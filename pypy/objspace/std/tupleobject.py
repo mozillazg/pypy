@@ -29,10 +29,10 @@ def len__Tuple(space, w_tuple):
     result = len(w_tuple.wrappeditems)
     return W_IntObject(space, result)
 
-def getitem__Tuple_Int(space, w_tuple, w_index):
+def getitem__Tuple_ANY(space, w_tuple, w_index):
     items = w_tuple.wrappeditems
     try:
-        w_item = items[w_index.intval]
+        w_item = items[space.int_w(w_index)]
     except IndexError:
         raise OperationError(space.w_IndexError,
                              space.wrap("tuple index out of range"))
@@ -64,14 +64,15 @@ def add__Tuple_Tuple(space, w_tuple1, w_tuple2):
     items2 = w_tuple2.wrappeditems
     return W_TupleObject(space, items1 + items2)
 
-def mul__Tuple_Int(space, w_tuple, w_int):
+def mul_tuple_times(space, w_tuple, times):
     items = w_tuple.wrappeditems
-    times = w_int.intval
-    return W_TupleObject(space, items * times)
+    return W_TupleObject(space, items * times)    
 
+def mul__Tuple_ANY(space, w_tuple, w_times):
+    return mul_tuple_times(space, w_tuple, space.int_w(w_times))
 
-def mul__Int_Tuple(space, w_int, w_tuple):
-    return mul__Tuple_Int(space, w_tuple, w_int)
+def mul__ANY_Tuple(space, w_times, w_tuple):
+    return mul_tuple_times(space, w_tuple, space.int_w(w_times))
 
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
     items1 = w_tuple1.wrappeditems
