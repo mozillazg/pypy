@@ -92,44 +92,73 @@ def instantiate(cls):
     else:
         return new.instance(cls)
 
+def make_descr_typecheck_wrapper(func, extraargs=()):
+    if not hasattr(func, 'im_func'):
+        return func
+    cls = func.im_class
+    func = func.im_func
+    #print cls.__name__, func.__name__
+    miniglobals = {
+        cls.__name__: cls,
+        func.__name__: func,
+        'OperationError': OperationError
+        }
+    exec ("""def descr_typecheck_%(name)s(space, w_obj, %(extra)s):
+    obj = space.interpclass_w(w_obj)
+    if obj is None or not isinstance(obj, %(cls)s):
+       raise OperationError(space.w_TypeError,
+                            space.wrap("descriptor is for '%%s'" %% %(cls)s.typedef.name)) # xxx improve
+    return %(name)s(space, obj, %(extra)s)
+""" % {'name': func.__name__, 'cls': cls.__name__,
+       'extra': ', '.join(extraargs)}) in miniglobals
+    return miniglobals['descr_typecheck_%s' % func.__name__]    
+
+
 class GetSetProperty(Wrappable):
     def __init__(self, fget, fset=None, fdel=None, doc=None):
         "NOT_RPYTHON: initialization-time only"
-        fget = getattr(fget, 'im_func', fget) 
-        fset = getattr(fset, 'im_func', fset) 
-        fdel = getattr(fdel, 'im_func', fdel) 
+        fget = make_descr_typecheck_wrapper(fget) 
+        fset = make_descr_typecheck_wrapper(fset, ('w_value',))
+        fdel = make_descr_typecheck_wrapper(fdel) 
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
         self.doc = doc
 
-    def descr_property_get(space, w_property, w_obj, w_cls=None):
+    def descr_property_get(space, property, w_obj, w_cls=None):
         # XXX HAAAAAAAAAAAACK (but possibly a good one)
         if w_obj == space.w_None and not space.is_true(space.is_(w_cls, space.type(space.w_None))):
-            #print w_property, w_obj, w_cls
-            return w_property
+            #print property, w_obj, w_cls
+            return space.wrap(property)
         else:
-            return space.interpclass_w(w_property).fget(space, w_obj)
+            return property.fget(space, w_obj)
 
-    def descr_property_set(space, w_property, w_obj, w_value):
-        fset = space.interpclass_w(w_property).fset
+    def descr_property_set(space, property, w_obj, w_value):
+        fset = property.fset
         if fset is None:
             raise OperationError(space.w_TypeError,
                                  space.wrap("read-only attribute"))
         fset(space, w_obj, w_value)
 
-    def descr_property_del(space, w_property, w_obj):
-        fdel = space.interpclass_w(w_property).fdel
+    def descr_property_del(space, property, w_obj):
+        fdel = property.fdel
         if fdel is None:
             raise OperationError(space.w_AttributeError,
                                  space.wrap("cannot delete attribute"))
         fdel(space, w_obj)
 
-    typedef = TypeDef("GetSetProperty",
-        __get__ = interp2app(descr_property_get),
-        __set__ = interp2app(descr_property_set),
-        __delete__ = interp2app(descr_property_del),
-        )
+GetSetProperty.typedef = TypeDef(
+    "GetSetProperty",
+    __get__ = interp2app(GetSetProperty.descr_property_get.im_func,
+                         unwrap_spec = [ObjSpace,
+                                        GetSetProperty, W_Root, W_Root]),
+    __set__ = interp2app(GetSetProperty.descr_property_set.im_func,
+                         unwrap_spec = [ObjSpace,
+                                        GetSetProperty, W_Root, W_Root]),
+    __delete__ = interp2app(GetSetProperty.descr_property_del.im_func,
+                            unwrap_spec = [ObjSpace,
+                                           GetSetProperty, W_Root]),
+    )
 
 def interp_attrproperty(name):
     "NOT_RPYTHON: initialization-time only"
@@ -241,7 +270,7 @@ Code.typedef = TypeDef('internal-code',
 
 Frame.typedef = TypeDef('internal-frame',
     f_code = interp_attrproperty('code'),
-    f_locals = GetSetProperty(Frame.fget_getdictscope.im_func),
+    f_locals = GetSetProperty(Frame.fget_getdictscope),
     f_globals = interp_attrproperty_w('w_globals'),
     )
 
@@ -265,8 +294,8 @@ PyCode.typedef = TypeDef('code',
     )
 
 PyFrame.typedef = TypeDef('frame',
-    f_builtins = GetSetProperty(PyFrame.fget_f_builtins.im_func),
-    f_lineno = GetSetProperty(PyFrame.fget_f_lineno.im_func),
+    f_builtins = GetSetProperty(PyFrame.fget_f_builtins),
+    f_lineno = GetSetProperty(PyFrame.fget_f_lineno),
     **Frame.typedef.rawdict)
 
 Module.typedef = TypeDef("module",
