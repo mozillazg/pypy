@@ -122,7 +122,7 @@ class TrivialObjSpace(ObjSpace):
                             continue
                         else:
                             base = done[b.__name__]
-                            newtype = type(k, (base,), {})
+                            newtype = type(next, (base,), {})
                             setattr(self, 'w_' + next, newtype)
                             done[next] = newtype
                             stack.pop()
@@ -143,10 +143,12 @@ class TrivialObjSpace(ObjSpace):
                     "None" : self.w_None,
                     "Ellipsis" : self.w_Ellipsis,
                     "buffer": buffer,
-                    "xrange": xrange,
+                    #"xrange": xrange,
                     "slice": slice,
                     }
         for n, c in __builtin__.__dict__.iteritems():
+            if n == 'xrange': # we define this in builtin_app
+                continue
             if isinstance(c, types.TypeType):
                 setattr(self, 'w_' + c.__name__, c)
                 newstuff[c.__name__] = c
