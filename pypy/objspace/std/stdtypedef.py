@@ -167,7 +167,6 @@ def sliced_typeorders(typeorder, multimethod, typedef, i):
     return prefix, list_of_typeorders
 
 def typeerrormsg(space, operatorsymbol, args_w):
-    print "AAAARGH", operatorsymbol, args_w
     return space.wrap("XXX insert message here")
 
 def wrap_func_in_trampoline(func, multimethod, selfindex=0):
@@ -220,12 +219,10 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
                           w_res = perform_call(space, %s)
                       except FailedToImplement, e:
                           if e.args:
-                              w_type = e.args[0]
-                              w_value = e.args[1]
+                              raise OperationError(e.args[0], e.args[1])
                           else:
-                              w_value = typeerrormsg(space, %r, [%s])
-                              w_type = space.w_TypeError
-                          raise OperationError(w_type, w_value)
+                              raise OperationError(space.w_TypeError,
+                                  typeerrormsg(space, %r, [%s]))
                       if w_res is None:
                           w_res = space.w_None
                       return w_res
