@@ -83,7 +83,7 @@ def sc_operator(space, fn, args):
     return space.do_operation(opname, *args_w)
 
 def setup(space):
-    fn = pyframe.normalize_exception.get_function(space)
+    fn = pyframe.normalize_exception
     space.specialcases[fn] = sc_normalize_exception
     space.specialcases[__import__] = sc_import
     for opname in ['lt', 'le', 'eq', 'ne', 'gt', 'ge', 'is_']:
