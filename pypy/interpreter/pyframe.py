@@ -5,7 +5,6 @@ from pypy.interpreter import eval, baseobjspace, gateway
 from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pytraceback
-from pypy.interpreter import module
 
 import __future__
 compiler_flags = 0
@@ -34,7 +33,7 @@ class PyFrame(eval.Frame):
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
-        self.builtin = space.lookup_builtin(w_globals)
+        self.builtin = space.builtin.pick_builtin(w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
         if code.dictscope_needed():

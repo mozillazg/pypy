@@ -37,6 +37,9 @@ class FlowObjSpace(ObjSpace):
         import __builtin__
         self.concrete_mode = 0
         self.builtin    = Module(self, Constant('__builtin__'), Constant(__builtin__.__dict__))
+        def pick_builtin(w_globals):
+            return self.builtin
+        self.builtin.pick_builtin = pick_builtin
         self.sys        = Module(self, Constant('sys'), Constant(sys.__dict__))
         self.sys.recursionlimit = 100
         self.w_None     = Constant(None)
@@ -55,10 +58,6 @@ class FlowObjSpace(ObjSpace):
         self.specialcases = {}
         #self.make_builtins()
         #self.make_sys()
-
-
-    def lookup_builtin(self, w_globals):
-        return self.builtin
 
     def loadfromcache(self, key, builder, cache):
         # when populating the caches, the flow space switches to

@@ -38,8 +38,6 @@ class Wrappable(BaseWrappable, object):
     """Same as BaseWrappable, just new-style instead."""
 
 
-from pypy.interpreter import module
-
 class ObjSpace(object):
     """Base class for the interpreter-level implementations of object spaces.
     http://codespeak.net/moin/pypy/moin.cgi/ObjectSpace"""
@@ -93,27 +91,6 @@ class ObjSpace(object):
                 #print "setitem: space instance %-20s into builtins" % name
                 self.setitem(self.builtin.w_dict, self.wrap(name), value)
         print "finished make_builtins", self
-
-    def lookup_builtin(space, w_globals):
-        "Look up the builtin module to use from the __builtins__ global"
-        try:
-            w_builtin = space.getitem(w_globals, space.wrap('__builtins__'))
-        except OperationError, e:
-            if not e.match(space, space.w_KeyError):
-                raise
-        else:
-            if w_builtin is space.builtin:   # common case
-                return space.builtin
-            if space.is_true(space.isinstance(w_builtin, space.w_dict)):
-                return module.Module(space, None, w_builtin)
-            builtin = space.interpclass_w(w_builtin)
-            if isinstance(builtin, module.Module):
-                return builtin
-        # no builtin! make a default one.  Given them None, at least.
-        builtin = module.Module(space, None)
-        space.setitem(builtin.w_dict, space.wrap('None'), space.w_None)
-        return builtin
-
 
     def XXXget_builtin_module(self, name):
         if name not in self.sys.builtin_modules:
