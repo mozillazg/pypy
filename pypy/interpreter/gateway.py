@@ -592,16 +592,6 @@ class interp2app_temp(interp2app):
 # and now for something completly different ... 
 #
 
-def preparesource(source, funcdecl): 
-    """ NOT_RPYTHON """ 
-    source = py.code.Source(source) 
-    source = source.putaround("def %s:" % funcdecl)
-    d = {}
-    exec source.compile() in d
-    i = funcdecl.find('(')
-    assert i != -1
-    return d[funcdecl[:i]].func_code 
-
 def appdef(source): 
     """ NOT_RPYTHON """ 
     from pypy.interpreter.pycode import PyCode
@@ -610,7 +600,6 @@ def appdef(source):
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
     funcdecl, source = source.strip().split(':', 1)
-    #newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
     funcname = funcname.strip() or 'anonymous'
     decl = decl.strip()[:-1] 
