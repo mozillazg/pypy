@@ -62,7 +62,11 @@ def descr__base(space, w_type):
         return space.w_object
 
 def descr__doc(space, w_type):
-    return w_type.dict_w.get('__doc__')
+    w_result = w_type.getdictvalue(space, '__doc__')
+    if w_result is None:
+        return space.w_None
+    else:
+        return w_result
 
 # ____________________________________________________________
 
