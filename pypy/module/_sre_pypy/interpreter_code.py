@@ -104,6 +104,7 @@ _compile.unwrap_spec = [ObjSpace, str, int, W_Root, int, W_Root, W_Root]
 
 def _SRE_Pattern_match(space, w_wrapped, pattern, pos, endpos):
     wrapped = space.interpclass_w(w_wrapped).value
+    print pattern, pos, endpos 
     match_obj = wrapped.match(pattern, pos, endpos)
     if match_obj is None:
         return space.w_None

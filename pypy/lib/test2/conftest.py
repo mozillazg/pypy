@@ -2,7 +2,7 @@ import autopath
 import sys
 import py
 import pypy
-from pypy.conftest import gettestobjspace 
+from pypy.conftest import gettestobjspace, option
 
 ModuleType = type(sys)
 
@@ -25,7 +25,7 @@ conftest = libtest.join('conftest.py').getpymodule()
 conftest.__file__ = str(conftest.__file__)  # keep out the py's importhook 
 
 def Module(fspath): 
-    if py.test.config.option.allpypy: 
+    if option.allpypy: 
         return conftest.Module(fspath) 
     return UnittestModuleOnCPython(fspath) 
 
