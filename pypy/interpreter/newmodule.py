@@ -13,16 +13,23 @@ class ExtModule(Module):
         self.__class__.buildloaders() 
 
     def get(self, name): 
-        space = self.space
+        w_value = self.getdictvalue(self.space, name) 
+        if w_value is None: 
+            raise OperationError(space.w_AttributeError, space.wrap(name))
+        return w_value 
+
+    def getdictvalue(self, space, name): 
         try: 
             return space.getitem(self.w_dict, space.wrap(name))
         except OperationError, e: 
-            if not self.lazy or not e.match(space, space.w_KeyError): 
+            if not e.match(space, space.w_KeyError): 
                 raise 
+            if not self.lazy: 
+                return None 
             try: 
                 loader = self.loaders[name]
             except KeyError: 
-                raise OperationError(space.w_AttributeError, space.wrap(name))
+                return None 
             else: 
                 w_value = loader(space) 
                 self.space.setitem(self.w_dict, space.wrap(name), w_value) 
