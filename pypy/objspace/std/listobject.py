@@ -29,36 +29,30 @@ class W_ListObject(W_Object):
         reprlist = [repr(w_item) for w_item in w_self.ob_item[:w_self.ob_size]]
         return "%s(%s)" % (w_self.__class__.__name__, ', '.join(reprlist))
 
+    def unwrap(w_list):
+        space = w_list.space
+        items = [space.unwrap(w_item) for w_item in w_list.ob_item[:w_list.ob_size]]# XXX generic mixed types unwrap
+        return list(items)
+
 
 registerimplementation(W_ListObject)
 
 
-def unwrap__List(space, w_list): 
-    items = [space.unwrap(w_item) for w_item in w_list.ob_item[:w_list.ob_size]]# XXX generic mixed types unwrap
-    return list(items)
-
-def init__List(space, w_list, w_args, w_kwds):
-    if space.is_true(w_kwds):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("no keyword arguments expected"))
+def init__List(space, w_list, __args__):
+    w_iterable, __args__.parse('list',
+                               (['sequence'], None, None),   # signature
+                               [W_ListObject(space, [])])    # default argument
     w_list.ob_size = 0  # XXX think about it later
-    args = space.unpackiterable(w_args)
-    if len(args) == 0:
-        pass   # empty list
-    elif len(args) == 1:
-        w_iterable = args[0]
-        w_iterator = space.iter(w_iterable)
-        while True:
-            try:
-                w_item = space.next(w_iterator)
-            except OperationError, e:
-                if not e.match(space, space.w_StopIteration):
-                    raise
-                break  # done
-            _ins1(w_list, w_list.ob_size, w_item)
-    else:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("list() takes at most 1 argument"))
+    w_iterable = args[0]
+    w_iterator = space.iter(w_iterable)
+    while True:
+        try:
+            w_item = space.next(w_iterator)
+        except OperationError, e:
+            if not e.match(space, space.w_StopIteration):
+                raise
+            break  # done
+        _ins1(w_list, w_list.ob_size, w_item)
 
 def len__List(space, w_list):
     result = w_list.ob_size
