@@ -119,7 +119,8 @@ class Gateway(object):
 
     def make_function(self, space, bind_instance=None, w_globals=None):
         if w_globals is None:
-            w_globals = space.wrap(self.staticglobals)
+            #w_globals = space.wrap(self.staticglobals)
+            w_globals = self.staticglobals.makedict(space, bind_instance)
         defs_w = [space.wrap(def_value) for def_value in self.staticdefs]
         code = self.code
         if self.argflags.get('implicitself') and isinstance(code, BuiltinCode):
@@ -163,11 +164,16 @@ class BoundGateway(object):
             args = args[1:]
             if not isinstance(space, ObjSpace):
                 raise TypeError, "'space' expected as first argument"
+        wrap = space.wrap
         if self.gateway.argflags.get('implicitself'):
             pass  # app-space gets no 'self' argument
         else:
-            args = (space.wrap(self.obj),) + args  # insert 'w_self'
-        return self.gateway(space, *args, **kwds)
+            args = (wrap(self.obj),) + args  # insert 'w_self'
+        w_args = [wrap(arg) for arg in args]
+        w_kwds = space.newdict([(wrap(key), wrap(value))
+                                for key, value in kwds.items()])
+        fn = self.gateway.make_function(space, self.obj)
+        return fn.call(w_args, w_kwds)
 
 
 class DictProxy(Wrappable):
@@ -265,18 +271,21 @@ class DictProxy(Wrappable):
             if not name.startswith('_') or name.endswith('_'):
                 self.exportname(name, obj, optional=1)
 
-    def importall(self, newd):
+    def importall(self, d, cls=None):
         """Import all app_-level functions as Gateways into a dict.
         Also import literals whose name starts with 'app_'."""
-        for name, obj in newd.items():
-            if name.startswith('app_') and name[4:] not in newd:
+        for name, obj in d.items():
+            if name.startswith('app_') and name[4:] not in d:
                 if isinstance(obj, types.FunctionType):
                     # an app-level function
                     assert name == obj.func_name
-                    newd[name[4:]] = self.app2interp(obj)
+                    obj = self.app2interp(obj)
                 else:
-                    # assume a simple, easily wrappable object
-                    newd[name[4:]] = obj
+                    pass  # assume a simple, easily wrappable object
+                if cls is None:
+                    d[name[4:]] = obj
+                else:
+                    setattr(cls, name[4:], obj)
 
     def makedict(self, space, bind_instance=None):
         """Turn the proxy into a normal dict.

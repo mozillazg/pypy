@@ -25,6 +25,8 @@ class ExtModule(Wrappable):
                                      implicitself=True)
         # automatically publish all functions from this class
         cls._appdict.exportall(cls.__dict__)
+        # automatically import all app_ functions
+        cls._appdict.importall(cls.__dict__, cls)
 
     def __getattr__(self, attr):
         # XXX temporary, for use by objspace.trivial and
