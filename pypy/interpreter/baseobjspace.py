@@ -289,7 +289,6 @@ class ObjSpace(object):
         frame.setfastscope(posargs_w)
         return frame.run() 
 
-pypycodecache = Cache() 
 def buildpypycode(source, space): 
     """ NOT_RPYTHON """ 
     # XXX will change once we have our own compiler 
