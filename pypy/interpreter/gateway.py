@@ -641,3 +641,52 @@ class interp2app_temp(interp2app):
     "NOT_RPYTHON"
     def getcache(self, space): 
         return self.__dict__.setdefault(space, Cache())
+
+
+# and now for something completly different ... 
+#
+# the following function might just go away 
+#def preparesource(source): 
+#    from pypy.tool.pytestsupport import py  # aehem
+#    argdecl, source = source.split(':', 1)
+#    argdecl = argdecl.strip()
+#    if not argdecl.startswith('(') or not argdecl.endswith(')'): 
+#        raise SyntaxError("incorrect exec_with header\n%s" % source)
+#
+#    newco = peparesource_funcdecl(source, argdecl+'(') 
+#    argnames = argdecl[1:-1].strip().split(',')
+#    return newco, argnames 
+
+
+def preparesource(source, funcdecl): 
+    from pypy.tool.pytestsupport import py 
+    source = py.code.Source(source) 
+    source = source.putaround("def %s:" % funcdecl)
+    d = {}
+    exec source.compile() in d
+    i = funcdecl.find('(')
+    assert i != -1
+    return d[funcdecl[:i]].func_code 
+
+def appdef(funcdecl, source): 
+    from pypy.tool.pytestsupport import py 
+    from pypy.interpreter.pycode import PyCode
+    newco = preparesource(source, funcdecl) 
+    funcname, decl = funcdecl.split('(', 1)
+    decl = decl.strip()[:-1] 
+    wargnames = ["w_%s" % x.strip() for x in decl[:-1].split(',')]
+    wdecl = ", ".join(wargnames) 
+    source = py.code.Source("""
+        def %s(space, %s):
+            pypyco = PyCode(space)._from_code(newco) 
+            w_glob = space.newdict([])
+            frame = pypyco.create_frame(space, w_glob) 
+            frame.setfastscope([%s])
+            return frame.run() 
+    """ % (funcname, wdecl, wdecl))
+    glob = {
+        'newco' : newco, 
+        'PyCode': PyCode, 
+    }
+    exec source.compile() in glob 
+    return glob[funcname]
