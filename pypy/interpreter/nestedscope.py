@@ -1,4 +1,5 @@
-from pypy.interpreter.pyfastscope import PyFastScopeFrame, UNDEFINED
+from pypy.interpreter.eval import UNDEFINED
+from pypy.interpreter.pyopcode import PyInterpFrame
 
 
 class Cell(object):
@@ -36,7 +37,7 @@ class Cell(object):
                                      content, id(self))
 
 
-class PyNestedScopeFrame(PyFastScopeFrame):
+class PyNestedScopeFrame(PyInterpFrame):
     """This class enhances a standard frame with nested scope abilities,
     i.e. handling of cell/free variables."""
 
@@ -47,14 +48,23 @@ class PyNestedScopeFrame(PyFastScopeFrame):
     # 'closure' is a list of Cell instances: the received free vars.
 
     def __init__(self, space, code, w_globals, closure):
-        PyFastScopeFrame.__init__(self, space, code, w_globals, closure)
+        PyInterpFrame.__init__(self, space, code, w_globals, closure)
         ncellvars = len(code.co_cellvars)
         nfreevars = len(code.co_freevars)
+        if closure is None:
+            if nfreevars:
+                raise OperationError(space.w_TypeError,
+                                     "directly executed code object "
+                                     "may not contain free variables")
+        else:
+            if len(closure) != nfreevars:
+                raise ValueError("code object received a closure with "
+                                 "an unexpected number of free variables")
         self.cells = [Cell() for i in range(ncellvars)] + closure
 
     def fast2locals(self):
-        PyFastScopeFrame.fast2locals(self)
-        freevarnames = self.bytecode.co_cellvars + self.bytecode.co_freevars
+        PyInterpFrame.fast2locals(self)
+        freevarnames = self.code.co_cellvars + self.code.co_freevars
         for name, cell in zip(freevarnames, self.cells):
             try:
                 w_value = cell.get()
@@ -65,8 +75,8 @@ class PyNestedScopeFrame(PyFastScopeFrame):
                 self.space.setitem(self.w_locals, w_name, w_value)
 
     def locals2fast(self):
-        PyFastScopeFrame.locals2fast(self)
-        freevarnames = self.bytecode.co_cellvars + self.bytecode.co_freevars
+        PyInterpFrame.locals2fast(self)
+        freevarnames = self.code.co_cellvars + self.code.co_freevars
         for name, cell in zip(freevarnames, self.cells):
             w_name = self.space.wrap(name)
             try:
@@ -78,11 +88,11 @@ class PyNestedScopeFrame(PyFastScopeFrame):
                 cell.set(w_value)
 
     def setfastscope(self, scope_w):
-        PyFastScopeFrame.setfastscope(scope_w)
-        if self.bytecode.co_cellvars:
+        PyInterpFrame.setfastscope(scope_w)
+        if self.code.co_cellvars:
             # the first few cell vars could shadow already-set arguments,
             # in the same order as they appear in co_varnames
-            code     = self.bytecode
+            code     = self.code
             argvars  = code.co_varnames
             cellvars = code.co_cellvars
             next     = 0
@@ -99,12 +109,12 @@ class PyNestedScopeFrame(PyFastScopeFrame):
                         break   # all cell vars initialized this way
 
     def getfreevarname(self, index):
-        freevarnames = self.bytecode.co_cellvars + self.bytecode.co_freevars
+        freevarnames = self.code.co_cellvars + self.code.co_freevars
         return freevarnames[index]
 
     def iscellvar(self, index):
         # is the variable given by index a cell or a free var?
-        return index < len(self.bytecode.co_cellvars)
+        return index < len(self.code.co_cellvars)
 
     ### extra opcodes ###
 

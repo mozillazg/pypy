@@ -25,43 +25,31 @@ class Code(object):
         "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
         return [], None, None
 
-    def getargcount(self):
-        "Number of arguments including * and **."
+    def getvarnames(self):
+        """List of names including the arguments, vararg and kwarg,
+        and possibly more locals."""
         argnames, varargname, kwargname = self.signature()
-        count = len(argnames)
         if varargname is not None:
-            count += 1
+            argnames.append(argname)
         if kwargname is not None:
-            count += 1
-        return count
+            argnames.append(kwargname)
+        return argnames
 
-    def getlocalvarname(self, index):
-        "Default implementation, can be overridden."
-        argnames, varargname, kwargname = self.signature()
-        try:
-            return argnames[index]
-        except IndexError:
-            index -= len(argnames)
-            if varargname is not None:
-                if index == 0:
-                    return varargname
-                index -= 1
-            if kwargname is not None:
-                if index == 0:
-                    return kwargname
-                index -= 1
-            raise IndexError, "local variable index out of bounds"
+
+UNDEFINED = object()  # marker for undefined local variables
 
 
 class Frame(object):
     """A frame is an environment supporting the execution of a code object.
     Abstract base class."""
 
-    def __init__(self, space, code, w_globals):
+    def __init__(self, space, code, w_globals, numlocals=0):
         self.space      = space
         self.code       = code       # Code instance
         self.w_globals  = w_globals  # wrapped dict of globals
         self.w_locals   = None       # wrapped dict of locals
+        # flat list of wrapped locals
+        self.fastlocals_w = [UNDEFINED]*numlocals
 
     def run(self):
         "Run the frame."
@@ -78,21 +66,45 @@ class Frame(object):
         raise TypeError, "abstract"
 
     def getdictscope(self):
-        "Overriden by subclasses with another representation for locals."
+        "Get the locals as a dictionary."
+        self.fast2locals()
         return self.w_locals
 
     def setdictscope(self, w_locals):
-        """Initialize the locals from a dictionary.
-        Overriden by subclasses with another representation for locals."""
+        "Initialize the locals from a dictionary."
         self.w_locals = w_locals
+        self.locals2fast()
+
+    def getfastscope(self):
+        "Get the fast locals as a list."
+        return self.fastlocals_w
 
     def setfastscope(self, scope_w):
-        """Initialize the locals from a list of values,
-        where the order is according to self.code.signature().
-        Default implementation, to be overridden."""
-        space = self.space
+        """Initialize the fast locals from a list of values,
+        where the order is according to self.code.signature()."""
+        if len(scope_w) > len(self.fastlocals_w):
+            raise ValueError, "too many fastlocals"
+        self.fastlocals_w[:len(scope_w)] = scope_w
+
+    def fast2locals(self):
+        # Copy values from self.fastlocals_w to self.w_locals
         if self.w_locals is None:
-            self.w_locals = space.newdict([])
-        for i in range(len(scope_w)):
-            varname = self.code.getlocalvarname(i)
-            space.setitem(self.w_locals, space.wrap(varname), scope_w[i])
+            self.w_locals = self.space.newdict([])
+        varnames = self.code.getvarnames()
+        for name, w_value in zip(varnames, self.fastlocals_w):
+            if w_value is not UNDEFINED:
+                w_name = self.space.wrap(name)
+                self.space.setitem(self.w_locals, w_name, w_value)
+
+    def locals2fast(self):
+        # Copy values from self.w_locals to self.fastlocals_w
+        varnames = self.code.getvarnames()
+        for name, i in zip(varnames, range(len(self.fastlocals_w))):
+            w_name = self.space.wrap(varnames[i])
+            try:
+                w_value = self.space.getitem(self.w_locals, w_name)
+            except OperationError, e:
+                if not e.match(self.space, self.space.w_KeyError):
+                    raise
+            else:
+                self.fastlocals_w[i] = w_value
