@@ -5,9 +5,10 @@ pyfastscope.py and pynestedscope.py.
 """
 
 from pypy.interpreter.baseobjspace import OperationError, NoValue
-import dis
-from pypy.interpreter import baseobjspace
-from pypy.interpreter.pyframe import PyFrame
+from pypy.interpreter.eval import UNDEFINED
+from pypy.interpreter import baseobjspace, pyframe
+from pypy.interpreter.miscutils import InitializedClass
+from pypy.interpreter.gateway import DictProxy
 
 
 class unaryoperation:
@@ -30,14 +31,11 @@ class binaryoperation:
         f.valuestack.push(w_result)
 
 
-class PyInterpFrame(PyFrame):
-    """A PyFrame that knows about interpretation of standard Python opcodes,
-    with the exception of nested scopes."""
-
-    def __init__(self, space, code, w_globals, closure):
-        PyFrame.__init__(self, space, code, w_globals, closure,
-                         code.co_nlocals)   # size of fastlocals_w array
-
+class PyInterpFrame(pyframe.PyFrame):
+    """A PyFrame that knows about interpretation of standard Python opcodes
+    minus the ones related to nested scopes."""
+    appdict = DictProxy(implicitspace=True)
+    
     ### opcode dispatch ###
 
     # 'dispatch_table' is a class attribute: a list of functions.
@@ -270,24 +268,23 @@ class PyInterpFrame(PyFrame):
 
     def PRINT_EXPR(f):
         w_expr = f.valuestack.pop()
-        #print f.space.unwrap(w_expr)
-        f.space.gethelper(appfile).call("print_expr", [w_expr])
+        print_expr(f.space, w_expr)
 
     def PRINT_ITEM_TO(f):
         w_stream = f.valuestack.pop()
         w_item = f.valuestack.pop()
-        f.space.gethelper(appfile).call("print_item_to", [w_item, w_stream])
+        print_item_to(f.space, w_item, w_stream)
 
     def PRINT_ITEM(f):
         w_item = f.valuestack.pop()
-        f.space.gethelper(appfile).call("print_item", [w_item])
+        print_item_to(f.space, w_item, sys_stdout(f.space))
 
     def PRINT_NEWLINE_TO(f):
         w_stream = f.valuestack.pop()
-        f.space.gethelper(appfile).call("print_newline_to", [w_stream])
+        print_newline_to(f.space, w_stream)
 
     def PRINT_NEWLINE(f):
-        f.space.gethelper(appfile).call("print_newline", [])
+        print_newline_to(f.space, sys_stdout(f.space))
 
     def BREAK_LOOP(f):
         raise pyframe.SBreakLoop
@@ -299,26 +296,12 @@ class PyInterpFrame(PyFrame):
         # we use the .app.py file to prepare the exception/value/traceback
         # but not to actually raise it, because we cannot use the 'raise'
         # statement to implement RAISE_VARARGS
-        if nbargs == 0:
-            w_resulttuple = f.space.gethelper(appfile).call("prepare_raise0", [])
-        elif nbargs == 1:
-            w_type = f.valuestack.pop()
-            w_resulttuple = f.space.gethelper(appfile).call(
-                "prepare_raise", [w_type, f.space.w_None, f.space.w_None])
-        elif nbargs == 2:
-            w_value = f.valuestack.pop()
-            w_type  = f.valuestack.pop()
-            w_resulttuple = f.space.gethelper(appfile).call(
-                "prepare_raise", [w_type, w_value, f.space.w_None])
-        elif nbargs == 3:
-            w_traceback = f.valuestack.pop()
-            w_value     = f.valuestack.pop()
-            w_type      = f.valuestack.pop()
-            w_resulttuple = f.space.gethelper(appfile).call(
-                "prepare_raise", [w_type, w_value, w_traceback])
-        else:
-            raise pyframe.BytecodeCorruption, "bad RAISE_VARARGS oparg"
-        w_type, w_value, w_traceback = f.space.unpacktuple(w_resulttuple)
+        w_type = w_value = w_traceback = f.space.w_None
+        if nbargs >= 3: w_traceback = f.valuestack.pop()
+        if nbargs >= 2: w_value     = f.valuestack.pop()
+        if nbargs >= 1: w_type      = f.valuestack.pop()
+        w_resulttuple = prepare_raise(f.space, w_type, w_value, w_traceback)
+        w_type, w_value, w_traceback = f.space.unpacktuple(w_resulttuple, 3)
         # XXX the three-arguments 'raise' is not supported yet
         raise OperationError(w_type, w_value)
 
@@ -338,20 +321,58 @@ class PyInterpFrame(PyFrame):
         w_locals  = f.valuestack.pop()
         w_globals = f.valuestack.pop()
         w_prog    = f.valuestack.pop()
-        w_tuple = f.space.gethelper(appfile).call("exec_statement",
-                                        [w_prog, w_globals, w_locals,
-                                         f.w_builtins, f.w_globals, f.w_locals])
-        w_prog = f.space.getitem(w_tuple,f.space.wrap(0))
-        w_globals = f.space.getitem(w_tuple,f.space.wrap(1))
-        w_locals = f.space.getitem(w_tuple,f.space.wrap(2))
+        w_resulttuple = f.prepare_exec(w_prog, w_globals, w_locals)
+        w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple)
 
-        #plain = ... ...   w_locals = f.getlocaldict()   XXX XXX
-        
-        scopedcode = ScopedCode(f.space, f.space.unwrap(w_prog), w_globals)
-        scopedcode.eval_frame(w_locals)
-        #f.space.unwrap(w_prog).eval_code(f.space, w_globals, w_locals)
+        plain = f.space.is_true(f.space.is_(w_locals, f.w_locals))
         if plain:
-            f.setlocaldict(w_locals)
+            w_locals = f.getdictscope()
+        pycode = f.space.unwrap(w_prog)
+        pycode.exec_code(f.space, w_globals, w_locals)
+        if plain:
+            f.setdictscope(w_locals)
+
+    def app_prepare_exec(f, prog, globals, locals):
+        """Manipulate parameters to exec statement to (codeobject, dict, dict).
+        """
+        # XXX INCOMPLETE
+        if (globals is None and locals is None and
+            isinstance(prog, tuple) and
+            (len(prog) == 2 or len(prog) == 3)):
+            globals = prog[1]
+            if len(prog) == 3:
+                locals = prog[2]
+            prog = prog[0]
+        if globals is None:
+            globals = f.w_globals    # XXX should be f.f_globals
+            if locals is None:
+                locals = f.w_locals  # XXX should be f.f_locals
+        if locals is None:
+            locals = globals
+        if not isinstance(globals, dict):
+            raise TypeError("exec: arg 2 must be a dictionary or None")
+        elif not globals.has_key('__builtins__'):
+            globals['__builtins__'] = f.w_builtins # XXX should be f.f_builtins
+        if not isinstance(locals, dict):
+            raise TypeError("exec: arg 3 must be a dictionary or None")
+        # XXX - HACK to check for code object
+        co = compile('1','<string>','eval')
+        if isinstance(prog, type(co)):
+            return (prog, globals, locals)
+        if not isinstance(prog, str):
+    ##     if not (isinstance(prog, types.StringTypes) or
+    ##             isinstance(prog, types.FileType)):
+            raise TypeError("exec: arg 1 must be a string, file, or code object")
+    ##     if isinstance(prog, types.FileType):
+    ##         flags = 0
+    ##         ## XXX add in parent flag merging
+    ##         co = compile(prog.read(),prog.name,'exec',flags,1)
+    ##         return (co,globals,locals)
+        else: # prog is a string
+            flags = 0
+            ## XXX add in parent flag merging
+            co = compile(prog,'<string>','exec',flags,1)
+            return (co, globals, locals)
 
     def POP_BLOCK(f):
         block = f.blockstack.pop()
@@ -373,26 +394,11 @@ class PyInterpFrame(PyFrame):
         w_methodsdict = f.valuestack.pop()
         w_bases       = f.valuestack.pop()
         w_name        = f.valuestack.pop()
-        # XXX it would be best to have all opcodes on a class that has a 'space' attribute
-        #     then the following initialization could be done at init-time. 
-        build_class = InterpretedFunction(f.space.gethelperspace(), app_build_class)
-        w_newclass = build_class(w_name, w_bases, w_methodsdict, f.w_globals)
+        w_metaclass = find_metaclass(f.space, w_bases,
+                                     w_methodsdict, f.w_globals)
+        w_newclass = f.space.call_function(w_metaclass, w_name,
+                                           w_bases, w_methodsdict)
         f.valuestack.push(w_newclass)
-
-    def app_build_class(name, bases, namespace, globals):
-        if '__metaclass__' in namespace:
-            metaclass = namespace['__metaclass__']
-        elif len(bases) > 0:
-            base = bases[0]
-            if hasattr(base, '__class__'):
-                metaclass = base.__class__
-            else:
-                metaclass = type(base)
-        elif '__metaclass__' in globals:
-            metaclass = globals['__metaclass__']
-        else:
-            metaclass = type
-        return metaclass(name, bases, namespace)
 
     def STORE_NAME(f, varindex):
         varname = f.getname(varindex)
@@ -474,9 +480,8 @@ class PyInterpFrame(PyFrame):
         # XXX the implementation can be pushed back into app-space as an
         # when exception handling begins to behave itself.  For now, it
         # was getting on my nerves -- mwh
-    #    w_value = f.space.gethelper(appfile).call(
-    #        "load_name", [w_varname, f.w_locals, f.w_globals, f.w_builtins])
-    #    f.valuestack.push(w_value)
+        #    w_value = f.load_name(w_varname)
+        #    f.valuestack.push(w_value)
 
     def LOAD_GLOBAL(f, nameindex):
         assert f.w_globals is not None
@@ -576,23 +581,31 @@ class PyInterpFrame(PyFrame):
         f.valuestack.push(w_result)
 
     def IMPORT_NAME(f, nameindex):
+        space = f.space
         modulename = f.getname(nameindex)
-        w_modulename = f.space.wrap(modulename)
         w_fromlist = f.valuestack.pop()
-        w_obj = f.space.gethelper(appfile).call(
-            "import_name", [f.w_builtins,
-                            w_modulename, f.w_globals, f.w_locals, w_fromlist])
+        try:
+            w_import = space.getitem(f.w_builtins, space.wrap("__import__"))
+        except OperationError, e:
+            if not e.match(space, space.w_KeyError):
+                raise
+            raise OperationError(space.w_ImportError,
+                                 space.wrap("__import__ not found"))
+        w_obj = space.call_function(w_import, space.wrap(modulename),
+                                    f.w_globals, f.w_locals, w_fromlist)
         f.valuestack.push(w_obj)
 
     def IMPORT_STAR(f):
         w_module = f.valuestack.pop()
-        f.space.gethelper(appfile).call("import_all_from", [w_module, f.w_locals])
+        w_locals = f.getfastscope()
+        import_all_from(f.space, w_module, w_locals)
+        f.setfastscope(w_locals)
 
     def IMPORT_FROM(f, nameindex):
         name = f.getname(nameindex)
         w_name = f.space.wrap(name)
         w_module = f.valuestack.top()
-        w_obj = f.space.gethelper(appfile).call("import_from", [w_module, w_name])
+        w_obj = import_from(f.space, w_module, w_name)
         f.valuestack.push(w_obj)
 
     def JUMP_FORWARD(f, stepby):
@@ -660,13 +673,26 @@ class PyInterpFrame(PyFrame):
         w_arguments = f.space.newtuple(arguments)
         w_keywords  = f.space.newdict(keywords)
         if with_varargs:
-            w_arguments = f.space.gethelper(appfile).call("concatenate_arguments",
-                                                          [w_arguments, w_varargs])
+            w_arguments = f.update_star_args(w_arguments, w_varargs)
         if with_varkw:
-            w_keywords  = f.space.gethelper(appfile).call("concatenate_keywords",
-                                                          [w_keywords,  w_varkw])
+            w_keywords  = f.update_keyword_args(w_keywords, w_varkw)
         w_result = f.space.call(w_function, w_arguments, w_keywords)
         f.valuestack.push(w_result)
+
+    def app_update_star_args(f, args, extra_args):
+        return args + tuple(extra_args)
+
+    def app_update_keyword_args(f, kw, extra_kw):
+        if not isinstance(extra_kw, dict):
+            raise TypeError, "argument after ** must be a dictionary"
+        result = kw.copy()
+        for key, value in extra_kw.items():
+            if key in result:
+                # XXX should mention the function name in error message
+                raise TypeError, ("got multiple values "
+                                  "for keyword argument '%s'" % key)
+            result[key] = value
+        return result
 
     def CALL_FUNCTION(f, oparg):
         f.call_function_extra(oparg, False, False)
@@ -715,24 +741,154 @@ class PyInterpFrame(PyFrame):
     def MISSING_OPCODE(f, oparg=None):
         raise pyframe.BytecodeCorruption, "unknown opcode"
 
-    ################################################################
+    ### dispatch_table ###
 
     # 'dispatch_table' is a class attribute: a list of functions
     # it is created by 'cls.setup_dispatch_table()'.
 
-    def setup_dispatch_table(cls):
+    __metaclass__ = InitializedClass
+    def __initclass__(cls):
         # create the 'cls.dispatch_table' attribute
+        import dis
         dispatch_table = []
         missing_opcode = cls.MISSING_OPCODE
         for i in range(256):
             opname = dis.opname[i].replace('+', '_')
             fn = getattr(cls, opname, missing_opcode)
+            fn = getattr(fn, 'im_func',fn)
+            fn.has_arg = i >= dis.HAVE_ARGUMENT
             #if fn is missing_opcode and not opname.startswith('<') and i>0:
             #    import warnings
             #    warnings.warn("* Warning, missing opcode %s" % opname)
             dispatch_table.append(fn)
         cls.dispatch_table = dispatch_table
-    setup_dispatch_table = classmethod(setup_dispatch_table)
 
 
-PyInterpFrame.setup_dispatch_table()
+    appdict.importall(locals())
+
+
+### helpers written at the application-level ###
+# Some of these functions are expected to be generally useful if other
+# parts of the code needs to do the same thing as a non-trivial opcode,
+# like finding out which metaclass a new class should have.
+# This is why they are not methods of PyInterpFrame.
+# There are also a couple of helpers that are methods, defined in the
+# class above.
+
+def app_print_expr(x):
+    import sys
+    try:
+        displayhook = sys.displayhook
+    except AttributeError:
+        raise RuntimeError("lost sys.displayhook")
+    displayhook(x)
+
+def app_file_softspace(file, newflag):
+    try:
+        softspace = file.softspace
+    except AttributeError:
+        softspace = 0
+    try:
+        file.softspace = newflag
+    except AttributeError:
+        pass
+    return softspace
+
+def app_sys_stdout():
+    import sys
+    try:
+        return sys.stdout
+    except AttributeError:
+        raise RuntimeError("lost sys.stdout")
+
+def app_print_item_to(x, stream):
+    if file_softspace(stream, False):
+        stream.write(" ")
+    stream.write(str(x))
+    # add a softspace unless we just printed a string which ends in a '\t'
+    # or '\n' -- or more generally any whitespace character but ' '
+    #    if isinstance(x, str) and len(x) and x[-1].isspace() and x[-1]!=' ':
+    #        return
+    # XXX add unicode handling
+    file_softspace(stream, True)
+
+def app_print_newline_to(stream):
+    stream.write("\n")
+    file_softspace(stream, False)
+
+def app_prepare_raise(etype, value, traceback):
+    # careful if 'import types' is added here!
+    # we get an infinite loop if this import fails:
+    #    import types -> IMPORT_NAME -> import_name -> raise ImportError
+    #    -> RAISE_VARARGS -> prepare_raise -> import types ...
+    if etype is None:
+        # reraise
+        # XXX this means that "raise" is equivalent to "raise None"
+        #     which is not the case in CPython, but well
+        import sys
+        etype, value, traceback = sys.exc_info()
+    #if not isinstance(traceback, (types.NoneType, types.TracebackType)):
+    #    raise TypeError, "raise: arg 3 must be traceback or None"
+    while isinstance(etype, tuple):
+        etype = etype[0]
+    if type(etype) is str:
+        # XXX warn
+        pass
+    elif isinstance(etype, Exception):
+        if value is not None:
+            raise TypeError("instance exception may not have a separate value")
+        value = etype
+        etype = value.__class__
+    elif isinstance(etype, type) and issubclass(etype, Exception):
+        if value is None:
+            value = ()
+        elif not isinstance(value, tuple):
+            value = (value,)
+        value = etype(*value)
+    else:
+        raise TypeError("exceptions must be instances or subclasses of "
+                        "Exception or strings (deprecated), not %s" %
+                        (type(etype).__name__,))
+    return etype, value, traceback
+
+def app_find_metaclass(bases, namespace, globals):
+    if '__metaclass__' in namespace:
+        return namespace['__metaclass__']
+    elif len(bases) > 0:
+        base = bases[0]
+        if hasattr(base, '__class__'):
+            return base.__class__
+        else:
+            return type(base)
+    elif '__metaclass__' in globals:
+        return globals['__metaclass__']
+    else:
+        return type
+
+def app_import_all_from(module, into_locals):
+    try:
+        all = module.__all__
+    except AttributeError:
+        try:
+            dict = module.__dict__
+        except AttributeError:
+            raise ImportError("from-import-* object has no __dict__ "
+                              "and no __all__")
+        all = dict.keys()
+        skip_leading_underscores = True
+    else:
+        skip_leading_underscores = False
+    for name in all:
+        if skip_leading_underscores and name[0]=='_':
+            continue
+        into_locals[name] = getattr(module, name)
+
+def app_import_from(module, name):
+    try:
+        return getattr(module, name)
+    except AttributeError:
+        raise ImportError("cannot import name '%s'" % name)
+
+
+appdict = DictProxy()
+appdict.importall(globals())   # app_xxx() -> xxx()

@@ -1,6 +1,6 @@
-from pypy.interpreter.executioncontext import ExecutionContext, Stack
+from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
-from pypy.interpreter import threadlocals
+from pypy.interpreter.miscutils import Stack, getthreadlocals
 
 __all__ = ['ObjSpace', 'OperationError', 'NoValue']
 
@@ -17,7 +17,7 @@ class NoValue(Exception):
 
 class ObjSpace:
     """Base class for the interpreter-level implementations of object spaces.
-    XXX describe here in more details what the object spaces are."""
+    http://codespeak.net/moin/pypy/moin.cgi/ObjectSpace"""
 
     def __init__(self):
         "Basic initialization of objects."
@@ -31,8 +31,9 @@ class ObjSpace:
         
         from pypy.module import builtin
         self.builtin = builtin.__builtin__(self)
-        self.w_builtin = self.builtin._wrapped
-        self.w_builtins = self.getattr(self.w_builtin, self.wrap("__dict__"))
+        self.w_builtin = self.wrap(self.builtin)
+        #self.w_builtins = self.getattr(self.w_builtin, self.wrap("__dict__"))
+        self.w_builtins = self.builtin.w_dict
 
         for name, value in self.__dict__.items():
             if name.startswith('w_'):
@@ -42,14 +43,14 @@ class ObjSpace:
                 #print "setitem: space instance %-20s into builtins" % name
                 self.setitem(self.w_builtins, self.wrap(name), value)
 
-        self.sys._setmodule(self.builtin)
+        self.sys._setmodule(self.w_builtin)
 
     def make_sys(self):
         assert not hasattr(self, 'sys')
         from pypy.module import sysmodule
-        self.sys = sysmodule.sys(self)
-        self.w_sys = self.sys._wrapped
-        self.sys._setmodule(self.sys)
+        self.sys = sysmodule.Sys(self)
+        self.w_sys = self.wrap(self.sys)
+        self.sys._setmodule(self.w_sys)
 
     # XXX get rid of this. 
     def get_builtin_module(self, w_name):
@@ -66,7 +67,7 @@ class ObjSpace:
 
     def getexecutioncontext(self):
         "Return what we consider to be the active execution context."
-        ec = threadlocals.getlocals().executioncontext
+        ec = getthreadlocals().executioncontext
         if ec is None:
             ec = self.createexecutioncontext()
         return ec

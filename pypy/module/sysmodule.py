@@ -1,14 +1,16 @@
-from pypy.interpreter.baseobjspace import OperationError
-from pypy.interpreter.gateway import AppVisibleModule
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.extmodule import ExtModule
 import os, pypy
 
 import sys as cpy_sys
 
-class sys(AppVisibleModule):
-    """ PyPy's 'sys' module.
+class Sys(ExtModule):
+    """ Template for PyPy's 'sys' module.
 
     Currently we only provide 'path', 'modules', 'stdout' and 'displayhook'
     """
+
+    app___name__ = 'sys'
 
     def __init__(self, space):
         opd = os.path.dirname
@@ -16,13 +18,15 @@ class sys(AppVisibleModule):
         appdir = os.path.join(pypydir, 'pypy', 'appspace')
         self.path = [appdir] + [p for p in cpy_sys.path if p!= pypydir]
         self.w_modules = space.newdict([])
-        AppVisibleModule.__init__(self, space)
-   
-    stdout = cpy_sys.stdout 
+        ExtModule.__init__(self, space)
 
-    def _setmodule(self, module):
+    stdout = cpy_sys.stdout
+    stderr = cpy_sys.stderr
+
+    def _setmodule(self, w_module):
         """ put a module into the modules list """
-        self.space.setitem(self.w_modules, module.w___name__, module._wrapped)
+        w_name = self.space.getattr(w_module, self.space.wrap('__name__'))
+        self.space.setitem(self.w_modules, w_name, w_module)
 
     def displayhook(self, w_x):
         space = self.space

@@ -2,28 +2,28 @@ import autopath
 
 import sys, os
 import unittest
-#from pypy.interpreter.gateway import InterpretedMethod, InterpretedFunction
-#   FIX ME FIX ME FIX ME
+from pypy.interpreter.gateway import DictProxy
 
 def make_testcase_class(space, tc_w):
     # XXX this is all a bit insane (but it works)
-    
-    #from pypy.interpreter.extmodule import make_builtin_func
-    w = space.wrap
-    d = space.newdict([])
-    space.setitem(d, w('failureException'), space.w_AssertionError)
 
+    # space-independent part: collect the test methods into
+    # a DictProxy.
+    d = DictProxy(implicitspace=True)
     for name in dir(AppTestCase):
         if ( name.startswith('assert') or name.startswith('fail')
              and name != 'failureException'):
-            func = InterpretedMethod(space, getattr(tc_w, name).im_func)
-            w_func = space.wrap(func)
-            #w_func = wrap_func(space, getattr(tc_w, name).im_func)
-            space.setitem(d, w(name), w_func)
+            d.app2interp(getattr(tc_w, name).im_func, name)
+
+    # space-dependent part: make an object-space-level dictionary
+    # and use it to build the class.
+    w = space.wrap
+    w_dict = d.makedict(space)
+    space.setitem(w_dict, w('failureException'), space.w_AssertionError)
     w_tc = space.call_function(space.w_type,
                                w('TestCase'),
                                space.newtuple([]),
-                               d)
+                               w_dict)
     return space.call_function(w_tc)
 
 
@@ -34,9 +34,7 @@ class WrappedFunc(object):
         self.testMethod = testMethod
 
     def __call__(self):
-        from pypy.interpreter import executioncontext
         space = self.testCase.space
-        w = space.wrap
 
         w_tc_attr = 'tc-attr-hacky-thing'
         if hasattr(space, w_tc_attr):
@@ -45,7 +43,9 @@ class WrappedFunc(object):
             w_tc = make_testcase_class(space, self.testCase)
             setattr(space, w_tc_attr, w_tc)
 
-        w_f = space.wrap(InterpretedFunction(space, self.testMethod.im_func))
+        f = self.testMethod.im_func
+        gateway = DictProxy(implicitspace=True).app2interp(f, f.func_name)
+        w_f = space.wrap(gateway)
         # w_f = wrap_func(space, self.testMethod.im_func)
         space.call_function(w_f, w_tc)
 
