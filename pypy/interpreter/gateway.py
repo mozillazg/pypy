@@ -592,87 +592,61 @@ class interp2app_temp(interp2app):
 # and now for something completly different ... 
 #
 
-pendingapphelpers = []
-def appdef(source): 
-    """ NOT_RPYTHON """ 
+class applevel:
+    """A container for app-level source code that should be executed
+    as a module in the object space;  interphook() builds a static
+    interp-level function that invokes the callable with the given
+    name at app-level."""
+
+    def __init__(self, source):
+        "NOT_RPYTHON"
+        self.code = py.code.Source(source).compile()
+
+    def getdict(self, space):
+        return space.loadfromcache(self, applevel.builddict,
+                                   space._gatewaycache)
+
+    def builddict(self, space):
+        "NOT_RPYTHON"
+        w_glob = space.newdict([])
+        space.exec_(self.code, w_glob, w_glob)
+        return w_glob
+
+    def interphook(self, name):
+        "NOT_RPYTHON"
+        def appcaller(space, *args_w):
+            w_glob = self.getdict(space)
+            w_func = space.getitem(w_glob, space.wrap(name))
+            args = Arguments(space, args_w)
+            return space.call_args(w_func, args)
+        return hack.func_with_new_name(appcaller, name)
+
+
+def appdef(source, applevel=applevel):
+    """ NOT_RPYTHON: build an app-level helper function, like for example:
+    myfunc = appdef('''myfunc(x, y):
+                           return x+y
+                    ''')
+    """ 
     from pypy.interpreter.pycode import PyCode
     if not isinstance(source, str): 
         source = str(py.code.Source(source).strip())
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
-    funcdecl, source = source.strip().split(':', 1)
-    funcname, decl = funcdecl.split('(', 1)
-    funcname = funcname.strip() or 'anonymous'
-    decl = decl.strip()[:-1] 
-    wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
+    p = source.find('(')
+    assert p >= 0
+    funcname = source[:p].strip()
+    source = source[p:]
+    return applevel("def %s%s\n" % (funcname, source)).interphook(funcname)
 
-    # get rid of w_
-    fastscope = ", ".join([x.strip()[2:] for x in wfastscope.split(',')])
+app2interp = appdef   # backward compatibility
 
-    # SOME MESS AHEAD ! 
-    # construct the special app source passed to appexec
-    appsource = py.code.Source(source).strip().putaround("%s(%s):" % (funcname, fastscope))
-    sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals(), 
-                   "    while pendingapphelpers:", 
-                   "        ihook = pendingapphelpers.pop()", 
-                   "        space.setitem(space.w_apphelper_globals,", 
-                   "                  space.wrap(ihook.name), space.wrap(ihook))", ]
-    sourcelines.extend(defaulthandlingsource.indent().lines)
-    sourcelines.append(
-                   "    return space.appexec([%(wfastscope)s], '''" % locals())
-    for line in appsource.indent().indent().lines: 
-        line = line.replace("\\", r"\\").replace("'", r"\'") 
-        sourcelines.append(line)
-    sourcelines.append("''')") 
-    source = py.code.Source()
-    source.lines = sourcelines 
-    #print str(source)
-    glob = { 'pendingapphelpers' : pendingapphelpers }
-    exec source.compile() in glob 
-    func = glob[funcname]
-    pendingapphelpers.append(interp2app(func, func.func_name))
-    return func
 
-def specialargparse(decl): 
-    """ NOT_RPYTHON """ 
-    wfuncargs = []
-    wfastnames = []
-    defaultargs = []
-    for name in decl.split(','): 
-        if not name.strip(): 
-            continue
-        name = "w_%s" % name.strip()
-        if '=' in name: 
-            name, value = name.split('=')
-            wfastnames.append(name) 
-            defaultargs.append((name, value))
-            name += "=None" 
-        else: 
-            assert not defaultargs, "posarg follows defaultarg"
-            wfastnames.append(name) 
-        wfuncargs.append(name) 
-   
-    # now we generate some nice code for default arg checking
-    # (which does not imply that the code doing it is nice :-) 
-    defaulthandlingsource = py.code.Source()
-    while defaultargs: 
-        name, value = defaultargs.pop(0) 
-        defaulthandlingsource = defaulthandlingsource.putaround("""\
-            if %s is None: 
-                %s = space.wrap(%s)
-        """ % (name, name, value), "")
-    wfuncdecl = ", ".join(wfuncargs) 
-    wfastdecl = ", ".join(wfastnames)
-    return wfuncdecl, wfastdecl, defaulthandlingsource 
+# app2interp_temp is used for testing mainly
+class applevel_temp(applevel):
+    def getdict(self, space):
+        return self.builddict(space)   # no cache
 
-app2interp = appdef 
-
-# for app2interp_temp (used for testing mainly) we can use *args
-class app2interp_temp(object): 
-    def __init__(self, func): 
-        """ NOT_RPYTHON """
-        self.appfunc = appdef(func) 
-
-    def __call__(self, space, *args_w, **kwargs_w): 
-        """ NOT_RPYTHON """
-        return self.appfunc(space, *args_w, **kwargs_w)
+def app2interp_temp(func):
+    """ NOT_RPYTHON """
+    return appdef(func, applevel_temp)

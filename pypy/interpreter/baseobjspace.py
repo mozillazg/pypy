@@ -279,38 +279,28 @@ class ObjSpace(object):
         return statement.exec_code(self, w_globals, w_locals)
 
     def appexec(self, posargs_w, source): 
-        """ return value from executing given source at applevel with 
-            the given list of wrapped arguments. The arguments are
-            directly set as the fastscope of the underlyingly executing 
-            frame. No Argument parsing is performed at this point. 
-            Consider using gateway.appdef() if you need default 
-            arguments. 
-        """ 
-        pypyco = self.loadfromcache(source, buildpypycode, self._codecache)
-        frame = pypyco.create_frame(self, self.w_apphelper_globals) 
-        frame.setfastscope(posargs_w)
-        return frame.run() 
+        """ return value from executing given source at applevel.
+            The source must look like
+               '''(x, y):
+                       do_stuff...
+                       return result
+               '''
+        """
+        w_func = self.loadfromcache(source, buildappexecfunc, self._codecache)
+        args = Arguments(self, posargs_w)
+        return self.call_args(w_func, args)
 
-def buildpypycode(source, space): 
+def buildappexecfunc(source, space):
     """ NOT_RPYTHON """ 
     # XXX will change once we have our own compiler 
     from pypy.interpreter.pycode import PyCode
     from pypy.tool.pytestsupport import py  # aehem
-    argdecl, source = source.split(':', 1)
-    argdecl = argdecl.strip()
-    i = argdecl.find('(')
-    if i >0: 
-        funcname, argdecl = argdecl[:i], argdecl[i:]
-    else: 
-        funcname = 'anon'
-    if not argdecl.startswith('(') or not argdecl.endswith(')'): 
-        raise SyntaxError("incorrect appexec header\n%s" % source)
-    source = py.code.Source(source) 
-    source = source.putaround("def %s%s:" % (funcname, argdecl))
-    d = {}
-    exec source.compile() in d
-    newco = d[funcname].func_code 
-    return PyCode(space)._from_code(newco) 
+    source = source.lstrip()
+    assert source.startswith('('), "incorrect header in:\n%s" % (source,)
+    source = py.code.Source("def anonymous%s\n" % source)
+    w_glob = space.newdict([])
+    space.exec_(source.compile(), w_glob, w_glob)
+    return space.getitem(w_glob, space.wrap('anonymous'))
 
 ## Table describing the regular part of the interface of object spaces,
 ## namely all methods which only take w_ arguments and return a w_ result

@@ -57,10 +57,6 @@ class TestBuiltinCode:
 
 class TestGateway: 
 
-    def setup_method(self, method): 
-        name = method.im_func.func_name 
-        if name in ('test_importall', 'test_exportall'): 
-            py.test.skip("sharing globals for app2interp'ed functions not supported") 
     def test_app2interp(self):
         w = self.space.wrap
         def app_g3(a, b):
@@ -195,26 +191,14 @@ class TestGateway:
 
     def test_importall(self):
         w = self.space.wrap
-        g = {}
-        exec """
-def app_g3(a, b):
-    return a+b
-def app_g1(x):
-    return g3('foo', x)
-""" in g
+        g = {'app_g3': app_g3}
         gateway.importall(g, temporary=True)
-        g1 = g['g1']
-        assert self.space.eq_w(g1(self.space, w('bar')), w('foobar'))
+        g3 = g['g3']
+        assert self.space.eq_w(g3(self.space, w('bar')), w('foobar'))
 
-    def test_exportall(self):
-        w = self.space.wrap
-        g = {}
-        exec """
-def g3(space, w_a, w_b):
-    return space.add(w_a, w_b)
-def app_g1(x):
-    return g3('foo', x)
-""" in g
-        gateway.exportall(g, temporary=True)
-        g1 = gateway.app2interp_temp(g['app_g1'])
-        assert self.space.eq_w(g1(self.space, w('bar')), w('foobar'))
+##    def test_exportall(self):
+##        not used any more
+
+
+def app_g3(b):
+    return 'foo'+b
