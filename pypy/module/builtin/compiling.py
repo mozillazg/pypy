@@ -4,6 +4,7 @@ Implementation of the interpreter-level compile/eval builtins.
 
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
+from pypy.interpreter.error import OperationError 
 from pypy.interpreter.gateway import NoneNotWrapped
 import __builtin__ as cpy_builtin
 
