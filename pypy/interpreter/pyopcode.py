@@ -348,7 +348,7 @@ class PyInterpFrame(pyframe.PyFrame):
         w_prog    = f.valuestack.pop()
         w_compile_flags = f.space.wrap(f.get_compile_flags())
         w_resulttuple = prepare_exec(f.space, f.space.wrap(f), w_prog, w_globals, w_locals,
-                                       w_compile_flags, space.wrap(f.builtin))
+                                       w_compile_flags, f.space.wrap(f.builtin))
         w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple, 3)
 
         plain = f.space.is_true(f.space.is_(w_locals, f.w_locals))
