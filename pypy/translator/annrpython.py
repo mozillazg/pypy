@@ -19,7 +19,6 @@ class RPythonAnnotator:
 
     def __init__(self, translator=None):
         self.pendingblocks = []  # list of (block, list-of-SomeValues-args)
-        self.delayedblocks = []  # list of blocked blocks
         self.bindings = {}       # map Variables to SomeValues
         self.annotated = {}      # set of blocks already seen
         self.creationpoints = {} # map positions-in-blocks to Factories
@@ -71,16 +70,10 @@ class RPythonAnnotator:
             # XXX don't know if it is better to pop from the head or the tail.
             # but suspect from the tail is better in the new Factory model.
             block, cells = self.pendingblocks.pop()
-            if self.processblock(block, cells):
-                # When flowin succeeds, i.e. when the analysis progress,
-                # we can tentatively re-schedule the delayed blocks.
-                delay = [(block, None) for block in self.delayedblocks]
-                delay.reverse()
-                self.pendingblocks[:0] = delay
-                del self.delayedblocks[:]
-        if self.delayedblocks:
-            raise AnnotatorError('%d block(s) are still blocked' %
-                                 len(delayedblocks))
+            self.processblock(block, cells)
+        if False in self.annotated.values():
+            raise AnnotatorError('%d blocks are still blocked' %
+                                 len(self.annotated.values().count(False)))
 
     def binding(self, arg):
         "Gives the SomeValue corresponding to the given Variable or Constant."
@@ -157,7 +150,6 @@ class RPythonAnnotator:
                 self.flowin(block)
             except BlockedInference, e:
                 self.annotated[block] = False   # failed, hopefully temporarily
-                self.delayedblocks.append(block)
                 for factory in e.invalidatefactories:
                     self.reflowpendingblock(factory.block)
             else:
