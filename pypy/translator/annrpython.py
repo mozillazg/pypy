@@ -32,7 +32,7 @@ class RPythonAnnotator:
         # make input arguments and set their type
         input_arg_types = list(input_arg_types)
         nbarg = len(flowgraph.getargs())
-        while input_arg_types < nbarg:
+        while len(input_arg_types) < nbarg:
             input_arg_types.append(object)
         inputcells = [annmodel.valueoftype(t) for t in input_arg_types]
         
