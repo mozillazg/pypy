@@ -514,13 +514,14 @@ class Comparer:
     def complex_lt(self, a, b):
         space = self.space
         w_cmp = self.w_cmp
+        w_result = space.call_function(w_cmp, a, b)
         try:
-            result = space.int_w(space.call_function(w_cmp, a, b))
+            result = space.int_w(w_result)
         except OperationError, e:
             if e.match(space, space.w_TypeError):
                 raise OperationError(space.w_TypeError,
                     space.wrap("comparison function must return int"))
-            raise e
+            raise
         return result < 0
 
 def list_sort__List_ANY(space, w_list, w_cmp):
