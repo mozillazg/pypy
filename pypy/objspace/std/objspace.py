@@ -251,7 +251,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 ##                                      self.wrap(x.imag))
         if isinstance(x, BaseWrappable):
             w_result = x.__spacebind__(self)
-            print 'wrapping', x, '->', w_result #XXX
+            #print 'wrapping', x, '->', w_result
             return w_result
         # anything below this line is implicitly XXX'ed
         if isinstance(x, type(Exception)) and issubclass(x, Exception):
