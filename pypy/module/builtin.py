@@ -1,11 +1,11 @@
 from pypy.interpreter.extmodule import *
-from pypy.interpreter import pycode, appfile, executioncontext
+from pypy.interpreter import pycode, executioncontext
 
 #######################
 ####  __builtin__  ####
 #######################
 
-import __builtin__ as _b
+import __builtin__ as cpy_builtin
 
 class Builtin(BuiltinModule):
     __pythonname__ = '__builtin__'
@@ -77,7 +77,7 @@ class Builtin(BuiltinModule):
                 dont_inherit = 0
 
         #print (str, filename, startstr, supplied_flags, dont_inherit)
-        c = _b.compile(str, filename, startstr, supplied_flags, dont_inherit)
+        c = cpy_builtin.compile(str, filename, startstr, supplied_flags, dont_inherit)
         res = pycode.PyByteCode()
         res._from_code(c)
         return space.wrap(res)
@@ -94,7 +94,7 @@ class Builtin(BuiltinModule):
 
         filename = space.unwrap(w_filename)
         s = open(filename).read()
-        c = _b.compile(s, filename, 'exec', 4096) # XXX generators 
+        c = cpy_builtin.compile(s, filename, 'exec', 4096) # XXX generators 
         res = pycode.PyByteCode()
         res._from_code(c)
 
@@ -123,7 +123,6 @@ class Builtin(BuiltinModule):
         return self.space.delattr(w_object, w_name)
     delattr = appmethod(delattr)
 
-
     def getattr(self, w_object, w_name):
         return self.space.getattr(w_object, w_name)
     getattr = appmethod(getattr)
@@ -137,7 +136,6 @@ class Builtin(BuiltinModule):
         return self.space.oct(w_val)
     oct = appmethod(oct)
 
-
     def hex(self, w_val):
         return self.space.hex(w_val)
     hex = appmethod(hex)
@@ -147,15 +145,13 @@ class Builtin(BuiltinModule):
         return self.space.id(w_object)
     id = appmethod(id)
 
-    #XXX
-    #It works only for new-style classes.
-    #So we have to fix it, when we add support for
-    #the old-style classes
+    #XXX works only for new-style classes.
+    #So we have to fix it, when we add support for old-style classes
     def issubclass(self, w_cls1, w_cls2):
         return self.space.issubtype(w_cls1, w_cls2)
     issubclass = appmethod(issubclass)
 
-    #XXX the is also the second form of iter, we don't have implemented
+    #XXX missing: second form of iter (callable, sentintel) 
     def iter(self, w_collection):
         return self.space.iter(w_collection)
     iter = appmethod(iter)
@@ -175,20 +171,3 @@ class Builtin(BuiltinModule):
     def setattr(self, w_object, w_name, w_val):
         return self.space.setattr(w_object, w_name, w_val)
     setattr = appmethod(setattr)
-
-    #XXX
-    #We don't have newunicode at the time
-    def unichr(self, w_val):
-        return self.space.newunicode([w_val])
-    unichr = appmethod(unichr)
-
-
-    # we have None! But leave these at the bottom, otherwise the default
-    # arguments of the above-defined functions will see this new None...
-    #None = appdata(_b.None)
-
-##    False = appdata(_b.False)
-##    True = appdata(_b.True)
-##    dict = appdata(_b.dict)   # XXX temporary
-##    tuple = appdata(_b.tuple) # XXX temporary
-##    int = appdata(_b.int) # XXX temporary
