@@ -235,3 +235,48 @@ def hex__Long(space, w_long1):
 
 
 register_all(vars())
+
+# register implementations of ops that recover int op overflows
+
+# binary ops
+for opname in ['add', 'sub', 'mul', 'div', 'floordiv', 'truediv', 'mod', 'divmod']:
+    exec """
+def %(opname)s_ovr__Int_Int(space, w_int1, w_int2):
+    w_long1 = delegate_Int2Long(w_int1)
+    w_long2 = delegate_Int2Long(w_int2)
+    return %(opname)s__Long_Long(space, w_long1, w_long2)
+""" % {'opname': opname}
+
+    getattr(StdObjSpace.MM, opname).register(globals()['%s_ovr__Int_Int' %opname], W_IntObject, W_IntObject, order=1)
+
+# unary ops
+for opname in ['neg', 'abs']:
+    exec """
+def %(opname)s_ovr__Int(space, w_int1):
+    w_long1 = delegate_Int2Long(w_int1)
+    return %(opname)s__Long(space, w_long1)
+""" % {'opname': opname}
+
+    getattr(StdObjSpace.MM, opname).register(globals()['%s_ovr__Int' %opname], W_IntObject, order=1)
+
+# lshift
+def lshift_ovr__Int_Int(space, w_int1, w_cnt):
+    w_long1 = delegate_Int2Long(w_int1)
+    return lshift__Long_Int(space, w_long1, w_cnt)
+
+StdObjSpace.MM.lshift.register(lshift_ovr__Int_Int, W_IntObject, W_IntObject, order=1)
+
+# pow
+def pow_ovr__Int_Int_None(space, w_int1, w_int2, w_none3):
+    w_long1 = delegate_Int2Long(w_int1)
+    w_long2 = delegate_Int2Long(w_int2)
+    return pow__Long_Long_None(space, w_long1, w_long2, w_none3)
+
+def pow_ovr__Int_Int_Int(space, w_int1, w_int2, w_int3):
+    w_long1 = delegate_Int2Long(w_int1)
+    w_long2 = delegate_Int2Long(w_int2)
+    w_long3 = delegate_Int2Long(w_int3)
+    return pow__Long_Long_Long(space, w_long1, w_long2, w_long3)
+
+StdObjSpace.MM.pow.register(pow_ovr__Int_Int_None, W_IntObject, W_IntObject, W_NoneObject, order=1)
+StdObjSpace.MM.pow.register(pow_ovr__Int_Int_Int , W_IntObject, W_IntObject, W_IntObject,  order=1)
