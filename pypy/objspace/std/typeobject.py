@@ -203,7 +203,8 @@ def getattr__Type_ANY(space, w_type, w_name):
         return space.get(w_value, space.w_None, w_type)
     if w_descr is not None:
         return space.get(w_descr,w_type)
-    raise OperationError(space.w_AttributeError,w_name)
+    msg = "type object '%s' has no attribute '%s'" %(w_type.name, name)
+    raise OperationError(space.w_AttributeError, space.wrap(msg))
 
 def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     name = space.str_w(w_name)

@@ -5,6 +5,11 @@ from pypy.interpreter.function import Function
 from pypy.interpreter.gateway import BuiltinCode
 from pypy.interpreter.argument import Arguments
 
+def raiseattrerror(space, w_obj, name): 
+    w_type = space.type(w_obj) 
+    msg = "'%s' object has not attribute '%s'" %(w_type.name, name)
+    raise OperationError(space.w_AttributeError, space.wrap(msg))
+
 class Object:
     def descr__getattribute__(space, w_obj, w_name):
         name = space.str_w(w_name)
@@ -17,8 +22,7 @@ class Object:
             return w_value
         if w_descr is not None:
             return space.get(w_descr, w_obj)
-
-        raise OperationError(space.w_AttributeError, w_name)
+        raiseattrerror(space, w_obj, name) 
 
     def descr__setattr__(space, w_obj, w_name, w_value):
         name = space.str_w(w_name)
@@ -29,7 +33,7 @@ class Object:
         w_dict = space.getdict(w_obj)
         if w_dict is not None:
             return space.setitem(w_dict, w_name, w_value)
-        raise OperationError(space.w_AttributeError, w_name)
+        raiseattrerror(space, w_obj, name) 
 
     def descr__delattr__(space, w_obj, w_name):
         name = space.str_w(w_name)
@@ -44,7 +48,7 @@ class Object:
             except OperationError, ex:
                 if not ex.match(space, space.w_KeyError):
                     raise
-        raise OperationError(space.w_AttributeError, w_name)
+        raiseattrerror(space, w_obj, name) 
 
     def descr__init__(space, w_obj, __args__):
         pass   # XXX some strange checking maybe
