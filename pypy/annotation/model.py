@@ -34,9 +34,10 @@ from pypy.annotation.pairtype import pair
 class SomeObject:
     """The set of all objects.  Each instance stands
     for an arbitrary object about which nothing is known."""
-    knowntype = None
+    knowntype = object
     def __eq__(self, other):
-        return (self.__class__, self.__dict__) == (other.__class__, other.__dict__)
+        return (self.__class__ is other.__class__ and
+                self.__dict__  == other.__dict__)
     def __ne__(self, other):
         return not (self == other)
     def __repr__(self):
@@ -44,6 +45,11 @@ class SomeObject:
         return '%s(%s)' % (self.__class__.__name__, kwds)
     def contains(self, other):
         return pair(self, other).union() == self
+    def is_constant(self):
+        return hasattr(self, 'const')
+    # non-binary default methods
+    def len(self):
+        return SomeInteger(nonneg=True)
 
 class SomeInteger(SomeObject):
     "Stands for an object which is known to be an integer."
@@ -74,6 +80,8 @@ class SomeTuple(SomeObject):
     knowntype = tuple
     def __init__(self, items):
         self.items = tuple(items)   # tuple of s_xxx elements
+    def len(self):
+        return immutablevalue(len(self.items))
 
 class SomeImpossibleValue(SomeObject):
     """The empty set.  Instances are placeholders for objects that
@@ -83,15 +91,17 @@ class SomeImpossibleValue(SomeObject):
 def immutablevalue(x):
     "The most precise SomeValue instance that contains the immutable value x."
     if isinstance(bool, type) and isinstance(x, bool):
-        return SomeBool()
+        result = SomeBool()
     elif isinstance(x, int):
-        return SomeInteger(nonneg = x>=0)
+        result = SomeInteger(nonneg = x>=0)
     elif isinstance(x, str):
-        return SomeString()
+        result = SomeString()
     elif isinstance(x, tuple):
-        return SomeTuple(items = [immutablevalue(e) for e in x])
+        result = SomeTuple(items = [immutablevalue(e) for e in x])
     else:
-        return SomeObject()
+        result = SomeObject()
+    result.const = x
+    return result
 
 def valueoftype(t):
     "The most precise SomeValue instance that contains all objects of type t."
@@ -103,6 +113,8 @@ def valueoftype(t):
         return SomeString()
     elif issubclass(t, list):
         return SomeList(factories={})
+    else:
+        return SomeObject()
 
 
 # this has the side-effect of registering the binary operations

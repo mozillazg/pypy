@@ -82,6 +82,18 @@ class __extend__(pairtype(SomeTuple, SomeTuple)):
         return SomeTuple(items = tup1.items + tup2.items)
 
 
+class __extend__(pairtype(SomeTuple, SomeInteger)):
+    
+    def getitem((tup1, int2)):
+        if int2.is_constant():
+            return tup1.items[int2.const]
+        else:
+            result = SomeImpossibleValue()
+            for a in tup1.items:
+                result = pair(result, a).union()
+            return result
+
+
 class __extend__(pairtype(SomeList, SomeInteger)):
     
     def mul((lst1, int2)):
