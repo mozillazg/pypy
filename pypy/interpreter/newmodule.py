@@ -8,35 +8,34 @@ import inspect
 class ExtModule(Module): 
     def __init__(self, space, w_name): 
         """ NOT_RPYTHON """ 
-        #Module.__init__(self, space, w_name) 
-        self.space = space 
-        self.w_name = w_name 
-        self.w_dict = None
-        self.itemcache = Cache()
+        Module.__init__(self, space, w_name) 
+        self.lazy = True 
         self.__class__.buildloaders() 
 
     def get(self, name): 
-        if self.w_dict is not None: 
-            return Module.get(self, name) 
-        return self.space.loadfromcache(name, self.buildwvalue, self.itemcache) 
+        space = self.space
+        try: 
+            return space.getitem(self.w_dict, space.wrap(name))
+        except OperationError, e: 
+            if not self.lazy or not e.match(space, space.w_KeyError): 
+                raise 
+            try: 
+                loader = self.loaders[name]
+            except KeyError: 
+                raise OperationError(space.w_AttributeError, space.wrap(name))
+            else: 
+                w_value = loader(space) 
+                self.space.setitem(self.w_dict, space.wrap(name), w_value) 
+                return w_value 
 
     def getdict(self): 
-        if self.w_dict is None: 
+        if self.lazy: 
             space = self.space
-            w_dict = wdict = space.newdict([])
             for name in self.loaders: 
                 w_value = self.get(name)  
-                space.setitem(w_dict, space.wrap(name), w_value) 
-            self.w_dict = w_dict 
+                space.setitem(self.w_dict, space.wrap(name), w_value) 
+            self.lazy = False 
         return self.w_dict 
-
-    def buildwvalue(self, name, space): 
-        try: 
-            loader = self.loaders[name]
-        except KeyError: 
-            raise OperationError(space.w_AttributeError, space.wrap(name))
-        else: 
-            return loader(space) 
 
     def buildloaders(cls): 
         """ NOT_RPYTHON """ 

@@ -13,7 +13,8 @@ class Module(Wrappable):
         if w_dict is None: 
             w_dict = space.newdict([])
         self.w_dict = w_dict 
-        self.descr_module__init__(w_name)
+        self.w_name = w_name 
+        space.setitem(w_dict, space.wrap('__name__'), w_name) 
 
     def getdict(self):
         return self.w_dict
@@ -75,7 +76,7 @@ class Module(Wrappable):
                     return space.wrap(operror.application_traceback)
         # produce a nice error message that shows the name of the module
         try:
-            name = space.str_w(self.w_name)
+            name = space.str_w(self.get('__name__'))
         except OperationError:
             name = '?'
         msg = "'%s' module has no attribute '%s'" % (name, attr)
