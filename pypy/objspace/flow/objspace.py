@@ -301,6 +301,17 @@ class FlowObjSpace(ObjSpace):
         self.handle_implicit_exceptions(exceptions)
         return w_res
 
+    def appexec(self, posargs_w, source):
+        name_end = source.find('(')
+        appname = source[:name_end].strip()
+        #print appname
+        try:
+            sc = self.specialcases[appname]
+        except KeyError:
+            return ObjSpace.appexec(self, posargs_w, source)
+        else:
+            return sc(self, posargs_w)
+
     def handle_implicit_exceptions(self, exceptions):
         if exceptions:
             # catch possible exceptions implicitly.  If the OperationError

@@ -785,7 +785,7 @@ def print_item_to(space, w_x, w_stream):
     # add a softspace unless we just printed a string which ends in a '\t'
     # or '\n' -- or more generally any whitespace character but ' '
     w_skip = space.appexec([w_x], """ 
-        (x): 
+        app_skip_space(x): 
             return isinstance(x, str) and len(x) and \
                    x[-1].isspace() and x[-1]!=' ' 
     """) 
