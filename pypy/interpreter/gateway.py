@@ -275,7 +275,8 @@ class BuiltinCode(eval.Code):
         #  'self' is used to specify a self method argument
         #  baseobjspace.W_Root is for wrapped arguments to keep wrapped
         #  argument.Arguments is for a final rest arguments Arguments object
-        # 'args_w' for unpacktuple applied rest arguments
+        # 'args_w' for unpacktuple applied to rest arguments
+        # 'w_args' for rest arguments passed as wrapped tuple
         # str,int,float: unwrap argument as such type
         
         # First extract the signature from the (CPython-level) code object
