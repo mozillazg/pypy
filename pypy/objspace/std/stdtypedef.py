@@ -237,7 +237,7 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
                       return w_res
 """        % (prefix, wrapper_sig, renaming, expr,
               multimethod.operatorsymbol, ', '.join(solid_arglist))
-    exec code in miniglobals
+    exec compile(code, '', 'exec') in miniglobals 
     return miniglobals["%s_perform_call" % prefix]
 
 def wrap_trampoline_in_gateway(func, methname, multimethod):

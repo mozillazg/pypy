@@ -137,7 +137,7 @@ def make_descr_typecheck_wrapper(func, extraargs=(), cls=None):
                  'expected': expected,
                  'unwrap': unwrap,
                  'extra': ', '.join(extraargs)} 
-    exec source in miniglobals 
+    exec compile(source, '', 'exec') in miniglobals 
     return miniglobals['descr_typecheck_%s' % func.__name__]    
 
 

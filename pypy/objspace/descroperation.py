@@ -494,24 +494,25 @@ for targetname, specialname, checkerspec in [
     l = ["space.is_true(space.isinstance(w_result, %s))" % x 
                 for x in checkerspec]
     checker = " or ".join(l) 
-    exec """
-def %(targetname)s(space, w_obj):
-    w_impl = space.lookup(w_obj, %(specialname)r) 
-    if w_impl is None:
-        raise OperationError(space.w_TypeError,
-               space.wrap("operand does not support unary %(targetname)s"))
-    w_result = space.get_and_call_function(w_impl, w_obj)
+    source = """if 1: 
+        def %(targetname)s(space, w_obj):
+            w_impl = space.lookup(w_obj, %(specialname)r) 
+            if w_impl is None:
+                raise OperationError(space.w_TypeError,
+                       space.wrap("operand does not support unary %(targetname)s"))
+            w_result = space.get_and_call_function(w_impl, w_obj)
 
-    if %(checker)s: 
-        return w_result
-    typename = space.str_w(space.getattr(space.type(w_result), 
-                           space.wrap('__name__')))
-    msg = '%(specialname)s returned non-%(targetname)s (type %%s)' %% (typename,) 
-    raise OperationError(space.w_TypeError, space.wrap(msg)) 
-assert not hasattr(DescrOperation, %(targetname)r)
-DescrOperation.%(targetname)s = %(targetname)s
-del %(targetname)s 
-""" % locals() 
+            if %(checker)s: 
+                return w_result
+            typename = space.str_w(space.getattr(space.type(w_result), 
+                                   space.wrap('__name__')))
+            msg = '%(specialname)s returned non-%(targetname)s (type %%s)' %% (typename,) 
+            raise OperationError(space.w_TypeError, space.wrap(msg)) 
+        assert not hasattr(DescrOperation, %(targetname)r)
+        DescrOperation.%(targetname)s = %(targetname)s
+        del %(targetname)s 
+        \n""" % locals() 
+    exec compile(source, '', 'exec')
 
 
 # add default operation implementations for all still missing ops 
