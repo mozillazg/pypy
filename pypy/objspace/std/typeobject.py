@@ -1,8 +1,7 @@
 from pypy.objspace.std.objspace import *
 from pypy.interpreter.function import Function, StaticMethod
-from pypy.interpreter.typedef import default_dict_descr
 from pypy.interpreter.argument import Arguments
-from pypy.objspace.std.stdtypedef import issubtypedef
+from pypy.objspace.std.stdtypedef import std_dict_descr, issubtypedef
 from pypy.objspace.std.objecttype import object_typedef
 
 class W_TypeObject(W_Object):
@@ -34,7 +33,7 @@ class W_TypeObject(W_Object):
         #       even for instances that may override the mro.  This probably is not
         #       a good thing to do.
         if forcedict and not w_self.lookup('__dict__'):
-            w_self.dict_w['__dict__'] = space.wrap(default_dict_descr)
+            w_self.dict_w['__dict__'] = space.wrap(std_dict_descr)
         if overridetypedef is None:
             w_type = space.type(w_self)
             if not space.is_true(space.is_(w_type, space.w_type)):

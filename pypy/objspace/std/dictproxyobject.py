@@ -2,8 +2,7 @@ from pypy.objspace.std.objspace import *
 from pypy.interpreter.typedef import GetSetProperty
 
 def descr_get_dictproxy(space, w_obj):
-    obj = space.interpclass_w(w_obj)
-    return W_DictProxyObject(space, obj.getdict())
+    return W_DictProxyObject(space, w_obj.getdict())
 
 dictproxy_descr = GetSetProperty(descr_get_dictproxy)
 
