@@ -2,9 +2,8 @@
 """
 
 from pypy.interpreter.executioncontext import OperationError, Stack, NoValue
-from pypy.interpreter.appfile import AppFile
 
-appfile = AppFile(__name__, ["interpreter"])
+from pypy.interpreter.pycode import app2interp
 
 
 class PyFrame:
@@ -229,14 +228,30 @@ class ExceptBlock(FrameBlock):
 ##             import pdb
 ##             pdb.set_trace()
 ##             print w_type, `w_value`, frame.bytecode.co_name
-            w_res = s.gethelper(appfile).call(
-                "normalize_exception", [w_type, w_value])
+            self.space = s # needed for the following call
+            w_res = self.normalize_exception(w_type, w_value)
             w_value = s.getitem(w_res, s.wrap(1))
             
             frame.valuestack.push(w_value)
             frame.valuestack.push(w_type)
             frame.next_instr = self.handlerposition   # jump to the handler
             raise StopUnrolling
+
+    def app_normalize_exception(self, etype, evalue):
+        # mistakes here usually show up as infinite recursion, which is fun.
+        if isinstance(evalue, etype):
+            return etype, evalue
+        if isinstance(etype, type) and issubclass(etype, Exception):
+            if evalue is None:
+                evalue = ()
+            elif not isinstance(evalue, tuple):
+                evalue = (evalue,)
+            evalue = etype(*evalue)
+        else:
+            raise Exception, "?!"
+        return etype, evalue
+    normalize_exception = app2interp(app_normalize_exception)
+
 
 
 class FinallyBlock(FrameBlock):
@@ -369,4 +384,42 @@ class Cell:
             return "%s()" % self.__class__.__name__
         else:
             return "%s(%s)" % (self.__class__.__name__, self.w_value)
+
+class AppFrame(PyFrame):
+    """Represents a frame for a regular Python function
+    that needs to be interpreted.
+
+    Public fields:
+     * 'space' is the object space this frame is running in
+     * 'w_locals' is the locals dictionary to use
+     * 'w_globals' is the attached globals dictionary
+     * 'w_builtins' is the attached built-ins dictionary
+     * 'valuestack', 'blockstack', 'next_instr' control the interpretation
+    """
+
+    def __init__(self, space, bytecode, w_globals, argtuple):
+        self.space = space
+        self.bytecode = bytecode # Misnomer; this is really like a code object
+
+        # XXX we may want to have lazy access to interp-level through w_globals later
+        self.w_globals = w_globals
+
+        # XXX construct self.w_locals
+        self.nestedcells = ()
+        self.localcells = [ Cell(x) for x in argtuple ]
+        missing = self.bytecode.co_nlocals - len(self.localcells)
+        self.localcells.extend([ Cell() for x in range(missing)])
+        
+        self.w_builtins = self.load_builtins()
+        self.valuestack = Stack()
+        self.blockstack = Stack()
+        self.last_exception = None
+        self.next_instr = 0
+        #self._dump()
+
+    def _dump(self):
+        print "AppFrame_dump"
+        print "  space     ", self.space
+        print "  localcells", self.localcells
+        print "  co_varnames  ", self.bytecode.co_varnames
 
