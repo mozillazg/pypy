@@ -645,18 +645,6 @@ class interp2app_temp(interp2app):
 
 # and now for something completly different ... 
 #
-# the following function might just go away 
-#def preparesource(source): 
-#    from pypy.tool.pytestsupport import py  # aehem
-#    argdecl, source = source.split(':', 1)
-#    argdecl = argdecl.strip()
-#    if not argdecl.startswith('(') or not argdecl.endswith(')'): 
-#        raise SyntaxError("incorrect exec_with header\n%s" % source)
-#
-#    newco = peparesource_funcdecl(source, argdecl+'(') 
-#    argnames = argdecl[1:-1].strip().split(',')
-#    return newco, argnames 
-
 
 def preparesource(source, funcdecl): 
     from pypy.tool.pytestsupport import py 
@@ -669,24 +657,56 @@ def preparesource(source, funcdecl):
     return d[funcdecl[:i]].func_code 
 
 def appdef(funcdecl, source): 
-    from pypy.tool.pytestsupport import py 
     from pypy.interpreter.pycode import PyCode
+    from pypy.tool.pytestsupport import py   
     newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
     decl = decl.strip()[:-1] 
-    wargnames = ["w_%s" % x.strip() for x in decl[:-1].split(',')]
-    wdecl = ", ".join(wargnames) 
-    source = py.code.Source("""
+    wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
+    source = py.code.Source("""\
         def %s(space, %s):
+            # HERE we inject the defhandlingsource below 
             pypyco = PyCode(space)._from_code(newco) 
             w_glob = space.newdict([])
             frame = pypyco.create_frame(space, w_glob) 
             frame.setfastscope([%s])
             return frame.run() 
-    """ % (funcname, wdecl, wdecl))
+    """ % (funcname, wfuncdecl, wfastscope))
+    source.lines[1:2] = defaulthandlingsource.indent().lines 
+    print str(source)
     glob = {
         'newco' : newco, 
         'PyCode': PyCode, 
     }
     exec source.compile() in glob 
     return glob[funcname]
+
+def specialargparse(decl): 
+    from pypy.tool.pytestsupport import py  # for code generation 
+    wfuncargs = []
+    wfastnames = []
+    defaultargs = []
+    for name in decl.split(','): 
+        name = "w_%s" % name.strip()
+        if '=' in name: 
+            name, value = name.split('=')
+            wfastnames.append(name) 
+            defaultargs.append((name, value))
+            name += "=None" 
+        else: 
+            assert not defaultargs, "posarg follows defaultarg"
+            wfastnames.append(name) 
+        wfuncargs.append(name) 
+   
+    # now we generate some nice code for default arg checking
+    # (which does not imply that the code doing it is nice :-) 
+    defaulthandlingsource = py.code.Source()
+    while defaultargs: 
+        name, value = defaultargs.pop() 
+        defaulthandlingsource = defaulthandlingsource.putaround("""\
+            if %s is None: 
+                %s = space.wrap(%s)
+        """ % (name, name, value), "")
+    wfuncdecl = ", ".join(wfuncargs) 
+    wfastdecl = ", ".join(wfastnames)
+    return wfuncdecl, wfastdecl, defaulthandlingsource 
