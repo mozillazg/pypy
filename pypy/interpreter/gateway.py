@@ -30,9 +30,6 @@ class BuiltinCode(eval.Code):
         eval.Code.__init__(self, func.__name__)
         self.func = func
         self.docstring = func.__doc__
-        # extract the signature from the (CPython-level) code object
-        tmp = pycode.PyCode(None)
-        tmp._from_code(func.func_code)
         # signature-based hacks: renaming arguments from w_xyz to xyz.
         # Currently we enforce the following signature tricks:
         #  * the first arg must be either 'self' or 'space'
@@ -40,7 +37,8 @@ class BuiltinCode(eval.Code):
         #  * '_w' suffix for the optional '*' argument
         #  * alternatively a final '__args__' means an Arguments()
         # Not exactly a clean approach XXX.
-        argnames, varargname, kwargname = tmp.signature()
+        # First extract the signature from the (CPython-level) code object
+        argnames, varargname, kwargname = pycode.cpython_code_signature(func.func_code)
         argnames = list(argnames)
         lookslikemethod = argnames[:1] == ['self']
         if ismethod is None:
@@ -139,12 +137,18 @@ class Gateway(Wrappable):
 
         # after initialization the following attributes should be set
         #   name
-        #   code 
         #   _staticglobals 
-        #   _staticdefs 
+        #   _staticdefs
+        #
+        #  getcode is called lazily to get the code object to construct
+        #  the space-bound function
 
     NOT_RPYTHON_ATTRIBUTES = ['_staticglobals', '_staticdefs']
 
+    def getcode(self, space):
+        # needs to be implemented by subclasses
+        raise TypeError, "abstract"
+        
     def __spacebind__(self, space):
         # to wrap a Gateway, we first make a real Function object out of it
         # and the result is a wrapped version of this Function.
@@ -192,7 +196,8 @@ class Gateway(Wrappable):
             return cache.content[self] 
         except KeyError: 
             defs = self.getdefaults(space)  # needs to be implemented by subclass
-            fn = Function(space, self.code, w_globals, defs, forcename = self.name)
+            code = self.getcode(space)
+            fn = Function(space, code, w_globals, defs, forcename = self.name)
             cache.content[self] = fn 
             return fn
 
@@ -200,10 +205,6 @@ class Gateway(Wrappable):
         # to get the Gateway as a method out of an instance, we build a
         # Function and get it.
         # the object space is implicitely fetched out of the instance
-        if isinstance(self.code, BuiltinCode):
-            assert self.code.ismethod, (
-                'global built-in function %r used as method' %
-                self.code.func)
         space = obj.space
         fn = self.get_function(space)
         w_obj = space.wrap(obj)
@@ -213,6 +214,9 @@ class Gateway(Wrappable):
 
 class app2interp(Gateway):
     """Build a Gateway that calls 'app' at app-level."""
+
+    NOT_RPYTHON_ATTRIBUTES = ['_staticcode']
+    
     def __init__(self, app, app_name=None):
         "NOT_RPYTHON"
         Gateway.__init__(self)
@@ -225,10 +229,15 @@ class app2interp(Gateway):
                                    "%r does not" % app.func_name)
             app_name = app.func_name[4:]
         self.name = app_name
-        self.code = pycode.PyCode(None)
-        self.code._from_code(app.func_code)
+        self._staticcode = app.func_code
         self._staticglobals = app.func_globals
         self._staticdefs = list(app.func_defaults or ())
+
+    def getcode(self, space):
+        "NOT_RPYTHON"
+        code = pycode.PyCode(space)
+        code._from_code(self._staticcode)
+        return code
 
     def getdefaults(self, space):
         "NOT_RPYTHON"
@@ -264,14 +273,24 @@ class interp2app(Gateway):
                 raise ValueError, ("function name %r suspiciously starts "
                                    "with 'app_'" % f.func_name)
             app_name = f.func_name
-        self.code = BuiltinCode(f)
+        self._code = BuiltinCode(f)
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())
         self._staticglobals = None
 
+    def getcode(self, space):
+        return self._code
+
     def getdefaults(self, space):
         "NOT_RPYTHON"
         return self._staticdefs
+
+    def get_method(self, obj):
+       assert self._code.ismethod, (
+           'global built-in function %r used as method' %
+           self._code.func)
+       return Gateway.get_method(self, obj)
+
 
 def exportall(d, temporary=False):
     """NOT_RPYTHON: Publish every function from a dict."""

@@ -68,8 +68,8 @@ class PyInterpFrame(pyframe.PyFrame):
     def getlocalvarname(self, index):
         return self.code.co_varnames[index]
 
-    def getconstant(self, index):
-        return self.code.co_consts[index]
+    def getconstant_w(self, index):
+        return self.code.co_consts_w[index]
 
     def getname(self, index):
         return self.code.co_names[index]
@@ -96,7 +96,7 @@ class PyInterpFrame(pyframe.PyFrame):
         f.valuestack.push(w_value)
 
     def LOAD_CONST(f, constindex):
-        w_const = f.space.wrap(f.getconstant(constindex))
+        w_const = f.getconstant_w(constindex)
         f.valuestack.push(w_const)
 
     def STORE_FAST(f, varindex):

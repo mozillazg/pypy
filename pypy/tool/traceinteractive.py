@@ -168,9 +168,9 @@ class TraceConsole(code.InteractiveConsole):
     def runcode(self, code):
         # 'code' is a CPython code object
         from pypy.interpreter.pycode import PyCode
-        pycode = PyCode()._from_code(code)
-
         s = self.space
+
+        pycode = PyCode(s)._from_code(code)
 
         try:
             if self.tracelevel:

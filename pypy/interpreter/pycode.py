@@ -25,17 +25,35 @@ CO_VARKEYWORDS  = 0x0008
 CO_NESTED       = 0x0010
 CO_GENERATOR    = 0x0020
 
+# cpython_code_signature helper
+def cpython_code_signature(code):
+    "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
+    argcount = code.co_argcount
+    argnames = list(code.co_varnames[:argcount])
+    if code.co_flags & CO_VARARGS:
+        varargname = code.co_varnames[argcount]
+        argcount += 1
+    else:
+        varargname = None
+    if code.co_flags & CO_VARKEYWORDS:
+        kwargname = code.co_varnames[argcount]
+        argcount += 1
+    else:
+        kwargname = None
+    return argnames, varargname, kwargname
+
 class PyCode(eval.Code):
     "CPython-style code objects."
     
-    def __init__(self, co_name=''):
+    def __init__(self, space, co_name=''):
+        self.space = space
         eval.Code.__init__(self, co_name)
         self.co_argcount = 0         # #arguments, except *vararg and **kwarg
         self.co_nlocals = 0          # #local variables
         self.co_stacksize = 0        # #entries needed for evaluation stack
         self.co_flags = 0            # CO_..., see above
         self.co_code = None          # string: instruction opcodes
-        self.co_consts = ()          # tuple: constants used
+        self.co_consts_w = ()        # tuple: constants used (wrapped!)
         self.co_names = ()           # tuple of strings: names (for attrs,...)
         self.co_varnames = ()        # tuple of strings: local variable names
         self.co_freevars = ()        # tuple of strings: free variable names
@@ -85,12 +103,13 @@ class PyCode(eval.Code):
         x = code.co_lnotab; assert isinstance(x, str)
         self.co_lnotab = x
         # recursively _from_code()-ify the code objects in code.co_consts
-        newconsts = []
+        space = self.space
+        newconsts_w = []
         for const in code.co_consts:
             if isinstance(const, types.CodeType):
-                const = PyCode()._from_code(const)
-            newconsts.append(const)
-        self.co_consts = tuple(newconsts) # xxx mixed types
+                const = PyCode(space)._from_code(const)
+            newconsts_w.append(space.wrap(const))
+        self.co_consts_w = newconsts_w
         return self
 
     def create_frame(self, space, w_globals, closure=None):
@@ -105,28 +124,18 @@ class PyCode(eval.Code):
             Frame = enhanceclass(Frame, F)
         return Frame(space, self, w_globals, closure)
 
-    def signature(self):
-        "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
-        argcount = self.co_argcount
-        argnames = list(self.co_varnames[:argcount])
-        if self.co_flags & CO_VARARGS:
-            varargname = self.co_varnames[argcount]
-            argcount += 1
-        else:
-            varargname = None
-        if self.co_flags & CO_VARKEYWORDS:
-            kwargname = self.co_varnames[argcount]
-            argcount += 1
-        else:
-            kwargname = None
-        return argnames, varargname, kwargname
+    signature = cpython_code_signature
 
     def getvarnames(self):
         return self.co_varnames
 
     def getdocstring(self):
-        if self.co_consts:   # it is probably never empty
-            return self.co_consts[0]
+        if self.co_consts_w:   # it is probably never empty
+            const0_w = self.co_consts_w[0]
+            if const0_w is self.space.w_None:
+                return None
+            else:
+                return self.space.str_w(const0_w)
         else:
             return None
 
@@ -141,20 +150,24 @@ class PyCode(eval.Code):
         # first approximation
         return dis.findlabels(self.co_code)
 
+    def fget_co_consts(space, w_self):
+        self = space.unwrap_builtin(w_self)
+        return space.newtuple(self.co_consts_w)
+
     def descr_code__new__(space, w_subtype,
                           w_argcount, w_nlocals, w_stacksize, w_flags,
                           w_codestring, w_constants, w_names,
                           w_varnames, w_filename, w_name, w_firstlineno,
                           w_lnotab, w_freevars=None, w_cellvars=None):
         code = space.allocate_instance(PyCode, w_subtype)
-        code.__init__()
+        code.__init__(space)
         # XXX typechecking everywhere!
         code.co_argcount   = space.int_w(w_argcount)
         code.co_nlocals    = space.int_w(w_nlocals)
         code.co_stacksize  = space.int_w(w_stacksize)
         code.co_flags      = space.int_w(w_flags)
         code.co_code       = space.str_w(w_codestring)
-        code.co_consts     = space.unwrap(w_constants) # xxx mixed types
+        code.co_consts_w   = space.unpacktuple(w_constants)
         code.co_names      = unpack_str_tuple(space, w_names)
         code.co_varnames   = unpack_str_tuple(space, w_varnames)
         code.co_filename   = space.str_w(w_filename)
@@ -179,7 +192,3 @@ def enhanceclass(baseclass, newclass, cache=Cache()):
     else:
         return cache.getorbuild((newclass, baseclass),
                                 _really_enhanceclass, None)
-
-
-def cpython_code_signature(co):
-    return PyCode()._from_code(co).signature()

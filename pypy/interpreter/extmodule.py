@@ -49,7 +49,7 @@ class BuiltinModule(Module):
         f.close()
         code = compile(modulesource, self.__file__, 'exec',
                        generators.compiler_flag)
-        pycode = PyCode()._from_code(code)
+        pycode = PyCode(space)._from_code(code)
 
         # Set the hooks that call back from app-level to interp-level
         w_builtins = space.w_builtins

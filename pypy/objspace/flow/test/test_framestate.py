@@ -15,7 +15,7 @@ class TestFrameState:
         except AttributeError:
             pass
         code = func.func_code
-        code = PyCode()._from_code(code)
+        code = PyCode(self.space)._from_code(code)
         w_globals = Constant({}) # space.newdict([])
         frame = code.create_frame(space, w_globals)
 

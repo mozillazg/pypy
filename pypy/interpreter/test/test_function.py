@@ -175,7 +175,7 @@ class TestMethod:
     def setup_method(self, method):
         def c(self, bar):
             return bar
-        code = PyCode()._from_code(c.func_code)
+        code = PyCode(self.space)._from_code(c.func_code)
         self.fn = Function(self.space, code)
         
     def test_get(self):
@@ -202,7 +202,7 @@ class TestMethod:
         space = self.space
         # Create some function for this test only
         def m(self): return self
-        func = Function(space, PyCode()._from_code(m.func_code))
+        func = Function(space, PyCode(self.space)._from_code(m.func_code))
         # Some shorthands
         obj1 = space.wrap(23)
         obj2 = space.wrap(42)

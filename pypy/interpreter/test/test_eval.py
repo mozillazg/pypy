@@ -8,7 +8,7 @@ class TestFrame:
     def setup_method(self, method):
         def c(x, y, *args):
             pass
-        code = PyCode()._from_code(c.func_code)
+        code = PyCode(self.space)._from_code(c.func_code)
 
         class ConcreteFastscopeFrame(Frame):
             
