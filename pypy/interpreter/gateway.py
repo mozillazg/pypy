@@ -562,7 +562,7 @@ def importall(d, temporary=False):
     for name, obj in d.items():
         if name.startswith('app_') and name[4:] not in d:
             if isinstance(obj, types.FunctionType):
-                d[name[4:]] = a2i(obj, name[4:])
+                d[name[4:]] = a2i(obj)
 
 def build_dict(d, space):
     """NOT_RPYTHON:
@@ -602,7 +602,7 @@ def preparesource(source, funcdecl):
     assert i != -1
     return d[funcdecl[:i]].func_code 
 
-def appdef(source, overridename=None): 
+def appdef(source): 
     """ NOT_RPYTHON """ 
     from pypy.interpreter.pycode import PyCode
     if not isinstance(source, str): 
@@ -612,10 +612,7 @@ def appdef(source, overridename=None):
     funcdecl, source = source.strip().split(':', 1)
     #newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
-    if overridename is not None: 
-        funcname = overridename 
-    else: 
-        funcname = funcname.strip() or 'anonymous'
+    funcname = funcname.strip() or 'anonymous'
     decl = decl.strip()[:-1] 
     wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
 
@@ -676,9 +673,9 @@ app2interp = appdef
 
 # for app2interp_temp (used for testing mainly) we can use *args
 class app2interp_temp(object): 
-    def __init__(self, func, overridename=None): 
+    def __init__(self, func): 
         """ NOT_RPYTHON """
-        self.appfunc = appdef(func, overridename) 
+        self.appfunc = appdef(func) 
 
     def __call__(self, space, *args_w, **kwargs_w): 
         """ NOT_RPYTHON """
