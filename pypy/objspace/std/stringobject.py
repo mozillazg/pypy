@@ -13,6 +13,7 @@ Py                PyPy
                   def mod__String_ANY(space, w_str, w_item):def mod__String_Tuple(space, w_str, w_tuple):def mod_str_tuple(space, w_format, w_args):
                   def ord__String(space, w_str):
                   def string_richcompare(space, w_str1, w_str2, op):
+                  def str_w__String(space, w_str):
                   def unwrap__String(space, w_str):
 __add__           def add__String_String(space, w_left, w_right):
 __class__
@@ -756,6 +757,9 @@ def app_str_translate__String_String_String(s, table, deletechars=''):
 
 str_translate__String_String_String = gateway.app2interp(app_str_translate__String_String_String)
 
+
+def str_w__String(space, w_str):
+    return w_str._value
     
 def unwrap__String(space, w_str):
     return w_str._value

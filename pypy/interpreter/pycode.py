@@ -8,6 +8,15 @@ import dis
 from pypy.interpreter import eval
 from pypy.tool.cache import Cache 
 
+# helper
+
+def unpack_str_tuple(space,w_str_tuple):
+    els = []
+    for w_el in space.unpackiterable(w_str_tuple):
+        els.append(space.str_w(w_el))
+    return tuple(els)
+
+
 # code object contants, for co_flags below
 CO_OPTIMIZED    = 0x0001
 CO_NEWLOCALS    = 0x0002
@@ -81,7 +90,7 @@ class PyCode(eval.Code):
             if isinstance(const, types.CodeType):
                 const = PyCode()._from_code(const)
             newconsts.append(const)
-        self.co_consts = tuple(newconsts)
+        self.co_consts = tuple(newconsts) # xxx mixed types
         return self
 
     def create_frame(self, space, w_globals, closure=None):
@@ -140,22 +149,22 @@ class PyCode(eval.Code):
         code = space.allocate_instance(PyCode, w_subtype)
         code.__init__()
         # XXX typechecking everywhere!
-        code.co_argcount   = space.unwrap(w_argcount)
-        code.co_nlocals    = space.unwrap(w_nlocals)
-        code.co_stacksize  = space.unwrap(w_stacksize)
-        code.co_flags      = space.unwrap(w_flags)
-        code.co_code       = space.unwrap(w_codestring)
-        code.co_consts     = space.unwrap(w_constants)
-        code.co_names      = space.unwrap(w_names)
-        code.co_varnames   = space.unwrap(w_varnames)
-        code.co_filename   = space.unwrap(w_filename)
-        code.co_name       = space.unwrap(w_name)
-        code.co_firstlineno= space.unwrap(w_firstlineno)
-        code.co_lnotab     = space.unwrap(w_lnotab)
+        code.co_argcount   = space.int_w(w_argcount)
+        code.co_nlocals    = space.int_w(w_nlocals)
+        code.co_stacksize  = space.int_w(w_stacksize)
+        code.co_flags      = space.int_w(w_flags)
+        code.co_code       = space.str_w(w_codestring)
+        code.co_consts     = space.unwrap(w_constants) # xxx mixed types
+        code.co_names      = unpack_str_tuple(space, w_names)
+        code.co_varnames   = unpack_str_tuple(space, w_varnames)
+        code.co_filename   = space.str_w(w_filename)
+        code.co_name       = space.str_w(w_name)
+        code.co_firstlineno= space.int_w(w_firstlineno)
+        code.co_lnotab     = space.str_w(w_lnotab)
         if w_freevars is not None:
-            code.co_freevars = space.unwrap(w_freevars)
+            code.co_freevars = unpack_str_tuple(space, w_freevars)
         if w_cellvars is not None:
-            code.co_cellvars = space.unwrap(w_cellvars)
+            code.co_cellvars = unpack_str_tuple(space, w_cellvars)
         return space.wrap(code)
 
 def _really_enhanceclass(key, stuff):

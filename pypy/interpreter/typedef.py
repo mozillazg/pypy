@@ -87,17 +87,17 @@ class GetSetProperty(Wrappable):
             #print w_property, w_obj, w_cls
             return w_property
         else:
-            return space.unwrap(w_property).fget(space, w_obj)
+            return space.unwrap_builtin(w_property).fget(space, w_obj)
 
     def descr_property_set(space, w_property, w_obj, w_value):
-        fset = space.unwrap(w_property).fset
+        fset = space.unwrap_builtin(w_property).fset
         if fset is None:
             raise OperationError(space.w_AttributeError,
                                  space.wrap("read-only attribute"))
         fset(space, w_obj, w_value)
 
     def descr_property_del(space, w_property, w_obj):
-        fdel = space.unwrap(w_property).fdel
+        fdel = space.unwrap_builtin(w_property).fdel
         if fdel is None:
             raise OperationError(space.w_AttributeError,
                                  space.wrap("cannot delete attribute"))

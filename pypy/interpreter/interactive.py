@@ -36,7 +36,7 @@ class PyPyConsole(code.InteractiveConsole):
                       "*** Entering interpreter-level console ***")
             local = self.__dict__.copy()
             for w_name in self.space.unpackiterable(self.w_globals):
-                local['w_' + self.space.unwrap(w_name)] = (
+                local['w_' + self.space.str_w(w_name)] = (
                     self.space.getitem(self.w_globals, w_name))
             code.interact(banner=banner, local=local)
             # copy back 'w_' names

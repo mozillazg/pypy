@@ -26,6 +26,9 @@ class TestW_IntObject:
         except FailedToImplement, arg:
             return arg[0]
 
+    def test_int_w(self):
+        assert self.space.int_w(self.space.wrap(42)) == 42
+
     def test_repr(self):
         x = 1
         f1 = iobj.W_IntObject(self.space, x)

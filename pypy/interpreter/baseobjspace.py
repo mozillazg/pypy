@@ -123,7 +123,7 @@ class ObjSpace(object):
     def not_(self, w_obj):
         return self.wrap(not self.is_true(w_obj))
 
-    def unwrapdefault(self, w_value, default):
+    def unwrapdefault(self, w_value, default): # xxx
         if w_value is None or w_value == self.w_None:
             return default
         else:
@@ -162,7 +162,7 @@ class ObjSpace(object):
     def unpacktuple(self, w_tuple, expected_length=None):
         """Same as unpackiterable(), but only for tuples.
         Only use for bootstrapping or performance reasons."""
-        tuple_length = self.unwrap(self.len(w_tuple))
+        tuple_length = self.int_w(self.len(w_tuple))
         if expected_length is not None and tuple_length != expected_length:
             raise ValueError, "got a tuple of length %d instead of %d" % (
                 tuple_length, expected_length)
@@ -361,6 +361,8 @@ ObjSpace.ExceptionTable = [
 ## Irregular part of the interface:
 #
 #                        wrap(x) -> w_x
+#                   str_w(w_str) -> str
+#                  int_w(w_ival) -> ival  
 #                    unwrap(w_x) -> x
 #                   is_true(w_x) -> True or False
 #       newtuple([w_1, w_2,...]) -> w_tuple

@@ -109,7 +109,7 @@ class BuiltinFrame(eval.Frame):
             w_args = argarray.pop()
             argarray += self.space.unpacktuple(w_args)
         if self.code.ismethod:
-            argarray[0] = self.space.unwrap(argarray[0])
+            argarray[0] = self.space.unwrap_builtin(argarray[0])
         self.argarray = argarray
 
     def getfastscope(self):
