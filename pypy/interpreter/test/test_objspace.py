@@ -68,7 +68,8 @@ class TestStdObjectSpace(test.TestCase):
         def f(x):
             return x
 
-        cpycode = f.func_code
+        from pypy.interpreter.pycode import PyCode
+        cpycode = PyCode()._from_code(f.func_code)
         w_globals = self.space.newdict([])
         w_defs = self.space.newtuple([])
         w_f = self.space.newfunction(cpycode, w_globals, w_defs)

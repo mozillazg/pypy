@@ -265,15 +265,6 @@ class SReturnValue(ControlFlowException):
     """Signals a 'return' statement.
     Argument is the wrapped object to return."""
     def emptystack(self, frame):
-        if frame.code.is_generator():
-            raise baseobjspace.NoValue
-        w_returnvalue = self.args[0]
-        raise ExitFrame(w_returnvalue)
-
-class SYieldValue(ControlFlowException):
-    """Signals a 'yield' statement.
-    Argument is the wrapped object to return."""
-    def action(self, frame, last_instr, executioncontext):
         w_returnvalue = self.args[0]
         raise ExitFrame(w_returnvalue)
 

@@ -60,11 +60,14 @@ class PyCode(eval.Code):
     def create_frame(self, space, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
         # select the appropriate kind of frame
+        from pypy.interpreter.pyopcode import PyInterpFrame as Frame
         if self.co_cellvars or self.co_freevars:
             from pypy.interpreter.nestedscope import PyNestedScopeFrame as F
-        else:
-            from pypy.interpreter.pyopcode import PyInterpFrame as F
-        return F(space, self, w_globals, closure)
+            Frame = enhanceclass(Frame, F)
+        if self.co_flags & CO_GENERATOR:
+            from pypy.interpreter.generator import GeneratorFrame as F
+            Frame = enhanceclass(Frame, F)
+        return Frame(space, self, w_globals, closure)
 
     def signature(self):
         "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
@@ -85,10 +88,23 @@ class PyCode(eval.Code):
     def getvarnames(self):
         return self.co_varnames
 
-    def is_generator(self):
-        return self.co_flags & CO_GENERATOR
-
     def dictscope_needed(self):
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
         return not (self.co_flags & CO_OPTIMIZED)
+
+
+def enhanceclass(baseclass, newclass, cache={}):
+    # this is a bit too dynamic for RPython, but it looks nice
+    # and I assume that we can easily change it into a static
+    # pre-computed table
+    if issubclass(newclass, baseclass):
+        return newclass
+    else:
+        try:
+            return cache[baseclass, newclass]
+        except KeyError:
+            class Mixed(newclass, baseclass):
+                pass
+            cache[baseclass, newclass] = Mixed
+            return Mixed
