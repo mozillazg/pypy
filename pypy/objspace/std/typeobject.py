@@ -243,7 +243,8 @@ def delattr__Type_ANY(space, w_type, w_name):
 # ____________________________________________________________
 
 
-def app_abstract_mro(klass): # abstract/classic mro
+def app_abstract_mro(klass):
+    # abstract/classic mro
     mro = []
     def fill_mro(klass):
         if klass not in mro:
