@@ -11,11 +11,8 @@ Gateway between app-level and interpreter-level:
 """
 
 import types, sys
-<<<<<<< .working
-from pypy.interpreter.error import OperationError
-=======
+
 from pypy.interpreter.error import OperationError 
->>>>>>> .merge-right.r8290
 from pypy.interpreter import eval, pycode
 from pypy.interpreter.function import Function, Method
 from pypy.interpreter.baseobjspace import Wrappable
