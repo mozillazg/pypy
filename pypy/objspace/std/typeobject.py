@@ -106,21 +106,19 @@ class W_TypeObject(W_Object):
             if isinstance(w_new, Function):
                 w_self.dict_w['__new__'] = StaticMethod(w_new)
 
+    def getdictvalue(w_self, space, attr):
+        try:
+            return w_self.dict_w[attr]
+        except KeyError:
+            return None
+
     def lookup(w_self, key):
         # note that this doesn't call __get__ on the result at all
         space = w_self.space
         for w_class in w_self.mro_w:
-            try:
-                if isinstance(w_class, W_TypeObject):
-                    return w_class.dict_w[key]
-                else:
-                    try:
-                        return space.getitem(space.getdict(w_class),space.wrap(key))
-                    except OperationError,e:
-                        if not e.match(space, space.w_KeyError):
-                            raise
-            except KeyError:
-                pass
+            w_value = space.getdictvalue(w_class, key)
+            if w_value is not None:
+                return w_value
         return None
 
     def lookup_where(w_self, key):
@@ -128,17 +126,9 @@ class W_TypeObject(W_Object):
         # attribute was found
         space = w_self.space
         for w_class in w_self.mro_w:
-            try:
-                if isinstance(w_class, W_TypeObject):
-                    return w_class, w_class.dict_w[key]
-                else:
-                    try:
-                        return w_class, space.getitem(space.getdict(w_class),space.wrap(key))
-                    except OperationError,e:
-                        if not e.match(space, space.w_KeyError):
-                            raise                
-            except KeyError:
-                pass
+            w_value = space.getdictvalue(w_class, key)
+            if w_value is not None:
+                return w_class, w_value
         return None, None
 
     def check_user_subclass(w_self, w_subtype):

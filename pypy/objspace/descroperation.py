@@ -12,15 +12,12 @@ class Object:
         if w_descr is not None:
             if space.is_data_descr(w_descr):
                 return space.get(w_descr, w_obj)
-        w_dict = space.getdict(w_obj)
-        if w_dict is not None:  
-            try:
-                return space.getitem(w_dict, w_name)
-            except OperationError, e:
-                if not e.match(space, space.w_KeyError):
-                    raise
+        w_value = space.getdictvalue(w_obj, name)
+        if w_value is not None:
+            return w_value
         if w_descr is not None:
             return space.get(w_descr, w_obj)
+
         raise OperationError(space.w_AttributeError, w_name)
 
     def descr__setattr__(space, w_obj, w_name, w_value):
@@ -56,6 +53,9 @@ class DescrOperation:
 
     def getdict(space, w_obj):
         return w_obj.getdict()
+
+    def getdictvalue(space, w_obj, attr):
+        return w_obj.getdictvalue(space, attr)
 
     def is_data_descr(space, w_obj):
         return space.lookup(w_obj, '__set__') is not None

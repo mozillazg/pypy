@@ -13,6 +13,18 @@ class W_Root:
     in a 'normal' object space like StdObjSpace."""
     def getdict(self):
         return None
+
+    def getdictvalue(self, space, attr):
+        w_dict = self.getdict()
+        if w_dict is not None:
+            try:
+                return space.getitem(w_dict, space.wrap(attr))
+            except OperationError, e:
+                if not e.match(space, space.w_KeyError):
+                    raise
+        return None
+
+    
     def getclass(self, space):
         return space.gettypeobject(self.typedef)
 
