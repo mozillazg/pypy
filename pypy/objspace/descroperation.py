@@ -7,7 +7,7 @@ from pypy.interpreter.argument import Arguments
 
 def raiseattrerror(space, w_obj, name): 
     w_type = space.type(w_obj) 
-    msg = "'%s' object has not attribute '%s'" %(w_type.name, name)
+    msg = "'%s' object has no attribute '%s'" %(w_type.name, name)
     raise OperationError(space.w_AttributeError, space.wrap(msg))
 
 class Object:
