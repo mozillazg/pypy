@@ -10,16 +10,10 @@ class Module(Wrappable):
 
     def __init__(self, space, w_name, w_dict=None):
         self.space = space
-        if w_dict is None:
+        if w_dict is None: 
             w_dict = space.newdict([])
-        self.w_dict = w_dict
-        self.w_name = w_name
-        space.setitem(w_dict, space.wrap('__name__'), w_name)
-        if not space.is_true(space.contains(w_dict, space.wrap('__doc__'))):
-            space.setitem(w_dict, space.wrap('__doc__'), space.w_None)
-
-    def get(self, name):
-        return self.space.getitem(self.w_dict, self.space.wrap(name))
+        self.w_dict = w_dict 
+        self.descr_module__init__(w_name)
 
     def getdict(self):
         return self.w_dict
@@ -35,17 +29,31 @@ class Module(Wrappable):
     def descr_module__init__(self, w_name, w_doc=None):
         space = self.space
         self.w_name = w_name
-        space.setitem(self.w_dict, space.wrap('__name__'), w_name)
-        if w_doc is not None:
-            space.setitem(self.w_dict, space.wrap('__doc__'), w_doc)
+        if w_doc is None:  
+            w_doc = space.w_None
+        w_dict = self.getdict()
+        space.setitem(w_dict, space.wrap('__name__'), w_name)
+        space.setitem(w_dict, space.wrap('__doc__'), w_doc)
 
-    def descr_module__getattr__(self, w_attr):
-        return self.ARGL_getattr(w_attr) 
-
-    def ARGL_getattr(self, w_attr): 
+    def descr_module__getattribute__(self, w_attr):
         space = self.space
+        w_self = space.wrap(self)
         attr = space.str_w(w_attr)
-        # ______ for the 'sys' module only _____ XXX generalize
+        w_result = space.lookup(w_self, attr) 
+        if w_result is None:
+            return self.get(attr) 
+        else:
+            return space.get(w_result, w_self)
+
+    def get(self, attr): 
+        space = self.space
+        try: 
+            return space.getitem(self.w_dict, self.space.wrap(attr))
+        except OperationError, e: 
+            if not e.match(space, space.w_KeyError): 
+                raise 
+        # ______ for the 'sys' module only _____ XXX put that
+        # into a special subclass at some point 
         if self is space.sys:
             if attr == 'exc_type':
                 operror = space.getexecutioncontext().sys_exc_info()

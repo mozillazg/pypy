@@ -111,6 +111,7 @@ class TestMixedModule:
         space.appexec([w_module], """
             (module): 
                 assert module.value is None 
+                assert module.__doc__ == 'mixedmodule doc'
 
                 assert module.somefunc is module.somefunc 
                 result = module.somefunc() 
@@ -121,6 +122,6 @@ class TestMixedModule:
                 assert appresult == 42 
 
                 assert module.__dict__ is module.__dict__
-                for name in ('somefunc', 'someappfunc'): 
+                for name in ('somefunc', 'someappfunc', '__doc__', '__name__'): 
                     assert name in module.__dict__
         """)
