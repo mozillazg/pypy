@@ -9,16 +9,6 @@ import __builtin__ as _b
 
 class Builtin(BuiltinModule):
     __pythonname__ = '__builtin__'
-    #__appfile__ = appfile.AppFile(__name__, ["module"])
-
-    #__helper_appfile__ = appfile.AppFile('builtin_helper',["module"])
-
-    # temporary hack, until we have a real tuple type for calling
-    #def tuple(self, w_obj):
-    #    lis = self.space.unpackiterable(w_obj)
-    #    w_res = self.space.newtuple(lis)
-    #    return w_res
-    #tuple = appmethod(tuple)
 
     def _actframe(self, index=-1):
         return self.space.getexecutioncontext().framestack.items[index]
@@ -93,13 +83,13 @@ class Builtin(BuiltinModule):
         return space.wrap(res)
     compile = appmethod(compile)
 
-    def execfile(self, w_filename, w_globals, w_locals):
+    def execfile(self, w_filename, w_globals=None, w_locals=None):
         space = self.space
         #XXX why do i have to check against space.w_None instead of None?
         #    above the compile commands *does* check against None
-        if w_globals is None or w_globals is space.w_None:
+        if w_globals is space.w_None:
             w_globals = self._actframe().w_globals
-        if w_locals is None or w_globals is space.w_None: 
+        if w_locals is space.w_None: 
             w_locals = w_globals
 
         filename = space.unwrap(w_filename)
@@ -174,16 +164,13 @@ class Builtin(BuiltinModule):
         return self.space.ord(w_val)
     ord = appmethod(ord)
 
-
     def pow(self, w_val):
         return self.space.pow(w_val)
     pow = appmethod(pow)
 
-
     def repr(self, w_object):
         return self.space.repr(w_object)
     repr = appmethod(repr)
-
 
     def setattr(self, w_object, w_name, w_val):
         return self.space.setattr(w_object, w_name, w_val)

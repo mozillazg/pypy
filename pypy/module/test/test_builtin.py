@@ -52,13 +52,42 @@ class TestBuiltinApp(test.AppTestCase):
         self.assertEquals(iter_x.next(), 3)
         self.assertRaises(StopIteration, iter_x.next)
 
-class TestCmp(test.TestCase):
-   
     def test_cmp(self):
-       self.failUnless(cmp(9, 9) == 0)
-       self.failUnless(cmp(0,9) < 0)
-       self.failUnless(cmp(9,0) > 0)
- 
+        self.assertEquals(cmp(9,9), 0)
+        self.assert_(cmp(0,9) < 0)
+        self.assert_(cmp(9,0) > 0)
+
+class TestInternal(test.IntTestCase):
+
+    def setUp(self):
+        self.space = space = test.objspace()
+
+    def get_builtin(self, name):
+        w = self.space.wrap
+        w_builtins = self.space.w_builtins
+        w_obj = self.space.getitem(w_builtins, w(name))
+        return w_obj
+   
+    def test_execfile(self):
+        # we need cpython's tempfile currently to test 
+        from tempfile import mktemp
+        fn = mktemp()
+        f = open(fn, 'w')
+        print >>f, "i=42"
+        f.close()
+
+        try:
+            w_execfile = self.get_builtin('execfile')
+            space = self.space
+            w_dict = space.newdict([])
+            self.space.call(w_execfile, space.newtuple([
+                space.wrap(fn), w_dict, space.w_None]), space.newdict([]))
+            w_value = space.getitem(w_dict, space.wrap('i'))
+            self.assertEqual_w(w_value, space.wrap(42))
+        finally:
+            import os
+            os.remove(fn)
+
 if __name__ == '__main__':
     test.main()
  

@@ -1,6 +1,5 @@
 from executioncontext import ExecutionContext, OperationError, NoValue
-import pyframe, threadlocals
-import pypy.module.builtin
+import threadlocals
 
 __all__ = ['ObjSpace', 'OperationError', 'NoValue', 'PyPyError']
 
@@ -22,6 +21,7 @@ class ObjSpace:
         self.initialize()
 
     def make_builtins(self):
+        import pypy.module.builtin
         self.builtin = pypy.module.builtin.Builtin(self)
         self.w_builtin = self.builtin.wrap_base()
         self.w_builtins = self.getattr(self.w_builtin, self.wrap("__dict__"))
