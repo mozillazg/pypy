@@ -219,17 +219,22 @@ def init__ANY(space, w_obj, w_args, w_kwds):
 class UnwrapError(Exception):
     pass
 
+def typed_unwrap_error_msg(space, expected, w_obj):
+    w = space.wrap
+    type_name = space.str_w(space.getattr(space.type(w_obj),w("__name__")))
+    return w("expected %s, got %s object" % (expected, type_name))
+
 def int_w__ANY(space,w_obj):
     raise OperationError(space.w_TypeError,
-                         space.wrap("expected integer"))
+                         typed_unwrap_error_msg(space, "integer", w_obj))
 
 def str_w__ANY(space,w_obj):
     raise OperationError(space.w_TypeError,
-                         space.wrap("expected str"))
+                         typed_unwrap_error_msg(space, "string", w_obj))
 
 def float_w__ANY(space,w_obj):
     raise OperationError(space.w_TypeError,
-                         space.wrap("expected float"))
+                         typed_unwrap_error_msg(space, "float", w_obj))
 
 def unwrap__ANY(space, w_obj):
     if isinstance(w_obj, BaseWrappable):
