@@ -1,7 +1,7 @@
-from pypy.interpreter.newmodule import ExtModule
+from pypy.interpreter.lazymodule import LazyModule 
 from pypy.interpreter.error import OperationError 
 
-class Module(ExtModule):
+class Module(LazyModule):
     """Sys Builtin Module. """
     def __init__(self, space, w_name): 
         super(Module, self).__init__(space, w_name) 
@@ -87,7 +87,7 @@ class Module(ExtModule):
 
     def getdictvalue(self, space, attr): 
         """ specialize access to dynamic exc_* attributes. """ 
-        value = ExtModule.getdictvalue(self, space, attr) 
+        value = LazyModule.getdictvalue(self, space, attr) 
         if value is not None: 
             return value 
         if attr == 'exc_type':

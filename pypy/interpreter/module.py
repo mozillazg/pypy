@@ -36,32 +36,3 @@ class Module(Wrappable):
         w_dict = self.getdict()
         space.setitem(w_dict, space.wrap('__name__'), w_name)
         space.setitem(w_dict, space.wrap('__doc__'), w_doc)
-
-    def getdictvalue(self, space, attr): 
-        try: 
-            return space.getitem(self.w_dict, self.space.wrap(attr))
-        except OperationError, e: 
-            if not e.match(space, space.w_KeyError): 
-                raise 
-        # ______ for the 'sys' module only _____ XXX put that
-        # into a special subclass at some point 
-        if self is space.sys:
-            if attr == 'exc_type':
-                operror = space.getexecutioncontext().sys_exc_info()
-                if operror is None:
-                    return space.w_None
-                else:
-                    return operror.w_type
-            if attr == 'exc_value':
-                operror = space.getexecutioncontext().sys_exc_info()
-                if operror is None:
-                    return space.w_None
-                else:
-                    return operror.w_value
-            if attr == 'exc_traceback':
-                operror = space.getexecutioncontext().sys_exc_info()
-                if operror is None:
-                    return space.w_None
-                else:
-                    return space.wrap(operror.application_traceback)
-        return None 

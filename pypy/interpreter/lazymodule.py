@@ -5,7 +5,7 @@ from pypy.interpreter.error import OperationError
 
 import inspect
 
-class ExtModule(Module):
+class LazyModule(Module):
 
     NOT_RPYTHON_ATTRIBUTES = ['loaders']
     
