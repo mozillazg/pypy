@@ -69,5 +69,14 @@ def test_app2interp_somefunc(space):
     app = appdef(somefunc) 
     w_result = app(space) 
     assert space.eq_w(w_result, space.wrap(42))
+
+def app_test_something_at_app_level(): 
+    x = 2
+    assert x/2 == 1
     
+class AppTestMethods: 
+    def test_somee_app_test_method(self): 
+        assert 2 == 2
+
+
 
