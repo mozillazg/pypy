@@ -615,7 +615,7 @@ def appdef(source, overridename=None):
     if overridename is not None: 
         funcname = overridename 
     else: 
-        funcname = funcname.strip()
+        funcname = funcname.strip() or 'anonymous'
     decl = decl.strip()[:-1] 
     wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
 

@@ -748,17 +748,15 @@ class PyInterpFrame(pyframe.PyFrame):
 # class above.
 
 def print_expr(space, w_x): 
-    space.appexec([w_x], """
-        (x): 
-            try:
-                displayhook = sys.displayhook
-            except AttributeError:
-                raise RuntimeError("lost sys.displayhook")
-            displayhook(x)
-    """)
+    try:
+        w_displayhook = space.getattr(space.w_sys, space.wrap('displayhook'))
+    except OperationError, e:
+        if not e.match(space, space.w_AttributeError):
+            raise
+        raise OperationError(space.w_RuntimeError, "lost sys.displayhook")
+    space.call_function(w_displayhook, w_x)
 
-def file_softspace(space, w_file, w_newflag): 
-    return space.appexec([w_file, w_newflag], """
+file_softspace = gateway.appdef("""
         (file, newflag):
             try:
                 softspace = file.softspace
