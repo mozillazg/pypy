@@ -461,8 +461,8 @@ class PyInterpFrame(pyframe.PyFrame):
             w_value = f.builtin.getdictvalue(f.space, varname)
             if w_value is None:
                 message = "global name '%s' is not defined" % varname
-                raise OperationError(space.w_NameError,
-                                     space.wrap(message))
+                raise OperationError(f.space.w_NameError,
+                                     f.space.wrap(message))
         f.valuestack.push(w_value)
 
     def DELETE_FAST(f, varindex):
