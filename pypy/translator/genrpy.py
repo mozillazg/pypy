@@ -96,9 +96,7 @@ class UniqueList(list):
                 list.append(self, arg)
             
 class GenRpy:
-    def __init__(self, fname, translator, modname=None, ftmpname=None):
-        self.fname = fname
-        self.ftmpname = ftmpname
+    def __init__(self, translator, modname=None):
         self.translator = translator
         self.modname = self.trans_funcname(modname or
                         uniquemodulename(translator.functions[0].__name__))
@@ -131,12 +129,6 @@ class GenRpy:
         #self.space = StdObjSpace() # for introspection
         self.space = FlowObjSpace() # for introspection
         
-        # just for debugging
-        global _gen; _gen = self
-        
-        #self.gen_source()
-        # opening the class to more parameterisation
-
         self.use_fast_call = False        
         
     def expr(self, v, localnames, wrapped = True):
@@ -187,13 +179,13 @@ class GenRpy:
             fmt = "%s = %s([%s])"
         else:
             fmt = "%s = %s(%s)"
-        # specialc ase is_true
+        # special case is_true
         wrapped = op.opname != "is_true"
         oper = "space.%s" % op.opname
         return fmt % (self.expr(op.result, localnames, wrapped), oper,
                       self.arglist(op.args, localnames))
 
-    def large_assignment(self,left, right, margin=65):
+    def large_assignment(self, left, right, margin=65):
         expr = "(%s) = (%s)" % (", ".join(left), ", ".join(right))
         pieces = expr.split(",")
         res = [pieces.pop(0)]
@@ -203,6 +195,18 @@ class GenRpy:
                 res.append(piece)
             else:
                 res[-1] += (","+piece)
+        return res
+
+    def large_initialize(self, vars, margin=65):
+        res = []
+        nonestr = "None"
+        margin -= len(nonestr)
+        for var in vars:
+            ass = var+"="
+            if not res or len(res[-1]) >= margin:
+                res.append(ass)
+            res[-1] += ass
+        res = [line + nonestr for line in res]
         return res
 
     def gen_link(self, link, localvars, blocknum, block, linklocalvars=None):
@@ -274,7 +278,10 @@ class GenRpy:
 
     def nameof_object(self, value):
         if type(value) is not object:
-            raise Exception, "nameof(%r) in %r" % (value, self.current_func)
+            #raise Exception, "nameof(%r) in %r" % (value, self.currentfunc)
+            name = self.uniquename('g_unknown_%r' % value)
+            self.initcode.append('# cannot build %s as %r' % (name, object))
+            return name
         name = self.uniquename('g_object')
         self.initcode.append('m.%s = object()'%name)
         return name
@@ -301,9 +308,9 @@ class GenRpy:
         return name
 
     def nameof_long(self, value):
-    	# allow short longs only, meaning they
-    	# must fit into a machine word.
-    	assert (sys.maxint*2+1)&value==value, "your literal long is too long"
+        # allow short longs only, meaning they
+        # must fit into a machine word.
+        assert (sys.maxint*2+1)&value==value, "your literal long is too long"
         # assume we want them in hex most of the time
         if value < 256L:
             s = "%dL" % value
@@ -344,7 +351,7 @@ class GenRpy:
         # debugging only!  Generates a placeholder for missing functions
         # that raises an exception when called.
         name = self.uniquename('gskippedfunc_' + func.__name__)
-        self.globaldecl.append('# global decl %s' % (name, name))
+        self.globaldecl.append('# global decl %s' % (name, ))
         self.initcode.append('# build func %s' % name)
         return name
 
@@ -391,7 +398,7 @@ class GenRpy:
             typ = self.nameof(meth.im_class)
             name = self.uniquename('gmeth_'+meth.im_func.__name__)
             self.initcode.append(
-                '%s = space.getattr(%s, %s))'%(name, ob, func))
+                '%s = space.getattr(%s, %s)'%(name, ob, func))
             return name
 
     def should_translate_attr(self, pbc, attr):
@@ -427,10 +434,10 @@ class GenRpy:
                 instance.__class__.__name__, name))
         else:
             # this seems to hardly work with the faked stuff
-            self.initcode.append('import types\n'
-                                 '_ins = space.wrap(types.InstanceType)\n'
-                                 '_tup = space.newtuple([%s])\n'
-                                 'm.%s = space.call(_ins, _tup)' % (
+            self.initcode.append('from types import InstanceType')
+            self.initcode.append('w_InstanceType = space.wrap(InstanceType)')
+            self.initcode.append('_tup = space.newtuple([%s])\n'
+                                 'm.%s = space.call(w_InstanceType, _tup)' % (
                 cls, name))
         self.later(initinstance())
         return name
@@ -470,12 +477,15 @@ class GenRpy:
             raise Exception, "%r should never be reached" % (cls,)
 
         metaclass = "space.w_type"
+        name = self.uniquename('gcls_' + cls.__name__)
         if issubclass(cls, Exception):
             if cls.__module__ == 'exceptions':
                 if hasattr(self.space, "w_%s" % cls.__name__):
                     return 'space.w_%s'%cls.__name__
                 else:
-                    return 'space.wrap(%s)' % cls.__name__
+                    self.initcode.append('m.%s = space.wrap(%s)' % (
+                                         name, cls.__name__))
+                    return name
             #else:
             #    # exceptions must be old-style classes (grr!)
             #    metaclass = "&PyClass_Type"
@@ -483,14 +493,13 @@ class GenRpy:
         # pypy source uses old-style classes, to avoid strange problems.
         if not isinstance(cls, type):
             assert type(cls) is type(Exception)
-            self.initcode.append("import types\n"
-                                 "m.classtype = space.wrap(types.ClassType)\n")
+            # self.initcode.append("import types\n"
+            #                      "m.classtype = space.wrap(types.ClassType)\n")
             # metaclass = "m.classtype"
             # XXX I cannot instantiate these.
-            # XXX using type instead, since we still inherit from excepetion
+            # XXX using type instead, since we still inherit from exception
             # XXX what is the future of classes in pypy?
 
-        name = self.uniquename('gcls_' + cls.__name__)
         basenames = [self.nameof(base) for base in cls.__bases__]
         def initclassobj():
             content = cls.__dict__.items()
@@ -568,10 +577,12 @@ class GenRpy:
         # XXX here we get <W_TypeObject(FakeDescriptor)>,
         # while eval gives us <W_TypeObject(GetSetProperty)>
         type(type.__dict__['__dict__']): 'eval_helper(space,'\
-            ' "type(type.__dict__[\'__dict__\']))',
+            ' "type(type.__dict__[\'__dict__\'])")',
         # type 'member_descriptor':
         # XXX this does not work in eval!
-        type(type.__dict__['__basicsize__']): "cannot eval type(type.__dict__['__basicsize__'])",
+        # type(type.__dict__['__basicsize__']): "cannot eval type(type.__dict__['__basicsize__'])",
+        # XXX there seems to be no working support for member descriptors ???
+        type(type.__dict__['__basicsize__']): "space.wrap(type(type.__dict__['__basicsize__']))",
         }
 
     def nameof_type(self, cls):
@@ -629,14 +640,17 @@ class GenRpy:
 
     def nameof_file(self, fil):
         if fil is sys.stdin:
-            return '#XXX howto: PySys_GetObject("stdin")'
+            return 'PySys_GetObject("stdin")'
         if fil is sys.stdout:
-            return '#XXX howto: PySys_GetObject("stdout")'
+            return 'PySys_GetObject("stdout")'
         if fil is sys.stderr:
-            return '#XXX howto: PySys_GetObject("stderr")'
+            return 'PySys_GetObject("stderr")'
         raise Exception, 'Cannot translate an already-open file: %r' % (fil,)
 
-    def gen_source(self):
+    def gen_source(self, fname, ftmpname=None):
+        self.fname = fname
+        self.ftmpname = ftmpname
+
         # generate unordered source file, first.
         # I prefer this over ordering everything in memory.
         fname = self.fname
@@ -697,7 +711,7 @@ class GenRpy:
         # function implementations
         while self.pendingfunctions:
             func = self.pendingfunctions.pop()
-            self.current_func = func
+            self.currentfunc = func
             self.gen_rpyfunction(func)
             # collect more of the latercode after each function
             while self.latercode:
@@ -780,8 +794,7 @@ class GenRpy:
         fast_set = dict(zip(fast_args, fast_args))
 
         # create function declaration
-        name = func.__name__  # change this
-        #args = [self.expr(var, localnames) for var in fast_args]
+        name = func.__name__
         argstr = ", ".join(fast_args)
         fast_function_header = ('def %s(space, %s):'
                                 % (fast_name, argstr))
@@ -810,18 +823,7 @@ class GenRpy:
             return fmt % ', '.join(seq)
 
         print >> f, '    defaults_w = (%s)' % tupstr(name_of_defaults)
-        # code not used:
-        fmt = 'O'*min_number_of_args
-        if min_number_of_args < len(positional_args):
-            fmt += '|' + 'O'*(len(positional_args)-min_number_of_args)
-        lst = ['args', 'kwds',
-               '"%s:%s"' % (fmt, func.__name__),
-               'kwlist',
-               ]
-        lst += ['&' + a.name for a in positional_args]
-        #print >> f, '\tif (!PyArg_ParseTupleAndKeywords(%s))' % ', '.join(lst),
 
-        print >> f, '    # XXX should parse args here, but no keyword support in gateway'
         theargs = [arg for arg in fast_args if arg != varname]
         txt = ('from pypy.translator.genrpy import PyArg_ParseMini\n'
                'm.PyArg_ParseMini = PyArg_ParseMini\n'
@@ -842,7 +844,11 @@ class GenRpy:
         print >> f, fast_function_header
 
         fast_locals = [arg for arg in localnames if arg not in fast_set]
-        
+        if fast_locals:
+            print >> f
+            for line in self.large_initialize(fast_locals):
+                print >> f, "    %s" % line
+            print >> f
         # generate an incref for each input argument
         # skipped
 
@@ -979,7 +985,7 @@ class GenRpy:
     RPY_INIT_HEADER = RPY_SEP + '''
 
 def init%(modname)s(space):
-    """NOT RPYTHON"""
+    """NOT_RPYTHON"""
     class m: pass # fake module
     m.__dict__ = globals()
 '''
@@ -1061,11 +1067,16 @@ class TestClass:pass
 
 def ff(a, b, c=3,*rest):
     try:
-        raise SystemError, 42
-        return a+b
-    finally:
-        a = 7
-        return len(rest),c
+        try:
+            if rest:
+                raise SystemError, 42
+            return a+b
+        finally:
+            a = 7
+            if rest:
+                return len(rest),c
+    except TypeError:
+        print "eek"
 
 glob = 100
 def fff():
@@ -1129,21 +1140,29 @@ def test_strutil():
     return (strutil.string_to_int("42"),
             strutil.string_to_long("12345678901234567890"))
 
+def test_struct():
+    from pypy.appspace import struct
+    import struct as stru
+    res1 = stru.pack('f',1.23), struct.pack('f',1.23)
+    res2 = struct.unpack('f', struct.pack('f',1.23))
+    return res1, res2
+
 def all_entries():
     res = [func() for func in entry_points[:-1]]
     return res
 
 entry_points = (lambda: f(2, 3),
-               lambda: ff(2, 3, 5),
-               fff,
-               lambda: app_str_decode__String_ANY_ANY("hugo"),
-               test_mod,
-               test_md5,
-               test_join,
-               test_iter,
-               test_strutil,
+                lambda: ff(2, 3, 5),
+                fff,
+                lambda: app_str_decode__String_ANY_ANY("hugo"),
+                test_mod,
+                test_md5,
+                test_join,
+                test_iter,
+                test_strutil,
+                test_struct,
                all_entries)
-entry_point = entry_points[-1]
+entry_point = entry_points[-2]
 
 if __name__ == "__main__":
     import os, sys
@@ -1154,18 +1173,31 @@ if __name__ == "__main__":
     if appdir not in sys.path:
         sys.path.insert(0, appdir)
 
-    fname = "d:/tmp/look.py"
     t = Translator(entry_point, verbose=False, simplifying=True)
-    gen = GenRpy(fname, t)
-    gen.use_fast_call= True
-    gen.gen_source()
+    gen = GenRpy(t)
+    gen.use_fast_call = True
     import pypy.appspace.generated as tmp
     pth = os.path.dirname(tmp.__file__)
+    ftmpname = "d:/tmp/look.py"
     fname = os.path.join(pth, gen.modname+".py")
-    file(fname, "w").write(file(fname).read())
+    gen.gen_source(fname, ftmpname)
 
     #t.simplify()
     #t.view()
     # debugging
     graph = t.getflowgraph()
     ab = ordered_blocks(graph) # use ctrl-b in PyWin with ab
+
+def crazy_test():
+    """ this thingy is generating the whole interpreter in itself"""
+    # but doesn't work, my goto's give a problem for flow space
+    dic = {"__builtins__": __builtins__, "__name__": "__main__"}
+    execfile("d:/tmp/look.py", dic)
+    
+    def test():
+        f_ff(space, 2, 3)
+    test = type(test)(test.func_code, dic)
+        
+    t = Translator(test, verbose=False, simplifying=True)
+    gen = GenRpy(t)
+    gen.gen_source("d:/tmp/look2.py")
