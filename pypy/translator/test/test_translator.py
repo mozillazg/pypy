@@ -40,7 +40,7 @@ class TranslatorTestCase(testit.IntTestCase):
     def test_sieve_of_eratosthenes(self):
         t = Translator(snippet.sieve_of_eratosthenes)
         t.simplify()
-        t.annotate([]).simplify()
+        t.annotate([])#.simplify()
         #t.view()
         sieve_of_eratosthenes = t.compile()
         self.assertEquals(sieve_of_eratosthenes(), 1028)
