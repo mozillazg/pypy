@@ -37,16 +37,9 @@ class Signature:
         self.argnames = argnames
         self.varargname = varargname
         self.kwargname = kwargname
-        self.rewind()
 
-    def rewind(self):
-        self._iter = iter(self.argnames)
-        
-    def __iter__(self):
-        return self
-
-    def next(self):
-        return self._iter.next()
+    def next_arg(self):
+        return self._argiter.next()
 
     def append(self, argname):
         self.argnames.append(argname)
@@ -54,11 +47,155 @@ class Signature:
     def signature(self):
         return self.argnames, self.varargname, self.kwargname
 
-def apply_unwrap_spec(unwrap_spec, orig_sig, new_sig, recipes):
-    for el in unwrap_spec:
-        recipes[el](orig_sig, new_sig)
-    return new_sig
+    def apply_unwrap_spec(self, unwrap_spec, recipe, new_sig):
+        self._argiter = iter(self.argnames)
+        for el in unwrap_spec:
+            recipe(el, self, new_sig)
+        return new_sig
 
+
+class UnwrapSpecRecipe:
+
+    bases_order = [W_Root, ObjSpace, Arguments, object]
+
+    def dispatch(self, meth_family, el, orig_sig, new_sig):
+        if isinstance(el,str):
+            getattr(self, "%s_%s" % (meth_family, el))(el, orig_sig, new_sig)
+        else:
+            for typ in self.bases_order:
+                if issubclass(el, typ):
+                    getattr(self, "%s__%s" % (meth_family, typ.__name__))(el, orig_sig, new_sig)
+                    break
+            else:
+                assert False, "no match for unwrap_spec element: %s" % el
+
+    def check(self, el, orig_sig, new_sig):
+        self.dispatch("check", el, orig_sig, new_sig)
+
+    def emit(self, el, orig_sig, new_sig):
+        self.dispatch("emit", el, orig_sig, new_sig)
+
+
+    # checks for checking interp2app func argument names wrt unwrap_spec
+    # and synthetizing an app-level signature
+
+    def check__ObjSpace(self, el, orig_sig, new_sig):
+        orig_sig.next_arg()
+
+    def check_self(self, el, orig_sig, app_sig): # xxx
+        argname = orig_sig.next_arg()
+        app_sig.append(argname)
+
+    def check__W_Root(self, el, orig_sig, app_sig):
+        argname = orig_sig.next_arg()
+        assert argname.startswith('w_'), (
+            "argument %s of built-in function %r should "
+            "start with 'w_'" % (argname, orig_sig.func))
+        app_sig.append(argname[2:])
+
+    def check__Arguments(self, el, orig_sig, app_sig):
+        argname = orig_sig.next_arg()
+        assert app_sig.varargname is None,(
+            "built-in function %r has conflicting rest args specs" % orig_sig.func)
+        app_sig.varargname = 'args'
+        app_sig.kwargname = 'keywords'
+
+    def check_starargs(self, el, orig_sig, app_sig):
+        varargname = orig_sig.varargname
+        assert varargname.endswith('_w'), (
+            "argument *%s of built-in function %r should end in '_w'" %
+            (varargname, orig_sig.func))
+        assert app_sig.varargname is None,(
+            "built-in function %r has conflicting rest args specs" % orig_sig.func)
+        app_sig.varargname = varargname[:-2]
+
+    def check_args_w(self, el, orig_sig, app_sig):
+        argname = orig_sig.next_arg()
+        assert argname.endswith('_w'), (
+            "rest arguments arg %s of built-in function %r should end in '_w'" %
+            (argname, orig_sig.func))
+        assert app_sig.varargname is None,(
+            "built-in function %r has conflicting rest args specs" % orig_sig.func)
+        app_sig.varargname = argname[:-2]    
+
+    def check_w_args(self, el, orig_sig, app_sig):
+        argname = orig_sig.next_arg()
+        assert argname.startswith('w_'), (
+            "rest arguments arg %s of built-in function %r should start 'w_'" %
+            (argname, orig_sig.func))
+        assert app_sig.varargname is None,(
+            "built-in function %r has conflicting rest args specs" % orig_sig.func)
+        app_sig.varargname = argname[2:]
+
+    def check__object(self, el, orig_sig, app_sig):
+        if el not in (int, str, float):
+            assert False, "unsupported basic type in uwnrap_spec"
+        name = el.__name__
+        argname = orig_sig.next_arg()
+        assert not argname.startswith('w_'), (
+            "unwrapped %s argument %s of built-in function %r should "
+            "not start with 'w_'" % (name, argname, orig_sig.func))
+        app_sig.append(argname)        
+
+    # collect code to emit for interp2app builtin frames based on unwrap_spec
+
+    def emit__ObjSpace(self, el, orig_sig, emit_sig):
+        emit_sig.run_args.append('self.space')
+
+    def emit_self(self, el, orig_sig, emit_sig): # xxx
+        emit_sig.setfastscope.append(
+            "self.self_arg = self.space.interpclass_w(scope_w[%d])" %
+                (emit_sig.through_scope_w))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.self_arg")
+
+    def emit__W_Root(self, el, orig_sig, emit_sig):
+        cur = emit_sig.through_scope_w
+        emit_sig.setfastscope.append(
+            "self.w_arg%d = scope_w[%d]" % (cur,cur))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.w_arg%d" % cur)
+
+    def emit__Arguments(self, el, orig_sig, emit_sig):
+        cur = emit_sig.through_scope_w
+        emit_sig.through_scope_w += 2
+        emit_sig.setfastscope.append(
+            "self.arguments_arg = "
+            "Arguments.frompacked(self.space,scope_w[%d],scope_w[%d])"
+                % (cur, cur+1))
+        emit_sig.run_args.append("self.arguments_arg")
+
+    def emit_starargs(self, el, orig_sig, emit_sig):
+        emit_sig.setfastscope.append(
+            "self.starargs_arg_w = self.space.unpacktuple(scope_w[%d])" %
+                (emit_sig.through_scope_w))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("*self.starargs_arg_w")
+
+    def emit_args_w(self, el, orig_sig, emit_sig):
+        emit_sig.setfastscope.append(
+            "self.args_w = self.space.unpacktuple(scope_w[%d])" %
+                 (emit_sig.through_scope_w))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.args_w")
+
+    def emit_w_args(self, el, orig_sig, emit_sig):
+        cur = emit_sig.through_scope_w
+        emit_sig.setfastscope.append(
+            "self.w_args = scope_w[%d]" % cur)
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.w_args")
+
+    def emit__object(self, el, orig_sig, emit_sig):
+        if el not in (int, str, float):
+            assert False, "unsupported basic type in uwnrap_spec"
+        name = el.__name__
+        cur = emit_sig.through_scope_w
+        emit_sig.setfastscope.append(
+            "self.%s_arg%d = self.space.%s_w(scope_w[%d])" %
+                (name,cur,name,cur))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.%s_arg%d" % (name,cur))
 
 class BuiltinCodeSignature(Signature):
 
@@ -91,164 +228,20 @@ def run(self):
         return type("BuiltinFrame_for_%s" % self.name,
                     (BuiltinFrame,),d)
         
-    
-def unwrap_spec_check_space(orig_sig, new_sig):
-    orig_sig.next()
-    
-def unwrap_spec_check_self(orig_sig, new_sig):
-    argname = orig_sig.next()
-    new_sig.append(argname)
-        
-        
-def unwrap_spec_check_wrapped(orig_sig, new_sig):
-    argname = orig_sig.next()
-    assert argname.startswith('w_'), (
-        "argument %s of built-in function %r should "
-        "start with 'w_'" % (argname, orig_sig.func))
-    new_sig.append(argname[2:])
-
-def unwrap_spec_check_arguments(orig_sig, new_sig):
-    argname = orig_sig.next()
-    assert new_sig.varargname is None,(
-        "built-in function %r has conflicting rest args specs" % orig_sig.func)
-    new_sig.varargname = 'args'
-    new_sig.kwargname = 'keywords'
-        
-def unwrap_spec_check_starargs(orig_sig, new_sig):
-    varargname = orig_sig.varargname
-    assert varargname.endswith('_w'), (
-        "argument *%s of built-in function %r should end in '_w'" %
-        (varargname, orig_sig.func))
-    assert new_sig.varargname is None,(
-        "built-in function %r has conflicting rest args specs" % orig_sig.func)
-    new_sig.varargname = varargname[:-2]
-
-def unwrap_spec_check_args_w(orig_sig, new_sig):
-    argname = orig_sig.next()
-    assert argname.endswith('_w'), (
-        "rest arguments arg %s of built-in function %r should end in '_w'" %
-        (argname, orig_sig.func))
-    assert new_sig.varargname is None,(
-        "built-in function %r has conflicting rest args specs" % orig_sig.func)
-    new_sig.varargname = argname[:-2]
-
-def unwrap_spec_check_w_args(orig_sig, new_sig):
-    argname = orig_sig.next()
-    assert argname.startswith('w_'), (
-        "rest arguments arg %s of built-in function %r should start 'w_'" %
-        (argname, orig_sig.func))
-    assert new_sig.varargname is None,(
-        "built-in function %r has conflicting rest args specs" % orig_sig.func)
-    new_sig.varargname = argname[2:]
-      
-# recipes for checking interp2app func argumes wrt unwrap_spec
-unwrap_spec_checks = {
-    ObjSpace: unwrap_spec_check_space,
-    'self': unwrap_spec_check_self,
-    W_Root: unwrap_spec_check_wrapped,
-    Arguments: unwrap_spec_check_arguments,
-    '*': unwrap_spec_check_starargs,
-    'args_w': unwrap_spec_check_args_w,
-    'w_args': unwrap_spec_check_w_args,    
-}
-
-def unwrap_spec_emit_space(orig_sig, new_sig):
-    new_sig.run_args.append('self.space')
-    
-def unwrap_spec_emit_self(orig_sig, new_sig):
-    new_sig.setfastscope.append(
-        "self.self_arg = self.space.interpclass_w(scope_w[%d])" %
-            (new_sig.through_scope_w))
-    new_sig.through_scope_w += 1
-    new_sig.run_args.append("self.self_arg")
-        
-def unwrap_spec_emit_wrapped(orig_sig, new_sig):
-    cur = new_sig.through_scope_w
-    new_sig.setfastscope.append(
-        "self.w_arg%d = scope_w[%d]" % (cur,cur))
-    new_sig.through_scope_w += 1
-    new_sig.run_args.append("self.w_arg%d" % cur)
-
-
-def unwrap_spec_emit_arguments(orig_sig, new_sig):
-    cur = new_sig.through_scope_w
-    new_sig.through_scope_w += 2
-    new_sig.setfastscope.append(
-        "self.arguments_arg = "
-        "Arguments.frompacked(self.space,scope_w[%d],scope_w[%d])"
-            % (cur, cur+1))
-    new_sig.run_args.append("self.arguments_arg")
-        
-def unwrap_spec_emit_starargs(orig_sig, new_sig):
-    new_sig.setfastscope.append(
-        "self.starargs_arg_w = self.space.unpacktuple(scope_w[%d])" %
-            (new_sig.through_scope_w))
-    new_sig.through_scope_w += 1
-    new_sig.run_args.append("*self.starargs_arg_w")
-
-def unwrap_spec_emit_args_w(orig_sig, new_sig):
-    new_sig.setfastscope.append(
-        "self.args_w = self.space.unpacktuple(scope_w[%d])" %
-             (new_sig.through_scope_w))
-    new_sig.through_scope_w += 1
-    new_sig.run_args.append("self.args_w")
-
-def unwrap_spec_emit_w_args(orig_sig, new_sig):
-    cur = new_sig.through_scope_w
-    new_sig.setfastscope.append(
-        "self.w_args = scope_w[%d]" % cur)
-    new_sig.through_scope_w += 1
-    new_sig.run_args.append("self.w_args")
-        
-# recipes for emitting unwrapping code for arguments of a interp2app func
-# wrt a unwrap_spec
-unwrap_spec_emit = {
-    ObjSpace: unwrap_spec_emit_space,
-    'self': unwrap_spec_emit_self,
-    W_Root: unwrap_spec_emit_wrapped,
-    Arguments: unwrap_spec_emit_arguments,
-    '*': unwrap_spec_emit_starargs,
-    'args_w': unwrap_spec_emit_args_w,
-    'w_args': unwrap_spec_emit_w_args,
-}
-
-# unwrap_spec_check/emit for str,int,float
-for basic_type in [str,int,float]:
-    name = basic_type.__name__
-    def unwrap_spec_check_basic(orig_sig, new_sig, name=name):
-        argname = orig_sig.next()
-        assert not argname.startswith('w_'), (
-            "unwrapped %s argument %s of built-in function %r should "
-            "not start with 'w_'" % (name, argname, orig_sig.func))
-        new_sig.append(argname)
-    def unwrap_spec_emit_basic(orig_sig, new_sig, name=name):
-        cur = new_sig.through_scope_w
-        new_sig.setfastscope.append(
-            "self.%s_arg%d = self.space.%s_w(scope_w[%d])" %
-                (name,cur,name,cur))
-        new_sig.through_scope_w += 1
-        new_sig.run_args.append("self.%s_arg%d" % (name,cur))
-    unwrap_spec_checks[basic_type] = hack.func_with_new_name(
-        unwrap_spec_check_basic, "unwrap_spec_check_%s" % name)
-    unwrap_spec_emit[basic_type] = hack.func_with_new_name(
-        unwrap_spec_emit_basic, "unwrap_spec_emit_%s" % name)    
-    
-
-
-def make_builtin_frame_class_for_unwrap_spec(unwrap_spec, cache={}):
+def make_builtin_frame_class_for_unwrap_spec(orig_sig, unwrap_spec, cache={}):
     "NOT_RPYTHON"
     key = tuple(unwrap_spec)
     try:
         return cache[key]
     except KeyError:
         name = '_'.join([getattr(k, "__name__", k) for k in key])
-        emit_sig = apply_unwrap_spec(unwrap_spec, None,
-                                     BuiltinCodeSignature(name=name),
-                                     unwrap_spec_emit)
+        emit_sig = orig_sig.apply_unwrap_spec(unwrap_spec, UnwrapSpecRecipe().emit,
+                                              BuiltinCodeSignature(name=name))
 
         cache[key] = cls = emit_sig.make_frame_class()
         return cls
-    
+
+
 
 class BuiltinCode(eval.Code):
     "The code object implementing a built-in (interpreter-level) hook."
@@ -324,7 +317,7 @@ class BuiltinCode(eval.Code):
                 unwrap_spec.extend([W_Root] * n)
 
             if self.starargs:
-                unwrap_spec.append('*')
+                unwrap_spec.append('starargs')
         else:
             assert not ismethod, ("if unwrap_spec is specified, "
                                   "ismethod is not expected")
@@ -333,11 +326,10 @@ class BuiltinCode(eval.Code):
 
         orig_sig = Signature(func, argnames, varargname, kwargname)
 
-        new_sig = apply_unwrap_spec(unwrap_spec, orig_sig,
-                                    Signature(func),
-                                    unwrap_spec_checks)
+        app_sig = orig_sig.apply_unwrap_spec(unwrap_spec, UnwrapSpecRecipe().check,
+                                             Signature(func))
 
-        self.sig = argnames, varargname, kwargname = new_sig.signature()
+        self.sig = argnames, varargname, kwargname = app_sig.signature()
 
         self.minargs = len(argnames)
         if varargname:
@@ -345,7 +337,7 @@ class BuiltinCode(eval.Code):
         else:
             self.maxargs = self.minargs
 
-        self.framecls = make_builtin_frame_class_for_unwrap_spec(unwrap_spec)
+        self.framecls = make_builtin_frame_class_for_unwrap_spec(orig_sig, unwrap_spec)
 
     def create_frame(self, space, w_globals, closure=None):
         return self.framecls(space, self, w_globals)
