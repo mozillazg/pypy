@@ -12,6 +12,15 @@ exact and might change.
 
 This module appears to be already quite usable.
 But I need to ask how we want to integrate it.
+
+XXX open questions:
+- do we wantamoduleperapp-spaceoperation?
+- do we want to auto-generate stuff?
+- do we want to create code that is more similar to the app code?
+- do we want to create specialized code for constants?
+- do we want to use small tail-functions instead of goto?
+- do we want to inline small functions?
+- do we want to translate non-rpythonic code as well?
 """
 
 from __future__ import generators
@@ -48,12 +57,6 @@ def uniquemodulename(name, SEEN={}):
         if result not in SEEN:
             SEEN[result] = True
             return result
-
-def go_figure_out_this_name(source):
-    # ahem
-    return 'PyRun_String("%s", Py_eval_input, PyEval_GetGlobals(), NULL)' % (
-        source, )
-
 
 def ordered_blocks(graph):
     # collect all blocks
@@ -93,10 +96,9 @@ class UniqueList(list):
                 list.append(self, arg)
             
 class GenRpy:
-    def __init__(self, f, translator, modname=None, f2=None, f2name=None):
-        self.f = f
-        self.f2 = f2
-        self.f2name = f2name
+    def __init__(self, fname, translator, modname=None, ftmpname=None):
+        self.fname = fname
+        self.ftmpname = ftmpname
         self.translator = translator
         self.modname = self.trans_funcname(modname or
                         uniquemodulename(translator.functions[0].__name__))
@@ -128,10 +130,14 @@ class GenRpy:
         # Or should it be the base space, ARMIN?
         #self.space = StdObjSpace() # for introspection
         self.space = FlowObjSpace() # for introspection
-        # debugging
+        
+        # just for debugging
         global _gen; _gen = self
         
-        self.gen_source()            
+        #self.gen_source()
+        # opening the class to more parameterisation
+
+        self.use_fast_call = False        
         
     def expr(self, v, localnames, wrapped = True):
         if isinstance(v, Variable):
@@ -167,7 +173,8 @@ class GenRpy:
                         "%(res)s = space.call(%(func)s, _tup)")
                 # see if we can optimize for a fast call.
                 # we justdo the very simple ones.
-                if isinstance(v, Constant) and exv.startswith('gfunc_'):
+                if self.use_fast_call and (isinstance(v, Constant)
+                                           and exv.startswith('gfunc_')):
                     func = v.value
                     if (not func.func_code.co_flags & CO_VARARGS) and (
                         func.func_defaults is None):
@@ -480,7 +487,7 @@ class GenRpy:
                                  "m.classtype = space.wrap(types.ClassType)\n")
             # metaclass = "m.classtype"
             # XXX I cannot instantiate these.
-            # XXX using type instead, since we still inherit from excpetion
+            # XXX using type instead, since we still inherit from excepetion
             # XXX what is the future of classes in pypy?
 
         name = self.uniquename('gcls_' + cls.__name__)
@@ -630,6 +637,53 @@ class GenRpy:
         raise Exception, 'Cannot translate an already-open file: %r' % (fil,)
 
     def gen_source(self):
+        # generate unordered source file, first.
+        # I prefer this over ordering everything in memory.
+        fname = self.fname
+        if self.ftmpname:
+            fname = self.ftmpname
+        f = file(fname, "w")
+        # generate ordered source file
+        try:
+            self.f = f
+            self.gen_source_temp()
+        finally:
+            f.close()
+
+        def copyfile(source, target):
+            file(target, "w").write(file(source).read())
+
+        def order_sections(fname):
+            sep = "\n##SECTION##\n"
+            txt = file(fname).read()
+            pieces = txt.split(sep)
+            prelude = pieces.pop(0)
+            postlude = pieces.pop()
+            dic = {}
+            while pieces:
+                func = pieces.pop()
+                head = pieces.pop()
+                key = makekey(head, len(pieces))
+                dic[key] = head + sep + func
+            lis = dic.items()
+            lis.sort()
+            lis = [prelude] + [func for head, func in lis] + [postlude]
+            txt = sep.join(lis)
+            file(fname, "w").write(txt)
+
+        def makekey(txt, uniqueno):
+            dic = {}
+            for line in txt.split("\n"):
+                ign, name, value = line.split(None, 2)
+                dic[name] = eval(value)
+            key = dic["filename"], dic["firstlineno"], uniqueno
+            return key
+
+        order_sections(fname)
+        if self.ftmpname:
+            copyfile(self.ftmpname, self.fname)
+        
+    def gen_source_temp(self):
         f = self.f
         info = {
             'modname': self.modname,
@@ -654,14 +708,15 @@ class GenRpy:
                 self.debugstack = ()
             self.gen_global_declarations()
 
+        # set the final splitter
+        print >> f, "##SECTION##"
         # footer
         print >> f, self.RPY_INIT_HEADER % info
-        if self.f2name is not None:
-            print >> f, '    execfile("%s")' % self.f2name
         for codelines in self.initcode:
             for codeline in codelines.split("\n"):
                 print >> f, "    %s" % codeline
         print >> f, self.RPY_INIT_FOOTER % info
+        f.close()
 
     def gen_global_declarations(self):
         g = self.globaldecl
@@ -676,14 +731,18 @@ class GenRpy:
         for name in g:
             pass # self.initcode.append('# REGISTER_GLOBAL(%s)' % (name,))
         del g[:]
-        if self.f2 is not None:
-            for line in self.initcode:
-                print >> self.f2, line
-            del self.initcode[:]
 
     def gen_rpyfunction(self, func):
 
         f = self.f
+        print >> f, "##SECTION##" # simple to split, afterwards
+        print >> f, ("## filename    %r\n"
+                     "## function    %r\n"
+                     "## firstlineno %d") % (
+            func.func_code.co_filename,
+            func.func_code.co_name,
+            func.func_code.co_firstlineno)
+        print >> f, "##SECTION##"
         locals = {}
         body = list(self.rpyfunction_body(func, locals))
         name_of_defaults = [self.nameof(x, debug=('Default argument of', func))
@@ -807,7 +866,7 @@ class GenRpy:
             print 20*"*", e
             print func
             raise
-        # not needed, tuple assignment
+        # not needed, we use tuple assignment!
         # remove_direct_loops(graph)
         checkgraph(graph)
 
@@ -974,6 +1033,8 @@ def PyArg_ParseMini(space, name, minargs, maxargs, args_w, defaults_w):
     return res_w
 # _____________________________________________________________________
 
+## this should go into some test file
+
 def somefunc(arg):
     pass
 
@@ -1043,7 +1104,8 @@ def test_mod():
 def test_join():
     return " ".join(["hi", "there"])
 
-# cannot nest classes,yet
+# cannot nest local classes, yet
+# this appears to be a problem in flow space.
 class AnIterClass(object):
     def __init__(self):
         self.lis = [c for c in "test"]
@@ -1083,30 +1145,27 @@ entry_points = (lambda: f(2, 3),
                all_entries)
 entry_point = entry_points[-1]
 
-import os, sys
-from pypy.interpreter import autopath
-srcdir = os.path.dirname(autopath.pypydir)
-appdir = os.path.join(autopath.pypydir, 'appspace')
+if __name__ == "__main__":
+    import os, sys
+    from pypy.interpreter import autopath
+    srcdir = os.path.dirname(autopath.pypydir)
+    appdir = os.path.join(autopath.pypydir, 'appspace')
 
-if appdir not in sys.path:
-    sys.path.insert(0, appdir)
+    if appdir not in sys.path:
+        sys.path.insert(0, appdir)
 
-test_mod()
-
-t = Translator(entry_point, verbose=False, simplifying=True)
-if 0:
-    gen = GenRpy(sys.stdout, t)
-else:
-    fil= file("d:/tmp/look.py", "w")
-    gen = GenRpy(fil, t)
-    fil.close()
+    fname = "d:/tmp/look.py"
+    t = Translator(entry_point, verbose=False, simplifying=True)
+    gen = GenRpy(fname, t)
+    gen.use_fast_call= True
+    gen.gen_source()
     import pypy.appspace.generated as tmp
     pth = os.path.dirname(tmp.__file__)
     fname = os.path.join(pth, gen.modname+".py")
-    file(fname, "w").write(file(fil.name).read())
+    file(fname, "w").write(file(fname).read())
 
-#t.simplify()
-#t.view()
-# debugging
-graph = t.getflowgraph()
-ab = ordered_blocks(graph) # use ctrl-b in PyWin with ab
+    #t.simplify()
+    #t.view()
+    # debugging
+    graph = t.getflowgraph()
+    ab = ordered_blocks(graph) # use ctrl-b in PyWin with ab
