@@ -633,7 +633,6 @@ def appdef(source):
     source = py.code.Source()
     source.lines = sourcelines 
     glob = {}
-    print str(source)
     exec source.compile() in glob 
     return glob[funcname]
 
