@@ -340,14 +340,16 @@ class StdObjSpace(ObjSpace, DescrOperation):
         delegate = DelegateMultiMethod()          # delegators
         int_w   = MultiMethod('int_w', 1, [])     # returns an unwrapped int
         str_w   = MultiMethod('str_w', 1, [])     # returns an unwrapped string
+        float_w = MultiMethod('float_w', 1, [])   # returns an unwrapped float      
         unwrap  = MultiMethod('unwrap', 1, [])    # returns an unwrapped object
         issubtype = MultiMethod('issubtype', 2, [])
         id = MultiMethod('id', 1, [])
         init = MultiMethod('__init__', 1, varargs=True, keywords=True)
 
-    int_w  = MM.int_w
-    str_w  = MM.str_w
-    unwrap = MM.unwrap
+    int_w   = MM.int_w
+    str_w   = MM.str_w
+    float_w = MM.float_w
+    unwrap  = MM.unwrap
     delegate = MM.delegate
     #is_true = MM.is_true
 

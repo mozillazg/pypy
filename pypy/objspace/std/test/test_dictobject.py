@@ -300,6 +300,8 @@ class FakeSpace:
         return hash(obj)
     def unwrap(self, x):
         return x
+    def int_w(self, x):
+        return x
     def is_true(self, x):
         return x
     def is_(self, x, y):

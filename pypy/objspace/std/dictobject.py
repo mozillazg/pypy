@@ -38,7 +38,7 @@ class W_DictObject(W_Object):
 
     def hash(w_self, w_obj):
         space = w_self.space
-        return r_uint(space.unwrap(space.hash(w_obj)))
+        return r_uint(space.int_w(space.hash(w_obj)))
 
     def insert(self, h, w_key, w_value):
         entry = self.lookdict(h, w_key)
@@ -108,7 +108,7 @@ class W_DictObject(W_Object):
 registerimplementation(W_DictObject)
 
 
-def unwrap__Dict(space, w_dict):
+def unwrap__Dict(space, w_dict): # xxx
     result = {}
     for entry in w_dict.non_empties():
         result[space.unwrap(entry.w_key)] = space.unwrap(entry.w_value)

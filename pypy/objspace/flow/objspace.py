@@ -102,8 +102,8 @@ class FlowObjSpace(ObjSpace):
     def int_w(self, w_obj):
         if isinstance(w_obj, Constant):
             val = w_obj.value
-            if type(val) is not int:
-                raise TypeError("expected int: " + repr(w_obj))
+            if type(val) not in (int,long):
+                raise TypeError("expected integer: " + repr(w_obj))
             return val
         return self.unwrap(w_obj)
 
@@ -114,6 +114,14 @@ class FlowObjSpace(ObjSpace):
                 raise TypeError("expected string: " + repr(w_obj))
             return val
         return self.unwrap(w_obj)                                
+
+    def float_w(self, w_obj):
+        if isinstance(w_obj, Constant):
+            val = w_obj.value
+            if type(val) is not float:
+                raise TypeError("expected float: " + repr(w_obj))
+            return val
+        return self.unwrap(w_obj)
 
     def unwrap(self, w_obj):
         if isinstance(w_obj, Variable):
