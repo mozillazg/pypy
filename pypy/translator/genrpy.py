@@ -166,7 +166,8 @@ class GenRpy:
                     value.__file__.endswith('.pyo')), \
                "%r is not a builtin module (probably :)"%value
         name = self.uniquename('mod%s'%value.__name__)
-        self.initcode.append('import %s as %s' % (value.__name__, name))
+        self.initcode.append('import %s as _tmp' % value.__name__)
+        self.initcode.append('%s = space.wrap(_tmp)' % (name))
         return name
         
 
