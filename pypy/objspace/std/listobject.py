@@ -33,8 +33,8 @@ class W_ListObject(W_Object):
 registerimplementation(W_ListObject)
 
 
-def unwrap__List(space, w_list):
-    items = [space.unwrap(w_item) for w_item in w_list.ob_item[:w_list.ob_size]]
+def unwrap__List(space, w_list): 
+    items = [space.unwrap(w_item) for w_item in w_list.ob_item[:w_list.ob_size]]# XXX generic mixed types unwrap
     return list(items)
 
 def init__List(space, w_list, w_args, w_kwds):
@@ -406,11 +406,11 @@ def list_index__List_ANY_ANY_ANY(space, w_list, w_any, w_start, w_stop):
     eq = space.eq
     items = w_list.ob_item
     size = w_list.ob_size
-    start = space.unwrap(w_start)   # XXX type check: int or clamped long
+    start = space.int_w(w_start)
     if start < 0:
         start += size
     start = min(max(0,start),size)
-    stop = space.unwrap(w_stop)     # XXX type check: int or clamped long
+    stop = space.int_w(w_stop)
     if stop < 0:
         stop += size
     stop = min(max(start,stop),size)
@@ -514,10 +514,13 @@ class Comparer:
     def complex_lt(self, a, b):
         space = self.space
         w_cmp = self.w_cmp
-        result = space.unwrap(space.call_function(w_cmp, a, b))
-        if not isinstance(result,int):
-            raise OperationError(space.w_TypeError,
-                     space.wrap("comparison function must return int"))
+        try:
+            result = space.int_w(space.call_function(w_cmp, a, b))
+        except OperationError, e:
+            if e.match(space, space.w_TypeError):
+                raise OperationError(space.w_TypeError,
+                    space.wrap("comparison function must return int"))
+            raise e
         return result < 0
 
 def list_sort__List_ANY(space, w_list, w_cmp):
