@@ -4,7 +4,7 @@ Implementation of interpreter-level builtins.
 from pypy.interpreter.module import Module
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
-_noarg = object()
+from pypy.interpreter.baseobjspace import BaseWrappable, W_Root
 
 import __builtin__ as cpy_builtin
 
@@ -21,13 +21,15 @@ def globals():
 def locals():
     return _actframe().getdictscope()
 
-def _caller_globals(w_index=None):
-    position = space.unwrapdefault(w_index, 1)
+def _caller_globals(position=1):
     return _actframe(position).w_globals
+#
+_caller_globals.unwrap_spec = [int]
 
-def _caller_locals(w_index=None):
-    position = space.unwrapdefault(w_index, 1)
+def _caller_locals(position=1):
     return _actframe(position).getdictscope()
+#
+_caller_locals.unwrap_spec = [int]
 
 
 def try_import_mod(w_modulename, f, w_parent, w_name, pkgdir=None):
@@ -78,9 +80,8 @@ def check_sys_modules(w_modulename):
 
 il_len = len
 
-def __import__(w_modulename, w_globals=None,
+def __import__(modulename, w_globals=None,
                w_locals=None, w_fromlist=None):
-    modulename = space.unwrap(w_modulename)
     if not isinstance(modulename, str):
         try:
             helper = ', not ' + modulename.__class__.__name__
@@ -100,13 +101,13 @@ def __import__(w_modulename, w_globals=None,
     rel_modulename = None
     if ctxt_w_name is not None:
 
-        ctxt_name_prefix_parts = space.unwrap(ctxt_w_name).split('.')
+        ctxt_name_prefix_parts = space.str_w(ctxt_w_name).split('.')
         if ctxt_w_path is None: # context is a plain module
             ctxt_name_prefix_parts = ctxt_name_prefix_parts[:-1]
             if ctxt_name_prefix_parts:
                 rel_modulename = '.'.join(ctxt_name_prefix_parts+[modulename])
         else: # context is a package module
-            rel_modulename = space.unwrap(ctxt_w_name)+'.'+modulename
+            rel_modulename = space.str_w(ctxt_w_name)+'.'+modulename
         if rel_modulename is not None:
             w_mod = check_sys_modules(w(rel_modulename))
             if (w_mod is None or
@@ -124,6 +125,8 @@ def __import__(w_modulename, w_globals=None,
     if rel_modulename is not None:
         space.setitem(space.sys.w_modules, w(rel_modulename),space.w_None)
     return w_mod
+#
+__import__.unwrap_spec = [str,W_Root,W_Root,W_Root]
 
 def absolute_import(modulename, baselevel, w_fromlist, tentative):
     w = space.wrap
@@ -153,7 +156,7 @@ def absolute_import(modulename, baselevel, w_fromlist, tentative):
     if w_fromlist is not None and space.is_true(w_fromlist):
         if w_path is not None:
             for w_name in space.unpackiterable(w_fromlist):
-                load_part(w_path, prefix, space.unwrap(w_name), w_mod,
+                load_part(w_path, prefix, space.str_w(w_name), w_mod,
                           tentative=1)
         return w_mod
     else:
@@ -173,14 +176,14 @@ def load_part(w_path, prefix, partname, w_parent, tentative):
             return w_mod
         import os
         for path in space.unpackiterable(w_path):
-            dir = os.path.join(space.unwrap(path), partname)
+            dir = os.path.join(space.str_w(path), partname)
             if os.path.isdir(dir):
                 f = os.path.join(dir,'__init__.py')
                 w_mod = try_import_mod(w_modulename, f, w_parent, w(partname),
                                        pkgdir=dir)
                 if w_mod is not None:
                     return w_mod
-            f = os.path.join(space.unwrap(path), partname + '.py')
+            f = os.path.join(space.str_w(path), partname + '.py')
             w_mod = try_import_mod(w_modulename, f, w_parent, w(partname))
             if w_mod is not None:
                 return w_mod
@@ -194,14 +197,8 @@ def load_part(w_path, prefix, partname, w_parent, tentative):
         raise OperationError(space.w_ImportError, w_exc)
 
 
-def compile(w_str, w_filename, w_startstr,
-            w_supplied_flags=None, w_dont_inherit=None):
-    str_ = space.unwrap(w_str)
-    filename = space.unwrap(w_filename)
-    startstr = space.unwrap(w_startstr)
-    supplied_flags = space.unwrapdefault(w_supplied_flags, 0)
-    dont_inherit   = space.unwrapdefault(w_dont_inherit, 0)
-
+def compile(str_, filename, startstr,
+            supplied_flags=0, dont_inherit=0):
     #print (str_, filename, startstr, supplied_flags, dont_inherit)
     # XXX we additionally allow GENERATORS because compiling some builtins
     #     requires it. doesn't feel quite right to do that here.
@@ -217,13 +214,16 @@ def compile(w_str, w_filename, w_startstr,
     except TypeError,e:
         raise OperationError(space.w_TypeError,space.wrap(str(e)))
     return space.wrap(PyCode(space)._from_code(c))
+#
+compile.unwrap_spec = [str,str,str,int,int]
+
 
 def eval(w_source, w_globals=None, w_locals=None):
     w = space.wrap
 
     if space.is_true(space.isinstance(w_source, space.w_str)):
-        w_codeobj = compile(w_source, w("<string>"), w("eval"))
-    elif isinstance(space.unwrap(w_source), PyCode):
+        w_codeobj = compile(space.str_w(w_source), "<string>", "eval")
+    elif space.is_true(space.isinstance(w_source, space.gettypeobject(PyCode.typedef))):
         w_codeobj = w_source
     else:
         raise OperationError(space.w_TypeError,
@@ -235,7 +235,7 @@ def eval(w_source, w_globals=None, w_locals=None):
     elif w_locals is None:
         w_locals = w_globals
 
-    return space.unwrap(w_codeobj).exec_code(space, w_globals, w_locals)
+    return space.unwrap_builtin(w_codeobj).exec_code(space, w_globals, w_locals)
 
 def abs(w_val):
     "abs(number) -> number\n\nReturn the absolute value of the argument."
@@ -252,12 +252,12 @@ def delattr(w_object, w_name):
     space.delattr(w_object, w_name)
     return space.w_None
 
-def getattr(w_object, w_name, w_defvalue = _noarg):
+def getattr(w_object, w_name, w_defvalue=None):
     try:
         return space.getattr(w_object, w_name)
     except OperationError, e:
         if e.match(space, space.w_AttributeError):
-            if w_defvalue is not _noarg:
+            if w_defvalue is not None:
                 return w_defvalue
         raise
 
@@ -284,13 +284,13 @@ def id(w_object):
 def _issubtype(w_cls1, w_cls2):
     return space.issubtype(w_cls1, w_cls2)
 
-def iter(w_collection_or_callable, w_sentinel = _noarg):
-    if w_sentinel is _noarg:
+def iter(w_collection_or_callable, w_sentinel=None):
+    if w_sentinel is None:
         return space.iter(w_collection_or_callable)
     else:
         if not space.is_true(callable(w_collection_or_callable)):
             raise OperationError(space.w_TypeError,
-                    space.wrap('iter(v, w): v must be callable'))
+                    space.wrap('iter(v, w): w must be callable'))
         return _iter_generator(w_collection_or_callable, w_sentinel)
 
 def ord(w_val):

@@ -12,6 +12,7 @@ Gateway between app-level and interpreter-level:
 
 import types, sys
 
+from pypy.tool import hack
 from pypy.interpreter.error import OperationError 
 from pypy.interpreter import eval, pycode
 from pypy.interpreter.function import Function, Method
@@ -67,7 +68,10 @@ class BuiltinCodeSignature(Signature):
         setfastscope = self.setfastscope
         if not setfastscope:
             setfastscope = ["pass"]
-        setfastscope = ["def setfastscope(self, scope_w):"] + setfastscope
+        setfastscope = ["def setfastscope(self, scope_w):",
+                        #"print 'ENTER',self.code.func.__name__",
+                        #"print scope_w"
+                        ] + setfastscope
         setfastscope = '\n  '.join(setfastscope)
         d = {}
         exec setfastscope in globals(),d
@@ -112,6 +116,15 @@ def unwrap_spec_check_starargs(orig_sig, new_sig):
     assert new_sig.varargname is None,(
         "built-in function %r has conflicting rest args specs" % orig_sig.func)
     new_sig.varargname = varargname[:-2]
+
+def unwrap_spec_check_args_w(orig_sig, new_sig):
+    argname = orig_sig.next()
+    assert argname.endswith('_w'), (
+        "rest arguments arg %s of built-in function %r should end in '_w'" %
+        (argname, orig_sig.func))
+    assert new_sig.varargname is None,(
+        "built-in function %r has conflicting rest args specs" % orig_sig.func)
+    new_sig.varargname = argname[:-2]
         
 # recipes for checking interp2app func argumes wrt unwrap_spec
 unwrap_spec_checks = {
@@ -120,6 +133,7 @@ unwrap_spec_checks = {
     W_Root: unwrap_spec_check_wrapped,
     Arguments: unwrap_spec_check_arguments,
     '*': unwrap_spec_check_starargs,
+    'args_w': unwrap_spec_check_args_w,
 }
 
 def unwrap_spec_emit_space(orig_sig, new_sig):
@@ -132,13 +146,13 @@ def unwrap_spec_emit_self(orig_sig, new_sig):
     new_sig.through_scope_w += 1
     new_sig.run_args.append("self.self_arg")
         
-        
 def unwrap_spec_emit_wrapped(orig_sig, new_sig):
     cur = new_sig.through_scope_w
     new_sig.setfastscope.append(
         "self.w_arg%d = scope_w[%d]" % (cur,cur))
     new_sig.through_scope_w += 1
     new_sig.run_args.append("self.w_arg%d" % cur)
+
 
 def unwrap_spec_emit_arguments(orig_sig, new_sig):
     cur = new_sig.through_scope_w
@@ -155,6 +169,13 @@ def unwrap_spec_emit_starargs(orig_sig, new_sig):
             (new_sig.through_scope_w))
     new_sig.through_scope_w += 1
     new_sig.run_args.append("*self.starargs_arg_w")
+
+def unwrap_spec_emit_args_w(orig_sig, new_sig):
+    new_sig.setfastscope.append(
+        "self.args_w = self.space.unpacktuple(scope_w[%d])" %
+             (new_sig.through_scope_w))
+    new_sig.through_scope_w += 1
+    new_sig.run_args.append("self.args_w")
         
 # recipes for emitting unwrapping code for arguments of a interp2app func
 # wrt a unwrap_spec
@@ -164,7 +185,31 @@ unwrap_spec_emit = {
     W_Root: unwrap_spec_emit_wrapped,
     Arguments: unwrap_spec_emit_arguments,
     '*': unwrap_spec_emit_starargs,
+    'args_w': unwrap_spec_emit_args_w,
 }
+
+# unwrap_space_check/emit for str,int,float
+for basic_type in [str,int,float]:
+    name = basic_type.__name__
+    def unwrap_spec_check_basic(orig_sig, new_sig, name=name):
+        argname = orig_sig.next()
+        assert not argname.startswith('w_'), (
+            "unwrapped %s argument %s of built-in function %r should "
+            "not start with 'w_'" % (name, argname, orig_sig.func))
+        new_sig.append(argname)
+    def unwrap_spec_emit_basic(orig_sig, new_sig, name=name):
+        cur = new_sig.through_scope_w
+        new_sig.setfastscope.append(
+            "self.%s_arg%d = self.space.%s_w(scope_w[%d])" %
+                (name,cur,name,cur))
+        new_sig.through_scope_w += 1
+        new_sig.run_args.append("self.%s_arg%d" % (name,cur))
+    unwrap_spec_checks[basic_type] = hack.func_with_new_name(
+        unwrap_spec_check_basic, "unwrap_spec_check_%s" % name)
+    unwrap_spec_emit[basic_type] = hack.func_with_new_name(
+        unwrap_spec_emit_basic, "unwrap_spec_emit_%s" % name)    
+    
+
 
 def make_builtin_frame_class_for_unwrap_spec(unwrap_spec, cache={}):
     "NOT_RPYTHON"
@@ -205,10 +250,12 @@ class BuiltinCode(eval.Code):
         # unwrap_spec can be passed to interp2app or
         # attached as an attribute to the function.
         # It is a list of types or singleton objects:
-        #  baseobjspace.ObjSpace is used to specify the  space argument
+        #  baseobjspace.ObjSpace is used to specify the space argument
         #  'self' is used to specify a self method argument
         #  baseobjspace.W_Root is for wrapped arguments to keep wrapped
         #  argument.Arguments is for a final rest arguments Arguments object
+        # 'args_w' for unpacktuple applied rest arguments
+        # str,int,float: unwrap argument as such type
         
         # First extract the signature from the (CPython-level) code object
         argnames, varargname, kwargname = pycode.cpython_code_signature(func.func_code)
@@ -266,7 +313,7 @@ class BuiltinCode(eval.Code):
         self.sig = argnames, varargname, kwargname = new_sig.signature()
 
         self.minargs = len(argnames)
-        if self.starargs:
+        if varargname:
             self.maxargs = sys.maxint
         else:
             self.maxargs = self.minargs
@@ -336,15 +383,8 @@ class Gateway(Wrappable):
                                    Gateway.build_all_functions, 
                                    self.getcache(space))
 
-    def build_all_functions(self, space):
+    def getglobals(self, space):
         "NOT_RPYTHON"
-        # the construction is supposed to be done only once in advance,
-        # but must be done lazily when needed only, because
-        #   1) it depends on the object space
-        #   2) the w_globals must not be built before the underlying
-        #      _staticglobals is completely initialized, because
-        #      w_globals must be built only once for all the Gateway
-        #      instances of _staticglobals
         if self._staticglobals is None:
             w_globals = None
         else:
@@ -361,7 +401,18 @@ class Gateway(Wrappable):
             else:
                 # no, we build all Gateways in the _staticglobals now.
                 w_globals = build_dict(self._staticglobals, space)
-        return self._build_function(space, w_globals)
+            return w_globals
+                
+    def build_all_functions(self, space):
+        "NOT_RPYTHON"
+        # the construction is supposed to be done only once in advance,
+        # but must be done lazily when needed only, because
+        #   1) it depends on the object space
+        #   2) the w_globals must not be built before the underlying
+        #      _staticglobals is completely initialized, because
+        #      w_globals must be built only once for all the Gateway
+        #      instances of _staticglobals
+        return self._build_function(space, self.getglobals(space))
 
     def getcache(self, space):
         return space._gatewaycache 
@@ -439,7 +490,18 @@ class app2interp(Gateway):
 
 class interp2app(Gateway):
     """Build a Gateway that calls 'f' at interp-level."""
-    def __init__(self, f, app_name=None):
+
+    # NOTICE even interp2app defaults are stored and passed as
+    # wrapped values, this to avoid having scope_w be of mixed
+    # wrapped and unwrapped types,
+    # an exception is made for None which is passed around as default
+    # as an unwrapped None, unwrapped None and wrapped types are
+    # compatible
+    #
+    # Takes optionally an unwrap_spec, see BuiltinCode
+    
+    def __init__(self, f, app_name=None,
+                 ismethod=None, spacearg=None, unwrap_spec = None):
         "NOT_RPYTHON"
         Gateway.__init__(self)
         # f must be a function whose name does NOT starts with 'app_'
@@ -450,9 +512,13 @@ class interp2app(Gateway):
                 raise ValueError, ("function name %r suspiciously starts "
                                    "with 'app_'" % f.func_name)
             app_name = f.func_name
-        self._code = BuiltinCode(f)
+        self._code = BuiltinCode(f, ismethod=ismethod,
+                                  spacearg=spacearg,
+                                  unwrap_spec=unwrap_spec)
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())
+        #if self._staticdefs:
+        #    print f.__module__,f.__name__,"HAS NON TRIVIAL DEFLS",self._staticdefs
         self._staticglobals = None
 
     def getcode(self, space):
@@ -460,7 +526,13 @@ class interp2app(Gateway):
 
     def getdefaults(self, space):
         "NOT_RPYTHON"
-        return self._staticdefs
+        defs_w = []
+        for val in self._staticdefs:
+            if val is None:
+                defs_w.append(val)
+            else:
+                defs_w.append(space.wrap(val))
+        return defs_w
 
     def get_method(self, obj):
        assert self._code.ismethod, (

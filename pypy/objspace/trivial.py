@@ -155,7 +155,7 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
     def str_w(self, w):
         if type(w) is not str:
             raise OperationError(self.w_TypeError,
-                                 sefl.wrap("expected string"))
+                                 self.wrap("expected string"))
         return w
 
     def float_w(self, w):
@@ -239,6 +239,8 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
             cls = type('CPyWrapped '+typedef.name, bases, descrdict)
             typedef.trivialwrapperclass = cls
             return cls
+
+    gettypeobject = hackwrapperclass
 
     def is_(self, w_obj1, w_obj2):
         return self.unwrap(w_obj1) is self.unwrap(w_obj2)

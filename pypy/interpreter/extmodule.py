@@ -13,6 +13,17 @@ from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.function import Function
 from pypy.interpreter.module import Module
 
+class interplevelimport_interp2app(gateway.interp2app):
+
+    def __init__(self, f, w_globals):
+        "NOT_RPYTHON"
+        gateway.interp2app.__init__(self, f, ismethod=False, spacearg=False)
+        self.w_globals = w_globals
+
+    def getglobals(self, space):
+        "NOT_RPYTHON"
+        return self.w_globals
+
 
 class BuiltinModule(Module):
     """A Module subclass specifically for built-in modules."""
@@ -141,10 +152,7 @@ class BuiltinModule(Module):
                 name = space.str_w(w_name)
                 if not hasattr(self, 'w_' + name):
                     f = getattr(self, name)
-                    code = gateway.BuiltinCode(f, ismethod=False,
-                                                  spacearg=False)
-                    defs_w = list(f.func_defaults or ())
-                    func = Function(space, code, self.w_dict, defs_w)
+                    func = interplevelimport_interp2app(f, self.w_dict)
                     w_result = space.wrap(func)
                 else:
                     w_result = getattr(self, 'w_' + name)

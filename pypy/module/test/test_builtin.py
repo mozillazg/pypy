@@ -228,6 +228,9 @@ class AppTestBuiltinApp:
         raises(TypeError, hash, [])
         raises(TypeError, hash, {})
 
+    def test_eval(self):
+        assert eval("1+2") == 3
+
     def test_compile(self):
         co = compile('1+2', '?', 'eval')
         assert eval(co) == 3

@@ -134,8 +134,7 @@ def inlinecompile(source, space, symbol='exec'):
     This lets OperationError.print_application_traceback() print the
     actual source line in the traceback."""
     compile = space.builtin.compile
-    w = space.wrap
-    return compile(w(source), w('<inline>\n%s'%source), w(symbol), w(0), w(0))
+    return compile(source, '<inline>\n%s'%source, symbol, 0, 0)
 
 
 class LinePrefixer:

@@ -1,3 +1,4 @@
+from pypy.interpreter import baseobjspace
 from pypy.objspace.std.stdtypedef import *
 from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.error import OperationError
@@ -80,7 +81,7 @@ register_all(vars(), globals())
 
 # ____________________________________________________________
 
-def descr__new__(space, w_slicetype, *args_w):
+def descr__new__(space, w_slicetype, args_w):
     from pypy.objspace.std.sliceobject import W_SliceObject
     w_start = space.w_None
     w_stop = space.w_None
@@ -100,6 +101,9 @@ def descr__new__(space, w_slicetype, *args_w):
     w_obj = space.allocate_instance(W_SliceObject, w_slicetype)
     w_obj.__init__(space, w_start, w_stop, w_step)
     return w_obj
+#
+descr__new__.unwrap_spec = [baseobjspace.ObjSpace, baseobjspace.W_Root,
+                            'args_w']
 
 # ____________________________________________________________
 
