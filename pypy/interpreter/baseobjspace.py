@@ -284,6 +284,8 @@ class ObjSpace(object):
             statement = PyCode(self)._from_code(statement)
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
+        self.call_method(w_globals, 'setdefault',
+                         self.wrap('__builtins__'), self.wrap(self.builtin))
         return statement.exec_code(self, w_globals, w_locals)
 
     def appexec(self, posargs_w, source): 

@@ -5,6 +5,7 @@ from pypy.interpreter import eval, baseobjspace, gateway
 from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pytraceback
+from pypy.interpreter import module
 
 import __future__
 compiler_flags = 0
@@ -23,7 +24,7 @@ class PyFrame(eval.Frame):
      * 'code' is the PyCode object this frame runs
      * 'w_locals' is the locals dictionary to use
      * 'w_globals' is the attached globals dictionary
-     * 'w_builtins' is the attached built-ins dictionary
+     * 'builtin' is the attached built-in module
      * 'valuestack', 'blockstack', 'next_instr' control the interpretation
     """
 
@@ -33,7 +34,7 @@ class PyFrame(eval.Frame):
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
-        #self.w_builtins = self.space.w_builtins
+        self.builtin = lookup_builtin(space, w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
         if code.dictscope_needed():
@@ -129,6 +130,31 @@ class PyFrame(eval.Frame):
     def get_next_lineno(self):
         "Returns the line number of the next instruction to execute."
         return pytraceback.offset2lineno(self.code, self.next_instr)
+
+    def fget_f_builtins(space, w_self):
+        self = space.interpclass_w(w_self)
+        return self.builtin.getdict()
+
+
+def lookup_builtin(space, w_globals):
+    "Look up the builtin module to use from the __builtins__ global"
+    try:
+        w_builtin = space.getitem(w_globals, space.wrap('__builtins__'))
+    except OperationError, e:
+        if not e.match(space, space.w_KeyError):
+            raise
+    else:
+        if w_builtin is space.builtin:   # common case
+            return space.builtin
+        if space.is_true(space.isinstance(w_builtin, space.w_dict)):
+            return module.Module(space, None, w_builtin)
+        builtin = space.interpclass_w(w_builtin)
+        if isinstance(builtin, Module):
+            return builtin
+    # no builtin! make a default one.  Given them None, at least.
+    builtin = module.Module(space, None)
+    space.setitem(builtin.w_dict, space.wrap('None'), space.w_None)
+    return builtin
 
 
 ### Frame Blocks ###
