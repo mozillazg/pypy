@@ -7,34 +7,31 @@ old_function = re.compile(r'^(\s*)' + old_fname + r'\((.*)')
 leading_spaces = re.compile(r'^(\s*)')
 
 
-def process_block(s, interesting, indentation, old, new):
-    if not interesting:
+def process_block(s, old, new):
+    body = s.replace(old, '', 1).lstrip()
+        
+    if body.rstrip() == '(,)': # catch this special case early.
+        print 'malformed block %s cannot be converted' % s.rstrip()
+        return s
+        
+    plist = pos_finder(body, ',')
+    if plist == []:
+        print "Could not find a ',' in %s" % body
         return s
     else:
-        body = s.replace(old, '', 1).lstrip()
-        
-        if body.rstrip() == '(,)': # catch this special case early.
-            print 'malformed block %s cannot be converted' % s.rstrip()
-            return s
-        
-        plist = pos_finder(body, ',')
-        if plist == []:
-            print "Could not find a ',' in %s" % body
+        arglist = []
+        for p in plist:
+            left, right = body[:p], body[p+1:]
+            arglist.append((left, right))
+
+        r = find_comma(arglist)
+
+        if r is None:
+            print 'malformed block %s cannot be converted' % s
             return s
         else:
-            arglist = []
-            for p in plist:
-                left, right = body[:p], body[p+1:]
-                arglist.append((left, right))
-            r = find_comma(arglist)
-
-            if r is None:
-                print 'malformed block %s cannot be converted' % s
-                return s
-            else:
-                return indentation + new + r[0] + ') == (' + r[1]
+            return new + r[0] + ') == (' + r[1]
         
-
 def find_comma(tuplelist):
     import parser
 
@@ -65,15 +62,13 @@ def blocksplitter(filename):
     fp = file(filename, 'r')
     blockstring = ''
     filestring = ''
-    current_indent = 0
     was_interesting = False
-    n_l_s = ''
+    indentation = ''
     
     for line in fp:
 
         ls = leading_spaces.search(line) # this will never fail
         l_spaces = ls.group(1)
-        new_indent = len(l_spaces)
 
         interesting = old_function.search(line)
 
@@ -82,39 +77,42 @@ def blocksplitter(filename):
             # finish up your business with your last block, and
             # reset everything
 
-            filestring += process_block(blockstring, was_interesting,
-                                        n_l_s, old_fname, new_fname)
+            if was_interesting:
+                filestring += indentation + process_block(blockstring,
+                                                          old_fname, new_fname)
+            else:
+                filestring += line
 
             blockstring = line # reset the block
-            current_indent = new_indent
-            n_l_s = ls.group(1)
+            indentation = ls.group(1)
             was_interesting = True
 
         elif not was_interesting and not interesting :
-            # the last line was not interesting and this one isn't either
-            # just add it to the block
+            # the last line was not interesting and this one isn't either.
+            # just copy it out.
 
-            blockstring += line
+            filestring  += line
 
         else:
             # the slightly-hard case:
             # is this line a continuation of the current interesting block?
             # or is it just another uninteresting line that follows it?
 
-            if new_indent > current_indent:  # continuation
-                blockstring += line
+            try:
+                compile(blockstring.lstrip(), '', 'exec')
+                # We were done.  This is a boring old follower
 
-                # XXXX FIXME: check for comments?  line continuations with \?
-                # Will we ever need it?
-
-            else: # boring follower
-                filestring += process_block(blockstring, was_interesting,
-                                            n_l_s, old_fname, new_fname)
+                filestring += indentation + process_block(blockstring, old_fname, new_fname)
                 blockstring = line
                 was_interesting = False
-                
-    filestring += process_block(blockstring, was_interesting, n_l_s,
-                                old_fname, new_fname)
+
+            except SyntaxError:  # we haven't got enough yet.
+                blockstring += line
+
+    if was_interesting :
+        filestring += indentation + process_block(blockstring, old_fname, new_fname)
+    else:
+        filestring += line
     
     print filestring
 
