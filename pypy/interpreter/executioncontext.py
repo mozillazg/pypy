@@ -26,10 +26,11 @@ class ExecutionContext:
         locals.executioncontext = previous_ec
 
     def get_w_builtins(self):
-        if self.framestack.empty():
-            return self.space.w_builtins
-        else:
-            return self.framestack.top().w_builtins
+        # XXX sort out __builtins__ issue 
+        #if self.framestack.empty():
+        return self.space.w_builtin
+        #else:
+        #    return self.framestack.top().w_builtins
 
     def make_standard_w_globals(self):
         "Create a new empty 'globals' dictionary."

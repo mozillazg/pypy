@@ -59,21 +59,28 @@ class ObjSpace(object):
         "NOT_RPYTHON: only for initializing the space."
         # initializing builtins may require creating a frame which in
         # turn already accesses space.w_builtins, provide a dummy one ...
-        self.w_builtins = self.newdict([])
+        # XXX TEMPORARY 
 
-        # insert stuff into the newly-made builtins
-        for key, w_value in for_builtins.items():
-            self.setitem(self.w_builtins, self.wrap(key), w_value)
+        from pypy.module.sys2 import Module 
+        w_name = self.wrap('sys')
+        self.sys = Module(self, w_name) 
+        self.w_sys = self.wrap(self.sys) 
 
-        assert not hasattr(self, 'builtin')
-        if not hasattr(self, 'sys'):
-            self.make_sys()
+        w_modules = self.sys.get('modules')
+        self.setitem(w_modules, w_name, self.w_sys) 
+        print "initialized", self.w_sys 
+        from pypy.module.builtin import Module 
+        w_name = self.wrap('__builtin__')
+        self.builtin = Module(self, w_name) 
+        self.w_builtin = self.wrap(self.builtin) 
+        #self.w_builtins = self.builtin.w_dict 
+        self.setitem(w_modules, w_name, self.w_builtin) 
+        self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), self.w_builtin) 
+        print "initialized", self.w_builtin 
 
-        from pypy.interpreter.extmodule import BuiltinModule
-
-        # the builtins are iteratively initialized
-        self.builtin = BuiltinModule(self, '__builtin__', self.w_builtins)
-        self.w_builtin = self.wrap(self.builtin)
+        # do we need this? 
+        #for key, w_value in for_builtins.items():
+        #    self.setitem(self.builtin.w_dict, self.wrap(key), w_value)
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
         for name, value in self.__dict__.items():
@@ -82,27 +89,10 @@ class ObjSpace(object):
                 if name.startswith('builtin') or name.startswith('sys'):
                     continue
                 #print "setitem: space instance %-20s into builtins" % name
-                self.setitem(self.w_builtins, self.wrap(name), value)
+                self.setitem(self.builtin.w_dict, self.wrap(name), value)
+        print "finished make_builtins", self
 
-        self.sys.setbuiltinmodule(self.w_builtin, '__builtin__')
-
-        # XXX TEMPORARY 
-        from pypy.module.builtin import Module 
-        w_name = self.wrap('builtin')
-        self.setitem(self.w_builtins, w_name, Module(self, w_name))
-        from pypy.module.sys2 import Module 
-        w_name = self.wrap('sys2')
-        self.setitem(self.w_builtins, w_name, Module(self, w_name))
-
-    def make_sys(self):
-        "NOT_RPYTHON: only for initializing the space."
-        from pypy.interpreter.extmodule import BuiltinModule
-        assert not hasattr(self, 'sys')
-        self.sys = BuiltinModule(self, 'sys')
-        self.w_sys = self.wrap(self.sys)
-        self.sys.setbuiltinmodule(self.w_sys, 'sys')
-        
-    def get_builtin_module(self, name):
+    def XXXget_builtin_module(self, name):
         if name not in self.sys.builtin_modules:
             return None
         module = self.sys.builtin_modules[name]

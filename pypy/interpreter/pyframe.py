@@ -33,7 +33,7 @@ class PyFrame(eval.Frame):
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
-        self.w_builtins = self.space.w_builtins
+        #self.w_builtins = self.space.w_builtins
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
         if code.dictscope_needed():

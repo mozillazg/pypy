@@ -24,7 +24,8 @@ def try_import_mod(space, w_modulename, f, w_parent, w_name, pkgdir=None):
         if pkgdir is not None:
             space.setattr(w_mod, w('__path__'), space.newlist([w(pkgdir)]))
         w_dict = space.getattr(w_mod, w('__dict__'))
-        execfile(w(f), w_dict, w_dict)
+        w_execfile = space.builtin.get("execfile") 
+        space.call_function(w_execfile, w(f), w_dict, w_dict)
         w_mod = check_sys_modules(space, w_modulename)
         if w_mod is not None and w_parent is not None:
             space.setattr(w_parent, w_name, w_mod)
@@ -50,8 +51,9 @@ def try_getitem(space, w_obj, w_key):
 
 
 def check_sys_modules(space, w_modulename):
+    w_modules = space.sys.get('modules')
     try:
-        w_mod = space.getitem(space.sys.w_modules, w_modulename)
+        w_mod = space.getitem(w_modules, w_modulename) 
     except OperationError, e:
         pass
     else:
@@ -116,7 +118,7 @@ def absolute_import(space, modulename, baselevel, w_fromlist, tentative):
     prefix = []
     # it would be nice if we could do here: w_path = space.sys.w_path
     # instead:
-    w_path = space.getitem(space.sys.w_dict, space.wrap('path'))
+    w_path = space.sys.get('path') 
 
     first = None
     level = 0
@@ -152,7 +154,7 @@ def load_part(space, w_path, prefix, partname, w_parent, tentative):
         if not space.is_true(space.is_(w_mod,space.w_None)):
             return w_mod
     else:
-        w_mod = space.get_builtin_module(modulename)
+        w_mod = space.sys.getmodule(modulename) 
         if w_mod is not None:
             return w_mod
         for path in space.unpackiterable(w_path):
