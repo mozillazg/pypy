@@ -147,10 +147,10 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
             if -sys.maxint-1 <= w <= sys.maxint:
                 return w
             raise OperationError(self.w_OverflowError,
-                                 sefl.wrap("long int too large to convert to int"))            
+                                 self.wrap("long int too large to convert to int"))            
       
         raise OperationError(self.w_TypeError,
-                                 sefl.wrap("expected integer"))
+                                 self.wrap("expected integer"))
 
     def str_w(self, w):
         if type(w) is not str:
@@ -161,7 +161,7 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
     def float_w(self, w):
         if type(w) is not float:
             raise OperationError(self.w_TypeError,
-                                 sefl.wrap("expected float"))
+                                 self.wrap("expected float"))
         return w
 
     def unwrap(self, w):

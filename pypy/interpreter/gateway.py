@@ -188,7 +188,7 @@ unwrap_spec_emit = {
     'args_w': unwrap_spec_emit_args_w,
 }
 
-# unwrap_space_check/emit for str,int,float
+# unwrap_spec_check/emit for str,int,float
 for basic_type in [str,int,float]:
     name = basic_type.__name__
     def unwrap_spec_check_basic(orig_sig, new_sig, name=name):
