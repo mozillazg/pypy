@@ -91,7 +91,14 @@ class PyInterpFrame(pyframe.PyFrame):
         if w_value is UNDEFINED:
             varname = f.getlocalvarname(varindex)
             message = "local variable '%s' referenced before assignment" % varname
-            raise OperationError(f.space.w_UnboundLocalError, f.space.wrap(message))
+            try:
+                w_exc_type = f.space.w_UnboundLocalError
+                w_exc_value = f.space.wrap(message)
+            except AttributeError:
+                # object space does not support it, so crash really
+                raise UnboundLocalError, (message +
+                    ", but %s has no UnboundLocalError!" % f.space)
+            raise OperationError(w_exc_type, w_exc_value)
         f.valuestack.push(w_value)
 
     def LOAD_CONST(f, constindex):
