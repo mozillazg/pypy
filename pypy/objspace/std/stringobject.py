@@ -864,7 +864,16 @@ def add__String_String(space, w_left, w_right):
     return space.wrap("".join(buf))
 
 def mod_str_tuple(space, w_format, w_args):
-    raise NotImplementedError
+    # XXX implement me
+    format = space.unwrap(w_format)
+    args = space.unwrap(w_args)
+    try:
+        s = format % args
+    except TypeError, e:
+        raise OperationError(space.w_TypeError, space.wrap(str(e)))
+    except ValueError, e:
+        raise OperationError(space.w_ValueError, space.wrap(str(e)))
+    return space.wrap(s)
 
 def len__String(space, w_str):
     return space.wrap(len(space.unwrap(w_str)))
@@ -956,7 +965,7 @@ def mod__String_ANY(space, w_str, w_item):
     return mod_str_tuple(space, w_str, space.newtuple([w_item]))
 
 def mod__String_Tuple(space, w_str, w_tuple):
-    return space.wrap(space.unwrap(w_str)%space.unwrap(w_tuple))
+    return mod_str_tuple(space, w_str, w_tuple)
 
 # register all methods 
 register_all(vars(), W_StringType)
