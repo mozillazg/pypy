@@ -42,7 +42,8 @@ class RPythonAnnotator:
         self.complete()
 
     def gettype(self, variable):
-        """Return the known type of a control flow graph variable, or None."""
+        """Return the known type of a control flow graph variable,
+        defaulting to 'object'."""
         if isinstance(variable, Constant):
             return type(variable.value)
         elif isinstance(variable, Variable):
@@ -50,7 +51,7 @@ class RPythonAnnotator:
             if cell:
                 return cell.knowntype
             else:
-                return None
+                return object
         else:
             raise TypeError, ("Variable or Constant instance expected, "
                               "got %r" % (variable,))
@@ -60,6 +61,8 @@ class RPythonAnnotator:
 
     def addpendingblock(self, block, cells):
         """Register an entry point into block with the given input cells."""
+        for a in cells:
+            assert isinstance(a, annmodel.SomeObject)
         self.pendingblocks.append((block, cells))
 
     def complete(self):
@@ -109,13 +112,15 @@ class RPythonAnnotator:
         # Variable that just happens to be bound to the given SomeValue.
         # A typical example would be if the tuple of arguments was created
         # from another basic block or even another function.  Well I guess
-        # there is no clean solution.
-        constvalue = self.heap.get(ANN.const, cell)
-        if constvalue is not mostgeneralvalue:
-            return Constant(constvalue)
+        # there is no clean solution, short of making the transformations
+        # more syntactic (e.g. replacing a specific sequence of SpaceOperations
+        # with another one).  This is a real hack because we have to use
+        # the identity of 'cell'.
+        if cell.is_constant():
+            return Constant(cell.const)
         else:
             for v in known_variables:
-                if self.heap.isshared(self.bindings[v], cell):
+                if self.bindings[v] is cell:
                     return v
             else:
                 raise CannotSimplify
@@ -192,13 +197,18 @@ class RPythonAnnotator:
 
     def getfactory(self, factorycls):
         try:
-            return self.creationpoints[self.curblockpos]
+            factory = self.creationpoints[self.curblockpos]
         except KeyError:
             block = self.curblockpos[0]
             factory = factorycls()
             factory.block = block
             self.creationpoints[self.curblockpos] = factory
-            return factory
+        # self.curblockpos is an arbitrary key that identifies a specific
+        # position, so that asking twice for a factory from the same position
+        # returns the same factory object.  Because we can ask for several
+        # factories in the same operation, we change self.curblockpos here
+        self.curblockpos = self.curblockpos, 'bis'
+        return factory
 
 
     #___ creating the annotations based on operations ______
@@ -227,44 +237,52 @@ def consider_op_%s(self, arg1, arg2, *args):
 """ % (opname, opname)
     del opname
 
+    def consider_op_newtuple(self, *args):
+        return annmodel.SomeTuple(items = args)
+
     def consider_op_newlist(self, *args):
         factory = self.getfactory(ListFactory)
         for a in args:
             factory.generalize(a)
         return factory.create()
 
-##    def decode_simple_call(self, varargs_cell, varkwds_cell):
-##        nbargs = self.heap.get(ANN.len, varargs_cell)
-##        if nbargs is mostgeneralvalue:
-##            return None
-##        arg_cells = [self.heap.get(ANN.tupleitem[j], varargs_cell)
-##                     for j in range(nbargs)]
+    def decode_simple_call(self, s_varargs, s_varkwds):
+        s_nbargs = s_varargs.len()
+        if not s_nbargs.is_constant():
+            return None
+        nbargs = s_nbargs.const
+        arg_cells = [pair(s_varargs, annmodel.immutablevalue(j)).getitem()
+                     for j in range(nbargs)]
 ##        nbkwds = self.heap.get(ANN.len, varkwds_cell)
 ##        if nbkwds != 0:
 ##            return None  # XXX deal with dictionaries with constant keys
-##        return arg_cells
+        return arg_cells
 
-##    def consider_op_call(self, func, varargs, kwargs):
-##        ...
-##        func = self.heap.get(ANN.const, func)
+    def consider_op_call(self, s_func, s_varargs, s_kwargs):
+        if not s_func.is_constant():
+            return annmodel.SomeObject()
+        func = s_func.const
         
-##        # XXX: generalize this later
-##        if func is range:
-##            self.heap.settype(result, list)
-##        elif func is pow:
-##            args = self.decode_simple_call(varargs, kwargs)
-##            if args is not None and len(args) == 2:
-##                if tp(args[0], int) and tp(args[1], int):
-##                    self.heap.settype(result, int)
-##        elif isinstance(func, FunctionType) and self.translator:
-##            args = self.decode_simple_call(varargs, kwargs)
-##            return self.translator.consider_call(self, func, args)
-##        elif isinstance(func,type):
+        # XXX: generalize this later
+        if func is range:
+            factory = self.getfactory(ListFactory)
+            factory.generalize(annmodel.SomeInteger())  # XXX nonneg=...
+            return factory.create()
+        elif func is pow:
+            args = self.decode_simple_call(s_varargs, s_kwargs)
+            if args is not None and len(args) == 2:
+                if (issubclass(args[0].knowntype, int) and
+                    issubclass(args[1].knowntype, int)):
+                    return annmodel.SomeInteger()
+        elif isinstance(func, FunctionType) and self.translator:
+            args = self.decode_simple_call(s_varargs, s_kwargs)
+            return self.translator.consider_call(self, func, args)
+        elif isinstance(func,type):
+            return annmodel.valueoftype(func)
 ##            # XXX flow into __init__/__new__
-##            self.heap.settype(result,func)
 ##            if func.__module__ != '__builtin__':
 ##                self.userclasses.setdefault(func, {})
-##        return result
+        return annmodel.SomeObject()
 
 
 ##    def consider_op_setattr(self,obj,attr,newval):
@@ -361,24 +379,6 @@ def consider_op_%s(self, arg1, arg2, *args):
 ##    consider_op_ne = consider_op_lt
 ##    consider_op_gt = consider_op_lt
 ##    consider_op_ge = consider_op_lt
-
-##    def consider_op_newtuple(self, *args):
-##        result = SomeValue()
-##        self.heap.settype(result, tuple)
-##        self.heap.set(ANN.len, result, len(args))
-##        for i in range(len(args)):
-##            self.heap.set(ANN.tupleitem[i], result, args[i])
-##        return result
-
-##    def consider_op_newlist(self, *args):
-##        result = SomeValue()
-##        self.heap.settype(result, list)
-##        self.heap.set(ANN.len, result, len(args))
-##        item_cell = impossiblevalue
-##        for a in args:
-##            item_cell = self.heap.merge(item_cell, a)
-##        self.heap.set(ANN.listitems, result, item_cell)
-##        return result
 
 ##    def consider_op_newslice(self, *args):
 ##        result = SomeValue()
