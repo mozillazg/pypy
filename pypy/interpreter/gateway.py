@@ -606,6 +606,10 @@ class applevel:
         return space.loadfromcache(self, applevel.builddict,
                                    space._gatewaycache)
 
+    def buildmodule(self, space, name='applevel'):
+        from pypy.interpreter.module import Module
+        return Module(space, space.wrap(name), self.getdict(space))
+
     def builddict(self, space):
         "NOT_RPYTHON"
         w_glob = space.newdict([])
@@ -619,7 +623,13 @@ class applevel:
             w_func = space.getitem(w_glob, space.wrap(name))
             args = Arguments(space, args_w)
             return space.call_args(w_func, args)
-        return hack.func_with_new_name(appcaller, name)
+        def get_function(space):
+            w_glob = self.getdict(space)
+            w_func = space.getitem(w_glob, space.wrap(name))
+            return space.unwrap(w_func)
+        appcaller = hack.func_with_new_name(appcaller, name)
+        appcaller.get_function = get_function
+        return appcaller
 
 
 def appdef(source, applevel=applevel):

@@ -744,7 +744,38 @@ class PyInterpFrame(pyframe.PyFrame):
 # There are also a couple of helpers that are methods, defined in the
 # class above.
 
-app = gateway.applevel('''
+app = gateway.applevel(r'''
+
+    import sys
+
+    def sys_stdout(): 
+        try: 
+            return sys.stdout
+        except AttributeError:
+            raise RuntimeError("lost sys.stdout")
+
+    def print_expr(obj):
+        try:
+            displayhook = sys.displayhook
+        except AttributeError:
+            raise RuntimeError("lost sys.displayhook")
+        displayhook(obj)
+
+    def print_item_to(x, stream):
+        if file_softspace(stream, False):
+           stream.write(" ")
+        stream.write(str(x))
+
+        # add a softspace unless we just printed a string which ends in a '\t'
+        # or '\n' -- or more generally any whitespace character but ' '
+        if isinstance(x, str) and x and x[-1].isspace() and x[-1]!=' ':
+            return 
+        # XXX add unicode handling
+        file_softspace(stream, True)
+
+    def print_newline_to(stream):
+        stream.write("\n")
+        file_softspace(stream, False)
 
     def file_softspace(file, newflag):
         try:
@@ -831,44 +862,11 @@ app = gateway.applevel('''
             return (co, globals, locals)
 ''')
 
+sys_stdout      = app.interphook('sys_stdout')
+print_expr      = app.interphook('print_expr')
+print_item_to   = app.interphook('print_item_to')
+print_newline_to= app.interphook('print_newline_to')
 file_softspace  = app.interphook('file_softspace')
 find_metaclass  = app.interphook('find_metaclass')
 import_all_from = app.interphook('import_all_from')
 prepare_exec    = app.interphook('prepare_exec')
-
-def print_expr(space, w_x): 
-    try:
-        w_displayhook = space.getattr(space.w_sys, space.wrap('displayhook'))
-    except OperationError, e:
-        if not e.match(space, space.w_AttributeError):
-            raise
-        raise OperationError(space.w_RuntimeError, "lost sys.displayhook")
-    space.call_function(w_displayhook, w_x)
-
-def sys_stdout(space): 
-    try: 
-        return space.getattr(space.w_sys, space.wrap('stdout'))
-    except OperationError, e: 
-        if not e.match(space, space.w_AttributeError): 
-            raise 
-        raise OperationError(space.w_RuntimeError, "lost sys.stdout")
-
-def print_item_to(space, w_x, w_stream):
-    if space.is_true(file_softspace(space, w_stream, space.w_False)): 
-       space.call_method(w_stream, 'write', space.wrap(" "))
-    space.call_method(w_stream, 'write', space.str(w_x))
-
-    # add a softspace unless we just printed a string which ends in a '\t'
-    # or '\n' -- or more generally any whitespace character but ' '
-    w_skip = space.appexec([w_x], """(x):
-            return isinstance(x, str) and len(x) and \
-                   x[-1].isspace() and x[-1]!=' ' 
-    """) 
-    if space.is_true(w_skip): 
-        return 
-    # XXX add unicode handling
-    file_softspace(space, w_stream, space.w_True)
-
-def print_newline_to(space, w_stream):
-    space.call_method(w_stream, 'write', space.wrap("\n"))
-    file_softspace(space, w_stream, space.w_False)

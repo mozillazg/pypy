@@ -18,6 +18,9 @@ class Module(Wrappable):
         if not space.is_true(space.contains(w_dict, space.wrap('__doc__'))):
             space.setitem(w_dict, space.wrap('__doc__'), space.w_None)
 
+    def get(self, name):
+        return self.space.getitem(self.w_dict, self.space.wrap(name))
+
     def getdict(self):
         return self.w_dict
 

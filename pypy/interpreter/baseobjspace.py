@@ -280,7 +280,7 @@ class ObjSpace(object):
 
     def appexec(self, posargs_w, source): 
         """ return value from executing given source at applevel.
-            The source must look like
+            EXPERIMENTAL. The source must look like
                '''(x, y):
                        do_stuff...
                        return result
