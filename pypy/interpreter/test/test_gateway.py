@@ -1,6 +1,7 @@
 
 import autopath
 from pypy.interpreter import gateway
+import py
 
 class TestBuiltinCode: 
     def test_signature(self):
@@ -55,6 +56,11 @@ class TestBuiltinCode:
 
 
 class TestGateway: 
+
+    def setup_method(self, method): 
+        name = method.im_func.func_name 
+        if name in ('test_importall', 'test_exportall'): 
+            py.test.skip("sharing globals for app2interp'ed functions not supported") 
     def test_app2interp(self):
         w = self.space.wrap
         def app_g3(a, b):

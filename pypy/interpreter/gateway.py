@@ -467,56 +467,6 @@ class Gateway(Wrappable):
                       w_obj, space.type(w_obj))
 
 
-class app2interp(Gateway):
-    """Build a Gateway that calls 'app' at app-level."""
-
-    NOT_RPYTHON_ATTRIBUTES = ['_staticcode'] + Gateway.NOT_RPYTHON_ATTRIBUTES
-    
-    def __init__(self, app, app_name=None):
-        "NOT_RPYTHON"
-        Gateway.__init__(self)
-        # app must be a function whose name starts with 'app_'.
-        if not isinstance(app, types.FunctionType):
-            raise TypeError, "function expected, got %r instead" % app
-        if app_name is None:
-            if not app.func_name.startswith('app_'):
-                raise ValueError, ("function name must start with 'app_'; "
-                                   "%r does not" % app.func_name)
-            app_name = app.func_name[4:]
-        self.__name__ = app.func_name
-        self.name = app_name
-        self._staticcode = app.func_code
-        self._staticglobals = app.func_globals
-        self._staticdefs = list(app.func_defaults or ())
-
-    def getcode(self, space):
-        "NOT_RPYTHON"
-        from pypy.interpreter import pycode
-        code = pycode.PyCode(space)
-        code._from_code(self._staticcode)
-        return code
-
-    def getdefaults(self, space):
-        "NOT_RPYTHON"
-        return [space.wrap(val) for val in self._staticdefs]
-
-    def __call__(self, space, *args_w):
-        # to call the Gateway as a non-method, 'space' must be explicitly
-        # supplied. We build the Function object and call it.
-        fn = self.get_function(space)
-        return space.call_function(space.wrap(fn), *args_w)
-
-    def __get__(self, obj, cls=None):
-        "NOT_RPYTHON"
-        if obj is None:
-            return self
-        else:
-            space = obj.space
-            w_method = space.wrap(self.get_method(obj))
-            def helper_method_caller(*args_w):
-                return space.call_function(w_method, *args_w)
-            return helper_method_caller
-
 class interp2app(Gateway):
     """Build a Gateway that calls 'f' at interp-level."""
 
@@ -632,12 +582,6 @@ def build_dict(d, space):
 # 
 # the next gateways are to be used only for 
 # temporary/initialization purposes 
-class app2interp_temp(app2interp):
-    "NOT_RPYTHON"
-    def getcache(self, space): 
-        return self.__dict__.setdefault(space, Cache())
-        #                               ^^^^^
-        #                          armin suggested this 
      
 class interp2app_temp(interp2app): 
     "NOT_RPYTHON"
@@ -725,3 +669,29 @@ def specialargparse(decl):
     return wfuncdecl, wfastdecl, defaulthandlingsource 
 
 app2interp = appdef 
+
+# for app2interp_temp (used for testing mainly) we can use *args
+class app2interp_temp(object): 
+    def __init__(self, func, overridename=None): 
+        """ NOT_RPYTHON """
+        self.appfunc = appdef(func, overridename) 
+
+    def __get__(self, instance, cls=None): 
+        """ NOT_RPYTHON """
+        return app2interp_temp_method(self.appfunc, instance)
+
+    def __call__(self, space, *args_w, **kwargs_w): 
+        """ NOT_RPYTHON """
+        return self.appfunc(space, *args_w, **kwargs_w)
+      
+class app2interp_temp_method(object): 
+    def __init__(self, func, instance): 
+        """ NOT_RPYTHON """
+        self.func = func 
+        self.instance = instance 
+
+    def __call__(self, *args_w, **kwargs_w): 
+        """ NOT_RPYTHON """
+        space = self.instance.space 
+        return self.appfunc(space, space.wrap(self.instance), 
+                            *args_w, **kwargs_w)
