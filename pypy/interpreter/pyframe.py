@@ -99,7 +99,7 @@ class PyFrame(eval.Frame):
 
     def fget_f_lineno(space, w_self):
         "Returns the line number of the instruction currently being executed."
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         return space.wrap(self.get_last_lineno())
 
     def get_last_lineno(self):

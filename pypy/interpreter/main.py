@@ -24,7 +24,7 @@ def _run_eval_string(source, filename, space, eval):
         mainmodule = module.Module(space, space.wrap("__main__"))
         w_globals = mainmodule.w_dict
 
-        pycode = space.unwrap_builtin(w_code)
+        pycode = space.interpclass_w(w_code)
         retval = pycode.exec_code(space, w_globals, w_globals)
         if eval:
             return retval

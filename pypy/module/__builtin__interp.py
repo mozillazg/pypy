@@ -223,7 +223,7 @@ def eval(w_source, w_globals=None, w_locals=None):
 
     if space.is_true(space.isinstance(w_source, space.w_str)):
         w_codeobj = compile(space.str_w(w_source), "<string>", "eval")
-    elif space.is_true(space.isinstance(w_source, space.gettypeobject(PyCode.typedef))):
+    elif isinstance(space.interpclass_w(w_source), PyCode):
         w_codeobj = w_source
     else:
         raise OperationError(space.w_TypeError,
@@ -235,7 +235,7 @@ def eval(w_source, w_globals=None, w_locals=None):
     elif w_locals is None:
         w_locals = w_globals
 
-    return space.unwrap_builtin(w_codeobj).exec_code(space, w_globals, w_locals)
+    return space.interpclass_w(w_codeobj).exec_code(space, w_globals, w_locals)
 
 def abs(w_val):
     "abs(number) -> number\n\nReturn the absolute value of the argument."

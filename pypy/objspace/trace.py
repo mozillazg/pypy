@@ -151,9 +151,7 @@ def get_operations():
     global operations
     if operations is None:
         operations = dict([(r[0], r[0]) for r in ObjSpace.MethodTable])
-        for name in ["is_true", "newtuple", "newlist", "newstring", "newdict",
-                     "newslice", "call_args", "is_", "get_and_call_function",
-                     "wrap", "unwrap"]:
+        for name in ObjSpace.IrregularOpTable+ ["get_and_call_function"]:
             operations[name] = name
 
     return operations

@@ -1,6 +1,6 @@
 import operator
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.baseobjspace import ObjSpace,W_Root
+from pypy.interpreter.baseobjspace import ObjSpace, W_Root, BaseWrappable
 from pypy.interpreter.function import Function
 from pypy.interpreter.gateway import BuiltinCode
 from pypy.interpreter.argument import Arguments
@@ -61,7 +61,7 @@ class DescrOperation:
         return space.lookup(w_obj, '__set__') is not None
 
     def get_and_call_args(space, w_descr, w_obj, args):
-        descr = space.unwrap_builtin(w_descr)
+        descr = space.interpclass_w(w_descr)
         # a special case for performance and to avoid infinite recursion
         if isinstance(descr, Function):
             return descr.call_args(args.prepend(w_obj))
@@ -72,11 +72,6 @@ class DescrOperation:
     def get_and_call_function(space, w_descr, w_obj, *args_w):
         args = Arguments(space, list(args_w))
         return space.get_and_call_args(w_descr, w_obj, args)
-
-    def unwrap_builtin(space, w_obj):
-        if not isinstance(w_obj, W_Root):
-            raise TypeError,"cannot unwrap_builtin: " + repr(w_obj)
-        return w_obj    # hook for hack by TrivialObjSpace
 
     def call_args(space, w_obj, args):
         # a special case for performance

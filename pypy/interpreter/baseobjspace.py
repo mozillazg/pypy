@@ -129,6 +129,13 @@ class ObjSpace(object):
         else:
             return self.w_False
 
+    def interpclass_w(space, w_obj):
+        """
+         If w_obj is a wrapped internal interpreter class instance unwrap to it,
+         otherwise this is the identity
+        """
+        return w_obj    # hook for hack by TrivialObjSpace
+
     def unpackiterable(self, w_iterable, expected_length=None):
         """Unpack an iterable object into a real (interpreter-level) list.
         Raise a real ValueError if the length is wrong."""
@@ -354,15 +361,32 @@ ObjSpace.ExceptionTable = [
 
 ## Irregular part of the interface:
 #
-#                        wrap(x) -> w_x
-#                   str_w(w_str) -> str
-#   int_w(w_ival or w_long_ival) -> ival
-#            float_w(w_floatval) -> floatval
-#                    unwrap(w_x) -> x
-#                   is_true(w_x) -> True or False
-#       newtuple([w_1, w_2,...]) -> w_tuple
-#        newlist([w_1, w_2,...]) -> w_list
-#      newstring([w_1, w_2,...]) -> w_string from ascii numbers (bytes)
-# newdict([(w_key,w_value),...]) -> w_dict
-#newslice(w_start,w_stop,w_step) -> w_slice (any argument may be a real None)
-#   call_args(w_obj,Arguments()) -> w_result
+#                                   wrap(x) -> w_x
+#                              str_w(w_str) -> str
+#              int_w(w_ival or w_long_ival) -> ival
+#                       float_w(w_floatval) -> floatval
+#interpclass_w(w_interpclass_inst or w_obj) -> interpclass_inst|w_obj
+#                               unwrap(w_x) -> x
+#                              is_true(w_x) -> True or False
+#                  newtuple([w_1, w_2,...]) -> w_tuple
+#                   newlist([w_1, w_2,...]) -> w_list
+#                 newstring([w_1, w_2,...]) -> w_string from ascii numbers (bytes)
+#            newdict([(w_key,w_value),...]) -> w_dict
+#           newslice(w_start,w_stop,w_step) -> w_slice (any argument may be a real None)
+#              call_args(w_obj,Arguments()) -> w_result
+
+ObjSpace.IrregularOpTable = [
+    'wrap',
+    'str_w',
+    'int_w',
+    'float_w',
+    'interpclass_w',
+    'unwrap',
+    'is_true',
+    'newtuple',
+    'newlist',
+    'newdict',
+    'newslice',
+    'call_args'
+    ]
+

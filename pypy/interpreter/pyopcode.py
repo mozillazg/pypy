@@ -321,7 +321,7 @@ class PyInterpFrame(pyframe.PyFrame):
                                                     w_traceback)
         w_type, w_value, w_traceback = f.space.unpacktuple(w_resulttuple, 3)
         if w_traceback is not f.space.w_None:
-            tb = f.space.unwrap_builtin(w_traceback)
+            tb = f.space.interpclass_w(w_traceback)
             if not isinstance(tb,pytraceback.PyTraceback):
                 raise OperationError(f.space.w_TypeError,
                       f.space.wrap("raise: arg 3 must be a traceback or None"))
@@ -349,7 +349,7 @@ class PyInterpFrame(pyframe.PyFrame):
         plain = f.space.is_true(f.space.is_(w_locals, f.w_locals))
         if plain:
             w_locals = f.getdictscope()
-        pycode = f.space.unwrap_builtin(w_prog)
+        pycode = f.space.interpclass_w(w_prog)
         pycode.exec_code(f.space, w_globals, w_locals)
         if plain:
             f.setdictscope(w_locals)
@@ -411,7 +411,7 @@ class PyInterpFrame(pyframe.PyFrame):
         w_unroller = f.valuestack.pop()
         if w_unroller is not f.space.w_None:
             # re-raise the unroller, if any
-            raise f.space.unwrap_builtin(w_unroller)
+            raise f.space.interpclass_w(w_unroller)
 
     def BUILD_CLASS(f):
         w_methodsdict = f.valuestack.pop()
@@ -723,7 +723,7 @@ class PyInterpFrame(pyframe.PyFrame):
 
     def MAKE_FUNCTION(f, numdefaults):
         w_codeobj = f.valuestack.pop()
-        codeobj = f.space.unwrap_builtin(w_codeobj)   
+        codeobj = f.space.interpclass_w(w_codeobj)   
         defaultarguments = [f.valuestack.pop() for i in range(numdefaults)]
         defaultarguments.reverse()
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)

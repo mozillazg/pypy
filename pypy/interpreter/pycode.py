@@ -151,7 +151,7 @@ class PyCode(eval.Code):
         return dis.findlabels(self.co_code)
 
     def fget_co_consts(space, w_self):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         return space.newtuple(self.co_consts_w)
 
     def descr_code__new__(space, w_subtype,

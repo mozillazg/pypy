@@ -165,10 +165,10 @@ class PyNestedScopeFrame(PyInterpFrame):
 
     def MAKE_CLOSURE(f, numdefaults):
         w_codeobj = f.valuestack.pop()
-        codeobj = f.space.unwrap_builtin(w_codeobj)
+        codeobj = f.space.interpclass_w(w_codeobj)
         assert isinstance(codeobj, pycode.PyCode)
         nfreevars = len(codeobj.co_freevars)
-        freevars = [f.space.unwrap_builtin(f.valuestack.pop()) for i in range(nfreevars)]
+        freevars = [f.space.interpclass_w(f.valuestack.pop()) for i in range(nfreevars)]
         freevars.reverse()
         defaultarguments = [f.valuestack.pop() for i in range(numdefaults)]
         defaultarguments.reverse()
