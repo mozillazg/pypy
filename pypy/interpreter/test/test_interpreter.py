@@ -19,7 +19,7 @@ class TestInterpreter:
 
         tempmodule = module.Module(space, w("__temp__"))
         w_glob = tempmodule.w_dict
-        #space.setitem(w_glob, w("__builtins__"), space.sys.w_builtins)
+        space.setitem(w_glob, w("__builtins__"), space.builtin)
 
         code = space.unwrap(w_code)
         code.exec_code(space, w_glob, w_glob)
