@@ -105,7 +105,7 @@ def importhook(space, modulename, w_globals=None,
 
     w_mod = absolute_import(space, modulename, 0, w_fromlist, tentative=0)
     if rel_modulename is not None:
-        space.setitem(space.sys.w_modules, w(rel_modulename),space.w_None)
+        space.setitem(space.sys.get('modules'), w(rel_modulename),space.w_None)
     return w_mod
 #
 importhook.unwrap_spec = [ObjSpace,str,W_Root,W_Root,W_Root]
