@@ -53,6 +53,7 @@ class FlowObjSpace(ObjSpace):
         #self.make_builtins()
         #self.make_sys()
         self.w_sys = self.wrap(sys)
+        self.w_apphelper_globals = Constant({}) 
 
     def loadfromcache(self, key, builder, cache):
         # when populating the caches, the flow space switches to
