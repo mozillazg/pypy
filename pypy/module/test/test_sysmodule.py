@@ -115,9 +115,9 @@ class AppTestSysModulePortedFromCPython:
         dh(None)
         assert out.getvalue() == ""
         assert not hasattr(__builtin__, "_")
-        dh(42)
-        assert out.getvalue() == "42\n"
-        assert __builtin__._ == 42
+        dh("hello")
+        assert out.getvalue() == "'hello'\n"
+        assert __builtin__._ == "hello"
 
         del sys.stdout
         raises(RuntimeError, dh, 42)
