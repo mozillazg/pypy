@@ -525,8 +525,13 @@ class PyInterpFrame(pyframe.PyFrame):
                 if not e.match(f.space, f.space.w_KeyError):
                     raise
                 message = "global name '%s' is not defined" % varname
-                w_exc_type = f.space.w_NameError
-                w_exc_value = f.space.wrap(message)
+                try:
+                    w_exc_type = f.space.w_NameError
+                    w_exc_value = f.space.wrap(message)
+                except AttributeError:
+                    # object space does not support it, so crash really
+                    raise NameError, (message +
+                        ", but %s has no NameError!" % f.space)
                 raise OperationError(w_exc_type, w_exc_value)
         f.valuestack.push(w_value)
 
