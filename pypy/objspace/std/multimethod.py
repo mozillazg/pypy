@@ -203,7 +203,7 @@ class UnboundMultiMethod(AbstractMultiMethod):
 
 
 class BoundMultiMethod:
-    #ASSERT_BASE_TYPE = None
+    ASSERT_BASE_TYPE = None
 
     def __init__(self, space, multimethod):
         self.space = space
@@ -237,11 +237,14 @@ class BoundMultiMethod:
         arity = self.multimethod.arity
         extraargs = args[arity:]
 
-##        if self.ASSERT_BASE_TYPE:
-##            for a in args[:arity]:
-##                assert issubclass(a.dispatchclass, self.ASSERT_BASE_TYPE), (
-##                    "multimethod '%s' call with non wrapped argument: %r" %
-##                    (self.multimethod.operatorsymbol, a))
+        if self.ASSERT_BASE_TYPE:
+            for a in args[:arity]:
+                assert hasattr(a, 'dispatchclass'), (
+                    "multimethod '%s' call with non wrapped argument: %r" %
+                    (self.multimethod.operatorsymbol, a))
+                assert issubclass(a.dispatchclass, self.ASSERT_BASE_TYPE), (
+                    "multimethod '%s' call with non wrapped argument: %r" %
+                    (self.multimethod.operatorsymbol, a))
 
         # look for an exact match first
         firstfailure = None

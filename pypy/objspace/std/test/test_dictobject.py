@@ -61,6 +61,35 @@ class TestW_DictObject(test.TestCase):
        cell = space.unwrap(d.cell(space,wk2))
        self.assertEqual_w(cell.get(),space.wrap(2))
 
+    def test_empty_cell(self):
+        space = self.space
+        d = W_DictObject(space,
+                         [(space.wrap('colour'), space.wrap(0)),
+                          (space.wrap('of'),     space.wrap(2)),
+                          (space.wrap('magic'),  space.wrap(1))])
+        w_cell = d.cell(space, space.wrap('of'))
+        d2 = W_DictObject(space,
+                          [(space.wrap('colour'), space.wrap(0)),
+                           (space.wrap('magic'),  space.wrap(1))])
+        self.assertNotEqual_w(d, d2)
+        space.delitem(d, space.wrap('of'))
+        self.assertEqual_w(d, d2)
+
+    def test_empty_cell2(self):
+        space = self.space
+        d = W_DictObject(space,
+                         [(space.wrap('colour'), space.wrap(0)),
+                          (space.wrap('of'),     space.wrap(2)),
+                          (space.wrap('magic'),  space.wrap(1))])
+        w_cell = d.cell(space, space.wrap('of'))
+        d2 = W_DictObject(space,
+                          [(space.wrap('colour'), space.wrap(0)),
+                           (space.wrap('magic'),  space.wrap(1))])
+        self.assertNotEqual_w(d, d2)
+        cell = space.unwrap(w_cell)
+        cell.make_empty()
+        self.assertEqual_w(d, d2)
+
 
     def test_wrap_dict(self):
         self.assert_(isinstance(self.space.wrap({}), W_DictObject))

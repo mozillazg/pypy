@@ -1,10 +1,3 @@
-"""
-without intending to test objectspace, we discovered
-some unforeseen wrapping of PyByteCode.
-XXX further analysis needed.
-"""
-
-import pypy.interpreter.appfile
 from register_all import register_all
 from pypy.interpreter.baseobjspace import *
 from multimethod import *
@@ -23,7 +16,7 @@ class W_AbstractTypeObject(W_Object):
 
 
 W_ANY = W_Object  # synonyms for use in .register()
-#BoundMultiMethod.ASSERT_BASE_TYPE = W_Object
+BoundMultiMethod.ASSERT_BASE_TYPE = W_Object
 MultiMethod.BASE_TYPE_OBJECT = W_AbstractTypeObject
 
 # delegation priorities
@@ -48,11 +41,6 @@ class StdObjSpace(ObjSpace):
 
     PACKAGE_PATH = 'objspace.std'
 
-    class AppFile(pypy.interpreter.appfile.AppFile):
-        pass
-    AppFile.LOCAL_PATH = [PACKAGE_PATH]
-
-
     def standard_types(self):
         class result:
             "Import here the types you want to have appear in __builtin__."
@@ -72,17 +60,12 @@ class StdObjSpace(ObjSpace):
 
     def clone_exception_hierarchy(self):
         from usertype import W_UserType
-        from funcobject import W_FuncObject
-        from pypy.interpreter.pycode import PyByteCode
+        from pypy.interpreter import gateway
         w = self.wrap
-        def __init__(self, *args):
+        def app___init__(self, *args):
             self.args = args
-        code = PyByteCode()
-        code._from_code(__init__.func_code)
-        w_init = W_FuncObject(self, code,
-                              self.newdict([]), self.newtuple([]), None)
-##        w_init = w(__init__) # should this work? --mwh
-        def __str__(self):
+        w_init = w(gateway.app2interp(app___init__))
+        def app___str__(self):
             l = len(self.args)
             if l == 0:
                 return ''
@@ -90,10 +73,7 @@ class StdObjSpace(ObjSpace):
                 return str(self.args[0])
             else:
                 return str(self.args)
-        code = PyByteCode()
-        code._from_code(__str__.func_code)
-        w_str = W_FuncObject(self, code,
-                              self.newdict([]), self.newtuple([]), None)
+        w_str = w(gateway.app2interp(app___str__))
         import exceptions
 
         # to create types, we should call the standard type object;
@@ -146,13 +126,11 @@ class StdObjSpace(ObjSpace):
                             
     def initialize(self):
         from noneobject    import W_NoneObject
-        from nullobject    import W_NullObject
         from boolobject    import W_BoolObject
         from cpythonobject import W_CPythonObject
 
         # singletons
         self.w_None  = W_NoneObject(self)
-        self.w_Null  = W_NullObject(self)
         self.w_False = W_BoolObject(self, False)
         self.w_True  = W_BoolObject(self, True)
         self.w_NotImplemented = self.wrap(NotImplemented)  # XXX do me
@@ -176,7 +154,6 @@ class StdObjSpace(ObjSpace):
         for_builtins.update(self.clone_exception_hierarchy())
         
         self.make_builtins()
-        self.make_sys()
         
         # insert stuff into the newly-made builtins
         for key, w_value in for_builtins.items():
@@ -221,8 +198,9 @@ class StdObjSpace(ObjSpace):
             wrappeditems = [self.wrap(item) for item in x]
             import listobject
             return listobject.W_ListObject(self, wrappeditems)
+        if hasattr(x, '__wrap__'):
+            return x.__wrap__(self)
         # print "wrapping %r (%s)" % (x, type(x))
-        # XXX unexpected wrapping of PyByteCode 
         import cpythonobject
         return cpythonobject.W_CPythonObject(self, x)
 
@@ -250,15 +228,6 @@ class StdObjSpace(ObjSpace):
         # w_step may be a real None
         import sliceobject
         return sliceobject.W_SliceObject(self, w_start, w_end, w_step)
-
-    def newfunction(self, code, w_globals, w_defaultarguments, w_closure=None):
-        import funcobject
-        return funcobject.W_FuncObject(self, code, w_globals,
-                                       w_defaultarguments, w_closure)
-
-    def newmodule(self, w_name):
-        import moduleobject
-        return moduleobject.W_ModuleObject(self, w_name)
 
     def newstring(self, chars_w):
         try:

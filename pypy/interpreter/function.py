@@ -13,15 +13,13 @@ class Function(object):
     an object space, a dictionary of globals, default arguments,
     and an arbitrary 'closure' passed to the code object."""
     
-    def __init__(self, space, code, w_globals, w_defs=None, closure=None):
+    def __init__(self, space, code, w_globals=None, defs_w=[], closure=None):
         self.space     = space
         self.func_code = code       # Code instance
         self.w_globals = w_globals  # the globals dictionary
         self.closure   = closure    # normally, list of Cell instances or None
-        if w_defs is None:
-            self.defs_w = []
-        else:
-            self.defs_w = space.unpackiterable(w_defs)  # list of w_default's
+        self.defs_w    = defs_w     # list of w_default's
+        self.__name__  = self.func_code.co_name   # XXX
 
     def call(self, w_args, w_kwds=None):
         scope_w = self.parse_args(w_args, w_kwds)
@@ -29,6 +27,7 @@ class Function(object):
                                             self.closure)
         frame.setfastscope(scope_w)
         return frame.run()
+    pypy_call = call
 
     def parse_args(self, w_args, w_kwds=None):
         """ parse args and kwargs to initialize the frame.
@@ -46,9 +45,10 @@ class Function(object):
         # We try to give error messages following CPython's, which are
         # very informative.
         #
-        if w_kwds is None:
+        if w_kwds is None or not space.is_true(w_kwds):
             w_kwargs = space.newdict([])
         else:
+            # space.is_true() above avoids infinite recursion copy<->parse_args
             w_kwargs = space.call_method(w_kwds, "copy")
 
         co_argcount = len(argnames) # expected formal arguments, without */**
@@ -131,13 +131,13 @@ class Function(object):
                 msg2,
                 plural,
                 nargs)
-        raise OperationError(self.space.w_TypeError, msg)
+        raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
 
     def raise_argerr_multiple_values(self, argname):
         msg = "%s() got multiple values for keyword argument %s" % (
             self.func_code.co_name,
             argname)
-        raise OperationError(self.space.w_TypeError, msg)
+        raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
 
     def raise_argerr_unknown_kwds(self, w_kwds):
         nkwds = self.space.unwrap(self.space.len(w_kwds))
@@ -151,22 +151,65 @@ class Function(object):
             msg = "%s() got %d unexpected keyword arguments" % (
                 self.func_code.co_name,
                 nkwds)
-        raise OperationError(self.space.w_TypeError, msg)
+        raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
+
+    def __get__(self, obj, cls=None):
+        wrap = self.space.wrap
+        if obj is not None:
+            if cls is None:
+                cls = obj.__class__
+            return Method(self.space, wrap(self), wrap(obj), wrap(cls))
+        else:
+            return Method(self.space, wrap(self), None, wrap(cls))
+
+    def pypy_get(self, w_obj, w_cls):
+        wrap = self.space.wrap
+        if not self.space.is_true(self.space.is_(w_obj, self.space.w_None)):
+            if self.space.is_true(self.space.is_(w_cls, self.space.w_None)):
+                w_cls = self.space.type(w_obj)
+            return wrap(Method(self.space, wrap(self), w_obj, w_cls))
+        else:
+            return wrap(Method(self.space, wrap(self), None, w_cls))
+
+    def __call__(self, *args_w, **kwds_w):
+        wrap = self.space.wrap
+        w_args = self.space.newtuple(args_w)
+        w_kwds = self.space.newdict([(wrap(key), w_value)
+                                     for key, w_value in kwds_w.items()])
+        return self.call(w_args, w_kwds)
 
 
-    def __get__(self, inst, cls=None):
-        # for TrivialObjSpace only !!!
-        # use the mecanisms of gateway.py otherwise
-        import sys, new
-        assert 'pypy.objspace.trivial' in sys.modules, (
-            "don't try to __get__() Function instances out of classes")
-        self.__name__ = self.func_code.co_name
-        return new.instancemethod(self, inst, cls)
+class Method(object):
+    """A method is a function bound to a specific instance or class."""
 
-    def __call__(self, *args, **kwds):
-        # for TrivialObjSpace only !!!
-        # use the mecanisms of gateway.py otherwise
-        import sys, new
-        assert 'pypy.objspace.trivial' in sys.modules, (
-            "don't try to __call__() Function instances directly")
-        return self.call(args, kwds)
+    def __init__(self, space, w_function, w_instance, w_class):
+        self.space = space
+        self.w_function = w_function
+        self.w_instance = w_instance   # or None
+        self.w_class = w_class
+
+    def call(self, w_args, w_kwds=None):
+        args_w = self.space.unpacktuple(w_args)
+        if self.w_instance is not None:
+            # bound method
+            args_w = [self.w_instance] + args_w
+            w_args = self.space.newtuple(args_w)
+        else:
+            # unbound method
+            if (len(args_w) >= 1 and self.space.is_true(
+                    self.space.isinstance(args_w[0], self.w_class))):
+                pass  # ok
+            else:
+                msg = ("unbound method must be called with "
+                       "instance as first argument")     # XXX fix error msg
+                raise OperationError(self.space.w_TypeError,
+                                     self.space.wrap(msg))
+        return self.space.call(self.w_function, w_args, w_kwds)
+    pypy_call = call
+
+    def __call__(self, *args_w, **kwds_w):
+        wrap = self.space.wrap
+        w_args = self.space.newtuple(args_w)
+        w_kwds = self.space.newdict([(wrap(key), w_value)
+                                     for key, w_value in kwds_w.items()])
+        return self.call(w_args, w_kwds)

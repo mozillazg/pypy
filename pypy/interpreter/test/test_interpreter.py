@@ -7,7 +7,8 @@ class TestInterpreter(test.TestCase):
     def codetest(self, source, functionname, args):
         """Compile and run the given code string, and then call its function
         named by 'functionname' with arguments 'args'."""
-        from pypy.interpreter import baseobjspace, executioncontext, pyframe, gateway
+        from pypy.interpreter import baseobjspace, executioncontext
+        from pypy.interpreter import pyframe, gateway, module
         space = self.space
 
         compile = space.builtin.compile
@@ -16,8 +17,8 @@ class TestInterpreter(test.TestCase):
 
         ec = executioncontext.ExecutionContext(space)
 
-        w_tempmodule = space.newmodule(w("__temp__"))
-        w_glob = space.getattr(w_tempmodule, w("__dict__"))
+        tempmodule = module.Module(space, w("__temp__"))
+        w_glob = tempmodule.w_dict
         space.setitem(w_glob, w("__builtins__"), space.w_builtins)
 
         code = space.unwrap(w_code)
@@ -260,6 +261,12 @@ class AppTestInterpreter(test.AppTestCase):
             yield 1
         g = f()
         self.assertEquals(list(g), [1])
+
+    def test_generator4(self):
+        def f():
+            yield 1
+        g = f()
+        self.assertEquals([x for x in g], [1])
         
     def test_generator_restart(self):
         def g():

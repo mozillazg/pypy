@@ -2,7 +2,8 @@ from pypy.objspace.std.objspace import *
 from listtype import W_ListType
 from intobject import W_IntObject
 from sliceobject import W_SliceObject
-from pypy.interpreter.extmodule import make_builtin_func
+import slicetype
+from pypy.interpreter import gateway
 from restricted_int import r_int, r_uint
 
 
@@ -73,11 +74,8 @@ def getitem__List_Int(space, w_list, w_index):
 
 def getitem__List_Slice(space, w_list, w_slice):
     items = w_list.ob_item
-    w_length = space.wrap(w_list.ob_size)
-    w_start, w_stop, w_step, w_slicelength = w_slice.indices(w_length)
-    start       = space.unwrap(w_start)
-    step        = space.unwrap(w_step)
-    slicelength = space.unwrap(w_slicelength)
+    length = w_list.ob_size
+    start, stop, step, slicelength = slicetype.indices4(space, w_slice, length)
     assert slicelength >= 0
     w_res = W_ListObject(space, [])
     _list_resize(w_res, slicelength)

@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.eval import UNDEFINED
 from pypy.interpreter.pyopcode import PyInterpFrame
+from pypy.interpreter import function, pycode
 
 
 class Cell(object):
@@ -157,12 +158,12 @@ class PyNestedScopeFrame(PyInterpFrame):
     def MAKE_CLOSURE(f, numdefaults):
         w_codeobj = f.valuestack.pop()
         codeobj = f.space.unwrap(w_codeobj)
+        assert isinstance(codeobj, pycode.PyCode)
         nfreevars = len(codeobj.co_freevars)
-        freevars = [f.valuestack.pop() for i in range(nfreevars)]
+        freevars = [f.space.unwrap(f.valuestack.pop()) for i in range(nfreevars)]
         freevars.reverse()
         defaultarguments = [f.valuestack.pop() for i in range(numdefaults)]
         defaultarguments.reverse()
-        w_defaultarguments = f.space.newtuple(defaultarguments)
-        w_func = f.space.newfunction(f.space.unwrap(w_codeobj),
-                                     f.w_globals, w_defaultarguments, freevars)
-        f.valuestack.push(w_func)
+        fn = function.Function(f.space, codeobj, f.w_globals,
+                               defaultarguments, freevars)
+        f.valuestack.push(f.space.wrap(fn))

@@ -1,5 +1,6 @@
 from __future__ import generators
 from pypy.interpreter import executioncontext
+from pypy.interpreter.module import Module
 from pypy.interpreter.extmodule import ExtModule
 from pypy.interpreter.error import OperationError
 
@@ -13,7 +14,10 @@ class __builtin__(ExtModule):
     """ Template for PyPy's '__builtin__' module.
     """
     
-    app___name__ = '__builtin__'
+    __name__ = '__builtin__'
+
+    open = cpy_builtin.open
+    file = cpy_builtin.file
 
     def _actframe(self, index=-1):
         return self.space.getexecutioncontext().framestack.items[index]
@@ -33,7 +37,7 @@ class __builtin__(ExtModule):
         except OperationError,e:
             if not e.match(space, space.w_KeyError):
                 raise
-            w_mod = space.get_builtin_module(w_modulename)
+            w_mod = space.get_builtin_module(space.unwrap(w_modulename))
             if w_mod is not None:
                 space.setitem(space.sys.w_modules, w_modulename, w_mod)
                 return w_mod
@@ -42,11 +46,10 @@ class __builtin__(ExtModule):
             for path in space.sys.path:
                 f = os.path.join(path, space.unwrap(w_modulename) + '.py')
                 if os.path.exists(f):
-                    w_mod = space.newmodule(w_modulename)
+                    w_mod = space.wrap(Module(space, w_modulename))
                     space.setitem(space.sys.w_modules, w_modulename, w_mod)
                     space.setattr(w_mod, w('__file__'), w(f))
                     w_dict = space.getattr(w_mod, w('__dict__'))
-                    import sys; print >> sys.stderr, self.__class__.__dict__['execfile']
                     self.execfile(w(f), w_dict, w_dict)
                     return w_mod
             
@@ -77,7 +80,7 @@ class __builtin__(ExtModule):
         from pypy.interpreter.pycode import PyCode
         return space.wrap(PyCode()._from_code(c))
 
-    def app_execfile(filename, glob=None, loc=None):
+    def app_execfile(self, filename, glob=None, loc=None):
         if glob is None:
             glob = globals()
             if loc is None:
@@ -141,11 +144,11 @@ class __builtin__(ExtModule):
 
     # app-level functions
 
-    def app_apply(function, args, kwds={}):
+    def app_apply(self, function, args, kwds={}):
         """call a function (or other callable object) and return its result"""
         return function(*args, **kwds)
 
-    def app_map(function, *collections):
+    def app_map(self, function, *collections):
         """does 3 separate things, hence this enormous docstring.
            1.  if function is None, return a list of tuples, each with one
                item from each collection.  If the collections have different
@@ -191,7 +194,7 @@ class __builtin__(ExtModule):
                   return res
               idx = idx + 1
 
-    def app_filter(function, collection):
+    def app_filter(self, function, collection):
         """construct a list of those elements of collection for which function
            is True.  If function is None, then return the items in the sequence
            which are True."""
@@ -208,7 +211,7 @@ class __builtin__(ExtModule):
         else:
            return res
 
-    def app_zip(*collections):
+    def app_zip(self, *collections):
         """return a list of tuples, where the nth tuple contains every
            nth item of each collection.  If the collections have different
            lengths, zip returns a list as long as the shortest collection,
@@ -229,7 +232,7 @@ class __builtin__(ExtModule):
            idx = idx + 1
         return res
 
-    def app_reduce(function, l, *initialt):
+    def app_reduce(self, function, l, *initialt):
         """ Apply function of two arguments cumulatively to the items of
             sequence, from left to right, so as to reduce the sequence to a
             single value.  Optionally begin with an initial value."""
@@ -251,7 +254,7 @@ class __builtin__(ExtModule):
              break
         return initial
 
-    def app_isinstance(obj, klass_or_tuple):
+    def app_isinstance(self, obj, klass_or_tuple):
         objcls = obj.__class__
         if issubclass(klass_or_tuple.__class__, tuple):
            for klass in klass_or_tuple:
@@ -264,7 +267,7 @@ class __builtin__(ExtModule):
            except TypeError:
                raise TypeError, "isinstance() arg 2 must be a class or type"
 
-    def app_range(x, y=None, step=1):
+    def app_range(self, x, y=None, step=1):
         """ returns a list of integers in arithmetic position from start (defaults
             to zero) to stop - 1 by step (defaults to 1).  Use a negative step to
             get a list in decending order."""
@@ -303,7 +306,7 @@ class __builtin__(ExtModule):
     # min and max could be one function if we had operator.__gt__ and
     # operator.__lt__  Perhaps later when we have operator.
 
-    def app_min(*arr):
+    def app_min(self, *arr):
         """return the smallest number in a list"""
 
         if not arr:
@@ -323,7 +326,7 @@ class __builtin__(ExtModule):
                 min = i
         return min
 
-    def app_max(*arr):
+    def app_max(self, *arr):
         """return the largest number in a list"""
 
         if not arr:
@@ -344,7 +347,7 @@ class __builtin__(ExtModule):
         return max
 
 
-    def app_cmp(x, y):
+    def app_cmp(self, x, y):
         """return 0 when x == y, -1 when x < y and 1 when x > y """
         if x < y:
             return -1
@@ -353,7 +356,7 @@ class __builtin__(ExtModule):
         else:
             return 1
 
-    def app_vars(*obj):
+    def app_vars(self, *obj):
         """return a dictionary of all the attributes currently bound in obj.  If
         called with no argument, return the variables bound in local scope."""
 
@@ -367,7 +370,7 @@ class __builtin__(ExtModule):
             except AttributeError:
                 raise TypeError, "vars() argument must have __dict__ attribute"
 
-    def app_hasattr(ob, attr):
+    def app_hasattr(self, ob, attr):
         try:
             getattr(ob, attr)
             return True
@@ -375,7 +378,7 @@ class __builtin__(ExtModule):
             return False
 
 
-    def app_xrange(start, stop=None, step=1):
+    def app_xrange(self, start, stop=None, step=1):
         class xrange:
             def __init__(self, start, stop=None, step=1):
                 if stop is None: 

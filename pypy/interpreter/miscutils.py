@@ -51,6 +51,26 @@ class InitializedClass(type):
             self.__initclass__()
 
 
+class RwDictProxy(object):
+    """A dict-like class standing for 'cls.__dict__', to work around
+    the fact that the latter is a read-only proxy for new-style classes."""
+    
+    def __init__(self, cls):
+        self.cls = cls
+
+    def __getitem__(self, attr):
+        return self.cls.__dict__[attr]
+
+    def __setitem__(self, attr, value):
+        setattr(self.cls, attr, value)
+
+    def __contains__(self, value):
+        return value in self.cls.__dict__
+
+    def items(self):
+        return self.cls.__dict__.items()
+
+
 class ThreadLocals:
     """Thread-local storage."""
 

@@ -2,23 +2,22 @@ import autopath
 
 import sys, os
 import unittest
-from pypy.interpreter.gateway import DictProxy
+from pypy.interpreter import gateway
 
 def make_testcase_class(space, tc_w):
     # XXX this is all a bit insane (but it works)
 
-    # space-independent part: collect the test methods into
-    # a DictProxy.
-    d = DictProxy(implicitspace=True)
+    # collect the test methods into a dictionary
+    w = space.wrap
+    w_dict = space.newdict([])
     for name in dir(AppTestCase):
         if ( name.startswith('assert') or name.startswith('fail')
              and name != 'failureException'):
-            d.app2interp(getattr(tc_w, name).im_func, name)
+            fn = gateway.app2interp(getattr(tc_w, name).im_func, name)
+            space.setitem(w_dict, w(name), w(fn))
 
     # space-dependent part: make an object-space-level dictionary
     # and use it to build the class.
-    w = space.wrap
-    w_dict = d.makedict(space)
     space.setitem(w_dict, w('failureException'), space.w_AssertionError)
     w_tc = space.call_function(space.w_type,
                                w('TestCase'),
@@ -44,10 +43,8 @@ class WrappedFunc(object):
             setattr(space, w_tc_attr, w_tc)
 
         f = self.testMethod.im_func
-        gateway = DictProxy(implicitspace=True).app2interp(f, f.func_name)
-        w_f = space.wrap(gateway)
-        # w_f = wrap_func(space, self.testMethod.im_func)
-        space.call_function(w_f, w_tc)
+        gway = gateway.app2interp(f, f.func_name)
+        gway(space, w_tc)
 
 
 class IntTestCase(unittest.TestCase):

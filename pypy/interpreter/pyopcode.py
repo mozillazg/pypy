@@ -6,9 +6,8 @@ pyfastscope.py and pynestedscope.py.
 
 from pypy.interpreter.baseobjspace import OperationError, NoValue
 from pypy.interpreter.eval import UNDEFINED
-from pypy.interpreter import baseobjspace, pyframe
+from pypy.interpreter import baseobjspace, pyframe, gateway, function
 from pypy.interpreter.miscutils import InitializedClass
-from pypy.interpreter.gateway import DictProxy
 
 
 class unaryoperation:
@@ -34,7 +33,6 @@ class binaryoperation:
 class PyInterpFrame(pyframe.PyFrame):
     """A PyFrame that knows about interpretation of standard Python opcodes
     minus the ones related to nested scopes."""
-    appdict = DictProxy(implicitspace=True)
     
     ### opcode dispatch ###
 
@@ -195,20 +193,20 @@ class PyInterpFrame(pyframe.PyFrame):
         f.valuestack.push(w_result)
 
     def SLICE_0(f):
-        slice(f, None, None)
+        f.slice(None, None)
 
     def SLICE_1(f):
         w_start = f.valuestack.pop()
-        slice(f, w_start, None)
+        f.slice(w_start, None)
 
     def SLICE_2(f):
         w_end = f.valuestack.pop()
-        slice(f, None, w_end)
+        f.slice(None, w_end)
 
     def SLICE_3(f):
         w_end = f.valuestack.pop()
         w_start = f.valuestack.pop()
-        slice(f, w_start, w_end)
+        f.slice(w_start, w_end)
 
     def storeslice(f, w_start, w_end):
         w_slice = f.space.newslice(w_start, w_end, None)
@@ -217,20 +215,20 @@ class PyInterpFrame(pyframe.PyFrame):
         f.space.setitem(w_obj, w_slice, w_newvalue)
 
     def STORE_SLICE_0(f):
-        storeslice(f, None, None)
+        f.storeslice(None, None)
 
     def STORE_SLICE_1(f):
         w_start = f.valuestack.pop()
-        storeslice(f, w_start, None)
+        f.storeslice(w_start, None)
 
     def STORE_SLICE_2(f):
         w_end = f.valuestack.pop()
-        storeslice(f, None, w_end)
+        f.storeslice(None, w_end)
 
     def STORE_SLICE_3(f):
         w_end = f.valuestack.pop()
         w_start = f.valuestack.pop()
-        storeslice(f, w_start, w_end)
+        f.storeslice(w_start, w_end)
 
     def deleteslice(f, w_start, w_end):
         w_slice = f.space.newslice(w_start, w_end, None)
@@ -238,20 +236,20 @@ class PyInterpFrame(pyframe.PyFrame):
         f.space.delitem(w_obj, w_slice)
 
     def DELETE_SLICE_0(f):
-        deleteslice(f, None, None)
+        f.deleteslice(None, None)
 
     def DELETE_SLICE_1(f):
         w_start = f.valuestack.pop()
-        deleteslice(f, w_start, None)
+        f.deleteslice(w_start, None)
 
     def DELETE_SLICE_2(f):
         w_end = f.valuestack.pop()
-        deleteslice(f, None, w_end)
+        f.deleteslice(None, w_end)
 
     def DELETE_SLICE_3(f):
         w_end = f.valuestack.pop()
         w_start = f.valuestack.pop()
-        deleteslice(f, w_start, w_end)
+        f.deleteslice(w_start, w_end)
 
     def STORE_SUBSCR(f):
         "obj[subscr] = newvalue"
@@ -339,15 +337,15 @@ class PyInterpFrame(pyframe.PyFrame):
                 locals = prog[2]
             prog = prog[0]
         if globals is None:
-            globals = f.w_globals    # XXX should be f.f_globals
+            globals = f.f_globals
             if locals is None:
-                locals = f.w_locals  # XXX should be f.f_locals
+                locals = f.f_locals
         if locals is None:
             locals = globals
         if not isinstance(globals, dict):
             raise TypeError("exec: arg 2 must be a dictionary or None")
         elif not globals.has_key('__builtins__'):
-            globals['__builtins__'] = f.w_builtins # XXX should be f.f_builtins
+            globals['__builtins__'] = f.f_builtins
         if not isinstance(locals, dict):
             raise TypeError("exec: arg 3 must be a dictionary or None")
         # XXX - HACK to check for code object
@@ -592,9 +590,9 @@ class PyInterpFrame(pyframe.PyFrame):
 
     def IMPORT_STAR(f):
         w_module = f.valuestack.pop()
-        w_locals = f.getfastscope()
+        w_locals = f.getdictscope()
         import_all_from(f.space, w_module, w_locals)
-        f.setfastscope(w_locals)
+        f.setdictscope(w_locals)
 
     def IMPORT_FROM(f, nameindex):
         name = f.getname(nameindex)
@@ -703,12 +701,11 @@ class PyInterpFrame(pyframe.PyFrame):
 
     def MAKE_FUNCTION(f, numdefaults):
         w_codeobj = f.valuestack.pop()
+        codeobj = f.space.unwrap(w_codeobj)
         defaultarguments = [f.valuestack.pop() for i in range(numdefaults)]
         defaultarguments.reverse()
-        w_defaultarguments = f.space.newtuple(defaultarguments)
-        w_func = f.space.newfunction(f.space.unwrap(w_codeobj),
-                                     f.w_globals, w_defaultarguments)
-        f.valuestack.push(w_func)
+        fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
+        f.valuestack.push(f.space.wrap(fn))
 
     def BUILD_SLICE(f, numargs):
         if numargs == 3:
@@ -759,7 +756,7 @@ class PyInterpFrame(pyframe.PyFrame):
         cls.dispatch_table = dispatch_table
 
 
-    appdict.importall(locals())
+    gateway.importall(locals())   # app_xxx() -> xxx()
 
 
 ### helpers written at the application-level ###
@@ -885,5 +882,4 @@ def app_import_from(module, name):
         raise ImportError("cannot import name '%s'" % name)
 
 
-appdict = DictProxy()
-appdict.importall(globals())   # app_xxx() -> xxx()
+gateway.importall(globals())   # app_xxx() -> xxx()

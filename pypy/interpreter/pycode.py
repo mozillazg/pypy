@@ -72,7 +72,7 @@ class PyCode(eval.Code):
     def signature(self):
         "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
         argcount = self.co_argcount
-        argnames = self.co_varnames[:argcount]
+        argnames = list(self.co_varnames[:argcount])
         if self.co_flags & CO_VARARGS:
             varargname = self.co_varnames[argcount]
             argcount += 1

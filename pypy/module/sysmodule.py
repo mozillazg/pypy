@@ -7,10 +7,10 @@ import sys as cpy_sys
 class Sys(ExtModule):
     """ Template for PyPy's 'sys' module.
 
-    Currently we only provide 'path', 'modules', 'stdout' and 'displayhook'
+    Currently we only provide a handful of attributes.
     """
 
-    app___name__ = 'sys'
+    __name__ = 'sys'
 
     def __init__(self, space):
         opd = os.path.dirname
@@ -22,6 +22,7 @@ class Sys(ExtModule):
 
     stdout = cpy_sys.stdout
     stderr = cpy_sys.stderr
+    maxint = cpy_sys.maxint
 
     def _setmodule(self, w_module):
         """ put a module into the modules list """
@@ -31,7 +32,7 @@ class Sys(ExtModule):
     def displayhook(self, w_x):
         space = self.space
         w = space.wrap
-        if w_x != space.w_None:
+        if not space.is_true(space.is_(w_x, space.w_None)):
             try:
                 print space.unwrap(self.space.repr(w_x))
             except OperationError:

@@ -2,6 +2,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import NoValue
 from pypy.interpreter.eval import Frame
 from pypy.interpreter.pyframe import ControlFlowException, ExitFrame
+from pypy.interpreter import function, gateway
 
 #
 # Generator support. Note that GeneratorFrame is not a subclass of PyFrame.
@@ -18,7 +19,7 @@ class GeneratorFrame(Frame):
     def run(self):
         "Build a generator-iterator."
         self.exhausted = False
-        return GeneratorIterator(self)
+        return self.space.wrap(GeneratorIterator(self))
 
     ### extra opcodes ###
 
@@ -39,10 +40,14 @@ class GeneratorIterator(object):
     "An iterator created by a generator."
     
     def __init__(self, frame):
+        self.space = frame.space
         self.frame = frame
         self.running = False
 
-    def nextvalue(self):
+    def pypy_iter(self):
+        return self.space.wrap(self)
+
+    def pypy_next(self):
         # raise NoValue when exhausted
         if self.running:
             space = self.frame.space
@@ -56,19 +61,31 @@ class GeneratorIterator(object):
         finally:
             self.running = False
 
-
-    # XXX trick for trivialobjspace
-    # XXX make these __iter__() and next() app-visible
-
-    def __iter__(self):
-        return self
-
     def next(self):
-        # XXX trivialobjspace only !!
         try:
-            return self.nextvalue()
+            return self.pypy_next()
         except NoValue:
-            raise StopIteration
+            raise OperationError(self.space.w_StopIteration,
+                                 self.space.w_None)
+    app_next = gateway.interp2app(next)
+
+    def pypy_getattr(self, w_attr):
+        # XXX boilerplate that should disappear at some point
+        attr = self.space.unwrap(w_attr)
+        if attr == 'next':
+            return self.space.wrap(self.app_next)
+        raise OperationError(self.space.w_AttributeError, w_attr)
+
+    # XXX the following is for TrivialObjSpace only, when iteration is
+    # done by C code (e.g. when calling 'list(g())').
+    def __iter__(self):
+        class hack:
+            def next(h):
+                try:
+                    return self.pypy_next()
+                except NoValue:
+                    raise StopIteration
+        return hack()
 
 #
 # the specific ControlFlowExceptions used by generators

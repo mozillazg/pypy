@@ -75,12 +75,14 @@ from pypy.objspace.std.objspace import *
 from stringtype import W_StringType
 from intobject   import W_IntObject
 from sliceobject import W_SliceObject
+import slicetype
 from listobject import W_ListObject
-from instmethobject import W_InstMethObject
 from noneobject import W_NoneObject
 from tupleobject import W_TupleObject
 
-applicationfile = StdObjSpace.AppFile(__name__)
+# XXX consider reimplementing _value to be a list of characters
+#     instead of a plain string
+
 
 class W_StringObject(W_Object):
     statictype = W_StringType
@@ -826,21 +828,14 @@ def getitem__String_Int(space, w_str, w_int):
     return W_StringObject(space, str[ival])
 
 def getitem__String_Slice(space, w_str, w_slice):
-    return space.gethelper(applicationfile).call(
-        "getitem_string_slice", [w_str, w_slice])
+    # XXX this is really too slow for slices with no step argument
     w = space.wrap
-    u = space.unwrap
-    w_start, w_stop, w_step, w_sl = w_slice.indices(w(len(u(w_str._value))))
-    start = u(w_start)
-    stop = u(w_stop)
-    step = u(w_step)
-    sl = u(w_sl)
-    r = [None] * sl
-    for i in range(sl):
-        r[i] = space.getitem(w_str, w(start + i*step))
+    length = len(w_str._value)
+    start, stop, step, sl = slicetype.indices4(space, w_slice, length)
+    r = [space.getitem(w_str, w(start + i*step)) for i in range(sl)]
     w_r = space.newlist(r)
     w_empty = space.newstring([])
-    return str_join(space, w_empty, w_r)
+    return str_join__String_ANY(space, w_empty, w_r)
 
 def mul__String_Int(space, w_str, w_mul):
     u = space.unwrap

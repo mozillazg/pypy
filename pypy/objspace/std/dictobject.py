@@ -6,11 +6,8 @@ for order comparisons.
 """
 
 from pypy.objspace.std.objspace import *
-from dicttype import W_DictType, _no_object
+from dicttype import W_DictType
 from stringobject import W_StringObject
-from pypy.interpreter.extmodule import make_builtin_func
-
-applicationfile = StdObjSpace.AppFile(__name__)
 
 class _NoValueInCell: pass
 
@@ -106,7 +103,7 @@ def object_init__Dict_ANY_ANY(space, w_dict, w_args, w_kwds):
     else:
         raise OperationError(space.w_TypeError,
                              space.wrap("dict() takes at most 1 argument"))
-    dict_update__Dict_Dict(space, w_dict, w_kwds)
+    space.call_method(w_dict, 'update', w_kwds)
 
 def getitem__Dict_ANY(space, w_dict, w_lookup):
     data = w_dict.non_empties()
@@ -144,9 +141,11 @@ def iter__Dict(space, w_dict):
     return iterobject.W_SeqIterObject(space, w_keys)
     
 def eq__Dict_Dict(space, w_left, w_right):
-    if len(w_left.data) != len(w_right.data):
+    dataleft = w_left.non_empties()
+    dataright = w_right.non_empties()
+    if len(dataleft) != len(dataright):
         return space.w_False
-    for w_key, cell in w_left.non_empties():
+    for w_key, cell in dataleft:
         try:
             w_rightval = space.getitem(w_right, w_key)
         except OperationError:
@@ -157,13 +156,15 @@ def eq__Dict_Dict(space, w_left, w_right):
         
 def lt__Dict_Dict(space, w_left, w_right):
     # Different sizes, no problem
-    if len(w_left.data) < len(w_right.data):
+    dataleft = w_left.non_empties()
+    dataright = w_right.non_empties()
+    if len(dataleft) < len(dataright):
         return space.w_True
-    if len(w_left.data) > len(w_right.data):
+    if len(dataleft) > len(dataright):
         return space.w_False
 
     # Same size
-    for w_key, cell in w_left.non_empties():
+    for w_key, cell in dataleft:
         # This is incorrect, but we need to decide what comparisons on
         # dictionaries of equal size actually means
         # The Python language specification is silent on the subject
@@ -172,28 +173,6 @@ def lt__Dict_Dict(space, w_left, w_right):
         except OperationError:
             return space.w_True
         if space.is_true(space.lt(cell.w_value, w_rightval)):
-            return space.w_True
-    # The dictionaries are equal. This is correct.
-    return space.w_False
-
-
-def gt__Dict_Dict(space, w_left, w_right):
-    # Different sizes, no problem
-    if len(w_left.data) > len(w_right.data):
-        return space.w_True
-    if len(w_left.data) < len(w_right.data):
-        return space.w_False
-
-    # Same size
-    for w_key, cell in w_left.non_empties():
-        # This is incorrect, but we need to decide what comparisons on
-        # dictionaries of equal size actually means
-        # The Python language specification is silent on the subject
-        try:
-            w_rightval = space.getitem(w_right, w_key)
-        except OperationError:
-            return space.w_True
-        if space.is_true(space.gt(cell.w_value, w_rightval)):
             return space.w_True
     # The dictionaries are equal. This is correct.
     return space.w_False
@@ -229,13 +208,6 @@ def dict_has_key__Dict_ANY(space, w_self, w_lookup):
 def dict_clear__Dict(space, w_self):
     w_self.data = []
 
-def dict_update__Dict_Dict(space, w_self, w_other):
-    w_self.space.gethelper(applicationfile).call("dict_update", [w_self, w_other])
-    
-def dict_popitem__Dict(space, w_self):
-    w_item = w_self.space.gethelper(applicationfile).call("dict_popitem", [w_self])
-    return w_item
-    
 def dict_get__Dict_ANY_ANY(space, w_self, w_lookup, w_default):
     data = w_self.non_empties()
     for w_key, cell in data:
@@ -243,28 +215,4 @@ def dict_get__Dict_ANY_ANY(space, w_self, w_lookup, w_default):
             return cell.get()
     return w_default
     
-def dict_setdefault__Dict_ANY_ANY(space, w_self, w_key, w_default):
-    w_value = w_self.space.gethelper(applicationfile).call("dict_setdefault", [w_self, w_key, w_default])
-    return w_value
-
-def dict_pop__Dict_ANY_ANY(space, w_self, w_key, w_default):
-    default = space.unwrap(w_default)
-    if default is _no_object:
-        w_value = w_self.space.gethelper(applicationfile).call("dict_pop_no_default", [w_self, w_key])
-    else:
-        w_value = w_self.space.gethelper(applicationfile).call("dict_pop_with_default", [w_self, w_key, w_default])
-    return w_value
-
-def dict_iteritems__Dict(space, w_self):
-    w_item = w_self.space.gethelper(applicationfile).call("dict_iteritems", [w_self])
-    return w_item
-
-def dict_iterkeys__Dict(space, w_self):
-    w_item = w_self.space.gethelper(applicationfile).call("dict_iterkeys", [w_self])
-    return w_item
-
-def dict_itervalues__Dict(space, w_self):
-    w_item = w_self.space.gethelper(applicationfile).call("dict_itervalues", [w_self])
-    return w_item
-
 register_all(vars(), W_DictType)

@@ -4,7 +4,7 @@ from pypy.tool import test
 class SysTests(test.TestCase):
     def setUp(self):
         self.space = test.objspace()
-        self.sys_w = self.space.get_builtin_module(self.space.wrap("sys"))
+        self.sys_w = self.space.get_builtin_module("sys")
     def tearDown(self):
         pass
 

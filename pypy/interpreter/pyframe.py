@@ -1,10 +1,9 @@
 """ PyFrame class implementation with the interpreter main loop.
 """
 
-from pypy.interpreter import eval, baseobjspace
+from pypy.interpreter import eval, baseobjspace, gateway
 from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import DictProxy
 
 
 class PyFrame(eval.Frame):
@@ -97,6 +96,17 @@ class PyFrame(eval.Frame):
                 break
             self.exceptionstack.pop()
 
+    ### public attributes ###
+
+    def pypy_getattr(self, w_attr):
+        # XXX surely not the Right Way to do this
+        attr = self.space.unwrap(w_attr)
+        if attr == 'f_locals':   return self.w_locals
+        if attr == 'f_globals':  return self.w_globals
+        if attr == 'f_builtins': return self.w_builtins
+        if attr == 'f_code':     return self.space.wrap(self.code)
+        raise OperationError(self.space.w_AttributeError, w_attr)
+
 
 ### Frame Blocks ###
 
@@ -182,7 +192,7 @@ def app_normalize_exception(etype, evalue):
     else:
         raise Exception, "?!"   # XXX
     return etype, evalue
-normalize_exception = DictProxy().app2interp(app_normalize_exception)
+normalize_exception = gateway.app2interp(app_normalize_exception)
 
 
 class FinallyBlock(FrameBlock):

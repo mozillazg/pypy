@@ -53,8 +53,7 @@ class ObjSpace:
         self.sys._setmodule(self.w_sys)
 
     # XXX get rid of this. 
-    def get_builtin_module(self, w_name):
-        name = self.unwrap(w_name)
+    def get_builtin_module(self, name):
         if name == '__builtin__':
             return self.w_builtin
         elif name == 'sys':
@@ -301,7 +300,5 @@ ObjSpace.ExceptionTable = [
 #      newstring([w_1, w_2,...]) -> w_string from ascii numbers (bytes)
 # newdict([(w_key,w_value),...]) -> w_dict
 # newslice(w_start,w_stop,w_end) -> w_slice     (w_end may be a real None)
-#               newfunction(...) -> w_function
-#              newmodule(w_name) -> w_module
 #                   next(w_iter) -> w_value or raise NoValue
 #
