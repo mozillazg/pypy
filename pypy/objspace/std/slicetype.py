@@ -125,10 +125,20 @@ descr__new__.unwrap_spec = [baseobjspace.ObjSpace, baseobjspace.W_Root,
 
 # ____________________________________________________________
 
+def slicewprop(name):
+    def fget(space, w_obj):
+        from pypy.objspace.std.sliceobject import W_SliceObject
+        if not isinstance(w_obj, W_SliceObject):
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("descriptor is for 'slice'"))
+        return getattr(w_obj, name)
+    return GetSetProperty(fget)
+
+
 slice_typedef = StdTypeDef("slice",
     __new__ = newmethod(descr__new__),
-    start = attrproperty_w('w_start'),
-    stop  = attrproperty_w('w_stop'),
-    step  = attrproperty_w('w_step'),
+    start = slicewprop('w_start'),
+    stop  = slicewprop('w_stop'),
+    step  = slicewprop('w_step'),
     )
 slice_typedef.registermethods(globals())
