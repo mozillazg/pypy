@@ -1,6 +1,6 @@
 # ______________________________________________________________________
 import sys, operator, types
-from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.baseobjspace import ObjSpace, BaseWrappable
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
 from pypy.objspace.flow.model import *
@@ -131,7 +131,11 @@ class FlowObjSpace(ObjSpace):
         else:
             raise TypeError("not wrapped: " + repr(w_obj))
 
-    interpclass_w = unwrap
+    def interpclass_w(self, w_obj):
+        obj = self.unwrap(w_obj)
+        if isinstance(obj, BaseWrappable):
+            return obj
+        return None
 
     def getexecutioncontext(self):
         return self.executioncontext
