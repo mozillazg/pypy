@@ -74,6 +74,17 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.w_classobj = W_TypeObject(self, 'classobj', [self.w_object], {})
         self.w_instance = W_TypeObject(self, 'instance', [self.w_object], {})
 
+        # fix up a problem where multimethods apparently don't 
+        # like to define this at interp-level 
+        self.appexec([self.w_dict], """
+            (dict): 
+                def fromkeys(cls, seq, value=None):
+                    r = cls()
+                    for s in seq:
+                        r[s] = value
+                    return r
+                dict.fromkeys = classmethod(fromkeys)
+        """) 
         # old-style classes
         #self.setup_old_style_classes()
 
