@@ -15,120 +15,96 @@ class Function:
         self.space     = space
         self.func_code = code       # Code instance
         self.w_globals = w_globals  # the globals dictionary
-        self.w_defs    = w_defs     # wrapped sequence of default args or None
         self.closure   = closure    # normally, list of Cell instances or None
+        if w_defs is None:
+            self.defs_w = []
+        else:
+            self.defs_w = space.unpackiterable(w_defs)  # list of w_default's
 
-    def parse_args(self, frame, w_args, w_kwargs=None):
+    def call(self, w_args, w_kwds=None):
+        scope_w = self.parse_args(w_args, w_kwds)
+        frame = self.func_code.create_frame(self.space, self.w_globals)
+        frame.setfastscope(scope_w)
+        return frame.run()
+
+    def parse_args(self, w_args, w_kwds=None):
         """ parse args and kwargs to initialize the frame.
         """
         space = self.space
         signature = self.func_code.signature()
         argnames, varargname, kwargname = signature
-        # test for 'simple case':
-        if (varargname is None and kwargname is None and          # no */**
-            (w_kwargs is None or not space.is_true(w_kwargs)) and # no kwargs
-            self.unwrap(self.len(w_args)) == len(argnames)):  # correct #args
-            for index in range(len(argnames)):
-                w_index = self.wrap(index)
-                w_argument = self.getitem(w_args, w_index)
-                frame.setlocalvar(index, w_argument)
-        else:
-            #print "complicated case of arguments for", self.func_code.co_name
-            if w_kwargs is None:
-                w_kwargs = space.w_None
-            self.parse_args_complex(frame, w_args, w_kwargs,
-                                    space.wrap(signature))
-        frame.setclosure(self.closure)
-
-    def app_parse_args_complex(self, frame, args, kws, signature):
-        """ app-level helper for the complex case of parse_args().
-        """
-        # ===== ATTENTION =====
         #
-        # This code is pretty fundamental to pypy and great care must be taken
-        # to avoid infinite recursion.  In particular:
-        #
-        # - All calls here must be "easy", i.e. not involve default or keyword
-        #   arguments.  For example, all range() calls need three arguments.
-        #
-        # - You cannot *catch* any exceptions (raising is fine).
-        #
-        # Assumptions:
-        #   frame = empty frame to be initialized
-        #   args = sequence of the normal actual parameters
-        #   kws = dictionary of keyword parameters or None
-        #   self.defs = sequence of defaults
+        #   w_args = wrapped sequence of the normal actual parameters
+        #   args_w = the same, as a list of wrapped actual parameters
+        #   w_kwds = wrapped dictionary of keyword parameters or a real None
+        #   argnames = list of formal parameter names
+        #   scope_w = resulting list of wrapped values
         #
         # We try to give error messages following CPython's, which are
         # very informative.
-
-        argnames, varargname, kwargname = signature
-        input_argcount = len(args)
-        co_argcount = len(argnames)
-        deffirst = co_argcount - len(self.defs)
-        if kws:
-            kwargs = kws.copy()
+        #
+        if w_kwds is None:
+            w_kwargs = space.newdict([])
         else:
-            kwargs = {}
+            w_kwargs = space.call_method(w_kwds, "copy")
 
-        # fetch all arguments left-to-right
-        for i in range(0, co_argcount, 1):
-            argname = argnames[i]
-            if i < input_argcount:
-                value = args[i]
-                # check that no keyword argument also gives a value here
-                if argname in kwargs:
-                    raise TypeError, self.argerr_multiple_values(argname)
-            elif argname in kwargs:
-                # positional arguments exhausted,
-                # complete with keyword arguments
-                value = kwargs[argname]
-                del kwargs[argname]
-            elif i >= deffirst:
-                # no matching keyword argument, but there is a default value
-                value = self.defs[i - deffirst]
-            else:
-                raise TypeError, self.argerr(signature, args, kws, False)
-            frame.setlocalvar(i, value)
+        co_argcount = len(argnames) # expected formal arguments, without */**
 
+        # put as many positional input arguments into place as available
+        args_w = space.unpacktuple(w_args)
+        scope_w = args_w[:co_argcount]
+
+        # check that no keyword argument conflicts with these
+        for name in argnames[:len(scope_w)]:
+            w_name = space.wrap(name)
+            if space.is_true(space.contains(w_kwargs, w_name)):
+                self.raise_argerr_multiple_values(name)
+
+        if len(scope_w) < co_argcount:
+            # not enough args, fill in kwargs or defaults if exists
+            def_first = co_argcount - len(self.defs_w)
+            for i in range(input_argcount, co_argcount):
+                w_name = space.wrap(argnames[i])
+                if space.is_true(space.contains(w_kwargs, w_name)):
+                    scope_w.append(space.getitem(w_kwargs, w_name))
+                    space.delitem(w_kwargs, w_name)
+                elif i >= def_first:
+                    scope_w.append(self.defs_w[i-def_first])
+                else:
+                    self.raise_argerr(w_args, w_kwds, False)
+                    
         # collect extra positional arguments into the *vararg
-        specialarg = co_argcount
         if varargname is not None:
-            var_tuple = args[co_argcount:]
-            frame.setlocalvar(specialarg, var_tuple)
-            specialarg += 1
-        elif input_argcount > co_argcount:
-            # cannot do anything with these extra positional arguments
-            raise TypeError, self.argerr(signature, args, kws, True)
+            scope_w.append(space.newtuple(args_w[co_argcount:]))
+        elif len(args_w) > co_argcount:
+            self.raise_argerr(w_args, w_kwds, True)
 
         # collect extra keyword arguments into the **kwarg
         if kwargname is not None:
             # XXX this doesn't check that the keys of kwargs are strings
-            frame.setlocalvar(specialarg, kwargs)
-            specialarg += 1
-        elif kwargs:
-            # cannot do anything with these extra keyword arguments
-            raise TypeError, self.argerr_unknown_kwds(kwargs)
-    parse_args_complex = app2interp(app_parse_args_complex)
+            scope_w.append(w_kwargs)
+        elif space.is_true(w_kwargs):
+            self.raise_unknown_kwds(w_kwds)
+        return scope_w
 
     # helper functions to build error message for the above
 
-    def app_argerr(self, signature, args, kws, too_many):
-        argnames, varargname, kwargname = signature
+    def raise_argerr(self, w_args, w_kwds, too_many):
+        argnames, varargname, kwargname = self.func_code.signature()
+        nargs = self.space.unwrap(self.space.len(w_args))
         n = len(argnames)
         if n == 0:
-            n = len(args)
             if kwargname is not None:
                 msg2 = "non-keyword "
             else:
                 msg2 = ""
-                n += len(kws)
-            return "%s() takes no %sargument (%d given)" % (
+                nargs += self.space.unwrap(self.space.len(w_kwds))
+            msg = "%s() takes no %sargument (%d given)" % (
                 self.func_code.co_name,
                 msg2,
-                n)
+                nargs)
         else:
-            defcount = len(self.defs)
+            defcount = len(self.defs_w)
             if defcount == 0:
                 msg1 = "exactly"
             elif too_many:
@@ -144,25 +120,31 @@ class Function:
                 plural = ""
             else:
                 plural = "s"
-            return "%s() takes %s %d %sargument%s (%d given)" % (
+            msg = "%s() takes %s %d %sargument%s (%d given)" % (
                 self.func_code.co_name,
                 msg1,
                 n,
                 msg2,
                 plural,
                 len(args))
+        raise OperationError(self.space.w_TypeError, msg)
 
-    def app_argerr_multiple_values(self, argname):
-        return "%s() got multiple values for keyword argument %s" % (
+    def raise_argerr_multiple_values(self, argname):
+        msg = "%s() got multiple values for keyword argument %s" % (
             self.func_code.co_name,
             argname)
+        raise OperationError(self.space.w_TypeError, msg)
 
-    def app_argerr_unknown_kwds(self, kws):
-        if len(kws) == 1:
-            return "%s() got an unexpected keyword argument '%s'" % (
+    def raise_argerr_unknown_kwds(self, w_kwds):
+        nkwds = self.space.unwrap(self.space.len(w_kwds))
+        if nkwds == 1:
+            w_iter = self.space.iter(w_kwds)
+            w_key = self.space.next(w_iter)
+            msg = "%s() got an unexpected keyword argument '%s'" % (
                 self.func_code.co_name,
-                kws.keys()[0])
+                self.space.unwrap(w_key))
         else:
-            return "%s() got %d unexpected keyword arguments" % (
+            msg = "%s() got %d unexpected keyword arguments" % (
                 self.func_code.co_name,
-                len(kws))
+                nkwds)
+        raise OperationError(self.space.w_TypeError, msg)

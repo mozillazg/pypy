@@ -62,7 +62,7 @@ class PyCode(eval.Code):
                 newconsts = newconsts + (const,)
         self.co_consts = newconsts
 
-    def create_frame(self, space):
+    def create_frame(self, space, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
         # select the appropriate kind of frame; see below
         if self.co_cellvars or self.co_freevars:
@@ -71,7 +71,7 @@ class PyCode(eval.Code):
             frameclass = PyFastScopeFrame
         else:
             frameclass = PyOperationalFrame
-        return frameclass(space, self)
+        return frameclass(space, self, w_globals, closure)
 
     def signature(self):
         "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
