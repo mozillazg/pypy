@@ -40,10 +40,16 @@ class Result:
         compiled_function = self.translator.compile()
         return compiled_function
     
-def collect_functions(module):
+def collect_functions(module, specnamelist):
     l = []
-    for name, value in vars(module).items():
-        if name[0] != '_' and hasattr(value, 'func_code'):
+    for funcname, value in vars(module).items():
+        if not hasattr(value, 'func_code'):
+            continue
+        for specname in specnamelist:
+            if funcname.startswith(specname):
+                l.append(value)
+                break
+        if not specnamelist:
             l.append(value) 
     return l
    
@@ -72,8 +78,8 @@ def repr_result(res):
     return format_str %(funccall, flow, ann, comp)
      
 if __name__=='__main__':
-    funcs = collect_functions(snippet)
-    funcs.insert(0, snippet._attrs) 
+    specnamelist = sys.argv[1:]
+    funcs = collect_functions(snippet, specnamelist) 
     results = []
     print format_str %("functioncall", "flowed", "annotated", "compiled")
     for func in funcs:
@@ -81,6 +87,9 @@ if __name__=='__main__':
             result = Result(func, argtypeslist) 
             results.append(result) 
             print repr_result(result) 
+            if specnamelist and getattr(result, 'excinfo', None): 
+                traceback.print_exception(*result.excinfo) 
+                raise SystemExit, 1
     
     for res in results:
         print repr_result(res) 
