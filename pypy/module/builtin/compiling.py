@@ -2,6 +2,10 @@
 Implementation of the interpreter-level compile/eval builtins.
 """
 
+from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.baseobjspace import W_Root, ObjSpace
+from pypy.interpreter.gateway import NoneNotWrapped
+
 def compile(space, w_str_, filename, startstr,
             supplied_flags=0, dont_inherit=0):
     if space.is_true(space.isinstance(w_str_, space.w_unicode)):
@@ -32,7 +36,7 @@ def compile(space, w_str_, filename, startstr,
         raise OperationError(space.w_TypeError,space.wrap(str(e)))
     return space.wrap(PyCode(space)._from_code(c))
 #
-compile.unwrap_spec = [W_Root,str,str,int,int]
+compile.unwrap_spec = [ObjSpace,W_Root,str,str,int,int]
 
 
 def eval(space, w_source, w_globals=NoneNotWrapped, w_locals=NoneNotWrapped):
