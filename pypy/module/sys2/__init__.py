@@ -52,3 +52,28 @@ class Module(ExtModule):
         '__excepthook__'        : 'app.__excepthook__', 
         'exit'                  : 'app.exit', 
     }
+
+    def getdictvalue(self, space, attr): 
+        """ specialize access to dynamic exc_* attributes. """ 
+        value = ExtModule.getdictvalue(self, space, attr) 
+        if value is not None: 
+            return value 
+        if attr == 'exc_type':
+            operror = space.getexecutioncontext().sys_exc_info()
+            if operror is None:
+                return space.w_None
+            else:
+                return operror.w_type
+        elif attr == 'exc_value':
+            operror = space.getexecutioncontext().sys_exc_info()
+            if operror is None:
+                return space.w_None
+            else:
+                return operror.w_value
+        elif attr == 'exc_traceback':
+            operror = space.getexecutioncontext().sys_exc_info()
+            if operror is None:
+                return space.w_None
+            else:
+                return space.wrap(operror.application_traceback)
+        return None 
