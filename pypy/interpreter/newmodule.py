@@ -5,15 +5,19 @@ from pypy.interpreter.error import OperationError
 
 import inspect
 
-class ExtModule(Module): 
+class ExtModule(Module):
+
+    NOT_RPYTHON_ATTRIBUTES = ['loaders']
+    
     def __init__(self, space, w_name): 
         """ NOT_RPYTHON """ 
         Module.__init__(self, space, w_name) 
         self.lazy = True 
         self.__class__.buildloaders() 
 
-    def get(self, name): 
-        w_value = self.getdictvalue(self.space, name) 
+    def get(self, name):
+        space = self.space
+        w_value = self.getdictvalue(space, name) 
         if w_value is None: 
             raise OperationError(space.w_AttributeError, space.wrap(name))
         return w_value 
@@ -57,9 +61,9 @@ class ExtModule(Module):
                 loaders[name] = getappfileloader(pkgroot, spec) 
     buildloaders = classmethod(buildloaders) 
 
-def getinterpevalloader(pkgroot, spec): 
+def getinterpevalloader(pkgroot, spec):
+    """ NOT_RPYTHON """     
     def ifileloader(space): 
-        """ NOT_RPYTHON """ 
         d = {'space' : space}
         # EVIL HACK (but it works, and this is not RPython :-) 
         while 1: 
@@ -81,7 +85,8 @@ def getinterpevalloader(pkgroot, spec):
     return ifileloader 
         
 applevelcache = Cache()
-def getappfileloader(pkgroot, spec): 
+def getappfileloader(pkgroot, spec):
+    """ NOT_RPYTHON """ 
     # hum, it's a bit more involved, because we usually 
     # want the import at applevel
     modname, attrname = spec.split('.')
@@ -89,10 +94,10 @@ def getappfileloader(pkgroot, spec):
     mod = __import__(impbase, None, None, ['attrname'])
     app = applevelcache.getorbuild(mod, buildapplevelfrommodule, None)
     def afileloader(space): 
-        """ NOT_RPYTHON """ 
         return app.wget(space, attrname)
     return afileloader 
 
-def buildapplevelfrommodule(mod, _): 
+def buildapplevelfrommodule(mod, _):
+    """ NOT_RPYTHON """ 
     source = inspect.getsource(mod) 
     return gateway.applevel(source) 
