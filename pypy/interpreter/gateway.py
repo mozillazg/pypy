@@ -624,7 +624,7 @@ def appdef(source, overridename=None):
 
     # SOME MESS AHEAD ! 
     # construct the special app source passed to appexec
-    appsource = py.code.Source(source).strip().putaround("(%s):" % fastscope, "") 
+    appsource = py.code.Source(source).strip().putaround("(%s):" % fastscope) 
     sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals()]
     sourcelines.extend(defaulthandlingsource.indent().lines)
     sourcelines.append(
@@ -632,7 +632,7 @@ def appdef(source, overridename=None):
     for line in appsource.indent().indent().lines: 
         line = line.replace("\\", r"\\").replace("'", r"\'") 
         sourcelines.append(line)
-    sourcelines.append( "''')")
+    sourcelines.append( "''', funcname=%r)" % funcname)
     source = py.code.Source()
     source.lines = sourcelines 
     glob = {}
@@ -679,22 +679,6 @@ class app2interp_temp(object):
         """ NOT_RPYTHON """
         self.appfunc = appdef(func, overridename) 
 
-    def __get__(self, instance, cls=None): 
-        """ NOT_RPYTHON """
-        return app2interp_temp_method(self.appfunc, instance)
-
     def __call__(self, space, *args_w, **kwargs_w): 
         """ NOT_RPYTHON """
         return self.appfunc(space, *args_w, **kwargs_w)
-      
-class app2interp_temp_method(object): 
-    def __init__(self, func, instance): 
-        """ NOT_RPYTHON """
-        self.func = func 
-        self.instance = instance 
-
-    def __call__(self, *args_w, **kwargs_w): 
-        """ NOT_RPYTHON """
-        space = self.instance.space 
-        return self.appfunc(space, space.wrap(self.instance), 
-                            *args_w, **kwargs_w)
