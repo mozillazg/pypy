@@ -125,7 +125,7 @@ class AppTestFunction(PyPyItem):
         assert not args 
         name = target.func_globals.get('objspacename', None) 
         space = gettestobjspace(name) 
-        func = app2interp_temp(target, target.__name__)
+        func = app2interp_temp(target)
         self.execute_appex(space, func, space)
 
 
@@ -133,7 +133,7 @@ class AppTestMethod(PyPyItem):
     def execute(self, target, *args): 
         assert not args 
         space = target.im_self.space 
-        func = app2interp_temp(target.im_func, target.__name__) 
+        func = app2interp_temp(target.im_func) 
         self.execute_appex(space, func, space, space.w_None)
 
 class AppClassCollector(py.test.collect.Class): 
