@@ -90,11 +90,11 @@ class PyCode(eval.Code):
         x = code.co_names; assert isinstance(x, tuple)
         self.co_names = list(x)
         x = code.co_varnames; assert isinstance(x, tuple)
-        self.co_varnames = list(x)
+        self.co_varnames = x
         x = code.co_freevars; assert isinstance(x, tuple)
-        self.co_freevars = list(x)
+        self.co_freevars = x
         x = code.co_cellvars; assert isinstance(x, tuple)
-        self.co_cellvars = list(x)
+        self.co_cellvars = x
         x = code.co_filename; assert isinstance(x, str)
         self.co_filename = x
         x = code.co_name; assert isinstance(x, str)
