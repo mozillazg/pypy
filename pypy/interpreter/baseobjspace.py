@@ -276,20 +276,20 @@ class ObjSpace(object):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         return statement.exec_code(self, w_globals, w_locals)
 
-    def appexec(self, posargs, source): 
+    def appexec(self, posargs_w, source, funcname="anon"): 
         """ return value from executing given source at applevel with 
             given name=wrapped value parameters as its starting scope.  
             Note: EXPERIMENTAL. 
         """ 
         space = self
-        pypyco = pypycodecache.getorbuild((space,source), buildpypycode, posargs)
+        pypyco = pypycodecache.getorbuild((space,source, funcname), buildpypycode, posargs_w)
         w_glob = space.newdict([])
         frame = pypyco.create_frame(space, w_glob) 
-        frame.setfastscope(posargs)
+        frame.setfastscope(posargs_w)
         return frame.run() 
 
 pypycodecache = Cache() 
-def buildpypycode((space, source), posargs): 
+def buildpypycode((space, source, funcname), posargs_w): 
     """ NOT_RPYTHON """ 
     # XXX will change once we have our own compiler 
     from pypy.interpreter.pycode import PyCode
@@ -299,10 +299,10 @@ def buildpypycode((space, source), posargs):
     if not argdecl.startswith('(') or not argdecl.endswith(')'): 
         raise SyntaxError("incorrect exec_with header\n%s" % source)
     source = py.code.Source(source) 
-    source = source.putaround("def anon%s:" % argdecl)
+    source = source.putaround("def %s%s:" % (funcname, argdecl))
     d = {}
     exec source.compile() in d
-    newco = d['anon'].func_code 
+    newco = d[funcname].func_code 
     return PyCode(space)._from_code(newco) 
 
 ## Table describing the regular part of the interface of object spaces,
