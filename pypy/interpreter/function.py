@@ -6,7 +6,9 @@ objects; the difference lies in the code object found in their func_code
 attribute.
 """
 
-class Function:
+from error import OperationError
+
+class Function(object):
     """A function is a code object captured with some environment:
     an object space, a dictionary of globals, default arguments,
     and an arbitrary 'closure' passed to the code object."""
@@ -53,14 +55,15 @@ class Function:
         # put as many positional input arguments into place as available
         args_w = space.unpacktuple(w_args)
         scope_w = args_w[:co_argcount]
+        input_argcount = len(scope_w)
 
         # check that no keyword argument conflicts with these
-        for name in argnames[:len(scope_w)]:
+        for name in argnames[:input_argcount]:
             w_name = space.wrap(name)
             if space.is_true(space.contains(w_kwargs, w_name)):
                 self.raise_argerr_multiple_values(name)
 
-        if len(scope_w) < co_argcount:
+        if input_argcount < co_argcount:
             # not enough args, fill in kwargs or defaults if exists
             def_first = co_argcount - len(self.defs_w)
             for i in range(input_argcount, co_argcount):
@@ -112,7 +115,7 @@ class Function:
             else:
                 msg1 = "at least"
                 n -= defcount
-            if kws:
+            if kwargname is not None:
                 msg2 = "non-keyword "
             else:
                 msg2 = ""
@@ -126,7 +129,7 @@ class Function:
                 n,
                 msg2,
                 plural,
-                len(args))
+                nargs)
         raise OperationError(self.space.w_TypeError, msg)
 
     def raise_argerr_multiple_values(self, argname):
@@ -148,3 +151,21 @@ class Function:
                 self.func_code.co_name,
                 nkwds)
         raise OperationError(self.space.w_TypeError, msg)
+
+
+    def __get__(self, inst, cls=None):
+        # for TrivialObjSpace only !!!
+        # use the mecanisms of gateway.py otherwise
+        import sys, new
+        assert 'pypy.objspace.trivial' in sys.modules, (
+            "don't try to __get__() Function instances out of classes")
+        self.__name__ = self.func_code.co_name
+        return new.instancemethod(self, inst, cls)
+
+    def __call__(self, *args, **kwds):
+        # for TrivialObjSpace only !!!
+        # use the mecanisms of gateway.py otherwise
+        import sys, new
+        assert 'pypy.objspace.trivial' in sys.modules, (
+            "don't try to __call__() Function instances directly")
+        return self.call(args, kwds)

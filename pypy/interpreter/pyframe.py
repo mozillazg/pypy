@@ -1,10 +1,10 @@
 """ PyFrame class implementation with the interpreter main loop.
 """
 
-from pypy.interpreter.executioncontext import Stack
-from pypy.interpreter.error import OperationError
 from pypy.interpreter import eval, baseobjspace
-from pypy.interpreter.gateway import noglobals
+from pypy.interpreter.miscutils import Stack
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.gateway import DictProxy
 
 
 class PyFrame(eval.Frame):
@@ -23,12 +23,17 @@ class PyFrame(eval.Frame):
     """
 
     def __init__(self, space, code, w_globals, closure):
-        eval.Frame.__init__(self, space, code, w_globals)
+        eval.Frame.__init__(self, space, code, w_globals, code.co_nlocals)
         self.valuestack = Stack()
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
         self.w_builtins = self.space.w_builtins
+        # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
+        # class bodies only have CO_NEWLOCALS.
+        if code.dictscope_needed():
+            self.w_locals = space.newdict([])  # set to None by Frame.__init__
+
 
 ##    def XXXclone(self):
 ##        f = self.__class__()
@@ -145,13 +150,16 @@ class ExceptBlock(FrameBlock):
             # push the exception to the value stack for inspection by the
             # exception handler (the code after the except:)
             operationerr = unroller.args[0]
-            operationerr.normalize(frame.space)
+            w_normalized = normalize_exception(frame.space,
+                                               operationerr.w_type,
+                                               operationerr.w_value)
+            w_type, w_value = frame.space.unpacktuple(w_normalized, 2)
             # the stack setup is slightly different than in CPython:
             # instead of the traceback, we store the unroller object,
             # wrapped.
             frame.valuestack.push(frame.space.wrap(unroller))
-            frame.valuestack.push(operationerr.w_value)
-            frame.valuestack.push(operationerr.w_type)
+            frame.valuestack.push(w_value)
+            frame.valuestack.push(w_type)
             frame.next_instr = self.handlerposition   # jump to the handler
             raise StopUnrolling
 
@@ -174,7 +182,7 @@ def app_normalize_exception(etype, evalue):
     else:
         raise Exception, "?!"   # XXX
     return etype, evalue
-normalize_exception = noglobals.app2interp(app_normalize_exception)
+normalize_exception = DictProxy().app2interp(app_normalize_exception)
 
 
 class FinallyBlock(FrameBlock):

@@ -4,62 +4,62 @@
 # correctly wrap the exceptions.
 #
 
-from pypy.interpreter import pyframe
+from pypy.interpreter import pyframe, gateway
 from pypy.interpreter.baseobjspace import *
-import operator, types, new, sys
+import operator, types, new, sys, __builtin__
 
-class nugen(object):
-    def __init__(self, frame):
-        self.space = frame.space
-        self.frame = frame
-        self.running = 0
+##class nugen(object):
+##    def __init__(self, frame):
+##        self.space = frame.space
+##        self.frame = frame
+##        self.running = 0
 
-    def next(self):
-        if self.running:
-            raise OperationError(self.space.w_ValueError,
-                                 "generator already executing")
-        ec = self.space.getexecutioncontext()
+##    def next(self):
+##        if self.running:
+##            raise OperationError(self.space.w_ValueError,
+##                                 "generator already executing")
+##        ec = self.space.getexecutioncontext()
 
-        self.running = 1
-        try:
-            try:
-                ret = ec.eval_frame(self.frame)
-            except NoValue:
-                raise StopIteration
-        finally:
-            self.running = 0
+##        self.running = 1
+##        try:
+##            try:
+##                ret = ec.eval_frame(self.frame)
+##            except NoValue:
+##                raise StopIteration
+##        finally:
+##            self.running = 0
 
-        return ret
+##        return ret
 
-    def __iter__(self):
-        return self
+##    def __iter__(self):
+##        return self
 
-from pypy.interpreter.gateway import InterpretedFunction, InterpretedFunctionFromCode
+##from pypy.interpreter.gateway import InterpretedFunction, InterpretedFunctionFromCode
 
-class numeth(InterpretedFunction):
-    def __init__(self, ifunc, instance, cls):
-        self.ifunc = ifunc
-        self.instance = instance
-        self.cls = cls
+##class numeth(InterpretedFunction):
+##    def __init__(self, ifunc, instance, cls):
+##        self.ifunc = ifunc
+##        self.instance = instance
+##        self.cls = cls
 
-    def __call__(self, *args, **kws):
-        if self.instance is None and self.cls is not type(None):
-            pass
-        else:
-            args = (self.instance,) + args
-        return self.ifunc(*args, **kws)
+##    def __call__(self, *args, **kws):
+##        if self.instance is None and self.cls is not type(None):
+##            pass
+##        else:
+##            args = (self.instance,) + args
+##        return self.ifunc(*args, **kws)
 
-class nufun(InterpretedFunctionFromCode):
+##class nufun(InterpretedFunctionFromCode):
 
-    def __call__(self, *args, **kwargs):
-        if self.cpycode.co_flags & 0x0020:
-            frame = self.create_frame(args, kwargs)
-            return nugen(frame)
-        else:
-            return self.eval_frame(args, kwargs)
+##    def __call__(self, *args, **kwargs):
+##        if self.cpycode.co_flags & 0x0020:
+##            frame = self.create_frame(args, kwargs)
+##            return nugen(frame)
+##        else:
+##            return self.eval_frame(args, kwargs)
 
-    def __get__(self, ob, cls=None):
-        return numeth(self, ob, cls)
+##    def __get__(self, ob, cls=None):
+##        return numeth(self, ob, cls)
 
 
 class TrivialObjSpace(ObjSpace):
@@ -120,7 +120,6 @@ class TrivialObjSpace(ObjSpace):
         self.w_False = False
         self.w_NotImplemented = NotImplemented
         self.w_Ellipsis = Ellipsis
-        import __builtin__, types
         newstuff = {"False": self.w_False,
                     "True" : self.w_True,
                     "NotImplemented" : self.w_NotImplemented,
@@ -144,7 +143,10 @@ class TrivialObjSpace(ObjSpace):
 
     # general stuff
     def wrap(self, x):
-        return x
+        if hasattr(x, '__wrap__'):
+            return x.__wrap__(self)
+        else:
+            return x
 
     def unwrap(self, w):
         return w
@@ -171,88 +173,79 @@ class TrivialObjSpace(ObjSpace):
             nv = evalue
         raise OperationError(nt, nv)
 
+    def _auto(name, sourcefn, classlocals):
+        s = """
+def %(name)s(self, *args):
+    try:
+        value = %(sourcefn)s(*args)
+    except:
+        self.reraise()
+    return self.wrap(value)
+""" % locals()
+        exec s in globals(), classlocals
+
     # from the built-ins
-    id        = id
-    type      = type
-    issubtype = issubclass
-    newtuple  = tuple
-    newlist   = list
-    newdict   = dict
-    newslice  = slice  # maybe moved away to application-space at some time
-    newmodule = new.module
-    iter      = iter
-    repr      = repr
-    str       = str
-    len       = len
-    pow       = pow
-    divmod    = divmod
-    hash      = hash
-    setattr   = setattr
-    delattr   = delattr
+    _auto('issubtype', 'issubclass', locals())
+    _auto('newmodule', 'new.module', locals())
+    _auto('newtuple',  'tuple',      locals())
+    _auto('newlist',   'list',       locals())
+    _auto('newdict',   'dict',       locals())
+    _auto('newslice',  'slice',      locals())
     is_true   = operator.truth
     # 'is_true' is not called 'truth' because it returns a *non-wrapped* boolean
 
-    def getattr(self, w_obj, w_name):
-        obj = self.unwrap(w_obj)
-        name = self.unwrap(w_name)
-        try:
-            return getattr(obj, name)
-        except:
-            self.reraise()
+    for _name in ('id', 'type', 'iter', 'repr', 'str', 'len',
+                  'pow', 'divmod', 'hash', 'setattr', 'delattr', 'hex',
+                  'oct', 'ord', 'getattr'):
+        _auto(_name, _name, locals())
 
     for _name in ('pos', 'neg', 'not_', 'abs', 'invert',
                   'mul', 'truediv', 'floordiv', 'div', 'mod',
                   'add', 'sub', 'lshift', 'rshift', 'and_', 'xor', 'or_',
                   'lt', 'le', 'eq', 'ne', 'gt', 'ge', 'contains'):
-        exec """
-def %(_name)s(self, *args):
-    try:
-        return operator.%(_name)s(*args)
-    except:
-        self.reraise()
-""" % locals()
+        _auto(_name, 'operator.' + _name, locals())
 
     # in-place operators
     def inplace_pow(self, w1, w2):
         w1 **= w2
-        return w1
+        return self.wrap(w1)
     def inplace_mul(self, w1, w2):
         w1 *= w2
-        return w1
+        return self.wrap(w1)
     def inplace_truediv(self, w1, w2):
         w1 /= w2  # XXX depends on compiler flags
-        return w1
+        return self.wrap(w1)
     def inplace_floordiv(self, w1, w2):
         w1 //= w2
-        return w1
+        return self.wrap(w1)
     def inplace_div(self, w1, w2):
         w1 /= w2  # XXX depends on compiler flags
-        return w1
+        return self.wrap(w1)
     def inplace_mod(self, w1, w2):
         w1 %= w2
-        return w1
+        return self.wrap(w1)
 
     def inplace_add(self, w1, w2):
         w1 += w2
-        return w1
+        return self.wrap(w1)
     def inplace_sub(self, w1, w2):
         w1 -= w2
-        return w1
+        return self.wrap(w1)
     def inplace_lshift(self, w1, w2):
         w1 <<= w2
-        return w1
+        return self.wrap(w1)
     def inplace_rshift(self, w1, w2):
         w1 >>= w2
-        return w1
+        return self.wrap(w1)
     def inplace_and(self, w1, w2):
         w1 &= w2
-        return w1
+        return self.wrap(w1)
     def inplace_or(self, w1, w2):
         w1 |= w2
-        return w1
+        return self.wrap(w1)
     def inplace_xor(self, w1, w2):
         w1 ^= w2
-        return w1
+        return self.wrap(w1)
 
 
     # slicing
@@ -274,9 +267,9 @@ def %(_name)s(self, *args):
         sindex = self.old_slice(index)
         try:
             if sindex is None:
-                return obj[index]
+                return self.wrap(obj[index])
             else:
-                return operator.getslice(obj, sindex[0], sindex[1])
+                return self.wrap(operator.getslice(obj, sindex[0], sindex[1]))
         except:
             self.reraise()
 
@@ -289,7 +282,7 @@ def %(_name)s(self, *args):
             if sindex is None:
                 obj[index] = value
             else:
-                return operator.setslice(obj, sindex[0], sindex[1], value)
+                operator.setslice(obj, sindex[0], sindex[1], value)
         except:
             self.reraise()
 
@@ -308,7 +301,7 @@ def %(_name)s(self, *args):
     # misc
     def next(self, w):
         try:
-            return w.next()
+            return self.wrap(w.next())
         except StopIteration:
             raise NoValue
 
@@ -319,7 +312,12 @@ def %(_name)s(self, *args):
         #assert hasattr(code, 'co_name')
         #assert hasattr(code, 'build_arguments')
         #assert hasattr(code, 'eval_code')
-        return nufun(self, code, defs, globals, closure)
+
+        # XXX the newxxx() interface should disappear at some point
+        # XXX because the interpreter can perfectly do the following
+        # XXX itself without bothering the object space
+        from pypy.interpreter.function import Function
+        return self.wrap(Function(self, code, globals, defs, closure))
 
     def newstring(self, asciilist):
         try:
@@ -336,13 +334,16 @@ def %(_name)s(self, *args):
                 self.reraise()
             if hasattr(r, '__init__'):
                 self.call(r.__init__, args, kwds)
-            return r
-        if (isinstance(callable, types.MethodType)
-            and callable.im_self is not None):
-            args = (callable.im_self,) + args
-            callable = callable.im_func
+            return self.wrap(r)
+        #if (isinstance(callable, types.MethodType)
+        #    and callable.im_self is not None):
+        #    args = (callable.im_self,) + args
+        #    callable = callable.im_func
+        assert not isinstance(callable, gateway.Gateway), (
+            "trivial object space is detecting an object that has not "
+            "been wrapped")
         try:
-            return callable(*args, **(kwds or {}))
+            return self.wrap(callable(*args, **(kwds or {})))
         except OperationError:
             raise
         except:
@@ -351,32 +352,14 @@ def %(_name)s(self, *args):
             #print "kwds", kwds
             self.reraise()
                 
-    def hex(self, ob):
-        try:
-            return hex(ob)
-        except:
-            self.reraise()
-
-    def oct(self, ob):
-        try:
-            return oct(ob)
-        except:
-            self.reraise()
-
-    def ord(self, ob):
-        try:
-            return ord(ob)
-        except:
-            self.reraise()
-
     def get(self, descr, ob, cls):
         try:
-            return descr.__get__(ob, cls)
+            return self.wrap(descr.__get__(ob, cls))
         except:
             self.reraise()
 
     def new(self, type, args, kw):
-        return type(args, kw)
+        return self.wrap(type(args, kw))
 
     def init(self, type, args, kw):
         pass

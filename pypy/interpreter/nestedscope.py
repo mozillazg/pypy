@@ -165,6 +165,3 @@ class PyNestedScopeFrame(PyInterpFrame):
         w_func = f.space.newfunction(f.space.unwrap(w_codeobj),
                                      f.w_globals, w_defaultarguments, w_freevars)
         f.valuestack.push(w_func)
-
-
-PyNestedScopeFrame.setup_dispatch_table()

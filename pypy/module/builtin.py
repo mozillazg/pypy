@@ -1,5 +1,6 @@
 from pypy.interpreter import executioncontext
-from pypy.interpreter.gateway import AppVisibleModule, ScopedCode
+from pypy.interpreter.extmodule import ExtModule
+from pypy.interpreter.error import OperationError
 
 #######################
 ####  __builtin__  ####
@@ -7,7 +8,11 @@ from pypy.interpreter.gateway import AppVisibleModule, ScopedCode
 
 import __builtin__ as cpy_builtin
 
-class __builtin__(AppVisibleModule):
+class __builtin__(ExtModule):
+    """ Template for PyPy's '__builtin__' module.
+    """
+    
+    app___name__ = '__builtin__'
 
     def _actframe(self, index=-1):
         return self.space.getexecutioncontext().framestack.items[index]
@@ -24,7 +29,7 @@ class __builtin__(AppVisibleModule):
         try:
             w_mod = space.getitem(space.sys.w_modules, w_modulename)
             return w_mod
-        except executioncontext.OperationError,e:
+        except OperationError,e:
             if not e.match(space, space.w_KeyError):
                 raise
             w_mod = space.get_builtin_module(w_modulename)
@@ -53,7 +58,7 @@ class __builtin__(AppVisibleModule):
                     return w_mod
             
             w_exc = space.call_function(space.w_ImportError, w_modulename)
-            raise executioncontext.OperationError(
+            raise OperationError(
                       space.w_ImportError, w_exc)
 
     def compile(self, w_str, w_filename, w_startstr,
@@ -77,7 +82,8 @@ class __builtin__(AppVisibleModule):
 
         #print (str, filename, startstr, supplied_flags, dont_inherit)
         c = cpy_builtin.compile(str, filename, startstr, supplied_flags, dont_inherit)
-        return space.wrap(c)
+        from pypy.interpreter.pycode import PyCode
+        return space.wrap(PyCode()._from_code(c))
 
     def execfile(self, w_filename, w_globals=None, w_locals=None):
         space = self.space
@@ -361,7 +367,7 @@ class __builtin__(AppVisibleModule):
         else:
             return 1
 
-    def app__vars(*obj):
+    def app_vars(*obj):
         """return a dictionary of all the attributes currently bound in obj.  If
         called with no argument, return the variables bound in local scope."""
 

@@ -34,12 +34,17 @@ class PyPyConsole(code.InteractiveConsole):
                 self.space.__class__.__name__)
         code.InteractiveConsole.interact(self, banner)
 
+    def raw_input(self, prompt=""):
+        # add a character to the PyPy prompt so that you know where you
+        # are when you debug it with "python -i py.py"
+        return code.InteractiveConsole.raw_input(self, prompt[0] + prompt)
+
     def runcode(self, code):
-        from pypy.interpreter.gateway import ScopedCode
-        scopedcode = ScopedCode(self.space, code, self.w_globals)
-        frame = scopedcode.create_frame()
+        # 'code' is a CPython code object
+        from pypy.interpreter.pycode import PyCode
+        pycode = PyCode()._from_code(code)
         try:
-            self.ec.eval_frame(frame)
+            pycode.exec_code(self.space, self.w_globals, self.w_globals)
         except baseobjspace.OperationError, operationerr:
             # XXX insert exception info into the application-level sys.last_xxx
             operationerr.print_detailed_traceback(self.space)

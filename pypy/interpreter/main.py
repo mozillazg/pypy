@@ -1,5 +1,5 @@
 import autopath
-from pypy.tool import test, option
+from pypy.tool import option
 from pypy.interpreter import executioncontext, baseobjspace, gateway
 import sys, os
 
@@ -23,18 +23,17 @@ def _run_eval_string(source, filename, space, eval):
 
         w_mainmodule = space.newmodule(space.wrap("__main__"))
         w_globals = space.getattr(w_mainmodule, space.wrap("__dict__"))
-        space.setitem(w_globals, space.wrap("__builtins__"), space.w_builtins)
        
     except baseobjspace.OperationError, operationerr:
         operationerr.record_interpreter_traceback()
         raise baseobjspace.PyPyError(space, operationerr)
     else:
-        scopedcode = gateway.ScopedCode(space, space.unwrap(w_code), w_globals)
-        frame = scopedcode.create_frame()
+        pycode = space.unwrap(w_code)
+        retval = pycode.exec_code(space, w_globals, w_globals)
         if eval:
-            return ec.eval_frame(frame)
+            return retval
         else:
-            ec.eval_frame(frame)
+            return
     
 def run_string(source, filename='<string>', space=None):
     _run_eval_string(source, filename, space, False)

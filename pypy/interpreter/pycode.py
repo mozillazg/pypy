@@ -19,7 +19,7 @@ CO_GENERATOR    = 0x0020
 class PyCode(eval.Code):
     "CPython-style code objects."
     
-    def __init__(self, co_name):
+    def __init__(self, co_name=''):
         eval.Code.__init__(self, co_name)
         self.co_argcount = 0         # #arguments, except *vararg and **kwarg
         self.co_nlocals = 0          # #local variables
@@ -52,12 +52,10 @@ class PyCode(eval.Code):
         newconsts = ()
         for const in code.co_consts:
             if isinstance(const, types.CodeType):
-                newc = PyCode(const.co_name)
-                newc._from_code(const)
-                newconsts = newconsts + (newc,)
-            else:
-                newconsts = newconsts + (const,)
+                const = PyCode()._from_code(const)
+            newconsts = newconsts + (const,)
         self.co_consts = newconsts
+        return self
 
     def create_frame(self, space, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
@@ -89,3 +87,8 @@ class PyCode(eval.Code):
 
     def is_generator(self):
         return self.co_flags & CO_GENERATOR
+
+    def dictscope_needed(self):
+        # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
+        # class bodies only have CO_NEWLOCALS.
+        return not (self.co_flags & CO_OPTIMIZED)

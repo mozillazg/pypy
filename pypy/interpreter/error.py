@@ -69,7 +69,7 @@ class OperationError(Exception):
             tb.reverse()
             print >> file, "Traceback (application-level):"
             for f, i in tb:
-                co = f.bytecode
+                co = f.code
                 lineno = offset2lineno(co, i)
                 fname = co.co_filename
                 if fname.startswith('<inline>\n'):
