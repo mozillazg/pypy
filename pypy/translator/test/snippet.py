@@ -19,6 +19,89 @@ list should suffice.
 
 But for now, none of the above applies.
 """
+function_info={
+ 'append_five':{'arg_names': ['lst'],'arg_types':[list],
+               'name': 'append_five'},
+ 'branch_id': {'arg_names': ['cond', 'a', 'b'],'arg_types':[int,int,int],
+               'name': 'branch_id'},
+ 'break_continue': {'arg_names': ['x'],'arg_types':[int],
+                    'name': 'break_continue'},
+ 'build_instance': {'arg_names': [],'arg_types':[],
+                    'name': 'build_instance'},
+ 'builtinusage': {'arg_names': [],'arg_types':[],
+                  'name': 'builtinusage'},
+ 'call_five': {'arg_names': [],'arg_types':[],
+                    'name': 'call_five'},
+ 'choose_last': {'arg_names': [],'arg_types':[],
+                 'name': 'choose_last'},
+ 'factorial': {'arg_names': ['n'],'arg_types':[int],
+               'name': 'factorial'},
+ 'factorial2': {'arg_names': ['n'],'arg_types':[int],
+                'name': 'factorial2'},
+ 'finallys': {'arg_names': ['lst'],'arg_types':[list],
+              'name': 'finallys'},
+ 'greet': {'arg_names': ['target'],'arg_types':[str],
+           'name': 'greet'},
+ 'half_of_n': {'arg_names': ['n'],'arg_types':[int],
+               'name': 'half_of_n'},
+ 'if_then_else': {'arg_names': ['cond', 'x', 'y'],
+                     'arg_types':[object,object,object],
+                  'name': 'if_then_else'},
+ 'inheritance1': {'arg_names': [],'arg_types':[],
+                  'name': 'inheritance1'},
+ 'inheritance2': {'arg_names': [],'arg_types':[],
+                  'name': 'inheritance2'},
+ #'inheritance_nonrunnable': {'arg_names': [],'arg_types':[],
+ #                            'name': 'inheritance_nonrunnable'},
+ 'int_id': {'arg_names': ['x'],'arg_types':[int],
+            'name': 'int_id'},
+ 'is_perfect_number': {'arg_names': ['i'],'arg_types':[int],
+                    'name': 'is_perfect_number'},
+ 'knownkeysdict': {'arg_names': ['b'],'arg_types':[object],
+                   'name': 'knownkeysdict'},
+ 'merge_setattr': {'arg_names': ['x'],'arg_types':[object],
+                   'name': 'merge_setattr'},
+ 'my_bool': {'arg_names': ['x'],'arg_types':[object],
+             'name': 'my_bool'},
+ 'my_gcd': {'arg_names': ['a', 'b'],'arg_types':[int,int],
+            'name': 'my_gcd'},
+ 'nested_whiles': {'arg_names': ['i', 'j'],'arg_types':[int,int],
+                   'name': 'nested_whiles'},
+ 'poly_branch': {'arg_names': ['x'],'arg_types':[object],
+                 'name': 'poly_branch'},
+ 'poor_man_range': {'arg_names': ['i'],'arg_types':[int],
+                    'name': 'poor_man_range'},
+ 'poor_man_rev_range': {'arg_names': ['i'],'arg_types':[int],
+                    'name': 'poor_man__rev_range'},
+ 'powerset': {'arg_names': ['x'],'arg_types':[int],
+                 'name': 'powerset'},
+ 'prime': {'arg_names': ['n'],'arg_types':[int],
+           'name': 'prime'},
+ 'reverse_3': {'arg_names': ['lst'],'arg_types':[list],
+               'name': 'reverse_3'},
+ 's_and': {'arg_names': ['x', 'y'],'arg_types':[object,object],
+           'name': 's_and'},
+ 'set_attr': {'arg_names': [],'arg_types':[],
+              'name': 'set_attr'},
+ 'sieve_of_eratosthenes': {'arg_names': [],'arg_types':[],
+                           'name': 'sieve_of_eratosthenes'},
+ 'simple_func': {'arg_names': ['i'],'arg_types':[int],
+                 'name': 'simple_func'},
+ 'simple_id': {'arg_names': ['x'],'arg_types':[object],
+               'name': 'simple_id'},
+ 'simple_method': {'arg_names': ['v'],'arg_types':[object],
+                   'name': 'simple_method'},
+# 'somebug1': {'arg_names': ['n'],'arg_types':[int],
+#              'name': 'somebug1'},
+ 'time_waster': {'arg_names': ['n'],'arg_types':[int],
+                 'name': 'time_waster'},
+ 'two_plus_two': {'arg_names': [],'arg_types':[],
+                  'name': 'two_plus_two'},
+ 'while_func': {'arg_names': ['i'],'arg_types':[int],
+                'name': 'while_func'},
+ 'yast': {'arg_names': ['lst'],'arg_types':[list],
+          'name': 'yast'}
+ }
 
 def if_then_else(cond, x, y):
     if cond:
@@ -122,12 +205,6 @@ def branch_id(cond, a, b):
         else:
             return b
 
-def attrs():
-    def b(): pass
-    b.f = 4
-    b.g = 5
-    return b.f + b.g
-
 def builtinusage():
     return pow(2, 2)
 
@@ -175,36 +252,6 @@ def choose_last():
     for choice in set:
         pass
     return choice
-
-def powerset(setsize):
-    """Powerset
-
-    This one is from a Philippine Pythonista Hangout, an modified
-    version of Andy Sy's code.
-    
-    list.append is modified to list concatenation, and powerset
-    is pre-allocated and stored, instead of printed.
-    
-    URL is: http://lists.free.net.ph/pipermail/python/2002-November/
-    """
-    set = range(setsize)
-    maxcardinality = pow(2, setsize)
-    bitmask = 0L
-    powerset = [None] * maxcardinality
-    ptr = 0
-    while bitmask < maxcardinality:
-        bitpos = 1L
-        index = 0
-        subset = []
-        while bitpos < maxcardinality:
-            if bitpos & bitmask:
-                subset = subset + [set[index]]
-            index += 1
-            bitpos <<= 1
-        powerset[ptr] = subset
-        ptr += 1
-        bitmask += 1
-    return powerset
 
 def poly_branch(x):
     if x:
@@ -275,6 +322,7 @@ def factorial2(n):   # analysed in a different order
 
 def append_five(lst):
     lst += [5]
+    
 
 def call_five():
     a = []
@@ -314,8 +362,6 @@ def inheritance1():
     lst = [d, e]
     return d.stuff, e.stuff
 
-def getstuff(x):
-    return x.stuff
 
 def inheritance2():
     d = D()
@@ -323,13 +369,6 @@ def inheritance2():
     e = E()
     e.stuff = (3, "world")
     return getstuff(d), getstuff(e)
-
-def inheritance_nonrunnable():
-    d = D()
-    d.stuff = (-12, -12)
-    e = E()
-    e.stuff = (3, "world")
-    return C().stuff
 
 class F:
     pass
@@ -362,12 +401,6 @@ def knownkeysdict(b):
 def prime(n):
     return len([i for i in range(1,n+1) if n%i==0]) == 2
 
-def somebug1(n):
-    l = []
-    v = l.append
-    while n:
-        l[7] = 5
-    return v
 
 class Z:
     def my_method(self):
@@ -377,3 +410,60 @@ def simple_method(v):
     z = Z()
     z.my_attribute = v
     return z.my_method()
+
+# --------------------(Currently) Non runnable Functions ---------------------
+
+def somebug1(n):
+    l = []
+    v = l.append
+    while n:
+        l[7] = 5
+    return v
+
+def inheritance_nonrunnable():
+    d = D()
+    d.stuff = (-12, -12)
+    e = E()
+    e.stuff = (3, "world")
+    return C().stuff
+
+# --------------------(Currently) Non compillable Functions ---------------------
+
+def attrs():
+    def b(): pass
+    b.f = 4
+    b.g = 5
+    return b.f + b.g
+
+def powerset(setsize):
+    """Powerset
+
+    This one is from a Philippine Pythonista Hangout, an modified
+    version of Andy Sy's code.
+    
+    list.append is modified to list concatenation, and powerset
+    is pre-allocated and stored, instead of printed.
+    
+    URL is: http://lists.free.net.ph/pipermail/python/2002-November/
+    """
+    set = range(setsize)
+    maxcardinality = pow(2, setsize)
+    bitmask = 0L
+    powerset = [None] * maxcardinality
+    ptr = 0
+    while bitmask < maxcardinality:
+        bitpos = 1L
+        index = 0
+        subset = []
+        while bitpos < maxcardinality:
+            if bitpos & bitmask:
+                subset = subset + [set[index]]
+            index += 1
+            bitpos <<= 1
+        powerset[ptr] = subset
+        ptr += 1
+        bitmask += 1
+    return powerset
+
+def getstuff(x):
+    return x.stuff
