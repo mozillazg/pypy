@@ -123,18 +123,21 @@ def make_descr_typecheck_wrapper(func, extraargs=(), cls=None):
         miniglobals[cls_name] = cls
         check = "isinstance(obj, %s)" % cls_name
         expected = "%s.typedef.name" % cls_name
-    
-    exec ("""def descr_typecheck_%(name)s(space, w_obj, %(extra)s):
-    obj = %(unwrap)s
-    if obj is None or not %(check)s:
-       raise OperationError(space.w_TypeError,
-                            space.wrap("descriptor is for '%%s'" %% %(expected)s)) # xxx improve
-    return %(name)s(space, obj, %(extra)s)
-""" % {'name': func.__name__, 
-       'check': check,
-       'expected': expected,
-       'unwrap': unwrap,
-       'extra': ', '.join(extraargs)}) in miniglobals
+   
+    source = """if 1: 
+        def descr_typecheck_%(name)s(space, w_obj, %(extra)s):
+            obj = %(unwrap)s
+            if obj is None or not %(check)s:
+                # xxx improve msg
+                msg =  "descriptor is for '%%s'" %% %(expected)s
+                raise OperationError(space.w_TypeError, space.wrap(msg))
+            return %(name)s(space, obj, %(extra)s)
+        \n""" % {'name': func.__name__, 
+                 'check': check,
+                 'expected': expected,
+                 'unwrap': unwrap,
+                 'extra': ', '.join(extraargs)} 
+    exec source in miniglobals 
     return miniglobals['descr_typecheck_%s' % func.__name__]    
 
 
