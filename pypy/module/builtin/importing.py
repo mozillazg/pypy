@@ -6,7 +6,7 @@ import sys, os
 
 from pypy.interpreter.module import Module
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.baseobjspace import W_Root
+from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 
 # XXX this uses the os.path module at interp-level, which means
 # XXX that translate_pypy will produce a translated version of
@@ -106,7 +106,7 @@ def importhook(space, modulename, w_globals=None,
         space.setitem(space.sys.w_modules, w(rel_modulename),space.w_None)
     return w_mod
 #
-importhook.unwrap_spec = [str,W_Root,W_Root,W_Root]
+importhook.unwrap_spec = [ObjSpace,str,W_Root,W_Root,W_Root]
 
 def absolute_import(space, modulename, baselevel, w_fromlist, tentative):
     w = space.wrap
