@@ -114,7 +114,7 @@ class GetSetProperty(Wrappable):
     def descr_property_set(space, w_property, w_obj, w_value):
         fset = space.interpclass_w(w_property).fset
         if fset is None:
-            raise OperationError(space.w_AttributeError,
+            raise OperationError(space.w_TypeError,
                                  space.wrap("read-only attribute"))
         fset(space, w_obj, w_value)
 
