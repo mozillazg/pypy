@@ -63,7 +63,7 @@ Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
         'object'        : '(space.w_object)',
         'file'          : '(space.wrap(file))',
         'open'          : '(space.wrap(file))',
-        'unicode'       : '(space.wrap(unicode)',  # XXX faked
+        'unicode'       : '(space.wrap(unicode))',  # XXX faked
 
         # old-style classes dummy support
         '_classobj'     : '(space.w_classobj)',

@@ -3,7 +3,7 @@ Interp-level implementation of the basic space operations.
 """
 
 from pypy.interpreter import gateway
-
+NoneNotWrapped = gateway.NoneNotWrapped
 
 def abs(space, w_val):
     "abs(number) -> number\n\nReturn the absolute value of the argument."

@@ -4,6 +4,10 @@ Implementation of the interpreter-level default import logic.
 
 import sys, os
 
+from pypy.interpreter.module import Module
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.baseobjspace import W_Root
+
 # XXX this uses the os.path module at interp-level, which means
 # XXX that translate_pypy will produce a translated version of
 # XXX PyPy that will only run on the same platform, as it contains
