@@ -57,8 +57,7 @@ class Testit(unittest.TestCase):
     def test(self):
         self.assertEquals(parse('111,9'), ('111','9'))
         self.assertEquals(parse('x","xx,yyy'), ('x","xx', 'yyy'))
-        self.assertEquals(parse('xx' + "+\"z'z\"+" + 'x,yyy'),("xx+\"z'z\"+x", "
-yyy"))
+        self.assertEquals(parse('xx' + "+\"z'z\"+" + 'x,yyy'),("xx+\"z'z\"+x", "yyy"))
         self.assertEquals(parse("x','xx,yyy"), ("x','xx", "yyy"))
         self.assertEquals(parse(r'''x"\","xx,yyy'''), (r'''x"\","xx''', 'yyy'))
         self.assertEquals(parse(r'''x'\','xx,yyy'''), (r'''x'\','xx''', 'yyy'))
