@@ -159,6 +159,7 @@ class UnwrapSpecRecipe:
     def emit__Arguments(self, el, orig_sig, emit_sig):
         cur = emit_sig.through_scope_w
         emit_sig.through_scope_w += 2
+        emit_sig.miniglobals['Arguments'] = Arguments
         emit_sig.setfastscope.append(
             "self.arguments_arg = "
             "Arguments.frompacked(self.space,scope_w[%d],scope_w[%d])"
@@ -204,6 +205,7 @@ class BuiltinCodeSignature(Signature):
         self.setfastscope = []
         self.run_args = []
         self.through_scope_w = 0
+        self.miniglobals = {}
 
     def make_frame_class(self):
         setfastscope = self.setfastscope
@@ -217,14 +219,14 @@ class BuiltinCodeSignature(Signature):
         # Python 2.2 SyntaxError without newline: Bug #501622
         setfastscope += '\n'
         d = {}
-        exec setfastscope in globals(),d
+        exec setfastscope in self.miniglobals, d
         exec """
 def run(self):
     w_result = self.code.func(%s)
     if w_result is None:
         w_result = self.space.w_None
     return w_result
-""" % ','.join(self.run_args) in globals(),d
+""" % ','.join(self.run_args) in self.miniglobals, d
         return type("BuiltinFrame_for_%s" % self.name,
                     (BuiltinFrame,),d)
         
