@@ -312,11 +312,6 @@ class PyInterpFrame(pyframe.PyFrame):
         w_returnvalue = f.valuestack.pop()
         raise pyframe.SReturnValue(w_returnvalue)
 
-    def YIELD_VALUE(f):
-        w_yieldedvalue = f.valuestack.pop()
-        raise pyframe.SYieldValue(w_yieldedvalue)
-    YIELD_STMT = YIELD_VALUE  # misnamed in dis.opname
-
     def EXEC_STMT(f):
         w_locals  = f.valuestack.pop()
         w_globals = f.valuestack.pop()

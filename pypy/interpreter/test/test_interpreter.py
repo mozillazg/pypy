@@ -19,9 +19,9 @@ class TestInterpreter(test.TestCase):
         w_tempmodule = space.newmodule(w("__temp__"))
         w_glob = space.getattr(w_tempmodule, w("__dict__"))
         space.setitem(w_glob, w("__builtins__"), space.w_builtins)
-       
-        scopedcode = gateway.ScopedCode(space, space.unwrap(w_code), w_glob)
-        scopedcode.eval_frame()
+
+        code = space.unwrap(w_code)
+        code.exec_code(space, w_glob, w_glob)
 
         wrappedargs = w(args)
         wrappedfunc = space.getitem(w_glob, w(functionname))

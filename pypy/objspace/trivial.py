@@ -157,7 +157,9 @@ class TrivialObjSpace(ObjSpace):
         #ec = self.getexecutioncontext() # .framestack.items[-1]
         #ec.print_detailed_traceback(self)
 
-        etype, evalue = sys.exc_info()[:2]
+        etype, evalue, etb = sys.exc_info()
+        if etype is OperationError:
+            raise etype, evalue, etb   # just re-raise it
         name = etype.__name__
         if hasattr(self, 'w_' + name):
             nt = getattr(self, 'w_' + name)
@@ -171,7 +173,7 @@ class TrivialObjSpace(ObjSpace):
         else:
             nt = etype
             nv = evalue
-        raise OperationError(nt, nv)
+        raise OperationError, OperationError(nt, nv), etb
 
     def _auto(name, sourcefn, classlocals):
         s = """

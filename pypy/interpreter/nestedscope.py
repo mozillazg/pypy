@@ -1,3 +1,4 @@
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.eval import UNDEFINED
 from pypy.interpreter.pyopcode import PyInterpFrame
 
@@ -56,6 +57,7 @@ class PyNestedScopeFrame(PyInterpFrame):
                 raise OperationError(space.w_TypeError,
                                      "directly executed code object "
                                      "may not contain free variables")
+            closure = []
         else:
             if len(closure) != nfreevars:
                 raise ValueError("code object received a closure with "
@@ -88,7 +90,7 @@ class PyNestedScopeFrame(PyInterpFrame):
                 cell.set(w_value)
 
     def setfastscope(self, scope_w):
-        PyInterpFrame.setfastscope(scope_w)
+        PyInterpFrame.setfastscope(self, scope_w)
         if self.code.co_cellvars:
             # the first few cell vars could shadow already-set arguments,
             # in the same order as they appear in co_varnames
@@ -158,10 +160,9 @@ class PyNestedScopeFrame(PyInterpFrame):
         nfreevars = len(codeobj.co_freevars)
         freevars = [f.valuestack.pop() for i in range(nfreevars)]
         freevars.reverse()
-        w_freevars = f.space.newtuple(freevars)
         defaultarguments = [f.valuestack.pop() for i in range(numdefaults)]
         defaultarguments.reverse()
         w_defaultarguments = f.space.newtuple(defaultarguments)
         w_func = f.space.newfunction(f.space.unwrap(w_codeobj),
-                                     f.w_globals, w_defaultarguments, w_freevars)
+                                     f.w_globals, w_defaultarguments, freevars)
         f.valuestack.push(w_func)

@@ -25,7 +25,8 @@ class Function(object):
 
     def call(self, w_args, w_kwds=None):
         scope_w = self.parse_args(w_args, w_kwds)
-        frame = self.func_code.create_frame(self.space, self.w_globals)
+        frame = self.func_code.create_frame(self.space, self.w_globals,
+                                            self.closure)
         frame.setfastscope(scope_w)
         return frame.run()
 
