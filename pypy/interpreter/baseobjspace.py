@@ -90,6 +90,9 @@ class ObjSpace(object):
         from pypy.module.builtin import Module 
         w_name = self.wrap('builtin')
         self.setitem(self.w_builtins, w_name, Module(self, w_name))
+        from pypy.module.sys2 import Module 
+        w_name = self.wrap('sys2')
+        self.setitem(self.w_builtins, w_name, Module(self, w_name))
 
     def make_sys(self):
         "NOT_RPYTHON: only for initializing the space."
