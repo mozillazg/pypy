@@ -33,7 +33,7 @@ class TestBuiltinCode:
             (w('hello'), self.space.newtuple([w(0), w(True)])),
             ])
         w_result = code.exec_code(self.space, w_dict, w_dict)
-        self.space.eq_w(w_result, w(102))
+        assert self.space.eq_w(w_result, w(102))
 
     def test_call_args(self):
         def c(space, w_x, w_y, __args__):
@@ -51,7 +51,7 @@ class TestBuiltinCode:
             (w('keywords'), self.space.newdict([(w('boo'), w(10))])),
             ])
         w_result = code.exec_code(self.space, w_dict, w_dict)
-        self.space.eq_w(w_result, w(1020))
+        assert self.space.eq_w(w_result, w(1020))
 
 
 class TestGateway: 
@@ -60,7 +60,7 @@ class TestGateway:
         def app_g3(a, b):
             return a+b
         g3 = gateway.app2interp_temp(app_g3)
-        self.space.eq_w(g3(self.space, w('foo'), w('bar')), w('foobar'))
+        assert self.space.eq_w(g3(self.space, w('foo'), w('bar')), w('foobar'))
         
     def test_interp2app(self):
         space = self.space
@@ -69,12 +69,12 @@ class TestGateway:
             return space.add(w_a, w_b)
         app_g3 = gateway.interp2app_temp(g3)
         w_app_g3 = space.wrap(app_g3) 
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call(w_app_g3, 
                        space.newtuple([w('foo'), w('bar')]),
                        space.newdict([])),
             w('foobar'))
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call_function(w_app_g3, w('foo'), w('bar')),
             w('foobar'))
         
@@ -88,12 +88,12 @@ class TestGateway:
                                                       gateway.W_Root,
                                                       gateway.W_Root])
         w_app_g3 = space.wrap(app_g3) 
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call(w_app_g3, 
                        space.newtuple([w('foo'), w('bar')]),
                        space.newdict([])),
             w('foobar'))
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call_function(w_app_g3, w('foo'), w('bar')),
             w('foobar'))
 
@@ -106,12 +106,12 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       'args_w'])
         w_app_g3_args_w = space.wrap(app_g3_args_w) 
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call(w_app_g3_args_w, 
                        space.newtuple([w('foo'), w('bar')]),
                        space.newdict([])),
             w('foobar'))
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call_function(w_app_g3_args_w, w('foo'), w('bar')),
             w('foobar'))
 
@@ -124,12 +124,12 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       str,str])
         w_app_g3_ss = space.wrap(app_g3_ss) 
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call(w_app_g3_ss, 
                        space.newtuple([w('foo'), w('bar')]),
                        space.newdict([])),
             w('foobar'))
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call_function(w_app_g3_ss, w('foo'), w('bar')),
             w('foobar'))
 
@@ -142,13 +142,13 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       int,float])
         w_app_g3_if = space.wrap(app_g3_if) 
-        self.space.eq_w(
+        assert self.space.eq_w(
             space.call(w_app_g3_if, 
                        space.newtuple([w(1), w(1.0)]),
                        space.newdict([])),
             w(2.0))
-        self.space.eq_w(
-            space.call_function(w_app_g3_if, w(1), w(2.0)),
+        assert self.space.eq_w(
+            space.call_function(w_app_g3_if, w(1), w(1.0)),
             w(2.0))
 
     def test_interp2app_unwrap_spec_typechecks(self):
@@ -160,8 +160,8 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       int])
         w_app_g3_i = space.wrap(app_g3_i)
-        space.eq_w(space.call_function(w_app_g3_i,w(1)),w(1))
-        space.eq_w(space.call_function(w_app_g3_i,w(1L)),w(1))        
+        assert space.eq_w(space.call_function(w_app_g3_i,w(1)),w(1))
+        assert space.eq_w(space.call_function(w_app_g3_i,w(1L)),w(1))        
         raises(gateway.OperationError,space.call_function,w_app_g3_i,w(2**32))
         raises(gateway.OperationError,space.call_function,w_app_g3_i,w(None))
         raises(gateway.OperationError,space.call_function,w_app_g3_i,w("foo"))
@@ -171,7 +171,7 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       str])
         w_app_g3_s = space.wrap(app_g3_s)
-        space.eq_w(space.call_function(w_app_g3_s,w("foo")),w("foo"))
+        assert space.eq_w(space.call_function(w_app_g3_s,w("foo")),w("foo"))
         raises(gateway.OperationError,space.call_function,w_app_g3_s,w(None))
         raises(gateway.OperationError,space.call_function,w_app_g3_s,w(1))
         raises(gateway.OperationError,space.call_function,w_app_g3_s,w(1.0))
@@ -180,9 +180,9 @@ class TestGateway:
                                          unwrap_spec=[gateway.ObjSpace,
                                                       float])
         w_app_g3_f = space.wrap(app_g3_f)
-        space.eq_w(space.call_function(w_app_g3_f,w(1.0)),w(1.0))
-        space.eq_w(space.call_function(w_app_g3_f,w(1)),w(1.0))
-        space.eq_w(space.call_function(w_app_g3_f,w(1L)),w(1.0))        
+        assert space.eq_w(space.call_function(w_app_g3_f,w(1.0)),w(1.0))
+        assert space.eq_w(space.call_function(w_app_g3_f,w(1)),w(1.0))
+        assert space.eq_w(space.call_function(w_app_g3_f,w(1L)),w(1.0))        
         raises(gateway.OperationError,space.call_function,w_app_g3_f,w(None))
         raises(gateway.OperationError,space.call_function,w_app_g3_f,w("foo"))
 
@@ -198,7 +198,7 @@ def app_g1(x):
 """ in g
         gateway.importall(g, temporary=True)
         g1 = g['g1']
-        self.space.eq_w(g1(self.space, w('bar')), w('foobar'))
+        assert self.space.eq_w(g1(self.space, w('bar')), w('foobar'))
 
     def test_exportall(self):
         w = self.space.wrap
@@ -211,4 +211,4 @@ def app_g1(x):
 """ in g
         gateway.exportall(g, temporary=True)
         g1 = gateway.app2interp_temp(g['app_g1'])
-        self.space.eq_w(g1(self.space, w('bar')), w('foobar'))
+        assert self.space.eq_w(g1(self.space, w('bar')), w('foobar'))

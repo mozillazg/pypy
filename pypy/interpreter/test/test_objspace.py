@@ -9,7 +9,7 @@ class TestObjSpace:
         w = self.space.wrap
         s = 'abc'
         chars_w = [w(ord(c)) for c in s]
-        self.space.eq_w(w(s), self.space.newstring(chars_w))
+        assert self.space.eq_w(w(s), self.space.newstring(chars_w))
 
     def test_newstring_fail(self):
         w = self.space.wrap
@@ -26,7 +26,7 @@ class TestObjSpace:
         w = self.space.wrap
         l = range(10)
         w_l = self.space.newlist([w(i) for i in l])
-        self.space.eq_w(w_l, w(l))
+        assert self.space.eq_w(w_l, w(l))
 
     def test_newdict(self):
         w = self.space.wrap
@@ -34,13 +34,13 @@ class TestObjSpace:
         items_w = [(w(k), w(v)) for (k, v) in items]
         d = dict(items)
         w_d = self.space.newdict(items_w)
-        self.space.eq_w(w_d, w(d))
+        assert self.space.eq_w(w_d, w(d))
 
     def test_newtuple(self):
         w = self.space.wrap
         t = tuple(range(10))
         w_t = self.space.newtuple([w(i) for i in t])
-        self.space.eq_w(w_t, w(t))
+        assert self.space.eq_w(w_t, w(t))
 
     def test_is_true(self):
         w = self.space.wrap
