@@ -1,51 +1,45 @@
 import re
 import unittest
 
-old_fname = 'self.assertEquals'
-new_fname = 'assert'
-old_function = re.compile(r'^(\s*)' + old_fname + r'\((.*)')
+old= 'self.assertEquals'
+new= 'assert'
+old_function = re.compile(r'^(\s*)' + old + r'\((.*)')
 leading_spaces = re.compile(r'^(\s*)')
 
 
-def process_block(s, old, new):
+def convert(s, old, new):
+
+    compile(s.lstrip(), '', 'exec')
     body = s.replace(old, '', 1).lstrip()
-        
-    if body.rstrip() == '(,)': # catch this special case early.
-        print 'malformed block %s cannot be converted' % s.rstrip()
-        return s
-        
     plist = pos_finder(body, ',')
+
     if plist == []:
-        print "Could not find a ',' in %s" % body
-        return s
+        raise SyntaxError , "Could not find a ',' in %s" % body
     else:
         arglist = []
         for p in plist:
-            left, right = body[:p], body[p+1:]
-            arglist.append((left, right))
+            l, r = body[:p], body[p+1:]
+            arglist.append((l, r))
 
-        try:
-            r = find_comma(arglist)
-            left, right = find_comma(arglist)
+        l, r = which_comma(arglist)
 
-            if right.rstrip()[-1] != ')':
-                # if the last printing char of the string is not ')',
-                # keep the parens for now.
-                return new + left + ') == (' + right
-            else:  # see if we can drop one set of parens
-                #stripped = right.rstrip()[0:-1]
-                l = new + ' ' + left[1:] + ' == ' + right.rstrip()[0:-1] + '\n'
-                try:
-                    compile(l, '', 'exec')
-                    return l
-                except SyntaxError: # too bad, needed them
-                    return new + left + ') == (' + right
+        if r.rstrip()[-1] != ')':
+            # if the last printing char of the string is not ')',
+            # keep the parens for now.  This could be refined.
+            return new + l + ') == (' + r
 
-        except SyntaxError:
-            print 'malformed block %s cannot be converted' % s.rstrip()
-            return s
+        else:  # see if we can drop one set of parens
+
+            stripped = r.rstrip()
+            line_ends = r[len(stripped):]
+            block = new + ' ' + l[1:] + ' == ' + stripped[0:-1] + line_ends
+            try:
+                compile(block, '', 'exec')
+                return block
+            except SyntaxError: # too bad, needed them
+                return new + l + ') == (' + r
         
-def find_comma(tuplelist):
+def which_comma(tuplelist):
     import parser
 
     # make the python parser do the hard work of deciding which comma
@@ -90,15 +84,19 @@ def blocksplitter(filename):
             # necessary and reset everything
 
             if was_interesting:
-                filestring += indent + process_block(blockstring,
-                                                     old_fname, new_fname)
+                try:
+                    backstring = convert(blockstring, old, new)
+                    filestring += indent + backstring
+                except SyntaxError:
+                    filestring += blockstring # malformed, copy as written
+                
             blockstring = line # reset the block
             indent = ls.group(1)
             was_interesting = True
 
         elif not was_interesting and not interesting :
             # the last line was not interesting and this one isn't either.
-            # just copy it out.
+
             filestring  += line
 
         else:
@@ -107,19 +105,21 @@ def blocksplitter(filename):
             # or is it just another uninteresting line that follows it?
 
             try:
-                compile(blockstring.lstrip(), '', 'exec')
+                filestring += indent + convert(blockstring, old, new)
                 # We were done.  This is a boring old follower
-                
-                filestring += indent + process_block(blockstring, old_fname, new_fname)
+
                 filestring += line
-                #blockstring = ''
                 was_interesting = False
 
             except SyntaxError:  # we haven't got enough yet.
                 blockstring += line
 
     if was_interesting :
-        filestring += indent + process_block(blockstring, old_fname, new_fname)
+        try:
+            filestring += indent + convert(blockstring, old, new)
+        except SyntaxError:
+            print 'last block %s was malformed' % blockstring.rstrip()
+            filestring += blockstring
     
     print filestring
 
