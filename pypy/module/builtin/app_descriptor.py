@@ -53,21 +53,6 @@ class classmethod(object):
             return self.f(klass, *args, **kwargs)
         return newfunc
 
-if not hasattr(dict, 'fromkeys'):
-    def _fromkeys(cls, seq, value=None):
-        r = cls()
-        for s in seq:
-            r[s] = value
-        return r
-
-    try:
-        dict.fromkeys = classmethod(_fromkeys)
-    except TypeError:
-        pass   # Python2.2 with trivial object space
-
-    del _fromkeys
-
-
 # super is a modified version from Guido's tutorial
 #     http://www.python.org/2.2.3/descrintro.html
 # it exposes the same special attributes as CPython's.
