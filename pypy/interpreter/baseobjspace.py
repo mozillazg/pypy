@@ -74,6 +74,11 @@ class ObjSpace(object):
 
         self.sys.setbuiltinmodule(self.w_builtin, '__builtin__')
 
+        # XXX TEMPORARY 
+        from pypy.module.builtin import Module 
+        w_name = self.wrap('builtin')
+        self.setitem(self.w_builtins, w_name, Module(self, w_name))
+
     def make_sys(self):
         "NOT_RPYTHON: only for initializing the space."
         from pypy.interpreter.extmodule import BuiltinModule
