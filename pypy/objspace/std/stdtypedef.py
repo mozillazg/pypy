@@ -4,7 +4,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.objspace.std.model import MultiMethod, FailedToImplement
 
 __all__ = ['StdTypeDef', 'newmethod', 'gateway',
-           'GetSetProperty', 'Member', 'attrproperty', 'attrproperty_w',
+           'GetSetProperty', 'Member',
            'MultiMethod']
 
 
@@ -29,28 +29,12 @@ def issubtypedef(a, b):
         a = a.base
     return True
 
-def attrproperty(name):
-    "NOT_RPYTHON: initialization-time only"
-    def fget(space, w_obj):
-        return space.wrap(getattr(w_obj, name))
-    return GetSetProperty(fget)
-
-def attrproperty_w(name):
-    "NOT_RPYTHON: initialization-time only"
-    def fget(space, w_obj):
-        w_value = getattr(w_obj, name)
-        if w_value is None:
-            return space.w_None
-        else:
-            return w_value 
-    return GetSetProperty(fget)
-
-def descr_get_dict(space, w_obj):
+def descr_get_dict(space, w_obj): # xxx typecheck
     w_dict = w_obj.getdict()
     assert w_dict is not None, repr(w_obj)
     return w_dict
 
-def descr_set_dict(space, w_obj, w_dict):
+def descr_set_dict(space, w_obj, w_dict): # xxx typecheck
     w_obj.setdict(w_dict)
 
 std_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
