@@ -104,7 +104,7 @@ def build_pytest_assertion(space):
         space.setattr(w_self, space.wrap('msg'), w_msg)
 
     # build a new AssertionError class to replace the original one.
-    w_BuiltinAssertionError = space.getitem(space.w_builtins,
+    w_BuiltinAssertionError = space.getitem(space.builtin.w_dict, 
                                             space.wrap('AssertionError'))
     w_metaclass = space.type(w_BuiltinAssertionError)
     w_init = space.wrap(interp2app_temp(my_init))
@@ -137,14 +137,14 @@ def pypyraises(space, w_ExpectedException, w_expr, __args__):
                               w_locals)
         except OperationError, e:
             if e.match(space, w_ExpectedException):
-                return space.sys.exc_info()
+                return space.call_function(space.sys.get('exc_info'))
             raise
     else:
         try:
             space.call_args(w_expr, __args__)
         except OperationError, e:
             if e.match(space, w_ExpectedException):
-                return space.sys.exc_info()
+                return space.call_function(space.sys.get('exc_info'))
             raise
     raise OperationError(space.w_AssertionError,
                          space.wrap("DID NOT RAISE"))
