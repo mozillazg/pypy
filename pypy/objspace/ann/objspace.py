@@ -90,7 +90,8 @@ class AnnotationObjSpace(ObjSpace):
     def createexecutioncontext(self):
         return CloningExecutionContext(self)
 
-    def gethelperspace(self):
+    #XXX disabled the helperspace-concept for now
+    def _gethelperspace(self):
         return HelperObjSpace()
 
     # Specialized creators whose interface is in the abstract base class

@@ -48,25 +48,19 @@ class Namespace:
         w_obj = self.space.getitem(self.w_namespace, w_name)
         return w_obj
 
-    def call(self, functionname, argumentslist):
+    def call(self, functionname, args):
         "Call a module function."
-        w_function = self.get(functionname)
-        w_arguments = self.space.newtuple(argumentslist)
+        w_func = self.get(functionname)
+        w_args = self.space.newtuple(args)
         w_keywords = self.space.newdict([])
-        return self.space.call(w_function, w_arguments, w_keywords)
+        return self.space.call(w_func, w_args, w_keywords)
 
     def runbytecode(self, bytecode):
         # initialize the module by running the bytecode in a new
         # dictionary, in a new execution context
-        from pyframe import PyFrame
-        from pycode import PyByteCode
-        ec = self.space.getexecutioncontext()
-        res = PyByteCode()
-        res._from_code(bytecode)
-        frame = PyFrame(self.space, res,
-                                self.w_namespace, self.w_namespace)
-        ec.eval_frame(frame)
-
+        from pypy.interpreter.gateway import ScopedCode
+        scopedcode = ScopedCode(self.space, bytecode, self.w_namespace)
+        scopedcode.eval_frame()
 
 class AppHelper(Namespace):
 

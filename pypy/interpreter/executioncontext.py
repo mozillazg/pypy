@@ -209,6 +209,17 @@ class Stack:
     def __init__(self):
         self.items = []
 
+    def clone(self):
+        s = self.__class__()
+        for item in self.items:
+            try:
+                item = item.clone()
+            except AttributeError:
+                pass
+            s.push(item)
+        return s
+
+
     def push(self, item):
         self.items.append(item)
 

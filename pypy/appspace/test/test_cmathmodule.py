@@ -24,7 +24,7 @@ from pypy.appspace.complexobject import complex as pycomplex
 #    import cmathmodule
 #    from pypy.complexobject import complex as pycomplex
 
-from test_complexobject import equal, enumerate
+from pypy.appspace.test.test_complexobject import equal, enumerate
 
 
 class TestCMathModule(test.TestCase):

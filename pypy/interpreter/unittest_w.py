@@ -4,18 +4,14 @@ import sys, os
 import unittest
 
 def wrap_func(space, func):
-    # this is generally useful enough that it should probably go
-    # somewhere more obvious (objspace method?)
-    from pypy.interpreter import pycode
-    code = pycode.PyByteCode()
-    code._from_code(func.func_code)
-    return space.newfunction(code, space.newdict([]),
-                             space.wrap(func.func_defaults), None)
+    from pypy.interpreter.gateway import InterpretedFunction
+    func = InterpretedFunction(space, func)
+    return space.wrap(func)
 
 def make_testcase_class(space, tc_w):
     # XXX this is all a bit insane (but it works)
     
-    from pypy.interpreter.extmodule import make_builtin_func
+    #from pypy.interpreter.extmodule import make_builtin_func
     w = space.wrap
     d = space.newdict([])
     space.setitem(d, w('failureException'), space.w_AssertionError)
@@ -40,7 +36,6 @@ class WrappedFunc(object):
 
     def __call__(self):
         from pypy.interpreter import executioncontext
-        from pypy.interpreter import pyframe
         space = self.testCase.space
         w = space.wrap
 
@@ -127,7 +122,7 @@ class IntTestCase(unittest.TestCase):
         return self.failIf(condition, msg)
 
     def assertRaises_w(self, w_exc_class, callable, *args, **kw):
-        from pypy.objspace.std.objspace import OperationError
+        from pypy.interpreter.baseobjspace import OperationError
         try:
             callable(*args, **kw)
         except OperationError, e:

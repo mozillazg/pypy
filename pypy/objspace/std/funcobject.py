@@ -40,7 +40,8 @@ def call__Func_ANY_ANY(space, w_function, w_arguments, w_keywords):
     if somecode.co_flags & CO_GENERATOR:
         from generatorobject import W_GeneratorObject
         from pypy.interpreter import pyframe
-        frame = pyframe.PyFrame(space, somecode, w_globals, w_locals)
+        frame = pyframe.PyFrame()
+        frame.initialize(space, somecode, w_globals, w_locals)
         w_ret = W_GeneratorObject(space, frame)
     else:
         w_ret = somecode.eval_code(space, w_globals, w_locals)

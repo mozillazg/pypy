@@ -7,7 +7,7 @@ class TestInterpreter(test.TestCase):
     def codetest(self, source, functionname, args):
         """Compile and run the given code string, and then call its function
         named by 'functionname' with arguments 'args'."""
-        from pypy.interpreter import baseobjspace, executioncontext, pyframe
+        from pypy.interpreter import baseobjspace, executioncontext, pyframe, gateway
         space = self.space
 
         compile = space.builtin.compile
@@ -19,9 +19,9 @@ class TestInterpreter(test.TestCase):
         w_tempmodule = space.newmodule(w("__temp__"))
         w_glob = space.getattr(w_tempmodule, w("__dict__"))
         space.setitem(w_glob, w("__builtins__"), space.w_builtins)
-        
-        frame = pyframe.PyFrame(space, space.unwrap(w_code), w_glob, w_glob)
-        ec.eval_frame(frame)
+       
+        scopedcode = gateway.ScopedCode(space, space.unwrap(w_code), w_glob)
+        scopedcode.eval_frame()
 
         wrappedargs = w(args)
         wrappedfunc = space.getitem(w_glob, w(functionname))

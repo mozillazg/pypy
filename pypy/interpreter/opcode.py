@@ -1,8 +1,9 @@
 from appfile import AppFile
 from pypy.interpreter.baseobjspace import OperationError, NoValue
+from pypy.interpreter.pyframe import _NULL
 import dis
 from pypy.interpreter import pyframe, baseobjspace
-from pypy.interpreter.pycode import app2interp
+from pypy.interpreter.gateway import app2interp, ScopedCode
 
 
 # dynamically loaded application-space utilities
@@ -35,10 +36,8 @@ class binaryoperation:
 
 def LOAD_FAST(f, varindex):
     # access a local variable through its cell object
-    cell = f.localcells[varindex]
-    try:
-        w_value = cell.get()
-    except ValueError:
+    w_value = f.locals_w[varindex]
+    if w_value is _NULL:
         varname = f.getlocalvarname(varindex)
         message = "local variable '%s' referenced before assignment" % varname
         raise OperationError(f.space.w_UnboundLocalError, f.space.wrap(message))
@@ -49,9 +48,19 @@ def LOAD_CONST(f, constindex):
     f.valuestack.push(w_const)
 
 def STORE_FAST(f, varindex):
-    w_newvalue = f.valuestack.pop()
-    cell = f.localcells[varindex]
-    cell.set(w_newvalue)
+    try:
+        w_newvalue = f.valuestack.pop()
+        f.locals_w[varindex] = w_newvalue
+    except:
+        print "exception: got index error"
+        print " varindex:", varindex
+        print " len(locals_w)", len(f.locals_w)
+        import dis
+        print dis.dis(f.bytecode)
+        print "co_varnames", f.bytecode.co_varnames
+        print "co_nlocals", f.bytecode.co_nlocals
+        raise
+
 
 def POP_TOP(f):
     f.valuestack.pop()
@@ -215,6 +224,7 @@ def DELETE_SUBSCR(f):
 
 def PRINT_EXPR(f):
     w_expr = f.valuestack.pop()
+    #print f.space.unwrap(w_expr)
     f.space.gethelper(appfile).call("print_expr", [w_expr])
 
 def PRINT_ITEM_TO(f):
@@ -292,7 +302,9 @@ def EXEC_STMT(f):
     plain = (w_locals is f.w_locals)
     if plain:
         f.fast2locals()
-    f.space.unwrap(w_prog).eval_code(f.space, w_globals, w_locals)
+    scopedcode = ScopedCode(f.space, f.space.unwrap(w_prog), w_globals)
+    scopedcode.eval_frame(w_locals)
+    #f.space.unwrap(w_prog).eval_code(f.space, w_globals, w_locals)
     if plain:
         f.locals2fast()
     
@@ -337,7 +349,7 @@ def BUILD_CLASS(f):
     w_methodsdict = f.valuestack.pop()
     w_bases       = f.valuestack.pop()
     w_name        = f.valuestack.pop()
-    w_newclass = app(f.space).build_class(w_name, w_bases, w_methodsdict, f.w_globals)
+    w_newclass = app(f.space.gethelperspace()).build_class(w_name, w_bases, w_methodsdict, f.w_globals)
     f.valuestack.push(w_newclass)
 
 def STORE_NAME(f, varindex):
@@ -425,6 +437,7 @@ def LOAD_NAME(f, nameindex):
 #    f.valuestack.push(w_value)
 
 def LOAD_GLOBAL(f, nameindex):
+    assert f.w_globals is not None
     varname = f.getname(nameindex)
     w_varname = f.space.wrap(varname)
     try:
@@ -447,23 +460,22 @@ def LOAD_GLOBAL(f, nameindex):
     f.valuestack.push(w_value)
 
 def DELETE_FAST(f, varindex):
-    cell = f.localcells[varindex]
-    try:
-        cell.delete()
-    except ValueError:
+    w_value = f.locals_w[varindex]
+    if f.locals_w[varindex] is _NULL:
         varname = f.getlocalvarname(varindex)
         message = "local variable '%s' referenced before assignment" % varname
         raise OperationError(f.space.w_UnboundLocalError, f.space.wrap(message))
+    f.locals_w[varindex] = _NULL
 
 def LOAD_CLOSURE(f, varindex):
     # nested scopes: access the cell object
-    cell = f.nestedcells[varindex]
+    cell = f.closure_w[varindex]
     w_value = f.space.wrap(cell)
     f.valuestack.push(w_value)
 
 def LOAD_DEREF(f, varindex):
     # nested scopes: access a variable through its cell object
-    cell = f.nestedcells[varindex]
+    cell = f.closure_w[varindex]
     try:
         w_value = cell.get()
     except ValueError:
@@ -482,9 +494,9 @@ def STORE_DEREF(f, varindex):
     # nested scopes: access a variable through its cell object
     w_newvalue = f.valuestack.pop()
     try:
-        cell = f.nestedcells[varindex]
+        cell = f.closure_w[varindex]
     except IndexError:
-        import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         raise
     cell.set(w_newvalue)
 
@@ -716,8 +728,9 @@ for i in range(256):
     if opname in globals():
         fn = globals()[opname]
     elif not opname.startswith('<') and i>0:
-        import warnings
-        warnings.warn("* Warning, missing opcode %s" % opname)
+        #import warnings
+        #warnings.warn("* Warning, missing opcode %s" % opname)
+        pass
     dispatch_table.append(fn)
 
 

@@ -81,7 +81,13 @@ class W_Constant(W_Object):
     def clone(self):
         if type(self.value) is type(lambda:0): # XXX
             return W_Constant(self.value)
-        return W_Constant(copy.deepcopy(self.value))
+        try:
+            return W_Constant(copy.deepcopy(self.value))
+        except TypeError:
+            return W_Constant(self.value)
+        except:
+            return W_Constant(self.value)
+
 
 class W_KnownKeysContainer(W_Object):
     """A dict with a known set of keys or a list with known length.

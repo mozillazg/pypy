@@ -9,6 +9,10 @@ class PyPyError(Exception):
         self.space = space
         self.operationerr = operationerr
 
+class Null:
+    """ marker object for Null values within the interpreter
+        (not visible at app-level)
+    """
 
 class ObjSpace:
     """Base class for the interpreter-level implementations of object spaces.
@@ -16,14 +20,17 @@ class ObjSpace:
 
     def __init__(self):
         "Basic initialization of objects."
-        self.w_modules = self.newdict([])
         self.appfile_helpers = {}
         self.initialize()
 
     def make_builtins(self):
-        import pypy.module.builtin
-        self.builtin = pypy.module.builtin.Builtin(self)
-        self.w_builtin = self.builtin.wrap_base()
+        assert not hasattr(self, 'builtin')
+        if not hasattr(self, 'sys'):
+            self.make_sys()
+        
+        from pypy.module import builtin
+        self.builtin = builtin.__builtin__(self)
+        self.w_builtin = self.builtin._wrapped
         self.w_builtins = self.getattr(self.w_builtin, self.wrap("__dict__"))
 
         for name, value in self.__dict__.items():
@@ -34,20 +41,17 @@ class ObjSpace:
                 #print "setitem: space instance %-20s into builtins" % name
                 self.setitem(self.w_builtins, self.wrap(name), value)
 
-        from pypy.module import __file__ as fn
-        import os
-        fn = os.path.join(os.path.dirname(fn), 'builtin_app.py')
-        w_args = self.newtuple([self.wrap(fn), self.w_builtins, self.w_builtins])
-        w_execfile = self.getitem(self.w_builtins, self.wrap('execfile'))
-        self.call(w_execfile, w_args, self.newdict([]))
+        self.builtin._wrap_postponed()
+        self.sys._setmodule(self.builtin)
 
     def make_sys(self):
-        import pypy.module.sysmodule
-        self.sys = pypy.module.sysmodule.Sys(self)
-        self.w_sys = self.sys.wrap_me()
-        self.setattr(self.w_sys, self.wrap("modules"), self.w_modules)
+        assert not hasattr(self, 'sys')
+        from pypy.module import sysmodule
+        self.sys = sysmodule.sys(self)
+        self.w_sys = self.sys._wrapped
+        self.sys._setmodule(self.sys)
 
-    # XXX use a dictionary in the future
+    # XXX get rid of this. 
     def get_builtin_module(self, w_name):
         name = self.unwrap(w_name)
         if name == '__builtin__':

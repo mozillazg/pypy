@@ -72,6 +72,11 @@ class CloningExecutionContext(ExecutionContext):
         # {(bytecode, w_globals): FunctionInfo(), ...}
 
     def getfunctioninfo(self, frame, new=False):
+        from pypy.interpreter.pyframe import AppFrame, PyFrame
+        if isinstance(frame, AppFrame):
+            print "getfunctioninfo from AppFrame", frame.bytecode.co_name
+            return FunctionInfo(self)
+
         key = self.makekey(frame)
         info = self.functioninfos.get(key)
         if info is None:
@@ -117,7 +122,10 @@ class CloningExecutionContext(ExecutionContext):
         return w_result
 
     def clone_frame(self, frame):
-        f = PyFrame(self.space, frame.bytecode, frame.w_globals, frame.w_locals)
+        return frame.clone()
+
+        f = frame.clone()
+        #f = PyFrame(self.space, frame.bytecode, frame.w_globals, frame.w_locals)
         f.valuestack = clonevaluestack(frame.valuestack)
         f.blockstack = cloneblockstack(frame.blockstack)
         f.last_exception = frame.last_exception
