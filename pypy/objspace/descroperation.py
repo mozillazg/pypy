@@ -7,7 +7,7 @@ from pypy.interpreter.argument import Arguments
 
 class Object:
     def descr__getattribute__(space, w_obj, w_name):
-        name = space.unwrap(w_name)
+        name = space.str_w(w_name)
         w_descr = space.lookup(w_obj, name)
         if w_descr is not None:
             if space.is_data_descr(w_descr):
@@ -24,7 +24,7 @@ class Object:
         raise OperationError(space.w_AttributeError, w_name)
 
     def descr__setattr__(space, w_obj, w_name, w_value):
-        name = space.unwrap(w_name)
+        name = space.str_w(w_name)
         w_descr = space.lookup(w_obj, name)
         if w_descr is not None:
             if space.is_data_descr(w_descr):
@@ -35,7 +35,7 @@ class Object:
         raise OperationError(space.w_AttributeError, w_name)
 
     def descr__delattr__(space, w_obj, w_name):
-        name = space.unwrap(w_name)
+        name = space.str_w(w_name)
         w_descr = space.lookup(w_obj, name)
         if w_descr is not None:
             if space.is_data_descr(w_descr):
@@ -361,7 +361,7 @@ def _make_comparison_impl(symbol, specialnames):
             return w_res
         # fallback: lt(a, b) <= lt(cmp(a, b), 0) ...
         w_res = _cmp(space, w_first, w_second)
-        res = space.unwrap(w_res)
+        res = space.int_w(w_res)
         return space.wrap(op(res, 0))
 
     return func_with_new_name(comparison_impl, 'comparison_%s_impl'%left.strip('_'))
