@@ -20,7 +20,7 @@ class interplevelimport_interp2app(gateway.interp2app):
         gateway.interp2app.__init__(self, f, ismethod=False, spacearg=False)
         self.w_globals = w_globals
 
-    def getglobals(self, space):
+    def _getglobals(self, space):
         "NOT_RPYTHON"
         return self.w_globals
 
