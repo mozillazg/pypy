@@ -147,15 +147,15 @@ class UnwrapSpecRecipe:
         name = el.__name__
         cur = emit_sig.through_scope_w
         emit_sig.setfastscope.append(
-            "x = self.space.interpclass_w(scope_w[%d])" % cur)
+            "obj = self.space.interpclass_w(scope_w[%d])" % cur)
         emit_sig.setfastscope.append(
-            "if x is None or not isinstance(x, %s):" % name)
+            "if obj is None or not isinstance(obj, %s):" % name)
         emit_sig.setfastscope.append(
-            "    raise OperationError(self.space.w_TypeError,space.wrap('unexpected arg type'))") # xxx
+            "    raise OperationError(self.space.w_TypeError,self.space.wrap('expected %%s' %% %s.typedef.name ))" % name) # xxx
         emit_sig.miniglobals[name] = el
         emit_sig.miniglobals['OperationError'] = OperationError
         emit_sig.setfastscope.append(
-            "self.%s_arg%d = x" % (name,cur))
+            "self.%s_arg%d = obj" % (name,cur))
         emit_sig.through_scope_w += 1
         emit_sig.run_args.append("self.%s_arg%d" % (name,cur))
 
