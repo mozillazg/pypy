@@ -4,7 +4,10 @@ import py
 from py.__impl__.magic import exprinfo
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
+import pypy
 
+optionpath = py.path.extpy(py.path.local(pypy.__file__).dirpath('conftest.py'), 
+                       'option') 
 # ____________________________________________________________
 
 class AppFrame(py.code.Frame):
@@ -99,7 +102,7 @@ def build_pytest_assertion(space):
                 source = str(source).strip()
             except py.error.ENOENT: 
                 source = None
-            if source and not py.test.config.option.nomagic:
+            if source and not optionpath.resolve().nomagic: 
                 msg = exprinfo.interpret(source, runner, should_fail=True)
                 space.setattr(w_self, space.wrap('args'),
                             space.newtuple([space.wrap(msg)]))
