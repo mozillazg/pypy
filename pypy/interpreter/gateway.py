@@ -592,6 +592,7 @@ class interp2app_temp(interp2app):
 # and now for something completly different ... 
 #
 
+pendingapphelpers = []
 def appdef(source): 
     """ NOT_RPYTHON """ 
     from pypy.interpreter.pycode import PyCode
@@ -611,19 +612,26 @@ def appdef(source):
     # SOME MESS AHEAD ! 
     # construct the special app source passed to appexec
     appsource = py.code.Source(source).strip().putaround("%s(%s):" % (funcname, fastscope))
-    sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals()]
+    sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals(), 
+                   "    while pendingapphelpers:", 
+                   "        ihook = pendingapphelpers.pop()", 
+                   "        space.setitem(space.w_apphelper_globals,", 
+                   "                  space.wrap(ihook.name), space.wrap(ihook))", ]
     sourcelines.extend(defaulthandlingsource.indent().lines)
     sourcelines.append(
                    "    return space.appexec([%(wfastscope)s], '''" % locals())
     for line in appsource.indent().indent().lines: 
         line = line.replace("\\", r"\\").replace("'", r"\'") 
         sourcelines.append(line)
-    sourcelines.append("''')")
+    sourcelines.append("''')") 
     source = py.code.Source()
     source.lines = sourcelines 
-    glob = {}
+    #print str(source)
+    glob = { 'pendingapphelpers' : pendingapphelpers }
     exec source.compile() in glob 
-    return glob[funcname]
+    func = glob[funcname]
+    pendingapphelpers.append(interp2app(func, func.func_name))
+    return func
 
 def specialargparse(decl): 
     """ NOT_RPYTHON """ 
