@@ -1,27 +1,19 @@
 import autopath
-from pypy.module.builtin_app import map, filter, reduce, zip
 from pypy.tool import test
 
 
-# trivial functions for testing 
-
-def add_two(x):
-   return x + 2
-
-def add_both(x, y):
-   return x + y
-
-
-class TestMap(test.TestCase):
+class TestMap(test.AppTestCase):
 
    def test_trivial_map_one_seq(self):
-      self.assertEqual(map(add_two, [1, 2, 3, 4]), [3, 4, 5, 6])
+      self.assertEqual(map(lambda x: x+2, [1, 2, 3, 4]), [3, 4, 5, 6])
 
    def test_trivial_map_two_seq(self):
-      self.assertEqual(map(add_both, [1, 2, 3, 4],[1, 2, 3, 4]), [2, 4, 6, 8])
+      self.assertEqual(map(lambda x,y: x+y, 
+                           [1, 2, 3, 4],[1, 2, 3, 4]),
+                       [2, 4, 6, 8])
 
    def test_trivial_map_sizes_dont_match_and_should(self):
-      self.assertRaises(TypeError, map, add_both, [1, 2, 3, 4], [1, 2, 3])
+      self.assertRaises(TypeError, map, lambda x,y: x+y, [1, 2, 3, 4], [1, 2, 3])
 
    def test_trivial_map_no_arguments(self):
       self.assertRaises(TypeError, map)
@@ -67,7 +59,7 @@ class TestMap(test.TestCase):
       b = []
       self.assertEqual(map(lambda x, y: x, a, b), a)
 
-class TestZip(test.TestCase):
+class TestZip(test.AppTestCase):
    def test_one_list(self):
       self.assertEqual(zip([1,2,3]), [(1,), (2,), (3,)])
 
@@ -86,7 +78,7 @@ class TestReduce(test.TestCase):
        self.assertEqual(reduce(lambda x, y: x-y, [10, 2, 8]), 0)
        self.assertEqual(reduce(lambda x, y: x-y, [2, 8], 10), 0)
 
-class TestFilter(test.TestCase):
+class TestFilter(test.AppTestCase):
    def test_None(self):
        self.assertEqual(filter(None, ['a', 'b', 1, 0, None]), ['a', 'b', 1])
 

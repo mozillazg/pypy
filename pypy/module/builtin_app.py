@@ -210,7 +210,7 @@ def cmp(x, y):
     else:
         return 1
 
-def vars(*obj):
+def _vars(*obj):
     """return a dictionary of all the attributes currently bound in obj.  If
     called with no argument, return the variables bound in local scope."""
 
@@ -230,4 +230,34 @@ def hasattr(ob, attr):
         return True
     except AttributeError:
         return False
-    
+
+class xrange:
+    def __init__(self, x, y=None, step=1):
+        """ returns an xrange object, see range for more docs"""
+
+        if y is None: 
+            self.start = 0
+            self.stop = x
+        else:
+            self.start = x
+            self.stop = y
+
+        if step == 0:
+            raise ValueError, 'xrange() step-argument (arg 3) must not be zero'
+
+        self.step = step
+
+    def __iter__(self):
+        def gen(self):
+            start,stop,step = self.start,self.stop,self.step
+            i = start
+            if step > 0:
+                while i < stop:
+                    yield i
+                    i+=step
+            else:
+                while i > stop:
+                    yield i
+                    i+=step
+
+        return gen(self)

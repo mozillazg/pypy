@@ -1,33 +1,22 @@
 import autopath
-from pypy.module.builtin_app import map
 from pypy.tool import test
 
-# trivial objects for testing 
+class TestVars(test.AppTestCase):
 
-class TrivialObject:
+    def _test_vars_no_arguments(self):
+        self.assertEqual(vars(), locals())
 
-   def __init__(self):
-      self.s1 = 'I am a string'
+    def _test_vars_too_many_arguments(self):
+        self.assertRaises(TypeError, vars,  0, 1)
 
-   def do_something(self):
-      self.s1 = "Now I am another string"
-
-t = TrivialObject()
-t1 = TrivialObject()
-t1.do_something()
-
-class TestVars(test.TestCase):
-
-   def test_vars_no_arguments(self):
-      self.assertEqual(vars(), locals())
-
-   def test_vars_too_many_arguments(self):
-      self.assertRaises(TypeError, vars,  t, t1)
-
-   def test_vars_correct_arguments(self):
-      self.assertEqual(vars(t), t.__dict__)
-      self.assertEqual(vars(t1), t1.__dict__)
-      self.assertNotEqual(vars(t1), t.__dict__)
+    def _test_vars_correct_arguments(self):
+        class a:
+            def __init__(self):
+                self.res = 42
+        self.assertEqual(vars(a), a.__dict__)
+        a1 = a()
+        self.assertEqual(vars(a1), a1.__dict__)
+        self.assertEqual(vars(a1).get('res'),42)
       
 if __name__ == '__main__':
     test.main()

@@ -1,8 +1,7 @@
 import autopath
-from pypy.module.builtin_app import zip
 from pypy.tool import test
 
-class TestZip(test.TestCase):
+class TestZip(test.AppTestCase):
 
    def test_zip_no_arguments(self):
       self.assertRaises(TypeError, zip)

@@ -25,7 +25,21 @@ class ObjSpace:
         self.builtin = pypy.module.builtin.Builtin(self)
         self.w_builtin = self.builtin.wrap_base()
         self.w_builtins = self.getattr(self.w_builtin, self.wrap("__dict__"))
-        self.builtin.wrap_appfile(self.w_builtin)
+
+        for name, value in self.__dict__.items():
+            if name.startswith('w_'):
+                name = name[2:]
+                if name.startswith('builtin'):
+                    continue
+                #print "setitem: space instance %-20s into builtins" % name
+                self.setitem(self.w_builtins, self.wrap(name), value)
+
+        from pypy.module import __file__ as fn
+        import os
+        fn = os.path.join(os.path.dirname(fn), 'builtin_app.py')
+        w_args = self.newtuple([self.wrap(fn), self.w_builtins, self.w_builtins])
+        w_execfile = self.getattr(self.w_builtin, self.wrap('execfile'))
+        self.call(w_execfile, w_args, self.newdict([]))
 
     def make_sys(self):
         import pypy.module.sysmodule
