@@ -43,7 +43,6 @@ def init__List(space, w_list, __args__):
                                (['sequence'], None, None),   # signature
                                [W_ListObject(space, [])])    # default argument
     w_list.ob_size = 0  # XXX think about it later
-    w_iterable = args[0]
     w_iterator = space.iter(w_iterable)
     while True:
         try:
