@@ -1,4 +1,5 @@
 from pypy.interpreter.error import OperationError
+from pypy.interpreter import baseobjspace
 from pypy.interpreter import eval
 from pypy.interpreter.function import Function
 from pypy.objspace.std.stdtypedef import *
@@ -43,14 +44,18 @@ def really_build_fake_type(cpy_type, ignored):
     for s, v in cpy_type.__dict__.items():
         if cpy_type is not unicode or s not in ['__add__', '__contains__']:
             kw[s] = v
-    def fake__new__(space, w_type, *args_w):
+    def fake__new__(space, w_type, args_w):
         args = [space.unwrap(w_arg) for w_arg in args_w]
         try:
             r = cpy_type.__new__(cpy_type, *args)
         except:
             wrap_exception(space)
         return W_Fake(space, r)
-    kw['__new__'] = gateway.interp2app(fake__new__)
+
+    kw['__new__'] = gateway.interp2app(fake__new__,
+                         unwrap_spec = [baseobjspace.ObjSpace,
+                                        baseobjspace.W_Root,
+                                        'args_w'])
     if cpy_type.__base__ is not object:
         assert cpy_type.__base__ is basestring
         from pypy.objspace.std.basestringtype import basestring_typedef

@@ -123,12 +123,6 @@ class ObjSpace(object):
     def not_(self, w_obj):
         return self.wrap(not self.is_true(w_obj))
 
-    def unwrapdefault(self, w_value, default): # xxx
-        if w_value is None or w_value == self.w_None:
-            return default
-        else:
-            return self.unwrap(w_value)
-
     def newbool(self, b):
         if b:
             return self.w_True

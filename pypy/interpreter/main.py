@@ -17,8 +17,7 @@ def _run_eval_string(source, filename, space, eval):
 
         compile = space.builtin.compile
         w = space.wrap
-        w_code = compile(w(source), w(filename), w(cmd),
-                         w(0), w(0))
+        w_code = compile(source, filename, cmd, 0, 0)
 
         ec = executioncontext.ExecutionContext(space)
 
