@@ -42,7 +42,7 @@ dependent."""
                              space.wrap("recursion limit must be positive"))
     # global recursion_limit
     # we need to do it without writing globals.
-    space.sys.recursion_limit = new_limit
+    space.sys.recursionlimit = new_limit
 
 def getrecursionlimit(space):
     """getrecursionlimit()
@@ -51,7 +51,7 @@ def getrecursionlimit(space):
     recursion from causing an overflow of the C stack and crashing Python.
     """
 
-    return space.wrap(space.sys.recursion_limit)
+    return space.wrap(space.sys.recursionlimit)
 
 checkinterval = 100
 

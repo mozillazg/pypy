@@ -10,11 +10,9 @@ def app_init_globals_via_builtins_hack():
     b.sys = sys
 
 class TestSysTests:
-    def setup_method(self,method):
-        self.sys_w = self.space.get_builtin_module("sys")
     def test_stdout_exists(self):
         s = self.space
-        assert s.is_true(s.getattr(self.sys_w, s.wrap("stdout")))
+        assert s.is_true(s.getattr(s.w_sys, s.wrap("stdout")))
 
 class AppTestAppSysTests:
     def test_path_exists(self):

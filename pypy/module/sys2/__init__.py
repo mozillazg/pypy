@@ -3,6 +3,11 @@ from pypy.interpreter.error import OperationError
 
 class Module(ExtModule):
     """Sys Builtin Module. """
+    def __init__(self, space, w_name): 
+        super(Module, self).__init__(space, w_name) 
+        self.checkinterval = 100
+        self.recursionlimit = 100
+        
     interpleveldefs = {
         'pypy_objspaceclass'    : '(space.wrap(space.__class__.__name__))', 
 
@@ -28,7 +33,7 @@ class Module(ExtModule):
         'builtin_module_names'  : 'state.get(space).w_builtin_module_names', 
         'pypy_getudir'          : 'state.pypy_getudir', 
 
-        'getdefaultencoding'    : 'space.wrap(sys.getdefaultencoding())', 
+        'getdefaultencoding'    : 'state.getdefaultencoding', 
         'getrefcount'           : 'vm.getrefcount', 
         '_getframe'             : 'vm._getframe', 
         'setrecursionlimit'     : 'vm.setrecursionlimit', 
@@ -40,7 +45,8 @@ class Module(ExtModule):
 
         'executable'            : 'space.wrap("py.py")', 
         'copyright'             : 'space.wrap("MIT-License")', 
-        'version_info'          : 'space.wrap((2,3,4, "pypy1"))', 
+        'api_version'           : 'space.wrap(1012)', 
+        'version_info'          : 'space.wrap((2,3,4, "alpha", 42))', 
         'version'               : 'space.wrap("2.3.4 (pypy1 build)")', 
         'hexversion'            : 'space.wrap(0x020304a0)', 
         'ps1'                   : 'space.wrap(">>>>")', 

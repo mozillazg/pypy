@@ -41,7 +41,7 @@ builtin_module_names.sort()
 class State: 
     def __init__(self, space, stuff=None): 
         self.space = space 
-        self.w_builtin_module_names = space.newlist(
+        self.w_builtin_module_names = space.newtuple(
             [space.wrap(fn) for fn in builtin_module_names])
         self.w_modules = space.newdict([])
         for fn, module in builtin_modules.items(): 
@@ -73,3 +73,5 @@ def pypy_getudir(space):
     from pypy.tool.udir import udir
     return space.wrap(str(udir))
 
+def getdefaultencoding(space): 
+    return space.wrap(sys.getdefaultencoding())

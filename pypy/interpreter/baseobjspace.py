@@ -48,7 +48,6 @@ class ObjSpace(object):
         self._gatewaycache = Cache()
         self._codecache = Cache()
         # set recursion limit
-        self.recursion_limit = 1000
         # sets all the internal descriptors
         self.initialize()
         
