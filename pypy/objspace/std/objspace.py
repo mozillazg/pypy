@@ -243,15 +243,15 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_ListObject(self, wrappeditems)
         if isinstance(x, long):
             return W_LongObject(self, x)
-        if isinstance(x, complex):
-            # XXX is this right?
-            c = self.getitem(self.w_builtins, self.wrap("complex"))
-            return self.call_function(c,
-                                      self.wrap(x.real), 
-                                      self.wrap(x.imag))
+##        if isinstance(x, complex):
+##            # XXX is this right?   YYY no, this is wrong right now  (CT)
+##            c = self.getitem(self.w_builtins, self.wrap("complex"))
+##            return self.call_function(c,
+##                                      self.wrap(x.real), 
+##                                      self.wrap(x.imag))
         if isinstance(x, BaseWrappable):
             w_result = x.__spacebind__(self)
-            #print 'wrapping', x, '->', w_result
+            print 'wrapping', x, '->', w_result #XXX
             return w_result
         # anything below this line is implicitly XXX'ed
         if isinstance(x, type(Exception)) and issubclass(x, Exception):
