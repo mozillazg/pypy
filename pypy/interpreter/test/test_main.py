@@ -51,4 +51,4 @@ class TestMain:
 
     def test_eval_string(self):
         w_x = main.eval_string('2+2', space=self.space)
-        self.space.eq_w(w_x, self.space.wrap(4))
+        assert self.space.eq_w(w_x, self.space.wrap(4))
