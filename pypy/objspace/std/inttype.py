@@ -12,7 +12,8 @@ def descr__new__(space, w_inttype, w_value=None, w_base=None):
             value = w_value.intval
         elif space.is_true(space.isinstance(w_value, space.w_str)):
             try:
-                value = string_to_int(space.unwrap(w_value))
+                # XXX can produce unwrapped long
+                value = string_to_int(space.str_w(w_value))
             except ValueError, e:
                 raise OperationError(space.w_ValueError,
                                      space.wrap(e.args[0]))
@@ -22,28 +23,38 @@ def descr__new__(space, w_inttype, w_value=None, w_base=None):
             # 'int(x)' should return whatever x.__int__() returned
             if space.is_true(space.is_(w_inttype, space.w_int)):
                 return w_obj
-            value = space.unwrap(w_obj)
-            if not isinstance(value, (int, long)): # XXX typechecking in unwrap!
-                raise OperationError(space.w_ValueError,
-                                 space.wrap("value can't be converted to int"))
+            # int_w is effectively what we want in this case,
+            # we cannot construct a subclass of int instance with an
+            # an overflowing long
+            try:
+                value = space.int_w(w_obj)
+            except OperationError, e:
+                if e.match(space,space.w_TypeError):
+                    raise OperationError(space.w_ValueError,
+                        space.wrap("value can't be converted to int"))
+                raise e
     else:
-        base = space.unwrap(w_base)
-        if not isinstance(base, int):   # XXX typechecking in unwrap!
-            raise OperationError(space.w_TypeError,
-                                 space.wrap("an integer is required"))
-        s = space.unwrap(w_value)
-        if not isinstance(s, str):   # XXX typechecking in unwrap!
+        base = space.int_w(w_base)
+
+        try:
+            s = space.str_w(w_value)
+        except OperationError, e:
             raise OperationError(space.w_TypeError,
                                  space.wrap("int() can't convert non-string "
                                             "with explicit base"))
         try:
+            # XXX can produce unwrapped long, need real long impl to know
+            # what to do
             value = string_to_int(s, base)
         except ValueError, e:
             raise OperationError(space.w_ValueError,
                                  space.wrap(e.args[0]))
 
     if isinstance(value, long):
-        # XXX is this right??
+        if not space.is_true(space.is_(w_inttype, space.w_int)):
+            raise OperationError(space.w_OverflowError,
+                                 space.wrap(
+                "long int too large to convert to int"))          
         from pypy.objspace.std.longobject import W_LongObject
         w_obj = space.allocate_instance(W_LongObject, space.w_long)
         w_obj.__init__(space, value)
