@@ -38,7 +38,7 @@ class ObjSpace:
         import os
         fn = os.path.join(os.path.dirname(fn), 'builtin_app.py')
         w_args = self.newtuple([self.wrap(fn), self.w_builtins, self.w_builtins])
-        w_execfile = self.getattr(self.w_builtin, self.wrap('execfile'))
+        w_execfile = self.getitem(self.w_builtins, self.wrap('execfile'))
         self.call(w_execfile, w_args, self.newdict([]))
 
     def make_sys(self):
