@@ -6,7 +6,8 @@ The bytecode interpreter itself is implemented by the PyFrame class.
 
 import dis
 from pypy.interpreter import eval
-from pypy.interpreter.gateway import NoneNotWrapped
+from pypy.interpreter.gateway import NoneNotWrapped 
+from pypy.interpreter.baseobjspace import ObjSpace, W_Root 
 from pypy.tool.cache import Cache 
 
 # helper
@@ -183,33 +184,39 @@ class PyCode(eval.Code):
                 return space.w_False
 
         return space.w_True
-    
+   
+    unwrap_spec =        [ObjSpace, W_Root, 
+                          int, int, int, int,
+                          str, W_Root, W_Root, 
+                          W_Root, str, str, int, 
+                          str, W_Root, 
+                          W_Root]
     def descr_code__new__(space, w_subtype,
-                          w_argcount, w_nlocals, w_stacksize, w_flags,
-                          w_codestring, w_constants, w_names,
-                          w_varnames, w_filename, w_name, w_firstlineno,
-                          w_lnotab, w_freevars=NoneNotWrapped,
+                          argcount, nlocals, stacksize, flags,
+                          codestring, w_constants, w_names,
+                          w_varnames, filename, name, firstlineno,
+                          lnotab, w_freevars=NoneNotWrapped,
                           w_cellvars=NoneNotWrapped):
         code = space.allocate_instance(PyCode, w_subtype)
         code.__init__(space)
-        # XXX typechecking everywhere!
-        code.co_argcount   = space.int_w(w_argcount)
-        code.co_nlocals    = space.int_w(w_nlocals)
-        code.co_stacksize  = space.int_w(w_stacksize)
-        code.co_flags      = space.int_w(w_flags)
-        code.co_code       = space.str_w(w_codestring)
+        code.co_argcount   = argcount 
+        code.co_nlocals    = nlocals 
+        code.co_stacksize  = stacksize 
+        code.co_flags      = flags 
+        code.co_code       = codestring 
         code.co_consts_w   = space.unpacktuple(w_constants)
         code.co_names      = unpack_str_tuple(space, w_names)
         code.co_varnames   = unpack_str_tuple(space, w_varnames)
-        code.co_filename   = space.str_w(w_filename)
-        code.co_name       = space.str_w(w_name)
-        code.co_firstlineno= space.int_w(w_firstlineno)
-        code.co_lnotab     = space.str_w(w_lnotab)
+        code.co_filename   = filename 
+        code.co_name       = name 
+        code.co_firstlineno= firstlineno 
+        code.co_lnotab     = lnotab 
         if w_freevars is not None:
             code.co_freevars = unpack_str_tuple(space, w_freevars)
         if w_cellvars is not None:
             code.co_cellvars = unpack_str_tuple(space, w_cellvars)
         return space.wrap(code)
+    descr_code__new__.unwrap_spec = unwrap_spec 
 
     
 def _really_enhanceclass(key, stuff):
