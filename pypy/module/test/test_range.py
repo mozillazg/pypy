@@ -1,14 +1,7 @@
 import autopath
-from pypy.module.builtin_app import range
 from pypy.tool import test
 
-class TestRange(test.TestCase):
-
-   def setUp(self):
-      pass
-
-   def tearDown(self):
-      pass
+class TestRange(test.AppTestCase):
 
    def test_range_toofew(self):
       self.assertRaises(TypeError, range)

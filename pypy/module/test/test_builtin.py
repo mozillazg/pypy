@@ -1,46 +1,57 @@
 import autopath
 
-from pypy.module.builtin_app import cmp
 from pypy.tool import test
 
+class TestBuiltinApp(test.AppTestCase):
+    def setUp(self):
+        self.space = test.objspace()
+    
+    def test_import(self):
+        import types
+        d = {}
+        m = __import__('quopri', d, d, [])
+        self.assertEquals(type(m), types.ModuleType)
 
-class TestBuiltin(test.TestCase):
+    def test_chr(self):
+        self.assertEquals(chr(65), 'A')
+        self.assertRaises(ValueError, chr, -1)
+        self.assertRaises(TypeError, chr, 'a')
 
-   def setUp(self):
-      self.space = test.objspace()
+    def test_type_selftest(self):
+        self.assert_(type(type) is type)
 
-   def tearDown(self):
-      pass
+    def test_xrange_args(self):
+        x = xrange(2)
+        self.assertEquals(x.start, 0)
+        self.assertEquals(x.stop, 2)
+        self.assertEquals(x.step, 1)
 
-   def get_builtin(self, name):
-      s = self.space
-      w_name = s.wrap(name)
-      w_bltin = s.getitem(s.w_builtins, w_name)
-      return w_bltin
+        x = xrange(2,10,2)
+        self.assertEquals(x.start, 2)
+        self.assertEquals(x.stop, 10)
+        self.assertEquals(x.step, 2)
 
-   def test_chr(self):
-      s = self.space      
-      w = s.wrap
-      w_chr = self.get_builtin('chr')
-      self.assertEqual_w(w(chr(65)),
-                         s.call_function(w_chr, w(65)))
-      self.assertWRaises_w(s.w_ValueError,
-                           w_chr,
-                           w(-1))
-      self.assertWRaises_w(s.w_TypeError,
-                           w_chr,
-                           w('a'))
+        self.assertRaises(ValueError, xrange, 0, 1, 0) 
 
-   def test_import(self):
-       s = self.space      
-       w = s.wrap
-       w_import = self.get_builtin('__import__')
-       w_dict = s.newdict([])
-       w_fromlist = s.newlist([])
-       # finding a module to import is an odd game; quopri is
-       # sufficiently simple
-       s.call_function(w_import, w('quopri'), w_dict, w_dict, w_fromlist)
-     
+    def test_xrange_up(self):
+        x = xrange(2)
+        self.assertEquals(x.start, 0)
+        self.assertEquals(x.stop, 2)
+        self.assertEquals(x.step, 1)
+
+        iter_x = iter(x)
+        self.assertEquals(iter_x.next(), 0)
+        self.assertEquals(iter_x.next(), 1)
+        self.assertRaises(StopIteration, iter_x.next)
+
+    def test_xrange_down(self):
+        x = xrange(4,2,-1)
+
+        iter_x = iter(x)
+        self.assertEquals(iter_x.next(), 4)
+        self.assertEquals(iter_x.next(), 3)
+        self.assertRaises(StopIteration, iter_x.next)
+
 class TestCmp(test.TestCase):
    
     def test_cmp(self):

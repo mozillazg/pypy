@@ -9,9 +9,9 @@ import __builtin__ as _b
 
 class Builtin(BuiltinModule):
     __pythonname__ = '__builtin__'
-    __appfile__ = appfile.AppFile(__name__, ["module"])
+    #__appfile__ = appfile.AppFile(__name__, ["module"])
 
-    __helper_appfile__ = appfile.AppFile('builtin_helper',["module"])
+    #__helper_appfile__ = appfile.AppFile('builtin_helper',["module"])
 
     # temporary hack, until we have a real tuple type for calling
     #def tuple(self, w_obj):
@@ -20,16 +20,15 @@ class Builtin(BuiltinModule):
     #    return w_res
     #tuple = appmethod(tuple)
 
-    def _actframe(self):
-        return self.space.getexecutioncontext().framestack.top()
-
+    def _actframe(self, index=-1):
+        return self.space.getexecutioncontext().framestack.items[index]
 
     def globals(self):
         return self._actframe().w_globals
     globals = appmethod(globals)
 
     def locals(self):
-        return self._actframe().w_locals
+        return self._actframe().w_globals
     locals = appmethod(locals)
 
 
@@ -93,6 +92,27 @@ class Builtin(BuiltinModule):
         res._from_code(c)
         return space.wrap(res)
     compile = appmethod(compile)
+
+    def execfile(self, w_filename, w_globals, w_locals):
+        space = self.space
+        #XXX why do i have to check against space.w_None instead of None?
+        #    above the compile commands *does* check against None
+        if w_globals is None or w_globals is space.w_None:
+            w_globals = self._actframe().w_globals
+        if w_locals is None or w_globals is space.w_None: 
+            w_locals = w_globals
+
+        filename = space.unwrap(w_filename)
+        s = open(filename).read()
+        c = _b.compile(s, filename, 'exec', 4096) # XXX generators 
+        res = pycode.PyByteCode()
+        res._from_code(c)
+
+        res.eval_code(space, w_globals, w_locals)
+        return space.w_None
+
+    execfile = appmethod(execfile)
+
 
 
     ####essentially implemented by the objectspace
@@ -178,10 +198,8 @@ class Builtin(BuiltinModule):
 
     # we have None! But leave these at the bottom, otherwise the default
     # arguments of the above-defined functions will see this new None...
-    None = appdata(_b.None)
-    # XXX Add these for Ann space.
-    TypeError = appdata(_b.TypeError)
-    type = appdata(_b.type)
+    #None = appdata(_b.None)
+
 ##    False = appdata(_b.False)
 ##    True = appdata(_b.True)
 ##    dict = appdata(_b.dict)   # XXX temporary

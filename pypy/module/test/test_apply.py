@@ -1,38 +1,31 @@
 import autopath
 
-from pypy.module.builtin_app import apply, min, max
 from pypy.tool import test
-
-def myminmax(*arr, **dict):
-   # trivial function which has the signature *args, **kw
-   v = list(arr) + dict.values()
-   return min(v), max(v)
-  
-class TestApply(test.TestCase):
-
-   def setUp(self):
-      pass
-  
-   def tearDown(self):
-      pass
 
 # This is a very trivial series of tests.  If apply is subtlely broken,
 # we will have to find out some other way.
-      
+  
+class TestApply(test.AppTestCase):
+
    def test_trivial_listonly(self):
-      self.assertEqual(apply(myminmax,
-                             [-1,-2,-3,-4]),
-                             (-4, -1))
+      def mymin(*args):
+           return min(list(args))
+
+      self.assertEqual(apply(mymin, [-1,-2,-3,-4]), -4)
 
    def test_trivial_dictonly(self):
-      self.assertEqual(apply(myminmax,
+      def mymin(*arr, **kwargs):
+           return min(list(arr) + kwargs.values())
+      self.assertEqual(apply(mymin,
                              [], {'null' : 0, 'one': 1, 'two' : 2}),
-                             (0, 2))
+                             0)
    def test_trivial(self):
-      self.assertEqual(apply(myminmax,
+      def mymin(*arr, **kwargs):
+           return min(list(arr) + kwargs.values())
+      self.assertEqual(apply(mymin,
                              [-1,-2,-3,-4],
                              {'null' : 0, 'one': 1, 'two' : 2}),
-                             (-4, 2))
+                             (-4))
 
 if __name__ == '__main__':
     test.main()

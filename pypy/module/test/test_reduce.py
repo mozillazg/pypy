@@ -1,8 +1,7 @@
 import autopath
-from pypy.module.builtin_app import reduce
 from pypy.tool import test
 
-class TestReduce(test.TestCase):
+class TestReduce(test.AppTestCase):
    def test_None(self):
        self.assertRaises(TypeError, reduce, lambda x, y: x+y, [1,2,3], None)
 
