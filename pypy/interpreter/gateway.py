@@ -409,9 +409,6 @@ class interp2app(Wrappable):
                 defs_w.append(space.wrap(val))
         return defs_w
 
-    def _getglobals(self, space):
-        return None
-
     # lazy binding to space
 
     def __spacebind__(self, space):
@@ -450,7 +447,7 @@ class interp2app(Wrappable):
         except KeyError: 
             defs = self._getdefaults(space)  # needs to be implemented by subclass
             code = self._code
-            fn = Function(space, code, self._getglobals(space), defs, forcename = self.name)
+            fn = Function(space, code, None, defs, forcename = self.name)
             cache.content[self] = fn 
             return fn
 
