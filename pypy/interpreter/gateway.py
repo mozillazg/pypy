@@ -602,35 +602,36 @@ class applevel:
         "NOT_RPYTHON"
         self.code = py.code.Source(source).compile()
 
-    def getdict(self, space):
-        return space.loadfromcache(self, applevel.builddict,
+    def getwdict(self, space):
+        return space.loadfromcache(self, applevel._builddict,
                                    space._gatewaycache)
 
     def buildmodule(self, space, name='applevel'):
         from pypy.interpreter.module import Module
-        return Module(space, space.wrap(name), self.getdict(space))
+        return Module(space, space.wrap(name), self.getwdict(space))
 
-    def builddict(self, space):
+    def _builddict(self, space):
         "NOT_RPYTHON"
         w_glob = space.newdict([])
         space.exec_(self.code, w_glob, w_glob)
         return w_glob
+    
+    def wget(self, space, name): 
+        w_globals = self.getwdict(space) 
+        return space.getitem(w_globals, space.wrap(name))
 
     def interphook(self, name):
         "NOT_RPYTHON"
         def appcaller(space, *args_w):
-            w_glob = self.getdict(space)
-            w_func = space.getitem(w_glob, space.wrap(name))
             args = Arguments(space, args_w)
+            w_func = self.wget(space, name) 
             return space.call_args(w_func, args)
         def get_function(space):
-            w_glob = self.getdict(space)
-            w_func = space.getitem(w_glob, space.wrap(name))
+            w_func = self.wget(space, name) 
             return space.unwrap(w_func)
         appcaller = hack.func_with_new_name(appcaller, name)
         appcaller.get_function = get_function
         return appcaller
-
 
 def appdef(source, applevel=applevel):
     """ NOT_RPYTHON: build an app-level helper function, like for example:
@@ -654,8 +655,8 @@ app2interp = appdef   # backward compatibility
 
 # app2interp_temp is used for testing mainly
 class applevel_temp(applevel):
-    def getdict(self, space):
-        return self.builddict(space)   # no cache
+    def getwdict(self, space):
+        return self._builddict(space)   # no cache
 
 def app2interp_temp(func):
     """ NOT_RPYTHON """
