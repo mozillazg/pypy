@@ -676,7 +676,7 @@ def appdef(source, overridename=None):
     wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
     source = py.code.Source("""\
         def %s(space, %s):
-            # HERE we inject the defhandlingsource below 
+            # HERE we inject the defaultargs-handling below 
             pypyco = PyCode(space)._from_code(newco) 
             w_glob = space.newdict([])
             frame = pypyco.create_frame(space, w_glob) 
@@ -684,6 +684,7 @@ def appdef(source, overridename=None):
             return frame.run() 
     """ % (funcname, wfuncdecl, wfastscope))
     source.lines[1:2] = defaulthandlingsource.indent().lines 
+    print str(source)
     glob = {
         'newco' : newco, 
         'PyCode': PyCode, 
@@ -722,3 +723,5 @@ def specialargparse(decl):
     wfuncdecl = ", ".join(wfuncargs) 
     wfastdecl = ", ".join(wfastnames)
     return wfuncdecl, wfastdecl, defaulthandlingsource 
+
+app2interp = appdef 
