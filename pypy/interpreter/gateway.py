@@ -15,9 +15,141 @@ import types, sys
 from pypy.interpreter.error import OperationError 
 from pypy.interpreter import eval, pycode
 from pypy.interpreter.function import Function, Method
-from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.baseobjspace import W_Root,ObjSpace,Wrappable
 from pypy.interpreter.argument import Arguments
 from pypy.tool.cache import Cache 
+
+class Signature:
+    def __init__(self, func=None, argnames=None, varargname=None, kwargname=None):
+        self.func = func
+        if argnames is None:
+            argnames = []
+        self.argnames = argnames
+        self.varargname = varargname
+        self.kwargname = kwargname
+        self.rewind()
+
+    def rewind(self):
+        self._iter = iter(self.argnames)
+        
+    def __iter__(self):
+        return self
+
+    def next(self):
+        return self._iter.next()
+
+    def append(self, argname):
+        self.argnames.append(argname)
+
+    def signature(self):
+        return self.argnames, self.varargname, self.kwargname
+
+def parse_unwrap_spec(unwrap_spec, func, argnames, varargname, kwargname,
+                      new_sig):
+    orig_sig = Signature(func, argnames, varargname, kwargname)
+
+    for el in unwrap_spec:
+        to_unwrap_spec_element[el](orig_sig, new_sig)
+
+    return new_sig
+
+
+class BuiltinCodeSignature(Signature):
+
+    def __init__(self,*args,**kwds):
+        Signature.__init__(self,*args,**kwds)
+        self.setfastscope = []
+        self.run_args = []
+        self.through_scope_w = 0
+
+
+    def make_frame_class(self):
+        setfastscope = self.setfastscope
+        if not setfastscope:
+            setfastscope = ["pass"]
+        setfastscope = ["def setfastscope(self, scope_w):"] + setfastscope
+        setfastscope = '\n  '.join(setfastscope)
+        d = {}
+        exec setfastscope in globals(),d
+        exec """
+def run(self):
+    w_result = self.code.func(%s)
+    if w_result is None:
+        w_result = self.space.w_None
+    return w_result
+""" % ','.join(self.run_args) in globals(),d
+        return type("BuiltinFrame_for_%s" % self.func.__name__,
+                    (BuiltinFrame,),d)
+        
+    
+def unwrap_spec_space(orig_sig, new_sig):
+    orig_sig.next()
+    #
+    new_sig.run_args.append('self.space')
+    
+def unwrap_spec_self(orig_sig, new_sig):
+    argname = orig_sig.next()
+    new_sig.append(argname)
+    #
+    new_sig.setfastscope.append(
+        "self.arg_%s = self.space.unwrap_builtin(scope_w[%d])" %
+            (argname, new_sig.through_scope_w))
+    new_sig.through_scope_w += 1
+    new_sig.run_args.append("self.arg_%s" % argname)
+        
+        
+def unwrap_spec_wrapped(orig_sig, new_sig):
+    argname = orig_sig.next()
+    assert argname.startswith('w_'), (
+        "argument %s of built-in function %r should "
+        "start with 'w_'" % (argname, orig_sig.func))
+    new_sig.append(argname[2:])
+    #
+    new_sig.setfastscope.append(
+        "self.arg_%s = scope_w[%d]" % (argname, new_sig.through_scope_w))
+    new_sig.through_scope_w += 1
+    new_sig.run_args.append("self.arg_%s" % argname)
+
+def unwrap_spec_arguments(orig_sig, new_sig):
+    argname = orig_sig.next()
+    assert new_sig.varargname is None,(
+        "built-in function %r has conflicting rest args specs" % orig_sig.func)
+    new_sig.varargname = 'args'
+    new_sig.kwargname = 'keywords'
+    #
+    cur = new_sig.through_scope_w
+    next = cur+1
+    new_sig.through_scope_w += 2
+    new_sig.setfastscope.append(
+        "self.arg_%s = "
+        "Arguments.frompacked(self.space,scope_w[%d],scope_w[%d])"
+            % (argname, cur, next))
+    new_sig.run_args.append("self.arg_%s" % argname)
+        
+def unwrap_spec_starargs(orig_sig, new_sig):
+    varargname = orig_sig.varargname
+    assert varargname.endswith('_w'), (
+        "argument *%s of built-in function %r should end in '_w'" %
+        (varargname, orig_sig.func))
+    assert new_sig.varargname is None,(
+        "built-in function %r has conflicting rest args specs" % orig_sig.func)
+    new_sig.varargname = varargname[:-2]
+    #
+    new_sig.setfastscope.append(
+        "self.arg_%s = self.space.unpacktuple(scope_w[%d])" %
+            (varargname, new_sig.through_scope_w))
+    new_sig.through_scope_w += 1
+    new_sig.run_args.append("*self.arg_%s" % varargname)
+        
+
+to_unwrap_spec_element = {
+    ObjSpace: unwrap_spec_space,
+    'self': unwrap_spec_self,
+    W_Root: unwrap_spec_wrapped,
+    Arguments: unwrap_spec_arguments,
+    '*': unwrap_spec_starargs,
+}
+
 
 class BuiltinCode(eval.Code):
     "The code object implementing a built-in (interpreter-level) hook."
@@ -25,7 +157,7 @@ class BuiltinCode(eval.Code):
     # When a BuiltinCode is stored in a Function object,
     # you get the functionality of CPython's built-in function type.
 
-    def __init__(self, func, ismethod=None, spacearg=None):
+    def __init__(self, func, ismethod=None, spacearg=None, unwrap_spec = None):
         "NOT_RPYTHON"
         # 'implfunc' is the interpreter-level function.
         # Note that this uses a lot of (construction-time) introspection.
@@ -41,50 +173,63 @@ class BuiltinCode(eval.Code):
         # Not exactly a clean approach XXX.
         # First extract the signature from the (CPython-level) code object
         argnames, varargname, kwargname = pycode.cpython_code_signature(func.func_code)
-        argnames = list(argnames)
-        lookslikemethod = argnames[:1] == ['self']
-        if ismethod is None:
-            ismethod = lookslikemethod
-        if spacearg is None:
-            spacearg = not lookslikemethod
-        self.ismethod = ismethod
-        self.spacearg = spacearg
-        if spacearg:
-            del argnames[0]
+        if unwrap_spec is None:
 
-        assert kwargname is None, (
-            "built-in function %r should not take a ** argument" % func)
+            unwrap_spec = []
 
-        self.generalargs = argnames[-1:] == ['__args__']
-        self.starargs = varargname is not None
-        assert not (self.generalargs and self.starargs), (
-            "built-in function %r has both __args__ and a * argument" % func)
-        if self.generalargs:
-            del argnames[-1]
-            varargname = "args"
-            kwargname = "keywords"
-        elif self.starargs:
-            assert varargname.endswith('_w'), (
-                "argument *%s of built-in function %r should end in '_w'" %
-                (varargname, func))
-            varargname = varargname[:-2]
+            argnames = list(argnames)
+            lookslikemethod = argnames[:1] == ['self']
+            if ismethod is None:
+                ismethod = lookslikemethod
+            if spacearg is None:
+                spacearg = not lookslikemethod
+            self.ismethod = ismethod
+            self.spacearg = spacearg
+            assert kwargname is None, (
+                "built-in function %r should not take a ** argument" % func)
 
-        for i in range(ismethod, len(argnames)):
-            a = argnames[i]
-            assert a.startswith('w_'), (
-                "argument %s of built-in function %r should "
-                "start with 'w_'" % (a, func))
-            argnames[i] = a[2:]
+            n = len(argnames)
 
-        self.sig = argnames, varargname, kwargname
+            if self.ismethod:
+                unwrap_spec.append('self')
+                n -= 1
+            if self.spacearg:
+                unwrap_spec.append(ObjSpace)
+                n -= 1
+
+            self.generalargs = argnames[-1:] == ['__args__']
+            self.starargs = varargname is not None
+
+            if self.generalargs:
+                unwrap_spec.extend([W_Root] * (n-1))
+                unwrap_spec.append(Arguments)
+            else:
+                unwrap_spec.extend([W_Root] * n)
+
+            if self.starargs:
+                unwrap_spec.append('*')
+        else:
+            assert ismethod is None,("if unwrap_spec is specified,"
+                                     "ismethod is not expected")
+            assert spacearg is None,("if unwrap_spec is specified,"
+                                     "spacearg is not expected")
+
+        new_sig = parse_unwrap_spec(unwrap_spec, func, argnames,
+                                    varargname, kwargname,
+                                    BuiltinCodeSignature(func))
+
+        self.sig = argnames, varargname, kwargname = new_sig.signature()
+
         self.minargs = len(argnames)
         if self.starargs:
             self.maxargs = sys.maxint
         else:
             self.maxargs = self.minargs
 
+        self.framecls = new_sig.make_frame_class()
+
     def create_frame(self, space, w_globals, closure=None):
-        return BuiltinFrame(space, self, w_globals)
+        return self.framecls(space, self, w_globals)
 
     def signature(self):
         return self.sig
@@ -100,21 +245,23 @@ class BuiltinFrame(eval.Frame):
     # via the interface defined in eval.Frame.
 
     def setfastscope(self, scope_w):
-        argarray = list(scope_w)
-        if self.code.generalargs:
-            w_kwds = argarray.pop()
-            w_args = argarray.pop()
-            argarray.append(Arguments.frompacked(self.space, w_args, w_kwds))
-        elif self.code.starargs:
-            w_args = argarray.pop()
-            argarray += self.space.unpacktuple(w_args)
-        if self.code.ismethod:
-            argarray[0] = self.space.unwrap_builtin(argarray[0])
-        self.argarray = argarray
+        pass
+##         argarray = list(scope_w)
+##         if self.code.generalargs:
+##             w_kwds = argarray.pop()
+##             w_args = argarray.pop()
+##             argarray.append(Arguments.frompacked(self.space, w_args, w_kwds))
+##         elif self.code.starargs:
+##             w_args = argarray.pop()
+##             argarray += self.space.unpacktuple(w_args)
+##         if self.code.ismethod:
+##             argarray[0] = self.space.unwrap_builtin(argarray[0])
+##         self.argarray = argarray
 
     def getfastscope(self):
-        raise OperationError(self.space.w_TypeError,
-          self.space.wrap("cannot get fastscope of a BuiltinFrame"))
+        pass
+##         raise OperationError(self.space.w_TypeError,
+##           self.space.wrap("cannot get fastscope of a BuiltinFrame"))
 
     def run(self):
         argarray = self.argarray
