@@ -21,7 +21,9 @@ def compile(space, w_str_, filename, startstr,
     if not dont_inherit:
         try:
             frame = space.call_function(space.sys.get('_getframe')) 
-        except IndexError:
+        except OperationError, e: 
+            if not e.match(space, space.w_ValueError): 
+                raise 
             pass
         else:
             supplied_flags |= frame.get_compile_flags()
