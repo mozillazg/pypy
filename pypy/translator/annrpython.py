@@ -1,10 +1,10 @@
 from __future__ import generators
 
-from types import FunctionType
+from types import FunctionType, ClassType
 from pypy.annotation import model as annmodel
 from pypy.annotation.model import pair
-from pypy.annotation.factory import ListFactory
-from pypy.annotation.factory import BlockedInference, NeedGeneralization
+from pypy.annotation.factory import ListFactory, InstanceFactory
+from pypy.annotation.factory import BlockedInference
 from pypy.objspace.flow.model import Variable, Constant, UndefinedConstant
 from pypy.objspace.flow.model import SpaceOperation
 
@@ -23,6 +23,7 @@ class RPythonAnnotator:
         self.annotated = {}      # set of blocks already seen
         self.creationpoints = {} # map positions-in-blocks to Factories
         self.translator = translator
+        self.userclasses = {}    # set of user classes
 
     #___ convenience high-level interface __________________
 
@@ -55,6 +56,18 @@ class RPythonAnnotator:
             raise TypeError, ("Variable or Constant instance expected, "
                               "got %r" % (variable,))
 
+    def getuserclasses(self):
+        """Return a set of known user classes."""
+        return self.userclasses
+
+    def getuserattributes(self, cls):
+        """Enumerate the attributes of the given user class, as Variable()s."""
+        clsdef = self.userclasses[cls]
+        for attr, s_value in clsdef.attrs.items():
+            v = Variable(name=attr)
+            self.bindings[v] = s_value
+            yield v
+
 
     #___ medium-level interface ____________________________
 
@@ -73,7 +86,7 @@ class RPythonAnnotator:
             self.processblock(block, cells)
         if False in self.annotated.values():
             raise AnnotatorError('%d blocks are still blocked' %
-                                 len(self.annotated.values().count(False)))
+                                 self.annotated.values().count(False))
 
     def binding(self, arg):
         "Gives the SomeValue corresponding to the given Variable or Constant."
@@ -85,10 +98,6 @@ class RPythonAnnotator:
             return annmodel.immutablevalue(arg.value)
         else:
             raise TypeError, 'Variable or Constant expected, got %r' % (arg,)
-
-    def constant(self, value):
-        "Turn a value into a SomeValue with the proper annotations."
-        return annmodel.immutablevalue(arg.value)
 
 
     #___ simplification (should be moved elsewhere?) _______
@@ -149,12 +158,13 @@ class RPythonAnnotator:
             try:
                 self.flowin(block)
             except BlockedInference, e:
+                #print '_'*60
+                #print 'Blocked at %r:' % (self.curblockpos,)
+                #import traceback, sys
+                #traceback.print_tb(sys.exc_info()[2])
                 self.annotated[block] = False   # failed, hopefully temporarily
                 for factory in e.invalidatefactories:
                     self.reflowpendingblock(factory.block)
-            else:
-                return True   # progressed
-        return False
 
     def reflowpendingblock(self, block):
         self.pendingblocks.append((block, None))
@@ -178,21 +188,19 @@ class RPythonAnnotator:
 
     def flowin(self, block):
         #print 'Flowing', block, [self.binding(a) for a in block.inputargs]
-        if block.operations:
-            for i in range(len(block.operations)):
-                self.curblockpos = block, i
-                self.consider_op(block.operations[i])
-            del self.curblockpos
+        for i in range(len(block.operations)):
+            self.curblockpos = block, i
+            self.consider_op(block.operations[i])
         for link in block.exits:
             cells = [self.binding(a) for a in link.args]
             self.addpendingblock(link.target, cells)
 
-    def getfactory(self, factorycls):
+    def getfactory(self, factorycls, *factoryargs):
         try:
             factory = self.creationpoints[self.curblockpos]
         except KeyError:
             block = self.curblockpos[0]
-            factory = factorycls()
+            factory = factorycls(*factoryargs)
             factory.block = block
             self.creationpoints[self.curblockpos] = factory
         # self.curblockpos is an arbitrary key that identifies a specific
@@ -278,11 +286,13 @@ def consider_op_%s(self, arg1, arg2, *args):
         elif isinstance(func, FunctionType) and self.translator:
             args = self.decode_simple_call(s_varargs, s_kwargs)
             return self.translator.consider_call(self, func, args)
+        elif (isinstance(func, (type, ClassType)) and
+              func.__module__ != '__builtin__'):
+            # XXX flow into __init__/__new__
+            factory = self.getfactory(InstanceFactory, func, self.userclasses)
+            return factory.create()
         elif isinstance(func,type):
             return annmodel.valueoftype(func)
-##            # XXX flow into __init__/__new__
-##            if func.__module__ != '__builtin__':
-##                self.userclasses.setdefault(func, {})
         return annmodel.SomeObject()
 
 

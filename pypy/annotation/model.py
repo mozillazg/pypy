@@ -45,7 +45,7 @@ class SomeObject:
         kwds = ', '.join(['%s=%r' % item for item in self.__dict__.items()])
         return '%s(%s)' % (self.__class__.__name__, kwds)
     def contains(self, other):
-        return pair(self, other).union() == self
+        return self == other or pair(self, other).union() == self
     def is_constant(self):
         return hasattr(self, 'const')
 
@@ -80,6 +80,13 @@ class SomeTuple(SomeObject):
         self.items = tuple(items)   # tuple of s_xxx elements
     def len(self):
         return immutablevalue(len(self.items))
+
+class SomeInstance(SomeObject):
+    "Stands for an instance of a (user-defined) class."
+    def __init__(self, classdef):
+        self.classdef = classdef
+        self.knowntype = classdef.cls
+        self.revision = classdef.revision
 
 class SomeImpossibleValue(SomeObject):
     """The empty set.  Instances are placeholders for objects that
