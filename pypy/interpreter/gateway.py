@@ -598,6 +598,8 @@ class applevel:
     interp-level function that invokes the callable with the given
     name at app-level."""
 
+    NOT_RPYTHON_ATTRIBUTES = ['code']
+
     def __init__(self, source):
         "NOT_RPYTHON"
         self.code = py.code.Source(source).compile()

@@ -35,6 +35,11 @@ def go_figure_out_this_name(source):
     return 'PyRun_String("%s", Py_eval_input, PyEval_GetGlobals(), NULL)' % (
         source, )
 
+def builtin_base(obj):
+    typ = type(obj)
+    while typ.__module__ != '__builtin__':
+        typ = typ.__base__
+    return typ
 
 class GenC:
     MODNAMES = {}
@@ -71,8 +76,8 @@ class GenC:
             else:
                 stackentry = obj
             self.debugstack = (self.debugstack, stackentry)
-            if (type(obj).__module__ != '__builtin__' and
-                not isinstance(obj, type)):   # skip user-defined metaclasses
+            obj_builtin_base = builtin_base(obj)
+            if obj_builtin_base in (object, int, long) and type(obj) is not obj_builtin_base:
                 # assume it's a user defined thingy
                 name = self.nameof_instance(obj)
             else:
