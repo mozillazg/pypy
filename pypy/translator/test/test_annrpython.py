@@ -165,7 +165,7 @@ class AnnonateTestCase(testit.IntTestCase):
 
     def test_inheritance2(self):
         a = RPythonAnnotator()
-        s = a.build_types(snippet.inheritance_nonrunnable, [])
+        s = a.build_types(snippet._inheritance_nonrunnable, [])
         # result should be exactly:
         self.assertEquals(s, annmodel.SomeTuple([
                                 annmodel.SomeInteger(),
@@ -181,7 +181,7 @@ class AnnonateTestCase(testit.IntTestCase):
 
     def test_methodcall1(self):
         a = RPythonAnnotator()
-        s = a.build_types(snippet.methodcall1, [int])
+        s = a.build_types(snippet._methodcall1, [int])
         # result should be a tuple of (C, positive_int)
         self.assertEquals(s.knowntype, tuple)
         self.assertEquals(len(s.items), 2)
@@ -191,7 +191,7 @@ class AnnonateTestCase(testit.IntTestCase):
 
     def test_classes_methodcall1(self):
         a = RPythonAnnotator()
-        a.build_types(snippet.methodcall1, [int])
+        a.build_types(snippet._methodcall1, [int])
         # the user classes should have the following attributes:
         classes = a.bookkeeper.userclasses
         self.assertEquals(classes[snippet.F].attrs.keys(), ['m'])
@@ -207,7 +207,7 @@ class AnnonateTestCase(testit.IntTestCase):
 
     def test_somebug1(self):
         a = RPythonAnnotator()
-        s = a.build_types(snippet.somebug1, [int])
+        s = a.build_types(snippet._somebug1, [int])
         # result should be a built-in method
         self.assert_(isinstance(s, annmodel.SomeBuiltin))
 

@@ -19,99 +19,23 @@ list should suffice.
 
 But for now, none of the above applies.
 """
-function_info={
- 'append_five':{'arg_names': ['lst'],'arg_types':[list],
-               'name': 'append_five'},
- 'branch_id': {'arg_names': ['cond', 'a', 'b'],'arg_types':[int,int,int],
-               'name': 'branch_id'},
- 'break_continue': {'arg_names': ['x'],'arg_types':[int],
-                    'name': 'break_continue'},
- 'build_instance': {'arg_names': [],'arg_types':[],
-                    'name': 'build_instance'},
- 'builtinusage': {'arg_names': [],'arg_types':[],
-                  'name': 'builtinusage'},
- 'call_five': {'arg_names': [],'arg_types':[],
-                    'name': 'call_five'},
- 'choose_last': {'arg_names': [],'arg_types':[],
-                 'name': 'choose_last'},
- 'factorial': {'arg_names': ['n'],'arg_types':[int],
-               'name': 'factorial'},
- 'factorial2': {'arg_names': ['n'],'arg_types':[int],
-                'name': 'factorial2'},
- 'finallys': {'arg_names': ['lst'],'arg_types':[list],
-              'name': 'finallys'},
- 'greet': {'arg_names': ['target'],'arg_types':[str],
-           'name': 'greet'},
- 'half_of_n': {'arg_names': ['n'],'arg_types':[int],
-               'name': 'half_of_n'},
- 'if_then_else': {'arg_names': ['cond', 'x', 'y'],
-                     'arg_types':[object,object,object],
-                  'name': 'if_then_else'},
- 'inheritance1': {'arg_names': [],'arg_types':[],
-                  'name': 'inheritance1'},
- 'inheritance2': {'arg_names': [],'arg_types':[],
-                  'name': 'inheritance2'},
- #'inheritance_nonrunnable': {'arg_names': [],'arg_types':[],
- #                            'name': 'inheritance_nonrunnable'},
- 'int_id': {'arg_names': ['x'],'arg_types':[int],
-            'name': 'int_id'},
- 'is_perfect_number': {'arg_names': ['i'],'arg_types':[int],
-                    'name': 'is_perfect_number'},
- 'knownkeysdict': {'arg_names': ['b'],'arg_types':[object],
-                   'name': 'knownkeysdict'},
- 'merge_setattr': {'arg_names': ['x'],'arg_types':[object],
-                   'name': 'merge_setattr'},
-# 'methodcall1': {'arg_names': ['cond'],'arg_types':[int],
-#                   'name': 'methodcall1'},
- 'my_bool': {'arg_names': ['x'],'arg_types':[object],
-             'name': 'my_bool'},
- 'my_gcd': {'arg_names': ['a', 'b'],'arg_types':[int,int],
-            'name': 'my_gcd'},
- 'nested_whiles': {'arg_names': ['i', 'j'],'arg_types':[int,int],
-                   'name': 'nested_whiles'},
- 'poly_branch': {'arg_names': ['x'],'arg_types':[object],
-                 'name': 'poly_branch'},
- 'poor_man_range': {'arg_names': ['i'],'arg_types':[int],
-                    'name': 'poor_man_range'},
- 'poor_man_rev_range': {'arg_names': ['i'],'arg_types':[int],
-                    'name': 'poor_man__rev_range'},
- 'powerset': {'arg_names': ['x'],'arg_types':[int],
-                 'name': 'powerset'},
- 'prime': {'arg_names': ['n'],'arg_types':[int],
-           'name': 'prime'},
- 'reverse_3': {'arg_names': ['lst'],'arg_types':[list],
-               'name': 'reverse_3'},
- 's_and': {'arg_names': ['x', 'y'],'arg_types':[object,object],
-           'name': 's_and'},
- 'set_attr': {'arg_names': [],'arg_types':[],
-              'name': 'set_attr'},
- 'sieve_of_eratosthenes': {'arg_names': [],'arg_types':[],
-                           'name': 'sieve_of_eratosthenes'},
- 'simple_func': {'arg_names': ['i'],'arg_types':[int],
-                 'name': 'simple_func'},
- 'simple_id': {'arg_names': ['x'],'arg_types':[object],
-               'name': 'simple_id'},
- 'simple_method': {'arg_names': ['v'],'arg_types':[object],
-                   'name': 'simple_method'},
-# 'somebug1': {'arg_names': ['n'],'arg_types':[int],
-#              'name': 'somebug1'},
- 'time_waster': {'arg_names': ['n'],'arg_types':[int],
-                 'name': 'time_waster'},
- 'two_plus_two': {'arg_names': [],'arg_types':[],
-                  'name': 'two_plus_two'},
- 'while_func': {'arg_names': ['i'],'arg_types':[int],
-                'name': 'while_func'},
- 'yast': {'arg_names': ['lst'],'arg_types':[list],
-          'name': 'yast'}
- }
 
-def if_then_else(cond, x, y):
+# we define the starting types in the snippet 
+# function's default arguments.  the following
+# definitions denote to the "test-generator"
+# the possible types that can be passed to
+# the specific snippet. 
+numtype = (int, float, ) 
+anytype = (int, float, str, )
+seqtype = (list, tuple) 
+
+def if_then_else(cond=anytype, x=anytype, y=anytype):
     if cond:
         return x
     else:
         return y
 
-def my_gcd(a, b):
+def my_gcd(a=numtype, b=numtype):
     r = a % b
     while r:
         a = b
@@ -119,7 +43,7 @@ def my_gcd(a, b):
         r = a % b
     return b
 
-def is_perfect_number(n):
+def is_perfect_number(n=int):
     div = 1
     sum = 0
     while div < n:
@@ -128,7 +52,7 @@ def is_perfect_number(n):
         div += 1
     return n == sum
 
-def my_bool(x):
+def my_bool(x=int):
     return not not x
 
 def two_plus_two():
@@ -160,17 +84,17 @@ def sieve_of_eratosthenes():
         i = i + 1
     return count
 
-def simple_func(i):
+def simple_func(i=numtype):
     return i + 1
 
-def while_func(i):
+def while_func(i=numtype):
     total = 0
     while i > 0:
         total = total + i
         i = i - 1
     return total
 
-def nested_whiles(i, j):
+def nested_whiles(i=int, j=int):
     s = ''
     z = 5
     while z > 0:
@@ -182,7 +106,7 @@ def nested_whiles(i, j):
         s = s + '!'
     return s
 
-def poor_man_range(i):
+def poor_man_range(i=int): 
     lst = []
     while i > 0:
         i = i - 1
@@ -190,17 +114,17 @@ def poor_man_range(i):
     lst.reverse()
     return lst
 
-def poor_man_rev_range(i):
+def poor_man_rev_range(i=int): 
     lst = []
     while i > 0:
         i = i - 1
         lst += [i]
     return lst
 
-def simple_id(x):
+def simple_id(x=anytype): 
     return x
 
-def branch_id(cond, a, b):
+def branch_id(cond=anytype, a=anytype, b=anytype):
     while 1:
         if cond:
             return a
@@ -210,13 +134,13 @@ def branch_id(cond, a, b):
 def builtinusage():
     return pow(2, 2)
 
-def yast(lst):
+def yast(lst=seqtype):
     total = 0
     for z in lst:
         total = total + z
     return total
 
-def time_waster(n):
+def time_waster(n=int):
     """Arbitrary test function"""
     i = 0
     x = 1
@@ -228,7 +152,7 @@ def time_waster(n):
         i = i + 1
     return x
 
-def half_of_n(n):
+def half_of_n(n=int):
     """Slice test"""
     i = 0
     lst = range(n)
@@ -237,13 +161,13 @@ def half_of_n(n):
         i = i + 1
     return i
 
-def int_id(x):
+def int_id(x=int):
     i = 0
     while i < x:
         i = i + 1
     return i
 
-def greet(target):
+def greet(target=str):
     """String test"""
     hello = "hello"
     return hello + target
@@ -255,7 +179,7 @@ def choose_last():
         pass
     return choice
 
-def poly_branch(x):
+def poly_branch(x=int):
     if x:
         y = [1,2,3]
     else:
@@ -264,13 +188,13 @@ def poly_branch(x):
     z = y
     return z*2
 
-def s_and(x, y):
+def s_and(x=anytype, y=anytype):
     if x and y:
         return 'yes'
     else:
         return 'no'
 
-def break_continue(x):
+def break_continue(x=numtype):
     result = []
     i = 0
     while 1:
@@ -285,14 +209,14 @@ def break_continue(x):
         i = i + 1
     return result
 
-def reverse_3(lst):
+def reverse_3(lst=seqtype):
     try:
         a, b, c = lst
     except:
         return 0, 0, 0
     return c, b, a
 
-def finallys(lst):
+def finallys(lst=seqtype):
     x = 1
     try:
         x = 2
@@ -310,28 +234,27 @@ def finallys(lst):
         x = 8
     return x
 
-def factorial(n):
+def factorial(n=int):
     if n <= 1:
         return 1
     else:
         return n * factorial(n-1)
 
-def factorial2(n):   # analysed in a different order
+def factorial2(n=int):   # analysed in a different order
     if n > 1:
         return n * factorial(n-1)
     else:
         return 1
 
-def append_five(lst):
+def _append_five(lst): 
     lst += [5]
-    
 
 def call_five():
     a = []
-    append_five(a)
+    _append_five(a)
     return a
 
-
+# INHERITANCE / CLASS TESTS  
 class C(object): pass
 
 def build_instance():
@@ -370,7 +293,7 @@ def inheritance2():
     d.stuff = (-12, -12)
     e = E()
     e.stuff = (3, "world")
-    return getstuff(d), getstuff(e)
+    return _getstuff(d), _getstuff(e)
 
 class F:
     pass
@@ -384,7 +307,7 @@ class H(F):
         self.attr = 1
         return E(), y
 
-def knownkeysdict(b):
+def knownkeysdict(b=anytype):
     if b:
         d = {'a': 0}
         d['b'] = b
@@ -393,7 +316,7 @@ def knownkeysdict(b):
         d = {'b': -123}
     return d['b']
 
-def prime(n):
+def prime(n=int):
     return len([i for i in range(1,n+1) if n%i==0]) == 2
 
 
@@ -401,13 +324,13 @@ class Z:
     def my_method(self):
         return self.my_attribute
 
-def simple_method(v):
+def simple_method(v=anytype):
     z = Z()
     z.my_attribute = v
     return z.my_method()
 
 
-def powerset(setsize):
+def powerset(setsize=int):
     """Powerset
 
     This one is from a Philippine Pythonista Hangout, an modified
@@ -439,14 +362,15 @@ def powerset(setsize):
 
 # --------------------(Currently) Non runnable Functions ---------------------
 
-def somebug1(n):
+def _somebug1(n=int):
     l = []
     v = l.append
     while n:
-        l[7] = 5
+        l[7] = 5 # raises an exception 
+        break 
     return v
 
-def inheritance_nonrunnable():
+def _inheritance_nonrunnable():
     d = D()
     d.stuff = (-12, -12)
     e = E()
@@ -455,16 +379,16 @@ def inheritance_nonrunnable():
 
 # --------------------(Currently) Non compillable Functions ---------------------
 
-def attrs():
+def _attrs():
     def b(): pass
     b.f = 4
     b.g = 5
     return b.f + b.g
 
-def getstuff(x):
+def _getstuff(x):
     return x.stuff
 
-def methodcall1(cond):
+def _methodcall1(cond):
     if cond:
         x = G()
     else:
