@@ -125,12 +125,12 @@ d['failUnless'] = d['assert_']
                         
 
 d['failIf'] = {'new': 'assert not',
-               'change type': fail_special,
+               'change type': strip_parens,
                'op': None}
 
 d['fail'] = {'old': 'fail',
              'new': 'raise AssertionError ',
-             'change type': strip_parens,
+             'change type': fail_special,
              'op': None}
 
 """
@@ -312,7 +312,7 @@ class Testit(unittest.TestCase):
         
         self.assertEquals(process_block(
             r"""
-            self.assert_(0 + 0
+            self.failIf(0 + 0
                          + len('badger\n')
                          + 0, '''badger badger badger badger
                                  mushroom mushroom
@@ -321,7 +321,7 @@ class Testit(unittest.TestCase):
             """
             ),
             r"""
-            assert 0 + 0\
+            assert not 0 + 0\
                          + len('badger\n')\
                          + 0, '''badger badger badger badger
                                  mushroom mushroom
