@@ -52,6 +52,7 @@ class FlowObjSpace(ObjSpace):
         self.specialcases = {}
         #self.make_builtins()
         #self.make_sys()
+        self.w_sys = self.wrap(sys)
 
     def loadfromcache(self, key, builder, cache):
         # when populating the caches, the flow space switches to
