@@ -51,7 +51,7 @@ class PyPyConsole(code.InteractiveConsole):
     def runcode(self, code):
         # 'code' is a CPython code object
         from pypy.interpreter.pycode import PyCode
-        pycode = PyCode()._from_code(code)
+        pycode = PyCode(self.space)._from_code(code)
         try:
             pycode.exec_code(self.space, self.w_globals, self.w_globals)
         except baseobjspace.OperationError, operationerr:

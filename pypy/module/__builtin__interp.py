@@ -216,7 +216,7 @@ def compile(w_str, w_filename, w_startstr,
         raise OperationError(space.w_ValueError,space.wrap(str(e)))
     except TypeError,e:
         raise OperationError(space.w_TypeError,space.wrap(str(e)))
-    return space.wrap(PyCode()._from_code(c))
+    return space.wrap(PyCode(space)._from_code(c))
 
 def eval(w_source, w_globals=None, w_locals=None):
     w = space.wrap
