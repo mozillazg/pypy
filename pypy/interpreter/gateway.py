@@ -2,7 +2,6 @@
 
 Gateway between app-level and interpreter-level:
 * BuiltinCode (call interp-level code from app-level)
-* Gateway     (a space-independent gateway to a Code object)
 * app2interp  (embed an app-level function into an interp-level callable)
 * interp2app  (publish an interp-level object to be visible from app-level)
 * exportall   (mass-call interp2app on a whole dict of objects)
@@ -366,113 +365,25 @@ class BuiltinCode(eval.Code):
     def getdocstring(self):
         return self.docstring
 
-class Gateway(Wrappable):
-    """General-purpose utility for the interpreter-level to create callables
-    that transparently invoke code objects (and thus possibly interpreted
-    app-level code)."""
 
-    # This is similar to a Function object, but not bound to a particular
-    # object space. During the call, the object space is either given
-    # explicitly as the first argument (for plain function), or is read
-    # from 'self.space' for methods.
+class interp2app(Wrappable):
+    """Build a gateway that calls 'f' at interp-level."""
 
-        # after initialization the following attributes should be set
-        #   name
-        #   _staticglobals 
-        #   _staticdefs
-        #
-        #  getcode is called lazily to get the code object to construct
-        #  the space-bound function
-
-    NOT_RPYTHON_ATTRIBUTES = ['_staticglobals', '_staticdefs']
-
-    def getcode(self, space):
-        # needs to be implemented by subclasses
-        raise TypeError, "abstract"
-        
-    def __spacebind__(self, space):
-        # to wrap a Gateway, we first make a real Function object out of it
-        # and the result is a wrapped version of this Function.
-        return self.get_function(space)
-
-    def get_function(self, space):
-        return space.loadfromcache(self, 
-                                   Gateway.build_all_functions, 
-                                   self.getcache(space))
-
-    def getglobals(self, space):
-        "NOT_RPYTHON"
-        if self._staticglobals is None:
-            w_globals = None
-        else:
-            # is there another Gateway in _staticglobals for which we
-            # already have a w_globals for this space ?
-            cache = self.getcache(space) 
-            for value in self._staticglobals.itervalues():
-                if isinstance(value, Gateway):
-                    if value in cache.content: 
-                        # yes, we share its w_globals
-                        fn = cache.content[value] 
-                        w_globals = fn.w_func_globals
-                        break
-            else:
-                # no, we build all Gateways in the _staticglobals now.
-                w_globals = build_dict(self._staticglobals, space)
-            return w_globals
-                
-    def build_all_functions(self, space):
-        "NOT_RPYTHON"
-        # the construction is supposed to be done only once in advance,
-        # but must be done lazily when needed only, because
-        #   1) it depends on the object space
-        #   2) the w_globals must not be built before the underlying
-        #      _staticglobals is completely initialized, because
-        #      w_globals must be built only once for all the Gateway
-        #      instances of _staticglobals
-        return self._build_function(space, self.getglobals(space))
-
-    def getcache(self, space):
-        return space._gatewaycache 
-
-    def _build_function(self, space, w_globals):
-        "NOT_RPYTHON"
-        cache = self.getcache(space) 
-        try: 
-            return cache.content[self] 
-        except KeyError: 
-            defs = self.getdefaults(space)  # needs to be implemented by subclass
-            code = self.getcode(space)
-            fn = Function(space, code, w_globals, defs, forcename = self.name)
-            cache.content[self] = fn 
-            return fn
-
-    def get_method(self, obj):
-        # to get the Gateway as a method out of an instance, we build a
-        # Function and get it.
-        # the object space is implicitely fetched out of the instance
-        space = obj.space
-        fn = self.get_function(space)
-        w_obj = space.wrap(obj)
-        return Method(space, space.wrap(fn),
-                      w_obj, space.type(w_obj))
-
-
-class interp2app(Gateway):
-    """Build a Gateway that calls 'f' at interp-level."""
-
-    # NOTICE even interp2app defaults are stored and passed as
+    # NOTICE interp2app defaults are stored and passed as
     # wrapped values, this to avoid having scope_w be of mixed
-    # wrapped and unwrapped types,
-    # an exception is made for None which is passed around as default
-    # as an unwrapped None, unwrapped None and wrapped types are
-    # compatible
+    # wrapped and unwrapped types;
+    # an exception is made for the NoneNotWrapped special value
+    # which is passed around as default as an unwrapped None,
+    # unwrapped None and wrapped types are compatible
     #
     # Takes optionally an unwrap_spec, see BuiltinCode
+
+    NOT_RPYTHON_ATTRIBUTES = ['_staticdefs']
     
     def __init__(self, f, app_name=None,
                  ismethod=None, spacearg=None, unwrap_spec = None):
         "NOT_RPYTHON"
-        Gateway.__init__(self)
+        Wrappable.__init__(self)
         # f must be a function whose name does NOT starts with 'app_'
         if not isinstance(f, types.FunctionType):
             raise TypeError, "function expected, got %r instead" % f
@@ -487,14 +398,8 @@ class interp2app(Gateway):
         self.__name__ = f.func_name
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())
-        #if self._staticdefs:
-        #    print f.__module__,f.__name__,"HAS NON TRIVIAL DEFLS",self._staticdefs
-        self._staticglobals = None
 
-    def getcode(self, space):
-        return self._code
-
-    def getdefaults(self, space):
+    def _getdefaults(self, space):
         "NOT_RPYTHON"
         defs_w = []
         for val in self._staticdefs:
@@ -504,13 +409,52 @@ class interp2app(Gateway):
                 defs_w.append(space.wrap(val))
         return defs_w
 
+    def _getglobals(self, space):
+        return None
+
+    # lazy binding to space
+
+    def __spacebind__(self, space):
+        # we first make a real Function object out of it
+        # and the result is a wrapped version of this Function.
+        return self.get_function(space)
+
+    def get_function(self, space):
+        return space.loadfromcache(self, 
+                                   interp2app.build_function, 
+                                   self.getcache(space))
+
+    def getcache(self, space):
+        return space._gatewaycache 
+
     def get_method(self, obj):
-       assert self._code.ismethod, (
-           'global built-in function %r used as method' %
-           self._code.func)
-       return Gateway.get_method(self, obj)
+        # to bind this as a method out of an instance, we build a
+        # Function and get it.
+        # the object space is implicitely fetched out of the instance
+        assert self._code.ismethod, (
+            'global built-in function %r used as method' %
+            self._code.func)
+
+        space = obj.space
+        fn = self.get_function(space)
+        w_obj = space.wrap(obj)
+        return Method(space, space.wrap(fn),
+                      w_obj, space.type(w_obj))
 
 
+    def build_function(self, space):
+        "NOT_RPYTHON"
+        cache = self.getcache(space) 
+        try: 
+            return cache.content[self] 
+        except KeyError: 
+            defs = self._getdefaults(space)  # needs to be implemented by subclass
+            code = self._code
+            fn = Function(space, code, self._getglobals(space), defs, forcename = self.name)
+            cache.content[self] = fn 
+            return fn
+
+        
 def exportall(d, temporary=False):
     """NOT_RPYTHON: Publish every function from a dict."""
     if temporary:
@@ -553,21 +497,6 @@ def importall(d, temporary=False):
         if name.startswith('app_') and name[4:] not in d:
             if isinstance(obj, types.FunctionType):
                 d[name[4:]] = a2i(obj)
-
-def build_dict(d, space):
-    """NOT_RPYTHON:
-    Search all Gateways and put them into a wrapped dictionary."""
-    w_globals = space.newdict([])
-    for value in d.itervalues():
-        if isinstance(value, Gateway):
-            fn = value._build_function(space, w_globals)
-            w_name = space.wrap(value.name)
-            w_object = space.wrap(fn)
-            space.setitem(w_globals, w_name, w_object)
-    if hasattr(space, 'w_sys'):  # give them 'sys' if it exists already
-        space.setitem(w_globals, space.wrap('sys'), space.w_sys)
-    return w_globals
-
 
 # 
 # the next gateways are to be used only for 
