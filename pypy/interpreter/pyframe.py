@@ -229,7 +229,7 @@ class ExceptBlock(FrameBlock):
             frame.next_instr = self.handlerposition   # jump to the handler
             raise StopUnrolling
 
-    def app_normalize_exception(self, etype, evalue):
+    def app_normalize_exception(etype, evalue):
         # mistakes here usually show up as infinite recursion, which is fun.
         if isinstance(evalue, etype):
             return etype, evalue

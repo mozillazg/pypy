@@ -34,41 +34,22 @@ class nugen(object):
     def __iter__(self):
         return self
 
-class _numeth(object):
-    def __init__(self, space, func, inst, cls):
-        self.space = space
-        self.func = func
-        self.inst = inst
+from pypy.interpreter.gateway import InterpretedFunction, InterpretedFunctionFromCode
+
+class numeth(InterpretedFunction):
+    def __init__(self, ifunc, instance, cls):
+        self.ifunc = ifunc
+        self.instance = instance
         self.cls = cls
 
-    def _call_(self, *args, **kws):
-        if self.inst is None and self.cls is not type(None):
+    def __call__(self, *args, **kws):
+        if self.instance is None and self.cls is not type(None):
             pass
         else:
-            args = (self.inst,) + args
-        return self.func(*args, **kws)
+            args = (self.instance,) + args
+        return self.ifunc(*args, **kws)
 
-    def __call__(self, *args, **kws):
-        try:
-            return self._call_(*args, **kws)
-        except OperationError, oe:
-            raise eval(oe.w_type.__name__)
-        except:
-            raise
-
-from pypy.interpreter.gateway import InterpretedFunction
-
-class nufun(InterpretedFunction):
-    def __init__(self, space, code, globals, defs, closure):
-        InterpretedFunction.__init__(self, space, code, globals, closure)
-        self.w_defs = space.wrap(defs)
-        self.__name__ = code.co_name
-        self.func_code = code
-
-        #self.func_code = self.code = code
-        #self.globals = globals
-        #self.defaultarguments = defs
-        #self.closure = closure
+class nufun(InterpretedFunctionFromCode):
 
     def __call__(self, *args, **kwargs):
         if self.cpycode.co_flags & 0x0020:
@@ -77,24 +58,8 @@ class nufun(InterpretedFunction):
         else:
             return self.eval_frame(args, kwargs)
 
-    #def __get__(self, ob, cls=None):
-    #    return numeth(self.space, self, ob, cls)
-
-    #def do_call(self, *args, **kwds):
-    #    locals = self.code.build_arguments(self.space, args, kwds,
-    #        w_defaults = self.defaultarguments,
-    #        w_closure = self.closure)
-    #    if self.code.co_flags & 0x0020:
-    #        from pypy.interpreter import pyframe
-    #        frame = pyframe.PyFrame()
-    #        frame.initialize(self.space, self.code,
-    #                         self.globals, locals)
-    #        return nugen(self.space, frame)
-    #    else:
-    #        return self.code.eval_code(self.space, self.globals, locals)
-
-    #def __call__(self, *args, **kwds):
-    #    return self.do_call(*args, **kwds)
+    def __get__(self, ob, cls=None):
+        return numeth(self, ob, cls)
 
 
 class TrivialObjSpace(ObjSpace):
@@ -354,7 +319,7 @@ def %(_name)s(self, *args):
         #assert hasattr(code, 'co_name')
         #assert hasattr(code, 'build_arguments')
         #assert hasattr(code, 'eval_code')
-        return nufun(self, code, globals, defs, closure)
+        return nufun(self, code, defs, globals, closure)
 
     def newstring(self, asciilist):
         try:
