@@ -6,8 +6,7 @@ from pypy.interpreter.error import OperationError
 
 def proxymethod(name):
     def fget(space, w_obj):
-        obj = space.interpclass_w(w_obj)
-        return space.getattr(obj.w_dict, space.wrap(name))
+        return space.getattr(w_obj.w_dict, space.wrap(name))
     return GetSetProperty(fget)
 
 # ____________________________________________________________

@@ -132,9 +132,11 @@ class ObjSpace(object):
     def interpclass_w(space, w_obj):
         """
          If w_obj is a wrapped internal interpreter class instance unwrap to it,
-         otherwise this is the identity
+         otherwise return None
         """
-        return w_obj    # hook for hack by TrivialObjSpace
+        if isinstance(w_obj, BaseWrappable):
+            return w_obj
+        return None
 
     def unpackiterable(self, w_iterable, expected_length=None):
         """Unpack an iterable object into a real (interpreter-level) list.

@@ -171,7 +171,11 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
         else:
             return w
 
-    interpclass_w = unwrap
+    def interpclass_w(self, w):
+        w = self.unwrap(w)
+        if isinstance(w, BaseWrappable):
+            return w
+        return None
 
     def getdict(self, w_obj):
         if isinstance(w_obj, CPyWrapper):
@@ -239,8 +243,6 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
             cls = type('CPyWrapped '+typedef.name, bases, descrdict)
             typedef.trivialwrapperclass = cls
             return cls
-
-    gettypeobject = hackwrapperclass
 
     def is_(self, w_obj1, w_obj2):
         return self.unwrap(w_obj1) is self.unwrap(w_obj2)

@@ -109,14 +109,14 @@ class GetSetProperty(Wrappable):
         __delete__ = interp2app(descr_property_del),
         )
 
-def attrproperty(name):
+def interp_attrproperty(name):
     "NOT_RPYTHON: initialization-time only"
     def fget(space, w_obj):
         obj = space.interpclass_w(w_obj)
         return space.wrap(getattr(obj, name))
     return GetSetProperty(fget)
 
-def attrproperty_w(name):
+def interp_attrproperty_w(name):
     "NOT_RPYTHON: initialization-time only"
     def fget(space, w_obj):
         obj = space.interpclass_w(w_obj)
@@ -152,7 +152,7 @@ def descr_set_dict(space, w_obj, w_dict):
     obj = space.interpclass_w(w_obj)
     obj.setdict(w_dict)
 
-default_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
+interp_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
 
 
 # co_xxx interface emulation for built-in code objects
@@ -179,7 +179,7 @@ def fget_co_consts(space, w_code):
     return space.newtuple([w_docstring])
 
 Code.typedef = TypeDef('internal-code',
-    co_name = attrproperty('co_name'),
+    co_name = interp_attrproperty('co_name'),
     co_varnames = GetSetProperty(fget_co_varnames),
     co_argcount = GetSetProperty(fget_co_argcount),
     co_flags = GetSetProperty(fget_co_flags),
@@ -187,38 +187,38 @@ Code.typedef = TypeDef('internal-code',
     )
 
 Frame.typedef = TypeDef('internal-frame',
-    f_code = attrproperty('code'),
+    f_code = interp_attrproperty('code'),
     f_locals = GetSetProperty(Frame.fget_getdictscope.im_func),
-    f_globals = attrproperty_w('w_globals'),
+    f_globals = interp_attrproperty_w('w_globals'),
     )
 
 PyCode.typedef = TypeDef('code',
     __new__ = interp2app(PyCode.descr_code__new__.im_func),
-    co_argcount = attrproperty('co_argcount'),
-    co_nlocals = attrproperty('co_nlocals'),
-    co_stacksize = attrproperty('co_stacksize'),
-    co_flags = attrproperty('co_flags'),
-    co_code = attrproperty('co_code'),
+    co_argcount = interp_attrproperty('co_argcount'),
+    co_nlocals = interp_attrproperty('co_nlocals'),
+    co_stacksize = interp_attrproperty('co_stacksize'),
+    co_flags = interp_attrproperty('co_flags'),
+    co_code = interp_attrproperty('co_code'),
     co_consts = GetSetProperty(PyCode.fget_co_consts),
-    co_names = attrproperty('co_names'),
-    co_varnames = attrproperty('co_varnames'),
-    co_freevars = attrproperty('co_freevars'),
-    co_cellvars = attrproperty('co_cellvars'),
-    co_filename = attrproperty('co_filename'),
-    co_name = attrproperty('co_name'),
-    co_firstlineno = attrproperty('co_firstlineno'),
-    co_lnotab = attrproperty('co_lnotab'),
+    co_names = interp_attrproperty('co_names'),
+    co_varnames = interp_attrproperty('co_varnames'),
+    co_freevars = interp_attrproperty('co_freevars'),
+    co_cellvars = interp_attrproperty('co_cellvars'),
+    co_filename = interp_attrproperty('co_filename'),
+    co_name = interp_attrproperty('co_name'),
+    co_firstlineno = interp_attrproperty('co_firstlineno'),
+    co_lnotab = interp_attrproperty('co_lnotab'),
     )
 
 PyFrame.typedef = TypeDef('frame',
-    f_builtins = attrproperty_w('w_builtins'),
+    f_builtins = interp_attrproperty_w('w_builtins'),
     f_lineno = GetSetProperty(PyFrame.fget_f_lineno.im_func),
     **Frame.typedef.rawdict)
 
 Module.typedef = TypeDef("module",
     __new__ = interp2app(Module.descr_module__new__.im_func),
     __init__ = interp2app(Module.descr_module__init__.im_func),
-    __dict__ = default_dict_descr,
+    __dict__ = interp_dict_descr,
     )
 
 getset_func_doc = GetSetProperty(Function.fget_func_doc,
@@ -228,24 +228,24 @@ getset_func_doc = GetSetProperty(Function.fget_func_doc,
 Function.typedef = TypeDef("function",
     __call__ = interp2app(Function.descr_function_call.im_func),
     __get__ = interp2app(Function.descr_function_get.im_func),
-    func_code = attrproperty('code'), 
+    func_code = interp_attrproperty('code'), 
     func_doc = getset_func_doc,
-    func_name = attrproperty('name'), 
-    func_dict = attrproperty_w('w_func_dict'), 
+    func_name = interp_attrproperty('name'), 
+    func_dict = interp_attrproperty_w('w_func_dict'), 
     func_defaults = GetSetProperty(Function.fget_func_defaults),
-    func_globals = attrproperty_w('w_func_globals'),
+    func_globals = interp_attrproperty_w('w_func_globals'),
     __doc__ = getset_func_doc,
-    __name__ = attrproperty('name'),
-    __dict__ = default_dict_descr,
+    __name__ = interp_attrproperty('name'),
+    __dict__ = interp_dict_descr,
     # XXX func_closure, etc.pp
     )
 
 Method.typedef = TypeDef("method",
     __call__ = interp2app(Method.descr_method_call.im_func),
     __get__ = interp2app(Method.descr_method_get.im_func),
-    im_func  = attrproperty_w('w_function'), 
-    im_self  = attrproperty_w('w_instance'), 
-    im_class = attrproperty_w('w_class'),
+    im_func  = interp_attrproperty_w('w_function'), 
+    im_self  = interp_attrproperty_w('w_instance'), 
+    im_class = interp_attrproperty_w('w_class'),
     __getattribute__ = interp2app(Method.descr_method_getattribute.im_func),
     # XXX getattribute/setattribute etc.pp 
     )
@@ -256,17 +256,17 @@ StaticMethod.typedef = TypeDef("staticmethod",
     )
 
 PyTraceback.typedef = TypeDef("traceback",
-    tb_frame  = attrproperty('frame'),
-    tb_lasti  = attrproperty('lasti'),
-    tb_lineno = attrproperty('lineno'),
-    tb_next   = attrproperty('next'),
+    tb_frame  = interp_attrproperty('frame'),
+    tb_lasti  = interp_attrproperty('lasti'),
+    tb_lineno = interp_attrproperty('lineno'),
+    tb_next   = interp_attrproperty('next'),
     )
 
 GeneratorIterator.typedef = TypeDef("generator",
     next       = interp2app(GeneratorIterator.descr_next.im_func),
     __iter__   = interp2app(GeneratorIterator.descr__iter__.im_func),
-    gi_running = attrproperty('running'), 
-    gi_frame   = attrproperty('frame'), 
+    gi_running = interp_attrproperty('running'), 
+    gi_frame   = interp_attrproperty('frame'), 
 )
 
 Cell.typedef = TypeDef("Cell")

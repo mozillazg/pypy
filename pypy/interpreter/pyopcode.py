@@ -4,7 +4,7 @@ The rest, dealing with variables in optimized ways, is in
 pyfastscope.py and pynestedscope.py.
 """
 
-from pypy.interpreter.baseobjspace import OperationError
+from pypy.interpreter.baseobjspace import OperationError, BaseWrappable
 from pypy.interpreter.eval import UNDEFINED
 from pypy.interpreter import gateway, function
 from pypy.interpreter import pyframe, pytraceback
