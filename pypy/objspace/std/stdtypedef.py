@@ -55,10 +55,10 @@ def descr_set_dict(space, w_obj, w_dict):
 
 std_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
 
-def newmethod(descr_new):
+def newmethod(descr_new, unwrap_spec=None):
     "NOT_RPYTHON: initialization-time only."
     # this is turned into a static method by the constructor of W_TypeObject.
-    return gateway.interp2app(descr_new)
+    return gateway.interp2app(descr_new, unwrap_spec=unwrap_spec)
 
 # ____________________________________________________________
 #

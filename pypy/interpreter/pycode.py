@@ -159,8 +159,7 @@ class PyCode(eval.Code):
         self = space.interpclass_w(w_self)
         return space.newtuple([space.wrap(name) for name in self.co_names])
 
-    def descr_code__eq__(space, w_self, w_other):
-        self = space.interpclass_w(w_self)
+    def descr_code__eq__(self, w_other):
         other = space.interpclass_w(w_other)
         if not isinstance(other, PyCode):
             return space.w_False

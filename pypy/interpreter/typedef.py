@@ -2,7 +2,7 @@
 
 
 """
-from pypy.interpreter.gateway import interp2app 
+from pypy.interpreter.gateway import interp2app, ObjSpace, Arguments, W_Root 
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.tool.cache import Cache
@@ -247,7 +247,7 @@ Frame.typedef = TypeDef('internal-frame',
 
 PyCode.typedef = TypeDef('code',
     __new__ = interp2app(PyCode.descr_code__new__.im_func),
-    __eq__ = interp2app(PyCode.descr_code__eq__.im_func),
+    __eq__ = interp2app(PyCode.descr_code__eq__),
     co_argcount = interp_attrproperty('co_argcount'),
     co_nlocals = interp_attrproperty('co_nlocals'),
     co_stacksize = interp_attrproperty('co_stacksize'),
@@ -270,8 +270,9 @@ PyFrame.typedef = TypeDef('frame',
     **Frame.typedef.rawdict)
 
 Module.typedef = TypeDef("module",
-    __new__ = interp2app(Module.descr_module__new__.im_func),
-    __init__ = interp2app(Module.descr_module__init__.im_func),
+    __new__ = interp2app(Module.descr_module__new__.im_func,
+                         unwrap_spec=[ObjSpace, W_Root, Arguments]),
+    __init__ = interp2app(Module.descr_module__init__),
     __dict__ = GetSetProperty(descr_get_dict), # module dictionaries are readonly attributes
     )
 
@@ -297,8 +298,9 @@ getset_func_code = GetSetProperty(Function.fget_func_code,
 getset_func_dict = GetSetProperty(descr_get_dict, descr_set_dict)
 
 Function.typedef = TypeDef("function",
-    __call__ = interp2app(Function.descr_function_call.im_func),
-    __get__ = interp2app(Function.descr_function_get.im_func),
+    __call__ = interp2app(Function.descr_function_call,
+                          unwrap_spec=['self', Arguments]),
+    __get__ = interp2app(Function.descr_function_get),
     func_code = getset_func_code, 
     func_doc = getset_func_doc,
     func_name = interp_attrproperty('name'), 
@@ -315,17 +317,18 @@ Function.typedef = TypeDef("function",
 
 Method.typedef = TypeDef("method",
     __new__ = interp2app(Method.descr_method__new__.im_func),
-    __call__ = interp2app(Method.descr_method_call.im_func),
-    __get__ = interp2app(Method.descr_method_get.im_func),
+    __call__ = interp2app(Method.descr_method_call,
+                          unwrap_spec=['self', Arguments]),
+    __get__ = interp2app(Method.descr_method_get),
     im_func  = interp_attrproperty_w('w_function'), 
     im_self  = interp_attrproperty_w('w_instance'), 
     im_class = interp_attrproperty_w('w_class'),
-    __getattribute__ = interp2app(Method.descr_method_getattribute.im_func),
+    __getattribute__ = interp2app(Method.descr_method_getattribute),
     # XXX getattribute/setattribute etc.pp 
     )
 
 StaticMethod.typedef = TypeDef("staticmethod",
-    __get__ = interp2app(StaticMethod.descr_staticmethod_get.im_func),
+    __get__ = interp2app(StaticMethod.descr_staticmethod_get),
     # XXX getattribute etc.pp
     )
 
@@ -337,8 +340,8 @@ PyTraceback.typedef = TypeDef("traceback",
     )
 
 GeneratorIterator.typedef = TypeDef("generator",
-    next       = interp2app(GeneratorIterator.descr_next.im_func),
-    __iter__   = interp2app(GeneratorIterator.descr__iter__.im_func),
+    next       = interp2app(GeneratorIterator.descr_next),
+    __iter__   = interp2app(GeneratorIterator.descr__iter__),
     gi_running = interp_attrproperty('running'), 
     gi_frame   = interp_attrproperty('frame'), 
 )
@@ -346,11 +349,11 @@ GeneratorIterator.typedef = TypeDef("generator",
 Cell.typedef = TypeDef("cell")
 
 Ellipsis.typedef = TypeDef("Ellipsis", 
-    __repr__   = interp2app(Ellipsis.descr__repr__.im_func),
+    __repr__   = interp2app(Ellipsis.descr__repr__),
 )
 
 NotImplemented.typedef = TypeDef("NotImplemented", 
-    __repr__   = interp2app(NotImplemented.descr__repr__.im_func), 
+    __repr__   = interp2app(NotImplemented.descr__repr__), 
 )
 
 ControlFlowException.typedef = TypeDef("ControlFlowException")
