@@ -280,12 +280,14 @@ class ObjSpace(object):
 
     def appexec(self, posargs_w, source): 
         """ return value from executing given source at applevel with 
-            given name=wrapped value parameters as its starting scope.  
-            Note: EXPERIMENTAL. 
+            the given list of wrapped arguments. The arguments are
+            directly set as the fastscope of the underlyingly executing 
+            frame. No Argument parsing is performed at this point. 
+            Consider using gateway.appdef() if you need default 
+            arguments. 
         """ 
-        space = self
-        pypyco = space.loadfromcache(source, buildpypycode, self._codecache)
-        frame = pypyco.create_frame(space, self.w_apphelper_globals) 
+        pypyco = self.loadfromcache(source, buildpypycode, self._codecache)
+        frame = pypyco.create_frame(self, self.w_apphelper_globals) 
         frame.setfastscope(posargs_w)
         return frame.run() 
 
