@@ -85,7 +85,7 @@ def build_pytest_assertion(space):
         frame = framestack.top(0)
         # Argh! we may see app-level helpers in the frame stack!
         #       that's very probably very bad...
-        if frame.code.co_name == 'app_normalize_exception': 
+        if frame.code.co_name == 'normalize_exception': 
             frame = framestack.top(1)
         
         runner = AppFrame(frame)
