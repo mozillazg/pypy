@@ -1,8 +1,9 @@
 import re
 import unittest
 import parser
+import os
 
-
+d={}
 #  d is the dictionary of unittest changes, keyed to the old name
 #  used by unittest.  d['new'] is the new replacement function, and
 #  d['change type'] is one of the following functions
@@ -13,101 +14,175 @@ import parser
 #           rounding          e.g.  assertAlmostEqual(l, r) becomes
 #                                     assert round(l - r, 7) == 0
 #  Finally, 'op' is the operator you will substitute, if applicable.
-
-# First define the functions you want to dispatch
+#  Got to define the dispatch functions first ....
 
 def namechange_only(old, new, block, op):
-    # dictionary dispatch function.
-    # this is the simplest of changes.
+    '''rename a function.  dictionary dispatched.'''
     return re.sub('self.'+old, new, block)
 
+d['assertRaises'] = {'new': 'raises',
+                     'change type': namechange_only,
+                     'op': None}
+
+d['failUnlessRaises'] = d['assertRaises']
+
 def fail_special(old, new, block, op):
-    # dictionary dispatch function.
+    '''change fail function to raise AssertionError. dictionary dispatched. '''
     indent, expr, trailer = common_setup(old, block)
     
     if expr == '':  # fail()  --> raise AssertionError
          return indent + new + trailer
     else:   # fail('Problem')  --> raise AssertionError, 'Problem'
          return indent + new + ', ' + expr + trailer
+     
+d['fail'] = {'new': 'raise AssertionError',
+             'change type': fail_special,
+             'op': None}
+
+def comma_to_op(old, new, block, op):
+    '''change comma to appropriate op. dictionary dispatched. '''
+    indent, expr, trailer = common_setup(old, block)
+    new = new + ' '
+    op = ' ' + op
+    left, right = get_expr(expr, ',')
+
+    try:
+        parser.expr(left)  # that paren came off easily
+    except SyntaxError:
+        left  = re.sub(linesep, '\\'+linesep, left)
+        
+    try:
+        parser.expr(right.lstrip())  # that paren came off easily
+    except SyntaxError:
+        right = re.sub(linesep, '\\'+linesep, right)
+
+    if right.startswith(linesep):
+        op = op + '\\'
+    return indent + new + left + op + right + trailer
+
+d['assertEqual'] = {'new': 'assert',
+                    'change type': comma_to_op,
+                    'op': '=='}
+
+d['assertEquals'] = d['assertEqual']
+
+d['assertNotEqual'] = {'new': 'assert',
+                       'change type':comma_to_op,
+                       'op': '!='}
+
+d['assertNotEquals'] = d['assertNotEqual']
+
+d['failUnlessEqual'] = {'new': 'assert not',
+                        'change type': comma_to_op,
+                        'op': '!='}
+d['failIfEqual'] = {'new': 'assert not',
+                    'change type': comma_to_op,
+                    'op': '=='}
 
 def strip_parens(old, new, block, op):
-    # dictionary dispatch function.
+    '''remove one set of parens. dictionary dispatched. '''
     indent, expr, trailer = common_setup(old, block)
     new = new + ' '
 
     try:
         parser.expr(expr) # the parens came off easily
         return indent + new + expr + trailer
-
     except SyntaxError:
         # paste continuation backslashes on our multiline constructs.
         try:
             # is the input expr, string?
             left, right = get_expr(expr, ',')
-            # ok, paste continuation backslashes on our left,
-            # but not on our right hand side, since a multiline
-            # string is not using the parens to avoid SyntaxError,
-            # and must already have a working mechanism, existing
-            # backslashes, or triple quotes ....
-
-            left = re.sub(r'\n', r'\\\n', left)
+            left = re.sub(linesep, '\\'+linesep, left)
+            # since the right is a string, assume it can take care
+            # of itself even if multiline.
             
-            if right[0] == '\n':  # that needs a slash too ...
-                                  # do we handle non-unix correctly?
+            if right.startswith(linesep):# that needs a slash too ...
                 between = ',\\'
             else:
                 between = ','
             return indent + new + left + between + right + trailer
 
-        except SyntaxError:
-            # we couldn't find a 'expr, string' so it is
-            # probably just a regular old multiline expression
-            # e.g   self.assertx(0
-            #                    +f(x)
-            #                    +g(x))
-
-            expr = re.sub(r'\n', r'\\\n', expr)
-
+        except SyntaxError: # just a regular old multiline expression
+            expr = re.sub(linesep, '\\'+linesep, expr)
             return indent + new + expr + trailer
-
-def comma_to_op(old, new, block, op):
-    # dictionary dispatch function.  parser.expr does all the work.
-
-    indent, expr, trailer = common_setup(old, block)
-    new = new + ' '
-    op = ' ' + op
-    left, right = get_expr(expr, ',')
-
-    print 'left is <%s>, right is <%s>' % (left, right)
-    try:
-        parser.expr(left)  # that paren came off easily
-    except SyntaxError:
-        left  = re.sub(r'\n', r'\\\n', left)
         
-    try:
-        parser.expr(right.lstrip())  # that paren came off easily
+d['assert_'] = {'new': 'assert',
+                'change type': strip_parens,
+                'op': None}
 
-    except SyntaxError:
-        right = re.sub(r'\n', r'\\\n', right)
+d['failUnless'] = d['assert_']
 
-    if right[0] == '\n':
-        op = op + '\\'
-    return indent + new + left + op + right + trailer
+d['failIf'] = {'new': 'assert not',
+               'change type': strip_parens,
+               'op': None}
+"""
 
-def right_finder(s):
-    
-    for i in range(len(s)):
-        if s[i] != ' ' and s[i] != '\t':
-            print i
-            break
+d['assertNotAlmostEqual'] = {'old': 'assertNotAlmostEqual',
+                             'new': 'assert round',
+                             'change type': 'rounding',
+                             'op': '!='}
 
-    if s[i] == '\n':
-        return True
+d['assertNotAlmostEquals'] = {'old': 'assertNotAlmostEquals',
+                              'new': 'assert round',
+                              'change type': 'rounding',
+                              'op': '!='}
+
+d['failUnlessAlmostEqual'] = {'old': 'failUnlessAlmostEqual',
+                              'new': 'assert not round',
+                              'change type': 'rounding',
+                              'op': '=='}
+
+d['assertUnlessAlmostEquals'] = {'old': 'assertUnlessAlmostEquals',
+                                 'new': 'assert round',
+                                 'change type': 'rounding',
+                                 'op': '=='}
+
+d['assertAlmostEqual'] = {'old': 'assertAlmostEqual',
+                          'new': 'assert round',
+                          'change type': 'rounding',
+                          'op': '=='}
+"""
+leading_spaces = re.compile(r'^(\s*)')
+
+pat = ''
+for k in d.keys():  # this complicated pattern to match all unittests
+    pat += '|' + r'^(\s*)' + 'self.' + k + r'\(' # \tself.whatever(
+
+old_names = re.compile(pat[1:])  # strip the extra '|' from front
+linesep=os.linesep
+
+def blocksplitter(filename):
+
+    fp = file(filename, 'r')
+    blocklist = []
+    blockstring = ''
+
+    for line in fp:
+
+        interesting = old_names.match(line)
+
+        if interesting :
+            if blockstring:
+                blocklist.append(blockstring)
+                blockstring = line # reset the block
+        else:
+            blockstring += line
+            
+    blocklist.append(blockstring)
+    return blocklist
+
+def process_block(s):
+    f = old_names.match(s)
+    if f:
+        key = f.group(0).lstrip()[5:-1]  # '\tself.blah(' -> 'blah'
+        # now do the dictionary dispatch.
+        return d[key]['change type'](key, d[key]['new'], s, d[key] ['op'])
     else:
-        return False
+        return s
 
 def common_setup(old, block):
-    """split the block into component parts"""
+    '''split the block into component parts'''
+
     indent = re.search(r'^(\s*)', block).group()
     pat = re.search('self.' + old + r'\(', block)
     expr, trailer = get_expr(block[pat.end():], ')')
@@ -140,112 +215,6 @@ def pos_finder(s, char=','):
         if s[i] == char:
             pos.append(i)
     return pos
-
-d={}
-
-d['assertRaises'] = {'new': 'raises',
-                     'change type': namechange_only,
-                     'op': None}
-
-d['failUnlessRaises'] = d['assertRaises']
-
-d['fail'] = {'new': 'raise AssertionError',
-             'change type': fail_special,
-             'op': None}
-
-d['assert_'] = {'new': 'assert',
-                'change type': strip_parens,
-                'op': None}
-
-d['failUnless'] = d['assert_']
-
-d['failIf'] = {'new': 'assert not',
-               'change type': strip_parens,
-               'op': None}
-
-d['assertEqual'] = {'new': 'assert',
-                     'change type': comma_to_op,
-                     'op': '=='}
-
-d['assertEquals'] = d['assertEqual']
-
-
-d['assertNotEqual'] = {'new': 'assert',
-                        'change type':comma_to_op,
-                        'op': '!='}
-
-d['assertNotEquals'] = d['assertNotEqual']
-
-d['failUnlessEqual'] = {'new': 'assert not',
-                        'change type': comma_to_op,
-                        'op': '!='}
-d['failIfEqual'] = {'new': 'assert not',
-                    'change type': comma_to_op,
-                    'op': '=='}
-
-"""
-
-d['assertNotAlmostEqual'] = {'old': 'assertNotAlmostEqual',
-                             'new': 'assert round',
-                             'change type': 'rounding',
-                             'op': '!='}
-
-d['assertNotAlmostEquals'] = {'old': 'assertNotAlmostEquals',
-                              'new': 'assert round',
-                              'change type': 'rounding',
-                              'op': '!='}
-
-d['failUnlessAlmostEqual'] = {'old': 'failUnlessAlmostEqual',
-                              'new': 'assert not round',
-                              'change type': 'rounding',
-                              'op': '=='}
-
-d['assertUnlessAlmostEquals'] = {'old': 'assertUnlessAlmostEquals',
-                                 'new': 'assert round',
-                                 'change type': 'rounding',
-                                 'op': '=='}
-
-d['assertAlmostEqual'] = {'old': 'assertAlmostEqual',
-                          'new': 'assert round',
-                          'change type': 'rounding',
-                          'op': '=='}
-"""
-leading_spaces = re.compile(r'^(\s*)')
-
-pat = ''
-for k in d.keys():
-    pat += '|' + r'^(\s*)' + 'self.' + k + r'\(' # \tself.whatever(
-
-old_names = re.compile(pat[1:])  # strip the extra '|' from front
-
-def blocksplitter(filename):
-
-    fp = file(filename, 'r')
-    blocklist = []
-    blockstring = ''
-
-    for line in fp:
-
-        interesting = old_names.match(line)
-
-        if interesting :
-            if blockstring:
-                blocklist.append(blockstring)
-                blockstring = line # reset the block
-        else:
-            blockstring += line
-            
-    blocklist.append(blockstring)
-    return blocklist
-
-def process_block(s):
-    f = old_names.match(s)
-    if f:
-        key = f.group(0).lstrip()[5:-1]  # '\tself.blah(' -> 'blah'
-        # now do the dictionary dispatch.
-        return d[key]['change type'](key, d[key]['new'], s, d[key] ['op'])
-    else:
-        return s
 
 class Testit(unittest.TestCase):
     def test(self):
