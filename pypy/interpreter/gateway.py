@@ -198,6 +198,24 @@ class UnwrapSpecRecipe:
         emit_sig.through_scope_w += 1
         emit_sig.run_args.append("self.%s_arg%d" % (name,cur))
 
+class BuiltinFrame(eval.Frame):
+    "Frame emulation for BuiltinCode."
+    # Subclasses of this are defined with the function to delegate to attached through miniglobals.
+    # Initialization of locals is already done by the time run() is called,
+    # via the interface defined in eval.Frame.
+
+    def setfastscope(self, scope_w):
+        """Subclasses with behavior specific for an unwrap spec are generated"""
+        raise TypeError, "abstract"
+
+    def getfastscope(self):
+        raise OperationError(self.space.w_TypeError,
+            self.space.wrap("cannot get fastscope of a BuiltinFrame"))
+
+    def run(self):
+        """Subclasses with behavior specific for an unwrap spec are generated"""
+        raise TypeError, "abstract"
+
 class BuiltinCodeSignature(Signature):
 
     def __init__(self,*args,**kwds):
@@ -207,7 +225,7 @@ class BuiltinCodeSignature(Signature):
         self.through_scope_w = 0
         self.miniglobals = {}
 
-    def make_frame_class(self):
+    def make_frame_class(self, func):
         setfastscope = self.setfastscope
         if not setfastscope:
             setfastscope = ["pass"]
@@ -220,28 +238,27 @@ class BuiltinCodeSignature(Signature):
         setfastscope += '\n'
         d = {}
         exec setfastscope in self.miniglobals, d
+
+        self.miniglobals['func'] = func
+        
         exec """
 def run(self):
-    w_result = self.code.func(%s)
+    w_result = func(%s)
     if w_result is None:
         w_result = self.space.w_None
     return w_result
 """ % ','.join(self.run_args) in self.miniglobals, d
+
         return type("BuiltinFrame_for_%s" % self.name,
                     (BuiltinFrame,),d)
         
-def make_builtin_frame_class_for_unwrap_spec(orig_sig, unwrap_spec, cache={}):
+def make_builtin_frame_class(func, orig_sig, unwrap_spec):
     "NOT_RPYTHON"
-    key = tuple(unwrap_spec)
-    try:
-        return cache[key]
-    except KeyError:
-        name = '_'.join([getattr(k, "__name__", k) for k in key])
-        emit_sig = orig_sig.apply_unwrap_spec(unwrap_spec, UnwrapSpecRecipe().emit,
+    name = (getattr(func, '__module__', None) or '')+'_'+func.__name__
+    emit_sig = orig_sig.apply_unwrap_spec(unwrap_spec, UnwrapSpecRecipe().emit,
                                               BuiltinCodeSignature(name=name))
-
-        cache[key] = cls = emit_sig.make_frame_class()
-        return cls
+    cls = emit_sig.make_frame_class(func)
+    return cls
 
 
 
@@ -256,7 +273,6 @@ class BuiltinCode(eval.Code):
         # 'implfunc' is the interpreter-level function.
         # Note that this uses a lot of (construction-time) introspection.
         eval.Code.__init__(self, func.__name__)
-        self.func = func
         self.docstring = func.__doc__
         # signature-based hacks if unwrap_spec is not specified:
         # renaming arguments from w_xyz to xyz.
@@ -339,7 +355,7 @@ class BuiltinCode(eval.Code):
         else:
             self.maxargs = self.minargs
 
-        self.framecls = make_builtin_frame_class_for_unwrap_spec(orig_sig, unwrap_spec)
+        self.framecls = make_builtin_frame_class(func, orig_sig, unwrap_spec)
 
     def create_frame(self, space, w_globals, closure=None):
         return self.framecls(space, self, w_globals)
@@ -349,26 +365,6 @@ class BuiltinCode(eval.Code):
 
     def getdocstring(self):
         return self.docstring
-
-
-class BuiltinFrame(eval.Frame):
-    "Frame emulation for BuiltinCode."
-    # This is essentially just a delegation to the 'func' of the BuiltinCode.
-    # Initialization of locals is already done by the time run() is called,
-    # via the interface defined in eval.Frame.
-
-    def setfastscope(self, scope_w):
-        """Subclasses with behavior specific for an unwrap spec are generated"""
-        raise TypeError, "abstract"
-
-    def getfastscope(self):
-        raise OperationError(self.space.w_TypeError,
-            self.space.wrap("cannot get fastscope of a BuiltinFrame"))
-
-    def run(self):
-        """Subclasses with behavior specific for an unwrap spec are generated"""
-        raise TypeError, "abstract"        
-
 
 class Gateway(Wrappable):
     """General-purpose utility for the interpreter-level to create callables
