@@ -6,7 +6,7 @@ W_UnicodeObject = fake_type(unicode)
 
 # string-to-unicode delegation
 def delegate__String(space, w_str):
-    return W_UnicodeObject(space, unicode(space.unwrap(w_str)))
+    return W_UnicodeObject(space, unicode(space.str_w(w_str)))
 delegate__String.result_class = W_UnicodeObject
 delegate__String.priority = PRIORITY_CHANGE_TYPE
 delegate__String.can_fail = True
