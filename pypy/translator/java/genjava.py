@@ -74,7 +74,7 @@ class GenJava:
         entrypoint = self.nameof(self.translator.functions[0])
         f = self.jdir.join('test.java').open('w')
         print >> f, 'class test extends PyObject {'
-        print >> f, '    static void main(String[] argv) {'
+        print >> f, '    static public void main(String[] argv) {'
         print >> f, '        PyObject result = %s.op_call_%d(%s);' % (
             entrypoint, len(inputargs),
             ', '.join([self.nameof(x) for x in inputargs]))
