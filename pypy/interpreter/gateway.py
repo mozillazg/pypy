@@ -715,7 +715,7 @@ def specialargparse(decl):
     # (which does not imply that the code doing it is nice :-) 
     defaulthandlingsource = py.code.Source()
     while defaultargs: 
-        name, value = defaultargs.pop() 
+        name, value = defaultargs.pop(0) 
         defaulthandlingsource = defaulthandlingsource.putaround("""\
             if %s is None: 
                 %s = space.wrap(%s)
