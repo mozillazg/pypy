@@ -16,13 +16,14 @@ class W_TupleObject(W_Object):
         reprlist = [repr(w_item) for w_item in w_self.wrappeditems]
         return "%s(%s)" % (w_self.__class__.__name__, ', '.join(reprlist))
 
+    def unwrap(w_tuple):
+        space = w_tuple.space
+        items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
+        return tuple(items)
+
 
 registerimplementation(W_TupleObject)
 
-
-def unwrap__Tuple(space, w_tuple): 
-    items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
-    return tuple(items)
 
 def len__Tuple(space, w_tuple):
     result = len(w_tuple.wrappeditems)

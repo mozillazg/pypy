@@ -14,7 +14,6 @@ Py                PyPy
                   def ord__String(space, w_str):
                   def string_richcompare(space, w_str1, w_str2, op):
                   def str_w__String(space, w_str):
-                  def unwrap__String(space, w_str):
 __add__           def add__String_String(space, w_left, w_right):
 __class__
 __contains__
@@ -99,6 +98,9 @@ class W_StringObject(W_Object):
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%r)" % (w_self.__class__.__name__, w_self._value)
+
+    def unwrap(w_self):
+        return w_self._value
 
 
 registerimplementation(W_StringObject)
@@ -766,9 +768,6 @@ str_translate__String_ANY_ANY = gateway.app2interp(app_str_translate__String_ANY
 
 
 def str_w__String(space, w_str):
-    return w_str._value
-    
-def unwrap__String(space, w_str):
     return w_str._value
 
 def hash__String(space, w_str):

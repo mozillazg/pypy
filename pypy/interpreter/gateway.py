@@ -20,6 +20,8 @@ from pypy.interpreter.baseobjspace import W_Root,ObjSpace,Wrappable
 from pypy.interpreter.argument import Arguments
 from pypy.tool.cache import Cache 
 
+NoneNotWrapped = object()
+
 class Signature:
     def __init__(self, func=None, argnames=None, varargname=None,
                  kwargname=None, name = None):
@@ -457,6 +459,7 @@ class app2interp(Gateway):
                 raise ValueError, ("function name must start with 'app_'; "
                                    "%r does not" % app.func_name)
             app_name = app.func_name[4:]
+        self.__name__ = app.func_name
         self.name = app_name
         self._staticcode = app.func_code
         self._staticglobals = app.func_globals
@@ -516,6 +519,7 @@ class interp2app(Gateway):
         self._code = BuiltinCode(f, ismethod=ismethod,
                                   spacearg=spacearg,
                                   unwrap_spec=unwrap_spec)
+        self.__name__ = f.func_name
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())
         #if self._staticdefs:
@@ -529,8 +533,8 @@ class interp2app(Gateway):
         "NOT_RPYTHON"
         defs_w = []
         for val in self._staticdefs:
-            if val is None:
-                defs_w.append(val)
+            if val is NoneNotWrapped:
+                defs_w.append(None)
             else:
                 defs_w.append(space.wrap(val))
         return defs_w
