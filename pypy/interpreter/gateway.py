@@ -610,7 +610,7 @@ def appdef(source, overridename=None):
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
     funcdecl, source = source.strip().split(':', 1)
-    newco = preparesource(source, funcdecl) 
+    #newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
     if overridename is not None: 
         funcname = overridename 
@@ -618,21 +618,25 @@ def appdef(source, overridename=None):
         funcname = funcname.strip()
     decl = decl.strip()[:-1] 
     wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
-    source = py.code.Source("""\
-        def %s(space, %s):
-            # HERE we inject the defaultargs-handling below 
-            pypyco = PyCode(space)._from_code(newco) 
-            w_glob = space.newdict([])
-            frame = pypyco.create_frame(space, w_glob) 
-            frame.setfastscope([%s])
-            return frame.run() 
-    """ % (funcname, wfuncdecl, wfastscope))
-    source.lines[1:2] = defaulthandlingsource.indent().lines 
+
+    # get rid of w_
+    fastscope = ", ".join([x.strip()[2:] for x in wfastscope.split(',')])
+
+    # construct the special app source passed to appexec
+    appsource = py.code.Source(source).strip().putaround("(%s):" % fastscope, "") 
+    sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals()]
+    sourcelines.extend(defaulthandlingsource.indent().lines)
+    sourcelines.append(
+                   "    return space.appexec([%(wfastscope)s], '''" % locals())
+    for line in appsource.indent().indent().lines: 
+        line = line.replace("'''", "\'\'\'") 
+        sourcelines.append(line)
+    sourcelines.append( "''')")
+    source = py.code.Source()
+    source.lines = sourcelines 
+    #source = py.code.Source(sourcelines)
     print str(source)
-    glob = {
-        'newco' : newco, 
-        'PyCode': PyCode, 
-    }
+    glob = {}
     exec source.compile() in glob 
     return glob[funcname]
 
