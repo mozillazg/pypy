@@ -112,9 +112,9 @@ class FlowExecutionContext(ExecutionContext):
                                       self.closure)
 
     def bytecode_trace(self, frame):
-        assert frame is self.crnt_frame, "seeing an unexpected frame!"
         if not isinstance(self.crnt_ops, list):
             return
+        assert frame is self.crnt_frame, "seeing an unexpected frame!"
         next_instr = frame.next_instr
         self.crnt_offset = next_instr # save offset for opcode
         varnames = frame.code.getvarnames()

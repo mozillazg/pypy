@@ -736,9 +736,6 @@ class PyInterpFrame(pyframe.PyFrame):
         cls.dispatch_table = dispatch_table
 
 
-    gateway.importall(locals())   # app_xxx() -> xxx()
-
-
 ### helpers written at the application-level ###
 # Some of these functions are expected to be generally useful if other
 # parts of the code needs to do the same thing as a non-trivial opcode,
@@ -746,6 +743,98 @@ class PyInterpFrame(pyframe.PyFrame):
 # This is why they are not methods of PyInterpFrame.
 # There are also a couple of helpers that are methods, defined in the
 # class above.
+
+app = gateway.applevel('''
+
+    def file_softspace(file, newflag):
+        try:
+            softspace = file.softspace
+        except AttributeError:
+            softspace = 0
+        try:
+            file.softspace = newflag
+        except AttributeError:
+            pass
+        return softspace
+
+    def find_metaclass(bases, namespace, globals, builtins):
+        if '__metaclass__' in namespace:
+            return namespace['__metaclass__']
+        elif len(bases) > 0:
+            base = bases[0]
+            if hasattr(base, '__class__'):
+                return base.__class__
+            else:
+                return type(base)
+        elif '__metaclass__' in globals:
+            return globals['__metaclass__']
+        elif '__metaclass__' in builtins:
+            return builtins['__metaclass__']
+        else:
+            return type
+
+    def import_all_from(module, into_locals):
+        try:
+            all = module.__all__
+        except AttributeError:
+            try:
+                dict = module.__dict__
+            except AttributeError:
+                raise ImportError("from-import-* object has no __dict__ "
+                                  "and no __all__")
+            all = dict.keys()
+            skip_leading_underscores = True
+        else:
+            skip_leading_underscores = False
+        for name in all:
+            if skip_leading_underscores and name[0]=='_':
+                continue
+            into_locals[name] = getattr(module, name)
+
+    def prepare_exec(f, prog, globals, locals, compile_flags):
+        """Manipulate parameters to exec statement to (codeobject, dict, dict).
+        """
+        # XXX INCOMPLETE
+        if (globals is None and locals is None and
+            isinstance(prog, tuple) and
+            (len(prog) == 2 or len(prog) == 3)):
+            globals = prog[1]
+            if len(prog) == 3:
+                locals = prog[2]
+            prog = prog[0]
+        if globals is None:
+            globals = f.f_globals
+            if locals is None:
+                locals = f.f_locals
+        if locals is None:
+            locals = globals
+        if not isinstance(globals, dict):
+            raise TypeError("exec: arg 2 must be a dictionary or None")
+        elif not globals.has_key('__builtins__'):
+            globals['__builtins__'] = f.f_builtins
+        if not isinstance(locals, dict):
+            raise TypeError("exec: arg 3 must be a dictionary or None")
+        # XXX - HACK to check for code object
+        co = compile('1','<string>','eval')
+        if isinstance(prog, type(co)):
+            return (prog, globals, locals)
+        if not isinstance(prog, str):
+    ##     if not (isinstance(prog, types.StringTypes) or
+    ##             isinstance(prog, types.FileType)):
+            raise TypeError("exec: arg 1 must be a string, file, "
+                            "or code object")
+    ##     if isinstance(prog, types.FileType):
+    ##         co = compile(prog.read(),prog.name,'exec',comple_flags,1)
+    ##         return (co,globals,locals)
+        else: # prog is a string
+            co = compile(prog,'<string>','exec', compile_flags, 1)
+            return (co, globals, locals)
+''')
+
+file_softspace  = app.interphook('file_softspace')
+find_metaclass  = app.interphook('find_metaclass')
+import_all_from = app.interphook('import_all_from')
+prepare_exec    = app.interphook('prepare_exec')
 
 def print_expr(space, w_x): 
     try:
@@ -755,19 +844,6 @@ def print_expr(space, w_x):
             raise
         raise OperationError(space.w_RuntimeError, "lost sys.displayhook")
     space.call_function(w_displayhook, w_x)
-
-file_softspace = gateway.appdef("""
-        (file, newflag):
-            try:
-                softspace = file.softspace
-            except AttributeError:
-                softspace = 0
-            try:
-                file.softspace = newflag
-            except AttributeError:
-                pass
-            return softspace
-    """)
 
 def sys_stdout(space): 
     try: 
@@ -784,8 +860,7 @@ def print_item_to(space, w_x, w_stream):
 
     # add a softspace unless we just printed a string which ends in a '\t'
     # or '\n' -- or more generally any whitespace character but ' '
-    w_skip = space.appexec([w_x], """ 
-        app_skip_space(x): 
+    w_skip = space.appexec([w_x], """(x):
             return isinstance(x, str) and len(x) and \
                    x[-1].isspace() and x[-1]!=' ' 
     """) 
@@ -797,78 +872,3 @@ def print_item_to(space, w_x, w_stream):
 def print_newline_to(space, w_stream):
     space.call_method(w_stream, 'write', space.wrap("\n"))
     file_softspace(space, w_stream, space.w_False)
-
-def app_find_metaclass(bases, namespace, globals, builtins):
-    if '__metaclass__' in namespace:
-        return namespace['__metaclass__']
-    elif len(bases) > 0:
-        base = bases[0]
-        if hasattr(base, '__class__'):
-            return base.__class__
-        else:
-            return type(base)
-    elif '__metaclass__' in globals:
-        return globals['__metaclass__']
-    elif '__metaclass__' in builtins:
-        return builtins['__metaclass__']
-    else:
-        return type
-
-def app_import_all_from(module, into_locals):
-    try:
-        all = module.__all__
-    except AttributeError:
-        try:
-            dict = module.__dict__
-        except AttributeError:
-            raise ImportError("from-import-* object has no __dict__ "
-                              "and no __all__")
-        all = dict.keys()
-        skip_leading_underscores = True
-    else:
-        skip_leading_underscores = False
-    for name in all:
-        if skip_leading_underscores and name[0]=='_':
-            continue
-        into_locals[name] = getattr(module, name)
-
-
-def app_prepare_exec(f, prog, globals, locals, compile_flags):
-    """Manipulate parameters to exec statement to (codeobject, dict, dict).
-    """
-    # XXX INCOMPLETE
-    if (globals is None and locals is None and
-        isinstance(prog, tuple) and
-        (len(prog) == 2 or len(prog) == 3)):
-        globals = prog[1]
-        if len(prog) == 3:
-            locals = prog[2]
-        prog = prog[0]
-    if globals is None:
-        globals = f.f_globals
-        if locals is None:
-            locals = f.f_locals
-    if locals is None:
-        locals = globals
-    if not isinstance(globals, dict):
-        raise TypeError("exec: arg 2 must be a dictionary or None")
-    elif not globals.has_key('__builtins__'):
-        globals['__builtins__'] = f.f_builtins
-    if not isinstance(locals, dict):
-        raise TypeError("exec: arg 3 must be a dictionary or None")
-    # XXX - HACK to check for code object
-    co = compile('1','<string>','eval')
-    if isinstance(prog, type(co)):
-        return (prog, globals, locals)
-    if not isinstance(prog, str):
-##     if not (isinstance(prog, types.StringTypes) or
-##             isinstance(prog, types.FileType)):
-        raise TypeError("exec: arg 1 must be a string, file, or code object")
-##     if isinstance(prog, types.FileType):
-##         co = compile(prog.read(),prog.name,'exec',comple_flags,1)
-##         return (co,globals,locals)
-    else: # prog is a string
-        co = compile(prog,'<string>','exec', compile_flags, 1)
-        return (co, globals, locals)
-
-gateway.importall(globals())   # app_xxx() -> xxx()

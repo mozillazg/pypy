@@ -1,6 +1,6 @@
 
 import py
-from pypy.interpreter.gateway import appdef 
+from pypy.interpreter.gateway import appdef, applevel
 
 def test_execwith_novars(space): 
     val = space.appexec([], """ 
@@ -70,13 +70,21 @@ def test_app2interp_somefunc(space):
     w_result = app(space) 
     assert space.eq_w(w_result, space.wrap(42))
 
+def test_applevel_object(space):
+    app = applevel('''
+        def f(x, y):
+            return x-y
+        def g(x, y):
+            return f(y, x)
+    ''')
+    g = app.interphook('g')
+    w_res = g(space, space.wrap(10), space.wrap(1))
+    assert space.eq_w(w_res, space.wrap(-9))
+
 def app_test_something_at_app_level(): 
     x = 2
     assert x/2 == 1
-    
+
 class AppTestMethods: 
     def test_somee_app_test_method(self): 
         assert 2 == 2
-
-
-
