@@ -68,13 +68,13 @@ slice_indices4 = gateway.app2interp(app_slice_indices4)
 def indices3(space, w_slice, length):
     w_result = slice_indices3(space, w_slice, space.wrap(length))
     w_1, w_2, w_3 = space.unpacktuple(w_result, 3)
-    return space.unwrap(w_1), space.unwrap(w_2), space.unwrap(w_3)
+    return space.int_w(w_1), space.int_w(w_2), space.int_w(w_3)
 
 def indices4(space, w_slice, length):
     w_result = slice_indices4(space, w_slice, space.wrap(length))
     w_1, w_2, w_3, w_4 = space.unpacktuple(w_result, 4)
-    return (space.unwrap(w_1), space.unwrap(w_2),
-            space.unwrap(w_3), space.unwrap(w_4))
+    return (space.int_w(w_1), space.int_w(w_2),
+            space.int_w(w_3), space.int_w(w_4))
 
 register_all(vars(), globals())
 

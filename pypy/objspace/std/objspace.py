@@ -288,7 +288,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def newstring(self, chars_w):
         try:
-            chars = [chr(self.unwrap(w_c)) for w_c in chars_w]
+            chars = [chr(self.int_w(w_c)) for w_c in chars_w]
         except TypeError:   # chr(not-an-integer)
             raise OperationError(self.w_TypeError,
                                  self.wrap("an integer is required"))
