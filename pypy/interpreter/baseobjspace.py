@@ -277,29 +277,33 @@ class ObjSpace(object):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         return statement.exec_code(self, w_globals, w_locals)
 
-    def appexec(self, posargs_w, source, funcname="anon"): 
+    def appexec(self, posargs_w, source): 
         """ return value from executing given source at applevel with 
             given name=wrapped value parameters as its starting scope.  
             Note: EXPERIMENTAL. 
         """ 
         space = self
-        pypyco = space.loadfromcache((source, funcname), buildpypycode, 
-                                     self._codecache)
+        pypyco = space.loadfromcache((source), buildpypycode, self._codecache)
         w_glob = space.newdict([])
         frame = pypyco.create_frame(space, w_glob) 
         frame.setfastscope(posargs_w)
         return frame.run() 
 
 pypycodecache = Cache() 
-def buildpypycode((source, funcname), space): 
+def buildpypycode(source, space): 
     """ NOT_RPYTHON """ 
     # XXX will change once we have our own compiler 
     from pypy.interpreter.pycode import PyCode
     from pypy.tool.pytestsupport import py  # aehem
     argdecl, source = source.split(':', 1)
     argdecl = argdecl.strip()
+    i = argdecl.find('(')
+    if i >0: 
+        funcname, argdecl = argdecl[:i], argdecl[i:]
+    else: 
+        funcname = 'anon'
     if not argdecl.startswith('(') or not argdecl.endswith(')'): 
-        raise SyntaxError("incorrect exec_with header\n%s" % source)
+        raise SyntaxError("incorrect appexec header\n%s" % source)
     source = py.code.Source(source) 
     source = source.putaround("def %s%s:" % (funcname, argdecl))
     d = {}
