@@ -159,8 +159,10 @@ def make_dot_graphs(basefilename, graphs, storedir=None, target='ps'):
     #print source
     dest.write(source)
     psdest = dest.new(ext=target)
-    out = cmdexec('dot -T%s %s' % (target, str(dest)))
-    psdest.write(out)
+    out = cmdexec('dot -T%s %s>%s' % (target, str(dest),str(psdest)))
+## This is the old code, which doesnt work on binary files on windows    
+##    out = cmdexec('dot -T%s %s' % (target, str(dest)))
+##    psdest.write(out)
     #print "wrote", psdest
     return psdest
 
