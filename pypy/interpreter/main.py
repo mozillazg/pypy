@@ -14,10 +14,10 @@ def _run_eval_string(source, filename, space, eval):
             from pypy.objspace.std import StdObjSpace
             space = StdObjSpace()
 
-        compile = space.builtin.compile
+        w_compile = space.builtin.get('compile') 
         w = space.wrap
-        w_code = compile(source, filename, cmd, 0, 0)
-
+        w_code = space.call_function(w_compile, 
+                 w(source), w(filename), w(cmd), w(0), w(0))
         mainmodule = module.Module(space, space.wrap("__main__"))
         w_globals = mainmodule.w_dict
 

@@ -17,7 +17,7 @@ main()
 testresultoutput = '11\n'
 
 def checkoutput(space, expected_output,f,*args):
-    w_sys = space.get_builtin_module("sys")
+    w_sys = space.w_sys 
     w_oldout = space.getattr(w_sys, space.wrap("stdout"))
     capturefn = udir.join('capturefile')
     capturefile = capturefn.open('w') 
