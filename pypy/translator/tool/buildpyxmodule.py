@@ -17,6 +17,7 @@ def make_module_from_pyxstring(name, dirpath, string):
     i = 0
     while pyxfile.check():
         pyxfile = pyxfile.new(basename='%s%d.pyx' % (name, i))
+        i+=1
     pyxfile.write(string)
     if debug: print "made pyxfile", pyxfile
     make_c_from_pyxfile(pyxfile)
