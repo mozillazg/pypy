@@ -61,6 +61,8 @@ function_info={
                    'name': 'knownkeysdict'},
  'merge_setattr': {'arg_names': ['x'],'arg_types':[object],
                    'name': 'merge_setattr'},
+# 'methodcall1': {'arg_names': ['cond'],'arg_types':[int],
+#                   'name': 'methodcall1'},
  'my_bool': {'arg_names': ['x'],'arg_types':[object],
              'name': 'my_bool'},
  'my_gcd': {'arg_names': ['a', 'b'],'arg_types':[int,int],
@@ -382,13 +384,6 @@ class H(F):
         self.attr = 1
         return E(), y
 
-def methodcall1(cond):
-    if cond:
-        x = G()
-    else:
-        x = H()
-    return x.m(42)
-
 def knownkeysdict(b):
     if b:
         d = {'a': 0}
@@ -411,29 +406,6 @@ def simple_method(v):
     z.my_attribute = v
     return z.my_method()
 
-# --------------------(Currently) Non runnable Functions ---------------------
-
-def somebug1(n):
-    l = []
-    v = l.append
-    while n:
-        l[7] = 5
-    return v
-
-def inheritance_nonrunnable():
-    d = D()
-    d.stuff = (-12, -12)
-    e = E()
-    e.stuff = (3, "world")
-    return C().stuff
-
-# --------------------(Currently) Non compillable Functions ---------------------
-
-def attrs():
-    def b(): pass
-    b.f = 4
-    b.g = 5
-    return b.f + b.g
 
 def powerset(setsize):
     """Powerset
@@ -465,5 +437,37 @@ def powerset(setsize):
         bitmask += 1
     return powerset
 
+# --------------------(Currently) Non runnable Functions ---------------------
+
+def somebug1(n):
+    l = []
+    v = l.append
+    while n:
+        l[7] = 5
+    return v
+
+def inheritance_nonrunnable():
+    d = D()
+    d.stuff = (-12, -12)
+    e = E()
+    e.stuff = (3, "world")
+    return C().stuff
+
+# --------------------(Currently) Non compillable Functions ---------------------
+
+def attrs():
+    def b(): pass
+    b.f = 4
+    b.g = 5
+    return b.f + b.g
+
 def getstuff(x):
     return x.stuff
+
+def methodcall1(cond):
+    if cond:
+        x = G()
+    else:
+        x = H()
+    return x.m(42)
+
