@@ -131,7 +131,7 @@ class FlowObjSpace(ObjSpace):
         else:
             raise TypeError("not wrapped: " + repr(w_obj))
 
-    unwrap_builtin = unwrap
+    interpclass_w = unwrap
 
     def getexecutioncontext(self):
         return self.executioncontext

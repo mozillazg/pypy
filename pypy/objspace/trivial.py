@@ -171,7 +171,7 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
         else:
             return w
 
-    unwrap_builtin = unwrap
+    interpclass_w = unwrap
 
     def getdict(self, w_obj):
         if isinstance(w_obj, CPyWrapper):

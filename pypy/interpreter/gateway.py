@@ -141,7 +141,7 @@ def unwrap_spec_emit_space(orig_sig, new_sig):
     
 def unwrap_spec_emit_self(orig_sig, new_sig):
     new_sig.setfastscope.append(
-        "self.self_arg = self.space.unwrap_builtin(scope_w[%d])" %
+        "self.self_arg = self.space.interpclass_w(scope_w[%d])" %
             (new_sig.through_scope_w))
     new_sig.through_scope_w += 1
     new_sig.run_args.append("self.self_arg")

@@ -87,17 +87,17 @@ class GetSetProperty(Wrappable):
             #print w_property, w_obj, w_cls
             return w_property
         else:
-            return space.unwrap_builtin(w_property).fget(space, w_obj)
+            return space.interpclass_w(w_property).fget(space, w_obj)
 
     def descr_property_set(space, w_property, w_obj, w_value):
-        fset = space.unwrap_builtin(w_property).fset
+        fset = space.interpclass_w(w_property).fset
         if fset is None:
             raise OperationError(space.w_AttributeError,
                                  space.wrap("read-only attribute"))
         fset(space, w_obj, w_value)
 
     def descr_property_del(space, w_property, w_obj):
-        fdel = space.unwrap_builtin(w_property).fdel
+        fdel = space.interpclass_w(w_property).fdel
         if fdel is None:
             raise OperationError(space.w_AttributeError,
                                  space.wrap("cannot delete attribute"))
@@ -112,14 +112,14 @@ class GetSetProperty(Wrappable):
 def attrproperty(name):
     "NOT_RPYTHON: initialization-time only"
     def fget(space, w_obj):
-        obj = space.unwrap_builtin(w_obj)
+        obj = space.interpclass_w(w_obj)
         return space.wrap(getattr(obj, name))
     return GetSetProperty(fget)
 
 def attrproperty_w(name):
     "NOT_RPYTHON: initialization-time only"
     def fget(space, w_obj):
-        obj = space.unwrap_builtin(w_obj)
+        obj = space.interpclass_w(w_obj)
         w_value = getattr(obj, name)
         if w_value is None:
             return space.w_None
@@ -143,13 +143,13 @@ from pypy.interpreter.nestedscope import Cell
 from pypy.interpreter.special import NotImplemented, Ellipsis
 
 def descr_get_dict(space, w_obj):
-    obj = space.unwrap_builtin(w_obj)
+    obj = space.interpclass_w(w_obj)
     w_dict = obj.getdict()
     assert w_dict is not None, repr(obj)
     return w_dict
 
 def descr_set_dict(space, w_obj, w_dict):
-    obj = space.unwrap_builtin(w_obj)
+    obj = space.interpclass_w(w_obj)
     obj.setdict(w_dict)
 
 default_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
@@ -157,16 +157,16 @@ default_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict)
 
 # co_xxx interface emulation for built-in code objects
 def fget_co_varnames(space, w_code):
-    code = space.unwrap_builtin(w_code)
+    code = space.interpclass_w(w_code)
     return space.newtuple([space.wrap(name) for name in code.getvarnames()])
 
 def fget_co_argcount(space, w_code):
-    code = space.unwrap_builtin(w_code)
+    code = space.interpclass_w(w_code)
     argnames, varargname, kwargname = code.signature()
     return space.wrap(len(argnames))
 
 def fget_co_flags(space, w_code):
-    code = space.unwrap_builtin(w_code)
+    code = space.interpclass_w(w_code)
     argnames, varargname, kwargname = code.signature()
     flags = 0
     if varargname is not None: flags |= CO_VARARGS
@@ -174,7 +174,7 @@ def fget_co_flags(space, w_code):
     return space.wrap(flags)
 
 def fget_co_consts(space, w_code):
-    code = space.unwrap_builtin(w_code)
+    code = space.interpclass_w(w_code)
     w_docstring = space.wrap(code.getdocstring())
     return space.newtuple([w_docstring])
 

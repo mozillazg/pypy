@@ -60,24 +60,24 @@ class Function(Wrappable):
         return self.call_args(__args__)
 
     def fget_func_defaults(space, w_self):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         values_w = self.defs_w
         if not values_w:
             return space.w_None
         return space.newtuple(values_w)
 
     def fget_func_doc(space, w_self):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         if self.w_doc is None:
             self.w_doc = space.wrap(self.code.getdocstring())
         return self.w_doc
 
     def fset_func_doc(space, w_self, w_doc):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         self.w_doc = w_doc
 
     def fdel_func_doc(space, w_self):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         self.w_doc = space.w_None
 
 class Method(Wrappable): 

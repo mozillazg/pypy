@@ -91,7 +91,7 @@ class Frame(Wrappable):
         return self.w_locals
 
     def fget_getdictscope(space, w_self):
-        self = space.unwrap_builtin(w_self)
+        self = space.interpclass_w(w_self)
         return self.getdictscope()
 
     def setdictscope(self, w_locals):
