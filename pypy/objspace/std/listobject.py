@@ -39,7 +39,7 @@ registerimplementation(W_ListObject)
 
 
 def init__List(space, w_list, __args__):
-    w_iterable, __args__.parse('list',
+    w_iterable, = __args__.parse('list',
                                (['sequence'], None, None),   # signature
                                [W_ListObject(space, [])])    # default argument
     w_list.ob_size = 0  # XXX think about it later
