@@ -20,6 +20,7 @@ def _run_eval_string(source, filename, space, eval):
                  w(source), w(filename), w(cmd), w(0), w(0))
         mainmodule = module.Module(space, space.wrap("__main__"))
         w_globals = mainmodule.w_dict
+        space.setitem(w_globals, w('__builtins__'), space.builtin)
 
         pycode = space.interpclass_w(w_code)
         retval = pycode.exec_code(space, w_globals, w_globals)
