@@ -7,6 +7,7 @@ from pypy.objspace.flow.model import Variable, Constant, UndefinedConstant
 from pypy.objspace.flow.model import mkentrymap
 from pypy.translator.annrpython import RPythonAnnotator
 from pypy.annotation.model import SomeMethod
+import inspect
 
 class Op:
     def __init__(self, operation, gen, block):
@@ -180,6 +181,7 @@ class GenPyrex:
     def gen_graph(self):
         fun = self.functiongraph
         self.entrymap = mkentrymap(fun)
+        for block in self.entrymap : check_consistent_exits(block)
         currentlines = self.lines
         self.lines = []
         self.indent += 1 
@@ -201,10 +203,10 @@ class GenPyrex:
         hackedargs = ', '.join([var.name for var in fun.getargs()])
         self.putline("def %s(%s):" % (fun.name, hackedargs))
         self.indent += 1
-        self.putline("return %s(%s)" % (self._hackname(function_object), hackedargs))
+        self.putline("return %s(%s)" % (self.getfunctionname(function_object), hackedargs))
         self.indent -= 1
         # go ahead with the mandled header and body of the function
-        self.putline("def %s(%s):" % (self._hackname(function_object), params))
+        self.putline("def %s(%s):" % (self.getfunctionname(function_object), params))
         self.indent += 1
         #self.putline("# %r" % self.annotations)
         decllines = []
@@ -254,13 +256,10 @@ class GenPyrex:
         if vartype in (int, bool):
             ctype = "int"
         elif self.annotator and vartype in self.annotator.getuserclasses():
-            ctype = self.get_classname(vartype)
+            ctype = self.getclassname(vartype)
         else:
             ctype = "object"
         return ctype
-
-    def get_classname(self, userclass):
-        return self._hackname(userclass)
 
     def _vardecl(self, var):
             vartype, varname = self._paramvardecl(var)
@@ -269,29 +268,36 @@ class GenPyrex:
             else:
                 return ""
 
-    def _hackname(self, value):
-        try:
-            name = value.__name__
-        except AttributeError:
-            pass
-        else:
-            import types
-            if isinstance(value, (types.FunctionType, types.ClassType, type)):
-                # XXX! use the id of the value to make unique function and
-                #      class names
-                return '%s__%x' % (name, id(value))
-            elif isinstance(value, types.BuiltinFunctionType):
-                return str(name)
-        if isinstance(value, int):
-            value = int(value)  # cast subclasses of int (i.e. bools) to ints
-        return repr(value)
+    def getclassname(self,cls):
+        assert inspect.isclass(cls)
+        return '%s__%x' % (cls.__name__, id(cls))#self._hackname(cls)
+    
+    def getfunctionname(self,func):
+        assert inspect.isfunction(func) or inspect.ismethod(func)
+        return '%s__%x' % (func.__name__, id(func))#self._hackname(func)
+    
+    def getvarname(self,var):
+        assert inspect.isclass(var)
+        return self._hackname(var)
 
     def _str(self, obj, block):
         if isinstance(obj, Variable):
             #self.variablelocations[obj] = block
             return self.get_varname(obj)
         elif isinstance(obj, Constant):
-            return self._hackname(obj.value)
+            import types
+            if isinstance(obj.value,(types.ClassType,type)):
+                fff=self.getclassname(obj.value)
+            elif isinstance(obj.value,(types.FunctionType,type)):
+                fff=self.getfunctionname(obj.value)
+            elif isinstance(obj.value, types.BuiltinFunctionType):
+                fff=str(obj.value.__name__)
+            else:
+                #fff=self._hackname(obj.value)
+                fff=repr(obj.value)
+                if isinstance(obj.value, int):
+                    fff = repr(int(obj.value))
+            return fff
         else:
             raise TypeError("Unknown class: %s" % obj.__class__)
 
@@ -359,10 +365,10 @@ class GenPyrex:
             delay_methods={}
             for cls in self.annotator.getuserclassdefinitions():
                 if cls.basedef:
-                    bdef="(%s)" % (self.get_classname(cls.basedef.cls))
+                    bdef="(%s)" % (self.getclassname(cls.basedef.cls))
                 else:
                     bdef=""
-                self.putline("cdef class %s%s:" % (self.get_classname(cls.cls),bdef))
+                self.putline("cdef class %s%s:" % (self.getclassname(cls.cls),bdef))
                 self.indent += 1
                 empty = True
                 for attr,s_value in cls.attrs.items():
@@ -380,7 +386,7 @@ class GenPyrex:
                     hackedargs = ', '.join([var.name for var in fun.getargs()])
                     self.putline("def %s(%s):" % (py_fun.__name__, hackedargs))
                     self.indent += 1
-                    self.putline("return %s(%s)" % (self._hackname(py_fun),
+                    self.putline("return %s(%s)" % (self.getfunctionname(py_fun),
                                                     hackedargs))
                     self.indent -= 1
                     empty = False
@@ -391,3 +397,10 @@ class GenPyrex:
             return '\n'.join(self.lines)
         else:
             return ''
+        
+def check_consistent_exits(block):
+    for exit in block.exits :
+        if len(exit.args) != len(exit.target.inputargs):
+            print "inconsistent block exit", block,exit,exit.args
+            print "more", exit.target,exit.target.inputargs
+            
