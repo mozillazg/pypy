@@ -6,8 +6,8 @@ transformation may introduce new space operation.
 
 import types
 from pypy.objspace.flow.model import SpaceOperation
-from pypy.annotation.model import SomeValue
-from pypy.translator.annrpython import CannotSimplify
+#from pypy.annotation.model import SomeValue
+#from pypy.translator.annrpython import CannotSimplify
 
 # XXX: Lots of duplicated codes. Fix this!
 
