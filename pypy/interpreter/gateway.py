@@ -14,7 +14,7 @@ import types, sys
 
 from pypy.tool import hack
 from pypy.interpreter.error import OperationError 
-from pypy.interpreter import eval, pycode
+from pypy.interpreter import eval
 from pypy.interpreter.function import Function, Method
 from pypy.interpreter.baseobjspace import W_Root,ObjSpace,Wrappable
 from pypy.interpreter.argument import Arguments
@@ -261,6 +261,7 @@ class BuiltinCode(eval.Code):
         # str,int,float: unwrap argument as such type
         
         # First extract the signature from the (CPython-level) code object
+        from pypy.interpreter import pycode
         argnames, varargname, kwargname = pycode.cpython_code_signature(func.func_code)
 
         if unwrap_spec is None:
@@ -467,6 +468,7 @@ class app2interp(Gateway):
 
     def getcode(self, space):
         "NOT_RPYTHON"
+        from pypy.interpreter import pycode
         code = pycode.PyCode(space)
         code._from_code(self._staticcode)
         return code
