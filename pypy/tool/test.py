@@ -225,8 +225,12 @@ def testsuite_from_dir(root, filterfunc=None, recursive=0, loader=None):
             modpath = fullfn[len(autopath.pypydir)+1:-3]
             modpath = 'pypy.' + modpath.replace(os.sep, '.')
             if not filterfunc or filterfunc(modpath):
-                subsuite = loader.loadTestsFromName(modpath)
-                suite.addTest(subsuite, modpath)
+                try:
+                    subsuite = loader.loadTestsFromName(modpath)
+                except:
+                    print "skipping testfile (failed loading it)", modpath
+                else:
+                    suite.addTest(subsuite, modpath)
         elif recursive and os.path.isdir(fullfn):
             subsuite = testsuite_from_dir(fullfn, filterfunc, 1, loader)
             if subsuite:

@@ -9,10 +9,11 @@ from pypy.interpreter.baseobjspace import *
 import operator, types, new, sys
 
 class nugen(object):
-    def __init__(self, space, frame):
-        self.space = space
+    def __init__(self, frame):
+        self.space = frame.space
         self.frame = frame
         self.running = 0
+
     def next(self):
         if self.running:
             raise OperationError(self.space.w_ValueError,
@@ -29,21 +30,24 @@ class nugen(object):
             self.running = 0
 
         return ret
+
     def __iter__(self):
         return self
 
-class numeth(object):
+class _numeth(object):
     def __init__(self, space, func, inst, cls):
         self.space = space
         self.func = func
         self.inst = inst
         self.cls = cls
+
     def _call_(self, *args, **kws):
         if self.inst is None and self.cls is not type(None):
             pass
         else:
             args = (self.inst,) + args
         return self.func(*args, **kws)
+
     def __call__(self, *args, **kws):
         try:
             return self._call_(*args, **kws)
@@ -52,35 +56,50 @@ class numeth(object):
         except:
             raise
 
-class nufun(object):
-    def __init__(self, space, code, globals, defaultarguments, closure):
-        self.space = space
+from pypy.interpreter.gateway import InterpretedFunction
+
+class nufun(InterpretedFunction):
+    def __init__(self, space, code, globals, defs, closure):
+        InterpretedFunction.__init__(self, space, code, globals, closure)
+        self.w_defs = space.wrap(defs)
         self.__name__ = code.co_name
-        self.func_code = self.code = code
-        self.globals = globals
-        self.defaultarguments = defaultarguments
-        self.closure = closure
-    def do_call(self, *args, **kwds):
-        locals = self.code.build_arguments(self.space, args, kwds,
-            w_defaults = self.defaultarguments,
-            w_closure = self.closure)
-        if self.code.co_flags & 0x0020:
-            from pypy.interpreter import pyframe
-            frame = pyframe.PyFrame(self.space, self.code,
-                                    self.globals, locals)
-            return nugen(self.space, frame)
+        self.func_code = code
+
+        #self.func_code = self.code = code
+        #self.globals = globals
+        #self.defaultarguments = defs
+        #self.closure = closure
+
+    def __call__(self, *args, **kwargs):
+        if self.cpycode.co_flags & 0x0020:
+            frame = self.create_frame(args, kwargs)
+            return nugen(frame)
         else:
-            return self.code.eval_code(self.space, self.globals, locals)
-    def __call__(self, *args, **kwds):
-        return self.do_call(*args, **kwds)
-    def __get__(self, ob, cls=None):
-        return numeth(self.space, self, ob, cls)
+            return self.eval_frame(args, kwargs)
+
+    #def __get__(self, ob, cls=None):
+    #    return numeth(self.space, self, ob, cls)
+
+    #def do_call(self, *args, **kwds):
+    #    locals = self.code.build_arguments(self.space, args, kwds,
+    #        w_defaults = self.defaultarguments,
+    #        w_closure = self.closure)
+    #    if self.code.co_flags & 0x0020:
+    #        from pypy.interpreter import pyframe
+    #        frame = pyframe.PyFrame()
+    #        frame.initialize(self.space, self.code,
+    #                         self.globals, locals)
+    #        return nugen(self.space, frame)
+    #    else:
+    #        return self.code.eval_code(self.space, self.globals, locals)
+
+    #def __call__(self, *args, **kwds):
+    #    return self.do_call(*args, **kwds)
 
 
 class TrivialObjSpace(ObjSpace):
 
     def clone_exception_hierarchy(self):
-        from pypy.interpreter.pycode import PyByteCode
         def __init__(self, *args):
             self.args = args
         def __str__(self):
@@ -154,7 +173,6 @@ class TrivialObjSpace(ObjSpace):
                 newstuff[c.__name__] = c
         newstuff.update(self.clone_exception_hierarchy())
         self.make_builtins()
-        self.make_sys()
         # insert these into the newly-made builtins
         for key, w_value in newstuff.items():
             self.setitem(self.w_builtins, self.wrap(key), w_value)
@@ -167,6 +185,11 @@ class TrivialObjSpace(ObjSpace):
         return w
 
     def reraise(self):
+        #import traceback
+        #traceback.print_exc()
+        #ec = self.getexecutioncontext() # .framestack.items[-1]
+        #ec.print_detailed_traceback(self)
+
         etype, evalue = sys.exc_info()[:2]
         name = etype.__name__
         if hasattr(self, 'w_' + name):
@@ -324,11 +347,14 @@ def %(_name)s(self, *args):
         except StopIteration:
             raise NoValue
 
-    def newfunction(self, code, globals, defaultarguments, closure=None):
-        assert hasattr(code, 'co_name')
-        assert hasattr(code, 'build_arguments')
-        assert hasattr(code, 'eval_code')
-        return nufun(self, code, globals, defaultarguments, closure)
+    def newfunction(self, code, globals, defs, closure=None):
+        #from pypy.interpreter.gateway import Function
+        #return Function(self, code, globals, defaultarguments, closure)
+
+        #assert hasattr(code, 'co_name')
+        #assert hasattr(code, 'build_arguments')
+        #assert hasattr(code, 'eval_code')
+        return nufun(self, code, globals, defs, closure)
 
     def newstring(self, asciilist):
         try:
@@ -351,10 +377,13 @@ def %(_name)s(self, *args):
             args = (callable.im_self,) + args
             callable = callable.im_func
         try:
-            return apply(callable, args, kwds or {})
+            return callable(*args, **(kwds or {}))
         except OperationError:
             raise
         except:
+            #print "got exception in", callable.__name__
+            #print "len args", len(args)
+            #print "kwds", kwds
             self.reraise()
                 
     def hex(self, ob):

@@ -1,7 +1,7 @@
 import autopath
 
 from pypy.tool import test
-from pypy.interpreter.pyframe import PyFrame
+from pypy.interpreter.gateway import ScopedCode
 from pypy.interpreter import baseobjspace, executioncontext
 
 class TestExecutionContext(test.TestCase):
@@ -16,9 +16,9 @@ class TestExecutionContext(test.TestCase):
                                         space.wrap('exec'))).co_consts[0]
         w_globals = ec.make_standard_w_globals()
         w_locals = space.newdict([(space.wrap('x'), space.wrap(5))])
-        frame = PyFrame(space, bytecode, w_globals, w_locals)
-        w_output = ec.eval_frame(frame)
-        self.assertEquals(frame.space.unwrap(w_output), 6)
+        scopedcode = ScopedCode(space, bytecode, w_globals)
+        w_output = scopedcode.eval_frame(w_locals)
+        self.assertEquals(space.unwrap(w_output), 6)
 
 
 if __name__ == '__main__':

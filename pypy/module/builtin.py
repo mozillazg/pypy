@@ -1,5 +1,6 @@
-from pypy.interpreter.extmodule import *
-from pypy.interpreter import pycode, executioncontext
+from pypy.interpreter import executioncontext
+from pypy.interpreter.gateway import \
+     AppVisibleModule, ScopedCode, wrap_applevel_class
 
 #######################
 ####  __builtin__  ####
@@ -7,55 +8,67 @@ from pypy.interpreter import pycode, executioncontext
 
 import __builtin__ as cpy_builtin
 
-class Builtin(BuiltinModule):
-    __pythonname__ = '__builtin__'
+class __builtin__(AppVisibleModule):
 
     def _actframe(self, index=-1):
         return self.space.getexecutioncontext().framestack.items[index]
 
+    def _wrap_postponed(self):
+        """ stuff that needs a mostly working interpreter goes here.
+
+        The AppVisibleModule init will put all objects into '_postponed'
+        that need to be wrapped now.  Currently this should only be
+        the 'xrange' class. 
+        """
+        for name, obj in self._postponed:
+            # for now this can only be a class
+            w_res = wrap_applevel_class(self.space, name, obj)
+            w_name = self.space.wrap(name)
+            self.space.setattr(self._wrapped, w_name, w_res)
+
     def globals(self):
         return self._actframe().w_globals
-    globals = appmethod(globals)
 
     def locals(self):
         return self._actframe().w_locals
-    locals = appmethod(locals)
-
 
     def __import__(self, w_modulename, w_locals, w_globals, w_fromlist):
         space = self.space
         w = space.wrap
         try:
-            w_mod = space.getitem(space.w_modules, w_modulename)
+            w_mod = space.getitem(space.sys.w_modules, w_modulename)
             return w_mod
         except executioncontext.OperationError,e:
             if not e.match(space, space.w_KeyError):
                 raise
             w_mod = space.get_builtin_module(w_modulename)
             if w_mod is not None:
-                space.setitem(space.w_modules,w_modulename,w_mod)
+                space.setitem(space.sys.w_modules, w_modulename, w_mod)
                 return w_mod
 
             import os, __future__
-            for path in space.unwrap(space.getattr(space.w_sys, w('path'))):
+            for path in space.unwrap(space.sys.w_path):
                 f = os.path.join(path, space.unwrap(w_modulename) + '.py')
                 if os.path.exists(f):
                     w_mod = space.newmodule(w_modulename)
-                    space.setitem(space.w_modules, w_modulename, w_mod)
+                    space.setitem(space.sys.w_modules, w_modulename, w_mod)
                     space.setattr(w_mod, w('__file__'), w(f))
                     w_source = w(open(f, 'r').read())
                     # wrt the __future__.generators.compiler_flag, "um" -- mwh
                     w_code = self.compile(w_source, w(f), w('exec'),
                                           w(__future__.generators.compiler_flag))
                     w_dict = space.getattr(w_mod, w('__dict__'))
-                    space.unwrap(w_code).eval_code(space, w_dict, w_dict)
+
+                    code = space.unwrap(w_code)
+                    from pypy.interpreter.gateway import ScopedCode
+                    scopedcode = ScopedCode(space, code, w_dict)
+                    scopedcode.eval_frame()
 
                     return w_mod
             
             w_exc = space.call_function(space.w_ImportError, w_modulename)
             raise executioncontext.OperationError(
                       space.w_ImportError, w_exc)
-    __import__ = appmethod(__import__)
 
     def compile(self, w_str, w_filename, w_startstr,
                 w_supplied_flags=None, w_dont_inherit=None):
@@ -78,10 +91,7 @@ class Builtin(BuiltinModule):
 
         #print (str, filename, startstr, supplied_flags, dont_inherit)
         c = cpy_builtin.compile(str, filename, startstr, supplied_flags, dont_inherit)
-        res = pycode.PyByteCode()
-        res._from_code(c)
-        return space.wrap(res)
-    compile = appmethod(compile)
+        return space.wrap(c)
 
     def execfile(self, w_filename, w_globals=None, w_locals=None):
         space = self.space
@@ -95,79 +105,325 @@ class Builtin(BuiltinModule):
         filename = space.unwrap(w_filename)
         s = open(filename).read()
         c = cpy_builtin.compile(s, filename, 'exec', 4096) # XXX generators 
-        res = pycode.PyByteCode()
-        res._from_code(c)
 
-        res.eval_code(space, w_globals, w_locals)
+
+        scopedcode = ScopedCode(space, c, w_globals)
+        scopedcode.eval_frame(w_locals)
         return space.w_None
-
-    execfile = appmethod(execfile)
-
-
 
     ####essentially implemented by the objectspace
     def abs(self, w_val):
         return self.space.abs(w_val)
-    abs = appmethod(abs)
 
     def chr(self, w_ascii):
         w_character = self.space.newstring([w_ascii])
         return w_character
-    chr = appmethod(chr)
 
     def len(self, w_obj):
         return self.space.len(w_obj)
-    len = appmethod(len)
 
     def delattr(self, w_object, w_name):
         return self.space.delattr(w_object, w_name)
-    delattr = appmethod(delattr)
 
     def getattr(self, w_object, w_name):
         return self.space.getattr(w_object, w_name)
-    getattr = appmethod(getattr)
-
 
     def hash(self, w_object):
         return self.space.hash(w_object)
-    hash = appmethod(hash)
 
     def oct(self, w_val):
         return self.space.oct(w_val)
-    oct = appmethod(oct)
 
     def hex(self, w_val):
         return self.space.hex(w_val)
-    hex = appmethod(hex)
-
 
     def id(self, w_object):
         return self.space.id(w_object)
-    id = appmethod(id)
 
     #XXX works only for new-style classes.
     #So we have to fix it, when we add support for old-style classes
     def issubclass(self, w_cls1, w_cls2):
         return self.space.issubtype(w_cls1, w_cls2)
-    issubclass = appmethod(issubclass)
 
     #XXX missing: second form of iter (callable, sentintel) 
     def iter(self, w_collection):
         return self.space.iter(w_collection)
-    iter = appmethod(iter)
 
     def ord(self, w_val):
         return self.space.ord(w_val)
-    ord = appmethod(ord)
 
     def pow(self, w_val):
         return self.space.pow(w_val)
-    pow = appmethod(pow)
 
     def repr(self, w_object):
         return self.space.repr(w_object)
-    repr = appmethod(repr)
 
     def setattr(self, w_object, w_name, w_val):
         return self.space.setattr(w_object, w_name, w_val)
-    setattr = appmethod(setattr)
+
+    # app-level functions
+
+    def app_apply(function, args, kwds={}):
+        """call a function (or other callable object) and return its result"""
+        return function(*args, **kwds)
+
+    def app_map(function, *collections):
+        """does 3 separate things, hence this enormous docstring.
+           1.  if function is None, return a list of tuples, each with one
+               item from each collection.  If the collections have different
+               lengths,  shorter ones are padded with None.
+
+           2.  if function is not None, and there is only one collection,
+               apply function to every item in the collection and return a
+               list of the results.
+
+           3.  if function is not None, and there are several collections,
+               repeatedly call the function with one argument from each
+               collection.  If the collections have different lengths,
+               shorter ones are padded with None"""
+
+        if len(collections) == 0:
+            raise TypeError, "map() requires at least one sequence"
+
+        elif len(collections) == 1:
+           #it's the most common case, so make it faster
+           if function is None:
+              return collections[0]
+           else:
+              return [function(x) for x in collections[0]]
+        else:
+           res = []
+           idx = 0   
+           while 1:
+              cont = 0     #is any collection not empty?
+              args = []
+              for collection in collections:
+                  try:
+                     elem = collection[idx]
+                     cont = cont + 1
+                  except IndexError:
+                     elem = None
+                  args.append(elem)
+              if cont:
+                  if function is None:
+                     res.append(tuple(args))
+                  else:
+                     res.append(function(*args))
+              else:
+                  return res
+              idx = idx + 1
+
+    def app_filter(function, collection):
+        """construct a list of those elements of collection for which function
+           is True.  If function is None, then return the items in the sequence
+           which are True."""
+
+        if function is None:
+            res = [item for item in collection if item]
+        else:
+            res = [item for item in collection if function(item)]
+
+        if type(collection) is tuple:
+           return tuple(res)
+        elif type(collection) is str:
+           return "".join(res)
+        else:
+           return res
+
+    def app_zip(*collections):
+        """return a list of tuples, where the nth tuple contains every
+           nth item of each collection.  If the collections have different
+           lengths, zip returns a list as long as the shortest collection,
+           ignoring the trailing items in the other collections."""
+
+        if len(collections) == 0:
+           raise TypeError, "zip() requires at least one sequence"
+        res = []
+        idx = 0
+        while 1:
+           try:
+              elems = []
+              for collection in collections:
+                 elems.append(collection[idx])
+              res.append(tuple(elems))
+           except IndexError:
+              break
+           idx = idx + 1
+        return res
+
+    def app_reduce(function, l, *initialt):
+        """ Apply function of two arguments cumulatively to the items of
+            sequence, from left to right, so as to reduce the sequence to a
+            single value.  Optionally begin with an initial value."""
+
+        if initialt:
+           initial, = initialt
+           idx = 0
+        else:
+           try:
+              initial = l[0]
+           except IndexError:
+              raise TypeError, "reduce() of empty sequence with no initial value"
+           idx = 1
+        while 1:
+           try:
+             initial = function(initial, l[idx])
+             idx = idx + 1
+           except IndexError:
+             break
+        return initial
+
+    def app_isinstance(obj, klass_or_tuple):
+        objcls = obj.__class__
+        if issubclass(klass_or_tuple.__class__, tuple):
+           for klass in klass_or_tuple:
+               if issubclass(objcls, klass):
+                  return 1
+           return 0
+        else:
+           try:
+               return issubclass(objcls, klass_or_tuple)
+           except TypeError:
+               raise TypeError, "isinstance() arg 2 must be a class or type"
+
+    def app_range(x, y=None, step=1):
+        """ returns a list of integers in arithmetic position from start (defaults
+            to zero) to stop - 1 by step (defaults to 1).  Use a negative step to
+            get a list in decending order."""
+
+        if y is None: 
+                start = 0
+                stop = x
+        else:
+                start = x
+                stop = y
+
+        if step == 0:
+            raise ValueError, 'range() arg 3 must not be zero'
+
+        elif step > 0:
+            if stop <= start: # no work for us
+                return []
+            howmany = (stop - start + step - 1)/step
+
+        else:  # step must be < 0, or we would have raised ValueError
+            if stop >= start: # no work for us
+                return []
+            howmany = (start - stop - step  - 1)/-step
+
+        arr = [None] * howmany  # this is to avoid using append.
+
+        i = start
+        n = 0
+        while n < howmany:
+            arr[n] = i
+            i += step
+            n += 1
+
+        return arr
+
+    # min and max could be one function if we had operator.__gt__ and
+    # operator.__lt__  Perhaps later when we have operator.
+
+    def app_min(*arr):
+        """return the smallest number in a list"""
+
+        if not arr:
+            raise TypeError, 'min() takes at least one argument'
+
+        if len(arr) == 1:
+            arr = arr[0]
+
+        iterator = iter(arr)
+        try:
+            min = iterator.next()
+        except StopIteration:
+            raise ValueError, 'min() arg is an empty sequence'
+
+        for i in iterator:
+            if min > i:
+                min = i
+        return min
+
+    def app_max(*arr):
+        """return the largest number in a list"""
+
+        if not arr:
+            raise TypeError, 'max() takes at least one argument'
+
+        if len(arr) == 1:
+            arr = arr[0]
+
+        iterator = iter(arr)
+        try:
+            max = iterator.next()
+        except StopIteration:
+            raise ValueError, 'max() arg is an empty sequence'
+
+        for i in iterator:
+            if max < i:
+                max = i
+        return max
+
+
+    def app_cmp(x, y):
+        """return 0 when x == y, -1 when x < y and 1 when x > y """
+        if x < y:
+            return -1
+        elif x == y:
+            return 0
+        else:
+            return 1
+
+    def app__vars(*obj):
+        """return a dictionary of all the attributes currently bound in obj.  If
+        called with no argument, return the variables bound in local scope."""
+
+        if len(obj) == 0:
+            return locals()
+        elif len(obj) != 1:
+            raise TypeError, "vars() takes at most 1 argument."
+        else:
+            try:
+                return obj[0].__dict__
+            except AttributeError:
+                raise TypeError, "vars() argument must have __dict__ attribute"
+
+    def app_hasattr(ob, attr):
+        try:
+            getattr(ob, attr)
+            return True
+        except AttributeError:
+            return False
+
+
+    class app_xrange:
+        def __init__(self, x, y=None, step=1):
+            """ returns an xrange object, see range for more docs"""
+
+            if y is None: 
+                self.start = 0
+                self.stop = x
+            else:
+                self.start = x
+                self.stop = y
+
+            if step == 0:
+                raise ValueError, 'xrange() step-argument (arg 3) must not be zero'
+
+            self.step = step
+
+        def __iter__(self):
+            def gen(self):
+                start,stop,step = self.start,self.stop,self.step
+                i = start
+                if step > 0:
+                    while i < stop:
+                        yield i
+                        i+=step
+                else:
+                    while i > stop:
+                        yield i
+                        i+=step
+
+            return gen(self)

@@ -35,11 +35,9 @@ class PyPyConsole(code.InteractiveConsole):
         code.InteractiveConsole.interact(self, banner)
 
     def runcode(self, code):
-        from pypy.interpreter import pycode
-        r = pycode.PyByteCode()
-        r._from_code(code)
-        frame = pyframe.PyFrame(self.space, r,
-                                self.w_globals, self.w_globals)
+        from pypy.interpreter.gateway import ScopedCode
+        scopedcode = ScopedCode(self.space, code, self.w_globals)
+        frame = scopedcode.create_frame()
         try:
             self.ec.eval_frame(frame)
         except baseobjspace.OperationError, operationerr:

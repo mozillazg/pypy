@@ -158,11 +158,11 @@ def exec_statement(prog, globals, locals,
             locals = caller_locals
     if locals is None:
         locals = globals
-    if not isinstance(globals, types.DictType):
+    if not isinstance(globals, dict):
         raise TypeError("exec: arg 2 must be a dictionary or None")
     elif not globals.has_key('__builtins__'):
         globals['__builtins__'] = builtins
-    if not isinstance(locals, types.DictType):
+    if not isinstance(locals, dict):
         raise TypeError("exec: arg 3 must be a dictionary or None")
 ##     # XXX - HACK to check for code object
 ##     co = compile('1','<string>','eval')

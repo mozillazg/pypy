@@ -67,12 +67,11 @@ class TestStdObjectSpace(test.TestCase):
         # unavoidable
         def f(x):
             return x
-        from pypy.interpreter.pycode import PyByteCode
-        c = PyByteCode()
-        c._from_code(f.func_code)
+
+        cpycode = f.func_code
         w_globals = self.space.newdict([])
         w_defs = self.space.newtuple([])
-        w_f = self.space.newfunction(c, w_globals, w_defs)
+        w_f = self.space.newfunction(cpycode, w_globals, w_defs)
         self.assertEqual_w(self.space.call_function(w_f, self.space.wrap(1)),
                            self.space.wrap(1))
     

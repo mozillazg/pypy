@@ -2,8 +2,7 @@
 """
 
 from pypy.interpreter.executioncontext import OperationError, Stack, NoValue
-
-from pypy.interpreter.pycode import app2interp
+from pypy.interpreter.gateway import app2interp, Cell, _NULL
 
 
 class PyFrame:
@@ -18,18 +17,41 @@ class PyFrame:
      * 'valuestack', 'blockstack', 'next_instr' control the interpretation
     """
 
-    def __init__(self, space, bytecode, w_globals, w_locals):
-        self.space = space
-        self.bytecode = bytecode # Misnomer; this is really like a code object
-        self.w_globals = w_globals
-        self.w_locals = w_locals
-        self.localcells, self.nestedcells = bytecode.locals2cells(space,
-                                                                  w_locals)
-        self.w_builtins = self.load_builtins()
+    def initialize(self, scopedcode):
+        self.space = scopedcode.space
+        self.bytecode = scopedcode.cpycode
+        self.w_globals = scopedcode.w_globals
+        self.closure_w = scopedcode.closure_w or ()
         self.valuestack = Stack()
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
+        self.w_builtins = self.space.w_builtins
+
+    def setdictscope(self, w_locals):
+        self.w_locals = w_locals
+        self.locals_w = [_NULL] * self.bytecode.co_nlocals
+        self.locals2fast()
+
+    def setfastscope(self, locals_w):
+        self.locals_w = locals_w
+        self.w_locals = self.space.newdict([])
+        self.fast2locals()
+
+    def XXXclone(self):
+        f = self.__class__()
+        f.space = self.space
+        f.bytecode = self.bytecode
+        f.w_globals = self.w_globals
+        f.w_locals = self.w_locals
+        f.w_builtins = self.w_builtins
+        f.valuestack = self.valuestack.clone()
+        f.blockstack = self.blockstack.clone()
+        f.localcells = [x.clone() for x in self.localcells]
+        f.nestedcells = [x.clone() for x in self.nestedcells]
+        f.last_exception = self.last_exception
+        f.next_instr = self.next_instr
+        return f
 
     def eval(self, executioncontext):
         "Interpreter main loop!"
@@ -48,6 +70,8 @@ class PyFrame:
                         else:
                             opcode.dispatch_noarg(self, op)
                     except OperationError, e:
+                        #import traceback
+                        #traceback.print_exc()
                         e.record_application_traceback(self, last_instr)
                         self.last_exception = e
                         executioncontext.exception_trace(e)
@@ -100,57 +124,25 @@ class PyFrame:
 
     def fast2locals(self):
         # Copy values from self.localcells to self.w_locals
-        for i in range(len(self.localcells)):
-            name = self.bytecode.co_varnames[i]
-            cell = self.localcells[i]
+        for name, w_value in zip(self.bytecode.co_varnames, self.locals_w):
             w_name = self.space.wrap(name)
-            try:
-                w_value = cell.get()
-            except ValueError:
-                pass
-            else:
+            if w_value is not _NULL:
                 self.space.setitem(self.w_locals, w_name, w_value)
 
     def locals2fast(self):
         # Copy values from self.w_locals to self.localcells
         for i in range(self.bytecode.co_nlocals):
-            name = self.bytecode.co_varnames[i]
-            cell = self.localcells[i]
-            w_name = self.space.wrap(name)
+            w_name = self.space.wrap(self.bytecode.co_varnames[i])
             try:
                 w_value = self.space.getitem(self.w_locals, w_name)
             except OperationError, e:
                 if not e.match(self.space, self.space.w_KeyError):
                     raise
-                else:
-                    pass
             else:
-                cell.set(w_value)
+                self.locals_w[i] = w_value
 
     ### frame initialization ###
 
-    def load_builtins(self):
-        # compute w_builtins.  This cannot be done in the '.app.py'
-        # file for bootstrapping reasons.
-        w_builtinsname = self.space.wrap("__builtins__")
-        try:
-            w_builtins = self.space.getitem(self.w_globals, w_builtinsname)
-        except OperationError, e:
-            if not e.match(self.space, self.space.w_KeyError):
-                raise
-            w_builtins = self.space.w_builtins  # fall-back for bootstrapping
-        # w_builtins can be a module object or a dictionary object.
-        # In frameobject.c we explicitely check if w_builtins is a module
-        # object.  Here we will just try to read its __dict__ attribute and
-        # if it fails we assume that it was a dictionary in the first place.
-        w_attrname = self.space.wrap("__dict__")
-        # XXX Commented out the following; it doesn't work for Ann space,
-        # and doesn't seem to be needed for other spaces AFAICT.
-##        try:
-##            w_builtins = self.space.getattr(w_builtins, w_attrname)
-##        except OperationError:
-##            pass # XXX catch and ignore any error
-        return w_builtins
 
     ### exception stack ###
 
@@ -251,8 +243,6 @@ class ExceptBlock(FrameBlock):
             raise Exception, "?!"
         return etype, evalue
     normalize_exception = app2interp(app_normalize_exception)
-
-
 
 class FinallyBlock(FrameBlock):
     """A try:finally: block.  Stores the position of the exception handler."""
@@ -356,70 +346,4 @@ class ExitFrame(Exception):
 class BytecodeCorruption(ValueError):
     """Detected bytecode corruption.  Never caught; it's an error."""
 
-
-## Cells ##
-
-_NULL = object() # Marker object
-
-class Cell:
-    def __init__(self, w_value=_NULL):
-        self.w_value = w_value
-
-    def get(self):
-        if self.w_value is _NULL:
-            raise ValueError, "get() from an empty cell"
-        return self.w_value
-
-    def set(self, w_value):
-        self.w_value = w_value
-
-    def delete(self):
-        if self.w_value is _NULL:
-            raise ValueError, "make_empty() on an empty cell"
-        self.w_value = _NULL
-
-    def __repr__(self):
-        """ representation for debugging purposes """
-        if self.w_value is _NULL:
-            return "%s()" % self.__class__.__name__
-        else:
-            return "%s(%s)" % (self.__class__.__name__, self.w_value)
-
-class AppFrame(PyFrame):
-    """Represents a frame for a regular Python function
-    that needs to be interpreted.
-
-    Public fields:
-     * 'space' is the object space this frame is running in
-     * 'w_locals' is the locals dictionary to use
-     * 'w_globals' is the attached globals dictionary
-     * 'w_builtins' is the attached built-ins dictionary
-     * 'valuestack', 'blockstack', 'next_instr' control the interpretation
-    """
-
-    def __init__(self, space, bytecode, w_globals, argtuple):
-        self.space = space
-        self.bytecode = bytecode # Misnomer; this is really like a code object
-
-        # XXX we may want to have lazy access to interp-level through w_globals later
-        self.w_globals = w_globals
-
-        # XXX construct self.w_locals
-        self.nestedcells = ()
-        self.localcells = [ Cell(x) for x in argtuple ]
-        missing = self.bytecode.co_nlocals - len(self.localcells)
-        self.localcells.extend([ Cell() for x in range(missing)])
-        
-        self.w_builtins = self.load_builtins()
-        self.valuestack = Stack()
-        self.blockstack = Stack()
-        self.last_exception = None
-        self.next_instr = 0
-        #self._dump()
-
-    def _dump(self):
-        print "AppFrame_dump"
-        print "  space     ", self.space
-        print "  localcells", self.localcells
-        print "  co_varnames  ", self.bytecode.co_varnames
 

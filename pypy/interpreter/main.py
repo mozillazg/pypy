@@ -1,8 +1,6 @@
 import autopath
 from pypy.tool import test, option
-from pypy.objspace.std import StdObjSpace
-from pypy.module.builtin import Builtin
-from pypy.interpreter import executioncontext, baseobjspace, pyframe
+from pypy.interpreter import executioncontext, baseobjspace, gateway
 import sys, os
 
 def _run_eval_string(source, filename, space, eval):
@@ -13,6 +11,7 @@ def _run_eval_string(source, filename, space, eval):
         
     try:
         if space is None:
+            from pypy.objspace.std import StdObjSpace
             space = StdObjSpace()
 
         compile = space.builtin.compile
@@ -25,13 +24,13 @@ def _run_eval_string(source, filename, space, eval):
         w_mainmodule = space.newmodule(space.wrap("__main__"))
         w_globals = space.getattr(w_mainmodule, space.wrap("__dict__"))
         space.setitem(w_globals, space.wrap("__builtins__"), space.w_builtins)
-        
-        frame = pyframe.PyFrame(space, space.unwrap(w_code),
-                                w_globals, w_globals)
+       
     except baseobjspace.OperationError, operationerr:
         operationerr.record_interpreter_traceback()
         raise baseobjspace.PyPyError(space, operationerr)
     else:
+        scopedcode = gateway.ScopedCode(space, space.unwrap(w_code), w_globals)
+        frame = scopedcode.create_frame()
         if eval:
             return ec.eval_frame(frame)
         else:
