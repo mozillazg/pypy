@@ -16,7 +16,7 @@ def getconstclass(space, w_cls):
     return None
 
 
-def sc_normalize_exception(space, args):
+def sc_normalize_exception(space, fn, args):
     """Special-case for 'raise' statements.  Case-by-case analysis:
 
     * raise Class
@@ -34,7 +34,7 @@ def sc_normalize_exception(space, args):
        - assumes that Arg is the value you want for the exception, and
          that Class is exactly the exception class.  No check or normalization.
     """
-    w_arg1, w_arg2, w_tb = args
+    w_arg1, w_arg2, w_tb = args.fixedunpack(3)
 
     # w_arg3 (the traceback) is ignored and replaced with None
     # if it is a Variable, because pyopcode.py tries to unwrap it.
@@ -82,17 +82,10 @@ def sc_operator(space, fn, args):
     opname = fn.__name__.replace('__', '')
     return space.do_operation(opname, *args_w)
 
-def skip_space(w_x):
-    pass
-
-def sc_skip_space(space, args):
-    return space.do_operation('simple_call', space.wrap("skip_space"), args[0])
-
 
 def setup(space):
-    fn = pyframe.normalize_exception
-    space.specialcases["app_normalize_exception"] = sc_normalize_exception
-    space.specialcases["app_skip_space"] = sc_skip_space
+    fn = pyframe.normalize_exception.get_function(space)
+    space.specialcases[fn] = sc_normalize_exception
     space.specialcases[__import__] = sc_import
     for opname in ['lt', 'le', 'eq', 'ne', 'gt', 'ge', 'is_']:
         space.specialcases[getattr(operator, opname)] = sc_operator

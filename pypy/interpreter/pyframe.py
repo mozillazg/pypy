@@ -216,44 +216,46 @@ class ExceptBlock(FrameBlock):
             return True  # stop unrolling
         return False
 
-def app_normalize_exception(etype, value, tb):
-    """Normalize an (exc_type, exc_value) pair:
-    exc_value will be an exception instance and exc_type its class.
-    """
-    # mistakes here usually show up as infinite recursion, which is fun.
-    while isinstance(etype, tuple):
-        etype = etype[0]
-    if isinstance(etype, (type, _classobj)):
-        if not isinstance(value, etype):
-            if value is None:
-                # raise Type: we assume we have to instantiate Type
-                value = etype()
-            elif isinstance(value, tuple):
-                # raise Type, Tuple: assume Tuple contains the constructor args
-                value = etype(*value)
-            else:
-                # raise Type, X: assume X is the constructor argument
-                value = etype(value)
-        # raise Type, Instance: let etype be the exact type of value
-        etype = value.__class__
-    elif type(etype) is str:
-        # XXX warn -- deprecated
-        if value is not None and type(value) is not str:
-            raise TypeError("string exceptions can only have a string value")
-    else:
-        # raise X: we assume that X is an already-built instance
-        if value is not None:
-            raise TypeError("instance exception may not have a separate value")
-        value = etype
-        etype = value.__class__
-        # for the sake of language consistency we should not allow
-        # things like 'raise 1', but it's probably fine (i.e.
-        # not ambiguous) to allow them in the explicit form 'raise int, 1'
-        if not hasattr(value, '__dict__') and not hasattr(value, '__slots__'):
-            raise TypeError("raising built-in objects can be ambiguous, "
-                            "use 'raise type, value' instead")
-    return etype, value, tb
-normalize_exception = gateway.app2interp(app_normalize_exception)
+app = gateway.applevel('''
+    def normalize_exception(etype, value, tb):
+        """Normalize an (exc_type, exc_value) pair:
+        exc_value will be an exception instance and exc_type its class.
+        """
+        # mistakes here usually show up as infinite recursion, which is fun.
+        while isinstance(etype, tuple):
+            etype = etype[0]
+        if isinstance(etype, (type, _classobj)):
+            if not isinstance(value, etype):
+                if value is None:
+                    # raise Type: we assume we have to instantiate Type
+                    value = etype()
+                elif isinstance(value, tuple):
+                    # raise Type, Tuple: assume Tuple contains the constructor args
+                    value = etype(*value)
+                else:
+                    # raise Type, X: assume X is the constructor argument
+                    value = etype(value)
+            # raise Type, Instance: let etype be the exact type of value
+            etype = value.__class__
+        elif type(etype) is str:
+            # XXX warn -- deprecated
+            if value is not None and type(value) is not str:
+                raise TypeError("string exceptions can only have a string value")
+        else:
+            # raise X: we assume that X is an already-built instance
+            if value is not None:
+                raise TypeError("instance exception may not have a separate value")
+            value = etype
+            etype = value.__class__
+            # for the sake of language consistency we should not allow
+            # things like 'raise 1', but it is probably fine (i.e.
+            # not ambiguous) to allow them in the explicit form 'raise int, 1'
+            if not hasattr(value, '__dict__') and not hasattr(value, '__slots__'):
+                raise TypeError("raising built-in objects can be ambiguous, "
+                                "use 'raise type, value' instead")
+        return etype, value, tb
+''')
+normalize_exception = app.interphook("normalize_exception")
 
 
 class FinallyBlock(FrameBlock):
