@@ -221,11 +221,15 @@ class UnwrapError(Exception):
 
 def int_w__ANY(space,w_obj):
     raise OperationError(space.w_TypeError,
-                         space.wrap("expected int"))
+                         space.wrap("expected integer"))
 
 def str_w__ANY(space,w_obj):
     raise OperationError(space.w_TypeError,
                          space.wrap("expected str"))
+
+def float_w__ANY(space,w_obj):
+    raise OperationError(space.w_TypeError,
+                         space.wrap("expected float"))
 
 def unwrap__ANY(space, w_obj):
     if isinstance(w_obj, BaseWrappable):

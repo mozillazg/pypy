@@ -43,6 +43,9 @@ def float__Float(space, w_float1):
 def int__Float(space, w_value):
     return space.newint(int(w_value.floatval))
 
+def float_w__Float(space, w_float):
+    return w_float.floatval
+
 def unwrap__Float(space, w_float):
     return w_float.floatval
 

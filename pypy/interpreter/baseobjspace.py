@@ -362,7 +362,8 @@ ObjSpace.ExceptionTable = [
 #
 #                        wrap(x) -> w_x
 #                   str_w(w_str) -> str
-#                  int_w(w_ival) -> ival  
+#   int_w(w_ival or w_long_ival) -> ival
+#            float_w(w_floatval) -> floatval
 #                    unwrap(w_x) -> x
 #                   is_true(w_x) -> True or False
 #       newtuple([w_1, w_2,...]) -> w_tuple

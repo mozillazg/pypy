@@ -44,6 +44,13 @@ def float__Long(space, w_longobj):
 def long__Float(space, w_floatobj):
     return W_LongObject(space, long(w_floatobj.floatval))
 
+def int_w__Long(space, w_value):
+    if -sys.maxint-1 <= w_value.longval <= sys.maxint:
+        return int(w_value.longval)
+    else:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("long int too large to convert to int"))        
+
 def unwrap__Long(space, w_long):
     return w_long.longval
 
