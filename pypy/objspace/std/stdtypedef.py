@@ -178,8 +178,10 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
     # XXX packed arguments: w_args, w_kwds instead of *args_w, **kwds_w
     solid_arglist = ['w_'+name for name in argnames]
     wrapper_arglist = solid_arglist[:]
-    if multimethod.extras.get('varargs', False):
+    if multimethod.extras.get('varargs_w', False):
         wrapper_arglist.append('args_w')
+    if multimethod.extras.get('w_varargs', False):
+        wrapper_arglist.append('w_args')        
     if multimethod.extras.get('keywords', False):
         raise Exception, "no longer supported, use __args__"
     if multimethod.extras.get('general__args__', False):
@@ -233,8 +235,10 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
 
 def wrap_trampoline_in_gateway(func, methname, multimethod):
     unwrap_spec = [gateway.ObjSpace] + [gateway.W_Root]*multimethod.arity
-    if multimethod.extras.get('varargs', False):
+    if multimethod.extras.get('varargs_w', False):
         unwrap_spec.append('args_w')
+    if multimethod.extras.get('w_varargs', False):
+        unwrap_spec.append('w_args')        
     if multimethod.extras.get('general__args__', False):
         unwrap_spec.append(gateway.Arguments)
     return gateway.interp2app(func, app_name=methname, unwrap_spec=unwrap_spec)

@@ -127,7 +127,16 @@ def unwrap_spec_check_args_w(orig_sig, new_sig):
     assert new_sig.varargname is None,(
         "built-in function %r has conflicting rest args specs" % orig_sig.func)
     new_sig.varargname = argname[:-2]
-        
+
+def unwrap_spec_check_w_args(orig_sig, new_sig):
+    argname = orig_sig.next()
+    assert argname.startswith('w_'), (
+        "rest arguments arg %s of built-in function %r should start 'w_'" %
+        (argname, orig_sig.func))
+    assert new_sig.varargname is None,(
+        "built-in function %r has conflicting rest args specs" % orig_sig.func)
+    new_sig.varargname = argname[2:]
+      
 # recipes for checking interp2app func argumes wrt unwrap_spec
 unwrap_spec_checks = {
     ObjSpace: unwrap_spec_check_space,
@@ -136,6 +145,7 @@ unwrap_spec_checks = {
     Arguments: unwrap_spec_check_arguments,
     '*': unwrap_spec_check_starargs,
     'args_w': unwrap_spec_check_args_w,
+    'w_args': unwrap_spec_check_w_args,    
 }
 
 def unwrap_spec_emit_space(orig_sig, new_sig):
@@ -178,6 +188,13 @@ def unwrap_spec_emit_args_w(orig_sig, new_sig):
              (new_sig.through_scope_w))
     new_sig.through_scope_w += 1
     new_sig.run_args.append("self.args_w")
+
+def unwrap_spec_emit_w_args(orig_sig, new_sig):
+    cur = new_sig.through_scope_w
+    new_sig.setfastscope.append(
+        "self.w_args = scope_w[%d]" % cur)
+    new_sig.through_scope_w += 1
+    new_sig.run_args.append("self.w_args")
         
 # recipes for emitting unwrapping code for arguments of a interp2app func
 # wrt a unwrap_spec
@@ -188,6 +205,7 @@ unwrap_spec_emit = {
     Arguments: unwrap_spec_emit_arguments,
     '*': unwrap_spec_emit_starargs,
     'args_w': unwrap_spec_emit_args_w,
+    'w_args': unwrap_spec_emit_w_args,
 }
 
 # unwrap_spec_check/emit for str,int,float
