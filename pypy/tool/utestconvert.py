@@ -53,7 +53,7 @@ def strip_parens(old, new, block, op):
             left = re.sub(r'\n', r'\\\n', left)
             
             if right[0] == '\n':  # that needs a slash too ...
-                                  # do we handle non unix correctly?
+                                  # do we handle non-unix correctly?
                 between = ',\\'
             else:
                 between = ','
@@ -71,27 +71,43 @@ def strip_parens(old, new, block, op):
             return indent + new + expr + trailer
 
 def comma_to_op(old, new, block, op):
-    # dictionary dispatch function.  get_expr does all the work.
-    indent, expr, trailer = common_setup(old, block)
-    left, right = get_expr(expr, ',')
-    #print 'left is <%s>, right is <%s>' % (left, right)
+    # dictionary dispatch function.  parser.expr does all the work.
 
+    indent, expr, trailer = common_setup(old, block)
+    new = new + ' '
+    op = ' ' + op
+    left, right = get_expr(expr, ',')
+
+    print 'left is <%s>, right is <%s>' % (left, right)
     try:
         parser.expr(left)  # that paren came off easily
-        left = left + ' ' + op
     except SyntaxError:
-        left  = re.sub(r'\n', r'\\\n', left + ' ' + op)
-        #if right[0] == '\n':  # that needs a slash too ...
-        #    left  += '\\'
+        left  = re.sub(r'\n', r'\\\n', left)
+        
     try:
-        parser.expr(right)  # that paren came off easily
+        parser.expr(right.lstrip())  # that paren came off easily
+
     except SyntaxError:
         right = re.sub(r'\n', r'\\\n', right)
 
-    return indent + new + ' ' + left + right + trailer
+    if right[0] == '\n':
+        op = op + '\\'
+    return indent + new + left + op + right + trailer
+
+def right_finder(s):
+    
+    for i in range(len(s)):
+        if s[i] != ' ' and s[i] != '\t':
+            print i
+            break
+
+    if s[i] == '\n':
+        return True
+    else:
+        return False
 
 def common_setup(old, block):
-
+    """split the block into component parts"""
     indent = re.search(r'^(\s*)', block).group()
     pat = re.search('self.' + old + r'\(', block)
     expr, trailer = get_expr(block[pat.end():], ')')
@@ -385,7 +401,28 @@ class Testit(unittest.TestCase):
 
         self.assertEquals(process_block("self.failUnlessEqual(0, 0)"),
                           "assert not 0 != 0")
+
+        self.assertEquals(process_block(
+            r"""
+            self.failUnlessEqual(mushroom()
+                                 + mushroom()
+                                 + mushroom(), '''badger badger badger badger
+                                 badger badger badger badger
+                                 badger badger badger badger
+                                 ''') # multiline, must remove the parens
+            """
+            ),
+            r"""
+            assert not mushroom()\
+                                 + mushroom()\
+                                 + mushroom() != '''badger badger badger badger
+                                 badger badger badger badger
+                                 badger badger badger badger
+                                 ''' # multiline, must remove the parens
+            """
+                          )
                               
 if __name__ == '__main__':
     unittest.main()
     #for block in  blocksplitter('xxx.py'): print process_block(block)
+
