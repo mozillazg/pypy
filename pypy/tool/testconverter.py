@@ -1,75 +1,99 @@
 import re
 import unittest
 
-def parse(string):
-    i = parser(string, 0)
-    #print 'Returning ', (string[0:i], string[i+1:])
-    return (string[0:i], string[i+1:])
+old_fname = 'self.assertEquals'
+new_fname = 'assert'
+old_function = re.compile(r'^(\s*)' + old_fname + r'\((.*)')
+leading_spaces = re.compile(r'^(\s*)')
 
-def parser(string, i):
-    #print string[i:]
-    inDoubleQuotes = False
-    inSingleQuotes = False
-    for c in string[i:]:
-        if string[i] == '(' and not (inSingleQuotes or inDoubleQuotes):
-            #print "Calling", i+1
-            i = parser(string, i+1)
-        if string[i] == ')' and not (inSingleQuotes or inDoubleQuotes):
-            #print "Returning", i+1
-            return i+1
-        if string[i] == '"' and not inSingleQuotes:
-            if not inDoubleQuotes or not (string[i-1] == '\\' and string[i-2] !=
- '\\'):
-                inDoubleQuotes = not inDoubleQuotes
-        if string[i] == "'" and not inDoubleQuotes:
-            if not inSingleQuotes or not (string[i-1] == '\\' and string[i-2] !=
- '\\'):
-                inSingleQuotes = not inSingleQuotes
+def strip_trailing(line, char=')'):
+    last = line[len(line)-1]
+    lastchar = last[-1]
 
-        if string[i] == ',' and not inDoubleQuotes and not inSingleQuotes:
-            return i
-        i += 1
-    raise IndexError
+    if lastchar != char :
+        print "Stripping trailing '%s' from buf '%s', got '%s' instead!" % (
+            char, line, lastchar)
+        return line
+    else:
+        """
+        buf = s.splitlines()
+        for l in buf:
+            if not l.startswith(indentation):
+                print 'Expected %s but got %s instead' % (indentation, l)
+                return s
+            else:
+                buf[0] = buf[0].replace
+        print 'hi' + buf[0]
+        """
+        return last[0:-1]
 
-pattern = re.compile(r'^(\s*)self\.assertEquals\((.*)')
+def process_block(s, interesting, indentation, old, new):
+    if not interesting:
+        return s
+    else:
 
-def parseFile(filename):
+        import parser
+        body = s.replace(old, '', 1)
+        return 'ASSERT' + body
+            
+def blocksplitter(filename):
+
     fp = file(filename, 'r')
-    saved = ''
+    blockstring = ''
+    filestring = ''
+    current_indent = 0
+    was_interesting = False
+    n_l_s = ''
+    
     for line in fp:
-        line = saved + line
-        match = pattern.search(line)
-        if match:
-            s = match.group(2)
-            try:
-                a,b = parse(s)
-                b = b.rstrip()
-                b = b[:-1]
-                print '%sassert %s == %s' % (match.group(1), a, b)
-                saved = ''
-            except IndexError:
-                saved = line.rstrip()
-                #print "Saved: ", saved
-        else:
-            print line
 
-class Testit(unittest.TestCase):
-    def test(self):
-        self.assertEquals(parse('111,9'), ('111','9'))
-        self.assertEquals(parse('x","xx,yyy'), ('x","xx', 'yyy'))
-        self.assertEquals(parse('xx' + "+\"z'z\"+" + 'x,yyy'),("xx+\"z'z\"+x", "yyy"))
-        self.assertEquals(parse("x','xx,yyy"), ("x','xx", "yyy"))
-        self.assertEquals(parse(r'''x"\","xx,yyy'''), (r'''x"\","xx''', 'yyy'))
-        self.assertEquals(parse(r'''x'\','xx,yyy'''), (r'''x'\','xx''', 'yyy'))
-        self.assertEquals(parse(r'''x",\\"xx,yyy'''), (r'''x",\\"xx''', 'yyy'))
-        self.assertEquals(parse(r'''x',\\'xx,yyy'''), (r'''x',\\'xx''', 'yyy'))
-        self.assertEquals(parse("(),7"), ("()", "7"))
-        self.assertEquals(parse("(1+(3*2)),7"), ("(1+(3*2))", "7"))
-        self.assertEquals(parse("('apa'+(3*2)),7"), ("('apa'+(3*2))", "7"))
-        self.assertEquals(parse("('ap)a'+(3*2)),7"), ("('ap)a'+(3*2))", "7"))
-        self.assertRaises(IndexError, parse, "('apa'+(3*2))7")
-        self.assertRaises(IndexError, parse, "3 +")
+        ls = leading_spaces.search(line) # this will never fail
+        l_spaces = ls.group(1)
+        new_indent = len(l_spaces)
+
+        interesting = old_function.search(line)
+
+        if interesting :
+            # we have found the beginning of a new interesting block.
+            # finish up your business with your last block, and
+            # reset everything
+
+            filestring += process_block(blockstring, was_interesting,
+                                        n_l_s, old_fname, new_fname)
+
+            blockstring = line # reset the block
+            current_indent = new_indent
+            n_l_s = ls.group(1)
+            was_interesting = True
+
+        elif not was_interesting and not interesting :
+            # the last line was not interesting and this one isn't either
+            # just add it to the block
+
+            blockstring += line
+
+        else:
+            # the slightly-hard case:
+            # is this line a continuation of the current interesting block?
+            # or is it just another uninteresting line that follows it?
+
+            if new_indent > current_indent:  # continuation
+                blockstring += line
+
+                # XXXX FIXME: check for comments?  line continuations with \?
+                # Will we ever need it?
+
+            else: # boring follower
+                filestring += process_block(blockstring, was_interesting,
+                                            n_l_s, old_fname, new_fname)
+                blockstring = line
+                was_interesting = False
+                
+    filestring += process_block(blockstring, was_interesting, n_l_s,
+                                old_fname, new_fname)
+    
+    print filestring
 
 if __name__ == '__main__':
     #unittest.main()
-    parseFile('apa.py')
+    blocksplitter('xxx.py')
