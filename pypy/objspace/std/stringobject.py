@@ -130,7 +130,7 @@ def _islower(ch):
 
 def _is_generic(w_self, fun): 
     space = w_self.space   
-    v = space.unwrap(w_self)
+    v = w_self._value
     if len(v) == 0:
         return space.w_False
     if len(v) == 1:
@@ -162,7 +162,7 @@ def str_islower__String(space, w_self):
     return _is_generic(w_self, _islower)
 
 def str_istitle__String(space, w_self):
-    input = space.unwrap(w_self)
+    input = w_self._value
     prev_letter='!'
 
     for pos in range(0, len(input)):
@@ -176,7 +176,7 @@ def str_istitle__String(space, w_self):
     return space.w_True
 
 def str_upper__String(space, w_self):
-    self = space.unwrap(w_self)
+    self = w_self._value
     res = [' '] * len(self)
     for i in range(len(self)):
         ch = self[i]
@@ -189,7 +189,7 @@ def str_upper__String(space, w_self):
     return space.wrap("".join(res))
 
 def str_lower__String(space, w_self):
-    self = space.unwrap(w_self)
+    self = w_self._value
     res = [' '] * len(self)
     for i in range(len(self)):
         ch = self[i]
@@ -202,7 +202,7 @@ def str_lower__String(space, w_self):
     return space.wrap("".join(res))
 
 def str_swapcase__String(space, w_self):
-    self = space.unwrap(w_self)
+    self = w_self._value
     res = [' '] * len(self)
     for i in range(len(self)):
         ch = self[i]
@@ -219,7 +219,7 @@ def str_swapcase__String(space, w_self):
 
     
 def str_capitalize__String(space, w_self):
-    input = space.unwrap(w_self)
+    input = w_self._value
     buffer = [' '] * len(input)
     if len(input) > 0:
         ch = input[0]
@@ -240,7 +240,7 @@ def str_capitalize__String(space, w_self):
     return space.wrap("".join(buffer))
          
 def str_title__String(space, w_self):
-    input = space.unwrap(w_self)
+    input = w_self._value
     buffer = [' '] * len(input)
     prev_letter=' '
 
@@ -258,9 +258,8 @@ def str_title__String(space, w_self):
 def str_split__String_None_Int(space, w_self, w_none, w_maxsplit=-1):
     res = []
     inword = 0
-    u = space.unwrap
-    value = u(w_self)
-    maxsplit = u(w_maxsplit)
+    value = w_self._value
+    maxsplit = space.int_w(w_maxsplit)
     pos = 0
 
     for ch in value:
@@ -285,13 +284,12 @@ def str_split__String_None_Int(space, w_self, w_none, w_maxsplit=-1):
     return W_ListObject(space, res)
 
 def str_split__String_String_Int(space, w_self, w_by, w_maxsplit=-1):
-    u = space.unwrap
     res = []
     start = 0
-    value = u(w_self)
-    by = u(w_by)
+    value = w_self._value
+    by = w_by._value
     bylen = len(by)
-    maxsplit = u(w_maxsplit)
+    maxsplit = space.int_w(w_maxsplit)
 
     #if maxsplit is default, then you have no limit
     #of the length of the resulting array
@@ -323,10 +321,10 @@ def str_split__String_String_Int(space, w_self, w_by, w_maxsplit=-1):
     return W_ListObject(w_self.space, res)
 
 def str_join__String_ANY(space, w_self, w_list):
-    u = space.unwrap
     list = space.unpackiterable(w_list)
+    str_w = space.str_w
     if list:
-        self = u(w_self)
+        self = w_self._value
         firstelem = 1
         listlen = 0
         reslen = 0
@@ -340,7 +338,7 @@ def str_join__String_ANY(space, w_self, w_list):
                     space.w_TypeError,
                     space.wrap("sequence item %d: expected string, %s "
                                "found"%(i, space.type(list[i]).name)))
-            reslen = reslen + len(u(list[i]))
+            reslen = reslen + len(str_w(list[i]))
             listlen = listlen + 1
 
         reslen = reslen + (listlen - 1) * len(self)
@@ -351,7 +349,7 @@ def str_join__String_ANY(space, w_self, w_list):
         pos = 0
         #fill in the string buffer
         for w_item in list:
-            item = u(w_item)
+            item = str_w(w_item)
             if firstelem:
                 for i in range(len(item)):
                     res[i+pos] = item[i]
@@ -372,10 +370,9 @@ def str_join__String_ANY(space, w_self, w_list):
 
 
 def str_rjust__String_ANY(space, w_self, w_arg):
-    u = space.unwrap
 
-    u_arg = u(w_arg)
-    u_self = u(w_self)
+    u_arg = space.int_w(w_arg)
+    u_self = w_self._value
     
     d = u_arg - len(u_self)
     if d>0:
@@ -385,10 +382,9 @@ def str_rjust__String_ANY(space, w_self, w_arg):
 
 
 def str_ljust__String_ANY(space, w_self, w_arg):
-    u = space.unwrap
 
-    u_self = u(w_self)
-    u_arg = u(w_arg)
+    u_self = w_self._value
+    u_arg = space.int_w(w_arg)
 
     d = u_arg - len(u_self)
     if d>0:
@@ -397,15 +393,16 @@ def str_ljust__String_ANY(space, w_self, w_arg):
     return space.wrap(u_self)
 
 def _convert_idx_params(space, w_self, w_sub, w_start, w_end):
-    u = space.unwrap
-    start = u(w_start)
-    end = u(w_end)
-    self = u(w_self)
-    sub = u(w_sub)
-    if start is None:
+    self = w_self._value
+    sub = w_sub._value
+    if space.is_true(space.is_(w_start,space.w_None)):
         start = 0
-    if end is None:
+    else:
+        start = space.int_w(w_start)
+    if space.is_true(space.is_(w_end,space.w_None)):
         end = len(self)
+    else:
+        end = space.int_w(w_end)
 
     return (self, sub, start, end)
 
@@ -446,12 +443,11 @@ def str_rindex__String_String_ANY_ANY(space, w_self, w_sub, w_start=None, w_end=
 
 
 def str_replace__String_String_String_Int(space, w_self, w_sub, w_by, w_maxsplit=-1):
-    u = space.unwrap
 
-    input = u(w_self)
-    sub = u(w_sub)
-    by = u(w_by)
-    maxsplit = u(w_maxsplit)   #I don't use it now
+    input = w_self._value
+    sub = w_sub._value
+    by = w_by._value
+    maxsplit = space.int_w(w_maxsplit)   #I don't use it now
 
     #print "from replace, input: %s, sub: %s, by: %s" % (input, sub, by)
 
@@ -542,8 +538,9 @@ def _find(self, sub, start, end, dir):
 
 def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"
-    u_self = space.unwrap(w_self)
-    u_chars = space.unwrap(w_chars)
+    u_self = w_self._value
+    assert isinstance(w_chars,W_StringObject)
+    u_chars = w_chars._value
     
     if u_self == None or u_chars == None:
         return w_self
@@ -576,8 +573,8 @@ def str_lstrip__String_String(space, w_self, w_chars):
    
 
 def str_center__String_Int(space, w_self, w_arg):
-    u_self = space.unwrap(w_self)
-    u_arg  = space.unwrap(w_arg)
+    u_self = w_self._value
+    u_arg  = space.int_w(w_arg)
 
     d = u_arg - len(u_self) 
     if d>0:
@@ -590,18 +587,20 @@ def str_center__String_Int(space, w_self, w_arg):
       
       
 def str_count__String_String_ANY_ANY(space, w_self, w_arg, w_start, w_end): 
-    u_self  = space.unwrap(w_self)
-    u_arg   = space.unwrap(w_arg)
-    u_start = space.unwrap(w_start)
-    u_end   = space.unwrap(w_end)
-    
-    
-    if u_end == None: 
+    u_self  = w_self._value
+    u_arg   = w_arg._value
+
+    if space.is_true(space.is_(w_start,space.w_None)):
+        u_start = 0
+    else:
+        u_start = space.int_w(w_start)
+
+    if space.is_true(space.is_(w_end,space.w_None)):
         u_end = len(u_self)
-    elif u_end < 0:
-        u_end += len(u_self)
-    
-    if u_start == None: u_start = 0
+    else:
+        u_end = space.int_w(w_end)
+        if u_end < 0:
+            u_end += len(u_self)
     
     area =  u_self [u_start:u_end]
     
@@ -620,8 +619,8 @@ def str_count__String_String_ANY_ANY(space, w_self, w_arg, w_start, w_end):
 
 #[optional arguments not supported now]    
 def str_endswith__String_String(space, w_self, w_end): 
-    u_self = space.unwrap(w_self)
-    u_end  = space.unwrap(w_end)
+    u_self = w_self._value
+    u_end  = w_end._value
     
     found = 0
     if u_end:
@@ -636,8 +635,8 @@ def str_endswith__String_String(space, w_self, w_end):
     
 #[optional arguments not supported now]    
 def str_startswith__String_String(space, w_self, w_start): 
-    u_self = space.unwrap(w_self)
-    u_start  = space.unwrap(w_start)
+    u_self = w_self._value
+    u_start  = w_start._value
     
     found = 0
     if u_start:
@@ -677,8 +676,8 @@ def _tabindent(u_token, u_tabsize):
     
     
 def str_expandtabs__String_Int(space, w_self, w_tabsize):   
-    u_self = space.unwrap(w_self)
-    u_tabsize  = space.unwrap(w_tabsize)
+    u_self = w_self._value
+    u_tabsize  = space.int_w(w_tabsize)
     
     u_expanded = ""
     if u_self:
@@ -694,8 +693,8 @@ def str_expandtabs__String_Int(space, w_self, w_tabsize):
  
  
 def str_splitlines__String_Int(space, w_self, w_keepends):
-    u_self = space.unwrap(w_self)
-    u_keepends  = space.unwrap(w_keepends)
+    u_self = w_self._value
+    u_keepends  = space.is_true(w_keepends)
     selflen = len(u_self)
     
     L = []
@@ -713,9 +712,8 @@ def str_splitlines__String_Int(space, w_self, w_keepends):
     return W_ListObject(space, L)
 
 def str_zfill__String_Int(space, w_self, w_width):
-    u = space.unwrap
-    input = u(w_self)
-    width = u(w_width)
+    input = w_self._value
+    width = space.int_w(w_width)
 
     if len(input) >= width:
         return w_self
@@ -765,7 +763,7 @@ def unwrap__String(space, w_str):
     return w_str._value
 
 def hash__String(space, w_str):
-    return W_IntObject(space, hash(space.unwrap(w_str)))
+    return W_IntObject(space, hash(w_str._value))
 
 
 ##EQ = 1
@@ -881,10 +879,9 @@ def ge__String_String(space, w_str1, w_str2):
         return space.w_False
 
 def getitem__String_Int(space, w_str, w_int):
-    u = space.unwrap
-    ival = w_int.intval
-    str = u(w_str)
-    slen = len(u(w_str))
+    ival = space.int_w(w_int)
+    str = w_str._value
+    slen = len(str)
     if ival < 0:
         ival += slen
     if ival < 0 or ival >= slen:
@@ -904,9 +901,8 @@ def getitem__String_Slice(space, w_str, w_slice):
     return str_join__String_ANY(space, w_empty, w_r)
 
 def mul__String_Int(space, w_str, w_mul):
-    u = space.unwrap
-    input = u(w_str)
-    mul = u(w_mul)
+    input = w_str._value
+    mul = space.int_w(w_mul)
 
     buffer = [' '] * (mul*len(input))
 
@@ -922,9 +918,8 @@ def mul__Int_String(space, w_mul, w_str):
     return mul__String_Int(space, w_str, w_mul)
 
 def add__String_String(space, w_left, w_right):
-    u = space.unwrap
-    right = u(w_right)
-    left = u(w_left)
+    right = w_right._value
+    left = w_left._value
     buf = [' '] * (len(left) + len(right))
     for i in range(len(left)):
         buf[i] = left[i]
@@ -933,7 +928,7 @@ def add__String_String(space, w_left, w_right):
     return space.wrap("".join(buf))
 
 def len__String(space, w_str):
-    return space.wrap(len(space.unwrap(w_str)))
+    return space.wrap(len(w_str._value))
 
 def str__String(space, w_str):
     return w_str
@@ -974,12 +969,13 @@ repr__String = gateway.app2interp(app_repr__String)
 
     
 def ord__String(space, w_str):
-    if len(w_str._value) != 1:
+    u_str = w_str._value
+    if len(u_str) != 1:
         raise OperationError(
             space.w_TypeError,
             space.wrap("ord() expected a character, but string "
                        "of length %d found"%(len(w_str._value),)))
-    return space.wrap(ord(space.unwrap(w_str)))
+    return space.wrap(ord(u_str))
 
 def app_mod__String_ANY(format, values):
     import _formatting
