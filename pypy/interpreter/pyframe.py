@@ -1,61 +1,53 @@
 """ PyFrame class implementation with the interpreter main loop.
 """
 
-from pypy.interpreter.executioncontext import OperationError, Stack, NoValue
-from pypy.interpreter.gateway import app2interp, Cell, _NULL
+from pypy.interpreter.executioncontext import Stack
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.gateway import app2interp
+from pypy.interpreter import eval, baseobjspace
 
 
-class PyFrame:
+class PyFrame(eval.Frame):
     """Represents a frame for a regular Python function
     that needs to be interpreted.
 
+    See also pyopcode.PyStandardFrame and pynestedscope.PyNestedScopeFrame.
+
     Public fields:
      * 'space' is the object space this frame is running in
+     * 'bytecode' is the PyCode object this frame runs
      * 'w_locals' is the locals dictionary to use
      * 'w_globals' is the attached globals dictionary
      * 'w_builtins' is the attached built-ins dictionary
      * 'valuestack', 'blockstack', 'next_instr' control the interpretation
     """
 
-    def initialize(self, scopedcode):
-        self.space = scopedcode.space
-        self.bytecode = scopedcode.cpycode
-        self.w_globals = scopedcode.w_globals
-        self.closure_w = scopedcode.closure_w or ()
+    def __init__(self, space, code):
+        eval.Frame.__init__(self, space, code)
+        self.bytecode = code   # Misnomer; this is really like a code object
         self.valuestack = Stack()
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
         self.w_builtins = self.space.w_builtins
 
-    def setdictscope(self, w_locals):
-        self.w_locals = w_locals
-        self.locals_w = [_NULL] * self.bytecode.co_nlocals
-        self.locals2fast()
-
-    def setfastscope(self, locals_w):
-        self.locals_w = locals_w
-        self.w_locals = self.space.newdict([])
-        self.fast2locals()
-
-    def XXXclone(self):
-        f = self.__class__()
-        f.space = self.space
-        f.bytecode = self.bytecode
-        f.w_globals = self.w_globals
-        f.w_locals = self.w_locals
-        f.w_builtins = self.w_builtins
-        f.valuestack = self.valuestack.clone()
-        f.blockstack = self.blockstack.clone()
-        f.localcells = [x.clone() for x in self.localcells]
-        f.nestedcells = [x.clone() for x in self.nestedcells]
-        f.last_exception = self.last_exception
-        f.next_instr = self.next_instr
-        return f
+##    def XXXclone(self):
+##        f = self.__class__()
+##        f.space = self.space
+##        f.bytecode = self.bytecode
+##        f.w_globals = self.w_globals
+##        f.w_locals = self.w_locals
+##        f.w_builtins = self.w_builtins
+##        f.valuestack = self.valuestack.clone()
+##        f.blockstack = self.blockstack.clone()
+##        f.localcells = [x.clone() for x in self.localcells]
+##        f.nestedcells = [x.clone() for x in self.nestedcells]
+##        f.last_exception = self.last_exception
+##        f.next_instr = self.next_instr
+##        return f
 
     def eval(self, executioncontext):
         "Interpreter main loop!"
-        from pypy.interpreter import opcode
         try:
             while True:
                 try:
@@ -63,12 +55,8 @@ class PyFrame:
                     last_instr = self.next_instr
                     try:
                         # fetch and dispatch the next opcode
-                        op = self.nextop()
-                        if opcode.has_arg(op):
-                            oparg = self.nextarg()
-                            opcode.dispatch_arg(self, op, oparg)
-                        else:
-                            opcode.dispatch_noarg(self, op)
+                        # dispatch() is abstract, see pyopcode.
+                        self.dispatch()
                     except OperationError, e:
                         #import traceback
                         #traceback.print_exc()
@@ -93,7 +81,20 @@ class PyFrame:
             w_exitvalue = e.args[0]
             return w_exitvalue
 
-    ### accessor functions ###
+    ### opcode dispatch ###
+
+    # 'dispatch_table' is a class attribute: a list of functions.
+    # Currently, it is always created by setup_dispatch_table in pyopcode.py
+    # but it could be a custom table.
+
+    def dispatch(self):
+        opcode = self.nextop()
+        fn = self.dispatch_table[opcode]
+        if fn.has_arg:
+            oparg = self.nextarg()
+            fn(self, oparg)
+        else:
+            fn(self)
 
     def nextop(self):
         c = self.bytecode.co_code[self.next_instr]
@@ -104,45 +105,6 @@ class PyFrame:
         lo = self.nextop()
         hi = self.nextop()
         return (hi<<8) + lo
-
-    def getconstant(self, index):
-        return self.bytecode.co_consts[index]
-
-    def getlocalvarname(self, index):
-        return self.bytecode.co_varnames[index]
-
-    def getname(self, index):
-        return self.bytecode.co_names[index]
-
-    def getfreevarname(self, index):
-        freevarnames = self.bytecode.co_cellvars + self.bytecode.co_freevars
-        return freevarnames[index]
-
-    def iscellvar(self, index):
-        # is the variable given by index a cell or a free var?
-        return index < len(self.bytecode.co_cellvars)
-
-    def fast2locals(self):
-        # Copy values from self.localcells to self.w_locals
-        for name, w_value in zip(self.bytecode.co_varnames, self.locals_w):
-            w_name = self.space.wrap(name)
-            if w_value is not _NULL:
-                self.space.setitem(self.w_locals, w_name, w_value)
-
-    def locals2fast(self):
-        # Copy values from self.w_locals to self.localcells
-        for i in range(self.bytecode.co_nlocals):
-            w_name = self.space.wrap(self.bytecode.co_varnames[i])
-            try:
-                w_value = self.space.getitem(self.w_locals, w_name)
-            except OperationError, e:
-                if not e.match(self.space, self.space.w_KeyError):
-                    raise
-            else:
-                self.locals_w[i] = w_value
-
-    ### frame initialization ###
-
 
     ### exception stack ###
 
@@ -240,7 +202,7 @@ class ExceptBlock(FrameBlock):
                 evalue = (evalue,)
             evalue = etype(*evalue)
         else:
-            raise Exception, "?!"
+            raise Exception, "?!"   # XXX
         return etype, evalue
     normalize_exception = app2interp(app_normalize_exception)
 
@@ -324,8 +286,8 @@ class SReturnValue(ControlFlowException):
     """Signals a 'return' statement.
     Argument is the wrapped object to return."""
     def emptystack(self, frame):
-        if frame.bytecode.co_flags & 0x0020:#CO_GENERATOR:
-            raise NoValue
+        if frame.bytecode.is_generator():
+            raise baseobjspace.NoValue
         w_returnvalue = self.args[0]
         raise ExitFrame(w_returnvalue)
 

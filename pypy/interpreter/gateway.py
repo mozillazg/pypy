@@ -1,10 +1,23 @@
 """
 
-gateway between app-level and interpreter-level 
+Gateway between app-level and interpreter-level:
+the Wrappable base class.
 
 """
-import inspect
-CO_VARARGS, CO_VARKEYWORDS = 0x4, 0x8
+
+class Wrappable(object):
+    """A subclass of Wrappable is an internal, interpreter-level class
+    that can nevertheless be exposed at application-level,
+    via space.wrap().
+
+    The methods and attributes that a class wants to expose are defined
+    with a naming convension: 'app_xxx' is exposed as 'xxx'.
+    In general, 'app_xxx' should be a gateway (see below)."""
+
+# XXX most code from some classes below have been "stolen" in
+# XXX new classes in other modules. Will be removed.
+
+
 
 class ScopedCode(object):
     """ a code object within a certain global and closure scope.
