@@ -52,16 +52,25 @@ def collect_functions(module, specnamelist):
         if not specnamelist:
             l.append(value) 
     return l
-   
+  
+ 
+def combine(lists):
+    if not lists:
+        yield []
+    else:
+        head = lists[0]
+        if not isinstance(head, tuple):
+            head = (head,)
+        tail = lists[1:]
+        for item in head:
+            for com in combine(tail):
+                yield [item] + com 
+
 def get_arg_types(func):
     # func_defaults e.g.:  ([int, float], [str, int], int) 
     if func.func_defaults:
-        argstypelist = []
-        for spec in func.func_defaults:
-            if isinstance(spec, tuple):
-                spec = spec[0] # use the first type only for the tests
-            argstypelist.append(spec)
-        yield argstypelist 
+        for argtypeslist in combine(func.func_defaults):
+            yield argtypeslist 
     else:
         yield []
 
@@ -84,6 +93,7 @@ if __name__=='__main__':
     print format_str %("functioncall", "flowed", "annotated", "compiled")
     for func in funcs:
         for argtypeslist in get_arg_types(func):
+            #print "trying %s %s" %(func, argtypeslist)
             result = Result(func, argtypeslist) 
             results.append(result) 
             print repr_result(result) 
@@ -91,7 +101,7 @@ if __name__=='__main__':
                 traceback.print_exception(*result.excinfo) 
                 raise SystemExit, 1
     
-    for res in results:
-        print repr_result(res) 
+    #for res in results:
+    #    print repr_result(res) 
    
      

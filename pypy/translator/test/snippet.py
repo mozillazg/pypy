@@ -26,7 +26,7 @@ But for now, none of the above applies.
 # the possible types that can be passed to
 # the specific snippet. 
 numtype = (int, float, ) 
-anytype = (int, float, str, )
+anytype = (int, float, str)
 seqtype = (list, tuple) 
 
 def if_then_else(cond=anytype, x=anytype, y=anytype):
