@@ -145,7 +145,7 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
             return w
         if type(w) is long:
             if -sys.maxint-1 <= w <= sys.maxint:
-                return w
+                return int(w)
             raise OperationError(self.w_OverflowError,
                                  self.wrap("long int too large to convert to int"))            
       
@@ -159,10 +159,10 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
         return w
 
     def float_w(self, w):
-        if type(w) is not float:
+        if type(w) not in (int,long,float):
             raise OperationError(self.w_TypeError,
                                  self.wrap("expected float"))
-        return w
+        return float(w)
 
     def unwrap(self, w):
         if isinstance(w, CPyWrapper):

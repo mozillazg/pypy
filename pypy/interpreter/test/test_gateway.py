@@ -77,6 +77,115 @@ class TestGateway:
         self.space.eq_w(
             space.call_function(w_app_g3, w('foo'), w('bar')),
             w('foobar'))
+        
+    def test_interp2app_unwrap_spec(self):
+        space = self.space
+        w = space.wrap
+        def g3(space, w_a, w_b):
+            return space.add(w_a, w_b)        
+        app_g3 = gateway.interp2app_temp(g3,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      gateway.W_Root,
+                                                      gateway.W_Root])
+        w_app_g3 = space.wrap(app_g3) 
+        self.space.eq_w(
+            space.call(w_app_g3, 
+                       space.newtuple([w('foo'), w('bar')]),
+                       space.newdict([])),
+            w('foobar'))
+        self.space.eq_w(
+            space.call_function(w_app_g3, w('foo'), w('bar')),
+            w('foobar'))
+
+    def test_interp2app_unwrap_spec_args_w(self):
+        space = self.space
+        w = space.wrap
+        def g3_args_w(space, args_w):
+            return space.add(args_w[0], args_w[1])        
+        app_g3_args_w = gateway.interp2app_temp(g3_args_w,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      'args_w'])
+        w_app_g3_args_w = space.wrap(app_g3_args_w) 
+        self.space.eq_w(
+            space.call(w_app_g3_args_w, 
+                       space.newtuple([w('foo'), w('bar')]),
+                       space.newdict([])),
+            w('foobar'))
+        self.space.eq_w(
+            space.call_function(w_app_g3_args_w, w('foo'), w('bar')),
+            w('foobar'))
+
+    def test_interp2app_unwrap_spec_str(self):
+        space = self.space
+        w = space.wrap
+        def g3_ss(space, s0, s1):
+            return space.wrap(s0+s1)       
+        app_g3_ss = gateway.interp2app_temp(g3_ss,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      str,str])
+        w_app_g3_ss = space.wrap(app_g3_ss) 
+        self.space.eq_w(
+            space.call(w_app_g3_ss, 
+                       space.newtuple([w('foo'), w('bar')]),
+                       space.newdict([])),
+            w('foobar'))
+        self.space.eq_w(
+            space.call_function(w_app_g3_ss, w('foo'), w('bar')),
+            w('foobar'))
+
+    def test_interp2app_unwrap_spec_int_float(self):
+        space = self.space
+        w = space.wrap
+        def g3_if(space, i0, f1):
+            return space.wrap(i0+f1)       
+        app_g3_if = gateway.interp2app_temp(g3_if,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      int,float])
+        w_app_g3_if = space.wrap(app_g3_if) 
+        self.space.eq_w(
+            space.call(w_app_g3_if, 
+                       space.newtuple([w(1), w(1.0)]),
+                       space.newdict([])),
+            w(2.0))
+        self.space.eq_w(
+            space.call_function(w_app_g3_if, w(1), w(2.0)),
+            w(2.0))
+
+    def test_interp2app_unwrap_spec_typechecks(self):
+        space = self.space
+        w = space.wrap
+        def g3_id(space, x):
+            return space.wrap(x)
+        app_g3_i = gateway.interp2app_temp(g3_id,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      int])
+        w_app_g3_i = space.wrap(app_g3_i)
+        space.eq_w(space.call_function(w_app_g3_i,w(1)),w(1))
+        space.eq_w(space.call_function(w_app_g3_i,w(1L)),w(1))        
+        raises(gateway.OperationError,space.call_function,w_app_g3_i,w(2**32))
+        raises(gateway.OperationError,space.call_function,w_app_g3_i,w(None))
+        raises(gateway.OperationError,space.call_function,w_app_g3_i,w("foo"))
+        raises(gateway.OperationError,space.call_function,w_app_g3_i,w(1.0))
+
+        app_g3_s = gateway.interp2app_temp(g3_id,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      str])
+        w_app_g3_s = space.wrap(app_g3_s)
+        space.eq_w(space.call_function(w_app_g3_s,w("foo")),w("foo"))
+        raises(gateway.OperationError,space.call_function,w_app_g3_s,w(None))
+        raises(gateway.OperationError,space.call_function,w_app_g3_s,w(1))
+        raises(gateway.OperationError,space.call_function,w_app_g3_s,w(1.0))
+        
+        app_g3_f = gateway.interp2app_temp(g3_id,
+                                         unwrap_spec=[gateway.ObjSpace,
+                                                      float])
+        w_app_g3_f = space.wrap(app_g3_f)
+        space.eq_w(space.call_function(w_app_g3_f,w(1.0)),w(1.0))
+        space.eq_w(space.call_function(w_app_g3_f,w(1)),w(1.0))
+        space.eq_w(space.call_function(w_app_g3_f,w(1L)),w(1.0))        
+        raises(gateway.OperationError,space.call_function,w_app_g3_f,w(None))
+        raises(gateway.OperationError,space.call_function,w_app_g3_f,w("foo"))
+
 
     def test_importall(self):
         w = self.space.wrap
