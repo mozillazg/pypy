@@ -1,4 +1,5 @@
 from pypy.interpreter.newmodule import ExtModule
+from pypy.interpreter.error import OperationError 
 
 class Module(ExtModule):
     """Sys Builtin Module. """
@@ -44,14 +45,39 @@ class Module(ExtModule):
         'hexversion'            : 'space.wrap(0x020304a0)', 
         'ps1'                   : 'space.wrap(">>>>")', 
         'ps2'                   : 'space.wrap("....")', 
+
+        'displayhook'           : 'hook.displayhook', 
+        '__displayhook__'       : 'hook.__displayhook__', 
     }
     appleveldefs = {
-        'displayhook'           : 'app.displayhook', 
-        '__displayhook__'       : 'app.__displayhook__', 
+        #'displayhook'           : 'app.displayhook', 
+        #'__displayhook__'       : 'app.__displayhook__', 
         'excepthook'            : 'app.excepthook', 
         '__excepthook__'        : 'app.__excepthook__', 
         'exit'                  : 'app.exit', 
+        'getfilesystemencoding' : 'app.getfilesystemencoding', 
     }
+
+    def setbuiltinmodule(self, w_module, name): 
+        w_name = self.space.wrap(name)
+        w_modules = self.get('modules')
+        self.space.setitem(w_modules, w_name, w_module)
+
+    def getmodule(self, name): 
+        space = self.space
+        w_modules = self.get('modules') 
+        try: 
+            return space.getitem(w_modules, space.wrap(name))
+        except OperationError, e: 
+            if not e.match(space, space.w_KeyError): 
+                raise 
+            return None 
+
+    def setmodule(self, w_module): 
+        space = self.space
+        w_name = self.space.getattr(w_module, space.wrap('__name__'))
+        w_modules = self.get('modules')
+        self.space.setitem(w_modules, w_name, w_module)
 
     def getdictvalue(self, space, attr): 
         """ specialize access to dynamic exc_* attributes. """ 

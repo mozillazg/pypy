@@ -44,6 +44,8 @@ class State:
         self.w_builtin_module_names = space.newlist(
             [space.wrap(fn) for fn in builtin_module_names])
         self.w_modules = space.newdict([])
+        for fn, module in builtin_modules.items(): 
+            space.setitem(self.w_modules, space.wrap(fn), space.wrap(module))
         self.w_warnoptions = space.newlist([])
         self.w_argv = space.newlist([])
         self.setinitialpath(space) 

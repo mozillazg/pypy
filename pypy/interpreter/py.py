@@ -56,14 +56,14 @@ def main_(argv=None):
         if Options.command:
             args = ['-c'] + Options.command[1:]
         for arg in args:
-            space.call_method(space.sys.w_argv, 'append', space.wrap(arg))
+            space.call_method(space.sys.get('argv'), 'append', space.wrap(arg))
         try:
             if Options.command:
                 main.run_string(Options.command[0], '<string>', space)
             elif args:
                 main.run_file(args[0], space)
             else:
-                space.call_method(space.sys.w_argv, 'append', space.wrap(''))
+                space.call_method(space.sys.get('argv'), 'append', space.wrap(''))
                 go_interactive = 1
                 banner = None
         except error.OperationError, operationerr:

@@ -178,7 +178,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if isinstance(x, complex):
             # XXX is this right?   YYY no, this is wrong right now  (CT)
             # ZZZ hum, seems necessary for complex literals in co_consts (AR)
-            c = self.getitem(self.w_builtins, self.wrap("complex"))
+            c = self.builtin.get('complex') 
             return self.call_function(c,
                                       self.wrap(x.real), 
                                       self.wrap(x.imag))

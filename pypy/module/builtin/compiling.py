@@ -5,6 +5,7 @@ Implementation of the interpreter-level compile/eval builtins.
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 from pypy.interpreter.gateway import NoneNotWrapped
+import __builtin__ as cpy_builtin
 
 def compile(space, w_str_, filename, startstr,
             supplied_flags=0, dont_inherit=0):
@@ -18,7 +19,7 @@ def compile(space, w_str_, filename, startstr,
     supplied_flags |= 4096 
     if not dont_inherit:
         try:
-            frame = _actframe()
+            frame = space.call_function(space.sys.get('_getframe')) 
         except IndexError:
             pass
         else:

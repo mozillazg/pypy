@@ -97,15 +97,15 @@ def iter(space, w_collection_or_callable, w_sentinel=NoneNotWrapped):
 def _seqiter(space, w_obj):
     return space.newseqiter(w_obj)
 
-def ord(w_val):
+def ord(space, w_val):
     return space.ord(w_val)
 
-def pow(w_base, w_exponent, w_modulus=None):
+def pow(space, w_base, w_exponent, w_modulus=None):
     return space.pow(w_base, w_exponent, w_modulus)
 
-def repr(w_object):
+def repr(space, w_object):
     return space.repr(w_object)
 
-def setattr(w_object, w_name, w_val):
+def setattr(space, w_object, w_name, w_val):
     space.setattr(w_object, w_name, w_val)
     return space.w_None

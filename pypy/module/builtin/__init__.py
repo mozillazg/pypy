@@ -68,8 +68,8 @@ Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
         'unicode'       : '(space.wrap(unicode))',  # XXX faked
 
         # old-style classes dummy support
-        '_classobj'     : '(space.w_classobj)',
-        '_instance'     : '(space.w_instance)',
+        '_classobj'     : 'space.w_classobj',
+        '_instance'     : 'space.w_instance',
         # default __metaclass__
         # XXX can use _classobj when we have a working one integrated
         '__metaclass__' : '(space.w_type)',

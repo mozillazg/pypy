@@ -17,18 +17,7 @@ def exit(exitcode=0):
     # in normalize_exception, which is exactlylike CPython.
     raise SystemExit, exitcode
 
-def setmodule(module):
-    """ put a module into the modules dict """
-    sys.modules[module.__name__] = module 
-
-def displayhook(obj):
-    if obj is not None:
-        __builtins__['_'] = obj
-        # NB. this is slightly more complicated in CPython,
-        # see e.g. the difference with  >>> print 5,; 8
-        print `obj`
-
-__displayhook__ = displayhook  # this is exactly like in CPython
+#import __builtin__
 
 def getfilesystemencoding():
     """ getfilesystemencoding() -> string
