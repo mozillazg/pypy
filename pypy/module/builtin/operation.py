@@ -3,6 +3,7 @@ Interp-level implementation of the basic space operations.
 """
 
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError 
 NoneNotWrapped = gateway.NoneNotWrapped
 
 def abs(space, w_val):

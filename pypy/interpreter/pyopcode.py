@@ -799,7 +799,7 @@ app = gateway.applevel(r'''
             return globals['__metaclass__']
         else: 
             try: 
-                builtin.__metaclass__ 
+                return builtin.__metaclass__ 
             except AttributeError: 
                 return type
 
