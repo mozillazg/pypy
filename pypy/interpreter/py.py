@@ -3,7 +3,7 @@
 import autopath
 from pypy.tool import option
 from pypy.tool.optik import make_option
-from pypy.interpreter import main, interactive, baseobjspace
+from pypy.interpreter import main, interactive, baseobjspace, error
 import sys
 
 class Options(option.Options):
@@ -35,12 +35,12 @@ def main_(argv=None):
     if Options.command:
         try:
             main.run_string(Options.command[0], '<string>', space)
-        except baseobjspace.PyPyError, pypyerr:
+        except error.PyPyError, pypyerr:
             pypyerr.operationerr.print_detailed_traceback(pypyerr.space)
     elif args:
         try:
             main.run_file(args[0], space)
-        except baseobjspace.PyPyError, pypyerr:
+        except error.PyPyError, pypyerr:
             pypyerr.operationerr.print_detailed_traceback(pypyerr.space)
     else:
         go_interactive = 1

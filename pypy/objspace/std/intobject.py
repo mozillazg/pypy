@@ -3,8 +3,6 @@ from inttype import W_IntType
 from noneobject import W_NoneObject
 from restricted_int import r_int, LONG_BIT
 
-applicationfile = StdObjSpace.AppFile(__name__)
-
 """
 The implementation of integers is a bit difficult,
 since integers are currently undergoing the change to turn

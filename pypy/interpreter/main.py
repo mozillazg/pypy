@@ -1,6 +1,6 @@
 import autopath
 from pypy.tool import option
-from pypy.interpreter import executioncontext, baseobjspace, gateway
+from pypy.interpreter import executioncontext, baseobjspace, gateway, module
 import sys, os
 
 def _run_eval_string(source, filename, space, eval):
@@ -21,8 +21,8 @@ def _run_eval_string(source, filename, space, eval):
 
         ec = executioncontext.ExecutionContext(space)
 
-        w_mainmodule = space.newmodule(space.wrap("__main__"))
-        w_globals = space.getattr(w_mainmodule, space.wrap("__dict__"))
+        mainmodule = module.Module(space, space.wrap("__main__"))
+        w_globals = mainmodule.w_dict
        
     except baseobjspace.OperationError, operationerr:
         operationerr.record_interpreter_traceback()

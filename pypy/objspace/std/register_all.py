@@ -19,7 +19,7 @@ def register_all(module_dict, alt_ns=None):
         namespaces.insert(0, alt_ns)
 
     for name, obj in module_dict.items():
-        if name.find('__')<1:
+        if name.find('__')<1 or name.startswith('app_'):
             continue
         funcname, sig = name.split('__')
         l=[]

@@ -37,7 +37,9 @@ StdObjSpace.unwrap.register(cpython_unwrap, W_CPythonObject)
 # real-to-wrapped exceptions
 def wrap_exception(space):
     exc, value, tb = sys.exc_info()
-    raise OperationError(space.wrap(exc), space.wrap(value))
+    if exc is OperationError:
+        raise exc, value, tb   # just re-raise it
+    raise OperationError, OperationError(space.wrap(exc), space.wrap(value)), tb
 
 # in-place operators
 def inplace_pow(x1, x2):
@@ -81,11 +83,17 @@ def inplace_xor(x1, x2):
     x1 ^= x2
     return x1
 
+def getter(o, i, c):
+    if hasattr(o, '__get__'):
+        return o.__get__(i, c)
+    else:
+        return o
+
 # regular part of the interface (minus 'next' and 'call')
 MethodImplementation = {
     'id':                 id,
     'type':               type,
-#    'issubtype':          issubclass,
+#    'issubtype':          see below,
     'repr':               repr,
     'str':                str,
     'len':                len,
@@ -93,10 +101,16 @@ MethodImplementation = {
     'getattr':            getattr,
     'setattr':            setattr,
     'delattr':            delattr,
+#    'getitem':            see below,
+#    'setitem':            see below,
+#    'delitem':            see below,
     'pos':                operator.pos,
     'neg':                operator.neg,
     'not_':               operator.not_,
     'abs':                operator.abs,
+    'hex':                hex,
+    'oct':                oct,
+    'ord':                ord,
     'invert':             operator.invert,
     'add':                operator.add,
     'sub':                operator.sub,
@@ -112,6 +126,8 @@ MethodImplementation = {
     'and_':               operator.and_,
     'or_':                operator.or_,
     'xor':                operator.xor,
+    'int':                int,
+    'float':              float,
     'inplace_add':        inplace_add,
     'inplace_sub':        inplace_sub,
     'inplace_mul':        inplace_mul,
@@ -133,22 +149,29 @@ MethodImplementation = {
     'ge':                 operator.ge,
     'contains':           operator.contains,
     'iter':               iter,
+    'get':                getter,
+#    'set':                setter,
+#    'delete':             deleter,
     }
 
 for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
     f = MethodImplementation.get(_name)
     if f:
         if _arity == 1:
-            def cpython_f(space, w_1, f=f):
+            def cpython_f(space, w_1, f=f, pypymethod='pypy_'+_name):
                 x = space.unwrap(w_1)
+                if hasattr(x, pypymethod):
+                    return getattr(x, pypymethod)()
                 try:
                     y = f(x)
                 except:
                     wrap_exception(space)
                 return space.wrap(y)
         elif _arity == 2:
-            def cpython_f(space, w_1, w_2, f=f):
+            def cpython_f(space, w_1, w_2, f=f, pypymethod='pypy_'+_name):
                 x1 = space.unwrap(w_1)
+                if hasattr(x1, pypymethod):
+                    return getattr(x1, pypymethod)(w_2)
                 x2 = space.unwrap(w_2)
                 try:
                     y = f(x1, x2)
@@ -156,8 +179,10 @@ for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
                     wrap_exception(space)
                 return space.wrap(y)
         elif _arity == 3:
-            def cpython_f(space, w_1, w_2, w_3, f=f):
+            def cpython_f(space, w_1, w_2, w_3, f=f, pypymethod='pypy_'+_name):
                 x1 = space.unwrap(w_1)
+                if hasattr(x1, pypymethod):
+                    return getattr(x1, pypymethod)(w_2, w_3)
                 x2 = space.unwrap(w_2)
                 x3 = space.unwrap(w_3)
                 try:
@@ -234,6 +259,8 @@ def delitem__CPython_ANY(space, w_obj, w_index):
 
 def next__CPython(space, w_obj):
     obj = space.unwrap(w_obj)
+    if hasattr(obj, 'pypy_next'):
+        return obj.pypy_next()
     try:
         result = obj.next()
     except StopIteration:
@@ -245,6 +272,8 @@ def next__CPython(space, w_obj):
 def call__CPython_ANY_ANY(space, w_obj, w_arguments, w_keywords):
     # XXX temporary hack similar to objspace.trivial.call()
     callable = space.unwrap(w_obj)
+    if hasattr(callable, 'pypy_call'):
+        return callable.pypy_call(w_arguments, w_keywords)
     args = space.unwrap(w_arguments)
     keywords = space.unwrap(w_keywords)
     try:

@@ -30,9 +30,9 @@ class Code(object):
         and possibly more locals."""
         argnames, varargname, kwargname = self.signature()
         if varargname is not None:
-            argnames.append(argname)
+            argnames = argnames + [varargname]
         if kwargname is not None:
-            argnames.append(kwargname)
+            argnames = argnames + [kwargname]
         return argnames
 
 
@@ -43,13 +43,14 @@ class Frame(object):
     """A frame is an environment supporting the execution of a code object.
     Abstract base class."""
 
-    def __init__(self, space, code, w_globals, numlocals=0):
+    def __init__(self, space, code, w_globals=None, numlocals=-1):
         self.space      = space
         self.code       = code       # Code instance
         self.w_globals  = w_globals  # wrapped dict of globals
         self.w_locals   = None       # wrapped dict of locals
-        # flat list of wrapped locals
-        self.fastlocals_w = [UNDEFINED]*numlocals
+        if numlocals < 0:  # compute the minimal size based on arguments
+            numlocals = len(code.getvarnames())
+        self.fastlocals_w = [UNDEFINED]*numlocals  # flat list of wrapped locals
 
     def run(self):
         "Run the frame."
@@ -83,7 +84,7 @@ class Frame(object):
         """Initialize the fast locals from a list of values,
         where the order is according to self.code.signature()."""
         if len(scope_w) > len(self.fastlocals_w):
-            raise ValueError, "too many fastlocals"
+            raise ValueError, "new fastscope is longer than the allocated area"
         self.fastlocals_w[:len(scope_w)] = scope_w
 
     def fast2locals(self):

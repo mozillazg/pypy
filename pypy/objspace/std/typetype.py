@@ -1,11 +1,16 @@
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.register_all import register_all
+from pypy.interpreter import eval
 from typeobject import W_TypeObject
 
 
-def NewMultimethodCode_builder(*args):
-    from typeobject import NewMultimethodCode  # sadly necessary late import hack
-    return NewMultimethodCode(*args)
+class NewMmFrame(eval.Frame):
+    def run(self):
+        "Call the __new__() method of typetype.py."
+        mm = self.code.slice().get(self.space)
+        args = self.fastlocals_w
+        w_result, callinit = mm(*args)
+        return w_result
 
 
 class W_TypeType(W_TypeObject):
@@ -23,7 +28,7 @@ class W_TypeType(W_TypeObject):
     # Attention, this internally returns a tuple (w_result, flag),
     # where 'flag' specifies whether we would like __init__() to be called.
     type_new = MultiMethod('__new__', 4, varargs=True, keywords=True,
-                                         pycodeclass=NewMultimethodCode_builder)
+                                         mmframeclass=NewMmFrame)
 
 registerimplementation(W_TypeType)
 

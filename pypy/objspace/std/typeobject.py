@@ -1,4 +1,4 @@
-from pypy.interpreter import pycode
+from pypy.interpreter import eval, function
 from pypy.objspace.std.objspace import *
 
 
@@ -58,7 +58,8 @@ class W_TypeObject(W_AbstractTypeObject):
             raise KeyError   # pass on the KeyError
         if code.slice().is_empty():
             raise KeyError
-        return space.newfunction(code, space.w_None, code.getdefaults(space))
+        fn = function.Function(space, code, defs_w=code.getdefaults(space))
+        return space.wrap(fn)
 
 
 import typetype, objecttype
@@ -86,7 +87,7 @@ def getmultimethods(spaceclass, typeclass):
         for multimethod in (hack_out_multimethods(typeclass) +
                             hack_out_multimethods(spaceclass)):
             for i in range(len(multimethod.specialnames)):
-                # each PyMultimethodCode embeds a multimethod
+                # each MultimethodCode embeds a multimethod
                 name = multimethod.specialnames[i]
                 if name in multimethods:
                     # conflict between e.g. __lt__ and
@@ -94,102 +95,96 @@ def getmultimethods(spaceclass, typeclass):
                     code = multimethods[name]
                     if code.bound_position < i:
                         continue
-                pycodeclass = multimethod.extras.get('pycodeclass')
-                if pycodeclass is None:
+                mmframeclass = multimethod.extras.get('mmframeclass')
+                if mmframeclass is None:
                     if len(multimethod.specialnames) > 1:
-                        pycodeclass = SpecialMultimethodCode
+                        mmframeclass = SpecialMmFrame
                     else:
-                        pycodeclass = PyMultimethodCode
-                code = pycodeclass(multimethod, typeclass, i)
+                        mmframeclass = MmFrame
+                code = MultimethodCode(multimethod, mmframeclass, typeclass, i)
                 multimethods[name] = code
         # add some more multimethods with a special interface
-        code = NextMultimethodCode(spaceclass.next, typeclass)
+        code = MultimethodCode(spaceclass.next, NextMmFrame, typeclass)
         multimethods['next'] = code
-        code = NonZeroMultimethodCode(spaceclass.is_true, typeclass)
+        code = MultimethodCode(spaceclass.is_true, NonZeroMmFrame, typeclass)
         multimethods['__nonzero__'] = code
     return multimethods
 
-class PyMultimethodCode(pycode.PyBaseCode):
-
-    def __init__(self, multimethod, typeclass, bound_position=0):
-        pycode.PyBaseCode.__init__(self)
-        argnames = ['x%d'%(i+1) for i in range(multimethod.arity)]
-        argnames.insert(0, argnames.pop(bound_position))
-        self.co_name = multimethod.operatorsymbol
-        self.co_varnames = tuple(argnames)
-        self.co_argcount = multimethod.arity
-        self.co_flags = 0
-        if multimethod.extras.get('varargs', False):
-            self.co_flags |= pycode.CO_VARARGS
-        if multimethod.extras.get('keywords', False):
-            self.co_flags |= pycode.CO_VARKEYWORDS
+class MultimethodCode(eval.Code):
+    """A code object that invokes a multimethod."""
+    
+    def __init__(self, multimethod, framecls, typeclass, bound_position=0):
+        eval.Code.__init__(self, multimethod.operatorsymbol)
         self.basemultimethod = multimethod
         self.typeclass = typeclass
         self.bound_position = bound_position
+        self.framecls = framecls
+        argnames = ['x%d'%(i+1) for i in range(multimethod.arity)]
+        argnames.insert(0, argnames.pop(self.bound_position))
+        varargname = kwargname = None
+        if multimethod.extras.get('varargs', False):
+            varargname = 'args'
+        if multimethod.extras.get('keywords', False):
+            kwargname = 'keywords'
+        self.sig = argnames, varargname, kwargname
+        
+    def signature(self):
+        return self.sig
 
     def getdefaults(self, space):
-        return space.wrap(self.basemultimethod.extras.get('defaults', ()))
+        return [space.wrap(x)
+                for x in self.basemultimethod.extras.get('defaults', ())]
 
     def slice(self):
         return self.basemultimethod.slice(self.typeclass, self.bound_position)
 
-    def prepare_args(self, space, w_globals, w_locals):
-        multimethod = self.slice()
-        dispatchargs = []
-        for i in range(multimethod.arity):
-            w_arg = space.getitem(w_locals, space.wrap('x%d'%(i+1)))
-            dispatchargs.append(w_arg)
-        dispatchargs = tuple(dispatchargs)
-        return multimethod.get(space), dispatchargs
+    def create_frame(self, space, w_globals, closure=None):
+        return self.framecls(space, self)
 
-    def do_call(self, space, w_globals, w_locals):
+class MmFrame(eval.Frame):
+    def run(self):
         "Call the multimethod, raising a TypeError if not implemented."
-        mm, args = self.prepare_args(space, w_globals, w_locals)
-        return mm(*args)
-
-    def eval_code(self, space, w_globals, w_locals):
-        "Call the multimethods, or raise a TypeError."
-        w_result = self.do_call(space, w_globals, w_locals)
+        mm = self.code.slice().get(self.space)
+        args = self.fastlocals_w
+        w_result = mm(*args)
         # we accept a real None from operations with no return value
         if w_result is None:
-            w_result = space.w_None
+            w_result = self.space.w_None
         return w_result
 
-class SpecialMultimethodCode(PyMultimethodCode):
-
-    def do_call(self, space, w_globals, w_locals):
+class SpecialMmFrame(eval.Frame):
+    def run(self):
         "Call the multimethods, possibly returning a NotImplemented."
-        mm, args = self.prepare_args(space, w_globals, w_locals)
+        mm = self.code.slice().get(self.space)
+        args = self.fastlocals_w
         try:
             return mm.perform_call(args)
         except FailedToImplement, e:
             if e.args:
                 raise OperationError(*e.args)
             else:
-                return space.w_NotImplemented
+                return self.space.w_NotImplemented
 
-class NextMultimethodCode(PyMultimethodCode):
-
-    def eval_code(self, space, w_globals, w_locals):
+class NextMmFrame(eval.Frame):
+    def run(self):
         "Call the next() multimethod."
+        mm = self.code.slice().get(self.space)
+        args = self.fastlocals_w
         try:
-            return self.do_call(space, w_globals, w_locals)
+            return mm(*args)
         except NoValue:
-            raise OperationError(space.w_StopIteration, space.w_None)
+            raise OperationError(self.space.w_StopIteration,
+                                 self.space.w_None)
 
-class NonZeroMultimethodCode(PyMultimethodCode):
-
-    def eval_code(self, space, w_globals, w_locals):
+class NonZeroMmFrame(eval.Frame):
+    def run(self):
         "Call the is_true() multimethods."
-        result = self.do_call(space, w_globals, w_locals)
-        return space.newbool(result)
+        mm = self.code.slice().get(self.space)
+        args = self.fastlocals_w
+        result = mm(*args)
+        return self.space.newbool(result)
 
-class NewMultimethodCode(PyMultimethodCode):
-
-    def eval_code(self, space, w_globals, w_locals):
-        "Call the __new__() method of typetype.py."
-        w_result, callinit = self.do_call(space, w_globals, w_locals)
-        return w_result
+# see also class NewMmFrame in typetype.py
 
 
 def call__Type_ANY_ANY(space, w_type, w_args, w_kwds):
@@ -205,7 +200,7 @@ def issubtype__Type_Type(space, w_type1, w_type2):
     return space.newbool(w_type2 in w_type1.getmro())
 
 def repr__Type(space, w_obj):
-    return space.wrap("<type '%s'>" % w_obj.typename) 
+    return space.wrap("<pypy type '%s'>" % w_obj.typename)  # XXX remove 'pypy'
 
 def getattr__Type_ANY(space, w_type, w_attr):
     # XXX mwh doubts this is the Right Way to do this...
@@ -217,7 +212,7 @@ def getattr__Type_ANY(space, w_type, w_attr):
         desc = w_type.lookup(w_attr)
     except KeyError:
         raise FailedToImplement #OperationError(space.w_AttributeError,w_attr)
-    return space.get(desc, space.w_Null, w_type)
+    return space.get(desc, space.w_None, w_type)
 
 
 register_all(vars())

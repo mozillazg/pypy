@@ -10,8 +10,6 @@ from floattype import W_FloatType
 import math
 from intobject import W_IntObject
 
-applicationfile = StdObjSpace.AppFile(__name__)
-
 class W_FloatObject(W_Object):
     """This is a reimplementation of the CPython "PyFloatObject" 
        it is assumed that the constructor takes a real Python float as
@@ -188,7 +186,7 @@ def pos__Float(space, w_float):
         return W_FloatObject(space, w_float.floatval)
 
 def abs__Float(space, w_float):
-    return W_FloatObject(space, fabs(w_float.floatval))
+    return W_FloatObject(space, abs(w_float.floatval))
 
 def is_true__Float(space, w_float):
     return w_float.floatval != 0.0

@@ -177,9 +177,11 @@ class TrivialObjSpace(ObjSpace):
 
     def _auto(name, sourcefn, classlocals):
         s = """
-def %(name)s(self, *args):
+def %(name)s(self, x, *args):
+    if hasattr(x, 'pypy_%(name)s'):
+        return x.pypy_%(name)s(*args)
     try:
-        value = %(sourcefn)s(*args)
+        value = %(sourcefn)s(x, *args)
     except:
         self.reraise()
     return self.wrap(value)
@@ -188,7 +190,6 @@ def %(name)s(self, *args):
 
     # from the built-ins
     _auto('issubtype', 'issubclass', locals())
-    _auto('newmodule', 'new.module', locals())
     _auto('newtuple',  'tuple',      locals())
     _auto('newlist',   'list',       locals())
     _auto('newdict',   'dict',       locals())
@@ -262,7 +263,7 @@ def %(name)s(self, *args):
                 if stop  is None: stop  = sys.maxint
                 return start, stop
         return None
-        
+
     def getitem(self, w_obj, w_index):
         obj = self.unwrap(w_obj)
         index = self.unwrap(w_index)
@@ -302,24 +303,12 @@ def %(name)s(self, *args):
 
     # misc
     def next(self, w):
+        if hasattr(w, 'pypy_next'):
+            return w.pypy_next()
         try:
             return self.wrap(w.next())
         except StopIteration:
             raise NoValue
-
-    def newfunction(self, code, globals, defs, closure=None):
-        #from pypy.interpreter.gateway import Function
-        #return Function(self, code, globals, defaultarguments, closure)
-
-        #assert hasattr(code, 'co_name')
-        #assert hasattr(code, 'build_arguments')
-        #assert hasattr(code, 'eval_code')
-
-        # XXX the newxxx() interface should disappear at some point
-        # XXX because the interpreter can perfectly do the following
-        # XXX itself without bothering the object space
-        from pypy.interpreter.function import Function
-        return self.wrap(Function(self, code, globals, defs, closure))
 
     def newstring(self, asciilist):
         try:
@@ -344,6 +333,8 @@ def %(name)s(self, *args):
         assert not isinstance(callable, gateway.Gateway), (
             "trivial object space is detecting an object that has not "
             "been wrapped")
+        if hasattr(callable, 'pypy_call'):
+            return callable.pypy_call(args, kwds)
         try:
             return self.wrap(callable(*args, **(kwds or {})))
         except OperationError:

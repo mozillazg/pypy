@@ -21,7 +21,7 @@ capture = StringIO()
 
 def checkoutput(expected_output,f,*args):
     space = test.objspace()
-    w_sys = space.get_builtin_module(space.wrap("sys"))
+    w_sys = space.get_builtin_module("sys")
     w_oldout = space.getattr(w_sys, space.wrap("stdout"))
     capture.reset()
     space.setattr(w_sys, space.wrap("stdout"), space.wrap(capture))

@@ -7,10 +7,10 @@ class TestBuiltinApp(test.AppTestCase):
         self.space = test.objspace()
     
     def test_import(self):
-        import types
         d = {}
-        m = __import__('quopri', d, d, [])
-        self.assertEquals(type(m), types.ModuleType)
+        m = __import__('types', d, d, [])
+        self.assertEquals(m.IntType, type(123))
+        self.assertEquals(m.__name__, "types")
 
     def test_chr(self):
         self.assertEquals(chr(65), 'A')

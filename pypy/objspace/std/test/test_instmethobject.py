@@ -1,22 +1,8 @@
 import autopath
 from pypy.tool import test
 
-class TestInstMethObject(test.TestCase):
-    def setUp(self):
-        self.space = test.objspace('std')
-
-    def test_unbound(self):
-        from pypy.objspace.std.instmethobject import W_InstMethObject
-        space = self.space
-        w_list = space.newlist([])
-        w_boundmeth = space.getattr(w_list, space.wrap('__len__'))
-        w_unboundmeth = W_InstMethObject(space,
-                                         w_boundmeth.w_im_func,
-                                         space.w_Null,
-                                         w_boundmeth.w_im_class)
-        self.assertEqual_w(space.call_function(w_unboundmeth, w_list),
-                           space.wrap(0))
-        
+# NB. instmethobject.py has been removed,
+# but the following tests still make sense
 
 class TestInstMethObjectApp(test.AppTestCase):
     def setUp(self):

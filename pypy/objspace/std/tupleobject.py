@@ -2,6 +2,7 @@ from pypy.objspace.std.objspace import *
 from tupletype import W_TupleType
 from intobject import W_IntObject
 from sliceobject import W_SliceObject
+import slicetype
 
 
 class W_TupleObject(W_Object):
@@ -39,11 +40,8 @@ def getitem__Tuple_Int(space, w_tuple, w_index):
 
 def getitem__Tuple_Slice(space, w_tuple, w_slice):
     items = w_tuple.wrappeditems
-    w_length = space.wrap(len(items))
-    w_start, w_stop, w_step, w_slicelength = w_slice.indices(w_length)
-    start       = space.unwrap(w_start)
-    step        = space.unwrap(w_step)
-    slicelength = space.unwrap(w_slicelength)
+    length = len(items)
+    start, stop, step, slicelength = slicetype.indices4(space, w_slice, length)
     assert slicelength >= 0
     subitems = [None] * slicelength
     for i in range(slicelength):

@@ -1,5 +1,7 @@
 import sys
 
+AUTO_DEBUG = 1
+
 
 class PyPyError(Exception):
     "Raise this when you encounter an exceptional situation in PyPy itself."
@@ -111,6 +113,9 @@ class OperationError(Exception):
             print >> file, exc_typename
         else:
             print >> file, exc_typename+':', exc_value
+        if AUTO_DEBUG:
+            import debug
+            debug.fire(self)
 
 
 # Utilities
