@@ -46,26 +46,26 @@ def comma_to_op(old, new, block, op):
         parser.expr(right.lstrip())  # that paren came off easily
     except SyntaxError:
         # paste continuation backslashes on our multiline constructs
-        try:
-            # is the input expr, expr, string?
-            # so right is expr, string?
-
-            expr, string = get_expr(right, ',')
-            expr = re.sub(linesep, '\\'+linesep, expr)
-            # since the right1 is a string, assume it can take care
-            # of itself even if multiline.
-            
-            if expr.startswith(linesep):# that needs a slash too ...
-                between = ',\\'
-            else:
-                between = ','
-            right = expr + between + string
-        except SyntaxError: # just a regular old multiline expression
-           right = re.sub(linesep, '\\'+linesep, right)
-
+        right = handle_multiline(right)
+        
     if right.startswith(linesep):
         op = op + '\\'
     return indent + new + left + op + right + trailer
+
+def handle_multiline(expr, sep=','):
+    try:
+        left, right = get_expr(expr, sep)
+        left = re.sub(linesep, '\\'+linesep, left)
+
+        # only repair the lhs.  The rhs may be a multiline string that
+        # can take care of itself.
+            
+        if right.startswith(linesep):# that needs a slash too ...
+            sep = sep + '\\'
+        
+        return left + sep + right
+    except SyntaxError: # just a regular old multiline expression
+        return re.sub(linesep, '\\'+linesep, expr)
 
 def strip_parens(old, new, block, op):
     '''remove one set of parens. dictionary dispatched. '''
@@ -73,25 +73,11 @@ def strip_parens(old, new, block, op):
     new = new + ' '
     try:
         parser.expr(expr) # the parens came off easily
-        return indent + new + expr + trailer
     except SyntaxError:
         # paste continuation backslashes on our multiline constructs.
-        try:
-            # is the input expr, string?
-            left, right = get_expr(expr, ',')
-            left = re.sub(linesep, '\\'+linesep, left)
-            # since the right is a string, assume it can take care
-            # of itself even if multiline.
-            
-            if right.startswith(linesep):# that needs a slash too ...
-                between = ',\\'
-            else:
-                between = ','
-            return indent + new + left + between + right + trailer
+        expr = handle_multiline(expr)
 
-        except SyntaxError: # just a regular old multiline expression
-            expr = re.sub(linesep, '\\'+linesep, expr)
-            return indent + new + expr + trailer
+    return indent + new + expr + trailer
 
 def rounding():
     pass
