@@ -6,35 +6,59 @@ new_fname = 'assert'
 old_function = re.compile(r'^(\s*)' + old_fname + r'\((.*)')
 leading_spaces = re.compile(r'^(\s*)')
 
-def strip_trailing(line, char=')'):
-    last = line[len(line)-1]
-    lastchar = last[-1]
-
-    if lastchar != char :
-        print "Stripping trailing '%s' from buf '%s', got '%s' instead!" % (
-            char, line, lastchar)
-        return line
-    else:
-        """
-        buf = s.splitlines()
-        for l in buf:
-            if not l.startswith(indentation):
-                print 'Expected %s but got %s instead' % (indentation, l)
-                return s
-            else:
-                buf[0] = buf[0].replace
-        print 'hi' + buf[0]
-        """
-        return last[0:-1]
 
 def process_block(s, interesting, indentation, old, new):
     if not interesting:
         return s
     else:
+        body = s.replace(old, '', 1).lstrip()
+        
+        if body.rstrip() == '(,)': # catch this special case early.
+            print 'malformed block %s cannot be converted' % s.rstrip()
+            return s
+        
+        plist = pos_finder(body, ',')
+        if plist == []:
+            print "Could not find a ',' in %s" % body
+            return s
+        else:
+            arglist = []
+            for p in plist:
+                left, right = body[:p], body[p+1:]
+                arglist.append((left, right))
+            r = find_comma(arglist)
 
-        import parser
-        body = s.replace(old, '', 1)
-        return 'ASSERT' + body
+            if r is None:
+                print 'malformed block %s cannot be converted' % s
+                return s
+            else:
+                return indentation + new + r[0] + ') == (' + r[1]
+        
+
+def find_comma(tuplelist):
+    import parser
+
+    # make the python parser do the hard work of deciding which comma
+    # splits the string into two expressions
+    
+    for l, r in tuplelist:
+        try:
+            left = l + ')'
+            right = '(' + r
+            parser.expr(left)
+            parser.expr(right)
+            return l , r  # Great!  Both sides are expressions!
+        except SyntaxError: # It wasn't that comma
+            pass
+    return None
+    
+def pos_finder(s, char=','):
+    # returns the list of string positions where the char 'char' was found
+    pos=[]
+    for i in range(len(s)):
+        if s[i] == char:
+            pos.append(i)
+    return pos
             
 def blocksplitter(filename):
 
