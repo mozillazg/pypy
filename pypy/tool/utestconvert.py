@@ -23,13 +23,8 @@ def namechange_only(old, new, block, op):
 
 def fail_special(old, new, block, op):
     # dictionary dispatch function.
-    pat = re.search(r'^(\s*)', block)
-    indent = pat.group()
-    pat = re.search('self.' + old + r'\(', block)
-    rest = block[pat.end():]
-
-    expr, trailer = get_expr(rest, ')')
-
+    indent, expr, trailer = common_setup(old, block)
+    
     if expr == '':  # fail()  --> raise AssertionError
          return indent + new + trailer
     else:   # fail('Problem')  --> raise AssertionError, 'Problem'
@@ -37,42 +32,32 @@ def fail_special(old, new, block, op):
 
 def strip_parens(old, new, block, op):
     # dictionary dispatch function.
-    return_dict={}
-    pat = re.search(r'^(\s*)', block)
-    indent = pat.group()
-    pat = re.search('self.' + old + r'\(', block)
-    rest = block[pat.end():]
-
-    expr, trailer = get_expr(rest, ')')
-    extra = ''
+    indent, expr, trailer = common_setup(old, block)
+    new = new + ' '
 
     try:
         parser.expr(expr) # the parens came off easily
+        return indent + new + expr + trailer
 
     except SyntaxError:
-        # self.assertx_(0, string) prints the string, as does
-        # assert 0, string .  But assert(0, string) prints
-        # neither the string, nor the AssertionError !  So we have
-        # to paste continuation backslashes on our multiline constructs.
-
+        # paste continuation backslashes on our multiline constructs.
         try:
+            # is the input expr, string?
             left, right = get_expr(expr, ',')
+            # ok, paste continuation backslashes on our left,
+            # but not on our right hand side, since a multiline
+            # string is not using the parens to avoid SyntaxError,
+            # and must already have a working mechanism, existing
+            # backslashes, or triple quotes ....
 
-            # aha. we found an expr followed by a ', something_else'
-            # we should probably test to make sure that something_else
-            # is a string, and not, say, another expr.  But the whole
-            # question of what to do when your input is bogus requires
-            # more thought than I want to do at this hour ...
-            # Given that assert 0, range(10) is legal, and prints
-            # AssertionError: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], is it
-            # even true that right has to be a string?
-
-            expr = re.sub(r'\n', r'\\\n', left)
+            left = re.sub(r'\n', r'\\\n', left)
             
             if right[0] == '\n':  # that needs a slash too ...
-                extra = ',\\' + right
+                                  # do we handle non unix correctly?
+                between = ',\\'
             else:
-                extra = ',' + right
+                between = ','
+            return indent + new + left + between + right + trailer
 
         except SyntaxError:
             # we couldn't find a 'expr, string' so it is
@@ -83,17 +68,11 @@ def strip_parens(old, new, block, op):
 
             expr = re.sub(r'\n', r'\\\n', expr)
 
-    return indent + new + ' ' + expr + extra + trailer
+            return indent + new + expr + trailer
 
 def comma_to_op(old, new, block, op):
     # dictionary dispatch function.  get_expr does all the work.
-
-    pat = re.search(r'^(\s*)', block)
-    indent = pat.group()
-    pat = re.search('self.' + old + r'\(', block)
-    rest = block[pat.end():]
-
-    expr, trailer = get_expr(rest, ')')
+    indent, expr, trailer = common_setup(old, block)
     left, right = get_expr(expr, ',')
     #print 'left is <%s>, right is <%s>' % (left, right)
 
@@ -111,8 +90,15 @@ def comma_to_op(old, new, block, op):
 
     return indent + new + ' ' + left + right + trailer
 
+def common_setup(old, block):
+
+    indent = re.search(r'^(\s*)', block).group()
+    pat = re.search('self.' + old + r'\(', block)
+    expr, trailer = get_expr(block[pat.end():], ')')
+    return indent, expr, trailer
+
 def get_expr(s, char):
-    # used by fail_special, real_strip_parens, comma_to_op
+    # the trick.  how to get an expression without really trying :-)
     # read from the beginning of the string until you get an expression.
     # return it, and the stuff left over, minus the char you separated on
     pos = pos_finder(s, char)
