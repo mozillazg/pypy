@@ -32,52 +32,30 @@ def fail_special(old, new, block, op):
 
 def comma_to_op(old, new, block, op):
     '''change comma to appropriate op. dictionary dispatched. '''
-    indent, expr, trailer = common_setup(old, block)
+p    indent, expr, trailer = common_setup(old, block)
     new = new + ' '
     op = ' ' + op
     left, right = get_expr(expr, ',')
 
     try:
-        parser.expr(left)  # that paren came off easily
+        parser.expr(left.lstrip())  # that paren came off easily
     except SyntaxError:
         left  = re.sub(linesep, '\\'+linesep, left)
         
-    try:
-        parser.expr(right.lstrip())  # that paren came off easily
-    except SyntaxError:
-        # paste continuation backslashes on our multiline constructs
-        right = handle_multiline(right)
-        
+    right = process_args(right)
+
     if right.startswith(linesep):
         op = op + '\\'
+
     return indent + new + left + op + right + trailer
-
-def handle_multiline(expr, sep=','):
-    try:
-        left, right = get_expr(expr, sep)
-        left = re.sub(linesep, '\\'+linesep, left)
-
-        # only repair the lhs.  The rhs may be a multiline string that
-        # can take care of itself.
-            
-        if right.startswith(linesep):# that needs a slash too ...
-            sep = sep + '\\'
-        
-        return left + sep + right
-    except SyntaxError: # just a regular old multiline expression
-        return re.sub(linesep, '\\'+linesep, expr)
-
+ 
 def strip_parens(old, new, block, op):
     '''remove one set of parens. dictionary dispatched. '''
-    indent, expr, trailer = common_setup(old, block)
+    indent, args, trailer = common_setup(old, block)
     new = new + ' '
-    try:
-        parser.expr(expr) # the parens came off easily
-    except SyntaxError:
-        # paste continuation backslashes on our multiline constructs.
-        expr = handle_multiline(expr)
 
-    return indent + new + expr + trailer
+    args = process_args(args)
+    return indent + new + args + trailer
 
 def rounding():
     pass
@@ -158,6 +136,35 @@ def common_setup(old, block):
     pat = re.search('self.' + old + r'\(', block)
     expr, trailer = get_expr(block[pat.end():], ')')
     return indent, expr, trailer
+
+def find_first_expr(args):
+    '''find the first expression, return it, and the rest if it exists'''
+    sep = ','
+    try:
+        left, right = get_expr(args, sep)
+        left = re.sub(linesep, '\\'+linesep, left)
+
+        # only repair the lhs.  The rhs may be a multiline string that
+        # can take care of itself.
+            
+        if right.startswith(linesep):# that needs a slash too ...
+            sep = sep + '\\'
+        
+        return left + sep, right
+    except SyntaxError: # just a regular old multiline expression
+        return re.sub(linesep, '\\'+linesep, args), None
+
+def process_args(args):
+    try:
+        parser.expr(args.lstrip()) # the parens come off easily
+        return args
+    except SyntaxError:
+        # paste continuation backslashes on our multiline constructs.
+        left, right = find_first_expr(args)
+        if right:
+            return left + right
+        else:
+            return left
 
 def get_expr(s, char):
     '''split a string into an expression, and the rest of the string'''
