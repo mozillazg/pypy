@@ -20,14 +20,20 @@ class Op:
 
     def __call__(self):
         operator = self.gen.ops.get(self.op.opname, self.op.opname)
-        #print "operator, ", self.op.opname, operator, self.gen.ops
-
         args = self.argnames
         if not (operator[0] >= "a" and operator[0] <= "z"):
             if len(args) == 1:
                 return "%s = %s %s" % (self.resultname, operator) + args
             elif len(args) == 2:
-                return "%s = %s %s %s" % (self.resultname, args[0], operator, args[1])
+                #Inplace operators
+                inp=['+=','-=','*=','/=','%=','^=','//=','div=','**=','<<=','>>=','!=','&=']
+                if operator in inp:
+                    temp_str="temp_xx12=%s %s %s\n"%(args[0], operator[:-1], args[1])
+                    temp_str+="%s=temp_xx12\n"%args[0]
+                    temp_str+="%s=temp_xx12"%self.resultname
+                    return temp_str
+                else:
+                    return "%s = %s %s %s" % (self.resultname, args[0], operator, args[1])
             elif len(args) == 3 and operator == "**": #special case, have to handle it manually
                 return "%s = pow(%s, %s, %s)" % (self.resultname,) + args
             else:
@@ -181,7 +187,6 @@ class GenPyrex:
     def gen_graph(self):
         fun = self.functiongraph
         self.entrymap = mkentrymap(fun)
-        for block in self.entrymap : check_consistent_exits(block)
         currentlines = self.lines
         self.lines = []
         self.indent += 1 
@@ -200,10 +205,10 @@ class GenPyrex:
         except AttributeError:
             def function_object(): pass   # XXX!!!
         # make the function visible from the outside under its original name
-        hackedargs = ', '.join([var.name for var in fun.getargs()])
-        self.putline("def %s(%s):" % (fun.name, hackedargs))
+        args = ', '.join([var.name for var in fun.getargs()])
+        self.putline("def %s(%s):" % (fun.name, args))
         self.indent += 1
-        self.putline("return %s(%s)" % (self.getfunctionname(function_object), hackedargs))
+        self.putline("return %s(%s)" % (self.getfunctionname(function_object), args))
         self.indent -= 1
         # go ahead with the mandled header and body of the function
         self.putline("def %s(%s):" % (self.getfunctionname(function_object), params))
@@ -270,7 +275,10 @@ class GenPyrex:
 
     def getclassname(self,cls):
         assert inspect.isclass(cls)
-        return '%s__%x' % (cls.__name__, id(cls))#self._hackname(cls)
+        name = cls.__name__
+        if issubclass(cls,Exception):
+            return name
+        return '%s__%x' % (name, id(cls))#self._hackname(cls)
     
     def getfunctionname(self,func):
         assert inspect.isfunction(func) or inspect.ismethod(func)
@@ -295,7 +303,7 @@ class GenPyrex:
             else:
                 #fff=self._hackname(obj.value)
                 fff=repr(obj.value)
-                if isinstance(obj.value, int):
+                if isinstance(obj.value,( int,long)):
                     fff = repr(int(obj.value))
             return fff
         else:
@@ -397,10 +405,4 @@ class GenPyrex:
             return '\n'.join(self.lines)
         else:
             return ''
-        
-def check_consistent_exits(block):
-    for exit in block.exits :
-        if len(exit.args) != len(exit.target.inputargs):
-            print "inconsistent block exit", block,exit,exit.args
-            print "more", exit.target,exit.target.inputargs
-            
+
