@@ -3,7 +3,8 @@ Binary operations between SomeValues.
 """
 
 from pypy.annotation.pairtype import pair, pairtype
-from pypy.annotation.model import SomeObject, SomeInteger, SomeString, SomeList
+from pypy.annotation.model import SomeObject, SomeInteger, SomeBool
+from pypy.annotation.model import SomeString, SomeList
 from pypy.annotation.model import SomeTuple, SomeImpossibleValue
 from pypy.annotation.factory import NeedGeneralization
 
@@ -42,6 +43,12 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
 
     def sub((int1, int2)):
         return SomeInteger()
+
+
+class __extend__(pairtype(SomeBool, SomeBool)):
+
+    def union((boo1, boo2)):
+        return SomeBool()
 
 
 class __extend__(pairtype(SomeString, SomeString)):
