@@ -130,11 +130,8 @@ class ObjSpace:
         if expected_length is not None and tuple_length != expected_length:
             raise ValueError, "got a tuple of length %d instead of %d" % (
                 tuple_length, expected_length)
-        items = []
-        for i in range(tuple_length):
-            w_i = self.wrap(i)
-            w_item = self.getitem(w_tuple, w_i)
-            items.append(w_item)
+        items = [
+            self.getitem(w_tuple, self.wrap(i)) for i in range(tuple_length)]
         return items
 
     def exception_match(self, w_exc_type, w_check_class):
@@ -159,6 +156,10 @@ class ObjSpace:
     def call_function(self, w_func, *args_w, **kw_w):
         w_kw = self.newdict([(self.wrap(k), w_v) for k, w_v in kw_w.iteritems()])
         return self.call(w_func, self.newtuple(list(args_w)), w_kw)
+
+    def call_method(self, w_obj, methname, *arg_w, **kw_w):
+        w_meth = self.getattr(w_obj, self.wrap(methname))
+        return self.call_function(w_meth, *arg_w, **kw_w)
 
     def isinstance(self, w_obj, w_type):
         w_objtype = self.type(w_obj)

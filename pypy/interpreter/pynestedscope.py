@@ -40,11 +40,17 @@ class PyNestedScopeFrame(PyFastScopeFrame):
     """This class enhances a standard frame with nested scope abilities,
     i.e. handling of cell/free variables."""
 
-    def __init__(self, space, code):
-        PyFastScopeFrame.__init__(self, space, code)
+    # Cell Vars:
+    #     my local variables that are exposed to my inner functions
+    # Free Vars:
+    #     variables coming from a parent function in which i'm nested
+    # 'closure' is a list of Cell instances: the received free vars.
+
+    def __init__(self, space, code, w_globals, closure):
+        PyFastScopeFrame.__init__(self, space, code, w_globals, closure)
         ncellvars = len(code.co_cellvars)
         nfreevars = len(code.co_freevars)
-        self.cells = [None] * (ncellvars + nfreevars)
+        self.cells = [Cell() for i in range(ncellvars)] + closure
 
     def fast2locals(self):
         PyFastScopeFrame.fast2locals(self)
@@ -71,44 +77,26 @@ class PyNestedScopeFrame(PyFastScopeFrame):
             else:
                 cell.set(w_value)
 
-    def setclosure(self, closure):
-        # Cell Vars:
-        #     my local variables that are exposed to my inner functions
-        # Free Vars:
-        #     variables coming from a parent function in which i'm nested
-        # 'closure' is a list of Cell instances: the received free vars.
-        code = self.bytecode
-        ncellvars = len(code.co_cellvars)
-        nfreevars = len(code.co_freevars)
-        if ncellvars:
+    def setfastscope(self, scope_w):
+        PyFastScopeFrame.setfastscope(scope_w)
+        if self.bytecode.co_cellvars:
             # the first few cell vars could shadow already-set arguments,
             # in the same order as they appear in co_varnames
-            nargvars = code.getargcount()
+            code     = self.bytecode
             argvars  = code.co_varnames
             cellvars = code.co_cellvars
             next     = 0
             nextname = cellvars[0]
-            for i in range(nargvars):
+            for i in range(len(scope_w)):
                 if argvars[i] == nextname:
                     # argument i has the same name as the next cell var
-                    w_value = self.locals_w[i]
+                    w_value = scope_w[i]
                     self.cells[next] = Cell(w_value)
                     next += 1
                     try:
                         nextname = cellvars[next]
                     except IndexError:
                         break   # all cell vars initialized this way
-            else:
-                # the remaining cell vars are empty
-                for i in range(next, ncellvars):
-                    self.cells[i] = Cell()
-        # following the cell vars are the free vars, copied from 'closure'
-        if closure is None:
-            closure = []
-        if len(closure) != nfreevars:
-            raise TypeError, ("%d free variables expected, got %d" %
-                              (nfreevars, len(closure)))   # internal error
-        self.cells[ncellvars:] = closure
 
     def getfreevarname(self, index):
         freevarnames = self.bytecode.co_cellvars + self.bytecode.co_freevars
@@ -123,7 +111,6 @@ class PyNestedScopeFrame(PyFastScopeFrame):
     def LOAD_CLOSURE(f, varindex):
         # nested scopes: access the cell object
         cell = f.cells[varindex]
-        assert cell is not None, "setclosure() was not called"
         w_value = f.space.wrap(cell)
         f.valuestack.push(w_value)
 

@@ -12,26 +12,23 @@ class PyFastScopeFrame(PyOperationalFrame):
     # of values accessed by index (by the LOAD_FAST, STORE_FAST and
     # DELETE_FAST opcodes).
 
-    def __init__(self, space, code):
-        PyOperationalFrame.__init__(self, space, code)
+    def __init__(self, space, code, w_globals, closure):
+        PyOperationalFrame.__init__(self, space, code, w_globals, closure)
         self.locals_w = [UNDEFINED] * code.co_nlocals
 
     def getlocalvarname(self, index):
         return self.bytecode.co_varnames[index]
 
-    def getlocaldict(self):
+    def getdictlocals(self):
         self.fast2locals()
         return self.w_locals
 
-    def setlocaldict(self, w_locals):
+    def setdictlocals(self, w_locals):
         self.w_locals = w_locals
         self.locals2fast()
 
-    def getlocalvar(self, index):
-        return self.locals_w[index]
-
-    def setlocalvar(self, index, w_value):
-        self.locals_w[index] = w_value
+    def setfastlocals(self, scope_w):
+        self.locals_w[:len(scope_w)] = scope_w
 
     def fast2locals(self):
         # Copy values from self.locals_w to self.w_locals

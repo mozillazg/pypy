@@ -22,8 +22,8 @@ class PyFrame(eval.Frame):
      * 'valuestack', 'blockstack', 'next_instr' control the interpretation
     """
 
-    def __init__(self, space, code):
-        eval.Frame.__init__(self, space, code)
+    def __init__(self, space, code, w_globals, closure):
+        eval.Frame.__init__(self, space, code, w_globals)
         self.bytecode = code   # Misnomer; this is really like a code object
         self.valuestack = Stack()
         self.blockstack = Stack()
