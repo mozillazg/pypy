@@ -7,7 +7,8 @@ slice_indices = MultiMethod('indices', 2)
 
 # default application-level implementations for some operations
 
-def app_slice_indices3(slice, length):
+slice_indices__ANY_ANY = slice_indices3 = gateway.appdef(
+    """slice_indices3(slice, length):
     # this is used internally, analogous to CPython's PySlice_GetIndicesEx
     step = slice.step
     if step is None:
@@ -50,9 +51,9 @@ def app_slice_indices3(slice, length):
             stop = length
 
     return start, stop, step
-slice_indices__ANY_ANY = slice_indices3 = gateway.app2interp(app_slice_indices3)
+    """)
 
-def app_slice_indices4(slice, sequencelength):
+slice_indices4 = gateway.appdef("""slice_indices4(slice, sequencelength):
     start, stop, step = slice_indices3(slice, sequencelength)
     slicelength = stop - start
     lengthsign = cmp(slicelength, 0)
@@ -63,7 +64,7 @@ def app_slice_indices4(slice, sequencelength):
         slicelength = 0
 
     return start, stop, step, slicelength
-slice_indices4 = gateway.app2interp(app_slice_indices4)
+    """)
 
 # utility functions
 def indices3(space, w_slice, length):
