@@ -9,6 +9,7 @@ from pypy.tool import option
 from pypy.tool.optik import make_option
 from pypy.interpreter import main, interactive, error
 import os, sys
+import time
 
 class Options(option.Options):
     verbose = os.getenv('PYPY_TB')
@@ -42,11 +43,13 @@ def get_main_options():
     return options
 
 def main_(argv=None):
+    starttime = time.time() 
     from pypy.tool import tb_server
     args = option.process_options(get_main_options(), Options, argv[1:])
     space = None
     try:
         space = option.objspace()
+        space._starttime = starttime
         assert 'pypy.tool.udir' not in sys.modules, (
             "running py.py should not import pypy.tool.udir, which is\n"
             "only for testing or translating purposes.")
