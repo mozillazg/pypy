@@ -152,7 +152,7 @@ class NoTypeCGenTestCase(testit.IntTestCase):
         self.assertRaises(TypeError, call_with_star, [4,7,12,63])
         self.assertRaises(TypeError, call_with_star, 521)
 
-    def XXX_test_call_with_keyword(self):
+    def test_call_with_keyword(self):
         call_with_keyword = self.build_cfunc(snippet.call_with_keyword)
         self.assertEquals(call_with_keyword(100), 82)
 
