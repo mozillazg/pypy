@@ -622,6 +622,7 @@ def appdef(source, overridename=None):
     # get rid of w_
     fastscope = ", ".join([x.strip()[2:] for x in wfastscope.split(',')])
 
+    # SOME MESS AHEAD ! 
     # construct the special app source passed to appexec
     appsource = py.code.Source(source).strip().putaround("(%s):" % fastscope, "") 
     sourcelines = ["def %(funcname)s(space, %(wfuncdecl)s):" % locals()]
@@ -629,13 +630,11 @@ def appdef(source, overridename=None):
     sourcelines.append(
                    "    return space.appexec([%(wfastscope)s], '''" % locals())
     for line in appsource.indent().indent().lines: 
-        line = line.replace("'''", "\'\'\'") 
+        line = line.replace("\\", r"\\").replace("'", r"\'") 
         sourcelines.append(line)
     sourcelines.append( "''')")
     source = py.code.Source()
     source.lines = sourcelines 
-    #source = py.code.Source(sourcelines)
-    print str(source)
     glob = {}
     exec source.compile() in glob 
     return glob[funcname]
