@@ -150,6 +150,29 @@ class AnnonateTestCase(testit.IntTestCase):
         # result should be an integer
         self.assertEquals(a.gettype(graph.getreturnvar()), int)
 
+    def test_inheritance1(self):
+        translator = Translator(snippet.inheritance1)
+        graph = translator.getflowgraph()
+        a = RPythonAnnotator(translator)
+        a.build_types(graph, [])
+        # result should be exactly:
+        self.assertEquals(a.binding(graph.getreturnvar()),
+                          annmodel.SomeTuple([
+                              annmodel.SomeTuple([]),
+                              annmodel.SomeInteger()
+                              ]))
+
+    def test_inheritance2(self):
+        translator = Translator(snippet.inheritance2)
+        graph = translator.getflowgraph()
+        a = RPythonAnnotator(translator)
+        a.build_types(graph, [])
+        # result should be exactly:
+        self.assertEquals(a.binding(graph.getreturnvar()),
+                          annmodel.SomeTuple([
+                              annmodel.SomeInteger(),
+                              annmodel.SomeObject()
+                              ]))
 
 
 def g(n):

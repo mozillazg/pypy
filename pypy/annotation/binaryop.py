@@ -6,8 +6,9 @@ from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInteger, SomeBool
 from pypy.annotation.model import SomeString, SomeList
 from pypy.annotation.model import SomeTuple, SomeImpossibleValue
+from pypy.annotation.model import SomeInstance
 from pypy.annotation.model import set, setunion, missing_operation
-from pypy.annotation.factory import NeedGeneralization
+from pypy.annotation.factory import BlockedInference
 
 
 # XXX unify this with ObjSpace.MethodTable
@@ -107,15 +108,24 @@ class __extend__(pairtype(SomeList, SomeInteger)):
     def getitem((lst1, int2)):
         return lst1.s_item
 
-    def setitem((lst1, int2), value):
-        if not lst1.s_item.contains(value):
-            raise NeedGeneralization(lst1, value)
+    def setitem((lst1, int2), s_value):
+        if not lst1.s_item.contains(s_value):
+            for factory in lst1.factories:
+                factory.generalize(s_value)
+            raise BlockedInference(lst1.factories)
 
 
 class __extend__(pairtype(SomeInteger, SomeList)):
     
     def mul((int1, lst2)):
         return lst2
+
+
+class __extend__(pairtype(SomeInstance, SomeInstance)):
+
+    def union((ins1, ins2)):
+        basedef = ins1.classdef.commonbase(ins2.classdef)
+        return SomeInstance(basedef)
 
 
 class __extend__(pairtype(SomeImpossibleValue, SomeObject)):
