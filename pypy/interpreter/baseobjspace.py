@@ -34,6 +34,7 @@ class ObjSpace(object):
     def __init__(self):
         "NOT_RPYTHON: Basic initialization of objects."
         self._gatewaycache = Cache()
+        self._codecache = Cache()
         # set recursion limit
         self.recursion_limit = 1000
         # sets all the internal descriptors
@@ -282,14 +283,15 @@ class ObjSpace(object):
             Note: EXPERIMENTAL. 
         """ 
         space = self
-        pypyco = pypycodecache.getorbuild((space,source, funcname), buildpypycode, posargs_w)
+        pypyco = space.loadfromcache((source, funcname), buildpypycode, 
+                                     self._codecache)
         w_glob = space.newdict([])
         frame = pypyco.create_frame(space, w_glob) 
         frame.setfastscope(posargs_w)
         return frame.run() 
 
 pypycodecache = Cache() 
-def buildpypycode((space, source, funcname), posargs_w): 
+def buildpypycode((source, funcname), space): 
     """ NOT_RPYTHON """ 
     # XXX will change once we have our own compiler 
     from pypy.interpreter.pycode import PyCode
