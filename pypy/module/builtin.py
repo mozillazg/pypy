@@ -1,3 +1,4 @@
+from __future__ import generators
 from pypy.interpreter import executioncontext
 from pypy.interpreter.extmodule import ExtModule
 from pypy.interpreter.error import OperationError
@@ -37,29 +38,20 @@ class __builtin__(ExtModule):
                 space.setitem(space.sys.w_modules, w_modulename, w_mod)
                 return w_mod
 
-            import os, __future__
-            for path in space.unwrap(space.sys.w_path):
+            import os
+            for path in space.sys.path:
                 f = os.path.join(path, space.unwrap(w_modulename) + '.py')
                 if os.path.exists(f):
                     w_mod = space.newmodule(w_modulename)
                     space.setitem(space.sys.w_modules, w_modulename, w_mod)
                     space.setattr(w_mod, w('__file__'), w(f))
-                    w_source = w(open(f, 'r').read())
-                    # wrt the __future__.generators.compiler_flag, "um" -- mwh
-                    w_code = self.compile(w_source, w(f), w('exec'),
-                                          w(__future__.generators.compiler_flag))
                     w_dict = space.getattr(w_mod, w('__dict__'))
-
-                    code = space.unwrap(w_code)
-                    from pypy.interpreter.gateway import ScopedCode
-                    scopedcode = ScopedCode(space, code, w_dict)
-                    scopedcode.eval_frame()
-
+                    import sys; print >> sys.stderr, self.__class__.__dict__['execfile']
+                    self.execfile(w(f), w_dict, w_dict)
                     return w_mod
             
             w_exc = space.call_function(space.w_ImportError, w_modulename)
-            raise OperationError(
-                      space.w_ImportError, w_exc)
+            raise OperationError(space.w_ImportError, w_exc)
 
     def compile(self, w_str, w_filename, w_startstr,
                 w_supplied_flags=None, w_dont_inherit=None):
@@ -85,23 +77,17 @@ class __builtin__(ExtModule):
         from pypy.interpreter.pycode import PyCode
         return space.wrap(PyCode()._from_code(c))
 
-    def execfile(self, w_filename, w_globals=None, w_locals=None):
-        space = self.space
-        #XXX why do i have to check against space.w_None instead of None?
-        #    above the compile commands *does* check against None
-        if w_globals is space.w_None:
-            w_globals = self._actframe().w_globals
-        if w_locals is space.w_None: 
-            w_locals = w_globals
-
-        filename = space.unwrap(w_filename)
-        s = open(filename).read()
-        c = cpy_builtin.compile(s, filename, 'exec', 4096) # XXX generators 
-
-
-        scopedcode = ScopedCode(space, c, w_globals)
-        scopedcode.eval_frame(w_locals)
-        return space.w_None
+    def app_execfile(filename, glob=None, loc=None):
+        if glob is None:
+            glob = globals()
+            if loc is None:
+                loc = locals()
+        elif loc is None:
+            loc = glob
+        f = file(filename)
+        source = f.read()
+        f.close()
+        exec source in glob, loc
 
     ####essentially implemented by the objectspace
     def abs(self, w_val):
