@@ -18,21 +18,19 @@ class ExtModule(Module):
         
         # to build the dictionary of the module we get all the objects
         # accessible as 'self.xxx'. Methods are bound.
-        d = {}
         for cls in self.__class__.__mro__:
-            for name, value in cls.__dict__.iteritems():
+            for name in cls.__dict__:
                 # ignore names in '_xyz'
                 if not name.startswith('_') or name.endswith('_'):
+                    value = cls.__dict__[name]
                     if isinstance(value, gateway.Gateway):
                         name = value.name
                         value = value.__get__(self)  # get a Method
-                    else:
-                        if hasattr(value, '__get__'):
-                            continue  # ignore CPython functions
-                    if name not in d:
-                        d[name] = value
-        for key, value in d.iteritems():
-            space.setitem(self.w_dict, space.wrap(key), space.wrap(value))
+                    elif hasattr(value, '__get__'):
+                        continue  # ignore CPython functions
+
+                    space.call_method(self.w_dict, 'setdefault', 
+                                      space.wrap(name), space.wrap(value))
 
     __metaclass__ = InitializedClass
     def __initclass__(cls):

@@ -76,7 +76,9 @@ class __builtin__(ExtModule):
                 dont_inherit = 0
 
         #print (str, filename, startstr, supplied_flags, dont_inherit)
-        c = cpy_builtin.compile(str, filename, startstr, supplied_flags, dont_inherit)
+        # XXX we additionally allow GENERATORS because compiling some builtins
+        #     requires it. doesn't feel quite right to do that here. 
+        c = cpy_builtin.compile(str, filename, startstr, supplied_flags|4096, dont_inherit)
         from pypy.interpreter.pycode import PyCode
         return space.wrap(PyCode()._from_code(c))
 

@@ -25,10 +25,14 @@ class ObjSpace:
         self.initialize()
 
     def make_builtins(self):
+        # initializing builtins may require creating a frame which in
+        # turn already accesses space.w_builtins, provide a dummy one ...
+        self.w_builtins = self.newdict([])
+
         assert not hasattr(self, 'builtin')
         if not hasattr(self, 'sys'):
             self.make_sys()
-        
+
         from pypy.module import builtin
         self.builtin = builtin.__builtin__(self)
         self.w_builtin = self.wrap(self.builtin)
