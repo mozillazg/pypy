@@ -70,7 +70,7 @@ def test_app2interp_somefunc(space):
     w_result = app(space) 
     assert space.eq_w(w_result, space.wrap(42))
 
-def test_applevel_object(space):
+def test_applevel_functions(space):
     app = applevel('''
         def f(x, y):
             return x-y
@@ -80,6 +80,20 @@ def test_applevel_object(space):
     g = app.interphook('g')
     w_res = g(space, space.wrap(10), space.wrap(1))
     assert space.eq_w(w_res, space.wrap(-9))
+
+def test_applevel_class(space):
+    app = applevel('''
+        class C: 
+            clsattr = 42 
+            def __init__(self, x=13): 
+                self.attr = x 
+    ''')
+    C = app.interphook('C')
+    c = C(space, space.wrap(17)) 
+    w_attr = space.getattr(c, space.wrap('clsattr'))
+    assert space.eq_w(w_attr, space.wrap(42))
+    w_clsattr = space.getattr(c, space.wrap('attr'))
+    assert space.eq_w(w_clsattr, space.wrap(17))
 
 def app_test_something_at_app_level(): 
     x = 2
