@@ -1,13 +1,12 @@
-from pypy.interpreter.extmodule import ExtModule
+from pypy.interpreter.newmodule import ExtModule
 
-
-class BuiltinModule(ExtModule):
+class Module(ExtModule):
     """Built-in functions, exceptions, and other objects.
 
 Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
 """
 
-    _applevel_ = {
+    appleveldefs = {
         'quit'          : 'app_help.exit',
         'exit'          : 'app_help.exit',
         'copyright'     : 'app_help.copyright',
@@ -54,7 +53,7 @@ Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
         'reload'        : 'app_misc.reload',
     }
 
-    _interplevel_ = {
+    interpleveldefs = {
         # constants
         'None'          : '(space.w_None)',
         'False'         : '(space.w_False)',
