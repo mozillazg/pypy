@@ -25,7 +25,7 @@ def test_execwith_compile_error(space):
     assert str(excinfo).find('y y') != -1 
 
 def test_simple_applevel(space):
-    app = appdef("app(x,y)", """
+    app = appdef("""app(x,y): 
         return x + y
     """)
     assert app.func_name == 'app'
@@ -33,10 +33,27 @@ def test_simple_applevel(space):
     assert space.eq_w(w_result, space.wrap(42))
 
 def test_applevel_withdefault(space):
-    app = appdef("app(x,y=1)", """
+    app = appdef("""app(x,y=1): 
         return x + y
     """)
     assert app.func_name == 'app'
     w_result = app(space, space.wrap(41)) 
     assert space.eq_w(w_result, space.wrap(42))
+
+def test_applevel_noargs(space):
+    app = appdef("""app(): 
+        return 42 
+    """)
+    assert app.func_name == 'app'
+    w_result = app(space) 
+    assert space.eq_w(w_result, space.wrap(42))
+
+def somefunc(arg2=42): 
+    return arg2 
+
+def test_app2interp_somefunc(space): 
+    app = appdef(somefunc) 
+    w_result = app(space) 
+    assert space.eq_w(w_result, space.wrap(42))
+    
 
