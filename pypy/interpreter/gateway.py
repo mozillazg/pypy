@@ -658,16 +658,20 @@ def preparesource(source, funcdecl):
     assert i != -1
     return d[funcdecl[:i]].func_code 
 
-def appdef(source): 
+def appdef(source, overridename=None): 
     """ NOT_RPYTHON """ 
     from pypy.interpreter.pycode import PyCode
     if not isinstance(source, str): 
         source = str(py.code.Source(source).strip())
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
-    funcdecl, source = str(source).split(':', 1)
+    funcdecl, source = source.strip().split(':', 1)
     newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
+    if overridename is not None: 
+        funcname = overridename 
+    else: 
+        funcname = funcname.strip()
     decl = decl.strip()[:-1] 
     wfuncdecl, wfastscope, defaulthandlingsource = specialargparse(decl) 
     source = py.code.Source("""\
@@ -680,7 +684,6 @@ def appdef(source):
             return frame.run() 
     """ % (funcname, wfuncdecl, wfastscope))
     source.lines[1:2] = defaulthandlingsource.indent().lines 
-    print str(source)
     glob = {
         'newco' : newco, 
         'PyCode': PyCode, 
