@@ -22,7 +22,7 @@ __doc__
 __eq__            def eq__String_String(space, w_str1, w_str2):
 __ge__            def ge__String_String(space, w_str1, w_str2):
 __getattribute__
-__getitem__       def getitem__String_Int(space, w_str, w_int): def getitem__String_Slice(space, w_str, w_slice):
+__getitem__       def getitem__String_ANY(space, w_str, w_int): def getitem__String_Slice(space, w_str, w_slice):
 __getslice__
 __gt__            def gt__String_String(space, w_str1, w_str2):
 __hash__          def hash__String(space, w_str):
@@ -39,12 +39,12 @@ __rmul__
 __setattr__
 __str__           def str__String(space, w_str):
 capitalize        def str_capitalize__String(space, w_self):
-center            def str_center__String_Int(space, w_self):
-count             def str_count__String_String_Int_Int(space, w_self): [optional arguments not supported now]
+center            def str_center__String_ANY(space, w_self):
+count             def str_count__String_String_ANY_ANY(space, w_self): [optional arguments not supported now]
 decode            !Unicode not supported now
 encode            !Unicode not supported now
 endswith          str_endswith__String_String    [optional arguments not supported now]
-expandtabs        str_expandtabs__String_Int
+expandtabs        str_expandtabs__String_ANY
 find              OK
 index             OK
 isalnum           def str_isalnum__String(space, w_self): def _isalnum(ch):
@@ -63,7 +63,7 @@ rfind             OK
 rindex            OK
 rjust             def str_rjust__String_ANY(space, w_self, w_arg):
 rstrip            def str_rstrip__String_String(space, w_self, w_chars):
-split             def str_split__String_None_Int(space, w_self, w_none, w_maxsplit=-1):def str_split__String_String_Int(space, w_self, w_by, w_maxsplit=-1):
+split             def str_split__String_None_ANY(space, w_self, w_none, w_maxsplit=-1):def str_split__String_String_ANY(space, w_self, w_by, w_maxsplit=-1):
 splitlines        def str_splitlines__String_String(space, w_self, w_keepends):
 startswith        str_startswith__String_String    [optional arguments not supported now]
 strip             def str_strip__String_String(space, w_self, w_chars):
@@ -890,8 +890,8 @@ def ge__String_String(space, w_str1, w_str2):
     else:
         return space.w_False
 
-def getitem__String_Int(space, w_str, w_int):
-    ival = space.int_w(w_int)
+def getitem__String_ANY(space, w_str, w_index):
+    ival = space.int_w(w_index)
     str = w_str._value
     slen = len(str)
     if ival < 0:
@@ -912,9 +912,8 @@ def getitem__String_Slice(space, w_str, w_slice):
     w_empty = space.newstring([])
     return str_join__String_ANY(space, w_empty, w_r)
 
-def mul__String_Int(space, w_str, w_mul):
+def mul_string_times(space, w_str, mul):
     input = w_str._value
-    mul = space.int_w(w_mul)
     if mul < 0:
         return space.wrap("")
     input_len = len(input)
@@ -931,8 +930,11 @@ def mul__String_Int(space, w_str, w_mul):
 
     return space.wrap("".join(buffer))
 
-def mul__Int_String(space, w_mul, w_str):
-    return mul__String_Int(space, w_str, w_mul)
+def mul__String_ANY(space, w_str, w_times):
+    return mul_string_times(space, w_str, space.int_w(w_times))
+
+def mul__ANY_String(space, w_mul, w_str):
+    return mul_string_times(space, w_str, space.int_w(w_times))
 
 def add__String_String(space, w_left, w_right):
     right = w_right._value
