@@ -52,33 +52,34 @@ class ExtModule(Module):
             cls.loaders = loaders = {}
             pkgroot = cls.__module__
             for name, spec in cls.interpleveldefs.items(): 
-                if spec.startswith('('): 
-                    loader = getinterpevalloader(spec)
-                else: 
-                    loader = getinterpfileloader(pkgroot, spec) 
-                loaders[name] = loader 
+                loaders[name] = getinterpevalloader(pkgroot, spec) 
             for name, spec in cls.appleveldefs.items(): 
                 loaders[name] = getappfileloader(pkgroot, spec) 
     buildloaders = classmethod(buildloaders) 
 
-def getinterpevalloader(spec): 
-    def ievalloader(space): 
-        """ NOT_RPYTHON """ 
-        d = {'space' : space}
-        return eval(spec, d, d)
-    return ievalloader 
-
-def getinterpfileloader(pkgroot, spec):
-    modname, attrname = spec.split('.')
-    impbase = pkgroot + '.' + modname 
+def getinterpevalloader(pkgroot, spec): 
     def ifileloader(space): 
         """ NOT_RPYTHON """ 
-        mod = __import__(impbase, None, None, [attrname])
-        attr = getattr(mod, attrname)
-        iattr = gateway.interp2app(attr, attrname)
-        return space.wrap(iattr) 
+        d = {'space' : space}
+        # EVIL HACK (but it works, and this is not RPython :-) 
+        while 1: 
+            try: 
+                value = eval(spec, d) 
+            except NameError, ex: 
+                #assert name not in d, "huh, am i looping?" 
+                name = ex.args[0].split("'")[1] # super-Evil 
+                try: 
+                    d[name] = __import__(pkgroot+'.'+name, None, None, [name])
+                except ImportError: 
+                    d[name] = __import__(name, None, None, [name])
+            else: 
+                #print spec, "->", value
+                if hasattr(value, 'func_code'):  # semi-evil 
+                    return space.wrap(gateway.interp2app(value))
+                assert value is not None 
+                return value 
     return ifileloader 
-
+        
 applevelcache = Cache()
 def getappfileloader(pkgroot, spec): 
     # hum, it's a bit more involved, because we usually 
