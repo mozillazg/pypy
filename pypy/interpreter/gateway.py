@@ -259,19 +259,19 @@ class BuiltinFrame(eval.Frame):
 ##         self.argarray = argarray
 
     def getfastscope(self):
-        pass
-##         raise OperationError(self.space.w_TypeError,
-##           self.space.wrap("cannot get fastscope of a BuiltinFrame"))
+        raise OperationError(self.space.w_TypeError,
+            self.space.wrap("cannot get fastscope of a BuiltinFrame"))
 
     def run(self):
-        argarray = self.argarray
-        if self.code.spacearg:
-            w_result = self.code.func(self.space, *argarray)
-        else:
-            w_result = self.code.func(*argarray)
-        if w_result is None:
-            w_result = self.space.w_None
-        return w_result
+        pass
+##         argarray = self.argarray
+##         if self.code.spacearg:
+##             w_result = self.code.func(self.space, *argarray)
+##         else:
+##             w_result = self.code.func(*argarray)
+##         if w_result is None:
+##             w_result = self.space.w_None
+##         return w_result
 
 
 class Gateway(Wrappable):
