@@ -317,3 +317,19 @@ class AppTestInt:
 
     def test_pow(self):
         assert pow(2, -10) == 1/1024.
+
+    def test_int_w_long_arg(self):
+        assert int(10000000000) == 10000000000L
+        assert int("10000000000") == 10000000000L
+
+    def test_int_subclass_ctr(self):
+        class j(int):
+            pass
+        assert j(100) == 100
+        assert isinstance(j(100),j)
+        assert j(100L) == 100
+        assert j("100") == 100
+        assert j("100",2) == 4
+        assert isinstance(j("100",2),j)
+        raises(OverflowError,j,10000000000)
+        raises(OverflowError,j,"10000000000")
