@@ -20,8 +20,8 @@ class W_TupleObject(W_Object):
 registerimplementation(W_TupleObject)
 
 
-def unwrap__Tuple(space, w_tuple):
-    items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems]
+def unwrap__Tuple(space, w_tuple): 
+    items = [space.unwrap(w_item) for w_item in w_tuple.wrappeditems] # XXX generic mixed types unwrap
     return tuple(items)
 
 def len__Tuple(space, w_tuple):

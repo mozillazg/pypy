@@ -108,10 +108,10 @@ class W_DictObject(W_Object):
 registerimplementation(W_DictObject)
 
 
-def unwrap__Dict(space, w_dict): # xxx
+def unwrap__Dict(space, w_dict):
     result = {}
     for entry in w_dict.non_empties():
-        result[space.unwrap(entry.w_key)] = space.unwrap(entry.w_value)
+        result[space.unwrap(entry.w_key)] = space.unwrap(entry.w_value) # XXX generic mixed types unwrap
     return result
 
 def init__Dict(space, w_dict, w_args, w_kwds):
