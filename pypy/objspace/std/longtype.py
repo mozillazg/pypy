@@ -13,7 +13,7 @@ def descr__new__(space, w_longtype, w_value=None, w_base=None):
             value = w_value.longval
         elif space.is_true(space.isinstance(w_value, space.w_str)):
             try:
-                # XXX value can unwrapped long
+                # XXX value can be unwrapped long
                 value = string_to_long(space.str_w(w_value))
             except ValueError, e:
                 raise OperationError(space.w_ValueError,
@@ -24,7 +24,7 @@ def descr__new__(space, w_longtype, w_value=None, w_base=None):
             # 'long(x)' should return whatever x.__long__() returned
             if space.is_true(space.is_(w_longtype, space.w_long)):
                 return w_obj
-            value = space.unwrap(w_obj) # XXX value can unwrapped long
+            value = space.unwrap(w_obj) # XXX value can be unwrapped long
             if isinstance(value, int):    # XXX typechecking in unwrap!
                 value = long(value)
             if not isinstance(value, long):
@@ -40,7 +40,7 @@ def descr__new__(space, w_longtype, w_value=None, w_base=None):
                                  space.wrap("long() can't convert non-string "
                                             "with explicit base"))
         try:
-            # XXX value can unwrapped long
+            # XXX value can be unwrapped long
             value = string_to_long(s, base)
         except ValueError, e:
             raise OperationError(space.w_ValueError,
