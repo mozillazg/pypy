@@ -39,6 +39,9 @@ class SomeObject:
         return (self.__class__, self.__dict__) == (other.__class__, other.__dict__)
     def __ne__(self, other):
         return not (self == other)
+    def __repr__(self):
+        kwds = ', '.join(['%s=%r' % item for item in self.__dict__.items()])
+        return '%s(%s)' % (self.__class__.__name__, kwds)
     def contains(self, other):
         return pair(self, other).union() == self
 
@@ -51,8 +54,9 @@ class SomeInteger(SomeObject):
 class SomeBool(SomeInteger):
     "Stands for true or false."
     knowntype = bool
+    nonneg = True
     def __init__(self):
-        SomeInteger.__init__(self, nonneg=True)
+        pass
 
 class SomeString(SomeObject):
     "Stands for an object which is known to be a string."

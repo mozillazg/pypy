@@ -68,7 +68,13 @@ class RPythonAnnotator:
             # XXX don't know if it is better to pop from the head or the tail.
             # but suspect from the tail is better in the new Factory model.
             block, cells = self.pendingblocks.pop()
-            self.processblock(block, cells)
+            if self.processblock(block, cells):
+                # When flowin succeeds, i.e. when the analysis progress,
+                # we can tentatively re-schedule the delayed blocks.
+                delay = [(block, None) for block in self.delayedblocks]
+                delay.reverse()
+                self.pendingblocks[:0] = delay
+                del self.delayedblocks[:]
         if self.delayedblocks:
             raise AnnotatorError('%d block(s) are still blocked' %
                                  len(delayedblocks))
@@ -150,11 +156,8 @@ class RPythonAnnotator:
                 for factory in e.invalidatefactories:
                     self.reflowpendingblock(factory.block)
             else:
-                # When flowin succeeds, i.e. when the analysis progress,
-                # we can tentatively re-schedlue the delayed blocks.
-                for block in self.delayedblocks:
-                    self.addpendingblock(block, None)
-                del self.delayedblocks[:]
+                return True   # progressed
+        return False
 
     def reflowpendingblock(self, block):
         self.pendingblocks.append((block, None))
@@ -177,6 +180,7 @@ class RPythonAnnotator:
             self.bindinputargs(block, unions)
 
     def flowin(self, block):
+        #print 'Flowing', block, [self.binding(a) for a in block.inputargs]
         if block.operations:
             for i in range(len(block.operations)):
                 self.curblockpos = block, i
