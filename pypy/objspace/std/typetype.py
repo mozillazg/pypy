@@ -6,14 +6,13 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
     "This is used to create user-defined classes only."
     from pypy.objspace.std.typeobject import W_TypeObject
     # XXX check types
-    name = space.unwrap(w_name)
+    name = space.str_w(w_name)
     assert isinstance(name, str)
     bases_w = space.unpackiterable(w_bases)
     dict_w = {}
     dictkeys_w = space.unpackiterable(w_dict)
     for w_key in dictkeys_w:
-        key = space.unwrap(w_key)
-        assert isinstance(key, str)
+        key = space.str_w(w_key)
         dict_w[key] = space.getitem(w_dict, w_key)
     w_type = space.allocate_instance(W_TypeObject, w_typetype)
     w_type.__init__(space, name, bases_w or [space.w_object], dict_w)

@@ -129,7 +129,7 @@ def repr__Type(space, w_obj):
     return space.wrap("<pypy type '%s'>" % w_obj.name)  # XXX remove 'pypy'
 
 def getattr__Type_ANY(space, w_type, w_name):
-    name = space.unwrap(w_name)
+    name = space.str_w(w_name)
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
         if space.is_data_descr(w_descr):
@@ -143,7 +143,7 @@ def getattr__Type_ANY(space, w_type, w_name):
     raise OperationError(space.w_AttributeError,w_name)
 
 def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
-    name = space.unwrap(w_name)
+    name = space.str_w(w_name)
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
         if space.is_data_descr(w_descr):
@@ -151,7 +151,7 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     w_type.dict_w[name] = w_value
 
 def delattr__Type_ANY(space, w_type, w_name):
-    name = space.unwrap(w_name)
+    name = space.str_w(w_name)
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
         if space.is_data_descr(w_descr):
