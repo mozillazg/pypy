@@ -250,18 +250,18 @@ class BuiltinCodeSignature(Signature):
         # Python 2.2 SyntaxError without newline: Bug #501622
         setfastscope += '\n'
         d = {}
-        exec setfastscope in self.miniglobals, d
+        exec compile(setfastscope, '', 'exec') in self.miniglobals, d
 
         self.miniglobals['func'] = func
         
-        exec """
-def run(self):
-    w_result = func(%s)
-    if w_result is None:
-        w_result = self.space.w_None
-    return w_result
-""" % ','.join(self.run_args) in self.miniglobals, d
-
+        source = """if 1: 
+            def run(self):
+                w_result = func(%s)
+                if w_result is None:
+                    w_result = self.space.w_None
+                return w_result
+            \n""" % ','.join(self.run_args) 
+        exec compile(source, '', 'exec') in self.miniglobals, d
         return type("BuiltinFrame_for_%s" % self.name,
                     (BuiltinFrame,),d)
         
