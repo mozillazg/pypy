@@ -55,50 +55,28 @@ class ObjSpace(object):
     def __repr__(self):
         return self.__class__.__name__
 
-    def make_builtins(self, for_builtins):
+    def make_builtins(self):
         "NOT_RPYTHON: only for initializing the space."
-        # initializing builtins may require creating a frame which in
-        # turn already accesses space.w_builtins, provide a dummy one ...
-        # XXX TEMPORARY 
 
         from pypy.module.sys2 import Module 
         w_name = self.wrap('sys')
         self.sys = Module(self, w_name) 
-        self.w_sys = self.wrap(self.sys) 
-
         w_modules = self.sys.get('modules')
-        self.setitem(w_modules, w_name, self.w_sys) 
-        print "initialized", self.w_sys 
+        self.setitem(w_modules, w_name, self.wrap(self.sys))
+
         from pypy.module.builtin import Module 
         w_name = self.wrap('__builtin__')
         self.builtin = Module(self, w_name) 
-        self.w_builtin = self.wrap(self.builtin) 
-        #self.w_builtins = self.builtin.w_dict 
-        self.setitem(w_modules, w_name, self.w_builtin) 
-        self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), self.w_builtin) 
-        print "initialized", self.w_builtin 
-
-        # do we need this? 
-        #for key, w_value in for_builtins.items():
-        #    self.setitem(self.builtin.w_dict, self.wrap(key), w_value)
+        w_builtin = self.wrap(self.builtin)
+        self.setitem(w_modules, w_name, w_builtin) 
+        self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin) 
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
         for name, value in self.__dict__.items():
             if name.startswith('w_'):
                 name = name[2:]
-                if name.startswith('builtin') or name.startswith('sys'):
-                    continue
                 #print "setitem: space instance %-20s into builtins" % name
                 self.setitem(self.builtin.w_dict, self.wrap(name), value)
-        print "finished make_builtins", self
-
-    def XXXget_builtin_module(self, name):
-        if name not in self.sys.builtin_modules:
-            return None
-        module = self.sys.builtin_modules[name]
-        w_module = self.wrap(module)
-        self.sys.setbuiltinmodule(w_module, name)
-        return w_module
 
     def initialize(self):
         """NOT_RPYTHON: Abstract method that should put some minimal
