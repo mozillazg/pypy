@@ -7,8 +7,8 @@ from pypy.objspace.std.objspace import StdObjSpace
 
 def descr__repr__(space, w_obj):
     w = space.wrap
-    classname = space.unwrap(space.getattr(space.type(w_obj), w("__name__")))
-    id = space.unwrap(space.id(w_obj))
+    classname = space.str_w(space.getattr(space.type(w_obj), w("__name__")))
+    id = space.int_w(space.id(w_obj))# xxx ids could be long
     return w("<%s object at 0x%x>" % (classname, id))
 
 def descr__str__(space, w_obj):
@@ -16,6 +16,7 @@ def descr__str__(space, w_obj):
 
 def descr__hash__(space, w_obj):
     # XXX detect non-hashable instances (the ones overriding comparison only)
+    # XXX ids could be long
     return space.id(w_obj)
 
 def descr__class__(space, w_obj):
