@@ -19,6 +19,8 @@ from pypy.interpreter.function import Function, Method
 from pypy.interpreter.baseobjspace import W_Root,ObjSpace,Wrappable
 from pypy.interpreter.argument import Arguments
 from pypy.tool.cache import Cache 
+# internal non-translatable parts: 
+from pypy.tool.getpy import py  # XXX from interpreter/ we get py.py 
 
 NoneNotWrapped = object()
 
@@ -647,7 +649,7 @@ class interp2app_temp(interp2app):
 #
 
 def preparesource(source, funcdecl): 
-    from pypy.tool.pytestsupport import py 
+    """ NOT_RPYTHON """ 
     source = py.code.Source(source) 
     source = source.putaround("def %s:" % funcdecl)
     d = {}
@@ -656,9 +658,14 @@ def preparesource(source, funcdecl):
     assert i != -1
     return d[funcdecl[:i]].func_code 
 
-def appdef(funcdecl, source): 
+def appdef(source): 
+    """ NOT_RPYTHON """ 
     from pypy.interpreter.pycode import PyCode
-    from pypy.tool.pytestsupport import py   
+    if not isinstance(source, str): 
+        source = str(py.code.Source(source).strip())
+        assert source.startswith("def "), "can only transform functions" 
+        source = source[4:]
+    funcdecl, source = str(source).split(':', 1)
     newco = preparesource(source, funcdecl) 
     funcname, decl = funcdecl.split('(', 1)
     decl = decl.strip()[:-1] 
@@ -682,11 +689,13 @@ def appdef(funcdecl, source):
     return glob[funcname]
 
 def specialargparse(decl): 
-    from pypy.tool.pytestsupport import py  # for code generation 
+    """ NOT_RPYTHON """ 
     wfuncargs = []
     wfastnames = []
     defaultargs = []
     for name in decl.split(','): 
+        if not name.strip(): 
+            continue
         name = "w_%s" % name.strip()
         if '=' in name: 
             name, value = name.split('=')
