@@ -1,6 +1,5 @@
 from pypy.interpreter import executioncontext
-from pypy.interpreter.gateway import \
-     AppVisibleModule, ScopedCode, wrap_applevel_class
+from pypy.interpreter.gateway import AppVisibleModule, ScopedCode
 
 #######################
 ####  __builtin__  ####
@@ -12,19 +11,6 @@ class __builtin__(AppVisibleModule):
 
     def _actframe(self, index=-1):
         return self.space.getexecutioncontext().framestack.items[index]
-
-    def _wrap_postponed(self):
-        """ stuff that needs a mostly working interpreter goes here.
-
-        The AppVisibleModule init will put all objects into '_postponed'
-        that need to be wrapped now.  Currently this should only be
-        the 'xrange' class. 
-        """
-        for name, obj in self._postponed:
-            # for now this can only be a class
-            w_res = wrap_applevel_class(self.space, name, obj)
-            w_name = self.space.wrap(name)
-            self.space.setattr(self._wrapped, w_name, w_res)
 
     def globals(self):
         return self._actframe().w_globals
@@ -397,33 +383,30 @@ class __builtin__(AppVisibleModule):
             return False
 
 
-    class app_xrange:
-        def __init__(self, x, y=None, step=1):
-            """ returns an xrange object, see range for more docs"""
-
-            if y is None: 
-                self.start = 0
-                self.stop = x
-            else:
-                self.start = x
-                self.stop = y
-
-            if step == 0:
-                raise ValueError, 'xrange() step-argument (arg 3) must not be zero'
-
-            self.step = step
-
-        def __iter__(self):
-            def gen(self):
-                start,stop,step = self.start,self.stop,self.step
-                i = start
-                if step > 0:
-                    while i < stop:
-                        yield i
-                        i+=step
+    def app_xrange(start, stop=None, step=1):
+        class xrange:
+            def __init__(self, start, stop=None, step=1):
+                if stop is None: 
+                    self.start = 0
+                    self.stop = start
                 else:
-                    while i > stop:
-                        yield i
-                        i+=step
+                    self.start = start
+                    self.stop = stop
+                if step == 0:
+                    raise ValueError, 'xrange() step-argument (arg 3) must not be zero'
+                self.step = step
 
-            return gen(self)
+            def __iter__(self):
+                def gen(self):
+                    start, stop, step = self.start, self.stop, self.step
+                    i = start
+                    if step > 0:
+                        while i < stop:
+                            yield i
+                            i+=step
+                    else:
+                        while i > stop:
+                            yield i
+                            i+=step
+                return gen(self)
+        return xrange(start, stop, step)

@@ -2,11 +2,7 @@ import autopath
 
 import sys, os
 import unittest
-
-def wrap_func(space, func):
-    from pypy.interpreter.gateway import InterpretedFunction
-    func = InterpretedFunction(space, func)
-    return space.wrap(func)
+from pypy.interpreter.gateway import InterpretedMethod, InterpretedFunction
 
 def make_testcase_class(space, tc_w):
     # XXX this is all a bit insane (but it works)
@@ -19,7 +15,9 @@ def make_testcase_class(space, tc_w):
     for name in dir(AppTestCase):
         if ( name.startswith('assert') or name.startswith('fail')
              and name != 'failureException'):
-            w_func = wrap_func(space, getattr(tc_w, name).im_func)
+            func = InterpretedMethod(space, getattr(tc_w, name).im_func)
+            w_func = space.wrap(func)
+            #w_func = wrap_func(space, getattr(tc_w, name).im_func)
             space.setitem(d, w(name), w_func)
     w_tc = space.call_function(space.w_type,
                                w('TestCase'),
@@ -46,7 +44,8 @@ class WrappedFunc(object):
             w_tc = make_testcase_class(space, self.testCase)
             setattr(space, w_tc_attr, w_tc)
 
-        w_f = wrap_func(space, self.testMethod.im_func)
+        w_f = space.wrap(InterpretedFunction(space, self.testMethod.im_func))
+        # w_f = wrap_func(space, self.testMethod.im_func)
         space.call_function(w_f, w_tc)
 
 

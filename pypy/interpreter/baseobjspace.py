@@ -41,7 +41,6 @@ class ObjSpace:
                 #print "setitem: space instance %-20s into builtins" % name
                 self.setitem(self.w_builtins, self.wrap(name), value)
 
-        self.builtin._wrap_postponed()
         self.sys._setmodule(self.builtin)
 
     def make_sys(self):

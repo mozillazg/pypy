@@ -3,7 +3,7 @@ from pypy.interpreter.baseobjspace import OperationError, NoValue
 from pypy.interpreter.pyframe import _NULL
 import dis
 from pypy.interpreter import pyframe, baseobjspace
-from pypy.interpreter.gateway import app2interp, ScopedCode
+from pypy.interpreter.gateway import InterpretedFunction, ScopedCode
 
 
 # dynamically loaded application-space utilities
@@ -323,34 +323,31 @@ def END_FINALLY(f):
     unroller = f.space.unwrap(f.valuestack.pop())
     if unroller is not None:
         raise unroller   # re-raise the unroller, if any
-
-class app(object):
-    def __init__(self, space):
-        self.space = space
-
-    def app_build_class(self, name, bases, namespace, globals):
-        if '__metaclass__' in namespace:
-            metaclass = namespace['__metaclass__']
-        elif len(bases) > 0:
-            base = bases[0]
-            if hasattr(base, '__class__'):
-                metaclass = base.__class__
-            else:
-                metaclass = type(base)
-        elif '__metaclass__' in globals:
-            metaclass = globals['__metaclass__']
-        else:
-            metaclass = type
-        return metaclass(name, bases, namespace)
-
-    build_class = app2interp(app_build_class)
     
 def BUILD_CLASS(f):
     w_methodsdict = f.valuestack.pop()
     w_bases       = f.valuestack.pop()
     w_name        = f.valuestack.pop()
-    w_newclass = app(f.space.gethelperspace()).build_class(w_name, w_bases, w_methodsdict, f.w_globals)
+    # XXX it would be best to have all opcodes on a class that has a 'space' attribute
+    #     then the following initialization could be done at init-time. 
+    build_class = InterpretedFunction(f.space.gethelperspace(), app_build_class)
+    w_newclass = build_class(w_name, w_bases, w_methodsdict, f.w_globals)
     f.valuestack.push(w_newclass)
+
+def app_build_class(name, bases, namespace, globals):
+    if '__metaclass__' in namespace:
+        metaclass = namespace['__metaclass__']
+    elif len(bases) > 0:
+        base = bases[0]
+        if hasattr(base, '__class__'):
+            metaclass = base.__class__
+        else:
+            metaclass = type(base)
+    elif '__metaclass__' in globals:
+        metaclass = globals['__metaclass__']
+    else:
+        metaclass = type
+    return metaclass(name, bases, namespace)
 
 def STORE_NAME(f, varindex):
     varname = f.getname(varindex)

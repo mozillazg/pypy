@@ -5,9 +5,9 @@ import os, pypy
 import sys as cpy_sys
 
 class sys(AppVisibleModule):
-    """ A Minimal 'sys' module.
+    """ PyPy's 'sys' module.
 
-    Currently we only provide 'stdout' and 'displayhook'
+    Currently we only provide 'path', 'modules', 'stdout' and 'displayhook'
     """
 
     def __init__(self, space):

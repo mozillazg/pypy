@@ -6,31 +6,6 @@ gateway between app-level and interpreter-level
 import inspect
 CO_VARARGS, CO_VARKEYWORDS = 0x4, 0x8
 
-class app2interp(object):
-    """ this class exposes an app-level defined function at interpreter-level 
-        Assumption:  the interp-level function will be called ala
-
-                            a.function(arg1, arg2, argn)
-
-                     with 'a' having an attribute 'space' which the app-level 
-                     code should run in. (might change in during the branch)
-    """
-    def __init__(self, func):
-        #print "making app2interp for", func
-        self.func = func
-        self._codecache = {}
-
-    def __get__(self, instance, cls=None):
-        space = instance.space
-        try:
-            return self._codecache[(space, instance, self)] 
-        except KeyError:
-            c = InterpretedFunction(space, self.func)
-            c.im_self = instance
-            assert c.simple, "function should be simple but isn't"
-            self._codecache[(space, instance, self)] = c
-            return c
-
 class ScopedCode(object):
     """ a code object within a certain global and closure scope.
     (the local scope is given when you call 'eval_frame')
@@ -58,34 +33,30 @@ class ScopedCode(object):
         frame = self.create_frame(*args, **kwargs)
         return self.space.getexecutioncontext().eval_frame(frame)
 
-class InterpretedFunction(ScopedCode):
-    """ a function which executes at app-level (by interpreting bytecode
-    and dispatching operations on an objectspace). 
-    """
+class app2interp(object):
+    """ this class exposes an app-level method at interpreter-level.
 
-    def __init__(self, space, cpyobj, w_globals=None, closure_w=()): 
-        """ initialization similar to base class but it also wraps 
-        some function-specific stuff (like defaults). 
-        """
-        if hasattr(cpyobj, 'func_code'):
-            self.w_defs = space.wrap(cpyobj.func_defaults or ()) 
-            cpycode = cpyobj.func_code
-        else:
-            self.w_defs = space.newtuple([])
-            cpycode = cpyobj
-        assert type(self.w_defs) is tuple, "type of desfs is %s" % type(self.w_defs)
+    Note that the wrapped method must *NOT* use a 'self' argument. 
+    Assumption: the instance on which this method is bound to has a
+                'space' attribute. 
+    """
+    def __init__(self, appfunc):
+        self.appfunc = appfunc
+
+    def __get__(self, instance, cls=None):
+        return InterpretedFunction(instance.space, self.appfunc)
+
+class InterpretedFunctionFromCode(ScopedCode):
+    def __init__(self, space, cpycode, w_defs, w_globals=None, closure_w=()):
         ScopedCode.__init__(self, space, cpycode, w_globals, closure_w)
+        self.w_defs = w_defs
         self.simple = cpycode.co_flags & (CO_VARARGS|CO_VARKEYWORDS)==0
+        self.func_code = cpycode
 
     def parse_args(self, frame, w_args, w_kwargs):
         """ parse args and kwargs and set fast scope of frame.
         """
         space = self.space
-        if hasattr(self, 'im_self'):
-            args_w = space.unpacktuple(w_args)
-            args_w = [space.wrap(self.im_self)] + args_w
-            w_args = space.newtuple(args_w)
-
         loc_w = None
         if self.simple and (w_kwargs is None or not space.is_true(w_kwargs)):
             try:
@@ -94,26 +65,21 @@ class InterpretedFunction(ScopedCode):
                 pass
         if loc_w is None:
             #print "complicated case of arguments for", self.cpycode.co_name, "simple=", self.simple
-            assert type(self.w_defs) is tuple
             w_loc = self.parse_args_complex(self.w_code, w_args, w_kwargs, self.w_defs)
             loc_w = space.unpacktuple(w_loc)
         loc_w.extend([_NULL] * (self.cpycode.co_nlocals - len(loc_w)))
 
         # make nested cells
-        for name in self.cpycode.co_cellvars:
-            i = list(self.cpycode.co_varnames).index(name)
-            w_value = loc_w[i] 
-            loc_w[i] = _NULL
-            frame.closure_w += (Cell(w_value),)
+        if self.cpycode.co_cellvars:
+            varnames = list(self.cpycode.co_varnames)
+            for name in self.cpycode.co_cellvars:
+                i = varnames.index(name)
+                w_value = loc_w[i] 
+                loc_w[i] = _NULL
+                frame.closure_w += (Cell(w_value),)
 
         assert len(loc_w) == self.cpycode.co_nlocals, "local arguments not prepared correctly"
         frame.setfastscope(loc_w)
-
-    def __get__(self, instance, cls=None):
-        func = object.__new__(self.__class__)
-        func.__dict__.update(self.__dict__)
-        func.im_self = instance
-        return func
 
     def create_frame(self, w_args, w_kwargs):
         """ parse arguments and execute frame """
@@ -123,7 +89,7 @@ class InterpretedFunction(ScopedCode):
         self.parse_args(frame, w_args, w_kwargs)
         return frame
 
-    def parse_args_complex_w(self, cpycode, args, kwargs, defs):
+    def app_parse_args_complex(cpycode, args, kwargs, defs):
         """ return list of initial local values parsed from 
         'args', 'kwargs' and defaults.
         """
@@ -166,6 +132,7 @@ class InterpretedFunction(ScopedCode):
         elif len_args > co_argcount:
             raise TypeError, "Too many arguments"
 
+        # we only do the next loop for determining multiple kw-values
         i = 0
         while i < len_args and i < co_argcount:
             name = cpycode.co_varnames[i]
@@ -173,28 +140,58 @@ class InterpretedFunction(ScopedCode):
                 raise TypeError, "got multiple values for argument %r" % name
             i+=1
 
-
-        # XXX probably need an extra pass over kwargs to determine if a 
-        #     keyword-arg sets a second time 
         if cpycode.co_flags & CO_VARKEYWORDS:
             positional_args.append(kwargs)
         elif kwargs:
             raise TypeError, "got unexpected keyword argument(s) %s" % repr(kwargs.keys()[0])
 
         return positional_args
-    parse_args_complex = app2interp(parse_args_complex_w)
+    parse_args_complex = app2interp(app_parse_args_complex)
 
     def __call__(self, *args_w, **kwargs_w):
-        """ call with native parameter passing convention """
-        #print "native call on", self.cpycode.co_name
-        #print "len args_w", len(args_w)
-        #print "kwargs_w", kwargs_w
+        """ execute function and take arguments with
+        native interp-level parameter passing convention """
         w_args = self.space.newtuple(args_w)
         w = self.space.wrap
         w_kwargs = self.space.newdict([])
         for name, w_value in kwargs_w.items():
             self.space.setitem(w_kwargs, w(name), w_value)
         return self.eval_frame(w_args, w_kwargs)
+
+class InterpretedFunction(InterpretedFunctionFromCode):
+    """ a function which executes at app-level (by interpreting bytecode
+    and dispatching operations on an objectspace). 
+    """
+
+    def __init__(self, space, cpyfunc, w_globals=None, closure_w=()): 
+        """ initialization similar to base class but it also wraps 
+        some function-specific stuff (like defaults). 
+        """
+        assert not hasattr(cpyfunc, 'im_self')
+        InterpretedFunctionFromCode.__init__(self, space, 
+                                             cpyfunc.func_code,
+                                             space.wrap(cpyfunc.func_defaults or ()),
+                                             w_globals, closure_w)
+
+class InterpretedMethod(InterpretedFunction):
+    """ an InterpretedFunction with 'self' spice.
+
+    XXX hpk: i think we want to eliminate all uses for this class
+             as bound/unbound methods should be done in objspace?!
+
+    """
+
+    def __init__(self, *args):
+        InterpretedFunction.__init__(self, *args)
+
+    def parse_args(self, frame, w_args, w_kwargs):
+        """ fills in "self" arg and dispatch to InterpreterFunction.
+        """
+        space = self.space
+        args_w = space.unpacktuple(w_args)
+        args_w = [space.wrap(self)] + args_w
+        w_args = space.newtuple(args_w)
+        return InterpretedFunction.parse_args(self, frame, w_args, w_kwargs)
 
 class AppVisibleModule:
     """ app-level visible Module defined at interpreter-level.
@@ -205,19 +202,13 @@ class AppVisibleModule:
     with 'app_'. Both non-underscore methods and app-level methods will
     be available on app-level with their respective name. 
 
-    On __wrap__(space) it returns an app-level (read: wrapped) module object. 
-
-    functions prefixed with 'app_' indicate app-level running functions.
-    Note that these functions don't get a 'self' argument because we really
-    need only the function (there is no notion of beeing 'bound' or 'unbound' 
-    for them).
+    Note that app-level functions don't get a 'self' argument because it doesn't
+    make sense and we really only need the function (there is no notion of beeing 
+    'bound' or 'unbound' for them).
     
     """
     def __init__(self, space):
         self.space = space
-
-        if hasattr(self, '_wrap_postponed'):
-            self._postponed = []
 
         space = self.space
         modname = self.__class__.__name__
@@ -239,22 +230,8 @@ class AppVisibleModule:
             elif name.startswith('app_'):
                 obj = self.__class__.__dict__.get(name)
                 name = name[4:]
-
-                # just a simple function? 
-                if hasattr(obj, 'func_code'):
-                    w_res = space.wrap(InterpretedFunction(space, obj))
-
-                # or a class? (which eventually needs to be recompiled)
-                elif inspect.isclass(obj):
-                    # this module chooses to do this later (usually
-                    # for bootstrapping reasons)
-                    if hasattr(self, '_postponed'):
-                        self._postponed.append((name, obj))
-                    else:
-                        w_res = wrap_applevel_class(space, name, obj)
-                else:
-                    raise ValueError, "cannot wrap %s, %s" %(name, obj)
-
+                w_res = wrap_applevel(space, name, obj)
+            # nope then we must expose interpreter-level to app-level
             else:
                 w_res = wrap_interplevel(space, name, obj)
                 setattr(self, 'w_'+name, w_res)
@@ -262,13 +239,12 @@ class AppVisibleModule:
             space.setattr(_wrapped, w_name, w_res)
 
 def wrap_applevel(space, name, obj):
-    """ wrap an app-level object which was compiled/lives 
-    at interpreter-level.
-    """
-    #print "app registering ", name #, obj
+    """ wrap an app-level style object which was compiled at interp-level. """
     if hasattr(obj, 'func_code'):
         return space.wrap(InterpretedFunction(space, obj))
     elif inspect.isclass(obj):
+        # XXX currently (rev 1020) unused, but it may be useful
+        #     to define builtin app-level classes at interp-level. 
         return wrap_applevel_class(space, name, obj)
     else:
         raise ValueError, "cannot wrap %s, %s" % (name, obj)
@@ -276,8 +252,9 @@ def wrap_applevel(space, name, obj):
 def wrap_applevel_class(space, name, obj):
     """ construct an app-level class by reproducing the
     source definition and running it through the interpreter.
-    It's a bit ugly but i don't know a better way (holger). 
+    It's a bit ugly but i don't know a better way (holger).
     """
+    assert 1!=1, "Oh you want to use this function?"
     l = ['class %s:' % name]
     indent = '    '
     for key, value in vars(obj).items():
@@ -302,12 +279,10 @@ def wrap_applevel_class(space, name, obj):
     w_res = space.getitem(scopedcode.w_globals, w_name)
     return w_res
 
-def wrap_interplevel(space, name, obj):
-    """ wrap an app-level object which was compiled/lives 
-    at interpreter-level.
-    """
-    return space.wrap(obj)
 
+def wrap_interplevel(space, name, obj):
+    """ make an interp-level object accessible on app-level. """
+    return space.wrap(obj)
 
 ## Cells (used for nested scopes only) ##
 
