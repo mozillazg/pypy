@@ -30,8 +30,9 @@ class Arguments:
                                      space.wrap("the keywords must be "
                                                 "a dictionary"))
             for w_key in space.unpackiterable(w_starstararg):
-                key = space.unwrap(w_key)
-                if not isinstance(key, str):
+                try:
+                    key = space.str_w(w_key)
+                except OperationError:
                     raise OperationError(space.w_TypeError,
                                          space.wrap("keywords must be strings"))
                 if key in self.kwds_w:

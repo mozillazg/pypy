@@ -37,6 +37,10 @@ class TestW_StringObject:
 ##                                                w(str2),
 ##                                                pypyconst))
         
+
+    def test_str_w(self):
+        assert self.space.str_w(self.space.wrap("foo")) == "foo"
+
     def test_equality(self):
         w = self.space.wrap 
         assert self.space.eq_w(w('abc'), w('abc'))

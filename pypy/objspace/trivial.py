@@ -140,6 +140,18 @@ class TrivialObjSpace(ObjSpace, DescrOperation):
                 return tuple([self.wrap(y) for y in x])
             return x
 
+    def int_w(self, w):
+        if type(w) is not int:
+            raise OperationError(self.w_TypeError,
+                                 sefl.wrap("expected int"))
+        return w
+
+    def str_w(self, w):
+        if type(w) is not str:
+            raise OperationError(self.w_TypeError,
+                                 sefl.wrap("expected string"))
+        return w
+
     def unwrap(self, w):
         if isinstance(w, CPyWrapper):
             instancedict = CPyWrapper.__dict__['__dict__'].__get__(w)

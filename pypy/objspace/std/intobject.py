@@ -40,6 +40,9 @@ FromUnicode
 print
 """
 
+def int_w__Int(space, w_int1):
+    return int(w_int1.intval)
+
 def unwrap__Int(space, w_int1):
     return int(w_int1.intval)
 

@@ -219,6 +219,14 @@ def init__ANY(space, w_obj, w_args, w_kwds):
 class UnwrapError(Exception):
     pass
 
+def int_w__ANY(space,w_obj):
+    raise OperationError(space.w_TypeError,
+                         space.wrap("expected int"))
+
+def str_w__ANY(space,w_obj):
+    raise OperationError(space.w_TypeError,
+                         space.wrap("expected str"))
+
 def unwrap__ANY(space, w_obj):
     if isinstance(w_obj, BaseWrappable):
         return w_obj

@@ -37,9 +37,9 @@ class OperationError(Exception):
 
     def errorstr(self, space):
         "NOT_RPYTHON: The exception class and value, as a string."
-        exc_type  = space.unwrap(
+        exc_type  = space.str_w(
             space.getattr(self.w_type, space.wrap('__name__')))
-        exc_value = space.unwrap(space.str(self.w_value))
+        exc_value = space.str_w(space.str(self.w_value))
         return '%s: %s' % (exc_type, exc_value)
 
     def getframe(self):
@@ -107,14 +107,14 @@ class OperationError(Exception):
         else:
             w = space.wrap
             if space.is_true(space.is_(space.type(self.w_type), space.w_str)):
-                exc_typename = space.unwrap(self.w_type)
+                exc_typename = space.str_w(self.w_type)
             else:
-                exc_typename = space.unwrap(
+                exc_typename = space.str_w(
                     space.getattr(self.w_type, w('__name__')))
             if self.w_value == space.w_None:
                 exc_value = None
             else:
-                exc_value = space.unwrap(space.str(self.w_value))
+                exc_value = space.str_w(space.str(self.w_value))
             print >> file, '(application-level)',
         if not exc_value:
             print >> file, exc_typename

@@ -341,7 +341,7 @@ class SContinueLoop(ControlFlowException):
         jump_to = self.args[0]
         return [space.wrap(jump_to)]
     def state_pack_variables(self, space, w_jump_to):
-        self.args = (space.unwrap(w_jump_to),)
+        self.args = (space.int_w(w_jump_to),)
 
 class SReturnValue(ControlFlowException):
     """Signals a 'return' statement.

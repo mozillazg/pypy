@@ -104,7 +104,7 @@ class BuiltinModule(Module):
 
     def interplevelexec(self, w_codestring):
         "NOT_RPYTHON: 'exec' a string at interp-level."
-        codestring = self.space.unwrap(w_codestring)
+        codestring = self.space.str_w(w_codestring)
         exec codestring in self.__dict__
         return self.space.w_None
 
@@ -112,7 +112,7 @@ class BuiltinModule(Module):
         """NOT_RPYTHON: 'eval' a string at interp-level.  The result must
         be None or a wrapped object, which is returned to the caller."""
         space = self.space
-        codestring = space.unwrap(w_codestring)
+        codestring = space.str_w(w_codestring)
         w_result = eval(codestring, self.__dict__)
         if w_result is None:
             w_result = space.w_None   # else assume that it is already wrapped
@@ -121,7 +121,7 @@ class BuiltinModule(Module):
     def interplevelexecfile(self, w_filename):
         """NOT_RPYTON: 'exec' a file at interp-level.  The file should be in
         the same directory as the xxxmodule.py source file of the module."""
-        filename = self.space.unwrap(w_filename)
+        filename = self.space.str_w(w_filename)
         filename = os.path.join(os.path.dirname(self.__file__), filename)
         execfile(filename, self.__dict__)
         return self.space.w_None
@@ -138,7 +138,7 @@ class BuiltinModule(Module):
             if w_fromlist == space.w_None:
                 raise ImportError, "must use 'from __interplevel__ import xx'"
             for w_name in space.unpacktuple(w_fromlist):
-                name = space.unwrap(w_name)
+                name = space.str_w(w_name)
                 if not hasattr(self, 'w_' + name):
                     f = getattr(self, name)
                     code = gateway.BuiltinCode(f, ismethod=False,

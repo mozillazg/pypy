@@ -99,6 +99,22 @@ class FlowObjSpace(ObjSpace):
             raise TypeError("already wrapped: " + repr(obj))
         return Constant(obj)
 
+    def int_w(self, w_obj):
+        if isinstance(w_obj, Constant):
+            val = w_obj.value
+            if type(val) is not int:
+                raise TypeError("expected int: " + repr(w_obj))
+            return val
+        return self.unwrap(w_obj)
+
+    def str_w(self, w_obj):
+        if isinstance(w_obj, Constant):
+            val = w_obj.value
+            if type(val) is not str:
+                raise TypeError("expected string: " + repr(w_obj))
+            return val
+        return self.unwrap(w_obj)                                
+
     def unwrap(self, w_obj):
         if isinstance(w_obj, Variable):
             raise UnwrapException
@@ -106,6 +122,8 @@ class FlowObjSpace(ObjSpace):
             return w_obj.value
         else:
             raise TypeError("not wrapped: " + repr(w_obj))
+
+    unwrap_builtin = unwrap
 
     def getexecutioncontext(self):
         return self.executioncontext
