@@ -277,6 +277,9 @@ class AppBuiltinCode:
         self.co_nlocals = co.co_nlocals
         self.co_argcount = co.co_argcount 
         self.co_names = co.co_names
+        self.co_lnotab = co.co_lnotab 
+        self.co_firstlineno = co.co_firstlineno 
+        self.co_filename = co.co_filename 
         self.next_arg = self.co_argcount 
 
     def __call__(self, *args_w):

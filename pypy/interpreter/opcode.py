@@ -2,6 +2,7 @@ from appfile import AppFile
 from pypy.interpreter.baseobjspace import OperationError, NoValue
 import dis
 from pypy.interpreter import pyframe, baseobjspace
+from pypy.interpreter.pycode import app2interp
 
 
 # dynamically loaded application-space utilities
@@ -311,12 +312,32 @@ def END_FINALLY(f):
     if unroller is not None:
         raise unroller   # re-raise the unroller, if any
 
+class app(object):
+    def __init__(self, space):
+        self.space = space
+
+    def app_build_class(self, name, bases, namespace, globals):
+        if '__metaclass__' in namespace:
+            metaclass = namespace['__metaclass__']
+        elif len(bases) > 0:
+            base = bases[0]
+            if hasattr(base, '__class__'):
+                metaclass = base.__class__
+            else:
+                metaclass = type(base)
+        elif '__metaclass__' in globals:
+            metaclass = globals['__metaclass__']
+        else:
+            metaclass = type
+        return metaclass(name, bases, namespace)
+
+    build_class = app2interp(app_build_class)
+    
 def BUILD_CLASS(f):
     w_methodsdict = f.valuestack.pop()
     w_bases       = f.valuestack.pop()
     w_name        = f.valuestack.pop()
-    w_newclass = f.space.gethelper(appfile).call(
-        "build_class", [w_name, w_bases, w_methodsdict, f.w_globals])
+    w_newclass = app(f.space).build_class(w_name, w_bases, w_methodsdict, f.w_globals)
     f.valuestack.push(w_newclass)
 
 def STORE_NAME(f, varindex):
