@@ -52,7 +52,7 @@ class SomeBool(SomeInteger):
     "Stands for true or false."
     knowntype = bool
     def __init__(self):
-        SomeInteger.__init__(nonneg=True)
+        SomeInteger.__init__(self, nonneg=True)
 
 class SomeString(SomeObject):
     "Stands for an object which is known to be a string."
