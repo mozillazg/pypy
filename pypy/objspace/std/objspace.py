@@ -36,7 +36,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
             if isinstance(mm, MultiMethod) and not hasattr(self, name):
-                func = mm.install_not_sliced(self.model.typeorder)
+                exprargs, expr, miniglobals, fallback = (
+                    mm.install_not_sliced(self.model.typeorder, baked_perform_call=False))
+
+                func = stdtypedef.make_perform_trampoline('__mm_'+name,
+                                                          exprargs, expr, miniglobals,
+                                                          mm)
+                
                                                   # e.g. add(space, w_x, w_y)
                 boundmethod = func.__get__(self)  # bind the 'space' argument
                 setattr(self, name, boundmethod)  # store into 'space' instance

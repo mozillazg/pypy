@@ -4,7 +4,7 @@ class FailedToImplement(Exception):
     pass
 
 
-def well_just_complain(*args):
+def raiseFailedToImplement():
     raise FailedToImplement
 
 
@@ -39,14 +39,23 @@ class MultiMethodTable:
             types, order)
         lst[order] = function
 
-    def install(self, prefix, list_of_typeorders):
+    def install(self, prefix, list_of_typeorders, baked_perform_call=True):
+        "NOT_RPYTHON: initialization-time only"
+        assert len(list_of_typeorders) == self.arity
+        installer = Installer(self, prefix, list_of_typeorders,
+                              baked_perform_call=baked_perform_call)
+        return installer.install()
+
+    def install_if_not_empty(self, prefix, list_of_typeorders):
         "NOT_RPYTHON: initialization-time only"
         assert len(list_of_typeorders) == self.arity
         installer = Installer(self, prefix, list_of_typeorders)
         if installer.is_empty():
-            return well_just_complain
+            return None
         else:
-            return installer.install()
+            return installer.install()        
+        
+    
 
     # ____________________________________________________________
     # limited dict-like interface to the dispatch table
@@ -84,19 +93,32 @@ class MultiMethodTable:
 
 class Installer:
 
-    def __init__(self, multimethod, prefix, list_of_typeorders):
+    prefix_memo = {}
+
+    def __init__(self, multimethod, prefix, list_of_typeorders, baked_perform_call=True):
         self.multimethod = multimethod
+        # avoid prefix clashes, user code should supply different prefixes
+        # itself for nice names in tracebacks
+        n = 1
+        while prefix in self.prefix_memo:
+            n += 1
+            prefix = "%s%d" % (prefix,n)
         self.prefix = prefix
+        self.prefix_memo[prefix] = 1
         self.list_of_typeorders = list_of_typeorders
         self.subtree_cache = {}
         self.to_install = []
         self.non_empty = self.build_tree([], multimethod.dispatch_tree)
+
+        self.baked_perform_call = baked_perform_call
+        
         if self.non_empty:
-            self.perform_call = self.build_function(None, prefix+'perform_call',
-                                                    None,
-                                                    [(None, prefix, 0)])
+            perform = [(None, prefix, 0)]
         else:
-            self.perform_call = well_just_complain
+            perform = []
+
+        self.perform_call = self.build_function(None, prefix+'_perform_call',
+                                                None, perform)
 
     def is_empty(self):
         return not self.non_empty
@@ -106,9 +128,9 @@ class Installer:
         #print >> f, '_'*60
         #import pprint
         #pprint.pprint(self.list_of_typeorders, f)
-        for target, funcname, func, source in self.to_install:
+        for target, funcname, func, source, fallback in self.to_install:
             if target is not None:
-                if hasattr(target, funcname) and func is well_just_complain:
+                if hasattr(target, funcname) and fallback:
                     continue
                 #print >> f, target.__name__, funcname
                 #if source:
@@ -192,14 +214,20 @@ class Installer:
                     invent_name(conversion), callargs[to_convert])
             callname = invent_name(call)
             if call_selfarg_index is not None:
-                self.to_install.append((self.multimethod.root_class,
-                                        callname,
-                                        well_just_complain,
-                                        None))
+                # fallback on root_class
+                self.build_function(self.multimethod.root_class,
+                                    callname, call_selfarg_index, [])
                 callname = '%s.%s' % (callargs.pop(call_selfarg_index), callname)
             callargs = (self.multimethod.argnames_before +
                         callargs + self.multimethod.argnames_after)
             bodylines.append('return %s(%s)' % (callname, ', '.join(callargs)))
+
+        fallback = False
+        if not bodylines:
+            miniglobals['raiseFailedToImplement'] = raiseFailedToImplement
+            bodylines = ['return raiseFailedToImplement()']
+            fallback = True
+
 
         # protect all lines apart from the last one by a try:except:
         for i in range(len(bodylines)-2, -1, -1):
@@ -208,19 +236,25 @@ class Installer:
                                 'except FailedToImplement:',
                                 '    pass']
 
-        # indent mode
-        bodylines = ['    ' + line for line in bodylines]
-
         if func_selfarg_index is not None:
             selfargs = [funcargs.pop(func_selfarg_index)]
         else:
             selfargs = []
         funcargs = (selfargs + self.multimethod.argnames_before +
                     funcargs + self.multimethod.argnames_after)
+
+        if target is None and not self.baked_perform_call:
+            return funcargs, bodylines[0][len('return '):], miniglobals, fallback
+
+        # indent mode
+        bodylines = ['    ' + line for line in bodylines]
+
         bodylines.insert(0, 'def %s(%s):' % (funcname, ', '.join(funcargs)))
         bodylines.append('')
         source = '\n'.join(bodylines)
+        #print source
+        #print "*"*60
         exec source in miniglobals
         func = miniglobals[funcname]
-        self.to_install.append((target, funcname, func, source))
+        self.to_install.append((target, funcname, func, source, fallback))
         return func
