@@ -229,13 +229,22 @@ class RPythonAnnotator:
     def default_consider_op(self, *args):
         return annmodel.SomeObject()
 
-    # All binary operations
-    for opname in annmodel.BINARY_OPERATIONS:
-        exec """
+    def _registeroperations(loc):
+        # All unary operations
+        for opname in annmodel.UNARY_OPERATIONS:
+            exec """
+def consider_op_%s(self, arg, *args):
+    return arg.%s(*args)
+""" % (opname, opname) in globals(), loc
+        # All binary operations
+        for opname in annmodel.BINARY_OPERATIONS:
+            exec """
 def consider_op_%s(self, arg1, arg2, *args):
     return pair(arg1,arg2).%s(*args)
-""" % (opname, opname)
-    del opname
+""" % (opname, opname) in globals(), loc
+
+    _registeroperations(locals())
+    del _registeroperations
 
     def consider_op_newtuple(self, *args):
         return annmodel.SomeTuple(items = args)

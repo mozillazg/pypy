@@ -28,12 +28,13 @@ generic element in some specific subset of the set of all objects.
 #
 
 
-from pypy.annotation.pairtype import pair
+from pypy.annotation.pairtype import pair, extendabletype
 
 
 class SomeObject:
     """The set of all objects.  Each instance stands
     for an arbitrary object about which nothing is known."""
+    __metaclass__ = extendabletype
     knowntype = object
     def __eq__(self, other):
         return (self.__class__ is other.__class__ and
@@ -47,9 +48,6 @@ class SomeObject:
         return pair(self, other).union() == self
     def is_constant(self):
         return hasattr(self, 'const')
-    # non-binary default methods
-    def len(self):
-        return SomeInteger(nonneg=True)
 
 class SomeInteger(SomeObject):
     "Stands for an object which is known to be an integer."
@@ -117,5 +115,29 @@ def valueoftype(t):
         return SomeObject()
 
 
-# this has the side-effect of registering the binary operations
+# ____________________________________________________________
+# internal
+
+def setunion(d1, d2):
+    "Union of two sets represented as dictionaries."
+    d = d1.copy()
+    d.update(d2)
+    return d
+
+def set(it):
+    "Turn an iterable into a set."
+    d = {}
+    for x in it:
+        d[x] = True
+    return d
+
+def missing_operation(cls, name):
+    def default_op(*args):
+        print '* warning, no type available for %s(%s)' % (
+            name, ', '.join([repr(a) for a in args]))
+        return SomeObject()
+    setattr(cls, name, default_op)
+
+# this has the side-effect of registering the unary and binary operations
+from pypy.annotation.unaryop import UNARY_OPERATIONS
 from pypy.annotation.binaryop import BINARY_OPERATIONS

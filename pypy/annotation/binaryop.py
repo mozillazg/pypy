@@ -6,31 +6,24 @@ from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInteger, SomeBool
 from pypy.annotation.model import SomeString, SomeList
 from pypy.annotation.model import SomeTuple, SomeImpossibleValue
+from pypy.annotation.model import set, setunion, missing_operation
 from pypy.annotation.factory import NeedGeneralization
 
 
-def setunion(d1, d2):
-    "Union of two sets represented as dictionaries."
-    d = d1.copy()
-    d.update(d2)
-    return d
-
-def set(it):
-    "Turn an iterable into a set."
-    d = {}
-    for x in it:
-        d[x] = True
-    return d
-
-
+# XXX unify this with ObjSpace.MethodTable
 BINARY_OPERATIONS = set(['add', 'sub', 'mul', 'getitem', 'setitem',
+                         'inplace_add',
+                         'lt', 'le', 'eq', 'ne', 'gt', 'ge',
                          'union'])
 
-def _defaultcase((obj1, obj2), *args):
-    return SomeObject()
+for opname in BINARY_OPERATIONS:
+    missing_operation(pairtype(SomeObject, SomeObject), opname)
 
-for name in BINARY_OPERATIONS:
-    setattr(pairtype(SomeObject, SomeObject), name, _defaultcase)
+
+class __extend__(pairtype(SomeObject, SomeObject)):
+
+    def union((obj1, obj2)):
+        return SomeObject()
 
 
 class __extend__(pairtype(SomeInteger, SomeInteger)):
@@ -41,8 +34,17 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
     def add((int1, int2)):
         return SomeInteger(nonneg = int1.nonneg and int2.nonneg)
 
+    mul = add
+
     def sub((int1, int2)):
         return SomeInteger()
+
+    def lt((int1, int2)): return SomeBool()
+    def le((int1, int2)): return SomeBool()
+    def eq((int1, int2)): return SomeBool()
+    def ne((int1, int2)): return SomeBool()
+    def gt((int1, int2)): return SomeBool()
+    def ge((int1, int2)): return SomeBool()
 
 
 class __extend__(pairtype(SomeBool, SomeBool)):
@@ -67,6 +69,9 @@ class __extend__(pairtype(SomeList, SomeList)):
                         s_item = pair(lst1.s_item, lst2.s_item).union())
 
     add = union
+
+    def inplace_add((lst1, lst2)):
+        pair(lst1, SomeInteger()).setitem(lst2.s_item)
 
 
 class __extend__(pairtype(SomeTuple, SomeTuple)):
