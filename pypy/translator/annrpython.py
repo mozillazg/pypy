@@ -3,7 +3,8 @@ from __future__ import generators
 from types import FunctionType
 from pypy.annotation import model as annmodel
 from pypy.annotation.model import pair
-from pypy.annotation.factory import ListFactory, BlockedInference
+from pypy.annotation.factory import ListFactory
+from pypy.annotation.factory import BlockedInference, NeedGeneralization
 from pypy.objspace.flow.model import Variable, Constant, UndefinedConstant
 from pypy.objspace.flow.model import SpaceOperation
 
@@ -21,7 +22,7 @@ class RPythonAnnotator:
         self.delayedblocks = []  # list of blocked blocks
         self.bindings = {}       # map Variables to SomeValues
         self.annotated = {}      # set of blocks already seen
-        self.creationpoints = {} # map SpaceOperations to Factories
+        self.creationpoints = {} # map positions-in-blocks to Factories
         self.translator = translator
 
     #___ convenience high-level interface __________________
@@ -143,9 +144,11 @@ class RPythonAnnotator:
             self.annotated[block] = True
             try:
                 self.flowin(block)
-            except BlockedInference:
+            except BlockedInference, e:
                 self.annotated[block] = False   # failed, hopefully temporarily
                 self.delayedblocks.append(block)
+                for factory in e.invalidatefactories:
+                    self.reflowpendingblock(factory.block)
             else:
                 # When flowin succeeds, i.e. when the analysis progress,
                 # we can tentatively re-schedlue the delayed blocks.
@@ -171,28 +174,39 @@ class RPythonAnnotator:
         unions = [pair(c1,c2).union() for c1, c2 in zip(oldcells, inputcells)]
         # if the merged cells changed, we must redo the analysis
         if unions != oldcells:
-            self.bindinputargs(block, newcells)
+            self.bindinputargs(block, unions)
 
     def flowin(self, block):
-        for op in block.operations:
-            self.consider_op(op)
+        if block.operations:
+            for i in range(len(block.operations)):
+                self.curblockpos = block, i
+                self.consider_op(block.operations[i])
+            del self.curblockpos
         for link in block.exits:
             cells = [self.binding(a) for a in link.args]
             self.addpendingblock(link.target, cells)
+
+    def getfactory(self, factorycls):
+        try:
+            return self.creationpoints[self.curblockpos]
+        except KeyError:
+            block = self.curblockpos[0]
+            factory = factorycls()
+            factory.block = block
+            self.creationpoints[self.curblockpos] = factory
+            return factory
 
 
     #___ creating the annotations based on operations ______
 
     def consider_op(self,op):
         argcells = [self.binding(a) for a in op.args]
-
-        if op.opname in annmodel.BINARY_OPERATIONS:
-            resultcell = getattr(pair(*argcells), op.opname)()
-        else:
-            consider_meth = getattr(self,'consider_op_'+op.opname,
-                                    self.default_consider_op)
-            resultcell = consider_meth(*argcells)
-        if resultcell == annmodel.SomeImpossibleValue():
+        consider_meth = getattr(self,'consider_op_'+op.opname,
+                                self.default_consider_op)
+        resultcell = consider_meth(*argcells)
+        if resultcell is None:
+            resultcell = annmodel.SomeImpossibleValue()  # no return value
+        elif resultcell == annmodel.SomeImpossibleValue():
             raise BlockedInference  # the operation cannot succeed
         assert isinstance(resultcell, annmodel.SomeObject)
         assert isinstance(op.result, Variable)
@@ -200,6 +214,53 @@ class RPythonAnnotator:
 
     def default_consider_op(self, *args):
         return annmodel.SomeObject()
+
+    # All binary operations
+    for opname in annmodel.BINARY_OPERATIONS:
+        exec """
+def consider_op_%s(self, arg1, arg2, *args):
+    return pair(arg1,arg2).%s(*args)
+""" % (opname, opname)
+    del opname
+
+    def consider_op_newlist(self, *args):
+        factory = self.getfactory(ListFactory)
+        for a in args:
+            factory.generalize(a)
+        return factory.create()
+
+##    def decode_simple_call(self, varargs_cell, varkwds_cell):
+##        nbargs = self.heap.get(ANN.len, varargs_cell)
+##        if nbargs is mostgeneralvalue:
+##            return None
+##        arg_cells = [self.heap.get(ANN.tupleitem[j], varargs_cell)
+##                     for j in range(nbargs)]
+##        nbkwds = self.heap.get(ANN.len, varkwds_cell)
+##        if nbkwds != 0:
+##            return None  # XXX deal with dictionaries with constant keys
+##        return arg_cells
+
+##    def consider_op_call(self, func, varargs, kwargs):
+##        ...
+##        func = self.heap.get(ANN.const, func)
+        
+##        # XXX: generalize this later
+##        if func is range:
+##            self.heap.settype(result, list)
+##        elif func is pow:
+##            args = self.decode_simple_call(varargs, kwargs)
+##            if args is not None and len(args) == 2:
+##                if tp(args[0], int) and tp(args[1], int):
+##                    self.heap.settype(result, int)
+##        elif isinstance(func, FunctionType) and self.translator:
+##            args = self.decode_simple_call(varargs, kwargs)
+##            return self.translator.consider_call(self, func, args)
+##        elif isinstance(func,type):
+##            # XXX flow into __init__/__new__
+##            self.heap.settype(result,func)
+##            if func.__module__ != '__builtin__':
+##                self.userclasses.setdefault(func, {})
+##        return result
 
 
 ##    def consider_op_setattr(self,obj,attr,newval):

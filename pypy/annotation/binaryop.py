@@ -5,6 +5,7 @@ Binary operations between SomeValues.
 from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInteger, SomeString, SomeList
 from pypy.annotation.model import SomeTuple, SomeImpossibleValue
+from pypy.annotation.factory import NeedGeneralization
 
 
 def setunion(d1, d2):
@@ -13,18 +14,22 @@ def setunion(d1, d2):
     d.update(d2)
     return d
 
+def set(it):
+    "Turn an iterable into a set."
+    d = {}
+    for x in it:
+        d[x] = True
+    return d
 
-BINARY_OPERATIONS = {'add': True,
-                     'sub': True,
-                     'union': True,
-                     }
 
-class __extend__(pairtype(SomeObject, SomeObject)):
-    # default case
+BINARY_OPERATIONS = set(['add', 'sub', 'mul', 'getitem', 'setitem',
+                         'union'])
 
-    for name in BINARY_OPERATIONS:
-        locals()[name] = lambda *dummy: SomeObject()
-    del name
+def _defaultcase((obj1, obj2), *args):
+    return SomeObject()
+
+for name in BINARY_OPERATIONS:
+    setattr(pairtype(SomeObject, SomeObject), name, _defaultcase)
 
 
 class __extend__(pairtype(SomeInteger, SomeInteger)):
