@@ -28,7 +28,7 @@ class Builtin(BuiltinModule):
     globals = appmethod(globals)
 
     def locals(self):
-        return self._actframe().w_globals
+        return self._actframe().w_locals
     locals = appmethod(locals)
 
 
