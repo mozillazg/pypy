@@ -2,7 +2,6 @@ from pypy.interpreter import eval, function, gateway
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.objspace.std.model import MultiMethod, FailedToImplement
-from pypy.objspace.std.multimethod import well_just_complain
 
 __all__ = ['StdTypeDef', 'newmethod', 'gateway',
            'GetSetProperty', 'Member', 'attrproperty', 'attrproperty_w',
@@ -147,10 +146,10 @@ def hack_out_multimethods(ns):
 ##        return r
 
 
-def sliced_typeorders(typeorder, multimethod, typedef, i):
+def sliced_typeorders(typeorder, multimethod, typedef, i, local=False):
     list_of_typeorders = [typeorder] * multimethod.arity
-    prefix = '__mm_' + multimethod.name
-    if typedef is not None:
+    prefix = '_mm_' + multimethod.name
+    if not local:
         # slice
         sliced_typeorder = {}
         for type, order in typeorder.items():
@@ -164,18 +163,27 @@ def sliced_typeorders(typeorder, multimethod, typedef, i):
                 sliced_typeorder[type] = lst
         list_of_typeorders[i] = sliced_typeorder
         prefix += '_%sS%d' % (typedef.name, i)
+    else:
+        prefix = typedef.name +'_mth'+prefix
     return prefix, list_of_typeorders
 
 def typeerrormsg(space, operatorsymbol, args_w):
-    return space.wrap("XXX insert message here")
+    type_names = [ space.type(w_arg).name for w_arg in args_w ]
+    if len(args_w) > 1:
+        plural = 's'
+    else:
+        plural = ''
+    msg = "unsupported operand type%s for %s (%s)" % (
+                    plural, operatorsymbol,
+                    ', '.join(type_names))    
+    return space.wrap(msg)
 
-def wrap_func_in_trampoline(func, multimethod, selfindex=0):
-    # mess to figure out how to put a gateway around 'func'
+def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, selfindex=0,
+                            allow_NotImplemented_results=False):
+    # mess to figure out how to put a gateway around executing expr
     argnames = ['_%d'%(i+1) for i in range(multimethod.arity)]
     explicit_argnames = multimethod.extras.get('argnames', [])
     argnames[len(argnames)-len(explicit_argnames):] = explicit_argnames
-    # XXX do something about __call__ and __init__ which still use
-    # XXX packed arguments: w_args, w_kwds instead of *args_w, **kwds_w
     solid_arglist = ['w_'+name for name in argnames]
     wrapper_arglist = solid_arglist[:]
     if multimethod.extras.get('varargs_w', False):
@@ -187,10 +195,9 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
     if multimethod.extras.get('general__args__', False):
         wrapper_arglist.append('__args__')
 
-    miniglobals = {'perform_call': func,
-                   'OperationError': OperationError,
-                   'FailedToImplement': FailedToImplement,
-                   'typeerrormsg': typeerrormsg}
+    miniglobals.update({ 'OperationError': OperationError,                         
+                         'typeerrormsg': typeerrormsg})
+    
     app_defaults = multimethod.extras.get('defaults', ())
     i = len(argnames) - len(app_defaults)
     wrapper_signature = wrapper_arglist[:]
@@ -202,23 +209,33 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
 
     wrapper_signature.insert(0, wrapper_signature.pop(selfindex))
     wrapper_sig  = ', '.join(wrapper_signature)
-    wrapper_args = ', '.join(wrapper_arglist)
-    if len(multimethod.specialnames) > 1:
+
+    src = []
+    dest = []
+    for wrapper_arg,expr_arg in zip(['space']+wrapper_arglist, exprargs):
+        if wrapper_arg != expr_arg:
+            src.append(wrapper_arg)
+            dest.append(expr_arg)
+    renaming = ', '.join(dest) +" = "+', '.join(src)
+
+    if allow_NotImplemented_results and len(multimethod.specialnames) > 1:
         # turn FailedToImplement into NotImplemented
-        code = """def trampoline(space, %s):
+        code = """def %s_perform_call(space, %s):
+                      %s
                       try:
-                          return perform_call(space, %s)
+                          return %s
                       except FailedToImplement, e:
                           if e.args:
                               raise OperationError(e.args[0], e.args[1])
                           else:
                               return space.w_NotImplemented
-"""        % (wrapper_sig, wrapper_args)
+"""        % (prefix, wrapper_sig, renaming, expr)
     else:
         # turn FailedToImplement into nice TypeErrors
-        code = """def trampoline(space, %s):
+        code = """def %s_perform_call(space, %s):
+                      %s
                       try:
-                          w_res = perform_call(space, %s)
+                          w_res = %s
                       except FailedToImplement, e:
                           if e.args:
                               raise OperationError(e.args[0], e.args[1])
@@ -228,10 +245,10 @@ def wrap_func_in_trampoline(func, multimethod, selfindex=0):
                       if w_res is None:
                           w_res = space.w_None
                       return w_res
-"""        % (wrapper_sig, wrapper_args,
+"""        % (prefix, wrapper_sig, renaming, expr,
               multimethod.operatorsymbol, ', '.join(solid_arglist))
     exec code in miniglobals
-    return miniglobals['trampoline']
+    return miniglobals["%s_perform_call" % prefix]
 
 def wrap_trampoline_in_gateway(func, methname, multimethod):
     unwrap_spec = [gateway.ObjSpace] + [gateway.W_Root]*multimethod.arity
@@ -243,7 +260,7 @@ def wrap_trampoline_in_gateway(func, methname, multimethod):
         unwrap_spec.append(gateway.Arguments)
     return gateway.interp2app(func, app_name=methname, unwrap_spec=unwrap_spec)
 
-def slicemultimethod(space, multimethod, typedef, result):
+def slicemultimethod(space, multimethod, typedef, result, local=False):
     from pypy.objspace.std.objecttype import object_typedef
     for i in range(len(multimethod.specialnames)):
         # each MultimethodCode embeds a multimethod
@@ -256,11 +273,14 @@ def slicemultimethod(space, multimethod, typedef, result):
                 continue
 
         prefix, list_of_typeorders = sliced_typeorders(
-            space.model.typeorder, multimethod, typedef, i)
-        func = multimethod.install(prefix, list_of_typeorders)
-        if func is well_just_complain:
+            space.model.typeorder, multimethod, typedef, i, local=local)
+        exprargs, expr, miniglobals, fallback = multimethod.install(prefix, list_of_typeorders,
+                                                                    baked_perform_call=False)
+        if fallback:
             continue   # skip empty multimethods
-        trampoline = wrap_func_in_trampoline(func, multimethod, i)
+        trampoline = make_perform_trampoline(prefix, exprargs, expr, miniglobals,
+                                             multimethod, i,
+                                             allow_NotImplemented_results=True)
         gw = wrap_trampoline_in_gateway(trampoline, methname, multimethod)
         gw.bound_position = i   # for the check above
         result[methname] = gw
@@ -272,7 +292,7 @@ def slicemultimethods(space, typedef):
         slicemultimethod(space, multimethod, typedef, result)
     # import all multimethods defined directly on the type without slicing
     for multimethod in typedef.local_multimethods:
-        slicemultimethod(space, multimethod, None, result)
+        slicemultimethod(space, multimethod, typedef, result, local=True)
     return result
 
 ##class MultimethodCode(eval.Code):

@@ -142,6 +142,7 @@ class MultiMethod(MultiMethodTable):
                 break
         else:
             self.name = operatorsymbol
+
         if extras.get('general__args__', False):
             self.argnames_after = ['__args__']
         if extras.get('w_varargs', False):
@@ -149,6 +150,7 @@ class MultiMethod(MultiMethodTable):
         if extras.get('varargs_w', False):
             self.argnames_after = ['args_w']            
 
-    def install_not_sliced(self, typeorder):
+    def install_not_sliced(self, typeorder, baked_perform_call=True):
         return self.install(prefix = '__mm_' + self.name,
-                list_of_typeorders = [typeorder]*self.arity)
+                list_of_typeorders = [typeorder]*self.arity,
+                baked_perform_call=baked_perform_call)
