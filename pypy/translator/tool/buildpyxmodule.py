@@ -54,7 +54,7 @@ def make_module_from_c(cfile, include_dirs=None):
     lastdir = path.local()
     os.chdir(str(dirpath))
     try:
-        modname = cfile.get('purebasename') 
+        modname = cfile.purebasename
         if debug: print "modname", modname
         c = stdoutcapture.Capture(mixed_out_err = True)
         try:
