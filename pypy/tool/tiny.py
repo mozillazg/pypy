@@ -6,24 +6,23 @@ import parser
 #  d is the dictionary of unittest changes, keyed to the old name
 #  used by unittest.  d['new'] is the new replacement function, and
 #  d['change type'] is one of the following functions
-#           namechange_only   e.g.  assertRaises  becomes raises 
-#           strip_parens      e.g.  assert_(expr) becomes assert expr
+#           namechange_only   e.g.  assertRaises  becomes raises
 #           fail_special      e.g.  fail() becomes raise AssertionError
-#           comma to op       e.g.  assertEquals(l, r) becomes assert l == r
+#           strip_parens      e.g.  assert_(expr) becomes assert expr
+#           comma_to_op       e.g.  assertEquals(l, r) becomes assert l == r
 #           rounding          e.g.  assertAlmostEqual(l, r) becomes
 #                                     assert round(l - r, 7) == 0
 #  Finally, 'op' is the operator you will substitute, if applicable.
 
 # First define the functions you want to dispatch
 
-def namechange_only(old, new, block):
+def namechange_only(old, new, block, op):
     # dictionary dispatch function.
     # this is the simplest of changes.
     return re.sub('self.'+old, new, block)
 
-def strip_parens(old, new, block):
+def fail_special(old, new, block, op):
     # dictionary dispatch function.
-
     pat = re.search(r'^(\s*)', block)
     indent = pat.group()
     pat = re.search('self.' + old + r'\(', block)
@@ -31,27 +30,33 @@ def strip_parens(old, new, block):
 
     expr, trailer = get_expr(rest, ')')
 
+    if expr == '':  # fail()  --> raise AssertionError
+         return indent + new + trailer
+    else:   # fail('Problem')  --> raise AssertionError, 'Problem'
+         return indent + new + ', ' + expr + trailer
+
+def strip_parens(old, new, block, op):
+    # dictionary dispatch function.
+    return_dict={}
+    pat = re.search(r'^(\s*)', block)
+    indent = pat.group()
+    pat = re.search('self.' + old + r'\(', block)
+    rest = block[pat.end():]
+
+    expr, trailer = get_expr(rest, ')')
+    extra = ''
+
     try:
         parser.expr(expr) # the parens came off easily
-        return indent + new + ' ' + expr + trailer
 
     except SyntaxError:
-
-        # now we have to go to work.  It would be nice if we could
-        # just keep the parens, since the original author probably
-        # used them to group things nicely in a complicated multi-line
-        # expression.
-        #
-        # There is one hitch.
-        #
         # self.assertx_(0, string) prints the string, as does
-        # assert 0, string .  But not only does assert(0, string) not
-        # print the string, it also doesn't print the AssertionError
-        # either.  So nothing for it, we have to paste continuation
-        # backslashes on our multiline constructs.
+        # assert 0, string .  But assert(0, string) prints
+        # neither the string, nor the AssertionError !  So we have
+        # to paste continuation backslashes on our multiline constructs.
 
         try:
-            realexpr, s = get_expr(expr, ',')
+            left, right = get_expr(expr, ',')
 
             # aha. we found an expr followed by a ', something_else'
             # we should probably test to make sure that something_else
@@ -60,38 +65,64 @@ def strip_parens(old, new, block):
             # more thought than I want to do at this hour ...
             # Given that assert 0, range(10) is legal, and prints
             # AssertionError: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], is it
-            # even true that s has to be a string?
+            # even true that right has to be a string?
 
-            expr_w_slash = re.sub(r'\n', r'\\\n', realexpr)
-
-            if s[0] == '\n':  # that needs a slash too ...
-                return indent + new + ' ' + expr_w_slash + ',\\' + s + trailer
+            expr = re.sub(r'\n', r'\\\n', left)
+            
+            if right[0] == '\n':  # that needs a slash too ...
+                extra = ',\\' + right
             else:
-                return indent + new + ' ' + expr_w_slash + ',' + s + trailer
+                extra = ',' + right
 
         except SyntaxError:
             # we couldn't find a 'expr, string' so it is
             # probably just a regular old multiline expression
-            # t.ex. self.assertx(0
+            # e.g   self.assertx(0
             #                    +f(x)
             #                    +g(x))
 
-            expr_w_slash = re.sub(r'\n', r'\\\n', expr)
-            return indent + new + ' ' +  expr_w_slash + trailer
+            expr = re.sub(r'\n', r'\\\n', expr)
 
-def fail_special(old, new, block):
-    # dictionary dispatch function.
-    # while assert_() is  an error, fail() and
-    # fail('message') are just fine.
-    return re.sub('self.'+old, new, block)
-    
+    return indent + new + ' ' + expr + extra + trailer
+
+def comma_to_op(old, new, block, op):
+    # dictionary dispatch function.  get_expr does all the work.
+
+    pat = re.search(r'^(\s*)', block)
+    indent = pat.group()
+    pat = re.search('self.' + old + r'\(', block)
+    rest = block[pat.end():]
+
+    expr, trailer = get_expr(rest, ')')
+    left, right = get_expr(expr, ',')
+    #print 'left is <%s>, right is <%s>' % (left, right)
+
+    try:
+        parser.expr(left)  # that paren came off easily
+        left = left + ' ' + op
+    except SyntaxError:
+        left  = re.sub(r'\n', r'\\\n', left + ' ' + op)
+        #if right[0] == '\n':  # that needs a slash too ...
+        #    left  += '\\'
+    try:
+        parser.expr(right)  # that paren came off easily
+    except SyntaxError:
+        right = re.sub(r'\n', r'\\\n', right)
+
+    return indent + new + ' ' + left + right + trailer
 
 def get_expr(s, char):
+    # used by fail_special, real_strip_parens, comma_to_op
     # read from the beginning of the string until you get an expression.
     # return it, and the stuff left over, minus the char you separated on
     pos = pos_finder(s, char)
+
+    if pos == []:
+        raise SyntaxError # we didn't find the expected char.  Ick.
      
     for p in pos:
+        # make the python parser do the hard work of deciding which comma
+        # splits the string into two expressions
         try:
             parser.expr('(' + s[:p] + ')')
             return s[:p], s[p+1:]
@@ -100,6 +131,7 @@ def get_expr(s, char):
     raise SyntaxError       # We never found anything that worked.
 
 def pos_finder(s, char=','):
+    # used by find_expr
     # returns the list of string positions where the char 'char' was found
     pos=[]
     for i in range(len(s)):
@@ -109,51 +141,47 @@ def pos_finder(s, char=','):
 
 d={}
 
-#def assertRaises(self, excClass, callableObj, *args, **kwargs)
-
 d['assertRaises'] = {'new': 'raises',
                      'change type': namechange_only,
                      'op': None}
 
 d['failUnlessRaises'] = d['assertRaises']
 
+d['fail'] = {'new': 'raise AssertionError',
+             'change type': fail_special,
+             'op': None}
+
 d['assert_'] = {'new': 'assert',
                 'change type': strip_parens,
                 'op': None}
 
 d['failUnless'] = d['assert_']
-                        
 
 d['failIf'] = {'new': 'assert not',
                'change type': strip_parens,
                'op': None}
 
-d['fail'] = {'old': 'fail',
-             'new': 'raise AssertionError ',
-             'change type': fail_special,
-             'op': None}
-
-"""
-
-d['failUnlessEqual'] = {'old': 'failUnlessEqual',
-                        'new': 'assert not',
-                        'change type': 'comma to op',
-                        'op': '!='}
-
-d['failIfEqual'] = {'old': 'failIfEqual',
-                    'new': 'assert not',
-                    'change type': 'comma to op',
-                    'op': '=='}
-
-d['assertEquals'] = {'old': 'assertEquals',
-                     'new': 'assert',
-                     'change type': 'comma to op',
+d['assertEqual'] = {'new': 'assert',
+                     'change type': comma_to_op,
                      'op': '=='}
 
-d['assertNotEqual'] = {'old': 'assertNotEqual',
-                       'new': 'assert',
-                       'change type': 'comma to op',
-                       'op': '!='}
+d['assertEquals'] = d['assertEqual']
+
+
+d['assertNotEqual'] = {'new': 'assert',
+                        'change type':comma_to_op,
+                        'op': '!='}
+
+d['assertNotEquals'] = d['assertNotEqual']
+
+d['failUnlessEqual'] = {'new': 'assert not',
+                        'change type': comma_to_op,
+                        'op': '!='}
+d['failIfEqual'] = {'new': 'assert not',
+                    'change type': comma_to_op,
+                    'op': '=='}
+
+"""
 
 d['assertNotAlmostEqual'] = {'old': 'assertNotAlmostEqual',
                              'new': 'assert round',
@@ -169,17 +197,6 @@ d['failUnlessAlmostEqual'] = {'old': 'failUnlessAlmostEqual',
                               'new': 'assert not round',
                               'change type': 'rounding',
                               'op': '=='}
-
-d['assertNotEquals'] = {'old': 'assertNotEquals',
-                        'new': 'assert',
-                        'change type':
-                        'comma to op',
-                        'op': '!='}
-
-d['assertEqual'] = {'old': 'assertEqual',
-                    'new': 'assert',
-                    'change type': 'comma to op',
-                    'op': '=='}
 
 d['assertUnlessAlmostEquals'] = {'old': 'assertUnlessAlmostEquals',
                                  'new': 'assert round',
@@ -224,25 +241,9 @@ def process_block(s):
     if f:
         key = f.group(0).lstrip()[5:-1]  # '\tself.blah(' -> 'blah'
         # now do the dictionary dispatch.
-        return d[key]['change type'](key, d[key]['new'], s)
+        return d[key]['change type'](key, d[key]['new'], s, d[key] ['op'])
     else:
         return s
-
-def which_comma(tuplelist):
-    import parser
-
-    # make the python parser do the hard work of deciding which comma
-    # splits the string into two expressions
-
-    for l, r in tuplelist:
-        try:
-
-            parser.expr(l + ')')
-            parser.expr('(' + r)
-            return l , r    # Great!  Both sides are expressions!
-        except SyntaxError: # It wasn't that comma
-            pass
-    raise SyntaxError       # We never found anything that worked.
 
 class Testit(unittest.TestCase):
     def test(self):
@@ -253,7 +254,7 @@ class Testit(unittest.TestCase):
             "self.assertRaises(excClass, callableObj, *args, **kwargs)"
             ),
             "raises(excClass, callableObj, *args, **kwargs)"
-            )
+                          )
 
         self.assertEquals(process_block(
             """
@@ -263,7 +264,7 @@ class Testit(unittest.TestCase):
             """
             raises(TypeError, func, 42, **{'arg1': 23})
             """
-            )
+                          )
         self.assertEquals(process_block(
             """
             self.assertRaises(TypeError,
@@ -276,9 +277,11 @@ class Testit(unittest.TestCase):
                               func,
                               mushroom)
             """
-            )
-        self.assertEquals(process_block("self.assert_(x)"),
-                          "assert x")
+                          )
+        self.assertEquals(process_block("self.fail()"), "raise AssertionError")
+        self.assertEquals(process_block("self.fail('mushroom, mushroom')"),
+                          "raise AssertionError, 'mushroom, mushroom'")
+        self.assertEquals(process_block("self.assert_(x)"), "assert x")
         self.assertEquals(process_block("self.failUnless(func(x)) # XXX"),
                           "assert func(x) # XXX")
         
@@ -292,7 +295,7 @@ class Testit(unittest.TestCase):
             assert 1 + f(y)\
                          + z # multiline, add continuation backslash
             """
-            )
+                          )
 
         self.assertEquals(process_block("self.assert_(0, 'badger badger')"),
                           "assert 0, 'badger badger'")
@@ -307,31 +310,96 @@ class Testit(unittest.TestCase):
             assert 0,\
                  'Meet the badger.\n'
             """
-            )
-
+                          )
         
         self.assertEquals(process_block(
             r"""
             self.failIf(0 + 0
-                         + len('badger\n')
-                         + 0, '''badger badger badger badger
+                          + len('badger\n')
+                          + 0, '''badger badger badger badger
                                  mushroom mushroom
-                                 Snake!  It's a snake!
+                                 Snake!  Ooh a snake!
                               ''') # multiline, must remove the parens
             """
             ),
             r"""
             assert not 0 + 0\
-                         + len('badger\n')\
-                         + 0, '''badger badger badger badger
+                          + len('badger\n')\
+                          + 0, '''badger badger badger badger
                                  mushroom mushroom
-                                 Snake!  It's a snake!
+                                 Snake!  Ooh a snake!
                               ''' # multiline, must remove the parens
             """
-            )
+                          )
 
+        self.assertEquals(process_block("self.assertEquals(0, 0)"),
+                          "assert 0 == 0")
+        
+        self.assertEquals(process_block(
+            r"""
+            self.assertEquals(0,
+                 'Run away from the snake.\n')
+            """
+            ),
+            r"""
+            assert 0 ==\
+                 'Run away from the snake.\n'
+            """
+                          )
+
+        self.assertEquals(process_block(
+            r"""
+            self.assertEquals(badger + 0
+                              + mushroom
+                              + snake, 0)
+            """
+            ),
+            r"""
+            assert badger + 0\
+                              + mushroom\
+                              + snake == 0
+            """
+                          )
+                            
+        self.assertEquals(process_block(
+            r"""
+            self.assertNotEquals(badger + 0
+                              + mushroom
+                              + snake,
+                              mushroom
+                              - badger)
+            """
+            ),
+            r"""
+            assert badger + 0\
+                              + mushroom\
+                              + snake !=\
+                              mushroom\
+                              - badger
+            """
+                          )
+
+        self.assertEqual(process_block(
+            r"""
+            self.assertEquals(badger(),
+                              mushroom()
+                              + snake(mushroom)
+                              - badger())
+            """
+            ),
+            r"""
+            assert badger() ==\
+                              mushroom()\
+                              + snake(mushroom)\
+                              - badger()
+            """
+                         )
+        self.assertEquals(process_block("self.failIfEqual(0, 0)"),
+                          "assert not 0 == 0")
+
+        self.assertEquals(process_block("self.failUnlessEqual(0, 0)"),
+                          "assert not 0 != 0")
+                              
 if __name__ == '__main__':
     unittest.main()
     #for block in  blocksplitter('xxx.py'): print process_block(block)
-
-
