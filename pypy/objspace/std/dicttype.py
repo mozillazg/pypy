@@ -96,6 +96,7 @@ def descr__new__(space, w_dicttype, __args__):
 # ____________________________________________________________
 
 dict_typedef = StdTypeDef("dict",
-    __new__ = newmethod(descr__new__),
+    __new__ = newmethod(descr__new__,
+                        unwrap_spec=[gateway.ObjSpace,gateway.W_Root,gateway.Arguments]),
     )
 dict_typedef.registermethods(globals())

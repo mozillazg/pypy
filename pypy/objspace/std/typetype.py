@@ -78,5 +78,5 @@ type_typedef = StdTypeDef("type",
     __mro__ = GetSetProperty(descr_get__mro__),
     __dict__ = dictproxy_descr,
     __doc__ = GetSetProperty(descr__doc),
-    mro = newmethod(descr_mro),
+    mro = gateway.interp2app(descr_mro),
     )

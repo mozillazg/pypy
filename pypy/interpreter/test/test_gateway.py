@@ -7,15 +7,22 @@ class TestBuiltinCode:
     def test_signature(self):
         def c(space, w_x, w_y, *hello_w):
             pass
-        code = gateway.BuiltinCode(c)
+        code = gateway.BuiltinCode(c, unwrap_spec=[gateway.ObjSpace,
+                                                   gateway.W_Root,
+                                                   gateway.W_Root,
+                                                   'starargs'])
         assert code.signature() == (['x', 'y'], 'hello', None)
         def d(self, w_boo):
             pass
-        code = gateway.BuiltinCode(d)
+        code = gateway.BuiltinCode(d, unwrap_spec= ['self',
+                                                   gateway.W_Root], self_type=gateway.BaseWrappable)
         assert code.signature() == (['self', 'boo'], None, None)
         def e(space, w_x, w_y, __args__):
             pass
-        code = gateway.BuiltinCode(e)
+        code = gateway.BuiltinCode(e, unwrap_spec=[gateway.ObjSpace,
+                                                   gateway.W_Root,
+                                                   gateway.W_Root,
+                                                   gateway.Arguments])
         assert code.signature() == (['x', 'y'], 'args', 'keywords')
 
     def test_call(self):
@@ -26,7 +33,10 @@ class TestBuiltinCode:
             assert u(hello_w[0]) == 0
             assert u(hello_w[1]) == True
             return w((u(w_x) - u(w_y) + len(hello_w)))
-        code = gateway.BuiltinCode(c)
+        code = gateway.BuiltinCode(c, unwrap_spec=[gateway.ObjSpace,
+                                                   gateway.W_Root,
+                                                   gateway.W_Root,
+                                                   'starargs'])
         w = self.space.wrap
         w_dict = self.space.newdict([
             (w('x'), w(123)),
@@ -43,7 +53,10 @@ class TestBuiltinCode:
             w = space.wrap
             return w((u(w_x) - u(w_y) + len(args_w))
                      * u(kwds_w['boo']))
-        code = gateway.BuiltinCode(c)
+        code = gateway.BuiltinCode(c, unwrap_spec=[gateway.ObjSpace,
+                                                   gateway.W_Root,
+                                                   gateway.W_Root,
+                                                   gateway.Arguments])
         w = self.space.wrap
         w_dict = self.space.newdict([
             (w('x'), w(123)),

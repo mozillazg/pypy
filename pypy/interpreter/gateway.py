@@ -15,7 +15,7 @@ from pypy.tool import hack
 from pypy.interpreter.error import OperationError 
 from pypy.interpreter import eval
 from pypy.interpreter.function import Function, Method
-from pypy.interpreter.baseobjspace import W_Root,ObjSpace,Wrappable
+from pypy.interpreter.baseobjspace import W_Root,ObjSpace, BaseWrappable, Wrappable
 from pypy.interpreter.argument import Arguments
 from pypy.tool.cache import Cache 
 # internal non-translatable parts: 
@@ -55,7 +55,7 @@ class Signature:
 
 class UnwrapSpecRecipe:
 
-    bases_order = [W_Root, ObjSpace, Arguments, object]
+    bases_order = [BaseWrappable, W_Root, ObjSpace, Arguments, object]
 
     def dispatch(self, meth_family, el, orig_sig, new_sig):
         if isinstance(el,str):
@@ -78,14 +78,19 @@ class UnwrapSpecRecipe:
     # checks for checking interp2app func argument names wrt unwrap_spec
     # and synthetizing an app-level signature
 
-    def check__ObjSpace(self, el, orig_sig, new_sig):
+    def check__BaseWrappable(self, el, orig_sig, app_sig):
+        name = el.__name__
+        argname = orig_sig.next_arg()
+        assert not argname.startswith('w_'), (
+            "unwrapped %s argument %s of built-in function %r should "
+            "not start with 'w_'" % (name, argname, orig_sig.func))
+        app_sig.append(argname)
+        
+    def check__ObjSpace(self, el, orig_sig, app_sig):
         orig_sig.next_arg()
 
-    def check_self(self, el, orig_sig, app_sig): # xxx
-        argname = orig_sig.next_arg()
-        app_sig.append(argname)
-
     def check__W_Root(self, el, orig_sig, app_sig):
+        assert el is W_Root, "oops"
         argname = orig_sig.next_arg()
         assert argname.startswith('w_'), (
             "argument %s of built-in function %r should "
@@ -138,15 +143,24 @@ class UnwrapSpecRecipe:
 
     # collect code to emit for interp2app builtin frames based on unwrap_spec
 
+    def emit__BaseWrappable(self, el, orig_sig, emit_sig):
+        name = el.__name__
+        cur = emit_sig.through_scope_w
+        emit_sig.setfastscope.append(
+            "x = self.space.interpclass_w(scope_w[%d])" % cur)
+        emit_sig.setfastscope.append(
+            "if x is None or not isinstance(x, %s):" % name)
+        emit_sig.setfastscope.append(
+            "    raise OperationError(self.space.w_TypeError,space.wrap('unexpected arg type'))") # xxx
+        emit_sig.miniglobals[name] = el
+        emit_sig.miniglobals['OperationError'] = OperationError
+        emit_sig.setfastscope.append(
+            "self.%s_arg%d = x" % (name,cur))
+        emit_sig.through_scope_w += 1
+        emit_sig.run_args.append("self.%s_arg%d" % (name,cur))
+
     def emit__ObjSpace(self, el, orig_sig, emit_sig):
         emit_sig.run_args.append('self.space')
-
-    def emit_self(self, el, orig_sig, emit_sig): # xxx
-        emit_sig.setfastscope.append(
-            "self.self_arg = self.space.interpclass_w(scope_w[%d])" %
-                (emit_sig.through_scope_w))
-        emit_sig.through_scope_w += 1
-        emit_sig.run_args.append("self.self_arg")
 
     def emit__W_Root(self, el, orig_sig, emit_sig):
         cur = emit_sig.through_scope_w
@@ -267,27 +281,19 @@ class BuiltinCode(eval.Code):
     # When a BuiltinCode is stored in a Function object,
     # you get the functionality of CPython's built-in function type.
 
-    def __init__(self, func, ismethod=None, spacearg=None, unwrap_spec = None):
+    def __init__(self, func, ismethod=None, spacearg=None, unwrap_spec = None, self_type = None):
         "NOT_RPYTHON"
         # 'implfunc' is the interpreter-level function.
         # Note that this uses a lot of (construction-time) introspection.
         eval.Code.__init__(self, func.__name__)
         self.docstring = func.__doc__
-        # signature-based hacks if unwrap_spec is not specified:
-        # renaming arguments from w_xyz to xyz.
-        # Currently we enforce the following signature tricks:
-        #  * the first arg must be either 'self' or 'space'
-        #  * 'w_' prefixes for the rest
-        #  * '_w' suffix for the optional '*' argument
-        #  * alternatively a final '__args__' means an Arguments()
-        # Not exactly a clean approach XXX.
-        # --
+
         # unwrap_spec can be passed to interp2app or
         # attached as an attribute to the function.
         # It is a list of types or singleton objects:
         #  baseobjspace.ObjSpace is used to specify the space argument
-        #  'self' is used to specify a self method argument
         #  baseobjspace.W_Root is for wrapped arguments to keep wrapped
+        #  baseobjspace.BaseWrappable subclasses imply interpclass_w and a typecheck
         #  argument.Arguments is for a final rest arguments Arguments object
         # 'args_w' for unpacktuple applied to rest arguments
         # 'w_args' for rest arguments passed as wrapped tuple
@@ -297,49 +303,25 @@ class BuiltinCode(eval.Code):
         from pypy.interpreter import pycode
         argnames, varargname, kwargname = pycode.cpython_code_signature(func.func_code)
 
+        assert not ismethod, ("ismethod is not expected anymore")
+        assert not spacearg, ("spacearg is not expected anymore")
+
         if unwrap_spec is None:
             unwrap_spec = getattr(func,'unwrap_spec',None)
-        
+
+        if unwrap_spec is None and argnames == ['space', '__args__']: #xxx for geninterp
+            unwrap_spec = [ObjSpace, Arguments]
+
         if unwrap_spec is None:
+            unwrap_spec = [ObjSpace]+ [W_Root] * (len(argnames)-1)
 
-            unwrap_spec = []
-
-            argnames = list(argnames)
-            lookslikemethod = argnames[:1] == ['self']
-            if ismethod is None:
-                ismethod = lookslikemethod
-            if spacearg is None:
-                spacearg = not lookslikemethod
-            self.ismethod = ismethod
-            self.spacearg = spacearg
-            assert kwargname is None, (
-                "built-in function %r should not take a ** argument" % func)
-
-            n = len(argnames)
-
-            if self.ismethod:
-                unwrap_spec.append('self')
-                n -= 1
-            if self.spacearg:
-                unwrap_spec.append(ObjSpace)
-                n -= 1
-
-            self.generalargs = argnames[-1:] == ['__args__']
-            self.starargs = varargname is not None
-
-            if self.generalargs:
-                unwrap_spec.extend([W_Root] * (n-1))
-                unwrap_spec.append(Arguments)
-            else:
-                unwrap_spec.extend([W_Root] * n)
-
-            if self.starargs:
-                unwrap_spec.append('starargs')
-        else:
-            assert not ismethod, ("if unwrap_spec is specified, "
-                                  "ismethod is not expected")
-            assert not spacearg, ("if unwrap_spec is specified, " 
-                                  "spacearg is not expected")
+            if self_type:
+                unwrap_spec = ['self'] + unwrap_spec[1:]
+            
+        if self_type:
+            assert unwrap_spec[0] == 'self',"self_type without 'self' spec element"
+            unwrap_spec = list(unwrap_spec)
+            unwrap_spec[0] = self_type
 
         orig_sig = Signature(func, argnames, varargname, kwargname)
 
@@ -385,6 +367,10 @@ class interp2app(Wrappable):
         "NOT_RPYTHON"
         Wrappable.__init__(self)
         # f must be a function whose name does NOT starts with 'app_'
+        self_type = None
+        if hasattr(f, 'im_func'):
+            self_type = f.im_class
+            f = f.im_func
         if not isinstance(f, types.FunctionType):
             raise TypeError, "function expected, got %r instead" % f
         if app_name is None:
@@ -394,7 +380,8 @@ class interp2app(Wrappable):
             app_name = f.func_name
         self._code = BuiltinCode(f, ismethod=ismethod,
                                   spacearg=spacearg,
-                                  unwrap_spec=unwrap_spec)
+                                  unwrap_spec=unwrap_spec,
+                                  self_type = self_type)
         self.__name__ = f.func_name
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())
@@ -450,7 +437,6 @@ class interp2app(Wrappable):
             fn = Function(space, code, None, defs, forcename = self.name)
             cache.content[self] = fn 
             return fn
-
         
 def exportall(d, temporary=False):
     """NOT_RPYTHON: Publish every function from a dict."""

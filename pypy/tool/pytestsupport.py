@@ -2,7 +2,7 @@ from __future__ import generators
 import autopath
 import py
 from py.__impl__.magic import exprinfo
-from pypy.interpreter.gateway import interp2app_temp
+from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 
 # ____________________________________________________________
@@ -107,7 +107,10 @@ def build_pytest_assertion(space):
     w_BuiltinAssertionError = space.getitem(space.builtin.w_dict, 
                                             space.wrap('AssertionError'))
     w_metaclass = space.type(w_BuiltinAssertionError)
-    w_init = space.wrap(interp2app_temp(my_init))
+    w_init = space.wrap(gateway.interp2app_temp(my_init,
+                                                unwrap_spec=[gateway.ObjSpace,
+                                                             gateway.W_Root,
+                                                             gateway.Arguments]))
     w_dict = space.newdict([])
     space.setitem(w_dict, space.wrap('__init__'), w_init)
     return space.call_function(w_metaclass,
@@ -149,14 +152,18 @@ def pypyraises(space, w_ExpectedException, w_expr, __args__):
     raise OperationError(space.w_AssertionError,
                          space.wrap("DID NOT RAISE"))
 
-app_raises = interp2app_temp(pypyraises)
+app_raises = gateway.interp2app_temp(pypyraises,
+                                     unwrap_spec=[gateway.ObjSpace,
+                                                  gateway.W_Root,
+                                                  gateway.W_Root,
+                                                  gateway.Arguments])
 
 def pypyskip(space, w_message): 
     """skip a test at app-level. """ 
     msg = space.unwrap(w_message) 
     py.test.skip(msg)
 
-app_skip = interp2app_temp(pypyskip)
+app_skip = gateway.interp2app_temp(pypyskip)
 
 def raises_w(space, w_ExpectedException, *args, **kwds):
     try:

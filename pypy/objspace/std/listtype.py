@@ -37,6 +37,8 @@ def descr__new__(space, w_listtype, __args__):
 # ____________________________________________________________
 
 list_typedef = StdTypeDef("list",
-    __new__ = newmethod(descr__new__),
+    __new__ = newmethod(descr__new__, unwrap_spec=[gateway.ObjSpace,
+                                                   gateway.W_Root,
+                                                   gateway.Arguments]),
     )
 list_typedef.registermethods(globals())
