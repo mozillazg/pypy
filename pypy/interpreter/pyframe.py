@@ -3,8 +3,8 @@
 
 from pypy.interpreter.executioncontext import Stack
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import app2interp
 from pypy.interpreter import eval, baseobjspace
+from pypy.interpreter.gateway import noglobals
 
 
 class PyFrame(eval.Frame):
@@ -15,7 +15,7 @@ class PyFrame(eval.Frame):
 
     Public fields:
      * 'space' is the object space this frame is running in
-     * 'bytecode' is the PyCode object this frame runs
+     * 'code' is the PyCode object this frame runs
      * 'w_locals' is the locals dictionary to use
      * 'w_globals' is the attached globals dictionary
      * 'w_builtins' is the attached built-ins dictionary
@@ -24,7 +24,6 @@ class PyFrame(eval.Frame):
 
     def __init__(self, space, code, w_globals, closure):
         eval.Frame.__init__(self, space, code, w_globals)
-        self.bytecode = code   # Misnomer; this is really like a code object
         self.valuestack = Stack()
         self.blockstack = Stack()
         self.last_exception = None
@@ -80,31 +79,6 @@ class PyFrame(eval.Frame):
             # leave that frame
             w_exitvalue = e.args[0]
             return w_exitvalue
-
-    ### opcode dispatch ###
-
-    # 'dispatch_table' is a class attribute: a list of functions.
-    # Currently, it is always created by setup_dispatch_table in pyopcode.py
-    # but it could be a custom table.
-
-    def dispatch(self):
-        opcode = self.nextop()
-        fn = self.dispatch_table[opcode]
-        if fn.has_arg:
-            oparg = self.nextarg()
-            fn(self, oparg)
-        else:
-            fn(self)
-
-    def nextop(self):
-        c = self.bytecode.co_code[self.next_instr]
-        self.next_instr += 1
-        return ord(c)
-
-    def nextarg(self):
-        lo = self.nextop()
-        hi = self.nextop()
-        return (hi<<8) + lo
 
     ### exception stack ###
 
@@ -171,40 +145,37 @@ class ExceptBlock(FrameBlock):
             # push the exception to the value stack for inspection by the
             # exception handler (the code after the except:)
             operationerr = unroller.args[0]
+            operationerr.normalize(frame.space)
             # the stack setup is slightly different than in CPython:
             # instead of the traceback, we store the unroller object,
             # wrapped.
             frame.valuestack.push(frame.space.wrap(unroller))
-
-            s = frame.space
-            w_value = operationerr.w_value
-            w_type = operationerr.w_type
-##             import pdb
-##             pdb.set_trace()
-##             print w_type, `w_value`, frame.bytecode.co_name
-            self.space = s # needed for the following call
-            w_res = self.normalize_exception(w_type, w_value)
-            w_value = s.getitem(w_res, s.wrap(1))
-            
-            frame.valuestack.push(w_value)
-            frame.valuestack.push(w_type)
+            frame.valuestack.push(operationerr.w_value)
+            frame.valuestack.push(operationerr.w_type)
             frame.next_instr = self.handlerposition   # jump to the handler
             raise StopUnrolling
 
-    def app_normalize_exception(etype, evalue):
-        # mistakes here usually show up as infinite recursion, which is fun.
-        if isinstance(evalue, etype):
-            return etype, evalue
-        if isinstance(etype, type) and issubclass(etype, Exception):
-            if evalue is None:
-                evalue = ()
-            elif not isinstance(evalue, tuple):
-                evalue = (evalue,)
-            evalue = etype(*evalue)
-        else:
-            raise Exception, "?!"   # XXX
+def app_normalize_exception(etype, evalue):
+    # XXX should really be defined as a method on OperationError,
+    # but this is not so easy because OperationError cannot be
+    # at the same time an old-style subclass of Exception and a
+    # new-style subclass of Wrappable :-(
+    # moreover, try importing gateway from errors.py and you'll see :-(
+    
+    # mistakes here usually show up as infinite recursion, which is fun.
+    if isinstance(evalue, etype):
         return etype, evalue
-    normalize_exception = app2interp(app_normalize_exception)
+    if isinstance(etype, type) and issubclass(etype, Exception):
+        if evalue is None:
+            evalue = ()
+        elif not isinstance(evalue, tuple):
+            evalue = (evalue,)
+        evalue = etype(*evalue)
+    else:
+        raise Exception, "?!"   # XXX
+    return etype, evalue
+normalize_exception = noglobals.app2interp(app_normalize_exception)
+
 
 class FinallyBlock(FrameBlock):
     """A try:finally: block.  Stores the position of the exception handler."""
@@ -286,7 +257,7 @@ class SReturnValue(ControlFlowException):
     """Signals a 'return' statement.
     Argument is the wrapped object to return."""
     def emptystack(self, frame):
-        if frame.bytecode.is_generator():
+        if frame.code.is_generator():
             raise baseobjspace.NoValue
         w_returnvalue = self.args[0]
         raise ExitFrame(w_returnvalue)

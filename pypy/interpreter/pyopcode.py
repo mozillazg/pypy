@@ -30,17 +30,49 @@ class binaryoperation:
         f.valuestack.push(w_result)
 
 
-class PyOperationalFrame(PyFrame):
-    """A PyFrame that knows about all operational Python opcodes.
-    It does not know about 'fast variables' nor 'nested scopes'."""
+class PyInterpFrame(PyFrame):
+    """A PyFrame that knows about interpretation of standard Python opcodes,
+    with the exception of nested scopes."""
+
+    def __init__(self, space, code, w_globals, closure):
+        PyFrame.__init__(self, space, code, w_globals, closure,
+                         code.co_nlocals)   # size of fastlocals_w array
+
+    ### opcode dispatch ###
+
+    # 'dispatch_table' is a class attribute: a list of functions.
+    # Currently, it is always created by setup_dispatch_table in pyopcode.py
+    # but it could be a custom table.
+
+    def dispatch(self):
+        opcode = self.nextop()
+        fn = self.dispatch_table[opcode]
+        if fn.has_arg:
+            oparg = self.nextarg()
+            fn(self, oparg)
+        else:
+            fn(self)
+
+    def nextop(self):
+        c = self.code.co_code[self.next_instr]
+        self.next_instr += 1
+        return ord(c)
+
+    def nextarg(self):
+        lo = self.nextop()
+        hi = self.nextop()
+        return (hi<<8) + lo
 
     ### accessor functions ###
 
+    def getlocalvarname(self, index):
+        return self.code.co_varnames[index]
+
     def getconstant(self, index):
-        return self.bytecode.co_consts[index]
+        return self.code.co_consts[index]
 
     def getname(self, index):
-        return self.bytecode.co_names[index]
+        return self.code.co_names[index]
 
     ################################################################
     ##  Implementation of the "operational" opcodes
@@ -50,9 +82,31 @@ class PyOperationalFrame(PyFrame):
     #  the 'self' argument of opcode implementations is called 'f'
     #  for historical reasons
 
+    def LOAD_FAST(f, varindex):
+        # access a local variable directly
+        w_value = f.fastlocals_w[varindex]
+        if w_value is UNDEFINED:
+            varname = f.getlocalvarname(varindex)
+            message = "local variable '%s' referenced before assignment" % varname
+            raise OperationError(f.space.w_UnboundLocalError, f.space.wrap(message))
+        f.valuestack.push(w_value)
+
     def LOAD_CONST(f, constindex):
         w_const = f.space.wrap(f.getconstant(constindex))
         f.valuestack.push(w_const)
+
+    def STORE_FAST(f, varindex):
+        w_newvalue = f.valuestack.pop()
+        f.fastlocals_w[varindex] = w_newvalue
+        #except:
+        #    print "exception: got index error"
+        #    print " varindex:", varindex
+        #    print " len(locals_w)", len(f.locals_w)
+        #    import dis
+        #    print dis.dis(f.code)
+        #    print "co_varnames", f.code.co_varnames
+        #    print "co_nlocals", f.code.co_nlocals
+        #    raise
 
     def POP_TOP(f):
         f.valuestack.pop()
@@ -447,6 +501,13 @@ class PyOperationalFrame(PyFrame):
                 raise OperationError(w_exc_type, w_exc_value)
         f.valuestack.push(w_value)
 
+    def DELETE_FAST(f, varindex):
+        if f.fastlocals_w[varindex] is UNDEFINED:
+            varname = f.getlocalvarname(varindex)
+            message = "local variable '%s' referenced before assignment" % varname
+            raise OperationError(f.space.w_UnboundLocalError, f.space.wrap(message))
+        f.fastlocals_w[varindex] = UNDEFINED
+
     def BUILD_TUPLE(f, itemcount):
         items = [f.valuestack.pop() for i in range(itemcount)]
         items.reverse()
@@ -674,4 +735,4 @@ class PyOperationalFrame(PyFrame):
     setup_dispatch_table = classmethod(setup_dispatch_table)
 
 
-PyOperationalFrame.setup_dispatch_table()
+PyInterpFrame.setup_dispatch_table()

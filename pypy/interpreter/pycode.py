@@ -5,9 +5,6 @@ The bytecode interpreter itself is implemented by the PyFrame class.
 """
 
 from pypy.interpreter import eval
-from pypy.interpreter.pyopcode      import PyOperationalFrame
-from pypy.interpreter.pyfastscope   import PyFastScopeFrame
-from pypy.interpreter.pynestedscope import PyNestedScopeFrame
 
 
 # code object contants, for co_flags below
@@ -64,14 +61,12 @@ class PyCode(eval.Code):
 
     def create_frame(self, space, w_globals, closure=None):
         "Create an empty PyFrame suitable for this code object."
-        # select the appropriate kind of frame; see below
+        # select the appropriate kind of frame
         if self.co_cellvars or self.co_freevars:
-            frameclass = PyNestedScopeFrame
-        elif self.co_nlocals:
-            frameclass = PyFastScopeFrame
+            from pypy.interpreter.nestedscope import PyNestedScopeFrame as F
         else:
-            frameclass = PyOperationalFrame
-        return frameclass(space, self, w_globals, closure)
+            from pypy.interpreter.pyopcode import PyInterpFrame as F
+        return F(space, self, w_globals, closure)
 
     def signature(self):
         "([list-of-arg-names], vararg-name-or-None, kwarg-name-or-None)."
@@ -89,17 +84,8 @@ class PyCode(eval.Code):
             kwargname = None
         return argnames, varargname, kwargname
 
-    def getargcount(self):
-        count = self.co_argcount
-        if self.co_flags & CO_VARARGS:
-            count += 1
-        if self.co_flags & CO_VARKEYWORDS:
-            count += 1
-        return count
-
-    def getlocalvarname(self, index):
-        # nb. this is duplicated in PyFastScopeFrame.getlocalvarname()
-        return self.co_varnames[index]
+    def getvarnames(self):
+        return self.co_varnames
 
     def is_generator(self):
         return self.co_flags & CO_GENERATOR

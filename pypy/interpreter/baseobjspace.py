@@ -5,6 +5,11 @@ from pypy.interpreter import threadlocals
 __all__ = ['ObjSpace', 'OperationError', 'NoValue']
 
 
+class Wrappable(object):
+    """A subclass of Wrappable is an internal, interpreter-level class
+    that can nevertheless be exposed at application-level by space.wrap()."""
+
+
 class NoValue(Exception):
     """Raised to signal absence of value, e.g. in the iterator accessing
     method 'op.next()' of object spaces."""

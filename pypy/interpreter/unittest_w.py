@@ -2,7 +2,8 @@ import autopath
 
 import sys, os
 import unittest
-from pypy.interpreter.gateway import InterpretedMethod, InterpretedFunction
+#from pypy.interpreter.gateway import InterpretedMethod, InterpretedFunction
+#   FIX ME FIX ME FIX ME
 
 def make_testcase_class(space, tc_w):
     # XXX this is all a bit insane (but it works)
