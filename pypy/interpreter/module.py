@@ -40,6 +40,9 @@ class Module(Wrappable):
             space.setitem(self.w_dict, space.wrap('__doc__'), w_doc)
 
     def descr_module__getattr__(self, w_attr):
+        return self.ARGL_getattr(w_attr) 
+
+    def ARGL_getattr(self, w_attr): 
         space = self.space
         attr = space.str_w(w_attr)
         # ______ for the 'sys' module only _____ XXX generalize

@@ -100,5 +100,27 @@ def app_test_something_at_app_level():
     assert x/2 == 1
 
 class AppTestMethods: 
-    def test_somee_app_test_method(self): 
+    def test_some_app_test_method(self): 
         assert 2 == 2
+
+class TestMixedModule: 
+    def test_accesses(self): 
+        space = self.space 
+        import mixedmodule 
+        w_module = mixedmodule.Module(space, space.wrap('mixedmodule'))
+        space.appexec([w_module], """
+            (module): 
+                assert module.value is None 
+
+                assert module.somefunc is module.somefunc 
+                result = module.somefunc() 
+                assert result == True 
+
+                assert module.someappfunc is module.someappfunc 
+                appresult = module.someappfunc(41) 
+                assert appresult == 42 
+
+                assert module.__dict__ is module.__dict__
+                for name in ('somefunc', 'someappfunc'): 
+                    assert name in module.__dict__
+        """)
