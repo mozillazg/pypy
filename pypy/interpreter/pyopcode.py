@@ -71,9 +71,11 @@ class PyInterpFrame(pyframe.PyFrame):
     def getconstant_w(self, index):
         return self.code.co_consts_w[index]
 
+    def getname(self, index):
+        return self.code.co_names[index]
+
     def getname_w(self, index):
-        w_varname = self.code.co_names_w[index]
-        return w_varname
+        return self.space.wrap(self.code.co_names[index])
 
 
     ################################################################
@@ -346,7 +348,7 @@ class PyInterpFrame(pyframe.PyFrame):
         w_prog    = f.valuestack.pop()
         w_compile_flags = f.space.wrap(f.get_compile_flags())
         w_resulttuple = prepare_exec(f.space, f.space.wrap(f), w_prog, w_globals, w_locals,
-                                       w_compile_flags, f.space.builtin.w_dict) 
+                                       w_compile_flags, space.wrap(f.builtin))
         w_prog, w_globals, w_locals = f.space.unpacktuple(w_resulttuple, 3)
 
         plain = f.space.is_true(f.space.is_(w_locals, f.w_locals))
@@ -379,7 +381,8 @@ class PyInterpFrame(pyframe.PyFrame):
         w_bases       = f.valuestack.pop()
         w_name        = f.valuestack.pop()
         w_metaclass = find_metaclass(f.space, w_bases,
-                                     w_methodsdict, f.w_globals, f.space.builtin) 
+                                     w_methodsdict, f.w_globals,
+                                     f.space.wrap(f.builtin)) 
         w_newclass = f.space.call_function(w_metaclass, w_name,
                                            w_bases, w_methodsdict)
         f.valuestack.push(w_newclass)
@@ -433,32 +436,19 @@ class PyInterpFrame(pyframe.PyFrame):
         f.space.delitem(f.w_globals, w_varname)
 
     def LOAD_NAME(f, nameindex):
-        w_varname = f.getname_w(nameindex)
-
-        if f.w_globals is f.w_locals:
-            try_list_w = [f.w_globals]
-
-        else:
-            try_list_w = [f.w_locals, f.w_globals]
-
-        for wrapped in try_list_w:
+        if f.w_locals is not f.w_globals:
+            w_varname = f.getname_w(nameindex)
             try:
-                w_value = f.space.getitem(wrapped, w_varname)
-                break 
+                w_value = f.space.getitem(f.w_locals, w_varname)
             except OperationError, e:
                 if not e.match(f.space, f.space.w_KeyError):
                     raise
-        else: 
-            w_value =  getbuiltin(f.space, w_varname)
-        f.valuestack.push(w_value) 
-        # XXX the implementation can be pushed back into app-space as an
-        # when exception handling begins to behave itself.  For now, it
-        # was getting on my nerves -- mwh
-        #    w_value = f.load_name(w_varname)
-        #    f.valuestack.push(w_value)
+            else:
+                f.valuestack.push(w_value)
+                return
+        f.LOAD_GLOBAL(nameindex)    # fall-back
 
     def LOAD_GLOBAL(f, nameindex):
-        assert f.w_globals is not None
         w_varname = f.getname_w(nameindex)
         try:
             w_value = f.space.getitem(f.w_globals, w_varname)
@@ -467,7 +457,12 @@ class PyInterpFrame(pyframe.PyFrame):
             if not e.match(f.space, f.space.w_KeyError):
                 raise
             # we got a KeyError, now look in the built-ins
-            w_value = getbuiltin(f.space, w_varname) 
+            varname = f.getname(nameindex)
+            w_value = f.builtin.getdictvalue(f.space, varname)
+            if w_value is None:
+                message = "global name '%s' is not defined" % varname
+                raise OperationError(space.w_NameError,
+                                     space.wrap(message))
         f.valuestack.push(w_value)
 
     def DELETE_FAST(f, varindex):
@@ -548,11 +543,8 @@ class PyInterpFrame(pyframe.PyFrame):
         w_modulename = f.getname_w(nameindex)
         modulename = f.space.str_w(w_modulename)
         w_fromlist = f.valuestack.pop()
-        try:
-            w_import = space.builtin.get('__import__') 
-        except OperationError, e:
-            if not e.match(space, space.w_AttributeError):
-                raise
+        w_import = f.builtin.getdictvalue(f.space, '__import__')
+        if w_import is None:
             raise OperationError(space.w_ImportError,
                                  space.wrap("__import__ not found"))
         w_locals = f.w_locals
@@ -721,19 +713,6 @@ class PyInterpFrame(pyframe.PyFrame):
         cls.dispatch_table = dispatch_table
 
 
-def getbuiltin(space, w_varname): 
-    varname = space.str_w(w_varname) 
-    try:
-        return space.builtin.get(space.str_w(w_varname))
-    except OperationError, e:
-        # catch AttributeErrors 
-        if not e.match(space, space.w_AttributeError):
-            raise
-        message = "global name '%s' is not defined" % space.str_w(w_varname)
-        w_exc_type = space.w_NameError
-        w_exc_value = space.wrap(message)
-        raise OperationError(w_exc_type, w_exc_value)
-
 ### helpers written at the application-level ###
 # Some of these functions are expected to be generally useful if other
 # parts of the code needs to do the same thing as a non-trivial opcode,
@@ -821,7 +800,7 @@ app = gateway.applevel(r'''
                 continue
             into_locals[name] = getattr(module, name)
 
-    def prepare_exec(f, prog, globals, locals, compile_flags, builtins):
+    def prepare_exec(f, prog, globals, locals, compile_flags, builtin):
         """Manipulate parameters to exec statement to (codeobject, dict, dict).
         """
         # XXX INCOMPLETE
@@ -841,7 +820,7 @@ app = gateway.applevel(r'''
         if not isinstance(globals, dict):
             raise TypeError("exec: arg 2 must be a dictionary or None")
         elif not globals.has_key('__builtins__'):
-            globals['__builtins__'] = builtins # f.space.w_builtin # f_builtins
+            globals['__builtins__'] = builtin
         if not isinstance(locals, dict):
             raise TypeError("exec: arg 3 must be a dictionary or None")
         # XXX - HACK to check for code object
