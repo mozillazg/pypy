@@ -273,7 +273,6 @@ Module.typedef = TypeDef("module",
     __new__ = interp2app(Module.descr_module__new__.im_func),
     __init__ = interp2app(Module.descr_module__init__.im_func),
     __dict__ = GetSetProperty(descr_get_dict), # module dictionaries are readonly attributes
-    __getattribute__ = interp2app(Module.descr_module__getattribute__.im_func),
     )
 
 getset_func_doc = GetSetProperty(Function.fget_func_doc,

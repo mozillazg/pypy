@@ -36,18 +36,7 @@ class Module(Wrappable):
         space.setitem(w_dict, space.wrap('__name__'), w_name)
         space.setitem(w_dict, space.wrap('__doc__'), w_doc)
 
-    def descr_module__getattribute__(self, w_attr):
-        space = self.space
-        w_self = space.wrap(self)
-        attr = space.str_w(w_attr)
-        w_result = space.lookup(w_self, attr) 
-        if w_result is None:
-            return self.get(attr) 
-        else:
-            return space.get(w_result, w_self)
-
-    def get(self, attr): 
-        space = self.space
+    def getdictvalue(self, space, attr): 
         try: 
             return space.getitem(self.w_dict, self.space.wrap(attr))
         except OperationError, e: 
@@ -74,10 +63,4 @@ class Module(Wrappable):
                     return space.w_None
                 else:
                     return space.wrap(operror.application_traceback)
-        # produce a nice error message that shows the name of the module
-        try:
-            name = space.str_w(self.get('__name__'))
-        except OperationError:
-            name = '?'
-        msg = "'%s' module has no attribute '%s'" % (name, attr)
-        raise OperationError(space.w_AttributeError, space.wrap(msg))
+        return None 
