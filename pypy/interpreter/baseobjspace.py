@@ -1,18 +1,14 @@
-from executioncontext import ExecutionContext, OperationError, NoValue
-import threadlocals
+from pypy.interpreter.executioncontext import ExecutionContext, Stack
+from pypy.interpreter.error import OperationError
+from pypy.interpreter import threadlocals
 
-__all__ = ['ObjSpace', 'OperationError', 'NoValue', 'PyPyError']
+__all__ = ['ObjSpace', 'OperationError', 'NoValue']
 
-class PyPyError(Exception):
-    "Raise this when you encounter an exceptional situation in PyPy itself."
-    def __init__(self, space, operationerr):
-        self.space = space
-        self.operationerr = operationerr
 
-class Null:
-    """ marker object for Null values within the interpreter
-        (not visible at app-level)
-    """
+class NoValue(Exception):
+    """Raised to signal absence of value, e.g. in the iterator accessing
+    method 'op.next()' of object spaces."""
+
 
 class ObjSpace:
     """Base class for the interpreter-level implementations of object spaces.
@@ -146,31 +142,19 @@ class ObjSpace:
         check_list = [w_check_class]
         while check_list:
             w_item = check_list.pop()
-            #Test within iterables (i.e. tuples)
+            # Match identical items.
+            if self.is_true(self.is_(w_exc_type, w_item)):
+                return True
+            # Test within iterables (i.e. tuples)
             try:
                 exclst = self.unpackiterable(w_item)
                 check_list.extend(exclst)
-            except KeyboardInterrupt:
-                raise
-            except:
-                #w_check_class is not iterable
-                pass
-            #w_item should now be an Exception (or string?)
-            #Match identical items.
-            w_rv = self.is_(w_exc_type, w_item)
-            if self.is_true(w_rv):
-                return w_rv
-            #Match subclasses.
-            try:
-                w_rv = self.issubtype(w_exc_type, w_item)
-            except KeyboardInterrupt:
-                raise
-            except:
-                pass
-            else:
-                if self.is_true(w_rv):
-                    return w_rv
-        return self.w_False
+            except OperationError:
+                # w_item is not iterable; it should then be an Exception.
+                # Match subclasses.
+                if self.is_true(self.issubtype(w_exc_type, w_item)):
+                    return True
+        return False
 
     def call_function(self, w_func, *args_w, **kw_w):
         w_kw = self.newdict([(self.wrap(k), w_v) for k, w_v in kw_w.iteritems()])
