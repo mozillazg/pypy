@@ -75,14 +75,17 @@ class PyFrame(eval.Frame):
                         # catch asynchronous exceptions and turn them
                         # into OperationErrors
                         except KeyboardInterrupt:
-                            raise OperationError(self.space.w_KeyboardInterrupt,
-                                                 self.space.w_None)
+                            import sys; tb = sys.exc_info()[2]
+                            raise OperationError, (self.space.w_KeyboardInterrupt,
+                                                   self.space.w_None), tb
                         except MemoryError:
-                            raise OperationError(self.space.w_MemoryError,
-                                                 self.space.w_None)
+                            import sys; tb = sys.exc_info()[2]
+                            raise OperationError, (self.space.w_MemoryError,
+                                                   self.space.w_None), tb
                         except RuntimeError, e:
-                            raise OperationError(self.space.w_RuntimeError,
-                                self.space.wrap("internal error: " + str(e)))
+                            import sys; tb = sys.exc_info()[2]
+                            raise OperationError, (self.space.w_RuntimeError,
+                                self.space.wrap("internal error: " + str(e))), tb
 
                     except OperationError, e:
                         pytraceback.record_application_traceback(
