@@ -5,7 +5,7 @@ def displayhook(space, w_obj):
         space.setitem(space.builtin.w_dict, space.wrap('_'), w_obj)
         # NB. this is slightly more complicated in CPython,
         # see e.g. the difference with  >>> print 5,; 8
-        print_item_to(space, w_obj, sys_stdout(space))
+        print_item_to(space, space.repr(w_obj), sys_stdout(space))
         print_newline_to(space, sys_stdout(space))
 
 __displayhook__ = displayhook  # this is exactly like in CPython
