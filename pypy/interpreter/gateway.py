@@ -217,7 +217,7 @@ class Gateway(Wrappable):
 class app2interp(Gateway):
     """Build a Gateway that calls 'app' at app-level."""
 
-    NOT_RPYTHON_ATTRIBUTES = ['_staticcode']
+    NOT_RPYTHON_ATTRIBUTES = ['_staticcode'] + Gateway.NOT_RPYTHON_ATTRIBUTES
     
     def __init__(self, app, app_name=None):
         "NOT_RPYTHON"
