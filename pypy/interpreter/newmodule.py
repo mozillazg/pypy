@@ -35,7 +35,7 @@ class ExtModule(Module):
             except KeyError: 
                 return None 
             else: 
-                print "trying to load", name
+                #print "trying to load", name
                 w_value = loader(space) 
                 #print "loaded", w_value 
                 space.setitem(self.w_dict, space.wrap(name), w_value) 

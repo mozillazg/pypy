@@ -34,7 +34,7 @@ class PyFrame(eval.Frame):
         self.blockstack = Stack()
         self.last_exception = None
         self.next_instr = 0
-        self.builtin = lookup_builtin(space, w_globals)
+        self.builtin = space.lookup_builtin(w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
         if code.dictscope_needed():
@@ -137,27 +137,6 @@ class PyFrame(eval.Frame):
     def fget_f_builtins(space, w_self):
         self = space.interpclass_w(w_self)
         return self.builtin.getdict()
-
-
-def lookup_builtin(space, w_globals):
-    "Look up the builtin module to use from the __builtins__ global"
-    try:
-        w_builtin = space.getitem(w_globals, space.wrap('__builtins__'))
-    except OperationError, e:
-        if not e.match(space, space.w_KeyError):
-            raise
-    else:
-        if w_builtin is space.builtin:   # common case
-            return space.builtin
-        if space.is_true(space.isinstance(w_builtin, space.w_dict)):
-            return module.Module(space, None, w_builtin)
-        builtin = space.interpclass_w(w_builtin)
-        if isinstance(builtin, Module):
-            return builtin
-    # no builtin! make a default one.  Given them None, at least.
-    builtin = module.Module(space, None)
-    space.setitem(builtin.w_dict, space.wrap('None'), space.w_None)
-    return builtin
 
 
 ### Frame Blocks ###

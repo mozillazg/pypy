@@ -2,6 +2,7 @@
 import sys, operator, types
 from pypy.interpreter.baseobjspace import ObjSpace, BaseWrappable
 from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.module import Module
 from pypy.interpreter.error import OperationError
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow import flowcontext
@@ -35,7 +36,9 @@ class FlowObjSpace(ObjSpace):
     def initialize(self):
         import __builtin__
         self.concrete_mode = 0
-        self.w_builtins = Constant(__builtin__.__dict__)
+        self.builtin    = Module(self, Constant('__builtin__'), Constant(__builtin__.__dict__))
+        self.sys        = Module(self, Constant('sys'), Constant(sys.__dict__))
+        self.sys.recursionlimit = 100
         self.w_None     = Constant(None)
         self.w_False    = Constant(False)
         self.w_True     = Constant(True)
@@ -52,7 +55,10 @@ class FlowObjSpace(ObjSpace):
         self.specialcases = {}
         #self.make_builtins()
         #self.make_sys()
-        self.w_sys = self.wrap(sys)
+
+
+    def lookup_builtin(self, w_globals):
+        return self.builtin
 
     def loadfromcache(self, key, builder, cache):
         # when populating the caches, the flow space switches to
