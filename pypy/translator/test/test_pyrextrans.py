@@ -7,9 +7,7 @@ from pypy.translator.tool.buildpyxmodule import build_cfunc
 from pypy.translator.tool.buildpyxmodule import skip_missing_compiler
 from pypy.translator.translator import Translator
 
-import pypy, py
-optionpath = py.path.extpy(py.path.local(pypy.__file__).dirpath('conftest.py'), 
-                  'option') 
+from pypy import conftest 
 #from pypy.conftest import option
 
 from pypy.translator.test import snippet 
@@ -26,7 +24,7 @@ class TestNoTypePyrexGenTestCase:
         try: func = func.im_func
         except AttributeError: pass
 
-        dot = optionpath.resolve().verbose > 0 and 1 or 0 
+        dot = conftest.option.verbose > 0 and 1 or 0 
         options = {
             'simplify' : 1,
             'dot' : dot,
