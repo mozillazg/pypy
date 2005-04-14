@@ -10,14 +10,14 @@ rootdir = py.magic.autopath().dirpath()
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
 #
-Option = py.test.Option
+Option = py.test.Config.Option
 
 #class Options: 
 #    group = "pypy options" 
 #    optionlist = 
 
-option = py.test.addoptions("pypy options", 
-        Option('-o', '--objspace', action="store", default=None, 
+option = py.test.Config.addoptions("pypy options", 
+        Option('-O', '--objspace', action="store", default=None, 
                type="string", dest="objspacename", 
                help="object space to run tests on."),
         Option('--oldstyle', action="store_true",dest="oldstyle", default=False,

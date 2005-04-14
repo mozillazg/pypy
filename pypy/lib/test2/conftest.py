@@ -19,15 +19,12 @@ def make_cpy_module(dottedname, filepath, force=False):
 
 libtest = py.path.local(pypy.__file__).dirpath()
 libtest = libtest.dirpath('lib-python-2.3.4', 'test')
-assert libtest.check(dir=1) 
-#conftest = make_cpy_module('234conftest', libtest.join('conftest.py'))
-conftest = libtest.join('conftest.py').getpymodule()
-conftest.__file__ = str(conftest.__file__)  # keep out the py's importhook 
+conftest = libtest.join('conftest.py').pyimport()
 
-def Module(fspath): 
+def Module(fspath, parent=None): 
     if option.allpypy: 
-        return conftest.Module(fspath) 
-    return UnittestModuleOnCPython(fspath) 
+        return conftest.Module(fspath, parent=parent) 
+    return UnittestModuleOnCPython(fspath, parent=parent) 
 
 class Directory(conftest.Directory): 
     def __iter__(self): 
@@ -39,19 +36,19 @@ class UnittestModuleOnCPython(py.test.collect.Module):
         sys.modules['unittest'] = mod 
         mod.raises = py.test.raises 
         self.TestCase = mod.TestCase 
-        
-    def __iter__(self): 
+       
+    def run(self): 
         self._prepare() 
         try: 
             iterable = self._cache 
         except AttributeError: 
             iterable = self._cache = list(self._iter())
-        for x in iterable: 
-            yield x
+        return list(iterable) 
 
     def _iter(self): 
         name = self.fspath.purebasename 
         mod = make_cpy_module(name, self.fspath) 
+        print mod
         tlist = conftest.app_list_testmethods(mod, self.TestCase, [])
         for (setup, teardown, methods) in tlist: 
             for name, method in methods: 
