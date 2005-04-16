@@ -42,7 +42,22 @@ def getobjspace(name=None, _spacecache={}):
     except KeyError:
         #py.magic.invoke(compile=True)
         module = __import__("pypy.objspace.%s" % name, None, None, ["Space"])
-        space = module.Space()
+        try: 
+            space = module.Space()
+        except KeyboardInterrupt: 
+            raise 
+        except OperationError, e: 
+            # we cannot easily convert w_KeyboardInterrupt to
+            # KeyboardInterrupt so we have to jump through hoops 
+            try: 
+                if e.w_type.name == 'KeyboardInterrupt': 
+                    raise KeyboardInterrupt 
+            except AttributeError: 
+                pass 
+            if option.verbose:  
+                import traceback 
+                traceback.print_exc() 
+            py.test.fail("fatal: cannot initialize objspace:  %r" %(module.Space,))
         _spacecache[name] = space
         if name == 'std' and option.oldstyle: 
             space.enable_old_style_classes_as_default_metaclass()
