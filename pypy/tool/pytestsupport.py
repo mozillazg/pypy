@@ -44,6 +44,21 @@ class AppExceptionInfo(py.code.ExceptionInfo):
         self.operr = operr
         self.traceback = AppTraceback(self.operr.application_traceback)
 
+    def exconly(self): 
+        return '(application-level) ' + self.operr.errorstr(self.space)
+
+    def errisinstance(self, exc): 
+        clsname = exc.__name__ 
+        try: 
+            w_exc = getattr(self.space, 'w_' + clsname) 
+        except KeyboardInterrupt: 
+            raise 
+        except: 
+            pass 
+        else: 
+            return self.operr.match(self.space, w_exc) 
+        return False 
+
     def __str__(self):
         return '(application-level) ' + self.operr.errorstr(self.space)
 
