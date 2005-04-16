@@ -27,8 +27,8 @@ def Module(fspath, parent=None):
     return UnittestModuleOnCPython(fspath, parent=parent) 
 
 class Directory(conftest.Directory): 
-    def __iter__(self): 
-        return iter([])
+    def run(self): 
+        return []
 
 class UnittestModuleOnCPython(py.test.collect.Module): 
     def _prepare(self): 
