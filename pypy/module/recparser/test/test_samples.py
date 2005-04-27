@@ -44,7 +44,7 @@ def assert_tuples_equal(tup1, tup2, curpos = ()):
             raise AssertionError('Found difference at %s : %s != %s\n' %
                                  (curpos, name(elt1), name(elt2) ), curpos)
 
-def test_samples():
+def Xtest_samples():
     samples_dir = osp.join(osp.dirname(__file__), 'samples')
     for fname in os.listdir(samples_dir):
         if not fname.endswith('.py'):

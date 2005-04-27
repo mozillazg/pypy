@@ -11,7 +11,7 @@ import __builtin__ as cpy_builtin
 def compile(space, w_str_, filename, startstr,
             supplied_flags=0, dont_inherit=0):
     if space.is_true(space.isinstance(w_str_, space.w_unicode)):
-        str_ = space.unwrap(w_str_) # xxx generic unwrap
+        str_ = u''.join(w_str_._value) # Bad exposing of unicode internals
     else:
         str_ = space.str_w(w_str_)
     #print (str_, filename, startstr, supplied_flags, dont_inherit)
