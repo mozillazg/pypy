@@ -186,6 +186,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_IntObject(self, x)
         if isinstance(x, str):
             return W_StringObject(self, x)
+        if isinstance(x, unicode):
+            return W_UnicodeObject(self, x)
         if isinstance(x, dict):
             items_w = [(self.wrap(k), self.wrap(v)) for (k, v) in x.iteritems()]
             return W_DictObject(self, items_w)
