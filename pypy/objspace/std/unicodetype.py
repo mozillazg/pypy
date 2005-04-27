@@ -48,24 +48,29 @@ def descr__new__(space, w_unicodetype, w_obj=None, w_encoding=None, w_errors=Non
     if space.is_w(w_obj_type, space.w_unicode):
         if space.is_w(w_unicodetype, space.w_unicode):
             return w_obj
-        value = space.unwrap(w_obj)
+        value = w_obj._value
     elif space.is_w(w_obj, space.w_None):
-        value = u''
+        value = []
     elif space.is_true(space.isinstance(w_obj, space.w_unicode)):
         value = w_obj._value
     elif space.is_w(w_obj_type, space.w_str):
         try:
             if space.is_w(w_encoding, space.w_None):
-                value = unicode(space.str_w(w_obj))
+                value = [ u for u in unicode(space.str_w(w_obj)) ]
             elif space.is_w(w_errors, space.w_None): 
-                value = unicode(space.str_w(w_obj), space.str_w(w_encoding))
+                value = [ u for u in unicode(space.str_w(w_obj),
+                                             space.str_w(w_encoding)) ]
             else:
-                value = unicode(space.str_w(w_obj), space.str_w(w_encoding),
-                                space.str_w(w_errors))
+                value = [u for u in unicode(space.str_w(w_obj),
+                                            space.str_w(w_encoding),
+                                            space.str_w(w_errors)) ]
         except UnicodeDecodeError, e:
-            raise OperationError(space.w_UnicodeDecodeError, space.wrap(e.reason))
+            raise OperationError(space.w_UnicodeDecodeError,
+                                 space.wrap(e.reason))
     else:
-        raise OperationError(space.w_ValueError, space.wrap('Can not create unicode from other than strings (is %r)'%w_obj_type))
+        # try with __unicode__
+        raise OperationError(space.w_ValueError,
+                             space.wrap('Can not create unicode from other than strings'%w_obj_type))
     w_newobj = space.allocate_instance(W_UnicodeObject, w_unicodetype)
     w_newobj.__init__(space, value)
     return w_newobj
