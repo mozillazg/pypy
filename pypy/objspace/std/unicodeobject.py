@@ -6,6 +6,7 @@ from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.strutil import string_to_int, string_to_long, ParseStringError
 from pypy.tool.rarithmetic import intmask
+from pypy.module.unicodedata import unicodedb
 
 class W_UnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
@@ -197,6 +198,7 @@ def getitem__Unicode_Slice(space, w_uni, w_slice):
     r = [uni[start + i*step] for i in range(sl)]
     return W_UnicodeObject(space, r)
 
+
 def mul__Unicode_ANY(space, w_uni, w_times):
     chars = w_uni._value
     charlen = len(chars)
@@ -219,7 +221,11 @@ def mul__ANY_Unicode(space, w_times, w_uni):
     return space.mul(w_uni, w_times)
 
 def _isspace(uchar):
-    return uchar.isspace()
+    code = ord(uchar)
+    try:
+        return unicodedb.category[code] == 'Zs' or unicodedb.bidirectional[code] in ("WS", "B", "S")
+    except:
+        return False
 
 def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"

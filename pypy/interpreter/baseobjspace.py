@@ -81,6 +81,7 @@ class ObjSpace(object):
         w_builtin = self.wrap(self.builtin)
         self.setitem(w_modules, w_name, w_builtin) 
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin) 
+        self.setbuiltinmodule('unicodedata')
 
         # XXX we need to resolve unwrapping issues to 
         #     make this the default _sre module
