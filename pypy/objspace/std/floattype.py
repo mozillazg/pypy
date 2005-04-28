@@ -1,5 +1,6 @@
 from pypy.objspace.std.stdtypedef import *
 from pypy.interpreter.error import OperationError
+from pypy.objspace.std.strutil import ParseStringError
 
 def descr__new__(space, w_floattype, w_value=0.0):
     from pypy.objspace.std.floatobject import W_FloatObject
