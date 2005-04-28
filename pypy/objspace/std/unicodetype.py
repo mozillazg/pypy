@@ -79,5 +79,10 @@ def descr__new__(space, w_unicodetype, w_obj=None, w_encoding=None, w_errors=Non
 
 unicode_typedef = StdTypeDef("unicode", basestring_typedef,
     __new__ = newmethod(descr__new__),
+    __doc__ = '''unicode(string [, encoding[, errors]]) -> object
+
+Create a new Unicode object from the given encoded string.
+encoding defaults to the current default string encoding.
+errors can be 'strict', 'replace' or 'ignore' and defaults to 'strict'.'''
     )
 unicode_typedef.registermethods(globals())
