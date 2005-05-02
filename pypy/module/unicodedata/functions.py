@@ -78,7 +78,7 @@ def combining(space, w_unichr):
 
 def mirrored(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap(unicodedb.mirrored(code, 0)
+    return space.wrap(unicodedb.mirrored(code, 0))
 
 
 def decomposition(space, w_unichr):
@@ -90,12 +90,16 @@ def normalize(space, w_form, w_unistr):
     if not space.is_true(space.isinstance(w_unistr, space.w_unicode)):
         raise TypeError, 'argument 2 must be unicode'
     if form == 'NFC':
-        return w_unistr
+        raise OperationError(space.w_NotImplementedError,
+                             space.wrap('Normalization is not implemented'))
     if form == 'NFD':
-        return w_unistr
+        raise OperationError(space.w_NotImplementedError,
+                             space.wrap('Normalization is not implemented'))
     if form == 'NFKC':
-        return w_unistr
+        raise OperationError(space.w_NotImplementedError,
+                             space.wrap('Normalization is not implemented'))
     if form == 'NFKD':
-        return w_unistr
+        raise OperationError(space.w_NotImplementedError,
+                             space.wrap('Normalization is not implemented'))
     raise OperationError(space.w_ValueError,
                          space.wrap('invalid normalization form'))
