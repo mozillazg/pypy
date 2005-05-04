@@ -1,132 +1,223 @@
 #!/usr/bin/env python
-
 import sys
-import __future__
 
-def printDict(outfile, name, dictionary):
-    keys = dictionary.keys()
-    keys.sort()
-    print >> outfile, name, '= {'
-    for key in keys:
-        print >>outfile, '    %r : %r,' % (key, dictionary[key])
-    print  >>outfile, '}'
+class Unicodechar(object):
+    __slots__ = '''code name category combining bidirectional
+    decomposition decomposition_tag decimal digit numeric
+    mirrored upper lower title'''.split()
+    def __init__(self, data):
+        if not data[1] or data[1][0] == '<' and data[1][-1] == '>':
+            self.name = None
+        else:
+            self.name = data[1]
+        self.category = data[2]
+        self.combining = 0
+        if data[3]:
+            self.combining = int(data[3])
+        self.bidirectional = data[4]
+        self.decomposition = None
+        self.decomposition_tag = None
+        if data[5]:
+            if data[5][0] == '<':
+                tag, value = data[5].split(None, 1)
+            else:
+                tag = '<canonical>'
+                value = data[5]
+            self.decomposition_tag = tag[1:-1]
+            self.decomposition = [int(v, 16) for v in value.split()]
+                
+        self.decimal = None
+        if data[6]:
+            self.decimal = int(data[6])
+        self.digit = None
+        if data[7]:
+            self.digit = int(data[7])
+        self.numeric = None
+        if data[8]:
+            try:
+                numerator, denomenator = data[8].split('/')
+                self.numeric = float(numerator) / float(denomenator)
+            except ValueError:
+                self.numeric = float(data[8])
+        self.mirrored = (data[9] == 'Y')
+        if data[12]:
+            self.upper = int(data[12], 16)
+        self.lower = None
+        if data[13]:
+            self.lower = int(data[13], 16) 
+        self.title = None
+        if data[14]:
+            self.title = int(data[14], 16)
+
+    def isspace(self):
+        return (self.category == 'Zs' or
+                self.bidirectional in ('WS', 'B' or 'S'))
     
-def generate_unicodedb(unidata_version, infile, outfile):
-    decimal = {}
-    digit = {}
-    number = {}
-    uppercase = {}
-    lowercase = {}
-    titlecase = {}
-    category = {}
-    name = {}
-    combining = {}
-    bidir = {}
-    mirrored = {}
-
-    decomp = {}
-
-    table = {}
+def read_unicodedata(infile):
+    rangeFirst = {}
+    rangeLast = {}
+    table = [Unicodechar(['0000', None, 'Cn'] + [''] * 12)] * (sys.maxunicode + 1)
     for line in infile:
         line = line.split('#', 1)[0].strip()
         if not line:
             continue
         data = [ v.strip() for v in line.split(';') ]
-        code = data[0] = int(data[0], 16)
-        table[code] = data
+        if data[1].endswith(', First>'):
+            code = int(data[0], 16)
+            name = data[1][1:-len(', First>')]
+            rangeFirst[name] = (code, data)
+            continue
+        if data[1].endswith(', Last>'):
+            code = int(data[0], 16)
+            rangeLast[name]  = code
+            continue
+        code = int(data[0], 16)
+        u = Unicodechar(data)
+        table[code] = u
 
-    # Expand named ranges
-    field = None
-    for i in range(0, 0x110000):
-        s = table.get(i)
-        if s:
-            if s[1][-8:] == ", First>":
-                field = s[:]
-                field[1] = s[1][:-8]
-                s[1] = s[1][:-8] + '-%4X'%s[0]
-            elif s[1][-7:] == ", Last>":
-                s[1] = s[1][:-7] + '-%4X'%s[0]
-                field = None
-        elif field:
-            s = field[:]
-            s[0] = i
-            s[1] = s[1] + '-%4X'%s[0]
-            table[i] = s
+    # Expand ranges
+    for name, (start, data) in rangeFirst.iteritems():
+        end = rangeLast[name]
+        unichar = Unicodechar(['0000', None] + data[2:])
+        for code in range(start, end + 1):
+            table[code] = unichar
 
-    for (code, _name, cat, _combine, _bidir, _decomp,
-         _decimal, _digit, _number, _mirrored, unicode1_name, comment,
-         _uppercase, _lowercase, _titlecase) in table.itervalues():
-        if cat != 'Cn':
-            category[code] = cat
+    return table
 
-        name[code] = _name
-        if _combine:
-            combine = int(_combine)
-            if combine != 0:
-                combining[code] = combine
+def writeDict(outfile, name, dictionary):
+    print >> outfile, '%s = {' % name
+    keys = dictionary.keys()
+    keys.sort()
+    for key in keys:
+        print >> outfile, '%r: %r,'%(key, dictionary[key])
+    print >> outfile, '}'
+    print >> outfile
 
-        if _decimal:
-            decimal[code] = int(_decimal)
-        if _digit:
-            d = digit[code] = int(_digit)
-        if _number:
-            number[code] = float(eval(compile(_number, '-', 'eval', __future__.CO_FUTURE_DIVISION, 1)))
+def writeCategory(outfile, table, name, categoryNames):
+    print >> outfile, '_%s_names = %r' % (name, categoryNames)
+    print >> outfile, '_%s = "".join([' % name
+    for i in range(0, len(table), 64):
+        result = []
+        for char in table[i:i + 64]:
+            result.append(chr(categoryNames.index(getattr(char, name)) + 0x20))
+        print >> outfile, '    %r,' % ''.join(result)
+    print >> outfile, '])'
+    print >> outfile, '''
+def %s(code):
+    return _%s_names[ord(_%s[code]) & 0x1f]    
 
-        if _uppercase:
-            uppercase[code] = int(_uppercase, 16)
-        if _lowercase:
-            lowercase[code] = int(_lowercase, 16)
-        if _titlecase:
-            titlecase[code] = int(_titlecase, 16)
+'''%(name, name, name)
 
-        if _mirrored == 'Y':
+def writeUnicodedata(version, table, outfile):
+    # Version
+    print >> outfile, 'version = %r' % version
+    print >> outfile
+    # Character names
+    print >> outfile, '_charnames = {'
+    for code in range(len(table)):
+        if table[code].name:
+            print >> outfile, '%r: %r,'%(code, table[code].name)
+    print >> outfile, '''}
+    
+_code_by_name = dict(zip(_charnames.itervalues(), _charnames.iterkeys()))
+
+def lookup(name):
+    return _code_by_name[name]
+
+def name(code):
+    return _charnames[code]
+'''
+    # Categories
+    categories = {}
+    bidirs = {}
+    for char in table:
+        categories[char.category] = 1
+        bidirs[char.bidirectional] = 1
+    category_names = categories.keys()
+    category_names.sort()
+    if len(category_names) > 32:
+        raise RuntimeError('Too many general categories defined.')
+    bidirectional_names = bidirs.keys()
+    bidirectional_names.sort()
+    if len(bidirectional_names) > 32:
+        raise RuntimeError('Too many bidirectional categories defined.')
+
+    writeCategory(outfile, table, 'category', category_names)
+    writeCategory(outfile, table, 'bidirectional', bidirectional_names)
+    print >> outfile, '''
+def isspace(code):
+    return category(code) == "Zs" or bidirectional(code) in ("WS", "B", "S")
+def islower(code):
+    return category(code) == "Ll"
+def isupper(code):
+    return category(code) == "Lu"
+def istitle(code):
+    return category(code) == "Lt"
+def isalpha(code):
+    return category(code) in ("Lm", "Lt", "Lu", "Ll", "Lo")
+def islinebreak(code):
+    return category(code) == "Zl" or bidirectional(code) == "B"
+'''
+    
+    # Numeric characters
+    decimal = {}
+    digit = {}
+    numeric = {}
+    for code in range(len(table)):
+        if table[code].decimal is not None:
+            decimal[code] = table[code].decimal
+        if table[code].digit is not None:
+            digit[code] = table[code].digit
+        if table[code].numeric is not None:
+            numeric[code] = table[code].numeric
+            
+    writeDict(outfile, '_decimal', decimal)
+    writeDict(outfile, '_digit', digit)
+    writeDict(outfile, '_numeric', numeric)
+    print >> outfile, '''
+def decimal(code):
+    return _decimal[code]
+
+def isdecimal(code):
+    return _decimal.has_key(code)
+
+def digit(code):
+    return _digit[code]
+
+def isdigit(code):
+    return _digit.has_key(code)
+
+def numeric(code):
+    return _numeric[code]
+
+def isnumeric(code):
+    return _numeric.has_key(code)
+
+'''
+    # Combining
+    combining = {}
+    for code in range(len(table)):
+        if table[code].combining:
+            combining[code] = table[code].combining
+    writeDict(outfile, '_combining', combining)
+    print >> outfile, '''
+def combining(code):
+    return _combining.get(code, 0)
+
+'''
+    # Mirrored
+    mirrored = dict([(code, 1) for char in table
+                      if char.mirrored])
+    mirrored = {}
+    for code in range(len(table)):
+        if table[code].mirrored:
             mirrored[code] = 1
+    writeDict(outfile, '_mirrored', mirrored)
+    print >> outfile, '''
+def mirrored(code):
+    return _mirrored.get(code, 0)
 
-        if _bidir:
-            bidir[code] = _bidir
-
-        #if _decomp:
-        #    raise Exception
-
-    codeByName = {}
-    duplicateNames = {}
-    for k, v in name.iteritems():
-        if duplicateNames.has_key(k):
-            continue
-        if codeByName.has_key(k):
-            duplicateNames[k] = 1
-            del codeByName[k]
-            continue
-        codeByName[k] = v
-
-    print >> outfile, 'version = %r'%unidata_version
-    print >> outfile
-    printDict(outfile, 'charnameByCode', name)
-    print >> outfile
-    printDict(outfile,'charcodeByName', codeByName)
-    print >> outfile
-    printDict(outfile, 'decimalValue', decimal)
-    print >> outfile
-    printDict(outfile, 'digitValue', digit)
-    print >> outfile
-    printDict(outfile, 'numericValue', number)
-    print >> outfile
-    printDict(outfile, 'category', category)
-    print >> outfile
-    printDict(outfile, 'bidirectional', bidir)
-    print >> outfile
-    printDict(outfile, 'combining', combining)
-    print >> outfile
-    printDict(outfile, 'mirrored', mirrored)
-    print >> outfile
-    printDict(outfile, 'decomposition', decomp)
-    print >> outfile
-    printDict(outfile, 'uppercase', uppercase)
-    print >> outfile
-    printDict(outfile, 'lowercase', lowercase)
-    print >> outfile
-    printDict(outfile, 'titlecase', titlecase)
-    print >> outfile
+'''
 
 if __name__ == '__main__':
     import getopt, re
@@ -153,10 +244,10 @@ if __name__ == '__main__':
     
     if unidata_version is None:
         raise ValueError('No version specified')
-    
-    print >> outfile, '# UNICODE CHARACTER DATABASE'
-    print >> outfile, '# This ficle was genrated with the command:'
-    print >> outfile, '#   ', ' '.join(sys.argv)
-    print >> outfile
 
-    generate_unicodedb(unidata_version, infile, outfile)
+    table = read_unicodedata(infile)
+    print >> outfile, '# UNICODE CHARACTER DATABASE'
+    print >> outfile, '# This file was genrated with the command:'
+    print >> outfile, '#    ', ' '.join(sys.argv)
+    print >> outfile
+    writeUnicodedata(unidata_version, table, outfile)
