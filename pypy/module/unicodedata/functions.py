@@ -15,7 +15,7 @@ def unichr_to_code_w(space, w_unichr):
 def lookup(space, w_name):
     name = space.str_w(w_name)
     try:
-        code = unicodedb.charcodeByName[name]
+        code = unicodedb.lookup(name)
     except KeyError:
         msg = space.mod(space.wrap("undefined character name '%s'"), w_name)
         raise OperationError(space.w_KeyError, msg)
@@ -25,7 +25,7 @@ def lookup(space, w_name):
 def name(space, w_unichr, w_default=NoneNotWrapped):
     code = unichr_to_code_w(space, w_unichr)
     try:
-        name = unicodedb.charnameByCode[code]
+        name = unicodedb.name(code)
     except KeyError:
         if w_default is not None:
             return w_default
@@ -36,7 +36,7 @@ def name(space, w_unichr, w_default=NoneNotWrapped):
 def decimal(space, w_unichr, default=NoneNotWrapped):
     code = unichr_to_code_w(space, w_unichr)
     try:
-        return space.wrap(unicodedb.decimalValue[code])
+        return space.wrap(unicodedb.decimal(code))
     except KeyError:
         pass
     if w_default is not None:
@@ -46,7 +46,7 @@ def decimal(space, w_unichr, default=NoneNotWrapped):
 def digit(space, w_unichr, w_default=NoneNotWrapped):
     code = unichr_to_code_w(space, w_unichr)
     try:
-        return space.wrap(unicodedb.digitValue[code])
+        return space.wrap(unicodedb.digit(code))
     except KeyError:
         pass
     if w_default is not None:
@@ -56,7 +56,7 @@ def digit(space, w_unichr, w_default=NoneNotWrapped):
 def numeric(space, w_unichr, w_default=NoneNotWrapped):
     code = unichr_to_code_w(space, w_unichr)
     try:
-        return space.wrap(unicodedb.numericValue[code])
+        return space.wrap(unicodedb.numeric(code))
     except KeyError:
         pass
     if w_default is not None:
@@ -66,24 +66,24 @@ def numeric(space, w_unichr, w_default=NoneNotWrapped):
 
 def category(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap(unicodedb.category.get(code, 'Cn'))
+    return space.wrap(unicodedb.category(code))
 
 def bidirectional(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap(unicodedb.bidirectional.get(code, ''))
+    return space.wrap(unicodedb.bidirectional(code))
 
 def combining(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap(unicodedb.combining(code, 0)
+    return space.wrap(unicodedb.combining(code))
 
 def mirrored(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap(unicodedb.mirrored(code, 0))
-
+    return space.wrap(unicodedb.mirrored(code))
 
 def decomposition(space, w_unichr):
     code = unichr_to_code_w(space, w_unichr)
-    return space.wrap('')
+    raise OperationError(space.w_NotImplementedError,
+                         space.wrap('Decomposition is not implemented'))
 
 def normalize(space, w_form, w_unistr):
     form = space.str_w(w_form)
