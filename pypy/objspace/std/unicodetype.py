@@ -8,7 +8,7 @@ unicode_capitalize = MultiMethod('capitalize', 1)
 unicode_center     = MultiMethod('center', 2, )
 unicode_count      = MultiMethod('count', 4, defaults=(0, maxint))      
 unicode_encode     = MultiMethod('encode', 3, defaults=(None, None))
-unicode_endswith   = MultiMethod('endswith', 2) #[optional arguments not supported now]
+unicode_endswith   = MultiMethod('endswith', 4, defaults=(0,maxint))
 unicode_expandtabs = MultiMethod('expandtabs', 2, defaults=(8,))
 unicode_find       = MultiMethod('find', 4, defaults=(0, maxint))
 unicode_index      = MultiMethod('index', 4, defaults=(0, maxint))
@@ -32,47 +32,78 @@ unicode_rjust      = MultiMethod('rjust', 2)
 unicode_rstrip     = MultiMethod('rstrip', 2, defaults=(None,))
 unicode_split      = MultiMethod('split', 3, defaults=(None,-1))
 unicode_splitlines = MultiMethod('splitlines', 2, defaults=(0,))
-unicode_startswith = MultiMethod('startswith', 3, defaults=(0,))
+unicode_startswith = MultiMethod('startswith', 4, defaults=(0,maxint))
 unicode_strip      = MultiMethod('strip',  2, defaults=(None,))
 unicode_swapcase   = MultiMethod('swapcase', 1)
 unicode_title      = MultiMethod('title', 1)
-unicode_translate  = MultiMethod('translate', 3, defaults=('',))
+unicode_translate  = MultiMethod('translate', 2)
 unicode_upper      = MultiMethod('upper', 1)
 unicode_zfill      = MultiMethod('zfill', 2)
-
+unicode_getslice   = MultiMethod('__getslice__', 3)
 # ____________________________________________________________
+
+app = gateway.applevel('''
+import codecs, sys
+
+def unicode_from_encoded_object(obj, encoding, errors):
+    # Fix later for buffer
+    if type(obj).__name__ == 'buffer':
+        obj = obj.buf
+    if encoding is None:
+        encoding = sys.getdefaultencoding()
+    decoder = codecs.getdecoder(encoding)
+    if errors is None:
+        retval, lenght = decoder(obj)
+    else:
+        retval, length = decoder(obj, errors)
+    if not isinstance(retval, unicode):
+        raise TypeError("decoder did not return an unicode object (type=%s)" %
+                        type(retval).__name__)
+    return retval
+
+def unicode_from_object(obj):
+    if isinstance(obj, str):
+        res = obj
+    else:
+        try:
+            unicode_method = obj.__unicode__
+        except AttributeError:
+            res = str(obj)
+        else:
+            res = unicode_method()
+    if isinstance(res, unicode):
+        return res
+    return unicode_from_encoded_object(res, None, "strict")
+    
+''')
+unicode_from_object = app.interphook('unicode_from_object')
+unicode_from_encoded_object = app.interphook('unicode_from_encoded_object')
+
+
 def descr__new__(space, w_unicodetype, w_obj=None, w_encoding=None, w_errors=None):
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
     w_obj_type = space.type(w_obj)
     
     if space.is_w(w_obj_type, space.w_unicode):
+        if (not space.is_w(w_encoding, space.w_None) or
+            not space.is_w(w_errors, space.w_None)):
+            raise OperationError(space.w_TypeError,
+                                 space.wrap('decoding Unicode is not supported'))
         if space.is_w(w_unicodetype, space.w_unicode):
             return w_obj
-        value = w_obj._value
+        w_value = w_obj
     elif space.is_w(w_obj, space.w_None):
-        value = []
-    elif space.is_true(space.isinstance(w_obj, space.w_unicode)):
-        value = w_obj._value
-    elif space.is_w(w_obj_type, space.w_str):
-        try:
-            if space.is_w(w_encoding, space.w_None):
-                value = [ u for u in unicode(space.str_w(w_obj)) ]
-            elif space.is_w(w_errors, space.w_None): 
-                value = [ u for u in unicode(space.str_w(w_obj),
-                                             space.str_w(w_encoding)) ]
-            else:
-                value = [u for u in unicode(space.str_w(w_obj),
-                                            space.str_w(w_encoding),
-                                            space.str_w(w_errors)) ]
-        except UnicodeDecodeError, e:
-            raise OperationError(space.w_UnicodeDecodeError,
-                                 space.wrap(e.reason))
+        w_value = W_UnicodeObject(space, [])
+    elif (space.is_w(w_encoding, space.w_None) and
+          space.is_w(w_errors, space.w_None)):
+        if space.is_true(space.isinstance(w_obj, space.w_unicode)):
+            w_value = w_obj
+        else:
+            w_value = unicode_from_object(space, w_obj)
     else:
-        # try with __unicode__
-        raise OperationError(space.w_ValueError,
-                             space.wrap('Can not create unicode from other than strings'%w_obj_type))
+        w_value = unicode_from_encoded_object(space, w_obj, w_encoding, w_errors)
     w_newobj = space.allocate_instance(W_UnicodeObject, w_unicodetype)
-    w_newobj.__init__(space, value)
+    w_newobj.__init__(space, w_value._value)
     return w_newobj
 
 # ____________________________________________________________
