@@ -1,10 +1,7 @@
 #!/usr/bin/env python
 import sys
 
-class Unicodechar(object):
-    __slots__ = '''code name category combining bidirectional
-    decomposition decomposition_tag decimal digit numeric
-    mirrored upper lower title'''.split()
+class Unicodechar:
     def __init__(self, data):
         if not data[1] or data[1][0] == '<' and data[1][-1] == '>':
             self.name = None
@@ -40,6 +37,7 @@ class Unicodechar(object):
             except ValueError:
                 self.numeric = float(data[8])
         self.mirrored = (data[9] == 'Y')
+        self.upper = None
         if data[12]:
             self.upper = int(data[12], 16)
         self.lower = None
@@ -49,10 +47,6 @@ class Unicodechar(object):
         if data[14]:
             self.title = int(data[14], 16)
 
-    def isspace(self):
-        return (self.category == 'Zs' or
-                self.bidirectional in ('WS', 'B' or 'S'))
-    
 def read_unicodedata(infile):
     rangeFirst = {}
     rangeLast = {}
@@ -93,7 +87,21 @@ def writeDict(outfile, name, dictionary):
     print >> outfile, '}'
     print >> outfile
 
-def writeCategory(outfile, table, name, categoryNames):
+class Cache:
+    def __init__(self):
+        self._cache = {}
+        self._strings = []
+    def get(self, string):
+        try:
+            return self._cache[string]
+        except KeyError:
+            index = len(self._cache)
+            self._cache[string] = index
+            self._strings.append(string)
+            return index
+        
+def writeCategory(_outfile, table, name, categoryNames):
+    cache = Cache()
     print >> outfile, '_%s_names = %r' % (name, categoryNames)
     print >> outfile, '_%s = "".join([' % name
     for i in range(0, len(table), 64):
@@ -108,10 +116,52 @@ def %s(code):
 
 '''%(name, name, name)
 
+def writeCategory(outfile, table, name, categoryNames):
+    pgbits = 8
+    chunksize = 64
+    pgsize = 1 << pgbits
+    bytemask = ~(-1 << pgbits)
+    pages = []
+    print >> outfile, '_%s_names = %r' % (name, categoryNames)
+    print >> outfile, '_%s_pgtbl = "".join([' % name
+    line = []
+    for i in range(0, len(table), pgsize):
+        result = []
+        for char in table[i:i + pgsize]:
+            result.append(chr(categoryNames.index(getattr(char, name))))
+        categorytbl = ''.join(result)
+        try:
+            page = pages.index(categorytbl)
+        except ValueError:
+            page = len(pages)
+            pages.append(categorytbl)
+            assert len(pages) < 256, 'Too many unique pages for category %s.' % name
+        line.append(chr(page))
+        if len(line) >= chunksize:
+            print >> outfile, repr(''.join(line))
+            line = []
+    if len(line) > 0:
+        print >> outfile, repr(''.join(line))
+    print >> outfile, '])'
+
+    # Dump pgtbl
+    print >> outfile, '_%s = ( ' % name
+    for page_string in pages:
+        print >> outfile, '"".join(['
+        for index in range(0, len(page_string), chunksize):
+            print >> outfile, repr(page_string[index:index + chunksize])
+        print >> outfile, ']),'
+    print >> outfile, ')'
+    print >> outfile, '''
+def %s(code):
+    return _%s_names[ord(_%s[ord(_%s_pgtbl[code >> %d])][code & %d])]
+'''%(name, name, name, name, pgbits, bytemask)
+
 def writeUnicodedata(version, table, outfile):
     # Version
     print >> outfile, 'version = %r' % version
     print >> outfile
+
     # Character names
     print >> outfile, '_charnames = {'
     for code in range(len(table)):
@@ -127,6 +177,7 @@ def lookup(name):
 def name(code):
     return _charnames[code]
 '''
+
     # Categories
     categories = {}
     bidirs = {}
@@ -153,6 +204,8 @@ def isupper(code):
     return category(code) == "Lu"
 def istitle(code):
     return category(code) == "Lt"
+def iscased(code):
+    return category(code) in ("Ll", "Lu", "Lt")
 def isalpha(code):
     return category(code) in ("Lm", "Lt", "Lu", "Ll", "Lo")
 def islinebreak(code):
@@ -203,6 +256,53 @@ def isnumeric(code):
     print >> outfile, '''
 def combining(code):
     return _combining.get(code, 0)
+
+'''
+    # Mirrored
+    mirrored = {}
+    for code in range(len(table)):
+        if table[code].mirrored:
+            mirrored[code] = 1
+    writeDict(outfile, '_mirrored', mirrored)
+    print >> outfile, '''
+def mirrored(code):
+    return _mirrored.get(code, 0)
+
+'''
+    # Case conversion
+    toupper = {}
+    tolower = {}
+    totitle = {}
+    for code in range(len(table)):
+        if table[code].upper:
+            toupper[code] = table[code].upper
+        if table[code].lower:
+            tolower[code] = table[code].lower
+        if table[code].title:
+            totitle[code] = table[code].title
+    writeDict(outfile, '_toupper', toupper)
+    writeDict(outfile, '_tolower', tolower)
+    writeDict(outfile, '_totitle', totitle)
+    print >> outfile, '''
+def toupper(code):
+    return _toupper.get(code, code)
+def tolower(code):
+    return _tolower.get(code, code)
+def totitle(code):
+    return _totitle.get(code, code)
+
+'''
+    # Mirrored
+    mirrored = dict([(code, 1) for char in table
+                      if char.mirrored])
+    mirrored = {}
+    for code in range(len(table)):
+        if table[code].mirrored:
+            mirrored[code] = 1
+    writeDict(outfile, '_mirrored', mirrored)
+    print >> outfile, '''
+def mirrored(code):
+    return _mirrored.get(code, 0)
 
 '''
     # Mirrored
