@@ -268,6 +268,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
                                  self.wrap("character code not in range(256)"))
         return W_StringObject(self, ''.join(chars))
 
+    def newunicode(self, chars_w):
+        try:
+            chars = [unichr(self.int_w(w_c)) for w_c in chars_w]
+        except ValueError, e:  # unichr(out-of-range)
+            raise OperationError(self.w_ValueError,
+                                 self.wrap("character code not in range(0x110000)"))
+        return W_UnicodeObject(self, chars)
+
     def newseqiter(self, w_obj):
         return W_SeqIterObject(self, w_obj)
 

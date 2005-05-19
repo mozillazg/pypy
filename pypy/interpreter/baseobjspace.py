@@ -465,6 +465,7 @@ ObjSpace.ExceptionTable = [
 #                  newtuple([w_1, w_2,...]) -> w_tuple
 #                   newlist([w_1, w_2,...]) -> w_list
 #                 newstring([w_1, w_2,...]) -> w_string from ascii numbers (bytes)
+#                newunicode([w_1, w_2,...]) -> w_unicode from numbers
 #            newdict([(w_key,w_value),...]) -> w_dict
 #           newslice(w_start,w_stop,w_step) -> w_slice (any argument may be a real None)
 #              call_args(w_obj,Arguments()) -> w_result
@@ -481,6 +482,7 @@ ObjSpace.IrregularOpTable = [
     'newtuple',
     'newlist',
     'newstring',
+    'newunicode',
     'newdict',
     'newslice',
     'call_args'
