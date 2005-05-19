@@ -765,10 +765,14 @@ def unicode_translate__Unicode_ANY(self, table):
             else:
                 raise TypeError("character mapping must return integer, None or unicode")
     return ''.join(result)
-                
+
+def mod__Unicode_ANY(format, values):
+    return unicode(format.encode("utf-8") % values, "utf-8")
+
 ''')
 unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
+mod__Unicode_ANY = app.interphook('mod__Unicode_ANY')
 
 import unicodetype
 register_all(vars(), unicodetype)
