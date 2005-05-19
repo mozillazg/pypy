@@ -13,16 +13,8 @@ class Unicodechar:
             self.combining = int(data[3])
         self.bidirectional = data[4]
         self.decomposition = None
-        self.decomposition_tag = None
         if data[5]:
-            if data[5][0] == '<':
-                tag, value = data[5].split(None, 1)
-            else:
-                tag = '<canonical>'
-                value = data[5]
-            self.decomposition_tag = tag[1:-1]
-            self.decomposition = [int(v, 16) for v in value.split()]
-                
+            self.decomposition = data[5]
         self.decimal = None
         if data[6]:
             self.decimal = int(data[6])
@@ -99,22 +91,6 @@ class Cache:
             self._cache[string] = index
             self._strings.append(string)
             return index
-        
-def writeCategory(_outfile, table, name, categoryNames):
-    cache = Cache()
-    print >> outfile, '_%s_names = %r' % (name, categoryNames)
-    print >> outfile, '_%s = "".join([' % name
-    for i in range(0, len(table), 64):
-        result = []
-        for char in table[i:i + 64]:
-            result.append(chr(categoryNames.index(getattr(char, name)) + 0x20))
-        print >> outfile, '    %r,' % ''.join(result)
-    print >> outfile, '])'
-    print >> outfile, '''
-def %s(code):
-    return _%s_names[ord(_%s[code]) & 0x1f]    
-
-'''%(name, name, name)
 
 def writeCategory(outfile, table, name, categoryNames):
     pgbits = 8
@@ -292,30 +268,15 @@ def totitle(code):
     return _totitle.get(code, code)
 
 '''
-    # Mirrored
-    mirrored = dict([(code, 1) for char in table
-                      if char.mirrored])
-    mirrored = {}
+    # Decomposition
+    decomposition = {}
     for code in range(len(table)):
-        if table[code].mirrored:
-            mirrored[code] = 1
-    writeDict(outfile, '_mirrored', mirrored)
+        if table[code].decomposition:
+            decomposition[code] = table[code].decomposition
+    writeDict(outfile, '_decomposition', decomposition)
     print >> outfile, '''
-def mirrored(code):
-    return _mirrored.get(code, 0)
-
-'''
-    # Mirrored
-    mirrored = dict([(code, 1) for char in table
-                      if char.mirrored])
-    mirrored = {}
-    for code in range(len(table)):
-        if table[code].mirrored:
-            mirrored[code] = 1
-    writeDict(outfile, '_mirrored', mirrored)
-    print >> outfile, '''
-def mirrored(code):
-    return _mirrored.get(code, 0)
+def decompisition(code):
+    return _decomposition.get(code,'')
 
 '''
 
