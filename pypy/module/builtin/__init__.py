@@ -50,7 +50,6 @@ Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
         'complex'       : 'app_complex.complex',
 
         'intern'        : 'app_misc.intern',
-        'unichr'        : 'app_misc.unichr',
         'buffer'        : 'app_buffer.buffer',
         'reload'        : 'app_misc.reload',
     }
@@ -79,6 +78,7 @@ Noteworthy: None is the `nil' object; Ellipsis represents `...' in slices.
         # interp-level function definitions
         'abs'           : 'operation.abs',
         'chr'           : 'operation.chr',
+        'unichr'        : 'operation.unichr',
         'len'           : 'operation.len',
         'ord'           : 'operation.ord',
         'pow'           : 'operation.pow',
