@@ -766,21 +766,13 @@ def unicode_translate__Unicode_ANY(self, table):
                 raise TypeError("character mapping must return integer, None or unicode")
     return ''.join(result)
 
-def unicode_to_str(val):
-    if isinstance(val, unicode):
-        return val.encode("utf-8")
-    return val
-
 def mod__Unicode_ANY(format, values):
-    format = format.encode("utf-8")
+    import _formatting
     if isinstance(values, tuple):
-        values = tuple([unicode_to_str(val) for val in values])
-    elif hasattr(values, 'keys'):
-        values = dict([(key, unicode_to_str(val)) for key, val in values.iteritems()])
-    else:
-        values = unicode_to_str(values)
-    return unicode(format % values, "utf-8")
-
+        return _formatting.format(format, values, None, do_unicode=True)
+    if hasattr(values, 'keys'):
+        return _formatting.format(format, (values,), values, do_unicode=True)
+    return _formatting.format(format, (values,), None, do_unicode=True)
 ''')
 unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
