@@ -7,9 +7,9 @@ from pypy.interpreter.error import OperationError
 
 def unichr_to_code_w(space, w_unichr):
     if not space.is_true(space.isinstance(w_unichr, space.w_unicode)):
-        raise TypeError, 'argument 1 must be unicode'
+        raise OperationError(space.w_TypeError, space.wrap('argument 1 must be unicode'))
     if not space.int_w(space.len(w_unichr)) == 1:
-        raise TypeError, 'need a single Unicode character as parameter'
+        raise OperationError(space.w_TypeError, space.wrap('need a single Unicode character as parameter'))
     return space.int_w(space.ord(w_unichr))
 
 def lookup(space, w_name):
@@ -33,7 +33,7 @@ def name(space, w_unichr, w_default=NoneNotWrapped):
     return space.wrap(name)
 
 
-def decimal(space, w_unichr, default=NoneNotWrapped):
+def decimal(space, w_unichr, w_default=NoneNotWrapped):
     code = unichr_to_code_w(space, w_unichr)
     try:
         return space.wrap(unicodedb.decimal(code))
