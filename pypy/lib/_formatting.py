@@ -6,6 +6,7 @@
 # (1) rounding isn't always right (see comments in _float_formatting).
 # (2) something goes wrong in the f_alt case of %g handling.
 # (3) it's really, really slow.
+import sys
 
 class _Flags(object):
     def __repr__(self):
@@ -323,7 +324,7 @@ class CharFormatter(Formatter):
         return self.std_wp(v)
 
 
-format_registry = {
+str_format_registry = {
     'd':IntFormatter,
     'i':IntFormatter,
     'o':OctFormatter,
@@ -344,6 +345,50 @@ format_registry = {
     # doesn't consume a value.
     '%':funcFormatter(lambda x:'%'),
     }
+    
+class UnicodeStringFormatter(Formatter):
+    def format(self):
+        if isinstance(self.value, unicode):
+            return self.std_wp(self.value)
+        return self.std_wp(str(self.value))
+
+class UnicodeCharFormatter(Formatter):
+    def format(self):
+        if isinstance(self.value, unicode):
+            v = self.value
+            if len(v) != 1:
+                raise TypeError, "%c requires int or unicode char"
+        else:
+            i = maybe_int(self.value)
+            if not 0 <= i <= sys.maxunicode:
+                raise OverflowError("OverflowError: unsigned byte "
+                                    "integer is greater than maximum")
+            v = unichr(i)
+        self.prec = None
+        return self.std_wp(v)
+
+unicode_format_registry = {
+    u'd':IntFormatter,
+    u'i':IntFormatter,
+    u'o':OctFormatter,
+    u'u':IntFormatter,
+    u'x':HexFormatter,
+    u'X':HexFormatter,
+    u'e':FloatEFormatter,
+    u'E':FloatEFormatter,
+    u'f':FloatFFormatter,
+    u'F':FloatFFormatter,
+    u'g':FloatGFormatter,
+    u'G':FloatGFormatter,
+    u'c':UnicodeCharFormatter,
+    u's':UnicodeStringFormatter,
+    u'r':funcFormatter(repr),
+    # this *can* get accessed, by e.g. '%()4%'%{'':1}.
+    # The usual %% case has to be handled specially as it
+    # doesn't consume a value.
+    u'%':funcFormatter(lambda x:u'%'),
+    }
+    
 
 del funcFormatter # don't irritate flow space
 
@@ -374,7 +419,12 @@ class FmtIter(object):
             return self.fmt[i:j]
 
 
-def format(fmt, values, valuedict=None):
+def format(fmt, values, valuedict=None, do_unicode=False):
+    if do_unicode:
+        format_registry = unicode_format_registry
+    else:
+        format_registry = str_format_registry
+        
     fmtiter = FmtIter(fmt)
     valueiter = iter(values)
     r = []
@@ -407,5 +457,7 @@ def format(fmt, values, valuedict=None):
         if valuedict is None:
             raise TypeError('not all arguments converted '
                             'during string formatting')
+    if do_unicode:
+        return u''.join(r)
     return ''.join(r)
 
