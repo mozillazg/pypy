@@ -193,32 +193,25 @@ class __extend__(SomeTuple):
         return immutablevalue(len(tup.items))
 
     def iter(tup):
-        return SomeIterator(tup)
-
-    def getanyitem(tup):
-        return unionof(*tup.items)
+        return SomeIterator(unionof(*tup.items))
 
 
 class __extend__(SomeList):
 
     def method_append(lst, s_value):
-        lst.listdef.resize()
         pair(lst, SomeInteger()).setitem(s_value)
 
     def method_extend(lst, s_iterable):
-        lst.listdef.resize()
         s_iter = s_iterable.iter()
         pair(lst, SomeInteger()).setitem(s_iter.next())
 
     def method_reverse(lst):
-        lst.listdef.mutate()
+        pass
 
     def method_insert(lst, s_index, s_value):
-        lst.listdef.resize()
         pair(lst, SomeInteger()).setitem(s_value)
         
     def method_pop(lst, s_index=None):
-        lst.listdef.resize()
         return lst.listdef.read_item()
 
     def method_index(lst, el):
@@ -233,10 +226,7 @@ class __extend__(SomeList):
         return SomeObject.len(lst)
 
     def iter(lst):
-        return SomeIterator(lst)
-
-    def getanyitem(lst):
-        return lst.listdef.read_item()
+        return SomeIterator(lst.listdef.read_item())
 
 class __extend__(SomeDict):
 
@@ -250,10 +240,7 @@ class __extend__(SomeDict):
         return SomeObject.len(dct)
     
     def iter(dct):
-        return SomeIterator(dct)
-
-    def getanyitem(dct):
-        return dct.dictdef.read_key()
+        return SomeIterator(dct.dictdef.read_key())
 
     def method_get(dct, key, dfl):
         return unionof(dct.dictdef.read_value(), dfl)
@@ -288,10 +275,7 @@ class __extend__(SomeString):
         return SomeString()
 
     def iter(str):
-        return SomeIterator(str)
-
-    def getanyitem(str):
-        return SomeChar()
+        return SomeIterator(SomeChar())
 
     def ord(str):
         return SomeInteger(nonneg=True)
@@ -313,11 +297,8 @@ class __extend__(SomeUnicodeCodePoint):
 
 class __extend__(SomeIterator):
 
-    def iter(itr):
-        return itr
-
     def next(itr):
-        return itr.s_container.getanyitem()
+        return itr.s_item
 
 
 class __extend__(SomeInstance):
@@ -475,6 +456,3 @@ class __extend__(SomePtr):
         llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
         v = p.ll_ptrtype._example()(*llargs)
         return ll_to_annotation(v)
-
-    def is_true(p):
-        return SomeBool()

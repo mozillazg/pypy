@@ -18,71 +18,34 @@ import pypy.rpython.rarithmetic
 def immutablevalue(x):
     return getbookkeeper().immutablevalue(x)
 
-def constpropagate(func, args_s, s_result):
-    """Returns s_result unless all args are constants, in which case the
-    func() is called and a constant result is returned (it must be contained
-    in s_result).
-    """
-    args = []
-    for s in args_s:
-        if not s.is_constant():
-            return s_result
-        args.append(s.const)
-    realresult = func(*args)
-    s_realresult = immutablevalue(realresult)
-    if not s_result.contains(s_realresult):
-        raise Exception("%s%r returned %r, which is not contained in %s" % (
-            func, args, realresult, s_result))
-    return s_realresult
-
-# ____________________________________________________________
-
 def builtin_range(*args):
-    s_step = immutablevalue(1)
-    if len(args) == 1:
-        s_start = immutablevalue(0)
-        s_stop = args[0]
-    elif len(args) == 2:
-        s_start, s_stop = args
-    elif len(args) == 3:
-        s_start, s_stop = args[:2]
-        s_step = args[2]
-    else:
-        raise Exception, "range() takes 1 to 3 arguments"
-    if not s_step.is_constant():
-        raise Exception, "range() step argument should be a constant"
-    step = s_step.const
-    if step == 0:
-        raise Exception, "range() with step zero"
-    elif step > 0:
-        nonneg = s_start.nonneg
-    else:
-        nonneg = s_stop.nonneg or (s_stop.is_constant() and s_stop.const >= -1)
-    return getbookkeeper().newlist(SomeInteger(nonneg=nonneg), range_step=step)
+    return getbookkeeper().newlist(SomeInteger())  # XXX nonneg=...
 
 builtin_xrange = builtin_range # xxx for now allow it
 
 def builtin_bool(s_obj):
-    return constpropagate(bool, [s_obj], SomeBool())
+    r = SomeBool()
+    if s_obj.is_constant():
+        r.const = bool(s_obj.const)
+    return r
 
 def builtin_int(s_obj):
-    return constpropagate(int, [s_obj], SomeInteger())
+    return SomeInteger()
 
 def restricted_uint(s_obj):    # for r_uint
-    return constpropagate(pypy.rpython.rarithmetic.r_uint, [s_obj],
-                          SomeInteger(nonneg=True, unsigned=True))
+    return SomeInteger(nonneg=True, unsigned=True)
 
 def builtin_float(s_obj):
-    return constpropagate(float, [s_obj], SomeFloat())
+    return SomeFloat()
 
 def builtin_long(s_obj):
-    return SomeObject()   # XXX go away
+    return SomeObject()
 
 def builtin_chr(s_int):
-    return constpropagate(chr, [s_int], SomeChar())
+    return SomeChar()
 
 def builtin_unichr(s_int):
-    return constpropagate(unichr, [s_int], SomeUnicodeCodePoint())
+    return SomeUnicodeCodePoint()
 
 def builtin_unicode(s_obj):
     raise TypeError, "unicode() calls should not happen at interp-level"
@@ -316,23 +279,8 @@ def typeOf(s_val):
     lltype = annotation_to_lltype(s_val, info="in typeOf(): ")
     return immutablevalue(lltype)
 
-def nullptr(T):
-    assert T.is_constant()
-    p = lltype.nullptr(T.const)
-    r = SomePtr(lltype.typeOf(p))
-    r.const = p
-    return r
-
-def nullgcptr(T):
-    assert T.is_constant()
-    p = lltype.nullgcptr(T.const)
-    r = SomePtr(lltype.typeOf(p))
-    r.const = p
-    return r
-
 BUILTIN_ANALYZERS[lltype.malloc] = malloc
 BUILTIN_ANALYZERS[lltype.cast_flags] = cast_flags
 BUILTIN_ANALYZERS[lltype.cast_parent] = cast_parent
 BUILTIN_ANALYZERS[lltype.typeOf] = typeOf
-BUILTIN_ANALYZERS[lltype.nullptr] = nullptr
-BUILTIN_ANALYZERS[lltype.nullgcptr] = nullgcptr
+

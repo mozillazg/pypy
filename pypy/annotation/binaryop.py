@@ -23,7 +23,7 @@ BINARY_OPERATIONS = set(['add', 'sub', 'mul', 'div', 'mod',
                          'truediv', 'floordiv', 'divmod', 'pow',
                          'and_', 'or_', 'xor',
                          'lshift', 'rshift',
-                         'getitem', 'setitem', 'delitem',
+                         'getitem', 'setitem',
                          'inplace_add', 'inplace_sub', 'inplace_mul',
                          'inplace_truediv', 'inplace_floordiv', 'inplace_div',
                          'inplace_mod', 'inplace_pow',
@@ -282,13 +282,11 @@ class __extend__(pairtype(SomeList, SomeList)):
 class __extend__(pairtype(SomeList, SomeObject)):
 
     def inplace_add((lst1, obj2)):
-        lst1.listdef.resize()
         s_iter = obj2.iter()
         pair(lst1, SomeInteger()).setitem(s_iter.next())
         return lst1
 
     def inplace_mul((lst1, obj2)):
-        lst1.listdef.resize()
         return lst1
 
 
@@ -320,9 +318,6 @@ class __extend__(pairtype(SomeDict, SomeObject)):
         dic1.dictdef.generalize_key(obj2)
         dic1.dictdef.generalize_value(s_value)
 
-    def delitem((dic1, obj1)):
-        pass
-
 
 class __extend__(pairtype(SomeSlice, SomeSlice)):
 
@@ -347,30 +342,20 @@ class __extend__(pairtype(SomeTuple, SomeInteger)):
 class __extend__(pairtype(SomeList, SomeInteger)):
     
     def mul((lst1, int2)):
-        return getbookkeeper().newlist(lst1.listdef.read_item())
+        return lst1
 
     def getitem((lst1, int2)):
         return lst1.listdef.read_item()
 
     def setitem((lst1, int2), s_value):
-        lst1.listdef.mutate()
         lst1.listdef.generalize(s_value)
 
-    def delitem((lst1, int2)):
-        lst1.listdef.resize()
 
 class __extend__(pairtype(SomeList, SomeSlice)):
 
     def getitem((lst, slic)):
-        return getbookkeeper().newlist(lst.listdef.read_item())
+        return lst
 
-    def setitem((lst, slic), s_iterable):
-        lst.listdef.resize()
-        s_iter = s_iterable.iter()
-        pair(lst, SomeInteger()).setitem(s_iter.next())
-
-    def delitem((lst1, slic)):
-        lst1.listdef.resize()
 
 class __extend__(pairtype(SomeString, SomeSlice)):
 
@@ -393,7 +378,7 @@ class __extend__(pairtype(SomeInteger, SomeString)):
 class __extend__(pairtype(SomeInteger, SomeList)):
     
     def mul((int1, lst2)):
-        return getbookkeeper().newlist(lst2.listdef.read_item())
+        return lst2
 
 
 class __extend__(pairtype(SomeInstance, SomeInstance)):
@@ -408,7 +393,7 @@ class __extend__(pairtype(SomeInstance, SomeInstance)):
 class __extend__(pairtype(SomeIterator, SomeIterator)):
 
     def union((iter1, iter2)):
-        return SomeIterator(unionof(iter1.s_container, iter2.s_container))
+        return SomeIterator(unionof(iter1.s_item, iter2.s_item))
 
 
 class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):

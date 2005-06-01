@@ -46,10 +46,6 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
         return _rtype_template(hop, 'div')
     rtype_inplace_div = rtype_div
 
-    def rtype_floordiv(_, hop):
-        return _rtype_template(hop, 'floordiv')
-    rtype_inplace_floordiv = rtype_floordiv
-
     def rtype_mod(_, hop):
         return _rtype_template(hop, 'mod')
     rtype_inplace_mod = rtype_mod
@@ -158,6 +154,8 @@ class __extend__(SomeInteger):
             vlist = hop.inputargs(Signed)
             return hop.genop('int_is_true', vlist, resulttype=Bool)
 
+    rtype_nonzero = rtype_is_true
+
     #Unary arithmetic operations    
     
     def rtype_abs(_, hop):
@@ -197,16 +195,6 @@ class __extend__(SomeInteger):
             vlist = hop.inputargs(Unsigned)
         else:
             vlist = hop.inputargs(Signed)
-        return vlist[0]
-
-    def rtype_int(s_int, hop):
-        if s_int.unsigned:
-            raise TyperError("use intmask() instead of int(r_uint(...))")
-        vlist = hop.inputargs(Signed)
-        return vlist[0]
-
-    def rtype_float(_, hop):
-        vlist = hop.inputargs(Float)
         return vlist[0]
 
 #

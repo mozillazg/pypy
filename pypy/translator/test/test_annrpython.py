@@ -731,12 +731,6 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.harmonic, [int])
         assert s.knowntype == float
-        # check that the list produced by range() is not mutated or resized
-        for s_value in a.bindings.values():
-            if isinstance(s_value, annmodel.SomeList):
-                assert not s_value.listdef.listitem.resized
-                assert not s_value.listdef.listitem.mutated
-                assert s_value.listdef.listitem.range_step
 
     def test_bool(self):
         def f(a,b):
@@ -1053,40 +1047,6 @@ class TestAnnotateTestCase:
         # result should be an integer
         assert s.knowntype == int
 
-    def test_prime(self):
-        a = self.RPythonAnnotator()
-        s = a.build_types(snippet.prime, [int])
-        assert s == annmodel.SomeBool()
-
-    def test_and_is_true_coalesce(self):
-        def f(a,b,c,d,e):
-            x = a and b
-            if x:
-                return d,c
-            return e,c
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [int, str, a.bookkeeper.immutablevalue(1.0), a.bookkeeper.immutablevalue('d'), a.bookkeeper.immutablevalue('e')])
-        assert s == annmodel.SomeTuple([annmodel.SomeChar(), a.bookkeeper.immutablevalue(1.0)])
-        assert not [b for b in a.bindings.itervalues() if b.__class__ == annmodel.SomeObject]
-
-    def test_is_true_coalesce2(self):
-        def f(a,b,a1,b1,c,d,e):
-            x = (a or  b) and (a1 or b1)
-            if x:
-                return d,c
-            return e,c
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [int, str, float, list,  a.bookkeeper.immutablevalue(1.0), a.bookkeeper.immutablevalue('d'), a.bookkeeper.immutablevalue('e')])
-        assert s == annmodel.SomeTuple([annmodel.SomeChar(), a.bookkeeper.immutablevalue(1.0)])
-        assert not [b for b in a.bindings.itervalues() if b.__class__ == annmodel.SomeObject]
-
-    def test_is_true_coalesce_sanity(self):
-        def f(a):
-            while a:
-                pass
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [int])
-        assert s == a.bookkeeper.immutablevalue(None)
 
 def g(n):
     return [0,1,2,n]

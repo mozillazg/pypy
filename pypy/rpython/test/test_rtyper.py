@@ -1,4 +1,3 @@
-from pypy.annotation import model as annmodel
 from pypy.translator.translator import Translator
 from pypy.rpython.lltype import *
 from pypy.rpython.rtyper import RPythonTyper

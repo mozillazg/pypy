@@ -1,4 +1,3 @@
-import sys
 from pypy.annotation.pairtype import pair
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
@@ -26,8 +25,6 @@ class RPythonTyper:
     def __init__(self, annotator):
         self.annotator = annotator
         self.specialized_ll_functions = {}
-        self.rclassdefs = {}
-        self.typererror = None
 
     def specialize(self):
         """Main entry point: specialize all annotated blocks of the program."""
@@ -41,11 +38,6 @@ class RPythonTyper:
                 already_seen[block] = True
             pending = [block for block in self.annotator.annotated
                              if block not in already_seen]
-        if self.typererror:
-            exc, value, tb = self.typererror
-            self.typererror = None
-            #self.annotator.translator.view()
-            raise exc, value, tb
 
     def setconcretetype(self, v):
         assert isinstance(v, Variable)
@@ -68,7 +60,8 @@ class RPythonTyper:
                 hop = HighLevelOp(self, op, newops)
                 self.translate_hl_to_ll(hop, varmapping)
             except TyperError, e:
-                self.gottypererror(e, block, op, newops)
+                e.where = (block, op)
+                raise
 
         block.operations[:] = newops
         # multiple renamings (v1->v2->v3->...) are possible
@@ -87,42 +80,40 @@ class RPythonTyper:
         # insert the needed conversions on the links
         can_insert_here = block.exitswitch is None and len(block.exits) == 1
         for link in block.exits:
-            for a in [link.last_exception, link.last_exc_value]:
-                if isinstance(a, Variable):
-                    self.setconcretetype(a)
-            for i in range(len(link.args)):
-                a1 = link.args[i]
-                a2 = link.target.inputargs[i]
-                s_a2 = self.annotator.binding(a2)
-                if isinstance(a1, Constant):
-                    link.args[i] = inputconst(s_a2.lowleveltype(), a1.value)
-                    continue   # the Constant was typed, done
-                s_a1 = self.annotator.binding(a1)
-                if s_a1 == s_a2:
-                    continue   # no conversion needed
-                newops = LowLevelOpList(self)
-                try:
+            try:
+                for i in range(len(link.args)):
+                    a1 = link.args[i]
+                    ##if a1 in (link.last_exception, link.last_exc_value):# treated specially in gen_link
+                    ##    continue
+                    a2 = link.target.inputargs[i]
+                    s_a2 = self.annotator.binding(a2)
+                    if isinstance(a1, Constant):
+                        link.args[i] = inputconst(s_a2.lowleveltype(), a1.value)
+                        continue   # the Constant was typed, done
+                    s_a1 = self.annotator.binding(a1)
+                    if s_a1 == s_a2:
+                        continue   # no conversion needed
+                    newops = LowLevelOpList(self)
                     a1 = newops.convertvar(a1, s_a1, s_a2)
-                except TyperError, e:
-                    self.gottypererror(e, block, link, newops)
-
-                if newops and not can_insert_here:
-                    # cannot insert conversion operations around a single
-                    # link, unless it is the only exit of this block.
-                    # create a new block along the link...
-                    newblock = insert_empty_block(self.annotator.translator,
-                                                  link)
-                    # ...and do the conversions there.
-                    self.insert_link_conversions(newblock)
-                    break   # done with this link
-                else:
-                    block.operations.extend(newops)
-                    link.args[i] = a1
+                    if newops and not can_insert_here:
+                        # cannot insert conversion operations around a single
+                        # link, unless it is the only exit of this block.
+                        # create a new block along the link...
+                        newblock = insert_empty_block(self.annotator.translator,
+                                                      link)
+                        # ...and do the conversions there.
+                        self.insert_link_conversions(newblock)
+                        break   # done with this link
+                    else:
+                        block.operations.extend(newops)
+                        link.args[i] = a1
+            except TyperError, e:
+                e.where = (block, link)
+                raise
 
     def translate_hl_to_ll(self, hop, varmapping):
         op = hop.spaceop
-        translate_meth = getattr(self, 'translate_op_'+op.opname,
-                                 self.missing_operation)
+        translate_meth = getattr(self, 'translate_op_'+op.opname)
         resultvar = translate_meth(hop)
         if resultvar is None:
             # no return value
@@ -155,16 +146,6 @@ class RPythonTyper:
                     resultvar.value, hop.s_result.const))
             op.result.concretetype = hop.s_result.lowleveltype()
 
-    def gottypererror(self, e, block, position, llops):
-        """Record a TyperError without crashing immediately.
-        Put a 'TyperError' operation in the graph instead.
-        """
-        e.where = (block, position)
-        if self.typererror is None:
-            self.typererror = sys.exc_info()
-        c1 = inputconst(Void, Exception.__str__(e))
-        llops.genop('TYPER ERROR', [c1], resulttype=Void)
-
     # __________ regular operations __________
 
     def _registeroperations(loc):
@@ -191,9 +172,6 @@ def translate_op_%s(self, hop):
 
     def translate_op_newlist(self, hop):
         return rlist.rtype_newlist(hop)
-
-    def missing_operation(self, hop):
-        raise TyperError("unimplemented operation: '%s'" % hop.spaceop.opname)
 
     # __________ utilities __________
 
@@ -363,4 +341,4 @@ class LowLevelOpList(list):
 # _______________________________________________________________________
 # this has the side-effect of registering the unary and binary operations
 from pypy.rpython import robject, rlist, rptr, rbuiltin, rint, rbool, rfloat
-from pypy.rpython import rpbc, rstr, riter
+from pypy.rpython import rpbc

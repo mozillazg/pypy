@@ -225,10 +225,10 @@ class SomeDict(SomeObject):
 
 
 class SomeIterator(SomeObject):
-    "Stands for an iterator returning objects from a given container."
+    "Stands for an iterator returning objects of a known type."
     knowntype = type(iter([]))  # arbitrarily chose seqiter as the type
-    def __init__(self, s_container):
-        self.s_container = s_container
+    def __init__(self, s_item=SomeObject()):
+        self.s_item = s_item
 
 
 class SomeInstance(SomeObject):
@@ -324,12 +324,12 @@ class SomePtr(SomeObject):
 from pypy.rpython import lltype
 
 annotation_to_ll_map = [
-    (SomePBC({None: True}), lltype.Void),   # also matches SomeImpossibleValue()
     (SomeBool(), lltype.Bool),
     (SomeInteger(), lltype.Signed),
     (SomeInteger(nonneg=True, unsigned=True), lltype.Unsigned),    
     (SomeFloat(), lltype.Float),
     (SomeChar(), lltype.Char),
+    (SomePBC({None: True}), lltype.Void),
 ]
 
 def annotation_to_lltype(s_val, info=None):
@@ -415,16 +415,9 @@ def commonbase(cls1, cls2):   # XXX single inheritance only  XXX hum
 
 def missing_operation(cls, name):
     def default_op(*args):
-        if args and isinstance(args[0], tuple):
-            flattened = tuple(args[0]) + args[1:]
-        else:
-            flattened = args
-        for arg in flattened:
-            if arg.__class__ == SomeObject and arg.knowntype == object:
-                return  SomeObject()
-        bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
-        bookkeeper.warning("no precise annotation supplied for %s%r" % (name, args))
-        return SomeImpossibleValue()
+        #print '* warning, no type available for %s(%s)' % (
+        #    name, ', '.join([repr(a) for a in args]))
+        return SomeObject()
     setattr(cls, name, default_op)
 
 # this has the side-effect of registering the unary and binary operations

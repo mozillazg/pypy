@@ -2,25 +2,6 @@ import weakref
 import py
 from pypy.rpython.rarithmetic import r_uint
 from pypy.tool.uid import Hashable
-from pypy.tool.tls import tlsobject
-
-TLS = tlsobject()
-
-def saferecursive(func, defl):
-    def safe(*args):
-        try:
-            seeing = TLS.seeing
-        except AttributeError:
-            seeing = TLS.seeing = {}
-        seeingkey = tuple([func] + [id(arg) for arg in args])
-        if seeingkey in seeing:
-            return defl
-        seeing[seeingkey] = True
-        try:
-            return func(*args)
-        finally:
-            del seeing[seeingkey]
-    return safe
 
 class frozendict(dict):
 
@@ -28,14 +9,11 @@ class frozendict(dict):
         items = self.items()
         items.sort()
         return hash(tuple(items))
-    __hash__ = saferecursive(__hash__, 0)
 
 
 class LowLevelType(object):
     def __eq__(self, other):
         return self.__class__ is other.__class__ and self.__dict__ == other.__dict__
-    __eq__ = saferecursive(__eq__, True)
-
     def __ne__(self, other):
         return not (self == other)
 
@@ -43,7 +21,6 @@ class LowLevelType(object):
         items = self.__dict__.items()
         items.sort()
         return hash((self.__class__,) + tuple(items))
-    __hash__ = saferecursive(__hash__, 0)
 
     def __repr__(self):
         return '<%s>' % (self,)
@@ -114,7 +91,6 @@ class Struct(ContainerType):
     def _str_fields(self):
         return ', '.join(['%s: %s' % (name, self._flds[name])
                           for name in self._names])
-    _str_fields = saferecursive(_str_fields, '...')
 
     def __str__(self):
         return "%s %s { %s }" % (self.__class__.__name__,
@@ -184,21 +160,13 @@ PyObject = PyObjectType()
 
 class ForwardReference(ContainerType):
     def become(self, realcontainertype):
-        if not isinstance(realcontainertype, ContainerType):
-            raise TypeError("ForwardReference can only be to a container, "
-                            "not %r" % (realcontainertype,))
-        self.__class__ = realcontainertype.__class__
-        self.__dict__ = realcontainertype.__dict__
-
-class GcForwardReference(ForwardReference):
-    def become(self, realcontainertype):
         if not isinstance(realcontainertype, GC_CONTAINER):
-            raise TypeError("GcForwardReference can only be to GcStruct or "
+            raise TypeError("ForwardReference can only be to GcStruct or "
                             "GcArray, not %r" % (realcontainertype,))
         self.__class__ = realcontainertype.__class__
         self.__dict__ = realcontainertype.__dict__
 
-GC_CONTAINER = (GcStruct, GcArray, PyObjectType, GcForwardReference)
+GC_CONTAINER = (GcStruct, GcArray, PyObjectType, ForwardReference)
 
 
 class Primitive(LowLevelType):
@@ -247,11 +215,8 @@ class _PtrType(LowLevelType):
             result.append(flag)
         return ', '.join(result)
 
-    def _str_flavor(self):
-        return 'ptr(%s)' % self._str_flags()
-
     def __str__(self):
-        return '%s to %s' % (self._str_flavor(), self.TO)
+        return 'ptr(%s) to %s' % (self._str_flags(), self.TO)
 
     def _defl(self, parent=None, parentindex=None):
         return _ptr(self, None)
@@ -463,7 +428,7 @@ class _ptr(object):
         return '<%s>' % (self,)
 
     def __str__(self):
-        return '%s to %s' % (self._TYPE._str_flavor(), self._obj)
+        return '%s to %s' % (self._TYPE.__class__.__name__.lower(), self._obj)
 
     def __call__(self, *args):
         if isinstance(self._T, FuncType):
@@ -605,18 +570,14 @@ class _pyobject(Hashable):
         return "pyobject %s" % (super(_pyobject, self).__str__(),)
 
 
-def malloc(T, n=None, immortal=False):
+def malloc(T, n=None):
     if isinstance(T, Struct):
         o = _struct(T, n)
     elif isinstance(T, Array):
         o = _array(T, n)
     else:
         raise TypeError, "malloc for Structs and Arrays only"
-    if immortal:
-        T = NonGcPtr(T)
-    else:
-        T = GcPtr(T)
-    return _ptr(T, o)
+    return _ptr(GcPtr(T), o)
 
 def functionptr(TYPE, name, **attrs):
     if not isinstance(TYPE, FuncType):
@@ -624,16 +585,7 @@ def functionptr(TYPE, name, **attrs):
     o = _func(TYPE, _name=name, **attrs)
     return _ptr(NonGcPtr(TYPE), o)
 
-def nullptr(T):
-    return _ptr(NonGcPtr(T), None)
-
-def nullgcptr(T):
-    return _ptr(GcPtr(T), None)
-
-def pyobjectptr(obj):
+def pyobjectptr(obj, **flags):
+    T = _PtrType(PyObject, **flags)
     o = _pyobject(obj)
-    return _ptr(NonGcPtr(PyObject), o)
-
-def pyobjectgcptr(obj):
-    o = _pyobject(obj)
-    return _ptr(GcPtr(PyObject), o)
+    return _ptr(T, o)
