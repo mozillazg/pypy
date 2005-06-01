@@ -112,15 +112,11 @@ def test_varsizestruct():
     py.test.raises(TypeError, "Struct('invalid', ('x', S1))")
 
 def test_substructure_ptr():
-    S3 = Struct("s3", ('a', Signed))
-    S2 = Struct("s2", ('s3', S3))
+    S2 = Struct("s2", ('a', Signed))
     S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2))
     p1 = malloc(S1)
     assert typeOf(p1.sub1) == _TmpPtr(S2)
     assert typeOf(p1.sub2) == _TmpPtr(S2)
-    assert typeOf(p1.sub1.s3) == _TmpPtr(S3)
-    p2 = cast_flags(NonGcPtr(S2), p1.sub1)
-    assert typeOf(p2.s3) == _TmpPtr(S3)
 
 def test_gc_substructure_ptr():
     S1 = GcStruct("s2", ('a', Signed))
@@ -256,15 +252,8 @@ def test_inconsistent_gc_containers():
     py.test.raises(TypeError, "GcStruct('a', ('x', A))")
 
 def test_forward_reference():
-    F = GcForwardReference()
+    F = ForwardReference()
     S = GcStruct('abc', ('x', GcPtr(F)))
     F.become(S)
     assert S.x == GcPtr(S)
-    py.test.raises(TypeError, "GcForwardReference().become(Struct('abc'))")
-    ForwardReference().become(Struct('abc'))
-    hash(S)
-
-def test_nullptr():
-    S = Struct('s')
-    p0 = nullptr(S)
-    assert not p0
+    py.test.raises(TypeError, "ForwardReference().become(Struct('abc'))")
