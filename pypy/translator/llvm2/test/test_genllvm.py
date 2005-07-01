@@ -77,6 +77,22 @@ def test_uint_ops():
     assert f(1) == 1
     assert f(2) == 2
 
+def test_float_ops():
+    def ops(flt):
+        x = 0
+        x += flt < flt
+        x += flt <= flt
+        x += flt == flt
+        x += flt != flt
+        x += flt >= flt
+        x += flt > flt
+        #x += flt fs not None
+        #x += flt is None
+        return flt + 1 * flt / flt - 1
+    f = compile_function(ops, [float])
+    assert f(1) == 1
+    assert f(2) == 2
+
 
 def test_function_call():
     def callee():
@@ -112,7 +128,7 @@ def test_nested_tuple():
     f = compile_function(nested_tuple, [int])
     assert f(4) == 4 
 
-def test_string_getitem():
+def DONOTtest_string_getitem():
     def string_test(i): 
         l = "Hello, World"
         return l[i]

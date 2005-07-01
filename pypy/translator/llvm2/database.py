@@ -8,7 +8,8 @@ log = log.database
 
 PRIMITIVES_TO_LLVM = {lltype.Signed: "int",
                       lltype.Unsigned: "uint",
-                      lltype.Bool: "bool"}
+                      lltype.Bool: "bool",
+                      lltype.Float: "double" }
 
 class Database(object): 
     def __init__(self, translator): 

@@ -4,7 +4,9 @@ log = log.pyrex
 
 PRIMITIVES_TO_C = {lltype.Signed: "int",
                    lltype.Unsigned: "unsigned int",
-                   lltype.Bool: "char"}
+                   lltype.Bool: "char",
+                   lltype.Float: "double",
+                   }
 
 def write_pyx_wrapper(funcgen, targetpath): 
     def c_declaration():
