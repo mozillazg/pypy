@@ -86,9 +86,16 @@ def test_tuple_getitem():
     f = compile_function(tuple_getitem, [int])
     assert f(1) == 2 
 
-def test_nested_tuple(): 
+def test_nested_tuple():
     def nested_tuple(i): 
         l = (1,(1,2,i),i)
         return l[1][2]
     f = compile_function(nested_tuple, [int])
     assert f(4) == 4 
+
+def test_string_getitem():
+    def string_test(i): 
+        l = "Hello, World"
+        return l[i]
+    f = compile_function(string_test, [int])
+    assert f(0) == ord("H")
