@@ -11,6 +11,9 @@ class CodeWriter(object):
         self._lines.append(line) 
         log(line) 
 
+    def comment(self, line):
+        self.append(";; " + line) 
+
     def indent(self, line): 
         self.append("        " + line) 
 
@@ -19,6 +22,9 @@ class CodeWriter(object):
 
     def structdef(self, name, typereprs):
         self.append("%s = type { %s }" %(name, ", ".join(typereprs)))
+
+    def arraydef(self, name, typerepr):
+        self.append("%s = type { int, [0 x %s] }" % (name, typerepr))
 
     def declare(self, decl):
         self.append("declare %s" %(decl,))
@@ -64,12 +70,17 @@ class CodeWriter(object):
         self.indent("%(targetvar)s = cast %(fromtype)s "
                         "%(fromvar)s to %(targettype)s" % locals())
 
-    def malloc(self, targetvar, type):
-        self.indent("%(targetvar)s = malloc %(type)s" % locals())
+    def malloc(self, targetvar, type, sizetype=None, size=None):
+        if size is None:
+            assert sizetype is None
+            self.indent("%(targetvar)s = malloc %(type)s" % locals())
+        else:
+            self.indent("%(targetvar)s = malloc %(type)s, %(sizetype)s %(size)s" % locals())
 
-    def getelementptr(self, targetvar, type, typevar, index):
-        self.indent("%(targetvar)s = getelementptr "
-                    "%(type)s %(typevar)s, int 0, uint %(index)s" % locals())
+    def getelementptr(self, targetvar, type, typevar, *indices):
+        res = "%(targetvar)s = getelementptr %(type)s %(typevar)s, int 0, " % locals()
+        res += ", ".join(["%s %s" % (t, i) for t, i in indices])
+        self.indent(res)
 
     def load(self, targetvar, targettype, ptr):
         self.indent("%(targetvar)s = load %(targettype)s* %(ptr)s" % locals())

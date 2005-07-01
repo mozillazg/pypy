@@ -6,6 +6,7 @@ PRIMITIVES_TO_C = {lltype.Signed: "int",
                    lltype.Unsigned: "unsigned int",
                    lltype.Bool: "char",
                    lltype.Float: "double",
+                   lltype.Char: "char",
                    }
 
 def write_pyx_wrapper(funcgen, targetpath): 

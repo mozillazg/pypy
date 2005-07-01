@@ -168,7 +168,31 @@ def test_nested_tuple():
         l = (1,(1,2,i),i)
         return l[1][2]
     f = compile_function(nested_tuple, [int])
-    assert f(4) == 4 
+    assert f(4) == 4
+
+def test_pbc_fns(): 
+    def f2(x):
+         return x+1
+    def f3(x):
+         return x+2
+    def g(y):
+        if y < 0:
+            f = f2
+        else:
+            f = f3
+        return f(y+3)
+    f = compile_function(g, [int])
+    assert f(-1) == 3
+    assert f(0) == 5
+
+def DONOT_test_simple_chars():
+     def char_constant2(s):
+         s = s + s + s
+         return len(s + '.')
+     def char_constant():
+         return char_constant2("kk")    
+     f = compile_function(char_constant, [])
+     assert f() == 7
 
 def DONOTtest_string_getitem():
     def string_test(i): 
@@ -192,4 +216,3 @@ def DONOTtest_exception():
         except TestException:
             return 0
     f = compile_function(catch, [int])
-    

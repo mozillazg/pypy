@@ -6,6 +6,24 @@ from pypy.translator.llvm2.cfgtransform import prepare_graph
 from pypy.translator.llvm2.log import log 
 log = log.funcnode
 
+class FuncSig(object):
+    """ XXX Not sure about this - should be combined with FuncNode?
+    Abstract function signature. """
+    def __init__(self, db, typ):
+        self.db = db
+        self.typ = typ
+        # Hack around some debug statements
+        self.ref = "pending setup!"
+        
+    def __str__(self):
+        return "<FuncSig %r>" % self.ref
+
+    def setup(self):
+        returntype = self.db.repr_arg_type(self.typ.RESULT)
+        inputargtypes = self.db.repr_arg_type_multi(self.typ.ARGS)
+        self.ref = "%s (%s)" % (returntype, ", ".join(inputargtypes))
+
+
 class FuncNode(object):
     _issetup = False 
 
@@ -14,7 +32,6 @@ class FuncNode(object):
         self.ref = "%" + const_ptr_func.value._obj._name
         self.graph = prepare_graph(const_ptr_func.value._obj.graph,
                                    db._translator)
-
     def __str__(self):
         return "<FuncNode %r>" %(self.ref,)
     
@@ -30,19 +47,6 @@ class FuncNode(object):
                     self.db.prepare_arg(op.result)
         traverse(visit, self.graph)
         self._issetup = True
-
-    def getdecl(self):
-        assert self._issetup 
-        startblock = self.graph.startblock
-        returnblock = self.graph.returnblock
-        inputargs = self.db.repr_arg_multi(startblock.inputargs)
-        inputargtypes = self.db.repr_arg_type_multi(startblock.inputargs)
-        returntype = self.db.repr_arg_type(self.graph.returnblock.inputargs[0])
-        result = "%s %s" % (returntype, self.ref)
-        args = ["%s %s" % item for item in zip(inputargtypes, inputargs)]
-        result += "(%s)" % ", ".join(args)
-        return result 
-
     # ______________________________________________________________________
     # main entry points from genllvm 
     def writedecl(self, codewriter): 
@@ -71,6 +75,18 @@ class FuncNode(object):
 
     # ______________________________________________________________________
     # writing helpers for entry points
+
+    def getdecl(self):
+        assert self._issetup 
+        startblock = self.graph.startblock
+        returnblock = self.graph.returnblock
+        inputargs = self.db.repr_arg_multi(startblock.inputargs)
+        inputargtypes = self.db.repr_arg_type_multi(startblock.inputargs)
+        returntype = self.db.repr_arg_type(self.graph.returnblock.inputargs[0])
+        result = "%s %s" % (returntype, self.ref)
+        args = ["%s %s" % item for item in zip(inputargtypes, inputargs)]
+        result += "(%s)" % ", ".join(args)
+        return result 
 
     def write_block(self, codewriter, block):
         self.write_block_phi_nodes(codewriter, block)
@@ -101,7 +117,6 @@ class FuncNode(object):
         opwriter = OpWriter(self.db, codewriter)
         for op in block.operations:
             opwriter.write_operation(op)
-
     def write_startblock(self, codewriter, block):
         self.write_block_operations(codewriter, block)
         self.write_block_branches(codewriter, block)
@@ -218,17 +233,36 @@ class OpWriter(object):
         type = self.db.obj2node[arg.value].ref
         self.codewriter.malloc(targetvar, type) 
 
+    def malloc_varsize(self, op):
+        targetvar = self.db.repr_arg(op.result)
+        arg_type = op.args[0]
+        assert (isinstance(arg_type, Constant) and 
+                isinstance(arg_type.value, lltype.Struct))
+        struct_type = self.db.obj2node[arg_type.value].ref
+        struct_cons = self.db.obj2node[arg_type.value].new_var_name
+        argrefs = self.db.repr_arg_multi(op.args[1:])
+        argtypes = self.db.repr_arg_type_multi(op.args[1:])
+        self.codewriter.call(targetvar, struct_type + " *",
+                             struct_cons, argrefs, argtypes)
+
     def getfield(self, op): 
         tmpvar = self.db.repr_tmpvar()
-        type = self.db.repr_arg_type(op.args[0]) 
-        typevar = self.db.repr_arg(op.args[0]) 
+        typ = self.db.repr_arg_type(op.args[0]) 
+        typevar = self.db.repr_arg(op.args[0])
         fieldnames = list(op.args[0].concretetype.TO._names)
         index = fieldnames.index(op.args[1].value)
-        self.codewriter.getelementptr(tmpvar, type, typevar, index)
-
+        self.codewriter.getelementptr(tmpvar, typ, typevar, ("uint", index))
+        
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
-        self.codewriter.load(targetvar, targettype, tmpvar)
+        #XXX This doesnt work - yet
+        #if isinstance(op.result.concretetype, lltype.Ptr):        
+        #    self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
+        #else:
+            # Moving to correct result variable
+            #self.codewriter.load(targetvar, targettype, tmpvar)
+        self.codewriter.load(targetvar, targettype, tmpvar)    
+    getsubstruct = getfield
 
     def setfield(self, op): 
         tmpvar = self.db.repr_tmpvar()
@@ -236,8 +270,51 @@ class OpWriter(object):
         typevar = self.db.repr_arg(op.args[0]) 
         fieldnames = list(op.args[0].concretetype.TO._names)
         index = fieldnames.index(op.args[1].value)
-        self.codewriter.getelementptr(tmpvar, type, typevar, index)
+        self.codewriter.getelementptr(tmpvar, type, typevar, ("uint", index))
 
         valuevar = self.db.repr_arg(op.args[2]) 
         valuetype = self.db.repr_arg_type(op.args[2])
         self.codewriter.store(valuetype, valuevar, tmpvar) 
+
+    def getarrayitem(self, op):
+        var = self.db.repr_arg(op.args[0])
+        vartype = self.db.repr_arg_type(op.args[0])
+        index = self.db.repr_arg(op.args[1])
+        indextype = self.db.repr_arg_type(op.args[1])
+
+        tmpvar = self.db.repr_tmpvar()
+        self.codewriter.getelementptr(tmpvar, vartype, var,
+                                      ("uint", 1), (indextype, index))
+
+        targetvar = self.db.repr_arg(op.result)
+        targettype = self.db.repr_arg_type(op.result)
+
+        # Ditto see getfield
+        if not isinstance(op.result.concretetype, lltype.Ptr):        
+            self.codewriter.load(targetvar, targettype, tmpvar)
+        else:
+            # XXX noop
+            self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
+
+    def setarrayitem(self, op):
+        array = self.db.repr_arg(op.args[0])
+        arraytype = self.db.repr_arg_type(op.args[0])
+        index = self.db.repr_arg(op.args[1])
+        indextype = self.db.repr_arg_type(op.args[1])
+
+        tmpvar = self.db.repr_tmpvar()
+        self.codewriter.getelementptr(tmpvar, arraytype, array,
+                                      ("uint", 1), (indextype, index))
+
+        valuevar = self.db.repr_arg(op.args[2]) 
+        valuetype = self.db.repr_arg_type(op.args[2])
+        self.codewriter.store(valuetype, valuevar, tmpvar) 
+
+    def getarraysize(self, op):
+        var = self.db.repr_arg(op.args[0])
+        vartype = self.db.repr_arg_type(op.args[0])
+        tmpvar = self.db.repr_tmpvar()
+        self.codewriter.getelementptr(tmpvar, vartype, var, ("uint", 0))
+        targetvar = self.db.repr_arg(op.result)
+        targettype = self.db.repr_arg_type(op.result)
+        self.codewriter.load(targetvar, targettype, tmpvar)
