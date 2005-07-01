@@ -7,6 +7,7 @@ from pypy.objspace.flow.model import Block, Constant, Variable
 log = log.database 
 
 PRIMITIVES_TO_LLVM = {lltype.Signed: "int",
+                      lltype.Unsigned: "uint",
                       lltype.Bool: "bool"}
 
 class Database(object): 

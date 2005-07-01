@@ -9,6 +9,7 @@ from pypy.translator.llvm2.test import llvmsnippet
 from pypy.objspace.flow.model import Constant, Variable
 
 from pypy.rpython.rtyper import RPythonTyper
+from pypy.rpython.rarithmetic import r_uint
 
 py.log.setconsumer("genllvm", py.log.STDOUT)
 py.log.setconsumer("genllvm database prepare", None)
@@ -59,6 +60,24 @@ def test_int_ops():
     assert f(1) == 1
     assert f(2) == 2
 
+def test_uint_ops():
+    def ops(i):
+        x = r_uint(0)
+        x += i < i
+        x += i <= i
+        x += i == i
+        x += i != i
+        x += i >= i
+        x += i > i
+        x += x % i
+        #x += i is not None
+        #x += i is None
+        return i + 1 * i // i - 1
+    f = compile_function(ops, [r_uint])
+    assert f(1) == 1
+    assert f(2) == 2
+
+
 def test_function_call():
     def callee():
         return 1
@@ -99,3 +118,20 @@ def test_string_getitem():
         return l[i]
     f = compile_function(string_test, [int])
     assert f(0) == ord("H")
+
+class TestException(Exception):
+    pass
+
+def DONOTtest_exception():
+    def raise_(i):
+        if i:
+            raise TestException()
+        else:
+            return 1
+    def catch(i):
+        try:
+            return raise_(i)
+        except TestException:
+            return 0
+    f = compile_function(catch, [int])
+    

@@ -100,10 +100,7 @@ class FuncNode(object):
     def write_block_operations(self, codewriter, block):
         opwriter = OpWriter(self.db, codewriter)
         for op in block.operations:
-            meth = getattr(opwriter, op.opname, None)
-            assert meth is not None, "operation %r not found" %(op.opname,)
-            meth(op)
-                
+            opwriter.write_operation(op)
 
     def write_startblock(self, codewriter, block):
         self.write_block_operations(codewriter, block)
@@ -117,51 +114,52 @@ class FuncNode(object):
         codewriter.ret(inputargtype, inputarg)
 
 class OpWriter(object):
+    binary_operations = {'int_mul': 'mul',
+                         'int_add': 'add',
+                         'int_sub': 'sub',
+                         'int_floordiv': 'div',
+                         'int_mod': 'rem',
+                         'int_lt': 'setlt',
+                         'int_le': 'setle',
+                         'int_eq': 'seteq',
+                         'int_ne': 'setne',
+                         'int_ge': 'setge',
+                         'int_gt': 'setgt',
+                         
+                         'uint_mul': 'mul',
+                         'uint_add': 'add',
+                         'uint_sub': 'sub',
+                         'uint_floordiv': 'div',
+                         'uint_mod': 'rem',
+                         'uint_lt': 'setlt',
+                         'uint_le': 'setle',
+                         'uint_eq': 'seteq',
+                         'uint_ne': 'setne',
+                         'uint_ge': 'setge',
+                         'uint_gt': 'setgt'}
+
     def __init__(self, db, codewriter):
         self.db = db
         self.codewriter = codewriter
 
-    def binaryop(self, name, op):
+    def write_operation(self, op):
+        if op.opname in self.binary_operations:
+            self.binaryop(op)
+        else:
+            meth = getattr(self, op.opname, None)
+            assert meth is not None, "operation %r not found" %(op.opname,)
+            meth(op)                
+
+    def binaryop(self, op):
+        name = self.binary_operations[op.opname]
         assert len(op.args) == 2
         self.codewriter.binaryop(name,
                                  self.db.repr_arg(op.result),
                                  self.db.repr_arg_type(op.args[0]),
                                  self.db.repr_arg(op.args[0]),
                                  self.db.repr_arg(op.args[1]))
-    def int_mul(self, op):
-        self.binaryop('mul', op)
 
-    def int_floordiv(self, op):
-        self.binaryop('div', op)
-
-    def int_add(self, op):
-        self.binaryop('add', op)
-
-    def int_sub(self, op):
-        self.binaryop('sub', op)
-
-    def int_mod(self, op):
-        self.binaryop('rem', op)
-
-    def int_eq(self, op):
-        self.binaryop('seteq', op)
-
-    def int_ne(self, op):
-        self.binaryop('setne', op)
-
-    def int_lt(self, op):
-        self.binaryop('setlt', op)
-
-    def int_le(self, op):
-        self.binaryop('setle', op)
-
-    def int_gt(self, op):
-        self.binaryop('setgt', op)
-
-    def int_ge(self, op):
-        self.binaryop('setge', op)
-
-    def cast_bool_to_int(self, op): 
+    def cast_primitive(self, op): #works for all primitives
         assert len(op.args) == 1
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
@@ -169,7 +167,8 @@ class OpWriter(object):
         fromtype = self.db.repr_arg_type(op.args[0])
         self.codewriter.cast(targetvar, fromtype, fromvar, targettype)
 
-    int_is_true = cast_bool_to_int
+    int_is_true = cast_bool_to_int = cast_primitive
+    cast_bool_to_uint = uint_is_true = cast_primitive
     
     def direct_call(self, op):
         assert len(op.args) >= 1
