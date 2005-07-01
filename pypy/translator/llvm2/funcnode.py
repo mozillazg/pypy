@@ -180,8 +180,24 @@ class OpWriter(object):
         fromtype = self.db.repr_arg_type(op.args[0])
         self.codewriter.cast(targetvar, fromtype, fromvar, targettype)
 
-    int_is_true = cast_bool_to_int = cast_primitive
+    cast_bool_to_int = cast_primitive
     cast_bool_to_uint = uint_is_true = cast_primitive
+
+    def int_is_true(self, op):
+        self.codewriter.binaryop("setne",
+                                 self.db.repr_arg(op.result),
+                                 self.db.repr_arg_type(op.args[0]),
+                                 self.db.repr_arg(op.args[0]),
+                                 "0")
+
+    uint_is_true = int_is_true
+
+    def float_is_true(self, op):
+        self.codewriter.binaryop("setne",
+                                 self.db.repr_arg(op.result),
+                                 self.db.repr_arg_type(op.args[0]),
+                                 self.db.repr_arg(op.args[0]),
+                                 "0.0")
     
     def direct_call(self, op):
         assert len(op.args) >= 1
