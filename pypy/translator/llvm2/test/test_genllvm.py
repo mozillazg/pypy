@@ -18,7 +18,7 @@ py.log.setconsumer("genllvm database prepare", None)
 ## def setup_module(mod):
 ##     mod.llvm_found = is_on_path("llvm-as")
 
-def compile_function(function, annotate):
+def compile_function(function, annotate, view=False):
     t = Translator(function)
     a = t.annotate(annotate)
     t.specialize()
@@ -59,6 +59,20 @@ def test_int_ops():
     f = compile_function(ops, [int])
     assert f(1) == 1
     assert f(2) == 2
+
+def test_primitive_is_true():
+    def var_is_true(v):
+        return bool(v)
+    f = compile_function(var_is_true, [int])
+    assert f(256)
+    assert not f(0)
+    f = compile_function(var_is_true, [r_uint])
+    assert f(r_uint(256))
+    assert not f(r_uint(0))
+    f = compile_function(var_is_true, [float])
+    assert f(256.0)
+    assert not f(0.0)
+
 
 def test_uint_ops():
     def ops(i):
