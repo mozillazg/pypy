@@ -3,6 +3,7 @@ from pypy.rpython import lltype
 log = log.pyrex 
 
 PRIMITIVES_TO_C = {lltype.Signed: "int",
+                   lltype.Unsigned: "unsigned int",
                    lltype.Bool: "char"}
 
 def write_pyx_wrapper(funcgen, targetpath): 
