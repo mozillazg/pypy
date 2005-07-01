@@ -1,12 +1,15 @@
 from pypy.translator.llvm2.log import log 
-from pypy.translator.llvm2.funcnode import FuncNode
-from pypy.translator.llvm2.structnode import StructNode 
+from pypy.translator.llvm2.funcnode import FuncNode, FuncSig
+from pypy.translator.llvm2.structnode import StructNode, StructInstance
+from pypy.translator.llvm2.arraynode import ArrayNode
+ArrayNode
 from pypy.rpython import lltype
 from pypy.objspace.flow.model import Block, Constant, Variable
 
 log = log.database 
 
 PRIMITIVES_TO_LLVM = {lltype.Signed: "int",
+                      lltype.Char: "sbyte",
                       lltype.Unsigned: "uint",
                       lltype.Bool: "bool",
                       lltype.Float: "double" }
@@ -17,7 +20,7 @@ class Database(object):
         self.obj2node = {}
         self._pendingsetup = []
         self._tmpcount = 1
-
+        
     def addpending(self, key, node): 
         assert key not in self.obj2node, (
             "node with key %r already known!" %(key,))
@@ -32,11 +35,25 @@ class Database(object):
         if const_or_var in self.obj2node:
             return
         if isinstance(const_or_var, Constant):
-            if isinstance(const_or_var.concretetype, lltype.Primitive):
-                pass
-                #log.prepare(const_or_var, "(is primitive)") 
+            
+            ct = const_or_var.concretetype
+            while isinstance(ct, lltype.Ptr):
+                ct = ct.TO
+            
+            if isinstance(ct, lltype.FuncType):
+                self.addpending(const_or_var, FuncNode(self, const_or_var))
             else:
-                self.addpending(const_or_var, FuncNode(self, const_or_var)) 
+                #value = const_or_var.value
+                #while hasattr(value, "_obj"):
+                #    value = value._obj
+                
+                if isinstance(ct, lltype.Struct):
+                    self.addpending(const_or_var, StructInstance(self, value))
+
+                elif isinstance(ct, lltype.Primitive):
+                    log.prepare(const_or_var, "(is primitive)")
+                else:
+                    log.XXX("not sure what to do about %s(%s)" % (ct, const_or_var))
         else:
             log.prepare.ignore(const_or_var) 
 
@@ -47,23 +64,80 @@ class Database(object):
             pass
         elif isinstance(type_, lltype.Ptr): 
             self.prepare_repr_arg_type(type_.TO)
+
         elif isinstance(type_, lltype.Struct): 
             self.addpending(type_, StructNode(self, type_))
+
+        elif isinstance(type_, lltype.FuncType): 
+            self.addpending(type_, FuncSig(self, type_))
+
+        elif isinstance(type_, lltype.Array): 
+            self.addpending(type_, ArrayNode(self, type_))
+
         else:     
             log.XXX("need to prepare typerepr", type_)
 
     def prepare_arg(self, const_or_var):
         log.prepare(const_or_var)
-        self.prepare_repr_arg(const_or_var)
         self.prepare_repr_arg_type(const_or_var.concretetype)
-
+        self.prepare_repr_arg(const_or_var)
+            
     def setup_all(self):
         while self._pendingsetup: 
             self._pendingsetup.pop().setup()
 
-    def getobjects(self): 
-        return self.obj2node.values()
+    def getobjects(self, subset_types=None):
+        res = []
+        for v in self.obj2node.values():
+            if subset_types is None or isinstance(v, subset_types):
+                res.append(v)
+        res.reverse()
+        return res
 
+    def get_typedecls(self):
+        return self.getobjects((StructNode, ArrayNode))
+
+    def get_globaldata(self):
+        return self.getobjects((StructInstance))
+
+    def get_functions(self):
+        struct_nodes = [n for n in self.getobjects(StructNode) if n.inline_struct]
+        return struct_nodes + self.getobjects(FuncNode)
+
+    def dump(self):
+
+        # get and reverse the order in which seen objs
+        all_objs = self.obj2node.items()
+        all_objs.reverse()
+
+        log.dump_db("*** type declarations ***")
+        for k,v in all_objs:
+            if isinstance(v, (StructNode, ArrayNode)):
+                log.dump_db("%s ---> %s" % (k, v))            
+
+        log.dump_db("*** global data ***")
+        for k,v in all_objs:
+            if isinstance(v, (StructInstance)):
+                log.dump_db("%s ---> %s" % (k, v))
+
+        log.dump_db("*** function protos ***")
+        for k,v in all_objs:
+            if isinstance(v, (FuncNode)):
+                log.dump_db("%s ---> %s" % (k, v))
+
+        log.dump_db("*** function implementations ***")
+        for k,v in all_objs:
+            if isinstance(v, (FuncNode)):
+                log.dump_db("%s ---> %s" % (k, v))
+                
+        log.dump_db("*** unknown ***")
+        for k,v in all_objs:
+            if isinstance(v, (FuncSig)):
+                log.dump_db("%s ---> %s" % (k, v))
+        
+    # __________________________________________________________
+    # Getters
+    
     def repr_arg(self, arg):
         if (isinstance(arg, Constant) and 
             isinstance(arg.concretetype, lltype.Primitive)):
@@ -95,5 +169,3 @@ class Database(object):
         count = self._tmpcount 
         self._tmpcount += 1
         return "%tmp." + str(count) 
-        
- 

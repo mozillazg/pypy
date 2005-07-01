@@ -20,14 +20,27 @@ def genllvm(translator):
     db.setup_all()
     entrynode = db.obj2node[c]
     codewriter = CodeWriter()
-    dbobjects =  db.getobjects()
-    log.debug(dbobjects)
-    log.debug(db.obj2node)
-    for node in dbobjects:
-        node.writedecl(codewriter) 
-    codewriter.startimpl() 
-    for node in dbobjects:
-        node.writeimpl(codewriter)
+    comment = codewriter.comment
+    nl = lambda: codewriter.append("")
+    
+    nl(); comment("Type Declarations"); nl()
+    for typ_decl in db.get_typedecls():
+        typ_decl.writedatatypedecl(codewriter)
+
+    nl(); comment("Global Data") ; nl()
+    for typ_decl in db.get_globaldata():
+        typ_decl.writedata(codewriter)
+
+    nl(); comment("Function Prototypes") ; nl()
+    for typ_decl in db.get_functions():
+        typ_decl.writedecl(codewriter)
+
+    nl(); comment("Function Implementation") 
+    codewriter.startimpl()
+    for typ_decl in db.get_functions():
+        typ_decl.writeimpl(codewriter)
+
+    comment("End of file") ; nl()
     
     targetdir = udir
     llvmsource = targetdir.join(func.func_name).new(ext='.ll')
