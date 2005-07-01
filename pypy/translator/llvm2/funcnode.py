@@ -125,7 +125,7 @@ class OpWriter(object):
                          'int_ne': 'setne',
                          'int_ge': 'setge',
                          'int_gt': 'setgt',
-                         
+
                          'uint_mul': 'mul',
                          'uint_add': 'add',
                          'uint_sub': 'sub',
@@ -136,7 +136,20 @@ class OpWriter(object):
                          'uint_eq': 'seteq',
                          'uint_ne': 'setne',
                          'uint_ge': 'setge',
-                         'uint_gt': 'setgt'}
+                         'uint_gt': 'setgt',
+
+                         'float_mul': 'mul',
+                         'float_add': 'add',
+                         'float_sub': 'sub',
+                         'float_truediv': 'div',
+                         'float_mod': 'rem',
+                         'float_lt': 'setlt',
+                         'float_le': 'setle',
+                         'float_eq': 'seteq',
+                         'float_ne': 'setne',
+                         'float_ge': 'setge',
+                         'float_gt': 'setgt',
+                         }
 
     def __init__(self, db, codewriter):
         self.db = db
@@ -148,7 +161,7 @@ class OpWriter(object):
         else:
             meth = getattr(self, op.opname, None)
             assert meth is not None, "operation %r not found" %(op.opname,)
-            meth(op)                
+            meth(op)    
 
     def binaryop(self, op):
         name = self.binary_operations[op.opname]
