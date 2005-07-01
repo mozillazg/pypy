@@ -17,8 +17,7 @@ def genllvm(translator):
     c = inputconst(lltype.typeOf(ptr), ptr)
     db.prepare_repr_arg(c)
     assert c in db.obj2node
-    while db.process(): 
-        pass
+    db.setup_all()
     entrynode = db.obj2node[c]
     codewriter = CodeWriter()
     dbobjects =  db.getobjects()

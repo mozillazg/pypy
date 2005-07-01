@@ -24,6 +24,9 @@ class Database(object):
         self._pendingsetup.append(node) 
 
     def prepare_repr_arg(self, const_or_var):
+        """if const_or_var is not already in a dictionary self.obj2node,
+        the appropriate node gets constructed and gets added to
+        self._pendingsetup and to self.obj2node"""
         if const_or_var in self.obj2node:
             return
         if isinstance(const_or_var, Constant):
@@ -51,11 +54,10 @@ class Database(object):
         log.prepare(const_or_var)
         self.prepare_repr_arg(const_or_var)
         self.prepare_repr_arg_type(const_or_var.concretetype)
-            
-    def process(self):
-        if self._pendingsetup: 
+
+    def setup_all(self):
+        while self._pendingsetup: 
             self._pendingsetup.pop().setup()
-        return bool(self._pendingsetup) 
 
     def getobjects(self): 
         return self.obj2node.values()
