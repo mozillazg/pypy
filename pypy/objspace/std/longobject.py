@@ -648,9 +648,32 @@ def _x_mul(a, b, space):
     z._normalize()
     return z
 
+
 def _inplace_divrem1(pout, pin, n):
-    rem = r_uint(0, space)
+    """
+    Divide long pin by non-zero digit n, storing quotient
+    in pout, and returning the remainder. It's OK for pin == pout on entry.
+    """
+    rem = r_uint(0)
     assert n > 0 and n <= SHORT_MASK
     size = len(pin.digits) * 2 - 1
     while size >= 0:
         rem = (rem << SHORT_BIT) + pin._getshort(size)
+        hi = rem // n
+        pout._setshort(size, hi)
+        rem -= hi * n
+        size -= 1
+    return rem
+
+def _divrem1(space, a, n):
+    """
+    Divide a long integer by a digit, returning both the quotient
+    and the remainder as a tuple.
+    The sign of a is ignored; n should not be zero.
+    """
+    assert n > 0 and n <= SHORT_MASK
+    size = len(a.digits)
+    z = W_LongObject(space, [r_uint(0)] * size, 1)
+    rem = _inplace_divrem1(z, a, n)
+    z._normalize()
+    return z, rem
