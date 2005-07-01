@@ -2,12 +2,20 @@ import py
 from pypy.translator.llvm2.log import log 
 
 log = log.codewriter 
+show_line_numbers = True
 
 class CodeWriter(object): 
     def __init__(self): 
         self._lines = []
 
     def append(self, line): 
+        if show_line_numbers:
+            global  line_number
+            try:
+                line_number += 1
+            except:
+                line_number = 1
+            line = "%-80s; %d" % (line, line_number)
         self._lines.append(line) 
         log(line) 
 
