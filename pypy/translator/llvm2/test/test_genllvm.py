@@ -60,6 +60,34 @@ def test_int_ops():
     assert f(1) == 1
     assert f(2) == 2
 
+def test_while_loop():
+    def factorial(i):
+        r = 1
+        while i>1:
+            r *= i
+            i -= 1
+        return r
+    f = compile_function(factorial, [int])
+    assert factorial(4) == 24
+    assert factorial(5) == 120
+    f = compile_function(factorial, [float])
+    assert factorial(4.) == 24.
+    assert factorial(5.) == 120.
+
+def test_break_while_loop():
+    def factorial(i):
+        r = 1
+        while 1:
+            if i<=1:
+                break
+            r *= i
+            i -= 1
+        return r
+    f = compile_function(factorial, [int])
+    assert factorial(4) == 24
+    assert factorial(5) == 120
+
+
 def test_primitive_is_true():
     def var_is_true(v):
         return bool(v)
