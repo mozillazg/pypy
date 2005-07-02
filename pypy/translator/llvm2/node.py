@@ -7,3 +7,15 @@ class LLVMNode(object):
                                (self._ref,))
         self._ref = ref
     ref = property(_get_ref, _set_ref)
+
+    def writedatatypedecl(self, codewriter):
+        pass
+
+    def writedata(self, codewriter):
+        pass
+
+    def writedecl(self, codewriter):
+        pass
+
+    def writeimpl(self, codewriter):
+        pass
