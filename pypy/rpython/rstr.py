@@ -104,6 +104,18 @@ class __extend__(StringRepr):
         v_str, v_value = hop.inputargs(string_repr, string_repr)
         return hop.gendirectcall(ll_endswith, v_str, v_value)
 
+    def rtype_method_find(_, hop):
+        v_str, v_value = hop.inputargs(string_repr, string_repr)
+        return hop.gendirectcall(ll_find, v_str, v_value)
+
+    def rtype_method_upper(_, hop):
+        v_str, = hop.inputargs(string_repr)
+        return hop.gendirectcall(ll_upper, v_str)
+        
+    def rtype_method_lower(_, hop):
+        v_str, = hop.inputargs(string_repr)
+        return hop.gendirectcall(ll_lower, v_str)
+        
     def rtype_method_join(_, hop):
         r_lst = hop.args_r[1]
         s_item = r_lst.listitem.s_value
@@ -557,6 +569,40 @@ def ll_endswith(s1, s2):
     return True
 
 emptystr = string_repr.convert_const("")
+
+def ll_upper(s):
+    s_chars = s.chars
+    s_len = len(s_chars)
+    if s_len == 0:
+        return emptystr
+    i = 0
+    result = malloc(STR, s_len)
+    while i < s_len:
+        ochar = ord(s_chars[i])
+        if ochar >= 97 and ochar <= 122:
+            upperchar = ochar - 32
+        else:
+            upperchar = ochar
+        result.chars[i] = chr(upperchar)
+        i += 1
+    return result
+
+def ll_lower(s):
+    s_chars = s.chars
+    s_len = len(s_chars)
+    if s_len == 0:
+        return emptystr
+    i = 0
+    result = malloc(STR, s_len)
+    while i < s_len:
+        ochar = ord(s_chars[i])
+        if ochar >= 65 and ochar <= 96:
+            lowerchar = ochar + 32
+        else:
+            lowerchar = ochar
+        result.chars[i] = chr(lowerchar)
+        i += 1
+    return result
 
 def ll_join(s, items):
     s_chars = s.chars
