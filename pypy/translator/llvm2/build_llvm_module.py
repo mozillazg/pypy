@@ -28,6 +28,8 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
     modname = pyxfile.purebasename
     b = llvmfile.purebasename
 
+    usedistutils = sys.platform == "darwin"
+
     if sys.maxint == 2147483647:        #32 bit platform
         if optimize:
             ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b), 
@@ -38,8 +40,19 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
             ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b),
                     "llc -enable-correct-eh-support %s.bc -f -o %s.s" % (b, b),
                     "as %s.s -o %s.o" % (b, b)]
-        ops2 = ["gcc -c -shared -I/usr/include/python2.3 %s.c" % pyxfile.purebasename,
-                "gcc -shared %s.o %s.o -o %s.so" % (b, modname, modname)]
+        if usedistutils:
+            open("setup.py", "w").write(str(py.code.Source(''' 
+                from distutils.core import setup
+                from distutils.extension import Extension
+                setup(name="%s_wrapper",
+                    ext_modules = [Extension(name = "%s_wrapper",
+                        sources = ["%s_wrapper.c"],
+                        extra_objects = ["%s.o"])])
+                ''' % (b, b, b, b))))
+            ops2 = ["python setup.py build_ext --inplace"]
+        else:
+            ops2 = ["gcc -c -shared -I/usr/include/python2.3 %s.c" % pyxfile.purebasename,
+                    "gcc -shared %s.o %s.o -o %s.so" % (b, modname, modname)]
     else:       #assume 64 bit platform (x86-64?)
         #this special case for x86-64 (called ia64 in llvm) can go as soon as llc supports ia64 assembly output!
         if optimize:
