@@ -1,7 +1,7 @@
 from pypy.translator.llvm2.log import log 
 from pypy.translator.llvm2.funcnode import FuncNode, FuncTypeNode
-from pypy.translator.llvm2.structnode import StructNode, StructInstance
-from pypy.translator.llvm2.arraynode import ArrayNode
+from pypy.translator.llvm2.structnode import StructNode, StructTypeNode
+from pypy.translator.llvm2.arraynode import ArrayNode, ArrayTypeNode
 from pypy.rpython import lltype
 from pypy.objspace.flow.model import Block, Constant, Variable
 
@@ -42,19 +42,22 @@ class Database(object):
             if isinstance(ct, lltype.FuncType):
                 self.addpending(const_or_var, FuncNode(self, const_or_var))
             else:
-                #value = const_or_var.value
-                #while hasattr(value, "_obj"):
-                #    value = value._obj
-                
+                value = const_or_var.value
+                while hasattr(value, "_obj"):
+                    value = value._obj
+
                 if isinstance(ct, lltype.Struct):
-                    self.addpending(const_or_var, StructInstance(self, value))
+                    self.addpending(const_or_var, StructNode(self, value))
+
+                elif isinstance(ct, lltype.Array):
+                    self.addpending(const_or_var, ArrayNode(self, value))
 
                 elif isinstance(ct, lltype.Primitive):
                     log.prepare(const_or_var, "(is primitive)")
                 else:
                     log.XXX("not sure what to do about %s(%s)" % (ct, const_or_var))
         else:
-            log.prepare.ignore(const_or_var)
+            log.prepare(const_or_var, type(const_or_var)) #XXX dont checkin
 
     def prepare_repr_arg_multi(self, args):
         for const_or_var in args:
@@ -69,13 +72,13 @@ class Database(object):
             self.prepare_repr_arg_type(type_.TO)
 
         elif isinstance(type_, lltype.Struct): 
-            self.addpending(type_, StructNode(self, type_))
+            self.addpending(type_, StructTypeNode(self, type_))
 
         elif isinstance(type_, lltype.FuncType): 
             self.addpending(type_, FuncTypeNode(self, type_))
 
         elif isinstance(type_, lltype.Array): 
-            self.addpending(type_, ArrayNode(self, type_))
+            self.addpending(type_, ArrayTypeNode(self, type_))
 
         else:     
             log.XXX("need to prepare typerepr", type_)
@@ -91,7 +94,9 @@ class Database(object):
             
     def setup_all(self):
         while self._pendingsetup: 
-            self._pendingsetup.pop().setup()
+            x = self._pendingsetup.pop()
+            log.setup_all(x)
+            x.setup()
 
     def getobjects(self, subset_types=None):
         res = []
@@ -102,13 +107,13 @@ class Database(object):
         return res
 
     def get_typedecls(self):
-        return self.getobjects((StructNode, ArrayNode, FuncTypeNode))
+        return self.getobjects((StructTypeNode, ArrayTypeNode, FuncTypeNode))
 
     def get_globaldata(self):
-        return self.getobjects((StructInstance))
+        return self.getobjects((StructNode, ArrayNode))
 
     def get_functions(self):
-        struct_nodes = [n for n in self.getobjects(StructNode) if n.inline_struct]
+        struct_nodes = [n for n in self.getobjects(StructTypeNode) if n.inline_struct]
         return struct_nodes + self.getobjects(FuncNode)
 
     def dump(self):
@@ -119,12 +124,12 @@ class Database(object):
 
         log.dump_db("*** type declarations ***")
         for k,v in all_objs:
-            if isinstance(v, (StructNode, ArrayNode)):
+            if isinstance(v, (StructTypeNode, ArrayTypeNode)):
                 log.dump_db("%s ---> %s" % (k, v))            
 
         log.dump_db("*** global data ***")
         for k,v in all_objs:
-            if isinstance(v, (StructInstance)):
+            if isinstance(v, (StructNode)):
                 log.dump_db("%s ---> %s" % (k, v))
 
         log.dump_db("*** function protos ***")
