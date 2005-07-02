@@ -467,12 +467,7 @@ def format(fmt, values, valuedict=None, do_unicode=False):
                     # Switch to using the unicode formatters and retry.
                     do_unicode = True
                     format_registry = unicode_format_registry
-                    try:
-                        f = format_registry[t[0]]
-                    except KeyError:
-                        raise ValueError("unsupported format character "
-                                         "'%s' (0x%x) at index %d"
-                                         %(t[0], ord(t[0]), fmtiter.i-1))
+                    f = format_registry[t[0]]
                     r.append(f(char, flags, width, prec, value).format())
  
             else:
