@@ -1,8 +1,7 @@
 from pypy.translator.llvm2.log import log 
-from pypy.translator.llvm2.funcnode import FuncNode, FuncSig
+from pypy.translator.llvm2.funcnode import FuncNode, FuncTypeNode
 from pypy.translator.llvm2.structnode import StructNode, StructInstance
 from pypy.translator.llvm2.arraynode import ArrayNode
-ArrayNode
 from pypy.rpython import lltype
 from pypy.objspace.flow.model import Block, Constant, Variable
 
@@ -55,7 +54,11 @@ class Database(object):
                 else:
                     log.XXX("not sure what to do about %s(%s)" % (ct, const_or_var))
         else:
-            log.prepare.ignore(const_or_var) 
+            log.prepare.ignore(const_or_var)
+
+    def prepare_repr_arg_multi(self, args):
+        for const_or_var in args:
+            self.prepare_repr_arg(const_or_var)
 
     def prepare_repr_arg_type(self, type_):
         if type_ in self.obj2node:
@@ -69,13 +72,17 @@ class Database(object):
             self.addpending(type_, StructNode(self, type_))
 
         elif isinstance(type_, lltype.FuncType): 
-            self.addpending(type_, FuncSig(self, type_))
+            self.addpending(type_, FuncTypeNode(self, type_))
 
         elif isinstance(type_, lltype.Array): 
             self.addpending(type_, ArrayNode(self, type_))
 
         else:     
             log.XXX("need to prepare typerepr", type_)
+
+    def prepare_repr_arg_type_multi(self, types):
+        for type_ in types:
+            self.prepare_repr_arg_type(type_)
 
     def prepare_arg(self, const_or_var):
         log.prepare(const_or_var)
@@ -95,7 +102,7 @@ class Database(object):
         return res
 
     def get_typedecls(self):
-        return self.getobjects((StructNode, ArrayNode))
+        return self.getobjects((StructNode, ArrayNode, FuncTypeNode))
 
     def get_globaldata(self):
         return self.getobjects((StructInstance))
@@ -132,7 +139,7 @@ class Database(object):
                 
         log.dump_db("*** unknown ***")
         for k,v in all_objs:
-            if isinstance(v, (FuncSig)):
+            if isinstance(v, (FuncTypeNode)):
                 log.dump_db("%s ---> %s" % (k, v))
         
     # __________________________________________________________

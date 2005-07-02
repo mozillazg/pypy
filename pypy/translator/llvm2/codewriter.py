@@ -10,12 +10,7 @@ class CodeWriter(object):
 
     def append(self, line): 
         if show_line_numbers:
-            global  line_number
-            try:
-                line_number += 1
-            except:
-                line_number = 1
-            line = "%-80s; %d" % (line, line_number)
+            line = "%-75s; %d" % (line, len(self._lines) + 1)
         self._lines.append(line) 
         log(line) 
 
@@ -33,6 +28,10 @@ class CodeWriter(object):
 
     def arraydef(self, name, typerepr):
         self.append("%s = type { int, [0 x %s] }" % (name, typerepr))
+
+    def funcdef(self, name, rettyperepr, argtypereprs):
+        self.append("%s = type %s (%s)" % (name, rettyperepr,
+                                           ", ".join(argtypereprs)))
 
     def declare(self, decl):
         self.append("declare %s" %(decl,))
