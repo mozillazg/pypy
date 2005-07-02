@@ -3,28 +3,36 @@ from pypy.objspace.flow.model import Block, Constant, Variable, Link
 from pypy.objspace.flow.model import flatten, mkentrymap, traverse
 from pypy.rpython import lltype
 from pypy.translator.llvm2.cfgtransform import prepare_graph
+from pypy.translator.llvm2.node import LLVMNode
 from pypy.translator.llvm2.log import log 
 log = log.funcnode
 
-class FuncSig(object):
-    """ XXX Not sure about this - should be combined with FuncNode?
-    Abstract function signature. """
-    def __init__(self, db, typ):
+class FuncTypeNode(LLVMNode):
+    func_type_node_counter = 0
+
+    def __init__(self, db, type_):
         self.db = db
-        self.typ = typ
-        # Hack around some debug statements
-        self.ref = "pending setup!"
+        self.type_ = type_
+        ref = '"ft.%s.%s"' % (type_, FuncTypeNode.func_type_node_counter)
+        self.ref = ref.replace(" ", "")
+        FuncTypeNode.func_type_node_counter += 1
         
     def __str__(self):
-        return "<FuncSig %r>" % self.ref
+        return "<FuncTypeNode %r>" % self.ref
 
     def setup(self):
-        returntype = self.db.repr_arg_type(self.typ.RESULT)
-        inputargtypes = self.db.repr_arg_type_multi(self.typ.ARGS)
-        self.ref = "%s (%s)" % (returntype, ", ".join(inputargtypes))
+        self.db.prepare_repr_arg_type(self.type_.RESULT)
+        self.db.prepare_repr_arg_type(self.type_.ARGS)
+
+    def writedatatypedecl(self, codewriter):
+        returntype = self.db.repr_arg_type(self.type_.RESULT)
+        inputargtypes = self.db.repr_arg_type_multi(self.type_.ARGS)
+        decl = "%s type %s (%s)*" % (self.ref, returntype,
+                                     ", ".join(inputargtypes))
+        codewriter.funcdef(self.ref, returntype, inputargtypes)
 
 
-class FuncNode(object):
+class FuncNode(LLVMNode):
     _issetup = False 
 
     def __init__(self, db, const_ptr_func):
