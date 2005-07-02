@@ -9,7 +9,7 @@ from pypy.interpreter.typedef import interp_attrproperty, GetSetProperty
 from pypy.interpreter.pycode import PyCode 
 from syntaxtree import SyntaxNode
 from pythonparse import parse_python_source
-from pypy.module.recparser import PYTHON_PARSER
+from pythonutil import PYTHON_PARSER
 
 __all__ = [ "ASTType", "STType", "suite", "expr" ]
 

@@ -90,7 +90,8 @@ atom: '(' [testlist_gexp] ')' | '[' [listmaker] ']' | '{' [dictmaker] '}' | '`' 
 listmaker: test ( list_for | (',' test)* [','] )
 testlist_gexp: test ( gen_for | (',' test)* [','] )
 lambdef: 'lambda' [varargslist] ':' test
-trailer: '(' [arglist] ')' | '[' subscriptlist ']' | '.' NAME
+# trailer: '(' [arglist] ')' | '[' subscriptlist ']' | '.' NAME
+trailer: '(' ')' | '(' arglist ')' | '[' subscriptlist ']' | '.' NAME
 subscriptlist: subscript (',' subscript)* [',']
 subscript: '.' '.' '.' | [test] ':' [test] [sliceop] | test
 sliceop: ':' [test]
@@ -101,7 +102,8 @@ dictmaker: test ':' test (',' test ':' test)* [',']
 
 classdef: 'class' NAME ['(' testlist ')'] ':' suite
 
-arglist: (argument ',')* (argument [',']| '*' test [',' '**' test] | '**' test)
+# arglist: (argument ',')* (argument [',']| '*' test [',' '**' test] | '**' test)
+arglist: (argument ',')* ( '*' test [',' '**' test] | '**' test | argument | [argument ','] )
 argument: [test '='] test [gen_for] # Really [keyword '='] test
 
 list_iter: list_for | list_if

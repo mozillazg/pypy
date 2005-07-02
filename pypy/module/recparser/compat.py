@@ -1,7 +1,7 @@
 """Compatibility layer for CPython's parser module"""
 
 from pythonparse import parse_python_source
-from pypy.module.recparser import PYTHON_PARSER
+from pythonutil import PYTHON_PARSER
 from compiler import transformer, compile as pycompile
  
 def suite( source ):

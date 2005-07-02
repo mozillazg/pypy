@@ -2,7 +2,7 @@
 
 import os, os.path as osp
 import sys
-from pypy.module.recparser.pythonutil import python_parse, pypy_parse, set_debug
+from pypy.module.recparser.pythonutil import python_parse, pypy_parse
 from pprint import pprint
 from pypy.module.recparser import grammar
 grammar.DEBUG = False
@@ -85,7 +85,8 @@ if __name__=="__main__":
     opts, args = getopt.getopt( sys.argv[1:], "d:", [] )
     for opt, val in opts:
         if opt == "-d":
-            set_debug(int(val))
+            pass
+#            set_debug(int(val))
     if args:
         samples = args
     else:
