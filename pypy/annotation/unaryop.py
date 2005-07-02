@@ -301,6 +301,9 @@ class __extend__(SomeString):
     def method_endswith(str, frag):
         return SomeBool()
 
+    def method_find(str, frag):
+        return SomeInteger()
+
     def method_join(str, s_list):
         getbookkeeper().count("str_join", str)
         s_item = s_list.listdef.read_item()

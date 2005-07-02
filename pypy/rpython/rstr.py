@@ -26,6 +26,8 @@ from pypy.rpython.rclass import InstanceRepr
 STR = GcStruct('str', ('hash',  Signed),
                       ('chars', Array(Char)))
 
+SIGNED_ARRAY = GcArray(Signed)
+
 
 class __extend__(annmodel.SomeString):
     def rtyper_makerepr(self, rtyper):
@@ -568,6 +570,47 @@ def ll_endswith(s1, s2):
 
     return True
 
+def ll_find(s1, s2):
+    """Knuth Morris Prath algorithm for substring match"""
+    len1 = len(s1.chars)
+    len2 = len(s2.chars)
+    # Construct the array of possible restarting positions
+    # T = Array_of_ints [-1..len2]
+    # T[-1] = -1 s2.chars[-1] is supposed to be unequal to everything else
+    T = malloc( SIGNED_ARRAY, len2 )
+    i = 0
+    j = -1
+    while i<len2:
+        if j>=0 and s2.chars[i] == s2.chars[j]:
+            j += 1
+            T[i] = j
+            i += 1
+        elif j>0:
+            j = T[j-1]
+        else:
+            T[i] = 0
+            i += 1
+            j = 0
+
+    # Now the find algorithm
+    i = 0
+    m = 0
+    while m+i<len1:
+        if s1.chars[m+i]==s2.chars[i]:
+            i += 1
+            if i==len2:
+                return m
+        else:
+            # mismatch, go back to the last possible starting pos
+            if i==0:
+                e = -1
+            else:
+                e = T[i-1]
+            m = m + i - e
+            if i>0:
+                i = e
+    return -1
+    
 emptystr = string_repr.convert_const("")
 
 def ll_upper(s):
