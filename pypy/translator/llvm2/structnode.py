@@ -32,8 +32,6 @@ class StructTypeNode(LLVMNode):
 
     def writedatatypedecl(self, codewriter):
         assert self._issetup 
-        # cfbolz: XXX flds has no order
-        #l = [self.db.repr_arg_type(field) for field in self.struct._flds.values()]
         fields = [getattr(self.struct, name) for name in self.struct._names] 
         l = [self.db.repr_arg_type(field) for field in fields]
         codewriter.structdef(self.ref, l)
