@@ -185,6 +185,16 @@ def test_pbc_fns():
     assert f(-1) == 3
     assert f(0) == 5
 
+def test_list_getitem(): 
+    def list_getitem(i): 
+        l = [1,2,i]
+        return l[i]
+    f = compile_function(list_getitem, [int])
+    assert f(0) == 1
+    assert f(1) == 2
+    assert f(3) == 3
+
+
 def DONOT_test_simple_chars():
      def char_constant2(s):
          s = s + s + s
