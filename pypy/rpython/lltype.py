@@ -4,6 +4,8 @@ from pypy.rpython.rarithmetic import r_uint
 from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
 
+log = py.log.Producer('lltype')
+
 TLS = tlsobject()
 
 def saferecursive(func, defl):
@@ -140,6 +142,30 @@ class Struct(ContainerType):
         except KeyError:
             raise AttributeError, 'struct %s has no field %r' % (self._name,
                                                                  name)
+
+
+
+
+    def _names_without_voids(self, at_root=True):
+        if at_root:  #XXX debug stuff
+            log('_names_without_voids: ' + self._str_without_voids())
+        names_without_voids = [name for name in self._names if self._flds[name] is not Void]
+        if names_without_voids != list(self._names):
+            log('_names_without_voids: removed Void(s) _names=%s, return=%s' % (str(list(self._names)), str(names_without_voids)))
+        #return self._names
+        return names_without_voids
+    
+    def _str_fields_without_voids(self):
+        return ', '.join(['%s: %s' % (name, self._flds[name])
+                          for name in self._names_without_voids(False)])
+    _str_fields_without_voids = saferecursive(_str_fields_without_voids, '...')
+
+    def _str_without_voids(self):
+        return "%s %s { %s }" % (self.__class__.__name__,
+                                 self._name, self._str_fields_without_voids())
+
+
+
 
     def _str_fields(self):
         return ', '.join(['%s: %s' % (name, self._flds[name])
