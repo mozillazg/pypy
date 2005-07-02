@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import Block, Constant, Variable, Link
 from pypy.objspace.flow.model import flatten, mkentrymap, traverse
 from pypy.rpython import lltype
 from pypy.translator.backendoptimization import remove_same_as 
+from pypy.translator.unsimplify import remove_double_links                     
 from pypy.translator.llvm2.node import LLVMNode
 from pypy.translator.llvm2.log import log 
 log = log.funcnode
@@ -40,6 +41,7 @@ class FuncNode(LLVMNode):
         self.ref = "%" + const_ptr_func.value._obj._name
         self.graph = const_ptr_func.value._obj.graph 
         remove_same_as(self.graph) 
+        remove_double_links(self.db._translator, self.graph) 
         
     def __str__(self):
         return "<FuncNode %r>" %(self.ref,)
