@@ -23,10 +23,9 @@ def compile_function(function, annotate, view=False):
     a = t.annotate(annotate)
     t.specialize()
     a.simplify()
-    if view: 
+    if view:
         t.view()
     return genllvm(t)
-
 
 def test_return1():
     def simple1():
@@ -201,16 +200,6 @@ def test_pbc_fns():
     assert f(-1) == 3
     assert f(0) == 5
 
-def test_list_getitem(): 
-    def list_getitem(i): 
-        l = [1,2,i]
-        return l[i]
-    f = compile_function(list_getitem, [int])
-    assert f(0) == 1
-    assert f(1) == 2
-    assert f(3) == 3
-
-
 def DONOT_test_simple_chars():
      def char_constant2(s):
          s = s + s + s
@@ -220,7 +209,23 @@ def DONOT_test_simple_chars():
      f = compile_function(char_constant, [])
      assert f() == 7
 
-def DONOTtest_string_getitem():
+def DONOT_test_list_getitem(): 
+    def list_getitem(i): 
+        l = [1,2,i]
+        return l[i]
+    f = compile_function(list_getitem, [int])
+    assert f(0) == 1
+    assert f(1) == 2
+    assert f(3) == 3
+
+def DONOT_test_string_getitem1():
+    l = "Hello, World"
+    def string_test(i): 
+        return l[i]
+    f = compile_function(string_test, [int], view=True)
+    assert f(0) == ord("H")
+
+def DONOT_test_string_getitem2():
     def string_test(i): 
         l = "Hello, World"
         return l[i]

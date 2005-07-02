@@ -4,7 +4,7 @@ from pypy.translator.llvm2.log import log
 from pypy.rpython import lltype
 log = log.structnode 
 
-class StructNode(object):
+class StructTypeNode(object):
     _issetup = False 
     struct_counter = 0
 
@@ -14,24 +14,20 @@ class StructNode(object):
         self.db = db
         self.struct = struct
         
-        self.name = "%s.%s" % (self.struct._name, StructNode.struct_counter)
+        self.name = "%s.%s" % (self.struct._name, StructTypeNode.struct_counter)
         self.ref = "%%st.%s" % self.name
         self.inline_struct = self.struct._arrayfld
         
-        StructNode.struct_counter += 1
+        StructTypeNode.struct_counter += 1
         
     def __str__(self):
-        return "<StructNode %r>" %(self.ref,)
+        return "<StructTypeNode %r>" %(self.ref,)
     
     def setup(self):
         # Recurse
         for fieldname in self.struct._names:
             field_type = getattr(self.struct, fieldname)
             self.db.prepare_repr_arg_type(field_type)
-
-        if self.inline_struct:
-            log.XXX("Register me", self)
-
         self._issetup = True
 
     def get_decl_for_varsize(self):
@@ -57,7 +53,6 @@ class StructNode(object):
             codewriter.declare(self.get_decl_for_varsize())
 
     def writeimpl(self, codewriter):
-
         if self.inline_struct:
             log.writeimpl(self.ref)
             codewriter.openfunc(self.get_decl_for_varsize())
@@ -89,42 +84,46 @@ class StructNode(object):
             codewriter.closefunc()
 
 
-class StructInstance(object):
+class StructNode(object):
     _issetup = False 
     struct_counter = 0
 
     def __init__(self, db, value):
         self.db = db
-        self.name = "%s.%s" % (value._TYPE._name, StructInstance.struct_counter)
+        self.name = "%s.%s" % (value._TYPE._name, StructNode.struct_counter)
         self.ref = "%%stinstance.%s" % self.name
         self.value = value
-        StructInstance.struct_counter += 1
+        StructNode.struct_counter += 1
 
     def __str__(self):
-        return "<StructInstance %r>" %(self.ref,)
+        return "<StructNode %r>" %(self.ref,)
 
     def setup(self):
-        # Recurse fields (XXX Messy!)
         for name in self.value._TYPE._names:
             T = self.value._TYPE._flds[name]
-            self.db.prepare_repr_arg_type(T)
             if not isinstance(T, lltype.Primitive):
                 value = getattr(self.value, name)
-                self.db.prepare_repr_arg(value)
+                # Create a dummy constant hack XXX
+                c = Constant(value, T)
+                self.db.prepare_arg(c)
                 
         self._issetup = True
 
-#     def struct_repr(self):
-#         typ = repr_arg_type(self.value)
-#         self.value._TYPE._names
-#         typevaluepairs = ["%s %s" % for t, v in 
-#         typevaluepairsstr = ", ".join(typevaluepairs)
-#         return "%s { %s }" % (typ, typevaluepairsstr)
+    def get_values(self):
+        res = []
+        for name in self.value._TYPE._names:
+            T = self.value._TYPE._flds[name]
+            value = getattr(self.value, name)
+            if not isinstance(T, lltype.Primitive):
+                # Create a dummy constant hack XXX
+                value = self.db.repr_arg(Constant(value, T))
+            else:
+                value = str(value)
+            res.append((self.db.repr_arg_type(T), value))
+        return ", ".join(["%s %s" % (t, v) for t, v in res])
 
     def writedata(self, codewriter):
-        log.XXXXXXXXXX("ooops TODO should write - ", self.ref)
-        for name in self.value._TYPE._names:
-            log.XXXXXXXXXX("ooops ", getattr(self.value, name))
-        typ = self.db.repr_arg_type(self.value._TYPE)
-        # XXX constant you say?
-        codewriter.append("%s = internal constant %s* null" % (self.ref, typ))
+        codewriter.globalinstance(self.ref,
+                                  self.db.repr_arg_type(self.value._TYPE),
+                                  self.get_values())
+
