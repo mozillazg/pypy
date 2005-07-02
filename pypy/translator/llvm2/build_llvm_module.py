@@ -20,6 +20,21 @@ class CompileError(exceptions.Exception):
 
 OPTIMIZATION_SWITCHES = "-simplifycfg -mem2reg -instcombine -dce -inline"
 
+def compile_module(module, source_files, object_files):
+    open("%s_setup.py" % module, "w").write(str(py.code.Source(
+        '''
+        from distutils.core import setup
+        from distutils.extension import Extension
+        setup(name="%(module)s",
+            ext_modules = [Extension(
+                name = "%(module)s",
+                sources = %(source_files)s,
+                extra_objects = %(object_files)s)])
+        ''' % locals())))
+    cmd = "python %s_setup.py build_ext --inplace" % module
+    if debug: print cmd
+    cmdexec(cmd)
+
 def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
     include_dir = py.magic.autopath().dirpath()
     dirpath = llvmfile.dirpath()
@@ -27,36 +42,29 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
     os.chdir(str(dirpath))
     modname = pyxfile.purebasename
     b = llvmfile.purebasename
+    source_files = [ "%s.c" % modname ]
+    object_files = []
 
     if sys.maxint == 2147483647:        #32 bit platform
         if optimize:
-            ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b), 
+            cmds = ["llvm-as %s.ll -f -o %s.bc" % (b, b), 
                     "opt %s -f %s.bc -o %s_optimized.bc" % (OPTIMIZATION_SWITCHES, b, b),
-                    "llc -enable-correct-eh-support %s_optimized.bc -f -o %s.s" % (b, b),
-                    "as %s.s -o %s.o" % (b, b)]
+                    "llc -enable-correct-eh-support %s_optimized.bc -f -o %s.s" % (b, b)]
         else:
-            ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b),
-                    "llc -enable-correct-eh-support %s.bc -f -o %s.s" % (b, b),
-                    "as %s.s -o %s.o" % (b, b)]
-            open("%s_setup.py" % b, "w").write(str(py.code.Source(''' 
-                from distutils.core import setup
-                from distutils.extension import Extension
-                setup(name="%s_wrapper",
-                    ext_modules = [Extension(name = "%s_wrapper",
-                        sources = ["%s_wrapper.c"],
-                        extra_objects = ["%s.o"])])
-                ''' % (b, b, b, b))))
-            ops2 = ["python %s_setup.py build_ext --inplace" % b]
+            cmds = ["llvm-as %s.ll -f -o %s.bc" % (b, b),
+                    "llc -enable-correct-eh-support %s.bc -f -o %s.s" % (b, b)]
+        cmds.append("as %s.s -o %s.o" % (b, b))
+        object_files.append("%s.o" % b)
     else:       #assume 64 bit platform (x86-64?)
         #this special case for x86-64 (called ia64 in llvm) can go as soon as llc supports ia64 assembly output!
         if optimize:
-            ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b), 
+            cmds = ["llvm-as %s.ll -f -o %s.bc" % (b, b), 
                     "opt %s -f %s.bc -o %s_optimized.bc" % (OPTIMIZATION_SWITCHES, b, b),
                     "llc -enable-correct-eh-support %s_optimized.bc -march=c -f -o %s.c" % (b, b)]
         else:
-            ops1 = ["llvm-as %s.ll -f -o %s.bc" % (b, b),
+            cmds = ["llvm-as %s.ll -f -o %s.bc" % (b, b),
                     "llc -enable-correct-eh-support %s.bc -march=c -f -o %s.c" % (b, b)]
-        ops2 = ["gcc -shared -fPIC -I/usr/include/python2.3 %s.c %s.c -o %s.so" % (b, modname, modname)]
+        source_files.append("%s.c" % b)
 
     try:
         if debug: print "modname", modname
@@ -64,13 +72,11 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
         if debug: print "working in", path.local()
         try:
             try:
-                for op in ops1:
-                    if debug: print op
-                    cmdexec(op)
+                for cmd in cmds:
+                    if debug: print cmd
+                    cmdexec(cmd)
                 make_c_from_pyxfile(pyxfile)
-                for op in ops2:
-                    if debug: print op
-                    cmdexec(op)
+                compile_module(modname, source_files, object_files)
             finally:
                 foutput, foutput = c.done()
         except:
