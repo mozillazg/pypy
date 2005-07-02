@@ -17,6 +17,9 @@ class CodeWriter(object):
     def comment(self, line):
         self.append(";; " + line) 
 
+    def newline(self):
+        self.append("")
+
     def indent(self, line): 
         self.append("        " + line) 
 

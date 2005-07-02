@@ -21,7 +21,7 @@ def genllvm(translator):
     entrynode = db.obj2node[c]
     codewriter = CodeWriter()
     comment = codewriter.comment
-    nl = lambda: codewriter.append("")
+    nl = codewriter.newline
     
     nl(); comment("Type Declarations"); nl()
     for typ_decl in db.get_typedecls():
