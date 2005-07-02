@@ -23,6 +23,8 @@ def compile_function(function, annotate, view=False):
     a = t.annotate(annotate)
     t.specialize()
     a.simplify()
+    if view: 
+        t.view()
     return genllvm(t)
 
 
@@ -31,6 +33,20 @@ def test_return1():
         return 1
     f = compile_function(simple1, [])
     assert f() == 1
+
+def Xtest_simple_function_pointer(): 
+    def f1(x): 
+        return x + 1
+    def f2(x): 
+        return x + 2
+
+    l = [f1, f2]
+
+    def pointersimple(i): 
+        return l[i]
+
+    f = compile_function(pointersimple, [int])
+    assert f 
 
 def test_simple_branching():
     def simple5(b):
@@ -153,7 +169,7 @@ def test_recursive_call():
         if m == 0:
             return ackermann(n - 1, 1)
         return ackermann(n - 1, ackermann(n, m - 1))
-    f = compile_function(call_ackermann, [int, int])
+    f = compile_function(call_ackermann, [int, int], view=False)
     assert f(0, 2) == 3
     
 def test_tuple_getitem(): 
