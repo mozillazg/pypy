@@ -39,8 +39,9 @@ class StructTypeNode(LLVMNode):
         codewriter.structdef(self.ref, l)
 
 class StructVarsizeTypeNode(StructTypeNode):
-    def __init__(self, type_):
-        super(self, StructVarsizeTypeNode).__init__(type_)
+
+    def __init__(self, db, struct): 
+        super(StructVarsizeTypeNode, self).__init__(db, struct)
         new_var_name = "%%new.st.var.%s" % self.name
         self.constructor_name = "%s * %s(int %%len)" % (self.ref, new_var_name)
         

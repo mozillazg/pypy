@@ -1,6 +1,6 @@
 from pypy.translator.llvm2.log import log 
 from pypy.translator.llvm2.funcnode import FuncNode, FuncTypeNode
-from pypy.translator.llvm2.structnode import StructNode, StructTypeNode
+from pypy.translator.llvm2.structnode import StructNode, StructTypeNode, StructVarsizeTypeNode
 from pypy.translator.llvm2.arraynode import ArrayNode, ArrayTypeNode
 from pypy.rpython import lltype
 from pypy.objspace.flow.model import Block, Constant, Variable
