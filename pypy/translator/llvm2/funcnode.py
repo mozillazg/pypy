@@ -2,7 +2,7 @@ import py
 from pypy.objspace.flow.model import Block, Constant, Variable, Link
 from pypy.objspace.flow.model import flatten, mkentrymap, traverse
 from pypy.rpython import lltype
-from pypy.translator.llvm2.cfgtransform import prepare_graph
+from pypy.translator.backendoptimization import remove_same_as 
 from pypy.translator.llvm2.node import LLVMNode
 from pypy.translator.llvm2.log import log 
 log = log.funcnode
@@ -38,8 +38,9 @@ class FuncNode(LLVMNode):
     def __init__(self, db, const_ptr_func):
         self.db = db
         self.ref = "%" + const_ptr_func.value._obj._name
-        self.graph = prepare_graph(const_ptr_func.value._obj.graph,
-                                   db._translator)
+        self.graph = const_ptr_func.value._obj.graph 
+        remove_same_as(self.graph) 
+        
     def __str__(self):
         return "<FuncNode %r>" %(self.ref,)
     
@@ -53,6 +54,7 @@ class FuncNode(LLVMNode):
                 for op in node.operations:
                     map(self.db.prepare_arg, op.args)
                     self.db.prepare_arg(op.result)
+        assert self.graph, "cannot traverse"
         traverse(visit, self.graph)
         self._issetup = True
     # ______________________________________________________________________
