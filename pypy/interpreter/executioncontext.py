@@ -1,7 +1,7 @@
 import sys
 from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.compiler import CPythonCompiler
+from pypy.interpreter.pycompiler import CPythonCompiler
 
 class ExecutionContext:
     """An ExecutionContext holds the state of an execution thread
