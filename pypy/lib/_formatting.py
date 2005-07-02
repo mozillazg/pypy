@@ -453,9 +453,12 @@ def format(fmt, values, valuedict=None, do_unicode=False):
                 try:
                     f = format_registry[t[0]]
                 except KeyError:
+                    char = t[0]
+                    if isinstance(char, unicode):
+                        char = char.encode(sys.getdefaultencoding(), 'replace')
                     raise ValueError("unsupported format character "
                                      "'%s' (0x%x) at index %d"
-                                     %(t[0], ord(t[0]), fmtiter.i-1))
+                                     % (char, ord(t[0]), fmtiter.i - 1))
                 # Trying to translate this using the flow space.
                 # Currently, star args give a problem there,
                 # so let's be explicit about the args:
