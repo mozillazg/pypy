@@ -1,7 +1,7 @@
 """test module for CPython / PyPy nested tuples comparison"""
 import os, os.path as osp
-from pypy.module.recparser.pythonutil import python_parse
-from pypy.module.recparser.pythonparse import pypy_parse
+from pypy.module.recparser.pythonutil import python_parse, pypy_parse
+# from pypy.module.recparser.pythonparse import pypy_parse
 from pprint import pprint
 from pypy.module.recparser import grammar
 grammar.DEBUG = False
@@ -39,21 +39,30 @@ def print_sym_tuple(nested, level=0, limit=15, names=False, trace=()):
 def assert_tuples_equal(tup1, tup2, curpos = ()):
     for index, (elt1, elt2) in enumerate(zip(tup1, tup2)):
         if elt1 != elt2:
-            if type(elt1) is tuple and type(elt2) is tuple:
+            if isinstance(elt1, tuple) and isinstance(elt2, tuple):
                 assert_tuples_equal(elt1, elt2, curpos + (index,))
             raise AssertionError('Found difference at %s : %s != %s\n' %
                                  (curpos, name(elt1), name(elt2) ), curpos)
 
 def test_samples():
     samples_dir = osp.join(osp.dirname(__file__), 'samples')
-    for fname in os.listdir(samples_dir):
-        if not fname.endswith('.py'):
-            continue
-        abspath = osp.join(samples_dir, fname)
-        yield check_parse, abspath
-
+    for use_lookahead in (True, False):
+        grammar.USE_LOOKAHEAD = use_lookahead
+        for fname in os.listdir(samples_dir):
+            if not fname.endswith('.py'):
+            # if fname != 'snippet_simple_assignment.py':
+                continue
+            abspath = osp.join(samples_dir, fname)
+            yield check_parse, abspath
+        
 def check_parse(filepath):
-    pypy_tuples = pypy_parse(filepath)
+    # pypy_tuples = pypy_parse(filepath)
+    encoding_decl, stack_element, encoding = pypy_parse(filepath)
+    nested_tuples = stack_element.as_tuple()
+    if encoding is None:
+        pypy_tuples = nested_tuples
+    else:
+        pypy_tuples = (encoding_decl, nested_tuples, encoding)
     python_tuples = python_parse(filepath)
     try:
         assert_tuples_equal(pypy_tuples, python_tuples)

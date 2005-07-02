@@ -60,20 +60,21 @@ TOKEN_MAP = {
     "|" : token.VBAR,
     "|=" : token.VBAREQUAL,
     }
-    
+NT_OFFSET = token.NT_OFFSET    
+
 SYMBOLS = {}
 # copies the numerical mapping between symbol name and symbol value
 # into SYMBOLS
-for k,v in symbol.__dict__.items():
-    if type(v)==int:
-        SYMBOLS[k] = v
+for k,v in symbol.sym_name.items():
+    SYMBOLS[v] = k
+SYMBOLS['UNKNOWN'] = -1
 
 
 class SyntaxNode(object):
     """A syntax node"""
-    def __init__(self, name, source, *args):
+    def __init__(self, name, source, args):
         self.name = name
-        self.nodes = list(args)
+        self.nodes = args
         self.lineno = source.current_line()
         
     def dumptree(self, treenodes, indent):
@@ -102,6 +103,7 @@ class SyntaxNode(object):
         return "(%s)"  % self.name
 
     def visit(self, visitor):
+        """NOT RPYTHON, used only at bootstrap time anyway"""
         visit_meth = getattr(visitor, "visit_%s" % self.name, None)
         if visit_meth:
             return visit_meth(self)
@@ -114,7 +116,7 @@ class SyntaxNode(object):
         return [ self ]
 
     def totuple(self, lineno=False ):
-        symvalue = SYMBOLS.get( self.name, (0,self.name) )
+        symvalue = SYMBOLS.get( self.name, (0, self.name) )
         l = [ symvalue ]
         l += [node.totuple(lineno) for node in self.nodes]
         return tuple(l)
@@ -128,7 +130,7 @@ class TempSyntaxNode(SyntaxNode):
 class TokenNode(SyntaxNode):
     """A token node"""
     def __init__(self, name, source, value):
-        SyntaxNode.__init__(self, name, source)
+        SyntaxNode.__init__(self, name, source, [])
         self.value = value
 
     def dumptree(self, treenodes, indent):

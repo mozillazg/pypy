@@ -3,49 +3,45 @@ it obeys the TokenSource interface defined for the grammar
 analyser in grammar.py
 """
 
-from grammar import TokenSource
+from grammar import TokenSource, Token
+# Don't import string for that ...
+NAMECHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+NUMCHARS = '0123456789'
+ALNUMCHARS = NAMECHARS + NUMCHARS
+EXTENDED_ALNUMCHARS = ALNUMCHARS + '-.'
+WHITESPACES = ' \t\n\r\v\f'
 
-DEBUG = False
-import re
+def match_encoding_declaration(comment):
+    """returns the declared encoding or None
 
-KEYWORDS = [
-    'and', 'assert', 'break', 'class', 'continue', 'def', 'del',
-    'elif', 'if', 'import', 'in', 'is', 'finally', 'for', 'from',
-    'global', 'else', 'except', 'exec', 'lambda', 'not', 'or',
-    'pass', 'print', 'raise', 'return', 'try', 'while', 'yield'
-    ]
-
-py_keywords = re.compile(r'(%s)$' % ('|'.join(KEYWORDS)), re.M | re.X)
-
-py_punct = re.compile(r"""
-<>|!=|==|~|
-<=|<<=|<<|<|
->=|>>=|>>|>|
-\*=|\*\*=|\*\*|\*|
-//=|/=|//|/|
-%=|\^=|\|=|\+=|=|&=|-=|
-,|\^|&|\+|-|\.|%|\||
-\)|\(|;|:|@|\[|\]|`|\{|\}
-""", re.M | re.X)
-
-g_symdef = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*:", re.M)
-g_string = re.compile(r"'[^']+'", re.M)
-py_name = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*", re.M)
-py_comment = re.compile(r"#.*$|[ \t\014]*$", re.M)
-py_ws = re.compile(r" *", re.M)
-py_skip = re.compile(r"[ \t\014]*(#.*$)?", re.M)
-py_encoding = re.compile(r"coding[:=]\s*([-\w.]+)")
-# py_number = re.compile(r"0x[0-9a-z]+|[0-9]+l|([0-9]+\.[0-9]*|\.[0-9]+|[0-9]+)(e[+-]?[0-9]+)?j?||[0-9]+", re.I)
-
-# 0x[\da-f]+l matches hexadecimal numbers, possibly defined as long
-# \d+l matches and only matches long integers
-# (\d+\.\d*|\.\d+|\d+)(e[+-]?\d+)?j? matches simple integers,
-#   exponential notations and complex
-py_number = re.compile(r"""0x[\da-f]+l?|
-\d+l|
-(\d+\.\d*|\.\d+|\d+)(e[+-]?\d+)?j?
-""", re.I | re.X)
-
+    This function is a replacement for :
+    >>> py_encoding = re.compile(r"coding[:=]\s*([-\w.]+)")
+    >>> py_encoding.search(comment)
+    """
+    index = comment.find('coding')
+    if index == -1:
+        return None
+    next_char = comment[index + 6]
+    if next_char not in ':=':
+        return None
+    end_of_decl = comment[index + 7:]
+    index = 0
+    for char in end_of_decl:
+        if char not in WHITESPACES:
+            break
+        index += 1
+    else:
+        return None
+    encoding = ''
+    for char in end_of_decl[index:]:
+        if char in EXTENDED_ALNUMCHARS:
+            encoding += char
+        else:
+            break
+    if encoding != '':
+        return encoding
+    return None
+    
 def _normalize_encoding(encoding):
     """returns normalized name for <encoding>
 
@@ -64,25 +60,258 @@ def _normalize_encoding(encoding):
             return 'iso-8859-1'
     return encoding
 
+################################################################################
+import token as tokenmod
+from pytokenize import tabsize, whiteSpaceDFA, triple_quoted, endDFAs, \
+     single_quoted, pseudoDFA 
+import automata
+
+# adopt pytokenize notations / values
+tokenmod.COMMENT = tokenmod.N_TOKENS 
+tokenmod.NL = tokenmod.N_TOKENS + 1
+
+class TokenError(Exception):
+    """Raised when EOF is found prematuerly"""
+    def __init__(self, msg, strstart, token_stack):
+        # Exception.__init__(self, msg)
+        self.strstart = strstart
+        self.token_stack = token_stack
+    
+
+def generate_tokens(lines):
+    """
+    This is a rewrite of pypy.module.parser.pytokenize.generate_tokens since
+    the original function is not RPYTHON (uses yield)
+    It was also slightly modified to generate Token instances instead
+    of the original 5-tuples
+
+    Original docstring ::
+    
+        The generate_tokens() generator requires one argment, readline, which
+        must be a callable object which provides the same interface as the
+        readline() method of built-in file objects. Each call to the function
+        should return one line of input as a string.
+
+        The generator produces 5-tuples with these members: the token type; the
+        token string; a 2-tuple (srow, scol) of ints specifying the row and
+        column where the token begins in the source; a 2-tuple (erow, ecol) of
+        ints specifying the row and column where the token ends in the source;
+        and the line on which the token was found. The line passed is the
+        logical line; continuation lines are included.
+    """
+    token_list = []
+    lnum = parenlev = continued = 0
+    namechars = NAMECHARS
+    numchars = NUMCHARS
+    contstr, needcont = '', 0
+    contline = None
+    indents = [0]
+    last_comment = ''
+    encoding = None
+    strstart = (0, 0)
+
+    lines.append('') # XXX HACK probably not needed
+    endDFA = automata.DFA([], []) # XXX Make the translator happy
+    line = ''                 # XXX Make the translator happy
+    for line in lines:
+        lnum = lnum + 1
+        pos, max = 0, len(line)
+
+        if contstr:                            # continued string
+            if not line:
+                raise TokenError("EOF in multi-line string", strstart, token_list)
+            endmatch = endDFA.recognize(line)
+            if -1 != endmatch:
+                pos = end = endmatch
+                tok = token_from_values(tokenmod.STRING, contstr + line[:end])
+                token_list.append((tok, line))
+                last_comment = ''
+                # token_list.append((STRING, contstr + line[:end],
+                #                    strstart, (lnum, end), contline + line))
+                contstr, needcont = '', 0
+                contline = None
+            elif needcont and line[-2:] != '\\\n' and line[-3:] != '\\\r\n':
+                tok = token_from_values(tokenmod.ERRORTOKEN, contstr + line)
+                token_list.append((tok, line))
+                last_comment = ''
+                # token_list.append((ERRORTOKEN, contstr + line,
+                #                    strstart, (lnum, len(line)), contline))
+                contstr = ''
+                contline = None
+                continue
+            else:
+                contstr = contstr + line
+                contline = contline + line
+                continue
+
+        elif parenlev == 0 and not continued:  # new statement
+            if not line: break
+            column = 0
+            while pos < max:                   # measure leading whitespace
+                if line[pos] == ' ': column = column + 1
+                elif line[pos] == '\t': column = (column/tabsize + 1)*tabsize
+                elif line[pos] == '\f': column = 0
+                else: break
+                pos = pos + 1
+            if pos == max: break
+
+            if line[pos] in '#\r\n':           # skip comments or blank lines
+                if line[pos] == '#':
+                    tok = token_from_values(tokenmod.COMMENT, line[pos:])
+                    last_comment = line[pos:]
+                    if lnum <= 2 and encoding is None:
+                        encoding = match_encoding_declaration(last_comment)
+                        if encoding is not None:
+                            encoding = _normalize_encoding(encoding)
+                else:
+                    tok = token_from_values(tokenmod.NL, line[pos:])
+                    last_comment = ''
+                # XXX Skip NL and COMMENT Tokens   # token_list.append((tok, line))
+                # token_list.append(((NL, COMMENT)[line[pos] == '#'], line[pos:],
+                #                    (lnum, pos), (lnum, len(line)), line))
+                continue
+
+            if column > indents[-1]:           # count indents or dedents
+                indents.append(column)
+                tok = token_from_values(tokenmod.INDENT, line[:pos])
+                token_list.append((tok, line))
+                last_comment = ''
+                # token_list.append((INDENT, line[:pos], (lnum, 0), (lnum, pos), line))
+            while column < indents[-1]:
+                indents = indents[:-1]
+                tok = token_from_values(tokenmod.DEDENT, '')
+                token_list.append((tok, line))
+                last_comment = ''
+                # token_list.append((DEDENT, '', (lnum, pos), (lnum, pos), line))
+
+        else:                                  # continued statement
+            if not line:
+                raise TokenError("EOF in multi-line statement", (lnum, 0), token_list)
+            continued = 0
+
+        while pos < max:
+            pseudomatch = pseudoDFA.recognize(line, pos)
+            if -1 != pseudomatch:                            # scan for tokens
+                # JDR: Modified
+                start = whiteSpaceDFA.recognize(line, pos)
+                if -1 == start:
+                    start = pos
+                end = pseudomatch
+
+                spos, epos, pos = (lnum, start), (lnum, end), end
+                token, initial = line[start:end], line[start]
+
+                if initial in numchars or \
+                   (initial == '.' and token != '.'):      # ordinary number
+                    tok = token_from_values(tokenmod.NUMBER, token)
+                    token_list.append((tok, line))
+                    last_comment = ''
+                    # token_list.append((NUMBER, token, spos, epos, line))
+                elif initial in '\r\n':
+                    if parenlev > 0:
+                        tok = token_from_values(tokenmod.NL, token)
+                        last_comment = ''
+                        # XXX Skip NL
+                    else:
+                        tok = token_from_values(tokenmod.NEWLINE, token)
+                        # XXX YUCK !
+                        tok.value = last_comment
+                        token_list.append((tok, line))
+                        last_comment = ''
+                    # token_list.append((parenlev > 0 and NL or NEWLINE, token, spos, epos, line))
+                elif initial == '#':
+                    tok = token_from_values(tokenmod.COMMENT, token)
+                    last_comment = token
+                    if lnum <= 2 and encoding is None:
+                        encoding = match_encoding_declaration(last_comment)
+                        if encoding is not None:
+                            encoding = _normalize_encoding(encoding)
+                    # XXX Skip # token_list.append((tok, line))
+                    # token_list.append((COMMENT, token, spos, epos, line))
+                elif token in triple_quoted:
+                    endDFA = endDFAs[token]
+                    endmatch = endDFA.recognize(line, pos)
+                    if -1 != endmatch:                     # all on one line
+                        pos = endmatch
+                        token = line[start:pos]
+                        tok = token_from_values(tokenmod.STRING, token)
+                        token_list.append((tok, line))
+                        last_comment = ''
+                        # token_list.append((STRING, token, spos, (lnum, pos), line))
+                    else:
+                        strstart = (lnum, start)           # multiple lines
+                        contstr = line[start:]
+                        contline = line
+                        break
+                elif initial in single_quoted or \
+                    token[:2] in single_quoted or \
+                    token[:3] in single_quoted:
+                    if token[-1] == '\n':                  # continued string
+                        strstart = (lnum, start)
+                        endDFA = (endDFAs[initial] or endDFAs[token[1]] or
+                                   endDFAs[token[2]])
+                        contstr, needcont = line[start:], 1
+                        contline = line
+                        break
+                    else:                                  # ordinary string
+                        tok = token_from_values(tokenmod.STRING, token)
+                        token_list.append((tok, line))
+                        last_comment = ''
+                        # token_list.append((STRING, token, spos, epos, line))
+                elif initial in namechars:                 # ordinary name
+                    tok = token_from_values(tokenmod.NAME, token)
+                    token_list.append((tok, line))
+                    last_comment = ''
+                    # token_list.append((NAME, token, spos, epos, line))
+                elif initial == '\\':                      # continued stmt
+                    continued = 1
+                else:
+                    if initial in '([{': parenlev = parenlev + 1
+                    elif initial in ')]}': parenlev = parenlev - 1
+                    tok = token_from_values(tokenmod.OP, token)
+                    token_list.append((tok, line)) 
+                    last_comment = ''
+                    # token_list.append((OP, token, spos, epos, line))
+            else:
+                tok = token_from_values(tokenmod.ERRORTOKEN, line[pos])
+                token_list.append((tok, line))
+                last_comment = ''
+                # token_list.append((ERRORTOKEN, line[pos],
+                #                    (lnum, pos), (lnum, pos+1), line))
+                pos = pos + 1
+
+    last_comment = ''
+    for indent in indents[1:]:                 # pop remaining indent levels
+        tok = token_from_values(tokenmod.DEDENT, '')
+        token_list.append((tok, line))
+        # token_list.append((DEDENT, '', (lnum, 0), (lnum, 0), ''))
+
+    ## <XXX> adim
+    token_list.append((Token('NEWLINE', ''), line))
+    ## </XXX>
+    tok = token_from_values(tokenmod.ENDMARKER, '',)
+    token_list.append((tok, line))
+    # token_list.append((ENDMARKER, '', (lnum, 0), (lnum, 0), ''))
+    return token_list, encoding
+
 class PythonSource(TokenSource):
-    """The Python tokenizer"""
-    def __init__(self, inpstring):
-        TokenSource.__init__(self)
-        self.input = inpstring
-        self.pos = 0
-        self.indent = 0
-        self.indentstack = [ 0 ]
-        self.atbol = True
-        self.line = 1
-        self._current_line = 1
-        self.pendin = 0 # indentation change waiting to be reported
-        self.level = 0
-        self.linestart = 0
-        self.stack = []
+    """This source uses Jonathan's tokenizer"""
+    def __init__(self, strings):
+        # TokenSource.__init__(self)
+        tokens, encoding = generate_tokens(strings)
+        self.token_stack = tokens
+        self.encoding = encoding
+        self._current_line = '' # the current line (as a string)
         self.stack_pos = 0
-        self.comment = ''
-        self.encoding = None
-        
+
+    def next(self):
+        if self.stack_pos >= len(self.token_stack):
+            raise StopIteration("Remove me")
+        tok, line = self.token_stack[self.stack_pos]
+        self.stack_pos += 1
+        self._current_line = line
+        return tok
+
     def current_line(self):
         return self._current_line
 
@@ -92,6 +321,14 @@ class PythonSource(TokenSource):
     def restore(self, ctx):
         self.stack_pos = ctx
 
+    def peek(self):
+        """returns next token without consuming it"""
+        ctx = self.context()
+        token = self.next()
+        self.restore(ctx)
+        return token
+
+    #### methods below have to be translated 
     def offset(self, ctx=None):
         if ctx is None:
             return self.stack_pos
@@ -99,310 +336,40 @@ class PythonSource(TokenSource):
             assert type(ctx)==int
             return ctx
 
-    def _next(self):
-        """returns the next token from source"""
-        inp = self.input
-        pos = self.pos
-        input_length = len(inp)
-        if pos >= input_length:
-            return self.end_of_file()
-        # Beginning of line
-        if self.atbol:
-            self.linestart = pos
-            col = 0
-            m = py_ws.match(inp, pos)
-            pos = m.end()
-            col = pos - self.linestart
-            self.atbol = False
-            # skip blanklines
-            m = py_comment.match(inp, pos)
-            if m:
-                if not self.comment:
-                    self.comment = m.group(0)
-                # <HACK> XXX FIXME: encoding management
-                if self.line <= 2:
-                    # self.comment can be the previous comment, so don't use it
-                    comment = m.group(0)[1:]
-                    m_enc = py_encoding.search(comment)
-                    if m_enc is not None:
-                        self.encoding = _normalize_encoding(m_enc.group(1))
-                # </HACK>
-                self.pos = m.end() + 1
-                self.line += 1
-                self.atbol = True
-                return self._next()
-            # the current block is more indented than the previous one
-            if col > self.indentstack[-1]:
-                self.indentstack.append(col)
-                return "INDENT", None
-            # the current block is less indented than the previous one
-            while col < self.indentstack[-1]:
-                self.pendin += 1
-                self.indentstack.pop(-1)
-            if col != self.indentstack[-1]:
-                raise SyntaxError("Indentation Error")
-        if self.pendin > 0:
-            self.pendin -= 1
-            return "DEDENT", None
-        m = py_skip.match(inp, pos)
-        if m.group(0)[-1:] == '\n':
-            self.line += 1
-        self.comment = m.group(1) or ''
-        pos = m.end() # always match
-        if pos >= input_length:
-            return self.end_of_file()
-        self.pos = pos
-
-        # STRING
-        c = inp[pos]
-        if c in ('r','R'):
-            if pos < input_length-1 and inp[pos+1] in ("'",'"'):
-                return self.next_string(raw=1)
-        elif c in ('u','U'):
-            if pos < input_length-1:
-                if inp[pos+1] in ("r",'R'):
-                    if pos<input_length-2 and inp[pos+2] in ("'",'"'):
-                        return self.next_string( raw = 1, uni = 1 )
-                elif inp[pos+1] in ( "'", '"' ):
-                    return self.next_string( uni = 1 )
-        elif c in ( '"', "'" ):
-            return self.next_string()
-
-        # NAME
-        m = py_name.match(inp, pos)
-        if m:
-            self.pos = m.end()
-            val = m.group(0)
-#            if py_keywords.match(val):
-#                return val, None
-            return "NAME", val
-
-        # NUMBER
-        m = py_number.match(inp, pos)
-        if m:
-            self.pos = m.end()
-            return "NUMBER", m.group(0)
-
-        # NEWLINE
-        if c == '\n':
-            self.pos += 1
-            self.line += 1
-            if self.level > 0:
-                return self._next()
-            else:
-                self.atbol = True
-                comment = self.comment
-                self.comment = ''
-                return "NEWLINE", comment
-
-        if c == '\\':
-            if pos < input_length-1 and inp[pos+1] == '\n':
-                self.pos += 2
-                return self._next()
-        
-        m = py_punct.match(inp, pos)
-        if m:
-            punct = m.group(0)
-            if punct in ( '(', '{', '[' ):
-                self.level += 1
-            if punct in ( ')', '}', ']' ):
-                self.level -= 1
-            self.pos = m.end()
-            return punct, None
-        raise SyntaxError("Unrecognized token '%s'" % inp[pos:pos+20] )
-
-    def next(self):
+    def get_pos(self):
         if self.stack_pos >= len(self.stack):
-            tok, val = self._next()
-            self.stack.append( (tok, val, self.line) )
-            self._current_line = self.line
+            return self.pos
         else:
-            tok,val,line = self.stack[self.stack_pos]
-            self._current_line = line
-        self.stack_pos += 1
-        if DEBUG:
-            print "%d/%d: %s, %s" % (self.stack_pos, len(self.stack), tok, val)
-        return (tok, val)
-            
-    def end_of_file(self):
-        """return DEDENT and ENDMARKER"""
-        if len(self.indentstack) == 1:
-            self.indentstack.pop(-1)
-            return "NEWLINE", '' #self.comment
-        elif len(self.indentstack) > 1:
-            self.indentstack.pop(-1)
-            return "DEDENT", None
-        return "ENDMARKER", None
+            token, line, pos = self.stack[self.stack_pos]
+            return pos
 
-
-    def next_string(self, raw=0, uni=0):
-        pos = self.pos + raw + uni
-        inp = self.input
-        quote = inp[pos]
-        qsize = 1
-        if inp[pos:pos+3] == 3*quote:
-            pos += 3
-            quote = 3*quote
-            qsize = 3
-        else:
-            pos += 1
-        while True:
-            if inp[pos:pos+qsize] == quote:
-                s = inp[self.pos:pos+qsize]
-                self.pos = pos+qsize
-                return "STRING", s
-            # FIXME : shouldn't it be inp[pos] == os.linesep ?
-            if inp[pos:pos+2] == "\n" and qsize == 1:
-                return None, None
-            if inp[pos] == "\\":
-                pos += 1
-            pos += 1
-
+    def get_source_text(self, pos0, pos1 ):
+        return self.input[pos0:pos1]
+        
     def debug(self):
         """return context for debug information"""
-        if not hasattr(self, '_lines'):
-            # split lines only once
-            self._lines = self.input.splitlines()
-        if self.line > len(self._lines):
-            lineno = len(self._lines)
-        else:
-            lineno = self.line
-        return 'line %s : %s' % (lineno, self._lines[lineno-1])
+        return 'line %s : %s' % ('XXX', self._current_line)
 
-    ## ONLY refactor ideas ###########################################
-##     def _mynext(self):
-##         """returns the next token from source"""
-##         inp = self.input
-##         pos = self.pos
-##         input_length = len(inp)
-##         if pos >= input_length:
-##             return self.end_of_file()
-##         # Beginning of line
-##         if self.atbol:
-##             self.linestart = pos
-##             col = 0
-##             m = py_ws.match(inp, pos)
-##             pos = m.end()
-##             col = pos - self.linestart
-##             self.atbol = False
-##             # skip blanklines
-##             m = py_comment.match(inp, pos)
-##             if m:
-##                 self.pos = m.end() + 1
-##                 self.line += 1
-##                 self.atbol = True
-##                 return self._next()
-##             # the current block is more indented than the previous one
-##             if col > self.indentstack[-1]:
-##                 self.indentstack.append(col)
-##                 return "INDENT", None
-##             # the current block is less indented than the previous one
-##             while col < self.indentstack[-1]:
-##                 self.pendin += 1
-##                 self.indentstack.pop(-1)
-##             if col != self.indentstack[-1]:
-##                 raise SyntaxError("Indentation Error")
-##         if self.pendin > 0:
-##             self.pendin -= 1
-##             return "DEDENT", None
-##         m = py_skip.match(inp, pos)
-##         if m.group(0)[-1:] == '\n':
-##             self.line += 1
-##         pos = m.end() # always match
-##         if pos >= input_length:
-##             return self.end_of_file()
-##         self.pos = pos
+NONE_LIST = [tokenmod.ENDMARKER, tokenmod.INDENT, tokenmod.DEDENT,]
+NAMED_LIST = [tokenmod.OP, ]
 
-##         c = inp[pos]
-##         chain = (self._check_string, self._check_name, self._check_number,
-##                  self._check_newline, self._check_backslash, self._check_punct)
-##         for check_meth in chain:
-##             token_val_pair = check_meth(c, pos)
-##             if token_val_pair is not None:
-##                 return token_val_pair
-        
+def token_from_values(tok_type, tok_string):
+    """XXX Compatibility layer between both parsers"""
+    if tok_type in NONE_LIST:
+        return Token(tokenmod.tok_name[tok_type], None)
+    if tok_type in NAMED_LIST:
+        return Token(tok_string, None)
+    if tok_type == tokenmod.NEWLINE:
+        return Token('NEWLINE', '') # XXX pending comment ?
+    return Token(tokenmod.tok_name[tok_type], tok_string)
 
-##     def _check_string(self, c, pos):
-##         inp = self.input
-##         input_length = len(inp)
-##         # STRING
-##         if c in ('r', 'R'):
-##             if pos < input_length-1 and inp[pos+1] in ("'",'"'):
-##                 return self.next_string(raw=1)
-##         elif c in ('u','U'):
-##             if pos < input_length - 1:
-##                 if inp[pos+1] in ("r", 'R'):
-##                     if pos<input_length-2 and inp[pos+2] in ("'",'"'):
-##                         return self.next_string(raw = 1, uni = 1)
-##                 elif inp[pos+1] in ( "'", '"' ):
-##                     return self.next_string(uni = 1)
-##         elif c in ( '"', "'" ):
-##             return self.next_string()
-##         return None
-
-##     def _check_name(self, c, pos):
-##         inp = self.input
-##         # NAME
-##         m = py_name.match(inp, pos)
-##         if m:
-##             self.pos = m.end()
-##             val = m.group(0)
-##             if py_keywords.match(val):
-##                 return val, None
-##             return "NAME", val
-##         return None
-
-##     def _check_number(self, c, pos):
-##         inp = self.input
-##         # NUMBER
-##         m = py_number.match(inp, pos)
-##         if m:
-##             self.pos = m.end()
-##             return "NUMBER", m.group(0)
-##         return None
-
-##     def _check_newline(self, c, pos):
-##         # NEWLINE
-##         if c == '\n':
-##             self.pos += 1
-##             self.line += 1
-##             if self.level > 0:
-##                 return self._next()
-##             else:
-##                 self.atbol = True
-##                 return "NEWLINE", None
-##         return None
-            
-##     def _check_backslash(self, c, pos):
-##         inp = self.input
-##         input_length = len(inp)
-##         if c == '\\':
-##             if pos < input_length-1 and inp[pos+1] == '\n':
-##                 self.pos += 2
-##                 return self._next()
-##         return None
-
-##     def _check_punct(self, c, pos):
-##         inp = self.input
-##         input_length = len(inp)
-##         m = py_punct.match(inp, pos)
-##         if m:
-##             punct = m.group(0)
-##             if punct in ( '(', '{' ):
-##                 self.level += 1
-##             if punct in ( ')', '}' ):
-##                 self.level -= 1
-##             self.pos = m.end()
-##             return punct, None
-##         raise SyntaxError("Unrecognized token '%s'" % inp[pos:pos+20] )
-
-
+Source = PythonSource
 
 def tokenize_file(filename):
     f = file(filename).read()
-    src = PythonSource(f)
+    src = Source(f)
     token = src.next()
-    while token!=("ENDMARKER",None) and token!=(None,None):
+    while token != ("ENDMARKER", None) and token != (None, None):
         print token
         token = src.next()
 

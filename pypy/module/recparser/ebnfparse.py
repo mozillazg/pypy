@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from grammar import BaseGrammarBuilder, Alternative, Sequence, Token, \
-     KleenStar, GrammarElement
+     KleenStar, GrammarElement, build_first_sets, EmptyToken
 from ebnflexer import GrammarSource
 
 import re
@@ -32,7 +32,7 @@ class NameToken(Token):
         Token.__init__(self, "NAME")
         self.keywords = keywords
 
-    def match(self, source, builder):
+    def match(self, source, builder, level=0):
         """Matches a token.
         the default implementation is to match any token whose type
         corresponds to the object's name. You can extend Token
@@ -44,16 +44,38 @@ class NameToken(Token):
             # error unknown or negative integer
         """
         ctx = source.context()
-        tk_type, tk_value = source.next()
-        if tk_type==self.name:
-            if tk_value not in self.keywords:
-                ret = builder.token( tk_type, tk_value, source )
-                return self.debug_return( ret, tk_type, tk_value )
+        tk = source.next()
+        if tk.name==self.name:
+            if tk.value not in self.keywords:
+                ret = builder.token( tk.name, tk.value, source )
+                return self.debug_return( ret, tk.name, tk.value )
         source.restore( ctx )
-        return None
+        return 0
         
+    def match_token(self, other):
+        """convenience '==' implementation, this is *not* a *real* equality test
+        a Token instance can be compared to:
+         - another Token instance in which case all fields (name and value)
+           must be equal
+         - a tuple, such as those yielded by the Python lexer, in which case
+           the comparison algorithm is similar to the one in match()
+           XXX:
+             1/ refactor match and __eq__ ?
+             2/ make source.next and source.peek return a Token() instance
+        """
+        if not isinstance(other, Token):
+            raise RuntimeError("Unexpected token type %r" % other)
+        if other is EmptyToken:
+            return False
+        if other.name != self.name:
+            return False
+        if other.value in self.keywords:
+            return False
+        return True
+
 
 class EBNFVisitor(object):
+    
     def __init__(self):
         self.rules = {}
         self.terminals = {}
@@ -101,10 +123,10 @@ class EBNFVisitor(object):
         
     def visit_alternative( self, node ):
         items = [ node.nodes[0].visit(self) ]
-        items+= node.nodes[1].visit(self)        
-        if len(items)==1 and items[0].name.startswith(':'):
+        items += node.nodes[1].visit(self)        
+        if len(items) == 1 and items[0].name.startswith(':'):
             return items[0]
-        alt = Alternative( self.new_name(), *items )
+        alt = Alternative( self.new_name(), items )
         return self.new_item( alt )
 
     def visit_sequence( self, node ):
@@ -115,16 +137,12 @@ class EBNFVisitor(object):
         if len(items)==1:
             return items[0]
         elif len(items)>1:
-            return self.new_item( Sequence( self.new_name(), *items) )
+            return self.new_item( Sequence( self.new_name(), items) )
         raise SyntaxError("Found empty sequence")
 
     def visit_sequence_cont( self, node ):
         """Returns a list of sequences (possibly empty)"""
         return [n.visit(self) for n in node.nodes]
-##         L = []
-##         for n in node.nodes:
-##             L.append( n.visit(self) )
-##         return L
 
     def visit_seq_cont_list(self, node):
         return node.nodes[1].visit(self)
@@ -178,6 +196,7 @@ class EBNFVisitor(object):
                 raise SyntaxError("Got symbol star_opt with value='%s'" % tok.value )
         return myrule
 
+rules = None
 
 def grammar_grammar():
     """Builds the grammar for the grammar file
@@ -193,37 +212,42 @@ def grammar_grammar():
       option: '[' alternative ']'
       group: '(' alternative ')' star?    
     """
+    global rules
     # star: '*' | '+'
-    star          = Alternative( "star", Token('*'), Token('+') )
+    star          = Alternative( "star", [Token('*'), Token('+')] )
     star_opt      = KleenStar  ( "star_opt", 0, 1, rule=star )
 
     # rule: SYMBOL ':' alternative
-    symbol        = Sequence(    "symbol", Token('SYMBOL'), star_opt )
+    symbol        = Sequence(    "symbol", [Token('SYMBOL'), star_opt] )
     symboldef     = Token(       "SYMDEF" )
-    alternative   = Sequence(    "alternative" )
-    rule          = Sequence(    "rule", symboldef, alternative )
+    alternative   = Sequence(    "alternative", [])
+    rule          = Sequence(    "rule", [symboldef, alternative] )
 
     # grammar: rule+
     grammar       = KleenStar(   "grammar", _min=1, rule=rule )
 
     # alternative: sequence ( '|' sequence )*
     sequence      = KleenStar(   "sequence", 1 )
-    seq_cont_list = Sequence(    "seq_cont_list", Token('|'), sequence )
+    seq_cont_list = Sequence(    "seq_cont_list", [Token('|'), sequence] )
     sequence_cont = KleenStar(   "sequence_cont",0, rule=seq_cont_list )
     
     alternative.args = [ sequence, sequence_cont ]
 
     # option: '[' alternative ']'
-    option        = Sequence(    "option", Token('['), alternative, Token(']') )
+    option        = Sequence(    "option", [Token('['), alternative, Token(']')] )
 
     # group: '(' alternative ')'
-    group         = Sequence(    "group",  Token('('), alternative, Token(')'), star_opt )
+    group         = Sequence(    "group",  [Token('('), alternative, Token(')'), star_opt] )
 
     # sequence: (SYMBOL | STRING | option | group )+
     string = Token('STRING')
-    alt           = Alternative( "sequence_alt", symbol, string, option, group ) 
+    alt           = Alternative( "sequence_alt", [symbol, string, option, group] ) 
     sequence.args = [ alt ]
-    
+
+
+    rules = [ star, star_opt, symbol, alternative, rule, grammar, sequence,
+              seq_cont_list, sequence_cont, option, group, alt ]
+    build_first_sets( rules )
     return grammar
 
 
@@ -244,7 +268,7 @@ def parse_grammar(stream):
 
 from pprint import pprint
 if __name__ == "__main__":
-    grambuild = parse_grammar(file('../python/Grammar'))
+    grambuild = parse_grammar(file('data/Grammar2.3'))
     for i,r in enumerate(grambuild.items):
         print "%  3d : %s" % (i, r)
     pprint(grambuild.terminals.keys())

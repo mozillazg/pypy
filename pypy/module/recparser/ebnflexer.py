@@ -4,7 +4,7 @@ analyser in grammar.py
 """
 
 import re
-from grammar import TokenSource
+from grammar import TokenSource, Token
 
 DEBUG = False
 
@@ -21,9 +21,10 @@ class GrammarSource(TokenSource):
         TokenSource.__init__(self)
         self.input = inpstring
         self.pos = 0
+        self._peeked = None
 
     def context(self):
-        return self.pos
+        return self.pos, self._peeked
 
     def offset(self, ctx=None):
         if ctx is None:
@@ -32,10 +33,15 @@ class GrammarSource(TokenSource):
             assert type(ctx)==int
             return ctx
 
-    def restore(self, ctx ):
-        self.pos = ctx
+    def restore(self, ctx):
+        self.pos, self._peeked = ctx
 
     def next(self):
+        if self._peeked is not None:
+            peeked = self._peeked
+            self._peeked = None
+            return peeked
+        
         pos = self.pos
         inp = self.input
         m = g_skip.match(inp, pos)
@@ -43,29 +49,35 @@ class GrammarSource(TokenSource):
             pos = m.end()
             if pos==len(inp):
                 self.pos = pos
-                return None, None
+                return Token("EOF", None)
             m = g_skip.match(inp, pos)
         m = g_symdef.match(inp,pos)
         if m:
             tk = m.group(0)
             self.pos = m.end()
-            return 'SYMDEF',tk[:-1]
+            return Token('SYMDEF',tk[:-1])
         m = g_tok.match(inp,pos)
         if m:
             tk = m.group(0)
             self.pos = m.end()
-            return tk,tk
+            return Token(tk,tk)
         m = g_string.match(inp,pos)
         if m:
             tk = m.group(0)
             self.pos = m.end()
-            return 'STRING',tk[1:-1]
+            return Token('STRING',tk[1:-1])
         m = g_symbol.match(inp,pos)
         if m:
             tk = m.group(0)
             self.pos = m.end()
-            return 'SYMBOL',tk
+            return Token('SYMBOL',tk)
         raise ValueError("Unknown token at pos=%d context='%s'" % (pos,inp[pos:pos+20]) )
+
+    def peek(self):
+        if self._peeked is not None:
+            return self._peeked
+        self._peeked = self.next()
+        return self._peeked
 
     def debug(self):
         return self.input[self.pos:self.pos+20]
