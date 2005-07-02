@@ -8,8 +8,10 @@ from pypy.rpython.rmodel import inputconst, getfunctionptr
 from pypy.rpython import lltype
 from pypy.tool.udir import udir
 from pypy.translator.llvm2.codewriter import CodeWriter
+from pypy.translator.backendoptimization import remove_void
 
 def genllvm(translator):
+    remove_void(translator)
     func = translator.entrypoint
 
     db = Database(translator)
