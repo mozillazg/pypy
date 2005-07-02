@@ -324,6 +324,12 @@ class __extend__(SomeString):
     def method_replace(str, s1, s2):
         return SomeString()
 
+    def method_lower(str):
+        return SomeString()
+
+    def method_upper(str):
+        return SomeString()
+
 
 class __extend__(SomeChar):
 
