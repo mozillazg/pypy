@@ -32,7 +32,7 @@ class StructTypeNode(LLVMNode):
 
     def writedatatypedecl(self, codewriter):
         assert self._issetup 
-        fields = [getattr(self.struct, name) for name in self.struct._names] 
+        fields = [getattr(self.struct, name) for name in self.struct._names_without_voids()] 
         l = [self.db.repr_arg_type(field) for field in fields]
         codewriter.structdef(self.ref, l)
 
@@ -54,7 +54,7 @@ class StructVarsizeTypeNode(StructTypeNode):
         indices_to_array = [("int", 0)]
         s = self.struct
         while isintance(s, lltypes.Struct):
-            last_pos = len(self.struct._names) - 1
+            last_pos = len(self.struct._names_without_voids()) - 1
             indices_to_array.append(("uint", last_pos))
             s = s._flds.values()[-1]
 
@@ -94,8 +94,9 @@ class StructNode(LLVMNode):
         return "<StructNode %r>" %(self.ref,)
 
     def setup(self):
-        for name in self.value._TYPE._names:
+        for name in self.value._TYPE._names_without_voids():
             T = self.value._TYPE._flds[name]
+            assert T is not lltype.Void
             if not isinstance(T, lltype.Primitive):
                 value = getattr(self.value, name)
                 # Create a dummy constant hack XXX
@@ -106,7 +107,7 @@ class StructNode(LLVMNode):
 
     def get_values(self):
         res = []
-        for name in self.value._TYPE._names:
+        for name in self.value._TYPE._names_without_voids():
             T = self.value._TYPE._flds[name]
             value = getattr(self.value, name)
             if not isinstance(T, lltype.Primitive):
