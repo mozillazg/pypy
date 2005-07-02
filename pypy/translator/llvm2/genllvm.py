@@ -26,20 +26,20 @@ def genllvm(translator):
     nl = codewriter.newline
     
     nl(); comment("Type Declarations"); nl()
-    for typ_decl in db.get_typedecls():
+    for typ_decl in db.getobjects():
         typ_decl.writedatatypedecl(codewriter)
 
     nl(); comment("Global Data") ; nl()
-    for typ_decl in db.get_globaldata():
+    for typ_decl in db.getobjects():
         typ_decl.writedata(codewriter)
 
     nl(); comment("Function Prototypes") ; nl()
-    for typ_decl in db.get_functions():
+    for typ_decl in db.getobjects():
         typ_decl.writedecl(codewriter)
 
     nl(); comment("Function Implementation") 
     codewriter.startimpl()
-    for typ_decl in db.get_functions():
+    for typ_decl in db.getobjects():
         typ_decl.writeimpl(codewriter)
 
     comment("End of file") ; nl()

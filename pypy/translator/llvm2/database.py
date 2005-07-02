@@ -71,9 +71,11 @@ class Database(object):
         elif isinstance(type_, lltype.Ptr): 
             self.prepare_repr_arg_type(type_.TO)
 
-        elif isinstance(type_, lltype.Struct): 
-            self.addpending(type_, StructTypeNode(self, type_))
-
+        elif isinstance(type_, lltype.Struct):
+            if type_._arrayfld:
+                self.addpending(type_, StructVarsizeTypeNode(self, type_))
+            else:
+                self.addpending(type_, StructTypeNode(self, type_))                
         elif isinstance(type_, lltype.FuncType): 
             self.addpending(type_, FuncTypeNode(self, type_))
 
@@ -103,49 +105,8 @@ class Database(object):
         for v in self.obj2node.values():
             if subset_types is None or isinstance(v, subset_types):
                 res.append(v)
-        res.reverse()
         return res
 
-    def get_typedecls(self):
-        return self.getobjects((StructTypeNode, ArrayTypeNode, FuncTypeNode))
-
-    def get_globaldata(self):
-        return self.getobjects((StructNode, ArrayNode))
-
-    def get_functions(self):
-        struct_nodes = [n for n in self.getobjects(StructTypeNode) if n.inline_struct]
-        return struct_nodes + self.getobjects(FuncNode)
-
-    def dump(self):
-
-        # get and reverse the order in which seen objs
-        all_objs = self.obj2node.items()
-        all_objs.reverse()
-
-        log.dump_db("*** type declarations ***")
-        for k,v in all_objs:
-            if isinstance(v, (StructTypeNode, ArrayTypeNode)):
-                log.dump_db("%s ---> %s" % (k, v))            
-
-        log.dump_db("*** global data ***")
-        for k,v in all_objs:
-            if isinstance(v, (StructNode)):
-                log.dump_db("%s ---> %s" % (k, v))
-
-        log.dump_db("*** function protos ***")
-        for k,v in all_objs:
-            if isinstance(v, (FuncNode)):
-                log.dump_db("%s ---> %s" % (k, v))
-
-        log.dump_db("*** function implementations ***")
-        for k,v in all_objs:
-            if isinstance(v, (FuncNode)):
-                log.dump_db("%s ---> %s" % (k, v))
-                
-        log.dump_db("*** unknown ***")
-        for k,v in all_objs:
-            if isinstance(v, (FuncTypeNode)):
-                log.dump_db("%s ---> %s" % (k, v))
         
     # __________________________________________________________
     # Getters

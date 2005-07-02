@@ -1,23 +1,21 @@
 import py
 from pypy.objspace.flow.model import Block, Constant, Variable, Link
-from pypy.translator.llvm2.log import log 
+from pypy.translator.llvm2.log import log
+from pypy.translator.llvm2.node import LLVMNode
 from pypy.rpython import lltype
+
 log = log.structnode 
 
-class StructTypeNode(object):
+class StructTypeNode(LLVMNode):
     _issetup = False 
     struct_counter = 0
 
     def __init__(self, db, struct): 
         assert isinstance(struct, lltype.Struct)
-
         self.db = db
         self.struct = struct
-        
         self.name = "%s.%s" % (self.struct._name, StructTypeNode.struct_counter)
         self.ref = "%%st.%s" % self.name
-        self.inline_struct = self.struct._arrayfld
-        
         StructTypeNode.struct_counter += 1
         
     def __str__(self):
@@ -25,66 +23,64 @@ class StructTypeNode(object):
     
     def setup(self):
         # Recurse
-        for fieldname in self.struct._names:
-            field_type = getattr(self.struct, fieldname)
-            self.db.prepare_repr_arg_type(field_type)
+        for field in self.struct._flds:
+            self.db.prepare_repr_arg_type(field)
         self._issetup = True
-
-    def get_decl_for_varsize(self):
-        self.new_var_name = "%%new.st.%s" % self.name
-        return "%s * %s(int %%len)" % (self.ref, self.new_var_name)
 
     # ______________________________________________________________________
     # main entry points from genllvm 
 
     def writedatatypedecl(self, codewriter):
         assert self._issetup 
-        struct = self.struct
-        l = []
-        for fieldname in struct._names:
-            type_ = getattr(struct, fieldname)
-            l.append(self.db.repr_arg_type(type_))
-        codewriter.structdef(self.ref, l) 
+        # cfbolz: XXX flds has no order
+        #l = [self.db.repr_arg_type(field) for field in self.struct._flds.values()]
+        fields = [getattr(self.struct, name) for name in self.struct._names] 
+        l = [self.db.repr_arg_type(field) for field in fields]
+        codewriter.structdef(self.ref, l)
 
+class StructVarsizeTypeNode(StructTypeNode):
+    def __init__(self, type_):
+        super(self, StructVarsizeTypeNode).__init__(type_)
+        new_var_name = "%%new.st.var.%s" % self.name
+        self.constructor_name = "%s * %s(int %%len)" % (self.ref, new_var_name)
+        
     def writedecl(self, codewriter): 
         # declaration for constructor
-        if self.inline_struct:
-            # XXX Not well thought out - hack / better to modify the graph
-            codewriter.declare(self.get_decl_for_varsize())
+        codewriter.declare(self.constructor_name)
 
     def writeimpl(self, codewriter):
-        if self.inline_struct:
-            log.writeimpl(self.ref)
-            codewriter.openfunc(self.get_decl_for_varsize())
-            codewriter.label("block0")
-            
-            # XXX TODO
-            arraytype = "sbyte"
-            indices_to_array = [("uint", 1)]
-            
-            # Into array and length            
-            indices = indices_to_array + [("uint", 1), ("int", "%len")]
-            codewriter.getelementptr("%size", self.ref + "*",
-                                     "null", *indices)
-            
-            #XXX is this ok for 64bit?
-            codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
-            codewriter.malloc("%resulttmp", "sbyte", "uint", "%sizeu")
-            codewriter.cast("%result", "sbyte*", "%resulttmp", self.ref + "*")
+        log.writeimpl(self.ref)
+        codewriter.openfunc(self.constructor_name)
+        codewriter.label("block0")
+        indices_to_array = [("int", 0)]
+        s = self.struct
+        while isintance(s, lltypes.Struct):
+            last_pos = len(self.struct._names) - 1
+            indices_to_array.append(("uint", last_pos))
+            s = s._flds.values()[-1]
 
-            # remember the allocated length for later use.
-            indices = indices_to_array + [("uint", 0)]
-            codewriter.getelementptr("%size_ptr", self.ref + "*",
-                                     "%result", *indices)
+        # Into array and length            
+        indices = indices_to_array + [("uint", 1), ("int", "%len")]
+        codewriter.getelementptr("%size", self.ref + "*",
+                                 "null", *indices)
 
-            codewriter.cast("%signedsize", "uint", "%sizeu", "int")
-            codewriter.store("int", "%signedsize", "%size_ptr")
+        #XXX is this ok for 64bit?
+        codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
+        codewriter.malloc("%resulttmp", "sbyte", "uint", "%sizeu")
+        codewriter.cast("%result", "sbyte*", "%resulttmp", self.ref + "*")
 
-            codewriter.ret(self.ref + "*", "%result")
-            codewriter.closefunc()
+        # remember the allocated length for later use.
+        indices = indices_to_array + [("uint", 0)]
+        codewriter.getelementptr("%size_ptr", self.ref + "*",
+                                 "%result", *indices)
 
+        codewriter.cast("%signedsize", "uint", "%sizeu", "int")
+        codewriter.store("int", "%signedsize", "%size_ptr")
 
-class StructNode(object):
+        codewriter.ret(self.ref + "*", "%result")
+        codewriter.closefunc()
+
+class StructNode(LLVMNode):
     _issetup = False 
     struct_counter = 0
 
