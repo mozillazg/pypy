@@ -156,6 +156,7 @@ class ClassRepr(Repr):
         #    as MethodType has a custom __get__ too and we don't support
         #    it, it's a very bad idea anyway.
         if isinstance(s_value, annmodel.SomePBC):
+            s_value = self.classdef.matching(s_value)
             debound = {}
             count = 0
             for x, classdef in s_value.prebuiltinstances.items():
