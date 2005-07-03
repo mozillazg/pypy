@@ -252,7 +252,7 @@ class OpWriter(object):
                 isinstance(arg.value, lltype.Struct))
         #XXX unclean
         type = self.db.obj2node[arg.value].ref
-        self.codewriter.malloc(targetvar, type) 
+        self.codewriter.malloc(targetvar, type, atomic=False) 
 
     def malloc_varsize(self, op):
         targetvar = self.db.repr_arg(op.result)

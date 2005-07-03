@@ -65,7 +65,7 @@ class StructVarsizeTypeNode(StructTypeNode):
 
         #XXX is this ok for 64bit?
         codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
-        codewriter.malloc("%resulttmp", "sbyte", "uint", "%sizeu")
+        codewriter.malloc("%resulttmp", "sbyte", "%sizeu", atomic=False)
         codewriter.cast("%result", "sbyte*", "%resulttmp", self.ref + "*")
 
         # remember the allocated length for later use.

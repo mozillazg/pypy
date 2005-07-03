@@ -45,7 +45,7 @@ class ArrayTypeNode(LLVMNode):
                                  "null", *indices)
         fromtype = self.db.repr_arg_type(self.array.OF) 
         codewriter.cast("%usize", fromtype + "*", "%size", "uint")
-        codewriter.malloc("%ptr", "sbyte", "%usize")
+        codewriter.malloc("%ptr", "sbyte", "%usize", atomic=False)
         codewriter.cast("%result", "sbyte*", "%ptr", self.ref+"*")
         codewriter.getelementptr("%arraylength", self.ref+"*", "%result", ("uint", 0))
         codewriter.store("int", "%len", "%arraylength")
