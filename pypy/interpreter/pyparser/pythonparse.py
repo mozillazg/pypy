@@ -30,8 +30,15 @@ def python_grammar():
 debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
 PYTHON_PARSER = python_grammar()
 
+class BuilderError(SyntaxError):
+    def __init__(self, line, lineno):
+        self.filename = 'XXX.py'
+        self.line = self.text = line
+        self.lineno = lineno
+        self.offset = -1
+        self.msg = "SyntaxError at line %d: %r" % (self.lineno, self.line)
 
-def parse_python_source( textsrc, gram, goal, builder=None ):
+def parse_python_source(textsrc, gram, goal, builder=None):
     """Parse a python source according to goal"""
     target = gram.rules[goal]
     src = Source(textsrc)
@@ -44,8 +51,9 @@ def parse_python_source( textsrc, gram, goal, builder=None ):
     if not result:
         # raising a SyntaxError here is not annotable, and it can
         # probably be handled in an other way
-        # raise SyntaxError("at %s" % src.debug() )
-        return None
+        line, lineno = src.debug()
+        raise BuilderError(line, lineno)
+        # return None
     return builder
 
 def parse_file_input(pyf, gram, builder=None):

@@ -10,8 +10,8 @@ class Terminal(StackElement):
         self.nodes = [(num, value, lineno)]
         self.num = num
 
-    def as_tuple(self, lineno=None):
-        if lineno is not None:
+    def as_tuple(self, lineno=False):
+        if lineno:
             return self.nodes[0]
         else:
             return self.nodes[0][:-1]
@@ -22,7 +22,7 @@ class NonTerminal(StackElement):
         self.nodes = nodes
         self.num = num
 
-    def as_tuple(self, lineno=None):
+    def as_tuple(self, lineno=False):
         l = [self.num] + [node.as_tuple(lineno) for node in self.nodes]
         return tuple(l)
     
@@ -46,11 +46,11 @@ class TupleBuilder(BaseGrammarBuilder):
         self.source_encoding = None
         self.lineno = lineno
         self._unknown = -10
-
+        
     def _add_rule(self, rulename):
         SYMBOLS[rulename] = self._unknown
         self._unknown -= 1
-            
+
     def alternative(self, rule, source):
         # Do nothing, keep rule on top of the stack
         if rule.is_root():
