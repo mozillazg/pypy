@@ -70,13 +70,13 @@ import automata
 tokenmod.COMMENT = tokenmod.N_TOKENS 
 tokenmod.NL = tokenmod.N_TOKENS + 1
 
-class TokenError(Exception):
+class TokenError(SyntaxError):
     """Raised when EOF is found prematuerly"""
     def __init__(self, msg, strstart, token_stack):
-        # Exception.__init__(self, msg)
-        self.strstart = strstart
+        self.lineno, self.offset = strstart
+        self.text = "XXX"
+        self.msg = "TokenError at pos (%d, %d)" % (self.lineno, self.offset)
         self.token_stack = token_stack
-    
 
 def generate_tokens(lines):
     """
@@ -125,7 +125,7 @@ def generate_tokens(lines):
             if -1 != endmatch:
                 pos = end = endmatch
                 tok = token_from_values(tokenmod.STRING, contstr + line[:end])
-                token_list.append((tok, line))
+                token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((STRING, contstr + line[:end],
                 #                    strstart, (lnum, end), contline + line))
@@ -133,7 +133,7 @@ def generate_tokens(lines):
                 contline = None
             elif needcont and line[-2:] != '\\\n' and line[-3:] != '\\\r\n':
                 tok = token_from_values(tokenmod.ERRORTOKEN, contstr + line)
-                token_list.append((tok, line))
+                token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((ERRORTOKEN, contstr + line,
                 #                    strstart, (lnum, len(line)), contline))
@@ -168,7 +168,7 @@ def generate_tokens(lines):
                     tok = token_from_values(tokenmod.NL, line[pos:])
                     last_comment = ''
                 # XXX Skip NL and COMMENT Tokens
-                # token_list.append((tok, line))
+                # token_list.append((tok, line, lnum, pos))
                 # token_list.append(((NL, COMMENT)[line[pos] == '#'],
                 #                    line[pos:],
                 #                    (lnum, pos), (lnum, len(line)), line))
@@ -177,13 +177,13 @@ def generate_tokens(lines):
             if column > indents[-1]:           # count indents or dedents
                 indents.append(column)
                 tok = token_from_values(tokenmod.INDENT, line[:pos])
-                token_list.append((tok, line))
+                token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((INDENT, line[:pos],(lnum, 0),(lnum,pos),line))
             while column < indents[-1]:
                 indents = indents[:-1]
                 tok = token_from_values(tokenmod.DEDENT, '')
-                token_list.append((tok, line))
+                token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((DEDENT, '', (lnum, pos),(lnum,pos),line))
 
@@ -207,7 +207,7 @@ def generate_tokens(lines):
                 if initial in numchars or \
                    (initial == '.' and token != '.'):      # ordinary number
                     tok = token_from_values(tokenmod.NUMBER, token)
-                    token_list.append((tok, line))
+                    token_list.append((tok, line, lnum, pos))
                     last_comment = ''
                     # token_list.append((NUMBER, token, spos, epos, line))
                 elif initial in '\r\n':
@@ -219,7 +219,7 @@ def generate_tokens(lines):
                         tok = token_from_values(tokenmod.NEWLINE, token)
                         # XXX YUCK !
                         tok.value = last_comment
-                        token_list.append((tok, line))
+                        token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                     # token_list.append((parenlev > 0 and NL or NEWLINE, token, spos, epos, line))
                 elif initial == '#':
@@ -229,7 +229,7 @@ def generate_tokens(lines):
                         encoding = match_encoding_declaration(last_comment)
                         if encoding is not None:
                             encoding = _normalize_encoding(encoding)
-                    # XXX Skip # token_list.append((tok, line))
+                    # XXX Skip # token_list.append((tok, line, lnum, pos))
                     # token_list.append((COMMENT, token, spos, epos, line))
                 elif token in triple_quoted:
                     endDFA = endDFAs[token]
@@ -238,7 +238,7 @@ def generate_tokens(lines):
                         pos = endmatch
                         token = line[start:pos]
                         tok = token_from_values(tokenmod.STRING, token)
-                        token_list.append((tok, line))
+                        token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                         # token_list.append((STRING, token, spos, (lnum, pos), line))
                     else:
@@ -258,12 +258,12 @@ def generate_tokens(lines):
                         break
                     else:                                  # ordinary string
                         tok = token_from_values(tokenmod.STRING, token)
-                        token_list.append((tok, line))
+                        token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                         # token_list.append((STRING, token, spos, epos, line))
                 elif initial in namechars:                 # ordinary name
                     tok = token_from_values(tokenmod.NAME, token)
-                    token_list.append((tok, line))
+                    token_list.append((tok, line, lnum, pos))
                     last_comment = ''
                     # token_list.append((NAME, token, spos, epos, line))
                 elif initial == '\\':                      # continued stmt
@@ -272,12 +272,12 @@ def generate_tokens(lines):
                     if initial in '([{': parenlev = parenlev + 1
                     elif initial in ')]}': parenlev = parenlev - 1
                     tok = token_from_values(tokenmod.OP, token)
-                    token_list.append((tok, line)) 
+                    token_list.append((tok, line, lnum, pos)) 
                     last_comment = ''
                     # token_list.append((OP, token, spos, epos, line))
             else:
                 tok = token_from_values(tokenmod.ERRORTOKEN, line[pos])
-                token_list.append((tok, line))
+                token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((ERRORTOKEN, line[pos],
                 #                    (lnum, pos), (lnum, pos+1), line))
@@ -286,14 +286,14 @@ def generate_tokens(lines):
     last_comment = ''
     for indent in indents[1:]:                 # pop remaining indent levels
         tok = token_from_values(tokenmod.DEDENT, '')
-        token_list.append((tok, line))
+        token_list.append((tok, line, lnum, pos))
         # token_list.append((DEDENT, '', (lnum, 0), (lnum, 0), ''))
 
     ## <XXX> adim
-    token_list.append((Token('NEWLINE', ''), line))
+    token_list.append((Token('NEWLINE', ''), line, lnum, 0))
     ## </XXX>
     tok = token_from_values(tokenmod.ENDMARKER, '',)
-    token_list.append((tok, line))
+    token_list.append((tok, line, lnum, pos))
     # token_list.append((ENDMARKER, '', (lnum, 0), (lnum, 0), ''))
     return token_list, encoding
 
@@ -305,15 +305,19 @@ class PythonSource(TokenSource):
         self.token_stack = tokens
         self.encoding = encoding
         self._current_line = '' # the current line (as a string)
+        self._lineno = -1
+        self._offset = 0
         self.stack_pos = 0
 
     def next(self):
         """Returns the next parsed token"""
         if self.stack_pos >= len(self.token_stack):
             raise StopIteration("Remove me")
-        tok, line = self.token_stack[self.stack_pos]
+        tok, line, lnum, pos = self.token_stack[self.stack_pos]
         self.stack_pos += 1
         self._current_line = line
+        self._lineno = lnum
+        self._offset = pos
         return tok
 
     def current_line(self):
@@ -340,22 +344,23 @@ class PythonSource(TokenSource):
         if ctx is None:
             return self.stack_pos
         else:
-            assert type(ctx)==int
+            assert type(ctx) == int
             return ctx
 
     def get_pos(self):
         if self.stack_pos >= len(self.stack):
             return self.pos
         else:
-            token, line, pos = self.stack[self.stack_pos]
-            return pos
+            token, line, lnum, pos = self.stack[self.stack_pos]
+            return lnum, pos
 
-    def get_source_text(self, pos0, pos1 ):
+    def get_source_text(self, pos0, pos1):
         return self.input[pos0:pos1]
         
     def debug(self):
         """return context for debug information"""
-        return 'line %s : %s' % ('XXX', self._current_line)
+        return (self._current_line, self._lineno)
+        # return 'line %s : %s' % ('XXX', self._current_line)
 
 NONE_LIST = [tokenmod.ENDMARKER, tokenmod.INDENT, tokenmod.DEDENT,]
 NAMED_LIST = [tokenmod.OP, ]
