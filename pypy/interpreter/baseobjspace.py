@@ -145,7 +145,7 @@ class ObjSpace(object):
         #self.setbuiltinmodule("_sre", "_sre_pypy")
         if self.options.useparsermodule == "recparser":
              self.setbuiltinmodule('parser', 'recparser')
-        elif self.options.parsermodule == "parser":
+        elif self.options.useparsermodule == "parser":
             self.setbuiltinmodule('parser')
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
