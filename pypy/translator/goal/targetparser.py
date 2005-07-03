@@ -8,7 +8,7 @@ from pypy.annotation.listdef import ListDef
 
 this_dir = os.path.dirname(sys.argv[0])
 
-from pypy.module.recparser.pythonutil import annotateme
+from pypy.interpreter.pyparser.pythonutil import annotateme
 # __________  Entry point  __________
 entry_point = annotateme
 
