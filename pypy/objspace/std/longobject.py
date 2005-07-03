@@ -847,46 +847,37 @@ def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
     return a, rem
 
 
-##def _divrem(a, b)
-##    size_a = len(a.digits) * 2
-##    size_b = len(b.digits) * 2
-##    PyLongObject *z;
-##
-##    if (size_b == 0) {
-##        PyErr_SetString(PyExc_ZeroDivisionError,
-##                "long division or modulo by zero");
-##        return -1;
-##    }
-##    if (size_a < size_b ||
-##        (size_a == size_b &&
-##         a->ob_digit[size_a-1] < b->ob_digit[size_b-1])) {
-##        /* |a| < |b|. */
-##        *pdiv = _PyLong_New(0);
-##        Py_INCREF(a);
-##        *prem = (PyLongObject *) a;
-##        return 0;
-##    }
-##    if (size_b == 1) {
-##        digit rem = 0;
-##        z = divrem1(a, b->ob_digit[0], &rem);
-##        if (z == NULL)
-##            return -1;
-##        *prem = (PyLongObject *) PyLong_FromLong((long)rem);
-##    }
-##    else {
-##        z = x_divrem(a, b, prem);
-##        if (z == NULL)
-##            return -1;
-##    }
-##    /* Set the signs.
-##       The quotient z has the sign of a*b;
-##       the remainder r has the sign of a,
-##       so a = b*z + r. */
-##    if ((a->ob_size < 0) != (b->ob_size < 0))
-##        z->ob_size = -(z->ob_size);
-##    if (a->ob_size < 0 && (*prem)->ob_size != 0)
-##        (*prem)->ob_size = -((*prem)->ob_size);
-##    *pdiv = z;
-##    return 0;
+def _divrem(space, a, b):
+    """ Long division with remainder, top-level routine """
+    size_a = len(a.digits) * 2
+    size_b = len(b.digits) * 2
+    if a._getshort(size_a-1) == 0:
+        size_a -= 1
+    if b._getshort(size_b-1) == 0:
+        size_b -= 1
 
-## XXXX
+    if size_b == 0:
+        raise OperationError(w_longobj.space.w_ZeroDivisionError,
+                             w_longobj.space.wrap("long division or modulo by zero"))
+
+    if (size_a < size_b or
+        (size_a == size_b and
+         a._getshort(size_a-1) < b._getshort(size_b-1))):
+        # |a| < |b|
+        z = W_LongObject(space, [r_uint(0)], 0)
+        rem = a
+        return z, rem
+    if size_b == 1:
+        z, urem = divrem1(a, b._getshort(0))
+        rem = W_LongObject(space, [urem], int(urem != 0))
+    else:
+        z, rem = _x_divrem(a, b)
+    # Set the signs.
+    # The quotient z has the sign of a*b;
+    # the remainder r has the sign of a,
+    # so a = b*z + r.
+    if a.sign != b.sign:
+        z.sign = - z.sign
+    if z.sign < 0 and rem.sign != 0:
+        rem.sign = - rem.sign
+    return z, rem
