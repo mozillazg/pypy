@@ -19,7 +19,7 @@ py.log.setconsumer("genllvm database prepare", None)
 ## def setup_module(mod):
 ##     mod.llvm_found = is_on_path("llvm-as")
 
-def compile_function(function, annotate, view=False):
+def compile_module(function, annotate, view=False):
     t = Translator(function)
     a = t.annotate(annotate)
     t.specialize()
@@ -28,12 +28,20 @@ def compile_function(function, annotate, view=False):
         t.view()
     return genllvm(t)
 
+def compile_function(function, annotate, view=False):
+    mod = compile_module(function, annotate, view)
+    return getattr(mod, function.func_name + "_wrapper")
+
+def compile_module_function(function, annotate, view=False):
+    mod = compile_module(function, annotate, view)
+    f = getattr(mod, function.func_name + "_wrapper")
+    return mod, f
+
 def test_GC_malloc(): 
     if not use_boehm_gc:
         py.test.skip("test_GC_malloc skipped because Boehm collector library was not found")
         return
     def tuple_getitem(n): 
-        start_heap_size = GC_get_heap_size()
         x = 0
         i = 0
         while i < n:
@@ -41,14 +49,14 @@ def test_GC_malloc():
             x += l[2]
             i += 1
         return x
-    f = compile_function(tuple_getitem, [int])
-    heap_size_start = get_heap_size_wrapper()
+    mod,f = compile_module_function(tuple_getitem, [int])
+    get_heap_size = getattr(mod, "GC_get_heap_size_wrapper")
+    heap_size_start = get_heap_size()
     for i in range(0,10):
         f(10000)
         heap_size_used = get_heap_size() - heap_size_start
         print 'heap_size_used=%d' % heap_size_used
-        assert heap_size_used < 5000
-
+        assert heap_size_used < 100000
 
 def test_return1():
     def simple1():
