@@ -16,15 +16,15 @@ TARGET_DICT = {
     }
 
 ## convenience functions around CPython's parser functions
-def python_parsefile(filename):
+def python_parsefile(filename, lineno=False):
     """parse <filename> using CPython's parser module and return nested tuples
     """
     pyf = file(filename)
     source = pyf.read()
     pyf.close()
-    return python_parse(source)
+    return python_parse(source, 'exec', lineno)
 
-def python_parse(source, mode='exec'):
+def python_parse(source, mode='exec', lineno=False):
     """parse python source using CPython's parser module and return
     nested tuples
     """
@@ -35,7 +35,7 @@ def python_parse(source, mode='exec'):
     return tp.totuple()
 
 ## convenience functions around recparser functions
-def pypy_parsefile(filename):
+def pypy_parsefile(filename, lineno=False):
     """parse <filename> using PyPy's parser module and return
     a tuple of three elements :
      - The encoding declaration symbol or None if there were no encoding
@@ -49,9 +49,9 @@ def pypy_parsefile(filename):
     pyf = file(filename)
     source = pyf.read()
     pyf.close()
-    return pypy_parse(source)
+    return pypy_parse(source, 'exec', lineno)
 
-def pypy_parse(source, mode='exec'):
+def pypy_parse(source, mode='exec', lineno=False):
     """parse <source> using PyPy's parser module and return
     a tuple of three elements :
      - The encoding declaration symbol or None if there were no encoding
@@ -74,21 +74,24 @@ def pypy_parse(source, mode='exec'):
     target_rule = TARGET_DICT[mode]
     pythonparse.parse_python_source(strings, PYTHON_PARSER,
                                     target_rule, builder)
-    # stack_element is a tuplerbuilder.StackElement's instance
+##     if builder.error_occured():
+##         line, lineno, offset, filename = builder.get_error()
+##         raise SyntaxError(line, lineno, offset, filename)
+##     # stack_element is a tuplerbuilder.StackElement's instance
     stack_element = builder.stack[-1]
     # convert the stack element into nested tuples
     # XXX : the annotator can't follow this call
-    nested_tuples = stack_element.as_tuple()
+    nested_tuples = stack_element.as_tuple(lineno)
     if builder.source_encoding is not None:
         return (symbol.encoding_decl, nested_tuples, builder.source_encoding)
     else:
         return nested_tuples
 
-## convenience functions for computing AST objects based on recparser
+## convenience functions for computing AST objects using recparser
 def ast_from_input(input, mode):
-    tuples = pypy_parse(input, mode)
+    tuples = pypy_parse(input, mode, True)
     transformer = Transformer()
-    ast = transformer.transform(tuples)
+    ast = transformer.compile_node(tuples)
     return ast
 
 ## TARGET FOR ANNOTATORS #############################################
