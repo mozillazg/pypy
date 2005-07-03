@@ -266,6 +266,10 @@ class FuncType(ContainerType):
             return self.RESULT._defl()
         return _func(self, _callable=ex)
 
+    def _trueargs(self):
+        return [arg for arg in self.ARGS if arg is not Void]
+
+
 class OpaqueType(ContainerType):
     
     def __init__(self, tag):
