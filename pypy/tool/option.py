@@ -10,7 +10,7 @@ class Options:
     spaces = []
     oldstyle = 0
     uselibfile = 0
-    useparsermodule = "recparser" # "cpython" / "recparser" / "parser"
+    useparsermodule = "cpython" # "cpython" / "recparser" / "parser"
     parser = "cpython" # "cpython" / "pyparse"
     compiler = "cpython" # "cpython"
                          # "pyparse" pypy parser, cpython compiler
@@ -33,7 +33,7 @@ def get_standard_options():
 
     options.append(make_option(
         '--oldstyle', action="store_true",dest="oldstyle",
-        help="enable oldstyle classes as default metaclass (std objspace only)"))    
+        help="enable oldstyle classes as default metaclass (std objspace only)"))
     options.append(make_option(
         '--file', action="store_true",dest="uselibfile",
         help="enable our custom file implementation"))
@@ -47,6 +47,10 @@ def get_standard_options():
     options.append(make_option(
         '--pyparse', action="store_const", dest="compiler", const="pyparse",
         help="enable the internal pypy parser with CPython compiler"))
+    options.append(make_option(
+        '--parsermodule', action="store",type="string", dest="useparsermodule",
+        help="select the parser module to use",
+        metavar="[cpython|recparser|parser]"))
 
     return options
 
