@@ -80,6 +80,7 @@ from pypy.translator.pickle.main import load, save
 from pypy.translator.tool import buildpyxmodule
 buildpyxmodule.enable_fast_compilation()
 
+annmodel.DEBUG = False
 
 
 
