@@ -1,9 +1,10 @@
 import py
 from pypy.rpython import lltype 
-from pypy.translator.llvm2.log import log 
+from pypy.translator.llvm2.log import log
+from pypy.translator.llvm2.node import LLVMNode
 log = log.structnode 
 
-class ArrayTypeNode(object):
+class ArrayTypeNode(LLVMNode):
     _issetup = False 
     def __init__(self, db, array): 
         self.db = db
@@ -28,7 +29,7 @@ class ArrayTypeNode(object):
 # Each ArrayNode is a global constant.  This needs to have a specific type of
 # a certain type.
 
-class ArrayNode(object):
+class ArrayNode(LLVMNode):
 
     _issetup = False 
     array_counter = 0

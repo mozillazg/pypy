@@ -11,7 +11,8 @@ PRIMITIVES_TO_LLVM = {lltype.Signed: "int",
                       lltype.Char: "sbyte",
                       lltype.Unsigned: "uint",
                       lltype.Bool: "bool",
-                      lltype.Float: "double" }
+                      lltype.Float: "double",
+                      lltype.Void: "void"}
 
 class Database(object): 
     def __init__(self, translator): 

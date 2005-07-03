@@ -61,7 +61,10 @@ class CodeWriter(object):
         self.append("}") 
 
     def ret(self, type_, ref): 
-        self.indent("ret %s %s" % (type_, ref)) 
+        self.indent("ret %s %s" % (type_, ref))
+
+    def ret_void(self):
+        self.indent("ret void")
 
     def phi(self, targetvar, type_, refs, blocknames): 
         assert targetvar.startswith('%')
@@ -78,6 +81,10 @@ class CodeWriter(object):
         arglist = ["%s %s" % item for item in zip(argtypes, argrefs)]
         self.indent("%s = call %s %s(%s)" % (targetvar, returntype, functionref,
                                              ", ".join(arglist)))
+
+    def call_void(self, functionref, argrefs, argtypes):
+        arglist = ["%s %s" % item for item in zip(argtypes, argrefs)]
+        self.indent("call void %s(%s)" % (functionref, ", ".join(arglist)))
 
     def cast(self, targetvar, fromtype, fromvar, targettype):
         self.indent("%(targetvar)s = cast %(fromtype)s "
