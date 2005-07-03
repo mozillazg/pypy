@@ -1,7 +1,7 @@
 """test module for CPython / PyPy nested tuples comparison"""
 import os, os.path as osp
-from pypy.interpreter.pyparser.pythonutil import python_parse, pypy_parse
-# from pypy.module.recparser.pythonparse import pypy_parse
+from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
+    pypy_parsefile, python_parse, pypy_parse
 from pprint import pprint
 from pypy.interpreter.pyparser import grammar
 grammar.DEBUG = False
@@ -54,27 +54,46 @@ def test_samples():
                 continue
             abspath = osp.join(samples_dir, fname)
             yield check_parse, abspath
-        
-def check_parse(filepath):
-    # pypy_tuples = pypy_parse(filepath)
-    encoding_decl, stack_element, encoding = pypy_parse(filepath)
-    nested_tuples = stack_element.as_tuple()
-    if encoding is None:
-        pypy_tuples = nested_tuples
-    else:
-        pypy_tuples = (encoding_decl, nested_tuples, encoding)
-    python_tuples = python_parse(filepath)
+
+def _check_tuples_equality(pypy_tuples, python_tuples, testname):
+    """XXX FIXME: refactor with assert_tuples_equal()"""
     try:
         assert_tuples_equal(pypy_tuples, python_tuples)
     except AssertionError, e:
         error_path = e.args[-1]
         print "ERROR PATH =", error_path
-        print "="*80
-        print file(filepath).read()
-        print "="*80
         print "-"*10, "PyPy parse results", "-"*10
         print ''.join(print_sym_tuple(pypy_tuples, names=True, trace=error_path))
         print "-"*10, "CPython parse results", "-"*10
         print ''.join(print_sym_tuple(python_tuples, names=True, trace=error_path))
-        assert False, filepath
-    
+        assert False, testname
+
+def check_parse(filepath):
+    pypy_tuples = pypy_parsefile(filepath)
+    python_tuples = python_parsefile(filepath)
+    _check_tuples_equality(pypy_tuples, python_tuples, filepath)
+
+
+def check_parse_input(snippet, mode):
+    pypy_tuples = pypy_parse(snippet, mode)
+    python_tuples = python_parse(snippet, mode)
+    _check_tuples_equality(pypy_tuples, python_tuples, snippet)
+
+def test_eval_inputs():
+    snippets = [
+        '6*7',
+        'a+b*c/d',
+        'True and False',
+        ]
+    for snippet in snippets:
+        yield check_parse_input, snippet, 'eval'
+
+def test_exec_inputs():
+    snippets = [
+        # '\t # hello\n ',
+        'print 6*7', 'if 1:\n  x\n',
+        # 'if 1:\n  x', 'x = (', 'x = (\n', # 'x = (\n\n',
+        ]
+    for snippet in snippets:
+        print "snippet =", repr(snippet)
+        yield check_parse_input, snippet, 'exec'

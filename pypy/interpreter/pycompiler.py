@@ -169,30 +169,13 @@ class CPythonCompiler(AbstractCompiler):
 
 
 ########
-import symbol
-from compiler.transformer import Transformer
+# from compiler.transformer import Transformer
 from compiler.pycodegen import ModuleCodeGenerator
 from compiler.pycodegen import InteractiveCodeGenerator
 from compiler.pycodegen import ExpressionCodeGenerator
 from pyparser.pythonparse import parse_python_source, PYTHON_PARSER
 from pyparser.tuplebuilder import TupleBuilder
-
-def _parse_source(source, mode):
-    strings = [line+'\n' for line in source.split('\n')]
-    builder = TupleBuilder(PYTHON_PARSER.rules, lineno=False)
-    if mode == 'exec':
-        target = 'file_input'
-    elif mode == 'single':
-        target = 'single_input'
-    else: # target == 'eval':
-        target = 'eval_input'
-    parse_python_source(strings, PYTHON_PARSER, target, builder)
-    # Note: The annotator can't follow the as_tuple() method call
-    nested_tuples = builder.stack[-1].as_tuple()
-    if builder.source_encoding is not None:
-        return (symbol.encoding_decl, nested_tuples, builder.source_encoding)
-    else:
-        return nested_tuples
+from pyparser.pythonutil import ast_from_input
 
 class PythonCompiler(CPythonCompiler):
     """Uses the stdlib's python implementation of compiler"""
@@ -201,9 +184,7 @@ class PythonCompiler(CPythonCompiler):
         flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
-            transformer = Transformer()
-            tuples = _parse_source(source, mode)
-            tree = transformer.compile_node(tuples)
+            ast = ast_from_input(source, mode)
             compiler.misc.set_filename(filename, tree)
             if mode == 'exec':
                 codegenerator = ModuleCodeGenerator(tree)
