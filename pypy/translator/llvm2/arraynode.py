@@ -70,7 +70,7 @@ class ArrayNode(LLVMNode):
 
         return ", ".join(["%s %s" % (t, v) for t, v in res])
 
-    def writedata(self, codewriter):
+    def writeglobalconstants(self, codewriter):
         lenitems = len(self.value.items)
         lenstr = ".%s" % lenitems
         codewriter.globalinstance(self.ref,

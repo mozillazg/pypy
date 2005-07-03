@@ -118,7 +118,7 @@ class StructNode(LLVMNode):
             res.append((self.db.repr_arg_type(T), value))
         return ", ".join(["%s %s" % (t, v) for t, v in res])
 
-    def writedata(self, codewriter):
+    def writeglobalconstants(self, codewriter):
         codewriter.globalinstance(self.ref,
                                   self.db.repr_arg_type(self.value._TYPE),
                                   self.get_values())
