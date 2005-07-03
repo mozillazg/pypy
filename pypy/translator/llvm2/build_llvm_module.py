@@ -12,6 +12,7 @@ from pypy.tool.udir import udir
 from pypy.translator.pyrex.genpyrex import GenPyrex
 from pypy.translator.tool.buildpyxmodule import make_c_from_pyxfile
 from pypy.translator.tool import stdoutcapture
+from pypy.translator.llvm2.genllvm import use_boehm_gc
 
 debug = True
 
@@ -20,7 +21,7 @@ class CompileError(exceptions.Exception):
 
 OPTIMIZATION_SWITCHES = "-simplifycfg -mem2reg -instcombine -dce -inline"
 
-def compile_module(module, source_files, object_files):
+def compile_module(module, source_files, object_files, library_files):
     open("%s_setup.py" % module, "w").write(str(py.code.Source(
         '''
         from distutils.core import setup
@@ -29,6 +30,7 @@ def compile_module(module, source_files, object_files):
             ext_modules = [Extension(
                 name = "%(module)s",
                 sources = %(source_files)s,
+                libraries = %(library_files)s,
                 extra_objects = %(object_files)s)])
         ''' % locals())))
     cmd = "python %s_setup.py build_ext --inplace" % module
@@ -44,6 +46,9 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
     b = llvmfile.purebasename
     source_files = [ "%s.c" % modname ]
     object_files = []
+    library_files = []
+    if use_boehm_gc:
+        library_files.append('gc')
 
     if sys.maxint == 2147483647:        #32 bit platform
         if optimize:
@@ -76,7 +81,7 @@ def make_module_from_llvm(llvmfile, pyxfile, optimize=False):
                     if debug: print cmd
                     cmdexec(cmd)
                 make_c_from_pyxfile(pyxfile)
-                compile_module(modname, source_files, object_files)
+                compile_module(modname, source_files, object_files, library_files)
             finally:
                 foutput, foutput = c.done()
         except:

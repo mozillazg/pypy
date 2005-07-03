@@ -1,19 +1,16 @@
 import py
 from itertools import count
 from pypy.translator.llvm2.log import log 
+from pypy.translator.llvm2.genllvm import use_boehm_gc
 
 log = log.codewriter 
 show_line_numbers = True
 count = count().next
 
-#hack
-from os import getenv
-use_boehm_gc = getenv('USER','') in ('eric',)
-#/hack
-
 class CodeWriter(object): 
     def __init__(self): 
         self._lines = []
+        self.append('declare sbyte* %GC_malloc(uint)')
 
     def append(self, line): 
         if show_line_numbers:
@@ -102,7 +99,7 @@ class CodeWriter(object):
             cnt = count()
             self.indent("%%malloc.Size.%(cnt)d = getelementptr %(type_)s* null, int %(size)d" % locals())
             self.indent("%%malloc.SizeU.%(cnt)d = cast %(type_)s* %%malloc.Size.%(cnt)d to uint" % locals())
-            self.indent("%%malloc.Ptr.%(cnt)d = malloc sbyte, uint %%malloc.SizeU.%(cnt)d" % locals())
+            self.indent("%%malloc.Ptr.%(cnt)d = call sbyte* %%GC_malloc(uint %%malloc.SizeU.%(cnt)d)" % locals())
             self.indent("%(targetvar)s = cast sbyte* %%malloc.Ptr.%(cnt)d to %(type_)s*" % locals())
         else:
             self.indent("%(targetvar)s = malloc %(type_)s, uint %(size)s" % locals())
