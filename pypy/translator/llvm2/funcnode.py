@@ -8,6 +8,7 @@ from pypy.translator.llvm2.node import LLVMNode
 from pypy.translator.llvm2.log import log 
 log = log.funcnode
 
+
 class FuncTypeNode(LLVMNode):
     func_type_node_counter = 0
 
@@ -24,11 +25,12 @@ class FuncTypeNode(LLVMNode):
 
     def setup(self):
         self.db.prepare_repr_arg_type(self.type_.RESULT)
-        self.db.prepare_repr_arg_type(self.type_.ARGS)
+        self.db.prepare_repr_arg_type(args_without_void(self.type_.ARGS))
 
     def writedatatypedecl(self, codewriter):
         returntype = self.db.repr_arg_type(self.type_.RESULT)
-        inputargtypes = self.db.repr_arg_type_multi(self.type_.ARGS)
+        inputargtypes = self.db.repr_arg_type_multi(
+            args_without_void(self.type_.ARGS))
         decl = "%s type %s (%s)*" % (self.ref, returntype,
                                      ", ".join(inputargtypes))
         codewriter.funcdef(self.ref, returntype, inputargtypes)
@@ -254,16 +256,17 @@ class OpWriter(object):
         self.codewriter.malloc(targetvar, type) 
 
     def malloc_varsize(self, op):
+        XXXXXXXXXXXXXXXXXXXXXX
         targetvar = self.db.repr_arg(op.result)
         arg_type = op.args[0]
         assert (isinstance(arg_type, Constant) and 
-                isinstance(arg_type.value, lltype.Struct))
-        struct_type = self.db.obj2node[arg_type.value].ref
-        struct_cons = self.db.obj2node[arg_type.value].new_var_name
+                isinstance(arg_type.value, lltype.Array))
+##         struct_type = self.db.obj2node[arg_type.value].ref
+##         struct_cons = self.db.obj2node[arg_type.value].new_var_name
         argrefs = self.db.repr_arg_multi(op.args[1:])
         argtypes = self.db.repr_arg_type_multi(op.args[1:])
-        self.codewriter.call(targetvar, struct_type + " *",
-                             struct_cons, argrefs, argtypes)
+        self.codewriter.call("%example", "type*", "constructor",
+                             argrefs, argtypes)
 
     def getfield(self, op): 
         tmpvar = self.db.repr_tmpvar()
