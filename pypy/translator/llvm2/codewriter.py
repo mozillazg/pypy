@@ -105,7 +105,7 @@ class CodeWriter(object):
             self.indent("%%malloc.Ptr.%(cnt)d = malloc sbyte, uint %%malloc.SizeU.%(cnt)d" % locals())
             self.indent("%(targetvar)s = cast sbyte* %%malloc.Ptr.%(cnt)d to %(type_)s*" % locals())
         else:
-            self.indent("%(targetvar)s = malloc %(type_)s, uint %(size)d" % locals())
+            self.indent("%(targetvar)s = malloc %(type_)s, uint %(size)s" % locals())
 
     def getelementptr(self, targetvar, type, typevar, *indices):
         res = "%(targetvar)s = getelementptr %(type)s %(typevar)s, int 0, " % locals()

@@ -37,6 +37,7 @@ def genllvm(translator):
     for typ_decl in db.getobjects():
         typ_decl.writedecl(codewriter)
 
+    #import pdb ; pdb.set_trace()
     nl(); comment("Function Implementation") 
     codewriter.startimpl()
     for typ_decl in db.getobjects():

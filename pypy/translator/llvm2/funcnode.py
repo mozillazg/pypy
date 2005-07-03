@@ -255,16 +255,16 @@ class OpWriter(object):
         self.codewriter.malloc(targetvar, type) 
 
     def malloc_varsize(self, op):
-        XXXXXXXXXXXXXXXXXXXXXX
         targetvar = self.db.repr_arg(op.result)
         arg_type = op.args[0]
         assert (isinstance(arg_type, Constant) and 
                 isinstance(arg_type.value, lltype.Array))
-##         struct_type = self.db.obj2node[arg_type.value].ref
-##         struct_cons = self.db.obj2node[arg_type.value].new_var_name
+        #XXX unclean
+        struct_type = self.db.obj2node[arg_type.value].ref
+        struct_cons = self.db.obj2node[arg_type.value].constructor_ref
         argrefs = self.db.repr_arg_multi(op.args[1:])
         argtypes = self.db.repr_arg_type_multi(op.args[1:])
-        self.codewriter.call("%example", "type*", "constructor",
+        self.codewriter.call(targetvar, struct_type + "*", struct_cons,
                              argrefs, argtypes)
 
     def getfield(self, op): 
@@ -277,6 +277,7 @@ class OpWriter(object):
         
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
+        assert targettype != "void"
         #XXX This doesnt work - yet
         #if isinstance(op.result.concretetype, lltype.Ptr):        
         #    self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
@@ -293,9 +294,9 @@ class OpWriter(object):
         fieldnames = list(op.args[0].concretetype.TO._names)
         index = fieldnames.index(op.args[1].value)
         self.codewriter.getelementptr(tmpvar, type, typevar, ("uint", index))
-
         valuevar = self.db.repr_arg(op.args[2]) 
         valuetype = self.db.repr_arg_type(op.args[2])
+        assert valuetype != "void"
         self.codewriter.store(valuetype, valuevar, tmpvar) 
 
     def getarrayitem(self, op):
