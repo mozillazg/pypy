@@ -6,7 +6,7 @@ from codeop import PyCF_DONT_IMPLY_DEDENT
 from pypy.interpreter.error import OperationError
 
 
-class Compiler:
+class AbstractCompiler:
     """Abstract base class for a bytecode compiler."""
 
     # The idea is to grow more methods here over the time,
@@ -80,11 +80,14 @@ class Compiler:
 import warnings
 import __future__
 compiler_flags = 0
+compiler_features = {}
 for fname in __future__.all_feature_names:
-    compiler_flags |= getattr(__future__, fname).compiler_flag
+    flag = getattr(__future__, fname).compiler_flag
+    compiler_flags |= flag
+    compiler_features[fname] = flag
 
 
-class CPythonCompiler(Compiler):
+class CPythonCompiler(AbstractCompiler):
     """Faked implementation of a compiler, using the underlying compile()."""
 
     def compile(self, source, filename, mode, flags):
@@ -163,3 +166,75 @@ class CPythonCompiler(Compiler):
 
     def restore_warn_explicit(self, warnings, old_warn_explicit):
         warnings.warn_explicit = old_warn_explicit
+
+
+########
+import symbol
+from compiler.transformer import Transformer
+from compiler.pycodegen import ModuleCodeGenerator
+from compiler.pycodegen import InteractiveCodeGenerator
+from compiler.pycodegen import ExpressionCodeGenerator
+from pyparser.pythonparse import parse_python_source, PYTHON_PARSER
+from pyparser.tuplebuilder import TupleBuilder
+
+def pycompile(source, mode):
+    strings = [line+'\n' for line in source.split('\n')]
+    builder = TupleBuilder(PYTHON_PARSER.rules, lineno=False)
+    if mode == 'exec':
+        target = 'file_input'
+    elif mode == 'single':
+        target = 'single_input'
+    else: # target == 'eval':
+        target = 'eval_input'
+    parse_python_source(strings, PYTHON_PARSER, target, builder)
+    # Note: The annotator can't follow the as_tuple() method call
+    nested_tuples = builder.stack[-1].as_tuple()
+    if builder.source_encoding is not None:
+        return (symbol.encoding_decl, nested_tuples, builder.source_encoding)
+    else:
+        return nested_tuples
+
+class PythonCompiler(CPythonCompiler):
+    """Uses the stdlib's python implementation of compiler"""
+
+    def compile(self, source, filename, mode, flags):
+        flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
+        space = self.space
+        try:
+            transformer = Transformer()
+            tuples = pycompile(source, mode)
+            tree = transformer.compile_node(tuples)
+            compiler.misc.set_filename(filename, tree)
+            if mode == 'exec':
+                codegenerator = ModuleCodeGenerator(tree)
+            elif mode == 'single':
+                codegenerator = InteractiveCodeGenerator(tree)
+            else: # mode == 'eval':
+                codegenerator = ExpressionCodeGenerator(tree)
+            c = codegenerator.getCode()
+        # It would be nice to propagate all exceptions to app level,
+        # but here we only propagate the 'usual' ones, until we figure
+        # out how to do it generically.
+        except SyntaxError, e:
+            w_synerr = space.newtuple([space.wrap(e.msg),
+                                       space.newtuple([space.wrap(e.filename),
+                                                       space.wrap(e.lineno),
+                                                       space.wrap(e.offset),
+                                                       space.wrap(e.text)])])
+            raise OperationError(space.w_SyntaxError, w_synerr)
+        except ValueError,e:
+            raise OperationError(space.w_ValueError,space.wrap(str(e)))
+        except TypeError,e:
+            raise OperationError(space.w_TypeError,space.wrap(str(e)))
+        from pypy.interpreter.pycode import PyCode
+        return space.wrap(PyCode(space)._from_code(c))
+
+# This doesn't work for now
+class PyPyCompiler(CPythonCompiler):
+    """Uses the PyPy implementation of Compiler
+
+    WRITEME
+    """
+# PyPyCompiler = PythonCompiler = CPythonCompiler
+# PyPyCompiler = CPythonCompiler
+# PythonCompiler = CPythonCompiler

@@ -10,6 +10,8 @@ class Options:
     spaces = []
     oldstyle = 0
     uselibfile = 0
+    parser = "cpython"
+    compiler = "cpython"
 
 def run_tb_server(option, opt, value, parser):
     from pypy.tool import tb_server
@@ -67,7 +69,7 @@ def objspace(name='', _spacecache={}):
     except KeyError:
         module = __import__("pypy.objspace.%s" % name, None, None, ["Space"])
         Space = module.Space
-        space = Space()
+        space = Space( Options() )
         if name == 'std' and Options.oldstyle:
             space.enable_old_style_classes_as_default_metaclass()
         if Options.uselibfile:
