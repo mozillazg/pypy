@@ -89,6 +89,15 @@ def test_while_loop():
     assert factorial(4.) == 24.
     assert factorial(5.) == 120.
 
+def test_return_void():
+    def return_void(i):
+        return None
+    def call_return_void(i):
+        return_void(i)
+        return 1
+    f = compile_function(call_return_void, [int])
+    assert f(10) == 1
+
 def test_break_while_loop():
     def factorial(i):
         r = 1
@@ -209,7 +218,7 @@ def DONOT_test_simple_chars():
      f = compile_function(char_constant, [])
      assert f() == 7
 
-def DONOT_test_list_getitem(): 
+def Xtest_list_getitem(): 
     def list_getitem(i): 
         l = [1,2,i]
         return l[i]
@@ -218,11 +227,11 @@ def DONOT_test_list_getitem():
     assert f(1) == 2
     assert f(3) == 3
 
-def DONOT_test_string_getitem1():
+def Xtest_string_getitem1():
     l = "Hello, World"
     def string_test(i): 
         return l[i]
-    f = compile_function(string_test, [int], view=True)
+    f = compile_function(string_test, [int], view=False)
     assert f(0) == ord("H")
 
 def DONOT_test_string_getitem2():

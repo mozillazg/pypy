@@ -115,7 +115,8 @@ class FuncNode(LLVMNode):
             names = self.db.repr_arg_multi([link.args[i] for link in entrylinks])
             blocknames = [self.block_to_name[link.prevblock]
                               for link in entrylinks]
-            codewriter.phi(arg, type_, names, blocknames) 
+            if type_ != "void":
+                codewriter.phi(arg, type_, names, blocknames) 
 
     def write_block_branches(self, codewriter, block):
         if len(block.exits) == 1:
@@ -138,7 +139,10 @@ class FuncNode(LLVMNode):
         self.write_block_phi_nodes(codewriter, block)
         inputargtype = self.db.repr_arg_type(block.inputargs[0])
         inputarg = self.db.repr_arg(block.inputargs[0])
-        codewriter.ret(inputargtype, inputarg)
+        if inputargtype != "void":
+            codewriter.ret(inputargtype, inputarg)
+        else:
+            codewriter.ret_void()
 
 class OpWriter(object):
     binary_operations = {'int_mul': 'mul',
@@ -233,8 +237,11 @@ class OpWriter(object):
         functionref = self.db.repr_arg(op.args[0])
         argrefs = self.db.repr_arg_multi(op.args[1:])
         argtypes = self.db.repr_arg_type_multi(op.args[1:])
-        self.codewriter.call(targetvar, returntype, functionref, argrefs,
-                             argtypes)
+        if returntype != "void":
+            self.codewriter.call(targetvar, returntype, functionref, argrefs,
+                                 argtypes)
+        else:
+            self.codewriter.call_void(functionref, argrefs, argtypes)
 
     def malloc(self, op): 
         targetvar = self.db.repr_arg(op.result) 
