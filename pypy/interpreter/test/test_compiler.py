@@ -1,7 +1,7 @@
 import __future__
 import autopath
 import py
-from pypy.interpreter.compiler import CPythonCompiler, Compiler
+from pypy.interpreter.pycompiler import CPythonCompiler, Compiler
 from pypy.interpreter.pycode import PyCode
 
 
