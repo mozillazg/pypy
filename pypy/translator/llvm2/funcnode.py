@@ -25,12 +25,11 @@ class FuncTypeNode(LLVMNode):
 
     def setup(self):
         self.db.prepare_repr_arg_type(self.type_.RESULT)
-        self.db.prepare_repr_arg_type(args_without_void(self.type_.ARGS))
+        self.db.prepare_repr_arg_type_multi(self.type_._trueargs())
 
     def writedatatypedecl(self, codewriter):
         returntype = self.db.repr_arg_type(self.type_.RESULT)
-        inputargtypes = self.db.repr_arg_type_multi(
-            args_without_void(self.type_.ARGS))
+        inputargtypes = self.db.repr_arg_type_multi(self.type_._trueargs())
         decl = "%s type %s (%s)*" % (self.ref, returntype,
                                      ", ".join(inputargtypes))
         codewriter.funcdef(self.ref, returntype, inputargtypes)
