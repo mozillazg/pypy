@@ -1,11 +1,15 @@
 """test module for CPython / PyPy nested tuples comparison"""
 import os, os.path as osp
+from symbol import sym_name
+from pprint import pprint
+
+import py.test
+
 from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
     pypy_parsefile, python_parse, pypy_parse
-from pprint import pprint
 from pypy.interpreter.pyparser import grammar
+from pypy.interpreter.pyparser.pythonlexer import TokenError
 grammar.DEBUG = False
-from symbol import sym_name
 
 def name(elt):
     return "%s[%s]"% (sym_name.get(elt,elt),elt)
@@ -92,8 +96,11 @@ def test_exec_inputs():
     snippets = [
         # '\t # hello\n ',
         'print 6*7', 'if 1:\n  x\n',
-        # 'if 1:\n  x', 'x = (', 'x = (\n', # 'x = (\n\n',
         ]
     for snippet in snippets:
-        print "snippet =", repr(snippet)
         yield check_parse_input, snippet, 'exec'
+
+def test_bad_inputs():
+    inputs = ['x = (', 'x = (\n', 'x = (\n\n']
+    for inp in inputs:
+        py.test.raises(TokenError, pypy_parse, inp)
