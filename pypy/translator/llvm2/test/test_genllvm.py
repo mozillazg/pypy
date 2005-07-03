@@ -227,6 +227,23 @@ def test_list_getitem():
     assert f(1) == 2
     assert f(2) == 3
 
+def test_list_basic_ops(): 
+    def list_basic_ops(i, j): 
+        l = [1,2,3]
+        l.insert(0, 42)
+        del l[1]
+        l.append(i)
+        listlen = len(l)
+        l.extend(l) 
+        del l[listlen:]
+        l += [5,6]
+        l[1] = i
+        return l[j]
+    f = compile_function(list_basic_ops, [int, int])
+    for i in range(6): 
+        for j in range(6): 
+            assert f(i,j) == list_basic_ops(i,j)
+
 def Xtest_string_getitem1():
     l = "Hello, World"
     def string_test(i): 
