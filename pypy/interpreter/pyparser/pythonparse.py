@@ -1,9 +1,16 @@
 #!/usr/bin/env python
+"""This module loads the python Grammar (2.3 or 2.4) and builds
+the parser for this grammar in the global PYTHON_PARSER
+
+helper functions are provided that use the grammar to parse
+using file_input, single_input and eval_input targets
+"""
+from pypy.interpreter.error import OperationError, debug_print
+
 from pythonlexer import Source
-from ebnfparse import parse_grammar
+import ebnfparse
 import sys
 import os
-import symbol
 import grammar
 
 # parse the python grammar corresponding to our CPython version
@@ -14,12 +21,13 @@ def python_grammar():
     """returns a """
     level = grammar.DEBUG
     grammar.DEBUG = 0
-    gram = parse_grammar( file(PYTHON_GRAMMAR) )
+    gram = ebnfparse.parse_grammar( file(PYTHON_GRAMMAR) )
     grammar.DEBUG = level
     # Build first sets for each rule (including anonymous ones)
     grammar.build_first_sets(gram.items)
     return gram
 
+debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
 PYTHON_PARSER = python_grammar()
 
 

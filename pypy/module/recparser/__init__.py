@@ -4,8 +4,7 @@ from pypy.interpreter import module
 
 
 
-import pythonparse
-debug_print( "Loading grammar %s" % pythonparse.PYTHON_GRAMMAR )
+import pypy.interpreter.pyparser.pythonparse
 
 from pypy.interpreter.mixedmodule import MixedModule
 class Module(MixedModule):
