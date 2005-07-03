@@ -1,8 +1,15 @@
 import py
+from itertools import count
 from pypy.translator.llvm2.log import log 
 
 log = log.codewriter 
 show_line_numbers = True
+count = count().next
+
+#hack
+from os import getenv
+use_boehm_gc = getenv('USER','') in ('eric',)
+#/hack
 
 class CodeWriter(object): 
     def __init__(self): 
@@ -90,12 +97,15 @@ class CodeWriter(object):
         self.indent("%(targetvar)s = cast %(fromtype)s "
                         "%(fromvar)s to %(targettype)s" % locals())
 
-    def malloc(self, targetvar, type, sizetype=None, size=None):
-        if size is None:
-            assert sizetype is None
-            self.indent("%(targetvar)s = malloc %(type)s" % locals())
+    def malloc(self, targetvar, type_, size=1):
+        if use_boehm_gc:
+            cnt = count()
+            self.indent("%%malloc.Size.%(cnt)d = getelementptr %(type_)s* null, int %(size)d" % locals())
+            self.indent("%%malloc.SizeU.%(cnt)d = cast %(type_)s* %%malloc.Size.%(cnt)d to uint" % locals())
+            self.indent("%%malloc.Ptr.%(cnt)d = malloc sbyte, uint %%malloc.SizeU.%(cnt)d" % locals())
+            self.indent("%(targetvar)s = cast sbyte* %%malloc.Ptr.%(cnt)d to %(type_)s*" % locals())
         else:
-            self.indent("%(targetvar)s = malloc %(type)s, %(sizetype)s %(size)s" % locals())
+            self.indent("%(targetvar)s = malloc %(type_)s, uint %(size)d" % locals())
 
     def getelementptr(self, targetvar, type, typevar, *indices):
         res = "%(targetvar)s = getelementptr %(type)s %(typevar)s, int 0, " % locals()
