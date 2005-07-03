@@ -109,7 +109,7 @@ def generate_tokens(lines):
     last_comment = ''
     encoding = None
     strstart = (0, 0)
-
+    pos = -1
     lines.append('') # XXX HACK probably not needed
     endDFA = automata.DFA([], []) # XXX Make the translator happy
     line = ''                 # XXX Make the translator happy
