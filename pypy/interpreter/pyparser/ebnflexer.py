@@ -6,8 +6,6 @@ analyser in grammar.py
 import re
 from grammar import TokenSource, Token
 
-DEBUG = False
-
 ## Lexer for Python's grammar ########################################
 g_symdef = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*:",re.M)
 g_symbol = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*",re.M)
@@ -16,7 +14,14 @@ g_tok = re.compile(r"\[|\]|\(|\)|\*|\+|\|",re.M)
 g_skip = re.compile(r"\s*(#.*$)?",re.M)
 
 class GrammarSource(TokenSource):
-    """The grammar tokenizer"""
+    """The grammar tokenizer
+    It knows only 5 types of tokens:
+    EOF: end of file
+    SYMDEF: a symbol definition e.g. "file_input:"
+    STRING: a simple string "'xxx'"
+    SYMBOL: a rule symbol usually appeary right of a SYMDEF
+    tokens: '[', ']', '(' ,')', '*', '+', '|'
+    """
     def __init__(self, inpstring ):
         TokenSource.__init__(self)
         self.input = inpstring
@@ -24,9 +29,13 @@ class GrammarSource(TokenSource):
         self._peeked = None
 
     def context(self):
+        """returns an opaque context object, used to backtrack
+        to a well known position in the parser"""
         return self.pos, self._peeked
 
     def offset(self, ctx=None):
+        """Returns the current parsing position from the start
+        of the parsed text"""
         if ctx is None:
             return self.pos
         else:
@@ -34,9 +43,15 @@ class GrammarSource(TokenSource):
             return ctx
 
     def restore(self, ctx):
+        """restore the context provided by context()"""
         self.pos, self._peeked = ctx
 
     def next(self):
+        """returns the next token"""
+        # We only support 1-lookahead which
+        # means backtracking more than one token
+        # will re-tokenize the stream (but this is the
+        # grammar lexer so we don't care really!)
         if self._peeked is not None:
             peeked = self._peeked
             self._peeked = None
@@ -71,13 +86,17 @@ class GrammarSource(TokenSource):
             tk = m.group(0)
             self.pos = m.end()
             return Token('SYMBOL',tk)
-        raise ValueError("Unknown token at pos=%d context='%s'" % (pos,inp[pos:pos+20]) )
+        raise ValueError("Unknown token at pos=%d context='%s'" %
+                         (pos,inp[pos:pos+20]) )
 
     def peek(self):
+        """take a peek at the next token"""
         if self._peeked is not None:
             return self._peeked
         self._peeked = self.next()
         return self._peeked
 
-    def debug(self):
-        return self.input[self.pos:self.pos+20]
+    def debug(self, N=20):
+        """A simple helper function returning the stream at the last
+        parsed position"""
+        return self.input[self.pos:self.pos+N]
