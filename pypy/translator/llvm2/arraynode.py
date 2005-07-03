@@ -8,6 +8,7 @@ class ArrayTypeNode(LLVMNode):
     _issetup = False 
     def __init__(self, db, array): 
         self.db = db
+        assert isinstance(array, lltype.ArrayType)
         self.array = array
         self.ref_template = "%%array.%s" % array.OF
         self.ref = self.ref_template + ".0"

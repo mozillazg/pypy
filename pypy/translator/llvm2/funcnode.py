@@ -13,6 +13,7 @@ class FuncTypeNode(LLVMNode):
 
     def __init__(self, db, type_):
         self.db = db
+        assert isinstance(type_, lltype.FuncType)
         self.type_ = type_
         ref = '"ft.%s.%s"' % (type_, FuncTypeNode.func_type_node_counter)
         self.ref = ref.replace(" ", "")
