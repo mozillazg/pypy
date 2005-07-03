@@ -218,7 +218,7 @@ def DONOT_test_simple_chars():
      f = compile_function(char_constant, [])
      assert f() == 7
 
-def Xtest_list_getitem(): 
+def test_list_getitem(): 
     def list_getitem(i): 
         l = [1,2,i]
         return l[i]

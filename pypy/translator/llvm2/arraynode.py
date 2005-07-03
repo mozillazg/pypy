@@ -1,12 +1,12 @@
 import py
-from pypy.rpython import lltype 
+from pypy.rpython import lltype
 from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
-log = log.structnode 
+log = log.structnode
 
 class ArrayTypeNode(LLVMNode):
-    _issetup = False 
-    def __init__(self, db, array): 
+    _issetup = False
+    def __init__(self, db, array):
         self.db = db
         assert isinstance(array, lltype.ArrayType)
         self.array = array
@@ -14,14 +14,14 @@ class ArrayTypeNode(LLVMNode):
         self.ref = self.ref_template + ".0"
 
     def __str__(self):
-        return "<ArrayTypeNode %r>" % self.ref    
+        return "<ArrayTypeNode %r>" % self.ref
 
     def setup(self):
         self.db.prepare_repr_arg_type(self.array.OF)
         self._issetup = True
 
     # ______________________________________________________________________
-    # entry points from genllvm 
+    # entry points from genllvm
     #
     def writedatatypedecl(self, codewriter):
         codewriter.arraydef(self.ref, self.db.repr_arg_type(self.array.OF))
