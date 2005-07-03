@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import Constant
 from pypy.rpython import rmodel, lltype, rstr
 from pypy.rpython.rarithmetic import r_uint
-from pypy.rpython import rlist, rconstantdict 
+from pypy.rpython import rlist, rconstantdict, remptydict
 
 # ____________________________________________________________
 #
@@ -39,6 +39,8 @@ class __extend__(annmodel.SomeDict):
             return rconstantdict.ConstantDictRepr(
                         rtyper.getrepr(dictkey.s_value), 
                         rtyper.getrepr(dictvalue.s_value))
+        elif isinstance(s_key, annmodel.SomeImpossibleValue):
+            return remptydict.EmptyDictRepr()
         else: 
             raise rmodel.TyperError("cannot make repr of %r" %(self.dictdef,))
 
