@@ -31,7 +31,7 @@ def genllvm(translator):
 
     nl(); comment("Global Data") ; nl()
     for typ_decl in db.getobjects():
-        typ_decl.writedata(codewriter)
+        typ_decl.writeglobalconstants(codewriter)
 
     nl(); comment("Function Prototypes") ; nl()
     for typ_decl in db.getobjects():

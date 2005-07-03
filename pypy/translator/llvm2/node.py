@@ -8,14 +8,18 @@ class LLVMNode(object):
         self._ref = ref
     ref = property(_get_ref, _set_ref)
 
+    # __________________ before "implementation" ____________________
     def writedatatypedecl(self, codewriter):
-        pass
+        """ write out declare names of data types 
+            (structs/arrays/function pointers)
+        """
 
-    def writedata(self, codewriter):
-        pass
+    def writeglobalconstants(self, codewriter):
+        """ write out global values.  """
 
     def writedecl(self, codewriter):
-        pass
+        """ write function forward declarations. """ 
 
+    # __________________ after "implementation" ____________________
     def writeimpl(self, codewriter):
-        pass
+        """ write function implementations. """ 
