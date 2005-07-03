@@ -10,8 +10,11 @@ class Options:
     spaces = []
     oldstyle = 0
     uselibfile = 0
-    parser = "cpython"
-    compiler = "cpython"
+    useparsermodule = "recparser" # "cpython" / "recparser" / "parser"
+    parser = "cpython" # "cpython" / "pyparse"
+    compiler = "cpython" # "cpython"
+                         # "pyparse" pypy parser, cpython compiler
+                         # "pycomp" pypy parser and compiler (TBD)
 
 def run_tb_server(option, opt, value, parser):
     from pypy.tool import tb_server
@@ -41,6 +44,9 @@ def get_standard_options():
         '-H', action="callback",
         callback=run_tb_server,
         help="use web browser for traceback info"))
+    options.append(make_option(
+        '--pyparse', action="store_const", dest="compiler", const="pyparse",
+        help="enable the internal pypy parser with CPython compiler"))
 
     return options
 

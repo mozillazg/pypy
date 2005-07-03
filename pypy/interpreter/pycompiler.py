@@ -177,7 +177,7 @@ from compiler.pycodegen import ExpressionCodeGenerator
 from pyparser.pythonparse import parse_python_source, PYTHON_PARSER
 from pyparser.tuplebuilder import TupleBuilder
 
-def pycompile(source, mode):
+def _parse_source(source, mode):
     strings = [line+'\n' for line in source.split('\n')]
     builder = TupleBuilder(PYTHON_PARSER.rules, lineno=False)
     if mode == 'exec':
@@ -202,7 +202,7 @@ class PythonCompiler(CPythonCompiler):
         space = self.space
         try:
             transformer = Transformer()
-            tuples = pycompile(source, mode)
+            tuples = _parse_source(source, mode)
             tree = transformer.compile_node(tuples)
             compiler.misc.set_filename(filename, tree)
             if mode == 'exec':
