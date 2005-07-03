@@ -1,5 +1,5 @@
 from os.path import exists
-use_boehm_gc = exists('/usr/lib/libgc.so')
+use_boehm_gc = exists('/usr/lib/libgc.so') or exists('/usr/lib/libgc.a')
 
 import py
 from pypy.translator.llvm2 import build_llvm_module
@@ -60,8 +60,7 @@ def genllvm(translator):
     pyxsource = llvmsource.new(basename=llvmsource.purebasename+'_wrapper'+'.pyx')
     write_pyx_wrapper(entrynode, pyxsource)    
     
-    mod = build_llvm_module.make_module_from_llvm(llvmsource, pyxsource)
-    return getattr(mod, func.func_name + "_wrapper")
+    return build_llvm_module.make_module_from_llvm(llvmsource, pyxsource)
 
 def llvm_is_on_path():
     try:
