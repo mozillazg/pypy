@@ -14,10 +14,44 @@ PRIMITIVES_TO_LLVM = {lltype.Signed: "int",
                       lltype.Float: "double",
                       lltype.Void: "void"}
 
+class NormalizingDict(object): 
+    """ this is a helper dict for obj2node in order 
+        to allow saner key-unification for Ptrs to functions 
+        (and possibly other stuff in the future)
+    """ 
+    def __init__(self): 
+        self._dict = {}
+    def __repr__(self): 
+        return repr(self._dict)
+    def dump(self): 
+        for x,y in self._dict.items():
+            print x, y
+    def _get(self, key): 
+        if isinstance(key, Constant): 
+            if isinstance(key.value, lltype._ptr): 
+                key = key.value._obj 
+        return key 
+    def __getitem__(self, key): 
+        key = self._get(key)
+        return self._dict[key]
+    def __contains__(self, key): 
+        key = self._get(key)
+        return key in self._dict 
+    def __setitem__(self, key, value): 
+        key = self._get(key)
+        self._dict[key] = value 
+    def __delitem__(self, key): 
+        key = self._get(key)
+        del self._dict[key]
+    def values(self): 
+        return self._dict.values()
+    def items(self): 
+        return self._dict.items()
+
 class Database(object): 
     def __init__(self, translator): 
         self._translator = translator
-        self.obj2node = {}
+        self.obj2node = NormalizingDict() 
         self._pendingsetup = []
         self._tmpcount = 1
         

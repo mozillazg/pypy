@@ -220,18 +220,18 @@ def DONOT_test_simple_chars():
 
 def test_list_getitem(): 
     def list_getitem(i): 
-        l = [1,2,i]
+        l = [1,2,i+1]
         return l[i]
     f = compile_function(list_getitem, [int])
     assert f(0) == 1
     assert f(1) == 2
-    assert f(3) == 3
+    assert f(2) == 3
 
 def Xtest_string_getitem1():
     l = "Hello, World"
     def string_test(i): 
         return l[i]
-    f = compile_function(string_test, [int], view=False)
+    f = compile_function(string_test, [int], view=True)
     assert f(0) == ord("H")
 
 def DONOT_test_string_getitem2():

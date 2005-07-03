@@ -2,16 +2,55 @@ import py
 from pypy.rpython import lltype
 from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
+import itertools  
 log = log.structnode
+
+count = itertools.count().next 
 
 class ArrayTypeNode(LLVMNode):
     _issetup = False
     def __init__(self, db, array):
         self.db = db
-        assert isinstance(array, lltype.ArrayType)
+        assert isinstance(array, lltype.Array)
         self.array = array
-        self.ref_template = "%%array.%s" % array.OF
-        self.ref = self.ref_template + ".0"
+        ref_template = "%%array.%s." % array.OF
+        c = count()
+        self.ref = ref_template + str(c)
+        self.constructor_ref = "%%new.array.%s" % c 
+        self.constructor_decl = "%s * %s(int %%len)" % (
+                    self.ref, self.constructor_ref)
+        
+    def writedecl(self, codewriter): 
+        # declaration for constructor
+        codewriter.declare(self.constructor_decl)
+
+    def writeimpl(self, codewriter):
+        """ this function generates a LLVM function like the following:
+        %array = type { int, [0 x double] }
+        %array *%NewArray(int %len) {
+           ;; Get the offset of the 'len' element of the array from the null
+           ;; pointer.
+           %size = getelementptr %array* null, int 0, uint 1, %int %len
+           %usize = cast double* %size to uint
+           %ptr = malloc sbyte, uint %usize
+           %result = cast sbyte* %ptr to %array*
+           %arraylength = getelementptr %array* %result, int 0, uint 0
+           store int %len, int* %arraylength 
+           ret %array* %result
+        }"""
+        log.writeimpl(self.ref)
+        codewriter.openfunc(self.constructor_decl)
+        indices = [("uint", 1), ("int", "%len")]
+        codewriter.getelementptr("%size", self.ref + "*",
+                                 "null", *indices)
+        fromtype = self.db.repr_arg_type(self.array.OF) 
+        codewriter.cast("%usize", fromtype + "*", "%size", "uint")
+        codewriter.malloc("%ptr", "sbyte", "%usize")
+        codewriter.cast("%result", "sbyte*", "%ptr", self.ref+"*")
+        codewriter.getelementptr("%arraylength", self.ref+"*", "%result", ("uint", 0))
+        codewriter.store("int", "%len", "%arraylength")
+        codewriter.ret(self.ref+"*", "%result")
+        codewriter.closefunc()
 
     def __str__(self):
         return "<ArrayTypeNode %r>" % self.ref
@@ -25,7 +64,6 @@ class ArrayTypeNode(LLVMNode):
     #
     def writedatatypedecl(self, codewriter):
         codewriter.arraydef(self.ref, self.db.repr_arg_type(self.array.OF))
-
 
 # Each ArrayNode is a global constant.  This needs to have a specific type of
 # a certain type.
