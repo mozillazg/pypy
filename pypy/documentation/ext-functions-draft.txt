@@ -1,5 +1,5 @@
-example of interp-level code needing to somehow call an external function:
-::
+example of interp-level code needing to somehow call an external function::
+
     import os
     def open(space, w_fname):
         fname = space.str_w(fname)
