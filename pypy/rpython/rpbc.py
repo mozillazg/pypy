@@ -41,6 +41,9 @@ class __extend__(annmodel.SomePBC):
                     choice = MethodOfFrozenPBCRepr
                 else:
                     raise TyperError("don't know about callable %r" % (x,))
+            elif type(x) is type and x.__module__ == '__builtin__':
+                # special case for built-in types, seen in faking
+                choice = getPyObjRepr
             else:
                 # frozen object
                 choice = getFrozenPBCRepr
@@ -62,6 +65,9 @@ class __extend__(annmodel.SomePBC):
         return tuple(lst)
 
 # ____________________________________________________________
+
+def getPyObjRepr(rtyper, s_pbc):
+    return robject.pyobj_repr
 
 
 def getFrozenPBCRepr(rtyper, s_pbc):
