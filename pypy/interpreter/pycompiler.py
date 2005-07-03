@@ -176,15 +176,21 @@ from compiler.pycodegen import ExpressionCodeGenerator
 from pyparser.pythonparse import parse_python_source, PYTHON_PARSER
 from pyparser.tuplebuilder import TupleBuilder
 from pyparser.pythonutil import ast_from_input
+import compiler
 
 class PythonCompiler(CPythonCompiler):
-    """Uses the stdlib's python implementation of compiler"""
+    """Uses the stdlib's python implementation of compiler
 
+    XXX: This class should override the baseclass implementation of
+         compile_command() in order to optimize it, especially in case
+         of incomplete inputs (e.g. we shouldn't re-compile from sracth
+         the whole source after having only added a new '\n')
+    """
     def compile(self, source, filename, mode, flags):
         flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
-            ast = ast_from_input(source, mode)
+            tree = ast_from_input(source, mode)
             compiler.misc.set_filename(filename, tree)
             if mode == 'exec':
                 codegenerator = ModuleCodeGenerator(tree)
@@ -210,12 +216,9 @@ class PythonCompiler(CPythonCompiler):
         from pypy.interpreter.pycode import PyCode
         return space.wrap(PyCode(space)._from_code(c))
 
-# This doesn't work for now
+
 class PyPyCompiler(CPythonCompiler):
     """Uses the PyPy implementation of Compiler
 
-    WRITEME
+    XXX: WRITEME
     """
-# PyPyCompiler = PythonCompiler = CPythonCompiler
-# PyPyCompiler = CPythonCompiler
-# PythonCompiler = CPythonCompiler
