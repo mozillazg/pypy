@@ -72,7 +72,7 @@ def test_punct():
         try:
             tokens = parse_source(pstr)
         except TokenError, error:
-            tokens = [tok for tok, line in error.token_stack]
+            tokens = [tok for tok, _, _, _ in error.token_stack]
         assert tokens[0].name == pstr
 
 
