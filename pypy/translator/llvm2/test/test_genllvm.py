@@ -5,6 +5,7 @@ import py
 
 from pypy.translator.translator import Translator
 from pypy.translator.llvm2.genllvm import genllvm
+from pypy.translator.llvm2.genllvm import use_boehm_gc
 from pypy.translator.llvm2.test import llvmsnippet
 from pypy.objspace.flow.model import Constant, Variable
 
@@ -26,6 +27,24 @@ def compile_function(function, annotate, view=False):
     if view:
         t.view()
     return genllvm(t)
+
+def test_GC_malloc(): 
+    if not use_boehm_gc:
+        py.test.skip("test_GC_malloc skipped because Boehm collector library was not found")
+        return
+    py.test.skip("test_GC_malloc skipped because test not yet correct (Boehm collector IS used anyway)")
+    return
+    def tuple_getitem(n): 
+        x = 0
+        i = 0
+        while i < n:
+            l = (1,2,i,234,23,23,23,234,234,234,234)
+            x += l[2]
+            i += 1
+        return x
+    f = compile_function(tuple_getitem, [int])
+    t = 1024*1024*100
+    f(t) #assert f(t) == t
 
 def test_return1():
     def simple1():
