@@ -110,7 +110,7 @@ class Database(object):
 
         
     # __________________________________________________________
-    # Getters
+    # Representing variables and constants in LLVM source code 
     
     def repr_arg(self, arg):
         if (isinstance(arg, Constant) and 
