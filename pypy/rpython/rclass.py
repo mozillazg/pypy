@@ -397,8 +397,11 @@ class InstanceRepr(Repr):
                                                     result.super)
             # then add instance attributes from this level
             for name, (mangled_name, r) in self.fields.items():
-                attrvalue = getattr(value, name)
-                llattrvalue = r.convert_const(attrvalue)
+                if r.lowleveltype == Void:
+                    llattrvalue = None
+                else:
+                    attrvalue = getattr(value, name)
+                    llattrvalue = r.convert_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
         else:
             # OBJECT part
