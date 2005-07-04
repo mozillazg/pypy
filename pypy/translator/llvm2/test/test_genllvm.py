@@ -208,7 +208,7 @@ def test_recursive_call():
         if m == 0:
             return ackermann(n - 1, 1)
         return ackermann(n - 1, ackermann(n, m - 1))
-    f = compile_function(call_ackermann, [int, int], view=False)
+    f = compile_function(call_ackermann, [int, int])
     assert f(0, 2) == 3
     
 def test_tuple_getitem(): 
@@ -257,6 +257,21 @@ def test_list_getitem():
     assert f(0) == 1
     assert f(1) == 2
     assert f(2) == 3
+
+def Xtest_list_list_getitem(): 
+    def list_list_getitem(): 
+        l = [[1]]
+        return l[0][0]
+    f = compile_function(list_list_getitem, [])
+    assert f() == 2
+
+def Xtest_list_getitem_pbc(): 
+    l = [1,2]
+    def list_getitem(i): 
+        return l[i]
+    f = compile_function(list_getitem, [int], view=True)
+    assert f(0) == 1
+    assert f(1) == 2
 
 def test_list_basic_ops(): 
     def list_basic_ops(i, j): 
