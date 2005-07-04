@@ -273,18 +273,16 @@ class OpWriter(object):
         typevar = self.db.repr_arg(op.args[0])
         fieldnames = list(op.args[0].concretetype.TO._names)
         index = fieldnames.index(op.args[1].value)
-        self.codewriter.getelementptr(tmpvar, typ, typevar, ("uint", index))
-        
+        self.codewriter.getelementptr(tmpvar, typ, typevar, ("uint", index))        
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
         assert targettype != "void"
-        #XXX This doesnt work - yet
-        #if isinstance(op.result.concretetype, lltype.Ptr):        
-        #    self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
-        #else:
-            # Moving to correct result variable
-            #self.codewriter.load(targetvar, targettype, tmpvar)
-        self.codewriter.load(targetvar, targettype, tmpvar)    
+        if isinstance(op.result.concretetype, lltype.ContainerType):
+            # noop
+            self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
+        else:
+            self.codewriter.load(targetvar, targettype, tmpvar)
+
     getsubstruct = getfield
 
     def setfield(self, op): 
@@ -304,20 +302,16 @@ class OpWriter(object):
         vartype = self.db.repr_arg_type(op.args[0])
         index = self.db.repr_arg(op.args[1])
         indextype = self.db.repr_arg_type(op.args[1])
-
         tmpvar = self.db.repr_tmpvar()
         self.codewriter.getelementptr(tmpvar, vartype, var,
                                       ("uint", 1), (indextype, index))
-
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
-
-        # Ditto see getfield
-        if not isinstance(op.result.concretetype, lltype.Ptr):        
-            self.codewriter.load(targetvar, targettype, tmpvar)
-        else:
-            # XXX noop
+        if isinstance(op.result.concretetype, lltype.ContainerType):
+            # noop
             self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
+        else:
+            self.codewriter.load(targetvar, targettype, tmpvar)
 
     def setarrayitem(self, op):
         array = self.db.repr_arg(op.args[0])
