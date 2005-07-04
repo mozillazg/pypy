@@ -9,7 +9,18 @@ from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
     pypy_parsefile, python_parse, pypy_parse
 from pypy.interpreter.pyparser import grammar
 from pypy.interpreter.pyparser.pythonlexer import TokenError
+from pypy.interpreter.pyparser.pythonparse import PYTHON_VERSION, PYPY_VERSION
 grammar.DEBUG = False
+
+
+# these samples are skipped if the native version of Python does not match
+# the version of the grammar we use
+GRAMMAR_MISMATCH = PYTHON_VERSION != PYPY_VERSION
+SKIP_IF_NOT_NATIVE = [
+    "snippet_samples.py",
+    "snippet_import_statements.py",
+]
+
 
 def name(elt):
     return "%s[%s]"% (sym_name.get(elt,elt),elt)
@@ -55,6 +66,9 @@ def test_samples():
         for fname in os.listdir(samples_dir):
             if not fname.endswith('.py'):
             # if fname != 'snippet_simple_assignment.py':
+                continue
+            if GRAMMAR_MISMATCH and fname in SKIP_IF_NOT_NATIVE:
+                print "Skipping", fname
                 continue
             abspath = osp.join(samples_dir, fname)
             yield check_parse, abspath

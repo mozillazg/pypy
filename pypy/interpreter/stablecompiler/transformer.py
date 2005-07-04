@@ -32,13 +32,6 @@ import token
 import sys
 
 
-if not hasattr(symbol,'testlist_gexp'):
-    # python 2.3
-    symbols = symbol.sym_name.keys()
-    symbols.sort()
-    symbol.testlist_gexp = symbols[-1] + 1
-    symbol.sym_name[symbol.testlist_gexp] = "testlist_gexp"
-
 class WalkerError(StandardError):
     pass
 

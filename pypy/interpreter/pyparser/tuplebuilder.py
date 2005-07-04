@@ -1,6 +1,7 @@
 
 from grammar import BaseGrammarBuilder
-from syntaxtree import TOKEN_MAP, SYMBOLS # , NT_OFFSET
+from syntaxtree import TOKEN_MAP # , NT_OFFSET
+from pythonparse import SYMBOLS
 
 class StackElement:
     """wraps TupleBuilder's tuples"""
