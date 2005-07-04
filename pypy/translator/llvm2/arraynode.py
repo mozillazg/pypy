@@ -14,31 +14,21 @@ class ArrayTypeNode(LLVMNode):
         assert isinstance(array, lltype.Array)
         self.array = array
         c = count()
-        self.ref_template = "%%array.%s." + str(c)
-        self.ref = self.getref()
-        self.constructor_ref = "%%new.array.%s" % c 
+        ref_template = "%%array.%s." + str(c)
+        ref_template = '"%s"' % ref_template
+        arrayname = str(self.array.OF)            
+        self.ref = ref_template % arrayname
+        constructor_ref = "%%new.array.%s" % c
+        self.constructor_ref = '"%s"' % constructor_ref
+        self.constructor_decl = "%s * %s(int %%len)" % \
+                                (self.ref, self.constructor_ref)
 
     def __str__(self):
         return "<ArrayTypeNode %r>" % self.ref
-
-    def getref(self):
-        try:
-            arrayname = self.db.repr_arg_type(self.array.OF)
-        except KeyError:
-            arrayname = str(self.array.OF)
-        arrayname = arrayname.replace("%", "")
-        arrayname = arrayname.replace("*", "PTR")
-        return self.ref_template % arrayname
         
-    def get_structure_decl(self):
-        if not hasattr(self, "constructor_decl"):
-            self.constructor_decl =  "%s * %s(int %%len)" % \
-                                    (self.ref, self.constructor_ref)    
-        return self.constructor_decl
-
     def writedecl(self, codewriter): 
         # declaration for constructor
-        codewriter.declare(self.get_structure_decl())
+        codewriter.declare(self.constructor_decl)
 
     def writeimpl(self, codewriter):
         """ this function generates a LLVM function like the following:
@@ -55,7 +45,7 @@ class ArrayTypeNode(LLVMNode):
            ret %array* %result
         }"""
         log.writeimpl(self.ref)
-        codewriter.openfunc(self.get_structure_decl())
+        codewriter.openfunc(self.constructor_decl)
         indices = [("uint", 1), ("int", "%len")]
         codewriter.getelementptr("%size", self.ref + "*",
                                  "null", *indices)
@@ -88,8 +78,9 @@ class ArrayNode(LLVMNode):
 
     def __init__(self, db, value):
         self.db = db
-        self.name = "%s.%s" % (value._TYPE.OF, ArrayNode.array_counter)
-        self.ref = "%%stinstance.%s" % self.name
+        name = "%s.%s" % (value._TYPE.OF, ArrayNode.array_counter)
+        self.ref = "%%stinstance.%s" % name
+        self.dataref = self.ref + ".tmp" 
         self.value = value
         ArrayNode.array_counter += 1
 
@@ -127,4 +118,7 @@ class ArrayNode(LLVMNode):
         lenstr = ".%s" % lenitems
         codewriter.globalinstance(self.ref,
                                   self.db.repr_arg_type(self.value._TYPE),
-                                  self.get_values())
+                                  "null")
+        #codewriter.globalinstance(self.dataref,
+        #                          self.db.repr_arg_type(self.value._TYPE),
+        #                          self.get_values())
