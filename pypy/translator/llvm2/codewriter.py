@@ -10,10 +10,6 @@ count = count().next
 class CodeWriter(object): 
     def __init__(self): 
         self._lines = []
-        if use_boehm_gc:
-            self.declare('sbyte* %GC_malloc(uint)')
-            self.declare('sbyte* %GC_malloc_atomic(uint)')
-            self.declare('sbyte* %GC_realloc(sbyte*, uint)')
 
     def append(self, line): 
         if show_line_numbers:
@@ -104,7 +100,7 @@ class CodeWriter(object):
                 atomicString = '_atomic'
             else:
                 atomicString = ''
-            self.indent("%%malloc.Size.%(cnt)d = getelementptr %(type_)s* null, int %(size)s" % locals())
+            self.indent("%%malloc.Size.%(cnt)d = getelementptr %(type_)s* null, uint %(size)s" % locals())
             self.indent("%%malloc.SizeU.%(cnt)d = cast %(type_)s* %%malloc.Size.%(cnt)d to uint" % locals())
             self.indent("%%malloc.Ptr.%(cnt)d = call sbyte* %%GC_malloc%(atomicString)s(uint %%malloc.SizeU.%(cnt)d)" % locals())
             self.indent("%(targetvar)s = cast sbyte* %%malloc.Ptr.%(cnt)d to %(type_)s*" % locals())
