@@ -254,7 +254,8 @@ def mul__Long_Long(space, w_long1, w_long2):
     return result
 
 def truediv__Long_Long(space, w_long1, w_long2):
-    return _long_true_divide(space, w_long1, w_long2)
+    div = _long_true_divide(space, w_long1, w_long2)
+    return space.newfloat(div)
 
 def floordiv__Long_Long(space, w_long1, w_long2):
     div, rem = _divrem(space, w_long1, w_long2)
@@ -402,7 +403,7 @@ def lshift__Long_Long(space, w_long1, w_long2):
     w_result._normalize()
     return w_result
 
-def rshift__Long_Long(space, w_long1, w_long2): #YYYYYY
+def rshift__Long_Long(space, w_long1, w_long2):
     if w_long2.sign < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
@@ -933,7 +934,7 @@ def _long_true_divide(space, a, b):
         ad = ldexp(ad, aexp * SHORT_BIT)
         if isinf(ad):   # ignore underflow to 0.0
             raise OverflowError
-        return space.newfloat(ad)
+        return ad
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("long/long too large for a float"))
