@@ -288,10 +288,12 @@ def generate_tokens(lines):
         tok = token_from_values(tokenmod.DEDENT, '')
         token_list.append((tok, line, lnum, pos))
         # token_list.append((DEDENT, '', (lnum, 0), (lnum, 0), ''))
-
+        lnum += 1
+        
     ## <XXX> adim
-    token_list.append((Token('NEWLINE', ''), line, lnum, 0))
+    token_list.append((Token('NEWLINE', ''), '\n', lnum, 0))
     ## </XXX>
+    lnum += 1
     tok = token_from_values(tokenmod.ENDMARKER, '',)
     token_list.append((tok, line, lnum, pos))
     # token_list.append((ENDMARKER, '', (lnum, 0), (lnum, 0), ''))

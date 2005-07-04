@@ -68,7 +68,7 @@ class AbstractCompiler:
             if not err2.match(space, space.w_SyntaxError):
                 raise
 
-        if space.eq_w(err1.w_value, err2.w_value):
+        if mode != 'single' and space.eq_w(err1.w_value, err2.w_value):
             raise     # twice the same error, re-raise
 
         return None   # two different errors, expect more
