@@ -91,9 +91,9 @@ def delegate_Int2Long(w_intobj):
     return W_LongObject(w_intobj.space, digits, sign)
 
 # long-to-float delegation
-def delegate_Long2Float(w_longobj): #YYYYYY
+def delegate_Long2Float(w_longobj):
     try:
-        return W_FloatObject(w_longobj.space, float(w_longobj.longval()))
+        return W_FloatObject(w_longobj.space, _AsDouble(w_longobj))
     except OverflowError:
         raise OperationError(w_longobj.space.w_OverflowError,
                              w_longobj.space.wrap("long int too large to convert to float"))
@@ -127,9 +127,9 @@ def int__Long(space, w_value):
     #subtypes of long are converted to long!
     return long__Long(space, w_value)
 
-def float__Long(space, w_longobj): #YYYYYY
+def float__Long(space, w_longobj):
     try:
-        return space.newfloat(float(w_longobj.longval()))
+        return space.newfloat(_AsDouble(w_longobj))
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("long int too large to convert to float"))
@@ -253,30 +253,15 @@ def mul__Long_Long(space, w_long1, w_long2):
     result.sign = w_long1.sign * w_long2.sign
     return result
 
-def truediv__Long_Long(space, w_long1, w_long2): #YYYYYY
-    x = w_long1.longval()
-    y = w_long2.longval()
-    if not y:
-        raise OperationError(space.w_ZeroDivisionError,
-                             space.wrap("long division"))
-    try:
-        z = operator.truediv(x, y)
-    except OverflowError:
-        raise OperationError(space.w_OverflowError,
-                             space.wrap("long/long too large for a float"))
-    return space.newfloat(float(z))
+def truediv__Long_Long(space, w_long1, w_long2):
+    return _long_true_divide(space, w_long1, w_long2)
 
-def floordiv__Long_Long(space, w_long1, w_long2): #YYYYYY
-    x = w_long1.longval()
-    y = w_long2.longval()
-    if not y:
-        raise OperationError(space.w_ZeroDivisionError,
-                             space.wrap("long division"))
-    z = x // y
-    return W_LongObject(space, *args_from_long(z))
+def floordiv__Long_Long(space, w_long1, w_long2):
+    div, rem = _divrem(space, w_long1, w_long2)
+    return div
 
 old_style_div = 1 / 2 == 1 // 2
-def div__Long_Long(space, w_long1, w_long2): #YYYYYY
+def div__Long_Long(space, w_long1, w_long2):
     # Select the proper div
     if old_style_div:
         return floordiv__Long_Long(space, w_long1, w_long2)
@@ -284,25 +269,13 @@ def div__Long_Long(space, w_long1, w_long2): #YYYYYY
         return truediv__Long_Long(space, w_long1, w_long2)
 
 
-def mod__Long_Long(space, w_long1, w_long2): #YYYYYY
-    x = w_long1.longval()
-    y = w_long2.longval()
-    if not y:
-        raise OperationError(space.w_ZeroDivisionError,
-                             space.wrap("long modulo"))
-    z = x % y
-    return W_LongObject(space, *args_from_long(z))
+def mod__Long_Long(space, w_long1, w_long2):
+    div, rem = _divrem(space, w_long1, w_long2)
+    return rem
 
-def divmod__Long_Long(space, w_long1, w_long2): #YYYYYY
-    x = w_long1.longval()
-    y = w_long2.longval()
-    if not y:
-        raise OperationError(space.w_ZeroDivisionError,
-                             space.wrap("long modulo"))
-    z1, z2 = divmod(x, y)
-    w_result1 = W_LongObject(space, *args_from_long(z1))
-    w_result2 = W_LongObject(space, *args_from_long(z2))
-    return space.newtuple([w_result1, w_result2])
+def divmod__Long_Long(space, w_long1, w_long2):
+    div, rem = _divrem(space, w_long1, w_long2)
+    return space.newtuple([div, rem])
 
 # helper for pow()  #YYYYYY: still needs longval if second argument is negative
 def _impl_long_long_pow(space, lv, lw, lz=None):
@@ -868,10 +841,10 @@ def _divrem(space, a, b):
         rem = a
         return z, rem
     if size_b == 1:
-        z, urem = divrem1(a, b._getshort(0))
+        z, urem = _divrem1(space, a, b._getshort(0))
         rem = W_LongObject(space, [urem], int(urem != 0))
     else:
-        z, rem = _x_divrem(a, b)
+        z, rem = _x_divrem(space, a, b)
     # Set the signs.
     # The quotient z has the sign of a*b;
     # the remainder r has the sign of a,
@@ -881,3 +854,86 @@ def _divrem(space, a, b):
     if z.sign < 0 and rem.sign != 0:
         rem.sign = - rem.sign
     return z, rem
+
+# ______________ conversions to double _______________
+
+def _AsScaledDouble(v):
+    """
+    NBITS_WANTED should be > the number of bits in a double's precision,
+    but small enough so that 2**NBITS_WANTED is within the normal double
+    range.  nbitsneeded is set to 1 less than that because the most-significant
+    Python digit contains at least 1 significant bit, but we don't want to
+    bother counting them (catering to the worst case cheaply).
+
+    57 is one more than VAX-D double precision; I (Tim) don't know of a double
+    format with more precision than that; it's 1 larger so that we add in at
+    least one round bit to stand in for the ignored least-significant bits.
+    """
+    NBITS_WANTED = 57
+    multiplier = float(1 << SHORT_BIT)
+    if v.sign == 0:
+        return 0.0, 0
+    i = len(v.digits) * 2 - 1
+    if v._getshort(i) == 0:
+        i -= 1
+    sign = v.sign
+    x = float(v._getshort(i))
+    nbitsneeded = NBITS_WANTED - 1
+    # Invariant:  i Python digits remain unaccounted for.
+    while i > 0 and nbitsneeded > 0:
+        i -= 1
+        x = x * multiplier + float(v._getshort(i))
+        nbitsneeded -= SHORT_BIT
+    # There are i digits we didn't shift in.  Pretending they're all
+    # zeroes, the true value is x * 2**(i*SHIFT).
+    exponent = i
+    assert x > 0.0
+    return x * sign, exponent
+
+# XXX make ldexp and isinf a builtin float support function
+
+def isinf(x):
+    return x*2 == x
+
+def ldexp(x, exp):
+    assert type(x) is float
+    lb1 = LONG_BIT - 1
+    multiplier = float(r_uint(1) << lb1)
+    while exp >= lb1:
+        x *= multiplier
+        exp -= lb1
+    if exp:
+        x *= float(r_uint(1) << exp)
+    return x
+
+def _AsDouble(v):
+    """ Get a C double from a long int object. """
+    x, e = _AsScaledDouble(v)
+    if e <= sys.maxint / SHORT_BIT:
+        x = ldexp(x, e * SHORT_BIT)
+        if not isinf(x):
+            return x
+    raise OverflowError# sorry, "long int too large to convert to float"
+
+def _long_true_divide(space, a, b):
+    try:
+        ad, aexp = _AsScaledDouble(a)
+        bd, bexp = _AsScaledDouble(b)
+        if bd == 0.0:
+            raise OperationError(space.w_ZeroDivisionError,
+                                 space.wrap("long division or modulo by zero"))
+
+        # True value is very close to ad/bd * 2**(SHIFT*(aexp-bexp))
+        ad /= bd   # overflow/underflow impossible here
+        aexp -= bexp
+        if aexp > sys.maxint / SHORT_BIT:
+            raise OverflowError
+        elif aexp < -(sys.maxint / SHORT_BIT):
+            return 0.0 # underflow to 0
+        ad = ldexp(ad, aexp * SHORT_BIT)
+        if isinf(ad):   # ignore underflow to 0.0
+            raise OverflowError
+        return space.newfloat(ad)
+    except OverflowError:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("long/long too large for a float"))
