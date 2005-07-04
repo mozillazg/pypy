@@ -13,6 +13,8 @@ from pypy.tool.udir import udir
 from pypy.translator.llvm2.codewriter import CodeWriter
 from pypy.translator.backendoptimization import remove_void
 
+function_count = {}
+
 def genllvm(translator):
     remove_void(translator)
     func = translator.entrypoint
@@ -51,17 +53,24 @@ def genllvm(translator):
         typ_decl.writeimpl(codewriter)
 
     comment("End of file") ; nl()
+
+    if func.func_name in function_count:
+        postfix = '_%d' % function_count[func.func_name]
+        function_count[func.func_name] += 1
+    else:
+        postfix = ''
+        function_count[func.func_name] = 1
     
     targetdir = udir
-    llvmsource = targetdir.join(func.func_name).new(ext='.ll')
+    llvmsource = targetdir.join(func.func_name+postfix).new(ext='.ll')
     content = str(codewriter) 
     llvmsource.write(content) 
     log.source(content)
   
     if not llvm_is_on_path(): 
         py.test.skip("llvm not found")  # XXX not good to call py.test.skip here
-         
-    pyxsource = llvmsource.new(basename=llvmsource.purebasename+'_wrapper'+'.pyx')
+
+    pyxsource = llvmsource.new(basename=llvmsource.purebasename+'_wrapper'+postfix+'.pyx')
     write_pyx_wrapper(entrynode, pyxsource)    
     
     return build_llvm_module.make_module_from_llvm(llvmsource, pyxsource)
