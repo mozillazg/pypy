@@ -1,8 +1,9 @@
 """Module symbol-table generator"""
 
-from compiler import ast
-from compiler.consts import SC_LOCAL, SC_GLOBAL, SC_FREE, SC_CELL, SC_UNKNOWN
-from compiler.misc import mangle
+from pypy.interpreter.stablecompiler import ast
+from pypy.interpreter.stablecompiler.consts import SC_LOCAL, SC_GLOBAL, \
+    SC_FREE, SC_CELL, SC_UNKNOWN
+from pypy.interpreter.stablecompiler.misc import mangle
 import types
 
 
@@ -419,7 +420,7 @@ def list_eq(l1, l2):
 
 if __name__ == "__main__":
     import sys
-    from compiler import parseFile, walk
+    from pypy.interpreter.stablecompiler import parseFile, walk
     import symtable
 
     def get_names(syms):

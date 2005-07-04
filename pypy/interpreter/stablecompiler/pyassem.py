@@ -5,8 +5,8 @@ import new
 import sys
 import types
 
-from compiler import misc
-from compiler.consts \
+from pypy.interpreter.stablecompiler import misc
+from pypy.interpreter.stablecompiler.consts \
      import CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS
 
 class FlowGraph:
