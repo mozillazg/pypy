@@ -58,7 +58,7 @@ class StructVarsizeTypeNode(StructTypeNode):
         codewriter.label("block0")
         indices_to_array = [("int", 0)]
         s = self.struct
-        while isintance(s, lltypes.Struct):
+        while isinstance(s, lltype.Struct):
             last_pos = len(self.struct._names_without_voids()) - 1
             indices_to_array.append(("uint", last_pos))
             s = s._flds.values()[-1]
