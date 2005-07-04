@@ -173,10 +173,11 @@ class CPythonCompiler(AbstractCompiler):
 from compiler.pycodegen import ModuleCodeGenerator
 from compiler.pycodegen import InteractiveCodeGenerator
 from compiler.pycodegen import ExpressionCodeGenerator
-from pyparser.pythonparse import parse_python_source, PYTHON_PARSER
-from pyparser.tuplebuilder import TupleBuilder
+from compiler.transformer import Transformer
 from pyparser.pythonutil import ast_from_input
 import compiler
+# XXX compatibility
+# compiler = stablecompiler
 
 class PythonCompiler(CPythonCompiler):
     """Uses the stdlib's python implementation of compiler
@@ -190,7 +191,8 @@ class PythonCompiler(CPythonCompiler):
         flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
-            tree = ast_from_input(source, mode)
+            transformer = Transformer()
+            tree = ast_from_input(source, mode, transformer)
             compiler.misc.set_filename(filename, tree)
             if mode == 'exec':
                 codegenerator = ModuleCodeGenerator(tree)
