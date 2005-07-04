@@ -25,7 +25,7 @@ parseFile(path) -> AST
 #   http://www.opensource.org/licenses/bsd-license.html
 # and replace OWNER, ORGANIZATION, and YEAR as appropriate.
 
-from compiler.ast import *
+from pypy.interpreter.stablecompiler.ast import *
 import parser
 import symbol
 import token
