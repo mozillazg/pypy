@@ -44,6 +44,8 @@ class ArrayTypeNode(LLVMNode):
            store int %len, int* %arraylength 
            ret %array* %result
         }"""
+        from pypy.translator.llvm2.atomic import is_atomic
+
         log.writeimpl(self.ref)
         codewriter.openfunc(self.constructor_decl)
         indices = [("uint", 1), ("int", "%len")]
@@ -51,7 +53,7 @@ class ArrayTypeNode(LLVMNode):
                                  "null", *indices)
         fromtype = self.db.repr_arg_type(self.array.OF) 
         codewriter.cast("%usize", fromtype + "*", "%size", "uint")
-        codewriter.malloc("%ptr", "sbyte", "%usize", atomic=False)
+        codewriter.malloc("%ptr", "sbyte", "%usize", atomic=is_atomic(self))
         codewriter.cast("%result", "sbyte*", "%ptr", self.ref+"*")
         codewriter.getelementptr("%arraylength", self.ref+"*", "%result", ("uint", 0))
         codewriter.store("int", "%len", "%arraylength")
