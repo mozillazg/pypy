@@ -16,24 +16,28 @@ import grammar
 
 class PythonParser(object):
     """Wrapper class for python grammar"""
-    def __init__(self, grammar_builder ):
+    def __init__(self, grammar_builder):
         self.items = grammar_builder.items
         self.rules = grammar_builder.rules
         # Build first sets for each rule (including anonymous ones)
-        grammar.build_first_sets( self.items )
+        grammar.build_first_sets(self.items)
 
-    def parse_source( self, textsrc, goal, builder=None ):
+    def parse_source(self, textsrc, goal, builder=None):
         """Parse a python source according to goal"""
         lines = [line + '\n' for line in textsrc.split('\n')]
+        if textsrc == '\n':
+            lines.pop()
+        else:
+            last_line = lines[-1]
+            lines[-1] = last_line[:-1]
+        return self.parse_lines(lines, goal, builder)
 
-        return self.parse_lines( lines, goal, builder )
-
-    def parse_lines( self, lines, goal, builder=None ):
+    def parse_lines(self, lines, goal, builder=None):
         target = self.rules[goal]
         src = Source(lines)
         
         if builder is None:
-            builder = grammar.BaseGrammarBuilder(debug=False, rules=gram.rules)
+            builder = grammar.BaseGrammarBuilder(debug=False, rules=self.rules)
         result = target.match(src, builder)
         # <HACK> XXX find a clean way to process encoding declarations
         builder.source_encoding = src.encoding
@@ -41,8 +45,9 @@ class PythonParser(object):
         if not result:
             # raising a SyntaxError here is not annotable, and it can
             # probably be handled in an other way
-            # raise SyntaxError("at %s" % src.debug() )
-            return None
+            line, lineno = src.debug()
+            raise BuilderError(line, lineno)
+            # return None
         return builder
         
 # parse the python grammar corresponding to our CPython version
@@ -67,10 +72,6 @@ class BuilderError(SyntaxError):
         self.lineno = lineno
         self.offset = -1
         self.msg = "SyntaxError at line %d: %r" % (self.lineno, self.line)
-
-def parse_python_source( textlines, gram, goal, builder=None ):
-    """Parse a python source according to goal"""
-    return gram.parse_lines( textlines, goal, builder )
 
 def parse_file_input(pyf, gram, builder=None):
     """Parse a python file"""
