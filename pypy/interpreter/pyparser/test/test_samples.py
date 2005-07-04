@@ -61,11 +61,11 @@ def assert_tuples_equal(tup1, tup2, curpos = ()):
 
 def test_samples():
     samples_dir = osp.join(osp.dirname(__file__), 'samples')
+    # samples_dir = osp.dirname(os.__file__)
     for use_lookahead in (True, False):
         grammar.USE_LOOKAHEAD = use_lookahead
         for fname in os.listdir(samples_dir):
             if not fname.endswith('.py'):
-            # if fname != 'snippet_simple_assignment.py':
                 continue
             if GRAMMAR_MISMATCH and fname in SKIP_IF_NOT_NATIVE:
                 print "Skipping", fname
@@ -92,9 +92,9 @@ def check_parse(filepath):
     _check_tuples_equality(pypy_tuples, python_tuples, filepath)
 
 
-def check_parse_input(snippet, mode):
-    pypy_tuples = pypy_parse(snippet, mode)
-    python_tuples = python_parse(snippet, mode)
+def check_parse_input(snippet, mode, lineno=False):
+    pypy_tuples = pypy_parse(snippet, mode, lineno)
+    python_tuples = python_parse(snippet, mode, lineno)
     _check_tuples_equality(pypy_tuples, python_tuples, snippet)
 
 def test_eval_inputs():
@@ -104,7 +104,8 @@ def test_eval_inputs():
         'True and False',
         ]
     for snippet in snippets:
-        yield check_parse_input, snippet, 'eval'
+        yield check_parse_input, snippet, 'eval', True
+        yield check_parse_input, snippet, 'eval', False
 
 def test_exec_inputs():
     snippets = [
@@ -112,12 +113,14 @@ def test_exec_inputs():
         'print 6*7', 'if 1:\n  x\n',
         ]
     for snippet in snippets:
-        yield check_parse_input, snippet, 'exec'
+        yield check_parse_input, snippet, 'exec', True
+        yield check_parse_input, snippet, 'exec', False        
 
 def test_single_inputs():
     snippets = ['a=1', 'True', 'def f(a):\n    return a+1\n\n']
     for snippet in snippets:
-        yield check_parse_input, snippet, 'single'
+        yield check_parse_input, snippet, 'single', True
+        yield check_parse_input, snippet, 'single', False        
 
     
 def test_bad_inputs():
