@@ -41,7 +41,7 @@ def test_GC_malloc():
     if not use_boehm_gc:
         py.test.skip("test_GC_malloc skipped because Boehm collector library was not found")
         return
-    def tuple_getitem(n): 
+    def tuple_getitem2(n): 
         x = 0
         i = 0
         while i < n:
@@ -49,7 +49,7 @@ def test_GC_malloc():
             x += l[2]
             i += 1
         return x
-    mod,f = compile_module_function(tuple_getitem, [int])
+    mod,f = compile_module_function(tuple_getitem2, [int])
     assert f(10000) == 49995000
     get_heap_size = getattr(mod, "GC_get_heap_size_wrapper")
     heap_size_start = get_heap_size()

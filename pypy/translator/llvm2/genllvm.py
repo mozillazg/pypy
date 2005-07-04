@@ -37,6 +37,10 @@ def genllvm(translator):
         typ_decl.writeglobalconstants(codewriter)
 
     nl(); comment("Function Prototypes") ; nl()
+    if use_boehm_gc: 
+        codewriter.declare('sbyte* %GC_malloc(uint)')
+        codewriter.declare('sbyte* %GC_malloc_atomic(uint)')
+        codewriter.declare('sbyte* %GC_realloc(sbyte*, uint)')
     for typ_decl in db.getobjects():
         typ_decl.writedecl(codewriter)
 
