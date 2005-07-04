@@ -88,14 +88,11 @@ class TupleBuilder(BaseGrammarBuilder):
 
     def token(self, name, value, source):
         num = TOKEN_MAP.get(name, -1)
-        lineno = source.current_line()
+        lineno = source.current_lineno()
         if value is None:
             if name not in ("NEWLINE", "INDENT", "DEDENT", "ENDMARKER"):
                 value = name
             else:
                 value = ''
-        if self.lineno:
-            self.stack.append( Terminal(num, value, lineno) )
-        else:
-            self.stack.append( Terminal(num, value, -1) )
+        self.stack.append( Terminal(num, value, lineno) )
         return True
