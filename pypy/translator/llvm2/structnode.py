@@ -48,6 +48,8 @@ class StructVarsizeTypeNode(StructTypeNode):
         codewriter.declare(self.constructor_name)
 
     def writeimpl(self, codewriter):
+        from pypy.translator.llvm2.atomic import is_atomic
+
         log.writeimpl(self.ref)
         codewriter.openfunc(self.constructor_name)
         codewriter.label("block0")
@@ -65,7 +67,7 @@ class StructVarsizeTypeNode(StructTypeNode):
 
         #XXX is this ok for 64bit?
         codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
-        codewriter.malloc("%resulttmp", "sbyte", "%sizeu", atomic=False)
+        codewriter.malloc("%resulttmp", "sbyte", "%sizeu", atomic=is_atomic(self))
         codewriter.cast("%result", "sbyte*", "%resulttmp", self.ref + "*")
 
         # remember the allocated length for later use.
