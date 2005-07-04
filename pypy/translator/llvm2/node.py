@@ -1,6 +1,9 @@
 class LLVMNode(object):
     def _get_ref(self):
-        return self._ref
+        if callable(self._ref):
+            return self._ref()
+        else:
+            return self._ref
     def _set_ref(self, ref):
         if hasattr(self, "_ref"):
             raise TypeError, ("can only set ref once! currently: %s" %

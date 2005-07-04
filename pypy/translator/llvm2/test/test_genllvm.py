@@ -258,12 +258,12 @@ def test_list_getitem():
     assert f(1) == 2
     assert f(2) == 3
 
-def Xtest_list_list_getitem(): 
+def test_list_list_getitem(): 
     def list_list_getitem(): 
         l = [[1]]
         return l[0][0]
     f = compile_function(list_list_getitem, [])
-    assert f() == 2
+    assert f() == 1
 
 def Xtest_list_getitem_pbc(): 
     l = [1,2]

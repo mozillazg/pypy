@@ -13,16 +13,32 @@ class ArrayTypeNode(LLVMNode):
         self.db = db
         assert isinstance(array, lltype.Array)
         self.array = array
-        ref_template = "%%array.%s." % array.OF
         c = count()
-        self.ref = ref_template + str(c)
+        self.ref_template = "%%array.%s." + str(c)
+        self.ref = self.getref()
         self.constructor_ref = "%%new.array.%s" % c 
-        self.constructor_decl = "%s * %s(int %%len)" % (
-                    self.ref, self.constructor_ref)
+
+    def __str__(self):
+        return "<ArrayTypeNode %r>" % self.ref
+
+    def getref(self):
+        try:
+            arrayname = self.db.repr_arg_type(self.array.OF)
+        except KeyError:
+            arrayname = str(self.array.OF)
+        arrayname = arrayname.replace("%", "")
+        arrayname = arrayname.replace("*", "PTR")
+        return self.ref_template % arrayname
         
+    def get_structure_decl(self):
+        if not hasattr(self, "constructor_decl"):
+            self.constructor_decl =  "%s * %s(int %%len)" % \
+                                    (self.ref, self.constructor_ref)    
+        return self.constructor_decl
+
     def writedecl(self, codewriter): 
         # declaration for constructor
-        codewriter.declare(self.constructor_decl)
+        codewriter.declare(self.get_structure_decl())
 
     def writeimpl(self, codewriter):
         """ this function generates a LLVM function like the following:
@@ -39,7 +55,7 @@ class ArrayTypeNode(LLVMNode):
            ret %array* %result
         }"""
         log.writeimpl(self.ref)
-        codewriter.openfunc(self.constructor_decl)
+        codewriter.openfunc(self.get_structure_decl())
         indices = [("uint", 1), ("int", "%len")]
         codewriter.getelementptr("%size", self.ref + "*",
                                  "null", *indices)
@@ -51,9 +67,6 @@ class ArrayTypeNode(LLVMNode):
         codewriter.store("int", "%len", "%arraylength")
         codewriter.ret(self.ref+"*", "%result")
         codewriter.closefunc()
-
-    def __str__(self):
-        return "<ArrayTypeNode %r>" % self.ref
 
     def setup(self):
         self.db.prepare_repr_arg_type(self.array.OF)
@@ -113,5 +126,5 @@ class ArrayNode(LLVMNode):
         lenitems = len(self.value.items)
         lenstr = ".%s" % lenitems
         codewriter.globalinstance(self.ref,
-                                  self.db.repr_arg_type() + lenstr,
+                                  self.db.repr_arg_type(self.value._TYPE),
                                   self.get_values())
