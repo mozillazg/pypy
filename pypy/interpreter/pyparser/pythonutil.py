@@ -11,7 +11,7 @@ PYTHON_PARSER = pythonparse.PYTHON_PARSER
 TARGET_DICT = {
     'exec'   : "file_input",
     'eval'   : "eval_input",
-    'single' : "single_input",
+    'single' : "file_input",
     }
 
 ## convenience functions around CPython's parser functions
@@ -27,11 +27,11 @@ def python_parse(source, mode='exec', lineno=False):
     """parse python source using CPython's parser module and return
     nested tuples
     """
-    if mode == 'exec':
-        tp = parser.suite(source)
-    else:
+    if mode == 'eval':
         tp = parser.expr(source)
-    return tp.totuple()
+    else:
+        tp = parser.suite(source)
+    return parser.ast2tuple(tp, line_info=lineno)
 
 ## convenience functions around recparser functions
 def pypy_parsefile(filename, lineno=False):

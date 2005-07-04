@@ -100,6 +100,12 @@ def test_exec_inputs():
     for snippet in snippets:
         yield check_parse_input, snippet, 'exec'
 
+def test_single_inputs():
+    snippets = ['a=1', 'True', 'def f(a):\n    return a+1\n\n']
+    for snippet in snippets:
+        yield check_parse_input, snippet, 'single'
+
+    
 def test_bad_inputs():
     inputs = ['x = (', 'x = (\n', 'x = (\n\n']
     for inp in inputs:
