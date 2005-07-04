@@ -10,9 +10,10 @@ count = count().next
 class CodeWriter(object): 
     def __init__(self): 
         self._lines = []
-        self.declare('sbyte* %GC_malloc(uint)')
-        self.declare('sbyte* %GC_malloc_atomic(uint)')
-        self.declare('sbyte* %GC_realloc(sbyte*, uint)')
+        if use_boehm_gc:
+            self.declare('sbyte* %GC_malloc(uint)')
+            self.declare('sbyte* %GC_malloc_atomic(uint)')
+            self.declare('sbyte* %GC_realloc(sbyte*, uint)')
 
     def append(self, line): 
         if show_line_numbers:
