@@ -30,7 +30,8 @@ import parser
 import symbol
 import token
 import sys
-
+# make sure we import the parser with the correct grammar
+import pypy.interpreter.pyparser.pythonparse
 
 class WalkerError(StandardError):
     pass
