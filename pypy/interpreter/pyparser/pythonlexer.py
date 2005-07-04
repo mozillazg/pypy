@@ -2,6 +2,7 @@
 it obeys the TokenSource interface defined for the grammar
 analyser in grammar.py
 """
+import symbol
 
 from grammar import TokenSource, Token
 # Don't import string for that ...
@@ -72,10 +73,13 @@ tokenmod.NL = tokenmod.N_TOKENS + 1
 
 class TokenError(SyntaxError):
     """Raised when EOF is found prematuerly"""
-    def __init__(self, msg, strstart, token_stack):
+    def __init__(self, msg, line, strstart, token_stack):
         self.lineno, self.offset = strstart
-        self.text = "XXX"
-        self.msg = "TokenError at pos (%d, %d)" % (self.lineno, self.offset)
+        self.text = line
+        self.errlabel = msg
+        self.msg = "TokenError at pos (%d, %d) in %r" % (self.lineno,
+                                                         self.offset,
+                                                         line)
         self.token_stack = token_stack
 
 def generate_tokens(lines):
@@ -119,7 +123,7 @@ def generate_tokens(lines):
 
         if contstr:                            # continued string
             if not line:
-                raise TokenError("EOF in multi-line string", strstart,
+                raise TokenError("EOF in multi-line string", line, strstart,
                                  token_list)
             endmatch = endDFA.recognize(line)
             if -1 != endmatch:
@@ -189,7 +193,7 @@ def generate_tokens(lines):
 
         else:                                  # continued statement
             if not line:
-                raise TokenError("EOF in multi-line statement", (lnum, 0), token_list)
+                raise TokenError("EOF in multi-line statement", line, (lnum, 0), token_list)
             continued = 0
 
         while pos < max:
@@ -283,17 +287,16 @@ def generate_tokens(lines):
                 #                    (lnum, pos), (lnum, pos+1), line))
                 pos = pos + 1
 
-    last_comment = ''
+    lnum -= 1
     for indent in indents[1:]:                 # pop remaining indent levels
         tok = token_from_values(tokenmod.DEDENT, '')
         token_list.append((tok, line, lnum, pos))
         # token_list.append((DEDENT, '', (lnum, 0), (lnum, 0), ''))
-        lnum += 1
         
-    ## <XXX> adim
-    token_list.append((Token('NEWLINE', ''), '\n', lnum, 0))
+    ## <XXX> adim: this can't be (only) that, can it ?
+    if token_list and token_list[-1] != symbol.file_input:
+        token_list.append((Token('NEWLINE', ''), '\n', lnum, 0))
     ## </XXX>
-    lnum += 1
     tok = token_from_values(tokenmod.ENDMARKER, '',)
     token_list.append((tok, line, lnum, pos))
     # token_list.append((ENDMARKER, '', (lnum, 0), (lnum, 0), ''))
@@ -325,6 +328,9 @@ class PythonSource(TokenSource):
     def current_line(self):
         """Returns the current line being parsed"""
         return self._current_line
+
+    def current_lineno(self):
+        return self._lineno
 
     def context(self):
         """Returns an opaque context object for later restore"""
@@ -368,7 +374,7 @@ NONE_LIST = [tokenmod.ENDMARKER, tokenmod.INDENT, tokenmod.DEDENT,]
 NAMED_LIST = [tokenmod.OP, ]
 
 def token_from_values(tok_type, tok_string):
-    """XXX Compatibility layer between both parsers"""
+    """Compatibility layer between both parsers"""
     if tok_type in NONE_LIST:
         return Token(tokenmod.tok_name[tok_type], None)
     if tok_type in NAMED_LIST:
