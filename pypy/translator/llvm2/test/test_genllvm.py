@@ -50,13 +50,13 @@ def test_GC_malloc():
             i += 1
         return x
     mod,f = compile_module_function(tuple_getitem, [int])
+    assert f(10000) == 49995000
     get_heap_size = getattr(mod, "GC_get_heap_size_wrapper")
     heap_size_start = get_heap_size()
     for i in range(0,10):
-        f(10000)
-        heap_size_used = get_heap_size() - heap_size_start
-        print 'heap_size_used=%d' % heap_size_used
-        assert heap_size_used < 100000
+        assert f(10000) == 49995000
+        heap_size_inc = get_heap_size() - heap_size_start
+        assert heap_size_inc < 100000
 
 def test_return1():
     def simple1():
