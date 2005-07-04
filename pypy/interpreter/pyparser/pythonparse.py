@@ -13,6 +13,38 @@ import sys
 import os
 import grammar
 
+
+class PythonParser(object):
+    """Wrapper class for python grammar"""
+    def __init__(self, grammar_builder ):
+        self.items = grammar_builder.items
+        self.rules = grammar_builder.rules
+        # Build first sets for each rule (including anonymous ones)
+        grammar.build_first_sets( self.items )
+
+    def parse_source( self, textsrc, goal, builder=None ):
+        """Parse a python source according to goal"""
+        lines = [line + '\n' for line in textsrc.split('\n')]
+
+        return self.parse_lines( lines, goal, builder )
+
+    def parse_lines( self, lines, goal, builder=None ):
+        target = self.rules[goal]
+        src = Source(lines)
+        
+        if builder is None:
+            builder = grammar.BaseGrammarBuilder(debug=False, rules=gram.rules)
+        result = target.match(src, builder)
+        # <HACK> XXX find a clean way to process encoding declarations
+        builder.source_encoding = src.encoding
+        # </HACK>
+        if not result:
+            # raising a SyntaxError here is not annotable, and it can
+            # probably be handled in an other way
+            # raise SyntaxError("at %s" % src.debug() )
+            return None
+        return builder
+        
 # parse the python grammar corresponding to our CPython version
 _ver = ".".join([str(i) for i in sys.version_info[:2]])
 PYTHON_GRAMMAR = os.path.join( os.path.dirname(__file__), "data", "Grammar" + _ver )
@@ -23,9 +55,7 @@ def python_grammar():
     grammar.DEBUG = 0
     gram = ebnfparse.parse_grammar( file(PYTHON_GRAMMAR) )
     grammar.DEBUG = level
-    # Build first sets for each rule (including anonymous ones)
-    grammar.build_first_sets(gram.items)
-    return gram
+    return PythonParser(gram)
 
 debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
 PYTHON_PARSER = python_grammar()
@@ -38,32 +68,18 @@ class BuilderError(SyntaxError):
         self.offset = -1
         self.msg = "SyntaxError at line %d: %r" % (self.lineno, self.line)
 
-def parse_python_source(textsrc, gram, goal, builder=None):
+def parse_python_source( textlines, gram, goal, builder=None ):
     """Parse a python source according to goal"""
-    target = gram.rules[goal]
-    src = Source(textsrc)
-    if builder is None:
-        builder = grammar.BaseGrammarBuilder(debug=False, rules=gram.rules)
-    result = target.match(src, builder)
-    # <HACK> XXX find a clean way to process encoding declarations
-    builder.source_encoding = src.encoding
-    # </HACK>
-    if not result:
-        # raising a SyntaxError here is not annotable, and it can
-        # probably be handled in an other way
-        line, lineno = src.debug()
-        raise BuilderError(line, lineno)
-        # return None
-    return builder
+    return gram.parse_lines( textlines, goal, builder )
 
 def parse_file_input(pyf, gram, builder=None):
     """Parse a python file"""
-    return parse_python_source( pyf.read(), gram, "file_input", builder )
+    return gram.parse_source( pyf.read(), "file_input", builder )
     
 def parse_single_input(textsrc, gram, builder=None):
     """Parse a python single statement"""
-    return parse_python_source( textsrc, gram, "single_input", builder )
+    return gram.parse_source( textsrc, "single_input", builder )
 
 def parse_eval_input(textsrc, gram, builder=None):
     """Parse a python expression"""
-    return parse_python_source( textsrc, gram, "eval_input", builder )
+    return gram.parse_source( textsrc, "eval_input", builder )
