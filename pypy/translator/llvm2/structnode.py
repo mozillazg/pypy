@@ -42,6 +42,9 @@ class StructVarsizeTypeNode(StructTypeNode):
         super(StructVarsizeTypeNode, self).__init__(db, struct)
         new_var_name = "%%new.st.var.%s" % self.name
         self.constructor_name = "%s * %s(int %%len)" % (self.ref, new_var_name)
+
+    def __str__(self):
+        return "<StructVarsizeTypeNode %r>" %(self.ref,)
         
     def writedecl(self, codewriter): 
         # declaration for constructor
@@ -81,14 +84,22 @@ class StructVarsizeTypeNode(StructTypeNode):
         codewriter.ret(self.ref + "*", "%result")
         codewriter.closefunc()
 
+
+def cast_global(toptr, from_, name):
+    s = "cast(%s* getelementptr (%s* %s, int 0) to %s)" % (from_,
+                                                           from_,
+                                                           name,
+                                                           toptr)
+    return s
+
 class StructNode(LLVMNode):
     _issetup = False 
     struct_counter = 0
 
     def __init__(self, db, value):
         self.db = db
-        self.name = "%s.%s" % (value._TYPE._name, StructNode.struct_counter)
-        self.ref = "%%stinstance.%s" % self.name
+        name = "%s.%s" % (value._TYPE._name, StructNode.struct_counter)
+        self.ref = "%%stinstance.%s" % name
         self.value = value
         StructNode.struct_counter += 1
 
@@ -107,9 +118,40 @@ class StructNode(LLVMNode):
                 
         self._issetup = True
 
-    def get_values(self):
+    def getall(self):
         res = []
-        for name in self.value._TYPE._names_without_voids():
+        type_ = self.value._TYPE
+        for name in type_._names_without_voids():
+            T = type_._flds[name]
+            value = getattr(self.value, name)
+            if not isinstance(T, lltype.Primitive):
+                # Create a dummy constant hack XXX
+                c = Constant(value, T)
+                x = self.db.obj2node[c]
+                value = self.db.repr_arg(c)
+                t, v = x.getall()
+                value = cast_global(self.db.repr_arg_type(T), t, value)
+                
+            else:
+                value = str(value)
+            res.append((self.db.repr_arg_type(T), value))
+                
+        typestr = self.db.repr_arg_type(type_)
+        values = ", ".join(["%s %s" % (t, v) for t, v in res])
+        return typestr, values
+    
+    def writeglobalconstants(self, codewriter):
+        type_, values = self.getall()
+        codewriter.globalinstance(self.ref, type_, values)
+                
+class StructVarsizeNode(StructNode):
+    def __str__(self):
+        return "<StructVarsizeNode %r>" %(self.ref,)
+
+    def getall(self):
+
+        res = []
+        for name in self.value._TYPE._names_without_voids()[:-1]:
             T = self.value._TYPE._flds[name]
             value = getattr(self.value, name)
             if not isinstance(T, lltype.Primitive):
@@ -118,10 +160,18 @@ class StructNode(LLVMNode):
             else:
                 value = str(value)
             res.append((self.db.repr_arg_type(T), value))
-        return ", ".join(["%s %s" % (t, v) for t, v in res])
 
-    def writeglobalconstants(self, codewriter):
-        codewriter.globalinstance(self.ref,
-                                  self.db.repr_arg_type(self.value._TYPE),
-                                  self.get_values())
+        # Special case for varsized arrays
+        self.value._TYPE._names_without_voids()[-1]
+        x = self.db.obj2node[Constant(value, T)]
+        t, v = x.get_values() 
+        res.append((t, "{%s}" % v))
 
+        s = self.value._TYPE
+        fields = [getattr(s, name) for name in s._names_without_voids()[-1]] 
+        l = [self.db.repr_arg_type(field) for field in fields]
+        l += t
+        typestr = "{ %s }" % ", ".join(l)
+        values = ", ".join(["%s %s" % (t, v) for t, v in res])
+        return typestr, values
+    

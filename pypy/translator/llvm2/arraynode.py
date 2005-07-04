@@ -2,10 +2,14 @@ import py
 from pypy.rpython import lltype
 from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
+from pypy.objspace.flow.model import Constant
 import itertools  
 log = log.structnode
 
 count = itertools.count().next 
+
+def wrapstr(s):
+    return '"%s"' % s
 
 class ArrayTypeNode(LLVMNode):
     _issetup = False
@@ -14,12 +18,10 @@ class ArrayTypeNode(LLVMNode):
         assert isinstance(array, lltype.Array)
         self.array = array
         c = count()
-        ref_template = "%%array.%s." + str(c)
-        ref_template = '"%s"' % ref_template
-        arrayname = str(self.array.OF)            
-        self.ref = ref_template % arrayname
-        constructor_ref = "%%new.array.%s" % c
-        self.constructor_ref = '"%s"' % constructor_ref
+        ref_template = wrapstr("%%array.%s." + str(c))
+
+        self.ref = ref_template % array.OF
+        self.constructor_ref = wrapstr("%%new.array.%s" % c)
         self.constructor_decl = "%s * %s(int %%len)" % \
                                 (self.ref, self.constructor_ref)
 
@@ -80,9 +82,8 @@ class ArrayNode(LLVMNode):
 
     def __init__(self, db, value):
         self.db = db
-        name = "%s.%s" % (value._TYPE.OF, ArrayNode.array_counter)
-        self.ref = "%%stinstance.%s" % name
-        self.dataref = self.ref + ".tmp" 
+        name = '"%%arrayinstance.%s.%s"' % (value._TYPE.OF, ArrayNode.array_counter)
+        self.ref = name
         self.value = value
         ArrayNode.array_counter += 1
 
@@ -93,14 +94,15 @@ class ArrayNode(LLVMNode):
         T = self.value._TYPE.OF
         for item in self.value.items:
             if not isinstance(T, lltype.Primitive):
-                value = getattr(self.value, name)
                 # Create a dummy constant hack XXX
-                c = Constant(value, T)
+                c = Constant(item, T)
                 self.db.prepare_arg(c)
 
         self._issetup = True
 
-    def get_values(self):
+    def getall(self):
+        arraylen = len(self.value.items)
+
         res = []
 
         T = self.value._TYPE.OF
@@ -113,14 +115,17 @@ class ArrayNode(LLVMNode):
                 value = repr(value)
             res.append((typval, value))
 
-        return ", ".join(["%s %s" % (t, v) for t, v in res])
+        arrayvalues = ", ".join(["%s %s" % (t, v) for t, v in res])
 
+        type_ = "{ int, [%s x %s] }" % (len(self.value.items),
+                                        self.db.repr_arg_type(self.value._TYPE.OF))
+        
+        value = "int %s, [%s x %s] [ %s ]" % (arraylen,
+                                              arraylen,
+                                              typval,
+                                              arrayvalues)
+        return type_, value
+    
     def writeglobalconstants(self, codewriter):
-        lenitems = len(self.value.items)
-        lenstr = ".%s" % lenitems
-        codewriter.globalinstance(self.ref,
-                                  self.db.repr_arg_type(self.value._TYPE),
-                                  "null")
-        #codewriter.globalinstance(self.dataref,
-        #                          self.db.repr_arg_type(self.value._TYPE),
-        #                          self.get_values())
+        type_, values = self.getall()
+        codewriter.globalinstance(self.ref, type_, values)
