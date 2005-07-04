@@ -240,7 +240,7 @@ def test_pbc_fns():
     assert f(-1) == 3
     assert f(0) == 5
 
-def DONOT_test_simple_chars():
+def Xtest_simple_chars():
      def char_constant2(s):
          s = s + s + s
          return len(s + '.')
@@ -265,13 +265,21 @@ def test_list_list_getitem():
     f = compile_function(list_list_getitem, [])
     assert f() == 1
 
-def Xtest_list_getitem_pbc(): 
+def test_list_getitem_pbc(): 
     l = [1,2]
-    def list_getitem(i): 
+    def list_getitem_pbc(i): 
         return l[i]
-    f = compile_function(list_getitem, [int], view=True)
+    f = compile_function(list_getitem_pbc, [int])
     assert f(0) == 1
     assert f(1) == 2
+
+def test_list_list_getitem_pbc(): 
+    l = [[0, 1], [0, 1]]
+    def list_list_getitem_pbc(i): 
+        return l[i][i]
+    f = compile_function(list_list_getitem_pbc, [int])
+    assert f(0) == 0
+    assert f(1) == 1
 
 def test_list_basic_ops(): 
     def list_basic_ops(i, j): 
