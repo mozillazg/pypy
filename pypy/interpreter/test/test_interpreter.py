@@ -241,9 +241,6 @@ class TestPyPyInterpreter(TestInterpreter):
         ec = self.space.getexecutioncontext() 
         ec.compiler = self.saved_compiler
 
-    def test_extended_arg(self):
-        py.test.skip("Probably hits a bug in the compiler module")
-
 class AppTestInterpreter: 
     def test_trivial(self):
         x = 42
