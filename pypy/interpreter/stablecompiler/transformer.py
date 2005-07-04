@@ -89,7 +89,7 @@ def Node(*args):
             print nodes[kind], len(args), args
             raise
     else:
-        raise WalkerEror, "Can't find appropriate Node type: %s" % str(args)
+        raise WalkerError, "Can't find appropriate Node type: %s" % str(args)
         #return apply(ast.Node, args)
 
 class Transformer:
@@ -165,11 +165,10 @@ class Transformer:
         if n == symbol.classdef:
             return self.classdef(node[1:])
 
-        raise WalkerEror, ('unexpected node type', n)
+        raise WalkerError, ('unexpected node type', n)
 
     def single_input(self, node):
         ### do we want to do anything about being "interactive" ?
-
         # NEWLINE | simple_stmt | compound_stmt NEWLINE
         n = node[0][0]
         if n != token.NEWLINE:
@@ -314,31 +313,31 @@ class Transformer:
         return Stmt(stmts)
 
     def parameters(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def varargslist(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def fpdef(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def fplist(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def dotted_name(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def comp_op(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def trailer(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def sliceop(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     def argument(self, nodelist):
-        raise WalkerEror
+        raise WalkerError
 
     # --------------------------------------------------------------
     #
