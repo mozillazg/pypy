@@ -2,6 +2,7 @@ import py
 from pypy.objspace.flow.model import Block, Constant, Variable, Link
 from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
+from pypy.translator.llvm2 import varsize
 from pypy.rpython import lltype
 
 import itertools  
@@ -56,38 +57,19 @@ class StructVarsizeTypeNode(StructTypeNode):
         from pypy.translator.llvm2.atomic import is_atomic
 
         log.writeimpl(self.ref)
-        codewriter.openfunc(self.constructor_ref)
-        codewriter.label("block0")
+
+        # build up a list of indices to get to the last 
+        # var-sized struct (or rather the according array) 
         indices_to_array = [("int", 0)]
         s = self.struct
         while isinstance(s, lltype.Struct):
             last_pos = len(s._names_without_voids()) - 1
             indices_to_array.append(("uint", last_pos))
             s = s._flds[s._names_without_voids()[-1]]
-
         arraytype = self.db.repr_arg_type(s)
-
-        # Into array and length            
-        indices = indices_to_array + [("uint", 1), ("int", "%len")]
-        codewriter.getelementptr("%size", self.ref + "*",
-                                 "null", *indices)
-        
-        #XXX is this ok for 64bit?
-        codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
-        codewriter.malloc("%resulttmp", "sbyte", "%sizeu", atomic=is_atomic(self))
-        codewriter.cast("%result", "sbyte*", "%resulttmp", self.ref + "*")
-
-        # remember the allocated length for later use.
-        indices = indices_to_array + [("uint", 0)]
-        codewriter.getelementptr("%size_ptr", self.ref + "*",
-                                 "%result", *indices)
-
-        codewriter.cast("%signedsize", "uint", "%sizeu", "int")
-        codewriter.store("int", "%signedsize", "%size_ptr")
-
-        codewriter.ret(self.ref + "*", "%result")
-        codewriter.closefunc()
-
+        varsize.write_constructor(codewriter, 
+            self.ref, self.constructor_decl, arraytype, 
+            indices_to_array)
 
 def cast_global(toptr, from_, name):
     s = "cast(%s* getelementptr (%s* %s, int 0) to %s)" % (from_,
