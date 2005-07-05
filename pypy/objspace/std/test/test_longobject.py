@@ -302,3 +302,21 @@ class AppTestLong:
     def test_getnewargs(self):
         assert  0L .__getnewargs__() == (0L,)
         assert  (-1L) .__getnewargs__() == (-1L,)
+
+    def test_divmod(self):
+        def check_division(x, y):
+            q, r = divmod(x, y)
+            pab, pba = x*y, y*x
+            assert pab == pba
+            assert q == x//y
+            assert r == x%y
+            assert x == q*y + r
+            if y > 0:
+                assert 0 <= r < y
+            else:
+                assert y < r <= 0
+        for x in [-1L, 0L, 1L, 2L ** 100 - 1, -2L ** 100 - 1]:
+            for y in [-105566530L, -1L, 1L, 1034522340L]:
+                print "checking division for %s, %s" % (x, y)
+                check_division(x, y)
+            raises(ZeroDivisionError, "x // 0L")
