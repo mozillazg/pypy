@@ -27,13 +27,18 @@ def declare(func, annotation, ll_function, ll_annotable=True):
 def ll_os_open(fname, mode):
     return os.open(''.join(fname.chars), mode)
 
-def ll_os_getuid():
-    return os.getuid()
+def ll_os_getcwd():
+    cwd = os.getcwd()
+    from pypy.rpython import rstr
+    p = rstr.malloc(rstr.STR, len(cwd))
+    for i in range(len(cwd)):
+        p.chars[i] = cwd[i]
+    return p
 
 def ll_os_dup(fd):
     return 999
 
 # external function declarations
 declare(os.open, int, ll_os_open, ll_annotable=False)
-declare(os.getuid, int, ll_os_getuid, ll_annotable=False)
+declare(os.getcwd, str, ll_os_getcwd, ll_annotable=False)
 declare(os.dup, int, ll_os_dup, ll_annotable=True)
