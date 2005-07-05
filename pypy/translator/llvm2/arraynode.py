@@ -12,19 +12,19 @@ nextnum = itertools.count().next
 class ArrayTypeNode(LLVMNode):
     _issetup = False
     def __init__(self, db, array):
-        self.db = db
         assert isinstance(array, lltype.Array)
+
+        self.db = db
         self.array = array
-        c = nextnum()
-        ref_template = "%%array.%s." + str(c)
 
         # ref is used to reference the arraytype in llvm source 
-        self.ref = ref_template % array.OF
         # constructor_ref is used to reference the constructor 
         # for the array type in llvm source code 
-        self.constructor_ref = "%%new.array.%s" % c 
         # constructor_decl is used to declare the constructor
-        # for the array type (see writeimpl). 
+        # for the array type (see writeimpl)
+        c = nextnum()
+        self.ref = "%%array.%s.%s" % (c, array.OF)
+        self.constructor_ref = "%%new.array.%s" % c 
         self.constructor_decl = "%s * %s(int %%len)" % \
                                 (self.ref, self.constructor_ref)
 
@@ -52,58 +52,54 @@ class ArrayTypeNode(LLVMNode):
                                   self.constructor_decl,
                                   fromtype)
 
-# Each ArrayNode instance is a global constant. 
-
 class ArrayNode(LLVMNode):
-
     _issetup = False 
-
     def __init__(self, db, value):
         self.db = db
-        self.ref = "%%arrayinstance.%s.%s" % (value._TYPE.OF, nextnum())
         self.value = value
+        self.arraytype = value._TYPE.OF
+        self.ref = "%%arrayinstance.%s.%s" % (value._TYPE.OF, nextnum())
 
     def __str__(self):
         return "<ArrayNode %r>" %(self.ref,)
 
     def setup(self):
-        T = self.value._TYPE.OF
         for item in self.value.items:
-            if not isinstance(T, lltype.Primitive):
+            if not isinstance(self.arraytype, lltype.Primitive):
                 # Create a dummy constant hack XXX
-                c = Constant(item, T)
-                self.db.prepare_arg(c)
+                self.db.prepare_arg(Constant(item, self.arraytype))
         self._issetup = True
 
+    def value_helper(self, value):        
+        """ This should really be pushed back to the database??? XXX """
+        if not isinstance(self.arraytype, lltype.Primitive):
+            # Create a dummy constant hack XXX
+            value = self.db.repr_arg(Constant(value, self.arraytype))
+        else:
+            if isinstance(value, str) and len(value) == 1:
+                value = ord(value)                    
+            value = str(value)
+        return value
+    
     def getall(self):
-        "Returns the type and value for this node. "
-        arraylen = len(self.value.items)
+        """ Returns the type and value for this node. """
+        items = self.value.items
+        typeval = self.db.repr_arg_type(self.arraytype)
+        arraylen = len(items)
 
-        res = []
+        type_ = "{ int, [%s x %s] }" % (arraylen, typeval)        
+        arrayvalues = ["%s %s" % (typeval,
+                                  self.value_helper(v)) for v in items]
 
-        T = self.value._TYPE.OF
-        typval = self.db.repr_arg_type(self.value._TYPE.OF)
-        for value in self.value.items:
-            if not isinstance(T, lltype.Primitive):
-                # Create a dummy constant hack XXX
-                value = self.db.repr_arg(Constant(value, T))
-            else:
-                if isinstance(value, str):
-                    value = ord(value)
-                    
-                value = str(value)
-            res.append((typval, value))
-
-        type_ = "{ int, [%s x %s] }" % (arraylen,
-                                        self.db.repr_arg_type(self.value._TYPE.OF))
-        
-        arrayvalues = ", ".join(["%s %s" % (t, v) for t, v in res])
         value = "int %s, [%s x %s] [ %s ]" % (arraylen,
                                               arraylen,
-                                              typval,
-                                              arrayvalues)
+                                              typeval,
+                                              ", ".join(arrayvalues))
         return type_, value
     
+    # ______________________________________________________________________
+    # entry points from genllvm
+
     def writeglobalconstants(self, codewriter):
         type_, values = self.getall()
         codewriter.globalinstance(self.ref, type_, values)
