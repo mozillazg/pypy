@@ -1,4 +1,6 @@
 from pypy.rpython.test.test_llinterp import interpret
+from pypy.rpython.test import test_llinterp
+from pypy.objspace.flow import model as flowmodel
 
 from pypy.annotation.builtin import *
 import py
@@ -60,6 +62,35 @@ def test_builtin_math_fmod():
             rv = 1000 * float(i-10) 
             ry = 100 * float(i-10) +0.1
             assert fn(rv,ry) == interpret(fn, (rv, ry))
+
+def DONOT_test_os_getuid():
+    import os
+    def fn():
+        return os.getuid()
+    assert interpret(fn, []) == fn()
+
+def test_os_dup():
+    import os
+    def fn(fd):
+        return os.dup(fd)
+    res = interpret(fn, [0])
+    #try:
+    #    os.close(res)
+    #except OSError:
+    #    pass
+    t = test_llinterp.typer.annotator.translator
+    graph = t.getflowgraph(fn)
+    count = [0]
+    def visit(block):
+        from pypy.rpython import extfunctable
+        if isinstance(block, flowmodel.Block):
+            for op in block.operations:
+                if op.opname == 'direct_call':
+                    cfptr = op.args[0]
+                    assert cfptr.value._obj._callable == extfunctable.ll_os_dup
+                    count[0] += 1
+    flowmodel.traverse(visit, graph)
+    assert count[0] == 1
 
 def test_pbc_isTrue():
     class C:

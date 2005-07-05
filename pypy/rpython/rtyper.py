@@ -355,10 +355,10 @@ def translate_op_%s(self, hop):
 
     # __________ utilities __________
 
-    def getfunctionptr(self, func):
+    def getfunctionptr(self, graphfunc, _callable=None):
         def getconcretetype(v):
             return self.bindingrepr(v).lowleveltype
-        return getfunctionptr(self.annotator.translator, func, getconcretetype)
+        return getfunctionptr(self.annotator.translator, graphfunc, getconcretetype, _callable=_callable)
 
     def attachRuntimeTypeInfoFunc(self, GCSTRUCT, func, ARG_GCSTRUCT=None):
         self.call_all_setups()  # compute ForwardReferences now
@@ -516,7 +516,7 @@ class LowLevelOpList(list):
         dontcare, spec_function = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
 
         # build the 'direct_call' operation
-        f = self.rtyper.getfunctionptr(spec_function)
+        f = self.rtyper.getfunctionptr(spec_function, _callable=ll_function)
         c = inputconst(typeOf(f), f)
         return self.genop('direct_call', [c]+list(args_v),
                           resulttype = typeOf(f).TO.RESULT)

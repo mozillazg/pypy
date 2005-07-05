@@ -9,7 +9,7 @@ from pypy.rpython import rptr
 from pypy.rpython.robject import pyobj_repr
 from pypy.rpython.rfloat import float_repr, FloatRepr
 from pypy.rpython import rclass
-
+from pypy.tool import sourcetools
 
 class __extend__(annmodel.SomeBuiltin):
     def rtyper_makerepr(self, rtyper):
@@ -241,3 +241,21 @@ def rtype_math_exp(hop):
                                  includes=("math.h",))   # XXX clean up needed
 
 BUILTIN_TYPER[math.exp] = rtype_math_exp
+
+from pypy.rpython import extfunctable
+
+def make_rtype_extfunc(extfuncinfo):
+    ll_function = extfuncinfo.ll_function
+    if extfuncinfo.ll_annotable:
+        def rtype_extfunc(hop):
+            return hop.gendirectcall(ll_function, *hop.args_v)
+    else:
+        assert False, "xxx not implemented"
+    return sourcetools.func_with_new_name(rtype_extfunc,
+                                          "rtype_extfunc_%s" % extfuncinfo.func.__name__)
+
+# import rtyping information for external functions 
+# from the extfunctable.table  into our own specific table 
+for func, extfuncinfo in extfunctable.table.iteritems():
+    BUILTIN_TYPER[func] = make_rtype_extfunc(extfuncinfo)
+
