@@ -60,13 +60,16 @@ class StructVarsizeTypeNode(StructTypeNode):
 
         # build up a list of indices to get to the last 
         # var-sized struct (or rather the according array) 
-        indices_to_array = [("int", 0)]
-        s = self.struct
-        while isinstance(s, lltype.Struct):
-            last_pos = len(s._names_without_voids()) - 1
+        indices_to_array = [] 
+        current = self.struct
+        while isinstance(current, lltype.Struct):
+            last_pos = len(current._names_without_voids()) - 1
             indices_to_array.append(("uint", last_pos))
-            s = s._flds[s._names_without_voids()[-1]]
-        arraytype = self.db.repr_arg_type(s)
+            name = current._names_without_voids()[-1]
+            current = current._flds[name]
+        assert isinstance(current, lltype.Array)
+        arraytype = self.db.repr_arg_type(current.OF)
+        # XXX write type info as a comment 
         varsize.write_constructor(codewriter, 
             self.ref, self.constructor_decl, arraytype, 
             indices_to_array)
