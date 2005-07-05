@@ -59,15 +59,17 @@ class StructVarsizeTypeNode(StructTypeNode):
         indices_to_array = [("int", 0)]
         s = self.struct
         while isinstance(s, lltype.Struct):
-            last_pos = len(self.struct._names_without_voids()) - 1
+            last_pos = len(s._names_without_voids()) - 1
             indices_to_array.append(("uint", last_pos))
-            s = s._flds.values()[-1]
+            s = s._flds[s._names_without_voids()[-1]]
+
+        arraytype = self.db.repr_arg_type(s)
 
         # Into array and length            
         indices = indices_to_array + [("uint", 1), ("int", "%len")]
         codewriter.getelementptr("%size", self.ref + "*",
                                  "null", *indices)
-
+        
         #XXX is this ok for 64bit?
         codewriter.cast("%sizeu", arraytype + "*", "%size", "uint")
         codewriter.malloc("%resulttmp", "sbyte", "%sizeu", atomic=is_atomic(self))
@@ -127,6 +129,8 @@ class StructNode(LLVMNode):
             if not isinstance(T, lltype.Primitive):
                 # Create a dummy constant hack XXX
                 c = Constant(value, T)
+
+                # Needs some sanitisation
                 x = self.db.obj2node[c]
                 value = self.db.repr_arg(c)
                 t, v = x.getall()
@@ -149,10 +153,10 @@ class StructVarsizeNode(StructNode):
         return "<StructVarsizeNode %r>" %(self.ref,)
 
     def getall(self):
-
         res = []
-        for name in self.value._TYPE._names_without_voids()[:-1]:
-            T = self.value._TYPE._flds[name]
+        type_ = self.value._TYPE
+        for name in type_._names_without_voids()[:-1]:
+            T = type_._flds[name]
             value = getattr(self.value, name)
             if not isinstance(T, lltype.Primitive):
                 # Create a dummy constant hack XXX
@@ -162,16 +166,19 @@ class StructVarsizeNode(StructNode):
             res.append((self.db.repr_arg_type(T), value))
 
         # Special case for varsized arrays
-        self.value._TYPE._names_without_voids()[-1]
-        x = self.db.obj2node[Constant(value, T)]
-        t, v = x.get_values() 
-        res.append((t, "{%s}" % v))
+        name = type_._names_without_voids()[-1]
+        T = type_._flds[name]
+        assert not isinstance(T, lltype.Primitive)
+        value = getattr(self.value, name)
+        c = Constant(value, T)
+        x = self.db.obj2node[c]
+        t, v = x.getall()
 
-        s = self.value._TYPE
-        fields = [getattr(s, name) for name in s._names_without_voids()[-1]] 
-        l = [self.db.repr_arg_type(field) for field in fields]
-        l += t
-        typestr = "{ %s }" % ", ".join(l)
+        #value = self.db.repr_arg(c)
+        value = cast_global(self.db.repr_arg_type(T), t, "{%s}" % v)
+        res.append((self.db.repr_arg_type(T), value))
+
+        typestr = self.db.repr_arg_type(type_)
         values = ", ".join(["%s %s" % (t, v) for t, v in res])
         return typestr, values
     

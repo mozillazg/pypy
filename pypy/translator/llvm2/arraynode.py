@@ -97,10 +97,10 @@ class ArrayNode(LLVMNode):
                 # Create a dummy constant hack XXX
                 c = Constant(item, T)
                 self.db.prepare_arg(c)
-
         self._issetup = True
 
     def getall(self):
+        "Returns the type and value for this node. "
         arraylen = len(self.value.items)
 
         res = []
@@ -112,14 +112,16 @@ class ArrayNode(LLVMNode):
                 # Create a dummy constant hack XXX
                 value = self.db.repr_arg(Constant(value, T))
             else:
-                value = repr(value)
+                if isinstance(value, str):
+                    value = ord(value)
+                    
+                value = str(value)
             res.append((typval, value))
 
-        arrayvalues = ", ".join(["%s %s" % (t, v) for t, v in res])
-
-        type_ = "{ int, [%s x %s] }" % (len(self.value.items),
+        type_ = "{ int, [%s x %s] }" % (arraylen,
                                         self.db.repr_arg_type(self.value._TYPE.OF))
         
+        arrayvalues = ", ".join(["%s %s" % (t, v) for t, v in res])
         value = "int %s, [%s x %s] [ %s ]" % (arraylen,
                                               arraylen,
                                               typval,
