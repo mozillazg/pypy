@@ -24,12 +24,16 @@ def declare(func, annotation, ll_function, ll_annotable=True):
     table[func] = ExtFuncInfo(func, annotation, ll_function, ll_annotable)
 
 # low-level helpers representing the external functions
+def ll_os_open(fname, mode):
+    return os.open(''.join(fname.chars), mode)
+
 def ll_os_getuid():
-    return 1 #return os.getuid()
+    return os.getuid()
 
 def ll_os_dup(fd):
     return 999
 
 # external function declarations
-declare(os.getuid, int, ll_os_getuid, ll_annotable=True)
+declare(os.open, int, ll_os_open, ll_annotable=False)
+declare(os.getuid, int, ll_os_getuid, ll_annotable=False)
 declare(os.dup, int, ll_os_dup, ll_annotable=True)
