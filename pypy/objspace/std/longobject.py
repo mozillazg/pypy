@@ -63,7 +63,7 @@ class W_LongObject(W_Object):
 
     def _setshort(self, index, short):
         a = self.digits[index // 2]
-        ##!!assert isinstance(short, r_uint)
+        assert isinstance(short, r_uint)
         assert short & SHORT_MASK == short
         if index % 2 == 0:
             self.digits[index // 2] = ((a >> SHORT_BIT) << SHORT_BIT) + short
@@ -135,8 +135,8 @@ def float__Long(space, w_longobj):
         raise OperationError(space.w_OverflowError,
                              space.wrap("long int too large to convert to float"))
 
-def long__Float(space, w_floatobj): #YYYYYY
-    return W_LongObject(space, *args_from_long(long(w_floatobj.floatval)))
+def long__Float(space, w_floatobj):
+    return _FromDouble(space, w_floatobj.floatval)
 
 def int_w__Long(space, w_value):
     if len(w_value.digits) == 1:
@@ -156,11 +156,11 @@ def uint_w__Long(space, w_value):
     raise OperationError(space.w_OverflowError,
                          space.wrap("long int too large to convert to unsigned int"))    
 
-def repr__Long(space, w_long): #YYYYYY
-    return space.wrap(repr(w_long.longval()))
+def repr__Long(space, w_long):
+    return space.wrap(_format(w_long, 10, True))
 
-def str__Long(space, w_long): #YYYYYY
-    return space.wrap(str(w_long.longval()))
+def str__Long(space, w_long):
+    return space.wrap(_format(w_long, 10, False))
 
 def eq__Long_Long(space, w_long1, w_long2):
     if (w_long1.sign != w_long2.sign or
@@ -617,14 +617,16 @@ def _x_mul(a, b, space):
     z._normalize()
     return z
 
-def _inplace_divrem1(pout, pin, n):
+def _inplace_divrem1(pout, pin, n, size=0):
     """
     Divide long pin by non-zero digit n, storing quotient
     in pout, and returning the remainder. It's OK for pin == pout on entry.
     """
     rem = r_uint(0)
     assert n > 0 and n <= SHORT_MASK
-    size = len(pin.digits) * 2 - 1
+    if not size:
+        size = len(pin.digits) * 2
+    size -= 1
     while size >= 0:
         rem = (rem << SHORT_BIT) + pin._getshort(size)
         hi = rem // n
@@ -774,7 +776,7 @@ def _x_divrem(space, v1, w1):
             vj = r_uint(0)
         else:
             vj = v._getshort(j)
-        carry = r_suint(0) # note: this must hold two digits and sign!
+        carry = r_suint(0) # note: this must hold two digits and a sign!
 
         if vj == w._getshort(size_w-1):
             q = r_uint(SHORT_MASK)
@@ -792,7 +794,7 @@ def _x_divrem(space, v1, w1):
                                 ) << SHORT_BIT)
                 + v._getshort(j-2)):
             q -= 1
-
+            print '***', q##!!
         i = 0
         while i < size_w and i+k < size_v:
             z = w._getshort(i) * q
@@ -809,10 +811,10 @@ def _x_divrem(space, v1, w1):
             v._setshort(i+k, r_uint(0))
 
         if carry == 0:
-            a._setshort(k, q)
+            a._setshort(k, q & SHORT_MASK)
         else:
             assert carry == -1
-            a._setshort(k, q-1)
+            a._setshort(k, (q-1) & SHORT_MASK)
 
             carry = r_suint(0)
             i = 0
@@ -999,3 +1001,147 @@ def _l_divmod(space, v, w):
         one = W_LongObject(space, [r_uint(1)], 1)
         div = sub__Long_Long(space, div, one)
     return div, mod
+
+
+def _format(a, base, addL):
+    """
+    Convert a long int object to a string, using a given conversion base.
+    Return a string object.
+    If base is 8 or 16, add the proper prefix '0' or '0x'.
+    """
+    size_a = len(a.digits) * 2
+    if a._getshort(size_a-1) == 0:
+        size_a -= 1
+
+    assert base >= 2 and base <= 36
+
+    sign = chr(0)
+
+    # Compute a rough upper bound for the length of the string
+    i = base
+    bits = 0
+    while i > 1:
+        bits += 1
+        i >>= 1
+    i = 5 + int(bool(addL)) + (size_a*LONG_BIT + bits-1) // bits
+    s = [chr(0)] * i
+    p = i
+    if addL:
+        p -= 1
+        s[p] = 'L'
+    if a.sign < 0:
+        sign = '-'
+
+    if a.sign == 0:
+        p -= 1
+        s[p] = '0'
+    elif (base & (base - 1)) == 0:
+        # JRH: special case for power-of-2 bases
+        accum = r_uint(0)
+        accumbits = 0  # # of bits in accum 
+        basebits = 1   # # of bits in base-1
+        i = base
+        while 1:
+            i >>= 1
+            if i <= 1:
+                break
+            basebits += 1
+
+        for i in range(size_a):
+            accum |= a._getshort(i) << accumbits
+            accumbits += SHORT_BIT
+            assert accumbits >= basebits
+            while 1:
+                cdigit = accum & (base - 1)
+                if cdigit < 10:
+                    cdigit += ord('0')
+                else:
+                    cdigit += ord('A') - 10
+                assert p > 0
+                p -= 1
+                s[p] = chr(cdigit)
+                accumbits -= basebits
+                accum >>= basebits
+                if i < size_a - 1:
+                    if accumbits < basebits:
+                        break
+                else:
+                    if accum <= 0:
+                        break
+    else:
+        # Not 0, and base not a power of 2.  Divide repeatedly by
+        # base, but for speed use the highest power of base that
+        # fits in a digit.
+        size = size_a
+        pin = a # just for similarity to C source which uses the array
+        # powbasw <- largest power of base that fits in a digit.
+        powbase = base  # powbase == base ** power
+        power = 1
+        while 1:
+            newpow = powbase * r_uint(base)
+            if newpow >> SHORT_BIT:  # doesn't fit in a digit
+                break
+            powbase = newpow
+            power += 1
+
+        # Get a scratch area for repeated division.
+        digitpairs = (size + 1) // 2
+        scratch = W_LongObject(a.space, [r_uint(0)] * digitpairs, 1)
+
+        # Repeatedly divide by powbase.
+        while 1:
+            ntostore = power
+            rem = _inplace_divrem1(scratch, pin, powbase, size)
+            pin = scratch  # no need to use a again
+            if pin._getshort(size - 1) == 0:
+                size -= 1
+
+            # Break rem into digits.
+            assert ntostore > 0
+            while 1:
+                nextrem = rem // base
+                c = rem - nextrem * base
+                assert p > 0
+                if c < 10:
+                    c += ord('0')
+                else:
+                    c += ord('A') - 10
+                p -= 1
+                s[p] = chr(c)
+                rem = nextrem
+                ntostore -= 1
+                # Termination is a bit delicate:  must not
+                # store leading zeroes, so must get out if
+                # remaining quotient and rem are both 0.
+                if not (ntostore and (size or rem)):
+                    break
+            if size == 0:
+                break
+
+    if base == 8:
+        if size_a != 0:
+            p -= 1
+            s[p] = '0'
+    elif base == 16:
+        p -= 1
+        s[p] ='x'
+        p -= 1
+        s[p] = '0'
+    elif base != 10:
+        p -= 1
+        s[p] = '#'
+        p -= 1
+        s[p] = chr(ord('0') + base % 10)
+        if base > 10:
+            p -= 1
+            s[p] = chr(ord('0') + base // 10)
+    if sign:
+        p -= 1
+        s[p] = sign
+
+    if p == 0:
+        return ''.join(s)
+    else:
+        return ''.join(s[p:])
+
+
