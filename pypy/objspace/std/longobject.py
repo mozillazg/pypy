@@ -258,19 +258,19 @@ def truediv__Long_Long(space, w_long1, w_long2):
     return space.newfloat(div)
 
 def floordiv__Long_Long(space, w_long1, w_long2):
-    div, rem = _divrem(space, w_long1, w_long2)
+    div, mod = _l_divmod(space, w_long1, w_long2)
     return div
 
 def div__Long_Long(space, w_long1, w_long2):
     return floordiv__Long_Long(space, w_long1, w_long2)
 
 def mod__Long_Long(space, w_long1, w_long2):
-    div, rem = _divrem(space, w_long1, w_long2)
-    return rem
+    div, mod = _l_divmod(space, w_long1, w_long2)
+    return mod
 
 def divmod__Long_Long(space, w_long1, w_long2):
-    div, rem = _divrem(space, w_long1, w_long2)
-    return space.newtuple([div, rem])
+    div, mod = _l_divmod(space, w_long1, w_long2)
+    return space.newtuple([div, mod])
 
 # helper for pow()  #YYYYYY: still needs longval if second argument is negative
 def _impl_long_long_pow(space, lv, lw, lz=None):
@@ -961,3 +961,27 @@ def _FromDouble(space, dval):
     if neg:
         v.sign = -1
     return v
+
+def _l_divmod(space, v, w):
+    """
+    The / and % operators are now defined in terms of divmod().
+    The expression a mod b has the value a - b*floor(a/b).
+    The long_divrem function gives the remainder after division of
+    |a| by |b|, with the sign of a.  This is also expressed
+    as a - b*trunc(a/b), if trunc truncates towards zero.
+    Some examples:
+      a   b  a rem b     a mod b
+      13  10  3       3
+     -13  10 -3       7
+      13 -10  3      -7
+     -13 -10 -3      -3
+    So, to get from rem to mod, we have to add b if a and b
+    have different signs.  We then subtract one from the 'div'
+    part of the outcome to keep the invariant intact.
+    """
+    div, mod = _divrem(space, v, w)
+    if mod.sign * w.sign == -1:
+        mod = add__Long_Long(space, mod, w)
+        one = W_LongObject(space, [r_uint(1)], 1)
+        div = sub__Long_Long(space, div, one)
+    return div, mod
