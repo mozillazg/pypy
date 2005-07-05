@@ -435,31 +435,20 @@ def rshift__Long_Long(space, w_long1, w_long2):
     w_result._normalize()
     return w_result
 
-def and__Long_Long(space, w_long1, w_long2): #YYYYYY
-    a = w_long1.longval()
-    b = w_long2.longval()
-    res = a & b
-    return W_LongObject(space, *args_from_long(res))
+def and__Long_Long(space, w_long1, w_long2):
+    return _bitwise(w_long1, '&', w_long2)
 
-def xor__Long_Long(space, w_long1, w_long2): #YYYYYY
-    a = w_long1.longval()
-    b = w_long2.longval()
-    res = a ^ b
-    return W_LongObject(space, *args_from_long(res))
+def xor__Long_Long(space, w_long1, w_long2):
+    return _bitwise(w_long1, '^', w_long2)
 
-def or__Long_Long(space, w_long1, w_long2): #YYYYYY
-    a = w_long1.longval()
-    b = w_long2.longval()
-    res = a | b
-    return W_LongObject(space, *args_from_long(res))
+def or__Long_Long(space, w_long1, w_long2):
+    return _bitwise(w_long1, '|', w_long2)
 
-def oct__Long(space, w_long1): #YYYYYY
-    x = w_long1.longval()
-    return space.wrap(oct(x))
+def oct__Long(space, w_long1):
+    return space.wrap(_format(w_long1, 8, True))
 
-def hex__Long(space, w_long1): #YYYYYY
-    x = w_long1.longval()
-    return space.wrap(hex(x))
+def hex__Long(space, w_long1):
+    return space.wrap(_format(w_long1, 16, True))
 
 def getnewargs__Long(space, w_long1):
     return space.newtuple([W_LongObject(space, w_long1.digits, w_long1.sign)])
@@ -794,7 +783,6 @@ def _x_divrem(space, v1, w1):
                                 ) << SHORT_BIT)
                 + v._getshort(j-2)):
             q -= 1
-            print '***', q##!!
         i = 0
         while i < size_w and i+k < size_v:
             z = w._getshort(i) * q
@@ -1015,7 +1003,7 @@ def _format(a, base, addL):
 
     assert base >= 2 and base <= 36
 
-    sign = chr(0)
+    sign = False
 
     # Compute a rough upper bound for the length of the string
     i = base
@@ -1030,7 +1018,7 @@ def _format(a, base, addL):
         p -= 1
         s[p] = 'L'
     if a.sign < 0:
-        sign = '-'
+        sign = True
 
     if a.sign == 0:
         p -= 1
@@ -1137,7 +1125,7 @@ def _format(a, base, addL):
             s[p] = chr(ord('0') + base // 10)
     if sign:
         p -= 1
-        s[p] = sign
+        s[p] = '-'
 
     if p == 0:
         return ''.join(s)
@@ -1145,3 +1133,83 @@ def _format(a, base, addL):
         return ''.join(s[p:])
 
 
+def _bitwise(a, op, n): # '&', '|', '^'
+    """ Bitwise and/xor/or operations """
+
+    if a.sign < 0:
+        a = invert__Long(a.space, a)
+        maska = r_uint(SHORT_MASK)
+    else:
+        maska = r_uint(0)
+    if b.sign < 0:
+        b = invert__Long(b.space, b)
+        maskb = r_uint(SHORT_MASK)
+    else:
+        maskb = r_uint(0)
+
+    negz = 0
+    if op == '^':
+        if maska != maskb:
+            maska ^= SHORT_MASK
+            negz = -1
+    elif op == '&':
+        if maska and maskb:
+            op = '|'
+            maska ^= SHORT_MASK
+            maskb ^= SHORT_MASK
+            negz = -1
+    elif op == '|':
+        if maska or maskb:
+            op = '&'
+            maska ^= SHORT_MASK
+            maskb ^= SHORT_MASK
+            negz = -1
+
+    # JRH: The original logic here was to allocate the result value (z)
+    # as the longer of the two operands.  However, there are some cases
+    # where the result is guaranteed to be shorter than that: AND of two
+    # positives, OR of two negatives: use the shorter number.  AND with
+    # mixed signs: use the positive number.  OR with mixed signs: use the
+    # negative number.  After the transformations above, op will be '&'
+    # iff one of these cases applies, and mask will be non-0 for operands
+    # whose length should be ignored.
+
+    size_a = len(a.digits) * 2
+    if a._getshort(size_a - 1) == 0:
+        size_a -= 1
+    if b._getshort(size_b - 1) == 0:
+        size_b -= 1
+    if op == '&':
+        if maska:
+            size_z = size_b
+        else:
+            if maskb:
+                size_z = size_a
+            else:
+                size_z = min(size_a, size_b)
+    else:
+        size_z = max(size_a, size_b)
+
+    digitpairs = (size_z + 1) // 2
+    z = W_LongObject(a.space, [r_uint(0)] * digitpairs, 1)
+
+    for i in range(size_z):
+        if i < size_a:
+            diga = a._getshort(i) ^ maska
+        else:
+            diga = maska
+        if i < size_b:
+            digb = b._getshort(i) ^ maskb
+        else:
+            digb = maskb
+        if op == '&':
+            z._setshort(i, diga & digb)
+        elif op == '|':
+            z._setshort(i, diga | digb)
+        elif op == '^':
+            z._setshort(i, diga ^ digb)
+
+    z_normalize()
+    if negz == 0:
+        return z
+    return invert__Long(z)
