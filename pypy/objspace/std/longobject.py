@@ -9,7 +9,7 @@ from pypy.rpython.rarithmetic import LONG_BIT
 import math
 
 SHORT_BIT = int(LONG_BIT // 2)
-SHORT_MASK = int(LONG_MASK >> SHORT_BIT)
+SHORT_MASK = int((1 << SHORT_BIT) - 1)
 
 SIGN_BIT = LONG_BIT-1
 SIGN_MASK = r_uint(1) << SIGN_BIT
@@ -63,7 +63,8 @@ class W_LongObject(W_Object):
 
     def _setshort(self, index, short):
         a = self.digits[index // 2]
-        assert isinstance(short, r_uint)
+        ##!!assert isinstance(short, r_uint)
+        assert short & SHORT_MASK == short
         if index % 2 == 0:
             self.digits[index // 2] = ((a >> SHORT_BIT) << SHORT_BIT) + short
         else:
@@ -727,6 +728,15 @@ class r_suint(object):
         res >>= n
         return res
 
+    def __ilshift__(self, n):
+        self.value <<= n
+        return self
+
+    def __lshift__(self, n):
+        res = r_suint(self)
+        res <<= n
+        return res
+
     def __and__(self, mask):
         # only used to get bits from the value
         return self.value & mask
@@ -736,7 +746,7 @@ class r_suint(object):
             other = r_suint(other)
         return self.sign == other.sign and self.value == other.value
 
-def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
+def _x_divrem(space, v1, w1):
     size_w = len(w1.digits) * 2
     # hack for the moment:
     # find where w1 is really nonzero
@@ -756,8 +766,10 @@ def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
     size_a = size_v - size_w + 1
     digitpairs = (size_a + 1) // 2
     a = W_LongObject(space, [r_uint(0)] * digitpairs, 1)
+
     j = size_v
-    for k in range(size_a-1, -1, -1):
+    k = size_a - 1
+    while k >= 0:
         if j >= size_v:
             vj = r_uint(0)
         else:
@@ -769,18 +781,20 @@ def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
         else:
             q = ((vj << SHORT_BIT) + v._getshort(j-1)) // w._getshort(size_w-1)
 
+        # notabene!
+        # this check needs a signed two digits result
+        # or we get an overflow.
         while (w._getshort(size_w-2) * q >
                 ((
-                    (vj << SHORT_BIT)
+                    r_suint(vj << SHORT_BIT) # this one dominates
                     + v._getshort(j-1)
                     - q * w._getshort(size_w-1)
                                 ) << SHORT_BIT)
                 + v._getshort(j-2)):
             q -= 1
 
-        for i in range(size_w):
-            if i+k >= size_v:
-                break
+        i = 0
+        while i < size_w and i+k < size_v:
             z = w._getshort(i) * q
             zz = z >> SHORT_BIT
             carry += v._getshort(i+k) + (zz << SHORT_BIT)
@@ -788,8 +802,8 @@ def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
             v._setshort(i+k, r_uint(carry.value & SHORT_MASK))
             carry >>= SHORT_BIT
             carry -= zz
+            i += 1
 
-        i += 1 # compare C code which re-uses i of loop
         if i+k < size_v:
             carry += v._getshort(i+k)
             v._setshort(i+k, r_uint(0))
@@ -797,18 +811,18 @@ def _x_divrem(space, v1, w1): # return as tuple, PyLongObject **prem)
         if carry == 0:
             a._setshort(k, q)
         else:
-            #assert carry == -1
-            # the above would hold if we didn't minimize size_w
+            assert carry == -1
             a._setshort(k, q-1)
-            carry = r_suint(0)
 
-            for i in range(size_w):
-                if i+k >= size_v:
-                    break
+            carry = r_suint(0)
+            i = 0
+            while i < size_w and i+k < size_v:
                 carry += v._getshort(i+k) + w._getshort(i)
-                v._setshort(i+k, r_uint(carry) & SHORT_MASK)
+                v._setshort(i+k, r_uint(carry.value) & SHORT_MASK)
                 carry >>= SHORT_BIT
+                i += 1
         j -= 1
+        k -= 1
 
     a._normalize()
     rem, _ = _divrem1(space, v, d)
