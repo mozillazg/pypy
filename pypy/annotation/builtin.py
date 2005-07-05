@@ -335,3 +335,9 @@ BUILTIN_ANALYZERS[lltype.cast_pointer] = cast_pointer
 BUILTIN_ANALYZERS[lltype.getRuntimeTypeInfo] = getRuntimeTypeInfo
 BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
 
+from pypy.rpython import extfunctable
+
+# import annotation information for external functions 
+# from the extfunctable.table  into our own annotation specific table 
+for func, extfuncinfo in extfunctable.table.iteritems():
+    BUILTIN_ANALYZERS[func] = extfuncinfo.annotation 
