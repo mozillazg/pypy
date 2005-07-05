@@ -320,3 +320,8 @@ class AppTestLong:
                 print "checking division for %s, %s" % (x, y)
                 check_division(x, y)
             raises(ZeroDivisionError, "x // 0L")
+
+    def test_str(self):
+        assert str(-123456789L) == "-123456789"
+        assert str(123456789L) == "123456789"
+        
