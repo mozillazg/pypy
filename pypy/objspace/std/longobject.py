@@ -885,29 +885,31 @@ def _AsScaledDouble(v):
     assert x > 0.0
     return x * sign, exponent
 
-# XXX make ldexp and isinf a builtin float support function
+##def isinf(x):
+##    return x != 0.0 and x / 2 == x
+##
+##def ldexp(x, exp):
+##    assert type(x) is float
+##    lb1 = LONG_BIT - 1
+##    multiplier = float(r_uint(1) << lb1)
+##    while exp >= lb1:
+##        x *= multiplier
+##        exp -= lb1
+##    if exp:
+##        x *= float(r_uint(1) << exp)
+##    return x
 
-def isinf(x):
-    return x*2 == x
-
-def ldexp(x, exp):
-    assert type(x) is float
-    lb1 = LONG_BIT - 1
-    multiplier = float(r_uint(1) << lb1)
-    while exp >= lb1:
-        x *= multiplier
-        exp -= lb1
-    if exp:
-        x *= float(r_uint(1) << exp)
-    return x
+# note that math.ldexp checks for overflows,
+# while the C ldexp is not guaranteed to.
 
 def _AsDouble(v):
     """ Get a C double from a long int object. """
     x, e = _AsScaledDouble(v)
     if e <= sys.maxint / SHORT_BIT:
-        x = ldexp(x, e * SHORT_BIT)
-        if not isinf(x):
-            return x
+        x = math.ldexp(x, e * SHORT_BIT)
+        #if not isinf(x):
+        # this is checked by math.ldexp
+        return x
     raise OverflowError# sorry, "long int too large to convert to float"
 
 def _long_true_divide(space, a, b):
@@ -925,9 +927,10 @@ def _long_true_divide(space, a, b):
             raise OverflowError
         elif aexp < -(sys.maxint / SHORT_BIT):
             return 0.0 # underflow to 0
-        ad = ldexp(ad, aexp * SHORT_BIT)
-        if isinf(ad):   # ignore underflow to 0.0
-            raise OverflowError
+        ad = math.ldexp(ad, aexp * SHORT_BIT)
+        #if isinf(ad):   # ignore underflow to 0.0
+        #    raise OverflowError
+        # math.ldexp checks and raises
         return ad
     except OverflowError:
         raise OperationError(space.w_OverflowError,
