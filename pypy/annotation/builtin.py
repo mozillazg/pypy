@@ -67,9 +67,8 @@ def builtin_bool(s_obj):
     return constpropagate(bool, [s_obj], SomeBool())
 
 def builtin_int(s_obj, s_base=None):
-    assert (s_base is None or s_base.is_constant() 
-            and s_base.const == 16
-            and s_obj.knowntype == str), "only int(v|string) or int(string,16) expected"
+    assert (s_base is None or isinstance(s_base, SomeInteger)
+            and s_obj.knowntype == str), "only int(v|string) or int(string,int) expected"
     if s_base is not None:
         args_s = [s_obj, s_base]
     else:
