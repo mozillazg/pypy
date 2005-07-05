@@ -846,7 +846,7 @@ def _divrem(space, a, b):
     # so a = b*z + r.
     if a.sign != b.sign:
         z.sign = - z.sign
-    if z.sign < 0 and rem.sign != 0:
+    if a.sign < 0 and rem.sign != 0:
         rem.sign = - rem.sign
     return z, rem
 
@@ -966,15 +966,15 @@ def _l_divmod(space, v, w):
     """
     The / and % operators are now defined in terms of divmod().
     The expression a mod b has the value a - b*floor(a/b).
-    The long_divrem function gives the remainder after division of
+    The _divrem function gives the remainder after division of
     |a| by |b|, with the sign of a.  This is also expressed
     as a - b*trunc(a/b), if trunc truncates towards zero.
     Some examples:
-      a   b  a rem b     a mod b
-      13  10  3       3
-     -13  10 -3       7
-      13 -10  3      -7
-     -13 -10 -3      -3
+      a   b   a rem b     a mod b
+      13  10   3           3
+     -13  10  -3           7
+      13 -10   3          -7
+     -13 -10  -3          -3
     So, to get from rem to mod, we have to add b if a and b
     have different signs.  We then subtract one from the 'div'
     part of the outcome to keep the invariant intact.
