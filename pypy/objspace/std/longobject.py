@@ -824,9 +824,9 @@ def _divrem(space, a, b):
     if b._getshort(size_b-1) == 0:
         size_b -= 1
 
-    if size_b == 0:
-        raise OperationError(w_longobj.space.w_ZeroDivisionError,
-                             w_longobj.space.wrap("long division or modulo by zero"))
+    if b.sign == 0:
+        raise OperationError(space.w_ZeroDivisionError,
+                             space.wrap("long division or modulo by zero"))
 
     if (size_a < size_b or
         (size_a == size_b and
