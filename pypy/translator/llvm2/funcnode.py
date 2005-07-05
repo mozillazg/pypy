@@ -129,6 +129,7 @@ class FuncNode(LLVMNode):
     def write_block_operations(self, codewriter, block):
         opwriter = OpWriter(self.db, codewriter)
         for op in block.operations:
+            codewriter.comment(str(op))
             opwriter.write_operation(op)
     def write_startblock(self, codewriter, block):
         self.write_block_operations(codewriter, block)
@@ -286,14 +287,19 @@ class OpWriter(object):
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
         assert targettype != "void"
-        if isinstance(op.result.concretetype, lltype.ContainerType):
-            # noop
-            self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
-        else:
-            self.codewriter.load(targetvar, targettype, tmpvar)
+        self.codewriter.load(targetvar, targettype, tmpvar)
 
-    getsubstruct = getfield
-
+    def getsubstruct(self, op): 
+        typ = self.db.repr_arg_type(op.args[0]) 
+        typevar = self.db.repr_arg(op.args[0])
+        fieldnames = list(op.args[0].concretetype.TO._names)
+        index = fieldnames.index(op.args[1].value)
+        targetvar = self.db.repr_arg(op.result)
+        self.codewriter.getelementptr(targetvar, typ, 
+                                      typevar, ("uint", index))        
+        targettype = self.db.repr_arg_type(op.result)
+        assert targettype != "void"
+         
     def setfield(self, op): 
         tmpvar = self.db.repr_tmpvar()
         type = self.db.repr_arg_type(op.args[0]) 
@@ -316,11 +322,7 @@ class OpWriter(object):
                                       ("uint", 1), (indextype, index))
         targetvar = self.db.repr_arg(op.result)
         targettype = self.db.repr_arg_type(op.result)
-        if isinstance(op.result.concretetype, lltype.ContainerType):
-            # noop
-            self.codewriter.cast(targetvar, targettype, tmpvar, targettype)
-        else:
-            self.codewriter.load(targetvar, targettype, tmpvar)
+        self.codewriter.load(targetvar, targettype, tmpvar)
 
     def setarrayitem(self, op):
         array = self.db.repr_arg(op.args[0])

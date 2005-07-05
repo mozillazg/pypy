@@ -23,7 +23,7 @@ def write_constructor(codewriter, ref, constructor_decl, elemtype,
 
     # the following indices access the last element in the array 
     elemindices = list(indices_to_array) + [("uint", 1), ("int", "%len")]
-    
+   
     codewriter.openfunc(constructor_decl)
     codewriter.getelementptr("%size", ref + "*", "null", *elemindices) 
     codewriter.cast("%usize", elemtype + "*", "%size", "uint")

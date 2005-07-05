@@ -314,7 +314,7 @@ def test_list_basic_ops():
         for j in range(6): 
             assert f(i,j) == list_basic_ops(i,j)
 
-def xtest_string_simple(): 
+def test_string_simple(): 
     def string_simple(i): 
         return ord(str(i))
     f = compile_function(string_simple, [int], view=False)
