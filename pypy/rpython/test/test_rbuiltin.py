@@ -76,11 +76,12 @@ def enum_direct_calls(translator, func):
             if op.opname == 'direct_call':
                 yield op
 
-def test_os_getuid():
+def test_os_getcwd():
     import os
     def fn():
-        return os.getuid()
-    assert interpret(fn, []) == fn()
+        return os.getcwd()
+    res = interpret(fn, []) 
+    assert ''.join(res.chars) == fn()
         
 def test_os_dup():
     import os
