@@ -4,19 +4,20 @@ from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
 from pypy.rpython import lltype
 
+import itertools  
+nextnum = itertools.count().next 
+
 log = log.structnode 
 
 class StructTypeNode(LLVMNode):
     _issetup = False 
-    struct_counter = 0
 
     def __init__(self, db, struct): 
         assert isinstance(struct, lltype.Struct)
         self.db = db
         self.struct = struct
-        self.name = "%s.%s" % (self.struct._name, StructTypeNode.struct_counter)
+        self.name = "%s.%s" % (self.struct._name, nextnum())
         self.ref = "%%st.%s" % self.name
-        StructTypeNode.struct_counter += 1
         
     def __str__(self):
         return "<StructTypeNode %r>" %(self.ref,)
@@ -40,12 +41,7 @@ class StructVarsizeTypeNode(StructTypeNode):
 
     def __init__(self, db, struct): 
         super(StructVarsizeTypeNode, self).__init__(db, struct)
-        new_var_name = "%%new.st.var.%s" % self.name
-        self.constructor_ref = "%s * %s(int %%len)" % (self.ref, new_var_name)
-
-        ref_template = wrapstr("%%st.%s." + str(c))
-        self.ref = ref_template % array.OF
-        self.constructor_ref = wrapstr("%%new.array.%s" % c)
+        self.constructor_ref = "%%new.st.var.%s" % (self.name)
         self.constructor_decl = "%s * %s(int %%len)" % \
                                 (self.ref, self.constructor_ref)
 
@@ -54,13 +50,13 @@ class StructVarsizeTypeNode(StructTypeNode):
         
     def writedecl(self, codewriter): 
         # declaration for constructor
-        codewriter.declare(self.constructor_name)
+        codewriter.declare(self.constructor_decl)
 
     def writeimpl(self, codewriter):
         from pypy.translator.llvm2.atomic import is_atomic
 
         log.writeimpl(self.ref)
-        codewriter.openfunc(self.constructor_name)
+        codewriter.openfunc(self.constructor_ref)
         codewriter.label("block0")
         indices_to_array = [("int", 0)]
         s = self.struct
@@ -102,14 +98,11 @@ def cast_global(toptr, from_, name):
 
 class StructNode(LLVMNode):
     _issetup = False 
-    struct_counter = 0
 
     def __init__(self, db, value):
         self.db = db
-        name = "%s.%s" % (value._TYPE._name, StructNode.struct_counter)
-        self.ref = "%%stinstance.%s" % name
         self.value = value
-        StructNode.struct_counter += 1
+        self.ref = "%%stinstance.%s.%s" % (value._TYPE._name, nextnum())
 
     def __str__(self):
         return "<StructNode %r>" %(self.ref,)
