@@ -23,8 +23,8 @@ from pypy.rpython.rclass import InstanceRepr
 #        chars: array of Char
 #    }
 
-STR = GcStruct('str', ('hash',  Signed),
-                      ('chars', Array(Char)))
+STR = GcStruct('rpy_string', ('hash',  Signed),
+                             ('chars', Array(Char)))
 
 SIGNED_ARRAY = GcArray(Signed)
 
