@@ -4,6 +4,7 @@ from random import random, randint
 from pypy.objspace.std import longobject as lobj
 from pypy.objspace.std.objspace import FailedToImplement
 from pypy.rpython.rarithmetic import r_uint
+from pypy.interpreter.error import OperationError
 
 objspacename = 'std'
 
@@ -111,6 +112,18 @@ class TestW_LongObject:
         x = x ** 100
         f1 = lobj.W_LongObject(self.space, *lobj.args_from_long(x))
         assert raises(OverflowError, lobj._AsDouble, f1)
+
+    def test__FromDouble(self):
+        x = 1234567890.1234567890
+        f1 = lobj._FromDouble(self.space, x)
+        y = lobj._AsDouble(f1)
+        assert f1.longval() == long(x)
+        # check overflow
+        x = 12345.6789e10000000000000000000000000000
+        try:
+            lobj._FromDouble(self.space, x)
+        except OperationError, e:
+            assert e.w_type is self.space.w_OverflowError
 
     def test_eq(self):
         x = 5858393919192332223L

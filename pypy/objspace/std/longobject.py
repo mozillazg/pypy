@@ -885,9 +885,9 @@ def _AsScaledDouble(v):
     assert x > 0.0
     return x * sign, exponent
 
-##def isinf(x):
-##    return x != 0.0 and x / 2 == x
-##
+def isinf(x):
+    return x != 0.0 and x / 2 == x
+
 ##def ldexp(x, exp):
 ##    assert type(x) is float
 ##    lb1 = LONG_BIT - 1
@@ -935,3 +935,29 @@ def _long_true_divide(space, a, b):
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("long/long too large for a float"))
+
+
+def _FromDouble(space, dval):
+    """ Create a new long int object from a C double """
+    neg = 0
+    if isinf(dval):
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("cannot convert float infinity to long"))
+    if dval < 0.0:
+        neg = 1
+        dval = -dval
+    frac, expo = math.frexp(dval) # dval = frac*2**expo; 0.0 <= frac < 1.0
+    if expo <= 0:
+        return W_LongObject(space, [r_uint(0)], 0)
+    ndig = (expo-1) // SHORT_BIT + 1 # Number of 'digits' in result
+    digitpairs = (ndig + 1) // 2
+    v = W_LongObject(space, [r_uint(0)] * digitpairs, 1)
+    frac = math.ldexp(frac, (expo-1) % SHORT_BIT + 1)
+    for i in range(ndig-1, -1, -1):
+        bits = int(frac)
+        v._setshort(i, r_uint(bits))
+        frac -= float(bits)
+        frac = math.ldexp(frac, SHORT_BIT)
+    if neg:
+        v.sign = -1
+    return v
