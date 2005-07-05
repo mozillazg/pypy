@@ -194,6 +194,15 @@ class OpWriter(object):
             assert meth is not None, "operation %r not found" %(op.opname,)
             meth(op)    
 
+    def int_neg(self, op): 
+        self.codewriter.binaryop("sub", 
+                                 self.db.repr_arg(op.result),
+                                 self.db.repr_arg_type(op.args[0]),
+                                 "0", 
+                                 self.db.repr_arg(op.args[0]),
+                                 )
+                    
+
     def binaryop(self, op):
         name = self.binary_operations[op.opname]
         assert len(op.args) == 2
@@ -213,6 +222,7 @@ class OpWriter(object):
 
     cast_bool_to_int = cast_primitive
     cast_bool_to_uint = uint_is_true = cast_primitive
+    cast_int_to_char = cast_char_to_int = cast_primitive
 
     def int_is_true(self, op):
         self.codewriter.binaryop("setne",
@@ -324,6 +334,7 @@ class OpWriter(object):
 
         valuevar = self.db.repr_arg(op.args[2]) 
         valuetype = self.db.repr_arg_type(op.args[2])
+        assert valuevar.strip() != '-'
         self.codewriter.store(valuetype, valuevar, tmpvar) 
 
     def getarraysize(self, op):

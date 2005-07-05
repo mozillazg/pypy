@@ -12,7 +12,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.rarithmetic import r_uint
 
-py.log.setconsumer("genllvm", py.log.STDOUT)
+#py.log.setconsumer("genllvm", py.log.STDOUT)
 py.log.setconsumer("genllvm database prepare", None)
 
 
@@ -316,7 +316,7 @@ def test_list_basic_ops():
 
 def xtest_string_simple(): 
     def string_simple(i): 
-        return str(i) 
+        return ord(str(i))
     f = compile_function(string_simple, [int], view=False)
     assert f(0) 
 

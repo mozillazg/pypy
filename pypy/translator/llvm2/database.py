@@ -152,6 +152,10 @@ class Database(object):
     def repr_arg(self, arg):
         if (isinstance(arg, Constant) and 
             isinstance(arg.concretetype, lltype.Primitive)):
+           
+            # XXX generalize and test this 
+            if isinstance(arg.value, str) and len(arg.value) == 1: 
+                return str(ord(arg.value))
             return str(arg.value).lower() #False --> false
         elif isinstance(arg, Variable):
             return "%" + str(arg)

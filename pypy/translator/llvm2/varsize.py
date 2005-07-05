@@ -29,11 +29,12 @@ def write_constructor(codewriter, ref, constructor_decl, elemtype,
     codewriter.cast("%usize", elemtype + "*", "%size", "uint")
     codewriter.malloc("%ptr", "sbyte", "%usize", atomic=atomicmalloc)
     codewriter.cast("%result", "sbyte*", "%ptr", ref + "*")
-    
+ 
+    indices_to_array = tuple(indices_to_array) + (("uint", 0),)
     # the following accesses the length field of the array 
     codewriter.getelementptr("%arraylength", ref + "*", 
                              "%result", 
-                             indices_to_array + ("uint", 0))
+                             *indices_to_array)
     codewriter.store("int", "%len", "%arraylength")
     codewriter.ret(ref + "*", "%result")
     codewriter.closefunc()
