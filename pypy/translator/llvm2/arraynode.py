@@ -31,6 +31,16 @@ class ArrayTypeNode(LLVMNode):
     def __str__(self):
         return "<ArrayTypeNode %r>" % self.ref
         
+    def setup(self):
+        self.db.prepare_repr_arg_type(self.array.OF)
+        self._issetup = True
+
+    # ______________________________________________________________________
+    # entry points from genllvm
+    #
+    def writedatatypedecl(self, codewriter):
+        codewriter.arraydef(self.ref, self.db.repr_arg_type(self.array.OF))
+
     def writedecl(self, codewriter): 
         # declaration for constructor
         codewriter.declare(self.constructor_decl)
@@ -41,16 +51,6 @@ class ArrayTypeNode(LLVMNode):
         varsize.write_constructor(codewriter, self.ref, 
                                   self.constructor_decl,
                                   fromtype)
-
-    def setup(self):
-        self.db.prepare_repr_arg_type(self.array.OF)
-        self._issetup = True
-
-    # ______________________________________________________________________
-    # entry points from genllvm
-    #
-    def writedatatypedecl(self, codewriter):
-        codewriter.arraydef(self.ref, self.db.repr_arg_type(self.array.OF))
 
 # Each ArrayNode instance is a global constant. 
 
