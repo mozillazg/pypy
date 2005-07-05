@@ -3,6 +3,7 @@ from pypy.rpython import lltype
 from pypy.translator.llvm2.log import log
 from pypy.translator.llvm2.node import LLVMNode
 from pypy.objspace.flow.model import Constant
+from pypy.translator.llvm2 import varsize 
 import itertools  
 log = log.structnode
 
@@ -35,34 +36,11 @@ class ArrayTypeNode(LLVMNode):
         codewriter.declare(self.constructor_decl)
 
     def writeimpl(self, codewriter):
-        """ this function generates a LLVM function like the following:
-        %array = type { int, [0 x double] }
-        %array *%NewArray(int %len) {
-           ;; Get the offset of the 'len' element of the array from the null
-           ;; pointer.
-           %size = getelementptr %array* null, int 0, uint 1, %int %len
-           %usize = cast double* %size to uint
-           %ptr = malloc sbyte, uint %usize
-           %result = cast sbyte* %ptr to %array*
-           %arraylength = getelementptr %array* %result, int 0, uint 0
-           store int %len, int* %arraylength 
-           ret %array* %result
-        }"""
-        from pypy.translator.llvm2.atomic import is_atomic
-
         log.writeimpl(self.ref)
-        codewriter.openfunc(self.constructor_decl)
-        indices = [("uint", 1), ("int", "%len")]
-        codewriter.getelementptr("%size", self.ref + "*",
-                                 "null", *indices)
         fromtype = self.db.repr_arg_type(self.array.OF) 
-        codewriter.cast("%usize", fromtype + "*", "%size", "uint")
-        codewriter.malloc("%ptr", "sbyte", "%usize", atomic=is_atomic(self))
-        codewriter.cast("%result", "sbyte*", "%ptr", self.ref+"*")
-        codewriter.getelementptr("%arraylength", self.ref+"*", "%result", ("uint", 0))
-        codewriter.store("int", "%len", "%arraylength")
-        codewriter.ret(self.ref+"*", "%result")
-        codewriter.closefunc()
+        varsize.write_constructor(codewriter, self.ref, 
+                                  self.constructor_decl,
+                                  fromtype)
 
     def setup(self):
         self.db.prepare_repr_arg_type(self.array.OF)
@@ -79,15 +57,11 @@ class ArrayTypeNode(LLVMNode):
 class ArrayNode(LLVMNode):
 
     _issetup = False 
-    array_counter = 0
 
     def __init__(self, db, value):
         self.db = db
-        name = '"%%arrayinstance.%s.%s"' % (
-                    value._TYPE.OF, ArrayNode.array_counter)
-        self.ref = name
+        self.ref = "%%arrayinstance.%s.%s" % (value._TYPE.OF, nextnum())
         self.value = value
-        ArrayNode.array_counter += 1
 
     def __str__(self):
         return "<ArrayNode %r>" %(self.ref,)

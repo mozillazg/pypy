@@ -7,19 +7,16 @@ from pypy.translator.unsimplify import remove_double_links
 from pypy.translator.llvm2.node import LLVMNode
 from pypy.translator.llvm2.atomic import is_atomic
 from pypy.translator.llvm2.log import log 
+nextnum = py.std.itertools.count().next
 log = log.funcnode
 
 
 class FuncTypeNode(LLVMNode):
-    func_type_node_counter = 0
-
     def __init__(self, db, type_):
         self.db = db
         assert isinstance(type_, lltype.FuncType)
         self.type_ = type_
-        ref = '"ft.%s.%s"' % (type_, FuncTypeNode.func_type_node_counter)
-        self.ref = ref.replace(" ", "")
-        FuncTypeNode.func_type_node_counter += 1
+        self.ref = 'ft.%s.%s' % (type_, nextnum())
         
     def __str__(self):
         return "<FuncTypeNode %r>" % self.ref
@@ -260,7 +257,7 @@ class OpWriter(object):
         targetvar = self.db.repr_arg(op.result)
         arg_type = op.args[0]
         assert (isinstance(arg_type, Constant) and 
-                isinstance(arg_type.value, lltype.Array))
+                isinstance(arg_type.value, (lltype.Array, lltype.Struct)))
         #XXX unclean
         struct_type = self.db.obj2node[arg_type.value].ref
         struct_cons = self.db.obj2node[arg_type.value].constructor_ref

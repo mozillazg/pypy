@@ -41,7 +41,13 @@ class StructVarsizeTypeNode(StructTypeNode):
     def __init__(self, db, struct): 
         super(StructVarsizeTypeNode, self).__init__(db, struct)
         new_var_name = "%%new.st.var.%s" % self.name
-        self.constructor_name = "%s * %s(int %%len)" % (self.ref, new_var_name)
+        self.constructor_ref = "%s * %s(int %%len)" % (self.ref, new_var_name)
+
+        ref_template = wrapstr("%%st.%s." + str(c))
+        self.ref = ref_template % array.OF
+        self.constructor_ref = wrapstr("%%new.array.%s" % c)
+        self.constructor_decl = "%s * %s(int %%len)" % \
+                                (self.ref, self.constructor_ref)
 
     def __str__(self):
         return "<StructVarsizeTypeNode %r>" %(self.ref,)
