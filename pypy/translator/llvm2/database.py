@@ -84,7 +84,6 @@ class Database(object):
 
                 if isinstance(ct, lltype.Struct):
                     if ct._arrayfld:
-                        assert False, "HERE"
                         self.addpending(const_or_var, StructVarsizeNode(self, value))
                     else:
                         self.addpending(const_or_var, StructNode(self, value))

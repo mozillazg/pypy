@@ -288,7 +288,7 @@ def test_list_getitem_pbc():
     f = compile_function(list_getitem_pbc, [int])
     assert f(0) == 1
     assert f(1) == 2
-
+    
 def test_list_list_getitem_pbc(): 
     l = [[0, 1], [0, 1]]
     def list_list_getitem_pbc(i): 
@@ -316,9 +316,9 @@ def test_list_basic_ops():
 
 def Xtest_string_getitem1():
     l = "Hello, World"
-    def string_test(i): 
+    def string_getitem1(i): 
         return l[i]
-    f = compile_function(string_test, [int], view=True)
+    f = compile_function(string_getitem1, [int], view=True)
     assert f(0) == ord("H")
 
 def DONOT_test_string_getitem2():
