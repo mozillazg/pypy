@@ -261,14 +261,8 @@ def floordiv__Long_Long(space, w_long1, w_long2):
     div, rem = _divrem(space, w_long1, w_long2)
     return div
 
-old_style_div = 1 / 2 == 1 // 2
 def div__Long_Long(space, w_long1, w_long2):
-    # Select the proper div
-    if old_style_div:
-        return floordiv__Long_Long(space, w_long1, w_long2)
-    else:
-        return truediv__Long_Long(space, w_long1, w_long2)
-
+    return floordiv__Long_Long(space, w_long1, w_long2)
 
 def mod__Long_Long(space, w_long1, w_long2):
     div, rem = _divrem(space, w_long1, w_long2)
