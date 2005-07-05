@@ -6,10 +6,7 @@ from pypy.objspace.flow.model import Constant
 import itertools  
 log = log.structnode
 
-count = itertools.count().next 
-
-def wrapstr(s):
-    return '"%s"' % s
+nextnum = itertools.count().next 
 
 class ArrayTypeNode(LLVMNode):
     _issetup = False
@@ -17,11 +14,16 @@ class ArrayTypeNode(LLVMNode):
         self.db = db
         assert isinstance(array, lltype.Array)
         self.array = array
-        c = count()
-        ref_template = wrapstr("%%array.%s." + str(c))
+        c = nextnum()
+        ref_template = "%%array.%s." + str(c)
 
+        # ref is used to reference the arraytype in llvm source 
         self.ref = ref_template % array.OF
-        self.constructor_ref = wrapstr("%%new.array.%s" % c)
+        # constructor_ref is used to reference the constructor 
+        # for the array type in llvm source code 
+        self.constructor_ref = "%%new.array.%s" % c 
+        # constructor_decl is used to declare the constructor
+        # for the array type (see writeimpl). 
         self.constructor_decl = "%s * %s(int %%len)" % \
                                 (self.ref, self.constructor_ref)
 
@@ -72,8 +74,7 @@ class ArrayTypeNode(LLVMNode):
     def writedatatypedecl(self, codewriter):
         codewriter.arraydef(self.ref, self.db.repr_arg_type(self.array.OF))
 
-# Each ArrayNode is a global constant.  This needs to have a specific type of
-# a certain type.
+# Each ArrayNode instance is a global constant. 
 
 class ArrayNode(LLVMNode):
 
@@ -82,7 +83,8 @@ class ArrayNode(LLVMNode):
 
     def __init__(self, db, value):
         self.db = db
-        name = '"%%arrayinstance.%s.%s"' % (value._TYPE.OF, ArrayNode.array_counter)
+        name = '"%%arrayinstance.%s.%s"' % (
+                    value._TYPE.OF, ArrayNode.array_counter)
         self.ref = name
         self.value = value
         ArrayNode.array_counter += 1
