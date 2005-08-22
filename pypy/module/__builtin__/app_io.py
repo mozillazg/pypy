@@ -4,6 +4,7 @@ Plain Python definition of the builtin I/O-related functions.
 """
 
 import sys
+import os
 
 def execfile(filename, glob=None, loc=None):
     if glob is None:
