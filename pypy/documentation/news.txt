@@ -7,7 +7,7 @@
     nonsense, isn't it?  `more...`_
 
 .. _Python: http://www.python.org/doc/current/ref/ref.html
-.. _`more...`: ../architecture.html#mission-statement 
+.. _`more...`: architecture.html#mission-statement 
 
 Next PyPy Sprint in Heidelberg 22nd-29th August 2005
 ======================================================
@@ -67,8 +67,8 @@ the LLVM backends and type inference in general.
 .. _`pypy-dev`: http://codespeak.net/mailman/listinfo/pypy-dev
 
 .. _EuroPython: http://europython.org 
-.. _`translation`: ../translation.html 
-.. _`sprint announcement`: EP2005-announcement.html
+.. _`translation`: translation.html 
+.. _`sprint announcement`: http://codespeak.net/pypy/index.cgi?extradoc/sprintinfo/EP2005-announcement.html
 .. _`list of people coming`: http://codespeak.net/pypy/index.cgi?extradoc/sprintinfo/EP2005-people.html
 
 First PyPy release!

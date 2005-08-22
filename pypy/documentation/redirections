@@ -27,5 +27,7 @@
     'coding-style.html'     : 'coding-guide.html',
 
     'controlflow.html'      : 'objspace.html#the-flow-model',
+
+    'getting_started.html'  : 'getting-started.html', 
 }
 
