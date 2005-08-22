@@ -8,7 +8,7 @@ class PyPyPage(Page):
             html.a("doc", href="index.html", class_="menu"), " ",
             html.a("contact", href="contact.html", class_="menu"), " ", 
             html.a("getting-started", 
-                   href="getting_started.html", class_="menu"), " ",
+                   href="getting-started.html", class_="menu"), " ",
             html.a("issue", 
                    href="https://codespeak.net/issue/pypy-dev/", 
                    class_="menu"), 
