@@ -1,0 +1,87 @@
+
+
+    The PyPy project aims at producing a flexible and fast Python_
+    implementation.  The guiding idea is to translate a Python-level
+    description of the Python language itself to lower level languages.
+    Rumors have it that the secret goal is being faster-than-C which is
+    nonsense, isn't it?  `more...`_
+
+.. _Python: http://www.python.org/doc/current/ref/ref.html
+.. _`more...`: http://codespeak.net/pypy/dist/pypy/doc/architecture.html#mission-statement 
+
+Ongoing: PyPy Sprint in Heidelberg 22nd-29th August 2005
+==========================================================
+
+The current PyPy sprint takes place at the Heidelberg University
+in Germany from 22nd August to 29th August (both days included). 
+Its main focus is translation of the whole PyPy interpreter 
+to a low level language and reaching 2.4.1 Python compliancy.
+The goal of the sprint is to release a first self-contained
+PyPy-0.7 version.  To learn more see the `Heidelberg sprint
+announcement`_ or look at the list of people_ that are
+expected to come.
+
+.. _people: http://codespeak.net/pypy/extradoc/sprintinfo/heidelberg-people.html
+.. _`Heidelberg sprint announcement`: http://codespeak.net/pypy/extradoc/sprintinfo/Heidelberg-sprint.html
+
+
+PyPy Hildesheim2 finished: first self-contained PyPy run! 
+===========================================================
+
+Up until 31st August we were in a PyPy sprint at `Trillke-Gut`_. 
+Carl has written a `report about day 1`_, Holger 
+about `day 2 and day 3`_ and Carl again about `day 4 and day 5`_, 
+On `day 6`_ Holger reports the `breakthrough`_: PyPy runs 
+on its own! Hurray_!.  And Carl finally reports about the winding
+down of `day 7`_ which saw us relaxing, discussing and generally 
+having a good time.   You might want to look at the selected 
+`pictures from the sprint`_. 
+
+.. _`report about day 1`: http://codespeak.net/pipermail/pypy-dev/2005q3/002217.html 
+.. _`day 2 and day 3`: http://codespeak.net/pipermail/pypy-dev/2005q3/002220.html
+.. _`day 4 and day 5`: http://codespeak.net/pipermail/pypy-dev/2005q3/002234.html
+.. _`day 6`: http://codespeak.net/pipermail/pypy-dev/2005q3/002239.html
+.. _`day 7`: http://codespeak.net/pipermail/pypy-dev/2005q3/002245.html
+.. _`breakthrough`: http://codespeak.net/~hpk/hildesheim2-sprint-www/hildesheim2-sprint-www-Thumbnails/36.jpg
+.. _`hurray`: http://codespeak.net/~hpk/hildesheim2-sprint-www/hildesheim2-sprint-www-Pages/Image37.html
+.. _`pictures from the sprint`: http://codespeak.net/~hpk/hildesheim2-sprint-www/ 
+.. _`Trillke-Gut`: http://www.trillke.net/images/HomePagePictureSmall.jpg
+
+EuroPython 2005 sprints finished 
+======================================================
+
+We had two sprints around EuroPython, one more internal core
+developer one and a public one.  Both sprints were quite
+successful.  Regarding the Pre-EuroPython sprint Michael Hudson 
+has posted summaries of `day 1`_, `day 2`_ and `day 3`_ on 
+the `pypy-dev`_ mailing list.  The larger public sprint 
+has not been summarized yet but it went very well.  We had
+20 people initially attending to hear the tutorials and 
+work a bit.  Later with around 13-14 people we made the
+move to Python-2.4.1, integrated the parser, improved 
+the LLVM backends and type inference in general.  
+*(07/13/2005)* 
+
+.. _`day 1`: http://codespeak.net/pipermail/pypy-dev/2005q2/002169.html
+.. _`day 2`: http://codespeak.net/pipermail/pypy-dev/2005q2/002171.html
+.. _`day 3`: http://codespeak.net/pipermail/pypy-dev/2005q2/002172.html
+.. _`pypy-dev`: http://codespeak.net/mailman/listinfo/pypy-dev
+
+.. _EuroPython: http://europython.org 
+.. _`translation`: http://codespeak.net/pypy/dist/pypy/doc/translation.html 
+.. _`sprint announcement`: http://codespeak.net/pypy/extradoc/sprintinfo/EP2005-announcement.html
+.. _`list of people coming`: http://codespeak.net/pypy/extradoc/sprintinfo/EP2005-people.html
+
+First PyPy release!
+=================== 
+
+We are happy to announce the first public release of PyPy after two years of
+spare-time and half a year of EU funded development.  The 0.6 release is
+a preview release, concentrating on CPython compatibility, good documentation 
+and nice starting points into the PyPy code base.  We invite you to head 
+over to the `getting started`_ document or read more in the 
+`release announcement`_.  *(05/20/2005)*
+
+.. _`release announcement`: http://codespeak.net/pypy/dist/pypy/doc/release-0.6.html
+.. _`getting started`: http://codespeak.net/pypy/pypy/dist/pypy/doc/getting-started
+
