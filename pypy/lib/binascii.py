@@ -255,10 +255,6 @@ def b2a_qp(s, quotetabs=False, istext=True, header=False):
        istext=False means that \r and \n are treated as regular characters
        header=True encodes space characters with '_' and requires
        real '_' characters to be quoted.
-       
-
-        The CPython does not encode newlines as CRLF sequences. This
-        seems to be non-standard, and we copy this behaviour.
     """
     crlf = s.find('\r\n')
     lf = s.find('\n')
@@ -278,8 +274,7 @@ def b2a_qp(s, quotetabs=False, istext=True, header=False):
 
     lines = s.split('\n')
 
-    soft_lbr = '=\n' # The way CPython does it
-    #soft_lbr = '=\r\n' # The way I think the standard specifies
+    soft_lbr = '=' + linebreak
     result = []
     for line in lines:
         charlist = []
