@@ -47,7 +47,7 @@ class SRE_Pattern(object):
         instance. Return None if no position in the string matches the
         pattern."""
         state = _sre._State(string, pos, endpos, self.flags)
-        if search(state, self._code):
+        if _sre._search(state, self._code):
             return SRE_Match(self, state)
         else:
             return None
@@ -59,7 +59,7 @@ class SRE_Pattern(object):
         while state.start <= state.end:
             state.reset()
             state.string_position = state.start
-            if not search(state, self._code):
+            if not _sre._search(state, self._code):
                 break
             match = SRE_Match(self, state)
             if self.groups == 0 or self.groups == 1:
@@ -86,7 +86,7 @@ class SRE_Pattern(object):
         while not count or n < count:
             state.reset()
             state.string_position = state.start
-            if not search(state, self._code):
+            if not _sre._search(state, self._code):
                 break
             if last_pos < state.start:
                 sublist.append(string[last_pos:state.start])
@@ -132,7 +132,7 @@ class SRE_Pattern(object):
         while not maxsplit or n < maxsplit:
             state.reset()
             state.string_position = state.start
-            if not search(state, self._code):
+            if not _sre._search(state, self._code):
                 break
             if state.start == state.string_position: # zero-width match
                 if last == state.end:                # or end of string
@@ -188,7 +188,7 @@ class SRE_Scanner(object):
         return self._match_search(_sre._match)
 
     def search(self):
-        return self._match_search(search)
+        return self._match_search(_sre._search)
 
 
 class SRE_Match(object):
@@ -289,48 +289,6 @@ class SRE_Match(object):
 
     def __deepcopy__():
         raise TypeError, "cannot copy this pattern object"
-
-
-def search(state, pattern_codes):
-    flags = 0
-    if pattern_codes[0] == OPCODES["info"]:
-        # optimization info block
-        # <INFO> <1=skip> <2=flags> <3=min> <4=max> <5=prefix info>
-        #if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
-        #    return state.fast_search(pattern_codes)
-        flags = pattern_codes[2]
-        pattern_codes = pattern_codes[pattern_codes[1] + 1:]
-
-    string_position = state.start
-    """
-    if pattern_codes[0] == OPCODES["literal"]:
-        # Special case: Pattern starts with a literal character. This is
-        # used for short prefixes
-        character = pattern_codes[1]
-        while True:
-            while string_position < state.end \
-                    and ord(state.string[string_position]) != character:
-                string_position += 1
-            if string_position >= state.end:
-                return False
-            state.start = string_position
-            string_position += 1
-            state.string_position = string_position
-            if flags & SRE_INFO_LITERAL:
-                return True
-            if match(state, pattern_codes[2:]):
-                return True
-        return False
-    """
-
-    # General case
-    while string_position <= state.end:
-        state.reset()
-        state.start = state.string_position = string_position
-        if _sre._match(state, pattern_codes):
-            return True
-        string_position += 1
-    return False
 
 
 def fast_search(state, pattern_codes):
