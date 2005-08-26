@@ -369,30 +369,6 @@ def fast_search(state, pattern_codes):
         string_position += 1
     return False
 
-# XXX temporary constants for MatchContext.has_matched
-UNDECIDED = 0
-MATCHED = 1
-NOT_MATCHED = 2
-
-def match(state, pattern_codes):
-    # Optimization: Check string length. pattern_codes[3] contains the
-    # minimum length for a string to possibly match.
-    if pattern_codes[0] == OPCODES["info"] and pattern_codes[3]:
-        if state.end - state.string_position < pattern_codes[3]:
-            #_log("reject (got %d chars, need %d)"
-            #         % (state.end - state.string_position, pattern_codes[3]))
-            return False
-    
-    dispatcher = _OpcodeDispatcher()
-    state.context_stack.append(_sre._MatchContext(state, pattern_codes))
-    has_matched = UNDECIDED
-    while len(state.context_stack) > 0:
-        context = state.context_stack[-1]
-        has_matched = dispatcher.match(context)
-        if has_matched != UNDECIDED: # don't pop if context isn't done
-            state.context_stack.pop()
-    return has_matched == MATCHED
-
 
 def _log(message):
     if 0:
