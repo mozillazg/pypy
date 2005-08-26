@@ -310,7 +310,7 @@ def match(space, state, pattern_codes):
             has_matched = context.has_matched
         if has_matched != context.UNDECIDED: # don't pop if context isn't done
             state.context_stack.pop()
-    return has_matched == context.MATCHED
+    return has_matched == MatchContext.MATCHED
 
 def dispatch_loop(space, context):
     """Returns MATCHED if the current context matches, NOT_MATCHED if it doesn't
