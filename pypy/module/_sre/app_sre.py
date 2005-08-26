@@ -185,7 +185,7 @@ class SRE_Scanner(object):
         return match
 
     def match(self):
-        return self._match_search(match)
+        return self._match_search(_sre._match)
 
     def search(self):
         return self._match_search(search)
@@ -392,126 +392,6 @@ def match(state, pattern_codes):
         if has_matched != UNDECIDED: # don't pop if context isn't done
             state.context_stack.pop()
     return has_matched == MATCHED
-
-
-class _Dispatcher(object):
-
-    DISPATCH_TABLE = None
-
-    def dispatch(self, code, context):
-        method = self.DISPATCH_TABLE.get(code, self.__class__.unknown)
-        return method(self, context)
-
-    def unknown(self, code, ctx):
-        raise NotImplementedError()
-
-    def build_dispatch_table(cls, code_dict, method_prefix):
-        if cls.DISPATCH_TABLE is not None:
-            return
-        table = {}
-        for key, value in code_dict.items():
-            if hasattr(cls, "%s%s" % (method_prefix, key)):
-                table[value] = getattr(cls, "%s%s" % (method_prefix, key))
-        cls.DISPATCH_TABLE = table
-
-    build_dispatch_table = classmethod(build_dispatch_table)
-
-
-class _OpcodeDispatcher(_Dispatcher):
-    
-    def __init__(self):
-        self.executing_contexts = {}
-        
-    def match(self, context):
-        """Returns True if the current context matches, False if it doesn't and
-        None if matching is not finished, ie must be resumed after child
-        contexts have been matched."""
-        while context.remaining_codes() > 0 and context.has_matched == UNDECIDED:
-            opcode = context.peek_code()
-            if not self.dispatch(opcode, context):
-                return UNDECIDED
-        if context.has_matched == UNDECIDED:
-            context.has_matched = NOT_MATCHED
-        return context.has_matched
-
-    def dispatch(self, opcode, context):
-        """Dispatches a context on a given opcode. Returns True if the context
-        is done matching, False if it must be resumed when next encountered."""
-        if self.executing_contexts.has_key(id(context)):
-            generator = self.executing_contexts[id(context)]
-            del self.executing_contexts[id(context)]
-            has_finished = generator.next()
-        else:
-            if _sre._opcode_is_at_interplevel(opcode):
-                has_finished = _sre._opcode_dispatch(opcode, context)
-            else:
-                method = self.DISPATCH_TABLE.get(opcode, _OpcodeDispatcher.unknown)
-                has_finished = method(self, context)
-            if hasattr(has_finished, "next"): # avoid using the types module
-                generator = has_finished
-                has_finished = generator.next()
-        if not has_finished:
-            self.executing_contexts[id(context)] = generator
-        return has_finished
-
-    def op_min_until(self, ctx):
-        # minimizing repeat
-        # <REPEAT> <skip> <1=min> <2=max> item <MIN_UNTIL> tail
-        repeat = ctx.state.repeat
-        if repeat is None:
-            raise RuntimeError("Internal re error: MIN_UNTIL without REPEAT.")
-        mincount = repeat.peek_code(2)
-        maxcount = repeat.peek_code(3)
-        ctx.state.string_position = ctx.string_position
-        count = repeat.count + 1
-        #self._log(ctx, "MIN_UNTIL", count)
-
-        if count < mincount:
-            # not enough matches
-            repeat.count = count
-            child_context = repeat.push_new_context(4)
-            yield False
-            ctx.has_matched = child_context.has_matched
-            if ctx.has_matched == NOT_MATCHED:
-                repeat.count = count - 1
-                ctx.state.string_position = ctx.string_position
-            yield True
-
-        # see if the tail matches
-        ctx.state.marks_push()
-        ctx.state.repeat = repeat.previous
-        child_context = ctx.push_new_context(1)
-        yield False
-        if child_context.has_matched == MATCHED:
-            ctx.has_matched = MATCHED
-            yield True
-        ctx.state.repeat = repeat
-        ctx.state.string_position = ctx.string_position
-        ctx.state.marks_pop()
-
-        # match more until tail matches
-        if count >= maxcount and maxcount != MAXREPEAT:
-            ctx.has_matched = NOT_MATCHED
-            yield True
-        repeat.count = count
-        child_context = repeat.push_new_context(4)
-        yield False
-        ctx.has_matched = child_context.has_matched
-        if ctx.has_matched == NOT_MATCHED:
-            repeat.count = count - 1
-            ctx.state.string_position = ctx.string_position
-        yield True
-        
-    def unknown(self, ctx):
-        #self._log(ctx, "UNKNOWN", ctx.peek_code())
-        raise RuntimeError("Internal re error. Unknown opcode: %s" % ctx.peek_code())
-    
-    def _log(self, context, opname, *args):
-        arg_string = ("%s " * len(args)) % args
-        _log("|%s|%s|%s %s" % (context.pattern_codes,
-            context.string_position, opname, arg_string))
-
-_OpcodeDispatcher.build_dispatch_table(OPCODES, "op_")
 
 
 def _log(message):

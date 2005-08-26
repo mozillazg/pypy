@@ -695,6 +695,93 @@ def op_max_until(space, ctx):
                 ctx.state.string_position = ctx.string_position
             return True
 
+def op_min_until(space, ctx):
+    # minimizing repeat
+    # <REPEAT> <skip> <1=min> <2=max> item <MIN_UNTIL> tail
+    
+    # Case 1: First entry point
+    if not ctx.is_resumed():
+        repeat = ctx.state.repeat
+        if repeat is None:
+            raise RuntimeError("Internal re error: MIN_UNTIL without REPEAT.")
+        mincount = repeat.peek_code(2)
+        maxcount = repeat.peek_code(3)
+        ctx.state.string_position = ctx.string_position
+        count = repeat.count + 1
+
+        if count < mincount:
+            # not enough matches
+            repeat.count = count
+            repeat.repeat_stack.append(repeat.push_new_context(4))
+            ctx.backup_value(mincount)
+            ctx.backup_value(maxcount)
+            ctx.backup_value(count)
+            ctx.backup_value(0)
+            ctx.repeat = repeat
+            return False
+
+        # see if the tail matches
+        ctx.state.marks_push()
+        ctx.state.repeat = repeat.previous
+        ctx.push_new_context(1)
+        ctx.backup_value(mincount)
+        ctx.backup_value(maxcount)
+        ctx.backup_value(count)
+        ctx.backup_value(1)
+        ctx.repeat = repeat
+        return False
+
+    # Case 2: Resumed
+    else:
+        repeat = ctx.repeat
+        if repeat.has_matched == ctx.MATCHED:
+            ctx.has_matched = ctx.MATCHED
+            return True
+        values = ctx.restore_values()
+        mincount = values[0]
+        maxcount = values[1]
+        count = values[2]
+        matching_state = values[3]
+
+        if count < mincount:
+            # not enough matches
+            ctx.has_matched = repeat.repeat_stack.pop().has_matched
+            if ctx.has_matched == ctx.NOT_MATCHED:
+                repeat.count = count - 1
+                ctx.state.string_position = ctx.string_position
+            return True
+        
+        if matching_state == 1:
+            # returning from tail matching
+            if ctx.child_context.has_matched == ctx.MATCHED:
+                ctx.has_matched = ctx.MATCHED
+                return True
+            ctx.state.repeat = repeat
+            ctx.state.string_position = ctx.string_position
+            ctx.state.marks_pop()
+
+        if not matching_state == 2:
+            # match more until tail matches
+            if count >= maxcount and maxcount != MAXREPEAT:
+                ctx.has_matched = ctx.NOT_MATCHED
+                return True
+            repeat.count = count
+            repeat.repeat_stack.append(repeat.push_new_context(4))
+            ctx.backup_value(mincount)
+            ctx.backup_value(maxcount)
+            ctx.backup_value(count)
+            ctx.backup_value(2)
+            ctx.repeat = repeat
+            return False
+
+        # Final return
+        ctx.has_matched = repeat.repeat_stack.pop().has_matched
+        repeat.has_matched = ctx.has_matched
+        if ctx.has_matched == ctx.NOT_MATCHED:
+            repeat.count = count - 1
+            ctx.state.string_position = ctx.string_position
+        return True
+
 def op_jump(space, ctx):
     # jump forward
     # <JUMP>/<INFO> <offset>
@@ -822,7 +909,7 @@ opcode_dispatch_table = [
     op_literal, op_literal_ignore,
     op_mark,
     op_max_until,
-    None, #MIN_UNTIL,
+    op_min_until,
     op_not_literal, op_not_literal_ignore,
     None, #NEGATE,
     None, #RANGE,
