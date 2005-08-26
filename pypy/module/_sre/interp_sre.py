@@ -11,6 +11,7 @@ BIG_ENDIAN = sys.byteorder == "big"
 #### Exposed functions
 
 # XXX can we import those safely from sre_constants?
+SRE_INFO_PREFIX = 1
 SRE_INFO_LITERAL = 2
 SRE_FLAG_LOCALE = 4 # honour system locale
 SRE_FLAG_UNICODE = 32 # use unicode locale
@@ -18,16 +19,17 @@ OPCODE_INFO = 17
 OPCODE_LITERAL = 19
 MAXREPEAT = 65535
 
-def getlower(space, w_char_ord, w_flags):
-    char_ord = space.int_w(w_char_ord)
-    flags = space.int_w(w_flags)
+def w_getlower(space, w_char_ord, w_flags):
+    return space.wrap(getlower(space, space.int_w(w_char_ord), space.int_w(w_flags)))
+
+def getlower(space, char_ord, flags):
     if (char_ord < 128) or (flags & SRE_FLAG_UNICODE) \
                               or (flags & SRE_FLAG_LOCALE and char_ord < 256):
         w_uni_char = space.newunicode([char_ord])
         w_lowered = space.call_method(w_uni_char, "lower")
-        return space.ord(w_lowered)
+        return space.int_w(space.ord(w_lowered))
     else:
-        return space.wrap(char_ord)
+        return char_ord
 
 #### Core classes
 
@@ -102,9 +104,7 @@ class W_State(Wrappable):
         self.marks_stack.pop()
 
     def lower(self, char_ord):
-        # XXX this is ugly
-        space = self.space
-        return space.int_w(getlower(space, space.wrap(char_ord), space.wrap(self.flags)))
+        return getlower(self.space, char_ord, self.flags)
 
 def interp_attrproperty_int(name, cls):
     "NOT_RPYTHON: initialization-time only"
@@ -236,9 +236,8 @@ def search(space, state, pattern_codes):
     if pattern_codes[0] == OPCODE_INFO:
         # optimization info block
         # <INFO> <1=skip> <2=flags> <3=min> <4=max> <5=prefix info>
-        # XXX fast_search temporarily disabled
-        #if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
-        #    return state.fast_search(pattern_codes)
+        if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
+            return fast_search(space, state, pattern_codes)
         flags = pattern_codes[2]
         pattern_codes = pattern_codes[pattern_codes[1] + 1:]
 
@@ -248,6 +247,44 @@ def search(space, state, pattern_codes):
         state.start = state.string_position = string_position
         if match(space, state, pattern_codes):
             return True
+        string_position += 1
+    return False
+
+def fast_search(space, state, pattern_codes):
+    """Skips forward in a string as fast as possible using information from
+    an optimization info block."""
+    # pattern starts with a known prefix
+    # <5=length> <6=skip> <7=prefix data> <overlap data>
+    flags = pattern_codes[2]
+    prefix_len = pattern_codes[5]
+    prefix_skip = pattern_codes[6] # don't really know what this is good for
+    prefix = pattern_codes[7:7 + prefix_len]
+    overlap = pattern_codes[7 + prefix_len - 1:pattern_codes[1] + 1]
+    pattern_codes = pattern_codes[pattern_codes[1] + 1:]
+    i = 0
+    string_position = state.string_position
+    while string_position < state.end:
+        while True:
+            char_ord = space.int_w(space.ord(
+                space.getitem(state.w_string, space.wrap(string_position))))
+            if char_ord != prefix[i]:
+                if i == 0:
+                    break
+                else:
+                    i = overlap[i]
+            else:
+                i += 1
+                if i == prefix_len:
+                    # found a potential match
+                    state.start = string_position + 1 - prefix_len
+                    state.string_position = string_position + 1 \
+                                                 - prefix_len + prefix_skip
+                    if flags & SRE_INFO_LITERAL:
+                        return True # matched all of pure literal pattern
+                    if match(space, state, pattern_codes[2 * prefix_skip:]):
+                        return True
+                    i = overlap[i]
+                break
         string_position += 1
     return False
 

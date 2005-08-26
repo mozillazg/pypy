@@ -17,7 +17,7 @@ copyrighted by: Copyright (c) 1997-2001 by Secret Labs AB
     }
 
     interpleveldefs = {
-        'getlower':       'interp_sre.getlower',
+        'getlower':       'interp_sre.w_getlower',
         '_State':         'interp_sre.make_state',
         '_match':         'interp_sre.w_match',
         '_search':        'interp_sre.w_search',
