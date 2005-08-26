@@ -11,7 +11,7 @@ def create_context(space, string, string_position, end):
     state = isre.W_State(space, space.wrap(string), space.wrap(0),
                                                 space.wrap(end), space.wrap(0))
     state.string_position = string_position
-    return isre.W_MatchContext(space, state, space.newlist([]))
+    return isre.MatchContext(space, state, [])
 
 def test_is_uni_linebreak(space):
     for char in ["\n", "\r"]:
