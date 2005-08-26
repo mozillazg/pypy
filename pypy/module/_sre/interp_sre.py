@@ -58,7 +58,7 @@ class W_State(Wrappable):
         self.lastindex = -1
         self.marks_stack = []
         self.context_stack = []
-        self.w_repeat = self.space.w_None
+        self.repeat = None
 
     def set_mark(self, mark_nr, position):
         if mark_nr & 1:
@@ -262,24 +262,17 @@ W_MatchContext.typedef = TypeDef("W_MatchContext",
     at_end = interp2app(W_MatchContext.w_at_end),
 )
 
-def make_repeat_context(space, w_context):
-    # XXX Uhm, temporary
-    return space.wrap(W_RepeatContext(space, w_context))
 
 class W_RepeatContext(W_MatchContext):
     
-    def __init__(self, space, w_context):
-        W_MatchContext.__init__(self, space, w_context.state,
-            space.newlist(w_context.pattern_codes_w[w_context.code_position:]))
-        self.w_count = space.wrap(-1)
-        self.w_previous = w_context.state.w_repeat
-        self.w_last_position = space.w_None
+    def __init__(self, space, context):
+        W_MatchContext.__init__(self, space, context.state,
+            space.newlist(context.pattern_codes_w[context.code_position:]))
+        self.count = -1
+        self.previous = context.state.repeat
+        self.last_position = -1
+        self.repeat_stack = []
 
-W_RepeatContext.typedef = TypeDef("W_RepeatContext", W_MatchContext.typedef,
-    count = interp_attrproperty_obj_w("w_count", W_RepeatContext),
-    previous = interp_attrproperty_obj_w("w_previous", W_RepeatContext),
-    last_position = interp_attrproperty_obj_w("w_last_position", W_RepeatContext),
-)
 
 #### Main opcode dispatch loop
 
@@ -587,6 +580,121 @@ def op_min_repeat_one(space, ctx):
     ctx.has_matched = ctx.NOT_MATCHED
     return True
 
+def op_repeat(space, ctx):
+    # create repeat context.  all the hard work is done by the UNTIL
+    # operator (MAX_UNTIL, MIN_UNTIL)
+    # <REPEAT> <skip> <1=min> <2=max> item <UNTIL> tail
+    if not ctx.is_resumed():
+        ctx.repeat = W_RepeatContext(space, ctx)
+        ctx.state.repeat = ctx.repeat
+        ctx.state.string_position = ctx.string_position
+        ctx.push_new_context(ctx.peek_code(1) + 1)
+        return False
+    else:
+        ctx.state.repeat = ctx.repeat
+        ctx.has_matched = ctx.child_context.has_matched
+        return True
+
+def op_max_until(space, ctx):
+    # maximizing repeat
+    # <REPEAT> <skip> <1=min> <2=max> item <MAX_UNTIL> tail
+    
+    # Case 1: First entry point
+    if not ctx.is_resumed():
+        repeat = ctx.state.repeat
+        if repeat is None:
+            raise RuntimeError("Internal re error: MAX_UNTIL without REPEAT.")
+        mincount = repeat.peek_code(2)
+        maxcount = repeat.peek_code(3)
+        ctx.state.string_position = ctx.string_position
+        count = repeat.count + 1
+        if count < mincount:
+            # not enough matches
+            repeat.count = count
+            repeat.repeat_stack.append(repeat.push_new_context(4))
+            ctx.backup_value(mincount)
+            ctx.backup_value(maxcount)
+            ctx.backup_value(count)
+            ctx.backup_value(0) #ÊDummy for last_position
+            ctx.backup_value(0)
+            ctx.repeat = repeat
+            return False
+        if (count < maxcount or maxcount == MAXREPEAT) \
+                        and ctx.state.string_position != repeat.last_position:
+            # we may have enough matches, if we can match another item, do so
+            repeat.count = count
+            ctx.state.marks_push()
+            repeat.last_position = ctx.state.string_position
+            repeat.repeat_stack.append(repeat.push_new_context(4))
+            ctx.backup_value(mincount)
+            ctx.backup_value(maxcount)
+            ctx.backup_value(count)
+            ctx.backup_value(repeat.last_position) # zero-width match protection
+            ctx.backup_value(0)
+            ctx.repeat = repeat
+            return False
+
+        # Cannot match more repeated items here. Make sure the tail matches.
+        ctx.state.repeat = repeat.previous
+        ctx.push_new_context(1)
+        ctx.backup_value(mincount)
+        ctx.backup_value(maxcount)
+        ctx.backup_value(count)
+        ctx.backup_value(repeat.last_position) # zero-width match protection
+        ctx.backup_value(1) # tail matching
+        ctx.repeat = repeat
+        return False
+
+    # Case 2: Resumed
+    else:
+        repeat = ctx.repeat
+        if repeat.has_matched == ctx.MATCHED:
+            ctx.has_matched = ctx.MATCHED
+            return True
+        values = ctx.restore_values()
+        mincount = values[0]
+        maxcount = values[1]
+        count = values[2]
+        save_last_position = values[3]
+        tail_matching = values[4]
+        
+        if tail_matching == 0:
+            if count < mincount:
+                ctx.has_matched = repeat.repeat_stack.pop().has_matched
+                if ctx.has_matched == ctx.NOT_MATCHED:
+                    repeat.count = count - 1
+                    ctx.state.string_position = ctx.string_position
+                return True
+            if count < maxcount or maxcount == MAXREPEAT:
+                          # XXX can we really omit this test?
+                          #and ctx.state.string_position != repeat.last_position:
+                repeat.last_position = save_last_position
+                if repeat.repeat_stack.pop().has_matched == ctx.MATCHED:
+                    ctx.state.marks_pop_discard()
+                    ctx.has_matched = ctx.MATCHED
+                    return True
+                ctx.state.marks_pop()
+                repeat.count = count - 1
+                ctx.state.string_position = ctx.string_position
+
+            # Cannot match more repeated items here. Make sure the tail matches.
+            ctx.state.repeat = repeat.previous
+            ctx.push_new_context(1)
+            ctx.backup_value(mincount)
+            ctx.backup_value(maxcount)
+            ctx.backup_value(count)
+            ctx.backup_value(repeat.last_position) # zero-width match protection
+            ctx.backup_value(1) # tail matching
+            return False
+
+        else: # resuming after tail matching
+            ctx.has_matched = ctx.child_context.has_matched
+            repeat.has_matched = ctx.has_matched
+            if ctx.has_matched == ctx.NOT_MATCHED:
+                ctx.state.repeat = repeat
+                ctx.state.string_position = ctx.string_position
+            return True
+
 def op_jump(space, ctx):
     # jump forward
     # <JUMP>/<INFO> <offset>
@@ -713,12 +821,12 @@ opcode_dispatch_table = [
     op_jump, op_jump,
     op_literal, op_literal_ignore,
     op_mark,
-    None, #MAX_UNTIL,
+    op_max_until,
     None, #MIN_UNTIL,
     op_not_literal, op_not_literal_ignore,
     None, #NEGATE,
     None, #RANGE,
-    None, #REPEAT,
+    op_repeat,
     op_repeat_one,
     None, #SUBPATTERN,
     op_min_repeat_one,

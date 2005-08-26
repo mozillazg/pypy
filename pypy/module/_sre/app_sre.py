@@ -454,71 +454,6 @@ class _OpcodeDispatcher(_Dispatcher):
             self.executing_contexts[id(context)] = generator
         return has_finished
 
-    def op_repeat(self, ctx):
-        # create repeat context.  all the hard work is done by the UNTIL
-        # operator (MAX_UNTIL, MIN_UNTIL)
-        # <REPEAT> <skip> <1=min> <2=max> item <UNTIL> tail
-        #self._log(ctx, "REPEAT", ctx.peek_code(2), ctx.peek_code(3))
-        repeat = _sre._RepeatContext(ctx)
-        ctx.state.repeat = repeat
-        ctx.state.string_position = ctx.string_position
-        child_context = ctx.push_new_context(ctx.peek_code(1) + 1)
-        yield False
-        ctx.state.repeat = repeat.previous
-        ctx.has_matched = child_context.has_matched
-        yield True
-
-    def op_max_until(self, ctx):
-        # maximizing repeat
-        # <REPEAT> <skip> <1=min> <2=max> item <MAX_UNTIL> tail
-        repeat = ctx.state.repeat
-        if repeat is None:
-            raise RuntimeError("Internal re error: MAX_UNTIL without REPEAT.")
-        mincount = repeat.peek_code(2)
-        maxcount = repeat.peek_code(3)
-        ctx.state.string_position = ctx.string_position
-        count = repeat.count + 1
-        #self._log(ctx, "MAX_UNTIL", count)
-
-        if count < mincount:
-            # not enough matches
-            repeat.count = count
-            child_context = repeat.push_new_context(4)
-            yield False
-            ctx.has_matched = child_context.has_matched
-            if ctx.has_matched == NOT_MATCHED:
-                repeat.count = count - 1
-                ctx.state.string_position = ctx.string_position
-            yield True
-
-        if (count < maxcount or maxcount == MAXREPEAT) \
-                      and ctx.state.string_position != repeat.last_position:
-            # we may have enough matches, if we can match another item, do so
-            repeat.count = count
-            ctx.state.marks_push()
-            save_last_position = repeat.last_position # zero-width match protection
-            repeat.last_position = ctx.state.string_position
-            child_context = repeat.push_new_context(4)
-            yield False
-            repeat.last_position = save_last_position
-            if child_context.has_matched == MATCHED:
-                ctx.state.marks_pop_discard()
-                ctx.has_matched = MATCHED
-                yield True
-            ctx.state.marks_pop()
-            repeat.count = count - 1
-            ctx.state.string_position = ctx.string_position
-
-        # cannot match more repeated items here.  make sure the tail matches
-        ctx.state.repeat = repeat.previous
-        child_context = ctx.push_new_context(1)
-        yield False
-        ctx.has_matched = child_context.has_matched
-        if ctx.has_matched == NOT_MATCHED:
-            ctx.state.repeat = repeat
-            ctx.state.string_position = ctx.string_position
-        yield True
-
     def op_min_until(self, ctx):
         # minimizing repeat
         # <REPEAT> <skip> <1=min> <2=max> item <MIN_UNTIL> tail
@@ -571,34 +506,6 @@ class _OpcodeDispatcher(_Dispatcher):
         #self._log(ctx, "UNKNOWN", ctx.peek_code())
         raise RuntimeError("Internal re error. Unknown opcode: %s" % ctx.peek_code())
     
-    def count_repetitions(self, ctx, maxcount):
-        """Returns the number of repetitions of a single item, starting from the
-        current string position. The code pointer is expected to point to a
-        REPEAT_ONE operation (with the repeated 4 ahead)."""
-        count = 0
-        real_maxcount = ctx.state.end - ctx.string_position
-        if maxcount < real_maxcount and maxcount != MAXREPEAT:
-            real_maxcount = maxcount
-        # XXX could special case every single character pattern here, as in C.
-        # This is a general solution, a bit hackisch, but works and should be
-        # efficient.
-        code_position = ctx.code_position
-        string_position = ctx.string_position
-        ctx.skip_code(4)
-        reset_position = ctx.code_position
-        while count < real_maxcount:
-            # this works because the single character pattern is followed by
-            # a success opcode
-            ctx.code_position = reset_position
-            self.dispatch(ctx.peek_code(), ctx)
-            if ctx.has_matched == NOT_MATCHED: # could be None as well
-                break
-            count += 1
-        ctx.has_matched = UNDECIDED
-        ctx.code_position = code_position
-        ctx.string_position = string_position
-        return count
-
     def _log(self, context, opname, *args):
         arg_string = ("%s " * len(args)) % args
         _log("|%s|%s|%s %s" % (context.pattern_codes,
