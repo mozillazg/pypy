@@ -11,8 +11,11 @@ BIG_ENDIAN = sys.byteorder == "big"
 #### Exposed functions
 
 # XXX can we import those safely from sre_constants?
+SRE_INFO_LITERAL = 2
 SRE_FLAG_LOCALE = 4 # honour system locale
 SRE_FLAG_UNICODE = 32 # use unicode locale
+OPCODE_INFO = 17
+OPCODE_LITERAL = 19
 MAXREPEAT = 65535
 
 def getlower(space, w_char_ord, w_flags):
@@ -99,7 +102,9 @@ class W_State(Wrappable):
         self.marks_stack.pop()
 
     def lower(self, char_ord):
-        return self.space.int_w(self.w_lower(self.space.wrap(char_ord)))
+        # XXX this is ugly
+        space = self.space
+        return space.int_w(getlower(space, space.wrap(char_ord), space.wrap(self.flags)))
 
 def interp_attrproperty_int(name, cls):
     "NOT_RPYTHON: initialization-time only"
@@ -221,15 +226,43 @@ class RepeatContext(MatchContext):
 
 #### Main opcode dispatch loop
 
-def match(space, w_state, w_pattern_codes):
+def w_search(space, w_state, w_pattern_codes):
+    pattern_codes = [space.int_w(code) for code
+                                    in space.unpackiterable(w_pattern_codes)]
+    return space.newbool(search(space, w_state, pattern_codes))
+
+def search(space, state, pattern_codes):
+    flags = 0
+    if pattern_codes[0] == OPCODE_INFO:
+        # optimization info block
+        # <INFO> <1=skip> <2=flags> <3=min> <4=max> <5=prefix info>
+        # XXX fast_search temporarily disabled
+        #if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
+        #    return state.fast_search(pattern_codes)
+        flags = pattern_codes[2]
+        pattern_codes = pattern_codes[pattern_codes[1] + 1:]
+
+    string_position = state.start
+    while string_position <= state.end:
+        state.w_reset()
+        state.start = state.string_position = string_position
+        if match(space, state, pattern_codes):
+            return True
+        string_position += 1
+    return False
+
+def w_match(space, w_state, w_pattern_codes):
+    pattern_codes = [space.int_w(code) for code
+                                    in space.unpackiterable(w_pattern_codes)]
+    return space.newbool(match(space, w_state, pattern_codes))
+
+def match(space, state, pattern_codes):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
     # XXX disabled for now
     #if pattern_codes[0] == OPCODES["info"] and pattern_codes[3]:
     #    if state.end - state.string_position < pattern_codes[3]:
     #        return False
-    state = w_state
-    pattern_codes = [space.int_w(code) for code in space.unpackiterable(w_pattern_codes)]
     state.context_stack.append(MatchContext(space, state, pattern_codes))
     has_matched = MatchContext.UNDECIDED
     while len(state.context_stack) > 0:
@@ -240,7 +273,7 @@ def match(space, w_state, w_pattern_codes):
             has_matched = context.has_matched
         if has_matched != context.UNDECIDED: # don't pop if context isn't done
             state.context_stack.pop()
-    return space.newbool(has_matched == context.MATCHED)
+    return has_matched == context.MATCHED
 
 def dispatch_loop(space, context):
     """Returns MATCHED if the current context matches, NOT_MATCHED if it doesn't
