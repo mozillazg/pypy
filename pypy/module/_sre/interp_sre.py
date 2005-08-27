@@ -1,14 +1,28 @@
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
-# XXX is it allowed to import app-level module like this?
-from pypy.module._sre.app_info import CODESIZE
+from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import GetSetProperty, TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app
-
 import sys
-BIG_ENDIAN = sys.byteorder == "big"
 
-#### Exposed functions
+#### Constants and exposed functions
+
+# Identifying as _sre from Python 2.3 or 2.4
+MAGIC = 20031017
+
+# In _sre.c this is bytesize of the code word type of the C implementation.
+# There it's 2 for normal Python builds and more for wide unicode builds (large 
+# enough to hold a 32-bit UCS-4 encoded character). Since here in pure Python
+# we only see re bytecodes as Python longs, we shouldn't have to care about the
+# codesize. But sre_compile will compile some stuff differently depending on the
+# codesize (e.g., charsets).
+if sys.maxunicode == 65535:
+    CODESIZE = 2
+else:
+    CODESIZE = 4
+
+copyright = "_sre.py 2.4 Copyright 2005 by Nik Haldimann"
+
+BIG_ENDIAN = sys.byteorder == "big"
 
 # XXX can we import those safely from sre_constants?
 SRE_INFO_PREFIX = 1
@@ -30,6 +44,9 @@ def getlower(space, char_ord, flags):
         return space.int_w(space.ord(w_lowered))
     else:
         return char_ord
+
+def w_getcodesize(space):
+    return space.wrap(CODESIZE)
 
 #### Core classes
 
@@ -106,30 +123,31 @@ class W_State(Wrappable):
     def lower(self, char_ord):
         return getlower(self.space, char_ord, self.flags)
 
-def interp_attrproperty_int(name, cls):
-    "NOT_RPYTHON: initialization-time only"
-    def fget(space, obj):
-        return space.wrap(getattr(obj, name))
-    def fset(space, obj, w_value):
-        setattr(obj, name, space.int_w(w_value))
-    return GetSetProperty(fget, fset, cls=cls)
+    # Accessors for the typedef
+    
+    def fget_start(space, self):
+        return space.wrap(self.start)
 
-def interp_attrproperty_obj_w(name, cls):
-    "NOT_RPYTHON: initialization-time only"
-    def fget(space, obj):
-        return getattr(obj, name)
-    def fset(space, obj, w_value):
-        setattr(obj, name, w_value)
-    return GetSetProperty(fget, fset, cls=cls)
+    def fset_start(space, self, w_value):
+        self.start = space.int_w(w_value)
+
+    def fget_string_position(space, self):
+        return space.wrap(self.string_position)
+
+    def fset_string_position(space, self, w_value):
+        self.start = space.int_w(w_value)
+
+getset_start = GetSetProperty(W_State.fget_start, W_State.fset_start, cls=W_State)
+getset_string_position = GetSetProperty(W_State.fget_string_position,
+                                     W_State.fset_string_position, cls=W_State)
 
 W_State.typedef = TypeDef("W_State",
-    string = interp_attrproperty_obj_w("w_string", W_State),
-    start = interp_attrproperty_int("start", W_State),
-    end = interp_attrproperty_int("end", W_State),
-    string_position = interp_attrproperty_int("string_position", W_State),
+    string = interp_attrproperty_w("w_string", W_State),
+    start = getset_start,
+    end = interp_attrproperty("end", W_State),
+    string_position = getset_string_position,
     pos = interp_attrproperty("pos", W_State),
     lastindex = interp_attrproperty("lastindex", W_State),
-    repeat = interp_attrproperty_obj_w("w_repeat", W_State),
     reset = interp2app(W_State.w_reset),
     create_regs = interp2app(W_State.w_create_regs),
 )
@@ -227,6 +245,7 @@ class RepeatContext(MatchContext):
 #### Main opcode dispatch loop
 
 def w_search(space, w_state, w_pattern_codes):
+    assert isinstance(w_state, W_State)
     pattern_codes = [space.int_w(code) for code
                                     in space.unpackiterable(w_pattern_codes)]
     return space.newbool(search(space, w_state, pattern_codes))
@@ -289,6 +308,7 @@ def fast_search(space, state, pattern_codes):
     return False
 
 def w_match(space, w_state, w_pattern_codes):
+    assert isinstance(w_state, W_State)
     pattern_codes = [space.int_w(code) for code
                                     in space.unpackiterable(w_pattern_codes)]
     return space.newbool(match(space, w_state, pattern_codes))
