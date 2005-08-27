@@ -47,7 +47,7 @@ Have a look at `interesting starting points`_
 for guidance on how to continue. 
 
 .. _`90% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
-.. _`pypy-0.7.0-beta.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.bz2
+.. _`pypy-0.7.0-beta.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0-beta.tar.bz2
 .. _`pypy-0.7.0.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.bz2
 .. _`pypy-0.7.0.zip`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.zip
 .. _`pypy-0.7.0-beta.zip`: http://code2.codespeak.net/download/pypy/pypy-0.7.0-beta.zip
