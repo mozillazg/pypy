@@ -21,10 +21,14 @@ Download one of the following release files and unpack it:
 
 *pypy-0.7*
     
-  * download one of `pypy-0.7.0-beta.tar.gz`_ (unix line endings) or
-    `pypy-0.7.0-beta.zip`_ (windows line-endings) and unpack it 
+  * download one of 
+
+    * `pypy-0.7.0-beta.tar.gz`_ (unix line endings) or
+    * `pypy-0.7.0-beta.zip`_ (windows line-endings) and unpack it 
     
-  * alternatively run ``svn co http://codespeak.net/svn/pypy/release/0.7.0 pypy-0.7.0`` 
+  * alternatively run 
+  
+    * ``svn co http://codespeak.net/svn/pypy/release/0.7.0 pypy-0.7.0`` 
 
 then change to the ``pypy-0.7.0`` directory
 and execute the following command line:: 
