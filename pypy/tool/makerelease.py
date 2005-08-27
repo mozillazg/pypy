@@ -3,6 +3,7 @@
 import py
 
 log = py.log.Producer("log")
+logexec = py.log.Producer("exec")
 
 BASEURL = "file:///svn/pypy/release/0.7.x"
 DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
@@ -12,7 +13,7 @@ def usage():
     raise SystemExit, 1
 
 def cexec(cmd): 
-    log("exec:", cmd)
+    logexec(cmd)
     return py.process.cmdexec(cmd) 
 
 def maketargz(target):
@@ -21,6 +22,18 @@ def maketargz(target):
     old = target.dirpath().chdir() 
     try:
         out = cexec("tar zcvf %(targz)s %(basename)s" % locals())
+    finally:
+        old.chdir()
+    assert targz.check(file=1)
+    assert targz.size() > 0
+    return targz 
+
+def maketarbzip(target):
+    targz = target + ".tar.bz2" 
+    basename = target.basename 
+    old = target.dirpath().chdir() 
+    try:
+        out = cexec("tar jcvf %(targz)s %(basename)s" % locals())
     finally:
         old.chdir()
     assert targz.check(file=1)
@@ -46,8 +59,8 @@ def copydownload(fn):
     log("copying to download location")
     #fn.copy(dtarget) 
     ddir = DDIR
-    out = py.process.cmdexec("scp %(fn)s code2.codespeak.net:%(ddir)s" 
-                             % locals())
+    out = cexec("rsync %(fn)s code2.codespeak.net:%(ddir)s" 
+                % locals())
 
 def forced_export(BASEURL, target, lineend="CR"): 
     if target.check(dir=1):
@@ -70,6 +83,10 @@ if __name__ == '__main__':
     target_targz = maketargz(target)
     assert target_targz.check(file=1) 
     copydownload(target_targz)
+
+    target_tarbzip = maketarbzip(target)
+    assert target_tarbzip.check(file=1) 
+    copydownload(target_tarbzip)
 
     forced_export(BASEURL, target, lineend="CRLF")
     target_zip = makezip(target)
