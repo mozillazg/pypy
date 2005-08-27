@@ -44,9 +44,10 @@ def makezip(target):
 
 def copydownload(fn): 
     log("copying to download location")
-    dtarget = DDIR.join(fn.basename)
-    fn.copy(dtarget) 
-    return dtarget
+    #fn.copy(dtarget) 
+    ddir = DDIR
+    out = py.process.cmdexec("scp %(fn)s code2.codespeak.net:%(ddir)s" 
+                             % locals())
 
 def forced_export(BASEURL, target, lineend="CR"): 
     if target.check(dir=1):
@@ -68,9 +69,9 @@ if __name__ == '__main__':
     forced_export(BASEURL, target, lineend="CR")
     target_targz = maketargz(target)
     assert target_targz.check(file=1) 
-    down = copydownload(target_targz)
+    copydownload(target_targz)
 
     forced_export(BASEURL, target, lineend="CRLF")
     target_zip = makezip(target)
     assert target_zip.check(file=1) 
-    down = copydownload(target_zip)
+    copydownload(target_zip)
