@@ -451,6 +451,13 @@ class AppTestSimpleSearches:
         assert re.search(r"b(?<!\d.)a", "ba")
         assert not re.search(r"b(?<!\d.)a", "11ba")
 
+    def test_bug_725149(self):
+        # mark_stack_base restoring before restoring marks
+        # test copied from CPython test
+        import re
+        assert re.match('(a)(?:(?=(b)*)c)*', 'abb').groups() == ('a', None)
+        assert re.match('(a)((?!(b)*))*', 'abb').groups() == ('a', None, None)
+
 
 class AppTestMarksStack:
 
