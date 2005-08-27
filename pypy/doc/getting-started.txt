@@ -37,14 +37,16 @@ and execute the following command line::
     python pypy/bin/py.py 
 
 This will give you a PyPy prompt, i.e. a very compliant 
-Python interpreter implemented in Python.  Because this version
-of PyPy still runs on top of CPython, it runs around 2000
-times slower than the original CPython.  The release focus 
-really was on compliancy: PyPy passes around `90% of CPythons core 
-language regression tests`_. 
+Python interpreter implemented in Python.  PyPy passes 
+around `90% of CPythons core language regression tests`_. 
+Because this invocation of PyPy still runs on top of 
+CPython, it runs around 2000 times slower than the 
+original CPython.  
 
-Have a look at `interesting starting points`_ 
-for guidance on how to continue. 
+However, the major news with the 0.7.0 release is
+that you can use PyPy to `translate itself to lower
+level languages`_ after which it runs standalone 
+and is not dependant on CPython anymore. 
 
 .. _`90% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
 .. _`pypy-0.7.0-beta.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0-beta.tar.bz2
@@ -399,6 +401,8 @@ instances) is computed by the annotator.
 As soon as you close the PyGame window, the function is turned into C code,
 compiled and executed.
 
+.. _`translate itself to lower level languages`: 
+
 translating the PyPy interpreter
 --------------------------------
 
@@ -451,7 +455,9 @@ interesting options are:
      is useful if you don't have pygame installed.
 
    * ``-llvm``: produce code for LLVM_ instead of for C. One of the biggest
-     things not working there is threading.
+     things not working there is threading. Be aware that you will 
+     need to install llvm from CVS to successfully translate to
+     a LLVM target. 
 
    * ``-boehm``: use the `Boehm-Demers-Weiser garbage collector`_ instead of
      our own reference counting implementation.
