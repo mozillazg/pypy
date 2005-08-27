@@ -9,15 +9,15 @@ copyrighted by: Copyright (c) 1997-2001 by Secret Labs AB
 """
     
     appleveldefs = {
-        'CODESIZE':       'app_info.CODESIZE',
-        'MAGIC':          'app_info.MAGIC',
-        'copyright':      'app_info.copyright',
-        'getcodesize':    'app_info.getcodesize',
         'compile':        'app_sre.compile',
     }
 
     interpleveldefs = {
+        'CODESIZE':       'space.wrap(interp_sre.CODESIZE)',
+        'MAGIC':          'space.wrap(interp_sre.MAGIC)',
+        'copyright':      'space.wrap(interp_sre.copyright)',
         'getlower':       'interp_sre.w_getlower',
+        'getcodesize':    'interp_sre.w_getcodesize',
         '_State':         'interp_sre.make_state',
         '_match':         'interp_sre.w_match',
         '_search':        'interp_sre.w_search',
