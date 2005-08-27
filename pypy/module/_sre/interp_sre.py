@@ -2,6 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import GetSetProperty, TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app
+from pypy.rpython.rarithmetic import intmask
 import sys
 
 #### Constants and exposed functions
@@ -206,6 +207,9 @@ class MatchContext:
         return self.state.end - self.string_position
 
     def peek_code(self, peek=0):
+        return intmask(self.pattern_codes[self.code_position + peek])
+
+    def peek_code_uint(self, peek=0):
         return self.pattern_codes[self.code_position + peek]
 
     def skip_code(self, skip_count):
@@ -250,7 +254,7 @@ class RepeatContext(MatchContext):
 
 def w_search(space, w_state, w_pattern_codes):
     assert isinstance(w_state, W_State)
-    pattern_codes = [space.int_w(code) for code
+    pattern_codes = [space.uint_w(code) for code
                                     in space.unpackiterable(w_pattern_codes)]
     return space.newbool(search(space, w_state, pattern_codes))
 
@@ -323,7 +327,7 @@ def fast_search(space, state, pattern_codes):
 
 def w_match(space, w_state, w_pattern_codes):
     assert isinstance(w_state, W_State)
-    pattern_codes = [space.int_w(code) for code
+    pattern_codes = [space.uint_w(code) for code
                                     in space.unpackiterable(w_pattern_codes)]
     return space.newbool(match(space, w_state, pattern_codes))
 
@@ -1160,7 +1164,7 @@ def set_bigcharset(space, ctx, char_code):
             shift = 4
         else:
             shift = 5
-        block_value = ctx.peek_code(block * (32 / CODESIZE)
+        block_value = ctx.peek_code_uint(block * (32 / CODESIZE)
                                                 + ((char_code & 255) >> shift))
         if block_value & (1 << (char_code & ((8 * CODESIZE) - 1))):
             return ctx.set_ok
