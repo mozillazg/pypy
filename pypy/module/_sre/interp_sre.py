@@ -172,7 +172,9 @@ class MatchContext:
         """Creates a new child context of this context and pushes it on the
         stack. pattern_offset is the offset off the current code position to
         start interpreting from."""
-        pattern_codes = self.pattern_codes[self.code_position + pattern_offset:]
+        offset = self.code_position + pattern_offset
+        assert offset >= 0
+        pattern_codes = self.pattern_codes[offset:]
         child_context = MatchContext(self.space, self.state, pattern_codes)
         self.state.context_stack.append(child_context)
         self.child_context = child_context
@@ -234,8 +236,10 @@ class MatchContext:
 class RepeatContext(MatchContext):
     
     def __init__(self, space, context):
+        offset = context.code_position
+        assert offset >= 0
         MatchContext.__init__(self, space, context.state,
-                                context.pattern_codes[context.code_position:])
+                                context.pattern_codes[offset:])
         self.count = -1
         self.previous = context.state.repeat
         self.last_position = -1
@@ -258,7 +262,9 @@ def search(space, state, pattern_codes):
         if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
             return fast_search(space, state, pattern_codes)
         flags = pattern_codes[2]
-        pattern_codes = pattern_codes[pattern_codes[1] + 1:]
+        offset = pattern_codes[1] + 1
+        assert offset >= 0
+        pattern_codes = pattern_codes[offset:]
 
     string_position = state.start
     while string_position <= state.end:
@@ -277,9 +283,14 @@ def fast_search(space, state, pattern_codes):
     flags = pattern_codes[2]
     prefix_len = pattern_codes[5]
     prefix_skip = pattern_codes[6] # don't really know what this is good for
+    assert prefix_skip >= 0
     prefix = pattern_codes[7:7 + prefix_len]
-    overlap = pattern_codes[7 + prefix_len - 1:pattern_codes[1] + 1]
-    pattern_codes = pattern_codes[pattern_codes[1] + 1:]
+    overlap_offset = 7 + prefix_len - 1
+    assert overlap_offset >= 0
+    overlap = pattern_codes[overlap_offset:pattern_codes[1] + 1]
+    pattern_offset = pattern_codes[1] + 1
+    assert pattern_offset >= 0
+    pattern_codes = pattern_codes[pattern_offset:]
     i = 0
     string_position = state.string_position
     while string_position < state.end:
@@ -316,10 +327,9 @@ def w_match(space, w_state, w_pattern_codes):
 def match(space, state, pattern_codes):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
-    # XXX disabled for now
-    #if pattern_codes[0] == OPCODES["info"] and pattern_codes[3]:
-    #    if state.end - state.string_position < pattern_codes[3]:
-    #        return False
+    if pattern_codes[0] == OPCODE_INFO and pattern_codes[3] > 0:
+        if state.end - state.string_position < pattern_codes[3]:
+            return False
     state.context_stack.append(MatchContext(space, state, pattern_codes))
     has_matched = MatchContext.UNDECIDED
     while len(state.context_stack) > 0:
