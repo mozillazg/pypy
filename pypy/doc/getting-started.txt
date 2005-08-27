@@ -21,8 +21,8 @@ Download one of the following release files and unpack it:
 
 *pypy-0.7*
     
-  * download one of `pypy-0.7.0.tar.gz`_ (unix line endings) or
-    `pypy-0.7.0.zip`_ (windows line-endings) and unpack it 
+  * download one of `pypy-0.7.0-beta.tar.gz`_ (unix line endings) or
+    `pypy-0.7.0-beta.zip`_ (windows line-endings) and unpack it 
     
   * alternatively run ``svn co http://codespeak.net/svn/pypy/release/0.7.0 pypy-0.7.0`` 
 
@@ -42,9 +42,11 @@ Have a look at `interesting starting points`_
 for guidance on how to continue. 
 
 .. _`90% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
+.. _`pypy-0.7.0-beta.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.bz2
 .. _`pypy-0.7.0.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.bz2
 .. _`pypy-0.7.0.zip`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.zip
-.. _`pypy-0.7.0.tar.gz`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.gz
+.. _`pypy-0.7.0-beta.zip`: http://code2.codespeak.net/download/pypy/pypy-0.7.0-beta.zip
+.. _`pypy-0.7.0-beta.tar.gz`: http://code2.codespeak.net/download/pypy/pypy-0.7.0-beta.tar.gz
 
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
