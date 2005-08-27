@@ -666,7 +666,7 @@ def op_max_until(space, ctx):
             ctx.backup_value(maxcount)
             ctx.backup_value(count)
             ctx.backup_value(repeat.last_position) # zero-width match protection
-            ctx.backup_value(0)
+            ctx.backup_value(2) # more matching
             ctx.repeat = repeat
             return False
 
@@ -684,9 +684,6 @@ def op_max_until(space, ctx):
     # Case 2: Resumed
     else:
         repeat = ctx.repeat
-        if repeat.has_matched == ctx.MATCHED:
-            ctx.has_matched = ctx.MATCHED
-            return True
         values = ctx.restore_values()
         mincount = values[0]
         maxcount = values[1]
@@ -695,23 +692,20 @@ def op_max_until(space, ctx):
         tail_matching = values[4]
         
         if tail_matching == 0:
-            if count < mincount:
-                ctx.has_matched = repeat.repeat_stack.pop().has_matched
-                if ctx.has_matched == ctx.NOT_MATCHED:
-                    repeat.count = count - 1
-                    ctx.state.string_position = ctx.string_position
-                return True
-            if count < maxcount or maxcount == MAXREPEAT:
-                          # XXX can we really omit this test?
-                          #and ctx.state.string_position != repeat.last_position:
-                repeat.last_position = save_last_position
-                if repeat.repeat_stack.pop().has_matched == ctx.MATCHED:
-                    ctx.state.marks_pop_discard()
-                    ctx.has_matched = ctx.MATCHED
-                    return True
-                ctx.state.marks_pop()
+            ctx.has_matched = repeat.repeat_stack.pop().has_matched
+            if ctx.has_matched == ctx.NOT_MATCHED:
                 repeat.count = count - 1
                 ctx.state.string_position = ctx.string_position
+            return True
+        elif tail_matching == 2:
+            repeat.last_position = save_last_position
+            if repeat.repeat_stack.pop().has_matched == ctx.MATCHED:
+                ctx.state.marks_pop_discard()
+                ctx.has_matched = ctx.MATCHED
+                return True
+            ctx.state.marks_pop()
+            repeat.count = count - 1
+            ctx.state.string_position = ctx.string_position
 
             # Cannot match more repeated items here. Make sure the tail matches.
             ctx.state.repeat = repeat.previous
@@ -725,7 +719,6 @@ def op_max_until(space, ctx):
 
         else: # resuming after tail matching
             ctx.has_matched = ctx.child_context.has_matched
-            repeat.has_matched = ctx.has_matched
             if ctx.has_matched == ctx.NOT_MATCHED:
                 ctx.state.repeat = repeat
                 ctx.state.string_position = ctx.string_position
