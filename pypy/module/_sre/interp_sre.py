@@ -282,12 +282,15 @@ def fast_search(space, state, pattern_codes):
     # <5=length> <6=skip> <7=prefix data> <overlap data>
     flags = pattern_codes[2]
     prefix_len = pattern_codes[5]
+    assert prefix_len >= 0
     prefix_skip = pattern_codes[6] # don't really know what this is good for
     assert prefix_skip >= 0
     prefix = pattern_codes[7:7 + prefix_len]
     overlap_offset = 7 + prefix_len - 1
+    overlap_stop = pattern_codes[1] + 1
     assert overlap_offset >= 0
-    overlap = pattern_codes[overlap_offset:pattern_codes[1] + 1]
+    assert overlap_stop >= 0
+    overlap = pattern_codes[overlap_offset:overlap_stop]
     pattern_offset = pattern_codes[1] + 1
     assert pattern_offset >= 0
     pattern_codes = pattern_codes[pattern_offset:]
