@@ -77,7 +77,7 @@ def test_at_boundary(space):
         assert not isre.at_boundary(space, create_context(space, string, pos, end))
 
 def test_getlower(space):
-    assert space.int_w(isre.getlower(space, space.wrap(ord("A")), space.wrap(0))) == ord("a")
+    assert isre.getlower(space, ord("A"), 0) == ord("a")
 
 def test_get_byte_array(space):
     if sys.byteorder == "big":
