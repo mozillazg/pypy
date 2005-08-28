@@ -57,7 +57,7 @@ def target(geninterp=True):
 
     # disable translation of the whole of classobjinterp.py
     StdObjSpace.setup_old_style_classes = lambda self: None
-    if '-boehm' in __main__.options:
+    if __main__.options.get('-boehm'):
         print "disabling thread with boehm for stabilitiy (combination not tested)"
         usemodules = []
     else:
