@@ -1690,7 +1690,7 @@ def PyUnicode_DecodeRawUnicodeEscape(s, size,errors):
         else:
     #ifndef Py_UNICODE_WIDE
             if sys.maxunicode > 0xffff:
-                if (x > 0x10000):
+                if (x > sys.maxunicode):
                     res = unicode_call_errorhandler(
                         errors, "rawunicodeescape", "\\Uxxxxxxxx out of range",
                         s, size, pos, pos+1)
