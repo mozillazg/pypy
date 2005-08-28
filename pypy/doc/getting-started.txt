@@ -98,7 +98,8 @@ running all of PyPy's tests
 If you want to see if PyPy works on your machine/platform 
 you can simply run PyPy's large test suite with:: 
 
-    python pypy/test_all.py 
+    cd pypy
+    python test_all.py 
 
 test_all.py is just another name for `py.test`_ which is the
 testing tool that we are using and enhancing for PyPy.   
