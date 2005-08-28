@@ -22,7 +22,7 @@ in the pypy/doc directory.
 Our online release announcement has some more  
 information about the specific PyPy-0.7.0 release: 
 
-    pypy/documentation/release-0.7.0.txt or 
+    pypy/doc/release-0.7.0.txt or 
     http://codespeak.net/pypy/dist/pypy/doc/release-0.7.0.html 
 
 Please note that the last 9 months of PyPy development 
