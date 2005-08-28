@@ -330,7 +330,10 @@ def run_server():
         
     return display.run, show, async_quit, pygame.quit
 
-
+def mkexename(name):
+    if sys.platform == 'win32':
+        name += '.exe'
+    return name
 
 if __name__ == '__main__':
 
@@ -660,8 +663,10 @@ show class hierarchy graph"""
                 c_entry_point = t.ccompile(standalone=standalone, gcpolicy=gcpolicy)
                 if standalone: # xxx fragile and messy
                     import shutil
-                    shutil.move(c_entry_point, 'pypy-c')
-                    c_entry_point = './pypy-c'
+                    exename = mkexename(c_entry_point)
+                    newexename = mkexename('./pypy-c')
+                    shutil.move(exename, newexename)
+                    c_entry_point = newexename
             update_usession_dir()
             if not options['-o']:
                 print 'Running!'
