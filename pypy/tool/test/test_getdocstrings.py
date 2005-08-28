@@ -17,13 +17,17 @@ class TestDocStringInserter:
         self.fd1.close()
 
     def test_mkfilelist(self):
-        assert mk_std_filelist() == [
+        l = mk_std_filelist()
+        l.sort()
+        check = [
             'basestringtype.py', 'unicodetype.py', 'inttype.py',
             'nonetype.py', 'longtype.py', 'slicetype.py',
             'itertype.py', 'floattype.py',
             'dicttype.py', 'dictproxytype.py', 'tupletype.py',
             'booltype.py', 'objecttype.py', 'stringtype.py',
             'listtype.py']
+        check.sort()
+        assert l == check
 
     def test_gottestfile(self):
         s = self.fd1.read()       # whole file as string
