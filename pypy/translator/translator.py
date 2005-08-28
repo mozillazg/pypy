@@ -204,7 +204,7 @@ class Translator:
             raise ValueError, "function has to be annotated."
         gen = GenLLVM(self)
         filename = gen.gen_llvm_source()
-        f = open(filename, "r")
+        f = open(str(filename), "r")
         result = f.read()
         f.close()
         return result
