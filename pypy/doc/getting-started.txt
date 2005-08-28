@@ -359,30 +359,34 @@ The first command replaces operations with variables of types that are
 avaiable in C (e.g. int) with low level versions. This can also be ommited
 although it is not recommended.
 
-
 translating the flow graph to LLVM code
 +++++++++++++++++++++++++++++++++++++++
 
-If you feel adventureous (and have `LLVM installed`_ and on your path) you can
-also try to compile the graph with LLVM_ (low level virtual machine). This
-works nearly as well as for the c backend. There is a restriction, though: The
-return type and the arguments of the entry function has to be an int, float or
-bool. To try it do:: 
+To translate for LLVM (low level virtual machine) you must first have `LLVM
+installed with the CVS version`.  The LLVM backend is still experimental.
+However, it is very close to C backend functionality.  Calling compiled LLVM
+code from CPython is more restrictive than the C backend - the return type and
+the arguments of the entry function must be ints, floats or bools.  The
+emphasis of the LLVM backend is to compile standalone executables - please see
+the pypy/translate/llvm/demo directory for examples.
+
+Here is a simple example to try::
 
    >>> t = Translator(test.my_gcd)
    >>> a = t.annotate([int, int])
-   >>> a.simplify()
    >>> t.specialize()
    >>> print t.llvm()
 
    <...  really huge amount of LLVM code  ...>
 
-   >>> f = t.llvmcompile(optimize=True)
-   >>> f(15, 10)
+   >>> f = t.llvmcompile()
+   >>> f.pypy_my_gcd_wrapper(15, 10)
    5
 
-In contrast to the C backend this works only for fully annotated and
-specialized graphs.
+Please note that you dont need the CFrontend to compile, make tools-only.
+
+.. _LLVM:
+.. _`LLVM installed with the CVS version`: http://llvm.cs.uiuc.edu/releases/
 
 a slightly larger example
 +++++++++++++++++++++++++
@@ -454,11 +458,6 @@ interesting options are:
    * ``-text``: don't show the flowgraph after the translation is done. This
      is useful if you don't have pygame installed.
 
-   * ``-llvm``: produce code for LLVM_ instead of for C. One of the biggest
-     things not working there is threading. Be aware that you will 
-     need to install llvm from CVS to successfully translate to
-     a LLVM target. 
-
    * ``-boehm``: use the `Boehm-Demers-Weiser garbage collector`_ instead of
      our own reference counting implementation.
 
@@ -473,6 +472,9 @@ or a simplified, scaled-down version::
 
     python translate_pypy.py targetrpystone2
 
+or to create standalone executable using the experimental LLVM_ compiler infrastructure.
+
+    ./run_pypy-llvm.sh 
 
 .. _`start reading sources`: 
 
@@ -534,29 +536,6 @@ want to look at generated flowgraphs:
 	graphviz: http://www.research.att.com/sw/tools/graphviz/download.html 
 
 	pygame: http://www.pygame.org/download.shtml
-
-.. _LLVM:
-.. _`LLVM installed`: 
-
-LLVM  
-+++++ 
-
-LLVM is used by the optional `PyPy/LLVM backend`_ to generate
-processor indepdendant machine level code for the `low level
-virtual machine`_.  LLVM can be quite annoying to install: you
-need a fairly recent version of GCC to compile it and there
-can be severe problems under windows.  **NOTE: To use the LLVM
-backend of PyPy you don't need the GCC front end of LLVM, only
-LLVM itself**.  Here are detailed instructions on how to
-install: 
-
-    http://llvm.cs.uiuc.edu/docs/GettingStarted.html
-
-If you run into problems with the installation the `LLVM
-mailing list`_ is very helpful and friendly.  Note also that
-the PyPy LLVM backend was developed using LLVM 1.4 but it
-seems to work with LLVM 1.5. Nobody ever tried an older
-version.
 
 CLISP
 +++++++
