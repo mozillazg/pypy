@@ -62,7 +62,7 @@ def copydownload(fn):
     out = cexec("rsync %(fn)s code2.codespeak.net:%(ddir)s" 
                 % locals())
 
-def forced_export(BASEURL, target, lineend="CR"): 
+def forced_export(BASEURL, target, lineend="LF"): 
     if target.check(dir=1):
         log("removing", target)
         target.remove()
@@ -79,7 +79,7 @@ if __name__ == '__main__':
 
     target = tmpdir.join(ver)
 
-    forced_export(BASEURL, target, lineend="CR")
+    forced_export(BASEURL, target, lineend="LF")
     target_targz = maketargz(target)
     assert target_targz.check(file=1) 
     copydownload(target_targz)
