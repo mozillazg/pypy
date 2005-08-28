@@ -53,33 +53,6 @@ faster than CPython.
 .. _Psyco: http://psyco.sourceforge.net
 .. _Stackless: http://stackless.com 
 
-Status of the implementation (Aug 2005)
----------------------------------------
-
-In a number of one week sprints, attracting approximately 10 developers each,
-we made an almost complete implementation of Python in Python.
-
-Our rather complete and Python 2.4-compliant interpreter is about 30'000-50'000
-lines of code (depending on the way you count code borrowed and adapted from
-other sources), with another 14'000 lines of unit tests.
-If we include the tools, the parts related to code analysis and generation,
-and the standard library modules ported from C, PyPy is now 105'000 lines of
-code and 29'000 lines of tests.
-
-PyPy already passes a lot of CPython's own regression tests, including
-`90% of the core tests`_
-not depending on C extension modules (most of the remaining 10% are
-arguably dependant on very obscure implementation details of CPython).
-
-The PyPy code base can be translated to a static executable.  This is done
-by generating either C or LLVM_ code, using the Boehm garbage collector or
-(for C) reference counting.  The result is around `300 times slower`_ than
-CPython (this figure can vary quite a bit).
-
-.. _`90% of the core tests`: http://codespeak.net/~hpk/pypy-testresult/
-.. _`300 times slower`: faq.html#whysoslow
-
-
 Higher level picture
 ====================
 
@@ -87,6 +60,8 @@ The various parts of PyPy have always been under more or less heavy
 refactoring since its inception. However, the higher level architecture
 remains rather simple and unchanged.  There are two independent basic
 subsystems: `the Standard Interpreter`_ and `the Translation Process`_.
+
+.. _`standard interpreter`: 
 
 The Standard Interpreter
 ------------------------
@@ -397,6 +372,41 @@ low-level ones, directly manipulating C-like values and data structures.
 The complete translation process is described in more details in the
 `translation document`_. There is a graph_ that gives an overview over the
 whole process.
+
+Status of the implementation (Aug 2005)
+========================================== 
+
+With the pypy-0.7.0 release we have a static self-contained 
+translation of our `standard interpreter`_.  It is `very compliant`_
+to CPython 2.4.1 but you can still not run too many existing
+programs on it because we are missing a number of C-modules
+like socket or support for process creation.  The self-contained
+PyPy version runs around `300 times slower`_ than CPython but
+this figure can vary quite a bit as we still haven't focused
+on profiling and optimizing bottlenecks at all. 
+
+Also, we still are undergoing efforts to get a fast and stable 
+Python compiler on top of our existing nicely working Parser.
+It turned out we cannot fully build on the existing compiler
+package in CPython's standard library because it is not
+written in a style that allows translation and also it is not
+implementing all of the features CPython's c-level compiler. 
+We thus have to run the compiler at application-level which
+contributes a lot to the perceived slowness of the interactive
+command line. 
+
+Our rather complete and Python 2.4-compliant interpreter consists 
+of about 30'000-50'000 lines of code (depending on the way you
+count code borrowed and adapted from other sources), with
+another 14'000 lines of unit tests.  If we include the tools,
+the parts related to code analysis and generation, and the
+standard library modules ported from C, PyPy is now 105'000
+lines of code and 29'000 lines of tests. Refer to 
+the `statistics web page`_ for more detailed information. 
+
+.. _`statistics web page`: http://codespeak.net/~hpk/pypy-stat/
+.. _`very compliant`: http://codespeak.net/~hpk/pypy-testresult/
+.. _`300 times slower`: faq.html#whysoslow
 
 .. _`RPython`: coding-guide.html#rpython
 .. _`abstract interpretation`: theory.html#abstract-interpretation
