@@ -480,11 +480,9 @@ programs, e.g. a slightly changed version of Pystone::
     cd pypy/translator/goal
     python translate_pypy.py targetrpystone
 
-or a simplified, scaled-down version::
 
-    python translate_pypy.py targetrpystone2
-
-or to create standalone executable using the experimental LLVM_ compiler infrastructure::
+To create a standalone executable using the experimental LLVM_ compiler
+infrastructure::
 
     ./run_pypy-llvm.sh
 
