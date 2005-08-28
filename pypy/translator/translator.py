@@ -73,11 +73,11 @@ class Translator:
                 print
             self.flowgraphs[func] = graph
             self.functions.append(func)
+            graph.func = func
             try:
                 import inspect
-                graph.func = func
                 graph.source = inspect.getsource(func)
-            except IOError:
+            except:
                 pass  # e.g. when func is defined interactively
         if called_by:
             self.callgraph[called_by, func, call_tag] = called_by, func
