@@ -68,7 +68,7 @@ issue on the command line (DOS box or terminal)::
 
 This will create a directory named ``pypy-dist``, and will get you the PyPy
 source in ``pypy-dist/pypy`` and documentation files in
-``pypy-dist/pypy/documentation``.
+``pypy-dist/pypy/doc``.
 
 After checkout you can get a PyPy interpreter via:: 
 
@@ -285,11 +285,11 @@ Finally, there are the CPython regression tests which you can
 run like this::
 
     cd lib-python/2.4.1/test 
-    python ../../../pypy/test_all.py -E
+    python ../../../pypy/test_all.py
 
 or if you have `installed py.test`_ then you simply say::
 
-    py.test -E
+    py.test
 
 from the lib-python/2.4.1/test directory. 
 
