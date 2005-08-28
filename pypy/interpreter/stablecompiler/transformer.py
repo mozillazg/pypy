@@ -1210,11 +1210,11 @@ class Transformer:
         if t == token.LSQB:
             return self.com_subscriptlist(primaryNode, nodelist[2], OP_APPLY)
 
-        self.syntaxerror( 'unknown node type: %s' % t, primaryNode)
+        self.syntaxerror( 'unknown node type: %s' % t, nodelist[1])
 
     def com_select_member(self, primaryNode, nodelist):
         if nodelist[0] != token.NAME:
-            self.syntaxerror( "member must be a name", primaryNode)
+            self.syntaxerror( "member must be a name", nodelist[0])
         return Getattr(primaryNode, nodelist[1], lineno=nodelist[2])
 
     def com_call_function(self, primaryNode, nodelist):
@@ -1233,7 +1233,7 @@ class Transformer:
                and len(node) == 3 and node[2][0] == symbol.gen_for:
                 # allow f(x for x in y), but reject f(x for x in y, 1)
                 # should use f((x for x in y), 1) instead of f(x for x in y, 1)
-                self.syntaxerror( 'generator expression needs parenthesis', primaryNode)
+                self.syntaxerror( 'generator expression needs parenthesis', nodelist[0])
 
             args.append(result)
         else:
@@ -1249,14 +1249,14 @@ class Transformer:
             i = i + 3
             if tok[0]==token.STAR:
                 if star_node is not None:
-                    self.syntaxerror( 'already have the varargs indentifier', primaryNode)
+                    self.syntaxerror( 'already have the varargs indentifier', nodelist[0] )
                 star_node = self.com_node(ch)
             elif tok[0]==token.DOUBLESTAR:
                 if dstar_node is not None:
-                    self.syntaxerror( 'already have the kwargs indentifier', primaryNode)
+                    self.syntaxerror( 'already have the kwargs indentifier', nodelist[0] )
                 dstar_node = self.com_node(ch)
             else:
-                self.syntaxerror( 'unknown node type: %s' % tok, primaryNode)
+                self.syntaxerror( 'unknown node type: %s' % tok, nodelist[0] )
         return CallFunc(primaryNode, args, star_node, dstar_node,
                         lineno=extractLineNo(nodelist))
 
