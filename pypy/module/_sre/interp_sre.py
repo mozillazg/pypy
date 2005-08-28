@@ -260,13 +260,13 @@ def w_search(space, w_state, w_pattern_codes):
 
 def search(space, state, pattern_codes):
     flags = 0
-    if pattern_codes[0] == OPCODE_INFO:
+    if intmask(pattern_codes[0]) == OPCODE_INFO:
         # optimization info block
         # <INFO> <1=skip> <2=flags> <3=min> <4=max> <5=prefix info>
-        if pattern_codes[2] & SRE_INFO_PREFIX and pattern_codes[5] > 1:
+        if intmask(pattern_codes[2]) & SRE_INFO_PREFIX and intmask(pattern_codes[5]) > 1:
             return fast_search(space, state, pattern_codes)
-        flags = pattern_codes[2]
-        offset = pattern_codes[1] + 1
+        flags = intmask(pattern_codes[2])
+        offset = intmask(pattern_codes[1]) + 1
         assert offset >= 0
         pattern_codes = pattern_codes[offset:]
 
@@ -284,18 +284,18 @@ def fast_search(space, state, pattern_codes):
     an optimization info block."""
     # pattern starts with a known prefix
     # <5=length> <6=skip> <7=prefix data> <overlap data>
-    flags = pattern_codes[2]
-    prefix_len = pattern_codes[5]
+    flags = intmask(pattern_codes[2])
+    prefix_len = intmask(pattern_codes[5])
     assert prefix_len >= 0
-    prefix_skip = pattern_codes[6] # don't really know what this is good for
+    prefix_skip = intmask(pattern_codes[6]) # don't really know what this is good for
     assert prefix_skip >= 0
     prefix = pattern_codes[7:7 + prefix_len]
     overlap_offset = 7 + prefix_len - 1
-    overlap_stop = pattern_codes[1] + 1
+    overlap_stop = intmask(pattern_codes[1]) + 1
     assert overlap_offset >= 0
     assert overlap_stop >= 0
     overlap = pattern_codes[overlap_offset:overlap_stop]
-    pattern_offset = pattern_codes[1] + 1
+    pattern_offset = intmask(pattern_codes[1]) + 1
     assert pattern_offset >= 0
     pattern_codes = pattern_codes[pattern_offset:]
     i = 0
@@ -304,11 +304,11 @@ def fast_search(space, state, pattern_codes):
         while True:
             char_ord = space.int_w(space.ord(
                 space.getitem(state.w_string, space.wrap(string_position))))
-            if char_ord != prefix[i]:
+            if char_ord != intmask(prefix[i]):
                 if i == 0:
                     break
                 else:
-                    i = overlap[i]
+                    i = intmask(overlap[i])
             else:
                 i += 1
                 if i == prefix_len:
@@ -320,7 +320,7 @@ def fast_search(space, state, pattern_codes):
                         return True # matched all of pure literal pattern
                     if match(space, state, pattern_codes[2 * prefix_skip:]):
                         return True
-                    i = overlap[i]
+                    i = intmask(overlap[i])
                 break
         string_position += 1
     return False
@@ -334,8 +334,8 @@ def w_match(space, w_state, w_pattern_codes):
 def match(space, state, pattern_codes):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
-    if pattern_codes[0] == OPCODE_INFO and pattern_codes[3] > 0:
-        if state.end - state.string_position < pattern_codes[3]:
+    if intmask(pattern_codes[0]) == OPCODE_INFO and intmask(pattern_codes[3]) > 0:
+        if state.end - state.string_position < intmask(pattern_codes[3]):
             return False
     state.context_stack.append(MatchContext(space, state, pattern_codes))
     has_matched = MatchContext.UNDECIDED
