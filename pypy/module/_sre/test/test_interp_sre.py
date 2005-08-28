@@ -95,6 +95,6 @@ def test_get_byte_array(space):
             assert [0, 1] == isre.to_byte_array(256)
             assert [2, 1] == isre.to_byte_array(258)
         else:
-            assert [1, 0, 0, ] == isre.to_byte_array(1)
+            assert [1, 0, 0, 0] == isre.to_byte_array(1)
             assert [0, 1, 0, 0] == isre.to_byte_array(256)
             assert [4, 3, 2, 1] == isre.to_byte_array(0x01020304)
