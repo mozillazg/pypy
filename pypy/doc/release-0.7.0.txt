@@ -6,7 +6,7 @@ on some nested mailing list thread and in a pub became reality ...
 the PyPy development team is happy to announce its first
 public release of a fully translatable self contained Python
 implementation.  The 0.7 release showcases the results of our
-efforts in the last few months since the 0.6 preview releae
+efforts in the last few months since the 0.6 preview release
 which have been partially funded by the European Union:
 
 - whole program type inference on our Python Interpreter 
@@ -24,7 +24,7 @@ which have been partially funded by the European Union:
 What is PyPy (about)? 
 ------------------------------------------------
 
-PyPy is an MIT-licensed research-oriented reimplementation of
+PyPy is a MIT-licensed research-oriented reimplementation of
 Python written in Python itself, flexible and easy to
 experiment with.  It translates itself to lower level
 languages.  Our goals are to target a large variety of
