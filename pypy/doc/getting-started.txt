@@ -149,9 +149,7 @@ in pystones::
     >>>> from test import pystone 
     >>>> pystone.main(10)
 
-Note that this is a slightly modified version of pystone -- the
-original version does not accept the parameter to main().  The
-parameter is the number of loops to run through the test, and the
+The parameter is the number of loops to run through the test. The
 default is 50000, which is far too many to run in a reasonable time
 on the current PyPy implementation.
 
@@ -170,7 +168,7 @@ As an example of using PyPy from the command line, you could type::
 Alternatively, as with regular Python, you can simply give a
 script name on the command line::
 
-    python py.py ../../lib-python/modified-2.4.1/test/pystone.py 10
+    python py.py ../../lib-python/2.4.1/test/pystone.py 10
 
 special PyPy features 
 -------------------------- 
