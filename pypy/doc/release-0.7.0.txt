@@ -1,4 +1,4 @@
-pypy-0.7.0: first self-contained Python Implementation
+pypy-0.7.0: first PyPy-generated Python Implementations
 ==============================================================
 
 What was once just an idea between a few people discussing 
