@@ -282,7 +282,7 @@ to perform test runs or simply start it without arguments to
 run all tests below the current directory. 
 
 Finally, there are the CPython regression tests which you can 
-run like this::
+run like this (this will take a hours and hours and hours)::
 
     cd lib-python/2.4.1/test 
     python ../../../pypy/test_all.py
@@ -291,7 +291,9 @@ or if you have `installed py.test`_ then you simply say::
 
     py.test
 
-from the lib-python/2.4.1/test directory. 
+from the lib-python/2.4.1/test directory. You need to have a checkout of the
+testresult directory. Running one of the above commands tells you how to
+proceed.
 
 .. _`installed py.test`: http://codespeak.net/py/current/doc/getting-started.html
 
