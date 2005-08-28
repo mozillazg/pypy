@@ -273,7 +273,7 @@ To run all the unit tests::
 Alternatively, you may run subtests by going to the correct subdirectory
 and running them individually::
 
-    python test_all.py module/test/test_builtin.py
+    python test_all.py interpreter/test/test_pyframe.py
 
 ``test_all.py`` is actually just a synonym for `py.test`_ which is 
 our external testing tool. If you have installed that you 
