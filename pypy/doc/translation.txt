@@ -562,7 +562,7 @@ Low-Level Types
 ---------------
 
 The RPython Typer uses a standard low-level model which we believe can
-correspond rather directly to various target languages from C to LLVM to Java.
+correspond rather directly to various target languages from C to LLVM_ to Java.
 This model is implemented in the first part of `rpython/lltype.py`_.
 
 The second part of `rpython/lltype.py`_ is a runnable implementation of these
@@ -990,10 +990,32 @@ The LLVM Back-End
 
 http://codespeak.net/pypy/dist/pypy/translator/llvm/
 
-XXX to be written
+For information on getting started on the LLVM (`low level virtual machine`_)
+backend - please see `here`_. 
+
+Overview
+--------
+Similar to the task of GenC, GenLLVM translates a flow graph to low level LLVM
+bytecode.  GenLLVM requires annotation and the `RPython Typer`_ pass, to modify
+the annontated flow graph to replace operations with lower-level equivalents
+which are suitable to be easily translated to LLVM bytecode.
+
+History
+-------
+The LLVM backend would not have been possible without all the people
+contributing to PyPy. Carl Friedrich did an amazing amount of groundwork during
+the first half of 2005. Carl Friedrich and Holger then initiated a revamped
+version based on the new `RPython Typer`_ flow graph. Significant progress was
+made during the Gothenburg sprint - and then the following 6 weeks Eric and
+Richard worked on it, achieving a standalone executable just prior to the
+Heidelberg sprint.  During the Heildelberg sprint Eric and Richard mainly
+worked on sharing the backend external code with GenC.
 
 .. _`Python again`:
 .. _`Python back-end`:
+
+.. _`low level virtual machine`: http://llvm.cs.uiuc.edu/
+.. _`here`: getting-started.html#translating-the-flow-graph-to-llvm-code
 
 The Interplevel Back-End
 ========================
