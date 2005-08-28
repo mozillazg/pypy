@@ -314,9 +314,12 @@ The translator is a tool based on the PyPy interpreter which can translate
 sufficiently static Python programs into low-level code. To be able to use it
 you need to:
 
-  * Download and install `Dot Graphviz`_.
-
   * Download and install Pygame_ if you do not already have it.
+
+  * Have an internet connection. The flowgraph viewer connects to
+    codespeak.net and lets it convert the flowgraph by a patched version of
+    `Dot Graphviz`_ that does not crash. This is only needed if you want to
+    look at the flowgraphs.
 
 To start the interactive translator do::
 
@@ -359,7 +362,12 @@ The graph can be turned into C code::
 
 The first command replaces operations with variables of types that are
 avaiable in C (e.g. int) with low level versions. This can also be ommited
-although it is not recommended.
+although it is not recommended. To try out the compiled version::
+
+   >>> f(5)
+   False
+   >>> f(6)
+   True
 
 .. _LLVM:
 
