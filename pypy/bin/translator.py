@@ -24,10 +24,12 @@ Example:
     t.call(arg)                        # call original function
     t.dis()                            # bytecode disassemble
 
-    t.specialize()                     # use low level operations (for C only)
+    t.specialize()                     # use low level operations 
     f = t.ccompile()                   # C compilation
-    f = t.llvmcompile()                # LLVM compilation
-    assert f(arg) == t.call(arg)       # sanity check
+    mod = t.llvmcompile()              # LLVM compilation
+    assert f(arg) == func(arg)         # sanity check (for C)
+    assert mod.pypy_func_wrapper(arg) == func(arg)     # sanity check (for LLVM)
+    
 
 Some functions are provided for the benefit of interactive testing.
 Try dir(test) for list of current snippets.
