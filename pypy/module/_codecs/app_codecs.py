@@ -1303,6 +1303,8 @@ def PyUnicode_EncodeUTF8(s,size,errors):
                 p += (chr((0x80 | ((ord(ch) >> 6) & 0x3f))))
                 p += (chr((0x80 | (ord(ch) & 0x3f))))
                 continue
+            else:
+                p.extend(encodeUCS4(ord(ch)))
     return p
 
 def encodeUCS4(ch):
