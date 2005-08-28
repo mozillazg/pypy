@@ -1233,7 +1233,7 @@ class Transformer:
                and len(node) == 3 and node[2][0] == symbol.gen_for:
                 # allow f(x for x in y), but reject f(x for x in y, 1)
                 # should use f((x for x in y), 1) instead of f(x for x in y, 1)
-                self.syntaxerror( 'generator expression needs parenthesis', nodelist[0])
+                self.syntaxerror( 'generator expression needs parenthesis', node)
 
             args.append(result)
         else:
@@ -1249,14 +1249,14 @@ class Transformer:
             i = i + 3
             if tok[0]==token.STAR:
                 if star_node is not None:
-                    self.syntaxerror( 'already have the varargs indentifier', nodelist[0] )
+                    self.syntaxerror( 'already have the varargs indentifier', tok )
                 star_node = self.com_node(ch)
             elif tok[0]==token.DOUBLESTAR:
                 if dstar_node is not None:
-                    self.syntaxerror( 'already have the kwargs indentifier', nodelist[0] )
+                    self.syntaxerror( 'already have the kwargs indentifier', tok )
                 dstar_node = self.com_node(ch)
             else:
-                self.syntaxerror( 'unknown node type: %s' % tok, nodelist[0] )
+                self.syntaxerror( 'unknown node type: %s' % tok, tok )
         return CallFunc(primaryNode, args, star_node, dstar_node,
                         lineno=extractLineNo(nodelist))
 
@@ -1266,7 +1266,7 @@ class Transformer:
             return 0, self.com_generator_expression(test, nodelist[2])
         if len(nodelist) == 2:
             if kw:
-                self.syntaxerror( "non-keyword arg after keyword arg", nodelist[0])
+                self.syntaxerror( "non-keyword arg after keyword arg", nodelist )
             return 0, self.com_node(nodelist[1])
         result = self.com_node(nodelist[3])
         n = nodelist[1]
