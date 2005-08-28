@@ -1480,15 +1480,15 @@ def PyUnicode_DecodeUnicodeEscape(s, size, errors):
             elif ch == 'N':
                 message = "malformed \\N character escape"
                 #pos += 1
+                look = pos
                 try:
                     import unicodedata
                 except ImportError:
                     message = "\\N escapes not supported (can't load unicodedata module)"
                     unicode_call_errorhandler(errors,"unicodeescape",message,s,pos-1,size)
-                if (s[pos] == '{'):
-                    look = pos+1
+                if (s[look] == '{'):
                     #/* look for the closing brace */
-                    while (s[look] != '}' and look < size):
+                    while (look < size and s[look] != '}'):
                         look += 1
                     if (look > pos+1 and look < size and s[look] == '}'):
                         #/* found a name.  look it up in the unicode database */
@@ -1503,6 +1503,10 @@ def PyUnicode_DecodeUnicodeEscape(s, size, errors):
                             x = hexescape(s,pos+1,look-pos,message,errors)
                         p += x[0]
                         pos = x[1]
+                    else:        
+                        x=unicode_call_errorhandler(errors,"unicodeescape",message,s,pos-1,look)
+                else:        
+                    x=unicode_call_errorhandler(errors,"unicodeescape",message,s,pos-1,look)
             else:
                 if (pos > size):
                     message = "\\ at end of string"
