@@ -29,9 +29,10 @@ Download one of the following release files and unpack it:
     
   * alternatively run 
   
-    * ``svn co http://codespeak.net/svn/pypy/release/0.7.0 pypy-0.7.0`` 
+    * ``svn co http://codespeak.net/svn/pypy/release/0.7.x pypy-0.7.x``
+      (the 0.7 maintenance branch)
 
-then change to the ``pypy-0.7.0`` directory
+then change to the ``pypy-0.7.0`` or ``pypy-0.7.x`` directory
 and execute the following command line:: 
 
     python pypy/bin/py.py 
