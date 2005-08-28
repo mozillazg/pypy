@@ -332,7 +332,7 @@ def run_server():
 
 def mkexename(name):
     if sys.platform == 'win32':
-        name += '.exe'
+        name = os.path.normpath(name + '.exe')
     return name
 
 if __name__ == '__main__':
