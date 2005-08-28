@@ -57,10 +57,15 @@ def target(geninterp=True):
 
     # disable translation of the whole of classobjinterp.py
     StdObjSpace.setup_old_style_classes = lambda self: None
+    if '-boehm' in __main__.options:
+        print "disabling thread with boehm for stabilitiy (combination not tested)"
+        usemodules = []
+    else:
+        usemodules = ['thread']
     space = StdObjSpace(nofaking=True,
                         compiler="_stable", # lib/_stablecompiler
                         translating=True,
-                        usemodules=['thread'],
+                        usemodules=usemodules,
                         geninterp=geninterp)
     # manually imports app_main.py
     filename = os.path.join(this_dir, 'app_main.py')
