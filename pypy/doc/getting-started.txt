@@ -359,16 +359,22 @@ The first command replaces operations with variables of types that are
 avaiable in C (e.g. int) with low level versions. This can also be ommited
 although it is not recommended.
 
+.. _LLVM:
+
 translating the flow graph to LLVM code
 +++++++++++++++++++++++++++++++++++++++
 
-To translate for LLVM (low level virtual machine) you must first have `LLVM
-installed with the CVS version`.  The LLVM backend is still experimental.
-However, it is very close to C backend functionality.  Calling compiled LLVM
-code from CPython is more restrictive than the C backend - the return type and
-the arguments of the entry function must be ints, floats or bools.  The
-emphasis of the LLVM backend is to compile standalone executables - please see
-the pypy/translate/llvm/demo directory for examples.
+To translate for LLVM (`low level virtual machine`_) you must first have `LLVM
+installed with the CVS version`_ - the `how to install LLVM`_ provides some
+helpful hints.  Please note that you do not need the CFrontend to compile, make
+tools-only.
+
+The LLVM backend is still experimental.  However, it is very close to C backend
+functionality.  Calling compiled LLVM code from CPython is more restrictive
+than the C backend - the return type and the arguments of the entry function
+must be ints, floats or bools.  The emphasis of the LLVM backend is to compile
+standalone executables - please see the pypy/translate/llvm/demo directory for
+examples.
 
 Here is a simple example to try::
 
@@ -383,10 +389,6 @@ Here is a simple example to try::
    >>> f.pypy_my_gcd_wrapper(15, 10)
    5
 
-Please note that you dont need the CFrontend to compile, make tools-only.
-
-.. _LLVM:
-.. _`LLVM installed with the CVS version`: http://llvm.cs.uiuc.edu/releases/
 
 a slightly larger example
 +++++++++++++++++++++++++
@@ -472,9 +474,9 @@ or a simplified, scaled-down version::
 
     python translate_pypy.py targetrpystone2
 
-or to create standalone executable using the experimental LLVM_ compiler infrastructure.
+or to create standalone executable using the experimental LLVM_ compiler infrastructure::
 
-    ./run_pypy-llvm.sh 
+    ./run_pypy-llvm.sh
 
 .. _`start reading sources`: 
 
@@ -580,6 +582,7 @@ conferences such as EuroPython or Pycon.
 .. _`low level virtual machine`: http://llvm.cs.uiuc.edu/
 .. _`how to install LLVM`: http://llvm.cs.uiuc.edu/docs/GettingStarted.html
 .. _`LLVM mailing list`: http://mail.cs.uiuc.edu/mailman/listinfo/llvmdev
+.. _`LLVM installed with the CVS version`: http://llvm.cs.uiuc.edu/releases
 
 
 .. _Dot Graphviz:           http://www.research.att.com/sw/tools/graphviz/
