@@ -1,34 +1,46 @@
-PyPy-0.7.0: first self-contained Python Implementation 
+pypy-0.7.0: first self-contained Python Implementation
 ==============================================================
 
-The PyPy Development Team is happy to announce its first 
-public release of a fully translatable self contained Python 
-implementation. The 0.7 release is a preview release showcasing the
-results of our efforts in the last few months:
+What was once just an idea between a few people discussing 
+on some nested mailing list thread and in a pub became reality ... 
+the PyPy development team is happy to announce its first
+public release of a fully translatable self contained Python
+implementation.  The 0.7 release showcases the results of our
+efforts in the last few months since the 0.6 preview releae
+which have been partially funded by the European Union:
 
-- full program type inference with full translation 
-  to two different machine-level targets: C and LLVM 
+- whole program type inference on our Python Interpreter 
+  implementation with full translation to two different 
+  machine-level targets: C and LLVM 
 
-- the ability to translate with thread support or without 
+- a translation choice of using a refcounting or Boehm 
+  garbage collectors
 
-- a translation choice of using a reference counting or Boehm 
-  garbage collector 
+- the ability to translate with or without thread support 
 
-- very high compliancy with Python 2.4.1 (fully based on 
-  new style classes) 
+- very complete language-level compliancy with CPython 2.4.1 
+
 
 What is PyPy (about)? 
 ------------------------------------------------
 
-PyPy is an MIT-licensed reimplementation of Python written in Python
-itself, flexible and easy to experiment with.  It translates itself
-to lower level languages.  Our long-term goals are to target a large
-variety of platforms, small and large, by providing a compiler toolsuite
-that can produce custom Python versions. Platform, Memory and Threading
-models are to become aspects of the translation process - as opposed to
-encoding low level details into a language implementation itself.
-Eventually, dynamic optimization techniques - implemented as another
-translation aspect - should become robust against language changes.
+PyPy is an MIT-licensed research-oriented reimplementation of
+Python written in Python itself, flexible and easy to
+experiment with.  It translates itself to lower level
+languages.  Our goals are to target a large variety of
+platforms, small and large, by providing a compilation toolsuite
+that can produce custom Python versions.  Platform, Memory and
+Threading models are to become aspects of the translation
+process - as opposed to encoding low level details into a
+language implementation itself.  Eventually, dynamic
+optimization techniques - implemented as another translation
+aspect - should become robust against language changes.
+
+Note that PyPy is mainly a research and development project
+and does not by itself focus on getting a production-ready
+Python implementation although we do hope and expect it to
+become a viable contender in that area sometime next year. 
+
 
 Where to start? 
 -----------------------------
@@ -39,15 +51,23 @@ PyPy Documentation: http://codespeak.net/pypy/dist/pypy/doc/
 
 PyPy Homepage:      http://codespeak.net/pypy/
 
-The interpreter and object model implementations shipped with 0.7 can
-run on their own and implement the core language features of
-Python as of CPython 2.4.  However, we do not recommend using 
-PyPy for anything else than for playing or research purposes.  
+The interpreter and object model implementations shipped with
+the 0.7 version can run on their own and implement the core
+language features of Python as of CPython 2.4.  However, we still
+do not recommend using PyPy for anything else than for education, 
+playing or research purposes.  
 
 Ongoing work and near term goals
 ---------------------------------
 
-XXX 
+PyPy has been developed during approximately 15 coding sprints
+across Europe and the US.  It continues to be a very
+dynamically and incrementally evolving project with many
+one-week meetings to follow.  You are invited to consider coming to 
+the next such meeting in Paris mid October 2005 where we intend to 
+plan and head for an even more intense phase of the project
+involving building a JIT-Compiler and enabling unique
+features not found in other Python language implementations.
 
 PyPy has been a community effort from the start and it would
 not have got that far without the coding and feedback support
@@ -60,18 +80,25 @@ raise questions.
 
 have fun, 
     
-    the pypy-dev team ... 
+    the pypy team, of which here is a partial snapshot
+    of mainly involved persons: 
 
-    (insert names here) 
-
-
+    Armin Rigo, Samuele Pedroni, 
+    Holger Krekel, Christian Tismer, 
+    Carl Friedrich Bolz, Michael Hudson, 
+    Erik van Riet Paap, Richard Emslie, 
+    Anders Chrigstroem, Anders Lehmann, 
+    Ludovic Aubry, Adrien Di Mascio, 
+    Niklaus Haldimann, Jacob Hallen, 
+    Bea During, Laura Creighton, 
+    and many contributors ... 
 
 PyPy development and activities happen as an open source project  
-and with the support of a consortium funded by a two year EU IST 
-research grant. Here is a list of partners of the EU project: 
+and with the support of a consortium partially funded by a two 
+year European Union IST research grant. Here is a list of 
+the full partners of that consortium: 
         
     Heinrich-Heine University (Germany), AB Strakt (Sweden)
     merlinux GmbH (Germany), tismerysoft GmbH(Germany) 
     Logilab Paris (France), DFKI GmbH (Germany)
-    ChangeMaker (Sweden)
-
+    ChangeMaker (Sweden), Impara (Germany)
