@@ -321,7 +321,7 @@ The rules are described in more details `in the coding guide`_.
 RPython, the Flow Object Space and translation
 ==============================================
 
-One of PyPy's now-short-term objectives is to enable translation of our
+One of PyPy's now achieved objectives is to enable translation of our
 bytecode interpreter and standard object space into a lower-level language.
 In order for our translation and type inference mechanisms to work
 effectively, we need to restrict the dynamism of our interpreter-level
