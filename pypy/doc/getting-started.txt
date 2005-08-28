@@ -170,7 +170,7 @@ As an example of using PyPy from the command line, you could type::
 Alternatively, as with regular Python, you can simply give a
 script name on the command line::
 
-    python py.py ../../lib-python/modified-2.3.4/test/pystone.py 10
+    python py.py ../../lib-python/modified-2.4.1/test/pystone.py 10
 
 special PyPy features 
 -------------------------- 
@@ -286,14 +286,14 @@ run all tests below the current directory.
 Finally, there are the CPython regression tests which you can 
 run like this::
 
-    cd lib-python/2.3.4/test 
+    cd lib-python/2.4.1/test 
     python ../../../pypy/test_all.py -E
 
 or if you have `installed py.test`_ then you simply say::
 
     py.test -E
 
-from the lib-python-2.3.4/test directory. 
+from the lib-python/2.4.1/test directory. 
 
 .. _`installed py.test`: http://codespeak.net/py/current/doc/getting-started.html
 
