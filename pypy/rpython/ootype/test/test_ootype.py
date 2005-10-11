@@ -62,22 +62,22 @@ def test_simple_field_shadowing():
     
     py.test.raises(TypeError, """D = Class("test2", C, {"a": (Signed, 3)})""")
 
-def test_simple_function():
-    F = Func([Signed, Signed], Signed)
+def test_simple_static_method():
+    F = StaticMethod([Signed, Signed], Signed)
     def f_(a, b):
        return a+b
-    f = func(F, _name="f", _callable=f_)
+    f = static_meth(F, _name="f", _callable=f_)
     assert typeOf(f) == F
 
     result = f(2, 3)
     assert typeOf(result) == Signed
     assert result == 5
 
-def test_function_args():
-    F = Func([Signed, Signed], Signed)
+def test_static_method_args():
+    F = StaticMethod([Signed, Signed], Signed)
     def f_(a, b):
        return a+b
-    f = func(F, _name="f", _callable=f_)
+    f = static_meth(F, _name="f", _callable=f_)
 
     py.test.raises(TypeError, "f(2.0, 3.0)")
     py.test.raises(TypeError, "f()")
