@@ -448,6 +448,8 @@ annotation_to_ll_map = [
 ]
 
 def annotation_to_lltype(s_val, info=None):
+    if isinstance(s_val, SomeRef):
+        return s_val.ll_ptrtype
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
     for witness, lltype in annotation_to_ll_map:
@@ -465,7 +467,10 @@ ll_to_annotation_map = dict([(ll, ann) for ann,ll in annotation_to_ll_map])
 def lltype_to_annotation(T):
     s = ll_to_annotation_map.get(T)
     if s is None:
-        return SomePtr(T)
+	if isinstance(T, ootype.Class):
+	    return SomeRef(T)
+        else:
+	    return SomePtr(T)
     else:
         return s
 
