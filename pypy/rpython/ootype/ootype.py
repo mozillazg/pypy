@@ -6,6 +6,7 @@ from pypy.tool.tls import tlsobject
 from types import NoneType
 from pypy.rpython.lltype import LowLevelType, Signed, Unsigned, Float, Char
 from pypy.rpython.lltype import Bool, Void, UniChar, typeOf, Primitive
+from pypy.rpython.lltype import frozendict
 
 class OOType(LowLevelType):
     pass
@@ -15,8 +16,8 @@ class Class(OOType):
     def __init__(self, name, superclass, fields, methods={}):
         self._superclass = superclass
 
-	self._methods = {}
-        self._fields = {}
+	self._methods = frozendict()
+        self._fields = frozendict()
 
 	self._add_fields(fields)
 	self._add_methods(methods)
@@ -25,6 +26,9 @@ class Class(OOType):
 
     def _defl(self):
         return self._null
+
+    def _example(self):
+        return new(self)
 
     def _add_fields(self, fields):
         for name, defn in fields.iteritems():

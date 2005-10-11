@@ -4,6 +4,14 @@ import py
 def test_simple():
     assert typeOf(1) is Signed
 
+def test_class_hash():
+    M = Meth([Signed], Signed)
+    def m_(self, b):
+       return self.a + b
+    m = meth(M, _name="m", _callable=m_)
+    C = Class("test", None, {"a": Signed}, {"m": m})
+    assert type(hash(C)) == int
+
 def test_simple_class():
     C = Class("test", None, {"a": Signed})
 
