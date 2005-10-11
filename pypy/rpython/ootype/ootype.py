@@ -5,7 +5,7 @@ from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
 from types import NoneType
 from pypy.rpython.lltype import LowLevelType, Signed, Unsigned, Float, Char
-from pypy.rpython.lltype import Bool, Void, UniChar, typeOf
+from pypy.rpython.lltype import Bool, Void, UniChar, typeOf, Primitive
 
 class OOType(LowLevelType):
     pass
