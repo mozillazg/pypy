@@ -431,6 +431,9 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeRef(SomePtr):
+    pass
+
 from pypy.rpython import lltype
 
 annotation_to_ll_map = [
