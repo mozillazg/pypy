@@ -169,7 +169,9 @@ class Translator:
         if self.rtyper is not None:
             raise ValueError("cannot specialize() several times")
         from pypy.rpython.rtyper import RPythonTyper
-        self.rtyper = RPythonTyper(self.annotator)
+
+        self.rtyper = RPythonTyper(self.annotator,
+            type_system=flags.pop("type_system", "lltype"))
         self.rtyper.specialize(**flags)
 
     def backend_optimizations(self, **kwds):

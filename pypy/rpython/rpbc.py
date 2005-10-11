@@ -344,9 +344,8 @@ def adjust_shape(hop2, s_shape):
 
 
 def getsignature(rtyper, func):
-    f = rtyper.getfunctionptr(func)
+    f = rtyper.getcallable(func)
     graph = f._obj.graph
-    FUNCPTR = typeOf(f)
     rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
     if graph.getreturnvar() in rtyper.annotator.bindings:
         rresult = rtyper.bindingrepr(graph.getreturnvar())

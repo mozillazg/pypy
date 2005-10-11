@@ -4,6 +4,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltype import Void, Bool, Float, Signed, Char, UniChar
 from pypy.rpython.lltype import typeOf, LowLevelType, Ptr, PyObject
 from pypy.rpython.lltype import FuncType, functionptr, cast_ptr_to_int
+from pypy.rpython.ootype import ootype
 from pypy.rpython.error import TyperError, MissingRTypeOperation 
 
 # initialization states for Repr instances 
@@ -313,13 +314,19 @@ def getconcretetype(v):
     return getattr(v, 'concretetype', PyObjPtr)
 
 def getfunctionptr(translator, graphfunc, getconcretetype=getconcretetype):
+    return getcallable(translator, graphfunc, getconcretetype, FuncType, functionptr)
+
+def getstaticmeth(translator, graphfunc, getconcretetype=getconcretetype):
+    return getcallable(translator, graphfunc, getconcretetype, ootype.StaticMethod, ootype.static_meth)
+
+def getcallable(translator, graphfunc, getconcretetype, typ, constr):
     """Make a functionptr from the given Python function."""
     graph = translator.getflowgraph(graphfunc)
     llinputs = [getconcretetype(v) for v in graph.getargs()]
     lloutput = getconcretetype(graph.getreturnvar())
-    FT = FuncType(llinputs, lloutput)
+    FT = typ(llinputs, lloutput)
     _callable = getattr(graphfunc, '_specializedversionof_', graphfunc)
-    return functionptr(FT, graphfunc.func_name, graph = graph, _callable = _callable)
+    return constr(FT, graphfunc.func_name, graph = graph, _callable = _callable)
 
 def needsgc(classdef, nogc=False):
     if classdef is None:
