@@ -74,7 +74,7 @@ def test_simple_static_method():
     F = StaticMethod([Signed, Signed], Signed)
     def f_(a, b):
        return a+b
-    f = static_meth(F, _name="f", _callable=f_)
+    f = static_meth(F, "f", _callable=f_)
     assert typeOf(f) == F
 
     result = f(2, 3)
@@ -85,7 +85,7 @@ def test_static_method_args():
     F = StaticMethod([Signed, Signed], Signed)
     def f_(a, b):
        return a+b
-    f = static_meth(F, _name="f", _callable=f_)
+    f = static_meth(F, "f", _callable=f_)
 
     py.test.raises(TypeError, "f(2.0, 3.0)")
     py.test.raises(TypeError, "f()")

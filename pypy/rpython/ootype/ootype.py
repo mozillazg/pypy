@@ -197,8 +197,8 @@ class _bound_meth(object):
 def new(CLASS):
     return _instance(CLASS)
 
-def static_meth(FUNCTION, **attrs):
-    return _static_meth(FUNCTION, **attrs)
+def static_meth(FUNCTION, name,  **attrs):
+    return _static_meth(FUNCTION, _name=name, **attrs)
 
 def meth(METHOD, **attrs):
     return _meth(METHOD, **attrs)

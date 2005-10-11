@@ -26,7 +26,7 @@ from pypy.tool.sourcetools import func_with_new_name, valid_identifier
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.rmodel import Repr, inputconst
 from pypy.rpython.rmodel import TyperError, BrokenReprTyperError
-from pypy.rpython.rmodel import getfunctionptr, warning
+from pypy.rpython.rmodel import getfunctionptr, getstaticmeth, warning
 from pypy.rpython.normalizecalls import perform_normalizations
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper
 from pypy.rpython.exceptiondata import ExceptionData
@@ -36,8 +36,9 @@ from pypy.rpython.rmodel import log
 
 class RPythonTyper:
 
-    def __init__(self, annotator):
+    def __init__(self, annotator, type_system="lltype"):
         self.annotator = annotator
+        self.type_system = type_system
         self.reprs = {}
         self._reprs_must_call_setup = []
         self._seen_reprs_must_call_setup = {}
@@ -495,6 +496,18 @@ class RPythonTyper:
 
     def needs_hash_support(self, cls):
         return cls in self.annotator.bookkeeper.needs_hash_support
+
+    def getcallable(self, graphfunc):
+        if self.type_system == "lltype":
+            return self.getfunctionptr(graphfunc)
+        
+        elif self.type_system == "ootype":
+            return self.getstaticmeth(graphfunc)
+
+    def getstaticmeth(self, graphfunc):
+        def getconcretetype(v):
+            return self.bindingrepr(v).lowleveltype
+        return getstaticmeth(self.annotator.translator, graphfunc, getconcretetype)
 
     def getfunctionptr(self, graphfunc):
         def getconcretetype(v):

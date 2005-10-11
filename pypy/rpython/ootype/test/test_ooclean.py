@@ -18,7 +18,7 @@ def test_simple():
         return a + b
     t = Translator(f)
     t.annotate([int, int])
-    t.specialize()
+    t.specialize(type_system="ootype")
 
     graph = t.flowgraphs[f]
     check_only_ootype(graph)
@@ -32,7 +32,8 @@ def test_simple_call():
 
     t = Translator(g)
     t.annotate([])
-    t.specialize()
+    
+    t.specialize(type_system="ootype")
 
     graph = t.flowgraphs[g]
     check_only_ootype(graph)
