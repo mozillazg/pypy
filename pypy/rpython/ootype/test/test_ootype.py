@@ -175,3 +175,45 @@ def test_superclass_meth_lookup():
 
     d = new(D)
     assert d.m(d) == 9
+
+def test_isSubclass():
+    A = Class("A", None)
+    B = Class("B", A)
+    C = Class("C", A)
+    D = Class("D", C)
+
+    assert isSubclass(A, A)
+    assert isSubclass(B, A)
+    assert isSubclass(C, A)
+    assert not isSubclass(A, B)
+    assert not isSubclass(B, C)
+    assert isSubclass(D, C)
+    assert isSubclass(D, A)
+    assert not isSubclass(D, B)
+    
+def test_commonBaseclass():
+    A = Class("A", None)
+    B = Class("B", A)
+    C = Class("C", A)
+    D = Class("D", C)
+    E = Class("E", None)
+    F = Class("F", E)
+
+    assert commonBaseclass(A, A) == A
+    assert commonBaseclass(A, B) == A
+    assert commonBaseclass(B, A) == A
+    assert commonBaseclass(B, B) == B
+    assert commonBaseclass(B, C) == A
+    assert commonBaseclass(C, B) == A
+    assert commonBaseclass(C, A) == A
+    assert commonBaseclass(D, A) == A
+    assert commonBaseclass(D, B) == A
+    assert commonBaseclass(D, C) == C
+    assert commonBaseclass(A, D) == A
+    assert commonBaseclass(B, D) == A
+    assert commonBaseclass(C, D) == C
+    
+    assert commonBaseclass(E, A) is None
+    assert commonBaseclass(E, B) is None
+    assert commonBaseclass(F, A) is None
+    
