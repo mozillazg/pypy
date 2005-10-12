@@ -566,7 +566,9 @@ class __extend__(SomeExternalObject):
 
 
 # annotation of low-level types
-from pypy.annotation.model import SomePtr, SomeRef, ll_to_annotation, annotation_to_lltype
+from pypy.annotation.model import SomePtr, SomeRef, SomeBoundMeth, SomeStaticMeth
+from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
+
 class __extend__(SomePtr):
 
     def getattr(p, s_attr):
@@ -592,12 +594,28 @@ class __extend__(SomePtr):
     def is_true(p):
         return SomeBool()
 
+from pypy.rpython.ootype import ootype
 class __extend__(SomeRef):
-    def getattr(p, s_attr):
-        assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % p.ootype
-        v = getattr(p.ootype._example(), s_attr.const)
+    def getattr(r, s_attr):
+        assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % r.ootype
+        v = getattr(r.ootype._example(), s_attr.const)
+        if isinstance(v, ootype._bound_meth):
+            return SomeBoundMeth(r.ootype, s_attr.const)
         return ll_to_annotation(v)
 
+class __extend__(SomeBoundMeth):
+    def simple_call(m, *args_s):
+        llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
+        inst = m.ootype._example()
+        v = getattr(inst, m.name)(*llargs)
+        return ll_to_annotation(v)
+
+class __extend__(SomeStaticMeth):
+    def simple_call(m, *args_s):
+        llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
+        smeth = m.method._example()
+        v = smeth(*llargs)
+        return ll_to_annotation(v)
 
 #_________________________________________
 # memory addresses
@@ -611,3 +629,4 @@ class __extend__(SomeAddress):
         assert s_attr.const in lladdress.supported_access_types
         return SomeTypedAddressAccess(
             lladdress.supported_access_types[s_attr.const])
+

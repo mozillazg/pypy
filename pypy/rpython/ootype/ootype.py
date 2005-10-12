@@ -100,6 +100,10 @@ class StaticMethod(OOType):
     	self.ARGS = tuple(args)
 	self.RESULT = result
 
+    def _example(self):
+        _retval = self.RESULT._example()
+        return _static_meth(self, _callable=lambda *args: _retval)
+    
 class Meth(StaticMethod):
 
     def __init__(self, args, result):
@@ -190,11 +194,14 @@ class _meth(_callable):
         return _bound_meth(inst, self)
 
 class _bound_meth(object):
-
     def __init__(self, inst, meth):
+        #self._TYPE = self
         self.inst = inst
         self.meth = meth
 
+    #def _example(self):
+    #    return self
+    
     def __call__(self, *args):
         return self.meth._checkargs(args)(self.inst, *args)
 

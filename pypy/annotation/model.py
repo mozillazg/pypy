@@ -435,7 +435,15 @@ class SomeRef(SomeObject):
     def __init__(self, ootype):
         self.ootype = ootype
 
+class SomeBoundMeth(SomeObject):
+    def __init__(self, ootype, name):
+        self.ootype = ootype
+        self.name = name
 
+class SomeStaticMeth(SomeObject):
+    def __init__(self, method):
+        self.method = method
+        
 from pypy.rpython import lltype
 from pypy.rpython.ootype import ootype
 
