@@ -22,6 +22,7 @@ from pypy.rpython.lltype import Signed, Unsigned, Float, Char, Bool, Void
 from pypy.rpython.lltype import LowLevelType, Ptr, ContainerType
 from pypy.rpython.lltype import FuncType, functionptr, typeOf, RuntimeTypeInfo
 from pypy.rpython.lltype import attachRuntimeTypeInfo, Primitive
+from pypy.rpython.ootype import ootype
 from pypy.tool.sourcetools import func_with_new_name, valid_identifier
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.rmodel import Repr, inputconst
@@ -38,7 +39,11 @@ class RPythonTyper:
 
     def __init__(self, annotator, type_system="lltype"):
         self.annotator = annotator
+
+        if type_system not in ("lltype", "ootype"):
+            raise TyperError("Unknown type system %r!" % type_system)
         self.type_system = type_system
+
         self.reprs = {}
         self._reprs_must_call_setup = []
         self._seen_reprs_must_call_setup = {}
@@ -496,6 +501,16 @@ class RPythonTyper:
 
     def needs_hash_support(self, cls):
         return cls in self.annotator.bookkeeper.needs_hash_support
+
+    def deref(self, obj):
+        """Derefernce obj if it is a pointer."""
+        if self.type_system == "ootype":
+            assert isinstance(typeOf(obj), ootype.OOType)
+            return obj
+        elif self.type_system == "lltype":
+            assert isinstance(typeOf(obj), Ptr)
+
+            return obj._obj
 
     def getcallable(self, graphfunc):
         if self.type_system == "lltype":
