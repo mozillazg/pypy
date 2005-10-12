@@ -431,16 +431,20 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
-class SomeRef(SomeObject):
+class SomeOOClass(SomeObject):
     def __init__(self, ootype):
         self.ootype = ootype
 
-class SomeBoundMeth(SomeObject):
+class SomeOOInstance(SomeObject):
+    def __init__(self, ootype):
+        self.ootype = ootype
+
+class SomeOOBoundMeth(SomeObject):
     def __init__(self, ootype, name):
         self.ootype = ootype
         self.name = name
 
-class SomeStaticMeth(SomeObject):
+class SomeOOStaticMeth(SomeObject):
     def __init__(self, method):
         self.method = method
         
@@ -459,7 +463,7 @@ annotation_to_ll_map = [
 ]
 
 def annotation_to_lltype(s_val, info=None):
-    if isinstance(s_val, SomeRef):
+    if isinstance(s_val, SomeOOInstance):
         return s_val.ootype
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
@@ -478,8 +482,8 @@ ll_to_annotation_map = dict([(ll, ann) for ann,ll in annotation_to_ll_map])
 def lltype_to_annotation(T):
     s = ll_to_annotation_map.get(T)
     if s is None:
-	if isinstance(T, ootype.Class):
-	    return SomeRef(T)
+	if isinstance(T, ootype.Instance):
+	    return SomeOOInstance(T)
         else:
 	    return SomePtr(T)
     else:

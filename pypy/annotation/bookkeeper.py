@@ -354,7 +354,7 @@ class Bookkeeper:
             assert x is lladdress.NULL
             result= SomeAddress(is_null=True)
         elif isinstance(x, ootype._static_meth):
-            result = SomeStaticMeth(ootype.typeOf(x))
+            result = SomeOOStaticMeth(ootype.typeOf(x))
         elif callable(x) or isinstance(x, staticmethod): # XXX
             # maybe 'x' is a method bound to a not-yet-frozen cache?
             # fun fun fun.

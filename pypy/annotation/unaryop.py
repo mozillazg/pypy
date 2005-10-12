@@ -566,7 +566,7 @@ class __extend__(SomeExternalObject):
 
 
 # annotation of low-level types
-from pypy.annotation.model import SomePtr, SomeRef, SomeBoundMeth, SomeStaticMeth
+from pypy.annotation.model import SomePtr, SomeOOInstance, SomeOOBoundMeth, SomeOOStaticMeth
 from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
 
 class __extend__(SomePtr):
@@ -595,22 +595,22 @@ class __extend__(SomePtr):
         return SomeBool()
 
 from pypy.rpython.ootype import ootype
-class __extend__(SomeRef):
+class __extend__(SomeOOInstance):
     def getattr(r, s_attr):
         assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % r.ootype
         v = getattr(r.ootype._example(), s_attr.const)
         if isinstance(v, ootype._bound_meth):
-            return SomeBoundMeth(r.ootype, s_attr.const)
+            return SomeOOBoundMeth(r.ootype, s_attr.const)
         return ll_to_annotation(v)
 
-class __extend__(SomeBoundMeth):
+class __extend__(SomeOOBoundMeth):
     def simple_call(m, *args_s):
         llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
         inst = m.ootype._example()
         v = getattr(inst, m.name)(*llargs)
         return ll_to_annotation(v)
 
-class __extend__(SomeStaticMeth):
+class __extend__(SomeOOStaticMeth):
     def simple_call(m, *args_s):
         llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
         smeth = m.method._example()

@@ -12,7 +12,11 @@ class OOType(LowLevelType):
     pass
 
 class Class(OOType):
+    pass
+Class = Class()
 
+class Instance(OOType):
+    """this is the type of user-defined objects"""
     def __init__(self, name, superclass, fields={}, methods={}):
         self._name = name
         self._superclass = superclass
@@ -24,7 +28,8 @@ class Class(OOType):
 	self._add_methods(methods)
 
     	self._null = _null_instance(self)
-
+        self._class = _class(self)
+        
     def _defl(self):
         return self._null
 
@@ -110,13 +115,17 @@ class Meth(StaticMethod):
         StaticMethod.__init__(self, args, result)
 # ____________________________________________________________
 
+class _class(object):
+    _TYPE = Class
+    def __init__(self, INSTANCE):
+        self._INSTANCE = INSTANCE
+        
 class _instance(object):
     
-    def __init__(self, CLASS):
-        self.__dict__["_TYPE"] = CLASS
-
-        CLASS._init_instance(self)
-
+    def __init__(self, INSTANCE):
+        self.__dict__["_TYPE"] = INSTANCE
+        INSTANCE._init_instance(self)
+        
     def __getattr__(self, name):
         meth = self._TYPE._lookup(name)
         if meth is not None:
@@ -136,8 +145,8 @@ class _instance(object):
 
 class _null_instance(_instance):
 
-    def __init__(self, CLASS):
-        self.__dict__["_TYPE"] = CLASS
+    def __init__(self, INSTANCE):
+        self.__dict__["_TYPE"] = INSTANCE
 
     def __getattribute__(self, name):
         if name.startswith("_"):
@@ -166,7 +175,7 @@ class _callable(object):
 
        for a, ARG in zip(args, self._TYPE.ARGS):
            if typeOf(a) != ARG:
-               if isinstance(ARG, Class) and isinstance(a, _instance):
+               if isinstance(ARG, Instance) and isinstance(a, _instance):
                     if instanceof(a, ARG):
                         continue
                raise TypeError,"calling %r with wrong argument types: %r" % (self._TYPE, args)
@@ -205,8 +214,12 @@ class _bound_meth(object):
     def __call__(self, *args):
         return self.meth._checkargs(args)(self.inst, *args)
 
-def new(CLASS):
-    return _instance(CLASS)
+def new(INSTANCE):
+    return _instance(INSTANCE)
+
+def runtimenew(class_):
+    assert isinstance(class_, _class)
+    return _instance(class_._INSTANCE)
 
 def static_meth(FUNCTION, name,  **attrs):
     return _static_meth(FUNCTION, _name=name, **attrs)
@@ -214,17 +227,24 @@ def static_meth(FUNCTION, name,  **attrs):
 def meth(METHOD, **attrs):
     return _meth(METHOD, **attrs)
 
-def null(CLASS):
-    return CLASS._null
+def null(INSTANCE):
+    return INSTANCE._null
 
-def addFields(CLASS, fields):
-    CLASS._add_fields(fields)
+def instanceof(inst, INSTANCE):
+    return isSubclass(inst._TYPE, INSTANCE)
 
-def addMethods(CLASS, methods):
-    CLASS._add_methods(methods)
+def classof(inst):
+    return runtimeClass(inst._TYPE)
 
-def instanceof(inst, CLASS):
-    return isSubclass(inst._TYPE, CLASS)
+def addFields(INSTANCE, fields):
+    INSTANCE._add_fields(fields)
+
+def addMethods(INSTANCE, methods):
+    INSTANCE._add_methods(methods)
+
+def runtimeClass(INSTANCE):
+    assert isinstance(INSTANCE, Instance)
+    return INSTANCE._class
 
 def isSubclass(C1, C2):
     c = C1
@@ -234,10 +254,10 @@ def isSubclass(C1, C2):
         c = c._superclass
     return False
 
-def commonBaseclass(CLASS1, CLASS2):
-    c = CLASS1
+def commonBaseclass(INSTANCE1, INSTANCE2):
+    c = INSTANCE1
     while c is not None:
-        if isSubclass(CLASS2, c):
+        if isSubclass(INSTANCE2, c):
             return c
         c = c._superclass
     return None
