@@ -365,29 +365,39 @@ BUILTIN_ANALYZERS[lltype.getRuntimeTypeInfo] = getRuntimeTypeInfo
 BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
 
 # ootype
-from pypy.annotation.model import SomeRef
+from pypy.annotation.model import SomeOOInstance, SomeOOClass
 from pypy.rpython.ootype import ootype
 
-def new(C):
-    assert C.is_constant()
-    i = ootype.new(C.const)
-    r = SomeRef(ootype.typeOf(i))
+def new(I):
+    assert I.is_constant()
+    i = ootype.new(I.const)
+    r = SomeOOInstance(ootype.typeOf(i))
     return r
 
-def null(C):
-    assert C.is_constant()
-    i = ootype.null(C.const)
-    r = SomeRef(ootype.typeOf(i))
+def null(I):
+    assert I.is_constant()
+    i = ootype.null(I.const)
+    r = SomeOOInstance(ootype.typeOf(i))
     return r
 
-def instanceof(c, C):
-    assert C.is_constant()
-    assert isinstance(C.const, ootype.Class)
+def instanceof(i, I):
+    assert I.is_constant()
+    assert isinstance(I.const, ootype.Instance)
     return SomeBool()
+
+def classof(i):
+    assert isinstance(i, SomeOOInstance) 
+    return SomeOOClass(i.ootype)
+
+def runtimenew(c):
+    assert isinstance(c, SomeOOClass)
+    return SomeOOInstance(c.ootype)
 
 BUILTIN_ANALYZERS[ootype.instanceof] = instanceof
 BUILTIN_ANALYZERS[ootype.new] = new
 BUILTIN_ANALYZERS[ootype.null] = null
+BUILTIN_ANALYZERS[ootype.runtimenew] = runtimenew
+BUILTIN_ANALYZERS[ootype.classof] = classof
 
 #________________________________
 # non-gc objects

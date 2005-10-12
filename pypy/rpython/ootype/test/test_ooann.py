@@ -5,7 +5,7 @@ from pypy.translator.annrpython import RPythonAnnotator
 
 
 def test_simple_new():
-    C = Class("test", None, {'a': Signed})
+    C = Instance("test", None, {'a': Signed})
     
     def oof():
         c = new(C)
@@ -18,7 +18,7 @@ def test_simple_new():
     assert s.knowntype == int
 
 def test_simple_instanceof():
-    C = Class("test", None, {'a': Signed})
+    C = Instance("test", None, {'a': Signed})
     
     def oof():
         c = new(C)
@@ -31,20 +31,69 @@ def test_simple_instanceof():
     assert s.knowntype == bool
 
 def test_simple_null():
-    C = Class("test", None, {'a': Signed})
+    I = Instance("test", None, {'a': Signed})
     
     def oof():
-        c = null(C)
-        return c
+        i = null(I)
+        return i
 
     a = RPythonAnnotator()
     s = a.build_types(oof, [])
     #a.translator.view()
 
-    assert s == annmodel.SomeRef(C)
+    assert s == annmodel.SomeOOInstance(I)
+
+def test_simple_classof():
+    I = Instance("test", None, {'a': Signed})
+    
+    def oof():
+        i = new(I)
+        return classof(i)
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [])
+    #a.translator.view()
+
+    assert s == annmodel.SomeOOClass(I)
+
+def test_simple_runtimenew():
+    I = Instance("test", None, {'a': Signed})
+    
+    def oof():
+        i = new(I)
+        c = classof(i)
+        i2 = runtimenew(c)
+        return i2
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [])
+    #a.translator.view()
+
+    assert s == annmodel.SomeOOInstance(I)
+
+def test_complex_runtimenew():
+    I = Instance("test", None, {'a': Signed})
+    J = Instance("test2", I, {'b': Signed})
+    K = Instance("test2", I, {'b': Signed})
+    
+    def oof(x):
+        k = new(K)
+        j = new(J)
+        if x:
+            c = classof(k)
+        else:
+            c = classof(j)
+        i = runtimenew(c)
+        return i
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [bool])
+    #a.translator.view()
+
+    assert s == annmodel.SomeOOInstance(I)
 
 def test_method():
-    C = Class("test", None, {"a": (Signed, 3)})
+    C = Instance("test", None, {"a": (Signed, 3)})
 
     M = Meth([C], Signed)
     def m_(self, other):
@@ -64,9 +113,9 @@ def test_method():
     assert s.knowntype == int
 
 def test_unionof():
-    C1 = Class("C1", None)
-    C2 = Class("C2", C1)
-    C3 = Class("C3", C1)
+    C1 = Instance("C1", None)
+    C2 = Instance("C2", C1)
+    C3 = Instance("C3", C1)
 
     def oof(f):
         if f:
@@ -79,7 +128,7 @@ def test_unionof():
     s = a.build_types(oof, [bool])
     #a.translator.view()
 
-    assert s == annmodel.SomeRef(C1)
+    assert s == annmodel.SomeOOInstance(C1)
 
 def test_static_method():
     F = StaticMethod([Signed, Signed], Signed)
@@ -94,5 +143,5 @@ def test_static_method():
     s = a.build_types(oof, [])
     #a.translator.view()
 
-    assert s.knowntype = int
+    assert s.knowntype == int
 

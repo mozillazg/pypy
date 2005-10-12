@@ -9,31 +9,52 @@ def test_class_hash():
     def m_(self, b):
        return self.a + b
     m = meth(M, _name="m", _callable=m_)
-    C = Class("test", None, {"a": Signed}, {"m": m})
-    assert type(hash(C)) == int
+    I = Instance("test", None, {"a": Signed}, {"m": m})
+    assert type(hash(I)) == int
 
 def test_simple_class():
-    C = Class("test", None, {"a": Signed})
+    I = Instance("test", None, {"a": Signed})
+    i = new(I)
 
-    c = new(C)
-    assert typeOf(c) == C
+    py.test.raises(TypeError, "i.z")
+    py.test.raises(TypeError, "i.a = 3.0")
+
+    i.a = 3
+    assert i.a == 3
+
+def test_runtime_instanciation():
+    I = Instance("test", None, {"a": Signed})
+    c = runtimeClass(I)
+    i = runtimenew(c)
+
+    assert typeOf(i) == I
+    assert typeOf(c) == Class
+
+def test_classof():
+    I = Instance("test", None, {"a": Signed})
+    c = runtimeClass(I)
+    i = new(I)
+
+    assert classof(i) == c
+
+    j = new(I)
+
+    assert classof(i) is classof(j)
+    I2 = Instance("test2", I, {"b": Signed})
+    i2 = new(I2)
+    assert classof(i2) is not classof(i)
+    assert classof(i2) != classof(i)
     
-    py.test.raises(TypeError, "c.z")
-    py.test.raises(TypeError, "c.a = 3.0")
-
-    c.a = 3
-    assert c.a == 3
-
 def test_simple_default_class():
-    C = Class("test", None, {"a": (Signed, 3)})
+    I = Instance("test", None, {"a": (Signed, 3)})
+    i = new(I)
 
-    c = new(C)
-    assert c.a == 3
+    assert i.a == 3
 
-    py.test.raises(TypeError, "Class('test', None, {'a': (Signed, 3.0)})")
+    py.test.raises(TypeError, "Instance('test', None, {'a': (Signed, 3.0)})")
 
 def test_simple_null():
-    C = Class("test", None, {"a": Signed})
+    C = Instance("test", None, {"a": Signed})
 
     c = null(C)
     assert typeOf(c) == C
@@ -41,9 +62,9 @@ def test_simple_null():
     py.test.raises(RuntimeError, "c.a")
 
 def test_simple_class_field():
-    C = Class("test", None, {})
+    C = Instance("test", None, {})
 
-    D = Class("test2", None, {"a": C})
+    D = Instance("test2", None, {"a": C})
     d = new(D)
 
     assert typeOf(d.a) == C
@@ -51,7 +72,7 @@ def test_simple_class_field():
     assert d.a == null(C)
 
 def test_simple_recursive_class():
-    C = Class("test", None, {})
+    C = Instance("test", None, {})
 
     addFields(C, {"inst": C})
 
@@ -59,16 +80,16 @@ def test_simple_recursive_class():
     assert c.inst == null(C)
 
 def test_simple_super():
-    C = Class("test", None, {"a": (Signed, 3)})
-    D = Class("test2", C, {})
+    C = Instance("test", None, {"a": (Signed, 3)})
+    D = Instance("test2", C, {})
 
     d = new(D)
     assert d.a == 3
 
 def test_simple_field_shadowing():
-    C = Class("test", None, {"a": (Signed, 3)})
+    C = Instance("test", None, {"a": (Signed, 3)})
     
-    py.test.raises(TypeError, """D = Class("test2", C, {"a": (Signed, 3)})""")
+    py.test.raises(TypeError, """D = Instance("test2", C, {"a": (Signed, 3)})""")
 
 def test_simple_static_method():
     F = StaticMethod([Signed, Signed], Signed)
@@ -97,7 +118,7 @@ def test_class_method():
        return self.a + b
     m = meth(M, _name="m", _callable=m_)
 
-    C = Class("test", None, {"a": (Signed, 2)}, {"m": m})
+    C = Instance("test", None, {"a": (Signed, 2)}, {"m": m})
     c = new(C)
 
     assert c.m(3) == 5
@@ -112,12 +133,12 @@ def test_class_method_field_clash():
        return self.a + b
     m = meth(M, _name="m", _callable=m_)
 
-    py.test.raises(TypeError, """Class("test", None, {"a": M})""")
+    py.test.raises(TypeError, """Instance("test", None, {"a": M})""")
 
-    py.test.raises(TypeError, """Class("test", None, {"m": Signed}, {"m":m})""")
+    py.test.raises(TypeError, """Instance("test", None, {"m": Signed}, {"m":m})""")
 
 def test_simple_recursive_meth():
-    C = Class("test", None, {"a": (Signed, 3)})
+    C = Instance("test", None, {"a": (Signed, 3)})
 
     M = Meth([C], Signed)
     def m_(self, other):
@@ -130,7 +151,7 @@ def test_simple_recursive_meth():
     assert c.m(c) == 6
 
 def test_explicit_name_clash():
-    C = Class("test", None, {})
+    C = Instance("test", None, {})
 
     addFields(C, {"a": (Signed, 3)})
 
@@ -144,8 +165,8 @@ def test_explicit_name_clash():
     py.test.raises(TypeError, """addFields(C, {"b": Signed})""")
 
 def test_instanceof():
-    C = Class("test", None, {})
-    D = Class("test2", C, {})
+    C = Instance("test", None, {})
+    D = Instance("test2", C, {})
     c = new(C)
     d = new(D)
     assert instanceof(c, C)
@@ -154,7 +175,7 @@ def test_instanceof():
     assert instanceof(d, C)
 
 def test_superclass_meth_lookup():
-    C = Class("test", None, {"a": (Signed, 3)})
+    C = Instance("test", None, {"a": (Signed, 3)})
 
     M = Meth([C], Signed)
     def m_(self, other):
@@ -163,7 +184,7 @@ def test_superclass_meth_lookup():
 
     addMethods(C, {"m": m})
 
-    D = Class("test2", C, {})
+    D = Instance("test2", C, {})
     d = new(D)
 
     assert d.m(d) == 6
@@ -177,10 +198,10 @@ def test_superclass_meth_lookup():
     assert d.m(d) == 9
 
 def test_isSubclass():
-    A = Class("A", None)
-    B = Class("B", A)
-    C = Class("C", A)
-    D = Class("D", C)
+    A = Instance("A", None)
+    B = Instance("B", A)
+    C = Instance("C", A)
+    D = Instance("D", C)
 
     assert isSubclass(A, A)
     assert isSubclass(B, A)
@@ -192,12 +213,12 @@ def test_isSubclass():
     assert not isSubclass(D, B)
     
 def test_commonBaseclass():
-    A = Class("A", None)
-    B = Class("B", A)
-    C = Class("C", A)
-    D = Class("D", C)
-    E = Class("E", None)
-    F = Class("F", E)
+    A = Instance("A", None)
+    B = Instance("B", A)
+    C = Instance("C", A)
+    D = Instance("D", C)
+    E = Instance("E", None)
+    F = Instance("F", E)
 
     assert commonBaseclass(A, A) == A
     assert commonBaseclass(A, B) == A

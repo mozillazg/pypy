@@ -652,7 +652,8 @@ class __extend__(pairtype(SomeExternalObject, SomeExternalObject)):
 
 # ____________________________________________________________
 # annotation of low-level types
-from pypy.annotation.model import SomePtr, SomeRef, ll_to_annotation, annotation_to_lltype
+from pypy.annotation.model import SomePtr, SomeOOInstance, SomeOOClass
+from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
 from pypy.rpython.ootype import ootype
 
 class __extend__(pairtype(SomePtr, SomePtr)):
@@ -688,17 +689,23 @@ class __extend__(pairtype(SomeObject, SomePtr)):
         return pair(p2, obj).union()
 
 
-class __extend__(pairtype(SomeRef, SomeRef)):
+class __extend__(pairtype(SomeOOInstance, SomeOOInstance)):
+    def union((r1, r2)):
+        common = ootype.commonBaseclass(r1.ootype, r2.ootype)
+        assert common is not None, 'Mixing of incompatible instances %r, %r' %(r1.ootype, r2.ootype)
+        return SomeOOInstance(common)
+
+class __extend__(pairtype(SomeOOClass, SomeOOClass)):
     def union((r1, r2)):
         common = ootype.commonBaseclass(r1.ootype, r2.ootype)
         assert common is not None, 'Mixing of incompatible classes %r, %r' %(r1.ootype, r2.ootype)
-        return SomeRef(common)
+        return SomeOOClass(common)
 
-class __extend__(pairtype(SomeRef, SomeObject)):
+class __extend__(pairtype(SomeOOInstance, SomeObject)):
     def union((r, obj)):
         assert False, ("mixing reference type %r with something else %r" % (r.ootype, obj))
 
-class __extend__(pairtype(SomeObject, SomeRef)):
+class __extend__(pairtype(SomeObject, SomeOOInstance)):
     def union((obj, r2)):
         return pair(r2, obj).union()
 

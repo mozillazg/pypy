@@ -118,9 +118,9 @@ def test_ll_to_annotation():
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(S)
     s_p = ll_to_annotation(lltype.malloc(A, 0))
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(A)
-    C = ootype.Class('C', None, {})
+    C = ootype.Instance('C', None, {})
     s_p = ll_to_annotation(ootype.new(C))
-    assert isinstance(s_p, SomeRef) and s_p.ootype == C
+    assert isinstance(s_p, SomeOOInstance) and s_p.ootype == C
 
 def test_annotation_to_lltype():
     from pypy.rpython.rarithmetic import r_uint
@@ -143,8 +143,8 @@ def test_annotation_to_lltype():
     s_p = SomePtr(ll_ptrtype=PS)
     assert annotation_to_lltype(s_p) == PS
     py.test.raises(ValueError, "annotation_to_lltype(si0)")
-    C = ootype.Class('C', None, {})
-    ref = SomeRef(C)
+    C = ootype.Instance('C', None, {})
+    ref = SomeOOInstance(C)
     assert annotation_to_lltype(ref) == C
     
 def test_ll_union():
@@ -173,24 +173,24 @@ def test_ll_union():
     py.test.raises(AssertionError, "unionof(SomeObject(), SomePtr(PS1))")
 
 def test_oo_union():
-    C1 = ootype.Class("C1", None)
-    C2 = ootype.Class("C2", C1)
-    C3 = ootype.Class("C3", C1)
-    D = ootype.Class("D", None)
-    assert unionof(SomeRef(C1), SomeRef(C1)) == SomeRef(C1)
-    assert unionof(SomeRef(C1), SomeRef(C2)) == SomeRef(C1)
-    assert unionof(SomeRef(C2), SomeRef(C1)) == SomeRef(C1)
-    assert unionof(SomeRef(C2), SomeRef(C3)) == SomeRef(C1)
+    C1 = ootype.Instance("C1", None)
+    C2 = ootype.Instance("C2", C1)
+    C3 = ootype.Instance("C3", C1)
+    D = ootype.Instance("D", None)
+    assert unionof(SomeOOInstance(C1), SomeOOInstance(C1)) == SomeOOInstance(C1)
+    assert unionof(SomeOOInstance(C1), SomeOOInstance(C2)) == SomeOOInstance(C1)
+    assert unionof(SomeOOInstance(C2), SomeOOInstance(C1)) == SomeOOInstance(C1)
+    assert unionof(SomeOOInstance(C2), SomeOOInstance(C3)) == SomeOOInstance(C1)
 
-    assert unionof(SomeRef(C1),SomeImpossibleValue()) == SomeRef(C1)
-    assert unionof(SomeImpossibleValue(), SomeRef(C1)) == SomeRef(C1)
+    assert unionof(SomeOOInstance(C1),SomeImpossibleValue()) == SomeOOInstance(C1)
+    assert unionof(SomeImpossibleValue(), SomeOOInstance(C1)) == SomeOOInstance(C1)
 
-    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeRef(D))")
-    py.test.raises(AssertionError, "unionof(SomeRef(D), SomeRef(C1))")
-    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeInteger())")
-    py.test.raises(AssertionError, "unionof(SomeInteger(), SomeRef(C1))")
-    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeObject())")
-    py.test.raises(AssertionError, "unionof(SomeObject(), SomeRef(C1))")
+    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeOOInstance(D))")
+    py.test.raises(AssertionError, "unionof(SomeOOInstance(D), SomeOOInstance(C1))")
+    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeInteger())")
+    py.test.raises(AssertionError, "unionof(SomeInteger(), SomeOOInstance(C1))")
+    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeObject())")
+    py.test.raises(AssertionError, "unionof(SomeObject(), SomeOOInstance(C1))")
 
 if __name__ == '__main__':
     for name, value in globals().items():
