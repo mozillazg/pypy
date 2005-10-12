@@ -52,3 +52,19 @@ class ObjectOrientedTypeSystem(TypeSystem):
 # All typesystems are singletons
 LowLevelTypeSystem.instance = LowLevelTypeSystem()
 ObjectOrientedTypeSystem.instance = ObjectOrientedTypeSystem()
+
+# Multiple dispatch on type system and high-level annotation
+
+from pypy.annotation.pairtype import pairtype
+from pypy.annotation.model import SomeObject
+
+class __extend__(pairtype(TypeSystem, SomeObject)):
+    def rtyper_makerepr((ts, s_obj), rtyper):
+        return s_obj.rtyper_makerepr(rtyper)
+
+    def rtyper_makekey((ts, s_obj), rtyper):
+        if hasattr(s_obj, "rtyper_makekey_ex"):
+            return s_obj.rtyper_makekey_ex(rtyper)
+        return s_obj.rtyper_makekey()
+
+

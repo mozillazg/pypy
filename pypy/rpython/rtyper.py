@@ -102,12 +102,10 @@ class RPythonTyper:
         return self.exceptiondata    # built at the end of specialize()
 
     def makekey(self, s_obj):
-        if hasattr(s_obj, "rtyper_makekey_ex"):
-            return s_obj.rtyper_makekey_ex(self)
-        return s_obj.rtyper_makekey()
+        return pair(self.type_system, s_obj).rtyper_makekey(self)
 
     def makerepr(self, s_obj):
-        return s_obj.rtyper_makerepr(self)
+        return pair(self.type_system, s_obj).rtyper_makerepr(self)
         
     def getrepr(self, s_obj):
         # s_objs are not hashable... try hard to find a unique key anyway
