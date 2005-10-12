@@ -345,7 +345,7 @@ def adjust_shape(hop2, s_shape):
 
 def getsignature(rtyper, func):
     f = rtyper.getcallable(func)
-    graph = rtyper.deref(f).graph
+    graph = rtyper.type_system_deref(f).graph
     rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
     if graph.getreturnvar() in rtyper.annotator.bindings:
         rresult = rtyper.bindingrepr(graph.getreturnvar())
@@ -391,7 +391,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
 
     def get_args_ret_s(self):
         f, _, _ = self.get_signature()
-        graph = self.rtyper.deref(f).graph
+        graph = self.rtyper.type_system_deref(f).graph
         rtyper = self.rtyper
         return [rtyper.binding(arg) for arg in graph.getargs()], rtyper.binding(graph.getreturnvar())
 
@@ -419,7 +419,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
     def rtype_simple_call(self, hop):
         f, rinputs, rresult = self.function_signatures().itervalues().next()
 
-        if getattr(self.rtyper.deref(f).graph, 'normalized_for_calls', False):
+        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
             # should not have an argument count mismatch
             assert len(rinputs) == hop.nb_args-1, "normalization bug"
             vlist = hop.inputargs(self, *rinputs)
@@ -446,7 +446,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         f, rinputs, rresult = self.function_signatures().itervalues().next()
         # the function arguments may have been normalized by normalizecalls()
         # already
-        if getattr(self.rtyper.deref(f).graph, 'normalized_for_calls', False):
+        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
             vlist = hop.inputargs(self, Void, *rinputs)
             vlist = vlist[:1] + vlist[2:]
         else:

@@ -2,6 +2,14 @@ from pypy.translator.translator import Translator
 from pypy.rpython import lltype
 from pypy.rpython.ootype import ootype
 
+def specialize(f, input_types):
+    t = Translator(f)
+    t.annotate(input_types)
+    t.specialize(type_system="ootype")
+
+    graph = t.flowgraphs[f]
+    check_only_ootype(graph)
+
 def check_only_ootype(graph):
     def check_ootype(v):
         t = v.concretetype
@@ -16,12 +24,7 @@ def check_only_ootype(graph):
 def test_simple():
     def f(a, b):
         return a + b
-    t = Translator(f)
-    t.annotate([int, int])
-    t.specialize(type_system="ootype")
-
-    graph = t.flowgraphs[f]
-    check_only_ootype(graph)
+    specialize(f, [int, int])
 
 def test_simple_call():
     def f(a, b):
@@ -29,11 +32,14 @@ def test_simple_call():
 
     def g():
         return f(5, 3)
+    specialize(g, [])
 
-    t = Translator(g)
-    t.annotate([])
-    
-    t.specialize(type_system="ootype")
+# Adjusted from test_rclass.py
+class EmptyBase(object):
+    pass
 
-    graph = t.flowgraphs[g]
-    check_only_ootype(graph)
+def test_simple():
+    def dummyfn():
+        x = EmptyBase()
+        return x
+    specialize(dummyfn, [])

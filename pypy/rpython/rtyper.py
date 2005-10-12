@@ -27,12 +27,14 @@ from pypy.tool.sourcetools import func_with_new_name, valid_identifier
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.rmodel import Repr, inputconst
 from pypy.rpython.rmodel import TyperError, BrokenReprTyperError
-from pypy.rpython.rmodel import getfunctionptr, getstaticmeth, warning
+from pypy.rpython.rmodel import warning
 from pypy.rpython.normalizecalls import perform_normalizations
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper
 from pypy.rpython.exceptiondata import ExceptionData
 
 from pypy.rpython.rmodel import log
+from pypy.rpython.typesystem import LowLevelTypeSystem,\
+                                    ObjectOrientedTypeSystem
 
 
 class RPythonTyper:
@@ -40,9 +42,22 @@ class RPythonTyper:
     def __init__(self, annotator, type_system="lltype"):
         self.annotator = annotator
 
-        if type_system not in ("lltype", "ootype"):
+        if type_system == "lltype":
+            self.type_system = LowLevelTypeSystem.instance
+        elif type_system == "ootype":
+            self.type_system = ObjectOrientedTypeSystem.instance
+        else:
             raise TyperError("Unknown type system %r!" % type_system)
-        self.type_system = type_system
+        self.type_system_deref = self.type_system.deref
+
+        def getfunctionptr(graphfunc):
+            def getconcretetype(v):
+                return self.bindingrepr(v).lowleveltype
+
+            return LowLevelTypeSystem.instance.getcallable(
+                        self.annotator.translator, graphfunc, getconcretetype)
+        
+        self.getfunctionptr = getfunctionptr
 
         self.reprs = {}
         self._reprs_must_call_setup = []
@@ -502,32 +517,12 @@ class RPythonTyper:
     def needs_hash_support(self, cls):
         return cls in self.annotator.bookkeeper.needs_hash_support
 
-    def deref(self, obj):
-        """Derefernce obj if it is a pointer."""
-        if self.type_system == "ootype":
-            assert isinstance(typeOf(obj), ootype.OOType)
-            return obj
-        elif self.type_system == "lltype":
-            assert isinstance(typeOf(obj), Ptr)
-
-            return obj._obj
-
     def getcallable(self, graphfunc):
-        if self.type_system == "lltype":
-            return self.getfunctionptr(graphfunc)
-        
-        elif self.type_system == "ootype":
-            return self.getstaticmeth(graphfunc)
-
-    def getstaticmeth(self, graphfunc):
         def getconcretetype(v):
             return self.bindingrepr(v).lowleveltype
-        return getstaticmeth(self.annotator.translator, graphfunc, getconcretetype)
 
-    def getfunctionptr(self, graphfunc):
-        def getconcretetype(v):
-            return self.bindingrepr(v).lowleveltype
-        return getfunctionptr(self.annotator.translator, graphfunc, getconcretetype)
+        return self.type_system.getcallable(
+                    self.annotator.translator, graphfunc, getconcretetype)
 
     def annotate_helper(self, ll_function, arglltypes):
         """Annotate the given low-level helper function
