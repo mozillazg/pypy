@@ -566,7 +566,7 @@ class __extend__(SomeExternalObject):
 
 
 # annotation of low-level types
-from pypy.annotation.model import SomePtr, ll_to_annotation, annotation_to_lltype
+from pypy.annotation.model import SomePtr, SomeRef, ll_to_annotation, annotation_to_lltype
 class __extend__(SomePtr):
 
     def getattr(p, s_attr):
@@ -591,6 +591,12 @@ class __extend__(SomePtr):
 
     def is_true(p):
         return SomeBool()
+
+class __extend__(SomeRef):
+    def getattr(p, s_attr):
+        assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % p.ootype
+        v = getattr(p.ootype._example(), s_attr.const)
+        return ll_to_annotation(v)
 
 
 #_________________________________________

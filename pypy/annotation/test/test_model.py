@@ -118,6 +118,9 @@ def test_ll_to_annotation():
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(S)
     s_p = ll_to_annotation(lltype.malloc(A, 0))
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(A)
+    C = ootype.Class('C', None, {})
+    s_p = ll_to_annotation(ootype.new(C))
+    assert isinstance(s_p, SomeRef) and s_p.ootype == C
 
 def test_annotation_to_lltype():
     from pypy.rpython.rarithmetic import r_uint
@@ -140,6 +143,9 @@ def test_annotation_to_lltype():
     s_p = SomePtr(ll_ptrtype=PS)
     assert annotation_to_lltype(s_p) == PS
     py.test.raises(ValueError, "annotation_to_lltype(si0)")
+    C = ootype.Class('C', None, {})
+    ref = SomeRef(C)
+    assert annotation_to_lltype(ref) == C
     
 def test_ll_union():
     PS1 = lltype.Ptr(lltype.GcStruct('s'))
@@ -165,6 +171,13 @@ def test_ll_union():
     py.test.raises(AssertionError, "unionof(SomePtr(PS1), SomeObject())")
     py.test.raises(AssertionError, "unionof(SomeInteger(), SomePtr(PS1))")
     py.test.raises(AssertionError, "unionof(SomeObject(), SomePtr(PS1))")
+
+def test_oo_union():
+    C1 = ootype.Class("C1", None, {})
+    C2 = ootype.Class("C2", C1, {})
+    D = ootype.Class("D", None, {})
+    assert unionof(SomeRef(C1), SomeRef(C1)) == SomeRef(C1)
+    
 
 if __name__ == '__main__':
     for name, value in globals().items():
