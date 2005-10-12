@@ -374,6 +374,12 @@ def new(C):
     r = SomeRef(ootype.typeOf(i))
     return r
 
+def null(C):
+    assert C.is_constant()
+    i = ootype.null(C.const)
+    r = SomeRef(ootype.typeOf(i))
+    return r
+
 def instanceof(c, C):
     assert C.is_constant()
     assert isinstance(C.const, ootype.Class)
@@ -381,6 +387,7 @@ def instanceof(c, C):
 
 BUILTIN_ANALYZERS[ootype.instanceof] = instanceof
 BUILTIN_ANALYZERS[ootype.new] = new
+BUILTIN_ANALYZERS[ootype.null] = null
 
 #________________________________
 # non-gc objects
