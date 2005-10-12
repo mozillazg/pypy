@@ -173,11 +173,24 @@ def test_ll_union():
     py.test.raises(AssertionError, "unionof(SomeObject(), SomePtr(PS1))")
 
 def test_oo_union():
-    C1 = ootype.Class("C1", None, {})
-    C2 = ootype.Class("C2", C1, {})
-    D = ootype.Class("D", None, {})
+    C1 = ootype.Class("C1", None)
+    C2 = ootype.Class("C2", C1)
+    C3 = ootype.Class("C3", C1)
+    D = ootype.Class("D", None)
     assert unionof(SomeRef(C1), SomeRef(C1)) == SomeRef(C1)
-    
+    assert unionof(SomeRef(C1), SomeRef(C2)) == SomeRef(C1)
+    assert unionof(SomeRef(C2), SomeRef(C1)) == SomeRef(C1)
+    assert unionof(SomeRef(C2), SomeRef(C3)) == SomeRef(C1)
+
+    assert unionof(SomeRef(C1),SomeImpossibleValue()) == SomeRef(C1)
+    assert unionof(SomeImpossibleValue(), SomeRef(C1)) == SomeRef(C1)
+
+    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeRef(D))")
+    py.test.raises(AssertionError, "unionof(SomeRef(D), SomeRef(C1))")
+    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeInteger())")
+    py.test.raises(AssertionError, "unionof(SomeInteger(), SomeRef(C1))")
+    py.test.raises(AssertionError, "unionof(SomeRef(C1), SomeObject())")
+    py.test.raises(AssertionError, "unionof(SomeObject(), SomeRef(C1))")
 
 if __name__ == '__main__':
     for name, value in globals().items():

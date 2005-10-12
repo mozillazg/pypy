@@ -13,7 +13,8 @@ class OOType(LowLevelType):
 
 class Class(OOType):
 
-    def __init__(self, name, superclass, fields, methods={}):
+    def __init__(self, name, superclass, fields={}, methods={}):
+        self._name = name
         self._superclass = superclass
 
 	self._methods = frozendict()
@@ -29,6 +30,9 @@ class Class(OOType):
 
     def _example(self):
         return new(self)
+
+    def __repr__(self):
+        return '<%s %s>' % (self, self._name)
 
     def _add_fields(self, fields):
         for name, defn in fields.iteritems():
@@ -213,11 +217,20 @@ def addMethods(CLASS, methods):
     CLASS._add_methods(methods)
 
 def instanceof(inst, CLASS):
-    c = inst._TYPE
+    return isSubclass(inst._TYPE, CLASS)
+
+def isSubclass(C1, C2):
+    c = C1
     while c is not None:
-        if c is CLASS:
+        if c is C2:
             return True
         c = c._superclass
-
     return False
 
+def commonBaseclass(CLASS1, CLASS2):
+    c = CLASS1
+    while c is not None:
+        if isSubclass(CLASS2, c):
+            return c
+        c = c._superclass
+    return None
