@@ -431,10 +431,13 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
-class SomeRef(SomePtr):
-    pass
+class SomeRef(SomeObject):
+    def __init__(self, ootype):
+        self.ootype = ootype
+
 
 from pypy.rpython import lltype
+from pypy.rpython.ootype import ootype
 
 annotation_to_ll_map = [
     (SomePBC({None: True}), lltype.Void),   # also matches SomeImpossibleValue()
@@ -449,7 +452,7 @@ annotation_to_ll_map = [
 
 def annotation_to_lltype(s_val, info=None):
     if isinstance(s_val, SomeRef):
-        return s_val.ll_ptrtype
+        return s_val.ootype
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
     for witness, lltype in annotation_to_ll_map:
