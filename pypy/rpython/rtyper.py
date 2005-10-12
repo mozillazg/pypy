@@ -101,14 +101,22 @@ class RPythonTyper:
     def getexceptiondata(self):
         return self.exceptiondata    # built at the end of specialize()
 
+    def makekey(self, s_obj):
+        if hasattr(s_obj, "rtyper_makekey_ex"):
+            return s_obj.rtyper_makekey_ex(self)
+        return s_obj.rtyper_makekey()
+
+    def makerepr(self, s_obj):
+        return s_obj.rtyper_makerepr(self)
+        
     def getrepr(self, s_obj):
         # s_objs are not hashable... try hard to find a unique key anyway
-        key = s_obj.rtyper_makekey()
+        key = self.makekey(s_obj)
         assert key[0] == s_obj.__class__
         try:
             result = self.reprs[key]
         except KeyError:
-            result = s_obj.rtyper_makerepr(self)
+            result = self.makerepr(s_obj)
             assert not isinstance(result.lowleveltype, ContainerType), (
                 "missing a Ptr in the type specification "
                 "of %s:\n%r" % (s_obj, result.lowleveltype))

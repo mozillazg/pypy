@@ -182,8 +182,8 @@ class __extend__(annmodel.SomeIterator):
     def rtyper_makerepr(self, rtyper):
         r_container = rtyper.getrepr(self.s_container)
         return r_container.make_iterator_repr(*self.variant)
-    def rtyper_makekey(self):
-        return self.__class__, self.s_container.rtyper_makekey(), self.variant
+    def rtyper_makekey_ex(self, rtyper):
+        return self.__class__, rtyper.makekey(self.s_container), self.variant
 
 class __extend__(annmodel.SomeImpossibleValue):
     def rtyper_makerepr(self, rtyper):
