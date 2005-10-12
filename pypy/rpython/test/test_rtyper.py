@@ -1,5 +1,6 @@
 from pypy.annotation import model as annmodel
 from pypy.translator.translator import Translator
+from pypy.translator import annrpython
 from pypy.rpython.lltype import *
 from pypy.rpython.test.test_llinterp import interpret 
 from pypy.rpython.rtyper import RPythonTyper
@@ -19,8 +20,9 @@ def test_reprkeys_dont_clash():
                                 annmodel.SomeInteger()))
     stup2 = annmodel.SomeTuple((annmodel.SomeString(), 
                                 annmodel.SomeInteger()))
-    key1 = stup1.rtyper_makekey()
-    key2 = stup2.rtyper_makekey()
+    rtyper = RPythonTyper(annrpython.RPythonAnnotator(None))
+    key1 = rtyper.makekey(stup1)
+    key2 = rtyper.makekey(stup2)
     assert key1 != key2
 
 def test_slice_reprkeys():

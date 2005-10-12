@@ -42,7 +42,7 @@ class __extend__(annmodel.SomeSlice):
     def rtyper_makekey(self):
         # use the repr itself as the key (it can only be one of the three
         # prebuilt reprs below).
-        return self.__class__, self.rtyper_makerepr(None)
+        return self.__class__, self.rtyper_makerepr(self)
 
 
 class SliceRepr(Repr):
