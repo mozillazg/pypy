@@ -684,7 +684,7 @@ class ClassesPBCRepr(Repr):
         class_repr = self.get_class_repr()
         return class_repr.getpbcfield(vcls, access_set, attr, llops)
 
-class __extend__(pairtype(ClassesPBCRepr, rclass.ClassRepr)):
+class __extend__(pairtype(ClassesPBCRepr, rclass.AbstractClassRepr)):
     def convert_from_to((r_clspbc, r_cls), v, llops):
         if r_cls.lowleveltype != r_clspbc.lowleveltype:
             return NotImplemented   # good enough for now

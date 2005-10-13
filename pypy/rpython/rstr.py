@@ -12,7 +12,6 @@ from pypy.rpython.rslice import startstop_slice_repr, startonly_slice_repr
 from pypy.rpython.rslice import minusone_slice_repr
 from pypy.rpython.lltype import GcStruct, Signed, Array, Char, Ptr, malloc
 from pypy.rpython.lltype import Bool, Void, GcArray, nullptr, typeOf, pyobjectptr
-from pypy.rpython.rclass import InstanceRepr
 
 
 # ____________________________________________________________
@@ -334,6 +333,7 @@ def do_stringformat(hop, sourcevarsrepr):
 
     argsiter = iter(sourcevarsrepr)
     
+    InstanceRepr = hop.rtyper.type_system.rclass.InstanceRepr
     for i, thing in enumerate(things):
         if isinstance(thing, tuple):
             code = thing[0]

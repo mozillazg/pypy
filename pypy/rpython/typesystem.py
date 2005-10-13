@@ -3,8 +3,8 @@
 
 from pypy.annotation.pairtype import extendabletype
 
-from pypy.rpython.ootype import ootype
-from pypy.rpython import lltype # FIXME lltype in separate directory
+from pypy.rpython.ootype import ootype # FIXME ootype dir to ootypesystem
+from pypy.rpython.lltypesystem import lltype
 
 class TypeSystem(object):
     __metaclass__ = extendabletype
@@ -35,6 +35,19 @@ in a graph."""
 class LowLevelTypeSystem(TypeSystem):
     callable_trait = (lltype.FuncType, lltype.functionptr)
 
+    def __getattr__(self, name):
+        """Lazy import to avoid circular dependencies."""
+        if name == "rclass":
+            from pypy.rpython.lltypesystem import rclass
+            self.rclass = rclass
+
+            return rclass
+        elif name == "BUILTIN_TYPER":
+            from pypy.rpython.lltypesystem import rbuiltin
+            self.BUILTIN_TYPER = rbuiltin.BUILTIN_TYPER
+
+            return self.BUILTIN_TYPER
+
     def deref(self, obj):
         assert isinstance(lltype.typeOf(obj), lltype.Ptr)
         return obj._obj
@@ -44,6 +57,8 @@ class LowLevelTypeSystem(TypeSystem):
 
 class ObjectOrientedTypeSystem(TypeSystem):
     callable_trait = (ootype.StaticMethod, ootype.static_meth)
+
+    # FIXME rclass
 
     def deref(self, obj):
         assert isinstance(ootype.typeOf(obj), ootype.OOType)
@@ -66,5 +81,3 @@ class __extend__(pairtype(TypeSystem, SomeObject)):
         if hasattr(s_obj, "rtyper_makekey_ex"):
             return s_obj.rtyper_makekey_ex(rtyper)
         return s_obj.rtyper_makekey()
-
-
