@@ -10,7 +10,6 @@ from pypy.rpython.robject import pyobj_repr
 from pypy.rpython.rfloat import float_repr, FloatRepr
 from pypy.rpython.rbool import bool_repr
 from pypy.rpython.rdict import rtype_r_dict
-from pypy.rpython import rclass
 from pypy.tool import sourcetools
 
 class __extend__(annmodel.SomeBuiltin):
@@ -55,8 +54,12 @@ class BuiltinFunctionRepr(Repr):
         try:
             bltintyper = BUILTIN_TYPER[self.builtinfunc]
         except KeyError:
-            raise TyperError("don't know about built-in function %r" % (
-                self.builtinfunc,))
+            try:
+                rtyper = hop.rtyper
+                bltintyper = rtyper.type_system.BUILTIN_TYPER[self.builtinfunc]
+            except KeyError:
+                raise TyperError("don't know about built-in function %r" % (
+                    self.builtinfunc,))
         hop2 = hop.copy()
         hop2.r_s_popfirstarg()
         return bltintyper(hop2)
@@ -129,36 +132,6 @@ def rtype_builtin_unichr(hop):
 def rtype_builtin_list(hop):
     return hop.args_r[0].rtype_bltn_list(hop)
 
-def rtype_builtin_isinstance(hop):
-    if hop.s_result.is_constant():
-        return hop.inputconst(lltype.Bool, hop.s_result.const)
-    if hop.args_r[0] == pyobj_repr or hop.args_r[1] == pyobj_repr:
-        v_obj, v_typ = hop.inputargs(pyobj_repr, pyobj_repr)
-        c = hop.inputconst(pyobj_repr, isinstance)
-        v = hop.genop('simple_call', [c, v_obj, v_typ], resulttype = pyobj_repr)
-        return hop.llops.convertvar(v, pyobj_repr, bool_repr)        
-
-    if hop.args_s[1].is_constant() and hop.args_s[1].const == list:
-        if hop.args_s[0].knowntype != list:
-            raise TyperError("isinstance(x, list) expects x to be known statically to be a list or None")
-        rlist = hop.args_r[0]
-        vlist = hop.inputarg(rlist, arg=0)
-        cnone = hop.inputconst(rlist, None)
-        return hop.genop('ptr_ne', [vlist, cnone], resulttype=lltype.Bool)
-
-    class_repr = rclass.get_type_repr(hop.rtyper)
-    assert isinstance(hop.args_r[0], rclass.InstanceRepr)
-    instance_repr = hop.args_r[0].common_repr()
-
-    v_obj, v_cls = hop.inputargs(instance_repr, class_repr)
-    if isinstance(v_cls, Constant):
-        minid = hop.inputconst(lltype.Signed, v_cls.value.subclassrange_min)
-        maxid = hop.inputconst(lltype.Signed, v_cls.value.subclassrange_max)
-        return hop.gendirectcall(rclass.ll_isinstance_const, v_obj, minid,
-                                 maxid)
-    else:
-        return hop.gendirectcall(rclass.ll_isinstance, v_obj, v_cls)
-
 #def rtype_builtin_range(hop): see rrange.py
 
 #def rtype_builtin_xrange(hop): see rrange.py
@@ -211,24 +184,6 @@ def rtype_OSError__init__(hop):
         r_self = hop.args_r[0]
         v_errno = hop.inputarg(lltype.Signed, arg=1)
         r_self.setfield(v_self, 'errno', v_errno, hop.llops)
-
-def ll_instantiate(typeptr):
-    my_instantiate = typeptr.instantiate
-    return my_instantiate()
-
-def rtype_instantiate(hop):
-    s_class = hop.args_s[0]
-    assert isinstance(s_class, annmodel.SomePBC)
-    if len(s_class.prebuiltinstances) != 1:
-        # instantiate() on a variable class
-        vtypeptr, = hop.inputargs(rclass.get_type_repr(hop.rtyper))
-        v_inst = hop.gendirectcall(ll_instantiate, vtypeptr)
-        return hop.genop('cast_pointer', [v_inst],    # v_type implicit in r_result
-                         resulttype = hop.r_result.lowleveltype)
-
-
-    klass = s_class.const
-    return rclass.rtype_new_instance(hop.rtyper, klass, hop.llops)
 
 def rtype_we_are_translated(hop):
     return hop.inputconst(lltype.Bool, True)
@@ -319,7 +274,6 @@ BUILTIN_TYPER[lltype.runtime_type_info] = rtype_runtime_type_info
 BUILTIN_TYPER[rarithmetic.intmask] = rtype_intmask
 BUILTIN_TYPER[rarithmetic.r_uint] = rtype_r_uint
 BUILTIN_TYPER[objectmodel.r_dict] = rtype_r_dict
-BUILTIN_TYPER[objectmodel.instantiate] = rtype_instantiate
 BUILTIN_TYPER[objectmodel.we_are_translated] = rtype_we_are_translated
 
 BUILTIN_TYPER[objectmodel.hlinvoke] = rtype_hlinvoke

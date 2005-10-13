@@ -30,8 +30,6 @@ from pypy.rpython.rmodel import TyperError, BrokenReprTyperError
 from pypy.rpython.rmodel import warning
 from pypy.rpython.normalizecalls import perform_normalizations
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper
-from pypy.rpython.exceptiondata import ExceptionData
-
 from pypy.rpython.rmodel import log
 from pypy.rpython.typesystem import LowLevelTypeSystem,\
                                     ObjectOrientedTypeSystem
@@ -74,7 +72,13 @@ class RPythonTyper:
         for s_primitive, lltype in annmodel.annotation_to_ll_map:
             r = self.getrepr(s_primitive)
             self.primitive_to_repr[r.lowleveltype] = r
-        self.exceptiondata = ExceptionData(self)
+        if type_system == "lltype":
+            from pypy.rpython.lltypesystem.exceptiondata import ExceptionData
+
+            self.exceptiondata = ExceptionData(self)
+        else:
+            self.exceptiondata = None
+
         try:
             self.seed = int(os.getenv('RTYPERSEED'))
             s = 'Using %d as seed for block shuffling' % self.seed
