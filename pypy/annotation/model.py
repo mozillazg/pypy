@@ -449,7 +449,7 @@ class SomeOOStaticMeth(SomeObject):
         self.method = method
         
 from pypy.rpython import lltype
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 
 annotation_to_ll_map = [
     (SomePBC({None: True}), lltype.Void),   # also matches SomeImpossibleValue()

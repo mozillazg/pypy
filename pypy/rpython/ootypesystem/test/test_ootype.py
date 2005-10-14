@@ -1,4 +1,4 @@
-from pypy.rpython.ootype.ootype import *
+from pypy.rpython.ootypesystem.ootype import *
 import py
 
 def test_simple():

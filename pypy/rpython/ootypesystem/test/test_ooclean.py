@@ -1,6 +1,6 @@
 from pypy.translator.translator import Translator
 from pypy.rpython import lltype
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 
 def specialize(f, input_types):
     t = Translator(f)
