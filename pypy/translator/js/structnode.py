@@ -5,6 +5,11 @@ from pypy.translator.js.log import log
 
 log = log.structnode 
 
+def _rename_reserved_keyword(name):
+    if name in 'if then else function for while witch continue break super int bool Array String Struct Number'.split():
+        name += '_'
+    return name
+
 class StructTypeNode(LLVMNode):
     __slots__ = "db struct ref name".split()
 
@@ -32,9 +37,9 @@ class StructTypeNode(LLVMNode):
     # ______________________________________________________________________
     # main entry points from genllvm 
 
-    def writedatatypedecl(self, codewriter):
-        fields_types = [self.db.repr_type(f) for f in self._fields()]
-        codewriter.structdef(self.ref, fields_types)
+    #def writedatatypedecl(self, codewriter):
+    #    fields_types = [self.db.repr_type(f) for f in self._fields()]
+    #    codewriter.structdef(self.ref, fields_types)
 
 class StructVarsizeTypeNode(StructTypeNode):
     __slots__ = "constructor_ref constructor_decl".split()
@@ -53,9 +58,9 @@ class StructVarsizeTypeNode(StructTypeNode):
     # ______________________________________________________________________
     # main entry points from genllvm 
 
-    def writedecl(self, codewriter): 
-        # declaration for constructor
-        codewriter.declare(self.constructor_decl)
+    #def writedecl(self, codewriter): 
+    #    # declaration for constructor
+    #    codewriter.declare(self.constructor_decl)
 
     def writeimpl(self, codewriter):
         log.writeimpl(self.ref)
@@ -83,7 +88,7 @@ class StructNode(ConstantLLVMNode):
         self.db = db
         self.value = value
         self.structtype = self.value._TYPE
-        prefix = '%structinstance.'
+        prefix = 'structinstance_'
         name = str(value).split()[1]
         self.ref = self.make_ref(prefix, name)
         self._get_ref_cache = None
@@ -112,24 +117,26 @@ class StructNode(ConstantLLVMNode):
         p, c = lltype.parentlink(self.value)
         if p is not None:
             self.db.prepare_constant(lltype.typeOf(p), p)
-            
+
+    def writedecl(self, codewriter):
+        codewriter.declare(self.ref + ' = new Object()')
+        
     def get_typerepr(self):
         return self.db.repr_type(self.structtype)
 
     def get_childref(self, index):
-        pos = 0
-        found = False
-        for name in self.structtype._names_without_voids():
-            if name == index:
-                found = True
-                break
-            pos += 1
-        #Structure types require uint constants!
-        #see: http://llvm.cs.uiuc.edu/docs/LangRef.html#i_getelementptr
-        return "getelementptr(%s* %s, int 0, uint %s)" %(
-            self.get_typerepr(),
-            self.get_ref(),
-            pos)
+        return self.get_ref() #XXX what to do with index?
+        #pos = 0
+        #found = False
+        #for name in self.structtype._names_without_voids():
+        #    if name == index:
+        #        found = True
+        #        break
+        #    pos += 1
+        #return "getelementptr(%s* %s, int 0, uint %s)" %(
+        #    self.get_typerepr(),
+        #    self.get_ref(),
+        #    pos)
 
     def get_ref(self):
         """ Returns a reference as used for operations in blocks. """        
@@ -146,12 +153,20 @@ class StructNode(ConstantLLVMNode):
     def get_pbcref(self, toptr):
         """ Returns a reference as used per pbc. """        
         return self.get_ref()
-    
+
     def constantvalue(self):
         """ Returns the constant representation for this node. """
-        values = self._getvalues()
-        all_values = ",\n  ".join(values)
-        return "%s {\n  %s\n  }\n" % (self.get_typerepr(), all_values)
+        vars = []
+        for i, value in enumerate(self._getvalues()):
+            name = self._get_types[i][0]
+            name = _rename_reserved_keyword(name)
+            var  = (name, str(value))
+            vars.append(var)
+        return "({%s})" % ", ".join(["%s:%s" % var for var in vars])
+
+        #values = self._getvalues()
+        #all_values = ",\n  ".join(values)
+        #return "%s {\n  %s\n  }\n" % (self.get_typerepr(), all_values)
                 
                 
 class StructVarsizeNode(StructNode):
@@ -206,22 +221,24 @@ class StructVarsizeNode(StructNode):
                 return result
          
     def get_ref(self):
-        if self._get_ref_cache:
-            return self._get_ref_cache
-        ref = super(StructVarsizeNode, self).get_ref()
-        typeval = self.db.repr_type(lltype.typeOf(self.value))
-        ref = "cast (%s* %s to %s*)" % (self.get_typerepr(),
-                                        ref,
-                                        typeval)
-        self._get_ref_cache = ref
-        return ref
+        return self.ref
+        #if self._get_ref_cache:
+        #    return self._get_ref_cache
+        #ref = super(StructVarsizeNode, self).get_ref()
+        #typeval = self.db.repr_type(lltype.typeOf(self.value))
+        #ref = "cast (%s* %s to %s*)" % (self.get_typerepr(),
+        #                                ref,
+        #                                typeval)
+        #self._get_ref_cache = ref
+        #return ref
     
     def get_pbcref(self, toptr):
         """ Returns a reference as used per pbc. """        
-        ref = self.ref
-        p, c = lltype.parentlink(self.value)
-        assert p is None, "child arrays are NOT needed by rtyper"
-        fromptr = "%s*" % self.get_typerepr()
-        refptr = "getelementptr (%s %s, int 0)" % (fromptr, ref)
-        ref = "cast(%s %s to %s)" % (fromptr, refptr, toptr)
-        return ref
+        return self.ref
+        #ref = self.ref
+        #p, c = lltype.parentlink(self.value)
+        #assert p is None, "child arrays are NOT needed by rtyper"
+        #fromptr = "%s*" % self.get_typerepr()
+        #refptr = "getelementptr (%s %s, int 0)" % (fromptr, ref)
+        #ref = "cast(%s %s to %s)" % (fromptr, refptr, toptr)
+        #return ref

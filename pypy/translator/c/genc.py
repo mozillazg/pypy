@@ -11,7 +11,7 @@ from pypy.rpython.rmodel import getfunctionptr
 from pypy.rpython import lltype
 from pypy.tool.udir import udir
 
-class CBuilder: 
+class CBuilder(object):
     c_source_filename = None
     _compiled = False
     symboltable = None
@@ -23,7 +23,7 @@ class CBuilder:
 
         if libraries is None:
             libraries = []
-        self.libraries = libraries        
+        self.libraries = libraries
 
     def generate_source(self):
         assert self.c_source_filename is None
@@ -132,7 +132,8 @@ def translator2database(translator):
 
 # ____________________________________________________________
 
-SPLIT_CRITERIA = 170
+#SPLIT_CRITERIA = 32767 # enable to support VC++ 6.0
+SPLIT_CRITERIA = 65535 # support VC++ 7.2
 
 MARKER = '/*/*/' # provide an easy way to split after generating
 
@@ -148,9 +149,7 @@ class SourceGenerator:
 
     def set_strategy(self, path):
         all_nodes = list(self.database.globalcontainers())
-        # split off non-function nodes
-        # win32 has a problem: compiles but infinite recursion etc.
-        # trytocicumvent this by placing all non-func nodes into one file.
+        # split off non-function nodes. We don't try to optimize these, yet.
         funcnodes = []
         othernodes = []
         for node in all_nodes:
@@ -158,7 +157,8 @@ class SourceGenerator:
                 funcnodes.append(node)
             else:
                 othernodes.append(node)
-        if 1 or len(funcnodes) >= SPLIT_CRITERIA:##!!
+        # for now, only split for stand-alone programs.
+        if self.database.standalone:
             self.one_source_file = False
         self.funcnodes = funcnodes
         self.othernodes = othernodes
@@ -180,15 +180,26 @@ class SourceGenerator:
     def getothernodes(self):
         return self.othernodes[:]
 
-    def splitfuncnodes(self):
-        # silly first split, just by node count
-        # XXX filter constant stuff off and put it elsewhere
-        nodes = self.funcnodes[:]
-        nchunks = len(nodes) // SPLIT_CRITERIA or 1
-        chunksize = (len(nodes) + nchunks - 1) // nchunks
-        while nodes:
-            yield self.uniquecname('implement.c'), nodes[:chunksize]
-            del nodes[:chunksize]
+    def splitnodesimpl(self, basecname, nodes, nextra, nbetween):
+        # produce a sequence of nodes, grouped into files
+        # which have no more than SPLIT_CRITERIA lines
+        used = nextra
+        part = []
+        for node in nodes:
+            impl = list(node.implementation())
+            if not impl:
+                continue
+            cost = len(impl) + nbetween
+            if used + cost > SPLIT_CRITERIA and part:
+                # split if criteria met, unless we would produce nothing.
+                yield self.uniquecname(basecname), part
+                part = []
+                used = nextra
+            part.append( (node, impl) )
+            used += cost
+        # generate left pieces
+        if part:
+            yield self.uniquecname(basecname), part
 
     def gen_readable_parts_of_source(self, f):
         if self.one_source_file:
@@ -266,26 +277,33 @@ class SourceGenerator:
         print >> fc, '/***********************************************************/'
         fc.close()
 
-        name = self.uniquecname('nonfuncnodes.c')
-        print >> f, '/* %s */' % name
-        fc = self.makefile(name)
-        print >> fc, '/***********************************************************/'
-        print >> fc, '/***  Non-function Implementations                       ***/'
-        print >> fc
-        print >> fc, '#define PYPY_NOT_MAIN_FILE'
-        print >> fc, '#include "common_header.h"'
-        print >> fc, '#include "structdef.h"'
-        print >> fc, '#include "forwarddecl.h"'
-        print >> fc
-        print >> fc, '#include "src/g_include.h"'
-        print >> fc
-        print >> fc, MARKER
-        for node in self.getothernodes():
-            render_nonempty(node.implementation())
-        print >> fc, '/***********************************************************/'
-        fc.close()
+        nextralines = 11 + 1
+        for name, nodesimpl in self.splitnodesimpl('nonfuncnodes.c',
+                                                   self.othernodes,
+                                                   nextralines, 1):
+            print >> f, '/* %s */' % name
+            fc = self.makefile(name)
+            print >> fc, '/***********************************************************/'
+            print >> fc, '/***  Non-function Implementations                       ***/'
+            print >> fc
+            print >> fc, '#define PYPY_NOT_MAIN_FILE'
+            print >> fc, '#include "common_header.h"'
+            print >> fc, '#include "structdef.h"'
+            print >> fc, '#include "forwarddecl.h"'
+            print >> fc
+            print >> fc, '#include "src/g_include.h"'
+            print >> fc
+            print >> fc, MARKER
+            for node, impl in nodesimpl:
+                print >> fc, '\n'.join(impl)
+                print >> fc, MARKER
+            print >> fc, '/***********************************************************/'
+            fc.close()
 
-        for name, nodes in self.splitfuncnodes():
+        nextralines = 8 + len(self.preimpl) + 4 + 1
+        for name, nodesimpl in self.splitnodesimpl('implement.c',
+                                                   self.funcnodes,
+                                                   nextralines, 1):
             print >> f, '/* %s */' % name
             fc = self.makefile(name)
             print >> fc, '/***********************************************************/'
@@ -302,9 +320,9 @@ class SourceGenerator:
             print >> fc, '#include "src/g_include.h"'
             print >> fc
             print >> fc, MARKER
-            linecount = 12 + len(self.preimpl)
-            for node in nodes:
-                linecount += render_nonempty(node.implementation())
+            for node, impl in nodesimpl:
+                print >> fc, '\n'.join(impl)
+                print >> fc, MARKER
             print >> fc, '/***********************************************************/'
             fc.close()
         print >> f

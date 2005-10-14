@@ -2,6 +2,7 @@ import sys, os
 from pypy.objspace.flow.model import traverse, Block, Variable, Constant
 from pypy.translator.asm import infregmachine
 from pypy.rpython.lltype import Signed
+from pypy.translator.asm.simulator import Machine, TranslateProgram
 
 #Available Machine code targets (processor+operating system)
 TARGET_UNKNOWN=0
@@ -33,7 +34,7 @@ elif ASM_TARGET==TARGET_WIN386:
     from pypy.translator.asm.i386gen.i386_assembler import make_func
 
 
-def genasm(translator):
+def genasm(translator, processor):
 
     f = translator.entrypoint
 
@@ -48,10 +49,27 @@ def genasm(translator):
 
     g = FuncGenerator(graph)
     g.gencode()
-#    g.assembler.dump()
-    finreg = g.assembler.allocate_registers(30)
 
-    return make_func(finreg.assemble(), 'i', 'i'*len(graph.startblock.inputargs))
+    if processor == 'virt':
+        def r(*args):
+            return Machine.RunProgram(g.assembler.instructions,
+                                      args,
+                                      tracing=True)
+
+        return r
+    elif processor == 'virtfinite':
+        insns = TranslateProgram(g.assembler.instructions, 50)
+        for i in insns:
+            print i
+        def r(*args):
+            return Machine.RunProgram(insns,
+                                      args,
+                                      tracing=True)
+
+        return r
+    elif processor == 'ppc':
+        from pypy.translator.asm.ppc import codegen
+        return codegen.make_native_code(graph, g.assembler.instructions)
 
 class FuncGenerator(object):
 
@@ -71,7 +89,7 @@ class FuncGenerator(object):
         self.assembler = infregmachine.Assembler()
 
         for i, var in enumerate(graph.startblock.inputargs):
-            self.emit('LIA', self.reg(var), i)
+            self.emit('LIA', self.reg(var), Constant(i))
 
     def assign_register(self, var):
         assert var not in self._var2reg
@@ -85,7 +103,7 @@ class FuncGenerator(object):
         if isinstance(var, Constant):
             r = self.next_register
             assert isinstance(var.value, int)
-            self.assembler.emit("LOAD", r, var.value)
+            self.assembler.emit("LOAD", r, var)
             self.next_register += 1
             return r
         elif isinstance(var, Variable):
@@ -128,7 +146,8 @@ class FuncGenerator(object):
             assert block.exitswitch is not None
             falselink, truelink = block.exits
             lastop = block.operations[-1]
-            assert lastop.opname in ['int_gt', 'int_lt', 'int_ge']
+            assert lastop.opname in ['int_gt', 'int_lt', 'int_ge',
+                                     'int_eq', 'int_le', 'int_ne']
             A.emit(lastop.opname, *map(self.reg, lastop.args))
             b = self.blockname()
             A.emit('JT', b)

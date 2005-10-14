@@ -1,5 +1,5 @@
 import autopath
-import py
+import py, sys
 from pypy.translator.tool.cbuild import skip_missing_compiler
 from pypy.translator.translator import Translator
 
@@ -167,13 +167,13 @@ class TestAnnotatedTestCase:
         assert fn(-4.5) == 92.125
         assert fn(4.5) == 90.125
 
-    def test_recursion_detection(self):
-        def f(n=int, accum=int):
-            if n == 0:
-                return accum
-            else:
-                return f(n-1, accum*n)
+    def test_memoryerror(self):
+        def f(i=int):
+            lst = [0]*i
+            lst[-1] = 5
+            return lst[0]
         fn = self.getcompiled(f)
-        assert fn(7, 1) == 5040
-        py.test.skip("recursion detection: in-progress")
-        py.test.raises(RuntimeError, fn, -1, 0)
+        assert fn(1) == 5
+        assert fn(2) == 0
+        py.test.raises(MemoryError, fn, sys.maxint//2+1)
+        py.test.raises(MemoryError, fn, sys.maxint)

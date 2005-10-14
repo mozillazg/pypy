@@ -39,14 +39,14 @@ class ArrayTypeNode(LLVMNode):
     # ______________________________________________________________________
     # entry points from genllvm
     #
-    def writedatatypedecl(self, codewriter):
-        codewriter.arraydef(self.ref,
-                            'int',
-                            self.db.repr_type(self.arraytype))
+    #def writedatatypedecl(self, codewriter):
+    #    codewriter.arraydef(self.ref,
+    #                        'int',
+    #                        self.db.repr_type(self.arraytype))
 
-    def writedecl(self, codewriter): 
-        # declaration for constructor
-        codewriter.declare(self.constructor_decl)
+    #def writedecl(self, codewriter): 
+    #    # declaration for constructor
+    #    codewriter.declare(self.constructor_decl)
 
 
 class VoidArrayTypeNode(LLVMNode):
@@ -58,9 +58,9 @@ class VoidArrayTypeNode(LLVMNode):
         self.array = array
         self.ref = "arraytype_Void"
 
-    def writedatatypedecl(self, codewriter):
-        td = "%s = type { int }" % self.ref
-        codewriter.append(td)
+    #def writedatatypedecl(self, codewriter):
+    #    td = "%s = type { int }" % self.ref
+    #    codewriter.append(td)
         
 class ArrayNode(ConstantLLVMNode):
     """ An arraynode.  Elements can be
@@ -91,6 +91,12 @@ class ArrayNode(ConstantLLVMNode):
         if p is not None:
             self.db.prepare_constant(lltype.typeOf(p), p)
 
+    def writedecl(self, codewriter):
+        if self.arraytype is lltype.Char:  #or use seperate nodetype
+            codewriter.declare(self.ref + ' = new String()')
+        else:
+            codewriter.declare(self.ref + ' = new Array()')
+
     def get_length(self):
         """ returns logical length of array """
         items = self.value.items
@@ -109,21 +115,22 @@ class ArrayNode(ConstantLLVMNode):
         return "{ int, [%s x %s] }" % (arraylen, typeval)
 
     def get_ref(self):
+        return self.ref
         #typeval = self.db.repr_type(lltype.typeOf(self.value))
         #ref = "cast (%s* %s to %s*)" % (self.get_typerepr(), self.ref, typeval)
-        p, c = lltype.parentlink(self.value)
-        assert p is None, "child arrays are NOT needed by rtyper"
+        #p, c = lltype.parentlink(self.value)
+        #assert p is None, "child arrays are NOT needed by rtyper"
         #return ref
-        return self.ref
 
     def get_pbcref(self, toptr):
-        ref = self.ref
-        p, c = lltype.parentlink(self.value)
-        assert p is None, "child arrays are NOT needed by rtyper"
-
-        fromptr = "%s*" % self.get_typerepr()
-        ref = "cast(%s %s to %s)" % (fromptr, ref, toptr)
-        return ref
+        return self.ref
+        #ref = self.ref
+        #p, c = lltype.parentlink(self.value)
+        #assert p is None, "child arrays are NOT needed by rtyper"
+        #
+        #fromptr = "%s*" % self.get_typerepr()
+        #ref = "cast(%s %s to %s)" % (fromptr, ref, toptr)
+        #return ref
 
     def get_childref(self, index):
         return "getelementptr(%s* %s, int 0, uint 1, int %s)" %(
@@ -156,9 +163,6 @@ class StrArrayNode(ArrayNode):
     def get_arrayvalue(self):
         items = self.value.items
         item_length = len(items)
-        if item_length == 0 or items[-1] != chr(0):
-            items = items + [chr(0)]
-            item_length += 1
         s = []
         for c in items:
             if ord(c) in StrArrayNode.printables:
@@ -166,7 +170,7 @@ class StrArrayNode(ArrayNode):
             else:
                 s.append("\\%02x" % ord(c))
                 
-        r = 'c"%s"' % "".join(s)
+        r = '"%s"' % "".join(s)
         return item_length, r
 
 class VoidArrayNode(ConstantLLVMNode):

@@ -213,7 +213,7 @@ class Database(object):
         return self.obj2node.itervalues()
         
     # __________________________________________________________
-    # Representing variables and constants in LLVM source code 
+    # Representing variables and constants in Javascript source code 
 
     def repr_arg(self, arg):
         if isinstance(arg, Constant):
@@ -242,7 +242,7 @@ class Database(object):
             if isinstance(type_, lltype.Primitive):
                 return self.primitives[type_]
             elif isinstance(type_, lltype.Ptr):
-                return self.repr_type(type_.TO) + '*'
+                return '' #self.repr_type(type_.TO) + 'XXX*'
             else: 
                 raise TypeError("cannot represent %r" %(type_,))
             
@@ -260,7 +260,8 @@ class Database(object):
         type_ = lltype.typeOf(value)
         if isinstance(type_, lltype.Primitive):
             repr = self.primitive_to_str(type_, value)
-            return None, "%s %s" % (self.repr_type(type_), repr)
+            return None, repr
+            #return None, "%s %s" % (self.repr_type(type_), repr)
 
         elif isinstance(type_, lltype.Ptr):
             toptr = self.repr_type(type_)
@@ -333,13 +334,13 @@ class Database(object):
     # __________________________________________________________
     # Other helpers
 
-    def is_function_ptr(self, arg):
-        if isinstance(arg, (Constant, Variable)): 
-            arg = arg.concretetype 
-            if isinstance(arg, lltype.Ptr):
-                if isinstance(arg.TO, lltype.FuncType):
-                    return True
-        return False
+    #def is_function_ptr(self, arg):
+    #    if isinstance(arg, (Constant, Variable)): 
+    #        arg = arg.concretetype 
+    #        if isinstance(arg, lltype.Ptr):
+    #            if isinstance(arg.TO, lltype.FuncType):
+    #                return True
+    #    return False
 
     def get_childref(self, parent, child):
         node = self.obj2node[parent]

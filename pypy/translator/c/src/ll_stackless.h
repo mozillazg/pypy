@@ -32,6 +32,7 @@ extern void *slp_retval_voidptr;
 slp_frame_t* slp_new_frame(int size, int state);
 long LL_stackless_stack_frames_depth(void);
 void slp_main_loop(void);
+char LL_stackless_stack_too_big(void);
 
 #ifndef PYPY_NOT_MAIN_FILE
 
@@ -53,6 +54,19 @@ slp_frame_t* slp_new_frame(int size, int state)
   return f;
 }
 
+void LL_stackless_stack_unwind(void)
+{
+    if (slp_frame_stack_top)
+        goto resume;
+
+    slp_frame_stack_top = slp_frame_stack_bottom =
+        slp_new_frame(sizeof(slp_frame_t), 0);
+    return ;
+
+ resume:
+    slp_frame_stack_top = NULL;
+}
+
 
 /* example function for testing */
 
@@ -62,7 +76,7 @@ long LL_stackless_stack_frames_depth(void)
 	    goto resume;
 
 	slp_frame_stack_top = slp_frame_stack_bottom =
-		slp_new_frame(sizeof(slp_frame_t), 0);
+		slp_new_frame(sizeof(slp_frame_t), 1);
 	return -1;
 
  resume:
@@ -81,7 +95,6 @@ long LL_stackless_stack_frames_depth(void)
 }
 
 #include "slp_state_decoding.h"
-
 
 void slp_main_loop(void)
 {
@@ -132,7 +145,8 @@ void slp_main_loop(void)
 
 int slp_standalone_entry_point(RPyListOfString *argv)
 {
-	int result = PYPY_STANDALONE(argv);
+	int result;
+	result = PYPY_STANDALONE(argv);
 	if (slp_frame_stack_bottom) {
 		slp_main_loop();
 		result = (int) slp_retval_long;
@@ -142,4 +156,5 @@ int slp_standalone_entry_point(RPyListOfString *argv)
 
 #endif /* PYPY_NOT_MAIN_FILE */
 
-#endif USE_STACKLESS
+#endif /* USE_STACKLESS */
+
