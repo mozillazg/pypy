@@ -26,7 +26,7 @@ def test_simple():
         return a + b
     specialize(f, [int, int])
 
-def test_simple_call():
+def inprogress_test_simple_call():
     def f(a, b):
         return a + b
 
@@ -38,7 +38,7 @@ def test_simple_call():
 class EmptyBase(object):
     pass
 
-def test_simple():
+def inprogress_test_simple_empty_base():
     def dummyfn():
         x = EmptyBase()
         return x
