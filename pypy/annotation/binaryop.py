@@ -654,7 +654,7 @@ class __extend__(pairtype(SomeExternalObject, SomeExternalObject)):
 # annotation of low-level types
 from pypy.annotation.model import SomePtr, SomeOOInstance, SomeOOClass
 from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 
 class __extend__(pairtype(SomePtr, SomePtr)):
     def union((p1, p2)):

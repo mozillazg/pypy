@@ -4,7 +4,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltype import Void, Bool, Float, Signed, Char, UniChar
 from pypy.rpython.lltype import typeOf, LowLevelType, Ptr, PyObject
 from pypy.rpython.lltype import FuncType, functionptr, cast_ptr_to_int
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.error import TyperError, MissingRTypeOperation 
 
 # initialization states for Repr instances 

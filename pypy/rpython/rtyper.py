@@ -22,7 +22,7 @@ from pypy.rpython.lltype import Signed, Unsigned, Float, Char, Bool, Void
 from pypy.rpython.lltype import LowLevelType, Ptr, ContainerType
 from pypy.rpython.lltype import FuncType, functionptr, typeOf, RuntimeTypeInfo
 from pypy.rpython.lltype import attachRuntimeTypeInfo, Primitive
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 from pypy.tool.sourcetools import func_with_new_name, valid_identifier
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.rmodel import Repr, inputconst

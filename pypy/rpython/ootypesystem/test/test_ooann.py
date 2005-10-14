@@ -1,4 +1,4 @@
-from pypy.rpython.ootype.ootype import *
+from pypy.rpython.ootypesystem.ootype import *
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import FlowObjSpace
 from pypy.translator.annrpython import RPythonAnnotator

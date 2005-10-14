@@ -366,7 +366,7 @@ BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
 
 # ootype
 from pypy.annotation.model import SomeOOInstance, SomeOOClass
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 
 def new(I):
     assert I.is_constant()

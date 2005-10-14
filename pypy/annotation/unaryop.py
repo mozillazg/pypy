@@ -594,7 +594,7 @@ class __extend__(SomePtr):
     def is_true(p):
         return SomeBool()
 
-from pypy.rpython.ootype import ootype
+from pypy.rpython.ootypesystem import ootype
 class __extend__(SomeOOInstance):
     def getattr(r, s_attr):
         assert s_attr.is_constant(), "getattr on ref %r with non-constant field-name" % r.ootype

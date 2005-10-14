@@ -3,7 +3,7 @@
 
 from pypy.annotation.pairtype import extendabletype
 
-from pypy.rpython.ootype import ootype # FIXME ootype dir to ootypesystem
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lltype
 
 class TypeSystem(object):
