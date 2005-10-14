@@ -37,7 +37,10 @@ class Instance(OOType):
         return new(self)
 
     def __repr__(self):
-        return '<%s %s>' % (self, self._name)
+        return '<%s>' % (self,)
+
+    def __str__(self):
+        return '%s(%s)' % (self.__class__.__name__, self._name)
 
     def _add_fields(self, fields):
         for name, defn in fields.iteritems():

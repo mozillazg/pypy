@@ -149,8 +149,9 @@ class RPythonTyper:
         self.already_seen = {}
 
         self.specialize_more_blocks()
-        self.exceptiondata.make_helpers(self)
-        self.specialize_more_blocks()   # for the helpers just made
+        if self.exceptiondata is not None:
+            self.exceptiondata.make_helpers(self)
+            self.specialize_more_blocks()   # for the helpers just made
 
     def specialize_more_blocks(self):
         while True:
@@ -797,3 +798,4 @@ from pypy.rpython import rclass, rbuiltin, rpbc, rspecialcase
 from pypy.rpython import rexternalobj
 from pypy.rpython import rptr
 from pypy.rpython import raddress # memory addresses
+from pypy.rpython.ootypesystem import rootype
