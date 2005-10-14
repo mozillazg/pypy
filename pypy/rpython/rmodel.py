@@ -309,6 +309,7 @@ class BrokenReprTyperError(TyperError):
 # __________ utilities __________
 from pypy.rpython.typesystem import LowLevelTypeSystem
 getfunctionptr = LowLevelTypeSystem.instance.getcallable
+PyObjPtr = Ptr(PyObject)
 
 def needsgc(classdef, nogc=False):
     if classdef is None:
