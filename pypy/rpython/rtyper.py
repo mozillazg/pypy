@@ -515,7 +515,7 @@ class RPythonTyper:
         return rslice.rtype_newslice(hop)
 
     def translate_op_call_memo(self, hop):
-        return rpbc.rtype_call_memo(hop)
+        return self.type_system.rpbc.rtype_call_memo(hop)
 
     def translate_op_call_specialcase(self, hop):
         return rspecialcase.rtype_call_specialcase(hop)

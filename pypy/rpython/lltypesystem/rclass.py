@@ -9,7 +9,8 @@ from pypy.rpython.rclass import AbstractClassRepr,\
                                 AbstractInstanceRepr,\
                                 MissingRTypeAttribute,\
                                 getclassrepr, getinstancerepr,\
-                                get_type_repr, rtype_new_instance
+                                get_type_repr, rtype_new_instance,\
+                                instance_annotation_for_cls
 from pypy.rpython.lltype import ForwardReference, GcForwardReference
 from pypy.rpython.lltype import Ptr, Struct, GcStruct, malloc
 from pypy.rpython.lltype import cast_pointer, castable, nullptr

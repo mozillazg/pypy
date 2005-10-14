@@ -37,11 +37,17 @@ class LowLevelTypeSystem(TypeSystem):
 
     def __getattr__(self, name):
         """Lazy import to avoid circular dependencies."""
+        # FIXME refactor into TypeSystem
         if name == "rclass":
             from pypy.rpython.lltypesystem import rclass
             self.rclass = rclass
 
             return rclass
+        elif name == "rpbc":
+            from pypy.rpython.lltypesystem import rpbc
+            self.rpbc = rpbc
+
+            return rpbc
         elif name == "BUILTIN_TYPER":
             from pypy.rpython.lltypesystem import rbuiltin
             self.BUILTIN_TYPER = rbuiltin.BUILTIN_TYPER
