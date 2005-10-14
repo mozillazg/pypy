@@ -4,9 +4,9 @@ from pypy.rpython.rarithmetic import r_uint
 from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
 from types import NoneType
-from pypy.rpython.lltype import LowLevelType, Signed, Unsigned, Float, Char
-from pypy.rpython.lltype import Bool, Void, UniChar, typeOf, Primitive
-from pypy.rpython.lltype import frozendict
+from pypy.rpython.lltypesystem.lltype import LowLevelType, Signed, Unsigned, Float, Char
+from pypy.rpython.lltypesystem.lltype import Bool, Void, UniChar, typeOf, Primitive
+from pypy.rpython.lltypesystem.lltype import frozendict
 
 class OOType(LowLevelType):
     pass
@@ -207,13 +207,9 @@ class _meth(_callable):
 
 class _bound_meth(object):
     def __init__(self, inst, meth):
-        #self._TYPE = self
         self.inst = inst
         self.meth = meth
 
-    #def _example(self):
-    #    return self
-    
     def __call__(self, *args):
         return self.meth._checkargs(args)(self.inst, *args)
 

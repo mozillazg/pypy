@@ -9,6 +9,7 @@ def test_simple_new():
     
     def oof():
         c = new(C)
+        c.a = 5
         return c.a
 
     a = RPythonAnnotator()
