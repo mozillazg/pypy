@@ -11,13 +11,18 @@ class CodeWriter(object):
     def __init__(self, f, js): 
         self.f = f
         self.js = js
+        self._skip_closeblock = False
 
     def append(self, line, indentation_level=4): 
         if indentation_level:
             s = self.tabstring * indentation_level
         else:
             s = ''
-        self.f.write(s + line + '\n')
+        if not line or line[-1] in '{:};' or line.lstrip()[:2] == '//':
+            eol = '\n'
+        else:
+            eol = ';\n'
+        self.f.write(s + line + eol)
 
     def comment(self, line, indentation_level=4):
         self.append("// " + line, indentation_level)
@@ -30,10 +35,15 @@ class CodeWriter(object):
 
     def label(self, name):
         self.append("case %d:" % name, 3)
-    openblock = label
+
+    def openblock(self, name):
+        self.append("case %d:" % name, 3)
+        self._currentblock = name
 
     def closeblock(self):
-        self.append('continue')
+        if not self._skip_closeblock:
+            self.append('break')
+        self._skip_closeblock = False
 
     def globalinstance(self, name, typeanddata):
         #self.append('%s = %s' % (name, typeanddata[1:].split('{')[1][:-1]), 0)
@@ -44,32 +54,61 @@ class CodeWriter(object):
             self.llvm(line, 0)
 
     def structdef(self, name, typereprs):
-        self.llvm("%s = type { %s }" %(name, ", ".join(typereprs)), 0)
+        #self.llvm("%s = type { %s }" %(name, ", ".join(typereprs)), 0)
+        pass
 
     def arraydef(self, name, lentype, typerepr):
-        self.llvm("%s = type { %s, [0 x %s] }" % (name, lentype, typerepr), 0)
+        #self.llvm("%s = type { %s, [0 x %s] }" % (name, lentype, typerepr), 0)
+        pass
 
     def funcdef(self, name, rettyperepr, argtypereprs):
-        self.llvm("%s = type %s (%s)" % (name, rettyperepr,
-                                           ", ".join(argtypereprs)), 0)
+        #self.llvm("%s = type %s (%s)" % (name, rettyperepr,
+        #                                   ", ".join(argtypereprs)), 0)
+        pass
 
     def declare(self, decl):
-        #self.llvm("declare %s" % decl, 0)
-        pass
+        self.append(decl, 0)
 
     def startimpl(self):
         #self.llvm("implementation", 0)
         pass
 
-    def br_uncond(self, blockname): 
-        self.append('prevblock = block')
-        self.append('block = %d' % blockname)
-        #self.llvm("br label %s" %(blockname,))
+    def _goto_block(self, block, indentation_level=4):
+        if block == self._currentblock + 1:
+            self._skip_closeblock = True
+        else:
+            self.append('block = ' + str(block), indentation_level)
+            self.append('break', indentation_level)
 
-    def br(self, cond, blockname_false, blockname_true):
-        self.append('prevblock = block')
-        self.append('block = %s ? %d : %d' % (cond, blockname_true, blockname_false))
-        #self.llvm("br bool %s, label %s, label %s" % (cond, blockname_true, blockname_false))
+    def _phi(self, targetblock, exit, indentation_level=4):
+        #self.comment('target.inputargs=%s, args=%s, targetblock=%d' % (exit.target.inputargs, exit.args, targetblock), indentation_level)
+        for i, exitarg in enumerate(exit.args):
+            dest = str(exit.target.inputargs[i])
+            #src = str(exitarg)
+            src = str(self.js.db.repr_arg(exitarg))
+            if src == 'False':
+                src = 'false'
+            elif src == 'True':
+                src = 'true'
+            elif src == 'None':
+                src = 'undefined'
+            if dest != src:
+                self.append('%s = %s' % (dest, src), indentation_level)
+
+    def br_uncond(self, block, exit): 
+        self._phi(block, exit)
+        self._goto_block(block)
+        self._skip_closeblock = True
+
+    def br(self, cond, block_false, exit_false, block_true, exit_true):
+        self.append('if (%s) {' % cond)
+        self._phi(block_true, exit_true, 5)
+        self._goto_block(block_true, 5)
+        self.append('} else {')
+        self._phi(block_false, exit_false, 5)
+        self._goto_block(block_false, 5)
+        self.append('}')
+        self._skip_closeblock = True
 
     def switch(self, intty, cond, defaultdest, value_label):
         labels = ''
@@ -84,6 +123,10 @@ class CodeWriter(object):
         self.blocks   = blocks
         usedvars      = {}  #XXX could probably be limited to inputvars
         for block in blocks:
+            if block != blocks[0]:  #don't double startblock inputargs
+                for inputarg in block.inputargs:
+                    targetvar = self.js.db.repr_arg(inputarg)
+                    usedvars[targetvar] = True
             for op in block.operations:
                 targetvar = self.js.db.repr_arg(op.result)
                 usedvars[targetvar] = True
@@ -91,49 +134,20 @@ class CodeWriter(object):
         self.append("function %s {" % self.decl, 0)
         if usedvars:
             self.append("var %s" % ', '.join(usedvars.keys()), 1)
-        self.append("var block = 0", 1)
-        self.append("while (block != undefined) {", 1)
+        self.append("for (var block = 0;;) {", 1)
         self.append("switch (block) {", 2)
 
     def closefunc(self): 
-        self.append("} // end of switch (block)", 2)
-        self.append("} // end of while (block != undefined)", 1)
-        self.append("} // end of function %s" % self.decl, 0)
+        self.append("}", 2)
+        self.append("}", 1)
+        self.append("};", 0)
 
     def ret(self, type_, ref): 
         if type_ == 'void':
             self.append("return")
         else:
             self.append("return " + ref)
-
-    def phi(self, targetvar, type_, refs, blocknames): 
-        assert refs and len(refs) == len(blocknames), "phi node requires blocks" 
-        #mergelist = ", ".join(
-        #    ["[%s, %s]" % item 
-        #        for item in zip(refs, blocknames)])
-        #s = "%s = phi %s %s" % (targetvar, type_, mergelist)
-        #self.llvm(s)
-        all_refs_identical = True
-        for ref in refs:
-            if ref != refs[0]:
-                all_refs_identical = False
-                break
-        if all_refs_identical:
-            if targetvar != refs[0]:
-                self.append('%s = %s' % (targetvar, refs[0]))
-        else:
-            if len(blocknames) == 1:
-                self.append('%s = %s' % (targetvar, refs[i]))
-            else:
-                n = 0
-                for i, blockname in enumerate(blocknames):
-                    if targetvar != refs[i]:
-                        if n > 0:
-                            s = 'else '
-                        else:
-                            s = ''
-                        self.append('%sif (prevblock == %d) %s = %s' % (s, blockname, targetvar, refs[i]))
-                        n += 1
+        self._skip_closeblock = True
 
     def binaryop(self, name, targetvar, type_, ref1, ref2):
         self.append("%(targetvar)s = %(ref1)s %(name)s %(ref2)s" % locals())
@@ -155,10 +169,10 @@ class CodeWriter(object):
                 self.append('%s = %s(%s)' % (targetvar, functionref, args))
 
     def cast(self, targetvar, fromtype, fromvar, targettype):
-        self.comment('codewriter cast 1 targettype=%(targettype)s, targetvar=%(targetvar)s, fromtype=%(fromtype)s, fromvar=%(fromvar)s' % locals())
+        #self.comment('codewriter cast 1 targettype=%(targettype)s, targetvar=%(targetvar)s, fromtype=%(fromtype)s, fromvar=%(fromvar)s' % locals())
     	if fromtype == 'void' and targettype == 'void':
 		return
-        self.comment('codewriter cast 2')
+        #self.comment('codewriter cast 2')
         if targettype == fromtype:
             self.append("%(targetvar)s = %(fromvar)s" % locals())
         elif targettype in ('int','uint',):

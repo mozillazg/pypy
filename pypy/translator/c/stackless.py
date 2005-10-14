@@ -11,16 +11,18 @@ from pypy.rpython.memory.lladdress import Address
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 
-
 class StacklessData:
 
     def __init__(self):
         self.frame_types = {}
-        self.globalstatecounter = 1
         self.allsignatures = {}
         self.decode_table = []
+
         # start the decoding table with entries for the functions that
         # are written manually in ll_stackless.h
+        self.registerunwindable('LL_stackless_stack_unwind',
+                                lltype.FuncType([], lltype.Void),
+                                resume_points=1)
         self.registerunwindable('LL_stackless_stack_frames_depth',
                                 lltype.FuncType([], lltype.Signed),
                                 resume_points=1)
@@ -36,12 +38,17 @@ class StacklessData:
             for n in range(1, resume_points):
                 self.decode_table.append(('NULL', n))
 
-    def get_frame_type(self, n_integers, n_floats, n_pointers):
-        key = n_integers, n_floats, n_pointers
+    def get_frame_type(self, counts):
+        """Return the frame struct name,
+        named after the number of saved variables of each kind.
+        counts is a sequence of numbers, ordered like STATE_TYPES
+        """
+        key = tuple(counts)
         try:
             return self.frame_types[key]
         except KeyError:
-            name = 'slp_frame_%d_%d_%d_s' % key
+            nums = "_".join([str(c) for c in key])
+            name = 'slp_frame_%s_s' % nums
             self.frame_types[key] = name
             return name
 
@@ -56,37 +63,38 @@ class StacklessData:
         for line in sg.preimpl:
             print >> fc, line
         print >> fc, '#include "src/g_include.h"'
+
         items = self.frame_types.items()
         items.sort()
-        for (n_integers, n_floats, n_pointers), structname in items:
-            types = (['long']*n_integers +
-                     ['double']*n_floats +
-                     ['void *']*n_pointers)
-            varnames = (['l%d' % i for i in range(n_integers)] +
-                        ['d%d' % i for i in range(n_floats)] +
-                        ['v%d' % i for i in range(n_pointers)])
+        for counts, structname in items:
+            varnames = []
+            for count, vartype in zip(counts, STATE_TYPES):
+                varnames.extend([(vartype.ctype, '%s%d' % (vartype.prefix, i))
+                                 for i in range(count)])
+
+            # generate the struct definition
             fields = []
-            for type, varname in zip(types, varnames):
+            for type, varname in varnames:
                 fields.append('%s %s;' % (type, varname))
             print >> fi, 'struct %s { slp_frame_t header; %s };' % (
                 structname, ' '.join(fields))
 
+            # generate the 'save_' function
             arguments = ['int state']
             saving_lines = []
-            for type, varname in zip(types, varnames):
+            for type, varname in varnames:
                 arguments.append('%s %s' % (type, varname))
                 saving_lines.append('((struct %s*) f)->%s = %s;' % (
                     structname, varname, varname))
 
-            head = 'void *save_%(name)s(%(arguments)s);'
+            head = 'void save_%(name)s(%(arguments)s);'
             code = str(py.code.Source('''
-             void *save_%(name)s(%(arguments)s)
+             void save_%(name)s(%(arguments)s)
              {
                  slp_frame_t* f = slp_new_frame(sizeof(struct %(name)s), state);
                  slp_frame_stack_bottom->f_back = f;
                  slp_frame_stack_bottom = f;
                  %(saving_lines)s
-                 return NULL;
              }
             '''))
             argdict = {'name': structname,
@@ -110,11 +118,10 @@ class StacklessData:
             functiontype = sg.database.gettype(lltype.Ptr(FUNC))
             callexpr = '((%s) fn) (%s);' % (cdecl(functiontype, ''),
                                             ', '.join(dummyargs))
-            globalretvalvartype = simplified_type(FUNC.RESULT)
+            globalretvalvartype = storage_type(FUNC.RESULT)
             if globalretvalvartype is not None:
-                globalretvalvarname = RETVALVARS[globalretvalvartype]
-                callexpr = '%s = (%s) %s' % (globalretvalvarname,
-                                             globalretvalvartype,
+                callexpr = '%s = (%s) %s' % (globalretvalvartype.global_name,
+                                             globalretvalvartype.ctype,
                                              callexpr)
             print >> fi, '\t' + callexpr
             print >> fi, '\tbreak;'
@@ -163,11 +170,10 @@ class SlpFunctionCodeGenerator(FunctionCodeGenerator):
             # record extra data needed to generate the slp_*.h tables:
             # find the signatures of all functions
             slpdata = self.db.stacklessdata
-            argtypes = [erase_ptr_type(v.concretetype)
+            argtypes = [signature_type(self.lltypemap(v))
                         for v in self.graph.getargs()]
             argtypes = [T for T in argtypes if T is not lltype.Void]
-            import sys
-            rettype = erase_ptr_type(self.graph.getreturnvar().concretetype)
+            rettype = signature_type(self.lltypemap(self.graph.getreturnvar()))
             FUNC = lltype.FuncType(argtypes, rettype)
             slpdata.registerunwindable(self.functionname, FUNC,
                                        resume_points = len(self.resumeblocks))
@@ -179,49 +185,38 @@ class SlpFunctionCodeGenerator(FunctionCodeGenerator):
         stacklessdata = self.db.stacklessdata
         block = self.currentblock
         curpos = block.operations.index(op)
-
-        # XXX obscure: find all variables that are produced before 'op'
-        vars = []
-        for v in block.inputargs:
-            vars.append(v)
-        for op1 in block.operations[:curpos]:
-            vars.append(op1.result)
+        vars = list(variables_to_save_across_op(block, curpos))
 
         # get the simplified frame struct that can store these vars
-        counts = {"long":   [],
-                  "double": [],
-                  "void*":  []}
+        counts = dict([(type, []) for type in STATE_TYPES])
         variables_to_restore = []
         for v in vars:
-            st = simplified_type(erase_ptr_type(v.concretetype))
+            st = storage_type(self.lltypemap(v))
             if st is not None:   # ignore the Voids
                 varname = self.expr(v)
-                # XXX hackish: the name of the field in the structure is
-                # computed from the 1st letter of the 'st' type, counting
-                # from 0 for each of the 'st' types independently
+                # The name of the field in the structure is computed from
+                # the prefix of the 'st' type, counting from 0 for each
+                # of the 'st' types independently
                 variables_to_restore.append((v, '%s%d' % (
-                    st[0], len(counts[st]))))
-                counts[st].append('(%s)%s' % (st, varname))
-        structname = stacklessdata.get_frame_type(len(counts["long"]),
-                                                  len(counts["double"]),
-                                                  len(counts["void*"]))
+                    st.prefix, len(counts[st]))))
+                counts[st].append('(%s)%s' % (st.ctype, varname))
+        structname = stacklessdata.get_frame_type([len(counts[st]) for st in STATE_TYPES])
 
         # reorder the vars according to their type
-        vars = counts["long"] + counts["double"] + counts["void*"]
+        vars = sum([counts[st] for st in STATE_TYPES],[])
 
         # generate the 'save:' line, e.g.
         #      save_0: return (int) save_frame_1(0, (long) n);
         savelabel = 'save_%d' % len(self.savelines)
-        arguments = ['%d' % stacklessdata.globalstatecounter] + vars
-        stacklessdata.globalstatecounter += 1
+
+        # The globally unique number for our state
+        # is the total number of saved states so far
+        globalstatecounter = len(stacklessdata.decode_table) + len(self.savelines)
+        
+        arguments = ['%d' % globalstatecounter] + vars
+
         savecall = 'save_%s(%s);' % (structname, ', '.join(arguments))
-        retvar = self.graph.getreturnvar()
-        if retvar.concretetype is lltype.Void:
-            savecall += ' return;'
-        else:
-            retvartype = self.lltypename(retvar)
-            savecall = 'return (%s) %s' % (cdecl(retvartype, ''),
-                                           savecall)
+        savecall += ' return %s;' % self.error_return_value()
         self.savelines.append('%s: %s' % (savelabel, savecall))
 
         # generate the resume block, e.g.
@@ -238,9 +233,9 @@ class SlpFunctionCodeGenerator(FunctionCodeGenerator):
                 varname, cdecl(vartype, ''), structname, fieldname))
         retvarname = self.expr(op.result)
         retvartype = self.lltypename(op.result)
-        retvarst = simplified_type(erase_ptr_type(op.result.concretetype))
+        retvarst = storage_type(self.lltypemap(op.result))
         if retvarst is not None:
-            globalretvalvarname = RETVALVARS[retvarst]
+            globalretvalvarname = retvarst.global_name
             lines.append('%s = (%s) %s;' % (
                 retvarname, cdecl(retvartype, ''), globalretvalvarname))
         lines.append('goto %s;' % (resumelabel,))
@@ -248,17 +243,18 @@ class SlpFunctionCodeGenerator(FunctionCodeGenerator):
 
         # add the checks for the unwinding case just after the directcall
         # in the source
-        unwind_check = "if (slp_frame_stack_bottom) goto %s;" % (savelabel,)
+        unwind_check = "if (slp_frame_stack_bottom)\n\tgoto %s;" % (savelabel,)
         exception_check = (super(SlpFunctionCodeGenerator, self)
                            .check_directcall_result(op, err))
-        return '%s\n     %s:\n\t%s' % (unwind_check,
-                                       resumelabel,
-                                       exception_check)
+        return '%s\n  %s:\n%s' % (unwind_check,
+                                    resumelabel,
+                                    exception_check)
 
 
-def erase_ptr_type(T):
+def signature_type(T):
     """Return T unless it's a pointer type, in which case we return a general
     basic pointer type.
+    The returned type must have the same behaviour when put on the C stack.
     """
     if isinstance(T, lltype.Ptr):
         return Address
@@ -266,20 +262,55 @@ def erase_ptr_type(T):
         return T
 
 
-def simplified_type(T):
+class StateVariableType:
+    def __init__(self, ctype, prefix, global_name):
+        self.ctype = ctype
+        self.prefix = prefix
+        self.global_name = global_name
+
+STATE_TYPES = [
+    StateVariableType('long',   'l', 'slp_retval_long'),
+    StateVariableType('void*',  'p', 'slp_retval_voidptr'),
+    StateVariableType('double', 'd', 'slp_retval_double'),
+    ]
+
+def storage_type(T):
+    """Return the type used to save values of this type
+    """
     if T is lltype.Void:
         return None
     elif T is lltype.Float:
-        return "double"
-    elif T is Address:
-        return "void*"
+        return STATE_TYPES[ 2 ]
+    elif T is Address or isinstance(T, lltype.Ptr):
+        return STATE_TYPES[ 1 ]
     elif isinstance(T, lltype.Primitive):
-        return "long"   # large enough for all other primitives
+        return STATE_TYPES[ 0 ] # long is large enough for all other primitives
     else:
         raise Exception("don't know about %r" % (T,))
 
-RETVALVARS = {
-    "double": "slp_retval_double",
-    "long"  : "slp_retval_long",
-    "void*" : "slp_retval_voidptr",
-    }
+def variables_to_save_across_op(block, opindex):
+    # variable lifetime detection:
+    # 1) find all variables that are produced before the operation
+    produced = {}
+    for v in block.inputargs:
+        produced[v] = True
+    for op1 in block.operations[:opindex]:
+        produced[op1.result] = True
+    # 2) find all variables that are used by or after the operation
+    consumed = {}
+    for op1 in block.operations[opindex:]:
+        for v in op1.args:
+            if isinstance(v, Variable):
+                consumed[v] = True
+    if isinstance(block.exitswitch, Variable):
+        consumed[block.exitswitch] = True
+    for link in block.exits:
+        for v in link.args:
+            if isinstance(v, Variable):
+                consumed[v] = True
+    # 3) variables that are atomic and not consumed after the operation
+    #    don't have to have their lifetime extended; that leaves only
+    #    the ones that are not atomic or consumed.
+    for v in produced:
+        if v in consumed or not v.concretetype._is_atomic():
+            yield v

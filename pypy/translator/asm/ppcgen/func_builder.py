@@ -7,14 +7,14 @@ def load_arg(code, argi, typecode):
     code.lwz(rD, r4, 12 + 4*argi)
     if typecode == 'i':
         code.load_word(r0, lookup("PyInt_Type"))
-        code.lwz(r15, rD, 4) # XXX ick!
-        code.cmpw(r0, r15)
+        code.lwz(r31, rD, 4) # XXX ick!
+        code.cmpw(r0, r31)
         code.bne("argserror")
         code.lwz(rD, rD, 8)
     elif typecode == 'f':
         code.load_word(r0, lookup("PyFloat_Type"))
-        code.lwz(r15, rD, 4)
-        code.cmpw(r0, r15)
+        code.lwz(r31, rD, 4)
+        code.cmpw(r0, r31)
         code.bne("argserror")
         code.lfd(rD-2, rD, 8)
     elif typecode != "O":
@@ -22,8 +22,10 @@ def load_arg(code, argi, typecode):
 
 FAST_ENTRY_LABEL = "FAST-ENTRY-LABEL"
 
-def make_func(code, retcode, signature):
+def make_func(code, retcode, signature, localwords=0):
     """code shouldn't contain prologue/epilogue (or touch r31)"""
+
+    stacksize = 80 + 4*localwords
 
     argcount = len(signature)
 
@@ -31,7 +33,7 @@ def make_func(code, retcode, signature):
     ourcode.mflr(r0)
     ourcode.stmw(r31, r1, -4)
     ourcode.stw(r0, r1, 8)
-    ourcode.stwu(r1, r1, -80)
+    ourcode.stwu(r1, r1, -stacksize)
 
     ourcode.lwz(r3, r4, 8)
     ourcode.cmpwi(r3, argcount)
@@ -47,7 +49,7 @@ def make_func(code, retcode, signature):
         load_arg(ourcode, 1, signature[1])
 
     ourcode.bl(FAST_ENTRY_LABEL)
-    
+
     if retcode == 'i':
         s = lookup("PyInt_FromLong")
         ourcode.load_word(r0, s)
@@ -60,8 +62,8 @@ def make_func(code, retcode, signature):
         ourcode.bctrl()
 
     ourcode.label("epilogue")
-    ourcode.lwz(r0, r1, 88)
-    ourcode.addi(r1, r1, 80)
+    ourcode.lwz(r0, r1, stacksize + 8)
+    ourcode.addi(r1, r1, stacksize)
     ourcode.mtlr(r0)
     ourcode.lmw(r31, r1, -4)
     ourcode.blr()
@@ -96,7 +98,7 @@ def make_func(code, retcode, signature):
     return r
 
 def wrap(funcname, retcode, signature):
-    
+
     argcount = len(signature)
 
     ourcode = MyPPCAssembler()
@@ -118,11 +120,11 @@ def wrap(funcname, retcode, signature):
     if argcount > 1:
         load_arg(ourcode, 1, signature[1])
 
-    
+
     ourcode.load_word(r0, lookup(funcname))
     ourcode.mtctr(r0)
     ourcode.bctrl()
-    
+
     if retcode == 'i':
         s = lookup("PyInt_FromLong")
         ourcode.load_word(r0, s)

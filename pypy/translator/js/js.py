@@ -4,6 +4,7 @@ reference material:
     http://webreference.com/programming/javascript/
     http://mochikit.com/
     http://www.mozilla.org/js/spidermonkey/
+    svn co http://codespeak.net/svn/kupu/trunk/ecmaunit 
 '''
 
 #import os
@@ -77,7 +78,7 @@ class JS(object):   # JS = Javascript
         #    codewriter.comment("External Function Declarations")
         #    codewriter.append(llexterns_header)
 
-        codewriter.comment("Type Declarations", 0)
+        #codewriter.comment("Type Declarations", 0)
         #for c_name, obj in extern_decls:
         #    if isinstance(obj, lltype.LowLevelType):
         #        if isinstance(obj, lltype.Ptr):
@@ -85,33 +86,33 @@ class JS(object):   # JS = Javascript
         #        l = "%%%s = type %s" % (c_name, self.db.repr_type(obj))
         #        codewriter.append(l)
 
+        codewriter.comment("Function Implementation", 0)
         for typ_decl in self.db.getnodes():
-            typ_decl.writedatatypedecl(codewriter)
+            typ_decl.writeimpl(codewriter)
+
+        codewriter.comment("Forward Declarations", 0)
+        #for typ_decl in self.db.getnodes():
+        #    typ_decl.writedatatypedecl(codewriter)
+        for typ_decl in self.db.getnodes():
+            typ_decl.writedecl(codewriter)
 
         codewriter.comment("Global Data", 0)
         for typ_decl in self.db.getnodes():
             typ_decl.writeglobalconstants(codewriter)
 
-        codewriter.comment("Function Prototypes", 0)
+        #codewriter.comment("Function Prototypes", 0)
         #codewriter.append(extdeclarations)
         #codewriter.append(self.gcpolicy.declarations())
 
-        for typ_decl in self.db.getnodes():
-            typ_decl.writedecl(codewriter)
-
-        codewriter.comment("Function Implementation", 0)
-        codewriter.startimpl()
-        
-        for typ_decl in self.db.getnodes():
-            typ_decl.writeimpl(codewriter)
+        pypy_prefix = '' #pypy_
 
         #codewriter.append(self.exceptionpolicy.llvmcode(self.entrynode))
         #
         ## XXX we need to create our own main() that calls the actual entry_point function
-        #if entryfunc_name == 'pypy_entry_point': #XXX just to get on with translate_pypy
+        #if entryfunc_name == pypy_prefix + 'entry_point': #XXX just to get on with translate_pypy
         #    extfuncnode.ExternalFuncNode.used_external_functions['%main'] = True
         #
-        #elif entryfunc_name == 'pypy_main_noargs': #XXX just to get on with bpnn & richards
+        #elif entryfunc_name == pypy_prefix + 'main_noargs': #XXX just to get on with bpnn & richards
         #    extfuncnode.ExternalFuncNode.used_external_functions['%main_noargs'] = True
         #
         #for f in support_functions:
@@ -134,7 +135,7 @@ class JS(object):   # JS = Javascript
         graph      = self.db.obj2node[entry_point].graph
         startblock = graph.startblock
         args       = ','.join(['arguments[%d]' % i for i,v in enumerate(startblock.inputargs)])
-        self.wrappertemplate = "load('%s'); print(pypy_%s(%%s))" % (self.filename, graph.name)
+        self.wrappertemplate = "load('%s'); print(%s%s(%%s))" % (self.filename, pypy_prefix, graph.name)
 
         #codewriter.newline()
         #codewriter.comment("Wrapper code for the Javascript CLI", 0)
