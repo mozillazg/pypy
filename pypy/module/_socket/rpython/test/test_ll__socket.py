@@ -1,4 +1,4 @@
-
+import py
 import _socket
 import pypy.module._socket.rpython.exttable
 from pypy.module._socket.rpython.ll__socket import *
@@ -6,6 +6,9 @@ from pypy.translator.annrpython import RPythonAnnotator
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.module.support import from_rstr
 from pypy.rpython.module.support import to_opaque_object, from_opaque_object
+
+def setup_module(mod):
+    py.test.skip("As of 0.8 developement in-progress.")
 
 def test_ntohs():
     def fn():

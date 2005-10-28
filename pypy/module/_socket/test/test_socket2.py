@@ -4,6 +4,7 @@ import py
 import socket, sys
 
 def setup_module(mod):
+    py.test.skip("As of 0.8 developement in-progress.")
     mod.space = StdObjSpace(usemodules=['_socket'])
     mod.w_socket = space.appexec([], "(): import _socket as m; return m")
     mod.path = udir.join('fd')
