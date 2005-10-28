@@ -4,6 +4,7 @@ import _socket
 from pypy.translator.c.test.test_genc import compile
 
 def setup_module(mod):
+    py.test.skip("As of 0.8 developement in-progress.")
     import pypy.module._socket.rpython.exttable   # for declare()/declaretype()
 
 def test_htonl():
