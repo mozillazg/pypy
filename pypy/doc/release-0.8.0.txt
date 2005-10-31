@@ -9,6 +9,8 @@ The highlights of this third release of PyPy are:
   than CPython on pystones (release-0.7.0 was about 200  times
   slower)
 
+- a translatable version of the Thunk Object space
+
 The release includes the snapshots of the following interesting
 sub projects:
 
