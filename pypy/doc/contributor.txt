@@ -6,38 +6,50 @@ Here is a list of developers who have committed to the PyPy source
 code base, ordered by number of commits (which is certainly not a very
 appropriate measure but it's something)::
 
-    Armin Rigo
-    Samuele Pedroni
-    Holger Krekel
-    Michael Hudson
-    Christian Tismer
-    Seo Sanghyeon
-    Alex Martelli
-    Stefan Schwarzer
-    Tomek Meka
-    Patrick Maupin
-    Carl Friedrich Bolz
-    Bob Ippolito
-    Anders Chrigstrom
-    Jacob Hallen
-    Marius Gedminas
-    Laura Creighton
-    Guido van Rossum
-    Richard Emslie
-    Ludovic Aubry
-    Adrien Di Mascio
-    Stephan Diehl
-    Dinu Gherman
-    Guenter Jantzen
-    Anders Lehmann
-    Rocco Moretti
-    Olivier Dormond
-    Brian Dorsey
-    Jonathan David Riehl
-    Andreas Friedge
-    Jens-Uwe Mager
-    Alan McIntyre
-    Lutz Paelike
-    Jacek Generowicz
-    Ben Young
-    Michael Chermside
+    Armin Rigo <arigo@tunes.org>
+    Samuele Pedroni <pedronis@strakt.com>
+    Christian Tismer <tismer@tismer.com>
+    Holger Krekel <hpk@trillke.net>
+    Michael Hudson <mwh@python.net>
+    Carl Friedrich Bolz <cfbolz@gmx.de>
+    Eric van Riet Paap <eric@vanrietpaap.nl>
+    Anders Chrigstrom <ac@strakt.com>
+    Richard Emslie <rxe@ukshells.co.uk>
+    Anders Lehmann <serendipity-soft@get2net.dk>
+    Seo Sanghyeon <sanxiyn@gmail.com>
+    Alex Martelli <aleaxit@yahoo.com>
+    Ludovic Aubry <ludovic.aubry@logilab.fr>
+    Adrien Di Mascio <adim@logilab.fr>
+    Stefan Schwarzer <sschwarzer@sschwarzer.de>
+    Tomek Meka <>
+    Patrick Maupin <pmaupin@speakeasy.net>
+    Bob Ippolito <bob@redivi.com>
+    Jacob Hallen <jacob@strakt.com>
+    Laura Creighton <lac@strakt.com>
+    Marius Gedminas <mgedmin@b4net.lt>
+    Niklaus Haldimann <nhaldimann@gmx.ch>
+    Amaury Forgeot d Arc <amauryfa@gmail.com>
+    Guido van Rossum <guido@python.org>
+    Stephan Diehl <>
+    Dinu Gherman <gherman@darwin.in-berlin.de>
+    Guenter Jantzen <Guenter.Jantzen@t-mobile.de>
+    Rocco Moretti <roccomoretti@hotpop.com>
+    Boris Feigin <boria@fbg.uklinux.net>
+    Olivier Dormond <olivier.dormond@gmail.com>
+    Valentino Volonghi <dialtone@divmod.com>
+    Brian Dorsey <briandorsey@gmail.com>
+    Jonathan David Riehl <jriehl@spaceship.com>
+    Andreas Friedge <andreas@trillke.net>
+    Jens-Uwe Mager <jum@anubis.han.de>
+    Bert Freudenberg <bert@impara.de>
+    Alan McIntyre <alan.mcintyre@esrgtech.com>
+    Anders Qvist <quest@lysator.liu.se>
+    Ignas Mikalajunas <ignas@pov.lt>
+    Lutz Paelike <lutz_p@gmx.net>
+    Jacek Generowicz <jacek.generowicz@cern.ch>
+    Andrew Thompson <andrew.thompson@newhert.com>
+    Gintautas Miliauskas <>
+    Ben Young <ben@transversal.com>
+    Alexander Schremm <alex@alexanderweb.de>
+    Michael Chermside <mcherm@mcherm.com>
+
