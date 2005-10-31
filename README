@@ -6,7 +6,7 @@ PyPy is an implementation of the Python programming language, written
 in Python.
 
 PyPy is very much a work in progress, but can already build a
-self-contained Python implementation that is completey independent of
+self-contained Python implementation that is completely independent of
 Python.
 
 For more, we invite you to head over to our getting-started document:
@@ -21,7 +21,7 @@ PyPy.  It will also point you to our documentation section which is
 generated from information in the pypy/doc directory.
 
 For information in what's new in this release, please read the release
-announcment:
+announcement:
 
     pypy/doc/release-0.8.0.txt
     http://codespeak.net/pypy/dist/pypy/doc/release-0.8.0.html
