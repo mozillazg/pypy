@@ -19,7 +19,7 @@ sub projects:
 - the OOtyper. A rtyper replacement for highlevel backends 
   (squeak, ...)
 - A javascript backend
-- A (PPC) assembler backend
+- A limited (PPC) assembler backend
 
 What is PyPy (about)? 
 ------------------------------------------------
