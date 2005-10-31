@@ -378,7 +378,7 @@ With the pypy-0.8.0 release we have integrated our AST compiler with
 the rest of PyPy. The compiler gets translated with the rest to a
 static self-contained version of our `standard interpreter`_.  Like
 with 0.7.0 this version is `very compliant`_ to CPython 2.4.1 but you
-can still not run too many existing programs on it because we are
+can  not yet run too many existing programs on it because we are
 still missing a number of C-modules like socket or support for process
 creation.
 
@@ -394,19 +394,17 @@ at the moment.
 
 With the 0.8.0 release the "thunk" object space can also be translated
 (see `getting started`_), obtaining a self-contained version of PyPy
-with its feature (and some speed degradation), show-casing at a small
+with its features (and some speed degradation), show-casing at a small
 scale how our whole tool-chain supports flexibility from the interpreter
 written in Python to the resulting self-contained executable.
-
-XXX update numbers
 
 Our rather complete and Python 2.4-compliant interpreter consists 
 of about 30'000-50'000 lines of code (depending on the way you
 count code borrowed and adapted from other sources), with
 another 14'000 lines of unit tests.  If we include the tools,
 the parts related to code analysis and generation, and the
-standard library modules ported from C, PyPy is now 105'000
-lines of code and 29'000 lines of tests. Refer to 
+standard library modules ported from C, PyPy is now 138'000
+lines of code and 32'000 lines of tests. Refer to 
 the `statistics web page`_ for more detailed information. 
 
 .. _`statistics web page`: http://codespeak.net/~hpk/pypy-stat/
