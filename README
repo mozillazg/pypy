@@ -20,8 +20,8 @@ which gives you many good starting and entry points into playing with
 PyPy.  It will also point you to our documentation section which is
 generated from information in the pypy/doc directory.
 
-For more information in what's new in this release, please read the
-release announcment:
+For information in what's new in this release, please read the release
+announcment:
 
     pypy/doc/release-0.8.0.txt
     http://codespeak.net/pypy/dist/pypy/doc/release-0.8.0.html
