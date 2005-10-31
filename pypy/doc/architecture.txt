@@ -8,9 +8,6 @@ PyPy - Architecture Overview
 This document gives an overview of the goals and architecture of PyPy.
 See also `getting started`_ for a practical introduction.
 
-.. _`getting started`: getting-started.html
-
-
 Mission statement 
 ====================
 
@@ -115,11 +112,12 @@ their main content is *bytecode*.  We use the same compact bytecode format
 than CPython 2.4.
 
 Our bytecode compiler is implemented as a chain of flexible passes
-(tokenizer, lexer, parser, abstract syntax tree builder, bytecode generator).
-The latter passes are based on the ``compiler`` package from the standard
-library of CPython, with various improvements and bug fixes.  (The
-bytecode compiler was recently integrated to the rest of the standard
-interpreter -- it is still in development and not really documented yet.)
+(tokenizer, lexer, parser, abstract syntax tree builder, bytecode
+generator).  The latter passes are based on the ``compiler`` package
+from the standard library of CPython, with various improvements and
+bug fixes. The bytecode compiler (living under
+`interpreter/astcompiler/`_) is now integrated and is translated with
+the rest of PyPy.
 
 In addition to storing bytecode, code objects also know
 how to create a *frame* object which has the responsibility to
@@ -376,24 +374,31 @@ whole process.
 Status of the implementation (Oct 2005)
 ========================================== 
 
-With the pypy-0.8.0 XXX updat me! release we have a static self-contained 
-translation of our `standard interpreter`_.  It is `very compliant`_
-to CPython 2.4.1 but you can still not run too many existing
-programs on it because we are missing a number of C-modules
-like socket or support for process creation.  The self-contained
-PyPy version runs around `300 times slower`_ than CPython but
-this figure can vary quite a bit as we still haven't focused
-on profiling and optimizing bottlenecks at all. 
+With the pypy-0.8.0 release we have integrated our AST compiler with
+the rest of PyPy. The compiler gets translated with the rest to a
+static self-contained version of our `standard interpreter`_.  Like
+with 0.7.0 this version is `very compliant`_ to CPython 2.4.1 but you
+can still not run too many existing programs on it because we are
+still missing a number of C-modules like socket or support for process
+creation.
 
-Also, we still are undergoing efforts to get a fast and stable 
-Python compiler on top of our existing nicely working Parser.
-It turned out we cannot fully build on the existing compiler
-package in CPython's standard library because it is not
-written in a style that allows translation and also it is not
-implementing all of the features CPython's c-level compiler. 
-We thus have to run the compiler at application-level which
-contributes a lot to the perceived slowness of the interactive
-command line. 
+The self-contained PyPy version (single-threaded and using the
+`Boehm-Demers-Weiser garbage collector`_) now runs around 10-20 times
+slower than CPython, this is the result of optimising, adding short
+cuts for some common paths in our interpreter, and adding relatively
+straightforward optimisation transforms to our tool chain, like inlining
+paired with simple escape analysis to remove unnecessary heap allocations.
+We still have some way to go, and we still expect most of our speed
+will come from our Just-In-Time compiler work, which we barely started
+at the moment.
+
+With the 0.8.0 release the "thunk" object space can also be translated
+(see `getting started`_), obtaining a self-contained version of PyPy
+with its feature (and some speed degradation), show-casing at a small
+scale how our whole tool-chain supports flexibility from the interpreter
+written in Python to the resulting self-contained executable.
+
+XXX update numbers
 
 Our rather complete and Python 2.4-compliant interpreter consists 
 of about 30'000-50'000 lines of code (depending on the way you
@@ -406,11 +411,15 @@ the `statistics web page`_ for more detailed information.
 
 .. _`statistics web page`: http://codespeak.net/~hpk/pypy-stat/
 .. _`very compliant`: http://codespeak.net/~hpk/pypy-testresult/
-.. _`300 times slower`: faq.html#whysoslow
-
+.. _`Boehm-Demers-Weiser garbage collector`: http://www.hpl.hp.com/personal/Hans_Boehm/gc/
 .. _`RPython`: coding-guide.html#rpython
 .. _`abstract interpretation`: theory.html#abstract-interpretation
 .. _`translation document`: translation.html
 .. _LLVM: http://llvm.cs.uiuc.edu/
 .. _graph: image/translation.pdf
+.. _`getting started`: getting-started.html
+
 .. include:: _ref.txt
+
+
+
