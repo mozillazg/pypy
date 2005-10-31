@@ -373,10 +373,10 @@ The complete translation process is described in more details in the
 `translation document`_. There is a graph_ that gives an overview over the
 whole process.
 
-Status of the implementation (Aug 2005)
+Status of the implementation (Oct 2005)
 ========================================== 
 
-With the pypy-0.7.0 release we have a static self-contained 
+With the pypy-0.8.0 XXX updat me! release we have a static self-contained 
 translation of our `standard interpreter`_.  It is `very compliant`_
 to CPython 2.4.1 but you can still not run too many existing
 programs on it because we are missing a number of C-modules
