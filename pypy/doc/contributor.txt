@@ -44,12 +44,10 @@ appropriate measure but it's something)::
     Bert Freudenberg <bert@impara.de>
     Alan McIntyre <alan.mcintyre@esrgtech.com>
     Anders Qvist <quest@lysator.liu.se>
-    Ignas Mikalajunas <ignas@pov.lt>
     Lutz Paelike <lutz_p@gmx.net>
     Jacek Generowicz <jacek.generowicz@cern.ch>
     Andrew Thompson <andrew.thompson@newhert.com>
-    Gintautas Miliauskas <>
     Ben Young <ben@transversal.com>
-    Alexander Schremm <alex@alexanderweb.de>
+    Alexander Schremmer <alex@alexanderweb.de>
     Michael Chermside <mcherm@mcherm.com>
 
