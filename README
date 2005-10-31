@@ -1,35 +1,36 @@
 =======================================================
-PyPy: Python in Python implementation / Version 0.7.0
+PyPy: Python in Python implementation / Version 0.8.0
 =======================================================
 
-Welcome to PyPy!   PyPy-0.7.0 marks the first public release 
-that allows to build a self-contained Python implementation
-that does not depend or run on top of CPython anymore.  
+PyPy is an implementation of the Python programming language, written
+in Python.
 
-We invested a lot of time in improving the documentation and
-website and thus invite you to head over to our getting-started
-document 
+PyPy is very much a work in progress, but can already build a
+self-contained Python implementation that is completey independent of
+Python.
 
-    pypy/doc/getting-started.txt  (local if you got a tarball)
+For more, we invite you to head over to our getting-started document:
 
-    http://codespeak.net/pypy/dist/pypy/doc/getting-started.html 
+    pypy/doc/getting-started.txt
+    (local if you got a tarball or svn checkout)
 
-which gives you many good starting and entry points into
-playing with PyPy.  It will also point you to our
-documentation section which is generated from information
-in the pypy/doc directory. 
+    http://codespeak.net/pypy/dist/pypy/doc/getting-started.html
 
-Our online release announcement has some more  
-information about the specific PyPy-0.7.0 release: 
+which gives you many good starting and entry points into playing with
+PyPy.  It will also point you to our documentation section which is
+generated from information in the pypy/doc directory.
 
-    pypy/doc/release-0.7.0.txt or 
-    http://codespeak.net/pypy/dist/pypy/doc/release-0.7.0.html 
+For more information in what's new in this release, please read the
+release announcment:
 
-Please note that the last 9 months of PyPy development 
-have been funded by the European Union through its research
-programme. 
+    pypy/doc/release-0.8.0.txt
+    http://codespeak.net/pypy/dist/pypy/doc/release-0.8.0.html
 
-Enjoy and send us feedback! 
+Since December 2004, the development of PyPy has been funded by the
+European Union's research programme.  For more information on this
+aspect of the project please visit http://pypy.org/.
+
+Enjoy and send us feedback!
 
     the pypy-dev team <pypy-dev@codespeak.net>
 
