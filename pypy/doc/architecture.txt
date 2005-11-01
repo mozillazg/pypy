@@ -43,7 +43,7 @@ of specific features.
 Later in the project we will introduce optimizations, following the ideas
 of Psyco_ that should make PyPy run Python programs faster than CPython,
 and extensions, following the ideas of Stackless_ and others, that will
-increase the expressive available to python programmers.
+increase the expressive power available to python programmers.
 
 .. _Python: http://www.python.org/doc/current/ref/ref.html
 .. _Psyco: http://psyco.sourceforge.net
