@@ -1,25 +1,27 @@
-pypy-0.8.0: Translatable compiler/parser and more speed 
+pypy-0.8.0: Translatable compiler/parser and a bit more speed 
 ==============================================================
+
+The PyPy Development Team has been busy working and PyPy has 
+progressed since 0.7.0. Release 0.8.0 is the third public
+release of PyPy. It packages our latest improvements and
+completed work.
 
 The highlights of this third release of PyPy are:
 
-- Translatable parser and AST compiler
+- Translatable parser and AST compiler. PyPy now integrates its own
+  compiler based on Python own 'compiler' package and quite some bug
+  fixes.  The compiler has been ported to interpreter-level, is is now
+  RPython code, and gets translated with the rest of PyPy.
 
-- Speed enhancements. Translated PyPy is about 10 times slower
-  than CPython on pystones (release-0.7.0 was about 200  times
-  slower)
+- Speed enhancements. Translated PyPy is about 10-20 times slower than
+  CPython on pystones (release-0.7.0 was about 200 times slower) and
+  our other benchmarks.
 
-- a translatable version of the Thunk Object space
-
-The release includes the snapshots of the following interesting
-sub projects:
-
-- a socket module
-- the start of a stackless implementation
-- the OOtyper. A rtyper replacement for highlevel backends 
-  (squeak, ...)
-- A javascript backend
-- A limited (PPC) assembler backend
+- Since 0.6.0, PyPy shipped with an experimental Object Space (the
+  part of PyPy implementing object operations and manipulation)
+  implementing lazily computed objects, the "Thunk" object space. With
+  0.8.0 this object space can also been translated preserving
+  its feature additions.
 
 What is PyPy (about)? 
 ------------------------------------------------
@@ -59,6 +61,22 @@ playing or research purposes.
 
 Ongoing work and near term goals
 ---------------------------------
+
+At the last sprint in Paris we started exploring the new directions of
+our work, in terms of extending and optimising PyPy further. We
+started to scratch the surface of Just-In-Time compiler related work,
+which we still expect will be the major source of our future speed
+improvements and some successful amount work have been done on the
+support needed for stackless-like features.
+  
+This release also includes the snapshots in preliminary or embryonal
+form of the following interesting sub projects:
+
+- the OOtyper. A RTyper variation for high-level backends 
+  (Squeak, ...)
+- A JavaScript backend
+- A limited (PPC) assembler backend (this related to the JIT)
+- some bits for a socket module
 
 PyPy has been developed during approximately 16 coding sprints
 across Europe and the US.  It continues to be a very
