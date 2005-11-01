@@ -11,52 +11,53 @@ See also `getting started`_ for a practical introduction.
 Mission statement 
 ====================
 
-PyPy is a reimplementation of Python_ written in Python itself, flexible and
-easy to experiment with.  Our long-term goals are to target a large variety of
-platforms, small and large, by providing a compiler toolsuite that can produce
-custom Python versions.  Platform, Memory and Threading models are to become
-aspects of the translation process - as opposed to encoding low level details
-into a language implementation itself.  Eventually, dynamic optimization techniques
-- implemented as another translation aspect - should become robust against
-language changes.
+PyPy is an implementation of the Python_ programming language written in
+Python itself, flexible and easy to experiment with.  Our long-term goals are
+to target a large variety of platforms, small and large, by providing a
+compiler toolsuite that can produce custom Python versions.  Platform, memory
+and threading models are to become aspects of the translation process - as
+opposed to encoding low level details into the language implementation itself.
+Eventually, dynamic optimization techniques - implemented as another
+translation aspect - should become robust against language changes.
 
 
 PyPy - an implementation of Python in Python
 ============================================
 
 It has become a tradition in the development of computer languages to
-implement each language in itself. This serves many purposes. By doing so,
-you demonstrate the versatility of the language, and its applicability for
-large projects.  Writing compilers and interpreters are among the most 
-complex endeavours in software development. 
+implement each language in itself.  This serves many purposes. By doing so,
+you demonstrate the versatility of the language and its applicability for
+large projects.  Writing compilers and interpreters are among the most
+complex endeavours in software development.
 
 An important aspect of implementing Python in Python is the high level of
 abstraction and compactness of the language. This allows an implementation
 that is, in some respects, easier to understand and play with than the one
-done in C.  Actually, the existing CPython implementation is mostly 
-well written and it is often possible to manually translate according
-CPython code to PyPy by just stripping away many low level details. 
+written in C.
 
-Another carrying idea in PyPy is to build the implementation in the form
+Another central idea in PyPy is building the implementation in the form
 of a number of independent modules with clearly defined and well tested API's. 
 This eases reuse and allows experimenting with multiple implementations 
 of specific features.
 
-Later in the project, we will introduce optimizations, following the ideas
-of Psyco_ and Stackless_, that should make PyPy run Python programs 
-faster than CPython.
+Later in the project we will introduce optimizations, following the ideas
+of Psyco_ that should make PyPy run Python programs faster than CPython,
+and extensions, following the ideas of Stackless_ and others, that will
+increase the expressive available to python programmers.
 
 .. _Python: http://www.python.org/doc/current/ref/ref.html
 .. _Psyco: http://psyco.sourceforge.net
 .. _Stackless: http://stackless.com 
 
+
 Higher level picture
 ====================
 
-The various parts of PyPy have always been under more or less heavy
-refactoring since its inception. However, the higher level architecture
-remains rather simple and unchanged.  There are two independent basic
-subsystems: `the Standard Interpreter`_ and `the Translation Process`_.
+As you would expect from a project implemented using ideas from the world
+of `Extreme Programming`_, the architecture of PyPy has evolved over time
+and continues to evolve.  Nevertheless, the high level architecture is now
+clear.  There are two independent basic subsystems: `the Standard
+Interpreter`_ and `the Translation Process`_.
 
 .. _`standard interpreter`: 
 
@@ -64,17 +65,17 @@ The Standard Interpreter
 ------------------------
 
 The *standard interpreter* is the subsystem implementing the Python language.
-It is divided in two components:
+It is divided into two components:
 
 - the `bytecode interpreter`_ which is responsible for interpreting 
   code objects and implementing bytecodes,
 
-- the `standard object space`_ which implements creation, access and
-  modification of application level objects.
+- the `standard object space`_ which implements creating, accessing and
+  modifying application level objects.
 
 Note that the *standard interpreter* can run fine on top of CPython 
 (the C Implementation of Python led by Guido van Rossum), if one is
-willing to pay for the double-interpretation performance penalty.
+willing to pay the performance penalty for double-interpretation.
 
 The Translation Process
 -----------------------
@@ -84,7 +85,7 @@ representation of our standard interpreter.  The *translation process*
 is done in four steps:
 
 - producing a *flow graph* representation of the standard interpreter. 
-  A combination of a `bytecode interpreter`_ and a *flow object space*
+  A combination of the `bytecode interpreter`_ and a *flow object space*
   performs *abstract interpretation* to record the flow of objects
   and execution throughout a python program into such a *flow graph*;
 
@@ -179,7 +180,7 @@ the bytecode interpreter:
 - the *Thunk Object Space* wraps another object space (e.g. the standard
   one) and adds two capabilities: lazily computed objects (computed only when
   an operation is performed on them), and "become", which completely and
-  globally replaces an object with another.
+  globally replaces one object with another.
 
 - the *Flow Object Space* transforms a Python program into a
   flow-graph representation, by recording all operations that the bytecode 
@@ -200,7 +201,7 @@ Application-level and interpreter-level execution and objects
 =============================================================
 
 Since Python is used for implementing all of our code base, there is a
-crucial distinction to be aware of: *interpreter-level* objects versus
+crucial distinction to be aware of: that between *interpreter-level* objects and 
 *application-level* objects.  The latter are the ones that you deal with
 when you write normal python programs.  Interpreter-level code, however,
 cannot invoke operations nor access attributes from application-level
@@ -209,16 +210,16 @@ PyPy, because half the variable and object names start with a ``w_``, which
 indicates that they are `wrapped`_ application-level values. 
 
 Let's show the difference with a simple example.  To sum the contents of
-two variables ``a`` and ``b``, typical application-level code is ``a+b``
--- in sharp contrast, typical interpreter-level code is ``space.add(w_a,
-w_b)``, where ``space`` is an instance of an object space, and ``w_a``
-and ``w_b`` are typical names for the wrapped versions of the two
-variables.  
+two variables ``a`` and ``b``, one would write the simple application-level
+``a+b`` -- in contrast, the equivalent interpreter-level code is
+``space.add(w_a, w_b)``, where ``space`` is an instance of an object space,
+and ``w_a`` and ``w_b`` are typical names for the wrapped versions of the
+two variables.
 
 It helps to remember how CPython deals with the same issue: interpreter
-level code, in CPython, is written in C, and thus typical code for the
+level code, in CPython, is written in C and thus typical code for the
 addition is ``PyNumber_Add(p_a, p_b)`` where ``p_a`` and ``p_b`` are C
-variables of type ``PyObject*``. This is very similar to how we write
+variables of type ``PyObject*``. This is conceptually similar to how we write
 our interpreter-level code in Python.
 
 Moreover, in PyPy we have to make a sharp distinction between
@@ -262,7 +263,7 @@ something much lower-level and involved, say something like::
             space.setitem(w_self, w_key, w_value)
 
 This interpreter-level implementation looks much more similar to the C
-source code.  It is still more readable than it's C counterpart because 
+source code.  It is still more readable than its C counterpart because 
 it doesn't contain memory management details and can use Python's native 
 exception mechanism. 
 
@@ -274,7 +275,7 @@ In fact, in almost all parts of PyPy, you find application level code in
 the middle of interpreter-level code.  Apart from some bootstrapping
 problems (application level functions need a certain initialization
 level of the object space before they can be executed), application
-level code is usually preferable.  We have an abstraction (called
+level code is usually preferable.  We have an abstraction (called the
 'Gateway') which allows the caller of a function to remain ignorant of
 whether a particular function is implemented at application or
 interpreter level. 
@@ -286,10 +287,10 @@ Wrapping
 --------- 
 
 The ``w_`` prefixes so lavishly used in the previous example indicate,
-by PyPy coding convention, that we are dealing with *wrapped* objects,
+by PyPy coding convention, that we are dealing with *wrapped* (or *boxed*) objects,
 that is, interpreter-level objects which the object space constructs
 to implement corresponding application-level objects.  Each object
-space supplies ``wrap`` and ``unwrap``, ``int_w``, ``interpclass_w``,
+space supplies ``wrap``, ``unwrap``, ``int_w``, ``interpclass_w``,
 etc. operations that move between the two levels for objects of simple
 built-in types; each object space also implements other Python types
 with suitable interpreter-level classes with some amount of internal
@@ -299,13 +300,7 @@ For example, an application-level Python ``list``
 is implemented by the `standard object space`_ as an
 instance of ``W_ListObject``, which has an instance attribute
 ``ob_item`` (an interpreter-level list which contains the
-application-level list's items as wrapped objects) and another attribute
-``ob_size`` which records the application-level list's length (we want
-to be able to do "over-allocation" in ``ob_item``, for the same reasons
-of performance that lead CPython to do it, and therefore the length of
-``ob_item`` is allowed to be greater than the length of the
-application-level list -- it is for this reason that the length in
-question has to be explicitly recorded in ``ob_size``).
+application-level list's items as wrapped objects).
 
 The rules are described in more details `in the coding guide`_.
 
@@ -324,7 +319,7 @@ bytecode interpreter and standard object space into a lower-level language.
 In order for our translation and type inference mechanisms to work
 effectively, we need to restrict the dynamism of our interpreter-level
 Python code at some point.  However, in the start-up phase, we are
-completely free to use all kind of nice python constructs, including
+completely free to use all kinds of powerful python constructs, including
 metaclasses and execution of dynamically constructed strings.  However,
 when the initialization phase (mainly, the function
 ``objspace.initialize()``) finishes, all code objects involved need to
@@ -342,17 +337,17 @@ each basic block to other basic blocks.
 
 The flow graphs are fed as input into the Annotator.  The Annotator,
 given entry point types, infers the types of values that flow through
-the program variables.  Here, the definition of `RPython`_ comes
-again into play: RPython code is restricted in such a way that the
-Annotator is able to infer consistent types.  In total, how much
-dynamism we allow in RPython depends, and is restricted by, the Flow
+the program variables.  This is the core of the definition of `RPython`_:
+RPython code is restricted in such a way that the
+Annotator is able to infer consistent types.  How much
+dynamism we allow in RPython depends on, and is restricted by, the Flow
 Object Space and the Annotator implementation.  The more we can improve
 this translation phase, the more dynamism we can allow.  In some cases,
-however, it will probably be more feasible and practical to just get rid
+however, it is more feasible and practical to just get rid
 of some of the dynamism we use in our interpreter level code.  It is
 mainly because of this trade-off situation that the definition of
-RPython has been shifting quite a bit.  Although the Annotator is
-pretty stable now, and able to process the whole of PyPy, the RPython
+RPython has shifted over time.  Although the Annotator is
+pretty stable now and able to process the whole of PyPy, the RPython
 definition will probably continue to shift marginally as we improve it.
 
 The actual low-level code (and, in fact, also other high-level code) is
@@ -368,7 +363,7 @@ uses them to modify the flow graph in-place to replace its operations with
 low-level ones, directly manipulating C-like values and data structures.
 
 The complete translation process is described in more details in the
-`translation document`_. There is a graph_ that gives an overview over the
+`translation document`_. There is a graph_ that gives an overview of the
 whole process.
 
 Status of the implementation (Oct 2005)
@@ -378,18 +373,19 @@ With the pypy-0.8.0 release we have integrated our AST compiler with
 the rest of PyPy. The compiler gets translated with the rest to a
 static self-contained version of our `standard interpreter`_.  Like
 with 0.7.0 this version is `very compliant`_ to CPython 2.4.1 but you
-can  not yet run too many existing programs on it because we are
+cannot run many existing programs on it yet because we are
 still missing a number of C-modules like socket or support for process
 creation.
 
 The self-contained PyPy version (single-threaded and using the
 `Boehm-Demers-Weiser garbage collector`_) now runs around 10-20 times
-slower than CPython, this is the result of optimising, adding short
-cuts for some common paths in our interpreter, and adding relatively
-straightforward optimisation transforms to our tool chain, like inlining
+slower than CPython, i.e. around 10 times faster than 0.7.0.
+This is the result of optimizing, adding short
+cuts for some common paths in our interpreter and adding relatively
+straightforward optimization transforms to our tool chain, like inlining
 paired with simple escape analysis to remove unnecessary heap allocations.
 We still have some way to go, and we still expect most of our speed
-will come from our Just-In-Time compiler work, which we barely started
+will come from our Just-In-Time compiler work, which we have barely started
 at the moment.
 
 With the 0.8.0 release the "thunk" object space can also be translated
