@@ -33,7 +33,8 @@ complex endeavours in software development.
 An important aspect of implementing Python in Python is the high level of
 abstraction and compactness of the language. This allows an implementation
 that is, in some respects, easier to understand and play with than the one
-written in C.
+written in C (referred to throughout the PyPy documentation and source as
+"CPython").
 
 Another central idea in PyPy is building the implementation in the form
 of a number of independent modules with clearly defined and well tested API's. 
@@ -75,9 +76,8 @@ It is divided into two components:
 - the `standard object space`_ which implements creating, accessing and
   modifying application level objects.
 
-Note that the *standard interpreter* can run fine on top of CPython 
-(the C Implementation of Python led by Guido van Rossum), if one is
-willing to pay the performance penalty for double-interpretation.
+Note that the *standard interpreter* can run fine on top of CPython if one
+is willing to pay the performance penalty for double-interpretation.
 
 The Translation Process
 -----------------------
