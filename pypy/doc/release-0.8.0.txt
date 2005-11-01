@@ -1,17 +1,18 @@
 pypy-0.8.0: Translatable compiler/parser and a bit more speed 
 ==============================================================
 
-The PyPy Development Team has been busy working and PyPy has 
-progressed since 0.7.0. Release 0.8.0 is the third public
-release of PyPy. It packages our latest improvements and
-completed work.
+The PyPy development team has been busy working and we've packaged our
+latest improvements and completed work as version 0.8.0, our third
+public release.
 
 The highlights of this third release of PyPy are:
 
 - Translatable parser and AST compiler. PyPy now integrates its own
   compiler based on Python own 'compiler' package and quite some bug
-  fixes.  The compiler has been ported to interpreter-level, is is now
-  RPython code, and gets translated with the rest of PyPy.
+  fixes.  The compiler has been ported to interpreter-level, is now
+  RPython code, and gets translated with the rest of PyPy.  This makes
+  using the translated pypy interactively much more pleasant, as
+  compilation is considerably faster than in 0.7.0.
 
 - Speed enhancements. Translated PyPy is about 10-20 times slower than
   CPython on pystones (release-0.7.0 was about 200 times slower) and
@@ -69,19 +70,19 @@ which we still expect will be the major source of our future speed
 improvements and some successful amount work have been done on the
 support needed for stackless-like features.
   
-This release also includes the snapshots in preliminary or embryonal
+This release also includes the snapshots in preliminary or embryonic
 form of the following interesting sub projects:
 
-- the OOtyper. A RTyper variation for high-level backends 
+- The OOtyper, a RTyper variation for higher-level backends 
   (Squeak, ...)
 - A JavaScript backend
 - A limited (PPC) assembler backend (this related to the JIT)
 - some bits for a socket module
 
-PyPy has been developed during approximately 16 coding sprints
-across Europe and the US.  It continues to be a very
-dynamically and incrementally evolving project with many
-one-week meetings to follow. 
+PyPy has been developed during approximately 16 coding sprints across
+Europe and the US.  It continues to be a very dynamically and
+incrementally evolving project with many of these one-week workshops
+to follow.
 
 PyPy has been a community effort from the start and it would
 not have got that far without the coding and feedback support
@@ -93,20 +94,17 @@ raise questions.
 
 have fun, 
     
-    the pypy team, of which here is a partial snapshot
-    of mainly involved persons: 
-
-    Armin Rigo, Samuele Pedroni, 
+    the pypy team, (Armin Rigo, Samuele Pedroni, 
     Holger Krekel, Christian Tismer, 
     Carl Friedrich Bolz, Michael Hudson, 
-    and many contributors: http://codespeak.net/pypy/dist/pypy/doc/contributor.html 
+    and many others: http://codespeak.net/pypy/dist/pypy/doc/contributor.html)
 
 PyPy development and activities happen as an open source project  
 and with the support of a consortium partially funded by a two 
-year European Union IST research grant. Here is a list of 
-the full partners of that consortium: 
+year European Union IST research grant. The full partners of that 
+consortium are: 
         
     Heinrich-Heine University (Germany), AB Strakt (Sweden)
-    merlinux GmbH (Germany), tismerysoft GmbH(Germany) 
+    merlinux GmbH (Germany), tismerysoft GmbH (Germany) 
     Logilab Paris (France), DFKI GmbH (Germany)
     ChangeMaker (Sweden), Impara (Germany)
