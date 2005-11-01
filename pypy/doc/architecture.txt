@@ -59,6 +59,8 @@ and continues to evolve.  Nevertheless, the high level architecture is now
 clear.  There are two independent basic subsystems: `the Standard
 Interpreter`_ and `the Translation Process`_.
 
+.. _`Extreme Programming`: http://www.extremeprogramming.com/
+
 .. _`standard interpreter`: 
 
 The Standard Interpreter
