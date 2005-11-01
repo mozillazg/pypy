@@ -21,7 +21,7 @@ The highlights of this third release of PyPy are:
 - Since 0.6.0, PyPy shipped with an experimental Object Space (the
   part of PyPy implementing object operations and manipulation)
   implementing lazily computed objects, the "Thunk" object space. With
-  0.8.0 this object space can also been translated preserving
+  0.8.0 this object space can also be translated preserving
   its feature additions.
 
 What is PyPy (about)? 
@@ -67,11 +67,11 @@ At the last sprint in Paris we started exploring the new directions of
 our work, in terms of extending and optimising PyPy further. We
 started to scratch the surface of Just-In-Time compiler related work,
 which we still expect will be the major source of our future speed
-improvements and some successful amount work have been done on the
+improvements and some successful amount work has been done on the
 support needed for stackless-like features.
   
 This release also includes the snapshots in preliminary or embryonic
-form of the following interesting sub projects:
+form of the following interesting but yet not completed sub projects:
 
 - The OOtyper, a RTyper variation for higher-level backends 
   (Squeak, ...)
