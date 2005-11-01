@@ -301,7 +301,7 @@ structure.
 For example, an application-level Python ``list``
 is implemented by the `standard object space`_ as an
 instance of ``W_ListObject``, which has an instance attribute
-``ob_item`` (an interpreter-level list which contains the
+``wrappeditems`` (an interpreter-level list which contains the
 application-level list's items as wrapped objects).
 
 The rules are described in more details `in the coding guide`_.
