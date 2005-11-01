@@ -54,6 +54,11 @@ copyrighted by one or more of the following people and organizations:
     Laura Creighton <lac@strakt.com>
     Marius Gedminas <mgedmin@b4net.lt>
     Niklaus Haldimann <nhaldimann@gmx.ch>
+    Amaury Forgeot d Arc <amauryfa@gmail.com>
+    Boris Feigin <boria@fbg.uklinux.net>
+    Valentino Volonghi <dialtone@divmod.com>        
+    Bert Freudenberg <bert@impara.de>
+    Andrew Thompson <andrew.thompson@newhert.com>    
     Jonathan David Riehl <jriehl@spaceship.com>
     Guido van Rossum <guido@python.org>
 
@@ -63,6 +68,7 @@ copyrighted by one or more of the following people and organizations:
     tismerysoft GmbH, Germany 
     Logilab Paris, France 
     DFKI GmbH, Germany 
+    Impara, Germany
 
  
 License for 'lib-python/2.4.1' and 'lib-python/2.4.1-modified'
