@@ -10,11 +10,7 @@ PyPy - Getting Started
 Just the facts 
 ============== 
 
-.. XXX:
-  0.7 -> 0.8
-  still 2000 for py.py?
-
-getting & running the PyPy 0.7 release 
+getting & running the PyPy 0.8 release 
 -----------------------------------------
 
 *please come back tomorrow when the following information 
@@ -23,20 +19,20 @@ there yet*
 
 Download one of the following release files and unpack it: 
 
-*pypy-0.7*
+*pypy-0.8*
     
   * download one of 
 
-    * `pypy-0.7.0.tar.bz2`_ (unix line endings) or
-    * `pypy-0.7.0.tar.gz`_ (unix line endings) or
-    * `pypy-0.7.0.zip`_ (windows line-endings) and unpack it 
+    * `pypy-0.8.0.tar.bz2`_ (unix line endings) or
+    * `pypy-0.8.0.tar.gz`_ (unix line endings) or
+    * `pypy-0.8.0.zip`_ (windows line-endings) and unpack it 
     
   * alternatively run 
   
-    * ``svn co http://codespeak.net/svn/pypy/release/0.7.x pypy-0.7.x``
-      (the 0.7 maintenance branch)
+    * ``svn co http://codespeak.net/svn/pypy/release/0.8.x pypy-0.8.x``
+      (the 0.8 maintenance branch)
 
-then change to the ``pypy-0.7.0`` or ``pypy-0.7.x`` directory
+then change to the ``pypy-0.8.0`` or ``pypy-0.8.x`` directory
 and execute the following command line:: 
 
     python pypy/bin/py.py 
@@ -48,15 +44,14 @@ Because this invocation of PyPy still runs on top of
 CPython, it runs around 2000 times slower than the 
 original CPython.  
 
-However, the major news with the 0.7.0 release is
-that you can use PyPy to `translate itself to lower
-level languages`_ after which it runs standalone 
-and is not dependant on CPython anymore. 
+However, since the 0.7.0 release it is possible to use PyPy to `translate
+itself to lower level languages`_ after which it runs standalone, is not
+dependant on CPython anymore and becomes faster.
 
 .. _`90% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
-.. _`pypy-0.7.0.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.bz2
-.. _`pypy-0.7.0.zip`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.zip
-.. _`pypy-0.7.0.tar.gz`: http://code2.codespeak.net/download/pypy/pypy-0.7.0.tar.gz
+.. _`pypy-0.8.0.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.tar.bz2
+.. _`pypy-0.8.0.zip`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.zip
+.. _`pypy-0.8.0.tar.gz`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.tar.gz
 
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
@@ -262,7 +257,8 @@ without triggering the computation::
 
 It is interesting to note that this lazy-computing Python extension 
 is solely implemented in a small `objspace/thunk.py`_ file consisting 
-of around 100 lines of code. 
+of around 100 lines of code. Since the 0.8.0 release it is even possible
+to `translate PyPy with the thunk object space`_.
 
 Running the tests
 +++++++++++++++++
@@ -337,9 +333,6 @@ Test snippets of translatable code are provided in the file
     >>> t = Translator(test.is_perfect_number)
     >>> t.view()
         
-.. >>> from pypy.translator.translator import Translator 
-.. >>> from pypy.translator.test import snippet as test 
-
 
 trying out the type annotator
 +++++++++++++++++++++++++++++
@@ -364,9 +357,9 @@ The graph can be turned into C code::
    >>> t.specialize()
    >>> f = t.ccompile()
 
-The first command replaces operations with variables of types that are
-avaiable in C (e.g. int) with low level versions. This can also be ommited
-although it is not recommended. To try out the compiled version::
+The first command replaces the operations with other low level versions that
+only use low level types that are available in C (e.g. int). This can also be
+ommited although it is not recommended. To try out the compiled version::
 
    >>> f(5)
    False
@@ -485,14 +478,18 @@ interesting options are:
      garbage collector`_ or our own reference counting implementation
      (as we have seen Boehm's collector is the default). 
 
-.. XXX:
-   --stackless ? it's own section?
-
 You can also use the translate_pypy.py script to try out several smaller
 programs, e.g. a slightly changed version of Pystone::
 
     cd pypy/translator/goal
     python translate_pypy.py targetrpystone
+
+
+.. _`translate PyPy with the thunk object space`:
+
+Translating with the thunk object space
+++++++++++++++++++++++++++++++++++++++++
+
 
 It is also possible to experimentally translate a PyPy version using
 the "thunk" object space::
@@ -502,6 +499,10 @@ the "thunk" object space::
 
 the examples in `lazily computed objects`_ should work in the translated
 result.
+
+Translating using the LLVM backend
+++++++++++++++++++++++++++++++++++
+
 
 To create a standalone executable using the experimental LLVM_ compiler
 infrastructure::
