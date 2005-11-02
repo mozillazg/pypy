@@ -333,6 +333,9 @@ Test snippets of translatable code are provided in the file
     >>> t = Translator(test.is_perfect_number)
     >>> t.view()
         
+After that, the graph viewer pops up, that lets you interactively inspect the
+flowgraph. To move around, click on something that you want to inspect.
+To get help about how to use it, press 'H'. To close it again, press 'Q'.
 
 trying out the type annotator
 +++++++++++++++++++++++++++++
