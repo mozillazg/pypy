@@ -525,11 +525,16 @@ or start off at one of the following points:
    module.py_ and mixedmodule.py_.  Core types supporting the bytecode 
    interpreter are defined in typedef.py_.
 
-*  `pypy/interpreter/pyparser`_ contains the parser.  XXX more!  New
-   in 0.8.0.
-
-*  `pypy/interpreter/astcompiler`_ contains the compiler.  XXX more!  New
-   in 0.8.0.
+*  `pypy/interpreter/pyparser`_ contains a recursive descent parser,
+   and input data files that allow it to parse both Python 2.3 and 2.4
+   syntax.  Once the input data has been processed, the parser can be
+   translated by the above machinery into efficient code.
+ 
+*  `pypy/interpreter/astcompiler`_ contains the compiler.  This
+   contains a modified version of the compiler package from CPython
+   that fixes some bugs and is translatable.  That the compiler and
+   parser are translatable is new in 0.8.0 and it makes using the
+   resulting binary interactively much more pleasant.
 
 *  `pypy/objspace/std`_ contains the `Standard object space`_.  The main file
    is objspace.py_.  For each type, the files ``xxxtype.py`` and
