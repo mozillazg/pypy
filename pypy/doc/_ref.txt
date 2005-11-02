@@ -10,7 +10,8 @@
 .. _`interpreter/`:
 .. _`pypy/interpreter`: ../../pypy/interpreter
 .. _`pypy/interpreter/argument.py`: ../../pypy/interpreter/argument.py
-.. _`interpreter/astcompiler/`: ../../pypy/interpreter/astcompiler
+.. _`interpreter/astcompiler/`:
+.. _`pypy/interpreter/astcompiler`: ../../pypy/interpreter/astcompiler
 .. _`pypy/interpreter/function.py`: ../../pypy/interpreter/function.py
 .. _`interpreter/gateway.py`:
 .. _`pypy/interpreter/gateway.py`: ../../pypy/interpreter/gateway.py
@@ -18,6 +19,7 @@
 .. _`pypy/interpreter/mixedmodule.py`: ../../pypy/interpreter/mixedmodule.py
 .. _`pypy/interpreter/nestedscope.py`: ../../pypy/interpreter/nestedscope.py
 .. _`pypy/interpreter/pyopcode.py`: ../../pypy/interpreter/pyopcode.py
+.. _`pypy/interpreter/pyparser`: ../../pypy/interpreter/pyparser
 .. _`pypy/interpreter/typedef.py`: ../../pypy/interpreter/typedef.py
 .. _`lib/`:
 .. _`pypy/lib/`: ../../pypy/lib
