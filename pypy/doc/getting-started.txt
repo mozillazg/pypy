@@ -526,14 +526,20 @@ or start off at one of the following points:
    module.py_ and mixedmodule.py_.  Core types supporting the bytecode 
    interpreter are defined in typedef.py_.
 
+*  `pypy/interpreter/pyparser`_ contains the parser.  XXX more!  New
+   in 0.8.0.
+
+*  `pypy/interpreter/astcompiler`_ contains the compiler.  XXX more!  New
+   in 0.8.0.
+
 *  `pypy/objspace/std`_ contains the `Standard object space`_.  The main file
    is objspace.py_.  For each type, the files ``xxxtype.py`` and
    ``xxxobject.py`` contain respectively the definition of the type and its
    (default) implementation.
 
-*  `pypy/objspace`_ contains a few other object spaces: the thunk_
-   one, the trace_ one, the flow_ one.  The latter is a relatively short piece
-   of  code that builds the control flow graphs when the bytecode interpreter
+*  `pypy/objspace`_ contains a few other object spaces: the thunk_,
+   trace_ and flow_ object spaces.  The latter is a relatively short piece
+   of code that builds the control flow graphs when the bytecode interpreter
    runs in it.
 
 *  `pypy/translator`_ contains the code analysis and generation stuff.
