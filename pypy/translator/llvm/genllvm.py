@@ -29,8 +29,8 @@ class GenLLVM(object):
         LLVMNode.nodename_count = {}    
         self.db = Database(self, translator)
         self.translator = translator
-        self.gcpolicy = gcpolicy
-        self.exceptionpolicy = exceptionpolicy
+        self.gcpolicy = gcpolicy or GcPolicy.new(gcpolicy)
+        self.exceptionpolicy = exceptionpolicy or ExceptionPolicy.new(exceptionpolicy)
         extfuncnode.ExternalFuncNode.used_external_functions = {}
         self.debug = debug # for debug we create comments of every operation that may be executed
         if debug:
