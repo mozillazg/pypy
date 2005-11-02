@@ -282,7 +282,7 @@ to perform test runs or simply start it without arguments to
 run all tests below the current directory. 
 
 Finally, there are the CPython regression tests which you can 
-run like this (this will take a hours and hours and hours)::
+run like this (this will take hours and hours and hours)::
 
     cd lib-python/2.4.1/test 
     python ../../../pypy/test_all.py
