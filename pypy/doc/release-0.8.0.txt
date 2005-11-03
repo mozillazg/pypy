@@ -20,13 +20,11 @@ The highlights of this third release of PyPy are:
   language compliancy has been slightly increased compared to 0.7
   which had already reached major CPython compliancy goals. 
 
-- Some unique experimental features are now translateable. 
-  Since 0.6.0, PyPy shipped with an experimental "Thunk"
-  Object Space (an abstraction within PyPy responsible for implementing 
-  all Python object operations and manipulation) implementing lazily 
-  computed objects and a 'become' operation allowing to morph an arbitrary 
-  python object into another one. 
-
+- Some experimental features are now translateable.  Since 0.6.0, PyPy
+  shipped with an experimental Object Space (the part of PyPy
+  implementing object operations and manipulation) implementing lazily
+  computed objects, the "Thunk" object space. With 0.8.0 this object
+  space can also be translated preserving its feature additions.
 
 What is PyPy (about)? 
 ------------------------------------------------
