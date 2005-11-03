@@ -1,28 +1,32 @@
-pypy-0.8.0: Translatable compiler/parser and a bit more speed 
+pypy-0.8.0: Translatable compiler/parser and some more speed 
 ==============================================================
 
-The PyPy development team has been busy working and we've packaged our
-latest improvements and completed work as version 0.8.0, our third
-public release.
+The PyPy development team has been busy working and we've now packaged 
+our latest improvements, completed work and new experiments as 
+version 0.8.0, our third public release.
 
 The highlights of this third release of PyPy are:
 
 - Translatable parser and AST compiler. PyPy now integrates its own
-  compiler based on Python own 'compiler' package and quite some bug
-  fixes.  The compiler has been ported to interpreter-level, is now
-  RPython code, and gets translated with the rest of PyPy.  This makes
-  using the translated pypy interactively much more pleasant, as
-  compilation is considerably faster than in 0.7.0.
+  compiler based on Python own 'compiler' package but with a number
+  of fixes and code simplifications in order to get it translated 
+  with the rest of PyPy.  This makes using the translated pypy 
+  interactively much more pleasant, as compilation is considerably 
+  faster than in 0.7.0.
 
-- Speed enhancements. Translated PyPy is about 10-20 times slower than
-  CPython on pystones (release-0.7.0 was about 200 times slower) and
-  our other benchmarks.
+- Some Speed enhancements. Translated PyPy is now about 10 times
+  faster than 0.7 but still 10-20 times slower than
+  CPython on pystones and other benchmarks.  At the same time, 
+  language compliancy has been slightly increased compared to 0.7
+  which had already reached major CPython compliancy goals. 
 
-- Since 0.6.0, PyPy shipped with an experimental Object Space (the
-  part of PyPy implementing object operations and manipulation)
-  implementing lazily computed objects, the "Thunk" object space. With
-  0.8.0 this object space can also be translated preserving
-  its feature additions.
+- Some unique experimental features are now translateable. 
+  Since 0.6.0, PyPy shipped with an experimental "Thunk"
+  Object Space (an abstraction within PyPy responsible for implementing 
+  all Python object operations and manipulation) implementing lazily 
+  computed objects and a 'become' operation allowing to morph an arbitrary 
+  python object into another one. 
+
 
 What is PyPy (about)? 
 ------------------------------------------------
@@ -44,6 +48,8 @@ and does not by itself focus on getting a production-ready
 Python implementation although we do hope and expect it to
 become a viable contender in that area sometime next year. 
 
+PyPy is partially funded as a research project under the 
+European Union's IST programme. 
 
 Where to start? 
 -----------------------------
