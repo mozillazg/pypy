@@ -3,8 +3,8 @@ The Bookkeeper class.
 """
 
 from __future__ import generators
-import sys
-from types import FunctionType, ClassType, NoneType
+import sys, types
+
 from pypy.objspace.flow.model import Constant
 from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomePtr, unionof, SomeInstance, SomeDict, SomeBuiltin, SomePBC, \
@@ -405,16 +405,17 @@ class Bookkeeper:
         try:
             return self.descs[pyobj]
         except KeyError:
+            from pypy.annotation import desc
             if isinstance(pyobj, types.FunctionType):
-                result = FunctionDesc(pyobj)
+                result = desc.FunctionDesc(pyobj)
             elif isintance(pyobj, (type, types.ClassType)):
-                result = ClassDesc(pyobj)
+                result = desc.ClassDesc(pyobj)
             elif isinstance(pyobj, types.MethodType):
                 if pyobj.im_self is None:   # unbound
-                    result = FunctionDesc(pyobj.im_func)
+                    result = desc.FunctionDesc(pyobj.im_func)
                 elif (hasattr(pyobj.im_self, '_freeze_') and
                       pyobj.im_self._freeze_()):  # method of frozen
-                    result = MethodOfFrozenDesc(
+                    result = desc.MethodOfFrozenDesc(
                         self.getdesc(pyobj.im_func),            # funcdesc
                         self.getdesc(pyobj.im_self))            # frozendesc
                 else: # regular method
@@ -424,7 +425,7 @@ class Bookkeeper:
             else:
                 # must be a frozen pre-built constant, but let's check
                 assert pyobj._freeze_()
-                result = FrozenDesc(pyobj)
+                result = desc.FrozenDesc(pyobj)
                 cls = result.knowntype
                 if cls not in self.pbctypes:
                     self.pbctypes[cls] = True
@@ -438,14 +439,15 @@ class Bookkeeper:
         try:
             return self.methoddescs[funcdesc, classdef]
         except KeyError:
-            result = MethodDesc(funcdesc, classdef)
+            from pypy.annotation import desc
+            result = desc.MethodDesc(funcdesc, classdef)
             self.methoddescs[funcdesc, classdef] = result
             return result
 
     def valueoftype(self, t):
         """The most precise SomeValue instance that contains all
         objects of type t."""
-        assert isinstance(t, (type, ClassType))
+        assert isinstance(t, (type, types.ClassType))
         if t is bool:
             return SomeBool()
         elif t is int:
@@ -461,7 +463,7 @@ class Bookkeeper:
         elif t is dict:
             return SomeDict(MOST_GENERAL_DICTDEF)
         # can't do tuple
-        elif t is NoneType:
+        elif t is types.NoneType:
             return s_None
         elif t in EXTERNAL_TYPE_ANALYZERS:
             return SomeExternalObject(t)
@@ -529,7 +531,7 @@ class Bookkeeper:
                 classdef = None
 
             # if class => consider __init__ too
-            if isinstance(func, (type, ClassType)) and \
+            if isinstance(func, (type, types.ClassType)) and \
                     func.__module__ != '__builtin__':
                 assert classdef is None
                 init_classdef, s_init = self.get_s_init(func)
@@ -711,7 +713,7 @@ class Bookkeeper:
 
         func, args = func # method unpacking done by decide_callable
             
-        if isinstance(func, (type, ClassType)) and \
+        if isinstance(func, (type, types.ClassType)) and \
             func.__module__ != '__builtin__':
             classdef, s_init = self.get_s_init(func)
             s_instance = SomeInstance(classdef)
@@ -725,7 +727,7 @@ class Bookkeeper:
                     raise Exception, "no __init__ found in %r" % (classdef.cls,)
             return s_instance
 
-        assert isinstance(func, FunctionType), "[%s] expected user-defined function, got %r" % (self.whereami(), func)
+        assert isinstance(func, types.FunctionType), "[%s] expected user-defined function, got %r" % (self.whereami(), func)
 
         inputcells = self.get_inputcells(func, args)
         if context == 'current':
@@ -809,3 +811,4 @@ def delayed_imports():
     global BUILTIN_ANALYZERS, EXTERNAL_TYPE_ANALYZERS
     from pypy.annotation.builtin import BUILTIN_ANALYZERS
     from pypy.annotation.builtin import EXTERNAL_TYPE_ANALYZERS
+

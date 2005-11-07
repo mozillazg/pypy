@@ -20,7 +20,7 @@ class FunctionDesc(Desc):
     def __init__(self, pyobj=None, signature=None):
         self.pyobj = pyobj
         if signature is None:
-            signature = cpython_code_signature(pyfunc.func_code)
+            signature = cpython_code_signature(pyobj.func_code)
         self.signature = signature
 
 
