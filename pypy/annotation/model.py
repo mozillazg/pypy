@@ -318,7 +318,7 @@ class SomePBC(SomeObject):
                 if desc.pyobj is not None:
                     # hack for the convenience of direct callers to SomePBC():
                     # only if there is a single object in prebuiltinstances
-                    self.const, = desc.pyobj
+                    self.const = desc.pyobj
 
     def check(self):
         # We check that the set only contains a single kind of Desc instance
