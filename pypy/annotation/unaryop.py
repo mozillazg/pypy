@@ -36,7 +36,7 @@ class __extend__(SomeObject):
         if moreargs:
             raise Exception, 'type() called with more than one argument'
         if obj.is_constant():
-            r = SomePBC({obj.knowntype: True})
+            r = immutablevalue(obj.knowntype)
         else:
             r = SomeObject()
             r.knowntype = type

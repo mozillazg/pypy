@@ -9,7 +9,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomePtr, unionof, SomeInstance, SomeDict, SomeBuiltin, SomePBC, \
      SomeInteger, SomeExternalObject, SomeOOInstance, TLS, SomeAddress, \
-     new_or_old_class, SomeUnicodeCodePoint, SomeOOStaticMeth, \
+     SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeList, SomeObject
 from pypy.annotation.classdef import ClassDef, isclassdef
@@ -178,10 +178,10 @@ class Bookkeeper:
 
     def __init__(self, annotator):
         self.annotator = annotator
-        self.userclasses = {}    # map classes to ClassDefs
-        self.userclasseslist = []# userclasses.keys() in creation order
+        self.descs = {}          # map Python objects to their XxxDesc wrappers
+        self.methoddescs = {}    # map (funcdesc, classdef) to the MethodDesc
+        self.classdefs = []      # list of all ClassDefs
         self.cachespecializations = {}
-        self.pbccache = {}
         self.pbctypes = {}
         self.seen_mutable = {}
         self.listdefs = {}       # map position_keys to ListDefs
@@ -247,21 +247,14 @@ class Bookkeeper:
                     del self.needs_hash_support[cls]
                     break
 
-    def getclassdef(self, cls):
-        """Get the ClassDef associated with the given user cls."""
+    def getuniqueclassdef(self, cls):
+        """Get the ClassDef associated with the given user cls.
+        Avoid using this!  It breaks for classes that must be specialized.
+        """
         if cls is object:
             return None
-        try:
-            return self.userclasses[cls]
-        except KeyError:
-            if cls in self.pbctypes:
-                self.warning("%r gets a ClassDef, but is the type of some PBC"
-                             % (cls,))
-            cdef = ClassDef(cls, self)
-            self.userclasses[cls] = cdef
-            self.userclasseslist.append(cdef)
-            cdef.setup()
-            return cdef
+        desc = self.getdesc(cls)
+        return desc.getuniqueclassdef()
 
     def getlistdef(self, **flags):
         """Get the ListDef associated with the current position."""
@@ -366,17 +359,14 @@ class Bookkeeper:
         elif isinstance(x, ootype._instance):
             result = SomeOOInstance(ootype.typeOf(x))
         elif callable(x) or isinstance(x, staticmethod): # XXX
-            # maybe 'x' is a method bound to a not-yet-frozen cache?
-            # fun fun fun.
-            if hasattr(x, 'im_self') and hasattr(x.im_self, '_freeze_'):
-                x.im_self._freeze_()
             if hasattr(x, '__self__') and x.__self__ is not None:
+                # for cases like 'l.append' where 'l' is a global constant list
                 s_self = self.immutablevalue(x.__self__)
                 result = s_self.find_method(x.__name__)
                 if result is None:
                     result = SomeObject()
             else:
-                return self.getpbc(x)
+                result = SomePBC([self.getdesc(x)])
         elif hasattr(x, '__class__') \
                  and x.__class__.__module__ != '__builtin__':
             # user-defined classes can define a method _freeze_(), which
@@ -385,7 +375,7 @@ class Bookkeeper:
             # a SomePBC().  Otherwise it's just SomeInstance().
             frozen = hasattr(x, '_freeze_') and x._freeze_()
             if frozen:
-                return self.getpbc(x)
+                result = SomePBC([self.getdesc(x)])
             else:
                 clsdef = self.getclassdef(x.__class__)
                 if x.__class__.__dict__.get('_annspecialcase_', '').endswith('ctr_location'):
@@ -398,29 +388,58 @@ class Bookkeeper:
                         clsdef.add_source_for_attribute(attr, x) # can trigger reflowing
                 result = SomeInstance(clsdef)
         elif x is None:
-            return self.getpbc(None)
+            return s_None
         else:
             result = SomeObject()
         result.const = x
         return result
 
-    def getpbc(self, x):
+    def getdesc(self, pyobj):
+        # get the XxxDesc wrapper for the given Python object, which must be
+        # one of:
+        #  * a user-defined Python function
+        #  * a Python type or class (but not a built-in one like 'int')
+        #  * a user-defined bound or unbound method object
+        #  * a frozen pre-built constant (with _freeze_() == True)
+        #  * a bound method of a frozen pre-built constant
         try:
-            # this is not just an optimization, but needed to avoid
-            # infinitely repeated calls to add_source_for_attribute()
-            return self.pbccache[x]
+            return self.descs[pyobj]
         except KeyError:
-            result = SomePBC({x: True}) # pre-built inst
-            #clsdef = self.getclassdef(new_or_old_class(x))
-            #for attr in getattr(x, '__dict__', {}):
-            #    clsdef.add_source_for_attribute(attr, x)
-            self.pbccache[x] = result
-            cls = new_or_old_class(x)
-            if cls not in self.pbctypes:
-                self.pbctypes[cls] = True
-                if cls in self.userclasses:
-                    self.warning("making some PBC of type %r, which has "
-                                 "already got a ClassDef" % (cls,))
+            if isinstance(pyobj, types.FunctionType):
+                result = FunctionDesc(pyobj)
+            elif isintance(pyobj, (type, types.ClassType)):
+                result = ClassDesc(pyobj)
+            elif isinstance(pyobj, types.MethodType):
+                if pyobj.im_self is None:   # unbound
+                    result = FunctionDesc(pyobj.im_func)
+                elif (hasattr(pyobj.im_self, '_freeze_') and
+                      pyobj.im_self._freeze_()):  # method of frozen
+                    result = MethodOfFrozenDesc(
+                        self.getdesc(pyobj.im_func),            # funcdesc
+                        self.getdesc(pyobj.im_self))            # frozendesc
+                else: # regular method
+                    result = self.getmethoddesc(
+                        self.getdesc(pyobj.im_func),            # funcdesc
+                        self.getuniqueclassdef(pyobj.im_class)) # classdef
+            else:
+                # must be a frozen pre-built constant, but let's check
+                assert pyobj._freeze_()
+                result = FrozenDesc(pyobj)
+                cls = result.knowntype
+                if cls not in self.pbctypes:
+                    self.pbctypes[cls] = True
+                    if cls in self.userclasses:
+                        self.warning("making some PBC of type %r, which has "
+                                     "already got a ClassDef" % (cls,))
+            self.descs[pyobj] = result
+            return result
+
+    def getmethoddesc(self, funcdesc, classdef):
+        try:
+            return self.methoddescs[funcdesc, classdef]
+        except KeyError:
+            result = MethodDesc(funcdesc, classdef)
+            self.methoddescs[funcdesc, classdef] = result
             return result
 
     def valueoftype(self, t):
@@ -443,7 +462,7 @@ class Bookkeeper:
             return SomeDict(MOST_GENERAL_DICTDEF)
         # can't do tuple
         elif t is NoneType:
-            return self.getpbc(None)
+            return s_None
         elif t in EXTERNAL_TYPE_ANALYZERS:
             return SomeExternalObject(t)
         elif t.__module__ != '__builtin__' and t not in self.pbctypes:
@@ -460,28 +479,22 @@ class Bookkeeper:
         attr = s_attr.const
 
         access_sets = self.pbc_maximal_access_sets
-        objects = pbc.prebuiltinstances.keys()
-
-        for obj in objects:
-            if obj is not None:
-                first = obj
-                break
-        else:
+        descs = pbc.prebuiltinstances.keys()
+        if not descs:
             return SomeImpossibleValue()
+        first = descs[0]
 
         change, rep, access = access_sets.find(first)
-        for obj in objects:
-            if obj is not None:
-                change1, rep, access = access_sets.union(rep, obj)
-                change = change or change1
+        for desc in descs:
+            change1, rep, access = access_sets.union(rep, desc)
+            change = change or change1
 
         position = self.position_key
         access.read_locations[position] = True
 
         actuals = []
-        for c in access.objects:
-            if hasattr(c, attr):
-                actuals.append(self.immutablevalue(getattr(c, attr)))
+        for desc in access.objects:
+            actuals.append(desc.s_read_attribute(attr))
         s_result = unionof(*actuals)
 
         access.attrs[attr] = s_result

@@ -294,63 +294,54 @@ class SomeInstance(SomeObject):
         return SomeInstance(self.classdef, can_be_None=False)
 
 
-def new_or_old_class(c):
-    if hasattr(c, '__class__'):
-        return c.__class__
-    else:
-        return type(c)
-
-
 class SomePBC(SomeObject):
     """Stands for a global user instance, built prior to the analysis,
     or a set of such instances."""
-    def __init__(self, prebuiltinstances):
-        # prebuiltinstances is a dictionary containing concrete python
-        # objects as keys.
-        # if the key is a function, the value can be a classdef to
-        # indicate that it is really a method.
-        prebuiltinstances = prebuiltinstances.copy()
+    def __init__(self, prebuiltinstances, can_be_None=False):
+        # prebuiltinstances is a set of Desc instances.
+        prebuiltinstances = dict.fromkeys(prebuiltinstances)
         self.prebuiltinstances = prebuiltinstances
-        self.simplify()
+        self.can_be_None = can_be_None
+        self.check()
         if self.isNone():
             self.knowntype = type(None)
+            self.const = None
         else:
             knowntype = reduce(commonbase,
-                               [new_or_old_class(x)
-                                for x in prebuiltinstances
-                                if x is not None])
+                               [x.knowntype for x in prebuiltinstances])
             if knowntype == type(Exception):
                 knowntype = type
             if knowntype != object:
                 self.knowntype = knowntype
-        if prebuiltinstances.values() == [True]:
-            # hack for the convenience of direct callers to SomePBC():
-            # only if there is a single object in prebuiltinstances and
-            # it doesn't have an associated ClassDef
-            self.const, = prebuiltinstances
-    def simplify(self):
-        # We check that the dictionary does not contain at the same time
-        # a function bound to a classdef, and constant bound method objects
-        # on that class.
-        for x, ignored in self.prebuiltinstances.items():
-            if isinstance(x, MethodType) and x.im_func in self.prebuiltinstances:
-                classdef = self.prebuiltinstances[x.im_func]
-                if isinstance(x.im_self, classdef.cls):
-                    del self.prebuiltinstances[x]
+            if len(prebuiltinstances) == 1:
+                desc, = prebuiltinstances
+                if desc.pyobj is not None:
+                    # hack for the convenience of direct callers to SomePBC():
+                    # only if there is a single object in prebuiltinstances
+                    self.const, = desc.pyobj
+
+    def check(self):
+        # We check that the set only contains a single kind of Desc instance
+        kinds = {}
+        for x in self.prebuiltinstances:
+            assert type(x).__name__.endswith('Desc')  # avoid import nightmares
+            kinds[x.__class__] = True
+        assert len(kinds) <= 1, (
+            "mixing several kinds of PBCs: %r" % (kinds.keys(),))
+        assert self.prebuiltinstances or self.can_be_None, (
+            "use s_ImpossibleValue")
 
     def isNone(self):
-        return self.prebuiltinstances == {None:True}
+        return len(self.prebuiltinstances) == 0
 
     def can_be_none(self):
-        return None in self.prebuiltinstances
+        return self.can_be_None
 
     def nonnoneify(self):
-        prebuiltinstances = self.prebuiltinstances.copy()
-        del prebuiltinstances[None]
-        if not prebuiltinstances:
-            return SomeImpossibleValue()
+        if self.isNone():
+            return s_ImpossibleValue
         else:
-            return SomePBC(prebuiltinstances)
+            return SomePBC(self.prebuiltinstances, can_be_None=False)
 
     def fmt_prebuiltinstances(self, pbis):
         if hasattr(self, 'const'):
@@ -395,6 +386,10 @@ class SomeImpossibleValue(SomeObject):
 
     def can_be_none(self):
         return False
+
+
+s_None = SomePBC([], can_be_None=True)
+s_ImpossibleValue = SomeImpossibleValue()
 
 # ____________________________________________________________
 # memory addresses
@@ -459,7 +454,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 
 annotation_to_ll_map = [
-    (SomePBC({None: True}), lltype.Void),   # also matches SomeImpossibleValue()
+    (s_None, lltype.Void),   # also matches SomeImpossibleValue()
     (SomeBool(), lltype.Bool),
     (SomeInteger(), lltype.Signed),
     (SomeInteger(nonneg=True, unsigned=True), lltype.Unsigned),    
@@ -519,7 +514,7 @@ def unionof(*somevalues):
     try:
         s1, s2 = somevalues
     except ValueError:
-        s1 = SomeImpossibleValue()
+        s1 = s_ImpossibleValue
         for s2 in somevalues:
             if s1 != s2:
                 s1 = pair(s1, s2).union()
@@ -587,7 +582,7 @@ def missing_operation(cls, name):
                 return  SomeObject()
         bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
         bookkeeper.warning("no precise annotation supplied for %s%r" % (name, args))
-        return SomeImpossibleValue()
+        return s_ImpossibleValue
     setattr(cls, name, default_op)
 
 #
