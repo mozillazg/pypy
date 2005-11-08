@@ -1664,14 +1664,14 @@ class TestAnnotateTestCase:
                 return f(a1)
         a = self.RPythonAnnotator()
         s = a.build_types(g, [int])
-        assert None not in s.prebuiltinstances
+        assert not s.can_be_None
 
     def test_emulated_pbc_call_simple(self):
         def f(a,b):
             return a + b
         from pypy.translator import translator
         from pypy.translator import annrpython
-        a = annrpython.RPythonAnnotator(translator.Translator(simplifying=True))
+        a = annrpython.RPythonAnnotator()
         from pypy.annotation import model as annmodel
 
         s_f = a.bookkeeper.immutablevalue(f) 
@@ -1686,7 +1686,7 @@ class TestAnnotateTestCase:
             return a + b
         from pypy.translator import translator
         from pypy.translator import annrpython
-        a = annrpython.RPythonAnnotator(translator.Translator(simplifying=True))
+        a = annrpython.RPythonAnnotator()
         from pypy.annotation import model as annmodel
 
         memo = []

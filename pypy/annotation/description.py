@@ -219,6 +219,7 @@ class FrozenDesc(Desc):
         super(FrozenDesc, self).__init__(bookkeeper, pyobj)
         self.attributes = self.pyobj.__dict__.copy()
         self.knowntype = new_or_old_class(pyobj)
+        assert bool(pyobj), "__nonzero__ unsupported on frozen PBC %r" %(pyobj,)
 
     def s_read_attribute(self, attr):
         if attr in self.attributes:
