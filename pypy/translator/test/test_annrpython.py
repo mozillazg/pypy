@@ -600,6 +600,16 @@ class TestAnnotateTestCase:
                 a.bookkeeper.immutablevalue('world'))
         assert s == a.bookkeeper.immutablevalue(42)
 
+    def test_call_star_args(self):
+        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        s = a.build_types(snippet.call_star_args, [int])
+        assert s.knowntype == int
+
+    def test_call_star_args_multiple(self):
+        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        s = a.build_types(snippet.call_star_args_multiple, [int])
+        assert s.knowntype == int
+
     def test_class_spec(self):
         a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
         s = a.build_types(snippet.class_spec, [])
@@ -955,29 +965,20 @@ class TestAnnotateTestCase:
             c2 = alloc(C2)
             return c1,c2
 
-        class MyAnnotatorPolicy(policy.AnnotatorPolicy):
-
-            specialize__arg0 = staticmethod(specialize.argvalue(0))
-
-        a = self.RPythonAnnotator(policy=MyAnnotatorPolicy())
+        a = self.RPythonAnnotator()
         s = a.build_types(f, [])
         assert s.items[0].knowntype == C1
         assert s.items[1].knowntype == C2
 
-        callb = a.getpbccallables()
-        assert alloc not in callb
-        def visit(block):
-            if isinstance(block, Block):
-                for spaceop in block.operations:
-                    if spaceop.opname == "simple_call" and spaceop.args[0] == Constant(alloc):
-                        spec_alloc, memo = a.bookkeeper.query_spaceop_callable(spaceop)
-                        assert not memo
-                        spec_alloc = spec_alloc.const
-                        assert spec_alloc in callb
-                        assert callb[spec_alloc] == {(None, spec_alloc): True}
-                        assert (a.binding(graphof(a, spec_alloc).getreturnvar()).knowntype 
-                                == spaceop.args[1].value)
-        traverse(visit, graphof(a, f))
+        allocdesc = a.bookkeeper.getdesc(alloc)
+        s_C1 = a.bookkeeper.immutablevalue(C1)
+        s_C2 = a.bookkeeper.immutablevalue(C2)
+        graph1 = allocdesc.specialize([s_C1])
+        graph2 = allocdesc.specialize([s_C2])
+        assert a.binding(graph1.getreturnvar()).knowntype == C1
+        assert a.binding(graph2.getreturnvar()).knowntype == C2
+        assert graph1 in a.translator.graphs
+        assert graph2 in a.translator.graphs
 
     def test_assert_list_doesnt_lose_info(self):
         class T(object):
