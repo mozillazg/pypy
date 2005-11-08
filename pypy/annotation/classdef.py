@@ -6,6 +6,7 @@ from __future__ import generators
 from types import FunctionType
 from pypy.annotation.model import SomeImpossibleValue, SomePBC, unionof
 from pypy.annotation.model import SomeInteger, isdegenerated
+from pypy.annotation.desc import MethodDesc
 
 
 # The main purpose of a ClassDef is to collect information about class/instance
@@ -119,8 +120,8 @@ class Attribute:
         if isinstance(s_newvalue, SomePBC):
             attr = self.name
             meth = False
-            for func, classdef  in s_newvalue.prebuiltinstances.items():
-                if isclassdef(classdef):
+            for desc in s_newvalue.descriptions:
+                if isinstance(desc, MethodDesc):
                     meth = True
                     break
             if meth and getattr(homedef.cls, attr, None) is None:
@@ -167,7 +168,7 @@ class ClassDef:
                 base = b1
         mixeddict.update(cls.__dict__)
 
-        self.basedef = bookkeeper.getclassdef(base)
+        self.basedef = bookkeeper.getuniqueclassdef(base)
         if self.basedef:
             self.basedef.subdefs[cls] = self
 
@@ -416,9 +417,6 @@ class ClassDef:
             return True
         else:
             return False
-
-def isclassdef(x):
-    return isinstance(x, ClassDef)
 
 # ____________________________________________________________
 

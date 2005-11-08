@@ -10,7 +10,6 @@ from pypy.annotation.model import \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
      unionof, set, missing_operation, add_knowntypedata
 from pypy.annotation.bookkeeper import getbookkeeper
-from pypy.annotation.classdef import isclassdef
 from pypy.annotation import builtin
 
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
@@ -502,39 +501,19 @@ class __extend__(SomePBC):
     def setattr(pbc, s_attr, s_value):
         getbookkeeper().warning("setattr not wanted on %r" % (pbc,))
 
-    def call(pbc, args, implicit_init=False):
+    def call(pbc, args):
         bookkeeper = getbookkeeper()
-        return bookkeeper.pbc_call(pbc, args, implicit_init=implicit_init)
-
-        #bookkeeper = getbookkeeper()
-        #results = []
-        #for func, classdef in pbc.prebuiltinstances.items():
-        #    if isclassdef(classdef):
-        #        s_self = SomeInstance(classdef)
-        #        args1 = args.prepend(s_self)
-        #    else:
-        #        args1 = args
-        #    results.append(bookkeeper.pycall(func, args1))
-        #return unionof(*results)
+        return bookkeeper.pbc_call(pbc, args)
 
     def bindcallables(pbc, classdef):
         """ turn the callables in the given SomeCallable 'cal'
             into bound versions.
         """
-        d = {}
-        for func, value in pbc.prebuiltinstances.items():
-            if isinstance(func, FunctionType):
-                if isclassdef(value):
-                    getbookkeeper().warning("rebinding an already bound "
-                                            "method %r with %r" % (func, value))
-                d[func] = classdef
-            elif isinstance(func, staticmethod):
-                d[func.__get__(43)] = value
-            else:
-                d[func] = value
+        d = [desc.bind(classdef) for desc in pbc.descriptions]
         return SomePBC(d)
 
     def is_true_behavior(pbc):
+        FIXME_BY_THE_WAY
         outcome = None
         for c in pbc.prebuiltinstances:
             if c is not None and not bool(c):

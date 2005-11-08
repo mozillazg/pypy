@@ -12,9 +12,10 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeList, SomeObject
-from pypy.annotation.classdef import ClassDef, isclassdef
+from pypy.annotation.classdef import ClassDef
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
+from pypy.annotation import desc
 from pypy.interpreter.pycode import cpython_code_signature
 from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.rpython.rarithmetic import r_uint
@@ -25,27 +26,6 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.memory import lladdress
 
 from pypy.annotation.specialize import decide_callable
-
-class PBCAccessSet:
-    def __init__(self, obj):
-        self.objects = { obj: True }
-        self.read_locations = {}
-        self.attrs = {}
-        self.values = {}   # used in the typer 
-
-    def update(self, other):
-        self.objects.update(other.objects)
-        self.read_locations.update(other.read_locations)        
-        self.attrs.update(other.attrs)
-
-class PBCCallFamily:
-    def __init__(self, obj):
-        self.objects = { obj: True }
-        self.patterns = {}
-
-    def update(self, other):
-        self.objects.update(other.objects)
-        self.patterns.update(other.patterns)
 
 class Stats:
 
@@ -191,12 +171,8 @@ class Bookkeeper:
         # mapping position -> key, prev_result for specializations
         self.spec_callsite_keys_results = {}
 
-        self.pbc_maximal_access_sets = UnionFind(PBCAccessSet)
-        # can be precisely computed only at fix-point, see
-        # compute_at_fixpoint
-        self.pbc_maximal_call_families = None
-        self.pbc_callables = None
-        
+        self.pbc_maximal_access_sets = UnionFind(desc.AttrFamily)
+        self.pbc_maximal_call_families = UnionFind(desc.CallFamily)
         self.pbc_call_sites = {}
         self.emulated_pbc_calls = {}
 
@@ -225,21 +201,21 @@ class Bookkeeper:
         del self.position_key
 
     def compute_at_fixpoint(self):
-        if self.pbc_maximal_call_families is None:
-            self.pbc_maximal_call_families = UnionFind(PBCCallFamily)
-        if self.pbc_callables is None:
-            self.pbc_callables = {}
+##        if self.pbc_maximal_call_families is None:
+##            ...
+##        if self.pbc_callables is None:
+##            self.pbc_callables = {}
 
-        for (fn, block, i), shape in self.pbc_call_sites.iteritems():
-            spaceop = block.operations[i]
-            assert spaceop.opname in ('call_args', 'simple_call')
-            pbc = self.annotator.binding(spaceop.args[0], extquery=True)
-            self.consider_pbc_call(pbc, shape, spaceop)
-        self.pbc_call_sites = {}
+##        for (fn, block, i), shape in self.pbc_call_sites.iteritems():
+##            spaceop = block.operations[i]
+##            assert spaceop.opname in ('call_args', 'simple_call')
+##            pbc = self.annotator.binding(spaceop.args[0], extquery=True)
+##            self.consider_pbc_call(pbc, shape, spaceop)
+##        self.pbc_call_sites = {}
 
-        for pbc, shape in self.emulated_pbc_calls.itervalues():
-            self.consider_pbc_call(pbc, shape)
-        self.emulated_pbc_calls = {}
+##        for pbc, shape in self.emulated_pbc_calls.itervalues():
+##            self.consider_pbc_call(pbc, shape)
+##        self.emulated_pbc_calls = {}
 
         for cls in self.needs_hash_support.keys():
             for cls2 in self.needs_hash_support:
@@ -377,9 +353,7 @@ class Bookkeeper:
             if frozen:
                 result = SomePBC([self.getdesc(x)])
             else:
-                clsdef = self.getclassdef(x.__class__)
-                if x.__class__.__dict__.get('_annspecialcase_', '').endswith('ctr_location'):
-                    raise Exception, "encountered a pre-built mutable instance of a class needing specialization: %s" % x.__class__.__name__
+                clsdef = self.getuniqueclassdef(x.__class__)
                 if x not in self.seen_mutable: # avoid circular reflowing, 
                                                # see for example test_circular_mutable_getattr
                     self.seen_mutable[x] = True
@@ -405,17 +379,16 @@ class Bookkeeper:
         try:
             return self.descs[pyobj]
         except KeyError:
-            from pypy.annotation import desc
             if isinstance(pyobj, types.FunctionType):
-                result = desc.FunctionDesc(pyobj)
-            elif isintance(pyobj, (type, types.ClassType)):
-                result = desc.ClassDesc(pyobj)
+                result = desc.FunctionDesc(self, pyobj)
+            elif isinstance(pyobj, (type, types.ClassType)):
+                result = desc.ClassDesc(self, pyobj)
             elif isinstance(pyobj, types.MethodType):
                 if pyobj.im_self is None:   # unbound
-                    result = desc.FunctionDesc(pyobj.im_func)
+                    result = desc.FunctionDesc(self, pyobj.im_func)
                 elif (hasattr(pyobj.im_self, '_freeze_') and
                       pyobj.im_self._freeze_()):  # method of frozen
-                    result = desc.MethodOfFrozenDesc(
+                    result = desc.MethodOfFrozenDesc(self,
                         self.getdesc(pyobj.im_func),            # funcdesc
                         self.getdesc(pyobj.im_self))            # frozendesc
                 else: # regular method
@@ -425,7 +398,7 @@ class Bookkeeper:
             else:
                 # must be a frozen pre-built constant, but let's check
                 assert pyobj._freeze_()
-                result = desc.FrozenDesc(pyobj)
+                result = desc.FrozenDesc(self, pyobj)
                 cls = result.knowntype
                 if cls not in self.pbctypes:
                     self.pbctypes[cls] = True
@@ -439,8 +412,7 @@ class Bookkeeper:
         try:
             return self.methoddescs[funcdesc, classdef]
         except KeyError:
-            from pypy.annotation import desc
-            result = desc.MethodDesc(funcdesc, classdef)
+            result = desc.MethodDesc(self, funcdesc, classdef)
             self.methoddescs[funcdesc, classdef] = result
             return result
 
@@ -468,7 +440,7 @@ class Bookkeeper:
         elif t in EXTERNAL_TYPE_ANALYZERS:
             return SomeExternalObject(t)
         elif t.__module__ != '__builtin__' and t not in self.pbctypes:
-            classdef = self.getclassdef(t)
+            classdef = self.getuniqueclassdef(t)
             return SomeInstance(classdef)
         else:
             o = SomeObject()
@@ -480,29 +452,25 @@ class Bookkeeper:
         assert s_attr.is_constant()
         attr = s_attr.const
 
-        access_sets = self.pbc_maximal_access_sets
-        descs = pbc.prebuiltinstances.keys()
+        descs = pbc.descriptions.keys()
         if not descs:
             return SomeImpossibleValue()
         first = descs[0]
-
-        change, rep, access = access_sets.find(first)
-        for desc in descs:
-            change1, rep, access = access_sets.union(rep, desc)
-            change = change or change1
+        change = first.mergeattrfamilies(*descs[1:])
+        attrfamily = first.getattrfamily()
 
         position = self.position_key
-        access.read_locations[position] = True
+        attrfamily.read_locations[position] = True
 
         actuals = []
-        for desc in access.objects:
+        for desc in attrfamily.descs:
             actuals.append(desc.s_read_attribute(attr))
         s_result = unionof(*actuals)
 
-        access.attrs[attr] = s_result
+        attrfamily.attrs[attr] = s_result
 
         if change:
-            for position in access.read_locations:
+            for position in attrfamily.read_locations:
                 self.annotator.reflowfromposition(position)
                 
         return s_result
@@ -551,8 +519,29 @@ class Bookkeeper:
                     dontcare, rep, callfamily = call_families.union(rep, obj)
 
             callfamily.patterns.update({shape: True})
- 
-    def pbc_call(self, pbc, args, implicit_init=False, emulated=None):
+
+    def pbc_call(self, pbc, args):
+        """Analyse a call to a SomePBC() with the given args (list of
+        annotations).
+        """
+        descs = pbc.descriptions.keys()
+        if not descs:
+            return SomeImpossibleValue()
+        first = descs[0]
+        first.mergecallfamilies(*descs[1:])
+        callfamily = first.getcallfamily()
+
+        def schedule(graph, inputcells):
+            whence = self.position_key
+            return self.annotator.recursivecall(graph, whence, inputcells)
+
+        results = []
+        for desc in descs:
+            results.append(desc.pycall(schedule, args))
+        s_result = unionof(*results)
+        return s_result
+
+    def DISABLED_pbc_call(self, pbc, args, implicit_init=False, emulated=None):
         if not implicit_init and not emulated:
             fn, block, i = self.position_key
             assert block.operations[i].opname in ('call_args', 'simple_call')
@@ -765,8 +754,9 @@ class Bookkeeper:
 
         return r
 
-    def ondegenerated(self, what, s_value, where=None, called_from=None):
-        self.annotator.ondegenerated(what, s_value, where=where, called_from=called_from)
+    def ondegenerated(self, what, s_value, where=None, called_from_graph=None):
+        self.annotator.ondegenerated(what, s_value, where=where,
+                                     called_from_graph=called_from_graph)
         
     def whereami(self):
         return self.annotator.whereami(self.position_key)

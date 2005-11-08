@@ -297,10 +297,10 @@ class SomeInstance(SomeObject):
 class SomePBC(SomeObject):
     """Stands for a global user instance, built prior to the analysis,
     or a set of such instances."""
-    def __init__(self, prebuiltinstances, can_be_None=False):
-        # prebuiltinstances is a set of Desc instances.
-        prebuiltinstances = dict.fromkeys(prebuiltinstances)
-        self.prebuiltinstances = prebuiltinstances
+    def __init__(self, descriptions, can_be_None=False):
+        # descriptions is a set of Desc instances.
+        descriptions = dict.fromkeys(descriptions)
+        self.descriptions = descriptions
         self.can_be_None = can_be_None
         self.check()
         if self.isNone():
@@ -308,31 +308,31 @@ class SomePBC(SomeObject):
             self.const = None
         else:
             knowntype = reduce(commonbase,
-                               [x.knowntype for x in prebuiltinstances])
+                               [x.knowntype for x in descriptions])
             if knowntype == type(Exception):
                 knowntype = type
             if knowntype != object:
                 self.knowntype = knowntype
-            if len(prebuiltinstances) == 1:
-                desc, = prebuiltinstances
+            if len(descriptions) == 1:
+                # hack for the convenience of direct callers to SomePBC():
+                # only if there is a single object in descriptions
+                desc, = descriptions
                 if desc.pyobj is not None:
-                    # hack for the convenience of direct callers to SomePBC():
-                    # only if there is a single object in prebuiltinstances
                     self.const = desc.pyobj
 
     def check(self):
         # We check that the set only contains a single kind of Desc instance
         kinds = {}
-        for x in self.prebuiltinstances:
+        for x in self.descriptions:
             assert type(x).__name__.endswith('Desc')  # avoid import nightmares
             kinds[x.__class__] = True
         assert len(kinds) <= 1, (
             "mixing several kinds of PBCs: %r" % (kinds.keys(),))
-        assert self.prebuiltinstances or self.can_be_None, (
+        assert self.descriptions or self.can_be_None, (
             "use s_ImpossibleValue")
 
     def isNone(self):
-        return len(self.prebuiltinstances) == 0
+        return len(self.descriptions) == 0
 
     def can_be_none(self):
         return self.can_be_None
@@ -341,9 +341,9 @@ class SomePBC(SomeObject):
         if self.isNone():
             return s_ImpossibleValue
         else:
-            return SomePBC(self.prebuiltinstances, can_be_None=False)
+            return SomePBC(self.descriptions, can_be_None=False)
 
-    def fmt_prebuiltinstances(self, pbis):
+    def fmt_descriptions(self, pbis):
         if hasattr(self, 'const'):
             return None
         else:
