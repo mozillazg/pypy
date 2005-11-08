@@ -520,7 +520,7 @@ class Bookkeeper:
 
             callfamily.patterns.update({shape: True})
 
-    def pbc_call(self, pbc, args):
+    def pbc_call(self, pbc, args, emulated=None):
         """Analyse a call to a SomePBC() with the given args (list of
         annotations).
         """
@@ -531,8 +531,15 @@ class Bookkeeper:
         first.mergecallfamilies(*descs[1:])
         callfamily = first.getcallfamily()
 
-        def schedule(graph, inputcells):
+        if emulated is None:
             whence = self.position_key
+        else:
+            if emulated is True:
+                whence = None
+            else:
+                whence = emulated # callback case
+
+        def schedule(graph, inputcells):
             return self.annotator.recursivecall(graph, whence, inputcells)
 
         results = []
@@ -580,16 +587,16 @@ class Bookkeeper:
 
     def emulate_pbc_call(self, unique_key, pbc, args_s, replace=[], callback=None):
         args = self.build_args("simple_call", args_s)
-        shape = args.rawshape()
-        emulated_pbc_calls = self.emulated_pbc_calls
-        prev = [unique_key]
-        prev.extend(replace)
-        for other_key in prev:
-            if other_key in emulated_pbc_calls:
-                pbc, old_shape = emulated_pbc_calls[other_key]
-                assert shape == old_shape
-                del emulated_pbc_calls[other_key]
-        emulated_pbc_calls[unique_key] = pbc, shape
+        #shape = args.rawshape()
+        #emulated_pbc_calls = self.emulated_pbc_calls
+        #prev = [unique_key]
+        #prev.extend(replace)
+        #for other_key in prev:
+        #    if other_key in emulated_pbc_calls:
+        #        pbc, old_shape = emulated_pbc_calls[other_key]
+        #        assert shape == old_shape
+        #        del emulated_pbc_calls[other_key]
+        #emulated_pbc_calls[unique_key] = pbc, shape
 
         if callback is None:
             emulated = True

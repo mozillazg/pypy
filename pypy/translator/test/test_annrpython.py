@@ -1672,14 +1672,14 @@ class TestAnnotateTestCase:
         from pypy.translator import translator
         from pypy.translator import annrpython
         a = annrpython.RPythonAnnotator()
+        a.translator = translator.TranslationContext()
         from pypy.annotation import model as annmodel
 
         s_f = a.bookkeeper.immutablevalue(f) 
         a.bookkeeper.emulate_pbc_call('f', s_f, [annmodel.SomeInteger(), annmodel.SomeInteger()])
         a.complete()
 
-        assert f in a.translator.flowgraphs
-        assert a.binding(a.translator.flowgraphs[f].getreturnvar()).knowntype == int
+        assert a.binding(graphof(a, f).getreturnvar()).knowntype == int
 
     def test_emulated_pbc_call_callback(self):
         def f(a,b):
@@ -1687,6 +1687,7 @@ class TestAnnotateTestCase:
         from pypy.translator import translator
         from pypy.translator import annrpython
         a = annrpython.RPythonAnnotator()
+        a.translator = translator.TranslationContext()
         from pypy.annotation import model as annmodel
 
         memo = []
@@ -1699,8 +1700,7 @@ class TestAnnotateTestCase:
         assert s == annmodel.SomeImpossibleValue()
         a.complete()
 
-        assert f in a.translator.flowgraphs
-        assert a.binding(a.translator.flowgraphs[f].getreturnvar()).knowntype == int
+        assert a.binding(graphof(a, f).getreturnvar()).knowntype == int
         assert len(memo) >= 1
         for t in memo:
             assert t
