@@ -1,4 +1,5 @@
 import types
+from pypy.objspace.flow.model import FunctionGraph
 from pypy.interpreter.pycode import cpython_code_signature
 from pypy.interpreter.argument import ArgErr
 
@@ -80,7 +81,8 @@ class FunctionDesc(Desc):
     knowntype = types.FunctionType
     
     def __init__(self, bookkeeper, pyobj=None,
-                 name=None, signature=None, defaults=None, graph=None):
+                 name=None, signature=None, defaults=None,
+                 specializer=None):
         super(FunctionDesc, self).__init__(bookkeeper, pyobj)
         if name is None:
             name = pyobj.func_name
@@ -88,16 +90,30 @@ class FunctionDesc(Desc):
             signature = cpython_code_signature(pyobj.func_code)
         if defaults is None:
             defaults = pyobj.func_defaults
+        if specializer is None:
+            tag = getattr(pyobj, '_annspecialcase_', None)
+            policy = bookkeeper.annotator.policy
+            specializer = policy.get_specializer(tag)
         self.name = name
         self.signature = signature
         self.defaults = defaults or ()
-        self._graph = graph
+        # 'specializer' is a function with the following signature:
+        #      specializer(funcdesc, args_s) => graph
+        #                                 or => s_result (overridden/memo cases)
+        self.specializer = specializer
+        self._cache = {}     # convenience for the specializer
 
-    def getgraph(self):  # for now
-        if self._graph is None:
-            translator = self.bookkeeper.annotator.translator
-            self._graph = translator.buildflowgraph(self.pyobj)
-        return self._graph
+    def buildgraph(self):
+        translator = self.bookkeeper.annotator.translator
+        return translator.buildflowgraph(self.pyobj)
+
+    def cachedgraph(self, key):
+        try:
+            return self._cache[key]
+        except KeyError:
+            graph = self.buildgraph()
+            self._cache[key] = graph
+            return graph
 
     def parse_arguments(self, args):
         defs_s = []
@@ -109,11 +125,16 @@ class FunctionDesc(Desc):
             raise TypeError, "signature mismatch: %s" % e.getmsg(args, self.name)
         return inputcells
 
+    def specialize(self, inputcells):
+        return self.specializer(self, inputcells)
+
     def pycall(self, schedule, args):
         inputcells = self.parse_arguments(args)
-        graph = self.getgraph()
-        s_result = schedule(graph, inputcells)
-        return s_result
+        result = self.specialize(inputcells)
+        if isinstance(result, FunctionGraph):
+            graph = result         # common case
+            result = schedule(graph, inputcells)
+        return result
 
     def bind(self, classdef):
         # XXX static methods

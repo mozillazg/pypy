@@ -12,9 +12,12 @@ class BasicAnnotatorPolicy:
 
     def event(pol, bookkeeper, what, *args):
         pass
-    
-    def specialize(pol, bookkeeper, spaceop, func, args, mono):
-        return None, None
+
+    def get_specializer(pol, tag):
+        return pol.no_specialization
+
+    def no_specialization(pol, funcdesc, args_s):
+        return funcdesc.cachedgraph(None)
 
     def compute_at_fixpoint(pol, annotator):
         annotator.bookkeeper.compute_at_fixpoint()
@@ -25,51 +28,23 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
     Possibly subclass and pass an instance to the annotator to control special casing during annotation
     """
 
-    def specialize(pol, bookkeeper, spaceop, func, args, mono):
-        if hasattr(func, '_annspecialcase_'):
-            directive = func._annspecialcase_
-            if directive.startswith('specialize:'):
-                directive = directive[len('specialize:'):]
-            tag_mod = directive.split(':', 1)
-            if len(tag_mod) == 1:
-                tag, = tag_mod
-                mod = None
-            else:
-                tag, mod = tag_mod
+    def get_specializer(pol, directive):
+        if directive is None:
+            return pol.default_specialize
+
+        name = directive.replace(':', '__')
+        try:
+            specializer = getattr(pol, name)
+        except AttributeError:
+            raise AttributeError("%r specialize tag not defined in annotation"
+                                 "policy %s" % (directive, pol))
+        if directive.startswith('override:'):
+            # different signature: override__xyz(*args_s)
+            def specialize_override(funcdesc, args_s):
+                return specializer(*args_s)
+            return specialize_override
         else:
-            return pol.default_specialize(bookkeeper, None, spaceop, func, args, mono)
-        
-        try:
-            specialize = getattr(pol, 'specialize__%s' % tag)
-        except AttributeError:
-            raise AttributeError("%s specialize tag found in callable %r "
-                                 "(file %s:%d) but not defined in annotation "
-                                 "policy %s" % (tag, func.func_name,
-                                                func.func_code.co_filename,
-                                                func.func_code.co_firstlineno,
-                                                pol))
-
-        return specialize(bookkeeper, mod, spaceop, func, args, mono)
-
-    def specialize__override(pol, bookkeeper, mod, spaceop, func, args, mono):
-        from pypy.annotation.model import SomeObject
-        override_tag = mod
-
-        try:
-            override = getattr(pol, 'override__%s' % override_tag)
-        except AttributeError:
-            raise AttributeError("'override:%s' found in callable %r "
-                                 "(file %s:%d) but not defined in annotation "
-                                 "policy %s" % (override_tag, func.func_name,
-                                                func.func_code.co_filename,
-                                                func.func_code.co_firstlineno ,
-                                                pol))
-
-        inputcells = bookkeeper.get_inputcells(func, args)
-        r = override(*inputcells)
-
-        assert isinstance(r, SomeObject)
-        return r, None
+            return specializer
         
     # common specializations
 

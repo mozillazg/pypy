@@ -54,20 +54,22 @@ def decide_callable(bookkeeper, position, func, args, mono=True, unpacked=False)
 
     return func, key
 
-def default_specialize(bookkeeper, dontcare, spaceop, func, args, mono):
-    from pypy.interpreter.pycode import CO_VARARGS
-    if isinstance(func, types.FunctionType) and func.func_code.co_flags & CO_VARARGS:
+def default_specialize(funcdesc, args_s):
+    argnames, vararg, kwarg = funcdesc.signature
+    assert not kwarg, "functions with ** arguments are not supported"
+    if vararg:
+        from pypy.annotation import model as annmodel
         # calls to *arg functions: create one version per number of args
-        assert mono, "not-static call to *arg function %s" % func
-        assert not args.has_keywords(), (
-            "keyword forbidden in calls to *arg functions")
-        nbargs = len(args.arguments_w)
-        if args.w_stararg is not None:
-            s_len = args.w_stararg.len()
-            assert s_len.is_constant(), "calls require known number of args"
-            nbargs += s_len.const
-        return (func, nbargs), args
-    return None, None # no specialization
+        assert len(args_s) == len(argnames) + 1
+        s_tuple = args_s[-1]
+        assert isinstance(s_tuple, annmodel.SomeTuple), (
+            "calls f(..., *arg) require 'arg' to be a tuple")
+        s_len = s_tuple.len()
+        assert s_len.is_constant(), "calls require known number of args"
+        nb_extra_args = s_len.const
+        return funcdesc.cachedgraph(nb_extra_args)
+    else:
+        return funcdesc.cachedgraph(None)
 
 # helpers
 
@@ -209,15 +211,13 @@ def ctr_location(bookkeeper, mod, spaceop, orig_cls, args, mono):
         return cls, args
 
 def argvalue(i):
-    def specialize_argvalue(bookkeeper, mod, spaceop, func, args, mono):
-        """NOT_RPYTHON"""
-        ignore, args_w = args.flatten()
-        return (func, args_w[i].const), args
+    def specialize_argvalue(funcdesc, args_s):
+        key = args_s[i].const
+        return funcdesc.cachedgraph(key)        
     return specialize_argvalue
 
 def argtype(i):
-    def specialize_argtype(bookkeeper, mod, spaceop, func, args, mono):
-        """NOT_RPYTHON"""
-        ignore, args_w = args.flatten()
-        return (func, args_w[i].knowntype), args
+    def specialize_argtype(funcdesc, args_s):
+        key = args_s[i].knowntype
+        return funcdesc.cachedgraph(key)        
     return specialize_argtype
