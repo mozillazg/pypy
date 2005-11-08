@@ -513,19 +513,12 @@ class __extend__(SomePBC):
         return SomePBC(d, can_be_None=pbc.can_be_None)
 
     def is_true_behavior(pbc):
-        FIXME_BY_THE_WAY
-        outcome = None
-        for c in pbc.prebuiltinstances:
-            if c is not None and not bool(c):
-                getbookkeeper().warning("PBC %r has truth value False" % (c,))
-                getbookkeeper().count("pbc_is_true", pbc)
-        for c in pbc.prebuiltinstances:
-            if outcome is None:
-                outcome = bool(c)
-            else:
-                if outcome != bool(c):
-                    return SomeBool()
-        return immutablevalue(outcome)
+        if pbc.isNone():
+            return immutablevalue(False)
+        elif pbc.can_be_None:
+            return SomeBool()
+        else:
+            return immutablevalue(True)
 
 
 class __extend__(SomeExternalObject):
