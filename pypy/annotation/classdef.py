@@ -6,7 +6,7 @@ from __future__ import generators
 from types import FunctionType
 from pypy.annotation.model import SomeImpossibleValue, SomePBC, unionof
 from pypy.annotation.model import SomeInteger, isdegenerated
-from pypy.annotation.desc import MethodDesc
+from pypy.annotation import description
 
 
 # The main purpose of a ClassDef is to collect information about class/instance
@@ -121,7 +121,7 @@ class Attribute:
             attr = self.name
             meth = False
             for desc in s_newvalue.descriptions:
-                if isinstance(desc, MethodDesc):
+                if isinstance(desc, description.MethodDesc):
                     meth = True
                     break
             if meth and getattr(homedef.cls, attr, None) is None:
@@ -346,27 +346,34 @@ class ClassDef:
                     return None
         return None
 
-    def matching(self, pbc, name=None):
-        d = {}
+    def lookup_filter(self, pbc, name=None):
+        """Selects the methods in the pbc that could possibly be seen by
+        a lookup performed on an instance of 'self', removing the ones
+        that cannot appear.
+        """
+        d = []
         uplookup = None
         upfunc = None
         meth = False
         check_for_missing_attrs = False
-        for func, value in pbc.prebuiltinstances.items():
-            if isclassdef(value):
+        for desc in pbc.descriptions:
+            if isinstance(desc, description.MethodDesc):
                 meth = True
-                if value is not self and  value.issubclass(self):
+                methclassdef = desc.classdef
+                if methclassdef is not self and methclassdef.issubclass(self):
                     pass # subclasses methods are always candidates
-                elif self.issubclass(value): # upward consider only the best match
-                    if uplookup is None or value.issubclass(uplookup):
-                        uplookup = value
-                        upfunc = func
+                elif self.issubclass(methclassdef):
+                    # upward consider only the best match
+                    if uplookup is None or methclassdef.issubclass(uplookup):
+                        uplookup = methclassdef
+                        upfunc = desc.funcdesc
                     continue
-                    # for clsdef1 >= clsdef2
-                    # clsdef1.matching(pbc) includes clsdef2.matching(pbc)
+                    # for clsdef1 >= clsdef2, we guarantee that
+                    # clsdef1.lookup_filter(pbc) includes
+                    # clsdef2.lookup_filter(pbc) (see formal proof...)
                 else:
                     continue # not matching
-            d[func] = value
+            d.append(desc)
         if uplookup is not None:            
             # hack^2, in this case the classdef for uplookup could be the result
             # of the union of subclass sources that share the same implementation function
@@ -378,18 +385,18 @@ class ClassDef:
                 check_for_missing_attrs = True
 
             # when the method is found in a parent class, it get bound to the
-            # 'self' subclass.  This allows the 'func: classdef' entry of the
-            # PBC dictionary to track more precisely with which 'self' the
+            # 'self' subclass.  This allows the MethodDesc entry of the
+            # PBC descriptions to track more precisely with which 'self' the
             # method is called.
-            d[upfunc] = self
+            d.append(self.bookkeeper.getmethoddesc(upfunc, self))
         elif meth and name is not None:
             check_for_missing_attrs = True
 
         if check_for_missing_attrs:
             self.check_missing_attribute_update(name)
 
-        if d:
-            return SomePBC(d)
+        if d or pbc.can_be_None:
+            return SomePBC(d, can_be_None=pbc.can_be_None)
         else:
             return SomeImpossibleValue()
 

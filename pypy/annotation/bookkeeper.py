@@ -15,7 +15,7 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
 from pypy.annotation.classdef import ClassDef
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
-from pypy.annotation import desc
+from pypy.annotation import description
 from pypy.interpreter.pycode import cpython_code_signature
 from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.rpython.rarithmetic import r_uint
@@ -171,8 +171,8 @@ class Bookkeeper:
         # mapping position -> key, prev_result for specializations
         self.spec_callsite_keys_results = {}
 
-        self.pbc_maximal_access_sets = UnionFind(desc.AttrFamily)
-        self.pbc_maximal_call_families = UnionFind(desc.CallFamily)
+        self.pbc_maximal_access_sets = UnionFind(description.AttrFamily)
+        self.pbc_maximal_call_families = UnionFind(description.CallFamily)
         self.pbc_call_sites = {}
         self.emulated_pbc_calls = {}
 
@@ -380,15 +380,15 @@ class Bookkeeper:
             return self.descs[pyobj]
         except KeyError:
             if isinstance(pyobj, types.FunctionType):
-                result = desc.FunctionDesc(self, pyobj)
+                result = description.FunctionDesc(self, pyobj)
             elif isinstance(pyobj, (type, types.ClassType)):
-                result = desc.ClassDesc(self, pyobj)
+                result = description.ClassDesc(self, pyobj)
             elif isinstance(pyobj, types.MethodType):
                 if pyobj.im_self is None:   # unbound
-                    result = desc.FunctionDesc(self, pyobj.im_func)
+                    result = description.FunctionDesc(self, pyobj.im_func)
                 elif (hasattr(pyobj.im_self, '_freeze_') and
                       pyobj.im_self._freeze_()):  # method of frozen
-                    result = desc.MethodOfFrozenDesc(self,
+                    result = description.MethodOfFrozenDesc(self,
                         self.getdesc(pyobj.im_func),            # funcdesc
                         self.getdesc(pyobj.im_self))            # frozendesc
                 else: # regular method
@@ -398,7 +398,7 @@ class Bookkeeper:
             else:
                 # must be a frozen pre-built constant, but let's check
                 assert pyobj._freeze_()
-                result = desc.FrozenDesc(self, pyobj)
+                result = description.FrozenDesc(self, pyobj)
                 cls = result.knowntype
                 if cls not in self.pbctypes:
                     self.pbctypes[cls] = True
@@ -412,7 +412,7 @@ class Bookkeeper:
         try:
             return self.methoddescs[funcdesc, classdef]
         except KeyError:
-            result = desc.MethodDesc(self, funcdesc, classdef)
+            result = description.MethodDesc(self, funcdesc, classdef)
             self.methoddescs[funcdesc, classdef] = result
             return result
 

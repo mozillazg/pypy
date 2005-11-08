@@ -448,7 +448,7 @@ class __extend__(SomeInstance):
             #       that can't possibly apply to an instance of ins.classdef.
             # XXX do it more nicely
             if isinstance(s_result, SomePBC):
-                s_result = ins.classdef.matching(s_result, attr)
+                s_result = ins.classdef.lookup_filter(s_result, attr)
             elif isinstance(s_result, SomeImpossibleValue):
                 ins.classdef.check_missing_attribute_update(attr)
             return s_result
@@ -510,7 +510,7 @@ class __extend__(SomePBC):
             into bound versions.
         """
         d = [desc.bind(classdef) for desc in pbc.descriptions]
-        return SomePBC(d)
+        return SomePBC(d, can_be_None=pbc.can_be_None)
 
     def is_true_behavior(pbc):
         FIXME_BY_THE_WAY
