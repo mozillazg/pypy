@@ -150,6 +150,7 @@ def cutoff_alwaysraising_block(self, block):
     self.bookkeeper.getclassdef(AssertionError)
 
 def transform_specialization(self, block_subset):
+    THIS_SHOULD_DISAPPEAR
     for block in block_subset:
         for op in block.operations:
             if op.opname in ('simple_call', 'call_args'):
@@ -216,7 +217,7 @@ def insert_stackcheck(ann):
         caller_block.operations.insert(0, unwind_op)
 
 default_extra_passes = [
-    transform_specialization,
+    #transform_specialization,
     transform_allocate,
     ]
 
