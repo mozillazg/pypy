@@ -116,21 +116,9 @@ class RPythonAnnotator:
             raise TypeError, ("Variable or Constant instance expected, "
                               "got %r" % (variable,))
 
-    def getuserclasses(self):
-        """Return a set of known user classes."""
-        return self.bookkeeper.userclasses
-
     def getuserclassdefinitions(self):
         """Return a list of ClassDefs."""
-        return self.bookkeeper.userclasseslist
-
-    def getuserattributes(self, cls):
-        """Enumerate the attributes of the given user class, as Variable()s."""
-        clsdef = self.bookkeeper.userclasses[cls]
-        for attr, s_value in clsdef.attrs.items():
-            v = Variable(name=attr)
-            self.bindings[v] = s_value
-            yield v
+        return self.bookkeeper.classdefs
 
     def getpbcaccesssets(self):
         """Return mapping const obj -> PBCAccessSet"""
@@ -188,11 +176,10 @@ class RPythonAnnotator:
         # make sure that the return variables of all graphs is annotated
         if self.translator is not None:
             if self.added_blocks is not None:
-                newgraphs = [self.translator.flowgraphs[self.annotated[block]]
-                             for block in self.added_blocks]
+                newgraphs = [self.annotated[block] for block in self.added_blocks]
                 newgraphs = dict.fromkeys(newgraphs)
             else:
-                newgraphs = self.translator.flowgraphs.itervalues() #all of them
+                newgraphs = self.translator.graphs  #all of them
             for graph in newgraphs:
                 v = graph.getreturnvar()
                 if v not in self.bindings:

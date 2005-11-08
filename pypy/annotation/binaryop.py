@@ -15,7 +15,6 @@ from pypy.annotation.model import SomeAddress, SomeTypedAddressAccess
 from pypy.annotation.model import unionof, UnionError, set, missing_operation, TLS
 from pypy.annotation.model import add_knowntypedata, merge_knowntypedata
 from pypy.annotation.bookkeeper import getbookkeeper
-from pypy.annotation.classdef import isclassdef
 from pypy.objspace.flow.model import Variable
 
 # convenience only!
@@ -555,8 +554,8 @@ class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):
 
 class __extend__(pairtype(SomePBC, SomePBC)):
     def union((pbc1, pbc2)):       
-        d = pbc1.prebuiltinstances.copy()
-        d.update(pbc2.prebuiltinstances)
+        d = pbc1.descriptions.copy()
+        d.update(pbc2.descriptions)
         return SomePBC(d, can_be_None = pbc1.can_be_None or pbc2.can_be_None)
 
 class __extend__(pairtype(SomeImpossibleValue, SomeObject)):

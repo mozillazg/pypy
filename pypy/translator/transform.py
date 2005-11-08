@@ -18,8 +18,7 @@ from pypy.rpython.rstack import stack_check
 def checkgraphs(self, blocks):
     seen = {}
     for block in blocks:
-        fn = self.annotated[block]
-        graph = self.translator.flowgraphs[fn]
+        graph = self.annotated[block]
         if graph not in seen:
             checkgraph(graph)
             seen[graph] = True

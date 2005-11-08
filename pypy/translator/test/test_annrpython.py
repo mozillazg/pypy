@@ -33,6 +33,14 @@ def dictvalue(s_dict):
 def somedict(s_key=annmodel.SomeObject(), s_value=annmodel.SomeObject()):
     return annmodel.SomeDict(DictDef(None, s_key, s_value))
 
+def graphof(a, func):
+    result = []
+    for graph in a.translator.graphs:
+        if getattr(graph, 'func', None) is func:
+            result.append(graph)
+    assert len(result) == 1
+    return result[0]
+
 
 class TestAnnotateTestCase:
     def setup_class(cls): 
@@ -223,11 +231,11 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         a.build_types(snippet._methodcall1, [int])
         # the user classes should have the following attributes:
-        classes = a.bookkeeper.userclasses
-        assert classes[snippet.F].attrs.keys() == ['m']
-        assert classes[snippet.G].attrs.keys() == ['m2']
-        assert classes[snippet.H].attrs.keys() == ['attr'] 
-        assert classes[snippet.H].about_attribute('attr') == (
+        getcdef = a.bookkeeper.getuniqueclassdef
+        assert getcdef(snippet.F).attrs.keys() == ['m']
+        assert getcdef(snippet.G).attrs.keys() == ['m2']
+        assert getcdef(snippet.H).attrs.keys() == ['attr'] 
+        assert getcdef(snippet.H).about_attribute('attr') == (
                           a.bookkeeper.immutablevalue(1))
 
     def DISABLED_test_knownkeysdict(self):
@@ -259,13 +267,13 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.with_more_init, [int, bool])
         # the user classes should have the following attributes:
-        classes = a.bookkeeper.userclasses
+        getcdef = a.bookkeeper.getuniqueclassdef
         # XXX on which class should the attribute 'a' appear?  We only
         #     ever flow WithInit.__init__ with a self which is an instance
         #     of WithMoreInit, so currently it appears on WithMoreInit.
-        assert classes[snippet.WithMoreInit].about_attribute('a') == (
+        assert getcdef(snippet.WithMoreInit).about_attribute('a') == (
                           annmodel.SomeInteger())
-        assert classes[snippet.WithMoreInit].about_attribute('b') == (
+        assert getcdef(snippet.WithMoreInit).about_attribute('b') == (
                           annmodel.SomeBool())
 
     def test_global_instance(self):
@@ -293,21 +301,16 @@ class TestAnnotateTestCase:
         #a.translator.simplify()
         # must return "yadda"
         assert s == a.bookkeeper.immutablevalue("yadda")
-        keys = a.translator.flowgraphs.keys()
-        keys.sort()
-        expected = [snippet.constant_result,
-                    snippet.forty_two,
-                    # and not snippet.never_called
-                    ]
-        expected.sort()
-        assert keys == expected
+        graphs = a.translator.graphs
+        assert len(graphs) == 2
+        assert graphs[0].func is snippet.constant_result
+        assert graphs[1].func is snippet.forty_two
         a.simplify()
         #a.translator.view()
 
     def test_flow_type_info(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.flow_type_info, [object])
-        a.translator.simplify()
         a.simplify()
         #a.translator.view()
         assert s.knowntype == int
@@ -335,7 +338,6 @@ class TestAnnotateTestCase:
     def test_flow_identity_info(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.flow_identity_info, [object, object])
-        a.translator.simplify()
         a.simplify()
         #a.translator.view()
         assert s == a.bookkeeper.immutablevalue((None, None))
@@ -377,7 +379,7 @@ class TestAnnotateTestCase:
 
     def test_isinstance_and_knowntype_data(self): 
         a = self.RPythonAnnotator()
-        x = annmodel.SomePBC({snippet.apbc: True}) 
+        x = a.bookkeeper.immutablevalue(snippet.apbc)
         s = a.build_types(snippet.isinstance_and_knowntype, [x]) 
         #a.simplify()
         #a.translator.view()
@@ -409,14 +411,13 @@ class TestAnnotateTestCase:
 
     def test_simple_slicing0(self):
         a = self.RPythonAnnotator()
-        s = a.build_types(snippet.simple_slice, [list])
-        g = a.translator.getflowgraph(snippet.simple_slice)
-        for thing in flatten(g):
-            if isinstance(thing, Block):
-                for op in thing.operations:
-                    if op.opname == "newslice":
-                        assert isinstance(a.binding(op.result),
-                                          annmodel.SomeSlice)
+        a.build_types(snippet.simple_slice, [list])
+        g = graphof(a, snippet.simple_slice)
+        for block in g.iterblocks():
+            for op in block.operations:
+                if op.opname == "newslice":
+                    assert isinstance(a.binding(op.result),
+                                      annmodel.SomeSlice)
 
     def test_simple_slicing(self):
         a = self.RPythonAnnotator()
@@ -540,8 +541,8 @@ class TestAnnotateTestCase:
     def test_bltin_code_frame_confusion(self):
         a = self.RPythonAnnotator()
         a.build_types(snippet.bltin_code_frame_confusion,[])
-        f_flowgraph = a.translator.getflowgraph(snippet.bltin_code_frame_f)
-        g_flowgraph = a.translator.getflowgraph(snippet.bltin_code_frame_g)
+        f_flowgraph = graphof(a, snippet.bltin_code_frame_f)
+        g_flowgraph = graphof(a, snippet.bltin_code_frame_g)
         # annotator confused by original bltin code/frame setup, we just get SomeObject here
         assert a.binding(f_flowgraph.getreturnvar()).__class__ is annmodel.SomeObject
         assert a.binding(g_flowgraph.getreturnvar()).__class__ is annmodel.SomeObject
@@ -549,8 +550,8 @@ class TestAnnotateTestCase:
     def test_bltin_code_frame_reorg(self):
         a = self.RPythonAnnotator()
         a.build_types(snippet.bltin_code_frame_reorg,[])
-        f_flowgraph = a.translator.getflowgraph(snippet.bltin_code_frame_f)
-        g_flowgraph = a.translator.getflowgraph(snippet.bltin_code_frame_g)
+        f_flowgraph = graphof(a, snippet.bltin_code_frame_f)
+        g_flowgraph = graphof(a, snippet.bltin_code_frame_g)
         assert isinstance(a.binding(f_flowgraph.getreturnvar()),
                             annmodel.SomeInteger)
         assert isinstance(a.binding(g_flowgraph.getreturnvar()),
@@ -565,7 +566,7 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.make_r, [int])
         assert s.knowntype == snippet.R
-        Rdef = a.getuserclasses()[snippet.R]
+        Rdef = a.bookkeeper.getuniqueclassdef(snippet.R)
         assert Rdef.attrs['r'].s_value.knowntype == snippet.R
         assert Rdef.attrs['n'].s_value.knowntype == int
         assert Rdef.attrs['m'].s_value.knowntype == int
@@ -575,8 +576,8 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.make_eo, [int])
         assert s.knowntype == snippet.B
-        Even_def = a.getuserclasses()[snippet.Even]
-        Odd_def = a.getuserclasses()[snippet.Odd]
+        Even_def = a.bookkeeper.getuniqueclassdef(snippet.Even)
+        Odd_def = a.bookkeeper.getuniqueclassdef(snippet.Odd)
         assert listitem(Even_def.attrs['x'].s_value).knowntype == snippet.Odd
         assert listitem(Even_def.attrs['y'].s_value).knowntype == snippet.Even
         assert listitem(Odd_def.attrs['x'].s_value).knowntype == snippet.Even
@@ -591,11 +592,11 @@ class TestAnnotateTestCase:
     def test_methodcall_is_precise(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.methodcall_is_precise, [bool])
-        classes = a.bookkeeper.userclasses
-        assert 'x' not in classes[snippet.CBase].attrs
-        assert (classes[snippet.CSub1].attrs['x'].s_value ==
+        getcdef = a.bookkeeper.getuniqueclassdef
+        assert 'x' not in getcdef(snippet.CBase).attrs
+        assert (getcdef(snippet.CSub1).attrs['x'].s_value ==
                 a.bookkeeper.immutablevalue(42))
-        assert (classes[snippet.CSub2].attrs['x'].s_value ==
+        assert (getcdef(snippet.CSub2).attrs['x'].s_value ==
                 a.bookkeeper.immutablevalue('world'))
         assert s == a.bookkeeper.immutablevalue(42)
 
@@ -896,7 +897,7 @@ class TestAnnotateTestCase:
         callables = a.getpbccallables()        
         call_families = a.getpbccallfamilies()
 
-        clsdef = lambda cls: a.getuserclasses()[cls]
+        clsdef = a.bookkeeper.getuniqueclassdef
 
         fc = lambda x: {(None, x): True}
         mc = lambda x: {(clsdef(x.im_class), x.im_func): True}
@@ -974,9 +975,9 @@ class TestAnnotateTestCase:
                         spec_alloc = spec_alloc.const
                         assert spec_alloc in callb
                         assert callb[spec_alloc] == {(None, spec_alloc): True}
-                        assert (a.binding(a.translator.getflowgraph(spec_alloc).getreturnvar()).knowntype 
+                        assert (a.binding(graphof(a, spec_alloc).getreturnvar()).knowntype 
                                 == spaceop.args[1].value)
-        traverse(visit, a.translator.getflowgraph(f))
+        traverse(visit, graphof(a, f))
 
     def test_assert_list_doesnt_lose_info(self):
         class T(object):
@@ -1085,7 +1086,7 @@ class TestAnnotateTestCase:
                 raise
         a = self.RPythonAnnotator()
         a.build_types(f, [dict])
-        fg = a.translator.getflowgraph(f)
+        fg = graphof(a, f)
         et, ev = fg.exceptblock.inputargs
         t = annmodel.SomeObject()
         t.knowntype = type
@@ -1102,7 +1103,7 @@ class TestAnnotateTestCase:
                 raise
         a = self.RPythonAnnotator()
         a.build_types(f, [dict])
-        fg = a.translator.getflowgraph(f)
+        fg = graphof(a, f)
         et, ev = fg.exceptblock.inputargs
         t = annmodel.SomeObject()
         t.knowntype = type
@@ -1138,7 +1139,7 @@ class TestAnnotateTestCase:
                     h()
         a = self.RPythonAnnotator()
         a.build_types(f, [int, list])
-        fg = a.translator.getflowgraph(f)
+        fg = graphof(a, f)
         et, ev = fg.exceptblock.inputargs
         t = annmodel.SomeObject()
         t.knowntype = type
@@ -1161,7 +1162,7 @@ class TestAnnotateTestCase:
                 h()
         a = self.RPythonAnnotator()
         a.build_types(f, [])
-        fg = a.translator.getflowgraph(f)
+        fg = graphof(a, f)
         et, ev = fg.exceptblock.inputargs
         t = annmodel.SomeObject()
         t.knowntype = type
@@ -1294,8 +1295,8 @@ class TestAnnotateTestCase:
                 witness2(x)
         a = self.RPythonAnnotator()
         s = a.build_types(f, [annmodel.SomeInteger(unsigned=True)])
-        wg1 = a.translator.getflowgraph(witness1)
-        wg2 = a.translator.getflowgraph(witness2)        
+        wg1 = graphof(a, witness1)
+        wg2 = graphof(a, witness2)        
         assert a.binding(wg1.getargs()[0]).unsigned is True
         assert a.binding(wg2.getargs()[0]).unsigned is True        
         
@@ -1445,7 +1446,7 @@ class TestAnnotateTestCase:
             mutr(k, x, i)
         a = self.RPythonAnnotator()
         a.build_types(f, [bool, K,  int, int])
-        g = a.translator.getflowgraph(witness)
+        g = graphof(a, witness)
         assert a.binding(g.getargs()[0]).knowntype == int
 
     # check RPython static semantics of isinstance(x,bool|int) as needed for wrap
