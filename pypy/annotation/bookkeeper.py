@@ -705,6 +705,16 @@ class Bookkeeper:
             position_key = self.position_key
         else:
             position_key = None
+
+        # REFACTOR: the crucial point is that we don't want to pass position_key any longer to the logic in the descs
+        # just args, and possibly the old annotation of the result or SomeImpossibleValue if there is none
+        # see below: because of recursivecall and its needs we may have to pass a closure around recursivecall because itself it
+        # wants the position_key|callback and recursivecall maybe used (but not always) by the desc logic.
+        # We may be able to construct the family directly here, no more consider_pbc_call,  then we would pass/attach the shape too
+        # Indeed one possibility is to have logic on the pbc to construct the familily and use that in pbc_getattr too.
+        # Part of pycall logic  would go to the desc logic receiving args, etc plus helper closures related to recursivecall
+        # recursivecall should also change to deal with graphs directly, getting the graph should probably be a desc task.
+
         func, key = decide_callable(self, position_key, func, args, mono, unpacked=True)
         
         if func is None:
@@ -734,8 +744,11 @@ class Bookkeeper:
             whence = self.position_key
         else:
             whence = context
+        # REFACTOR: this and maybe get_inputcells should be passed as a helper closure to the descs logic
         r = self.annotator.recursivecall(func, whence, inputcells)
 
+
+        # REFACTOR: how we want to deal with this? either we always mix or we get a flag/key from the logic on the descs
         # if we got different specializations keys for a same site, mix previous results for stability
         if key is not None:
             assert context == 'current'
