@@ -134,7 +134,7 @@ class Translator(TranslationContext):
         """
         annotator = self.buildannotator(policy)
         graph = self.entrypointgraph
-        annotator.build_types(graph, input_args_types, self.entrypoint)
+        annotator.build_types(graph, input_args_types)
         return annotator
 
     def about(self, x, f=None):
