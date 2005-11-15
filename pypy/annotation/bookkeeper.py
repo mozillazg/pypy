@@ -385,6 +385,8 @@ class Bookkeeper:
                 result = description.ClassDesc(self, pyobj)
             elif isinstance(pyobj, types.MethodType):
                 if pyobj.im_self is None:   # unbound
+                    # XXX this will return a different Desc than that
+                    # returned by getdesc(pyobj.im_func) -- do we care?
                     result = description.FunctionDesc(self, pyobj.im_func)
                 elif (hasattr(pyobj.im_self, '_freeze_') and
                       pyobj.im_self._freeze_()):  # method of frozen
