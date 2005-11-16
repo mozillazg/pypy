@@ -83,7 +83,6 @@ class Translator(TranslationContext):
     def __init__(self, func, **flowing_flags):
         super(Translator, self).__init__(**flowing_flags)
         self.entrypoint = func
-        self.entrypointgraph = self.buildflowgraph(func)
 
     def __getstate__(self):
         # try to produce things a bit more ordered
@@ -95,10 +94,6 @@ class Translator(TranslationContext):
         assert len(args) == 3
         self.__dict__.update(args[2])
         assert args[0] is self.entrypoint and args[1] is self.functions
-
-    def getflowgraph(self):
-        """Get the flow graph of the entry point."""
-        return self.entrypointgraph
 
     def gv(self):
         """Shows the control flow graph -- requires 'dot' and 'gv'."""
@@ -133,8 +128,7 @@ class Translator(TranslationContext):
         Provides type information of arguments. Returns annotator.
         """
         annotator = self.buildannotator(policy)
-        graph = self.entrypointgraph
-        annotator.build_types(graph, input_args_types)
+        annotator.build_types(self.entrypoint, input_args_types)
         return annotator
 
     def about(self, x, f=None):
@@ -174,6 +168,7 @@ class Translator(TranslationContext):
         Returns <interactive> for functions written during the
         interactive session.
         """
+        FIX_ME
         return self.entrypointgraph.source
 
     def pyrex(self, input_arg_types=None, func=None):
