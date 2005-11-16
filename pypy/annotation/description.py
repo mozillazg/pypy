@@ -6,6 +6,9 @@ from pypy.interpreter.argument import ArgErr
 
 class CallFamily:
     """A family of Desc objects that could be called from common call sites.
+    The call families are conceptually a partition of all (callable) Desc
+    objects, where the equivalence relation is the transitive closure of
+    'd1~d2 if d1 and d2 might be called at the same call site'.
     """
     def __init__(self, desc):
         self.descs = { desc: True }
@@ -18,6 +21,10 @@ class CallFamily:
 
 class AttrFamily:
     """A family of Desc objects that have common 'getattr' sites.
+    The attr families are conceptually a partition of FrozenDesc and ClassDesc
+    objects, where the equivalence relation is the transitive closure of
+    'd1~d2 if d1 and d2 might have an attribute read on them by the same
+    getattr operation.'
     """
     def __init__(self, desc):
         self.descs = { desc: True }
