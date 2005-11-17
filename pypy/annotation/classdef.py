@@ -65,6 +65,23 @@ from pypy.annotation import description
 #        same name in all subclasses of A, if any.  (Parent class attributes can
 #        be visible in reads from instances of subclasses.)
 
+class ConstantSource:
+
+    def __init__(self, bookkeeper, obj, classdef=None):
+        self.bookkeeper = bookkeeper
+        self.obj = obj
+        self.classdef = classdef
+
+    def s_read_attribute(self, name):
+        s_value = self.bookkeeper.immutablevalue(
+            self.obj.__dict__[name])
+        if self.classdef:
+            s_value = s_value.bindcallables(self.classdef)
+        return s_value
+
+    def is_instance_level(self):
+        return self.classdef is None
+
 
 class Attribute:
     # readonly-ness
@@ -76,17 +93,13 @@ class Attribute:
     def __init__(self, name, bookkeeper):
         self.name = name
         self.bookkeeper = bookkeeper
-        # XXX a SomeImpossibleValue() constant?  later!!
         self.s_value = SomeImpossibleValue()
         self.readonly = True
         self.read_locations = {}
 
-    def add_constant_source(self, source, classdef):
-        s_value = self.bookkeeper.immutablevalue(
-            source.__dict__[self.name])
-        if classdef:
-            s_value = s_value.bindcallables(classdef)
-        else:
+    def add_constant_source(self, source):
+        s_value = source.s_read_attribute(self.name)
+        if source.is_instance_level():
             # a prebuilt instance source forces readonly=False, see above
             self.readonly = False
         s_new_value = unionof(self.s_value, s_value)       
@@ -141,17 +154,31 @@ class ClassDef:
         #self.instantiation_locations = {}
         self.cls = cls
         self.subdefs = {}
-        self.attr_sources = {}   # {name: {constant_object: classdef_or_None}}
+        self.attr_sources = {}   # {name: {constant-source: True}}
         base = object
-        mixeddict = {}
-        sources = {}
+
+
+        classsources = {}
+
         baselist = list(cls.__bases__)
         baselist.reverse()
         self.also_Exception_subclass = False
         if Exception in baselist and len(baselist)>1: # special-case
             baselist.remove(Exception)
-            mixeddict['__init__'] = Exception.__init__.im_func
+            classsources['__init__'] = ConstantSource(bookkeeper, Exception, self)
             self.also_Exception_subclass = True
+        
+        def add_sources_for_class(cls):
+            source = ConstantSource(bookkeeper, cls, self)
+            for name, value in cls.__dict__.items():
+                # ignore some special attributes
+                if name.startswith('_') and not isinstance(value, FunctionType):
+                    continue
+                # for debugging
+                if isinstance(value, FunctionType):
+                    if not hasattr(value, 'class_'):
+                        value.class_ = self.cls # remember that this is really a method
+                classsources[name] = source
 
         for b1 in baselist:
             if b1 is object:
@@ -159,14 +186,13 @@ class ClassDef:
             if getattr(b1, '_mixin_', False):
                 assert b1.__bases__ == () or b1.__bases__ == (object,), (
                     "mixin class %r should have no base" % (b1,))
-                mixeddict.update(b1.__dict__)
-                for name in b1.__dict__:
-                    sources[name] = b1
+                add_sources_for_class(b1)
             else:
                 assert base is object, ("multiple inheritance only supported "
                                         "with _mixin_: %r" % (cls,))
                 base = b1
-        mixeddict.update(cls.__dict__)
+
+        add_sources_for_class(cls)
 
         self.basedef = bookkeeper.getuniqueclassdef(base)
         if self.basedef:
@@ -174,7 +200,7 @@ class ClassDef:
 
         # pass some data to the setup() method, which must be called
         # after the __init__()
-        self.sources_from_the_class = mixeddict, sources
+        self.sources_from_the_class = classsources
 
         # forced attributes
         if cls in FORCE_ATTRIBUTES_INTO_CLASSES:
@@ -185,20 +211,14 @@ class ClassDef:
     def setup(self):
         # collect the (supposed constant) class attributes
         cls = self.cls
-        d, sources = self.sources_from_the_class
+        sources = self.sources_from_the_class
         del self.sources_from_the_class   # setup() shouldn't be called twice
-        for name, value in d.items():
-            # ignore some special attributes
-            if name.startswith('_') and not isinstance(value, FunctionType):
-                continue
-            if isinstance(value, FunctionType):
-                if not hasattr(value, 'class_'):
-                    value.class_ = cls # remember that this is really a method
-            self.add_source_for_attribute(name, sources.get(name, cls), self)
+        for name, source in sources.items():
+            self.add_source_for_attribute(name, source)
         if self.bookkeeper:
             self.bookkeeper.event('classdef_setup', self)
 
-    def add_source_for_attribute(self, attr, source, clsdef=None):
+    def add_source_for_attribute(self, attr, source):
         """Adds information about a constant source for an attribute.
         """
         sources = self.attr_sources.setdefault(attr, {})
@@ -207,7 +227,7 @@ class ClassDef:
                 # the Attribute() exists already for this class (or a parent)
                 attrdef = cdef.attrs[attr]
                 s_prev_value = attrdef.s_value
-                attrdef.add_constant_source(source, clsdef)
+                attrdef.add_constant_source(source)
                 # we should reflow from all the reader's position,
                 # but as an optimization we try to see if the attribute
                 # has really been generalized
@@ -216,18 +236,18 @@ class ClassDef:
                 return
         else:
             # remember the source in self.attr_sources
-            sources[source] = clsdef
+            sources[source] = True
             # register the source in any Attribute found in subclasses,
             # to restore invariant (III)
             # NB. add_constant_source() may discover new subdefs but the
             #     right thing will happen to them because self.attr_sources
             #     was already updated
-            if clsdef is not None:
+            if not source.is_instance_level():
                 for subdef in self.getallsubdefs():
                     if attr in subdef.attrs:
                         attrdef = subdef.attrs[attr]
                         s_prev_value = attrdef.s_value
-                        attrdef.add_constant_source(source, clsdef)
+                        attrdef.add_constant_source(source)
                         if attrdef.s_value != s_prev_value:
                             attrdef.mutated(subdef) # reflow from all read positions
 
@@ -299,9 +319,9 @@ class ClassDef:
         # invariant (III)
         for superdef in self.getmro():
             if attr in superdef.attr_sources:
-                for source, classdef in superdef.attr_sources[attr].items():
-                    if classdef is not None:
-                        constant_sources[source] = classdef
+                for source in superdef.attr_sources[attr]:
+                    if not source.is_instance_level():
+                        constant_sources[source] = True
 
         # create the Attribute and do the generalization asked for
         newattr = Attribute(attr, self.bookkeeper)
@@ -318,8 +338,8 @@ class ClassDef:
 
         # add the values of the pending constant attributes
         # completes invariants (II) and (III)
-        for source, classdef in constant_sources.items():
-            newattr.add_constant_source(source, classdef)
+        for source in constant_sources:
+            newattr.add_constant_source(source)
 
         # reflow from all read positions
         newattr.mutated(self)
@@ -412,7 +432,7 @@ class ClassDef:
     def check_attr_here(self, name):
         if name in self.cls.__dict__:
             # oups! new attribute showed up
-            self.add_source_for_attribute(name, self.cls, self)
+            self.add_source_for_attribute(name, ConstantSource(self.bookkeeper, self.cls, self))
             # maybe it also showed up in some subclass?
             for subdef in self.getallsubdefs():
                 if subdef is not self:
