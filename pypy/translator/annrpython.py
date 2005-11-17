@@ -73,27 +73,32 @@ class RPythonAnnotator:
 
     def build_types(self, flowgraph, input_arg_types):
         """Recursively build annotations about the specific entry point."""
-        if not isinstance(flowgraph, FunctionGraph):
-            # XXX this part of the interface is only for testing/debugging
-            func = flowgraph
-            if self.translator is None:
-                from pypy.translator.translator import TranslationContext
-                self.translator = TranslationContext()
-                self.translator.annotator = self
-            flowgraph = self.translator.buildflowgraph(func)
-        checkgraph(flowgraph)
-        self._register_returnvar(flowgraph)
         # make input arguments and set their type
-        input_arg_types = list(input_arg_types)
-        nbarg = len(flowgraph.getargs())
-        if len(input_arg_types) != nbarg: 
-            raise TypeError("%s expects %d args, got %d" %(       
-                            flowgraph, nbarg, len(input_arg_types)))
         inputcells = []
         for t in input_arg_types:
             if not isinstance(t, annmodel.SomeObject):
                 t = self.bookkeeper.valueoftype(t)
             inputcells.append(t)
+
+        if not isinstance(flowgraph, FunctionGraph):
+            func = flowgraph
+            if self.translator is None:
+                from pypy.translator.translator import TranslationContext
+                self.translator = TranslationContext()
+                self.translator.annotator = self
+            specialized = self.bookkeeper.getdesc(func).specialize(inputcells)
+            if not isinstance(specialized, FunctionGraph):
+                assert isinstance(specialized, annmodel.SomeObject)
+                return specialized
+            flowgraph = specialized
+ 
+        checkgraph(flowgraph)
+        self._register_returnvar(flowgraph)
+
+        nbarg = len(flowgraph.getargs())
+        if len(input_arg_types) != nbarg: 
+            raise TypeError("%s expects %d args, got %d" %(       
+                            flowgraph, nbarg, len(input_arg_types)))
         
         # register the entry point
         self.addpendingblock(flowgraph, flowgraph.startblock, inputcells)
