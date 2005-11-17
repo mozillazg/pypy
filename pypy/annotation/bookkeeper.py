@@ -12,7 +12,7 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeList, SomeObject
-from pypy.annotation.classdef import ClassDef
+from pypy.annotation.classdef import ClassDef, ConstantSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
@@ -359,7 +359,7 @@ class Bookkeeper:
                     self.seen_mutable[x] = True
                     self.event('mutable', x)
                     for attr in x.__dict__:
-                        clsdef.add_source_for_attribute(attr, x) # can trigger reflowing
+                        clsdef.add_source_for_attribute(attr, ConstantSource(self, x, None)) # can trigger reflowing
                 result = SomeInstance(clsdef)
         elif x is None:
             return s_None
