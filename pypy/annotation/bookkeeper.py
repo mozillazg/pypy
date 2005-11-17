@@ -12,7 +12,7 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeList, SomeObject
-from pypy.annotation.classdef import ClassDef, ConstantSource
+from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
@@ -89,7 +89,7 @@ class Stats:
 
     def typerepr(self, obj):
         if isinstance(obj, SomeInstance):
-            return obj.classdef.cls.__name__
+            return obj.classdef.name
         else:
             return obj.knowntype.__name__
 
@@ -269,7 +269,7 @@ class Bookkeeper:
     def immutablevalue(self, x):
         """The most precise SomeValue instance that contains the
         immutable value x."""
-        # convert unbound methods to the underlying function
+         # convert unbound methods to the underlying function
         if hasattr(x, 'im_self') and x.im_self is None:
             x = x.im_func
             assert not hasattr(x, 'im_self')
@@ -358,8 +358,9 @@ class Bookkeeper:
                                                # see for example test_circular_mutable_getattr
                     self.seen_mutable[x] = True
                     self.event('mutable', x)
+                    source = InstanceSource(self, x)
                     for attr in x.__dict__:
-                        clsdef.add_source_for_attribute(attr, ConstantSource(self, x, None)) # can trigger reflowing
+                        clsdef.add_source_for_attribute(attr, source) # can trigger reflowing
                 result = SomeInstance(clsdef)
         elif x is None:
             return s_None
@@ -382,6 +383,8 @@ class Bookkeeper:
             if isinstance(pyobj, types.FunctionType):
                 result = description.FunctionDesc(self, pyobj)
             elif isinstance(pyobj, (type, types.ClassType)):
+                if pyobj is object:
+                    raise Exception, "ClassDesc for object not supported"
                 result = description.ClassDesc(self, pyobj)
             elif isinstance(pyobj, types.MethodType):
                 if pyobj.im_self is None:   # unbound

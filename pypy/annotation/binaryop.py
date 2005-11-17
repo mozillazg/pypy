@@ -570,14 +570,15 @@ class __extend__(pairtype(SomeInstance, SomePBC)):
     def union((ins, pbc)):
         if pbc.isNone():
             return SomeInstance(classdef=ins.classdef, can_be_None = True)
+        raise UnionError("mixing pbc and instance not supported anymore:  %s %s" % (pbc, ins))
         # XXX is the following still useful?
-        classdef = ins.classdef.superdef_containing(pbc.knowntype)
-        if classdef is None:
-            # print warning?
-            return SomeObject()
-        if not getattr(TLS, 'no_side_effects_in_union', 0):
-            raise UnionError("mixing pbc and instance not supported anymore:  %s %s" % (pbc, ins))
-        return SomeInstance(classdef)
+        #classdef = ins.classdef.superdef_containing(pbc.knowntype)
+        #if classdef is None:
+        #    # print warning?
+        #    return SomeObject()
+        #if not getattr(TLS, 'no_side_effects_in_union', 0):
+        #    raise UnionError("mixing pbc and instance not supported anymore:  %s %s" % (pbc, ins))
+        #return SomeInstance(classdef)
 
 class __extend__(pairtype(SomePBC, SomeInstance)):
     def union((pbc, ins)):
