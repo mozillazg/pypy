@@ -247,3 +247,9 @@ class MethodOfFrozenDesc(Desc):
     def __repr__(self):
         return '<MethodOfFrozenDesc %r of %r>' % (self.funcdesc,
                                                   self.frozendesc)
+
+    def pycall(self, schedule, args):
+        from pypy.annotation.model import SomePBC
+        s_self = SomePBC([self.frozendesc])
+        args = args.prepend(s_self)
+        return self.funcdesc.pycall(schedule, args)

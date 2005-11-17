@@ -353,7 +353,7 @@ class ClassDef:
         """
         d = []
         uplookup = None
-        upfunc = None
+        updesc = None
         meth = False
         check_for_missing_attrs = False
         for desc in pbc.descriptions:
@@ -366,7 +366,7 @@ class ClassDef:
                     # upward consider only the best match
                     if uplookup is None or methclassdef.issubclass(uplookup):
                         uplookup = methclassdef
-                        upfunc = desc.funcdesc
+                        updesc = desc
                     continue
                     # for clsdef1 >= clsdef2, we guarantee that
                     # clsdef1.lookup_filter(pbc) includes
@@ -384,11 +384,7 @@ class ClassDef:
                 uplookup.attr_sources.setdefault(name, {})
                 check_for_missing_attrs = True
 
-            # when the method is found in a parent class, it get bound to the
-            # 'self' subclass.  This allows the MethodDesc entry of the
-            # PBC descriptions to track more precisely with which 'self' the
-            # method is called.
-            d.append(self.bookkeeper.getmethoddesc(upfunc, self))
+            d.append(updesc)
         elif meth and name is not None:
             check_for_missing_attrs = True
 
