@@ -402,9 +402,10 @@ class Bookkeeper:
                 cls = result.knowntype
                 if cls not in self.pbctypes:
                     self.pbctypes[cls] = True
-                    if cls in self.userclasses:
-                        self.warning("making some PBC of type %r, which has "
-                                     "already got a ClassDef" % (cls,))
+                    # XXX what to do about this old check?:
+                    #if cls in self.userclasses:
+                    #    self.warning("making some PBC of type %r, which has "
+                    #                 "already got a ClassDef" % (cls,))
             self.descs[pyobj] = result
             return result
 
@@ -530,6 +531,9 @@ class Bookkeeper:
         first = descs[0]
         first.mergecallfamilies(*descs[1:])
         callfamily = first.getcallfamily()
+
+        shape = args.rawshape()
+        callfamily.patterns[shape] = True
 
         if emulated is None:
             whence = self.position_key
