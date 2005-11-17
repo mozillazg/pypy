@@ -179,7 +179,8 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.build_instance, [])
         # result should be a snippet.C instance
-        assert s.knowntype == snippet.C
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(snippet.C)
 
     def test_set_attr(self):
         a = self.RPythonAnnotator()
@@ -223,7 +224,9 @@ class TestAnnotateTestCase:
         # result should be a tuple of (C, positive_int)
         assert s.knowntype == tuple
         assert len(s.items) == 2
-        assert s.items[0].knowntype == snippet.C
+        s0 = s.items[0]
+        assert isinstance(s0, annmodel.SomeInstance)
+        assert s0.classdef == a.bookkeeper.getuniqueclassdef(snippet.C)
         assert s.items[1].knowntype == int
         assert s.items[1].nonneg == True
 
@@ -327,13 +330,15 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.flow_usertype_info, [object])
         #a.translator.view()
-        assert s.knowntype == snippet.WithInit
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(snippet.WithInit)
 
     def test_flow_usertype_info2(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.flow_usertype_info, [snippet.WithMoreInit])
         #a.translator.view()
-        assert s.knowntype == snippet.WithMoreInit
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(snippet.WithMoreInit)
 
     def test_flow_identity_info(self):
         a = self.RPythonAnnotator()
@@ -495,13 +500,13 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction, [])
         assert isinstance(s, annmodel.SomeInstance)
-        assert s.knowntype is snippet.Exc
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
         
     def test_exception_deduction_we_are_dumb(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction_we_are_dumb, [])
         assert isinstance(s, annmodel.SomeInstance)
-        assert s.knowntype is snippet.Exc
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
         
     def test_nested_exception_deduction(self):
         a = self.RPythonAnnotator()
@@ -509,8 +514,8 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeTuple)
         assert isinstance(s.items[0], annmodel.SomeInstance)
         assert isinstance(s.items[1], annmodel.SomeInstance)
-        assert s.items[0].knowntype is snippet.Exc
-        assert s.items[1].knowntype is snippet.Exc2
+        assert s.items[0].classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
+        assert s.items[1].classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc2)
 
     def test_exc_deduction_our_exc_plus_others(self):
         a = self.RPythonAnnotator()
@@ -565,9 +570,9 @@ class TestAnnotateTestCase:
     def test_propagation_of_fresh_instances_through_attrs_rec_0(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.make_r, [int])
-        assert s.knowntype == snippet.R
         Rdef = a.bookkeeper.getuniqueclassdef(snippet.R)
-        assert Rdef.attrs['r'].s_value.knowntype == snippet.R
+        assert s.classdef == Rdef
+        assert Rdef.attrs['r'].s_value.classdef == Rdef
         assert Rdef.attrs['n'].s_value.knowntype == int
         assert Rdef.attrs['m'].s_value.knowntype == int
     
@@ -575,13 +580,13 @@ class TestAnnotateTestCase:
     def test_propagation_of_fresh_instances_through_attrs_rec_eo(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.make_eo, [int])
-        assert s.knowntype == snippet.B
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(snippet.B)
         Even_def = a.bookkeeper.getuniqueclassdef(snippet.Even)
         Odd_def = a.bookkeeper.getuniqueclassdef(snippet.Odd)
-        assert listitem(Even_def.attrs['x'].s_value).knowntype == snippet.Odd
-        assert listitem(Even_def.attrs['y'].s_value).knowntype == snippet.Even
-        assert listitem(Odd_def.attrs['x'].s_value).knowntype == snippet.Even
-        assert listitem(Odd_def.attrs['y'].s_value).knowntype == snippet.Odd        
+        assert listitem(Even_def.attrs['x'].s_value).classdef == Odd_def
+        assert listitem(Even_def.attrs['y'].s_value).classdef == Even_def
+        assert listitem(Odd_def.attrs['x'].s_value).classdef == Even_def
+        assert listitem(Odd_def.attrs['y'].s_value).classdef == Odd_def
 
     def test_flow_rev_numbers(self):
         a = self.RPythonAnnotator()
@@ -627,20 +632,20 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction_with_raise1, [bool])
         assert isinstance(s, annmodel.SomeInstance)
-        assert s.knowntype is snippet.Exc
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
 
 
     def test_exception_deduction_with_raise2(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction_with_raise2, [bool])
         assert isinstance(s, annmodel.SomeInstance)
-        assert s.knowntype is snippet.Exc
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
 
     def test_exception_deduction_with_raise3(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction_with_raise3, [bool])
         assert isinstance(s, annmodel.SomeInstance)
-        assert s.knowntype is snippet.Exc
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(snippet.Exc)
 
     def test_type_is(self):
         class C(object):
@@ -651,7 +656,7 @@ class TestAnnotateTestCase:
             raise Exception
         a = self.RPythonAnnotator()
         s = a.build_types(f, [object])
-        assert s.knowntype is C
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(C)
 
     def test_ann_assert(self):
         def assert_(x):
@@ -689,7 +694,7 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [list])
-        assert s.knowntype is IndexError  # KeyError ignored because l is a list
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(IndexError)  # KeyError ignored because l is a list
 
     def test_overrides(self):
         import sys
@@ -744,7 +749,8 @@ class TestAnnotateTestCase:
             return c.x
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == C
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(C)
 
     def test_circular_list_type(self):
         def f(n):
@@ -947,16 +953,19 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.items[0].knowntype == C1
-        assert s.items[1].knowntype == C2
+        C1df = a.bookkeeper.getuniqueclassdef(C1)
+        C2df = a.bookkeeper.getuniqueclassdef(C2)
+        
+        assert s.items[0].classdef == C1df
+        assert s.items[1].classdef == C2df
 
         allocdesc = a.bookkeeper.getdesc(alloc)
         s_C1 = a.bookkeeper.immutablevalue(C1)
         s_C2 = a.bookkeeper.immutablevalue(C2)
         graph1 = allocdesc.specialize([s_C1])
         graph2 = allocdesc.specialize([s_C2])
-        assert a.binding(graph1.getreturnvar()).knowntype == C1
-        assert a.binding(graph2.getreturnvar()).knowntype == C2
+        assert a.binding(graph1.getreturnvar()).classdef == C1df
+        assert a.binding(graph2.getreturnvar()).classdef == C2df
         assert graph1 in a.translator.graphs
         assert graph2 in a.translator.graphs
 
@@ -971,7 +980,9 @@ class TestAnnotateTestCase:
             return g(l)
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert listitem(s).knowntype == T
+        s_item = listitem(s)
+        assert isinstance(s_item, annmodel.SomeInstance)
+        assert s_item.classdef is a.bookkeeper.getuniqueclassdef(T)
           
     def test_assert_type_is_list_doesnt_lose_info(self):
         class T(object):
@@ -984,7 +995,10 @@ class TestAnnotateTestCase:
             return g(l)
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert listitem(s).knowntype == T
+        s_item = listitem(s)
+        assert isinstance(s_item, annmodel.SomeInstance)
+        assert s_item.classdef is a.bookkeeper.getuniqueclassdef(T)
+
 
     def test_int_str_mul(self):
         def f(x,a,b):
@@ -1074,7 +1088,7 @@ class TestAnnotateTestCase:
         t.const = KeyError
         t.is_type_of = [ev]
         assert a.binding(et) == t
-        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef.cls == KeyError
+        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef == a.bookkeeper.getuniqueclassdef(KeyError)
 
     def test_reraiseAnything(self):
         def f(dic):
@@ -1091,7 +1105,7 @@ class TestAnnotateTestCase:
         t.is_type_of = [ev]
         t.const = KeyError    # IndexError ignored because 'dic' is a dict
         assert a.binding(et) == t
-        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef.cls == KeyError
+        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef == a.bookkeeper.getuniqueclassdef(KeyError)
 
     def test_exception_mixing(self):
         def h():
@@ -1126,7 +1140,7 @@ class TestAnnotateTestCase:
         t.knowntype = type
         t.is_type_of = [ev]
         assert a.binding(et) == t
-        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef.cls == Exception
+        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef == a.bookkeeper.getuniqueclassdef(Exception)
 
     def test_try_except_raise_finally1(self):
         def h(): pass
@@ -1149,7 +1163,7 @@ class TestAnnotateTestCase:
         t.knowntype = type
         t.is_type_of = [ev]
         assert a.binding(et) == t
-        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef.cls == Exception
+        assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef == a.bookkeeper.getuniqueclassdef(Exception)
 
     def test_sys_attrs(self):
         import sys
@@ -1295,7 +1309,7 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [])
         assert isinstance(s, annmodel.SomeInstance)
         assert not s.can_be_None
-        assert s.classdef.cls is A
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(A)
 
     def test_class_attribute(self):
         class A:
@@ -1321,7 +1335,7 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [])
         assert isinstance(s, annmodel.SomeInstance)
         assert s.can_be_None
-        assert s.classdef.cls is A
+        assert s.classdef is a.bookkeeper.getuniqueclassdef(A)
 
     def test_long_list_recursive_getvalue(self):
         class A: pass
@@ -1502,7 +1516,7 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [])
         assert isinstance(s, annmodel.SomeTuple)
         assert isinstance(s.items[0], annmodel.SomeInstance)
-        assert s.items[0].classdef.cls is A
+        assert s.items[0].classdef is a.bookkeeper.getuniqueclassdef(A)
         assert s.items[0].can_be_None
         assert s.items[1] == a.bookkeeper.immutablevalue(A.hello)
 
@@ -1711,7 +1725,8 @@ class TestAnnotateTestCase:
             return g(None)
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == B
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(B)
 
     def test_type_is_no_improvement(self):
         class B(object):

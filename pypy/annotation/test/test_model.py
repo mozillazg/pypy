@@ -23,6 +23,7 @@ class C(object):
 class DummyClassDef:
     def __init__(self, cls=C):
         self.cls = cls
+        self.name = cls.__name__
 
 si0 = SomeInstance(DummyClassDef(), True)
 si1 = SomeInstance(DummyClassDef())

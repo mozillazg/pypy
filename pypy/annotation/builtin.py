@@ -126,16 +126,24 @@ def builtin_isinstance(s_obj, s_type, variables=None):
                 
             assert not issubclass(typ, (int,long)) or typ in (bool, int), (
                 "for integers only isinstance(.,int|r_uint) are supported")
+ 
             if s_obj.is_constant():
                 r.const = isinstance(s_obj.const, typ)
+            elif isinstance(s_obj, SomeInstance):
+                typdef = getbookkeeper().getuniqueclassdef(typ)
+                if s_obj.classdef.issubclass(typdef):
+                    if not s_obj.can_be_none():
+                        r.const = True 
+                elif not typdef.issubclass(s_obj.classdef):
+                    r.const = False
             elif our_issubclass(s_obj.knowntype, typ):
                 if not s_obj.can_be_none():
                     r.const = True 
             elif not our_issubclass(typ, s_obj.knowntype): 
                 r.const = False
             elif s_obj.knowntype == int and typ == bool: # xxx this will explode in case of generalisation
-                                                         # from bool to int, notice that isinstance( , bool|int)
-                                                         # is quite border case for RPython
+                                                   # from bool to int, notice that isinstance( , bool|int)
+                                                   # is quite border case for RPython
                 r.const = False
         # XXX HACK HACK HACK
         # XXX HACK HACK HACK

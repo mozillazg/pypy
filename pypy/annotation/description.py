@@ -147,13 +147,75 @@ class FunctionDesc(Desc):
         # XXX static methods
         return self.bookkeeper.getmethoddesc(self, classdef)
 
+class ClassSource:
+
+    def __init__(self, bookkeeper, cls, classdesc):
+        self.bookkeeper = bookkeeper
+        self.cls = cls
+        self.classdesc = classdesc
+
+    def s_read_attribute(self, name):
+        s_value = self.bookkeeper.immutablevalue(
+            self.cls.__dict__[name])
+        s_value = s_value.bindcallables(self.classdesc.getuniqueclassdef())
+        return s_value
+
+    def is_instance_level(self):
+        return False
 
 class ClassDesc(Desc):
     knowntype = type
 
-    def __init__(self, bookkeeper, pyobj, specialize=None):
+    def __init__(self, bookkeeper, pyobj=None, name=None,
+                 basedesc=None, 
+                 classsources=None, specialize=None):
         super(ClassDesc, self).__init__(bookkeeper, pyobj)
-        self.name = pyobj.__module__ + '.' + pyobj.__name__
+
+        if pyobj is not None:
+            cls = pyobj
+            base = object
+
+            classsources = {}
+
+            baselist = list(cls.__bases__)
+            baselist.reverse()
+
+            def add_sources_for_class(cls):
+                source = ClassSource(bookkeeper, cls, self)
+                for name, value in cls.__dict__.items():
+                    # ignore some special attributes
+                    if name.startswith('_') and not isinstance(value, types.FunctionType):
+                        continue
+                    # for debugging
+                    if isinstance(value, types.FunctionType):
+                        if not hasattr(value, 'class_'):
+                            value.class_ = self.pyobj # remember that this is really a method
+                    classsources[name] = source
+
+            for b1 in baselist:
+                if b1 is object:
+                    continue
+                if getattr(b1, '_mixin_', False):
+                    assert b1.__bases__ == () or b1.__bases__ == (object,), (
+                        "mixin class %r should have no base" % (b1,))
+                    add_sources_for_class(b1)
+                else:
+                    assert base is object, ("multiple inheritance only supported "
+                                            "with _mixin_: %r" % (cls,))
+                    base = b1
+
+            add_sources_for_class(cls)
+
+            name = pyobj.__module__ + '.' + pyobj.__name__
+            if base is object:
+                basedesc = None
+            else:
+                basedesc = bookkeeper.getdesc(base)
+            
+        self.name = name
+        self.basedesc = basedesc
+        self.classsources = classsources
+
         if specialize is None:
             tag = pyobj.__dict__.get('_annspecialcase_', '')
             assert not tag  # XXX later
@@ -165,11 +227,20 @@ class ClassDesc(Desc):
             raise Exception("not supported on class %r because it needs "
                             "specialization" % (self.name,))
         if self._classdef is None:
-            from pypy.annotation.classdef import ClassDef
-            classdef = ClassDef(self.pyobj, self.bookkeeper)
+            from pypy.annotation.classdef import ClassDef, FORCE_ATTRIBUTES_INTO_CLASSES
+            classdef = ClassDef(self.bookkeeper, self)
             self.bookkeeper.classdefs.append(classdef)
             self._classdef = classdef
-            classdef.setup()
+
+            # forced attributes
+            if self.pyobj is not None:
+                cls = self.pyobj
+                if cls in FORCE_ATTRIBUTES_INTO_CLASSES:
+                    for name, s_value in FORCE_ATTRIBUTES_INTO_CLASSES[cls].items():
+                        classdef.generalize_attr(name, s_value)
+                        classdef.find_attribute(name).readonly = False
+            
+            classdef.setup(self.classsources)
         return self._classdef
 
     def pycall(self, schedule, args):
@@ -190,6 +261,18 @@ class ClassDesc(Desc):
                                 " (class %s)" % (self.name,))
         return s_instance
 
+    def find_source_for(self, name):
+        if name in self.classsources:
+            return self.classsources[name]
+        if self.pyobj is not None:
+            # check whether in the case the classdesc corresponds to a real class
+            # there is a new attribute
+            cls = self.pyobj
+            if name in cls.__dict__:
+                source = ClassSource(self.bookkeeper, cls, self)
+                self.classsources[name] = source
+                return source
+        return None
 
 class MethodDesc(Desc):
     knowntype = types.MethodType

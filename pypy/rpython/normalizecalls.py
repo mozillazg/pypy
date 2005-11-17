@@ -349,7 +349,7 @@ def assign_inheritance_ids(annotator):
     def assign_id(classdef, nextid):
         classdef.minid = nextid
         nextid += 1
-        for subclass in classdef.subdefs.values():
+        for subclass in classdef.subdefs:
             nextid = assign_id(subclass, nextid)
         classdef.maxid = nextid
         return classdef.maxid
