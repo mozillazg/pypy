@@ -125,13 +125,8 @@ def cutoff_alwaysraising_block(self, block):
     s_impossible = annmodel.SomeImpossibleValue()
     self.bindings[block.operations[n].result] = s_impossible
     # insert the equivalent of 'raise AssertionError'
-    # XXX no sane way to get the graph from the block!
-    fn = self.annotated[block]
-    assert fn in self.translator.flowgraphs, (
-        "Cannot find the graph that this block belong to! "
-        "fn=%r" % (fn,))
-    graph = self.translator.flowgraphs[fn]
-    msg = "Call to %r should have raised an exception" % (fn,)
+    graph = self.annotated[block]
+    msg = "Call to %r should have raised an exception" % (getattr(graph, 'func', None),)
     c1 = Constant(AssertionError)
     c2 = Constant(AssertionError(msg))
     errlink = Link([c1, c2], graph.exceptblock)
@@ -143,11 +138,11 @@ def cutoff_alwaysraising_block(self, block):
     s_type = annmodel.SomeObject()
     s_type.knowntype = type
     s_type.is_type_of = [evalue]
-    s_value = annmodel.SomeInstance(self.bookkeeper.getclassdef(Exception))
+    s_value = annmodel.SomeInstance(self.bookkeeper.getuniqueclassdef(Exception))
     self.setbinding(etype, s_type)
     self.setbinding(evalue, s_value)
     # make sure the bookkeeper knows about AssertionError
-    self.bookkeeper.getclassdef(AssertionError)
+    self.bookkeeper.getuniqueclassdef(AssertionError)
 
 def transform_specialization(self, block_subset):
     THIS_SHOULD_DISAPPEAR
@@ -164,7 +159,7 @@ def transform_specialization(self, block_subset):
                                 if not isinstance(op.args[0], Constant) and not callb.is_constant():
                                     # this is a method call on some variable instance:
                                     # we still need the logic for methods up to calling the fixed specialized function,
-                                    # we use special call operations 'hardwired_simple_call' and 'hardwired_call_args'
+                                    # We use special call operations 'hardwired_simple_call' and 'hardwired_call_args'
                                     # including the specialized function as 2nd argument to distinguish this case
                                     op.opname = intern('hardwired_'+op.opname)
                                     op.args.insert(1, specialized_func)
