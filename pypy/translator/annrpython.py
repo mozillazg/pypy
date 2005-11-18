@@ -1,6 +1,6 @@
 from __future__ import generators
 
-from types import ClassType
+from types import ClassType, FunctionType
 from pypy.tool.ansi_print import ansi_log 
 from pypy.annotation import model as annmodel
 from pypy.annotation.pairtype import pair
@@ -71,27 +71,30 @@ class RPythonAnnotator:
 
     #___ convenience high-level interface __________________
 
-    def build_types(self, flowgraph, input_arg_types):
+    def build_types(self, function, input_arg_types):
         """Recursively build annotations about the specific entry point."""
+        assert isinstance(function, FunctionType), "fix that!"
+
+        if self.translator is None:
+            from pypy.translator.translator import TranslationContext
+            self.translator = TranslationContext()
+            self.translator.annotator = self
+
         # make input arguments and set their type
         inputcells = []
+        input_arg_types = list(input_arg_types)
+
         for t in input_arg_types:
             if not isinstance(t, annmodel.SomeObject):
                 t = self.bookkeeper.valueoftype(t)
             inputcells.append(t)
 
+        desc = self.bookkeeper.getdesc(function)
+        flowgraph = desc.specialize(inputcells)
         if not isinstance(flowgraph, FunctionGraph):
-            func = flowgraph
-            if self.translator is None:
-                from pypy.translator.translator import TranslationContext
-                self.translator = TranslationContext()
-                self.translator.annotator = self
-            specialized = self.bookkeeper.getdesc(func).specialize(inputcells)
-            if not isinstance(specialized, FunctionGraph):
-                assert isinstance(specialized, annmodel.SomeObject)
-                return specialized
-            flowgraph = specialized
- 
+            assert isinstance(flowgraph, annmodel.SomeObject)
+            return flowgraph
+
         checkgraph(flowgraph)
         self._register_returnvar(flowgraph)
 
