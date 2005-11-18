@@ -25,8 +25,6 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.memory import lladdress
 
-from pypy.annotation.specialize import decide_callable
-
 class Stats:
 
     def __init__(self, bookkeeper):
