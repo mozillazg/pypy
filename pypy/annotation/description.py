@@ -135,12 +135,17 @@ class FunctionDesc(Desc):
     def specialize(self, inputcells):
         return self.specializer(self, inputcells)
 
-    def pycall(self, schedule, args):
+    def pycall(self, schedule, args, s_previous_result):
         inputcells = self.parse_arguments(args)
         result = self.specialize(inputcells)
         if isinstance(result, FunctionGraph):
             graph = result         # common case
             result = schedule(graph, inputcells)
+        # Some specializations may break the invariant of returning
+        # annotations that are always more general than the previous time.
+        # We restore it here:
+        from pypy.annotation.model import unionof
+        result = unionof(result, s_previous_result)
         return result
 
     def bind(self, classdef):
@@ -157,25 +162,23 @@ class ClassDesc(Desc):
                  specialize=None):
         super(ClassDesc, self).__init__(bookkeeper, pyobj)
 
+        if name is None:
+            name = pyobj.__module__ + '.' + pyobj.__name__
+        self.name = name
+        self.basedesc = basedesc
+        if classdict is None:
+            classdict = {}    # populated below
+        self.classdict = classdict     # {attr: Constant-or-Desc}
+        if specialize is None:
+            specialize = pyobj.__dict__.get('_annspecialcase_', '')
+        self.specialize = specialize
+        self._classdefs = {}
+
         if pyobj is not None:
             cls = pyobj
             base = object
-
-            classdict = {}    # {attr: Constant-or-Desc}
-
             baselist = list(cls.__bases__)
             baselist.reverse()
-
-            def add_sources_for_class(cls):
-                for name, value in cls.__dict__.items():
-                    # ignore some special attributes
-                    if name.startswith('_') and not isinstance(value, types.FunctionType):
-                        continue
-                    # for debugging
-                    if isinstance(value, types.FunctionType):
-                        if not hasattr(value, 'class_'):
-                            value.class_ = self.pyobj # remember that this is really a method
-                    classdict[name] = Constant(value)
 
             for b1 in baselist:
                 if b1 is object:
@@ -183,39 +186,48 @@ class ClassDesc(Desc):
                 if getattr(b1, '_mixin_', False):
                     assert b1.__bases__ == () or b1.__bases__ == (object,), (
                         "mixin class %r should have no base" % (b1,))
-                    add_sources_for_class(b1)
+                    self.add_sources_for_class(b1)
                 else:
                     assert base is object, ("multiple inheritance only supported "
                                             "with _mixin_: %r" % (cls,))
                     base = b1
 
-            add_sources_for_class(cls)
+            self.add_sources_for_class(cls)
+            if base is not object:
+                self.basedesc = bookkeeper.getdesc(base)
 
-            name = pyobj.__module__ + '.' + pyobj.__name__
-            if base is object:
-                basedesc = None
-            else:
-                basedesc = bookkeeper.getdesc(base)
-            
-        self.name = name
-        self.basedesc = basedesc
-        self.classdict = classdict
+    def add_sources_for_class(self, cls):
+        for name, value in cls.__dict__.items():
+            ## -- useless? -- ignore some special attributes
+            ##if name.startswith('_') and not isinstance(value, types.FunctionType):
+            ##    continue
+            if isinstance(value, types.FunctionType):
+                # for debugging
+                if not hasattr(value, 'class_'):
+                    value.class_ = self.pyobj # remember that this is really a method
+                if self.specialize:
+                    # make a custom funcdesc that specializes on its first
+                    # argument (i.e. 'self').
+                    from pypy.annotation.specialize import argtype
+                    funcdesc = FunctionDesc(self.bookkeeper, value,
+                                            specializer=argtype(0))
+                    self.classdict[name] = funcdesc
+                    continue
+                # NB. if value is, say, AssertionError.__init__, then we
+                # should not use getdesc() on it.  Never.  The problem is
+                # that the py lib has its own AssertionError.__init__ which
+                # is of type FunctionType.  But bookkeeper.immutablevalue()
+                # will do the right thing in s_get_value().
+            self.classdict[name] = Constant(value)
 
-        if specialize is None:
-            tag = pyobj.__dict__.get('_annspecialcase_', '')
-            assert not tag  # XXX later
-        self.specialize = specialize
-        self._classdef = None
-
-    def getuniqueclassdef(self):
-        if self.specialize:
-            raise Exception("not supported on class %r because it needs "
-                            "specialization" % (self.name,))
-        if self._classdef is None:
+    def getclassdef(self, key):
+        try:
+            return self._classdefs[key]
+        except KeyError:
             from pypy.annotation.classdef import ClassDef, FORCE_ATTRIBUTES_INTO_CLASSES
             classdef = ClassDef(self.bookkeeper, self)
             self.bookkeeper.classdefs.append(classdef)
-            self._classdef = classdef
+            self._classdefs[key] = classdef
 
             # forced attributes
             if self.pyobj is not None:
@@ -231,34 +243,69 @@ class ClassDesc(Desc):
             for attr in self.classdict:
                 classsources[attr] = self    # comes from this ClassDesc
             classdef.setup(classsources)
-        return self._classdef
+            return classdef
 
-    def pycall(self, schedule, args):
-        from pypy.annotation.model import SomeInstance
-        classdef = self.getuniqueclassdef()
-        s_instance = SomeInstance(classdef)
-        init = getattr(self.pyobj, '__init__', None)  # xxx
-        if init is not None and init != object.__init__:
-            # call the constructor
-            s_init = self.bookkeeper.immutablevalue(init)
-            args = args.prepend(s_instance)
-            s_init.call(args)
+    def getuniqueclassdef(self):
+        if self.specialize:
+            raise Exception("not supported on class %r because it needs "
+                            "specialization" % (self.name,))
+        return self.getclassdef(None)
+
+    def pycall(self, schedule, args, s_previous_result):
+        from pypy.annotation.model import SomeInstance, SomeImpossibleValue
+        if self.specialize:
+            if self.specialize == 'specialize:ctr_location':
+                # We use the SomeInstance annotation returned the last time
+                # to make sure we use the same ClassDef this time.
+                if isinstance(s_previous_result, SomeInstance):
+                    classdef = s_previous_result.classdef
+                else:
+                    classdef = self.getclassdef(object())
+            else:
+                raise Exception("unsupported specialization tag: %r" % (
+                    self.specialize,))
         else:
+            classdef = self.getuniqueclassdef()
+        s_instance = SomeInstance(classdef)
+        # look up __init__ directly on the class, bypassing the normal
+        # lookup mechanisms ClassDef (to avoid influencing Attribute placement)
+        s_init = self.s_read_attribute('__init__')
+        if isinstance(s_init, SomeImpossibleValue):
+            # no __init__: check that there are no constructor args
             try:
                 args.fixedunpack(0)
             except ValueError:
                 raise Exception("default __init__ takes no argument"
                                 " (class %s)" % (self.name,))
+        else:
+            # call the constructor
+            args = args.prepend(s_instance)
+            s_init.call(args)
         return s_instance
 
-    def s_read_attribute(self, classdef, name):
+    def s_read_attribute(self, name):
+        # look up an attribute in the class
+        cdesc = self
+        while name not in cdesc.classdict:
+            cdesc = cdesc.basedesc
+            if cdesc is None:
+                from pypy.annotation.model import s_ImpossibleValue
+                return s_ImpossibleValue
+        else:
+            # delegate to s_get_value to turn it into an annotation
+            return cdesc.s_get_value(None, name)
+
+    def s_get_value(self, classdef, name):
         obj = self.classdict[name]
         if isinstance(obj, Constant):
             s_value = self.bookkeeper.immutablevalue(obj.value)
-            s_value = s_value.bindcallables(classdef)
+            if classdef is not None:
+                s_value = s_value.bindcallables(classdef)
         elif isinstance(obj, Desc):
             from pypy.annotation.model import SomePBC
-            s_value = SomePBC(obj.bind(classdef))
+            if classdef is not None:
+                obj = obj.bind(classdef)
+            s_value = SomePBC([obj])
         else:
             raise TypeError("classdict should not contain %r" % (obj,))
         return s_value
@@ -288,11 +335,11 @@ class MethodDesc(Desc):
         return '<MethodDesc %r of %r>' % (self.funcdesc,
                                           self.classdef)
 
-    def pycall(self, schedule, args):
+    def pycall(self, schedule, args, s_previous_result):
         from pypy.annotation.model import SomeInstance
         s_instance = SomeInstance(self.classdef)
         args = args.prepend(s_instance)
-        return self.funcdesc.pycall(schedule, args)
+        return self.funcdesc.pycall(schedule, args, s_previous_result)
 
     def bind(self, classdef):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
@@ -333,8 +380,8 @@ class MethodOfFrozenDesc(Desc):
         return '<MethodOfFrozenDesc %r of %r>' % (self.funcdesc,
                                                   self.frozendesc)
 
-    def pycall(self, schedule, args):
+    def pycall(self, schedule, args, s_previous_result):
         from pypy.annotation.model import SomePBC
         s_self = SomePBC([self.frozendesc])
         args = args.prepend(s_self)
-        return self.funcdesc.pycall(schedule, args)
+        return self.funcdesc.pycall(schedule, args, s_previous_result)
