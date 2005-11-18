@@ -4,7 +4,6 @@ The code needed to flow and annotate low-level helpers -- the ll_*() functions
 
 import types
 from pypy.annotation import model as annmodel
-from pypy.annotation.specialize import decide_callable
 from pypy.annotation.policy import AnnotatorPolicy
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython import extfunctable
