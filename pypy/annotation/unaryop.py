@@ -509,9 +509,6 @@ class __extend__(SomePBC):
         return bookkeeper.pbc_call(pbc, args)
 
     def bindcallables(pbc, classdef):
-        """ turn the callables in the given SomeCallable 'cal'
-            into bound versions.
-        """
         d = [desc.bind(classdef) for desc in pbc.descriptions]
         return SomePBC(d, can_be_None=pbc.can_be_None)
 
