@@ -162,31 +162,38 @@ class TestLowLevelAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = annotate_lowlevel_helper(a, llf, [])
         assert s == annmodel.SomeFloat()
-        vTs = []
+
+        seen = {}
         ngraphs = len(a.translator.graphs)
+
         for call in annotated_calls(a):
             if derived(call, "ll_"):
-                func = call.args[0].value
-                T = call.args[1].value
-                inputcells = [a.binding(v) for v in call.args[1:]]
-                g = a.bookkeeper.getdesc(func).specialize(inputcells)
+
+                func, T = [x.value for x in call.args[0:2]]
+                if (func, T) in seen:
+                    continue
+                seen[func, T] = True
+                
+                desc = a.bookkeeper.getdesc(func)
+                g = desc.specialize([a.binding(x) for x in call.args[1:]])
+
                 args = g.getargs()
                 rv = g.getreturnvar()
-                if len(args) == 2:
-                    vT, vn = args
-                    vTs.append(vT)
-                    assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
-                    assert a.binding(vn).knowntype == int
-                    assert a.binding(rv).ll_ptrtype.TO == T
-                else:
+                if func is ll_get:                    
                     vT, vp, vi = args
-                    vTs.append(vT)
                     assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
                     assert a.binding(vi).knowntype == int
                     assert a.binding(vp).ll_ptrtype.TO == T
                     assert a.binding(rv) == annmodel.lltype_to_annotation(T.OF)
-        assert len(a.translator.graphs) == ngraphs
-        return a, vTs
+                elif func is ll_make:
+                    vT, vn = args
+                    assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
+                    assert a.binding(vn).knowntype == int
+                    assert a.binding(rv).ll_ptrtype.TO == T
+                else:
+                    assert False, func
+
+        assert len(seen) == 4
  
     def test_ll_calling_ll2(self):
         A = GcArray(Float)
@@ -213,42 +220,48 @@ class TestLowLevelAnnotateTestCase:
         s = annotate_lowlevel_helper(a, llf, [])
         assert s == annmodel.SomeFloat()
 
+        seen = {}
+
         def q(v):
             s = a.binding(v)
             if s.is_constant():
                 return s.const
             else:
                 return s.ll_ptrtype
-                
-        vTs = []
-        ngraphs = len(a.translator.graphs)
+        
         for call in annotated_calls(a):
-            if derived(call, "ll_") or derived(call, "makelen4"):
-                func = call.args[0].value
-                T = q(call.args[1])
-                inputcells = [a.binding(v) for v in call.args[1:]]
-                g = a.bookkeeper.getdesc(func).specialize(inputcells)
+            if derived(call, "ll_")  or derived(call, "makelen4"):
+
+                func, T = [q(x) for x in call.args[0:2]]
+                if (func, T) in seen:
+                    continue
+                seen[func, T] = True
+
+                desc = a.bookkeeper.getdesc(func)
+                g = desc.specialize([a.binding(x) for x in call.args[1:]])
+
                 args = g.getargs()
                 rv = g.getreturnvar()
-                if isinstance(T, ContainerType):
-                    if len(args) == 2:
-                        vT, vn = args
-                        vTs.append(vT)
-                        assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
-                        assert a.binding(vn).knowntype == int
-                        assert a.binding(rv).ll_ptrtype.TO == T
-                    else:
-                        vT, = args
-                        vTs.append(vT)
-                        assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
-                        assert a.binding(rv).ll_ptrtype.TO == T
-                else:
+
+                if func is ll_make:
+                    vT, vn = args
+                    assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
+                    assert a.binding(vn).knowntype == int
+                    assert a.binding(rv).ll_ptrtype.TO == T
+                elif func is makelen4:
+                    vT, = args
+                    assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
+                    assert a.binding(rv).ll_ptrtype.TO == T
+                elif func is ll_get:
                     vp, vi = args
                     assert a.binding(vi).knowntype == int
                     assert a.binding(vp).ll_ptrtype == T
-                    assert a.binding(rv) == annmodel.lltype_to_annotation(T.TO.OF)
-        assert len(a.translator.graphs) == ngraphs
-        return a, vTs
+                    assert a.binding(rv) == annmodel.lltype_to_annotation(
+                        T.TO.OF)
+                else:
+                    assert False, func
+
+        assert len(seen) == 5
 
     def test_getRuntimeTypeInfo(self):
         S = GcStruct('s', ('x', Signed))
