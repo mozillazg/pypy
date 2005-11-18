@@ -239,6 +239,7 @@ class FlowObjSpace(ObjSpace):
             name = name.replace(c, '_')
         ec = flowcontext.FlowExecutionContext(self, code, func.func_globals,
                                               constargs, closure, name)
+        ec.graph.func = func
         self.setup_executioncontext(ec)
         ec.build_flow()
         checkgraph(ec.graph)
