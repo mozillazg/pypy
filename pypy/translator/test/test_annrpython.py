@@ -1765,6 +1765,32 @@ class TestAnnotateTestCase:
         assert s.is_constant()
         assert s.const is prebuilt_instance
 
+    def test_call_memoized_function(self):
+        class Freezing:
+            def _freeze_(self):
+                return True
+        fr1 = Freezing()
+        fr2 = Freezing()
+        def getorbuild(key):
+            a = 1
+            if key is fr1:
+                result = eval("a+2")
+            else:
+                result = eval("a+6")
+            return result
+        getorbuild._annspecialcase_ = "specialize:memo"
+
+        def f1(i):
+            if i > 0:
+                fr = fr1
+            else:
+                fr = fr2
+            return getorbuild(fr)
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f1, [int])
+        assert s.knowntype == int
+
 def g(n):
     return [0,1,2,n]
 

@@ -1174,5 +1174,3 @@ def class_spec():
     #if not isinstance(istk, PolyStk):
     #    return "confused"
     return istk.top(), sstk.top()
-
-    

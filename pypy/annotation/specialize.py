@@ -130,41 +130,32 @@ def clone(callb, postfix):
 # ____________________________________________________________________________
 # specializations
 
-class MemoTable:
-    def __init__(self, bookkeeper, func, s_result, arglist_s):
-        self.table = {}
-        self.arglist_s = arglist_s
-        self.s_result = s_result 
-        for arglist in possible_arguments(arglist_s):
-            result = func(*arglist)
-            self.table[arglist] = result
-        bookkeeper.memo_tables.append(self)
-    def _freeze_(self):
-        return True
-
-def memo(bookkeeper, mod, spaceop, func, args, mono):
+def memo(funcdesc, arglist_s):
     """NOT_RPYTHON"""
-    assert mono, "not-static call to memoized %s" % func
     from pypy.annotation.model import unionof
     # call the function now, and collect possible results
-    arglist_s, kwds_s = args.unpack()
-    assert not kwds_s, ("no ** args in call to function "
-                                    "marked specialize='concrete'")
+    func = funcdesc.pyobj
+    if func is None:
+        raise Exception("memo call: no Python function object to call (%r)" %
+                        (funcdesc,))
     possible_results = []
     for arglist in possible_arguments(arglist_s):
         result = func(*arglist)
-        possible_results.append(bookkeeper.immutablevalue(result))
-    return unionof(*possible_results), args
+        possible_results.append(funcdesc.bookkeeper.immutablevalue(result))
+    return unionof(*possible_results)
 
 def possible_values_of(s):
     from pypy.annotation.model import SomeBool, SomePBC
     if s.is_constant():
         return [s.const]
     elif isinstance(s, SomePBC):
-        for value in s.prebuiltinstances.values():
-            assert value is True, ("concrete call with a method bound "
-                                   "on a non-constant instance")
-        return s.prebuiltinstances.keys()
+        result = []
+        for desc in s.descriptions:
+            if desc.pyobj is None:
+                raise Exception("memo call with a PBC that has no "
+                                "corresponding Python object (%r)" % (desc,))
+            result.append(desc.pyobj)
+        return result
     elif isinstance(s, SomeBool):
         return [False, True]
     else:
