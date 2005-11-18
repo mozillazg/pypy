@@ -1,5 +1,5 @@
 import types
-from pypy.objspace.flow.model import FunctionGraph
+from pypy.objspace.flow.model import Constant, FunctionGraph
 from pypy.interpreter.pycode import cpython_code_signature
 from pypy.interpreter.argument import ArgErr
 
@@ -147,39 +147,26 @@ class FunctionDesc(Desc):
         # XXX static methods
         return self.bookkeeper.getmethoddesc(self, classdef)
 
-class ClassSource:
-    instance_level = False
-
-    def __init__(self, bookkeeper, cls, classdesc):
-        self.bookkeeper = bookkeeper
-        self.cls = cls
-        self.classdesc = classdesc
-
-    def s_read_attribute(self, name):
-        s_value = self.bookkeeper.immutablevalue(
-            self.cls.__dict__[name])
-        s_value = s_value.bindcallables(self.classdesc.getuniqueclassdef())
-        return s_value
 
 class ClassDesc(Desc):
     knowntype = type
+    instance_level = False
 
-    def __init__(self, bookkeeper, pyobj=None, name=None,
-                 basedesc=None, 
-                 classsources=None, specialize=None):
+    def __init__(self, bookkeeper, pyobj=None,
+                 name=None, basedesc=None, classdict=None,
+                 specialize=None):
         super(ClassDesc, self).__init__(bookkeeper, pyobj)
 
         if pyobj is not None:
             cls = pyobj
             base = object
 
-            classsources = {}
+            classdict = {}    # {attr: Constant-or-Desc}
 
             baselist = list(cls.__bases__)
             baselist.reverse()
 
             def add_sources_for_class(cls):
-                source = ClassSource(bookkeeper, cls, self)
                 for name, value in cls.__dict__.items():
                     # ignore some special attributes
                     if name.startswith('_') and not isinstance(value, types.FunctionType):
@@ -188,7 +175,7 @@ class ClassDesc(Desc):
                     if isinstance(value, types.FunctionType):
                         if not hasattr(value, 'class_'):
                             value.class_ = self.pyobj # remember that this is really a method
-                    classsources[name] = source
+                    classdict[name] = Constant(value)
 
             for b1 in baselist:
                 if b1 is object:
@@ -212,7 +199,7 @@ class ClassDesc(Desc):
             
         self.name = name
         self.basedesc = basedesc
-        self.classsources = classsources
+        self.classdict = classdict
 
         if specialize is None:
             tag = pyobj.__dict__.get('_annspecialcase_', '')
@@ -237,8 +224,13 @@ class ClassDesc(Desc):
                     for name, s_value in FORCE_ATTRIBUTES_INTO_CLASSES[cls].items():
                         classdef.generalize_attr(name, s_value)
                         classdef.find_attribute(name).readonly = False
-            
-            classdef.setup(self.classsources)
+
+            # register all class attributes as coming from this ClassDesc
+            # (as opposed to prebuilt instances)
+            classsources = {}
+            for attr in self.classdict:
+                classsources[attr] = self    # comes from this ClassDesc
+            classdef.setup(classsources)
         return self._classdef
 
     def pycall(self, schedule, args):
@@ -259,18 +251,30 @@ class ClassDesc(Desc):
                                 " (class %s)" % (self.name,))
         return s_instance
 
+    def s_read_attribute(self, classdef, name):
+        obj = self.classdict[name]
+        if isinstance(obj, Constant):
+            s_value = self.bookkeeper.immutablevalue(obj.value)
+            s_value = s_value.bindcallables(classdef)
+        elif isinstance(obj, Desc):
+            from pypy.annotation.model import SomePBC
+            s_value = SomePBC(obj.bind(classdef))
+        else:
+            raise TypeError("classdict should not contain %r" % (obj,))
+        return s_value
+
     def find_source_for(self, name):
-        if name in self.classsources:
-            return self.classsources[name]
+        if name in self.classdict:
+            return self
         if self.pyobj is not None:
             # check whether in the case the classdesc corresponds to a real class
             # there is a new attribute
             cls = self.pyobj
             if name in cls.__dict__:
-                source = ClassSource(self.bookkeeper, cls, self)
-                self.classsources[name] = source
-                return source
+                self.classdict[name] = Constant(cls.__dict__[name])
+                return self
         return None
+
 
 class MethodDesc(Desc):
     knowntype = types.MethodType

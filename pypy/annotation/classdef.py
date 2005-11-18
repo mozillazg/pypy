@@ -73,8 +73,8 @@ class Attribute:
         self.readonly = True
         self.read_locations = {}
 
-    def add_constant_source(self, source):
-        s_value = source.s_read_attribute(self.name)
+    def add_constant_source(self, classdef, source):
+        s_value = source.s_read_attribute(classdef, self.name)
         if source.instance_level:
             # a prebuilt instance source forces readonly=False, see above
             self.readonly = False
@@ -156,7 +156,7 @@ class ClassDef:
                 # the Attribute() exists already for this class (or a parent)
                 attrdef = cdef.attrs[attr]
                 s_prev_value = attrdef.s_value
-                attrdef.add_constant_source(source)
+                attrdef.add_constant_source(self, source)
                 # we should reflow from all the reader's position,
                 # but as an optimization we try to see if the attribute
                 # has really been generalized
@@ -176,7 +176,7 @@ class ClassDef:
                     if attr in subdef.attrs:
                         attrdef = subdef.attrs[attr]
                         s_prev_value = attrdef.s_value
-                        attrdef.add_constant_source(source)
+                        attrdef.add_constant_source(self, source)
                         if attrdef.s_value != s_prev_value:
                             attrdef.mutated(subdef) # reflow from all read positions
 
@@ -233,7 +233,7 @@ class ClassDef:
         # first remove the attribute from subclasses -- including us!
         # invariant (I)
         subclass_attrs = []
-        constant_sources = []
+        constant_sources = []    # [(classdef-of-origin, source)]
         for subdef in self.getallsubdefs():
             if attr in subdef.attrs:
                 subclass_attrs.append(subdef.attrs[attr])
@@ -241,7 +241,8 @@ class ClassDef:
             if attr in subdef.attr_sources:
                 # accumulate attr_sources for this attribute from all subclasses
                 lst = subdef.attr_sources[attr]
-                constant_sources.extend(lst)
+                for source in lst:
+                    constant_sources.append((subdef, source))
                 del lst[:]    # invariant (II)
 
         # accumulate attr_sources for this attribute from all parents, too
@@ -250,7 +251,7 @@ class ClassDef:
             if attr in superdef.attr_sources:
                 for source in superdef.attr_sources[attr]:
                     if not source.instance_level:
-                        constant_sources.append(source)
+                        constant_sources.append((superdef, source))
 
         # create the Attribute and do the generalization asked for
         newattr = Attribute(attr, self.bookkeeper)
@@ -267,8 +268,8 @@ class ClassDef:
 
         # add the values of the pending constant attributes
         # completes invariants (II) and (III)
-        for source in constant_sources:
-            newattr.add_constant_source(source)
+        for origin_classdef, source in constant_sources:
+            newattr.add_constant_source(origin_classdef, source)
 
         # reflow from all read positions
         newattr.mutated(self)
@@ -383,7 +384,7 @@ class InstanceSource:
         self.bookkeeper = bookkeeper
         self.obj = obj
  
-    def s_read_attribute(self, name):
+    def s_read_attribute(self, classdef, name):
         s_value = self.bookkeeper.immutablevalue(
             self.obj.__dict__[name])
         return s_value
