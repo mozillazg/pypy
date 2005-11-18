@@ -16,7 +16,6 @@ from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
-from pypy.interpreter.pycode import cpython_code_signature
 from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.rpython.rarithmetic import r_uint
 from pypy.rpython.objectmodel import r_dict
@@ -159,26 +158,17 @@ class Bookkeeper:
         self.descs = {}          # map Python objects to their XxxDesc wrappers
         self.methoddescs = {}    # map (funcdesc, classdef) to the MethodDesc
         self.classdefs = []      # list of all ClassDefs
-        self.cachespecializations = {}
         self.pbctypes = {}
         self.seen_mutable = {}
         self.listdefs = {}       # map position_keys to ListDefs
         self.dictdefs = {}       # map position_keys to DictDefs
         self.immutable_cache = {}
 
-        # mapping position -> key, prev_result for specializations
-        self.spec_callsite_keys_results = {}
-
         self.pbc_maximal_access_sets = UnionFind(description.AttrFamily)
         self.pbc_maximal_call_families = UnionFind(description.CallFamily)
-        self.pbc_call_sites = {}
-        self.emulated_pbc_calls = {}
 
         self.needs_hash_support = {}
-
         self.needs_generic_instantiate = {}
-
-        self.memo_tables = []
 
         self.stats = Stats(self)
 
@@ -199,22 +189,6 @@ class Bookkeeper:
         del self.position_key
 
     def compute_at_fixpoint(self):
-##        if self.pbc_maximal_call_families is None:
-##            ...
-##        if self.pbc_callables is None:
-##            self.pbc_callables = {}
-
-##        for (fn, block, i), shape in self.pbc_call_sites.iteritems():
-##            spaceop = block.operations[i]
-##            assert spaceop.opname in ('call_args', 'simple_call')
-##            pbc = self.annotator.binding(spaceop.args[0], extquery=True)
-##            self.consider_pbc_call(pbc, shape, spaceop)
-##        self.pbc_call_sites = {}
-
-##        for pbc, shape in self.emulated_pbc_calls.itervalues():
-##            self.consider_pbc_call(pbc, shape)
-##        self.emulated_pbc_calls = {}
-
         for cls in self.needs_hash_support.keys():
             for cls2 in self.needs_hash_support:
                 if issubclass(cls, cls2) and cls is not cls2:
@@ -477,51 +451,6 @@ class Bookkeeper:
                 
         return s_result
 
-    # xxx refactor
-
-    def consider_pbc_call(self, pbc, shape, spaceop=None, implicit_init=None): # computation done at fix-point
-        if not isinstance(pbc, SomePBC):
-            return
-        
-        if implicit_init:
-            implicit_init = pbc, implicit_init
-            shape = (shape[0]+1,) + shape[1:]
-        else:
-            implicit_init = None
-
-        if not (spaceop is implicit_init is None):
-            pbc, dontcaresc = self.query_spaceop_callable(spaceop,
-                                            implicit_init=implicit_init) 
-
-        nonnullcallables = []
-        for func, classdef in pbc.prebuiltinstances.items():
-            if func is None:
-                continue
-            if not isclassdef(classdef): 
-                classdef = None
-
-            # if class => consider __init__ too
-            if isinstance(func, (type, types.ClassType)) and \
-                    func.__module__ != '__builtin__':
-                assert classdef is None
-                init_classdef, s_init = self.get_s_init(func)
-                if s_init is not None:
-                    self.consider_pbc_call(s_init, shape, spaceop, implicit_init=init_classdef) 
-
-            callable = (classdef, func)
-            assert not hasattr(func, 'im_func') or func.im_self is not None
-            self.pbc_callables.setdefault(func,{})[callable] = True
-            nonnullcallables.append(callable)
-
-        if nonnullcallables:
-            call_families = self.pbc_maximal_call_families
-
-            dontcare, rep, callfamily = call_families.find(nonnullcallables[0])
-            for obj in nonnullcallables:
-                    dontcare, rep, callfamily = call_families.union(rep, obj)
-
-            callfamily.patterns.update({shape: True})
-
     def pbc_call(self, pbc, args, emulated=None):
         """Analyse a call to a SomePBC() with the given args (list of
         annotations).
@@ -562,113 +491,13 @@ class Bookkeeper:
         s_result = unionof(*results)
         return s_result
 
-    def DISABLED_pbc_call(self, pbc, args, implicit_init=False, emulated=None):
-        if not implicit_init and not emulated:
-            fn, block, i = self.position_key
-            assert block.operations[i].opname in ('call_args', 'simple_call')
-            assert self.annotator.binding(block.operations[i].args[0], extquery=True) is pbc
-            
-            # extract shape from args
-            shape = args.rawshape()
-            if self.position_key in self.pbc_call_sites:
-                assert self.pbc_call_sites[self.position_key] == shape
-            else:
-                self.pbc_call_sites[self.position_key] = shape
-
-        results = []
-        nonnullcallables = [(func, classdef)
-                            for func, classdef in pbc.prebuiltinstances.items()
-                            if func is not None]
-        mono = len(nonnullcallables) == 1
-
-        if emulated is not None:
-            if emulated is True:
-                context = None
-            else:
-                context = emulated
-        else:
-            context = 'current'
-
-        for func, classdef in nonnullcallables:
-            if isclassdef(classdef): 
-                s_self = SomeInstance(classdef)
-                args1 = args.prepend(s_self)
-            else:
-                args1 = args
-            results.append(self.pycall(func, args1, mono, context=context))
-
-        return unionof(*results) 
-
     def emulate_pbc_call(self, unique_key, pbc, args_s, replace=[], callback=None):
         args = self.build_args("simple_call", args_s)
-        #shape = args.rawshape()
-        #emulated_pbc_calls = self.emulated_pbc_calls
-        #prev = [unique_key]
-        #prev.extend(replace)
-        #for other_key in prev:
-        #    if other_key in emulated_pbc_calls:
-        #        pbc, old_shape = emulated_pbc_calls[other_key]
-        #        assert shape == old_shape
-        #        del emulated_pbc_calls[other_key]
-        #emulated_pbc_calls[unique_key] = pbc, shape
-
         if callback is None:
             emulated = True
         else:
             emulated = callback
-
         return self.pbc_call(pbc, args, emulated=emulated)
-
-    # decide_callable(position, func, args, mono) -> callb, key
-    # query_spaceop_callable(spaceop) -> pbc, isspecialcase
-    # get_s_init(decided_cls) -> classdef, s_undecided_init
-
-    def query_spaceop_callable(self, spaceop, implicit_init=None): # -> s_pbc, specialcase
-        self.enter(None)
-        try:
-            if implicit_init is None:
-                assert spaceop.opname in ("simple_call", "call_args")
-                obj = spaceop.args[0]
-                s_obj = self.annotator.binding(obj, extquery=True)
-                init_classdef = None
-            else:
-                s_obj, init_classdef = implicit_init
-
-            argsvars = spaceop.args[1:]
-            args_s = [self.annotator.binding(v) for v in argsvars]
-            args = self.build_args(spaceop.opname, args_s)
-
-            if isinstance(s_obj, SomePBC):
-                if len(s_obj.prebuiltinstances) > 1: # no specialization expected
-                    return s_obj, False
-
-                func, classdef = s_obj.prebuiltinstances.items()[0]
-
-                if init_classdef:
-                    args = args.prepend(SomeInstance(init_classdef))
-                elif isclassdef(classdef): 
-                    s_self = SomeInstance(classdef)
-                    args = args.prepend(s_self)
-            elif isinstance(s_obj, SomeLLADTMeth):
-                func = s_obj.func
-                args = args.prepend(SomePtr(s_obj.ll_ptrtype))
-            else:
-                assert False, "unexpected callable %r for query_spaceop_callable" % s_obj
-
-            func, key = decide_callable(self, spaceop, func, args, mono=True)
-
-            if key is None:
-                return s_obj, False
-
-            if func is None: # specialisation computes annotation direclty
-                return s_obj, True
-
-            if isinstance(s_obj, SomePBC):
-                return SomePBC({func: classdef}), False
-            else:
-                return SomeLLADTMeth(s_obj.ll_ptrtype, func), False
-        finally:
-            self.leave()
 
     def build_args(self, op, args_s):
         space = RPythonCallsSpace()
@@ -677,103 +506,6 @@ class Bookkeeper:
         elif op == "call_args":
             return Arguments.fromshape(space, args_s[0].const, # shape
                                        list(args_s[1:]))
-
-    def get_s_init(self, cls):
-        classdef = self.getclassdef(cls)
-        init = getattr(cls, '__init__', None)
-        if init is not None and init != object.__init__:
-            # don't record the access of __init__ on the classdef
-            # because it is not a dynamic attribute look-up, but
-            # merely a static function call
-            s_init = self.immutablevalue(init)
-            return classdef, s_init
-        else:
-            return classdef, None
- 
-    def get_inputcells(self, func, args):
-        # parse the arguments according to the function we are calling
-        signature = cpython_code_signature(func.func_code)
-        defs_s = []
-        if func.func_defaults:
-            for x in func.func_defaults:
-                defs_s.append(self.immutablevalue(x))
-        try:
-            inputcells = args.match_signature(signature, defs_s)
-        except ArgErr, e:
-            raise TypeError, "signature mismatch: %s" % e.getmsg(args, func.__name__)
-
-        return inputcells
- 
-
-    def pycall(self, func, args, mono, context='current'):
-        if func is None:   # consider None as a NULL function pointer
-            return SomeImpossibleValue()
-
-        # decide and pick if necessary a specialized version
-        base_func = func
-        if context == 'current':
-            position_key = self.position_key
-        else:
-            position_key = None
-
-        # REFACTOR: the crucial point is that we don't want to pass position_key any longer to the logic in the descs
-        # just args, and possibly the old annotation of the result or SomeImpossibleValue if there is none
-        # see below: because of recursivecall and its needs we may have to pass a closure around recursivecall because itself it
-        # wants the position_key|callback and recursivecall maybe used (but not always) by the desc logic.
-        # We may be able to construct the family directly here, no more consider_pbc_call,  then we would pass/attach the shape too
-        # Indeed one possibility is to have logic on the pbc to construct the familily and use that in pbc_getattr too.
-        # Part of pycall logic  would go to the desc logic receiving args, etc plus helper closures related to recursivecall
-        # recursivecall should also change to deal with graphs directly, getting the graph should probably be a desc task.
-
-        func, key = decide_callable(self, position_key, func, args, mono, unpacked=True)
-        
-        if func is None:
-            assert isinstance(key, SomeObject)
-            return key
-
-        func, args = func # method unpacking done by decide_callable
-            
-        if isinstance(func, (type, types.ClassType)) and \
-            func.__module__ != '__builtin__':
-            classdef, s_init = self.get_s_init(func)
-            s_instance = SomeInstance(classdef)
-            # flow into __init__() if the class has got one
-            if s_init is not None:
-                s_init.call(args.prepend(s_instance), implicit_init=True)
-            else:
-                try:
-                    args.fixedunpack(0)
-                except ValueError:
-                    raise Exception, "no __init__ found in %r" % (classdef.cls,)
-            return s_instance
-
-        assert isinstance(func, types.FunctionType), "[%s] expected user-defined function, got %r" % (self.whereami(), func)
-
-        inputcells = self.get_inputcells(func, args)
-        if context == 'current':
-            whence = self.position_key
-        else:
-            whence = context
-        # REFACTOR: this and maybe get_inputcells should be passed as a helper closure to the descs logic
-        r = self.annotator.recursivecall(func, whence, inputcells)
-
-
-        # REFACTOR: how we want to deal with this? either we always mix or we get a flag/key from the logic on the descs
-        # if we got different specializations keys for a same site, mix previous results for stability
-        if key is not None:
-            assert context == 'current'
-            occurence = (base_func, self.position_key)
-            try:
-                prev_key, prev_r = self.spec_callsite_keys_results[occurence]
-            except KeyError:
-                self.spec_callsite_keys_results[occurence] = key, r
-            else:
-                if prev_key != key:
-                    r = unionof(r, prev_r)
-                    prev_key = None
-                self.spec_callsite_keys_results[occurence] = prev_key, r
-
-        return r
 
     def ondegenerated(self, what, s_value, where=None, called_from_graph=None):
         self.annotator.ondegenerated(what, s_value, where=where,
