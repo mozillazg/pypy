@@ -74,7 +74,7 @@ class Attribute:
         self.read_locations = {}
 
     def add_constant_source(self, classdef, source):
-        s_value = source.s_read_attribute(classdef, self.name)
+        s_value = source.s_get_value(classdef, self.name)
         if source.instance_level:
             # a prebuilt instance source forces readonly=False, see above
             self.readonly = False
@@ -384,7 +384,7 @@ class InstanceSource:
         self.bookkeeper = bookkeeper
         self.obj = obj
  
-    def s_read_attribute(self, classdef, name):
+    def s_get_value(self, classdef, name):
         s_value = self.bookkeeper.immutablevalue(
             self.obj.__dict__[name])
         return s_value

@@ -9,7 +9,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomePtr, unionof, SomeInstance, SomeDict, SomeBuiltin, SomePBC, \
      SomeInteger, SomeExternalObject, SomeOOInstance, TLS, SomeAddress, \
-     SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, \
+     SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, s_ImpossibleValue, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
      SomeList, SomeObject
 from pypy.annotation.classdef import ClassDef, InstanceSource
@@ -540,18 +540,27 @@ class Bookkeeper:
 
         if emulated is None:
             whence = self.position_key
+            # fish the existing annotation for the result variable,
+            # needed by some kinds of specialization.
+            fn, block, i = self.position_key
+            op = block.operations[i]
+            s_previous_result = self.annotator.binding(op.result,
+                                                       extquery=True)
+            if s_previous_result is None:
+                s_previous_result = s_ImpossibleValue
         else:
             if emulated is True:
                 whence = None
             else:
                 whence = emulated # callback case
+            s_previous_result = s_ImpossibleValue
 
         def schedule(graph, inputcells):
             return self.annotator.recursivecall(graph, whence, inputcells)
 
         results = []
         for desc in descs:
-            results.append(desc.pycall(schedule, args))
+            results.append(desc.pycall(schedule, args, s_previous_result))
         s_result = unionof(*results)
         return s_result
 
