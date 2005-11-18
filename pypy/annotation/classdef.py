@@ -22,9 +22,9 @@ from pypy.annotation import description
 # (I) if B is a subclass of A, then they don't both have an Attribute for the
 #     same name.  (All information from B's Attribute must be merged into A's.)
 #
-# Additionally, each ClassDef records an 'attr_sources': it maps attribute
-# names to a set of objects that want to provide a constant value for this
-# attribute at the level of this class.  The attrsources provide information
+# Additionally, each ClassDef records an 'attr_sources': it maps attribute names
+# to a list of 'source' objects that want to provide a constant value for this
+# attribute at the level of this class.  The attr_sources provide information
 # higher in the class hierarchy than concrete Attribute()s.  It is for the case
 # where (so far or definitely) the user program only reads/writes the attribute
 # at the level of a subclass, but a value for this attribute could possibly
@@ -48,14 +48,9 @@ from pypy.annotation import description
 #
 # The following invariant holds:
 #
-# (II) if a class A has an Attribute, the 'attrsources' for the same name is
+# (II) if a class A has an Attribute, the 'attr_sources' for the same name is
 #      empty.  It is also empty on all subclasses of A.  (The information goes
 #      into the Attribute directly in this case.)
-#
-# The attrsources have the format {object: classdef}.  For class attributes,
-# 'object' is the class in question and 'classdef' its corresponding classdef,
-# used for binding methods.  For attribute sources that are prebuilt instances,
-# 'classdef' is None.
 #
 # The following invariant holds:
 #
@@ -80,7 +75,7 @@ class Attribute:
 
     def add_constant_source(self, source):
         s_value = source.s_read_attribute(self.name)
-        if source.is_instance_level():
+        if source.instance_level:
             # a prebuilt instance source forces readonly=False, see above
             self.readonly = False
         s_new_value = unionof(self.s_value, s_value)       
@@ -135,7 +130,7 @@ class ClassDef:
         self.classdesc = classdesc
         self.name = self.classdesc.name
         self.subdefs = []
-        self.attr_sources = {}   # {name: {constant-source: True}}
+        self.attr_sources = {}   # {name: list-of-sources}
 
         if classdesc.basedesc:
             self.basedef = classdesc.basedesc.getuniqueclassdef()
@@ -155,7 +150,7 @@ class ClassDef:
     def add_source_for_attribute(self, attr, source):
         """Adds information about a constant source for an attribute.
         """
-        sources = self.attr_sources.setdefault(attr, {})
+        sources = self.attr_sources.setdefault(attr, [])
         for cdef in self.getmro():
             if attr in cdef.attrs:
                 # the Attribute() exists already for this class (or a parent)
@@ -170,13 +165,13 @@ class ClassDef:
                 return
         else:
             # remember the source in self.attr_sources
-            sources[source] = True
+            sources.append(source)
             # register the source in any Attribute found in subclasses,
             # to restore invariant (III)
             # NB. add_constant_source() may discover new subdefs but the
             #     right thing will happen to them because self.attr_sources
             #     was already updated
-            if not source.is_instance_level():
+            if not source.instance_level:
                 for subdef in self.getallsubdefs():
                     if attr in subdef.attrs:
                         attrdef = subdef.attrs[attr]
@@ -238,24 +233,24 @@ class ClassDef:
         # first remove the attribute from subclasses -- including us!
         # invariant (I)
         subclass_attrs = []
-        constant_sources = {}
+        constant_sources = []
         for subdef in self.getallsubdefs():
             if attr in subdef.attrs:
                 subclass_attrs.append(subdef.attrs[attr])
                 del subdef.attrs[attr]
             if attr in subdef.attr_sources:
                 # accumulate attr_sources for this attribute from all subclasses
-                d = subdef.attr_sources[attr]
-                constant_sources.update(d)
-                d.clear()    # invariant (II)
+                lst = subdef.attr_sources[attr]
+                constant_sources.extend(lst)
+                del lst[:]    # invariant (II)
 
         # accumulate attr_sources for this attribute from all parents, too
         # invariant (III)
         for superdef in self.getmro():
             if attr in superdef.attr_sources:
                 for source in superdef.attr_sources[attr]:
-                    if not source.is_instance_level():
-                        constant_sources[source] = True
+                    if not source.instance_level:
+                        constant_sources.append(source)
 
         # create the Attribute and do the generalization asked for
         newattr = Attribute(attr, self.bookkeeper)
@@ -335,7 +330,7 @@ class ClassDef:
             # that could be going undetected. We use uplookup.attr_sources[name] to flag
             # whether a super implementation was considered and as such not undetected
             if name is not None and not name in uplookup.attr_sources:
-                uplookup.attr_sources.setdefault(name, {})
+                uplookup.attr_sources.setdefault(name, [])
                 check_for_missing_attrs = True
 
             d.append(updesc)
@@ -382,6 +377,7 @@ class ClassDef:
 # ____________________________________________________________
 
 class InstanceSource:
+    instance_level = True
 
     def __init__(self, bookkeeper, obj):
         self.bookkeeper = bookkeeper
@@ -391,9 +387,6 @@ class InstanceSource:
         s_value = self.bookkeeper.immutablevalue(
             self.obj.__dict__[name])
         return s_value
-
-    def is_instance_level(self):
-        return True
 
 # ____________________________________________________________
 

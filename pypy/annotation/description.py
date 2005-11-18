@@ -148,6 +148,7 @@ class FunctionDesc(Desc):
         return self.bookkeeper.getmethoddesc(self, classdef)
 
 class ClassSource:
+    instance_level = False
 
     def __init__(self, bookkeeper, cls, classdesc):
         self.bookkeeper = bookkeeper
@@ -159,9 +160,6 @@ class ClassSource:
             self.cls.__dict__[name])
         s_value = s_value.bindcallables(self.classdesc.getuniqueclassdef())
         return s_value
-
-    def is_instance_level(self):
-        return False
 
 class ClassDesc(Desc):
     knowntype = type
