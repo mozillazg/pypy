@@ -4,7 +4,7 @@ import py.test
 from pypy.tool.udir import udir
 
 from pypy.translator.annrpython import annmodel
-from pypy.translator.translator import Translator
+from pypy.translator.translator import Translator, TranslationContext
 from pypy.annotation import policy
 from pypy.annotation import specialize
 from pypy.annotation.listdef import ListDef
@@ -79,7 +79,10 @@ class TestAnnotateTestCase:
         block.operations.append(op)
         block.closeblock(Link([result], fun.returnblock))
         a = self.RPythonAnnotator()
-        a.build_types(fun, [int])
+        a.translator = TranslationContext()
+        a.translator.annotator = a
+        a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
+        a.complete()
         assert a.gettype(fun.getreturnvar()) == int
 
     def test_while(self):
@@ -108,7 +111,10 @@ class TestAnnotateTestCase:
         whileblock.closeblock(Link([i3], headerblock))
 
         a = self.RPythonAnnotator()
-        a.build_types(fun, [int])
+        a.translator = TranslationContext()
+        a.translator.annotator = a
+        a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
+        a.complete()
         assert a.gettype(fun.getreturnvar()) == int
 
     def test_while_sum(self):
@@ -148,7 +154,10 @@ class TestAnnotateTestCase:
         whileblock.closeblock(Link([i4, sum4], headerblock))
 
         a = self.RPythonAnnotator()
-        a.build_types(fun, [int])
+        a.translator = TranslationContext()
+        a.translator.annotator = a
+        a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
+        a.complete()
         assert a.gettype(fun.getreturnvar()) == int
 
     def test_f_calls_g(self):
