@@ -1,6 +1,6 @@
 # ______________________________________________________________________
 import sys, operator, types
-from pypy.interpreter.baseobjspace import ObjSpace, BaseWrappable
+from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.module import Module
 from pypy.interpreter.error import OperationError
@@ -62,20 +62,7 @@ class FlowObjSpace(ObjSpace):
         #self.make_builtins()
         #self.make_sys()
         # objects which should keep their SomeObjectness
-        self.not_really_const = {
-            Constant(sys): {
-                Constant('maxint'): True,
-                Constant('maxunicode'): True,
-                Constant('api_version'): True,
-                Constant('exit'): True,
-                Constant('exc_info'): True,
-                Constant('getrefcount'): True,
-                Constant('getdefaultencoding'): True,
-                # this is an incomplete list of true constants.
-                # if we add much more, a dedicated class
-                # might be considered for special objects.
-                }
-            }
+        self.not_really_const = NOT_REALLY_CONST
 
     def enter_cache_building_mode(self):
         # when populating the caches, the flow space switches to
@@ -182,7 +169,7 @@ class FlowObjSpace(ObjSpace):
 
     def interpclass_w(self, w_obj):
         obj = self.unwrap(w_obj)
-        if isinstance(obj, BaseWrappable):
+        if isinstance(obj, Wrappable):
             return obj
         return None
 
@@ -252,7 +239,6 @@ class FlowObjSpace(ObjSpace):
             name = name.replace(c, '_')
         ec = flowcontext.FlowExecutionContext(self, code, func.func_globals,
                                               constargs, closure, name)
-        ec.graph.func = func
         self.setup_executioncontext(ec)
         ec.build_flow()
         checkgraph(ec.graph)
@@ -419,6 +405,22 @@ class FlowObjSpace(ObjSpace):
                     #pass
                  raise flowcontext.ImplicitOperationError(w_exc_cls,
                                                          w_exc_value)
+
+# the following gives us easy access to declare more for applications:
+NOT_REALLY_CONST = {
+    Constant(sys): {
+        Constant('maxint'): True,
+        Constant('maxunicode'): True,
+        Constant('api_version'): True,
+        Constant('exit'): True,
+        Constant('exc_info'): True,
+        Constant('getrefcount'): True,
+        Constant('getdefaultencoding'): True,
+        # this is an incomplete list of true constants.
+        # if we add much more, a dedicated class
+        # might be considered for special objects.
+        }
+    }
 
 # ______________________________________________________________________
 

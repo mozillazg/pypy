@@ -36,7 +36,7 @@ w_NOT_COMPUTED_THUNK = W_Thunk(None, None)
 W_Thunk.w_thunkalias = w_NOT_COMPUTED_THUNK
 
 
-def force(space, w_self):
+def _force(space, w_self):
     w_alias = w_self.w_thunkalias
     while w_alias is not None:
         if w_alias is w_NOT_COMPUTED_THUNK:
@@ -53,6 +53,11 @@ def force(space, w_self):
             w_self.w_thunkalias = w_alias
         w_self = w_alias
         w_alias = w_self.w_thunkalias
+    return w_self
+
+def force(space, w_self):
+    if w_self.w_thunkalias is not None:
+        w_self = _force(space, w_self)
     return w_self
 
 def thunk(w_callable, __args__):
