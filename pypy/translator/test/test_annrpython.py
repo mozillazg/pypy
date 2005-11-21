@@ -905,7 +905,9 @@ class TestAnnotateTestCase:
         bookkeeper = a.bookkeeper
 
         def fam(meth):
-            mdesc = bookkeeper.getmethoddesc(bookkeeper.getdesc(meth.im_func), clsdef(meth.im_class))
+            mdesc = bookkeeper.getmethoddesc(bookkeeper.getdesc(meth.im_func), clsdef(meth.im_class), meth.im_func.func_name)
+            mdesc2 = bookkeeper.immutablevalue(meth.im_func.__get__(meth.im_class(), meth.im_class)).descriptions.keys()[0]
+            assert mdesc == mdesc2 # sanity check
             return mdesc.getcallfamily()
 
         famA_m = fam(A.m)

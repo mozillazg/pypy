@@ -80,7 +80,7 @@ class Desc(object):
             changed = changed or changed1
         return changed
 
-    def bind(self, classdef):
+    def bind_under(self, classdef, name):
         return self
 
 
@@ -148,9 +148,9 @@ class FunctionDesc(Desc):
         result = unionof(result, s_previous_result)
         return result
 
-    def bind(self, classdef):
+    def bind_under(self, classdef, name):
         # XXX static methods
-        return self.bookkeeper.getmethoddesc(self, classdef)
+        return self.bookkeeper.getmethoddesc(self, classdef, name)
 
 
 class ClassDesc(Desc):
@@ -300,11 +300,11 @@ class ClassDesc(Desc):
         if isinstance(obj, Constant):
             s_value = self.bookkeeper.immutablevalue(obj.value)
             if classdef is not None:
-                s_value = s_value.bindcallables(classdef)
+                s_value = s_value.bind_callables_under(classdef, name)
         elif isinstance(obj, Desc):
             from pypy.annotation.model import SomePBC
             if classdef is not None:
-                obj = obj.bind(classdef)
+                obj = obj.bind_under(classdef, name)
             s_value = SomePBC([obj])
         else:
             raise TypeError("classdict should not contain %r" % (obj,))
@@ -326,10 +326,11 @@ class ClassDesc(Desc):
 class MethodDesc(Desc):
     knowntype = types.MethodType
 
-    def __init__(self, bookkeeper, funcdesc, classdef):
+    def __init__(self, bookkeeper, funcdesc, classdef, name):
         super(MethodDesc, self).__init__(bookkeeper)
         self.funcdesc = funcdesc
         self.classdef = classdef
+        self.name = name
 
     def __repr__(self):
         return '<MethodDesc %r of %r>' % (self.funcdesc,
@@ -341,9 +342,9 @@ class MethodDesc(Desc):
         args = args.prepend(s_instance)
         return self.funcdesc.pycall(schedule, args, s_previous_result)
 
-    def bind(self, classdef):
+    def bind_under(self, classdef, name):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
-        return self.funcdesc.bind(classdef)
+        return self.funcdesc.bind_under(classdef, name)
 
 
 def new_or_old_class(c):
