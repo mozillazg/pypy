@@ -4,7 +4,7 @@ import py.test
 from pypy.tool.udir import udir
 
 from pypy.translator.annrpython import annmodel
-from pypy.translator.translator import Translator, TranslationContext
+from pypy.translator.translator import Translator
 from pypy.annotation import policy
 from pypy.annotation import specialize
 from pypy.annotation.listdef import ListDef
@@ -79,8 +79,6 @@ class TestAnnotateTestCase:
         block.operations.append(op)
         block.closeblock(Link([result], fun.returnblock))
         a = self.RPythonAnnotator()
-        a.translator = TranslationContext()
-        a.translator.annotator = a
         a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
         a.complete()
         assert a.gettype(fun.getreturnvar()) == int
@@ -111,8 +109,6 @@ class TestAnnotateTestCase:
         whileblock.closeblock(Link([i3], headerblock))
 
         a = self.RPythonAnnotator()
-        a.translator = TranslationContext()
-        a.translator.annotator = a
         a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
         a.complete()
         assert a.gettype(fun.getreturnvar()) == int
@@ -154,8 +150,6 @@ class TestAnnotateTestCase:
         whileblock.closeblock(Link([i4, sum4], headerblock))
 
         a = self.RPythonAnnotator()
-        a.translator = TranslationContext()
-        a.translator.annotator = a
         a.addpendingblock(fun, fun.startblock, [annmodel.SomeInteger()])
         a.complete()
         assert a.gettype(fun.getreturnvar()) == int
@@ -1672,10 +1666,8 @@ class TestAnnotateTestCase:
     def test_emulated_pbc_call_simple(self):
         def f(a,b):
             return a + b
-        from pypy.translator import translator
         from pypy.translator import annrpython
         a = annrpython.RPythonAnnotator()
-        a.translator = translator.TranslationContext()
         from pypy.annotation import model as annmodel
 
         s_f = a.bookkeeper.immutablevalue(f) 
@@ -1687,10 +1679,8 @@ class TestAnnotateTestCase:
     def test_emulated_pbc_call_callback(self):
         def f(a,b):
             return a + b
-        from pypy.translator import translator
         from pypy.translator import annrpython
         a = annrpython.RPythonAnnotator()
-        a.translator = translator.TranslationContext()
         from pypy.annotation import model as annmodel
 
         memo = []
