@@ -88,9 +88,11 @@ def annotate_lowlevel_helper(annotator, ll_function, args_s):
     annotator.policy = LowLevelAnnotatorPolicy()
     try:
         annotator.added_blocks = {}
-        s = annotator.build_types(ll_function, args_s)
+        desc = annotator.bookkeeper.getdesc(ll_function)
+        graph = desc.specialize(args_s)
+        s = annotator.build_graph_types(graph, args_s)
         # invoke annotation simplifications for the new blocks
         annotator.simplify(block_subset=annotator.added_blocks)
     finally:
         annotator.policy, annotator.added_blocks = saved
-    return s
+    return graph

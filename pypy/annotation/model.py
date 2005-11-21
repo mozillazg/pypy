@@ -321,16 +321,24 @@ class SomePBC(SomeObject):
                 if desc.pyobj is not None:
                     self.const = desc.pyobj
 
-    def check(self):
-        # We check that the set only contains a single kind of Desc instance
+    def getKind(self):
+        "Return the common Desc class of all descriptions in this PBC."
         kinds = {}
         for x in self.descriptions:
             assert type(x).__name__.endswith('Desc')  # avoid import nightmares
             kinds[x.__class__] = True
         assert len(kinds) <= 1, (
             "mixing several kinds of PBCs: %r" % (kinds.keys(),))
-        assert self.descriptions or self.can_be_None, (
-            "use s_ImpossibleValue")
+        if not kinds:
+            raise ValueError("no 'kind' on the 'None' PBC")
+        return kinds.keys()[0]
+
+    def check(self):
+        if self.descriptions:
+            # We check that the set only contains a single kind of Desc instance
+            self.getKind()
+        else:
+            assert self.can_be_None, "use s_ImpossibleValue"
 
     def isNone(self):
         return len(self.descriptions) == 0

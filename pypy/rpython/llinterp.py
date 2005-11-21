@@ -18,8 +18,7 @@ class LLException(Exception):
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
 
-    def __init__(self, flowgraphs, typer, lltype=lltype):
-        self.flowgraphs = flowgraphs
+    def __init__(self, typer, lltype=lltype):
         self.bindings = {}
         self.typer = typer
         self.llt = lltype  #module that contains the used lltype classes
@@ -28,14 +27,10 @@ class LLInterpreter(object):
         # prepare_graphs_and_create_gc might already use the llinterpreter!
         self.gc = None
         if hasattr(lltype, "prepare_graphs_and_create_gc"):
+            flowgraphs = FIXME
             self.gc = lltype.prepare_graphs_and_create_gc(self, flowgraphs)
 
-    def getgraph(self, func):
-        return self.flowgraphs[func]
-
-    def eval_function(self, func, args=(), graph=None):
-        if graph is None:
-            graph = self.getgraph(func)
+    def eval_graph(self, graph, args=()):
         llframe = LLFrame(graph, args, self)
         try:
             return llframe.eval()

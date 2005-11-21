@@ -15,49 +15,33 @@ from pypy.rpython import callparse
 
 class __extend__(annmodel.SomePBC):
     def rtyper_makerepr(self, rtyper):
-        # for now, we require that the PBC fits neatly into one of the Repr
-        # categories below, and doesn't for example mix functions, classes
-        # and methods.
-        call_families = rtyper.annotator.getpbccallfamilies()
-        #userclasses = rtyper.annotator.getuserclasses()
-        access_sets = rtyper.annotator.getpbcaccesssets()
-        choices = {}
-        for x in self.descriptions:
-            if isinstance(x, description.FunctionDesc):
-                if x in call_families:
-                    choice = FunctionsPBCRepr
-            elif isinstance(x, description.ClassDesc):
-                # classes -- still broken!
-                if 1 or x in userclasses:
-                    # user classes
-                    choice = rtyper.type_system.rpbc.ClassesPBCRepr
+        if self.isNone():
+            return none_frozen_pbc_repr 
+        kind = self.getKind()
+        if issubclass(kind, description.FunctionDesc):
+            getRepr = FunctionsPBCRepr
+        elif issubclass(kind, description.ClassDesc):
+            # user classes
+            getRepr = rtyper.type_system.rpbc.ClassesPBCRepr
+            # XXX what about this?
 ##                 elif type(x) is type and x.__module__ in sys.builtin_module_names:
 ##                     # special case for built-in types, seen in faking
-##                     choice = getPyObjRepr
-                else:
-                    choice = getFrozenPBCRepr
-            elif isinstance(x, description.MethodDesc):
-                choice = rtyper.type_system.rpbc.MethodsPBCRepr
-            elif isinstance(x, description.FrozenDesc):
-                choice = getFrozenPBCRepr
-            elif isinstance(x, description.MethodOfFrozenDesc):
-                choice = rtyper.type_system.rpbc.MethodOfFrozenPBCRepr
-            else:
-                raise TyperError("unexpected PBC %r"%(x,))
+##                     getRepr = getPyObjRepr
+        elif issubclass(kind, description.MethodDesc):
+            getRepr = rtyper.type_system.rpbc.MethodsPBCRepr
+        elif issubclass(kind, description.FrozenDesc):
+            getRepr = getFrozenPBCRepr
+        elif issubclass(kind, description.MethodOfFrozenDesc):
+            getRepr = rtyper.type_system.rpbc.MethodOfFrozenPBCRepr
+        else:
+            raise TyperError("unexpected PBC kind %r"%(kind,))
 
 ##             elif isinstance(x, builtin_descriptor_type):
 ##                 # strange built-in functions, method objects, etc. from fake.py
-##                 choice = getPyObjRepr
+##                 getRepr = getPyObjRepr
 
-            choices[choice] = True
 
-        if len(choices) > 1:
-            raise TyperError("mixed kinds of PBC in the set %r" % (
-                self.prebuiltinstances,))
-        if len(choices) < 1:
-            return none_frozen_pbc_repr    # prebuiltinstances == {None: True}
-        reprcls, = choices
-        return reprcls(rtyper, self)
+        return getRepr(rtyper, self)
 
     def rtyper_makekey(self):
         lst = list(self.descriptions)
@@ -91,7 +75,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
         self._function_signatures = None
-        if len(s_pbc.prebuiltinstances) == 1:
+        if len(s_pbc.descriptions) == 1:
             # a single function
             self.lowleveltype = Void
         else:
@@ -202,10 +186,9 @@ def get_access_set(rtyper, pbc):
         return None    
 
 def getFrozenPBCRepr(rtyper, s_pbc):
-    if len(s_pbc.prebuiltinstances) <= 1:
-        #if s_pbc.const is None:   -- take care of by rtyper_makerepr() above
-        #    return none_frozen_pbc_repr
-        return SingleFrozenPBCRepr(s_pbc.prebuiltinstances.keys()[0])
+    assert len(s_pbc.descriptions) >= 1
+    if len(s_pbc.descriptions) == 1:
+        return SingleFrozenPBCRepr(s_pbc.descriptions.keys()[0])
     else:
         pbcs = [pbc for pbc in s_pbc.prebuiltinstances.keys()
                     if pbc is not None]
@@ -226,8 +209,8 @@ class SingleFrozenPBCRepr(Repr):
     """Representation selected for a single non-callable pre-built constant."""
     lowleveltype = Void
 
-    def __init__(self, value):
-        self.value = value
+    def __init__(self, frozendesc):
+        self.frozendesc = frozendesc
 
     def rtype_getattr(_, hop):
         if not hop.s_result.is_constant():

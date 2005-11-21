@@ -101,9 +101,28 @@ Status
   methods (that should eventually be done via the translator/goal/driver
   code, but probably not as part of the same refactoring).
 
-* the annotator still misses "synthetic classes", i.e. ClassDefs that
-  would point back to the ClassDesc abstracting the user class, instead
+* the annotator has now "synthetic classes", i.e. ClassDefs that
+  point back to the ClassDesc abstracting the user class, instead
   of pointing directly back to the user class.  It's needed to reimplement
-  class specialization.  There are a few other test failures left too.
+  class specialization.  All annotator tests pass at the moment.
 
-* we didn't look much in the RTyper so far (so it's completely broken).
+* we started looking in the RTyper (but it's still completely broken).
+
+
+RTyping PBCs of functions
+=========================
+
+We have two plans for this; let me start with the one I prefer :-)
+
+The FuncDesc.specialize() method takes an args_s and return a corresponding
+graph.  Currently, the caller of specialize() parses the actual arguments
+provided by the simple_call or call_args operation, so that args_s is a flat
+parsed list.  The returned graph must have the same number and order of input
+variables.
+
+A proposed change: have specialize() return a graph whose input vars directly
+match the arguments of the underlying space operation.  If there is some
+non-trivial shuffling or ???
+
+
+

@@ -233,6 +233,7 @@ def merge_classpbc_getattr_into_classdef(rtyper):
         extra_access_sets[access_set] = len(extra_access_sets)
 
 def create_class_constructors(rtyper):
+    return    # XXX later
     # for classes that appear in families, make a __new__ PBC attribute.
     call_families = rtyper.annotator.getpbccallfamilies()
     access_sets = rtyper.annotator.getpbcaccesssets()
@@ -359,6 +360,7 @@ def assign_inheritance_ids(annotator):
             id_ = assign_id(classdef, id_)
         
 def perform_normalizations(rtyper):
+    return # XXX usw.
     create_class_constructors(rtyper)
     rtyper.annotator.frozen += 1
     try:

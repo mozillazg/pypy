@@ -34,19 +34,17 @@ class TypeSystem(object):
 """
         raise NotImplementedError()
 
-    def getcallable(self, translator, graphfunc, getconcretetype=None):
+    def getcallable(self, graph, getconcretetype=None):
         """Return callable given a Python function."""
         if getconcretetype is None:
             getconcretetype = self.getconcretetype
-        graph = translator.getflowgraph(graphfunc)
         llinputs = [getconcretetype(v) for v in graph.getargs()]
         lloutput = getconcretetype(graph.getreturnvar())
 
         typ, constr = self.callable_trait
         
         FT = typ(llinputs, lloutput)
-        _callable = getattr(graphfunc, '_specializedversionof_', graphfunc)
-        return constr(FT, graphfunc.func_name, graph = graph, _callable = _callable)
+        return constr(FT, graph.name, graph = graph)
 
     def getconcretetype(self, v):
         """Helper called by getcallable() to get the conrete type of a variable

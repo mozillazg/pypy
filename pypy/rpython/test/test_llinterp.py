@@ -53,7 +53,9 @@ def gengraph(func, argtypes=[], viewbefore=False, policy=None,
     timelog("rtyper-specializing", typer.specialize) 
     #t.view()
     timelog("checking graphs", t.checkgraphs) 
-    return t, typer
+    desc = t.annotator.bookkeeper.getdesc(func)
+    graph = desc.specialize(argtypes)
+    return t, typer, graph
 
 _lastinterpreted = []
 _tcache = {}
@@ -61,7 +63,7 @@ def get_interpreter(func, values, view=False, viewbefore=False, policy=None,
                     someobjects=False, type_system="lltype"):
     key = (func,) + tuple([typeOf(x) for x in values])+ (someobjects,)
     try: 
-        (t, interp) = _tcache[key]
+        (t, interp, graph) = _tcache[key]
     except KeyError:
         def annotation(x):
             T = typeOf(x)
@@ -71,24 +73,24 @@ def get_interpreter(func, values, view=False, viewbefore=False, policy=None,
                 return str
             else:
                 return lltype_to_annotation(T)
-        
-        t, typer = gengraph(func, [annotation(x) for x in values],
-                            viewbefore, policy, type_system=type_system)
-        interp = LLInterpreter(t.flowgraphs, typer)
-        _tcache[key] = (t, interp)
+
+        t, typer, graph = gengraph(func, [annotation(x) for x in values],
+                                   viewbefore, policy, type_system=type_system)
+        interp = LLInterpreter(typer)
+        _tcache[key] = (t, interp, graph)
         # keep the cache small 
         _lastinterpreted.append(key) 
         if len(_lastinterpreted) >= 4: 
             del _tcache[_lastinterpreted.pop(0)]
     if view:
         t.view()
-    return interp
+    return interp, graph
 
 def interpret(func, values, view=False, viewbefore=False, policy=None,
               someobjects=False, type_system="lltype"):
-    interp = get_interpreter(func, values, view, viewbefore, policy,
-                             someobjects, type_system=type_system)
-    return interp.eval_function(func, values)
+    interp, graph = get_interpreter(func, values, view, viewbefore, policy,
+                                    someobjects, type_system=type_system)
+    return interp.eval_graph(graph, values)
 
 def interpret_raises(exc, func, values, view=False, viewbefore=False,
                      policy=None, someobjects=False, type_system="lltype"):

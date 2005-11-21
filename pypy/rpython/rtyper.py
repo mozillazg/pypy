@@ -48,20 +48,9 @@ class RPythonTyper:
         else:
             raise TyperError("Unknown type system %r!" % type_system)
         self.type_system_deref = self.type_system.deref
-
-        def getfunctionptr(graphfunc):
-            def getconcretetype(v):
-                return self.bindingrepr(v).lowleveltype
-
-            return self.type_system.getcallable(
-                        self.annotator.translator, graphfunc, getconcretetype)
-        
-        self.getfunctionptr = getfunctionptr
-
         self.reprs = {}
         self._reprs_must_call_setup = []
         self._seen_reprs_must_call_setup = {}
-        self.specialized_ll_functions = {}
         self._dict_traits = {}
         self.class_reprs = {}
         self.instance_reprs = {}
@@ -74,7 +63,7 @@ class RPythonTyper:
         for s_primitive, lltype in annmodel.annotation_to_ll_map:
             r = self.getrepr(s_primitive)
             self.primitive_to_repr[r.lowleveltype] = r
-        if type_system == "lltype":
+        if 0:  # XXX for now XXX type_system == "lltype":
             from pypy.rpython.lltypesystem.exceptiondata import ExceptionData
 
             self.exceptiondata = ExceptionData(self)
@@ -202,7 +191,7 @@ class RPythonTyper:
             self.dump_typererrors(to_log=True) 
             raise TyperError("there were %d error" % len(self.typererrors))
         # make sure that the return variables of all graphs are concretetype'd
-        for graph in self.annotator.translator.flowgraphs.values():
+        for graph in self.annotator.translator.graphs:
             v = graph.getreturnvar()
             self.setconcretetype(v)
 
@@ -546,12 +535,11 @@ class RPythonTyper:
     def needs_hash_support(self, cls):
         return cls in self.annotator.bookkeeper.needs_hash_support
 
-    def getcallable(self, graphfunc):
+    def getcallable(self, graph):
         def getconcretetype(v):
             return self.bindingrepr(v).lowleveltype
 
-        return self.type_system.getcallable(
-                    self.annotator.translator, graphfunc, getconcretetype)
+        return self.type_system.getcallable(graph, getconcretetype)
 
     def annotate_helper(self, ll_function, arglltypes):
         """Annotate the given low-level helper function
@@ -781,14 +769,18 @@ class LowLevelOpList(list):
             newargs_v.append(v)
         
         self.rtyper.call_all_setups()  # compute ForwardReferences now
-        dontcare, spec_function = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
 
         # hack for bound methods
         if hasattr(ll_function, 'im_func'):
+            bk = rtyper.annotator.bookkeeper
+            args_s.insert(0, bk.immutablevalue(ll_function.im_self))
             newargs_v.insert(0, inputconst(Void, ll_function.im_self))
+            ll_function = ll_function.im_func
+
+        graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
 
         # build the 'direct_call' operation
-        f = self.rtyper.getfunctionptr(spec_function)
+        f = self.rtyper.getcallable(graph)
         c = inputconst(typeOf(f), f)
         fobj = self.rtyper.type_system_deref(f)
         return self.genop('direct_call', [c]+newargs_v,

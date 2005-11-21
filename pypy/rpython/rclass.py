@@ -1,6 +1,6 @@
 import types
 from pypy.annotation import model as annmodel
-from pypy.annotation.classdef import isclassdef
+#from pypy.annotation.classdef import isclassdef
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, needsgc
 
