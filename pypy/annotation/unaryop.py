@@ -159,7 +159,7 @@ class __extend__(SomeObject):
         return SomeObject()
     getattr.can_only_throw = []
 
-    def bindcallables(obj, classdef):
+    def bind_callables_under(obj, classdef, name):
         return obj   # default unbound __get__ implementation
 
     def simple_call(obj, *args_s):
@@ -508,8 +508,8 @@ class __extend__(SomePBC):
         bookkeeper = getbookkeeper()
         return bookkeeper.pbc_call(pbc, args)
 
-    def bindcallables(pbc, classdef):
-        d = [desc.bind(classdef) for desc in pbc.descriptions]
+    def bind_callables_under(pbc, classdef, name):
+        d = [desc.bind_under(classdef, name) for desc in pbc.descriptions]
         return SomePBC(d, can_be_None=pbc.can_be_None)
 
     def is_true_behavior(pbc):

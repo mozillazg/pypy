@@ -3,7 +3,7 @@ The Bookkeeper class.
 """
 
 from __future__ import generators
-import sys, types
+import sys, types, inspect
 
 from pypy.objspace.flow.model import Constant
 from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
@@ -369,7 +369,8 @@ class Bookkeeper:
                 else: # regular method
                     result = self.getmethoddesc(
                         self.getdesc(pyobj.im_func),            # funcdesc
-                        self.getuniqueclassdef(pyobj.im_class)) # classdef
+                        self.getuniqueclassdef(pyobj.im_class), # classdef
+                        name_of_meth(pyobj))
             else:
                 # must be a frozen pre-built constant, but let's check
                 assert pyobj._freeze_()
@@ -384,12 +385,12 @@ class Bookkeeper:
             self.descs[pyobj] = result
             return result
 
-    def getmethoddesc(self, funcdesc, classdef):
+    def getmethoddesc(self, funcdesc, classdef, name):
         try:
-            return self.methoddescs[funcdesc, classdef]
+            return self.methoddescs[funcdesc, classdef, name]
         except KeyError:
-            result = description.MethodDesc(self, funcdesc, classdef)
-            self.methoddescs[funcdesc, classdef] = result
+            result = description.MethodDesc(self, funcdesc, classdef, name)
+            self.methoddescs[funcdesc, classdef, name] = result
             return result
 
     def valueoftype(self, t):
@@ -519,6 +520,18 @@ class Bookkeeper:
 
     def warning(self, msg):
         return self.annotator.warning(msg)
+
+def name_of_meth(boundmeth):
+    func = boundmeth.im_func
+    candname = func.func_name
+    for cls in inspect.getmro(boundmeth.im_class):
+        dict = cls.__dict__
+        if dict.get(candname) is func:
+            return candname
+        for name, value in dict.iteritems():
+            if value is func:
+                return name
+    raise Exception, "could not match bound-method to attribute name: %r" % (boundmeth,)
 
 def ishashable(x):
     try:
