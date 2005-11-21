@@ -21,6 +21,11 @@ class RPythonAnnotator:
     See description in doc/translation.txt."""
 
     def __init__(self, translator=None, policy = None):
+        if translator is None:
+            # interface for tests
+            from pypy.translator.translator import TranslationContext
+            translator = TranslationContext()
+            translator.annotator = self
         self.translator = translator
         self.pendingblocks = {}  # map {block: graph-containing-it}
         self.bindings = {}       # map Variables to SomeValues
@@ -75,11 +80,6 @@ class RPythonAnnotator:
         """Recursively build annotations about the specific entry point."""
         assert isinstance(function, FunctionType), "fix that!"
 
-        if self.translator is None:
-            from pypy.translator.translator import TranslationContext
-            self.translator = TranslationContext()
-            self.translator.annotator = self
-
         # make input arguments and set their type
         inputcells = []
         input_arg_types = list(input_arg_types)
@@ -95,13 +95,16 @@ class RPythonAnnotator:
             assert isinstance(flowgraph, annmodel.SomeObject)
             return flowgraph
 
+        return self.build_graph_types(flowgraph, inputcells)
+
+    def build_graph_types(self, flowgraph, inputcells):
         checkgraph(flowgraph)
         self._register_returnvar(flowgraph)
 
         nbarg = len(flowgraph.getargs())
-        if len(input_arg_types) != nbarg: 
+        if len(inputcells) != nbarg: 
             raise TypeError("%s expects %d args, got %d" %(       
-                            flowgraph, nbarg, len(input_arg_types)))
+                            flowgraph, nbarg, len(inputcells)))
         
         # register the entry point
         self.addpendingblock(flowgraph, flowgraph.startblock, inputcells)
@@ -167,16 +170,15 @@ class RPythonAnnotator:
             raise AnnotatorError('%d blocks are still blocked' %
                                  self.annotated.values().count(False))
         # make sure that the return variables of all graphs is annotated
-        if self.translator is not None:
-            if self.added_blocks is not None:
-                newgraphs = [self.annotated[block] for block in self.added_blocks]
-                newgraphs = dict.fromkeys(newgraphs)
-            else:
-                newgraphs = self.translator.graphs  #all of them
-            for graph in newgraphs:
-                v = graph.getreturnvar()
-                if v not in self.bindings:
-                    self.setbinding(v, annmodel.SomeImpossibleValue())
+        if self.added_blocks is not None:
+            newgraphs = [self.annotated[block] for block in self.added_blocks]
+            newgraphs = dict.fromkeys(newgraphs)
+        else:
+            newgraphs = self.translator.graphs  #all of them
+        for graph in newgraphs:
+            v = graph.getreturnvar()
+            if v not in self.bindings:
+                self.setbinding(v, annmodel.SomeImpossibleValue())
         # policy-dependent computation
         self.policy.compute_at_fixpoint(self)
 

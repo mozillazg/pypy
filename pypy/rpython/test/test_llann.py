@@ -23,13 +23,17 @@ class TestLowLevelAnnotateTestCase:
 
     from pypy.translator.annrpython import RPythonAnnotator
 
+    def annotate(self, ll_function, argtypes):
+        self.a = self.RPythonAnnotator()
+        graph = annotate_lowlevel_helper(self.a, ll_function, argtypes)
+        return self.a.binding(graph.getreturnvar())
+
     def test_simple(self):
         S = GcStruct("s", ('v', Signed))
         def llf():
             s = malloc(S)
             return s.v
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int
 
     def test_simple2(self):
@@ -38,8 +42,7 @@ class TestLowLevelAnnotateTestCase:
         def llf():
             s = malloc(S2)
             return s.a.v+s.b.v
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int
 
     def test_array(self):
@@ -47,8 +50,7 @@ class TestLowLevelAnnotateTestCase:
         def llf():
             a = malloc(A, 1)
             return a[0].v
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int
 
     def test_prim_array(self):
@@ -56,8 +58,7 @@ class TestLowLevelAnnotateTestCase:
         def llf():
             a = malloc(A, 1)
             return a[0]
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int
 
     def test_prim_array_setitem(self):
@@ -66,8 +67,7 @@ class TestLowLevelAnnotateTestCase:
             a = malloc(A, 1)
             a[0] = 3
             return a[0]
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int        
         
     def test_cast_simple_widening(self):
@@ -79,8 +79,7 @@ class TestLowLevelAnnotateTestCase:
             p2 = p1.sub1
             p3 = cast_pointer(PS1, p2)
             return p3
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [annmodel.SomePtr(PS1)])
+        s = self.annotate(llf, [annmodel.SomePtr(PS1)])
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == PS1
 
@@ -93,8 +92,7 @@ class TestLowLevelAnnotateTestCase:
             p2 = p1.sub1
             p3 = cast_pointer(PS1, p2)
             return p3
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == PS1
 
@@ -116,8 +114,7 @@ class TestLowLevelAnnotateTestCase:
             p31 = cast_pointer(PS3, p1)
             p32 = cast_pointer(PS3, p2)
             return p12, p13, p21, p23, p31, p32
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert [x.ll_ptrtype for x in s.items] == [PS1, PS1, PS2, PS2, PS3, PS3]
             
 
@@ -126,8 +123,7 @@ class TestLowLevelAnnotateTestCase:
         def llf():
             a = malloc(A, 1)
             return len(a)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert s.knowntype == int
 
     def test_funcptr(self):
@@ -135,8 +131,7 @@ class TestLowLevelAnnotateTestCase:
         PF = Ptr(F)
         def llf(p):
             return p(0)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [annmodel.SomePtr(PF)])
+        s = self.annotate(llf, [annmodel.SomePtr(PF)])
         assert s.knowntype == int
  
 
@@ -159,8 +154,8 @@ class TestLowLevelAnnotateTestCase:
             a2 = ll_make(A, 4)
             a2[0] = 2.0
             return ll_get(A, a2, 1)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
+        a = self.a
         assert s == annmodel.SomeFloat()
 
         seen = {}
@@ -216,8 +211,8 @@ class TestLowLevelAnnotateTestCase:
             a2 = makelen4(A)
             a2[0] = 2.0
             return ll_get(a2, 1)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
+        a = self.a
         assert s == annmodel.SomeFloat()
 
         seen = {}
@@ -268,8 +263,7 @@ class TestLowLevelAnnotateTestCase:
         attachRuntimeTypeInfo(S)
         def llf():
             return getRuntimeTypeInfo(S)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [])
+        s = self.annotate(llf, [])
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == Ptr(RuntimeTypeInfo)
         assert s.const == getRuntimeTypeInfo(S)
@@ -279,8 +273,7 @@ class TestLowLevelAnnotateTestCase:
         attachRuntimeTypeInfo(S)
         def llf(p):
             return runtime_type_info(p)
-        a = self.RPythonAnnotator()
-        s = annotate_lowlevel_helper(a, llf, [annmodel.SomePtr(Ptr(S))])
+        s = self.annotate(llf, [annmodel.SomePtr(Ptr(S))])
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == Ptr(RuntimeTypeInfo)
         
