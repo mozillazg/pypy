@@ -2,7 +2,7 @@ import types
 import sys
 from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
-from pypy.annotation.classdef import isclassdef
+from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, Bool, nullptr
@@ -19,60 +19,35 @@ class __extend__(annmodel.SomePBC):
         # categories below, and doesn't for example mix functions, classes
         # and methods.
         call_families = rtyper.annotator.getpbccallfamilies()
-        userclasses = rtyper.annotator.getuserclasses()
+        #userclasses = rtyper.annotator.getuserclasses()
         access_sets = rtyper.annotator.getpbcaccesssets()
         choices = {}
-        for x, classdef in self.prebuiltinstances.items():
-            cdefflag = isclassdef(classdef)
-            if not cdefflag:
-                classdef = None
-
-            # consider unbound methods as plain functions
-            if isinstance(x, types.MethodType) and x.im_self is None:
-                x = x.im_func
-
-            if cdefflag:
-                # methods of a run-time instance
-                if not isinstance(x, types.FunctionType):
-                    raise TyperError("%r appears to be a method bound to %r, "
-                                     "but it is not a function" % (
-                        x, classdef))
-                choice = rtyper.type_system.rpbc.MethodsPBCRepr
-
-            elif x is None:
-                continue    # skipped, a None is allowed implicitely anywhere
-
-            elif isinstance(x, (type, types.ClassType)):
-                # classes
-                if x in userclasses:
+        for x in self.descriptions:
+            if isinstance(x, description.FunctionDesc):
+                if x in call_families:
+                    choice = FunctionsPBCRepr
+            elif isinstance(x, description.ClassDesc):
+                # classes -- still broken!
+                if 1 or x in userclasses:
                     # user classes
                     choice = rtyper.type_system.rpbc.ClassesPBCRepr
-                elif type(x) is type and x.__module__ in sys.builtin_module_names:
-                    # special case for built-in types, seen in faking
-                    choice = getPyObjRepr
+##                 elif type(x) is type and x.__module__ in sys.builtin_module_names:
+##                     # special case for built-in types, seen in faking
+##                     choice = getPyObjRepr
                 else:
-                    # classes that are never instantiated => consider them
-                    # as plain frozen objects
                     choice = getFrozenPBCRepr
-
-            elif (classdef, x) in call_families:
-                # other kind of callable
-                if isinstance(x, types.FunctionType):
-                    # function
-                    choice = FunctionsPBCRepr
-                elif isinstance(x, types.MethodType):
-                    # prebuilt bound method
-                    choice = rtyper.type_system.rpbc.MethodOfFrozenPBCRepr
-                else:
-                    raise TyperError("don't know about callable %r" % (x,))
-
-            elif isinstance(x, builtin_descriptor_type):
-                # strange built-in functions, method objects, etc. from fake.py
-                choice = getPyObjRepr
-
-            else:
-                # otherwise, just assume it's a plain frozen object
+            elif isinstance(x, description.MethodDesc):
+                choice = rtyper.type_system.rpbc.MethodsPBCRepr
+            elif isinstance(x, description.FrozenDesc):
                 choice = getFrozenPBCRepr
+            elif isinstance(x, description.MethodOfFrozenDesc):
+                choice = rtyper.type_system.rpbc.MethodOfFrozenPBCRepr
+            else:
+                raise TyperError("unexpected PBC %r"%(x,))
+
+##             elif isinstance(x, builtin_descriptor_type):
+##                 # strange built-in functions, method objects, etc. from fake.py
+##                 choice = getPyObjRepr
 
             choices[choice] = True
 
@@ -85,7 +60,7 @@ class __extend__(annmodel.SomePBC):
         return reprcls(rtyper, self)
 
     def rtyper_makekey(self):
-        lst = self.prebuiltinstances.items()
+        lst = list(self.descriptions)
         lst.sort()
         return tuple([self.__class__]+lst)
 
