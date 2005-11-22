@@ -14,10 +14,43 @@ class CallFamily:
         self.descs = { desc: True }
         self.patterns = {}    # set of "call shapes" in the sense of
                               # pypy.interpreter.argument.Argument
+        self.calltables = {}  # see calltable_add_row()
 
     def update(self, other):
         self.descs.update(other.descs)
         self.patterns.update(other.patterns)
+
+    def calltable_add_row(self, callshape, row):
+        # this code builds and updates a table of which graph to call
+        # at which call site.  Each call site gets a row of graphs,
+        # sharable with other call sites.  Each column is a FunctionDesc.
+        # There is one such table per "call shape".
+        table = self.calltables.setdefault(callshape, [])
+        for i, existing_row in enumerate(table):
+            # which row(s) can the new row be merged with?  The
+            # condition is to have at least a common graph, and no
+            # incompatible graphs elsewhere.
+            for desc, graph in row.items():
+                if existing_row.get(desc) is graph:
+                    # common graph.  Do we find incompatible graphs?
+                    merged = row.copy()
+                    merged.update(existing_row)
+                    for merged_desc, merged_graph in merged.items():
+                        if (merged_desc in row and
+                            row[merged_desc] is not merged_graph):
+                            msg = ("incompatible specializations in a call"
+                                   " to %r")
+                            raise Exception(msg % (merged_desc,))
+                    # done.  Start over again, because this expanded row
+                    # could now be merged with other rows...
+                    del table[i]
+                    self.calltable_add_row(callshape, merged)
+                    return
+            #else: no common graph
+        else:
+            # add this as a new row.
+            table.append(row)
+
 
 class AttrFamily:
     """A family of Desc objects that have common 'getattr' sites.
@@ -82,6 +115,10 @@ class Desc(object):
 
     def bind_under(self, classdef, name):
         return self
+
+    def consider_call_site(bookkeeper, family, descs, args):
+        print "unimplemented consider_call_site for %r" % (descs,) # XXX
+    consider_call_site = staticmethod(consider_call_site)
 
 
 class FunctionDesc(Desc):
@@ -151,6 +188,18 @@ class FunctionDesc(Desc):
     def bind_under(self, classdef, name):
         # XXX static methods
         return self.bookkeeper.getmethoddesc(self, classdef, name)
+
+    def consider_call_site(bookkeeper, family, descs, args):
+        from pypy.annotation.model import s_ImpossibleValue
+        # see comments in CallFamily
+        row = {}
+        for desc in descs:
+            def enlist(graph, ignore):
+                row[desc] = graph
+                return s_ImpossibleValue   # meaningless
+            desc.pycall(enlist, args, s_ImpossibleValue)
+        family.calltable_add_row(args.rawshape(), row)
+    consider_call_site = staticmethod(consider_call_site)
 
 
 class ClassDesc(Desc):
@@ -345,7 +394,6 @@ class MethodDesc(Desc):
     def bind_under(self, classdef, name):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
         return self.funcdesc.bind_under(classdef, name)
-
 
 def new_or_old_class(c):
     if hasattr(c, '__class__'):
