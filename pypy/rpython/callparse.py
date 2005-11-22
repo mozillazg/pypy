@@ -2,6 +2,7 @@ from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.annotation import model as annmodel
 from pypy.rpython import rtuple
 from pypy.rpython.error import TyperError
+from pypy.rpython.lltypesystem import lltype
 
 class CallPatternTooComplex(TyperError):
     pass
@@ -29,15 +30,21 @@ class RPythonCallsSpace:
         raise CallPatternTooComplex, "'*' argument must be a tuple"
 
 
+def getrinputs(rtyper, graph):
+    """Return the list of reprs of the input arguments to the 'graph'."""
+    return [rtyper.bindingrepr(v) for v in graph.getargs()]
+
+def getrresult(rtyper, graph):
+    """Return the repr of the result variable of the 'graph'."""
+    if graph.getreturnvar() in rtyper.annotator.bindings:
+        return rtyper.bindingrepr(graph.getreturnvar())
+    else:
+        return lltype.Void
+
 def callparse(rtyper, graph, hop, opname):
     """Parse the arguments of 'hop' when calling the given 'graph'.
-    Return a list of low-level variables and the repr of the result.
     """
-    rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
-    if graph.getreturnvar() in rtyper.annotator.bindings:
-        rresult = rtyper.bindingrepr(graph.getreturnvar())
-    else:
-        rresult = Void
+    rinputs = getrinputs(rtyper, graph)
     space = RPythonCallsSpace()
     def args_h(start):
         return [VarHolder(i, hop.args_s[i]) for i in range(start, hop.nb_args)]
@@ -62,7 +69,7 @@ def callparse(rtyper, graph, hop, opname):
     for h,r in zip(holders, rinputs):
         v = h.emit(r, hop)
         vlist.append(v)
-    return vlist, rresult
+    return vlist
 
 
 class Holder(object):
