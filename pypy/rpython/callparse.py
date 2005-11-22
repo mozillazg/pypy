@@ -29,13 +29,21 @@ class RPythonCallsSpace:
         raise CallPatternTooComplex, "'*' argument must be a tuple"
 
 
-def callparse(op, graph, rinputs, hop):
+def callparse(rtyper, graph, hop, opname):
+    """Parse the arguments of 'hop' when calling the given 'graph'.
+    Return a list of low-level variables and the repr of the result.
+    """
+    rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
+    if graph.getreturnvar() in rtyper.annotator.bindings:
+        rresult = rtyper.bindingrepr(graph.getreturnvar())
+    else:
+        rresult = Void
     space = RPythonCallsSpace()
     def args_h(start):
         return [VarHolder(i, hop.args_s[i]) for i in range(start, hop.nb_args)]
-    if op == "simple_call":
+    if opname == "simple_call":
         arguments =  Arguments(space, args_h(1))
-    elif op == "call_args":
+    elif opname == "call_args":
         arguments = Arguments.fromshape(space, hop.args_s[1].const, # shape
                                         args_h(2))
     # parse the arguments according to the function we are calling
@@ -54,7 +62,7 @@ def callparse(op, graph, rinputs, hop):
     for h,r in zip(holders, rinputs):
         v = h.emit(r, hop)
         vlist.append(v)
-    return vlist
+    return vlist, rresult
 
 
 class Holder(object):

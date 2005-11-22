@@ -76,7 +76,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         self.s_pbc = s_pbc
         self._function_signatures = None
         self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
-        if len(s_pbc.descriptions) == 1:
+        if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None:
             # a single function
             self.lowleveltype = Void
         else:
@@ -102,26 +102,44 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         rtyper = self.rtyper
         return [rtyper.binding(arg) for arg in graph.getargs()], rtyper.binding(graph.getreturnvar())
 
-    def function_signatures(self):
-        if self._function_signatures is None:
-            self._function_signatures = {}
-            for func in self.s_pbc.prebuiltinstances:
-                if func is not None:
-                    self._function_signatures[func] = getsignature(self.rtyper,
-                                                                   func)
-            assert self._function_signatures
-        return self._function_signatures
+##    def function_signatures(self):
+##        if self._function_signatures is None:
+##            self._function_signatures = {}
+##            for func in self.s_pbc.prebuiltinstances:
+##                if func is not None:
+##                    self._function_signatures[func] = getsignature(self.rtyper,
+##                                                                   func)
+##            assert self._function_signatures
+##        return self._function_signatures
 
     def convert_const(self, value):
         if value is None:
             return nullptr(self.lowleveltype.TO)
         if isinstance(value, types.MethodType) and value.im_self is None:
             value = value.im_func   # unbound method -> bare function
+        if self.lowleveltype is Void:
+            return inputconst(Void, value)
+        XXX
         if value not in self.function_signatures():
             raise TyperError("%r not in %r" % (value,
                                                self.s_pbc.prebuiltinstances))
         f, rinputs, rresult = self.function_signatures()[value]
         return f
+
+    def get_concrete_llfn(self, v, index, shape):
+        """Convert the variable 'v' to a variable referring to a concrete
+        low-level function.  In case the call table contains multiple rows,
+        'index' and 'shape' tells which of its items we are interested in."""
+        assert index == 0   # for now
+        if self.lowleveltype is Void:
+            table = self.callfamily.calltables[shape]
+            row = table[index]
+            assert len(row) == 1     # lowleveltype wouldn't be Void otherwise
+            graph, = row.values()
+            f = self.rtyper.getcallable(graph)
+            return inputconst(typeOf(f), f)
+        else:
+            Baoum
 
     def rtype_simple_call(self, hop):
         bk = self.rtyper.annotator.bookkeeper
@@ -130,14 +148,11 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         row = description.FunctionDesc.row_to_consider(descs, args)
         index, merged = self.callfamily.calltable_lookup_row(args.rawshape(),
                                                              row)
-        assert len(merged) == 1   # for now
-        [(funcdesc, graph)] = merged.items()
-        llfnobj = self.rtyper.getcallable(graph)
-        vlist = [hop.inputconst(typeOf(llfnobj), llfnobj)]
-        rinputs = [self.rtyper.bindingrepr(graph.getargs()[i])
-                   for i in range(len(graph.getargs()))]
-        vlist += callparse.callparse('simple_call', graph, rinputs, hop)
-        rresult = self.rtyper.bindingrepr(graph.getreturnvar())
+        graph = merged.itervalues().next()  # pick any witness
+        vlist, rresult = callparse.callparse(self.rtyper, graph,
+                                             hop, 'simple_call')
+        vfn = hop.inputarg(self, arg=0)
+        vlist.insert(0, self.get_concrete_llfn(vfn, index, args.rawshape()))
         hop.exception_is_here()
         v = hop.genop('direct_call', vlist, resulttype = rresult)
         return hop.llops.convertvar(v, rresult, hop.r_result)
@@ -392,15 +407,15 @@ class AbstractMethodsPBCRepr(Repr):
 
 # ____________________________________________________________
 
-def getsignature(rtyper, func):
-    f = rtyper.getcallable(func)
-    graph = rtyper.type_system_deref(f).graph
-    rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
-    if graph.getreturnvar() in rtyper.annotator.bindings:
-        rresult = rtyper.bindingrepr(graph.getreturnvar())
-    else:
-        rresult = Void
-    return f, rinputs, rresult
+##def getsignature(rtyper, func):
+##    f = rtyper.getcallable(func)
+##    graph = rtyper.type_system_deref(f).graph
+##    rinputs = [rtyper.bindingrepr(v) for v in graph.getargs()]
+##    if graph.getreturnvar() in rtyper.annotator.bindings:
+##        rresult = rtyper.bindingrepr(graph.getreturnvar())
+##    else:
+##        rresult = Void
+##    return f, rinputs, rresult
 
 def samesig(funcs):
     import inspect
