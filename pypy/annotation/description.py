@@ -355,18 +355,22 @@ def new_or_old_class(c):
 
 class FrozenDesc(Desc):
 
-    def __init__(self, bookkeeper, pyobj):
+    def __init__(self, bookkeeper, pyobj, read_attribute=None):
         super(FrozenDesc, self).__init__(bookkeeper, pyobj)
-        self.attributes = self.pyobj.__dict__.copy()
+        if read_attribute is None:
+            read_attribute = lambda attr: getattr(pyobj, attr)
+        self.read_attribute = read_attribute
         self.knowntype = new_or_old_class(pyobj)
         assert bool(pyobj), "__nonzero__ unsupported on frozen PBC %r" %(pyobj,)
 
     def s_read_attribute(self, attr):
-        if attr in self.attributes:
-            return self.bookkeeper.immutablevalue(self.attributes[attr])
-        else:
+        try:
+            value = self.read_attribute(attr)
+        except AttributeError:
             from pypy.annotation.model import s_ImpossibleValue
             return s_ImpossibleValue
+        else:
+            return self.bookkeeper.immutablevalue(value)
 
 
 class MethodOfFrozenDesc(Desc):
