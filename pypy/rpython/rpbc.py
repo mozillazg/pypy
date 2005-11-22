@@ -134,7 +134,6 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         [(funcdesc, graph)] = merged.items()
         llfnobj = self.rtyper.getcallable(graph)
         vlist = [hop.inputconst(typeOf(llfnobj), llfnobj)]
-        # XXX use callparse again here
         rinputs = [self.rtyper.bindingrepr(graph.getargs()[i])
                    for i in range(len(graph.getargs()))]
         vlist += callparse.callparse('simple_call', graph, rinputs, hop)
