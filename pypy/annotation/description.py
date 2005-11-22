@@ -14,15 +14,15 @@ class CallFamily:
         self.descs = { desc: True }
         self.patterns = {}    # set of "call shapes" in the sense of
                               # pypy.interpreter.argument.Argument
-        self.calltables = {}  # see calltable_add_row()
+        self.calltables = {}  # see calltable_lookup_row()
 
     def update(self, other):
         self.descs.update(other.descs)
         self.patterns.update(other.patterns)
 
-    def calltable_add_row(self, callshape, row):
-        # this code builds and updates a table of which graph to call
-        # at which call site.  Each call site gets a row of graphs,
+    def calltable_lookup_row(self, callshape, row):
+        # this code looks up a table of which graph to
+        # call at which call site.  Each call site gets a row of graphs,
         # sharable with other call sites.  Each column is a FunctionDesc.
         # There is one such table per "call shape".
         table = self.calltables.setdefault(callshape, [])
@@ -41,15 +41,28 @@ class CallFamily:
                             msg = ("incompatible specializations in a call"
                                    " to %r")
                             raise Exception(msg % (merged_desc,))
-                    # done.  Start over again, because this expanded row
-                    # could now be merged with other rows...
-                    del table[i]
-                    self.calltable_add_row(callshape, merged)
-                    return
+                    # done.
+                    return i, merged
             #else: no common graph
-        else:
-            # add this as a new row.
-            table.append(row)
+        raise LookupError
+
+    def calltable_add_row(self, callshape, row):
+        table = self.calltables.setdefault(callshape, [])
+        while True:
+            try:
+                index, merged = self.calltable_lookup_row(callshape, row)
+            except LookupError:
+                # no compatible row.  Add this new one.
+                table.append(row)
+            else:
+                if merged != row:
+                    # remove the existing row
+                    del table[index]
+                    # Start over again with this expanded row
+                    # which can possibly be further merged with other rows
+                    row = merged
+                    continue
+            return
 
 
 class AttrFamily:
@@ -190,16 +203,21 @@ class FunctionDesc(Desc):
         return self.bookkeeper.getmethoddesc(self, classdef, name)
 
     def consider_call_site(bookkeeper, family, descs, args):
-        from pypy.annotation.model import s_ImpossibleValue
+        row = FunctionDesc.row_to_consider(descs, args)
+        family.calltable_add_row(args.rawshape(), row)
+    consider_call_site = staticmethod(consider_call_site)
+
+    def row_to_consider(descs, args):
         # see comments in CallFamily
+        from pypy.annotation.model import s_ImpossibleValue
         row = {}
         for desc in descs:
             def enlist(graph, ignore):
                 row[desc] = graph
                 return s_ImpossibleValue   # meaningless
             desc.pycall(enlist, args, s_ImpossibleValue)
-        family.calltable_add_row(args.rawshape(), row)
-    consider_call_site = staticmethod(consider_call_site)
+        return row
+    row_to_consider = staticmethod(row_to_consider)
 
 
 class ClassDesc(Desc):

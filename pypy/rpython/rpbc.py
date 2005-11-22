@@ -75,6 +75,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
         self._function_signatures = None
+        self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
         if len(s_pbc.descriptions) == 1:
             # a single function
             self.lowleveltype = Void
@@ -123,22 +124,40 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         return f
 
     def rtype_simple_call(self, hop):
-        f, rinputs, rresult = self.function_signatures().itervalues().next()
+        bk = self.rtyper.annotator.bookkeeper
+        args = bk.build_args("simple_call", hop.args_s[1:])
+        descs = self.s_pbc.descriptions.keys()
+        row = description.FunctionDesc.row_to_consider(descs, args)
+        index, merged = self.callfamily.calltable_lookup_row(args.rawshape(),
+                                                             row)
+        assert len(merged) == 1   # for now
+        [(funcdesc, graph)] = merged.items()
+        llfnobj = self.rtyper.getcallable(graph)
+        vlist = [hop.inputconst(typeOf(llfnobj), llfnobj)]
+        # XXX use callparse again here
+        vlist += [hop.inputarg(self.rtyper.bindingrepr(graph.getargs()[i]), arg=i+1)
+                  for i in range(len(graph.getargs()))]
+        rresult = self.rtyper.bindingrepr(graph.getreturnvar())
+        hop.exception_is_here()
+        v = hop.genop('direct_call', vlist, resulttype = rresult)
+        return hop.llops.convertvar(v, rresult, hop.r_result)
 
-        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
-            # should not have an argument count mismatch
-            assert len(rinputs) == hop.nb_args-1, "normalization bug"
-            vlist = hop.inputargs(self, *rinputs)
-        else:
-            # if not normalized, should be a call to a known function
-            # or to functions all with same signature
-            funcs = self.function_signatures().keys()
-            assert samesig(funcs), "normalization bug"
-            func = funcs[0]
-            vlist = [hop.inputarg(self, arg=0)]
-            vlist += callparse.callparse('simple_call', func, rinputs, hop)
+##        f, rinputs, rresult = self.function_signatures().itervalues().next()
 
-        return self.call(hop, f, vlist, rresult)
+##        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
+##            # should not have an argument count mismatch
+##            assert len(rinputs) == hop.nb_args-1, "normalization bug"
+##            vlist = hop.inputargs(self, *rinputs)
+##        else:
+##            # if not normalized, should be a call to a known function
+##            # or to functions all with same signature
+##            funcs = self.function_signatures().keys()
+##            assert samesig(funcs), "normalization bug"
+##            func = funcs[0]
+##            vlist = [hop.inputarg(self, arg=0)]
+##            vlist += callparse.callparse('simple_call', func, rinputs, hop)
+
+##        return self.call(hop, f, vlist, rresult)
 
     def call(self, hop, f, vlist, rresult):
         if self.lowleveltype is Void:
