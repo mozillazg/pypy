@@ -5,7 +5,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Void, Bool, nullptr
+     typeOf, Void, Bool, nullptr, frozendict
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, inputconst
 from pypy.rpython import rclass
@@ -76,16 +76,37 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         self.s_pbc = s_pbc
         self._function_signatures = None
         self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
+
+        # Build the complete call table with concrete low-level function
+        # objects.
+        concretetable = {}
+        uniquerows = {}
+        for shape, rows in self.callfamily.calltables.items():
+            for index, row in enumerate(rows):
+                concreterow = {}
+                key = frozendict()
+                for funcdesc, graph in row.items():
+                    llfn = self.rtyper.getcallable(graph)
+                    concreterow[funcdesc] = llfn
+                    key[funcdesc] = self.rtyper.type_system_deref(llfn)
+                if key in uniquerows:
+                    attrname, concreterow = uniquerows[key]  # from the cache
+                else:
+                    attrname = 'variant%d' % len(uniquerows)
+                    uniquerows[key] = attrname, concreterow
+                concretetable[shape, index] = attrname, concreterow
+        self.concretetable = concretetable
+        self.uniquerows = uniquerows
+
         if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None:
             # a single function
             self.lowleveltype = Void
+        elif len(uniquerows) == 1:
+            [(attrname, row)] = uniquerows.values()
+            llfn = row.itervalues().next()
+            self.lowleveltype = typeOf(llfn)
         else:
-            signatures = self.function_signatures().values()
-            sig0 = signatures[0]
-            for sig1 in signatures[1:]:
-                assert typeOf(sig0[0]) == typeOf(sig1[0])  # XXX not implemented
-                assert sig0[1:] == sig1[1:]                # XXX not implemented
-            self.lowleveltype = typeOf(sig0[0])
+            XXX_later
 
     def get_s_callable(self):
         return self.s_pbc
@@ -113,33 +134,46 @@ class FunctionsPBCRepr(MultiplePBCRepr):
 ##        return self._function_signatures
 
     def convert_const(self, value):
-        if value is None:
-            return nullptr(self.lowleveltype.TO)
         if isinstance(value, types.MethodType) and value.im_self is None:
             value = value.im_func   # unbound method -> bare function
         if self.lowleveltype is Void:
             return inputconst(Void, value)
-        XXX
-        if value not in self.function_signatures():
+        null = nullptr(self.lowleveltype.TO)
+        if value is None:
+            return null
+        # get the whole "column" of the call table corresponding to this desc
+        funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
+        llfns = {}
+        found_anything = False
+        for attrname, row in self.uniquerows.values():
+            if funcdesc in row:
+                llfn = row[funcdesc]
+                found_anything = True
+            else:
+                llfn = null
+            llfns[attrname] = llfn
+        if not found_anything:
             raise TyperError("%r not in %r" % (value,
-                                               self.s_pbc.prebuiltinstances))
-        f, rinputs, rresult = self.function_signatures()[value]
-        return f
+                                               self.s_pbc.descriptions))
+        if len(self.uniquerows) == 1:
+            return llfn   # from the loop above
+        else:
+            XXX_later
 
-    def get_concrete_llfn(self, v, index, shape):
+    def convert_to_concrete_llfn(self, v, index, shape, llop):
         """Convert the variable 'v' to a variable referring to a concrete
         low-level function.  In case the call table contains multiple rows,
-        'index' and 'shape' tells which of its items we are interested in."""
-        assert index == 0   # for now
+        'index' and 'shape' tells which of its items we are interested in.
+        """
         if self.lowleveltype is Void:
-            table = self.callfamily.calltables[shape]
-            row = table[index]
+            attrname, row = self.concretetable[shape, index]
             assert len(row) == 1     # lowleveltype wouldn't be Void otherwise
-            graph, = row.values()
-            f = self.rtyper.getcallable(graph)
-            return inputconst(typeOf(f), f)
+            llfn, = row.values()
+            return inputconst(typeOf(llfn), llfn)
+        elif len(self.uniquerows) == 1:
+            return v
         else:
-            Baoum
+            XXX_later
 
     def rtype_simple_call(self, hop):
         bk = self.rtyper.annotator.bookkeeper
@@ -148,11 +182,13 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         row = description.FunctionDesc.row_to_consider(descs, args)
         index, merged = self.callfamily.calltable_lookup_row(args.rawshape(),
                                                              row)
-        graph = merged.itervalues().next()  # pick any witness
-        vlist, rresult = callparse.callparse(self.rtyper, graph,
-                                             hop, 'simple_call')
+        anygraph = merged.itervalues().next()  # pick any witness
         vfn = hop.inputarg(self, arg=0)
-        vlist.insert(0, self.get_concrete_llfn(vfn, index, args.rawshape()))
+        vlist = [self.convert_to_concrete_llfn(vfn, index, args.rawshape(),
+                                               hop.llops)]
+        vlist += callparse.callparse(self.rtyper, anygraph,
+                                     hop, 'simple_call')
+        rresult = callparse.getrresult(self.rtyper, anygraph)
         hop.exception_is_here()
         v = hop.genop('direct_call', vlist, resulttype = rresult)
         return hop.llops.convertvar(v, rresult, hop.r_result)
