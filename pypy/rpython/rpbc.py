@@ -135,8 +135,9 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         llfnobj = self.rtyper.getcallable(graph)
         vlist = [hop.inputconst(typeOf(llfnobj), llfnobj)]
         # XXX use callparse again here
-        vlist += [hop.inputarg(self.rtyper.bindingrepr(graph.getargs()[i]), arg=i+1)
-                  for i in range(len(graph.getargs()))]
+        rinputs = [self.rtyper.bindingrepr(graph.getargs()[i])
+                   for i in range(len(graph.getargs()))]
+        vlist += callparse.callparse('simple_call', graph, rinputs, hop)
         rresult = self.rtyper.bindingrepr(graph.getreturnvar())
         hop.exception_is_here()
         v = hop.genop('direct_call', vlist, resulttype = rresult)
