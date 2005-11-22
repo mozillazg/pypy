@@ -112,17 +112,43 @@ Status
 RTyping PBCs of functions
 =========================
 
-We have two plans for this; let me start with the one I prefer :-)
+The FuncDesc.specialize() method takes an args_s and return a
+corresponding graph.  The caller of specialize() parses the actual
+arguments provided by the simple_call or call_args operation, so that
+args_s is a flat parsed list.  The returned graph must have the same
+number and order of input variables.
 
-The FuncDesc.specialize() method takes an args_s and return a corresponding
-graph.  Currently, the caller of specialize() parses the actual arguments
-provided by the simple_call or call_args operation, so that args_s is a flat
-parsed list.  The returned graph must have the same number and order of input
-variables.
+For each call family, we compute a table like this (after annotation
+finished)::
 
-A proposed change: have specialize() return a graph whose input vars directly
-match the arguments of the underlying space operation.  If there is some
-non-trivial shuffling or ???
+          call_shape   FuncDesc1   FuncDesc2   FuncDesc3   ...
+  ----------------------------------------------------------
+   call0    shape1       graph1
+   call1    shape1       graph1      graph2
+   call2    shape1                   graph3     graph4            
+   call3    shape2                   graph5     graph6
 
 
+We then need to merge some of the lines if they look similar enough,
+e.g. call0 and call1.  Precisely, we can merge two lines if they only
+differ in having more or less holes.  In theory, the same graph could
+appear in two lines that are still not mergeable because of other
+graphs.  For sanity of implementation, we should check that at the end
+each graph only appears once in the table (unless there is only one
+*column*, in which case all problems can be dealt with at call sites).
 
+(Note that before this refactoring, the code was essentially requiring
+that the table ended up with either one single row or one single
+column.)
+
+The table is computed when the annotation is complete, in
+compute_at_fixpoint(), which calls the FuncDesc's consider_call_site()
+for each call site.  The latter merges lines as soon as possible.  The
+table is attached to the call family, grouped by call shape.
+
+During RTyping, compute_at_fixpoint() is called after each new ll
+helper is annotated.  Normally, this should not modify existing tables
+too much, but in some situations it will.  So the rule is that
+consider_call_site() should not add new (unmerged) rows to the table
+after the table is considered "finished" (again, unless there is only
+one column, in which case we should not discover new columns).

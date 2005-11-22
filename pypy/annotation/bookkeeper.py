@@ -189,11 +189,39 @@ class Bookkeeper:
         del self.position_key
 
     def compute_at_fixpoint(self):
-        for cls in self.needs_hash_support.keys():
-            for cls2 in self.needs_hash_support:
-                if issubclass(cls, cls2) and cls is not cls2:
-                    del self.needs_hash_support[cls]
-                    break
+        # getbookkeeper() needs to work during this function, so provide
+        # one with a dummy position
+        self.enter(None)
+        try:
+            def call_sites():
+                newblocks = self.annotator.added_blocks
+                if newblocks is None:
+                    newblocks = self.annotator.annotated  # all of them
+                for block in newblocks:
+                    for op in block.operations:
+                        if op.opname in ('simple_call', 'call_args'):
+                            yield op
+
+            for call_op in call_sites():
+                self.consider_call_site(call_op)
+
+            for cls in self.needs_hash_support.keys():
+                for cls2 in self.needs_hash_support:
+                    if issubclass(cls, cls2) and cls is not cls2:
+                        del self.needs_hash_support[cls]
+                        break
+        finally:
+            self.leave()
+
+    def consider_call_site(self, call_op):
+        binding = self.annotator.binding
+        s_callable = binding(call_op.args[0])
+        if isinstance(s_callable, SomePBC):
+            descs = s_callable.descriptions.keys()
+            family = descs[0].getcallfamily()
+            args_s = [binding(arg) for arg in call_op.args[1:]]
+            args = self.build_args(call_op.opname, args_s)
+            s_callable.getKind().consider_call_site(self, family, descs, args)
 
     def getuniqueclassdef(self, cls):
         """Get the ClassDef associated with the given user cls.
