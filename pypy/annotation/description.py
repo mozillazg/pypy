@@ -55,7 +55,7 @@ class CallFamily:
                 # no compatible row.  Add this new one.
                 table.append(row)
             else:
-                if merged != row:
+                if merged != table[index]:
                     # remove the existing row
                     del table[index]
                     # Start over again with this expanded row
