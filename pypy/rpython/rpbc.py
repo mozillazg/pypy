@@ -68,6 +68,87 @@ class MultiplePBCRepr(Repr):
         else:
             return hop.rtyper.type_system.check_null(self, hop)
 
+
+class ConcreteCallTableRow(dict):
+    """A row in a concrete call table."""
+
+def build_concrete_calltable(rtyper, callfamily):
+    """Build a complete call table of a call family
+    with concrete low-level function objs.
+    """
+    concretetable = {}   # (shape,index): row, maybe with duplicates
+    uniquerows = []      # list of rows, without duplicates
+    
+    def lookuprow(row):
+        # a 'matching' row is one that has the same llfn, expect
+        # that it may have more or less 'holes'
+        for existingindex, existingrow in enumerate(uniquerows):
+            for funcdesc, llfn in row.items():
+                if funcdesc in existingrow:
+                    if llfn != existingrow[funcdesc]:
+                        break   # mismatch
+            else:
+                # potential match, unless the two rows have no common funcdesc
+                merged = ConcreteCallTableRow(row)
+                merged.update(existingrow)
+                if len(merged) == len(row) + len(existingrow):
+                    pass   # no common funcdesc, not a match
+                else:
+                    return existingindex, merged
+        raise LookupError
+
+    def addrow(row):
+        # add a row to the table, potentially merging it with an existing row
+        try:
+            index, merged = lookuprow(row)
+        except LookupError:
+            uniquerows.append(row)   # new row
+        else:
+            if merged == uniquerows[index]:
+                pass    # already exactly in the table
+            else:
+                del uniquerows[index]
+                addrow(merged)   # add the potentially larger merged row
+
+    concreterows = {}
+    for shape, rows in callfamily.calltables.items():
+        for index, row in enumerate(rows):
+            concreterow = ConcreteCallTableRow()
+            for funcdesc, graph in row.items():
+                llfn = rtyper.getcallable(graph)
+                concreterow[funcdesc] = llfn
+            concreterows[shape, index] = concreterow
+
+    for row in concreterows.values():
+        addrow(row)
+
+    for (shape, index), row in concreterows.items():
+        _, biggerrow = lookuprow(row)
+        concretetable[shape, index] = biggerrow
+
+    for finalindex, row in enumerate(uniquerows):
+        row.attrname = 'variant%d' % finalindex
+
+    return concretetable, uniquerows
+
+def get_concrete_calltable(rtyper, callfamily):
+    """Get a complete call table of a call family
+    with concrete low-level function objs.
+    """
+    # cache on the callfamily
+    try:
+        cached = rtyper.concrete_calltables[callfamily]
+    except KeyError:
+        concretetable, uniquerows = build_concrete_calltable(rtyper, callfamily)
+        cached = concretetable, uniquerows, callfamily.total_calltable_size
+        rtyper.concrete_calltables[callfamily] = cached
+    else:
+        concretetable, uniquerows, oldsize = cached
+        if oldsize != callfamily.total_calltable_size:
+            raise TyperError("call table was unexpectedly extended")
+    return concretetable, uniquerows
+
+
 class FunctionsPBCRepr(MultiplePBCRepr):
     """Representation selected for a PBC of function(s)."""
 
@@ -76,50 +157,20 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         self.s_pbc = s_pbc
         self._function_signatures = None
         self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
-
-        # Build the complete call table with concrete low-level function
-        # objects.
-        concretetable = {}
-        uniquerows = {}
-        for shape, rows in self.callfamily.calltables.items():
-            for index, row in enumerate(rows):
-                concreterow = {}
-                key = frozendict()
-                last_sig = None
-                last_name = None
-                for funcdesc, graph in row.items():
-                    sig = (callparse.getrinputs(self.rtyper, graph),
-                           callparse.getrresult(self.rtyper, graph))
-                    if last_sig is None:
-                        last_sig = sig
-                        last_name = graph.name
-                    elif last_sig != sig:
-                        raise TyperError("normalization failed in call table:\n"
-                                         "graph %r sig %r\n"
-                                         "graph %r sig %r" % (
-                                             last_name, last_sig,
-                                             graph.name, sig))
-                    llfn = self.rtyper.getcallable(graph)
-                    concreterow[funcdesc] = llfn
-                    key[funcdesc] = self.rtyper.type_system_deref(llfn)
-                if key in uniquerows:
-                    attrname, concreterow = uniquerows[key]  # from the cache
-                else:
-                    attrname = 'variant%d' % len(uniquerows)
-                    uniquerows[key] = attrname, concreterow
-                concretetable[shape, index] = attrname, concreterow
-        self.concretetable = concretetable
-        self.uniquerows = uniquerows
-
         if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None:
             # a single function
             self.lowleveltype = Void
-        elif len(uniquerows) == 1:
-            [(attrname, row)] = uniquerows.values()
-            llfn = row.itervalues().next()
-            self.lowleveltype = typeOf(llfn)
         else:
-            XXX_later
+            concretetable, uniquerows = get_concrete_calltable(self.rtyper,
+                                                               self.callfamily)
+            self.concretetable = concretetable
+            self.uniquerows = uniquerows
+            if len(uniquerows) == 1:
+                row = uniquerows[0]
+                examplellfn = row.itervalues().next()
+                self.lowleveltype = typeOf(examplellfn)
+            else:
+                XXX_later
 
     def get_s_callable(self):
         return self.s_pbc
@@ -158,13 +209,13 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
         llfns = {}
         found_anything = False
-        for attrname, row in self.uniquerows.values():
+        for row in self.uniquerows:
             if funcdesc in row:
                 llfn = row[funcdesc]
                 found_anything = True
             else:
                 llfn = null
-            llfns[attrname] = llfn
+            llfns[row.attrname] = llfn
         if not found_anything:
             raise TyperError("%r not in %r" % (value,
                                                self.s_pbc.descriptions))
@@ -182,8 +233,9 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             assert len(self.s_pbc.descriptions) == 1
                                       # lowleveltype wouldn't be Void otherwise
             funcdesc, = self.s_pbc.descriptions
-            attrname, row = self.concretetable[shape, index]
-            llfn = row[funcdesc]
+            row_of_one_graph = self.callfamily.calltables[shape][index]
+            graph = row_of_one_graph[funcdesc]
+            llfn = self.rtyper.getcallable(graph)
             return inputconst(typeOf(llfn), llfn)
         elif len(self.uniquerows) == 1:
             return v
@@ -195,10 +247,9 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         args = bk.build_args("simple_call", hop.args_s[1:])
         descs = self.s_pbc.descriptions.keys()
         row = description.FunctionDesc.row_to_consider(descs, args)
-        index =self.callfamily.calltable_lookup_row(args.rawshape(),
-                                                              row)
-        merged = self.callfamily.calltables[args.rawshape()][index]
-        anygraph = merged.itervalues().next()  # pick any witness
+        index = self.callfamily.calltable_lookup_row(args.rawshape(), row)
+        row_of_graphs = self.callfamily.calltables[args.rawshape()][index]
+        anygraph = row_of_graphs.itervalues().next()  # pick any witness
         vfn = hop.inputarg(self, arg=0)
         vlist = [self.convert_to_concrete_llfn(vfn, index, args.rawshape(),
                                                hop.llops)]
