@@ -216,10 +216,14 @@ class Bookkeeper:
     def consider_call_site(self, call_op):
         binding = self.annotator.binding
         s_callable = binding(call_op.args[0])
+        args_s = [binding(arg) for arg in call_op.args[1:]]
+        if isinstance(s_callable, SomeLLADTMeth):
+            adtmeth = s_callable
+            s_callable = self.immutablevalue(adtmeth.func)
+            args_s = [SomePtr(adtmeth.ll_ptrtype)] + args_s
         if isinstance(s_callable, SomePBC):
             descs = s_callable.descriptions.keys()
             family = descs[0].getcallfamily()
-            args_s = [binding(arg) for arg in call_op.args[1:]]
             args = self.build_args(call_op.opname, args_s)
             s_callable.getKind().consider_call_site(self, family, descs, args)
 

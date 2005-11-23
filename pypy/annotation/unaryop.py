@@ -565,7 +565,8 @@ class __extend__(SomeLLADTMeth):
 
     def call(adtmeth, args):
         bookkeeper = getbookkeeper()
-        return bookkeeper.pycall(adtmeth.func, args.prepend(SomePtr(adtmeth.ll_ptrtype)), mono=True)
+        s_func = bookkeeper.immutablevalue(adtmeth.func)
+        return s_func.call(args.prepend(SomePtr(adtmeth.ll_ptrtype)))
 
 from pypy.rpython.ootypesystem import ootype
 class __extend__(SomeOOInstance):
