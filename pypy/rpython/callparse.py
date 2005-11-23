@@ -41,6 +41,13 @@ def getrresult(rtyper, graph):
     else:
         return lltype.Void
 
+def getsig(rtyper, graph):
+    """Return the complete 'signature' of the graph."""
+    return (graph.signature,
+            graph.defaults,
+            getrinputs(rtyper, graph),
+            getrresult(rtyper, graph))
+
 def callparse(rtyper, graph, hop, opname):
     """Parse the arguments of 'hop' when calling the given 'graph'.
     """

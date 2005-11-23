@@ -30,9 +30,23 @@ def test_normalize_f2_as_taking_string_argument():
             f = f2
         f("a")
 
+    # The call table looks like:
+    #
+    #                 FuncDesc(f1)  FuncDesc(f2)
+    #   --------------------------------------------
+    #   line g+2:       graph1
+    #   line g+5:                      graph2
+    #   line g+7:       graph1         graph2
+    #
+    # But all lines get compressed to a single line.
+
     translator = rtype(g, [int])
-    f1graph = translator.getflowgraph(f1)
-    f2graph = translator.getflowgraph(f2)
+    for g in translator.graphs:
+        if g.func is f1:
+            f1graph = g
+        elif g.func is f2:
+            f2graph = g
+
     s_l1 = translator.annotator.binding(f1graph.getargs()[0])
     s_l2 = translator.annotator.binding(f2graph.getargs()[0])
     assert s_l1.__class__ == annmodel.SomeString   # and not SomeChar

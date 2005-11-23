@@ -10,6 +10,9 @@ from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import needsgc
 from pypy.rpython.objectmodel import instantiate
 
+def normalize_call_familes(annotator):
+    for callfamily in annotator.bookkeeper.pbc_maximal_call_families.infos():
+       normalize_calltable(annotator, callfamily)
 
 ##def normalize_function_signatures(annotator):
 ##    """Make sure that all functions called in a group have exactly
@@ -70,9 +73,209 @@ from pypy.rpython.objectmodel import instantiate
 ##        if len(functions) > 1:  # otherwise, nothing to do
 
 
-def normalize_calltable_row(row):
+def normalize_calltable(annotator, callfamily):
+    """Try to normalize all rows of a table."""
+    nshapes = len(callfamily.calltables)
+    for shape, table in callfamily.calltables.items():
+        for row in table:
+            normalize_calltable_row_signature(annotator, shape, row, nshapes)
+    while True: 
+        progress = False
+        for shape, table in callfamily.calltables.items():
+            for row in table:
+                progress |= normalize_calltable_row_annotation(annotator, shape, row)
+        if not progress:
+            return   # done
+    else:
+        raise Exception("call table too complex, giving up")
+
+
+def sinputs(annotator, graph):
+    return [annotator.binding(a) for a in graph.getargs()]
+
+def sresult(annotator, graph):
+    if graph.getreturnvar() in annotator.bindings:
+        return annotator.binding(graph.getreturnvar())
+    else:
+        return annmodel.s_ImpossibleValue
+
+def sfullsig(annotator, graph):
+    return (graph.signature,
+            graph.defaults,
+            sinputs(annotator, graph),
+            sresult(annotator, graph))
+
+def normalize_calltable_row_signature(annotator, shape, row, nshapes):
+    graphs = row.values()
+    if not graphs:
+        return
+    sig0 = graphs[0].signature
+    defaults0 = graphs[0].defaults
+    for graph in graphs:
+        if graph.signature != sig0:
+            break
+        if graph.defaults != defaults0:
+            break
+    else:
+        return
+    
+    assert nshapes == 1, "XXX was not supported"
+    
+    shape_cnt, shape_keys, shape_star, shape_stst = shape
+    assert not shape_star, "XXX not implemented"
+    assert not shape_stst, "XXX not implemented"
+
+    # for the first 'shape_cnt' arguments we need to generalize to
+    # a common type
+    call_nbargs = shape_cnt + len(shape_keys)
+
+    NODEFAULT = object()
+
+    for graph in graphs:
+        argnames, varargname, kwargname = graph.signature
+        assert not varargname, "XXX not implemented"
+        assert not kwargname, "XXX not implemented" # ?
+        inputargs_s = [annotator.binding(v) for v in graph.getargs()]
+        argorder = range(shape_cnt)
+        for key in shape_keys:
+            i = list(argnames).index(key)
+            assert i not in argorder
+            argorder.append(i)
+        need_reordering = (argorder != range(call_nbargs))
+        if need_reordering: 
+            oldblock = graph.startblock
+            inlist = []
+            defaults = graph.defaults or ()
+            defaults = [NODEFAULT]*(len(inputargs_s) - len(defaults)) + list(defaults)
+            newdefaults = []
+            for j in argorder:
+                v = Variable(graph.getargs()[j])
+                annotator.setbinding(v, inputargs_s[j])
+                inlist.append(v)
+                newdefaults.append(defaults[j])
+            newblock = Block(inlist)
+            # prepare the output args of newblock:
+            # 1. collect the positional arguments
+            outlist = inlist[:shape_cnt]
+            # 2. add defaults and keywords
+            for j in range(shape_cnt, len(inputargs_s)):
+                try:
+                    i = argorder.index(j)
+                    v = inlist[i]
+                except ValueError:
+                    default = newdefaults[i]
+                    if default is NODEFAULT:
+                        raise TyperError(
+                            "call pattern has %d positional arguments, "
+                            "but %r takes at least %d arguments" % (
+                                shape_cnt, graph.name,
+                                len(inputargs_s) - len(defaults)))
+                    v = Constant(default)
+                outlist.append(v)
+            newblock.closeblock(Link(outlist, oldblock))
+            oldblock.isstartblock = False
+            newblock.isstartblock = True
+            graph.startblock = newblock
+            for i in range(len(newdefaults)-1,-1,-1):
+                if newdefaults[i] is NODEFAULT:
+                    newdefaults = newdefaults[i:]
+                    break
+            graph.defaults = tuple(newdefaults)
+            graph.signature = (tuple([argnames[j] for j in argorder]), 
+                                   None, None)
+            # finished
+            checkgraph(graph)
+            annotator.annotated[newblock] = annotator.annotated[oldblock]
+   
+def normalize_calltable_row_annotation(annotator, shape, row):
     if len(row) <= 1:
-        return   # nothing to do
+        return False   # nothing to do
+    graphs = row.values()
+    
+    shape_cnt, shape_keys, shape_star, shape_stst = shape
+    assert not shape_star, "XXX not implemented"
+    assert not shape_stst, "XXX not implemented"
+
+    call_nbargs = shape_cnt + len(shape_keys)
+
+    # for the first 'shape_cnt' arguments we need to generalize to
+    # a common type
+    graph_bindings = {}
+    for graph in graphs:
+        argnames, varargname, kwargname = graph.signature
+        assert not varargname, "XXX not implemented"
+        graph_bindings[graph] = [annotator.binding(v)
+                                 for v in graph.getargs()]
+        argorder = range(shape_cnt)
+        for key in shape_keys:
+            i = list(argnames).index(key)
+            assert i not in argorder
+            argorder.append(i)
+        assert argorder == range(call_nbargs)
+
+    call_nbargs = shape_cnt + len(shape_keys)
+    generalizedargs = []
+    for i in range(call_nbargs):
+        args_s = []
+        for graph, bindings in graph_bindings.items():
+            args_s.append(bindings[i])
+        s_value = annmodel.unionof(*args_s)
+        generalizedargs.append(s_value)
+    result_s = [annotator.binding(graph.getreturnvar())
+                for graph in graph_bindings]
+    generalizedresult = annmodel.unionof(*result_s)
+
+    conversion = False
+    for graph in graphs:
+        bindings = graph_bindings[graph]
+        need_conversion = (generalizedargs != bindings)
+        if need_conversion:
+            conversion = True
+            oldblock = graph.startblock
+            inlist = []
+            for j, s_value in enumerate(generalizedargs):
+                v = Variable(graph.getargs()[j])
+                annotator.setbinding(v, s_value)
+                inlist.append(v)
+            newblock = Block(inlist)
+            # prepare the output args of newblock and link
+            outlist = inlist[:]
+            newblock.closeblock(Link(outlist, oldblock))
+            oldblock.isstartblock = False
+            newblock.isstartblock = True
+            graph.startblock = newblock
+            # finished
+            checkgraph(graph)
+            annotator.annotated[newblock] = annotator.annotated[oldblock]
+        # convert the return value too
+        if annotator.binding(graph.getreturnvar()) != generalizedresult:
+            conversion = True
+            annotator.setbinding(graph.getreturnvar(), generalizedresult)
+
+    return conversion
+
+def normalize_calltable_row(annotator, shape, row):
+    """Normalize a row of the call table, in the sense that all graphs
+    in that row should end up having the same signature (sfullsig()).
+    """
+    if len(row) <= 1:
+        return False   # nothing to do
+    
+    # 1. if all the same sfullsig(), happy ?????????????????????
+
+    sigs = [sfullsig(annotator, graph) for graph in row.itervalues()]
+
+    if dict.fromkeys(sigs) == 1:
+        return False
+
+    assert not shape[1] # no keyword arguments yet
+
+    # 2. if all the same graph.signature+graph.defaults, not too bad;
+    #    otherwise,  parse all graphs' signature according to 'shape'
+    #
+    # 3. hack the graphs for the (potentially new) signature, and the
+    #    unification of the annotations
+    
     fully_normalized = True
     if len(family.patterns) > 1:
         argspec = inspect.getargspec(functions[0])
@@ -367,7 +570,7 @@ def perform_normalizations(rtyper):
     #XXX later: create_class_constructors(rtyper)
     rtyper.annotator.frozen += 1
     try:
-        pass
+        normalize_call_familes(rtyper.annotator)
         #XXX later: normalize_function_signatures(rtyper.annotator)
         #XXX later: specialize_pbcs_by_memotables(rtyper.annotator) 
         #XXX later: merge_classpbc_getattr_into_classdef(rtyper)
