@@ -15,8 +15,11 @@ class CallFamily:
         self.patterns = {}    # set of "call shapes" in the sense of
                               # pypy.interpreter.argument.Argument
         self.calltables = {}  # see calltable_lookup_row()
+        self.total_calltable_size = 0
 
     def update(self, other):
+        assert not self.calltables and not other.calltables, (
+            "too late for merging call families!")
         self.descs.update(other.descs)
         self.patterns.update(other.patterns)
 
@@ -27,42 +30,17 @@ class CallFamily:
         # There is one such table per "call shape".
         table = self.calltables.setdefault(callshape, [])
         for i, existing_row in enumerate(table):
-            # which row(s) can the new row be merged with?  The
-            # condition is to have at least a common graph, and no
-            # incompatible graphs elsewhere.
-            for desc, graph in row.items():
-                if existing_row.get(desc) is graph:
-                    # common graph.  Do we find incompatible graphs?
-                    merged = row.copy()
-                    merged.update(existing_row)
-                    for merged_desc, merged_graph in merged.items():
-                        if (merged_desc in row and
-                            row[merged_desc] is not merged_graph):
-                            msg = ("incompatible specializations in a call"
-                                   " to %r")
-                            raise Exception(msg % (merged_desc,))
-                    # done.
-                    return i, merged
-            #else: no common graph
+            if existing_row == row:   # XXX maybe use a dict again here?
+                return i
         raise LookupError
 
     def calltable_add_row(self, callshape, row):
-        table = self.calltables.setdefault(callshape, [])
-        while True:
-            try:
-                index, merged = self.calltable_lookup_row(callshape, row)
-            except LookupError:
-                # no compatible row.  Add this new one.
-                table.append(row)
-            else:
-                if merged != table[index]:
-                    # remove the existing row
-                    del table[index]
-                    # Start over again with this expanded row
-                    # which can possibly be further merged with other rows
-                    row = merged
-                    continue
-            return
+        try:
+            self.calltable_lookup_row(callshape, row)
+        except LookupError:
+            table = self.calltables.setdefault(callshape, [])
+            table.append(row)
+            self.total_calltable_size += 1
 
 
 class AttrFamily:

@@ -55,6 +55,7 @@ class RPythonTyper:
         self.class_reprs = {}
         self.instance_reprs = {}
         self.pbc_reprs = {}
+        self.concrete_calltables = {}
         self.class_pbc_attributes = {}
         self.typererrors = []
         self.typererror_count = 0
