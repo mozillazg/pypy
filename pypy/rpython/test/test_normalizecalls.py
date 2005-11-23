@@ -14,6 +14,14 @@ def rtype(fn, argtypes=[]):
     t.checkgraphs()
     return t
 
+def graphof(translator, func):
+    result = []
+    for graph in translator.graphs:
+        if getattr(graph, 'func', None) is func:
+            result.append(graph)
+    assert len(result) == 1
+    return result[0]
+
 # ____________________________________________________________
 
 def test_normalize_f2_as_taking_string_argument():
@@ -41,12 +49,8 @@ def test_normalize_f2_as_taking_string_argument():
     # But all lines get compressed to a single line.
 
     translator = rtype(g, [int])
-    for g in translator.graphs:
-        if g.func is f1:
-            f1graph = g
-        elif g.func is f2:
-            f2graph = g
-
+    f1graph = graphof(translator, f1)
+    f2graph = graphof(translator, f2)
     s_l1 = translator.annotator.binding(f1graph.getargs()[0])
     s_l2 = translator.annotator.binding(f2graph.getargs()[0])
     assert s_l1.__class__ == annmodel.SomeString   # and not SomeChar
@@ -66,8 +70,8 @@ def test_normalize_keyword_call():
         f(a=5, b=6)
 
     translator = rtype(g, [int])
-    f1graph = translator.getflowgraph(f1)
-    f2graph = translator.getflowgraph(f2)
+    f1graph = graphof(translator, f1)
+    f2graph = graphof(translator, f2)
     assert len(f1graph.getargs()) == 2
     assert len(f2graph.getargs()) == 2   # normalized to the common call pattern
     #translator.view()
@@ -105,8 +109,8 @@ def test_normalize_missing_return():
             return -1
 
     translator = rtype(dummyfn, [int, int])
-    add_one_graph = translator.getflowgraph(add_one)
-    oups_graph    = translator.getflowgraph(oups)
+    add_one_graph = graphof(translator, add_one)
+    oups_graph    = graphof(translator, oups)
     assert add_one_graph.getreturnvar().concretetype == lltype.Signed
     assert oups_graph   .getreturnvar().concretetype == lltype.Signed
     #translator.view()
@@ -129,9 +133,9 @@ def test_normalize_abstract_method():
         return x.fn()
 
     translator = rtype(dummyfn, [int])
-    base_graph = translator.getflowgraph(Base.fn.im_func)
-    sub1_graph = translator.getflowgraph(Sub1.fn.im_func)
-    sub2_graph = translator.getflowgraph(Sub2.fn.im_func)
+    base_graph = graphof(translator, Base.fn.im_func)
+    sub1_graph = graphof(translator, Sub1.fn.im_func)
+    sub2_graph = graphof(translator, Sub2.fn.im_func)
     assert base_graph.getreturnvar().concretetype == lltype.Signed
     assert sub1_graph.getreturnvar().concretetype == lltype.Signed
     assert sub2_graph.getreturnvar().concretetype == lltype.Signed

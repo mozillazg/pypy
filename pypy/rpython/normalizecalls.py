@@ -131,7 +131,8 @@ def normalize_calltable_row_signature(annotator, shape, row):
             oldblock = graph.startblock
             inlist = []
             defaults = graph.defaults or ()
-            defaults = [NODEFAULT]*(len(inputargs_s) - len(defaults)) + list(defaults)
+            num_nondefaults = len(inputargs_s) - len(defaults)
+            defaults = [NODEFAULT] * num_nondefaults + list(defaults)
             newdefaults = []
             for j in argorder:
                 v = Variable(graph.getargs()[j])
@@ -148,13 +149,12 @@ def normalize_calltable_row_signature(annotator, shape, row):
                     i = argorder.index(j)
                     v = inlist[i]
                 except ValueError:
-                    default = newdefaults[i]
+                    default = defaults[j]
                     if default is NODEFAULT:
                         raise TyperError(
                             "call pattern has %d positional arguments, "
                             "but %r takes at least %d arguments" % (
-                                shape_cnt, graph.name,
-                                len(inputargs_s) - len(defaults)))
+                                shape_cnt, graph.name, num_nondefaults))
                     v = Constant(default)
                 outlist.append(v)
             newblock.closeblock(Link(outlist, oldblock))
