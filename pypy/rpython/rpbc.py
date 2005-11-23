@@ -243,8 +243,14 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             XXX_later
 
     def rtype_simple_call(self, hop):
+        return self.call('simple_call', hop)
+
+    def rtype_call_args(self, hop):
+        return self.call('call_args', hop)
+
+    def call(self, opname, hop):
         bk = self.rtyper.annotator.bookkeeper
-        args = bk.build_args("simple_call", hop.args_s[1:])
+        args = bk.build_args(opname, hop.args_s[1:])
         descs = self.s_pbc.descriptions.keys()
         row = description.FunctionDesc.row_to_consider(descs, args)
         index = self.callfamily.calltable_lookup_row(args.rawshape(), row)
@@ -253,55 +259,11 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         vfn = hop.inputarg(self, arg=0)
         vlist = [self.convert_to_concrete_llfn(vfn, index, args.rawshape(),
                                                hop.llops)]
-        vlist += callparse.callparse(self.rtyper, anygraph,
-                                     hop, 'simple_call')
+        vlist += callparse.callparse(self.rtyper, anygraph, hop, opname)
         rresult = callparse.getrresult(self.rtyper, anygraph)
         hop.exception_is_here()
         v = hop.genop('direct_call', vlist, resulttype = rresult)
         return hop.llops.convertvar(v, rresult, hop.r_result)
-
-##        f, rinputs, rresult = self.function_signatures().itervalues().next()
-
-##        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
-##            # should not have an argument count mismatch
-##            assert len(rinputs) == hop.nb_args-1, "normalization bug"
-##            vlist = hop.inputargs(self, *rinputs)
-##        else:
-##            # if not normalized, should be a call to a known function
-##            # or to functions all with same signature
-##            funcs = self.function_signatures().keys()
-##            assert samesig(funcs), "normalization bug"
-##            func = funcs[0]
-##            vlist = [hop.inputarg(self, arg=0)]
-##            vlist += callparse.callparse('simple_call', func, rinputs, hop)
-
-##        return self.call(hop, f, vlist, rresult)
-
-    def call(self, hop, f, vlist, rresult):
-        if self.lowleveltype is Void:
-            assert len(self.function_signatures()) == 1
-            vlist[0] = hop.inputconst(typeOf(f), f)
-        hop.exception_is_here()
-        v = hop.genop('direct_call', vlist, resulttype = rresult)
-        return hop.llops.convertvar(v, rresult, hop.r_result)
-
-    def rtype_call_args(self, hop):
-        f, rinputs, rresult = self.function_signatures().itervalues().next()
-        # the function arguments may have been normalized by normalizecalls()
-        # already
-        if getattr(self.rtyper.type_system_deref(f).graph, 'normalized_for_calls', False):
-            vlist = hop.inputargs(self, Void, *rinputs)
-            vlist = vlist[:1] + vlist[2:]
-        else:
-            # if not normalized, should be a call to a known function
-            # or to functions all with same signature
-            funcs = self.function_signatures().keys()
-            assert samesig(funcs), "normalization bug"
-            func = funcs[0]
-            vlist = [hop.inputarg(self, arg=0)] 
-            vlist += callparse.callparse('call_args', func, rinputs, hop)
-
-        return self.call(hop, f, vlist, rresult)
 
 class __extend__(pairtype(FunctionsPBCRepr, FunctionsPBCRepr)):
         def convert_from_to((r_fpbc1, r_fpbc2), v, llops):
