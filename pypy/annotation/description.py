@@ -185,6 +185,17 @@ class FunctionDesc(Desc):
         family.calltable_add_row(args.rawshape(), row)
     consider_call_site = staticmethod(consider_call_site)
 
+    def variant_for_call_site(bookkeeper, family, descs, args):
+        bookkeeper.enter(None)
+        try:
+            row = FunctionDesc.row_to_consider(descs, args)
+        finally:
+            bookkeeper.leave()
+        shape = args.rawshape() 
+        index = family.calltable_lookup_row(shape, row)
+        return shape, index
+    variant_for_call_site = staticmethod(variant_for_call_site)
+
     def row_to_consider(descs, args):
         # see comments in CallFamily
         from pypy.annotation.model import s_ImpossibleValue

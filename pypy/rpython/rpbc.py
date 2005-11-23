@@ -224,7 +224,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         else:
             XXX_later
 
-    def convert_to_concrete_llfn(self, v, index, shape, llop):
+    def convert_to_concrete_llfn(self, v, shape, index, llop):
         """Convert the variable 'v' to a variable referring to a concrete
         low-level function.  In case the call table contains multiple rows,
         'index' and 'shape' tells which of its items we are interested in.
@@ -252,12 +252,11 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         bk = self.rtyper.annotator.bookkeeper
         args = bk.build_args(opname, hop.args_s[1:])
         descs = self.s_pbc.descriptions.keys()
-        row = description.FunctionDesc.row_to_consider(descs, args)
-        index = self.callfamily.calltable_lookup_row(args.rawshape(), row)
-        row_of_graphs = self.callfamily.calltables[args.rawshape()][index]
+        shape, index = description.FunctionDesc.variant_for_call_site(bk, self.callfamily, descs, args)
+        row_of_graphs = self.callfamily.calltables[shape][index]
         anygraph = row_of_graphs.itervalues().next()  # pick any witness
         vfn = hop.inputarg(self, arg=0)
-        vlist = [self.convert_to_concrete_llfn(vfn, index, args.rawshape(),
+        vlist = [self.convert_to_concrete_llfn(vfn, shape, index,
                                                hop.llops)]
         vlist += callparse.callparse(self.rtyper, anygraph, hop, opname)
         rresult = callparse.getrresult(self.rtyper, anygraph)
