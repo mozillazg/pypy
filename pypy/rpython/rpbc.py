@@ -85,7 +85,20 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             for index, row in enumerate(rows):
                 concreterow = {}
                 key = frozendict()
+                last_sig = None
+                last_name = None
                 for funcdesc, graph in row.items():
+                    sig = (callparse.getrinputs(self.rtyper, graph),
+                           callparse.getrresult(self.rtyper, graph))
+                    if last_sig is None:
+                        last_sig = sig
+                        last_name = graph.name
+                    elif last_sig != sig:
+                        raise TyperError("normalization failed in call table:\n"
+                                         "graph %r sig %r\n"
+                                         "graph %r sig %r" % (
+                                             last_name, last_sig,
+                                             graph.name, sig))
                     llfn = self.rtyper.getcallable(graph)
                     concreterow[funcdesc] = llfn
                     key[funcdesc] = self.rtyper.type_system_deref(llfn)
@@ -166,9 +179,11 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         'index' and 'shape' tells which of its items we are interested in.
         """
         if self.lowleveltype is Void:
+            assert len(self.s_pbc.descriptions) == 1
+                                      # lowleveltype wouldn't be Void otherwise
+            funcdesc, = self.s_pbc.descriptions
             attrname, row = self.concretetable[shape, index]
-            assert len(row) == 1     # lowleveltype wouldn't be Void otherwise
-            llfn, = row.values()
+            llfn = row[funcdesc]
             return inputconst(typeOf(llfn), llfn)
         elif len(self.uniquerows) == 1:
             return v
@@ -180,8 +195,9 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         args = bk.build_args("simple_call", hop.args_s[1:])
         descs = self.s_pbc.descriptions.keys()
         row = description.FunctionDesc.row_to_consider(descs, args)
-        index, merged = self.callfamily.calltable_lookup_row(args.rawshape(),
-                                                             row)
+        index =self.callfamily.calltable_lookup_row(args.rawshape(),
+                                                              row)
+        merged = self.callfamily.calltables[args.rawshape()][index]
         anygraph = merged.itervalues().next()  # pick any witness
         vfn = hop.inputarg(self, arg=0)
         vlist = [self.convert_to_concrete_llfn(vfn, index, args.rawshape(),
@@ -256,12 +272,11 @@ def get_access_set(rtyper, pbc):
         return None    
 
 def getFrozenPBCRepr(rtyper, s_pbc):
-    assert len(s_pbc.descriptions) >= 1
-    if len(s_pbc.descriptions) == 1:
-        return SingleFrozenPBCRepr(s_pbc.descriptions.keys()[0])
+    pbcs = s_pbc.descriptions.keys()
+    assert len(pbcs) >= 1
+    if len(pbcs) == 1:
+        return SingleFrozenPBCRepr(pbcs[0])
     else:
-        pbcs = [pbc for pbc in s_pbc.prebuiltinstances.keys()
-                    if pbc is not None]
         access = get_access_set(rtyper, pbcs[0])
         for obj in pbcs[1:]:
             access1 = get_access_set(rtyper, obj)
