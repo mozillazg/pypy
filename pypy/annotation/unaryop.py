@@ -473,7 +473,7 @@ class __extend__(SomeInstance):
             clsdef.generalize_attr(attr, s_value)
 
     def hash(ins):
-        getbookkeeper().needs_hash_support[ins.classdef.cls] = True
+        getbookkeeper().needs_hash_support[ins.classdef] = True
         return SomeInteger()
 
 

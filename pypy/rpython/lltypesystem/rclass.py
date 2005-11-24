@@ -118,7 +118,7 @@ class ClassRepr(AbstractClassRepr):
             #
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
             self.rbase.setup()
-            vtable_type = Struct('%s_vtable' % self.classdef.cls.__name__,
+            vtable_type = Struct('%s_vtable' % self.classdef.name,
                                  ('super', self.rbase.vtable_type),
                                  *llfields)
             self.vtable_type.become(vtable_type)
@@ -173,7 +173,7 @@ class ClassRepr(AbstractClassRepr):
             if rsubcls.classdef is None:
                 name = 'object'
             else:
-                name = rsubcls.classdef.cls.__name__
+                name = rsubcls.classdef.name
             vtable.name = malloc(Array(Char), len(name)+1, immortal=True)
             for i in range(len(name)):
                 vtable.name[i] = name[i]
@@ -189,7 +189,7 @@ class ClassRepr(AbstractClassRepr):
             def assign(mangled_name, value):
                 if isinstance(value, staticmethod):
                     value = value.__get__(42)   # staticmethod => bare function
-                llvalue = r.convert_const(value)
+                llvalue = r.convert_desc_or_const(value)
                 setattr(vtable, mangled_name, llvalue)
 
             mro = list(rsubcls.classdef.getmro())
@@ -197,11 +197,9 @@ class ClassRepr(AbstractClassRepr):
                 mangled_name, r = self.clsfields[fldname]
                 if r.lowleveltype is Void:
                     continue
-                for clsdef in mro:
-                    if fldname in clsdef.cls.__dict__:
-                        value = clsdef.cls.__dict__[fldname]
-                        assign(mangled_name, value)
-                        break
+                value = clsdef.classdesc.read_attribute(fldname, None)
+                if value is not None:
+                    assign(mangled_name, value)
             # extra PBC attributes
             for (access_set, attr), (mangled_name, r) in self.pbcfields.items():
                 if r.lowleveltype is Void:
@@ -316,7 +314,7 @@ class InstanceRepr(AbstractInstanceRepr):
                     llfields.append((mangled_name, r.lowleveltype))
             #
             # hash() support
-            if self.rtyper.needs_hash_support(self.classdef.cls):
+            if self.rtyper.needs_hash_support(self.classdef):
                 from pypy.rpython import rint
                 fields['_hash_cache_'] = 'hash_cache', rint.signed_repr
                 llfields.append(('hash_cache', Signed))
@@ -328,7 +326,7 @@ class InstanceRepr(AbstractInstanceRepr):
             else:
                 MkStruct = Struct
             
-            object_type = MkStruct(self.classdef.cls.__name__,
+            object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    *llfields)
             self.object_type.become(object_type)

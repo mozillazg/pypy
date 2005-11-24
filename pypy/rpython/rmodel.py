@@ -1,5 +1,6 @@
 from pypy.annotation.pairtype import pairtype, extendabletype
 from pypy.annotation import model as annmodel
+from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      Void, Bool, Float, Signed, Char, UniChar, \
@@ -89,6 +90,15 @@ class Repr:
     def _freeze_(self):
         return True
 
+    def convert_desc_or_const(self, value):
+        if isinstance(self, description.Desc):
+            return self.convert_desc(self, value)
+        elif isinstance(value, flowmodel.Constant):
+            return self.convert_const(value.value)
+        else:
+            raise TyperError("convert_desc_or_const expects a Desc"
+                             "or Constant: %r" % value)
+                            
     def convert_const(self, value):
         "Convert the given constant value to the low-level repr of 'self'."
         if self.lowleveltype is not Void:
@@ -317,7 +327,10 @@ def needsgc(classdef, nogc=False):
     if classdef is None:
         return not nogc
     else:
-        return getattr(classdef.cls, '_alloc_flavor_', 'gc').startswith('gc')
+        classdesc = classdef.classdesc
+        alloc_flavor = classdesc.read_attribute('_alloc_flavor',
+                                                Constant('gc')).value     
+        return alloc_flavor.startswith('gc')
 
 def externalvsinternal(rtyper, item_repr): # -> external_item_repr, (internal_)item_repr
     from pypy.rpython import rclass

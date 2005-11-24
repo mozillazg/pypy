@@ -205,9 +205,9 @@ class Bookkeeper:
             for call_op in call_sites():
                 self.consider_call_site(call_op)
 
-            for cls in self.needs_hash_support.keys():
-                for cls2 in self.needs_hash_support:
-                    if issubclass(cls, cls2) and cls is not cls2:
+            for clsdef in self.needs_hash_support.keys():
+                for clsdef2 in self.needs_hash_support:
+                    if clsdef.issubclass(clsdef2) and clsdef is not clsdef2:
                         del self.needs_hash_support[cls]
                         break
         finally:
