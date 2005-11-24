@@ -6,7 +6,8 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, \
      Ptr, malloc, nullptr
-from pypy.rpython.rmodel import Repr, TyperError, inputconst, warning, mangle
+from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc
+from pypy.rpython.rmodel import warning, mangle
 from pypy.rpython import robject
 from pypy.rpython import rtuple
 from pypy.rpython.rpbc import SingleFrozenPBCRepr, samesig,\
@@ -28,9 +29,10 @@ def rtype_is_None(robj1, rnone2, hop, pos=0):
 
 class MultipleFrozenPBCRepr(MultiplePBCRepr):
     """Representation selected for multiple non-callable pre-built constants."""
-    def __init__(self, rtyper, access_set):
+    def __init__(self, rtyper, frozendescs):
         self.rtyper = rtyper
-        self.access_set = access_set
+        self.descs = frozendescs
+        self.access_set = frozendescs[0].queryattrfamily()
         self.pbc_type = ForwardReference()
         self.lowleveltype = Ptr(self.pbc_type)
         self.pbc_cache = {}
@@ -50,31 +52,34 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
         self.pbc_type.become(Struct('pbc', *llfields))
         self.llfieldmap = llfieldmap
 
-    def convert_const(self, pbc):
-        if pbc is None:
-            return nullptr(self.pbc_type)
-        if isinstance(pbc, types.MethodType) and pbc.im_self is None:
-            value = pbc.im_func   # unbound method -> bare function
-##        if pbc not in self.access_set.objects:
-##            raise TyperError("not found in PBC set: %r" % (pbc,))
+    def convert_desc(self, frozendesc):
+        if frozendesc not in self.descs:
+            raise TyperError("not found in PBC set: %r" % (frozendesc,))
         try:
-            return self.pbc_cache[pbc]
+            return self.pbc_cache[frozendesc]
         except KeyError:
             self.setup()
             result = malloc(self.pbc_type, immortal=True)
-            desc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
-            self.pbc_cache[pbc] = result
+            self.pbc_cache[frozendesc] = result
             for attr, (mangled_name, r_value) in self.llfieldmap.items():
                 if r_value.lowleveltype is Void:
                     continue
                 try:
-                    thisattrvalue = desc.read_attribute(attr)
+                    thisattrvalue = frozendesc.read_attribute(attr)
                 except AttributeError:
                     warning("PBC %r has no attribute %r" % (pbc, attr))
                     continue
                 llvalue = r_value.convert_const(thisattrvalue)
                 setattr(result, mangled_name, llvalue)
             return result
+
+    def convert_const(self, pbc):
+        if pbc is None:
+            return nullptr(self.pbc_type)
+        if isinstance(pbc, types.MethodType) and pbc.im_self is None:
+            value = pbc.im_func   # unbound method -> bare function
+        frozendesc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
+        return self.convert_desc(frozendesc)
 
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
@@ -98,7 +103,7 @@ class __extend__(pairtype(SingleFrozenPBCRepr, MultipleFrozenPBCRepr)):
         frozendesc1 = r_pbc1.frozendesc
         access = frozendesc1.queryattrfamily()
         if access is r_pbc2.access_set:
-            return r_pbc1.convert_desc(r_pbc2, frozendesc1)
+            return inputdesc(r_pbc2, frozendesc1)
         return NotImplemented
 
 # ____________________________________________________________
@@ -140,12 +145,15 @@ class MethodOfFrozenPBCRepr(Repr):
         r_func = self.rtyper.getrepr(self.get_s_callable())
         return r_func, 1
 
+    def convert_desc(self, mdesc):
+        if mdesc.funcdesc is not self.funcdesc:
+            raise TyperError("not a method bound on %r: %r" % (self.funcdesc, 
+                                                               mdesc))
+        return self.r_im_self.convert_desc(mdesc.frozendesc)
+
     def convert_const(self, method):
         mdesc = self.rtyper.annotator.bookkeeper.getdesc(method)
-        if mdesc.funcdesc is not self.funcdesc:
-            raise TyperError("not a method bound on %r: %r" % (self.funcdesc,
-                                                               method))
-        return self.r_im_self.convert_const(method.im_self)
+        return self.convert_desc(mdesc)
 
     def rtype_simple_call(self, hop):
         return self.redispatch_call(hop, call_args=False)
