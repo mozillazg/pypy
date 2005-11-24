@@ -353,7 +353,7 @@ class AbstractClassesPBCRepr(Repr):
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
-        if None in s_pbc.prebuiltinstances:
+        if s_pbc.can_be_None:
             raise TyperError("unsupported: variable of type "
                              "class-pointer or None")
         if s_pbc.is_constant():
