@@ -19,7 +19,10 @@ class __extend__(annmodel.SomePBC):
             return none_frozen_pbc_repr 
         kind = self.getKind()
         if issubclass(kind, description.FunctionDesc):
-            getRepr = FunctionsPBCRepr
+            if self.descriptions.keys()[0].querycallfamily():
+                getRepr = FunctionsPBCRepr
+            else:
+                getRepr = getFrozenPBCRepr
         elif issubclass(kind, description.ClassDesc):
             # user classes
             getRepr = rtyper.type_system.rpbc.ClassesPBCRepr
@@ -46,7 +49,7 @@ class __extend__(annmodel.SomePBC):
     def rtyper_makekey(self):
         lst = list(self.descriptions)
         lst.sort()
-        return tuple([self.__class__]+lst)
+        return tuple([self.__class__, self.can_be_None]+lst)
 
 builtin_descriptor_type = (
     type(len),                             # type 'builtin_function_or_method'
@@ -279,7 +282,7 @@ def getPyObjRepr(rtyper, s_pbc):
 def getFrozenPBCRepr(rtyper, s_pbc):
     descs = s_pbc.descriptions.keys()
     assert len(descs) >= 1
-    if len(descs) == 1:
+    if len(descs) == 1 and not s_pbc.can_be_None:
         return SingleFrozenPBCRepr(descs[0])
     else:
         access = descs[0].queryattrfamily()

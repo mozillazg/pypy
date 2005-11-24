@@ -314,7 +314,7 @@ class SomePBC(SomeObject):
                 knowntype = type
             if knowntype != object:
                 self.knowntype = knowntype
-            if len(descriptions) == 1:
+            if len(descriptions) == 1 and not can_be_None:
                 # hack for the convenience of direct callers to SomePBC():
                 # only if there is a single object in descriptions
                 desc, = descriptions
