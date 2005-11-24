@@ -62,15 +62,13 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
         except KeyError:
             self.setup()
             result = malloc(self.pbc_type, immortal=True)
+            desc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
             self.pbc_cache[pbc] = result
             for attr, (mangled_name, r_value) in self.llfieldmap.items():
                 if r_value.lowleveltype is Void:
                     continue
-##                 try: 
-##                     thisattrvalue = self.access_set.values[(pbc, attr)] 
-##                 except KeyError:
                 try:
-                    thisattrvalue = getattr(pbc, attr)
+                    thisattrvalue = desc.read_attribute(attr)
                 except AttributeError:
                     warning("PBC %r has no attribute %r" % (pbc, attr))
                     continue
