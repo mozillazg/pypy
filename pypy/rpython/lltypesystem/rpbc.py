@@ -141,8 +141,9 @@ class MethodOfFrozenPBCRepr(Repr):
         return r_func, 1
 
     def convert_const(self, method):
-        if getattr(method, 'im_func', None) is not self.function:
-            raise TyperError("not a method bound on %r: %r" % (self.function,
+        mdesc = self.rtyper.annotator.bookkeeper.getdesc(method)
+        if mdesc.funcdesc is not self.funcdesc:
+            raise TyperError("not a method bound on %r: %r" % (self.funcdesc,
                                                                method))
         return self.r_im_self.convert_const(method.im_self)
 
