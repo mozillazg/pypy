@@ -18,10 +18,11 @@ class CallFamily:
         self.total_calltable_size = 0
 
     def update(self, other):
-        assert not self.calltables and not other.calltables, (
-            "too late for merging call families!")
         self.descs.update(other.descs)
         self.patterns.update(other.patterns)
+        for shape, table in other.calltables.items():
+            for row in table:
+                self.calltable_add_row(shape, row)
 
     def calltable_lookup_row(self, callshape, row):
         # this code looks up a table of which graph to
@@ -77,15 +78,15 @@ class Desc(object):
     def getcallfamily(self):
         """Get the CallFamily object."""
         call_families = self.bookkeeper.pbc_maximal_call_families
-        _, _, callfamily = call_families.find(self)
+        _, _, callfamily = call_families.find(self.rowkey())
         return callfamily
 
     def mergecallfamilies(self, *others):
         """Merge the call families of the given Descs into one."""
         call_families = self.bookkeeper.pbc_maximal_call_families
-        changed, rep, callfamily = call_families.find(self)
+        changed, rep, callfamily = call_families.find(self.rowkey())
         for desc in others:
-            changed1, rep, callfamily = call_families.union(rep, desc)
+            changed1, rep, callfamily = call_families.union(rep, desc.rowkey())
             changed = changed or changed1
         return changed
 
@@ -106,10 +107,6 @@ class Desc(object):
 
     def bind_under(self, classdef, name):
         return self
-
-    def consider_call_site(bookkeeper, family, descs, args):
-        print "unimplemented consider_call_site for %r" % (descs,) # XXX
-    consider_call_site = staticmethod(consider_call_site)
 
 
 class FunctionDesc(Desc):
@@ -196,13 +193,16 @@ class FunctionDesc(Desc):
         return shape, index
     variant_for_call_site = staticmethod(variant_for_call_site)
 
+    def rowkey(self):
+        return self
+
     def row_to_consider(descs, args):
         # see comments in CallFamily
         from pypy.annotation.model import s_ImpossibleValue
         row = {}
         for desc in descs:
             def enlist(graph, ignore):
-                row[desc] = graph
+                row[desc.rowkey()] = graph
                 return s_ImpossibleValue   # meaningless
             desc.pycall(enlist, args, s_ImpossibleValue)
         return row
@@ -378,6 +378,13 @@ class ClassDesc(Desc):
                 return self
         return None
 
+    def consider_call_site(bookkeeper, family, descs, args):
+        print "XXX not implemented"
+    consider_call_site = staticmethod(consider_call_site)
+
+    def rowkey(self):
+        return self
+
 
 class MethodDesc(Desc):
     knowntype = types.MethodType
@@ -401,6 +408,21 @@ class MethodDesc(Desc):
     def bind_under(self, classdef, name):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
         return self.funcdesc.bind_under(classdef, name)
+    
+    def consider_call_site(bookkeeper, family, descs, args):
+        funcdescs = [methoddesc.funcdesc for methoddesc in descs]
+        row = FunctionDesc.row_to_consider(descs, args)
+        shape = args.rawshape()
+        shape = (shape[0]+1,) + shape[1:]    # account for the extra 'self'
+        family.calltable_add_row(shape, row)
+    consider_call_site = staticmethod(consider_call_site)
+
+    def rowkey(self):
+        # we are computing call families and call tables that always contain
+        # FunctionDescs, not MethodDescs.  The present method returns the
+        # FunctionDesc to use as a key in that family.
+        return self.funcdesc
+
 
 def new_or_old_class(c):
     if hasattr(c, '__class__'):
@@ -445,3 +467,14 @@ class MethodOfFrozenDesc(Desc):
         s_self = SomePBC([self.frozendesc])
         args = args.prepend(s_self)
         return self.funcdesc.pycall(schedule, args, s_previous_result)
+    
+    def consider_call_site(bookkeeper, family, descs, args):
+        funcdescs = [mofdesc.funcdesc for mofdesc in descs]
+        row = FunctionDesc.row_to_consider(descs, args)
+        shape = args.rawshape()
+        shape = (shape[0]+1,) + shape[1:]    # account for the extra 'self'
+        family.calltable_add_row(shape, row)
+    consider_call_site = staticmethod(consider_call_site)
+
+    def rowkey(self):
+        return self.funcdesc

@@ -170,8 +170,7 @@ two basic choices:
    that's actually being called.
 
 Neither is totally straightforward: the former is closer to what
-happens on the trunk but there is no obvious place to attach the
-information, unless maybe normalization can essentially remove all
-callables from FuncDescs from the graph?  The latter is more of a
+happens on the trunk but new families of funcdescs need to be created
+at the end of annotation or by normalisation.  The latter is more of a
 change.  The former is also perhaps a bit unnatural for ootyped
 backends.
