@@ -153,7 +153,8 @@ class MethodOfFrozenPBCRepr(Repr):
         return self.redispatch_call(hop, call_args=True)
 
     def redispatch_call(self, hop, call_args):
-        s_function = annmodel.SomePBC({self.funcdesc: True})
+        # XXX obscure, try to refactor...
+        s_function = annmodel.SomePBC([self.funcdesc])
         hop2 = hop.copy()
         hop2.args_s[0] = self.s_im_self   # make the 1st arg stand for 'im_self'
         hop2.args_r[0] = self.r_im_self   # (same lowleveltype as 'self')
@@ -164,7 +165,8 @@ class MethodOfFrozenPBCRepr(Repr):
             hop2.swap_fst_snd_args()
             _, s_shape = hop2.r_s_popfirstarg() # temporarely remove shape
             adjust_shape(hop2, s_shape)
-        c = Constant(self.function)
+        # a marker that would crash if actually used...
+        c = Constant("obscure-don't-use-me")
         hop2.v_s_insertfirstarg(c, s_function)   # insert 'function'
         # now hop2 looks like simple_call(function, self, args...)
         return hop2.dispatch()
