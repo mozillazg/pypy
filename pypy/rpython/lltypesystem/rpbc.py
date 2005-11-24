@@ -2,7 +2,7 @@ import types
 import sys
 from pypy.annotation.pairtype import pairtype, pair
 from pypy.annotation import model as annmodel
-from pypy.objspace.flow.model import Constant
+from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, \
      Ptr, malloc, nullptr
@@ -111,26 +111,30 @@ class MethodOfFrozenPBCRepr(Repr):
 
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
-        self.function = s_pbc.prebuiltinstances.keys()[0].im_func
+        self.funcdesc = s_pbc.descriptions.keys()[0].funcdesc
+
         # a hack to force the underlying function to show up in call_families
         # (generally not needed, as normalizecalls() should ensure this,
         # but needed for bound methods that are ll helpers)
-        call_families = rtyper.annotator.getpbccallfamilies()
-        call_families.find((None, self.function))
+        # XXX sort this out
+        #call_families = rtyper.annotator.getpbccallfamilies()
+        #call_families.find((None, self.function))
+        
+        if s_pbc.can_be_none():
+            raise TyperError("unsupported: variable of type "
+                             "method-of-frozen-PBC or None")
+
         im_selves = {}
-        for pbc, not_a_classdef in s_pbc.prebuiltinstances.items():
-            if pbc is None:
-                raise TyperError("unsupported: variable of type "
-                                 "method-of-frozen-PBC or None")
-            assert pbc.im_func is self.function
-            assert not isclassdef(not_a_classdef)
-            im_selves[pbc.im_self] = True
+        for desc in s_pbc.descriptions:
+            assert desc.funcdesc is self.funcdesc
+            im_selves[desc.frozendesc] = True
+            
         self.s_im_self = annmodel.SomePBC(im_selves)
         self.r_im_self = rtyper.getrepr(self.s_im_self)
         self.lowleveltype = self.r_im_self.lowleveltype
 
     def get_s_callable(self):
-        return annmodel.SomePBC({self.function: True})
+        return annmodel.SomePBC({self.funcdesc: True})
 
     def get_r_implfunc(self):
         r_func = self.rtyper.getrepr(self.get_s_callable())
@@ -149,7 +153,7 @@ class MethodOfFrozenPBCRepr(Repr):
         return self.redispatch_call(hop, call_args=True)
 
     def redispatch_call(self, hop, call_args):
-        s_function = annmodel.SomePBC({self.function: True})
+        s_function = annmodel.SomePBC({self.funcdesc: True})
         hop2 = hop.copy()
         hop2.args_s[0] = self.s_im_self   # make the 1st arg stand for 'im_self'
         hop2.args_r[0] = self.r_im_self   # (same lowleveltype as 'self')
