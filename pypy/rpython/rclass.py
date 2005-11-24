@@ -1,6 +1,7 @@
 import types
 from pypy.annotation import model as annmodel
 #from pypy.annotation.classdef import isclassdef
+from pypy.annotation import description
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, needsgc
 
@@ -8,17 +9,17 @@ def getclassrepr(rtyper, classdef):
     try:
         result = rtyper.class_reprs[classdef]
     except KeyError:
-        if classdef and classdef.cls is Exception:
-            # skip Exception as a base class and go directly to 'object'.
-            # the goal is to allow any class anywhere in the hierarchy
-            # to have Exception as a second base class.  It should be an
-            # empty class anyway.
-            if classdef.attrs:
-                raise TyperError("the Exception class should not "
-                                 "have any attribute attached to it")
-            result = getclassrepr(rtyper, None)
-        else:
-            result = rtyper.type_system.rclass.ClassRepr(rtyper, classdef)
+        #if classdef and classdef.cls is Exception:
+        #    # skip Exception as a base class and go directly to 'object'.
+        #    # the goal is to allow any class anywhere in the hierarchy
+        #    # to have Exception as a second base class.  It should be an
+        #    # empty class anyway.
+        #    if classdef.attrs:
+        #        raise TyperError("the Exception class should not "
+        #                         "have any attribute attached to it")
+        #    result = getclassrepr(rtyper, None)
+        #else:
+        result = rtyper.type_system.rclass.ClassRepr(rtyper, classdef)
         rtyper.class_reprs[classdef] = result
         rtyper.add_pendingsetup(result)
     return result
@@ -28,12 +29,12 @@ def getinstancerepr(rtyper, classdef, nogc=False):
     try:
         result = rtyper.instance_reprs[classdef, does_need_gc]
     except KeyError:
-        if classdef and classdef.cls is Exception:
-            # see getclassrepr()
-            result = getinstancerepr(rtyper, None, nogc=False)
-        else:
-            result = rtyper.type_system.rclass.InstanceRepr(
-                    rtyper, classdef, does_need_gc=does_need_gc)
+        #if classdef and classdef.cls is Exception:
+        #    # see getclassrepr()
+        #    result = getinstancerepr(rtyper, None, nogc=False)
+        #else:
+        result = rtyper.type_system.rclass.InstanceRepr(
+                        rtyper, classdef, does_need_gc=does_need_gc)
 
         rtyper.instance_reprs[classdef, does_need_gc] = result
         rtyper.add_pendingsetup(result)
@@ -80,31 +81,13 @@ class AbstractClassRepr(Repr):
 
     def prepare_method(self, s_value):
         # special-casing for methods:
-        #  - a class (read-only) attribute that would contain a PBC
-        #    with {func: classdef...} is probably meant to be used as a
-        #    method, but in corner cases it could be a constant object
-        #    of type MethodType that just sits here in the class.  But
-        #    as MethodType has a custom __get__ too and we don't support
-        #    it, it's a very bad idea anyway.
+        #  if s_value is SomePBC([MethodDescs...])
+        #  return a PBC representing the underlying functions
         if isinstance(s_value, annmodel.SomePBC):
-            s_value = self.classdef.matching(s_value)
-            debound = {}
-            count = 0
-            for x, classdef in s_value.prebuiltinstances.items():
-                if isclassdef(classdef):
-                    #if classdef.commonbase(self.classdef) != self.classdef:
-                    #    raise TyperError("methods from PBC set %r don't belong "
-                    #                     "in %r" % (s_value.prebuiltinstances,
-                    #                                self.classdef.cls))
-                    count += 1
-                    classdef = True
-                debound[x] = classdef
-            if count > 0:
-                if count != len(s_value.prebuiltinstances):
-                    raise TyperError("mixing functions and methods "
-                                     "in PBC set %r" % (
-                        s_value.prebuiltinstances,))
-                return annmodel.SomePBC(debound)
+            if s_value.getKind() == description.MethodDesc:
+                s_value = self.classdef.lookup_filter(s_value)
+                funcdescs = [mdesc.funcdesc for mdesc in s_value.descriptions]
+                return annmodel.SomePBC(funcdescs)
         return None   # not a method
 
     def get_ll_eq_function(self):

@@ -98,7 +98,7 @@ class __extend__(pairtype(SingleFrozenPBCRepr, MultipleFrozenPBCRepr)):
         frozendesc1 = r_pbc1.frozendesc
         access = frozendesc1.queryattrfamily()
         if access is r_pbc2.access_set:
-            return r_pbc1.convert_concrete(r_pbc2)
+            return r_pbc1.convert_desc(r_pbc2, frozendesc1)
         return NotImplemented
 
 # ____________________________________________________________

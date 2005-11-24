@@ -310,8 +310,9 @@ class SingleFrozenPBCRepr(Repr):
             raise TyperError("getattr on a constant PBC returns a non-constant")
         return hop.inputconst(hop.r_result, hop.s_result.const)
 
-    def convert_concrete(self, to_repr):
-        return inputconst(to_repr, self.frozendesc.pyobj)
+    def convert_desc(self, to_repr, frozendesc):
+        assert self.frozendesc is frozendesc
+        return inputconst(to_repr, frozendesc.pyobj)
 
 # __ None ____________________________________________________
 class NoneFrozenPBCRepr(SingleFrozenPBCRepr):

@@ -226,6 +226,7 @@ class FunctionDesc(Desc):
         return row
     row_to_consider = staticmethod(row_to_consider)
 
+NODEFAULT = object()
 
 class ClassDesc(Desc):
     knowntype = type
@@ -357,14 +358,31 @@ class ClassDesc(Desc):
             s_init.call(args)
         return s_instance
 
-    def s_read_attribute(self, name):
-        # look up an attribute in the class
+    def lookup(self, name):
         cdesc = self
         while name not in cdesc.classdict:
             cdesc = cdesc.basedesc
             if cdesc is None:
-                from pypy.annotation.model import s_ImpossibleValue
-                return s_ImpossibleValue
+                return None 
+        else:
+            return cdesc
+
+    def read_attribute(self, name, default=NODEFAULT):
+        cdesc = self.lookup(name)
+        if cdesc is None:
+            if default is NODEFAULT:
+                raise AttributeError
+            else:
+                return default
+        else:
+            return cdesc.classdict[name]
+
+    def s_read_attribute(self, name):
+        # look up an attribute in the class
+        cdesc = self.lookup(name)
+        if cdesc is None:
+            from pypy.annotation.model import s_ImpossibleValue
+            return s_ImpossibleValue
         else:
             # delegate to s_get_value to turn it into an annotation
             return cdesc.s_get_value(None, name)
