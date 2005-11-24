@@ -287,7 +287,7 @@ def getFrozenPBCRepr(rtyper, s_pbc):
     descs = s_pbc.descriptions.keys()
     assert len(descs) >= 1
     if len(descs) == 1:
-        return SingleFrozenPBCRepr(pbcs[0])
+        return SingleFrozenPBCRepr(descs[0])
     else:
         access = descs[0].getattrfamily()
         for desc in descs[1:]:
