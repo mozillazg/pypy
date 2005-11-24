@@ -90,14 +90,14 @@ class Repr:
     def _freeze_(self):
         return True
 
-    def convert_desc_or_const(self, value):
-        if isinstance(self, description.Desc):
-            return self.convert_desc(self, value)
-        elif isinstance(value, flowmodel.Constant):
-            return self.convert_const(value.value)
+    def convert_desc_or_const(self, desc_or_const):
+        if isinstance(desc_or_const, description.Desc):
+            return self.convert_desc(desc_or_const)
+        elif isinstance(desc_or_const, flowmodel.Constant):
+            return self.convert_const(desc_or_const.value)
         else:
             raise TyperError("convert_desc_or_const expects a Desc"
-                             "or Constant: %r" % value)
+                             "or Constant: %r" % desc_or_const)
                             
     def convert_const(self, value):
         "Convert the given constant value to the low-level repr of 'self'."
@@ -285,6 +285,17 @@ class VoidRepr(Repr):
 impossible_repr = VoidRepr()
 
 # ____________________________________________________________
+
+def inputdesc(reqtype, desc):
+    """Return a Constant for the given desc, of the requested type,
+    which can only be a Repr.
+    """
+    assert isinstance(reqtype, Repr)
+    value = reqtype.convert_desc(desc)
+    lltype = reqtype.lowleveltype
+    c = Constant(value)
+    c.concretetype = lltype
+    return c
 
 def inputconst(reqtype, value):
     """Return a Constant with the given value, of the requested type,

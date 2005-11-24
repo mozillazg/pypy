@@ -200,16 +200,10 @@ class FunctionsPBCRepr(MultiplePBCRepr):
 ##            assert self._function_signatures
 ##        return self._function_signatures
 
-    def convert_const(self, value):
-        if isinstance(value, types.MethodType) and value.im_self is None:
-            value = value.im_func   # unbound method -> bare function
-        if self.lowleveltype is Void:
-            return inputconst(Void, value)
-        null = nullptr(self.lowleveltype.TO)
-        if value is None:
-            return null
+    def convert_desc(self, funcdesc):
         # get the whole "column" of the call table corresponding to this desc
-        funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
+        if self.lowleveltype is Void:
+            return funcdesc.pyobj
         llfns = {}
         found_anything = False
         for row in self.uniquerows:
@@ -220,12 +214,23 @@ class FunctionsPBCRepr(MultiplePBCRepr):
                 llfn = null
             llfns[row.attrname] = llfn
         if not found_anything:
-            raise TyperError("%r not in %r" % (value,
+            raise TyperError("%r not in %r" % (funcdesc,
                                                self.s_pbc.descriptions))
         if len(self.uniquerows) == 1:
             return llfn   # from the loop above
         else:
             XXX_later
+
+    def convert_const(self, value):
+        if isinstance(value, types.MethodType) and value.im_self is None:
+            value = value.im_func   # unbound method -> bare function
+        if self.lowleveltype is Void:
+            return value
+        null = nullptr(self.lowleveltype.TO)
+        if value is None:
+            return null
+        funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
+        return self.convert_desc(funcdesc)
 
     def convert_to_concrete_llfn(self, v, shape, index, llop):
         """Convert the variable 'v' to a variable referring to a concrete
@@ -292,7 +297,7 @@ def getFrozenPBCRepr(rtyper, s_pbc):
         try:
             return rtyper.pbc_reprs[access]
         except KeyError:
-            result = rtyper.type_system.rpbc.MultipleFrozenPBCRepr(rtyper, access)
+            result = rtyper.type_system.rpbc.MultipleFrozenPBCRepr(rtyper, descs)
             rtyper.pbc_reprs[access] = result
             rtyper.add_pendingsetup(result) 
             return result
@@ -309,10 +314,6 @@ class SingleFrozenPBCRepr(Repr):
         if not hop.s_result.is_constant():
             raise TyperError("getattr on a constant PBC returns a non-constant")
         return hop.inputconst(hop.r_result, hop.s_result.const)
-
-    def convert_desc(self, to_repr, frozendesc):
-        assert self.frozendesc is frozendesc
-        return inputconst(to_repr, frozendesc.pyobj)
 
 # __ None ____________________________________________________
 class NoneFrozenPBCRepr(SingleFrozenPBCRepr):
