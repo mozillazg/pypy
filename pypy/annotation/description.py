@@ -76,7 +76,7 @@ class Desc(object):
         return '<%s for %r>' % (self.__class__.__name__, pyobj)
 
     def getcallfamily(self):
-        """Get the CallFamily object."""
+        """Get the CallFamily object. Possibly creates one."""
         call_families = self.bookkeeper.pbc_maximal_call_families
         _, _, callfamily = call_families.find(self.rowkey())
         return callfamily
@@ -91,10 +91,19 @@ class Desc(object):
         return changed
 
     def getattrfamily(self):
-        """Get the AttrFamily object."""
+        """Get the AttrFamily object. Possibly creates one."""
         access_sets = self.bookkeeper.pbc_maximal_access_sets
         _, _, attrfamily = access_sets.find(self)
         return attrfamily
+
+    def queryattrfamily(self):
+        """Retrieve the AttrFamily object if there is one, otherwise
+           return None."""
+        access_sets = self.bookkeeper.pbc_maximal_access_sets
+        try:
+            return access_sets[self]
+        except KeyError:
+            return None
 
     def mergeattrfamilies(self, *others):
         """Merge the attr families of the given Descs into one."""

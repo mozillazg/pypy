@@ -276,22 +276,15 @@ class __extend__(pairtype(FunctionsPBCRepr, FunctionsPBCRepr)):
 def getPyObjRepr(rtyper, s_pbc):
     return robject.pyobj_repr
 
-def get_access_set(rtyper, pbc):
-    access_sets = rtyper.annotator.getpbcaccesssets()
-    try:
-        return access_sets[pbc]
-    except KeyError:
-        return None    
-
 def getFrozenPBCRepr(rtyper, s_pbc):
     descs = s_pbc.descriptions.keys()
     assert len(descs) >= 1
     if len(descs) == 1:
         return SingleFrozenPBCRepr(descs[0])
     else:
-        access = descs[0].getattrfamily()
+        access = descs[0].queryattrfamily()
         for desc in descs[1:]:
-            access1 = desc.getattrfamily()
+            access1 = desc.queryattrfamily()
             assert access1 is access       # XXX not implemented
         try:
             return rtyper.pbc_reprs[access]
@@ -313,6 +306,9 @@ class SingleFrozenPBCRepr(Repr):
         if not hop.s_result.is_constant():
             raise TyperError("getattr on a constant PBC returns a non-constant")
         return hop.inputconst(hop.r_result, hop.s_result.const)
+
+    def convert_concrete(self, to_repr):
+        return inputconst(to_repr, self.frozendesc.pyobj)
 
 # __ None ____________________________________________________
 class NoneFrozenPBCRepr(SingleFrozenPBCRepr):

@@ -10,7 +10,7 @@ from pypy.rpython.rmodel import Repr, TyperError, inputconst, warning
 from pypy.rpython import robject
 from pypy.rpython import rtuple
 from pypy.rpython.rpbc import SingleFrozenPBCRepr, samesig,\
-                                commonbase, allattributenames, get_access_set,\
+                                commonbase, allattributenames, \
                                 MultiplePBCRepr, FunctionsPBCRepr, \
                                 AbstractClassesPBCRepr, AbstractMethodsPBCRepr
 from pypy.rpython.lltypesystem import rclass
@@ -95,10 +95,10 @@ class __extend__(pairtype(MultipleFrozenPBCRepr, MultipleFrozenPBCRepr)):
 
 class __extend__(pairtype(SingleFrozenPBCRepr, MultipleFrozenPBCRepr)):
     def convert_from_to((r_pbc1, r_pbc2), v, llops):
-        value = r_pbc1.value
-        access = get_access_set(r_pbc2.rtyper, value)
+        frozendesc1 = r_pbc1.frozendesc
+        access = frozendesc1.queryattrfamily()
         if access is r_pbc2.access_set:
-            return inputconst(r_pbc2, value)
+            return r_pbc1.convert_concrete(r_pbc2)
         return NotImplemented
 
 # ____________________________________________________________
