@@ -6,7 +6,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, \
      Ptr, malloc, nullptr
-from pypy.rpython.rmodel import Repr, TyperError, inputconst, warning
+from pypy.rpython.rmodel import Repr, TyperError, inputconst, warning, mangle
 from pypy.rpython import robject
 from pypy.rpython import rtuple
 from pypy.rpython.rpbc import SingleFrozenPBCRepr, samesig,\
@@ -44,7 +44,7 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
             for attr in attrlist:
                 s_value = self.access_set.attrs[attr]
                 r_value = self.rtyper.getrepr(s_value)
-                mangled_name = 'pbc_' + attr
+                mangled_name = mangle('pbc', attr)
                 llfields.append((mangled_name, r_value.lowleveltype))
                 llfieldmap[attr] = mangled_name, r_value
         self.pbc_type.become(Struct('pbc', *llfields))

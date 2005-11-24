@@ -1,5 +1,6 @@
 # specialization support
 import types
+from pypy.tool.uid import uid
 
 def default_specialize(funcdesc, args_s):
     argnames, vararg, kwarg = funcdesc.signature
@@ -23,48 +24,39 @@ def default_specialize(funcdesc, args_s):
 
 def memo(funcdesc, arglist_s):
     """NOT_RPYTHON"""
-    from pypy.annotation.model import unionof
+    from pypy.annotation.model import unionof, SomePBC, SomeImpossibleValue
     # call the function now, and collect possible results
     func = funcdesc.pyobj
     if func is None:
         raise Exception("memo call: no Python function object to call (%r)" %
                         (funcdesc,))
-    possible_results = []
-    for arglist in possible_arguments(arglist_s):
-        result = func(*arglist)
-        possible_results.append(funcdesc.bookkeeper.immutablevalue(result))
-    return unionof(*possible_results)
-
-def possible_values_of(s):
-    from pypy.annotation.model import SomeBool, SomePBC
-    if s.is_constant():
-        return [s.const]
-    elif isinstance(s, SomePBC):
-        result = []
-        for desc in s.descriptions:
+    if len(arglist_s) != 1:
+        raise Exception("memo call: only one-argument functions supported"
+                        " at the moment (%r)" % (funcdesc,))
+    s = arglist_s[0]
+    if not isinstance(s, SomePBC):
+        if isinstance(s, SomeImpossibleValue):
+            return s    # we will probably get more possible args later
+        raise Exception("memo call: argument must be a class or a frozen PBC,"
+                        " got %r" % (s,))
+    # compute the concrete result and store them directly on the descs,
+    # using a strange attribute name
+    attrname = '$memo_%s_%d' % (funcdesc.name, uid(funcdesc))
+    for desc in s.descriptions:
+        s_result = desc.s_read_attribute(attrname)
+        if isinstance(s_result, SomeImpossibleValue):
+            # first time we see this 'desc'
             if desc.pyobj is None:
-                raise Exception("memo call with a PBC that has no "
+                raise Exception("memo call with a class or PBC that has no "
                                 "corresponding Python object (%r)" % (desc,))
-            result.append(desc.pyobj)
-        return result
-    elif isinstance(s, SomeBool):
-        return [False, True]
-    else:
-        raise ValueError, "memo call with a non-constant arg %r" % (s,)
+            result = func(desc.pyobj)
+            s_result = funcdesc.bookkeeper.immutablevalue(result)
+            desc.create_new_attribute(attrname, result)
+    # get or build the graph of the function that reads this strange attr
+    def memoized(x):
+        return getattr(x, attrname)
+    return funcdesc.cachedgraph('memo', memoized, 'memo_%s' % funcdesc.name)
 
-def possible_arguments(args):
-    # enumerate all tuples (x1,..xn) of concrete values that are contained
-    # in a tuple args=(s1,..sn) of SomeXxx.  Requires that each s be either
-    # a constant or SomePBC.
-    return cartesian_product([possible_values_of(s) for s in args])
-
-def cartesian_product(lstlst):
-    if not lstlst:
-        yield ()
-        return
-    for tuple_tail in cartesian_product(lstlst[1:]):
-        for value in lstlst[0]:
-            yield (value,) + tuple_tail
 
 def argvalue(i):
     def specialize_argvalue(funcdesc, args_s):
