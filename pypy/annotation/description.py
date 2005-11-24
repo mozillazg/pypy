@@ -75,6 +75,15 @@ class Desc(object):
             return object.__repr__(self)
         return '<%s for %r>' % (self.__class__.__name__, pyobj)
 
+    def querycallfamily(self):
+        """Retrieve the CallFamily object if there is one, otherwise
+           return None."""
+        call_families = self.bookkeeper.pbc_maximal_call_families
+        try:
+            return call_families[self]
+        except KeyError:
+            return None
+
     def getcallfamily(self):
         """Get the CallFamily object. Possibly creates one."""
         call_families = self.bookkeeper.pbc_maximal_call_families
