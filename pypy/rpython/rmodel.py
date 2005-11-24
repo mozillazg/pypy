@@ -318,6 +318,14 @@ class BrokenReprTyperError(TyperError):
         has failed already. 
     """
 
+def mangle(prefix, name):
+    """Make a unique identifier from the prefix and the name.  The name
+    is allowed to start with $."""
+    if name.startswith('$'):
+        return '%sinternal_%s' % (prefix, name[1:])
+    else:
+        return '%s_%s' % (prefix, name)
+
 # __________ utilities __________
 from pypy.rpython.typesystem import LowLevelTypeSystem
 getfunctionptr = LowLevelTypeSystem.instance.getcallable

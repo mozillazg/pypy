@@ -153,15 +153,19 @@ class FunctionDesc(Desc):
         self.specializer = specializer
         self._cache = {}     # convenience for the specializer
 
-    def buildgraph(self):
+    def buildgraph(self, alternate_fnobj=None, alternate_name=None):
+        fnobj = alternate_fnobj or self.pyobj
+        name = alternate_name or self.name
         translator = self.bookkeeper.annotator.translator
-        return translator.buildflowgraph(self.pyobj)
+        graph = translator.buildflowgraph(fnobj)
+        graph.name = name
+        return graph
 
-    def cachedgraph(self, key):
+    def cachedgraph(self, key, alternate_fnobj=None, alternate_name=None):
         try:
             return self._cache[key]
         except KeyError:
-            graph = self.buildgraph()
+            graph = self.buildgraph(alternate_fnobj, alternate_name)
             self._cache[key] = graph
             return graph
 
@@ -402,6 +406,10 @@ class ClassDesc(Desc):
             raise TypeError("classdict should not contain %r" % (obj,))
         return s_value
 
+    def create_new_attribute(self, name, value):
+        assert name not in self.classdict, "name clash: %r" % (name,)
+        self.classdict[name] = Constant(value)
+
     def find_source_for(self, name):
         if name in self.classdict:
             return self
@@ -484,6 +492,21 @@ class FrozenDesc(Desc):
             return s_ImpossibleValue
         else:
             return self.bookkeeper.immutablevalue(value)
+    
+    def create_new_attribute(self, name, value):
+        try:
+            self.read_attribute(name)
+        except AttributeError:
+            pass
+        else:
+            raise AssertionError("name clash: %r" % (name,))
+        def extended_read_attribute(attr):
+            if attr == name:
+                return value
+            else:
+                return previous_read_attribute(attr)
+        previous_read_attribute = self.read_attribute
+        self.read_attribute = extended_read_attribute
 
 
 class MethodOfFrozenDesc(Desc):
