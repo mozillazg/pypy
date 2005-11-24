@@ -2,7 +2,6 @@ import types
 import sys
 from pypy.annotation.pairtype import pairtype, pair
 from pypy.annotation import model as annmodel
-from pypy.annotation.classdef import isclassdef
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, \
@@ -10,7 +9,7 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.rmodel import Repr, TyperError, inputconst, warning
 from pypy.rpython import robject
 from pypy.rpython import rtuple
-from pypy.rpython.rpbc import SingleFrozenPBCRepr, getsignature, samesig,\
+from pypy.rpython.rpbc import SingleFrozenPBCRepr, samesig,\
                                 commonbase, allattributenames, get_access_set,\
                                 MultiplePBCRepr, FunctionsPBCRepr, \
                                 AbstractClassesPBCRepr, AbstractMethodsPBCRepr
@@ -67,14 +66,14 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
             for attr, (mangled_name, r_value) in self.llfieldmap.items():
                 if r_value.lowleveltype is Void:
                     continue
-                try: 
-                    thisattrvalue = self.access_set.values[(pbc, attr)] 
-                except KeyError:
-                    try:
-                        thisattrvalue = getattr(pbc, attr)
-                    except AttributeError:
-                        warning("PBC %r has no attribute %r" % (pbc, attr))
-                        continue
+##                 try: 
+##                     thisattrvalue = self.access_set.values[(pbc, attr)] 
+##                 except KeyError:
+                try:
+                    thisattrvalue = getattr(pbc, attr)
+                except AttributeError:
+                    warning("PBC %r has no attribute %r" % (pbc, attr))
+                    continue
                 llvalue = r_value.convert_const(thisattrvalue)
                 setattr(result, mangled_name, llvalue)
             return result

@@ -284,14 +284,14 @@ def get_access_set(rtyper, pbc):
         return None    
 
 def getFrozenPBCRepr(rtyper, s_pbc):
-    pbcs = s_pbc.descriptions.keys()
-    assert len(pbcs) >= 1
-    if len(pbcs) == 1:
+    descs = s_pbc.descriptions.keys()
+    assert len(descs) >= 1
+    if len(descs) == 1:
         return SingleFrozenPBCRepr(pbcs[0])
     else:
-        access = get_access_set(rtyper, pbcs[0])
-        for obj in pbcs[1:]:
-            access1 = get_access_set(rtyper, obj)
+        access = descs[0].getattrfamily()
+        for desc in descs[1:]:
+            access1 = desc.getattrfamily()
             assert access1 is access       # XXX not implemented
         try:
             return rtyper.pbc_reprs[access]
