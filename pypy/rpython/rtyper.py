@@ -557,6 +557,7 @@ class RPythonTyper:
         return self.getfunctionptr(spec_function)
 
     def attachRuntimeTypeInfoFunc(self, GCSTRUCT, func, ARG_GCSTRUCT=None):
+        return # FIXME
         self.call_all_setups()  # compute ForwardReferences now
         if ARG_GCSTRUCT is None:
             ARG_GCSTRUCT = GCSTRUCT
