@@ -309,7 +309,7 @@ class ClassDef:
         for desc in pbc.descriptions:
             if isinstance(desc, description.MethodDesc):
                 meth = True
-                methclassdef = desc.classdef
+                methclassdef = desc.originclassdef
                 if methclassdef is not self and methclassdef.issubclass(self):
                     pass # subclasses methods are always candidates
                 elif self.issubclass(methclassdef):
@@ -323,6 +323,9 @@ class ClassDef:
                     # clsdef2.lookup_filter(pbc) (see formal proof...)
                 else:
                     continue # not matching
+                # bind the method by giving it a selfclassdef.  Use the
+                # more precise subclass that it's coming from.
+                desc = desc.bind_self(methclassdef)
             d.append(desc)
         if uplookup is not None:            
             # hack^2, in this case the classdef for uplookup could be the result
@@ -334,7 +337,9 @@ class ClassDef:
                 uplookup.attr_sources.setdefault(name, [])
                 check_for_missing_attrs = True
 
-            d.append(updesc)
+            # add the updesc method, bounding it to the more precise
+            # classdef 'self' instead of its originclassdef
+            d.append(updesc.bind_self(self))
         elif meth and name is not None:
             check_for_missing_attrs = True
 

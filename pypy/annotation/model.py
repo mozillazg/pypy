@@ -303,7 +303,7 @@ class SomePBC(SomeObject):
         descriptions = dict.fromkeys(descriptions)
         self.descriptions = descriptions
         self.can_be_None = can_be_None
-        self.check()
+        self.simplify()
         if self.isNone():
             self.knowntype = type(None)
             self.const = None
@@ -333,10 +333,14 @@ class SomePBC(SomeObject):
             raise ValueError("no 'kind' on the 'None' PBC")
         return kinds.keys()[0]
 
-    def check(self):
+    def simplify(self):
         if self.descriptions:
             # We check that the set only contains a single kind of Desc instance
-            self.getKind()
+            kind = self.getKind()
+            # then we remove unnecessary entries in self.descriptions:
+            # some MethodDescs can be 'shadowed' by others
+            if len(self.descriptions) > 1:
+                kind.simplify_desc_set(self.descriptions)
         else:
             assert self.can_be_None, "use s_ImpossibleValue"
 
