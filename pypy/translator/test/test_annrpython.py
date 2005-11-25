@@ -869,12 +869,13 @@ class TestAnnotateTestCase:
         assert fam1 is not fam2
         assert fam1 is not fam3
         assert fam3 is fam2
-        
-        assert len(fam1.patterns) == 2
-        assert len(fam2.patterns) == 1
 
-        assert fam1.patterns == {(2, (), False, False): True, (1, (), False, False): True}
-        assert fam2.patterns == {(1, (), False, False): True}
+        gf1 = graphof(a, f1)
+        gf2 = graphof(a, f2)
+        gf3 = graphof(a, f3)
+
+        assert fam1.calltables == {(2, (), False, False): [{fdesc1: gf1}], (1, (), False, False): [{fdesc1: gf1}]}
+        assert fam2.calltables == {(1, (), False, False): [{fdesc2: gf2, fdesc3: gf3}]}
 
     def test_pbc_call_ins(self):
         class A(object):
@@ -904,27 +905,35 @@ class TestAnnotateTestCase:
         clsdef = a.bookkeeper.getuniqueclassdef
         bookkeeper = a.bookkeeper
 
-        def fam(meth):
-            mdesc = bookkeeper.getmethoddesc(bookkeeper.getdesc(meth.im_func), clsdef(meth.im_class), clsdef(meth.im_class), meth.im_func.func_name)
-            mdesc2 = bookkeeper.immutablevalue(meth.im_func.__get__(meth.im_class(), meth.im_class)).descriptions.keys()[0]
-            assert mdesc == mdesc2 # sanity check
-            return mdesc.getcallfamily()
+        def getmdesc(bmeth):
+            return bookkeeper.immutablevalue(bmeth).descriptions.keys()[0]
 
-        famA_m = fam(A.m)
-        famC_m = fam(C.m)
-        famB_n = fam(B.n)
+        mdescA_m = getmdesc(A().m)
+        mdescC_m = getmdesc(C().m)
+        mdescB_n = getmdesc(B().n)
+
+        assert mdescA_m.name == 'm' == mdescC_m.name
+        assert mdescB_n.name == 'n'
+
+        famA_m = mdescA_m.getcallfamily()
+        famC_m = mdescC_m.getcallfamily()
+        famB_n = mdescB_n.getcallfamily()
         
         assert famA_m is famC_m
         assert famB_n is not famA_m
 
-        assert len(famB_n.patterns) == 1
-        assert len(famC_m.patterns) == 1
+        gfB_n = graphof(a, B.n.im_func)
+        gfA_m = graphof(a, A.m.im_func)
+        gfC_m = graphof(a, C.m.im_func)
 
-        assert famB_n.patterns == {(0, (), False, False): True }
-        assert famA_m.patterns == {(0, (), False, False): True }
+        assert famB_n.calltables == {(1, (), False, False): [{mdescB_n.funcdesc: gfB_n}] }
+        assert famA_m.calltables == {(1, (), False, False): [{mdescA_m.funcdesc: gfA_m, mdescC_m.funcdesc: gfC_m }] }
 
-        famCinit = bookkeeper.getdesc(C.__init__.im_func).getcallfamily()
-        assert famCinit.patterns == {(1, (), False, False): True }
+        mdescCinit = getmdesc(C().__init__)
+        famCinit = mdescCinit.getcallfamily()
+        gfCinit = graphof(a, C.__init__.im_func)
+
+        assert famCinit.calltables == {(1, (), False, False): [{mdescCinit.funcdesc: gfCinit}] }
         
     def test_isinstance_usigned(self):
         def f(x):
