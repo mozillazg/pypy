@@ -128,19 +128,19 @@ class ClassRepr(AbstractClassRepr):
         self.allmethods = allmethods
         self.vtable = None
 
-    def convert_const(self, value):
-        if not isinstance(value, (type, types.ClassType)):
-            raise TyperError("not a class: %r" % (value,))
-        try:
-            subclassdef = self.rtyper.annotator.getuserclasses()[value]
-        except KeyError:
-            raise TyperError("no classdef: %r" % (value,))
-        if self.classdef is not None:
-            if self.classdef.commonbase(subclassdef) != self.classdef:
-                raise TyperError("not a subclass of %r: %r" % (
-                    self.classdef.cls, value))
-        #
-        return getclassrepr(self.rtyper, subclassdef).getvtable()
+#    def convert_const(self, value):
+#        if not isinstance(value, (type, types.ClassType)):
+#            raise TyperError("not a class: %r" % (value,))
+#        try:
+#            subclassdef = self.rtyper.annotator.getuserclasses()[value]
+#        except KeyError:
+#            raise TyperError("no classdef: %r" % (value,))
+#        if self.classdef is not None:
+#            if self.classdef.commonbase(subclassdef) != self.classdef:
+#                raise TyperError("not a subclass of %r: %r" % (
+#                    self.classdef.cls, value))
+#        #
+#        return getclassrepr(self.rtyper, subclassdef).getvtable()
 
     def getvtable(self, cast_to_typeptr=True):
         """Return a ptr to the vtable of this type."""
@@ -161,12 +161,11 @@ class ClassRepr(AbstractClassRepr):
             # initialize the 'parenttypeptr' and 'name' fields
             if rsubcls.classdef is not None:
                 vtable.parenttypeptr = rsubcls.rbase.getvtable()
-                #vtable.subclassrange_min = rsubcls.classdef.minid
-                #vtable.subclassrange_max = rsubcls.classdef.maxid
+                vtable.subclassrange_min = rsubcls.classdef.minid
+                vtable.subclassrange_max = rsubcls.classdef.maxid
             else: #for the root class
-                #vtable.subclassrange_min = 0
-                #vtable.subclassrange_max = sys.maxint
-                pass
+                vtable.subclassrange_min = 0
+                vtable.subclassrange_max = sys.maxint
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
             if rinstance.needsgc: # only gc-case
