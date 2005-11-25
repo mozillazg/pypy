@@ -505,10 +505,6 @@ class Bookkeeper:
             return SomeImpossibleValue()
         first = descs[0]
         first.mergecallfamilies(*descs[1:])
-        callfamily = first.getcallfamily()
-
-        shape = args.rawshape()
-        callfamily.patterns[shape] = True
 
         if emulated is None:
             whence = self.position_key

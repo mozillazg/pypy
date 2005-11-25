@@ -12,14 +12,11 @@ class CallFamily:
     """
     def __init__(self, desc):
         self.descs = { desc: True }
-        self.patterns = {}    # set of "call shapes" in the sense of
-                              # pypy.interpreter.argument.Argument
         self.calltables = {}  # see calltable_lookup_row()
         self.total_calltable_size = 0
 
     def update(self, other):
         self.descs.update(other.descs)
-        self.patterns.update(other.patterns)
         for shape, table in other.calltables.items():
             for row in table:
                 self.calltable_add_row(shape, row)
