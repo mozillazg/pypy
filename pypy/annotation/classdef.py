@@ -307,7 +307,10 @@ class ClassDef:
         meth = False
         check_for_missing_attrs = False
         for desc in pbc.descriptions:
-            if isinstance(desc, description.MethodDesc):
+            # pick methods but ignore already-bound methods, which can come
+            # from an instance attribute
+            if (isinstance(desc, description.MethodDesc)
+                and desc.selfclassdef is None):
                 meth = True
                 methclassdef = desc.originclassdef
                 if methclassdef is not self and methclassdef.issubclass(self):
