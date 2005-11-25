@@ -193,34 +193,21 @@ class MethodsPBCRepr(AbstractMethodsPBCRepr):
     It assumes that all the methods come from the same name in a base
     classdef."""
 
-    def rtype_hardwired_simple_call(self, hop):
-        return self.redispatch_call(hop, call_args=False, hardwired=True)
-
-    def rtype_hardwired_call_args(self, hop):
-        return self.redispatch_call(hop, call_args=True, hardwired=True)
-
     def rtype_simple_call(self, hop):
         return self.redispatch_call(hop, call_args=False)
 
     def rtype_call_args(self, hop):
         return self.redispatch_call(hop, call_args=True)
 
-    def redispatch_call(self, hop, call_args, hardwired=False):
+    def redispatch_call(self, hop, call_args):
         hop2 = hop.copy()
-        if hardwired:
-            hop2.swap_fst_snd_args() # bring the hardwired function constant in front
-            func = hop2.args_v[0].value
-            s_func = annmodel.SomePBC({func: True})
-            hop2.r_s_popfirstarg() # info captured, discard it
-            v_func = Constant(func)
-        else:
-            r_class = self.r_im_self.rclass
-            mangled_name, r_func = r_class.clsfields[self.methodname]
-            assert isinstance(r_func, FunctionsPBCRepr)
-            s_func = r_func.s_pbc
-            v_im_self = hop.inputarg(self, arg=0)
-            v_cls = self.r_im_self.getfield(v_im_self, '__class__', hop.llops)
-            v_func = r_class.getclsfield(v_cls, self.methodname, hop.llops)
+        r_class = self.r_im_self.rclass
+        mangled_name, r_func = r_class.clsfields[self.methodname]
+        assert isinstance(r_func, FunctionsPBCRepr)
+        s_func = r_func.s_pbc
+        v_im_self = hop.inputarg(self, arg=0)
+        v_cls = self.r_im_self.getfield(v_im_self, '__class__', hop.llops)
+        v_func = r_class.getclsfield(v_cls, self.methodname, hop.llops)
 
         hop2.args_s[0] = self.s_im_self   # make the 1st arg stand for 'im_self'
         hop2.args_r[0] = self.r_im_self   # (same lowleveltype as 'self')
