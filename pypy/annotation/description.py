@@ -153,28 +153,37 @@ class FunctionDesc(Desc):
         self.specializer = specializer
         self._cache = {}     # convenience for the specializer
 
-    def buildgraph(self, alternate_fnobj=None, alternate_name=None):
-        fnobj = alternate_fnobj or self.pyobj
-        name = alternate_name or self.name
+    def buildgraph(self, alt_name=None, builder=None):
         translator = self.bookkeeper.annotator.translator
-        graph = translator.buildflowgraph(fnobj)
-        graph.name = name
+        if builder:
+            graph = builder(translator, self.pyobj)
+        else:
+            graph = translator.buildflowgraph(self.pyobj)
+        if alt_name:
+            graph.name = alt_name
         return graph
 
-    def cachedgraph(self, key, alternate_fnobj=None, alternate_name=None):
+    def cachedgraph(self, key, alt_name=None, builder=None):
         try:
             return self._cache[key]
         except KeyError:
-            graph = self.buildgraph(alternate_fnobj, alternate_name)
+            graph = self.buildgraph(alt_name, builder)
             self._cache[key] = graph
             return graph
 
-    def parse_arguments(self, args):
+    def parse_arguments(self, args, graph=None):
         defs_s = []
-        for x in self.defaults:
-            defs_s.append(self.bookkeeper.immutablevalue(x))
+        if graph is None:
+            signature = self.signature
+            defaults  = self.defaults
+        else:
+            signature = graph.signature
+            defaults  = graph.defaults
+        if defaults:
+            for x in defaults:
+                defs_s.append(self.bookkeeper.immutablevalue(x))
         try:
-            inputcells = args.match_signature(self.signature, defs_s)
+            inputcells = args.match_signature(signature, defs_s)
         except ArgErr, e:
             raise TypeError, "signature mismatch: %s" % e.getmsg(args, self.name)
         return inputcells
@@ -187,6 +196,9 @@ class FunctionDesc(Desc):
         result = self.specialize(inputcells)
         if isinstance(result, FunctionGraph):
             graph = result         # common case
+            # if that graph has a different signature, we need to re-parse
+            # the arguments
+            inputcells = self.parse_arguments(args, graph)
             result = schedule(graph, inputcells)
         # Some specializations may break the invariant of returning
         # annotations that are always more general than the previous time.

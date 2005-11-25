@@ -1,6 +1,8 @@
 # specialization support
 import types
 from pypy.tool.uid import uid
+from pypy.objspace.flow.model import Block, Link, Variable, SpaceOperation
+from pypy.objspace.flow.model import checkgraph
 
 def default_specialize(funcdesc, args_s):
     argnames, vararg, kwarg = funcdesc.signature
@@ -15,7 +17,37 @@ def default_specialize(funcdesc, args_s):
         s_len = s_tuple.len()
         assert s_len.is_constant(), "calls require known number of args"
         nb_extra_args = s_len.const
-        return funcdesc.cachedgraph(nb_extra_args)
+        
+        def builder(translator, func):
+            # build a hacked graph that doesn't take a *arg any more, but
+            # individual extra arguments
+            graph = translator.buildflowgraph(func)
+            argnames, vararg, kwarg = graph.signature
+            assert vararg, "graph should have a *arg at this point"
+            assert not kwarg, "where does this **arg come from??"
+            argscopy = [Variable(v) for v in graph.getargs()]
+            starargs = [Variable('stararg%d'%i) for i in range(nb_extra_args)]
+            newstartblock = Block(argscopy[:-1] + starargs)
+            newtup = SpaceOperation('newtuple', starargs, argscopy[-1])
+            newstartblock.operations.append(newtup)
+            newstartblock.closeblock(Link(argscopy, graph.startblock))
+            graph.startblock.isstartblock = False
+            graph.startblock = newstartblock
+            newstartblock.isstartblock = True
+            argnames += tuple(['.star%d' % i for i in range(nb_extra_args)])
+            graph.signature = argnames, None, None
+            # note that we can mostly ignore defaults: if nb_extra_args > 0, 
+            # then defaults aren't applied.  if nb_extra_args == 0, then this 
+            # just removes the *arg and the defaults keep their meaning.
+            if nb_extra_args > 0:
+                graph.defaults = None   # shouldn't be used in this case
+            checkgraph(graph)
+            return graph
+        
+        return funcdesc.cachedgraph(nb_extra_args,
+                                    alt_name='%s_star%d' % (funcdesc.name,
+                                                            nb_extra_args),
+                                    builder=builder)
     else:
         return funcdesc.cachedgraph(None)
 
@@ -55,8 +87,10 @@ def memo(funcdesc, arglist_s):
     # get or build the graph of the function that reads this strange attr
     def memoized(x):
         return getattr(x, attrname)
-    return funcdesc.cachedgraph('memo', memoized, 'memo_%s' % funcdesc.name)
-
+    def builder(translator, func):
+        return translator.buildflowgraph(memoized)   # instead of 'func'
+    return funcdesc.cachedgraph('memo', alt_name='memo_%s' % funcdesc.name, 
+                                        builder=builder)
 
 def argvalue(i):
     def specialize_argvalue(funcdesc, args_s):
