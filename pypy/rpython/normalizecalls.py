@@ -127,7 +127,7 @@ def normalize_calltable_row_signature(annotator, shape, row):
             assert i not in argorder
             argorder.append(i)
         need_reordering = (argorder != range(call_nbargs))
-        if need_reordering: 
+        if need_reordering or len(graph.getargs()) != call_nbargs:
             oldblock = graph.startblock
             inlist = []
             defaults = graph.defaults or ()

@@ -56,24 +56,31 @@ def default_specialize(funcdesc, args_s):
 
 def memo(funcdesc, arglist_s):
     """NOT_RPYTHON"""
-    from pypy.annotation.model import unionof, SomePBC, SomeImpossibleValue
+    from pypy.annotation.model import SomePBC, SomeImpossibleValue
     # call the function now, and collect possible results
+    for s in arglist_s:
+        if not isinstance(s, SomePBC):
+            if isinstance(s, SomeImpossibleValue):
+                return s    # we will probably get more possible args later
+            raise Exception("memo call: argument must be a class or a frozen "
+                            "PBC, got %r" % (s,))
+    if len(arglist_s) == 1:
+        return memo_one_argument(funcdesc, *arglist_s)
+    elif len(arglist_s) == 2:
+        return memo_two_arguments(funcdesc, *arglist_s)
+    else:
+        raise Exception("memo call: only 1 or 2 arguments functions supported"
+                        " at the moment (%r)" % (funcdesc,))
+
+def memo_one_argument(funcdesc, s):
+    from pypy.annotation.model import SomeImpossibleValue
     func = funcdesc.pyobj
     if func is None:
         raise Exception("memo call: no Python function object to call (%r)" %
                         (funcdesc,))
-    if len(arglist_s) != 1:
-        raise Exception("memo call: only one-argument functions supported"
-                        " at the moment (%r)" % (funcdesc,))
-    s = arglist_s[0]
-    if not isinstance(s, SomePBC):
-        if isinstance(s, SomeImpossibleValue):
-            return s    # we will probably get more possible args later
-        raise Exception("memo call: argument must be a class or a frozen PBC,"
-                        " got %r" % (s,))
-    # compute the concrete result and store them directly on the descs,
+    # compute the concrete results and store them directly on the descs,
     # using a strange attribute name
-    attrname = '$memo_%s_%d' % (funcdesc.name, uid(funcdesc))
+    attrname = '$memo%d_%s' % (uid(funcdesc), funcdesc.name)
     for desc in s.descriptions:
         s_result = desc.s_read_attribute(attrname)
         if isinstance(s_result, SomeImpossibleValue):
@@ -82,15 +89,65 @@ def memo(funcdesc, arglist_s):
                 raise Exception("memo call with a class or PBC that has no "
                                 "corresponding Python object (%r)" % (desc,))
             result = func(desc.pyobj)
-            s_result = funcdesc.bookkeeper.immutablevalue(result)
             desc.create_new_attribute(attrname, result)
     # get or build the graph of the function that reads this strange attr
     def memoized(x):
         return getattr(x, attrname)
     def builder(translator, func):
         return translator.buildflowgraph(memoized)   # instead of 'func'
-    return funcdesc.cachedgraph('memo', alt_name='memo_%s' % funcdesc.name, 
-                                        builder=builder)
+    return funcdesc.cachedgraph('memo1', alt_name='memo_%s' % funcdesc.name, 
+                                         builder=builder)
+
+def memo_two_arguments(funcdesc, s1, s2):
+    from pypy.annotation.model import SomeImpossibleValue
+    from pypy.annotation.description import FrozenDesc
+    func = funcdesc.pyobj
+    if func is None:
+        raise Exception("memo call: no Python function object to call (%r)" %
+                        (funcdesc,))
+    # compute the concrete results and store them directly on the descs,
+    # using a strange attribute name.  The goal is to store in the pbcs of
+    # 's1' under the common 'attrname' a reader function; each reader function
+    # will read a field 'attrname2' from the pbcs of 's2', where 'attrname2'
+    # differs for each pbc of 's1'.
+    attrname = '$memoreader%d_%s' % (uid(funcdesc), funcdesc.name)
+    for desc1 in s1.descriptions:
+        attrname2 = '$memofield%d_%d_%s' % (uid(funcdesc), uid(desc1),
+                                            funcdesc.name)
+        s_reader = desc1.s_read_attribute(attrname)
+        if isinstance(s_reader, SomeImpossibleValue):
+            # first time we see this 'desc1': sanity-check 'desc1' and
+            # create its reader function
+            assert isinstance(desc1, FrozenDesc), (
+                "XXX not implemented: memo call with a class as first arg")
+            if desc1.pyobj is None:
+                raise Exception("memo call with a class or PBC that has no "
+                                "corresponding Python object (%r)" % (desc1,))
+            def reader(y, attrname2=attrname2):
+                return getattr(y, attrname2)
+            desc1.create_new_attribute(attrname, reader)
+        for desc2 in s2.descriptions:
+            s_result = desc2.s_read_attribute(attrname2)
+            if isinstance(s_result, SomeImpossibleValue):
+                # first time we see this 'desc1+desc2' combination
+                if desc2.pyobj is None:
+                    raise Exception("memo call with a class or PBC that has no "
+                                  "corresponding Python object (%r)" % (desc2,))
+                # concrete call, to get the concrete result
+                result = func(desc1.pyobj, desc2.pyobj)
+                #print 'func(%s, %s) -> %s' % (desc1.pyobj, desc2.pyobj, result)
+                #print 'goes into %s.%s'% (desc2,attrname2)
+                #print 'with reader %s.%s'% (desc1,attrname)
+                desc2.create_new_attribute(attrname2, result)
+    # get or build the graph of the function that reads this indirect
+    # settings of attributes
+    def memoized(x, y):
+        reader_fn = getattr(x, attrname)
+        return reader_fn(y)
+    def builder(translator, func):
+        return translator.buildflowgraph(memoized)   # instead of 'func'
+    return funcdesc.cachedgraph('memo2', alt_name='memo_%s' % funcdesc.name, 
+                                         builder=builder)
 
 def argvalue(i):
     def specialize_argvalue(funcdesc, args_s):
