@@ -240,10 +240,6 @@ def setattr_default(obj, attr, value):
 for opname in annmodel.UNARY_OPERATIONS:
     setattr_default(Repr, 'rtype_' + opname, missing_rtype_operation)
 
-# hardwired_*call*
-setattr_default(Repr, 'rtype_hardwired_simple_call', missing_rtype_operation)
-setattr_default(Repr, 'rtype_hardwired_call_args'  , missing_rtype_operation)
-
 for opname in annmodel.BINARY_OPERATIONS:
     setattr_default(pairtype(Repr, Repr),
                     'rtype_' + opname, missing_rtype_operation)
