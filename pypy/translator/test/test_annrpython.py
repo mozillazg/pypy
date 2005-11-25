@@ -905,7 +905,7 @@ class TestAnnotateTestCase:
         bookkeeper = a.bookkeeper
 
         def fam(meth):
-            mdesc = bookkeeper.getmethoddesc(bookkeeper.getdesc(meth.im_func), clsdef(meth.im_class), meth.im_func.func_name)
+            mdesc = bookkeeper.getmethoddesc(bookkeeper.getdesc(meth.im_func), clsdef(meth.im_class), clsdef(meth.im_class), meth.im_func.func_name)
             mdesc2 = bookkeeper.immutablevalue(meth.im_func.__get__(meth.im_class(), meth.im_class)).descriptions.keys()[0]
             assert mdesc == mdesc2 # sanity check
             return mdesc.getcallfamily()
@@ -1468,7 +1468,7 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [float])
         assert s.const == "dontknow"        
         
-    def MAYBE_test_hidden_method(self):
+    def test_hidden_method(self):
         class Base:
             def method(self):
                 return ["should be hidden"]
@@ -1477,7 +1477,7 @@ class TestAnnotateTestCase:
         class A(Base):
             def method(self):
                 return "visible"
-        class B(A):
+        class B(A):       # note: it's a chain of subclasses
             def method(self):
                 return None
         def f(flag):

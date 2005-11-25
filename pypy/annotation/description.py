@@ -126,6 +126,10 @@ class Desc(object):
     def bind_under(self, classdef, name):
         return self
 
+    def simplify_desc_set(descs):
+        pass
+    simplify_desc_set = staticmethod(simplify_desc_set)
+
 
 class FunctionDesc(Desc):
     knowntype = types.FunctionType
@@ -209,7 +213,10 @@ class FunctionDesc(Desc):
 
     def bind_under(self, classdef, name):
         # XXX static methods
-        return self.bookkeeper.getmethoddesc(self, classdef, name)
+        return self.bookkeeper.getmethoddesc(self, 
+                                             classdef,   # originclassdef,
+                                             None,       # selfclassdef
+                                             name)
 
     def consider_call_site(bookkeeper, family, descs, args, s_result):
         row = FunctionDesc.row_to_consider(descs, args)
@@ -456,6 +463,7 @@ class ClassDesc(Desc):
                 if isinstance(initfuncdesc, FunctionDesc):
                     initmethdesc = bookkeeper.getmethoddesc(initfuncdesc,
                                                             classdef,
+                                                            classdef,
                                                             '__init__')
                     initdescs.append(initmethdesc)
         # register a call to exactly these __init__ methods
@@ -473,25 +481,40 @@ class ClassDesc(Desc):
 class MethodDesc(Desc):
     knowntype = types.MethodType
 
-    def __init__(self, bookkeeper, funcdesc, classdef, name):
+    def __init__(self, bookkeeper, funcdesc, originclassdef, 
+                 selfclassdef, name):
         super(MethodDesc, self).__init__(bookkeeper)
         self.funcdesc = funcdesc
-        self.classdef = classdef
+        self.originclassdef = originclassdef
+        self.selfclassdef = selfclassdef
         self.name = name
 
     def __repr__(self):
-        return '<MethodDesc %r of %r>' % (self.funcdesc,
-                                          self.classdef)
+        if self.selfclassdef is None:
+            return '<unbound MethodDesc %r of %r>' % (self.name,
+                                                      self.originclassdef)
+        else:
+            return '<MethodDesc %r of %r bound to %r>' % (self.name,
+                                                          self.originclassdef,
+                                                          self.selfclassdef)
 
     def pycall(self, schedule, args, s_previous_result):
         from pypy.annotation.model import SomeInstance
-        s_instance = SomeInstance(self.classdef)
+        if self.selfclassdef is None:
+            raise Exception("calling %r" % (self,))
+        s_instance = SomeInstance(self.selfclassdef)
         args = args.prepend(s_instance)
         return self.funcdesc.pycall(schedule, args, s_previous_result)
 
     def bind_under(self, classdef, name):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
         return self.funcdesc.bind_under(classdef, name)
+
+    def bind_self(self, newselfclassdef):
+        return self.bookkeeper.getmethoddesc(self.funcdesc,
+                                             self.originclassdef,
+                                             newselfclassdef,
+                                             self.name)
     
     def consider_call_site(bookkeeper, family, descs, args, s_result):
         funcdescs = [methoddesc.funcdesc for methoddesc in descs]
@@ -506,6 +529,27 @@ class MethodDesc(Desc):
         # FunctionDescs, not MethodDescs.  The present method returns the
         # FunctionDesc to use as a key in that family.
         return self.funcdesc
+    
+    def simplify_desc_set(descs):
+        # if two MethodDescs in the set differ only in their selfclassdefs,
+        # and if one of the selfclassdefs is a subclass of the other, then
+        # we can remove the former.  This is not just an optimization but
+        # needed to make contains() happy on SomePBC.
+        groups = {}
+        for desc in descs:
+            if desc.selfclassdef is not None:
+                key = desc.funcdesc, desc.originclassdef, desc.name
+                groups.setdefault(key, []).append(desc)
+        for group in groups.values():
+            if len(group) > 1:
+                for desc1 in group:
+                    cdef1 = desc1.selfclassdef
+                    for desc2 in group:
+                        cdef2 = desc2.selfclassdef
+                        if cdef1 is not cdef2 and cdef1.issubclass(cdef2):
+                            del descs[desc1]
+                            break
+    simplify_desc_set = staticmethod(simplify_desc_set)
 
 
 def new_or_old_class(c):

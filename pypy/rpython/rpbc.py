@@ -417,9 +417,9 @@ class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):
         return NotImplemented
 
 class AbstractMethodsPBCRepr(Repr):
-    """Representation selected for a PBC of the form {func: classdef...}.
-    It assumes that all the methods come from the same name in a base
-    classdef."""
+    """Representation selected for a PBC of MethodDescs.
+    It assumes that all the methods come from the same name and have
+    been read from instances with a common base."""
 
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
@@ -429,14 +429,19 @@ class AbstractMethodsPBCRepr(Repr):
                              "bound-method-object or None")
         mdescs = s_pbc.descriptions.keys()
         methodname = mdescs[0].name
+        classdef = mdescs[0].selfclassdef
         for mdesc in mdescs[1:]:
             if mdesc.name != methodname:
                 raise TyperError("cannot find a unique name under which the "
                                  "methods can be found: %r" % (
                         mdescs,))
+            classdef = classdef.commonbase(mdesc.selfclassdef)
+            if classdef is None:
+                raise TyperError("mixing methods coming from instances of "
+                                 "classes with no common base: %r" % (mdescs,))
 
         self.methodname = methodname
-        self.classdef = mdescs[0].classdef.locate_attribute(methodname)
+        self.classdef = classdef.locate_attribute(methodname)
         # the low-level representation is just the bound 'self' argument.
         self.s_im_self = annmodel.SomeInstance(self.classdef)
         self.r_im_self = rclass.getinstancerepr(rtyper, self.classdef)
