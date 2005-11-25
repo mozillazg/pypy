@@ -1,6 +1,7 @@
 import types
 from pypy.objspace.flow.model import Constant, FunctionGraph
 from pypy.interpreter.pycode import cpython_code_signature
+from pypy.interpreter.argument import rawshape
 from pypy.interpreter.argument import ArgErr
 
 
@@ -216,17 +217,18 @@ class FunctionDesc(Desc):
                                              name)
 
     def consider_call_site(bookkeeper, family, descs, args, s_result):
+        shape = rawshape(args)
         row = FunctionDesc.row_to_consider(descs, args)
-        family.calltable_add_row(args.rawshape(), row)
+        family.calltable_add_row(shape, row)
     consider_call_site = staticmethod(consider_call_site)
 
     def variant_for_call_site(bookkeeper, family, descs, args):
+        shape = rawshape(args)
         bookkeeper.enter(None)
         try:
             row = FunctionDesc.row_to_consider(descs, args)
         finally:
             bookkeeper.leave()
-        shape = args.rawshape() 
         index = family.calltable_lookup_row(shape, row)
         return shape, index
     variant_for_call_site = staticmethod(variant_for_call_site)
@@ -514,10 +516,9 @@ class MethodDesc(Desc):
                                              self.name)
     
     def consider_call_site(bookkeeper, family, descs, args, s_result):
+        shape = rawshape(args, nextra=1)     # account for the extra 'self'
         funcdescs = [methoddesc.funcdesc for methoddesc in descs]
         row = FunctionDesc.row_to_consider(descs, args)
-        shape = args.rawshape()
-        shape = (shape[0]+1,) + shape[1:]    # account for the extra 'self'
         family.calltable_add_row(shape, row)
     consider_call_site = staticmethod(consider_call_site)
 
@@ -609,10 +610,9 @@ class MethodOfFrozenDesc(Desc):
         return self.funcdesc.pycall(schedule, args, s_previous_result)
     
     def consider_call_site(bookkeeper, family, descs, args, s_result):
+        shape = rawshape(args, nextra=1)    # account for the extra 'self'
         funcdescs = [mofdesc.funcdesc for mofdesc in descs]
         row = FunctionDesc.row_to_consider(descs, args)
-        shape = args.rawshape()
-        shape = (shape[0]+1,) + shape[1:]    # account for the extra 'self'
         family.calltable_add_row(shape, row)
     consider_call_site = staticmethod(consider_call_site)
 
