@@ -208,7 +208,7 @@ class Bookkeeper:
             for clsdef in self.needs_hash_support.keys():
                 for clsdef2 in self.needs_hash_support:
                     if clsdef.issubclass(clsdef2) and clsdef is not clsdef2:
-                        del self.needs_hash_support[cls]
+                        del self.needs_hash_support[clsdef]
                         break
         finally:
             self.leave()
