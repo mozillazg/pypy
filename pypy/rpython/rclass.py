@@ -65,19 +65,20 @@ class AbstractClassRepr(Repr):
             cls = self.classdef.cls
         return 'ClassR %s.%s' % (cls.__module__, cls.__name__)
 
-    def convert_const(self, value):
-        if not isinstance(value, (type, types.ClassType)):
-            raise TyperError("not a class: %r" % (value,))
-        try:
-            subclassdef = self.rtyper.annotator.getuserclasses()[value]
-        except KeyError:
-            raise TyperError("no classdef: %r" % (value,))
+    def convert_desc(self, desc):
+        subclassdef = desc.getuniqueclassdef()
         if self.classdef is not None:
             if self.classdef.commonbase(subclassdef) != self.classdef:
                 raise TyperError("not a subclass of %r: %r" % (
-                    self.classdef.cls, value))
+                    self.classdef.name, desc))
         #
         return getclassrepr(self.rtyper, subclassdef).getruntime()
+
+    def convert_const(self, value):
+        if not isinstance(value, (type, types.ClassType)):
+            raise TyperError("not a class: %r" % (value,))
+        bk = self.rtyper.annotator.bookkeeper
+        return self.convert_desc(bk.getdesc(value))
 
     def prepare_method(self, s_value):
         # special-casing for methods:

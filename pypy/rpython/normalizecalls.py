@@ -397,7 +397,7 @@ def assign_inheritance_ids(annotator):
         classdef.maxid = nextid
         return classdef.maxid
     id_ = 0
-    for cls, classdef in annotator.getuserclasses().items():
+    for classdef in annotator.bookkeeper.classdefs:
         if classdef.basedef is None:
             id_ = assign_id(classdef, id_)
         
@@ -409,7 +409,7 @@ def perform_normalizations(rtyper):
         #XXX later: normalize_function_signatures(rtyper.annotator)
         #XXX later: specialize_pbcs_by_memotables(rtyper.annotator) 
         #XXX later: merge_classpbc_getattr_into_classdef(rtyper)
-        #XXX later: assign_inheritance_ids(rtyper.annotator)
+        assign_inheritance_ids(rtyper.annotator)
     finally:
         rtyper.annotator.frozen -= 1
     #XXX later: create_instantiate_functions(rtyper.annotator)
