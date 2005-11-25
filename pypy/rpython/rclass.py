@@ -154,8 +154,7 @@ class AbstractInstanceRepr(Repr):
 
 # ____________________________________________________________
 
-def rtype_new_instance(rtyper, cls, llops):
-    classdef = rtyper.annotator.getuserclasses()[cls]
+def rtype_new_instance(rtyper, classdef, llops):
     rinstance = getinstancerepr(rtyper, classdef)
     return rinstance.new_instance(llops)
 
