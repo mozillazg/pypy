@@ -64,15 +64,10 @@ def memo(funcdesc, arglist_s):
                 return s    # we will probably get more possible args later
             raise Exception("memo call: argument must be a class or a frozen "
                             "PBC, got %r" % (s,))
-    if len(arglist_s) == 1:
-        return memo_one_argument(funcdesc, *arglist_s)
-    elif len(arglist_s) == 2:
-        return memo_two_arguments(funcdesc, *arglist_s)
-    else:
-        raise Exception("memo call: only 1 or 2 arguments functions supported"
+    if len(arglist_s) != 1:
+        raise Exception("memo call: only 1 argument functions supported"
                         " at the moment (%r)" % (funcdesc,))
-
-def memo_one_argument(funcdesc, s):
+    s, = arglist_s
     from pypy.annotation.model import SomeImpossibleValue
     func = funcdesc.pyobj
     if func is None:
@@ -98,22 +93,39 @@ def memo_one_argument(funcdesc, s):
     return funcdesc.cachedgraph('memo1', alt_name='memo_%s' % funcdesc.name, 
                                          builder=builder)
 
-def memo_two_arguments(funcdesc, s1, s2):
+def methodmemo(funcdesc, arglist_s):
+    """NOT_RPYTHON"""
+    from pypy.annotation.model import SomePBC, SomeImpossibleValue
+    # call the function now, and collect possible results
+    for s in arglist_s:
+        if not isinstance(s, SomePBC):
+            if isinstance(s, SomeImpossibleValue):
+                return s    # we will probably get more possible args later
+            raise Exception("method-memo call: argument must be a class or"
+                            " a frozen PBC, got %r" % (s,))
+    if len(arglist_s) != 2:
+        raise Exception("method-memo call: expected  2 arguments function" 
+                        " at the moment (%r)" % (funcdesc,))
     from pypy.annotation.model import SomeImpossibleValue
     from pypy.annotation.description import FrozenDesc
     func = funcdesc.pyobj
     if func is None:
-        raise Exception("memo call: no Python function object to call (%r)" %
-                        (funcdesc,))
+        raise Exception("method-memo call: no Python function object to call"
+                        " (%r)" % (funcdesc,))
     # compute the concrete results and store them directly on the descs,
     # using a strange attribute name.  The goal is to store in the pbcs of
     # 's1' under the common 'attrname' a reader function; each reader function
     # will read a field 'attrname2' from the pbcs of 's2', where 'attrname2'
-    # differs for each pbc of 's1'.
-    attrname = '$memoreader%d_%s' % (uid(funcdesc), funcdesc.name)
+    # differs for each pbc of 's1'. This is all specialized also
+    # considering the type of s1 to support return value 
+    # polymorphism.
+    s1, s2 = arglist_s
+    s1_type = s1.knowntype
+    memosig = "%d_%d_%s" % (uid(funcdesc), uid(s1_type), funcdesc.name)
+
+    attrname = '$memoreader%s' % memosig 
     for desc1 in s1.descriptions:
-        attrname2 = '$memofield%d_%d_%s' % (uid(funcdesc), uid(desc1),
-                                            funcdesc.name)
+        attrname2 = '$memofield%d_%s' % (uid(desc1), memosig)
         s_reader = desc1.s_read_attribute(attrname)
         if isinstance(s_reader, SomeImpossibleValue):
             # first time we see this 'desc1': sanity-check 'desc1' and
@@ -121,7 +133,8 @@ def memo_two_arguments(funcdesc, s1, s2):
             assert isinstance(desc1, FrozenDesc), (
                 "XXX not implemented: memo call with a class as first arg")
             if desc1.pyobj is None:
-                raise Exception("memo call with a class or PBC that has no "
+                raise Exception("method-memo call with a class or PBC"
+                                " that has no "
                                 "corresponding Python object (%r)" % (desc1,))
             def reader(y, attrname2=attrname2):
                 return getattr(y, attrname2)
@@ -131,7 +144,8 @@ def memo_two_arguments(funcdesc, s1, s2):
             if isinstance(s_result, SomeImpossibleValue):
                 # first time we see this 'desc1+desc2' combination
                 if desc2.pyobj is None:
-                    raise Exception("memo call with a class or PBC that has no "
+                    raise Exception("method-memo call with a class or PBC"
+                                  " that has no "
                                   "corresponding Python object (%r)" % (desc2,))
                 # concrete call, to get the concrete result
                 result = func(desc1.pyobj, desc2.pyobj)
@@ -146,7 +160,7 @@ def memo_two_arguments(funcdesc, s1, s2):
         return reader_fn(y)
     def builder(translator, func):
         return translator.buildflowgraph(memoized)   # instead of 'func'
-    return funcdesc.cachedgraph('memo2', alt_name='memo_%s' % funcdesc.name, 
+    return funcdesc.cachedgraph(s1_type, alt_name='memo_%s' % funcdesc.name, 
                                          builder=builder)
 
 def argvalue(i):

@@ -1,6 +1,7 @@
 # base annotation policy for overrides and specialization
-from pypy.annotation.specialize import memo, default_specialize as default
+from pypy.annotation.specialize import default_specialize as default
 from pypy.annotation.specialize import argtype, argvalue
+from pypy.annotation.specialize import memo, methodmemo
 # for some reason, model must be imported first,
 # or we create a cycle.
 from pypy.annotation import model as annmodel
@@ -50,6 +51,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
 
     default_specialize = staticmethod(default)
     specialize__memo = staticmethod(memo)
+    specialize__methodmemo = staticmethod(methodmemo)
     specialize__arg0 = staticmethod(argvalue(0))
     specialize__argtype0 = staticmethod(argtype(0))
     specialize__arg1 = staticmethod(argvalue(1))

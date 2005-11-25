@@ -1780,36 +1780,6 @@ class TestAnnotateTestCase:
         s = a.build_types(f1, [int])
         assert s.knowntype == int
 
-    def test_call_memoized_function_2(self):
-        fr1 = Freezing()
-        fr2 = Freezing()
-        br1 = Freezing(); br1.value = 'a'
-        br2 = Freezing(); br2.value = 'b'
-        def getorbuild(key1, key2):
-            a = 1
-            b = 100
-            if key1 is fr1:
-                result = eval("%s+2" % key2.value)
-            else:
-                result = eval("%s+6" % key2.value)
-            return result
-        getorbuild._annspecialcase_ = "specialize:memo"
-
-        def f1(i):
-            if i > 0:
-                fr = fr1
-            else:
-                fr = fr2
-            if i % 2 == 0:
-                br = br1
-            else:
-                br = br2
-            return getorbuild(fr, br)
-
-        a = self.RPythonAnnotator()
-        s = a.build_types(f1, [int])
-        assert s.knowntype == int
-
 def g(n):
     return [0,1,2,n]
 
