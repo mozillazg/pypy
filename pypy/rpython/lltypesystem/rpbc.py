@@ -265,16 +265,14 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
             return hop2.dispatch()
 
         # instantiating a single class
-        klass = self.s_pbc.const
-        v_instance = rclass.rtype_new_instance(hop.rtyper, klass, hop.llops)
-        try:
-            initfunc = klass.__init__.im_func
-        except AttributeError:
+        classdef = self.s_pbc.descriptions.keys()[0].getuniqueclassdef()  # xxx specialisation
+        v_instance = rclass.rtype_new_instance(hop.rtyper, classdef, hop.llops)
+        s_init = classdef.classdesc.s_read_attribute('__init__')
+        if isinstance(s_init, annmodel.SomeImpossibleValue):
             assert hop.nb_args == 1, ("arguments passed to __init__, "
                                       "but no __init__!")
         else:
             s_instance = rclass.instance_annotation_for_cls(self.rtyper, klass)
-            s_init = self.rtyper.annotator.bookkeeper.immutablevalue(initfunc)
             hop2 = hop.copy()
             hop2.r_s_popfirstarg()   # discard the class pointer argument
             if call_args:

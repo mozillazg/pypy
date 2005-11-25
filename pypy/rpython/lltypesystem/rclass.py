@@ -161,11 +161,12 @@ class ClassRepr(AbstractClassRepr):
             # initialize the 'parenttypeptr' and 'name' fields
             if rsubcls.classdef is not None:
                 vtable.parenttypeptr = rsubcls.rbase.getvtable()
-                vtable.subclassrange_min = rsubcls.classdef.minid
-                vtable.subclassrange_max = rsubcls.classdef.maxid
+                #vtable.subclassrange_min = rsubcls.classdef.minid
+                #vtable.subclassrange_max = rsubcls.classdef.maxid
             else: #for the root class
-                vtable.subclassrange_min = 0
-                vtable.subclassrange_max = sys.maxint
+                #vtable.subclassrange_min = 0
+                #vtable.subclassrange_max = sys.maxint
+                pass
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
             if rinstance.needsgc: # only gc-case
@@ -197,7 +198,7 @@ class ClassRepr(AbstractClassRepr):
                 mangled_name, r = self.clsfields[fldname]
                 if r.lowleveltype is Void:
                     continue
-                value = clsdef.classdesc.read_attribute(fldname, None)
+                value = rsubcls.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
                     assign(mangled_name, value)
             # extra PBC attributes
@@ -346,7 +347,7 @@ class InstanceRepr(AbstractInstanceRepr):
         return getinstancerepr(self.rtyper, None, nogc=not self.needsgc)
 
     def getflavor(self):
-        return getattr(self.classdef.cls, '_alloc_flavor_', 'gc')        
+        return self.classdef.classdesc.read_attribute('_alloc_flavor', Constant('gc')).value
 
     def convert_const(self, value):
         if value is None:
@@ -473,19 +474,17 @@ class InstanceRepr(AbstractInstanceRepr):
         if self.classdef is not None:
             flds = self.allinstancefields.keys()
             flds.sort()
-            mro = list(self.classdef.getmro())
             for fldname in flds:
                 if fldname == '__class__':
                     continue
                 mangled_name, r = self.allinstancefields[fldname]
                 if r.lowleveltype is Void:
                     continue
-                for clsdef in mro:
-                    if fldname in clsdef.cls.__dict__:
-                        value = clsdef.cls.__dict__[fldname]
-                        cvalue = inputconst(r, value)
-                        self.setfield(vptr, fldname, cvalue, llops)
-                        break
+                value = self.classdef.classdesc.read_attribute(fldname, None)
+                if value is not None:
+                    cvalue = Constant(r.convert_desc_or_const(value))
+                    self.setfield(vptr, fldname, cvalue, llops)
+
         return vptr
 
     def rtype_type(self, hop):

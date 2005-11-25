@@ -93,7 +93,7 @@ class Repr:
     def convert_desc_or_const(self, desc_or_const):
         if isinstance(desc_or_const, description.Desc):
             return self.convert_desc(desc_or_const)
-        elif isinstance(desc_or_const, flowmodel.Constant):
+        elif isinstance(desc_or_const, Constant):
             return self.convert_const(desc_or_const.value)
         else:
             raise TyperError("convert_desc_or_const expects a Desc"

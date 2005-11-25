@@ -424,28 +424,19 @@ class AbstractMethodsPBCRepr(Repr):
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
-        if None in s_pbc.prebuiltinstances:
+        if s_pbc.isNone():
             raise TyperError("unsupported: variable of type "
                              "bound-method-object or None")
-        basedef = commonbase(s_pbc.prebuiltinstances.values())
-        for classdef1, name in allattributenames(basedef):
-            # don't trust the func.func_names and see if this 'name' would be
-            # the one under which we can find all these methods
-            for func, classdef in s_pbc.prebuiltinstances.items():
-                try:
-                    if func != getattr(classdef.cls, name).im_func:
-                        break
-                except AttributeError:
-                    break
-            else:
-                # yes!
-                self.methodname = name
-                self.classdef = classdef1   # where the Attribute is defined
-                break
-        else:
-            raise TyperError("cannot find a unique name under which the "
-                             "methods can be found: %r" % (
-                s_pbc.prebuiltinstances,))
+        mdescs = s_pbc.descriptions.keys()
+        methodname = mdescs[0].name
+        for mdesc in mdescs[1:]:
+            if mdesc.name != methodname:
+                raise TyperError("cannot find a unique name under which the "
+                                 "methods can be found: %r" % (
+                        mdescs,))
+
+        self.methodname = methodname
+        self.classdef = mdescs[0].classdef.locate_attribute(methodname)
         # the low-level representation is just the bound 'self' argument.
         self.s_im_self = annmodel.SomeInstance(self.classdef)
         self.r_im_self = rclass.getinstancerepr(rtyper, self.classdef)
