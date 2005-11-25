@@ -352,15 +352,12 @@ class InstanceRepr(AbstractInstanceRepr):
     def convert_const(self, value):
         if value is None:
             return nullptr(self.object_type)
-        try:
-            classdef = self.rtyper.annotator.getuserclasses()[value.__class__]
-        except KeyError:
-            raise TyperError("no classdef: %r" % (value.__class__,))
+        cls = value.__class__
+        bk = self.rtyper.annotator.bookkeeper
+        classdef = bk.getdesc(cls).getuniqueclassdef()
         if classdef != self.classdef:
             # if the class does not match exactly, check that 'value' is an
             # instance of a subclass and delegate to that InstanceRepr
-            if classdef is None:
-                raise TyperError("not implemented: object() instance")
             if classdef.commonbase(self.classdef) != self.classdef:
                 raise TyperError("not an instance of %r: %r" % (
                     self.classdef.cls, value))
