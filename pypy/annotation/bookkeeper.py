@@ -197,10 +197,14 @@ class Bookkeeper:
                 newblocks = self.annotator.added_blocks
                 if newblocks is None:
                     newblocks = self.annotator.annotated  # all of them
+                binding = self.annotator.binding
                 for block in newblocks:
                     for op in block.operations:
                         if op.opname in ('simple_call', 'call_args'):
                             yield op
+                        # some blocks are partially annotated
+                        if binding(op.result, extquery=True) is None:
+                            break   # ignore the unannotated part
 
             for call_op in call_sites():
                 self.consider_call_site(call_op)
@@ -225,7 +229,11 @@ class Bookkeeper:
             descs = s_callable.descriptions.keys()
             family = descs[0].getcallfamily()
             args = self.build_args(call_op.opname, args_s)
-            s_callable.getKind().consider_call_site(self, family, descs, args)
+            s_result = binding(call_op.result, extquery=True)
+            if s_result is None:
+                s_result = s_ImpossibleValue
+            s_callable.getKind().consider_call_site(self, family, descs, args,
+                                                    s_result)
 
     def getuniqueclassdef(self, cls):
         """Get the ClassDef associated with the given user cls.

@@ -265,14 +265,15 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
             return hop2.dispatch()
 
         # instantiating a single class
-        classdef = self.s_pbc.descriptions.keys()[0].getuniqueclassdef()  # xxx specialisation
+        s_instance = hop.s_result
+        assert isinstance(s_instance, annmodel.SomeInstance)
+        classdef = hop.s_result.classdef
         v_instance = rclass.rtype_new_instance(hop.rtyper, classdef, hop.llops)
         s_init = classdef.classdesc.s_read_attribute('__init__')
         if isinstance(s_init, annmodel.SomeImpossibleValue):
             assert hop.nb_args == 1, ("arguments passed to __init__, "
                                       "but no __init__!")
         else:
-            s_instance = rclass.instance_annotation_for_cls(self.rtyper, klass)
             hop2 = hop.copy()
             hop2.r_s_popfirstarg()   # discard the class pointer argument
             if call_args:
@@ -281,9 +282,9 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
                 adjust_shape(hop2, s_shape)
             else:
                 hop2.v_s_insertfirstarg(v_instance, s_instance)  # add 'instance'
-            c = Constant(initfunc)
+            c = Constant("init-func-dummy")   # this value not really used
             hop2.v_s_insertfirstarg(c, s_init)   # add 'initfunc'
-            hop2.s_result = annmodel.SomePBC({None: True})
+            hop2.s_result = annmodel.s_None
             hop2.r_result = self.rtyper.getrepr(hop2.s_result)
             # now hop2 looks like simple_call(initfunc, instance, args...)
             hop2.dispatch()

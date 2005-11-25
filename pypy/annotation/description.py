@@ -211,7 +211,7 @@ class FunctionDesc(Desc):
         # XXX static methods
         return self.bookkeeper.getmethoddesc(self, classdef, name)
 
-    def consider_call_site(bookkeeper, family, descs, args):
+    def consider_call_site(bookkeeper, family, descs, args, s_result):
         row = FunctionDesc.row_to_consider(descs, args)
         family.calltable_add_row(args.rawshape(), row)
     consider_call_site = staticmethod(consider_call_site)
@@ -434,8 +434,36 @@ class ClassDesc(Desc):
                 return self
         return None
 
-    def consider_call_site(bookkeeper, family, descs, args):
-        print "XXX not implemented"
+    def consider_call_site(bookkeeper, family, descs, args, s_result):
+        from pypy.annotation.model import SomeInstance, SomePBC, s_None
+        if len(descs) == 1:
+            # call to a single class, look at the result annotation
+            # in case it was specialized
+            if not isinstance(s_result, SomeInstance):
+                raise Exception("calling a class didn't return an instance??")
+            classdefs = [s_result.classdef]
+        else:
+            # call to multiple classes: specialization not supported
+            classdefs = [desc.getuniqueclassdef() for desc in descs]
+        # make a PBC of MethodDescs, one for the __init__ of each class
+        initdescs = []
+        for desc, classdef in zip(descs, classdefs):
+            s_init = desc.s_read_attribute('__init__')
+            if isinstance(s_init, SomePBC):
+                assert len(s_init.descriptions) == 1, (
+                    "unexpected dynamic __init__?")
+                initfuncdesc = s_init.descriptions.keys()[0]
+                if isinstance(initfuncdesc, FunctionDesc):
+                    initmethdesc = bookkeeper.getmethoddesc(initfuncdesc,
+                                                            classdef,
+                                                            '__init__')
+                    initdescs.append(initmethdesc)
+        # register a call to exactly these __init__ methods
+        if initdescs:
+            initdescs[0].mergecallfamilies(*initdescs[1:])
+            initfamily = initdescs[0].getcallfamily()
+            MethodDesc.consider_call_site(bookkeeper, initfamily, initdescs,
+                                          args, s_None)
     consider_call_site = staticmethod(consider_call_site)
 
     def rowkey(self):
@@ -465,7 +493,7 @@ class MethodDesc(Desc):
         self.bookkeeper.warning("rebinding an already bound %r" % (self,))
         return self.funcdesc.bind_under(classdef, name)
     
-    def consider_call_site(bookkeeper, family, descs, args):
+    def consider_call_site(bookkeeper, family, descs, args, s_result):
         funcdescs = [methoddesc.funcdesc for methoddesc in descs]
         row = FunctionDesc.row_to_consider(descs, args)
         shape = args.rawshape()
@@ -539,7 +567,7 @@ class MethodOfFrozenDesc(Desc):
         args = args.prepend(s_self)
         return self.funcdesc.pycall(schedule, args, s_previous_result)
     
-    def consider_call_site(bookkeeper, family, descs, args):
+    def consider_call_site(bookkeeper, family, descs, args, s_result):
         funcdescs = [mofdesc.funcdesc for mofdesc in descs]
         row = FunctionDesc.row_to_consider(descs, args)
         shape = args.rawshape()
