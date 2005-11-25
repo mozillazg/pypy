@@ -1780,6 +1780,54 @@ class TestAnnotateTestCase:
         s = a.build_types(f1, [int])
         assert s.knowntype == int
 
+    def test_stored_bound_method(self):
+        # issue 129
+        class H:
+            def h(self):
+                return 42
+        class C:
+            def __init__(self, func):
+                self.f = func
+            def do(self):
+                return self.f()
+        def g():
+            h = H()
+            c = C(h.h)
+            return c.do()
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [])
+        assert s.is_constant()
+        assert s.const == 42
+
+    def test_stored_bound_method_2(self):
+        # issue 129
+        class H:
+            pass
+        class H1(H):
+            def h(self):
+                return 42
+        class H2(H):
+            def h(self):
+                return 17
+        class C:
+            def __init__(self, func):
+                self.f = func
+            def do(self):
+                return self.f()
+        def g(flag):
+            if flag:
+                h = H1()
+            else:
+                h = H2()
+            c = C(h.h)
+            return c.do()
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [int])
+        assert s.knowntype == int
+        assert not s.is_constant()
+
 def g(n):
     return [0,1,2,n]
 
