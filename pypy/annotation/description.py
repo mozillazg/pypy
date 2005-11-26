@@ -412,7 +412,11 @@ class ClassDesc(Desc):
     def s_get_value(self, classdef, name):
         obj = self.classdict[name]
         if isinstance(obj, Constant):
-            s_value = self.bookkeeper.immutablevalue(obj.value)
+            value = obj.value
+            if isinstance(value, staticmethod):   # special case
+                value = value.__get__(42)
+                classdef = None   # don't bind
+            s_value = self.bookkeeper.immutablevalue(value)
             if classdef is not None:
                 s_value = s_value.bind_callables_under(classdef, name)
         elif isinstance(obj, Desc):
