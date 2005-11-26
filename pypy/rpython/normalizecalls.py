@@ -28,8 +28,7 @@ def normalize_calltable(annotator, callfamily):
         progress = False
         for shape, table in callfamily.calltables.items():
             for row in table:
-                progress |= normalize_calltable_row_annotation(annotator, shape,
-                                                               row)
+                progress |= normalize_calltable_row_annotation(annotator, row)
         if not progress:
             return   # done
 
@@ -115,35 +114,21 @@ def normalize_calltable_row_signature(annotator, shape, row):
             did_something = True
     return did_something
 
-def normalize_calltable_row_annotation(annotator, shape, row):
+def normalize_calltable_row_annotation(annotator, row):
     if len(row) <= 1:
         return False   # nothing to do
     graphs = row.values()
-    
-    shape_cnt, shape_keys, shape_star, shape_stst = shape
-    assert not shape_star, "XXX not implemented"
-    assert not shape_stst, "XXX not implemented"
-
-    call_nbargs = shape_cnt + len(shape_keys)
-
-    # for the first 'shape_cnt' arguments we need to generalize to
-    # a common type
     graph_bindings = {}
     for graph in graphs:
-        argnames, varargname, kwargname = graph.signature
-        assert not varargname, "XXX not implemented"
         graph_bindings[graph] = [annotator.binding(v)
                                  for v in graph.getargs()]
-        argorder = range(shape_cnt)
-        for key in shape_keys:
-            i = list(argnames).index(key)
-            assert i not in argorder
-            argorder.append(i)
-        assert argorder == range(call_nbargs)
+    iterbindings = graph_bindings.itervalues()
+    nbargs = len(iterbindings.next())
+    for binding in iterbindings:
+        assert len(binding) == nbargs
 
-    call_nbargs = shape_cnt + len(shape_keys)
     generalizedargs = []
-    for i in range(call_nbargs):
+    for i in range(nbargs):
         args_s = []
         for graph, bindings in graph_bindings.items():
             args_s.append(bindings[i])
