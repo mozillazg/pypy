@@ -267,8 +267,10 @@ class RPythonAnnotator:
     def recursivecall(self, graph, whence, inputcells): # whence = position_key|callback taking the annotator, graph 
         if isinstance(whence, tuple):
             parent_graph, parent_block, parent_index = position_key = whence
+            tag = parent_block, parent_index
+            self.translator.update_call_graph(parent_graph, graph, tag)
         else:
-            parent_graph = position_key = None
+            position_key = None
         self._register_returnvar(graph)
         # self.notify[graph.returnblock] is a dictionary of call
         # points to this func which triggers a reflow whenever the

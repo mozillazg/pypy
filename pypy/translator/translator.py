@@ -34,9 +34,8 @@ class TranslationContext(object):
         self.callgraph = {}   # {opaque_tag: (caller-graph, callee-graph)}
         self._prebuilt_graphs = {}   # only used by the pygame viewer
         # the following is an index into self.functions from where to check
-        #self._callgraph_complete = 0
 
-    def buildflowgraph(self, func, called_by_graph=None, call_tag=None):
+    def buildflowgraph(self, func):
         """Get the flow graph for a function."""
         if not isinstance(func, types.FunctionType):
             raise TypeError("buildflowgraph() expects a function, "
@@ -54,11 +53,12 @@ class TranslationContext(object):
             if self.flags.get('verbose'):
                 log.done(func.__name__)
             self.graphs.append(graph)   # store the graph in our list
-        if called_by_graph:
-            # update the call graph
-            key = called_by_graph, graph, call_tag
-            self.callgraph[key] = called_by_graph, graph
         return graph
+
+    def update_call_graph(self, caller_graph, callee_graph, position_tag):
+        # update the call graph
+        key = caller_graph, callee_graph, position_tag
+        self.callgraph[key] = caller_graph, callee_graph
 
     def buildannotator(self, policy=None):
         if self.annotator is not None:
@@ -156,13 +156,11 @@ class Translator(TranslationContext):
         raise TypeError, "don't know about %r" % x
 
     def specialize(self, **flags):
-        #self._callgraph_complete = 0
         rtyper = self.buildrtyper(
             type_system=flags.pop("type_system", "lltype"))
         rtyper.specialize(**flags)
 
     def backend_optimizations(self, **kwds):
-        #self._callgraph_complete = 0
         from pypy.translator.backendopt.all import backend_optimizations
         backend_optimizations(self, **kwds)
 
@@ -337,32 +335,3 @@ class Translator(TranslationContext):
         """Disassembles underlying Python function to bytecodes."""
         from dis import dis
         dis(self.entrypoint)
-
-    def get_complete_callgraph(self):
-        FIX_ME
-        if self._callgraph_complete < len(self.functions):
-            self._complete_callgraph()
-        return self.callgraph
-    complete_callgraph = property(get_complete_callgraph)
-
-    def _complete_callgraph(self):
-        # walk through all functions, which may grow
-        # if we pull new graphs in.
-        graphs = self.flowgraphs
-        funcs = self.functions
-        complete = self._callgraph_complete
-        while complete < len(funcs):
-            sofar = len(funcs)
-            for func in funcs[complete:]:
-                graph = graphs[func]
-                for block in graph.iterblocks():
-                    for op in block.operations:
-                        if op.opname == 'direct_call':
-                            fnarg = op.args[0]
-                            if isinstance(fnarg, Constant):
-                                fnptr = fnarg.value
-                                fn = fnptr._obj._callable
-                                fg = self.getflowgraph(fn, called_by = func,
-                                                       call_tag = block)
-            complete = sofar
-        self._callgraph_complete = complete
