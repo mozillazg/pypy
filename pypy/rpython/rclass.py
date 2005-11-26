@@ -53,17 +53,17 @@ class AbstractClassRepr(Repr):
 
     def __repr__(self):
         if self.classdef is None:
-            cls = object
+            clsname = 'object'
         else:
-            cls = self.classdef.cls
-        return '<ClassRepr for %s.%s>' % (cls.__module__, cls.__name__)
+            clsname = self.classdef.name
+        return '<ClassRepr for %s>' % (clsname,)
 
     def compact_repr(self):
         if self.classdef is None:
-            cls = object
+            clsname = 'object'
         else:
-            cls = self.classdef.cls
-        return 'ClassR %s.%s' % (cls.__module__, cls.__name__)
+            clsname = self.classdef.name
+        return 'ClassR %s' % (clsname,)
 
     def convert_desc(self, desc):
         subclassdef = desc.getuniqueclassdef()
@@ -117,17 +117,17 @@ class AbstractInstanceRepr(Repr):
 
     def __repr__(self):
         if self.classdef is None:
-            cls = object
+            clsname = 'object'
         else:
-            cls = self.classdef.cls
-        return '<InstanceRepr for %s.%s>' % (cls.__module__, cls.__name__)
+            clsname = self.classdef.name
+        return '<InstanceRepr for %s>' % (clsname,)
 
     def compact_repr(self):
         if self.classdef is None:
-            cls = object
+            clsname = 'object'
         else:
-            cls = self.classdef.cls
-        return 'InstanceR %s.%s' % (cls.__module__, cls.__name__)
+            clsname = self.classdef.name
+        return 'InstanceR %s' % (clsname,)
 
     def _setup_repr_final(self):
         pass

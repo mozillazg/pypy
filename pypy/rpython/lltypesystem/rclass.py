@@ -355,7 +355,7 @@ class InstanceRepr(AbstractInstanceRepr):
             # instance of a subclass and delegate to that InstanceRepr
             if classdef.commonbase(self.classdef) != self.classdef:
                 raise TyperError("not an instance of %r: %r" % (
-                    self.classdef.cls, value))
+                    self.classdef.name, value))
             rinstance = getinstancerepr(self.rtyper, classdef)
             result = rinstance.convert_const(value)
             return cast_pointer(self.lowleveltype, result)
@@ -375,7 +375,7 @@ class InstanceRepr(AbstractInstanceRepr):
     def get_ll_hash_function(self):
         if self.classdef is None:
             return None
-        if self.rtyper.needs_hash_support( self.classdef.cls):
+        if self.rtyper.needs_hash_support(self.classdef):
             try:
                 return self._ll_hash_function
             except AttributeError:
@@ -490,7 +490,7 @@ class InstanceRepr(AbstractInstanceRepr):
     def rtype_hash(self, hop):
         if self.classdef is None:
             raise TyperError, "hash() not supported for this class"                        
-        if self.rtyper.needs_hash_support( self.classdef.cls):
+        if self.rtyper.needs_hash_support(self.classdef):
             vinst, = hop.inputargs(self)
             return hop.gendirectcall(ll_inst_hash, vinst)
         else:
