@@ -367,7 +367,7 @@ class AbstractClassesPBCRepr(Repr):
     def get_access_set(self):
         if self._access_set is None:
             classdescs = self.s_pbc.descriptions.keys()
-            access = classdescs[1].getattrfamily()
+            access = classdescs[0].getattrfamily()
             for classdesc in classdescs[1:]:
                 access1 = classdesc.getattrfamily() 
                 assert access1 is access       # XXX not implemented
