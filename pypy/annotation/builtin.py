@@ -232,15 +232,15 @@ def rarith_intmask(s_obj):
 def robjmodel_instantiate(s_clspbc):
     assert isinstance(s_clspbc, SomePBC)
     clsdef = None
-    for cls, v in s_clspbc.prebuiltinstances.items():
+    more_than_one = len(s_clspbc.descriptions)
+    for desc in s_clspbc.descriptions:
+        cdef = desc.getuniqueclassdef()
+        if more_than_one:
+            getbookkeeper().needs_generic_instantiate[cdef] = True
         if not clsdef:
-            clsdef = getbookkeeper().getclassdef(cls)
+            clsdef = cdef
         else:
-            clsdef = clsdef.commonbase(getbookkeeper().getclassdef(cls))
-    if len(s_clspbc.prebuiltinstances) > 1:
-        for cls in s_clspbc.prebuiltinstances:
-            getbookkeeper().needs_generic_instantiate[cls] = True
-            XXX_FixMe
+            clsdef = clsdef.commonbase(cdef)
     return SomeInstance(clsdef)
 
 def robjmodel_we_are_translated():
