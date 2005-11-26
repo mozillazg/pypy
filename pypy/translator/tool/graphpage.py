@@ -2,6 +2,7 @@ import inspect, types
 from pypy.objspace.flow.model import traverse, Block, Link, FunctionGraph
 from pypy.translator.tool.make_dot import DotGen, make_dot, make_dot_graphs
 from pypy.annotation.classdef import ClassDef
+from pypy.annotation import model as annmodel, description
 from pypy.tool.uid import uid
 
 
@@ -195,17 +196,35 @@ class ClassDefPage(GraphPage):
     """
     def compute(self, translator, cdef):
         self.translator = translator
-        dotgen = DotGen(cdef.cls.__name__, rankdir="LR")
+        dotgen = DotGen(cdef.name.split('.')[-1], rankdir="LR")
 
         def writecdef(cdef):
-            dotgen.emit_node(nameof(cdef), color="red", shape="octagon",
-                             label=repr(cdef.cls))
+            lines = [cdef.name, '']
             attrs = cdef.attrs.items()
             attrs.sort()
-            for name, attrdef in attrs:
-                s_value = attrdef.s_value
-                dotgen.emit_node(name, shape="box", label=nottoowide(s_value))
-                dotgen.emit_edge(nameof(cdef), name, label=name)
+
+            def writeadefs(prefix, classattrs):
+                for name, attrdef in attrs:
+                    if bool(attrdef.readonly) == bool(classattrs):
+                        s_value = attrdef.s_value
+                        linkname = name
+                        info = s_value
+                        if (classattrs and isinstance(s_value, annmodel.SomePBC)
+                            and s_value.getKind() == description.MethodDesc):
+                            name += '()'
+                            info = 'SomePBC(%s)' % ', '.join(
+                                ['method %s.%s' % (
+                                  desc.originclassdef.name.split('.')[-1],
+                                  desc.name) for desc in s_value.descriptions],)
+                        lines.append(name)
+                        self.links[linkname] = '%s.%s: %s' % (prefix, name, info)
+
+            prefix = cdef.name.split('.')[-1]
+            writeadefs(prefix + '()', False)
+            lines.append('')
+            writeadefs(prefix, True)
+            dotgen.emit_node(nameof(cdef), color="red", shape="box",
+                             label='\n'.join(lines))
 
         prevcdef = None
         while cdef is not None:
@@ -216,6 +235,9 @@ class ClassDefPage(GraphPage):
             cdef = cdef.basedef
         
         self.source = dotgen.generate(target=None)
+
+    def followlink(self, name):
+        return self
 
 class BaseTranslatorPage(GraphPage):
     """Abstract GraphPage for showing some of the call graph between functions
@@ -275,7 +297,7 @@ class BaseTranslatorPage(GraphPage):
             dotgen.emit_node(nameof(None), color="red", shape="octagon",
                              label="Root Class\\nobject")
             for classdef in self.translator.annotator.getuserclassdefinitions():
-                data = self.labelof(classdef, classdef.cls.__name__)
+                data = self.labelof(classdef, classdef.name.split('.')[-1])
                 dotgen.emit_node(nameof(classdef), label=data, shape="box")
                 dotgen.emit_edge(nameof(classdef.basedef), nameof(classdef))
              
