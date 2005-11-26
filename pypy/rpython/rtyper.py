@@ -280,7 +280,7 @@ class RPythonTyper:
         # specialize all the operations, as far as possible
         if block.operations == ():   # return or except block
             return
-        newops = LowLevelOpList(self)
+        newops = LowLevelOpList(self, block)
         varmapping = {}
         for v in block.getvariables():
             varmapping[v] = v    # records existing Variables
@@ -362,7 +362,7 @@ class RPythonTyper:
                     a, using_repr=self.exceptiondata.r_exception_value)
 
             inputargs_reprs = self.setup_block_entry(link.target)
-            newops = LowLevelOpList(self)
+            newops = LowLevelOpList(self, block)
             newlinkargs = {}
             for i in range(len(link.args)):
                 a1 = link.args[i]
@@ -712,8 +712,12 @@ class LowLevelOpList(list):
     llop_raising_exceptions = None
     implicit_exceptions_checked = None
 
-    def __init__(self, rtyper):
+    def __init__(self, rtyper, originalblock):
         self.rtyper = rtyper
+        self.originalblock = originalblock
+
+    def getparentgraph(self):
+        return self.rtyper.annotator.annotated[self.originalblock]
 
     def convertvar(self, v, r_from, r_to):
         assert isinstance(v, (Variable, Constant))
@@ -774,6 +778,10 @@ class LowLevelOpList(list):
             ll_function = ll_function.im_func
 
         graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
+        rtyper.annotator.translator.update_call_graph(
+            caller_graph = self.getparentgraph(),
+            callee_graph = graph,
+            position_tag = object())
 
         # build the 'direct_call' operation
         f = self.rtyper.getcallable(graph)
