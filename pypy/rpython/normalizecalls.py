@@ -4,6 +4,7 @@ import inspect
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import checkgraph
 from pypy.annotation import model as annmodel
+from pypy.annotation import description
 from pypy.tool.sourcetools import has_varargs, valid_identifier
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.error import TyperError
@@ -247,29 +248,29 @@ def merge_classpbc_getattr_into_classdef(rtyper):
     # PBC access set of the family of classes of 'some_class'.  If the classes
     # have corresponding ClassDefs, they are not updated by the annotator.
     # We have to do it now.
-    access_sets = rtyper.annotator.getpbcaccesssets()
-    userclasses = rtyper.annotator.getuserclasses()
+    access_sets = rtyper.annotator.bookkeeper.pbc_maximal_access_sets
     for access_set in access_sets.infos():
-        if len(access_set.objects) <= 1:
+        descs = access_set.descs
+        if len(descs) <= 1:
             continue
         count = 0
-        for obj in access_set.objects:
-            if obj in userclasses:
+        for desc in descs:
+            if isinstance(desc, description.ClassDesc):
                 count += 1
         if count == 0:
             continue
-        if count != len(access_set.objects):
+        if count != len(descs):
             raise TyperError("reading attributes %r: mixing instantiated "
                              "classes with something else in %r" % (
-                access_set.attrs.keys(), access_set.objects.keys()))
-        classdefs = [userclasses[obj] for obj in access_set.objects]
+                access_set.attrs.keys(), descs.keys()))
+        classdefs = [desc.getuniqueclassdef() for desc in descs]
         commonbase = classdefs[0]
         for cdef in classdefs[1:]:
             commonbase = commonbase.commonbase(cdef)
             if commonbase is None:
                 raise TyperError("reading attributes %r: no common base class "
                                  "for %r" % (
-                    access_set.attrs.keys(), access_set.objects.keys()))
+                    access_set.attrs.keys(), descs.keys()))
         access_set.commonbase = commonbase
         extra_access_sets = rtyper.class_pbc_attributes.setdefault(commonbase,
                                                                    {})
@@ -408,7 +409,7 @@ def perform_normalizations(rtyper):
         normalize_call_familes(rtyper.annotator)
         #XXX later: normalize_function_signatures(rtyper.annotator)
         #XXX later: specialize_pbcs_by_memotables(rtyper.annotator) 
-        #XXX later: merge_classpbc_getattr_into_classdef(rtyper)
+        merge_classpbc_getattr_into_classdef(rtyper)
         assign_inheritance_ids(rtyper.annotator)
     finally:
         rtyper.annotator.frozen -= 1

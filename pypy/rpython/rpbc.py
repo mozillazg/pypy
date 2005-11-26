@@ -366,11 +366,10 @@ class AbstractClassesPBCRepr(Repr):
 
     def get_access_set(self):
         if self._access_set is None:
-            access_sets = self.rtyper.annotator.getpbcaccesssets()
-            classes = self.s_pbc.prebuiltinstances.keys()
-            _, _, access = access_sets.find(classes[0])
-            for obj in classes[1:]:
-                _, _, access1 = access_sets.find(obj)
+            classdescs = self.s_pbc.descriptions.keys()
+            access = classdescs[1].getattrfamily()
+            for classdesc in classdescs[1:]:
+                access1 = classdesc.getattrfamily() 
                 assert access1 is access       # XXX not implemented
             commonbase = access.commonbase
             self._class_repr = rclass.getclassrepr(self.rtyper, commonbase)
@@ -381,12 +380,17 @@ class AbstractClassesPBCRepr(Repr):
         self.get_access_set()
         return self._class_repr
 
-    def convert_const(self, cls):
-        if cls not in self.s_pbc.prebuiltinstances:
+    def convert_desc(self, desc):
+        if desc not in self.s_pbc.descriptions:
             raise TyperError("%r not in %r" % (cls, self))
         if self.lowleveltype is Void:
-            return cls
-        return rclass.get_type_repr(self.rtyper).convert_const(cls)
+            return desc.pyobj
+        return rclass.get_type_repr(self.rtyper).convert_desc(desc)
+
+    def convert_const(self, cls):
+        bk = self.rtyper.annotator.bookkeeper
+        classdesc = bk.getdesc(cls)
+        return self.convert_desc(classdesc)
 
     def rtype_getattr(self, hop):
         if hop.s_result.is_constant():
