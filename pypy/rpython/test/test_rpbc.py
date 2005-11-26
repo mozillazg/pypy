@@ -852,7 +852,7 @@ def test_hlinvoke_simple():
         return a + b
     from pypy.translator import translator
     from pypy.translator import annrpython
-    a = annrpython.RPythonAnnotator(translator.Translator(simplifying=True))
+    a = annrpython.RPythonAnnotator()
     from pypy.annotation import model as annmodel
     
     s_f = a.bookkeeper.immutablevalue(f) 
