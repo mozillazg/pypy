@@ -97,10 +97,19 @@ class FlowGraphPage(GraphPage):
         self.translator = translator
         self.annotator = translator.annotator
         self.func_names = func_names or {}
-        functions = functions or translator.functions
-        graphs = [translator.getflowgraph(func) for func in functions]
+        if functions:
+            graphs = []
+            for func in functions:
+                graphs += self.graphsof(func)
+        else:
+            graphs = self.translator.graphs
+        if not graphs:
+            if hasattr(translator, 'entrypoint'):
+                graphs = self.graphsof(translator.entrypoint)
+            else:
+                raise Exception("no graph to show")
         gs = [(graph.name, graph) for graph in graphs]
-        if self.annotator and self.annotator.blocked_functions:
+        if self.annotator and self.annotator.blocked_graphs:
             for block, was_annotated in self.annotator.annotated.items():
                 if not was_annotated:
                     block.fillcolor = "red"
@@ -136,6 +145,21 @@ class FlowGraphPage(GraphPage):
                     self.links[var.name] = info
         for graph in graphs:
             traverse(visit, graph)
+
+    def graphsof(self, func):
+        graphs = []
+        if self.annotator:
+            funcdesc = self.annotator.bookkeeper.getdesc(func)
+            graphs = funcdesc._cache.values()
+        if not graphs:
+            # build a new graph, mark it as "to be returned to the annotator the
+            # next time it asks for a graph for the same function"
+            # (note that this buildflowgraph() call will return the same graph
+            # if called again, from the _prebuilt_graphs cache)
+            graph = self.translator.buildflowgraph(func)
+            self.translator._prebuilt_graphs[func] = graph
+            graphs = [graph]
+        return graphs
 
     def followlink(self, varname):
         # clicking on a variable name shows its binding history

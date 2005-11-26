@@ -32,6 +32,7 @@ class TranslationContext(object):
         self.rtyper = None
         self.graphs = []      # [graph]
         self.callgraph = {}   # {opaque_tag: (caller-graph, callee-graph)}
+        self._prebuilt_graphs = {}   # only used by the pygame viewer
         # the following is an index into self.functions from where to check
         #self._callgraph_complete = 0
 
@@ -40,16 +41,19 @@ class TranslationContext(object):
         if not isinstance(func, types.FunctionType):
             raise TypeError("buildflowgraph() expects a function, "
                             "got %r" % (func,))
-        if self.flags.get('verbose'):
-            log.start(nice_repr_for_func(func))
-        space = FlowObjSpace()
-        space.__dict__.update(self.flags)   # xxx push flags there
-        graph = space.build_flow(func)
-        if self.flags.get('simplifying'):
-            simplify_graph(graph)
-        if self.flags.get('verbose'):
-            log.done(func.__name__)
-        self.graphs.append(graph)   # store the graph in our list
+        if func in self._prebuilt_graphs:
+            graph = self._prebuilt_graphs.pop(func)
+        else:
+            if self.flags.get('verbose'):
+                log.start(nice_repr_for_func(func))
+            space = FlowObjSpace()
+            space.__dict__.update(self.flags)   # xxx push flags there
+            graph = space.build_flow(func)
+            if self.flags.get('simplifying'):
+                simplify_graph(graph)
+            if self.flags.get('verbose'):
+                log.done(func.__name__)
+            self.graphs.append(graph)   # store the graph in our list
         if called_by_graph:
             # update the call graph
             key = called_by_graph, graph, call_tag
