@@ -79,10 +79,10 @@ class Stats:
     def consider_non_int_eq(self, obj1, obj2):
         if obj1.knowntype == obj2.knowntype == list:
             self.count("list_list_eq", obj1, obj2)
-        return obj1.knowntype.__name__, obj2.knowntype.__name__
+        return self.typerepr(obj1), self.typerepr(obj2)
 
     def consider_non_int_comp(self, obj1, obj2):
-        return obj1.knowntype.__name__, obj2.knowntype.__name__
+        return self.typerepr(obj1), self.typerepr(obj2)
 
     def typerepr(self, obj):
         if isinstance(obj, SomeInstance):
