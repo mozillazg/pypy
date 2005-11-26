@@ -277,7 +277,7 @@ class SomeInstance(SomeObject):
 
     def __init__(self, classdef, can_be_None=False):
         self.classdef = classdef
-        self.knowntype = classdef
+        self.knowntype = classdef or object
         self.can_be_None = can_be_None
 
     def fmt_knowntype(self, kt):

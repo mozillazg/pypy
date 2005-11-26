@@ -240,6 +240,7 @@ def robjmodel_instantiate(s_clspbc):
     if len(s_clspbc.prebuiltinstances) > 1:
         for cls in s_clspbc.prebuiltinstances:
             getbookkeeper().needs_generic_instantiate[cls] = True
+            XXX_FixMe
     return SomeInstance(clsdef)
 
 def robjmodel_we_are_translated():

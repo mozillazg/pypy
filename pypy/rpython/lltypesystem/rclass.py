@@ -178,9 +178,9 @@ class ClassRepr(AbstractClassRepr):
             for i in range(len(name)):
                 vtable.name[i] = name[i]
             vtable.name[len(name)] = '\x00'
-            if hasattr(rsubcls.classdef, 'my_instantiate'):
-                fn = rsubcls.classdef.my_instantiate
-                vtable.instantiate = self.rtyper.getfunctionptr(fn)
+            if hasattr(rsubcls.classdef, 'my_instantiate_graph'):
+                graph = rsubcls.classdef.my_instantiate_graph
+                vtable.instantiate = self.rtyper.getcallable(graph)
             #else: the classdef was created recently, so no instantiate()
             #      could reach it
         else:
