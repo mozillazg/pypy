@@ -167,6 +167,8 @@ class Bookkeeper:
         self.pbc_maximal_access_sets = UnionFind(description.AttrFamily)
         self.pbc_maximal_call_families = UnionFind(description.CallFamily)
 
+        self.emulated_pbc_calls = {}
+
         self.needs_hash_support = {}
         self.needs_generic_instantiate = {}
 
@@ -209,6 +211,11 @@ class Bookkeeper:
             for call_op in call_sites():
                 self.consider_call_site(call_op)
 
+            for pbc, args_s in self.emulated_pbc_calls.itervalues():
+                self.consider_call_site_for_pbc(pbc, 'simple_call', 
+                                                args_s, s_ImpossibleValue)
+            self.emulated_pbc_calls = {}
+
             for clsdef in self.needs_hash_support.keys():
                 for clsdef2 in self.needs_hash_support:
                     if clsdef.issubclass(clsdef2) and clsdef is not clsdef2:
@@ -226,14 +233,19 @@ class Bookkeeper:
             s_callable = self.immutablevalue(adtmeth.func)
             args_s = [SomePtr(adtmeth.ll_ptrtype)] + args_s
         if isinstance(s_callable, SomePBC):
-            descs = s_callable.descriptions.keys()
-            family = descs[0].getcallfamily()
-            args = self.build_args(call_op.opname, args_s)
             s_result = binding(call_op.result, extquery=True)
             if s_result is None:
                 s_result = s_ImpossibleValue
-            s_callable.getKind().consider_call_site(self, family, descs, args,
-                                                    s_result)
+            self.consider_call_site_for_pbc(s_callable,
+                                            call_op.opname,
+                                            args_s, s_result)
+
+    def consider_call_site_for_pbc(self, s_callable, opname, args_s, s_result):
+        descs = s_callable.descriptions.keys()
+        family = descs[0].getcallfamily()
+        args = self.build_args(opname, args_s)
+        s_callable.getKind().consider_call_site(self, family, descs, args,
+                                                s_result)
 
     def getuniqueclassdef(self, cls):
         """Get the ClassDef associated with the given user cls.
@@ -533,6 +545,15 @@ class Bookkeeper:
         return s_result
 
     def emulate_pbc_call(self, unique_key, pbc, args_s, replace=[], callback=None):
+
+        emulated_pbc_calls = self.emulated_pbc_calls
+        prev = [unique_key]
+        prev.extend(replace)
+        for other_key in prev:
+            if other_key in emulated_pbc_calls:
+                del emulated_pbc_calls[other_key]
+        emulated_pbc_calls[unique_key] = pbc, args_s
+
         args = self.build_args("simple_call", args_s)
         if callback is None:
             emulated = True

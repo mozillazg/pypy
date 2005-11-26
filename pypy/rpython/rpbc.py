@@ -158,7 +158,6 @@ class FunctionsPBCRepr(MultiplePBCRepr):
     def __init__(self, rtyper, s_pbc):
         self.rtyper = rtyper
         self.s_pbc = s_pbc
-        self._function_signatures = None
         self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
         if len(s_pbc.descriptions) == 1 and not s_pbc.can_be_None:
             # a single function
@@ -181,14 +180,9 @@ class FunctionsPBCRepr(MultiplePBCRepr):
     def get_r_implfunc(self):
         return self, 0
 
-    def get_signature(self):
-        return self.function_signatures().itervalues().next()
-
-    def get_args_ret_s(self):
-        f, _, _ = self.get_signature()
-        graph = self.rtyper.type_system_deref(f).graph
-        rtyper = self.rtyper
-        return [rtyper.binding(arg) for arg in graph.getargs()], rtyper.binding(graph.getreturnvar())
+    def get_s_signatures(self, shape):
+        funcdesc = self.s_pbc.descriptions.iterkeys().next()
+        return funcdesc.get_s_signatures(shape)
 
 ##    def function_signatures(self):
 ##        if self._function_signatures is None:
@@ -314,6 +308,10 @@ class SingleFrozenPBCRepr(Repr):
         if not hop.s_result.is_constant():
             raise TyperError("getattr on a constant PBC returns a non-constant")
         return hop.inputconst(hop.r_result, hop.s_result.const)
+
+    def convert_desc(self, frozendesc):
+        assert frozendesc is self.frozendesc
+        return object()  # lowleveltype is Void
 
 # __ None ____________________________________________________
 class NoneFrozenPBCRepr(SingleFrozenPBCRepr):

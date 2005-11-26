@@ -255,8 +255,17 @@ def robjmodel_r_dict(s_eqfn, s_hashfn):
 def robjmodel_hlinvoke(s_repr, s_llcallable, *args_s):
     from pypy.rpython import rmodel
     assert s_repr.is_constant() and isinstance(s_repr.const, rmodel.Repr),"hlinvoke expects a constant repr as first argument"
-    r_func, _  = s_repr.const.get_r_implfunc()
-    f, rinputs, rresult = r_func.get_signature()
+    r_func, nimplicitarg  = s_repr.const.get_r_implfunc()
+
+    nbargs = len(args_s) + nimplicitarg 
+    s_sigs = r_func.get_s_signatures((nbargs, (), False, False))
+    if len(s_sigs) != 1:
+        raise TyperError("cannot hlinvoke callable %r with not uniform"
+                         "annotations: %r" % (s_repr.const,
+                                              s_sigs))
+    _, s_ret = s_sigs[0]
+    rresult = r_func.rtyper.getrepr(s_ret)
+
     return lltype_to_annotation(rresult.lowleveltype)
 
 def robjmodel_keepalive_until_here(*args_s):
