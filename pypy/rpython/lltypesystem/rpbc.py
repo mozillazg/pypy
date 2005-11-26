@@ -239,24 +239,33 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
         return self.redispatch_call(hop, call_args=True)
 
     def redispatch_call(self, hop, call_args):
-        if self.lowleveltype is not Void:
-            # instantiating a class from multiple possible classes
-            vcls = hop.inputarg(self, arg=0)
-            access_set = self.get_access_set()
-            vnewfn = self.get_class_repr().getpbcfield(vcls, access_set,
-                                                       '__new__', hop.llops)
-            hop2 = hop.copy()
-            hop2.r_s_popfirstarg()   # discard the class pointer argument
-            hop2.v_s_insertfirstarg(vnewfn, access_set.attrs['__new__'])
-            # now hop2 looks like simple_call(klass__new__, args...)
-            return hop2.dispatch()
-
-        # instantiating a single class
         s_instance = hop.s_result
-        assert isinstance(s_instance, annmodel.SomeInstance)
-        classdef = hop.s_result.classdef
-        v_instance = rclass.rtype_new_instance(hop.rtyper, classdef, hop.llops)
-        s_init = classdef.classdesc.s_read_attribute('__init__')
+        r_instance = hop.r_result
+
+        if self.lowleveltype is Void:
+            # instantiating a single class
+            assert isinstance(s_instance, annmodel.SomeInstance)
+            classdef = hop.s_result.classdef
+            v_instance = rclass.rtype_new_instance(hop.rtyper, classdef,
+                                                   hop.llops)
+            s_init = classdef.classdesc.s_read_attribute('__init__')
+            v_init = Constant("init-func-dummy")   # this value not really used
+        else:
+            # instantiating a class from multiple possible classes
+            from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
+            vtypeptr = hop.inputarg(self, arg=0)
+            access_set = self.get_access_set()
+            r_class = self.get_class_repr()
+            if '__init__' in access_set.attrs:
+                s_init = access_set.attrs['__init__']
+                v_init = r_class.getpbcfield(vtypeptr, access_set, '__init__',
+                                             hop.llops)
+            else:
+                s_init = annmodel.s_ImpossibleValue
+            v_inst1 = hop.gendirectcall(ll_instantiate, vtypeptr)
+            v_instance = hop.genop('cast_pointer', [v_inst1],
+                                   resulttype = r_instance)
+
         if isinstance(s_init, annmodel.SomeImpossibleValue):
             assert hop.nb_args == 1, ("arguments passed to __init__, "
                                       "but no __init__!")
@@ -269,8 +278,7 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
                 adjust_shape(hop2, s_shape)
             else:
                 hop2.v_s_insertfirstarg(v_instance, s_instance)  # add 'instance'
-            c = Constant("init-func-dummy")   # this value not really used
-            hop2.v_s_insertfirstarg(c, s_init)   # add 'initfunc'
+            hop2.v_s_insertfirstarg(v_init, s_init)   # add 'initfunc'
             hop2.s_result = annmodel.s_None
             hop2.r_result = self.rtyper.getrepr(hop2.s_result)
             # now hop2 looks like simple_call(initfunc, instance, args...)
@@ -297,14 +305,14 @@ class __extend__(pairtype(ClassesPBCRepr, ClassesPBCRepr)):
 
 # ____________________________________________________________
 
-def rtype_call_memo(hop): 
-    memo_table = hop.args_v[0].value
-    if memo_table.s_result.is_constant():
-        return hop.inputconst(hop.r_result, memo_table.s_result.const)
-    fieldname = memo_table.fieldname 
-    assert hop.nb_args == 2, "XXX"  
+##def rtype_call_memo(hop): 
+##    memo_table = hop.args_v[0].value
+##    if memo_table.s_result.is_constant():
+##        return hop.inputconst(hop.r_result, memo_table.s_result.const)
+##    fieldname = memo_table.fieldname 
+##    assert hop.nb_args == 2, "XXX"  
 
-    r_pbc = hop.args_r[1]
-    assert isinstance(r_pbc, (MultipleFrozenPBCRepr, ClassesPBCRepr))
-    v_table, v_pbc = hop.inputargs(Void, r_pbc)
-    return r_pbc.getfield(v_pbc, fieldname, hop.llops)
+##    r_pbc = hop.args_r[1]
+##    assert isinstance(r_pbc, (MultipleFrozenPBCRepr, ClassesPBCRepr))
+##    v_table, v_pbc = hop.inputargs(Void, r_pbc)
+##    return r_pbc.getfield(v_pbc, fieldname, hop.llops)

@@ -37,7 +37,7 @@ def rtype_builtin_isinstance(hop):
     else:
         return hop.gendirectcall(rclass.ll_isinstance, v_obj, v_cls)
 
-def ll_instantiate(typeptr):
+def ll_instantiate(typeptr):   # NB. used by rpbc.ClassesPBCRepr as well
     my_instantiate = typeptr.instantiate
     return my_instantiate()
 

@@ -516,11 +516,12 @@ class RPythonTyper:
     def translate_op_newslice(self, hop):
         return rslice.rtype_newslice(hop)
 
-    def translate_op_call_memo(self, hop):
-        return self.type_system.rpbc.rtype_call_memo(hop)
-
-    def translate_op_call_specialcase(self, hop):
-        return rspecialcase.rtype_call_specialcase(hop)
+    def translate_op_instantiate1(self, hop):
+        from pypy.rpython.lltypesystem import rclass
+        if not isinstance(hop.s_result, annmodel.SomeInstance):
+            raise TyperError("instantiate1 got s_result=%r" % (hop.s_result,))
+        classdef = hop.s_result.classdef
+        return rclass.rtype_new_instance(self, classdef, hop.llops)
 
     def missing_operation(self, hop):
         raise TyperError("unimplemented operation: '%s'" % hop.spaceop.opname)

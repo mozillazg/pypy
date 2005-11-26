@@ -2,7 +2,7 @@ import py
 import types
 import inspect
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
-from pypy.objspace.flow.model import checkgraph
+from pypy.objspace.flow.model import checkgraph, FunctionGraph, SpaceOperation
 from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.tool.sourcetools import has_varargs, valid_identifier
@@ -14,65 +14,6 @@ from pypy.rpython.objectmodel import instantiate
 def normalize_call_familes(annotator):
     for callfamily in annotator.bookkeeper.pbc_maximal_call_families.infos():
        normalize_calltable(annotator, callfamily)
-
-##def normalize_function_signatures(annotator):
-##    """Make sure that all functions called in a group have exactly
-##    the same signature, by hacking their flow graphs if needed.
-##    """
-##    call_families = annotator.getpbccallfamilies()
-
-##    # for methods, we create or complete a corresponding function-only
-##    # family with call patterns that have the extra 'self' argument
-##    for family in call_families.infos():
-##        prevkey = None
-##        for classdef, func in family.objects:
-##            if classdef is not None:
-##                # add (None, func) to the func_family
-##                if prevkey is None:
-##                    prevkey = (None, func)
-##                else:
-##                    call_families.union((None, func), prevkey)
-##        if prevkey is not None:
-##            # copy the patterns from family to func_family with the
-##            # extra self argument
-##            _, _, func_family = call_families.find(prevkey)
-##            for pattern in family.patterns:
-##                argcount = pattern[0]
-##                pattern = (argcount+1,) + pattern[1:]
-##                func_family.patterns[pattern] = True
-
-##    # for bound method objects, make sure the im_func shows up too.
-##    for family in call_families.infos():
-##        first = family.objects.keys()[0][1]
-##        for _, callable in family.objects:
-##            if isinstance(callable, types.MethodType):
-##                # for bound methods families for now just accept and check that
-##                # they all refer to the same function
-##                if not isinstance(first, types.MethodType):
-##                    raise TyperError("call family with both bound methods and "
-##                                     "%r" % (first,))
-##                if first.im_func is not callable.im_func:
-##                    raise TyperError("call family of bound methods: should all "
-##                                     "refer to the same function")
-##        # create a family for the common im_func
-##        if isinstance(first, types.MethodType):
-##            _, _, func_family = call_families.find((None, first.im_func))
-##            for pattern in family.patterns:
-##                argcount = pattern[0]
-##                pattern = (argcount+1,) + pattern[1:]
-##                func_family.patterns[pattern] = True
-
-##    # find the most general signature of each family
-##    for family in call_families.infos():
-##        # collect functions in this family, ignoring:
-##        #  - methods: taken care of above
-##        #  - bound methods: their im_func will also show up
-##        #  - classes: already handled by create_class_constructors()
-##        functions = [func for classdef, func in family.objects
-##                          if classdef is None and
-##                not isinstance(func, (type, types.ClassType, types.MethodType))]
-##        if len(functions) > 1:  # otherwise, nothing to do
-
 
 def normalize_calltable(annotator, callfamily):
     """Try to normalize all rows of a table."""
@@ -91,7 +32,6 @@ def normalize_calltable(annotator, callfamily):
                                                                row)
         if not progress:
             return   # done
-
 
 def normalize_calltable_row_signature(annotator, shape, row):
     graphs = row.values()
@@ -242,6 +182,7 @@ def normalize_calltable_row_annotation(annotator, shape, row):
 
     return conversion
 
+# ____________________________________________________________
 
 def merge_classpbc_getattr_into_classdef(rtyper):
     # code like 'some_class.attr' will record an attribute access in the
@@ -253,16 +194,8 @@ def merge_classpbc_getattr_into_classdef(rtyper):
         descs = access_set.descs
         if len(descs) <= 1:
             continue
-        count = 0
-        for desc in descs:
-            if isinstance(desc, description.ClassDesc):
-                count += 1
-        if count == 0:
+        if not isinstance(descs.iterkeys().next(), description.ClassDesc):
             continue
-        if count != len(descs):
-            raise TyperError("reading attributes %r: mixing instantiated "
-                             "classes with something else in %r" % (
-                access_set.attrs.keys(), descs.keys()))
         classdefs = [desc.getuniqueclassdef() for desc in descs]
         commonbase = classdefs[0]
         for cdef in classdefs[1:]:
@@ -276,118 +209,63 @@ def merge_classpbc_getattr_into_classdef(rtyper):
                                                                    {})
         extra_access_sets[access_set] = len(extra_access_sets)
 
-def create_class_constructors(rtyper):
-    # for classes that appear in families, make a __new__ PBC attribute.
-    call_families = rtyper.annotator.getpbccallfamilies()
-    access_sets = rtyper.annotator.getpbcaccesssets()
+# ____________________________________________________________
+
+def create_class_constructors(annotator):
+    bk = annotator.bookkeeper
+    call_families = bk.pbc_maximal_call_families
 
     for family in call_families.infos():
-        if len(family.objects) <= 1:
+        if len(family.descs) <= 1:
             continue
-        count = 0
-        for _, klass in family.objects:
-            if isinstance(klass, (type, types.ClassType)):
-                count += 1
-        if count == 0:
+        descs = family.descs.keys()
+        if not isinstance(descs[0], description.ClassDesc):
             continue
-        if count != len(family.objects):
-            raise TyperError("calls to mixed class/non-class objects in the "
-                             "family %r" % family.objects.keys())
+        # Note that a callfamily of classes must really be in the same
+        # attrfamily as well; This property is relied upon on various
+        # places in the rtyper
+        descs[0].mergeattrfamilies(*descs[1:])
+        attrfamily = descs[0].getattrfamily()
+        # Put __init__ into the attr family, for ClassesPBCRepr.call()
+        s_value = attrfamily.attrs.get('__init__', annmodel.s_ImpossibleValue)
+        inits_s = [desc.s_read_attribute('__init__') for desc in descs]
+        s_value = annmodel.unionof(s_value, *inits_s)
+        attrfamily.attrs['__init__'] = s_value
+        # ClassesPBCRepr.call() will also need instantiate() support
+        for desc in descs:
+            bk.needs_generic_instantiate[desc.getuniqueclassdef()] = True
 
-        patterns = family.patterns.copy()
-
-        klasses = [klass for (_, klass) in family.objects.keys()]
-        functions = {}
-        function_values = {}
-        for klass in klasses:
-            try:
-                initfunc = klass.__init__.im_func
-            except AttributeError:
-                initfunc = None
-            # XXX AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARGH
-            #     bouh.
-            if initfunc:
-                args, varargs, varkw, defaults = inspect.getargspec(initfunc)
-            else:
-                args, varargs, varkw, defaults = ('self',), None, None, ()
-            args = list(args)
-            args2 = args[:]
-            if defaults:
-                for i in range(-len(defaults), 0):
-                    args[i] += '=None'
-            if varargs:
-                args.append('*%s' % varargs)
-                args2.append('*%s' % varargs)
-            if varkw:
-                args.append('**%s' % varkw)
-                args2.append('**%s' % varkw)
-            args.pop(0)   # 'self'
-            args2.pop(0)   # 'self'
-            funcsig = ', '.join(args)
-            callsig = ', '.join(args2)
-            klass_name = valid_identifier(klass.__name__)
-            source = py.code.Source('''
-                def %s__new__(%s):
-                    return ____class(%s)
-            ''' % (
-                klass_name, funcsig, callsig))
-            miniglobals = {
-                '____class': klass,
-                }
-            exec source.compile() in miniglobals
-            klass__new__ = miniglobals['%s__new__' % klass_name]
-            if initfunc:
-                klass__new__.func_defaults = initfunc.func_defaults
-                graph = rtyper.annotator.translator.getflowgraph(initfunc)
-                args_s = [rtyper.annotator.binding(v) for v in graph.getargs()]
-                args_s.pop(0)   # 'self'
-            else:
-                args_s = []
-            rtyper.annotator.build_types(klass__new__, args_s)
-            functions[klass__new__] = True
-            function_values[klass, '__new__'] = klass__new__
-
-        _, _, access_set = access_sets.find(klasses[0])
-        for klass in klasses[1:]:
-            _, _, access_set = access_sets.union(klasses[0], klass)
-        if '__new__' in access_set.attrs:
-            raise TyperError("PBC access set for classes %r already contains "
-                             "a __new__" % (klasses,))
-        access_set.attrs['__new__'] = annmodel.SomePBC(functions)
-        access_set.values.update(function_values)
-
-        # make a call family for 'functions', copying the call family for
-        # 'klasses'
-        functionslist = functions.keys()
-        key0 = None, functionslist[0]
-        _, _, new_call_family = call_families.find(key0)
-        for klass__new__ in functionslist[1:]:
-            _, _, new_call_family = call_families.union(key0,
-                                                        (None, klass__new__))
-        new_call_family.patterns = patterns
-
+# ____________________________________________________________
 
 def create_instantiate_functions(annotator):
     # build the 'instantiate() -> instance of C' functions for the vtables
 
     needs_generic_instantiate = annotator.bookkeeper.needs_generic_instantiate
     
-    for cls, classdef in annotator.getuserclasses().items():
-        if cls in needs_generic_instantiate:
-            assert needsgc(classdef) # only gc-case            
-            create_instantiate_function(annotator, cls, classdef)
+    for classdef in needs_generic_instantiate:
+        assert needsgc(classdef) # only gc-case
+        create_instantiate_function(annotator, classdef)
 
-def create_instantiate_function(annotator, cls, classdef):
-    def my_instantiate():
-        return instantiate(cls)
-    my_instantiate = func_with_new_name(my_instantiate,
-                                valid_identifier('instantiate_'+cls.__name__))
-    annotator.build_types(my_instantiate, [])
+def create_instantiate_function(annotator, classdef):
+    # build the graph of a function that looks like
+    # 
+    # def my_instantiate():
+    #     return instantiate(cls)
+    #
+    v = Variable()
+    block = Block([])
+    block.operations.append(SpaceOperation('instantiate1', [], v))
+    name = valid_identifier('instantiate_'+classdef.name)
+    graph = FunctionGraph(name, block)
+    block.closeblock(Link([v], graph.returnblock))
+    annotator.setbinding(v, annmodel.SomeInstance(classdef))
+    annotator.annotated[block] = graph
     # force the result to be converted to a generic OBJECTPTR
     generalizedresult = annmodel.SomeInstance(classdef=None)
-    graph = annotator.translator.getflowgraph(my_instantiate)
     annotator.setbinding(graph.getreturnvar(), generalizedresult)
-    classdef.my_instantiate = my_instantiate
+    classdef.my_instantiate_graph = graph
+
+# ____________________________________________________________
 
 def assign_inheritance_ids(annotator):
     def assign_id(classdef, nextid):
@@ -401,16 +279,16 @@ def assign_inheritance_ids(annotator):
     for classdef in annotator.bookkeeper.classdefs:
         if classdef.basedef is None:
             id_ = assign_id(classdef, id_)
-        
+
+# ____________________________________________________________
+
 def perform_normalizations(rtyper):
-    #XXX later: create_class_constructors(rtyper)
+    create_class_constructors(rtyper.annotator)
     rtyper.annotator.frozen += 1
     try:
         normalize_call_familes(rtyper.annotator)
-        #XXX later: normalize_function_signatures(rtyper.annotator)
-        #XXX later: specialize_pbcs_by_memotables(rtyper.annotator) 
         merge_classpbc_getattr_into_classdef(rtyper)
         assign_inheritance_ids(rtyper.annotator)
     finally:
         rtyper.annotator.frozen -= 1
-    #XXX later: create_instantiate_functions(rtyper.annotator)
+    create_instantiate_functions(rtyper.annotator)
