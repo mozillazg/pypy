@@ -346,7 +346,7 @@ class Bookkeeper:
             result = SomeOOClass(x._INSTANCE)   # NB. can be None
         elif isinstance(x, ootype._instance):
             result = SomeOOInstance(ootype.typeOf(x))
-        elif callable(x) or isinstance(x, staticmethod): # XXX
+        elif callable(x):
             if hasattr(x, '__self__') and x.__self__ is not None:
                 # for cases like 'l.append' where 'l' is a global constant list
                 s_self = self.immutablevalue(x.__self__)
