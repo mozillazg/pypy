@@ -3,7 +3,7 @@ import types
 from pypy.annotation.pairtype import pairtype, pair
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.error import TyperError
-from pypy.rpython.rmodel import Repr, inputconst, warning
+from pypy.rpython.rmodel import Repr, inputconst, warning, mangle
 from pypy.rpython.rclass import AbstractClassRepr,\
                                 AbstractInstanceRepr,\
                                 MissingRTypeAttribute,\
@@ -112,7 +112,7 @@ class ClassRepr(AbstractClassRepr):
             for access_set, counter in extra_access_sets.items():
                 for attr, s_value in access_set.attrs.items():
                     r = self.rtyper.getrepr(s_value)
-                    mangled_name = 'pbc%d_%s' % (counter, attr)
+                    mangled_name = mangle('pbc%d' % counter, attr)
                     pbcfields[access_set, attr] = mangled_name, r
                     llfields.append((mangled_name, r.lowleveltype))
             #
@@ -173,7 +173,7 @@ class ClassRepr(AbstractClassRepr):
             if rsubcls.classdef is None:
                 name = 'object'
             else:
-                name = rsubcls.classdef.name
+                name = rsubcls.classdef.name.rsplit('.', 1)[-1]
             vtable.name = malloc(Array(Char), len(name)+1, immortal=True)
             for i in range(len(name)):
                 vtable.name[i] = name[i]
@@ -187,8 +187,8 @@ class ClassRepr(AbstractClassRepr):
             # setup class attributes: for each attribute name at the level
             # of 'self', look up its value in the subclass rsubcls
             def assign(mangled_name, value):
-                if isinstance(value, staticmethod):
-                    value = value.__get__(42)   # staticmethod => bare function
+                if isinstance(value, Constant) and isinstance(value.value, staticmethod):
+                    value = Constant(value.value.__get__(42))   # staticmethod => bare function
                 llvalue = r.convert_desc_or_const(value)
                 setattr(vtable, mangled_name, llvalue)
 
@@ -200,19 +200,13 @@ class ClassRepr(AbstractClassRepr):
                 value = rsubcls.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
                     assign(mangled_name, value)
-            # extra PBC attributes
+            # extra PBC attributes  # xxx couldn't they be implemented as regular readonyla attrs?
             for (access_set, attr), (mangled_name, r) in self.pbcfields.items():
                 if r.lowleveltype is Void:
                     continue
-                for clsdef in mro:
-                    try:
-                        thisattrvalue = access_set.values[clsdef.cls, attr]
-                    except KeyError:
-                        if attr not in clsdef.cls.__dict__:
-                            continue
-                        thisattrvalue = clsdef.cls.__dict__[attr]
-                    assign(mangled_name, thisattrvalue)
-                    break
+                attrvalue = rsubcls.classdef.classdesc.read_attribute(attr, None)
+                if attrvalue is not None:
+                    assign(mangled_name, attrvalue)
 
             # then initialize the 'super' portion of the vtable
             self.rbase.setup_vtable(vtable.super, rsubcls)
@@ -351,6 +345,8 @@ class InstanceRepr(AbstractInstanceRepr):
     def convert_const(self, value):
         if value is None:
             return nullptr(self.object_type)
+        if isinstance(value, types.MethodType):
+            value = value.im_self   # bound method -> instance
         cls = value.__class__
         bk = self.rtyper.annotator.bookkeeper
         classdef = bk.getdesc(cls).getuniqueclassdef()
