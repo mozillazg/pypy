@@ -1686,6 +1686,12 @@ class TestAnnotateTestCase:
         a.complete()
 
         assert a.binding(graphof(a, f).getreturnvar()).knowntype == int
+        fdesc = a.bookkeeper.getdesc(f)
+
+        someint = annmodel.SomeInteger()
+
+        assert (fdesc.get_s_signatures((2,(),False,False)) 
+                == [([someint,someint],someint)])
 
     def test_emulated_pbc_call_callback(self):
         def f(a,b):

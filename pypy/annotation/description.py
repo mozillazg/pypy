@@ -248,6 +248,33 @@ class FunctionDesc(Desc):
         return row
     row_to_consider = staticmethod(row_to_consider)
 
+    def get_s_signatures(self, shape):
+        family = self.getcallfamily()
+        table = family.calltables.get(shape)
+        if table is None:
+            return []
+        else:
+            graph_seen = {}
+            s_sigs = []
+
+            binding = self.bookkeeper.annotator.binding
+
+            def enlist(graph):
+                if graph in graph_seen:
+                    return
+                graph_seen[graph] = True
+                s_sig = ([binding(v) for v in graph.getargs()],
+                         binding(graph.getreturnvar()))
+                if s_sig in s_sigs:
+                    return
+                s_sigs.append(s_sig)
+
+            for row in table:
+                for graph in row.itervalues():
+                    enlist(graph)
+
+            return s_sigs
+
 NODEFAULT = object()
 
 class ClassDesc(Desc):
