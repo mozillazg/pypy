@@ -1,7 +1,6 @@
 from pypy.objspace.flow.model import Constant, Variable, last_exception
 from pypy.rpython.rarithmetic import intmask, r_uint, ovfcheck
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.rmodel import getfunctionptr
 from pypy.rpython.memory import lladdress
 from pypy.rpython.ootypesystem import ootype
 
@@ -219,18 +218,18 @@ class LLFrame(object):
         self.setvar(operation.result, retval)
 
     def make_llexception(self, exc):
-        exdata = self.llinterpreter.typer.getexceptiondata()
+        typer = self.llinterpreter.typer
+        exdata = typer.getexceptiondata()
         if isinstance(exc, OSError):
-            fn = getfunctionptr(self.llinterpreter.typer.annotator.translator,
-                                exdata.ll_raise_OSError)
+            fn = typer.type_system.getcallable(exdata.ll_raise_OSError_graph)
             self.op_direct_call(fn, exc.errno)
             assert False, "op_direct_call above should have raised"
         else:
             exc_class = exc.__class__
-            evalue = self.llinterpreter.eval_function(
-                exdata.ll_pyexcclass2exc, [self.llt.pyobjectptr(exc_class)])
-            etype = self.llinterpreter.eval_function(
-                exdata.ll_type_of_exc_inst, [evalue])
+            evalue = self.llinterpreter.eval_graph(
+                exdata.ll_pyexcclass2exc_graph, [self.llt.pyobjectptr(exc_class)])
+            etype = self.llinterpreter.eval_graph(
+                exdata.ll_type_of_exc_inst_graph, [evalue])
         raise LLException(etype, evalue)
 
     def invoke_callable_with_pyexceptions(self, fptr, *args):
@@ -295,11 +294,8 @@ class LLFrame(object):
         if hasattr(obj, 'graph'):
             graph = obj.graph
         else:
-            try:
-                graph = self.llinterpreter.getgraph(obj._callable)
-            except KeyError:
-                assert has_callable, "don't know how to execute %r" % f
-                return self.invoke_callable_with_pyexceptions(f, *args)
+            assert has_callable, "don't know how to execute %r" % f
+            return self.invoke_callable_with_pyexceptions(f, *args)
         frame = self.__class__(graph, args, self.llinterpreter, self)
         return frame.eval()
 
