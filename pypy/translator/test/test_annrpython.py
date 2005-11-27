@@ -4,7 +4,7 @@ import py.test
 from pypy.tool.udir import udir
 
 from pypy.translator.annrpython import annmodel
-from pypy.translator.translator import Translator
+from pypy.translator.translator import graphof as tgraphof
 from pypy.annotation import policy
 from pypy.annotation import specialize
 from pypy.annotation.listdef import ListDef
@@ -14,6 +14,9 @@ from pypy.rpython.rarithmetic import r_uint
 from pypy.objspace.flow import FlowObjSpace
 
 from pypy.translator.test import snippet
+
+def graphof(a, func):
+    return tgraphof(a.translator, func)
 
 def listitem(s_list):
     assert isinstance(s_list, annmodel.SomeList)
@@ -32,14 +35,6 @@ def dictvalue(s_dict):
 
 def somedict(s_key=annmodel.SomeObject(), s_value=annmodel.SomeObject()):
     return annmodel.SomeDict(DictDef(None, s_key, s_value))
-
-def graphof(a, func):
-    result = []
-    for graph in a.translator.graphs:
-        if getattr(graph, 'func', None) is func:
-            result.append(graph)
-    assert len(result) == 1
-    return result[0]
 
 
 class TestAnnotateTestCase:

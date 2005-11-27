@@ -1,5 +1,5 @@
 from pypy.annotation import model as annmodel
-from pypy.translator.translator import Translator
+from pypy.translator.translator import Translator, graphof
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.lltypesystem import lltype
@@ -13,14 +13,6 @@ def rtype(fn, argtypes=[]):
     #t.view()
     t.checkgraphs()
     return t
-
-def graphof(translator, func):
-    result = []
-    for graph in translator.graphs:
-        if getattr(graph, 'func', None) is func:
-            result.append(graph)
-    assert len(result) == 1
-    return result[0]
 
 # ____________________________________________________________
 
