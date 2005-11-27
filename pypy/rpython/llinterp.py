@@ -195,8 +195,8 @@ class LLFrame(object):
                 cls, inst = e.args
                 for link in block.exits[1:]:
                     assert issubclass(link.exitcase, Exception)
-                    if self.llinterpreter.eval_function(
-                        exdata.ll_exception_match, [cls, link.llexitcase]):
+                    if self.llinterpreter.eval_graph(
+                        exdata.ll_exception_match_graph, [cls, link.llexitcase]):
                         self.setifvar(link.last_exception, cls)
                         self.setifvar(link.last_exc_value, inst)
                         break
