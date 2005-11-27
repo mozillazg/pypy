@@ -552,18 +552,18 @@ class RPythonTyper:
         return self.getfunctionptr(spec_function)
 
     def attachRuntimeTypeInfoFunc(self, GCSTRUCT, func, ARG_GCSTRUCT=None):
-        return # FIXME
         self.call_all_setups()  # compute ForwardReferences now
         if ARG_GCSTRUCT is None:
             ARG_GCSTRUCT = GCSTRUCT
         args_s = [annmodel.SomePtr(Ptr(ARG_GCSTRUCT))]
-        s, spec_function = annotate_lowlevel_helper(self.annotator,
-                                                    func, args_s)
+        graph = annotate_lowlevel_helper(self.annotator,
+                                         func, args_s)
+        s = self.annotator.binding(graph.getreturnvar())
         if (not isinstance(s, annmodel.SomePtr) or
             s.ll_ptrtype != Ptr(RuntimeTypeInfo)):
             raise TyperError("runtime type info function %r returns %r, "
                              "excepted Ptr(RuntimeTypeInfo)" % (func, s))
-        funcptr = self.getfunctionptr(spec_function)
+        funcptr = self.getcallable(graph)
         attachRuntimeTypeInfo(GCSTRUCT, funcptr)
 
 # ____________________________________________________________

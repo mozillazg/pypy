@@ -340,7 +340,7 @@ class InstanceRepr(AbstractInstanceRepr):
         return getinstancerepr(self.rtyper, None, nogc=not self.needsgc)
 
     def getflavor(self):
-        return self.classdef.classdesc.read_attribute('_alloc_flavor', Constant('gc')).value
+        return self.classdef.classdesc.read_attribute('_alloc_flavor_', Constant('gc')).value
 
     def convert_const(self, value):
         if value is None:
