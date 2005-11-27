@@ -69,7 +69,12 @@ def test_builtin_math_fmod():
 
 def enum_direct_calls(translator, func):
     blocks = []
-    graph = translator.getflowgraph(func)
+    result = []
+    for graph in translator.graphs:
+        if getattr(graph, 'func', None) is func:
+            result.append(graph)
+    assert len(result) == 1
+    graph = result[0]
     def visit(block):
         if isinstance(block, flowmodel.Block):
             blocks.append(block)
