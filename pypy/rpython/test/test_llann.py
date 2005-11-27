@@ -161,6 +161,7 @@ class TestLowLevelAnnotateTestCase:
         seen = {}
         ngraphs = len(a.translator.graphs)
 
+        vTs = []
         for call in annotated_calls(a):
             if derived(call, "ll_"):
 
@@ -187,8 +188,11 @@ class TestLowLevelAnnotateTestCase:
                     assert a.binding(rv).ll_ptrtype.TO == T
                 else:
                     assert False, func
+                vTs.append(vT)
 
         assert len(seen) == 4
+
+        return a, vTs # reused by a test in test_rtyper
  
     def test_ll_calling_ll2(self):
         A = GcArray(Float)
@@ -224,6 +228,8 @@ class TestLowLevelAnnotateTestCase:
             else:
                 return s.ll_ptrtype
         
+        vTs = []
+
         for call in annotated_calls(a):
             if derived(call, "ll_")  or derived(call, "makelen4"):
 
@@ -243,10 +249,12 @@ class TestLowLevelAnnotateTestCase:
                     assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
                     assert a.binding(vn).knowntype == int
                     assert a.binding(rv).ll_ptrtype.TO == T
+                    vTs.append(vT)
                 elif func is makelen4:
                     vT, = args
                     assert a.binding(vT) == a.bookkeeper.immutablevalue(T)
                     assert a.binding(rv).ll_ptrtype.TO == T
+                    vTs.append(vT)
                 elif func is ll_get:
                     vp, vi = args
                     assert a.binding(vi).knowntype == int
@@ -257,6 +265,8 @@ class TestLowLevelAnnotateTestCase:
                     assert False, func
 
         assert len(seen) == 5
+
+        return a, vTs # reused by a test in test_rtyper
 
     def test_getRuntimeTypeInfo(self):
         S = GcStruct('s', ('x', Signed))
