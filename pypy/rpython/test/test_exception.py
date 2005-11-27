@@ -36,20 +36,23 @@ def test_exception_data():
     t = Translator(f)
     a = t.annotate([int])
     t.specialize()
-    data = t.rtyper.getexceptiondata()
+    excdata = t.rtyper.getexceptiondata()
+    ll_pyexcclass2exc = excdata.ll_pyexcclass2exc_graph.func # original callable version
+    getcdef = a.bookkeeper.getuniqueclassdef
+
     #t.view()
-    ovferr_inst = data.ll_pyexcclass2exc(pyobjectptr(OverflowError))
-    classdef = a.bookkeeper.getclassdef(OverflowError)
+    ovferr_inst = ll_pyexcclass2exc(pyobjectptr(OverflowError))
+    classdef = getcdef(OverflowError)
     assert ovferr_inst.typeptr == t.rtyper.class_reprs[classdef].getvtable()
 
-    taberr_inst = data.ll_pyexcclass2exc(pyobjectptr(TabError))
-    classdef = a.bookkeeper.getclassdef(StandardError) # most precise class seen
+    taberr_inst = ll_pyexcclass2exc(pyobjectptr(TabError))
+    classdef = getcdef(StandardError) # most precise class seen
     assert taberr_inst.typeptr == t.rtyper.class_reprs[classdef].getvtable()
 
-    myerr_inst = data.ll_pyexcclass2exc(pyobjectptr(MyException))
+    myerr_inst = ll_pyexcclass2exc(pyobjectptr(MyException))
     assert myerr_inst.typeptr == t.rtyper.class_reprs[None].getvtable()
 
-    strgerr_inst = data.ll_pyexcclass2exc(pyobjectptr(MyStrangeException))
+    strgerr_inst = ll_pyexcclass2exc(pyobjectptr(MyStrangeException))
     assert strgerr_inst.typeptr == t.rtyper.class_reprs[None].getvtable()
 
 

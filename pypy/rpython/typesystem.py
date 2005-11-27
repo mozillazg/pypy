@@ -44,7 +44,10 @@ class TypeSystem(object):
         typ, constr = self.callable_trait
         
         FT = typ(llinputs, lloutput)
-        return constr(FT, graph.name, graph = graph)
+        if hasattr(graph, 'func') and callable(graph.func):
+            return constr(FT, graph.name, graph = graph, _callable = graph.func)
+        else:
+            return constr(FT, graph.name, graph = graph)
 
     def getconcretetype(self, v):
         """Helper called by getcallable() to get the conrete type of a variable

@@ -64,7 +64,7 @@ class RPythonTyper:
         for s_primitive, lltype in annmodel.annotation_to_ll_map:
             r = self.getrepr(s_primitive)
             self.primitive_to_repr[r.lowleveltype] = r
-        if 0:  # XXX for now XXX type_system == "lltype":
+        if type_system == "lltype":
             from pypy.rpython.lltypesystem.exceptiondata import ExceptionData
 
             self.exceptiondata = ExceptionData(self)
