@@ -1,15 +1,6 @@
 from pypy.rpython.objectmodel import *
-from pypy.translator.translator import Translator
+from pypy.translator.translator import Translator, graphof
 from pypy.rpython.test.test_llinterp import interpret
-
-
-def graphof(translator, func):
-    result = []
-    for graph in translator.graphs:
-        if getattr(graph, 'func', None) is func:
-            result.append(graph)
-    assert len(result) == 1
-    return result[0]
 
 def test_we_are_translated():
     assert we_are_translated() == False

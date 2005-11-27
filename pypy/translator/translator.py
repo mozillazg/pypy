@@ -80,6 +80,18 @@ class TranslationContext(object):
         for graph in self.graphs:
             checkgraph(graph)
 
+# _______________________________________________________________
+# testing helper
+
+def graphof(translator, func):
+    result = []
+    for graph in translator.graphs:
+        if getattr(graph, 'func', None) is func:
+            result.append(graph)
+    assert len(result) == 1
+    return result[0]
+
+# _______________________________________________________________
 
 class Translator(TranslationContext):
 
