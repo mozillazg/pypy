@@ -341,7 +341,7 @@ def needsgc(classdef, nogc=False):
         return not nogc
     else:
         classdesc = classdef.classdesc
-        alloc_flavor = classdesc.read_attribute('_alloc_flavor',
+        alloc_flavor = classdesc.read_attribute('_alloc_flavor_',
                                                 Constant('gc')).value     
         return alloc_flavor.startswith('gc')
 
