@@ -3,6 +3,14 @@ from pypy.translator.translator import Translator
 from pypy.rpython.test.test_llinterp import interpret
 
 
+def graphof(translator, func):
+    result = []
+    for graph in translator.graphs:
+        if getattr(graph, 'func', None) is func:
+            result.append(graph)
+    assert len(result) == 1
+    return result[0]
+
 def test_we_are_translated():
     assert we_are_translated() == False
 
@@ -98,12 +106,10 @@ def test_annotate_r_dict():
     t = Translator(test_r_dict)
     a = t.annotate([])
     #t.view()
-    assert strange_key_eq in t.flowgraphs
-    assert strange_key_hash in t.flowgraphs
-    graph = t.flowgraphs[strange_key_eq]
+    graph = graphof(t, strange_key_eq)
     assert a.binding(graph.getargs()[0]).knowntype == str
     assert a.binding(graph.getargs()[1]).knowntype == str
-    graph = t.flowgraphs[strange_key_hash]
+    graph = graphof(t, strange_key_hash)
     assert a.binding(graph.getargs()[0]).knowntype == str
 
 def test_annotate_r_dict_bm():
@@ -113,14 +119,14 @@ def test_annotate_r_dict_bm():
     strange_key_eq = Strange.key_eq.im_func
     strange_key_hash = Strange.key_hash.im_func
 
-    assert strange_key_eq in t.flowgraphs
-    assert strange_key_hash in t.flowgraphs
-    graph = t.flowgraphs[strange_key_eq]
-    assert a.binding(graph.getargs()[0]).knowntype == Strange
+    Strange_def = a.bookkeeper.getuniqueclassdef(Strange)
+
+    graph = graphof(t, strange_key_eq)
+    assert a.binding(graph.getargs()[0]).knowntype == Strange_def
     assert a.binding(graph.getargs()[1]).knowntype == str
     assert a.binding(graph.getargs()[2]).knowntype == str
-    graph = t.flowgraphs[strange_key_hash]
-    assert a.binding(graph.getargs()[0]).knowntype == Strange
+    graph = graphof(t, strange_key_hash)
+    assert a.binding(graph.getargs()[0]).knowntype == Strange_def
     assert a.binding(graph.getargs()[1]).knowntype == str
 
 def test_rtype_r_dict():
