@@ -1,7 +1,7 @@
 import autopath
 import py, sys
 from pypy.translator.tool.cbuild import skip_missing_compiler
-from pypy.translator.translator import Translator
+from pypy.translator.translator import TranslationContext
 
 from pypy.translator.test import snippet 
 
@@ -12,7 +12,7 @@ cbuild.enable_fast_compilation()
 class TestAnnotatedTestCase:
 
     def getcompiled(self, func):
-        t = Translator(func, simplifying=True)
+        t = TranslationContext(simplifying=True)
         # builds starting-types from func_defs 
         argstypelist = []
         if func.func_defaults:
@@ -20,9 +20,15 @@ class TestAnnotatedTestCase:
                 if isinstance(spec, tuple):
                     spec = spec[0] # use the first type only for the tests
                 argstypelist.append(spec)
-        a = t.annotate(argstypelist)
+        a = t.buildannotator()
+        a.build_types(func, argstypelist)
         a.simplify()
-        return skip_missing_compiler(t.ccompile)
+        from pypy.translator.c import genc
+        builder = genc.CExtModuleBuilder(t, func)
+        builder.generate_source()
+        skip_missing_compiler(builder.compile)
+        builder.import_module()
+        return builder.get_entry_point()
 
     def test_set_attr(self):
         set_attr = self.getcompiled(snippet.set_attr)

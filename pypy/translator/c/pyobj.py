@@ -165,13 +165,11 @@ class PyObjMaker:
             "the Translator must be specified to build a PyObject "
             "wrapper for %r" % (func,))
         # look for skipped functions
-        if self.translator.frozen:
-            if func not in self.translator.flowgraphs:
-                return self.skipped_function(func)
-        else:
-            if (func.func_doc and
-                func.func_doc.lstrip().startswith('NOT_RPYTHON')):
-                return self.skipped_function(func)
+        if not self.translator.annotator.bookkeeper.getdesc(func).querycallfamily():
+            return self.skipped_function(func)
+        if (func.func_doc and
+            func.func_doc.lstrip().startswith('NOT_RPYTHON')):
+            return self.skipped_function(func)
 
         from pypy.translator.c.wrapper import gen_wrapper
         fwrapper = gen_wrapper(func, self.translator)
@@ -210,7 +208,7 @@ class PyObjMaker:
                 return False
             else:
                 return "probably"   # True
-        classdef = ann.getuserclasses().get(pbc.__class__)
+        classdef = ann.bookkeeper.immutablevalue(pbc).classdef
         if classdef and classdef.about_attribute(attr) is not None:
             return True
         return False
@@ -320,7 +318,8 @@ class PyObjMaker:
                     doc = value.__get__(cls).__doc__
                     if doc and doc.lstrip().startswith("NOT_RPYTHON"):
                         continue
-                if isinstance(value, FunctionType) and value not in self.translator.flowgraphs and self.translator.frozen:
+                bk = self.translator.annotator.bookkeeper
+                if isinstance(value, FunctionType) and not bk.getdesc(value).querycallfamily():
                     log.WARNING("skipped class function: %s" % value)
                     continue
                 if key in ignore:
