@@ -11,9 +11,8 @@ from pypy.rpython.rmodel import warning, mangle
 from pypy.rpython import robject
 from pypy.rpython import rtuple
 from pypy.rpython.rpbc import SingleFrozenPBCRepr, samesig,\
-                                commonbase, allattributenames, \
-                                MultiplePBCRepr, FunctionsPBCRepr, \
-                                AbstractClassesPBCRepr, AbstractMethodsPBCRepr
+     commonbase, allattributenames, MultiplePBCRepr, FunctionsPBCRepr, \
+     AbstractClassesPBCRepr, AbstractMethodsPBCRepr, OverriddenFunctionPBCRepr
 from pypy.rpython.lltypesystem import rclass
 from pypy.tool.sourcetools import has_varargs
 
@@ -203,7 +202,8 @@ class MethodsPBCRepr(AbstractMethodsPBCRepr):
         hop2 = hop.copy()
         r_class = self.r_im_self.rclass
         mangled_name, r_func = r_class.clsfields[self.methodname]
-        assert isinstance(r_func, FunctionsPBCRepr)
+        assert isinstance(r_func, (FunctionsPBCRepr,
+                                   OverriddenFunctionPBCRepr))
         s_func = r_func.s_pbc
         v_im_self = hop.inputarg(self, arg=0)
         v_cls = self.r_im_self.getfield(v_im_self, '__class__', hop.llops)

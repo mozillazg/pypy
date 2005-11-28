@@ -19,8 +19,12 @@ class __extend__(annmodel.SomePBC):
             return none_frozen_pbc_repr 
         kind = self.getKind()
         if issubclass(kind, description.FunctionDesc):
-            if self.descriptions.keys()[0].querycallfamily():
-                getRepr = FunctionsPBCRepr
+            sample = self.descriptions.keys()[0]
+            if sample.querycallfamily():
+                if sample.overridden:
+                    getRepr = OverriddenFunctionPBCRepr
+                else:
+                    getRepr = FunctionsPBCRepr
             else:
                 getRepr = getFrozenPBCRepr
         elif issubclass(kind, description.ClassDesc):
@@ -275,6 +279,17 @@ class __extend__(pairtype(FunctionsPBCRepr, FunctionsPBCRepr)):
                 return inputconst(r_fpbc2, r_fpbc1.s_pbc.const)
             return NotImplemented
 
+class OverriddenFunctionPBCRepr(Repr):
+    def __init__(self, rtyper, s_pbc):
+        self.rtyper = rtyper
+        self.s_pbc = s_pbc
+        assert len(s_pbc.descriptions) == 1
+        self.lowleveltype = Void
+
+    def rtype_simple_call(self, hop):
+        from pypy.rpython.rspecialcase import rtype_call_specialcase
+        return rtype_call_specialcase(hop)
+        
 def getPyObjRepr(rtyper, s_pbc):
     return robject.pyobj_repr
 
