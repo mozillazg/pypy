@@ -52,7 +52,7 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
         self.llfieldmap = llfieldmap
 
     def convert_desc(self, frozendesc):
-        if frozendesc not in self.descs:
+        if self.access_set is not None and frozendesc not in self.descs:
             raise TyperError("not found in PBC set: %r" % (frozendesc,))
         try:
             return self.pbc_cache[frozendesc]
