@@ -23,10 +23,10 @@ def find_exception(exc, interp):
     assert isinstance(exc, LLException)
     import exceptions
     klass, inst = exc.args
-    ll_pyexcclass2exc = typer.getexceptiondata().ll_pyexcclass2exc_graph.func # get original callable
+    ll_pyexcclass2exc_graph = typer.getexceptiondata().ll_pyexcclass2exc_graph
     for cls in exceptions.__dict__.values():
         if type(cls) is type(Exception):
-            if ll_pyexcclass2exc(pyobjectptr(cls)).typeptr == klass:
+            if interp.eval_graph(ll_pyexcclass2exc_graph, [pyobjectptr(cls)]).typeptr == klass:
                 return cls
     raise ValueError, "couldn't match exception"
 
