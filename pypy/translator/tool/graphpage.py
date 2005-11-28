@@ -196,7 +196,7 @@ class ClassDefPage(GraphPage):
     """
     def compute(self, translator, cdef):
         self.translator = translator
-        dotgen = DotGen(cdef.name.split('.')[-1], rankdir="LR")
+        dotgen = DotGen(cdef.shortname, rankdir="LR")
 
         def writecdef(cdef):
             lines = [cdef.name, '']
@@ -214,12 +214,12 @@ class ClassDefPage(GraphPage):
                             name += '()'
                             info = 'SomePBC(%s)' % ', '.join(
                                 ['method %s.%s' % (
-                                  desc.originclassdef.name.split('.')[-1],
+                                  desc.originclassdef.shortname,
                                   desc.name) for desc in s_value.descriptions],)
                         lines.append(name)
                         self.links[linkname] = '%s.%s: %s' % (prefix, name, info)
 
-            prefix = cdef.name.split('.')[-1]
+            prefix = cdef.shortname
             writeadefs(prefix + '()', False)
             lines.append('')
             writeadefs(prefix, True)
@@ -297,7 +297,7 @@ class BaseTranslatorPage(GraphPage):
             dotgen.emit_node(nameof(None), color="red", shape="octagon",
                              label="Root Class\\nobject")
             for classdef in self.translator.annotator.getuserclassdefinitions():
-                data = self.labelof(classdef, classdef.name.split('.')[-1])
+                data = self.labelof(classdef, classdef.shortname)
                 dotgen.emit_node(nameof(classdef), label=data, shape="box")
                 dotgen.emit_edge(nameof(classdef.basedef), nameof(classdef))
              
