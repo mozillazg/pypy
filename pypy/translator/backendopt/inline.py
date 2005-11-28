@@ -6,7 +6,7 @@ from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, last_exception
 from pypy.objspace.flow.model import traverse, mkentrymap, checkgraph
 from pypy.annotation import model as annmodel
-from pypy.rpython.typesystem import LowLevelTypeSystem
+from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem.lltype import Bool, typeOf, Void
 from pypy.rpython import rmodel
 from pypy.tool.algo import sparsemat
@@ -200,8 +200,8 @@ def _inline_function(translator, graph, block, index_operation):
                         index = afterblock.inputargs.index(arg)
                         linkargs.append(passon_vars[block][index - 1])
                 return linkargs
-            exc_match = Constant(LowLevelTypeSystem.instance.getcallable(
-                translator.rtyper.getexceptiondata().ll_exception_match_graph))
+            exc_match = Constant(getfunctionptr(
+                 translator.rtyper.getexceptiondata().ll_exception_match_graph))
             exc_match.concretetype = typeOf(exc_match.value)
             #try to match the exceptions for simple cases
             for link in entrymap[graph_to_inline.exceptblock]:

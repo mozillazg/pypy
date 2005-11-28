@@ -98,6 +98,8 @@ class ObjectOrientedTypeSystem(TypeSystem):
 LowLevelTypeSystem.instance = LowLevelTypeSystem()
 ObjectOrientedTypeSystem.instance = ObjectOrientedTypeSystem()
 
+getfunctionptr = LowLevelTypeSystem.instance.getcallable
+
 # Multiple dispatch on type system and high-level annotation
 
 from pypy.annotation.pairtype import pairtype

@@ -7,9 +7,7 @@ from pypy.rpython.rmodel import inputconst, PyObjPtr
 from pypy.rpython.robject import pyobj_repr
 from pypy.interpreter.pycode import CO_VARARGS
 
-
-from pypy.rpython.typesystem import LowLevelTypeSystem
-getfunctionptr = LowLevelTypeSystem.instance.getcallable
+from pypy.rpython.typesystem import getfunctionptr
 
 
 def gen_wrapper(func, translator):
