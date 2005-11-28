@@ -11,6 +11,8 @@ class CallFamily:
     objects, where the equivalence relation is the transitive closure of
     'd1~d2 if d1 and d2 might be called at the same call site'.
     """
+    overridden = False
+    
     def __init__(self, desc):
         self.descs = { desc: True }
         self.calltables = {}  # see calltable_lookup_row()
@@ -131,6 +133,7 @@ class Desc(object):
 
 class FunctionDesc(Desc):
     knowntype = types.FunctionType
+    overridden = False
     
     def __init__(self, bookkeeper, pyobj=None,
                  name=None, signature=None, defaults=None,
