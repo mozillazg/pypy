@@ -26,7 +26,7 @@ class LLInterpreter(object):
         # prepare_graphs_and_create_gc might already use the llinterpreter!
         self.gc = None
         if hasattr(lltype, "prepare_graphs_and_create_gc"):
-            flowgraphs = FIXME
+            flowgraphs = typer.annotator.translator.graphs
             self.gc = lltype.prepare_graphs_and_create_gc(self, flowgraphs)
 
     def eval_graph(self, graph, args=()):
