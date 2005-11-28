@@ -129,6 +129,7 @@ class ClassDef:
         self.attrs = {}          # {name: Attribute}
         self.classdesc = classdesc
         self.name = self.classdesc.name
+        self.shortname = self.name.split('.')[-1]        
         self.subdefs = []
         self.attr_sources = {}   # {name: list-of-sources}
 

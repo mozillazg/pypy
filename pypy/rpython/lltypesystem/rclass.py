@@ -173,7 +173,7 @@ class ClassRepr(AbstractClassRepr):
             if rsubcls.classdef is None:
                 name = 'object'
             else:
-                name = rsubcls.classdef.name.split('.')[-1]
+                name = rsubcls.classdef.shortname
             vtable.name = malloc(Array(Char), len(name)+1, immortal=True)
             for i in range(len(name)):
                 vtable.name[i] = name[i]
