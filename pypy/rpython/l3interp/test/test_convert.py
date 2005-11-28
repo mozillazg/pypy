@@ -7,7 +7,7 @@ def test_convert_add():
     t = Translator(f)
     t.annotate([int])
     t.specialize()
-    globals = convertgraph.convert(t)
+    globals = convertgraph.convert(t.graphs[0])
     interp = l3interp.LLInterpreter(globals)
     graph = globals.graphs[0]
     result = interp.eval_graph_int(graph, [0])
