@@ -3,9 +3,13 @@ from pypy.objspace.flow.model import Block, Link, FunctionGraph, checkgraph
 from pypy.rpython.lltypesystem.lltype import \
      Ptr, PyObject, typeOf, Signed, FuncType, functionptr
 from pypy.rpython.rtyper import LowLevelOpList
-from pypy.rpython.rmodel import inputconst, getfunctionptr, PyObjPtr
+from pypy.rpython.rmodel import inputconst, PyObjPtr
 from pypy.rpython.robject import pyobj_repr
 from pypy.interpreter.pycode import CO_VARARGS
+
+
+from pypy.rpython.typesystem import LowLevelTypeSystem
+getfunctionptr = LowLevelTypeSystem.instance.getcallable
 
 
 def gen_wrapper(func, translator):
@@ -22,7 +26,9 @@ def gen_wrapper(func, translator):
     nb_positional_args = func.func_code.co_argcount
     vararg = bool(func.func_code.co_flags & CO_VARARGS)
 
-    f = getfunctionptr(translator, func)
+    bk = translator.annotator.bookkeeper
+
+    f = getfunctionptr(bk.getdesc(func).cachedgraph(None))
     FUNCTYPE = typeOf(f).TO
     assert len(FUNCTYPE.ARGS) == nb_positional_args + vararg
 
