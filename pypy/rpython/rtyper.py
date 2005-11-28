@@ -57,6 +57,7 @@ class RPythonTyper:
         self.pbc_reprs = {}
         self.concrete_calltables = {}
         self.class_pbc_attributes = {}
+        self.oo_meth_impls = {}
         self.typererrors = []
         self.typererror_count = 0
         # make the primitive_to_repr constant mapping
@@ -542,14 +543,9 @@ class RPythonTyper:
         and return it as a function pointer object.
         """
         args_s = [annmodel.lltype_to_annotation(T) for T in arglltypes]
-        was_frozen = self.annotator.translator.frozen
-        self.annotator.translator.frozen = False   # oh well
-        try:
-            ignored, spec_function = annotate_lowlevel_helper(self.annotator,
-                                                            ll_function, args_s)
-        finally:
-            self.annotator.translator.frozen = was_frozen
-        return self.getfunctionptr(spec_function)
+        helper_graph = annotate_lowlevel_helper(self.annotator,
+                                                ll_function, args_s)
+        return helper_graph
 
     def attachRuntimeTypeInfoFunc(self, GCSTRUCT, func, ARG_GCSTRUCT=None):
         self.call_all_setups()  # compute ForwardReferences now

@@ -385,10 +385,10 @@ def new(I):
     r = SomeOOInstance(ootype.typeOf(i))
     return r
 
-def null(I):
-    assert I.is_constant()
-    i = ootype.null(I.const)
-    r = SomeOOInstance(ootype.typeOf(i))
+def null(I_OR_SM):
+    assert I_OR_SM.is_constant()
+    null = ootype.null(I_OR_SM.const)
+    r = lltype_to_annotation(ootype.typeOf(null))
     return r
 
 def instanceof(i, I):

@@ -2,7 +2,7 @@
 from pypy.rpython.ootypesystem.ootype import *
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import FlowObjSpace
-from pypy.translator.translator import Translator
+from pypy.translator.translator import Translator, graphof
 from pypy.rpython.test.test_llinterp import interpret
 
 def gengraph(f, args=[], viewBefore=False, viewAfter=False):
@@ -13,7 +13,7 @@ def gengraph(f, args=[], viewBefore=False, viewAfter=False):
     t.specialize(type_system="ootype")
     if viewAfter:
         t.view()
-    return t.flowgraphs[f]
+    return graphof(t, f)
 
 def test_simple_class():
     C = Instance("test", None, {'a': Signed})

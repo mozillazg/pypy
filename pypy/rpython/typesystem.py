@@ -34,6 +34,10 @@ class TypeSystem(object):
 """
         raise NotImplementedError()
 
+    def null_callable(self, T):
+        """null callable object of type T"""
+        raise NotImplementedError()
+        
     def getcallable(self, graph, getconcretetype=None):
         """Return callable given a Python function."""
         if getconcretetype is None:
@@ -70,6 +74,9 @@ class LowLevelTypeSystem(TypeSystem):
     def getconcretetype(self, v):
         return getattr(v, 'concretetype', lltype.Ptr(lltype.PyObject))
 
+    def null_callable(self, T):
+        return lltype.nullptr(T.TO)
+
     def isCompatibleType(self, t1, t2):
         return lltype.isCompatibleType(t1, t2)
 
@@ -80,6 +87,9 @@ class ObjectOrientedTypeSystem(TypeSystem):
     def deref(self, obj):
         assert isinstance(ootype.typeOf(obj), ootype.OOType)
         return obj
+    
+    def null_callable(self, T):
+        return ootype.null(T)
 
     def isCompatibleType(self, t1, t2):
         return ootype.isCompatibleType(t1, t2)
