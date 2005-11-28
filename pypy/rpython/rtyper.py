@@ -713,7 +713,7 @@ class LowLevelOpList(list):
     llop_raising_exceptions = None
     implicit_exceptions_checked = None
 
-    def __init__(self, rtyper, originalblock):
+    def __init__(self, rtyper, originalblock=None):
         self.rtyper = rtyper
         self.originalblock = originalblock
 
