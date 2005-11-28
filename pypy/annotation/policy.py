@@ -42,6 +42,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
         if directive.startswith('override:'):
             # different signature: override__xyz(*args_s)
             def specialize_override(funcdesc, args_s):
+                funcdesc.overridden = True
                 return specializer(*args_s)
             return specialize_override
         else:
