@@ -90,6 +90,7 @@ class RPythonAnnotator:
             inputcells.append(t)
 
         desc = self.bookkeeper.getdesc(function)
+        desc.getcallfamily()
         flowgraph = desc.specialize(inputcells)
         if not isinstance(flowgraph, FunctionGraph):
             assert isinstance(flowgraph, annmodel.SomeObject)
