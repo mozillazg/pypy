@@ -1,4 +1,4 @@
-from pypy.objspace.flow.model import Constant, Variable, last_exception
+from pypy.objspace.flow.model import FunctionGraph, Constant, Variable, last_exception
 from pypy.rpython.rarithmetic import intmask, r_uint, ovfcheck
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.memory import lladdress
@@ -90,6 +90,7 @@ ops_returning_a_bool = {'gt': True, 'ge': True,
 
 class LLFrame(object):
     def __init__(self, graph, args, llinterpreter, f_back=None):
+        assert isinstance(graph, FunctionGraph)
         self.graph = graph
         self.args = args
         self.llinterpreter = llinterpreter
@@ -633,7 +634,7 @@ class LLFrame(object):
         assert isinstance(message, str)
         bm = getattr(inst, message)
         m = bm.meth
-        m._checkargs(args)
+        m._checkargs(args, check_callable=False)
         if getattr(m, 'abstract', False):
             raise RuntimeError("calling abstract method %r" % (m,))
         return self.op_direct_call(m, inst, *args)

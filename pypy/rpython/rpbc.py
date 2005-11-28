@@ -224,7 +224,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             value = value.im_func   # unbound method -> bare function
         if self.lowleveltype is Void:
             return value
-        null = nullptr(self.lowleveltype.TO)
+        null = self.rtyper.type_system.null_callable(self.lowleveltype)
         if value is None:
             return null
         funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)

@@ -480,6 +480,8 @@ annotation_to_ll_map = [
 def annotation_to_lltype(s_val, info=None):
     if isinstance(s_val, SomeOOInstance):
         return s_val.ootype
+    if isinstance(s_val, SomeOOStaticMeth):
+        return s_val.method
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
     for witness, lltype in annotation_to_ll_map:
@@ -499,6 +501,8 @@ def lltype_to_annotation(T):
     if s is None:
         if isinstance(T, ootype.Instance):
             return SomeOOInstance(T)
+        elif isinstance(T, ootype.StaticMethod):
+            return SomeOOStaticMeth(T)
         else:
             return SomePtr(T)
     else:
