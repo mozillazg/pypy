@@ -2,7 +2,6 @@ import types
 from pypy.rpython.rmodel import inputconst, TyperError
 from pypy.rpython.rclass import AbstractClassRepr, AbstractInstanceRepr, \
                                 getinstancerepr, getclassrepr, get_type_repr
-from pypy.rpython.rpbc import getsignature
 from pypy.rpython.ootypesystem import ootype
 from pypy.annotation.pairtype import pairtype
 from pypy.tool.sourcetools import func_with_new_name
