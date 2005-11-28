@@ -198,7 +198,7 @@ def insert_stackcheck(ann):
         caller = edge.source
         _, _, call_tag = edge.callposition
         if call_tag:
-            _, caller_block, _ = call_tag
+            caller_block, _ = call_tag
         else:
             ann.warning("cycle detected but no information on where to insert "
                         "stack_check()")
