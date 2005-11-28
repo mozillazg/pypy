@@ -341,7 +341,7 @@ def static_callers(translator, ignore_primitives=False):
                                        'suggested_primitive', False):
                                 continue
                         result.append((parentgraph, graph))
-    for parentgraph in translator.flowgraphs.itervalues():
+    for parentgraph in translator.graphs:
         traverse(build_call_graph, parentgraph)
     return result
 
