@@ -1,14 +1,13 @@
 from pypy.annotation import model as annmodel
-from pypy.translator.translator import Translator, graphof
-from pypy.rpython.rtyper import RPythonTyper
+from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.lltypesystem import lltype
 
 
 def rtype(fn, argtypes=[]):
-    t = Translator(fn)
-    t.annotate(argtypes)
-    typer = RPythonTyper(t.annotator)
+    t = TranslationContext()
+    t.buildannotator().build_types(fn, argtypes)
+    typer = t.buildrtyper()
     typer.specialize()
     #t.view()
     t.checkgraphs()

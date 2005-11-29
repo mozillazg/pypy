@@ -1,6 +1,5 @@
-from pypy.translator.translator import Translator
+from pypy.translator.translator import TranslationContext
 from pypy.rpython.lltypesystem.lltype import *
-from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.test.test_llinterp import interpret
 
 
@@ -10,6 +9,14 @@ class MyException(Exception):
 class MyStrangeException:   # no (Exception) here
     pass
 
+def rtype(fn, argtypes=[]):
+    t = TranslationContext()
+    t.buildannotator().build_types(fn, argtypes)
+    typer = t.buildrtyper()
+    typer.specialize()
+    #t.view()
+    t.checkgraphs()
+    return t
 
 def test_simple():
     def g():
@@ -20,24 +27,18 @@ def test_simple():
         except MyException:
             pass
 
-    t = Translator(dummyfn)
-    a = t.annotate([])
-    a.simplify()
-    typer = RPythonTyper(t.annotator)
-    typer.specialize()
-    #t.view()
-    t.checkgraphs()
+    rtype(dummyfn)
+
 
 
 def test_exception_data():
     def f(n):
         raise OverflowError()
 
-    t = Translator(f)
-    a = t.annotate([int])
-    t.specialize()
+    t = rtype(f, [int])
+
     excdata = t.rtyper.getexceptiondata()
-    getcdef = a.bookkeeper.getuniqueclassdef
+    getcdef = t.annotator.bookkeeper.getuniqueclassdef
 
     #t.view()
     ovferr_inst = excdata.fn_pyexcclass2exc(pyobjectptr(OverflowError))
