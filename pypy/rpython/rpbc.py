@@ -20,7 +20,8 @@ class __extend__(annmodel.SomePBC):
         kind = self.getKind()
         if issubclass(kind, description.FunctionDesc):
             sample = self.descriptions.keys()[0]
-            if sample.querycallfamily():
+            callfamily = sample.querycallfamily()
+            if callfamily and callfamily.total_calltable_size > 0:
                 if sample.overridden:
                     getRepr = OverriddenFunctionPBCRepr
                 else:

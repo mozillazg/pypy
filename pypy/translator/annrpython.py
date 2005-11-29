@@ -84,7 +84,7 @@ class RPythonAnnotator:
         inputcells = [self.typeannotation(t) for t in input_arg_types]
 
         desc = self.bookkeeper.getdesc(function)
-        desc.getcallfamily()
+        desc.getcallfamily()   # record this implicit call (hint for back-ends)
         flowgraph = desc.specialize(inputcells)
         if not isinstance(flowgraph, FunctionGraph):
             assert isinstance(flowgraph, annmodel.SomeObject)
