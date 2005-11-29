@@ -394,4 +394,6 @@ class TestTypedTestCase(_TestAnnotatedTestCase):
                 return f(n-1, accum*n)
         fn = self.getcompiled(f)
         assert fn(7, 1) == 5040
+        assert fn(7, 1) == 5040    # detection must work several times, too
+        assert fn(7, 1) == 5040
         py.test.raises(RuntimeError, fn, -1, 0)
