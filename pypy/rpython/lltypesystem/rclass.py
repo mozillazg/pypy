@@ -474,7 +474,8 @@ class InstanceRepr(AbstractInstanceRepr):
                     continue
                 value = self.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
-                    cvalue = Constant(r.convert_desc_or_const(value))
+                    cvalue = inputconst(r.lowleveltype,
+                                        r.convert_desc_or_const(value))
                     self.setfield(vptr, fldname, cvalue, llops)
 
         return vptr
