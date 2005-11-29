@@ -24,9 +24,16 @@ def gen_wrapper(func, translator):
     nb_positional_args = func.func_code.co_argcount
     vararg = bool(func.func_code.co_flags & CO_VARARGS)
 
-    bk = translator.annotator.bookkeeper
+    if translator.annotator is None:
+        # get the graph from the translator, "push it back" so that it's
+        # still available for further buildflowgraph() calls
+        graph = translator.buildflowgraph(func)
+        translator._prebuilt_graphs[func] = graph
+    else:
+        bk = translator.annotator.bookkeeper
+        graph = bk.getdesc(func).cachedgraph(None)
 
-    f = getfunctionptr(bk.getdesc(func).cachedgraph(None))
+    f = getfunctionptr(graph)
     FUNCTYPE = typeOf(f).TO
     assert len(FUNCTYPE.ARGS) == nb_positional_args + vararg
 
