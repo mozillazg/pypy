@@ -3,7 +3,7 @@ import py
 from pypy.rpython.lltypesystem.lltype import typeOf, pyobjectptr, Ptr, PyObject
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.llinterp import LLInterpreter, LLException,log
-from pypy.translator.translator import Translator
+from pypy.translator.translator import TranslationContext
 from pypy.rpython.rlist import *
 from pypy.rpython.rint import signed_repr
 from pypy.rpython import rstr
@@ -45,14 +45,14 @@ def timelog(prefix, call, *args, **kwds):
 
 def gengraph(func, argtypes=[], viewbefore=False, policy=None,
              type_system="lltype"):
-    t = Translator(func)
-
-    timelog("annotating", t.annotate, argtypes, policy=policy)
+    t = TranslationContext()
+    a = t.buildannotator(policy=policy)
+    timelog("annotating", a.build_types, func, argtypes)
     if viewbefore:
-        t.annotator.simplify()
+        a.simplify()
         t.view()
     global typer # we need it for find_exception
-    typer = RPythonTyper(t.annotator, type_system=type_system)
+    typer = t.buildrtyper(type_system=type_system)
     timelog("rtyper-specializing", typer.specialize) 
     #t.view()
     timelog("checking graphs", t.checkgraphs) 

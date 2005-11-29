@@ -1,5 +1,5 @@
 from pypy.rpython.objectmodel import *
-from pypy.translator.translator import Translator, graphof
+from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.test.test_llinterp import interpret
 
 def test_we_are_translated():
@@ -94,8 +94,9 @@ def test_r_dict_bm():
     return play_with_r_dict(d)
 
 def test_annotate_r_dict():
-    t = Translator(test_r_dict)
-    a = t.annotate([])
+    t = TranslationContext()
+    a = t.buildannotator()
+    a.build_types(test_r_dict, [])
     #t.view()
     graph = graphof(t, strange_key_eq)
     assert a.binding(graph.getargs()[0]).knowntype == str
@@ -104,8 +105,9 @@ def test_annotate_r_dict():
     assert a.binding(graph.getargs()[0]).knowntype == str
 
 def test_annotate_r_dict_bm():
-    t = Translator(test_r_dict_bm)
-    a = t.annotate([])
+    t = TranslationContext()
+    a = t.buildannotator()
+    a.build_types(test_r_dict_bm, [])
     #t.view()
     strange_key_eq = Strange.key_eq.im_func
     strange_key_hash = Strange.key_hash.im_func

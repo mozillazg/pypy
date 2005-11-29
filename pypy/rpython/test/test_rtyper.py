@@ -1,12 +1,13 @@
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import Constant
-from pypy.translator.translator import Translator, graphof
+from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator import annrpython
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.test.test_llinterp import interpret 
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython import rmodel
 import py
+
 
 def setup_module(mod): 
     mod.logstate = py.log._getstate()
@@ -74,10 +75,9 @@ def test_function_call():
 def test_retval():
     def f(x):
         return x
-    t = Translator(f)
-    t.annotate([int])
-    typer = RPythonTyper(t.annotator)
-    typer.specialize()
+    t = TranslationContext()
+    t.buildannotator().build_types(f, [int])
+    t.buildrtyper().specialize()
     #t.view()
     t.checkgraphs()
     graph = graphof(t, f)
@@ -87,10 +87,9 @@ def test_retval():
 def test_retval_None():
     def f(x):
         pass
-    t = Translator(f)
-    t.annotate([int])
-    typer = RPythonTyper(t.annotator)
-    typer.specialize()
+    t = TranslationContext()
+    t.buildannotator().build_types(f, [int])
+    t.buildrtyper().specialize()
     #t.view()
     t.checkgraphs()
     graph = graphof(t, f)
