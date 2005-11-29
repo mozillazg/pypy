@@ -23,7 +23,10 @@ def find_exception(exc, interp):
     assert isinstance(exc, LLException)
     import exceptions
     klass, inst = exc.args
-    ll_pyexcclass2exc_graph = typer.getexceptiondata().ll_pyexcclass2exc_graph
+    # indirect way to invoke fn_pyexcclass2exc, for memory/test/test_llinterpsim
+    f = typer.getexceptiondata().fn_pyexcclass2exc
+    obj = typer.type_system.deref(f)
+    ll_pyexcclass2exc_graph = obj.graph
     for cls in exceptions.__dict__.values():
         if type(cls) is type(Exception):
             if interp.eval_graph(ll_pyexcclass2exc_graph, [pyobjectptr(cls)]).typeptr == klass:
