@@ -11,6 +11,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.translator.locality.calltree import CallTree
 from pypy.translator.c.support import log
+from pypy.rpython.typesystem import getfunctionptr
 
 class CBuilder(object):
     c_source_filename = None
@@ -121,7 +122,8 @@ class CStandaloneBuilder(CBuilder):
     def getentrypointptr(self):
         # XXX check that the entrypoint has the correct
         # signature:  list-of-strings -> int
-        return getfunctionptr(self.translator, self.entrypoint)
+        bk = self.translator.annotator.bookkeeper
+        return getfunctionptr(bk.getdesc(self.entrypoint).cachedgraph(None))
 
     def getccompiler(self, extra_includes):
         # XXX for now, we always include Python.h
