@@ -81,13 +81,7 @@ class RPythonAnnotator:
         assert isinstance(function, FunctionType), "fix that!"
 
         # make input arguments and set their type
-        inputcells = []
-        input_arg_types = list(input_arg_types)
-
-        for t in input_arg_types:
-            if not isinstance(t, annmodel.SomeObject):
-                t = self.bookkeeper.valueoftype(t)
-            inputcells.append(t)
+        inputcells = [self.typeannotation(t) for t in input_arg_types]
 
         desc = self.bookkeeper.getdesc(function)
         desc.getcallfamily()
@@ -200,6 +194,12 @@ class RPythonAnnotator:
             return self.bookkeeper.immutablevalue(arg.value)
         else:
             raise TypeError, 'Variable or Constant expected, got %r' % (arg,)
+
+    def typeannotation(self, t):
+        if isinstance(t, annmodel.SomeObject):
+            return t
+        else:
+            return self.bookkeeper.valueoftype(t)
 
     def ondegenerated(self, what, s_value, where=None, called_from_graph=None):
         if self.policy.allow_someobjects:
