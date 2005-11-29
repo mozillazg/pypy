@@ -719,6 +719,13 @@ class LowLevelOpList(list):
     def hasparentgraph(self):
         return self.originalblock is not None
 
+    def record_extra_call(self, graph):
+        if self.hasparentgraph():
+            self.rtyper.annotator.translator.update_call_graph(
+                caller_graph = self.getparentgraph(),
+                callee_graph = graph,
+                position_tag = object())
+
     def convertvar(self, v, r_from, r_to):
         assert isinstance(v, (Variable, Constant))
         if r_from != r_to:
@@ -778,11 +785,7 @@ class LowLevelOpList(list):
             ll_function = ll_function.im_func
 
         graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
-        if self.hasparentgraph():
-            rtyper.annotator.translator.update_call_graph(
-                caller_graph = self.getparentgraph(),
-                callee_graph = graph,
-                position_tag = object())
+        self.record_extra_call(graph)
 
         # build the 'direct_call' operation
         f = self.rtyper.getcallable(graph)

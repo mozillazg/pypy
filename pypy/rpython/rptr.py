@@ -59,6 +59,9 @@ class PtrRepr(Repr):
         if not isinstance(self.lowleveltype.TO, FuncType):
             raise TyperError("calling a non-function %r", self.lowleveltype.TO)
         vlist = hop.inputargs(*hop.args_r)
+        if isinstance(vlist[0], flowmodel.Constant):
+            if hasattr(vlist[0].value, 'graph'):
+                hop.llops.record_extra_call(vlist[0].value.graph)
         hop.exception_is_here()
         return hop.genop('direct_call', vlist,
                          resulttype = self.lowleveltype.TO.RESULT)
