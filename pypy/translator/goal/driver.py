@@ -1,6 +1,6 @@
 import sys, os
 
-from pypy.translator.translator import Translator
+from pypy.translator.translator import TranslationContext
 from pypy.translator.tool.taskengine import SimpleTaskEngine
 from pypy.translator.goal import query
 from pypy.annotation import model as annmodel
@@ -105,12 +105,13 @@ class TranslationDriver(SimpleTaskEngine):
         self.extra = extra
 
         if empty_translator:
-            # re-initialize it
-            empty_translator.__init__(entry_point, verbose=True, simplifying=True)
+            # set verbose flags
+            empty_translator.flags['verbose'] = True
             translator = empty_translator
         else:
-            translator = Translator(entry_point, verbose=True, simplifying=True)
+            translator = TranslationContext(verbose=True)
 
+        self.entry_point = entry_point
         self.translator = translator
 
 
