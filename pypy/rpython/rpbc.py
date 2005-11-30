@@ -210,6 +210,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
                 llfn = row[funcdesc]
                 found_anything = True
             else:
+                null = self.rtyper.type_system.null_callable(self.lowleveltype)
                 llfn = null
             llfns[row.attrname] = llfn
         if not found_anything:
@@ -225,8 +226,8 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             value = value.im_func   # unbound method -> bare function
         if self.lowleveltype is Void:
             return value
-        null = self.rtyper.type_system.null_callable(self.lowleveltype)
         if value is None:
+            null = self.rtyper.type_system.null_callable(self.lowleveltype)
             return null
         funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
         return self.convert_desc(funcdesc)
