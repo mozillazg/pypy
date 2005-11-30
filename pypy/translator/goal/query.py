@@ -565,10 +565,10 @@ def check_methods_qgen(translator):
             funcs = dict.fromkeys([desc.funcdesc
                                    for desc in meth.s_value.descriptions])
             for subcls in subclasses:
-                if not subcls.find_source_for(name):
+                if not subcls.classdesc.find_source_for(name):
                     continue
-                c = subcls.read_attribute(name)
-                if isinstance(c, Constant):
+                c = subcls.classdesc.read_attribute(name)
+                if isinstance(c, flowmodel.Constant):
                     if not isinstance(c.value, (types.FunctionType,
                                                 types.MethodType)):
                         continue
