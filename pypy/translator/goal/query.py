@@ -543,6 +543,8 @@ def check_methods_qgen(translator):
     def ismeth(s_val):
         if not isinstance(s_val, annmodel.SomePBC):
             return False
+        if s_val.isNone():
+            return False
         return s_val.getKind() is MethodDesc
     bk = translator.annotator.bookkeeper
     classdefs = bk.classdefs
