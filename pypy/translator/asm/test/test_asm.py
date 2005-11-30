@@ -1,4 +1,5 @@
-from pypy.translator.translator import Translator, graphof
+from pypy.translator.translator import TranslationContext, graphof
+from pypy.translator.backendopt.all import backend_optimizations
 from pypy.rpython.rarithmetic import ovfcheck
 from pypy.translator.asm import genasm
 import py
@@ -9,7 +10,7 @@ class TestAsm(object):
     processor = 'virt'
 
     def getcompiled(self, func, view=False):
-        t = Translator(func, simplifying=True)
+        t = TranslationContext(simplifying=True)
         # builds starting-types from func_defs
         argstypelist = []
         if func.func_defaults is None:
@@ -18,11 +19,14 @@ class TestAsm(object):
         else:
             assert len(func.func_defaults) == func.func_code.co_argcount
             argtypes = list(func.func_defaults)
-        a = t.annotate(argtypes)
+        a = t.buildannotator()
+        a.build_types(func, argtypes)
         a.simplify()
-        t.specialize()
+        r = t.buildrtyper()
+        r.specialize()
         t.checkgraphs()
-        t.backend_optimizations()
+        
+        backend_optimizations(t)
         if view:
             t.view()
         graph = graphof(t, func)
