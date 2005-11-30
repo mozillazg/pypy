@@ -1,5 +1,6 @@
-from pypy.translator.translator import Translator
+from pypy.translator.translator import Translator, graphof
 from pypy.rpython.rarithmetic import ovfcheck
+from pypy.translator.asm import genasm
 import py
 import os
 
@@ -24,7 +25,8 @@ class TestAsm(object):
         t.backend_optimizations()
         if view:
             t.view()
-        return t.asmcompile(self.processor)
+        graph = graphof(t, func)
+        return genasm.genasm(graph, self.processor)
 
     def dont_test_trivial(self):
         def testfn():

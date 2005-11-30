@@ -336,7 +336,8 @@ class Translator(TranslationContext):
         from pypy.translator.asm import genasm
         assert processor in ['ppc', 'virt', 'virtfinite']
         assert self.rtyper is not None, 'must specialize'
-        return genasm.genasm(self, processor)
+        graph = graphof(self, self.entrypoint)
+        return genasm.genasm(graph, processor)
 
     def call(self, *args):
         """Calls underlying Python function."""
