@@ -105,19 +105,18 @@ class Attribute:
 
     def mutated(self, homedef): # reflow from attr read positions
         s_newvalue = self.getvalue()
-        # check for method demotion
-        if isinstance(s_newvalue, SomePBC):
-            attr = self.name
-            meth = False
-            for desc in s_newvalue.descriptions:
-                if isinstance(desc, description.MethodDesc):
-                    meth = True
-                    break
-            if meth and homedef.classdesc.read_attribute(attr, None) is None:
-                self.bookkeeper.warning("demoting method %s to base class %s" % (self.name, homedef))
 
         for position in self.read_locations:
             self.bookkeeper.annotator.reflowfromposition(position)        
+
+        # check for method demotion and after-the-fact method additions
+        if isinstance(s_newvalue, SomePBC):
+            attr = self.name
+            if not s_newvalue.isNone() and s_newvalue.getKind() == description.MethodDesc:
+                if homedef.classdesc.read_attribute(attr, None) is None: # is method
+                    if not homedef.check_missing_attribute_update(attr):
+                        self.bookkeeper.warning("demoting method %s to base class %s" % 
+                                                (self.name, homedef))
 
 
 
@@ -332,23 +331,7 @@ class ClassDef:
                 desc = desc.bind_self(methclassdef)
             d.append(desc)
         if uplookup is not None:            
-            # hack^2, in this case the classdef for uplookup could be the result
-            # of the union of subclass sources that share the same implementation function
-            # so there could be still super and subclass implementations added after the fact
-            # that could be going undetected. We use uplookup.attr_sources[name] to flag
-            # whether a super implementation was considered and as such not undetected
-            if name is not None and not name in uplookup.attr_sources:
-                uplookup.attr_sources.setdefault(name, [])
-                check_for_missing_attrs = True
-
-            # add the updesc method, bounding it to the more precise
-            # classdef 'self' instead of its originclassdef
             d.append(updesc.bind_self(self))
-        elif meth and name is not None:
-            check_for_missing_attrs = True
-
-        if check_for_missing_attrs:
-            self.check_missing_attribute_update(name)
 
         if d or pbc.can_be_None:
             return SomePBC(d, can_be_None=pbc.can_be_None)
