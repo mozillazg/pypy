@@ -120,14 +120,20 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
     def event(pol, bookkeeper, what, x):
         from pypy.objspace.std import typeobject
         if isinstance(x, typeobject.W_TypeObject):
+            from pypy.annotation.classdef import InstanceSource
+            clsdef = bookkeeper.getuniqueclassdef(typeobject.W_TypeObject)
             pol.pypytypes[x] = True
             print "TYPE", x
             for attr in pol.lookups:
-                if attr:
-                    pol.attach_lookup(x, attr)
+                if attr and pol.attach_lookup(x, attr):
+                    cached = "cached_%s" % attr
+                    source = InstanceSource(bookkeeper, x)
+                    clsdef.add_source_for_attribute(cached, source)
             for attr in pol.lookups_where:
-                if attr:
-                    pol.attach_lookup_in_type_where(x, attr)
+                if attr and pol.attach_lookup_in_type_where(x, attr):
+                    cached = "cached_where_%s" % attr
+                    source = InstanceSource(bookkeeper, x)
+                    clsdef.add_source_for_attribute(cached, source)
         return
 
 CACHED_LOOKUP = """
