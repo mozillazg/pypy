@@ -2,7 +2,7 @@
 import types
 from pypy.tool.uid import uid
 from pypy.objspace.flow.model import Block, Link, Variable, SpaceOperation
-from pypy.objspace.flow.model import checkgraph
+from pypy.objspace.flow.model import Constant, checkgraph
 
 def default_specialize(funcdesc, args_s):
     argnames, vararg, kwarg = funcdesc.signature
@@ -73,9 +73,18 @@ def memo(funcdesc, arglist_s):
     if func is None:
         raise Exception("memo call: no Python function object to call (%r)" %
                         (funcdesc,))
+    return memo1(funcdesc, func, s)
+
+# XXX OBSCURE to support methodmemo()... needs to find something more 
+#     reasonable :-(
+KEY_NUMBERS = {}
+
+def memo1(funcdesc, func, s, key='memo1'):
+    from pypy.annotation.model import SomeImpossibleValue
     # compute the concrete results and store them directly on the descs,
     # using a strange attribute name
-    attrname = '$memo%d_%s' % (uid(funcdesc), funcdesc.name)
+    num = KEY_NUMBERS.setdefault(key, len(KEY_NUMBERS))
+    attrname = '$memo%d_%d_%s' % (uid(funcdesc), num, funcdesc.name)
     for desc in s.descriptions:
         s_result = desc.s_read_attribute(attrname)
         if isinstance(s_result, SomeImpossibleValue):
@@ -86,12 +95,12 @@ def memo(funcdesc, arglist_s):
             result = func(desc.pyobj)
             desc.create_new_attribute(attrname, result)
     # get or build the graph of the function that reads this strange attr
-    def memoized(x):
+    def memoized(x, y=None):
         return getattr(x, attrname)
     def builder(translator, func):
         return translator.buildflowgraph(memoized)   # instead of 'func'
-    return funcdesc.cachedgraph('memo1', alt_name='memo_%s' % funcdesc.name, 
-                                         builder=builder)
+    return funcdesc.cachedgraph(key, alt_name='memo_%s' % funcdesc.name, 
+                                     builder=builder)
 
 def methodmemo(funcdesc, arglist_s):
     """NOT_RPYTHON"""
@@ -121,6 +130,9 @@ def methodmemo(funcdesc, arglist_s):
     # polymorphism.
     s1, s2 = arglist_s
     s1_type = s1.knowntype
+    if s2.is_constant():
+        return memo1(funcdesc, lambda val1: func(val1, s2.const),
+                    s1, ('memo1of2', s1_type, Constant(s2.const)))
     memosig = "%d_%d_%s" % (uid(funcdesc), uid(s1_type), funcdesc.name)
 
     attrname = '$memoreader%s' % memosig 
