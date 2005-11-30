@@ -401,11 +401,14 @@ class InstanceRepr(AbstractInstanceRepr):
                 else:
                     try:
                         attrvalue = getattr(value, name)
+                        llattrvalue = r.convert_const(attrvalue)
                     except AttributeError:
-                        warning("prebuilt instance %r has no attribute %r" % (
-                            value, name))
-                        continue
-                    llattrvalue = r.convert_const(attrvalue)
+                        attrvalue = self.classdef.classdesc.read_attribute(name, None)
+                        if attrvalue is None:
+                            warning("prebuilt instance %r has no attribute %r" % (
+                                    value, name))
+                            continue
+                        llattrvalue = r.convert_desc_or_cosnt(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
         else:
             # OBJECT part
