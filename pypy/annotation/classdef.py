@@ -113,7 +113,7 @@ class Attribute:
                 if isinstance(desc, description.MethodDesc):
                     meth = True
                     break
-            if meth and homedef.classdesc.find_source_for(attr) is None:
+            if meth and homedef.classdesc.read_attribute(attr, None) is None:
                 self.bookkeeper.warning("demoting method %s to base class %s" % (self.name, homedef))
 
         for position in self.read_locations:
