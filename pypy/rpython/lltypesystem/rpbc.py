@@ -66,7 +66,7 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
                 try:
                     thisattrvalue = frozendesc.read_attribute(attr)
                 except AttributeError:
-                    warning("PBC %r has no attribute %r" % (pbc, attr))
+                    warning("Desc %r has no attribute %r" % (frozendesc, attr))
                     continue
                 llvalue = r_value.convert_const(thisattrvalue)
                 setattr(result, mangled_name, llvalue)
