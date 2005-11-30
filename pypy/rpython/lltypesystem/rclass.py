@@ -408,7 +408,7 @@ class InstanceRepr(AbstractInstanceRepr):
                             warning("prebuilt instance %r has no attribute %r" % (
                                     value, name))
                             continue
-                        llattrvalue = r.convert_desc_or_cosnt(attrvalue)
+                        llattrvalue = r.convert_desc_or_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
         else:
             # OBJECT part
