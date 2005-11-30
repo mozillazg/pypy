@@ -1838,6 +1838,50 @@ class TestAnnotateTestCase:
         assert s.knowntype == int
         assert not s.is_constant()
 
+    def test_getorbuild_as_attr(self):
+        from pypy.tool.cache import Cache
+        class SpaceCache(Cache):
+            def __init__(self, space):
+                Cache.__init__(self)
+                self.space = space
+            def _build(self, callable):
+                return callable(self.space)
+        class CacheX(Cache):
+            def __init__(self, space):
+                Cache.__init__(self)
+            def _build(self, key):
+                return key.x
+        class CacheY(Cache):
+            def __init__(self, space):
+                Cache.__init__(self)
+            def _build(self, key):
+                return key.y
+        class X:
+            def __init__(self, x):
+                self.x = x
+            def _freeze_(self):
+                return True
+        class Y:
+            def __init__(self, y):
+                self.y = y
+            def _freeze_(self):
+                return True
+        class Space:
+            def __init__(self):
+                self.fromcache = SpaceCache(self).getorbuild
+            def _freeze_(self):
+                return True
+        space = Space()
+        X1 = X(1)
+        Y2 = Y(2)
+        def f():
+            return space.fromcache(CacheX).getorbuild(X1) + \
+                   space.fromcache(CacheY).getorbuild(Y2)
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert s.knowntype == int
+
 def g(n):
     return [0,1,2,n]
 
