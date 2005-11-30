@@ -137,7 +137,8 @@ class TranslationDriver(SimpleTaskEngine):
         self.log.info('with policy: %s.%s' % (policy.__class__.__module__, policy.__class__.__name__))
 
         annmodel.DEBUG = self.options.debug
-        annotator = translator.annotate(self.inputtypes, policy=policy)
+        annotator = translator.buildannotator(policy=policy)
+        annotator.build_types(self.entry_point, self.inputtypes)
         self.sanity_check_annotation()
         annotator.simplify()        
     #
@@ -155,7 +156,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.log.info("No lost method defs")
 
         so = query.qoutput(query.polluted_qgen(translator))
-        tot = len(translator.flowgraphs)
+        tot = len(translator.graphs)
         percent = int(tot and (100.0*so / tot) or 0)
         if percent == 0:
             pr = self.log.info
@@ -167,14 +168,16 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_rtype(self):
         opt = self.options
-        self.translator.specialize(dont_simplify_again=True,
-                                   crash_on_first_typeerror=not opt.insist)
+        rtyper = self.translator.buildrtyper()
+        rtyper.specialize(dont_simplify_again=True,
+                          crash_on_first_typeerror=not opt.insist)
     #
     task_rtype = taskdef(task_rtype, ['annotate'], "RTyping")
 
     def task_backendopt(self):
+        from pypy.translator.backendopt.all import backend_optimizations
         opt = self.options
-        self.translator.backend_optimizations(ssa_form=opt.backend != 'llvm')
+        backend_optimizations(self.translator, ssa_form=opt.backend != 'llvm')
     #
     task_backendopt = taskdef(task_backendopt, 
                                         ['rtype'], "Back-end optimisations") 
@@ -194,9 +197,13 @@ class TranslationDriver(SimpleTaskEngine):
             from pypy.translator.c import gc
             gcpolicy = gc.NoneGcPolicy
 
-        cbuilder = translator.cbuilder(standalone=standalone, 
-                                       gcpolicy=gcpolicy,
-                                       thread_enabled = getattr(opt, 'thread', False))
+        if standalone:
+            from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
+        else:
+            from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
+        cbuilder = CBuilder(self.translator, self.entry_point,
+                            gcpolicy       = gcpolicy,
+                            thread_enabled = getattr(opt, 'thread', False))
         cbuilder.stackless = opt.stackless
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")

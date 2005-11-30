@@ -515,16 +515,16 @@ def polluted_qgen(translator):
                 s = annotator.binding(v, extquery=True)
                 if s and s.__class__ == annmodel.SomeObject and s.knowntype != type:
                     raise Found
-    for f,g in translator.flowgraphs.iteritems():
+    for g in translator.graphs:
         try:
             flowmodel.traverse(visit, g)
         except Found:
-            line = "%s: %s" % (prettyfunc(f), graph_sig(translator, g))
+            line = "%s: %s" % (g, graph_sig(translator, g))
             yield line
 
 def check_exceptblocks_qgen(translator):
     annotator = translator.annotator
-    for graph in translator.flowgraphs.itervalues():
+    for graph in translator.graphs:
         et, ev = graph.exceptblock.inputargs
         s_et = annotator.binding(et, extquery=True)
         s_ev = annotator.binding(ev, extquery=True)
@@ -539,19 +539,15 @@ def check_exceptblocks_qgen(translator):
             yield "%s exceptblock is not completely sane" % graph.name
 
 def check_methods_qgen(translator):
-    from pypy.annotation.classdef import ClassDef
+    from pypy.annotation.description import FunctionDesc, MethodDesc
     def ismeth(s_val):
         if not isinstance(s_val, annmodel.SomePBC):
             return False
-        s_pbc = s_val
-        c = 0
-        for f, clsdef in s_pbc.prebuiltinstances.iteritems():
-            if callable(f) and isinstance(clsdef, ClassDef):
-                c += 1
-        return c == len(s_pbc.prebuiltinstances)
-    usercls = translator.annotator.getuserclasses()
+        return s_val.getKind() is MethodDesc
+    bk = translator.annotator.bookkeeper
+    classdefs = bk.classdefs
     withmeths = []
-    for clsdef in usercls.itervalues():
+    for clsdef in classdefs:
         meths = []
         for attr in clsdef.attrs.values():
             if ismeth(attr.s_value):
@@ -559,22 +555,27 @@ def check_methods_qgen(translator):
         if meths:
             withmeths.append((clsdef, meths))
     for clsdef, meths in withmeths:
-        cls = clsdef.cls
         n = 0
         subclasses = []
-        for clsdef1 in usercls.itervalues():
-            if issubclass(clsdef1.cls, cls):
+        for clsdef1 in classdefs:
+            if clsdef1.issubclass(clsdef):
                 subclasses.append(clsdef1)
         for meth in meths:
             name = meth.name
-            funcs = dict.fromkeys(meth.s_value.prebuiltinstances.iterkeys())
+            funcs = dict.fromkeys([desc.funcdesc
+                                   for desc in meth.s_value.descriptions])
             for subcls in subclasses:
-                f = subcls.cls.__dict__.get(name)
-                if hasattr(f, 'im_self') and f.im_self is None:
-                    f = f.im_func                
-                if f:
-                    if f not in funcs:
-                        yield "lost method: %s %s %s %s" % (name, subcls.cls, cls, subcls.attrs.keys() )
+                if not subcls.find_source_for(name):
+                    continue
+                c = subcls.read_attribute(name)
+                if isinstance(c, Constant):
+                    if not isinstance(c.value, (types.FunctionType,
+                                                types.MethodType)):
+                        continue
+                    c = bk.getdesc(c.value)
+                if isinstance(c, FunctionDesc):
+                    if c not in funcs:
+                        yield "lost method: %s %s %s %s" % (name, subcls.name, clsdef.name, subcls.attrs.keys() )
 
 def qoutput(queryg, write=None):
     if write is None:
