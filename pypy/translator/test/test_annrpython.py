@@ -1860,15 +1860,16 @@ class TestAnnotateTestCase:
             def _freeze_(self):
                 return True
         X1 = X(1)
-        Y2 = Y(2)
+        Y2 = Y("hello")
         fromcache = SpaceCache().getorbuild
         def f():
-            return fromcache(CacheX).getorbuild(X1) + \
-                   fromcache(CacheY).getorbuild(Y2)
+            return (fromcache(CacheX).getorbuild(X1),
+                    fromcache(CacheY).getorbuild(Y2))
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == int
+        assert s.items[0].knowntype == int
+        assert s.items[1].knowntype == str
 
 def g(n):
     return [0,1,2,n]
