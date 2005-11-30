@@ -80,6 +80,43 @@ class TranslationContext(object):
         for graph in self.graphs:
             checkgraph(graph)
 
+    # debug aids
+
+    def about(self, x, f=None):
+        """Interactive debugging helper """
+        if f is None:
+            f = sys.stdout
+        if isinstance(x, Block):
+            for graph in self.graphs:
+                if x in graph.iterblocks():
+                    print >>f, '%s is a %s' % (x, x.__class__)
+                    print >>f, 'in %s' % (graph,)
+                    break
+            else:
+                print >>f, '%s is a %s at some unknown location' % (
+                    x, x.__class__.__name__)
+            print >>f, 'containing the following operations:'
+            for op in x.operations:
+                print >>f, "   ",op
+            print >>f, '--end--'
+            return
+        raise TypeError, "don't know about %r" % x
+
+
+    def view(self):
+        """Shows the control flow graph with annotations if computed.
+        Requires 'dot' and pygame."""
+        from pypy.translator.tool.graphpage import FlowGraphPage
+        FlowGraphPage(self).display()
+
+    def viewcg(self):
+        """Shows the whole call graph and the class hierarchy, based on
+        the computed annotations."""
+        from pypy.translator.tool.graphpage import TranslatorPage
+        TranslatorPage(self).display()
+
+
+
 # _______________________________________________________________
 # testing helper
 
@@ -120,18 +157,6 @@ class Translator(TranslationContext):
         dest = make_dot_graphs(self.entrypoint.__name__, graphs)
         os.system('gv %s' % str(dest))
 
-    def view(self):
-        """Shows the control flow graph with annotations if computed.
-        Requires 'dot' and pygame."""
-        from pypy.translator.tool.graphpage import FlowGraphPage
-        FlowGraphPage(self).display()
-
-    def viewcg(self):
-        """Shows the whole call graph and the class hierarchy, based on
-        the computed annotations."""
-        from pypy.translator.tool.graphpage import TranslatorPage
-        TranslatorPage(self).display()
-
     def simplify(self, passes=True):
         """Simplifies all the control flow graphs."""
         for graph in self.graphs:
@@ -145,26 +170,6 @@ class Translator(TranslationContext):
         annotator = self.buildannotator(policy)
         annotator.build_types(self.entrypoint, input_args_types)
         return annotator
-
-    def about(self, x, f=None):
-        """Interactive debugging helper """
-        if f is None:
-            f = sys.stdout
-        if isinstance(x, Block):
-            for graph in self.graphs:
-                if x in graph.iterblocks():
-                    print >>f, '%s is a %s' % (x, x.__class__)
-                    print >>f, 'in %s' % (graph,)
-                    break
-            else:
-                print >>f, '%s is a %s at some unknown location' % (
-                    x, x.__class__.__name__)
-            print >>f, 'containing the following operations:'
-            for op in x.operations:
-                print >>f, "   ",op
-            print >>f, '--end--'
-            return
-        raise TypeError, "don't know about %r" % x
 
     def specialize(self, **flags):
         rtyper = self.buildrtyper(
