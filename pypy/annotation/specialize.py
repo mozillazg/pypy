@@ -2,7 +2,7 @@
 import types
 from pypy.tool.uid import uid
 from pypy.objspace.flow.model import Block, Link, Variable, SpaceOperation
-from pypy.objspace.flow.model import checkgraph
+from pypy.objspace.flow.model import Constant, checkgraph
 
 def default_specialize(funcdesc, args_s):
     argnames, vararg, kwarg = funcdesc.signature
@@ -90,8 +90,12 @@ def memo(funcdesc, arglist_s):
         return getattr(x, attrname)
     def builder(translator, func):
         return translator.buildflowgraph(memoized)   # instead of 'func'
-    return funcdesc.cachedgraph('memo1', alt_name='memo_%s' % funcdesc.name, 
-                                         builder=builder)
+    # if 's' is actually a constant, make sure we get a new copy of
+    # 'memoized' for it.  This copy of memoized is all-constant and so
+    # it will get inlined.
+    key = ('memo1', s.is_constant() and Constant(s.const))
+    return funcdesc.cachedgraph(key, alt_name='memo_%s' % funcdesc.name, 
+                                     builder=builder)
 
 def methodmemo(funcdesc, arglist_s):
     """NOT_RPYTHON"""
@@ -160,8 +164,14 @@ def methodmemo(funcdesc, arglist_s):
         return reader_fn(y)
     def builder(translator, func):
         return translator.buildflowgraph(memoized)   # instead of 'func'
-    return funcdesc.cachedgraph(s1_type, alt_name='memo_%s' % funcdesc.name, 
-                                         builder=builder)
+    # if 's2' is actually a constant, make sure we get a new copy of
+    # 'memoized' for it.  This copy of memoized is all-constant and so
+    # it will get inlined.  In addition, if this methodmemo 'func' shows
+    # up on instances of different classes, use a different copy of
+    # 'memoized' as well to minimize annotation mixes.
+    key = ('memo2', s1_type, s2.is_constant() and Constant(s2.const))
+    return funcdesc.cachedgraph(key, alt_name='memo_%s' % funcdesc.name, 
+                                     builder=builder)
 
 def argvalue(i):
     def specialize_argvalue(funcdesc, args_s):
