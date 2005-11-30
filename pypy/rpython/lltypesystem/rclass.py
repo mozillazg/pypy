@@ -401,7 +401,6 @@ class InstanceRepr(AbstractInstanceRepr):
                 else:
                     try:
                         attrvalue = getattr(value, name)
-                        llattrvalue = r.convert_const(attrvalue)
                     except AttributeError:
                         attrvalue = self.classdef.classdesc.read_attribute(name, None)
                         if attrvalue is None:
@@ -409,6 +408,8 @@ class InstanceRepr(AbstractInstanceRepr):
                                     value, name))
                             continue
                         llattrvalue = r.convert_desc_or_const(attrvalue)
+                    else:
+                        llattrvalue = r.convert_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
         else:
             # OBJECT part
