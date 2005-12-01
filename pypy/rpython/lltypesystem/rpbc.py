@@ -28,10 +28,9 @@ def rtype_is_None(robj1, rnone2, hop, pos=0):
 
 class MultipleFrozenPBCRepr(MultiplePBCRepr):
     """Representation selected for multiple non-callable pre-built constants."""
-    def __init__(self, rtyper, frozendescs):
+    def __init__(self, rtyper, access_set):
         self.rtyper = rtyper
-        self.descs = frozendescs
-        self.access_set = frozendescs[0].queryattrfamily()
+        self.access_set = access_set
         self.pbc_type = ForwardReference()
         self.lowleveltype = Ptr(self.pbc_type)
         self.pbc_cache = {}
@@ -52,8 +51,9 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
         self.llfieldmap = llfieldmap
 
     def convert_desc(self, frozendesc):
-        if self.access_set is not None and frozendesc not in self.descs:
-            raise TyperError("not found in PBC set: %r" % (frozendesc,))
+        if (self.access_set is not None and
+            frozendesc not in self.access_set.descs):
+            raise TyperError("not found in PBC access set: %r" % (frozendesc,))
         try:
             return self.pbc_cache[frozendesc]
         except KeyError:

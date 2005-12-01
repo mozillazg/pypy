@@ -150,7 +150,6 @@ class ClassDef:
     def add_source_for_attribute(self, attr, source):
         """Adds information about a constant source for an attribute.
         """
-        sources = self.attr_sources.setdefault(attr, [])
         for cdef in self.getmro():
             if attr in cdef.attrs:
                 # the Attribute() exists already for this class (or a parent)
@@ -165,6 +164,7 @@ class ClassDef:
                 return
         else:
             # remember the source in self.attr_sources
+            sources = self.attr_sources.setdefault(attr, [])
             sources.append(source)
             # register the source in any Attribute found in subclasses,
             # to restore invariant (III)
