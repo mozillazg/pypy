@@ -377,15 +377,8 @@ class Bookkeeper:
             if frozen:
                 result = SomePBC([self.getdesc(x)])
             else:
-                clsdef = self.getuniqueclassdef(x.__class__)
-                if x not in self.seen_mutable: # avoid circular reflowing, 
-                                               # see for example test_circular_mutable_getattr
-                    self.seen_mutable[x] = True
-                    self.event('mutable', x)
-                    source = InstanceSource(self, x)
-                    for attr in x.__dict__:
-                        clsdef.add_source_for_attribute(attr, source) # can trigger reflowing
-                result = SomeInstance(clsdef)
+                self.see_mutable(x)
+                result = SomeInstance(self.getuniqueclassdef(x.__class__))
         elif x is None:
             return s_None
         else:
@@ -420,6 +413,7 @@ class Bookkeeper:
                         self.getdesc(pyobj.im_self))            # frozendesc
                 else: # regular method
                     origincls, name = origin_of_meth(pyobj)
+                    self.see_mutable(pyobj.im_self)
                     result = self.getmethoddesc(
                         self.getdesc(pyobj.im_func),            # funcdesc
                         self.getuniqueclassdef(origincls),      # originclassdef
@@ -448,6 +442,16 @@ class Bookkeeper:
                                             selfclassdef, name)
             self.methoddescs[key] = result
             return result
+
+    def see_mutable(self, x):
+        if x in self.seen_mutable:
+            return
+        clsdef = self.getuniqueclassdef(x.__class__)        
+        self.seen_mutable[x] = True
+        self.event('mutable', x)
+        source = InstanceSource(self, x)
+        for attr in x.__dict__:
+            clsdef.add_source_for_attribute(attr, source) # can trigger reflowing
 
     def valueoftype(self, t):
         """The most precise SomeValue instance that contains all
