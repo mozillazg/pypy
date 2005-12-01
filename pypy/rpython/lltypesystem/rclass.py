@@ -200,8 +200,10 @@ class ClassRepr(AbstractClassRepr):
                 value = rsubcls.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
                     assign(mangled_name, value)
-            # extra PBC attributes  # xxx couldn't they be implemented as regular readonyla attrs?
+            # extra PBC attributes
             for (access_set, attr), (mangled_name, r) in self.pbcfields.items():
+                if rsubcls.classdef.classdesc not in access_set.descs:
+                    continue   # only for the classes in the same pbc access set
                 if r.lowleveltype is Void:
                     continue
                 attrvalue = rsubcls.classdef.classdesc.read_attribute(attr, None)
