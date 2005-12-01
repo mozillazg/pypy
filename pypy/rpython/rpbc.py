@@ -308,7 +308,8 @@ def getFrozenPBCRepr(rtyper, s_pbc):
         try:
             return rtyper.pbc_reprs[access]
         except KeyError:
-            result = rtyper.type_system.rpbc.MultipleFrozenPBCRepr(rtyper, descs)
+            result = rtyper.type_system.rpbc.MultipleFrozenPBCRepr(rtyper,
+                                                                   access)
             rtyper.pbc_reprs[access] = result
             rtyper.add_pendingsetup(result) 
             return result
