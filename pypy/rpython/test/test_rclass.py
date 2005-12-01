@@ -342,12 +342,13 @@ def test_getattr_on_classes():
     class C(B):
         def meth(self):
             return self.value - 1
-    def f(i):
+    def pick_class(i):
         if i > 0:
-            cls = A
+            return A
         else:
-            cls = C
-        meth = cls.meth
+            return C
+    def f(i):
+        meth = pick_class(i).meth
         x = C()
         x.value = 12
         return meth(x)   # calls A.meth or C.meth, completely ignores B.meth
