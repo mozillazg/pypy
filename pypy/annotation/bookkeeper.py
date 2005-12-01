@@ -414,10 +414,15 @@ class Bookkeeper:
                 else: # regular method
                     origincls, name = origin_of_meth(pyobj)
                     self.see_mutable(pyobj.im_self)
+                    assert pyobj == getattr(pyobj.im_self, name), (
+                        "%r is not %s.%s ??" % (pyobj, pyobj.im_self, name))
+                    # emulate a getattr to make sure it's on the classdef
+                    classdef = self.getuniqueclassdef(pyobj.im_class)
+                    classdef.find_attribute(name)
                     result = self.getmethoddesc(
                         self.getdesc(pyobj.im_func),            # funcdesc
                         self.getuniqueclassdef(origincls),      # originclassdef
-                        self.getuniqueclassdef(pyobj.im_class), # selfclassdef
+                        classdef,                               # selfclassdef
                         name)
             else:
                 # must be a frozen pre-built constant, but let's check
