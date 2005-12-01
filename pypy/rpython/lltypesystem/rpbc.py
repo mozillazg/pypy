@@ -83,7 +83,9 @@ class MultipleFrozenPBCRepr(MultiplePBCRepr):
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         vpbc, vattr = hop.inputargs(self, Void)
-        return self.getfield(vpbc, attr, hop.llops)
+        v_res = self.getfield(vpbc, attr, hop.llops)
+        mangled_name, r_res = self.llfieldmap[attr]
+        return hop.llops.convertvar(v_res, r_res, hop.r_result)
 
     def getfield(self, vpbc, attr, llops):
         mangled_name, r_value = self.llfieldmap[attr]
@@ -128,17 +130,17 @@ class MethodOfFrozenPBCRepr(Repr):
             raise TyperError("unsupported: variable of type "
                              "method-of-frozen-PBC or None")
 
-        im_selves = {}
+        im_selves = []
         for desc in s_pbc.descriptions:
             assert desc.funcdesc is self.funcdesc
-            im_selves[desc.frozendesc] = True
+            im_selves.append(desc.frozendesc)
             
         self.s_im_self = annmodel.SomePBC(im_selves)
         self.r_im_self = rtyper.getrepr(self.s_im_self)
         self.lowleveltype = self.r_im_self.lowleveltype
 
     def get_s_callable(self):
-        return annmodel.SomePBC({self.funcdesc: True})
+        return annmodel.SomePBC([self.funcdesc])
 
     def get_r_implfunc(self):
         r_func = self.rtyper.getrepr(self.get_s_callable())
@@ -284,24 +286,6 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
             # now hop2 looks like simple_call(initfunc, instance, args...)
             hop2.dispatch()
         return v_instance
-
-
-class __extend__(pairtype(ClassesPBCRepr, rclass.AbstractClassRepr)):
-    def convert_from_to((r_clspbc, r_cls), v, llops):
-        if r_cls.lowleveltype != r_clspbc.lowleveltype:
-            return NotImplemented   # good enough for now
-        return v
-
-class __extend__(pairtype(ClassesPBCRepr, ClassesPBCRepr)):
-    def convert_from_to((r_clspbc1, r_clspbc2), v, llops):
-        # this check makes sense because both source and dest repr are ClassesPBCRepr
-        if r_clspbc1.lowleveltype == r_clspbc2.lowleveltype:
-            return v
-        if r_clspbc1.lowleveltype is Void:
-            return inputconst(r_clspbc2, r_clspbc1.s_pbc.const)
-        return NotImplemented
-            
-
 
 # ____________________________________________________________
 

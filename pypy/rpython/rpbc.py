@@ -413,19 +413,28 @@ class AbstractClassesPBCRepr(Repr):
             return hop.inputconst(hop.r_result, hop.s_result.const)
         else:
             attr = hop.args_s[1].const
-            vcls, vattr = hop.inputargs(self, Void)
-            return self.getfield(vcls, attr, hop.llops)
-
-    def getfield(self, vcls, attr, llops):
-        access_set = self.get_access_set()
-        class_repr = self.get_class_repr()
-        return class_repr.getpbcfield(vcls, access_set, attr, llops)
+            access_set = self.get_access_set()
+            class_repr = self.get_class_repr()
+            vcls, vattr = hop.inputargs(class_repr, Void)
+            v_res = class_repr.getpbcfield(vcls, access_set, attr, hop.llops)
+            s_res = access_set.attrs[attr]
+            r_res = self.rtyper.getrepr(s_res)
+            return hop.llops.convertvar(v_res, r_res, hop.r_result)
 
 class __extend__(pairtype(AbstractClassesPBCRepr, rclass.AbstractClassRepr)):
     def convert_from_to((r_clspbc, r_cls), v, llops):
-        if r_cls.lowleveltype != r_clspbc.lowleveltype:
-            return NotImplemented   # good enough for now
-        return v
+        # turn a PBC of classes to a standard pointer-to-vtable class repr
+        if r_clspbc.lowleveltype == r_cls.lowleveltype:
+            return v
+        if r_clspbc.lowleveltype is Void:
+            return inputconst(r_cls, r_clspbc.s_pbc.const)
+        # convert from ptr-to-object-vtable to ptr-to-more-precise-vtable
+        # but first check if it is safe
+        assert (r_clspbc.lowleveltype ==
+            r_clspbc.rtyper.type_system.rclass.CLASSTYPE)
+        if not r_clspbc.get_class_repr().classdef.issubclass(r_cls.classdef):
+            return NotImplemented
+        return r_cls.fromtypeptr(v, llops)
 
 class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):
     def convert_from_to((r_clspbc1, r_clspbc2), v, llops):

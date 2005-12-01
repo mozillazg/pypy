@@ -1112,3 +1112,60 @@ def test_function_or_none():
     assert res == 184
     res = interpret(f, [3, 100])
     assert res == -1
+
+def test_pbc_getattr_conversion():
+    fr1 = Freezing()
+    fr2 = Freezing()
+    fr3 = Freezing()
+    fr1.value = 10
+    fr2.value = 5
+    fr3.value = 2.5
+    def pick12(i):
+        if i > 0:
+            return fr1
+        else:
+            return fr2
+    def pick23(i):
+        if i > 5:
+            return fr2
+        else:
+            return fr3
+    def f(i):
+        x = pick12(i)
+        y = pick23(i)
+        return x.value, y.value
+    for i in [0, 5, 10]:
+        res = interpret(f, [i])
+        assert type(res.item0) is int   # precise
+        assert type(res.item1) is float
+        assert res.item0 == f(i)[0]
+        assert res.item1 == f(i)[1]
+
+def test_pbc_getattr_conversion_with_classes():
+    class base: pass
+    class fr1(base): pass
+    class fr2(base): pass
+    class fr3(base): pass
+    fr1.value = 10
+    fr2.value = 5
+    fr3.value = 2.5
+    def pick12(i):
+        if i > 0:
+            return fr1
+        else:
+            return fr2
+    def pick23(i):
+        if i > 5:
+            return fr2
+        else:
+            return fr3
+    def f(i):
+        x = pick12(i)
+        y = pick23(i)
+        return x.value, y.value
+    for i in [0, 5, 10]:
+        res = interpret(f, [i])
+        assert type(res.item0) is int   # precise
+        assert type(res.item1) is float
+        assert res.item0 == f(i)[0]
+        assert res.item1 == f(i)[1]
