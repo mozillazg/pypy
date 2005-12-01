@@ -333,6 +333,13 @@ def mangle(prefix, name):
     else:
         return '%s_%s' % (prefix, name)
 
+class HalfConcreteWrapper:
+    # see rtyper.gendirectcall()
+    def __init__(self, callback):
+        self.concretize = callback   # should produce a concrete const
+    def _freeze_(self):
+        return True
+
 # __________ utilities __________
 PyObjPtr = Ptr(PyObject)
 
