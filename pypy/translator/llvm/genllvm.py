@@ -3,7 +3,8 @@ import time
 from pypy.translator.llvm import build_llvm_module
 from pypy.translator.llvm.database import Database 
 from pypy.translator.llvm.pyxwrapper import write_pyx_wrapper 
-from pypy.rpython.rmodel import inputconst, getfunctionptr
+from pypy.rpython.rmodel import inputconst
+from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.translator.llvm.codewriter import CodeWriter
@@ -161,7 +162,8 @@ class GenLLVM(object):
             func = self.translator.entrypoint
         self.entrypoint = func
 
-        ptr = getfunctionptr(self.translator, func)
+        bk = self.translator.annotator.bookkeeper
+        ptr = getfunctionptr(bk.getdesc(func).cachedgraph(None))
         c = inputconst(lltype.typeOf(ptr), ptr)
         self.db.prepare_arg_value(c)
         self.entry_func_name = func.func_name
