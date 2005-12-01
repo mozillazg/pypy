@@ -7,7 +7,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, Bool, nullptr, frozendict
 from pypy.rpython.error import TyperError
-from pypy.rpython.rmodel import Repr, inputconst
+from pypy.rpython.rmodel import Repr, inputconst, HalfConcreteWrapper
 from pypy.rpython import rclass
 from pypy.rpython import robject
 
@@ -202,7 +202,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
     def convert_desc(self, funcdesc):
         # get the whole "column" of the call table corresponding to this desc
         if self.lowleveltype is Void:
-            return funcdesc.pyobj
+            return HalfConcreteWrapper(self.get_unique_llfn)
         llfns = {}
         found_anything = False
         for row in self.uniquerows:
@@ -225,7 +225,7 @@ class FunctionsPBCRepr(MultiplePBCRepr):
         if isinstance(value, types.MethodType) and value.im_self is None:
             value = value.im_func   # unbound method -> bare function
         if self.lowleveltype is Void:
-            return value
+            return HalfConcreteWrapper(self.get_unique_llfn)
         if value is None:
             null = self.rtyper.type_system.null_callable(self.lowleveltype)
             return null
@@ -249,6 +249,30 @@ class FunctionsPBCRepr(MultiplePBCRepr):
             return v
         else:
             XXX_later
+
+    def get_unique_llfn(self):
+        # try to build a unique low-level function.  Avoid to use
+        # whenever possible!  Doesn't work with specialization, multiple
+        # different call sites, etc.
+        if self.lowleveltype is not Void:
+            raise TyperError("cannot pass multiple functions here")
+        assert len(self.s_pbc.descriptions) == 1
+                                  # lowleveltype wouldn't be Void otherwise
+        funcdesc, = self.s_pbc.descriptions
+        if len(self.callfamily.calltables) != 1:
+            raise TyperError("cannot pass a function with various call shapes")
+        table, = self.callfamily.calltables.values()
+        graphs = []
+        for row in table:
+            if funcdesc in row:
+                graphs.append(row[funcdesc])
+        if not graphs:
+            raise TyperError("cannot pass here a function that is not called")
+        graph = graphs[0]
+        if graphs != [graph]*len(graphs):
+            raise TyperError("cannot pass a specialized function here")
+        llfn = self.rtyper.getcallable(graph)
+        return inputconst(typeOf(llfn), llfn)
 
     def rtype_simple_call(self, hop):
         return self.call('simple_call', hop)
