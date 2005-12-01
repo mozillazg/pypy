@@ -48,7 +48,7 @@ class GenLLVM(object):
 
         self.source_generated = False
 
-    def gen_llvm_source(self, func=None):
+    def gen_llvm_source(self, func):
         self._checkpoint()
 
         codewriter = self.setup(func)
@@ -158,8 +158,7 @@ class GenLLVM(object):
         codewriter.comment("End of file")
     
     def get_entry_point(self, func):
-        if func is None:
-            func = self.translator.entrypoint
+        assert func is not None
         self.entrypoint = func
 
         bk = self.translator.annotator.bookkeeper
