@@ -356,3 +356,14 @@ def test_getattr_on_classes():
     assert res == 54
     res = interpret(f, [0])
     assert res == 11
+
+def test_constant_bound_method():
+    class C:
+        value = 1
+        def meth(self):
+            return self.value
+    meth = C().meth
+    def f():
+        return meth()
+    res = interpret(f, [])
+    assert res == 1
