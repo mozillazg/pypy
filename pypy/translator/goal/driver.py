@@ -262,10 +262,12 @@ class TranslationDriver(SimpleTaskEngine):
         py.log.setconsumer("llinterp operation", None)
         
         translator = self.translator
-        interp = LLInterpreter(translator.flowgraphs, translator.rtyper)
-        v = interp.eval_function(translator.entrypoint,
-                                 self.extra.get('get_llinterp_args',
-                                                lambda: [])())
+        interp = LLInterpreter(translator.rtyper)
+        bk = translator.annotator.bookkeeper
+        graph = bk.getdesc(self.entry_point).cachedgraph(None)
+        v = interp.eval_graph(graph,
+                              self.extra.get('get_llinterp_args',
+                                             lambda: [])())
 
         log.llinterpret.event("result -> %s" % v)
     #
