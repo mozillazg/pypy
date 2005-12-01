@@ -223,18 +223,21 @@ class TranslationDriver(SimpleTaskEngine):
     #
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 
+    def create_exe(self):
+        import shutil
+        exename = mkexename(self.c_entryp)
+        newexename = mkexename('./pypy-%s' % self.options.backend)
+        shutil.copy(exename, newexename)
+        self.c_entryp = newexename
+        self.log.info("created: %s" % (self.c_entryp,))
+
     def task_compile_c(self): # xxx messy
         cbuilder = self.cbuilder
         cbuilder.compile()
-
+        
         if self.standalone:
-            c_entryp = cbuilder.executable_name
-            import shutil
-            exename = mkexename(c_entryp)
-            newexename = mkexename('./'+'pypy-c')
-            shutil.copy(exename, newexename)
-            self.c_entryp = newexename
-            self.log.info("created: %s" % (self.c_entryp,))
+            self.c_entryp = cbuilder.executable_name
+            self.create_exe()
         else:
             cbuilder.import_module()    
             self.c_entryp = cbuilder.get_entry_point()
@@ -275,33 +278,32 @@ class TranslationDriver(SimpleTaskEngine):
                                ['?backendopt', 'rtype'], 
                                "LLInterpreting")
 
-    def task_source_llvm(self): # xxx messy
+    def task_source_llvm(self):
         translator = self.translator
         opts = self.options
         if translator.annotator is None:
-            raise ValueError, "function has to be annotated."
+            raise ValueError, "llvm requires annotation."
+
         from pypy.translator.llvm import genllvm
-        self.llvmgen = genllvm.GenLLVM(translator, 
-                                       genllvm.GcPolicy.new(opts.gc), 
-                                       genllvm.ExceptionPolicy.new(None))
-        self.llvm_filename = self.llvmgen.gen_llvm_source()
-        self.log.info("written: %s" % (self.llvm_filename,))
+
+        # XXX Need more options for policies/llvm-backendoptions here?
+        self.llvmgen = genllvm.GenLLVM(translator, self.options.gc,
+                                       None, self.standalone)
+
+        llvm_filename = self.llvmgen.gen_llvm_source(self.entry_point)
+        self.log.info("written: %s" % (llvm_filename,))
     #
     task_source_llvm = taskdef(task_source_llvm, 
                                ['backendopt', 'rtype'], 
                                "Generating llvm source")
 
-    def task_compile_llvm(self): # xxx messy
-        self.c_entryp = self.llvmgen.create_module(self.llvm_filename,
-                                                   standalone=self.standalone,
-                                                   exe_name = 'pypy-llvm')
+    def task_compile_llvm(self):
+        gen = self.llvmgen
         if self.standalone:
-            import shutil
-            exename = mkexename(self.c_entryp)
-            newexename = mkexename('./pypy-llvm')
-            shutil.copy(exename, newexename)
-            self.c_entryp = newexename
-            self.log.info("created: %s" % (self.c_entryp,))
+            self.c_entryp = gen.compile_llvm_source(exe_name='pypy-llvm')
+            self.create_exe()
+        else:
+            self.c_entryp = gen.compile_llvm_source(return_fn=True)
     #
     task_compile_llvm = taskdef(task_compile_llvm, 
                                 ['source_llvm'], 
