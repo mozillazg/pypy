@@ -411,7 +411,11 @@ class LLFrame(object):
     def op_cast_float_to_int(self, f):
         assert type(f) is float
         return ovfcheck(int(f))
-    
+
+    def op_cast_float_to_uint(self, f):
+        assert type(f) is float
+        return r_uint(int(f))
+
     def op_cast_char_to_int(self, b):
         assert type(b) is str and len(b) == 1
         return ord(b)
