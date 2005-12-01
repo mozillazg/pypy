@@ -1871,6 +1871,19 @@ class TestAnnotateTestCase:
         assert s.items[0].knowntype == int
         assert s.items[1].knowntype == str
 
+    def test_constant_bound_method(self):
+        class C:
+            def __init__(self, value):
+                self.value = value
+            def meth(self):
+                return self.value
+        meth = C(1).meth
+        def f():
+            return meth()
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert s.knowntype == int
+
 def g(n):
     return [0,1,2,n]
 
