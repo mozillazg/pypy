@@ -500,11 +500,12 @@ class Bookkeeper:
         attrfamily.read_locations[position] = True
 
         actuals = []
-        for desc in attrfamily.descs:
+        for desc in descs:
             actuals.append(desc.s_read_attribute(attr))
         s_result = unionof(*actuals)
 
-        attrfamily.attrs[attr] = s_result
+        attrfamily.attrs[attr] = unionof(s_result,
+            attrfamily.attrs.get(attr, s_ImpossibleValue))
 
         if change:
             for position in attrfamily.read_locations:
