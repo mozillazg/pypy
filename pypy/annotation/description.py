@@ -145,10 +145,6 @@ class FunctionDesc(Desc):
             signature = cpython_code_signature(pyobj.func_code)
         if defaults is None:
             defaults = pyobj.func_defaults
-        if specializer is None:
-            tag = getattr(pyobj, '_annspecialcase_', None)
-            policy = bookkeeper.annotator.policy
-            specializer = policy.get_specializer(tag)
         self.name = name
         self.signature = signature
         self.defaults = defaults or ()
@@ -194,6 +190,12 @@ class FunctionDesc(Desc):
         return inputcells
 
     def specialize(self, inputcells):
+        if self.specializer is None:
+            # get the specializer based on the tag of the 'pyobj'
+            # (if any), according to the current policy
+            tag = getattr(self.pyobj, '_annspecialcase_', None)
+            policy = self.bookkeeper.annotator.policy
+            self.specializer = policy.get_specializer(tag)
         return self.specializer(self, inputcells)
 
     def pycall(self, schedule, args, s_previous_result):
