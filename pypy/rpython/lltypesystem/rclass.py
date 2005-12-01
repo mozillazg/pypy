@@ -219,6 +219,7 @@ class ClassRepr(AbstractClassRepr):
 
     def fromtypeptr(self, vcls, llops):
         """Return the type pointer cast to self's vtable type."""
+        self.setup()
         castable(self.lowleveltype, vcls.concretetype) # sanity check
         return llops.genop('cast_pointer', [vcls],
                            resulttype=self.lowleveltype)
