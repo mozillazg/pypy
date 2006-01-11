@@ -4,8 +4,104 @@ Arguments objects.
 
 from pypy.interpreter.error import OperationError
 
+class AbstractArguments:
+    def frompacked(space, w_args=None, w_kwds=None):
+        """Convenience static method to build an Arguments
+           from a wrapped sequence and a wrapped dictionary."""
+        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
+    frompacked = staticmethod(frompacked)
 
-class Arguments:
+    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
+        args_w = data_w[:shape_cnt]
+        p = shape_cnt
+        kwds_w = {}
+        for i in range(len(shape_keys)):
+            kwds_w[shape_keys[i]] = data_w[p]
+            p += 1
+        if shape_star:
+            w_star = data_w[p]
+            p += 1
+        else:
+            w_star = None
+        if shape_stst:
+            w_starstar = data_w[p]
+            p += 1
+        else:
+            w_starstar = None
+        return Arguments(space, args_w, kwds_w, w_star, w_starstar)
+    fromshape = staticmethod(fromshape)
+
+    def prepend(self, w_firstarg):
+        "Return a new Arguments with a new argument inserted first."
+        return ArgumentsPrepended(self, w_firstarg)
+    
+
+class ArgumentsPrepended(AbstractArguments):
+    def __init__(self, args, w_firstarg):
+        self.args = args
+        self.w_firstarg = w_firstarg
+        
+    def firstarg(self):
+        "Return the first argument for inspection."
+        return self.w_firstarg
+
+    def __repr__(self):
+        return 'ArgumentsPrepended(%r, %r)' % (self.args, self.w_firstarg)
+
+    def has_keywords(self):
+        return self.args.has_keywords()
+
+    def unpack(self):
+        arguments_w, kwds_w = self.args.unpack()
+        return ([self.w_firstarg] + arguments_w), kwds_w
+
+    def fixedunpack(self, argcount):
+        if argcount <= 0:
+            raise ValueError, "too many arguments (%d expected)" % argcount # XXX: Incorrect
+        return [self.w_firstarg] + self.args.fixedunpack(argcount - 1)
+        
+    def _rawshape(self, nextra=0):
+        return self.args._rawshape(nextra + 1)
+
+    def _unpack_stararg(self):
+        self.args._unpack_stararg()
+        
+    def parse(self, fnname, signature, defaults_w=[]):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        """
+        self._unpack_stararg()
+        try:
+            return self.match_signature(signature, defaults_w)
+        except ArgErr, e:
+            raise OperationError(self.args.space.w_TypeError,
+                                 self.args.space.wrap(e.getmsg(self, fnname)))
+
+    def match_signature(self, signature, defaults_w=[]):
+        """Parse args and kwargs according to the signature of a code object,
+        or raise an ArgErr in case of failure.
+        """
+        argnames, varargname, kwargname = signature
+        scope_w = self.args.match_signature((argnames[1:], varargname, kwargname), defaults_w)
+        if len(argnames) == 0:
+            if varargname is None:
+                raise ArgErrCount(signature, defaults_w, 0)
+            space = self.args.space
+            if kwargname is not None:
+                scope_w[-2] = space.newtuple([self.w_firstarg] + space.unpackiterable(scope_w[-2]))
+            else:
+                scope_w[-1] = space.newtuple([self.w_firstarg] + space.unpackiterable(scope_w[-1]))
+        else:
+            scope_w.insert(0, self.w_firstarg)
+        return scope_w
+    
+    def flatten(self):
+        (shape_cnt, shape_keys, shape_star, shape_stst), data_w = self.args.flatten()
+        data_w.insert(0, self.w_firstarg)
+        return (shape_cnt + 1, shape_keys, shape_star, shape_stst), data_w
+
+        
+class Arguments(AbstractArguments):
     """
     Collects the arguments of a function call.
     
@@ -23,12 +119,6 @@ class Arguments:
         self.kwds_w = kwds_w
         self.w_stararg = w_stararg
         self.w_starstararg = w_starstararg
-
-    def frompacked(space, w_args=None, w_kwds=None):
-        """Convenience static method to build an Arguments
-           from a wrapped sequence and a wrapped dictionary."""
-        return Arguments(space, [], w_stararg=w_args, w_starstararg=w_kwds)
-    frompacked = staticmethod(frompacked)
 
     def __repr__(self):
         if self.w_starstararg is not None:
@@ -84,13 +174,6 @@ class Arguments:
             self.w_starstararg = None
         return self.arguments_w, self.kwds_w
 
-    def prepend(self, w_firstarg):
-        "Return a new Arguments with a new argument inserted first."
-        args =  Arguments(self.space, [w_firstarg] + self.arguments_w,
-                          self.kwds_w, self.w_stararg, self.w_starstararg)
-        args.blind_arguments = self.blind_arguments + 1
-        return args
-
     def has_keywords(self):
         return bool(self.kwds_w) or (self.w_starstararg is not None and
                                      self.space.is_true(self.w_starstararg))
@@ -126,10 +209,7 @@ class Arguments:
 
     ###  Parsing for function calls  ###
 
-    def parse(self, fnname, signature, defaults_w=[]):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
+    def _unpack_stararg(self):
         space = self.space
         # If w_stararg is not exactly a tuple, unpack it now:
         # self.match_signature() assumes that it can use it directly for
@@ -137,11 +217,17 @@ class Arguments:
         if self.w_stararg is not None:
             if not space.is_w(space.type(self.w_stararg), space.w_tuple):
                 self.unpack()
+
+    def parse(self, fnname, signature, defaults_w=[]):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        """
+        self._unpack_stararg()
         try:
             return self.match_signature(signature, defaults_w)
         except ArgErr, e:
-            raise OperationError(space.w_TypeError,
-                                 space.wrap(e.getmsg(self, fnname)))
+            raise OperationError(self.space.w_TypeError,
+                                 self.space.wrap(e.getmsg(self, fnname)))
 
     def match_signature(self, signature, defaults_w=[]):
         """Parse args and kwargs according to the signature of a code object,
@@ -252,26 +338,6 @@ class Arguments:
         if shape_stst:
             data_w.append(self.w_starstararg)
         return (shape_cnt, shape_keys, shape_star, shape_stst), data_w
-
-    def fromshape(space, (shape_cnt,shape_keys,shape_star,shape_stst), data_w):
-        args_w = data_w[:shape_cnt]
-        p = shape_cnt
-        kwds_w = {}
-        for i in range(len(shape_keys)):
-            kwds_w[shape_keys[i]] = data_w[p]
-            p += 1
-        if shape_star:
-            w_star = data_w[p]
-            p += 1
-        else:
-            w_star = None
-        if shape_stst:
-            w_starstar = data_w[p]
-            p += 1
-        else:
-            w_starstar = None
-        return Arguments(space, args_w, kwds_w, w_star, w_starstar)
-    fromshape = staticmethod(fromshape)
 
 def rawshape(args, nextra=0):
     return args._rawshape(nextra)
