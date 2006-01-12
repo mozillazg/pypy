@@ -35,7 +35,6 @@ class AbstractArguments:
         "Return a new Arguments with a new argument inserted first."
         return ArgumentsPrepended(self, w_firstarg)
     
-
 class ArgumentsPrepended(AbstractArguments):
     def __init__(self, args, w_firstarg):
         self.args = args
@@ -63,29 +62,30 @@ class ArgumentsPrepended(AbstractArguments):
     def _rawshape(self, nextra=0):
         return self.args._rawshape(nextra + 1)
 
-    def _unpack_stararg(self):
-        self.args._unpack_stararg()
-        
     def parse(self, fnname, signature, defaults_w=[]):
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
-        self._unpack_stararg()
         try:
             return self.match_signature(signature, defaults_w)
         except ArgErr, e:
             raise OperationError(self.args.space.w_TypeError,
-                                 self.args.space.wrap(e.getmsg(self, fnname)))
+                                 self.args.space.wrap(e.getmsg(fnname)))
 
     def match_signature(self, signature, defaults_w=[]):
         """Parse args and kwargs according to the signature of a code object,
         or raise an ArgErr in case of failure.
         """
         argnames, varargname, kwargname = signature
-        scope_w = self.args.match_signature((argnames[1:], varargname, kwargname), defaults_w)
+        try:
+            scope_w = self.args.match_signature((argnames[1:], varargname, kwargname), defaults_w)
+        except ArgErrCount, e:
+            e.num_args += 1 # Add our first arg
+            raise
+        
         if len(argnames) == 0:
             if varargname is None:
-                raise ArgErrCount(signature, defaults_w, 0)
+                raise ArgErrCount(self, signature, defaults_w, 0)
             space = self.args.space
             if kwargname is not None:
                 scope_w[-2] = space.newtuple([self.w_firstarg] + space.unpackiterable(scope_w[-2]))
@@ -100,7 +100,12 @@ class ArgumentsPrepended(AbstractArguments):
         data_w.insert(0, self.w_firstarg)
         return (shape_cnt + 1, shape_keys, shape_star, shape_stst), data_w
 
-        
+    def num_args(self):
+        return self.args.num_args() + 1
+
+    def num_kwds(self):
+        return self.args.num_kwds()
+    
 class Arguments(AbstractArguments):
     """
     Collects the arguments of a function call.
@@ -120,6 +125,14 @@ class Arguments(AbstractArguments):
         self.w_stararg = w_stararg
         self.w_starstararg = w_starstararg
 
+    def num_args(self):
+        self._unpack()
+        return len(self.arguments_w)
+
+    def num_kwds(self):
+        self._unpack()
+        return len(self.kwds_w)
+        
     def __repr__(self):
         if self.w_starstararg is not None:
             return 'Arguments(%s, %s, %s, %s)' % (self.arguments_w,
@@ -140,6 +153,11 @@ class Arguments(AbstractArguments):
 
     def unpack(self):
         "Return a ([w1,w2...], {'kw':w3...}) pair."
+        self._unpack()
+        return self.arguments_w, self.kwds_w
+
+    def _unpack(self):
+        "unpack the *arg and **kwd into w_arguments and kwds_w"
         # --- unpack the * argument now ---
         if self.w_stararg is not None:
             self.arguments_w += self.space.unpackiterable(self.w_stararg)
@@ -172,7 +190,6 @@ class Arguments(AbstractArguments):
                 d[key] = space.getitem(w_starstararg, w_key)
             self.kwds_w = d
             self.w_starstararg = None
-        return self.arguments_w, self.kwds_w
 
     def has_keywords(self):
         return bool(self.kwds_w) or (self.w_starstararg is not None and
@@ -209,25 +226,16 @@ class Arguments(AbstractArguments):
 
     ###  Parsing for function calls  ###
 
-    def _unpack_stararg(self):
-        space = self.space
-        # If w_stararg is not exactly a tuple, unpack it now:
-        # self.match_signature() assumes that it can use it directly for
-        # a matching *arg in the callee's signature.
-        if self.w_stararg is not None:
-            if not space.is_w(space.type(self.w_stararg), space.w_tuple):
-                self.unpack()
-
     def parse(self, fnname, signature, defaults_w=[]):
         """Parse args and kwargs to initialize a frame
         according to the signature of code object.
         """
-        self._unpack_stararg()
         try:
             return self.match_signature(signature, defaults_w)
         except ArgErr, e:
             raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(self, fnname)))
+                                 self.space.wrap(e.getmsg(fnname)))
+
 
     def match_signature(self, signature, defaults_w=[]):
         """Parse args and kwargs according to the signature of a code object,
@@ -244,13 +252,16 @@ class Arguments(AbstractArguments):
         if self.w_stararg is not None:
             # There is a case where we don't have to unpack() a w_stararg:
             # if it matches exactly a *arg in the signature.
-            if len(self.arguments_w) == co_argcount and varargname is not None:
+            if (len(self.arguments_w) == co_argcount and
+                varargname is not None and
+                self.space.is_w(self.space.type(self.w_stararg),
+                                self.space.w_tuple)):
                 pass
             else:
-                self.unpack()   # sets self.w_stararg to None
+                self._unpack()   # sets self.w_stararg to None
         # always unpack the ** arguments
         if self.w_starstararg is not None:
-            self.unpack()
+            self._unpack()
 
         args_w = self.arguments_w
         kwds_w = self.kwds_w
@@ -301,7 +312,7 @@ class Arguments(AbstractArguments):
             else:      # shortcut for the non-unpack() case above
                 scope_w.append(self.w_stararg)
         elif len(args_w) > co_argcount:
-            raise ArgErrCount(signature, defaults_w, 0)
+            raise ArgErrCount(self, signature, defaults_w, 0)
 
         # collect extra keyword arguments into the **kwarg
         if kwargname is not None:
@@ -314,7 +325,7 @@ class Arguments(AbstractArguments):
             raise ArgErrUnknownKwds(remainingkwds_w)
 
         if missing:
-            raise ArgErrCount(signature, defaults_w, missing)
+            raise ArgErrCount(self, signature, defaults_w, missing)
         return scope_w
 
     ### Argument <-> list of w_objects together with "shape" information
@@ -350,29 +361,32 @@ def rawshape(args, nextra=0):
 
 class ArgErr(Exception):
     
-    def getmsg(self, args, fnname):
+    def getmsg(self, fnname):
         raise NotImplementedError
 
 class ArgErrCount(ArgErr):
 
-    def __init__(self, signature, defaults_w, missing_args):
+    def __init__(self, args, signature, defaults_w, missing_args):
         self.signature    = signature
         self.defaults_w   = defaults_w
         self.missing_args = missing_args
-
-    def getmsg(self, args, fnname):
+        self.num_args = args.num_args()
+        self.num_kwds = args.num_kwds()
+        
+    def getmsg(self, fnname):
+        args = None
         argnames, varargname, kwargname = self.signature
-        args_w, kwds_w = args.unpack()
-        if kwargname is not None or (kwds_w and self.defaults_w):
+        #args_w, kwds_w = args.unpack()
+        if kwargname is not None or (self.num_kwds and self.defaults_w):
             msg2 = "non-keyword "
             if self.missing_args:
                 required_args = len(argnames) - len(self.defaults_w)
                 nargs = required_args - self.missing_args
             else:
-                nargs = len(args_w)
+                nargs = self.num_args
         else:
             msg2 = ""
-            nargs = len(args_w) + len(kwds_w)
+            nargs = self.num_args + self.num_kwds
         n = len(argnames)
         if n == 0:
             msg = "%s() takes no %sargument (%d given)" % (
@@ -388,7 +402,7 @@ class ArgErrCount(ArgErr):
             else:
                 msg1 = "at least"
                 n -= defcount
-                if not kwds_w:  # msg "f() takes at least X non-keyword args"
+                if not self.num_kwds:  # msg "f() takes at least X non-keyword args"
                     msg2 = ""   # is confusing if no kwd arg actually provided
             if n == 1:
                 plural = ""
@@ -408,7 +422,7 @@ class ArgErrMultipleValues(ArgErr):
     def __init__(self, argname):
         self.argname = argname
 
-    def getmsg(self, args, fnname):
+    def getmsg(self, fnname):
         msg = "%s() got multiple values for keyword argument '%s'" % (
             fnname,
             self.argname)
@@ -417,16 +431,18 @@ class ArgErrMultipleValues(ArgErr):
 class ArgErrUnknownKwds(ArgErr):
 
     def __init__(self, kwds_w):
-        self.kwds_w = kwds_w
+        self.kwd_name = ''
+        self.num_kwds = len(kwds_w)
+        if self.num_kwds == 1:
+            self.kwd_name = kwds_w.keys()[0]
 
-    def getmsg(self, args, fnname):
-        kwds_w = self.kwds_w
-        if len(kwds_w) == 1:
+    def getmsg(self, fnname):
+        if self.num_kwds == 1:
             msg = "%s() got an unexpected keyword argument '%s'" % (
                 fnname,
-                kwds_w.keys()[0])
+                self.kwd_name)
         else:
             msg = "%s() got %d unexpected keyword arguments" % (
                 fnname,
-                len(kwds_w))
+                self.num_kwds)
         return msg
