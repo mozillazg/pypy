@@ -5,6 +5,17 @@ Arguments objects.
 from pypy.interpreter.error import OperationError
 
 class AbstractArguments:
+
+    def parse(self, fnname, signature, defaults_w=[]):
+        """Parse args and kwargs to initialize a frame
+        according to the signature of code object.
+        """
+        try:
+            return self.match_signature(signature, defaults_w)
+        except ArgErr, e:
+            raise OperationError(self.space.w_TypeError,
+                                 self.space.wrap(e.getmsg(fnname)))
+
     def frompacked(space, w_args=None, w_kwds=None):
         """Convenience static method to build an Arguments
            from a wrapped sequence and a wrapped dictionary."""
@@ -37,6 +48,7 @@ class AbstractArguments:
     
 class ArgumentsPrepended(AbstractArguments):
     def __init__(self, args, w_firstarg):
+        self.space = args.space
         self.args = args
         self.w_firstarg = w_firstarg
         
@@ -61,16 +73,6 @@ class ArgumentsPrepended(AbstractArguments):
         
     def _rawshape(self, nextra=0):
         return self.args._rawshape(nextra + 1)
-
-    def parse(self, fnname, signature, defaults_w=[]):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
-        try:
-            return self.match_signature(signature, defaults_w)
-        except ArgErr, e:
-            raise OperationError(self.args.space.w_TypeError,
-                                 self.args.space.wrap(e.getmsg(fnname)))
 
     def match_signature(self, signature, defaults_w=[]):
         """Parse args and kwargs according to the signature of a code object,
@@ -106,6 +108,100 @@ class ArgumentsPrepended(AbstractArguments):
     def num_kwds(self):
         return self.args.num_kwds()
     
+class ArgumentsFromValuestack(AbstractArguments):
+    """
+    Collects the arguments of a fuction call as stored on a PyFrame valuestack.
+
+    Only for the case of purely positional arguments, for now.
+    """
+
+    def __init__(self, space, valuestack, nargs=0):
+       self.space = space
+       self.valuestack = valuestack
+       self.nargs = nargs
+
+    def firstarg(self):
+        if self.nargs <= 0:
+            return None
+        return valuestack.top(nargs - 1)
+
+    def __repr__(self):
+        return 'ArgumentsFromValuestack(%r, %r)' % (self.valuestack, self.nargs)
+
+    def has_keywords(self):
+        return False
+
+    def unpack(self):
+        args_w = [None] * self.nargs
+        for i in range(self.nargs):
+            args_w[i] = self.valuestack.top(self.nargs - 1 - i)
+        return args_w, {}
+
+    def fixedunpack(self, argcount):
+        if self.nargs > argcount:
+            raise ValueError, "too many arguments (%d expected)" % argcount
+        elif self.nargs < argcount:
+            raise ValueError, "not enough arguments (%d expected)" % argcount
+        data_w = [None] * self.nargs
+        for i in range(self.nargs):
+            data_w[i] = self.valuestack.top(nargs - 1 - i)
+        return data_w
+
+    def _rawshape(self, nextra=0):
+        return nextra + self.nargs, (), False, False
+
+    def match_signature(self, signature, defaults_w=[]):
+        argnames, varargname, kwargname = signature
+        co_argcount = len(argnames)
+        if self.nargs + len(defaults_w) < co_argcount:
+            raise ArgErrCount(self, signature, defaults_w,
+                              co_argcount - self.nargs - len(defaults_w))
+        if self.nargs > co_argcount and varargname is None:
+            raise ArgErrCount(self, signature, defaults_w, 0)
+
+        scopesize = co_argcount
+        if varargname:
+            scopesize += 1
+        if kwargname:
+            scopesize += 1
+        scope_w = [None] * scopesize
+        if self.nargs >= co_argcount:
+            for i in range(co_argcount):
+                scope_w[i] = self.valuestack.top(self.nargs - 1 - i)
+            if varargname is not None:
+                stararg_w = [None] * (self.nargs - co_argcount)
+                for i in range(co_argcount, self.nargs):
+                    stararg_w[i - co_argcount] = self.valuestack.top(self.nargs - 1 - i)
+                scope_w[co_argcount] = self.space.newtuple(stararg_w)
+                co_argcount += 1
+        else:
+            for i in range(self.nargs):
+                scope_w[i] = self.valuestack.top(self.nargs - 1 - i)
+            ndefaults = len(defaults_w)
+            missing = co_argcount - self.nargs
+            first_default = ndefaults - missing
+            for i in range(missing):
+                scope_w[self.nargs + i] = defaults_w[first_default + i]
+            if varargname is not None:
+                scope_w[co_argcount] = self.space.newtuple([])
+                co_argcount += 1
+
+        if kwargname is not None:
+            scope_w[co_argcount] = self.space.newdict([])
+        return scope_w
+
+    def flatten(self):
+        data_w = [None] * self.nargs
+        for i in range(self.nargs):
+            data_w[i] = self.valuestack.top(nargs - 1 - i)
+        return nextra + self.nargs, (), False, False, data_w
+
+    def num_args(self):
+        return self.nargs
+
+    def num_kwds(self):
+        return 0
+
 class Arguments(AbstractArguments):
     """
     Collects the arguments of a function call.
@@ -225,17 +321,6 @@ class Arguments(AbstractArguments):
             return None
 
     ###  Parsing for function calls  ###
-
-    def parse(self, fnname, signature, defaults_w=[]):
-        """Parse args and kwargs to initialize a frame
-        according to the signature of code object.
-        """
-        try:
-            return self.match_signature(signature, defaults_w)
-        except ArgErr, e:
-            raise OperationError(self.space.w_TypeError,
-                                 self.space.wrap(e.getmsg(fnname)))
-
 
     def match_signature(self, signature, defaults_w=[]):
         """Parse args and kwargs according to the signature of a code object,
