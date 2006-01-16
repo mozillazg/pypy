@@ -123,7 +123,7 @@ class ArgumentsFromValuestack(AbstractArguments):
     def firstarg(self):
         if self.nargs <= 0:
             return None
-        return valuestack.top(nargs - 1)
+        return self.valuestack.top(self.nargs - 1)
 
     def __repr__(self):
         return 'ArgumentsFromValuestack(%r, %r)' % (self.valuestack, self.nargs)

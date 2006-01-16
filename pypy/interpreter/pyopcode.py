@@ -683,8 +683,10 @@ class PyInterpFrame(pyframe.PyFrame):
             nargs = oparg & 0xff
             args = ArgumentsFromValuestack(f.space, f.valuestack, nargs)
             w_function = f.valuestack.top(nargs)
-            w_result = f.space.call_args(w_function, args)
-            f.valuestack.drop(nargs + 1)
+            try:
+                w_result = f.space.call_args(w_function, args)
+            finally:
+                f.valuestack.drop(nargs + 1)
             f.valuestack.push(w_result)
         # XXX end of hack for performance
         else:
