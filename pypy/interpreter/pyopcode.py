@@ -9,7 +9,7 @@ from pypy.interpreter.baseobjspace import UnpackValueError
 from pypy.interpreter import gateway, function, eval
 from pypy.interpreter import pyframe, pytraceback
 from pypy.interpreter.miscutils import InitializedClass
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycode import PyCode
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.objectmodel import we_are_translated
@@ -677,6 +677,14 @@ class PyInterpFrame(pyframe.PyFrame):
             w_arg1 = f.valuestack.pop()
             w_function = f.valuestack.pop()
             w_result = f.space.call_function(w_function, w_arg1, w_arg2, w_arg3)
+            f.valuestack.push(w_result)
+        elif (oparg >> 8) & 0xff == 0:
+            # Only positional arguments
+            nargs = oparg & 0xff
+            args = ArgumentsFromValuestack(f.space, f.valuestack, nargs)
+            w_function = f.valuestack.top(nargs)
+            w_result = f.space.call_args(w_function, args)
+            f.valuestack.drop(nargs + 1)
             f.valuestack.push(w_result)
         # XXX end of hack for performance
         else:
