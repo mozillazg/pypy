@@ -9,6 +9,7 @@ attribute.
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
+from pypy.interpreter.pyframe import PyFrame
 
 class Function(Wrappable):
     """A function is a code object captured with some environment:
@@ -34,7 +35,7 @@ class Function(Wrappable):
     def call_args(self, args):
         scope_w = args.parse(self.name, self.code.signature(), self.defs_w)
         frame = self.code.create_frame(self.space, self.w_func_globals,
-                                            self.closure)
+                                       self.closure)
         frame.setfastscope(scope_w)
         return frame.run()
 
