@@ -33,10 +33,18 @@ class Function(Wrappable):
         return "<Function %s>" % self.name
 
     def call_args(self, args):
-        scope_w = args.parse(self.name, self.code.signature(), self.defs_w)
         frame = self.code.create_frame(self.space, self.w_func_globals,
                                        self.closure)
-        frame.setfastscope(scope_w)
+        sig = self.code.signature()
+        if (isinstance(frame, PyFrame) and
+            frame.setfastscope is PyFrame.setfastscope):
+            # XXX: Performance hack!
+            args_matched = args.parse_into_scope(frame.fastlocals_w, self.name,
+                                                 sig, self.defs_w)
+            frame.init_cells(args_matched)
+        else:
+            scope_w = args.parse(self.name, sig, self.defs_w)
+            frame.setfastscope(scope_w)
         return frame.run()
 
     def getdict(self):

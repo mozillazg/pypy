@@ -27,8 +27,8 @@ class AbstractArguments:
         has_vararg = varargname is not None
         has_kwarg = kwargname is not None
         try:
-            self._match_signature(scope_w, argnames, has_vararg, has_kwarg,
-                                  defaults_w, 0, [])
+            return self._match_signature(scope_w, argnames, has_vararg,
+                                         has_kwarg, defaults_w, 0, None)
         except ArgErr, e:
             raise OperationError(self.space.w_TypeError,
                                  self.space.wrap(e.getmsg(fnname)))
@@ -76,7 +76,7 @@ class AbstractArguments:
         if has_kwarg:
             scopelen += 1
         scope_w = [None] * scopelen
-        self._match_signature(scope_w, argnames, has_vararg, has_kwarg, defaults_w, 0, [])
+        self._match_signature(scope_w, argnames, has_vararg, has_kwarg, defaults_w, 0, None)
         return scope_w
     
 class ArgumentsPrepended(AbstractArguments):
@@ -107,13 +107,21 @@ class ArgumentsPrepended(AbstractArguments):
     def _rawshape(self, nextra=0):
         return self.args._rawshape(nextra + 1)
 
-    def _match_signature(self, scope_w, argnames, has_vararg=False, has_kwarg=False, defaults_w=[], blindargs=0, extravarargs=[]):
+    def _match_signature(self, scope_w, argnames, has_vararg=False, has_kwarg=False, defaults_w=[], blindargs=0, extravarargs=None):
+        """Parse args and kwargs according to the signature of a code object,
+        or raise an ArgErr in case of failure.
+        Return the number of arguments filled in.
+        """
         if blindargs < len(argnames):
             scope_w[blindargs] = self.w_firstarg
         else:
-            extravarargs.append(self.w_firstarg)
-        self.args._match_signature(scope_w, argnames, has_vararg, has_kwarg,
-                                   defaults_w, blindargs + 1, extravarargs)
+            if extravarargs is None:
+                extravarargs = [ self.w_firstarg ]
+            else:
+                extravarargs.append(self.w_firstarg)
+        return self.args._match_signature(scope_w, argnames, has_vararg,
+                                          has_kwarg, defaults_w,
+                                          blindargs + 1, extravarargs)
     
     def flatten(self):
         (shape_cnt, shape_keys, shape_star, shape_stst), data_w = self.args.flatten()
@@ -168,7 +176,11 @@ class ArgumentsFromValuestack(AbstractArguments):
     def _rawshape(self, nextra=0):
         return nextra + self.nargs, (), False, False
 
-    def _match_signature(self, scope_w, argnames, has_vararg=False, has_kwarg=False, defaults_w=[], blindargs=0, extravarargs=[]):
+    def _match_signature(self, scope_w, argnames, has_vararg=False, has_kwarg=False, defaults_w=[], blindargs=0, extravarargs=None):
+        """Parse args and kwargs according to the signature of a code object,
+        or raise an ArgErr in case of failure.
+        Return the number of arguments filled in.
+        """
         co_argcount = len(argnames)
         if blindargs + self.nargs + len(defaults_w) < co_argcount:
             raise ArgErrCount(blindargs + self.nargs , 0,
@@ -185,7 +197,7 @@ class ArgumentsFromValuestack(AbstractArguments):
                 scope_w[i + blindargs] = self.valuestack.top(self.nargs - 1 - i)
             if has_vararg:
                 if blindargs > co_argcount:
-                    startarg_w = extravararg
+                    startarg_w = extravarargs
                     for i in range(self.nargs):
                         startarg_w.append(self.valuestack.top(self.nargs - 1 - i))
                 else:
@@ -208,7 +220,9 @@ class ArgumentsFromValuestack(AbstractArguments):
 
         if has_kwarg:
             scope_w[co_argcount] = self.space.newdict([])
-
+            co_argcount += 1
+        return co_argcount
+    
     def flatten(self):
         data_w = [None] * self.nargs
         for i in range(self.nargs):
@@ -343,11 +357,11 @@ class Arguments(AbstractArguments):
 
     def _match_signature(self, scope_w, argnames, has_vararg=False,
                          has_kwarg=False, defaults_w=[], blindargs=0,
-                         extravarargs=[]):
+                         extravarargs=None):
         """Parse args and kwargs according to the signature of a code object,
         or raise an ArgErr in case of failure.
+        Return the number of arguments filled in.
         """
-
         #
         #   args_w = list of the normal actual parameters, wrapped
         #   kwds_w = real dictionary {'keyword': wrapped parameter}
@@ -455,7 +469,8 @@ class Arguments(AbstractArguments):
                               (co_argcount, has_vararg, has_kwarg),
                               defaults_w, missing)
 
-
+        return co_argcount + has_vararg + has_kwarg
+    
     ### Argument <-> list of w_objects together with "shape" information
 
     def _rawshape(self, nextra=0):
