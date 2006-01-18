@@ -573,6 +573,7 @@ class Node(Wrappable):
     def __init__(self, lineno = -1):
         self.lineno = lineno
         self.filename = ""
+        self.parent = None
         #self.scope = None
         
     def getChildren(self):
@@ -602,6 +603,12 @@ class Node(Wrappable):
     def descr_repr( self, space ):
         return space.wrap( self.__repr__() )
     
+    def fget_parent(space, self):
+        return space.wrap(self.parent)
+
+    def fset_parent(space, self, w_parent):
+        self.parent = space.interp_w(Node, w_parent, can_be_None=False)
+
     def descr_getChildNodes( self, space ):
         lst = self.getChildNodes()
         return space.newlist( [ space.wrap( it ) for it in lst ] )
@@ -623,6 +630,7 @@ Node.typedef = TypeDef('ASTNode',
                        accept = interp2app(descr_node_accept, unwrap_spec=[ ObjSpace, W_Root, W_Root ] ),
                        lineno = interp_attrproperty('lineno', cls=Node),
                        filename = interp_attrproperty('filename', cls=Node),
+                       parent=GetSetProperty(Node.fget_parent, Node.fset_parent),
                        )
 
         
