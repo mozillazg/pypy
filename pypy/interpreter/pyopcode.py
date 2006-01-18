@@ -679,7 +679,7 @@ class PyInterpFrame(pyframe.PyFrame):
             w_function = f.valuestack.pop()
             w_result = f.space.call_function(w_function, w_arg1, w_arg2, w_arg3)
             f.valuestack.push(w_result)
-        elif False and (oparg >> 8) & 0xff == 0:
+        elif (oparg >> 8) & 0xff == 0:
             # Only positional arguments
             nargs = oparg & 0xff
             args = ArgumentsFromValuestack(f.space, f.valuestack, nargs)

@@ -36,12 +36,13 @@ class Function(Wrappable):
         frame = self.code.create_frame(self.space, self.w_func_globals,
                                        self.closure)
         sig = self.code.signature()
+        # XXX start of hack for performance
         if (isinstance(frame, PyFrame) and
             frame.setfastscope is PyFrame.setfastscope):
-            # XXX: Performance hack!
             args_matched = args.parse_into_scope(frame.fastlocals_w, self.name,
                                                  sig, self.defs_w)
             frame.init_cells(args_matched)
+        # XXX end of hack for performance
         else:
             scope_w = args.parse(self.name, sig, self.defs_w)
             frame.setfastscope(scope_w)

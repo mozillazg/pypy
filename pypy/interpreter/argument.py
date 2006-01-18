@@ -187,7 +187,7 @@ class ArgumentsFromValuestack(AbstractArguments):
                               (co_argcount, has_vararg, has_kwarg),
                               defaults_w, co_argcount - blindargs -
                               self.nargs - len(defaults_w))
-        if self.nargs > co_argcount and has_vararg:
+        if blindargs + self.nargs > co_argcount and not has_vararg:
             raise ArgErrCount(blindargs + self.nargs, 0,
                               (co_argcount, has_vararg, has_kwarg),
                               defaults_w, 0)
