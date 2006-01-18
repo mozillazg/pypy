@@ -647,13 +647,14 @@ class PyInterpFrame(pyframe.PyFrame):
                 w_key   = f.valuestack.pop()
                 key = f.space.str_w(w_key)
                 keywords[key] = w_value
-        arguments = [f.valuestack.pop() for i in range(n_arguments)]
-        arguments.reverse()
+        arguments = [None] * n_arguments
+        for i in range(n_arguments - 1, -1, -1):
+            arguments[i] = f.valuestack.pop()
         args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
         w_function  = f.valuestack.pop()
         w_result = f.space.call_args(w_function, args)
         f.valuestack.push(w_result)
-
+        
     def CALL_FUNCTION(f, oparg):
         # XXX start of hack for performance
         if oparg == 0:      # 0 arg, 0 keyword arg
