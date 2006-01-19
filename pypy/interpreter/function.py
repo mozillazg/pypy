@@ -37,8 +37,7 @@ class Function(Wrappable):
                                        self.closure)
         sig = self.code.signature()
         # XXX start of hack for performance
-        if (isinstance(frame, PyFrame) and
-            frame.setfastscope is PyFrame.setfastscope):
+        if frame.setfastscope is PyFrame.setfastscope:
             args_matched = args.parse_into_scope(frame.fastlocals_w, self.name,
                                                  sig, self.defs_w)
             frame.init_cells(args_matched)

@@ -197,9 +197,9 @@ class ArgumentsFromValuestack(AbstractArguments):
                 scope_w[i + blindargs] = self.valuestack.top(self.nargs - 1 - i)
             if has_vararg:
                 if blindargs > co_argcount:
-                    startarg_w = extravarargs
+                    stararg_w = extravarargs
                     for i in range(self.nargs):
-                        startarg_w.append(self.valuestack.top(self.nargs - 1 - i))
+                        stararg_w.append(self.valuestack.top(self.nargs - 1 - i))
                 else:
                     stararg_w = [None] * (self.nargs + blindargs - co_argcount)
                     for i in range(co_argcount - blindargs, self.nargs):
