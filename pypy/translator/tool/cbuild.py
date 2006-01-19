@@ -271,15 +271,14 @@ class CCompiler:
                 self.libraries.append('m')
             if 'pthread' not in self.libraries:
                 self.libraries.append('pthread')
-            self.compile_extra += ['-g', '-O2', '-pthread']
-            self.link_extra += ['-g', '-pthread']
+            self.compile_extra += ['-O2', '-pthread']
+            self.link_extra += ['-pthread']
         if sys.platform == 'darwin':
             if '/sw/include' not in self.include_dirs:
                 self.include_dirs.append('/sw/include')
             if '/sw/lib' not in self.library_dirs:
                 self.library_dirs.append('/sw/lib')
-            self.compile_extra += ['-g', '-O2']
-            self.link_extra += ['-g']
+            self.compile_extra += ['-O2']
 
         if outputfilename is None:
             self.outputfilename = py.path.local(cfilenames[0]).new(ext=ext)
