@@ -215,7 +215,7 @@ class GrammarElement(Wrappable):
     """Base parser class"""
 
     symbols = {} # dirty trick to provide a symbols mapping while printing (and not putting it in every object)
-    
+
     def __init__(self, codename):
         # the rule name
         #assert type(codename)==int
@@ -311,10 +311,26 @@ class GrammarElement(Wrappable):
         pass
 
     def __str__(self):
-        return self.display(0, GrammarElement.symbols )
+        # XXX: remove me after debug
+        symbols = {}
+        import pytoken
+        import pysymbol
+        symbols.update( pysymbol._cpython_symbols.sym_name )
+        symbols.update( pytoken.tok_name )
+        
+        return self.display(0, symbols )
+#        return self.display(0, GrammarElement.symbols )
 
     def __repr__(self):
-        return self.display(0, GrammarElement.symbols )
+        # XXX: remove me after debug
+        symbols = {}
+        import pytoken
+        import pysymbol
+        symbols.update( pysymbol._cpython_symbols.sym_name )
+        symbols.update( pytoken.tok_name )
+        
+        return self.display(0, symbols )
+#        return self.display(0, GrammarElement.symbols )
 
     def display(self, level=0, symbols={}):
         """Helper function used to represent the grammar.
@@ -364,15 +380,15 @@ class GrammarElement(Wrappable):
 
 
 class GrammarProxy(GrammarElement):
-    def __init__(self, rule_name ):
-        GrammarElement.__init__(self, -1)
+    def __init__(self, rule_name, codename=-1 ):
+        GrammarElement.__init__(self, codename )
         self.rule_name = rule_name
         self.object = None
 
     def display(self, level=0, symbols={}):
         """Helper function used to represent the grammar.
         mostly used for debugging the grammar itself"""
-        name = symbols.get(self.rule_name,str(self.rule_name))
+        name = symbols.get(self.codename, self.rule_name)
         repr = "Proxy("+name
         if self.object:
             repr+=","+self.object.display(level=1,symbols=symbols)

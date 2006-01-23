@@ -20,9 +20,9 @@ from codeop import PyCF_DONT_IMPLY_DEDENT
 
 class PythonParser(object):
     """Wrapper class for python grammar"""
-    def __init__(self, grammar_builder):
-        self.items = grammar_builder.items
-        self.rules = grammar_builder.rules
+    def __init__(self, rules, items ):
+        self.items = items
+        self.rules = rules
         # Build first sets for each rule (including anonymous ones)
         grammar.build_first_sets(self.items)
 
@@ -125,11 +125,21 @@ def python_grammar(fname):
     grammar.DEBUG = 0
     gram = ebnfparse.parse_grammar( file(fname) )
     grammar.DEBUG = level
-    parser = PythonParser( gram )
+    parser = PythonParser( gram.rules, gram.items )
     return parser
+
+def python_grammar_dyn(fname):
+    """Loads the grammar using the 'dynamic' rpython parser"""
+    _grammar_file = file(fname)
+    ebnfbuilder = ebnfparse.parse_grammar_text( file(fname).read() )
+    ebnfbuilder.resolve_rules()
+    parser = PythonParser( ebnfbuilder.root_rules, ebnfbuilder.all_rules )
+    return parser
+
 
 debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
 PYTHON_PARSER = python_grammar( PYTHON_GRAMMAR )
+PYTHON_PARSER_DYN = python_grammar_dyn( PYTHON_GRAMMAR )
 
 def reload_grammar(version):
     """helper function to test with pypy different grammars"""
