@@ -124,7 +124,7 @@ def ebnf_handle_rule(self, node):
 
 def ebnf_handle_alternative(self, node):
     items = [node.nodes[0].visit(self)]
-    items += node.nodes[1].visit(self)        
+    items += node.nodes[1].visit(self)
     if len(items) == 1 and not items[0].is_root():
 	return items[0]
     alt = Alternative(self.new_symbol(), items)
@@ -203,7 +203,7 @@ for name, value in globals().items():
 
 def handle_unknown( self, node ):
     raise RuntimeError("Unknown Visitor for %r" % node.name)
-    
+
 
 
 class EBNFBuilder(AbstractBuilder):
@@ -221,6 +221,8 @@ class EBNFBuilder(AbstractBuilder):
         self.curseqcount = 0
         self.current_subrule = 0
         self.current_rule = -1
+        self.all_rules = []
+        self.tokens = {}
 
     def new_symbol(self):
         current_rule_name = self.symbols.sym_name.get(self.current_rule,"x")
@@ -229,6 +231,35 @@ class EBNFBuilder(AbstractBuilder):
         symval = self.symbols.add_anon_symbol( rule_name )
         return symval
 
+    def new_rule(self, rule):
+        self.all_rules.append(rule)
+        return rule
+
+    def resolve_rules(self):
+        """Remove GrammarProxy objects"""
+        to_be_deleted = {}
+        for rule in self.all_rules:
+            for i, arg in enumerate(rule.args):
+                if isinstance(arg, GrammarProxy):
+                    real_rule = self.root_rules[arg.codename]
+                    if isinstance(real_rule, GrammarProxy):
+                        # If we still have a GrammarProxy associated to this codename
+                        # this means we have encountered a terminal symbol
+                        to_be_deleted[ arg.codename ] = True
+                        rule.args[i] = self.get_token( arg.codename )
+                        #print arg, "-> Token(",arg.rule_name,")" 
+                    else:
+                        #print arg, "->", real_rule
+                        rule.args[i] = real_rule
+        for codename in to_be_deleted.keys():
+            del self.root_rules[codename]
+
+    def get_token(self, codename ):
+        if codename in self.tokens:
+            return self.tokens[codename]
+        token = self.tokens[codename] = Token(codename)
+        return token
+
     def get_symbolcode(self, name ):
         codename = self.symbols.sym_values.get( name, -1 )
         if codename == -1:
@@ -236,10 +267,13 @@ class EBNFBuilder(AbstractBuilder):
         return codename
 
     def get_rule( self, name ):
+        tokencode = pytoken.tok_values.get( name, -1 )
+        if tokencode>=0:
+            return self.get_token( tokencode )
         codename = self.get_symbolcode( name )
         if codename in self.root_rules:
             return self.root_rules[codename]
-        proxy = GrammarProxy( codename )
+        proxy = GrammarProxy( name, codename )
         self.root_rules[codename] = proxy
         return proxy
 
@@ -250,11 +284,11 @@ class EBNFBuilder(AbstractBuilder):
     def restore(self, ctx):
         """Accept an opaque context object"""
         assert False, "Not supported"
-    
+
     def alternative(self, rule, source):
 #        print " alternative", rule.display(level=0,symbols=ebnfgrammar.sym_map)
         return True
-    
+
     def pop_rules( self, count ):
         offset = len(self.rule_stack)-count
         assert offset>=0
@@ -272,7 +306,7 @@ class EBNFBuilder(AbstractBuilder):
                 self.curaltcount += 1
                 return True
             rules = self.pop_rules(self.curseqcount)
-            new_rule = Sequence( self.new_symbol(), rules )
+            new_rule = self.new_rule(Sequence( self.new_symbol(), rules ))
             self.rule_stack.append( new_rule )
             self.curseqcount = 0
             self.curaltcount += 1
@@ -282,7 +316,7 @@ class EBNFBuilder(AbstractBuilder):
                 self.curaltcount = 0
                 return True
             rules = self.pop_rules(self.curaltcount)
-            new_rule = Alternative( self.new_symbol(), rules )
+            new_rule = self.new_rule(Alternative( self.new_symbol(), rules ))
             self.rule_stack.append( new_rule )
             self.curaltcount = 0
         elif _rule == ebnfgrammar.group:
@@ -314,11 +348,11 @@ class EBNFBuilder(AbstractBuilder):
             self.curseqcount += 1
         elif name == ebnfgrammar.TOK_STAR:
             top = self.rule_stack[-1]
-            rule = KleeneStar( self.new_symbol(), _min=0, rule=top)
+            rule = self.new_rule(KleeneStar( self.new_symbol(), _min=0, rule=top))
             self.rule_stack[-1] = rule
         elif name == ebnfgrammar.TOK_ADD:
             top = self.rule_stack[-1]
-            rule = KleeneStar( self.new_symbol(), _min=1, rule=top)
+            rule = self.new_rule(KleeneStar( self.new_symbol(), _min=1, rule=top))
             self.rule_stack[-1] = rule
         elif name == ebnfgrammar.TOK_BAR:
             assert self.curseqcount == 0
@@ -424,7 +458,6 @@ def parse_grammar(stream):
     node.visit(vis)
     return vis
 
-
 def parse_grammar_text(txt):
     """parses a grammar input
 
@@ -441,7 +474,7 @@ def target_parse_grammar_text(txt):
     return None
 
 def main_build():
-    from pprint import pprint    
+    from pprint import pprint
     grambuild = parse_grammar(file('data/Grammar2.3'))
     for i,r in enumerate(grambuild.items):
         print "%  3d : %s" % (i, r)
