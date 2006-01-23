@@ -17,16 +17,15 @@ def g_add_symbol( name ):
     _count += 1
     sym_map[val] = name
     sym_rmap[name] = val
+    globals()[name] = val
     return val
 
 
 tok_map = {}
 tok_rmap = {}
 
-def g_add_token( **kwargs ):
+def g_add_token(sym, name):
     global _count
-    assert len(kwargs) == 1
-    sym, name = kwargs.popitem()
     if name in tok_rmap:
         return tok_rmap[name]
     val = _count
@@ -35,13 +34,18 @@ def g_add_token( **kwargs ):
     tok_rmap[name] = val
     sym_map[val] = sym
     sym_rmap[sym] = val
+    globals()[sym] = val
     return val
 
-g_add_token( EOF='EOF' )
+
+
+g_add_token('EOF', 'EOF')
+
 
 
 def grammar_grammar():
-    """NOT RPYTHON  (mostly because of g_add_token I suppose)
+    """
+    (mostly because of g_add_token I suppose)
     Builds the grammar for the grammar file
 
     Here's the description of the grammar's grammar ::
@@ -51,7 +55,7 @@ def grammar_grammar():
       
       alternative: sequence ( '|' sequence )+
       star: '*' | '+'
-      sequence: (SYMBOL star? | STRING | option | group star? )+
+      sequence: (SYMBOL star? | STRING | option | group )+
       option: '[' alternative ']'
       group: '(' alternative ')' star?
     """
@@ -59,12 +63,12 @@ def grammar_grammar():
     S = g_add_symbol
     T = g_add_token
     # star: '*' | '+'
-    star          = Alternative( S("star"), [Token(T(TOK_STAR='*')), Token(T(TOK_ADD='+'))] )
+    star          = Alternative( S("star"), [Token(T('TOK_STAR', '*')), Token(T('TOK_ADD', '+'))] )
     star_opt      = KleeneStar ( S("star_opt"), 0, 1, rule=star )
 
     # rule: SYMBOL ':' alternative
-    symbol        = Sequence(    S("symbol"), [Token(T(TOK_SYMBOL='SYMBOL')), star_opt] )
-    symboldef     = Token(       T(TOK_SYMDEF="SYMDEF") )
+    symbol        = Sequence(    S("symbol"), [Token(T('TOK_SYMBOL', 'SYMBOL')), star_opt] )
+    symboldef     = Token(       T('TOK_SYMDEF', 'SYMDEF') )
     alternative   = Sequence(    S("alternative"), [])
     rule          = Sequence(    S("rule"), [symboldef, alternative] )
 
@@ -73,19 +77,19 @@ def grammar_grammar():
 
     # alternative: sequence ( '|' sequence )*
     sequence      = KleeneStar(   S("sequence"), 1 )
-    seq_cont_list = Sequence(    S("seq_cont_list"), [Token(T(TOK_BAR='|')), sequence] )
+    seq_cont_list = Sequence(    S("seq_cont_list"), [Token(T('TOK_BAR', '|')), sequence] )
     sequence_cont = KleeneStar(   S("sequence_cont"),0, rule=seq_cont_list )
     
     alternative.args = [ sequence, sequence_cont ]
 
     # option: '[' alternative ']'
-    option        = Sequence(    S("option"), [Token(T(TOK_LBRACKET='[')), alternative, Token(T(TOK_RBRACKET=']'))] )
+    option        = Sequence(    S("option"), [Token(T('TOK_LBRACKET', '[')), alternative, Token(T('TOK_RBRACKET', ']'))] )
 
     # group: '(' alternative ')'
-    group         = Sequence(    S("group"),  [Token(T(TOK_LPAR='(')), alternative, Token(T(TOK_RPAR=')')), star_opt] )
+    group         = Sequence(    S("group"),  [Token(T('TOK_LPAR', '(')), alternative, Token(T('TOK_RPAR', ')')), star_opt] )
 
     # sequence: (SYMBOL | STRING | option | group )+
-    string = Token(T(TOK_STRING='STRING'))
+    string = Token(T('TOK_STRING', 'STRING'))
     alt           = Alternative( S("sequence_alt"), [symbol, string, option, group] ) 
     sequence.args = [ alt ]
 
@@ -106,4 +110,4 @@ del _sym
 del _value
 del grammar_grammar
 del g_add_symbol
-del g_add_token
+# del g_add_token

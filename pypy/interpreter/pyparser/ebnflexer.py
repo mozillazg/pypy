@@ -3,7 +3,7 @@ it obeys the TokenSource interface defined for the grammar
 analyser in grammar.py
 """
 
-from grammar import TokenSource, Token
+from grammar import TokenSource, Token, AbstractContext
 from ebnfgrammar import *
 
 
@@ -15,6 +15,12 @@ def match_symbol( input, start, stop ):
         idx+=1
     return idx
 
+
+class GrammarSourceContext(AbstractContext):
+    def __init__(self, pos, peek):
+        self.pos = pos
+        self.peek = peek
+
 class GrammarSource(TokenSource):
     """Fully RPython - see targetebnflexer.py
     The grammar tokenizer
@@ -25,8 +31,8 @@ class GrammarSource(TokenSource):
     SYMBOL: a rule symbol usually appeary right of a SYMDEF
     tokens: '[', ']', '(' ,')', '*', '+', '|'
     """
-    def __init__(self, inpstring ):
-        TokenSource.__init__(self)
+    def __init__(self, inpstring):
+        # TokenSource.__init__(self)
         self.input = inpstring
         self.pos = 0
         self.begin = 0
@@ -36,7 +42,7 @@ class GrammarSource(TokenSource):
     def context(self):
         """returns an opaque context object, used to backtrack
         to a well known position in the parser"""
-        return self.pos, self._peeked
+        return GrammarSourceContext( self.pos, self._peeked )
 
     def offset(self, ctx=None):
         """Returns the current parsing position from the start
@@ -44,14 +50,17 @@ class GrammarSource(TokenSource):
         if ctx is None:
             return self.pos
         else:
-            assert type(ctx)==int
-            return ctx
+            assert isinstance(ctx, GrammarSourceContext)
+            return ctx.pos
 
     def restore(self, ctx):
         """restore the context provided by context()"""
-        self.pos, self._peeked = ctx
+        assert isinstance( ctx, GrammarSourceContext )
+        self.pos = ctx.pos
+        self._peeked = ctx.peek
+        
 
-    def current_line(self):
+    def current_linesource(self):
         pos = idx = self.begin
         inp = self.input
         end = len(inp)

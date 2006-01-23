@@ -6,6 +6,7 @@ import pythonparse
 from tuplebuilder import TupleBuilder
 from astbuilder import AstBuilder
 from pypy.interpreter.pyparser import pysymbol
+import pysymbol
 
 PYTHON_PARSER = pythonparse.PYTHON_PARSER
 TARGET_DICT = {
@@ -60,7 +61,7 @@ def internal_pypy_parse(source, mode='exec', lineno=False, flags=0, space=None):
        tuples (StackElement is only a wrapper class around these tuples)
 
     """
-    builder = TupleBuilder(PYTHON_PARSER.rules, lineno=False)
+    builder = TupleBuilder(pysymbol._cpython_symbols, PYTHON_PARSER.rules, lineno=False)
     if space is not None:
         builder.space = space
     target_rule = TARGET_DICT[mode]

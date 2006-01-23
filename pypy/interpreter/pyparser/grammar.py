@@ -10,10 +10,13 @@ Token       : a lexer token
 try:
     from pypy.interpreter.baseobjspace import Wrappable
     from pypy.interpreter.pyparser.pytoken import NULLTOKEN
+    from pypy.interpreter.pyparser.pysymbol import SymbolMapper
 except ImportError:
     # allows standalone testing
     Wrappable = object
-    NULLTOKEN = None
+    NULLTOKEN = -1 # None
+    from pysymbol import SymbolMapper
+    
 
 from syntaxtree import SyntaxNode, TempSyntaxNode, TokenNode
 
@@ -27,6 +30,7 @@ def get_symbol( codename, symbols ):
         return symbols[codename]
     else:
         return "["+str(codename)+"]"
+
 
 #### Abstract interface for a lexer/tokenizer
 class TokenSource(object):
@@ -50,7 +54,7 @@ class TokenSource(object):
         of the context"""
         return -1
 
-    def current_line(self):
+    def current_linesource(self):
         """Returns the current line"""
         return ""
 
@@ -102,7 +106,7 @@ class AbstractContext(object):
 
 class AbstractBuilder(object):
     """Abstract base class for builder objects"""
-    def __init__(self, rules=None, debug=0, symbols={} ):
+    def __init__(self, symbols, rules=None, debug=0 ):
         # a dictionary of grammar rules for debug/reference
         if rules is not None:
             self.rules = rules
@@ -110,7 +114,9 @@ class AbstractBuilder(object):
             self.rules = {}
         # This attribute is here for convenience
         self.debug = debug
-        self.symbols = symbols # mapping from codename to symbols
+        # mapping from codename to symbols
+        assert isinstance( symbols, SymbolMapper )
+        self.symbols = symbols
 
     def context(self):
         """Return an opaque context object"""
@@ -143,6 +149,8 @@ class BaseGrammarBuilderContext(AbstractContext):
 class BaseGrammarBuilder(AbstractBuilder):
     """Base/default class for a builder"""
     def __init__(self, rules=None, debug=0, symbols={} ):
+        if rules is None:
+            rules = SymbolMapper()
         AbstractBuilder.__init__(self, rules, debug, symbols )
         # stacks contain different objects depending on the builder class
         # to be RPython they should not be defined in the base class
@@ -355,6 +363,23 @@ class GrammarElement(Wrappable):
 
 
 
+class GrammarProxy(GrammarElement):
+    def __init__(self, rule_name ):
+        GrammarElement.__init__(self, -1)
+        self.rule_name = rule_name
+        self.object = None
+
+    def display(self, level=0, symbols={}):
+        """Helper function used to represent the grammar.
+        mostly used for debugging the grammar itself"""
+        name = symbols.get(self.rule_name,str(self.rule_name))
+        repr = "Proxy("+name
+        if self.object:
+            repr+=","+self.object.display(level=1,symbols=symbols)
+        repr += ")"
+        return repr
+    
+
 
 class Alternative(GrammarElement):
     """Represents an alternative in a grammar rule (as in S -> A | B | C)"""
@@ -553,7 +578,7 @@ class KleeneStar(GrammarElement):
         """
         if DEBUG > 1:
             print "try kle:", self.display(0,builder.symbols)
-        ctx = 0
+        ctx = None
         bctx = None
         if self.min:
             ctx = source.context()
@@ -625,8 +650,8 @@ class KleeneStar(GrammarElement):
 
 class Token(GrammarElement):
     """Represents a Token in a grammar rule (a lexer token)"""
-    def __init__( self, codename, value = None):
-        GrammarElement.__init__( self, codename )
+    def __init__(self, codename, value=None):
+        GrammarElement.__init__(self, codename)
         self.value = value
         self.first_set = [self]
         # self.first_set = {self: 1}
@@ -673,7 +698,7 @@ class Token(GrammarElement):
            the comparison algorithm is similar to the one in match()
         """
         if not isinstance(other, Token):
-            raise RuntimeError("Unexpected token type %r" % other)
+            raise RuntimeError("Unexpected token type")
         if other is EmptyToken:
             return False
         res = other.codename == self.codename and self.value in [None, other.value]

@@ -3,6 +3,7 @@ from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
 from pypy.interpreter.pyparser.astbuilder import AstBuilder
 from pypy.interpreter.pyparser.tuplebuilder import TupleBuilder
 from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.pyparser.pysymbol import _cpython_symbols
 import py.test
 
 def setup_module(mod):
@@ -82,7 +83,7 @@ def compile_with_astcompiler(expr, target='exec', space=FakeSpace()):
 
 def compile_with_testcompiler(expr, target='exec', space=FakeSpace()):
     target2 = TARGET_DICT['exec'] # xxx exec: single not really tested
-    builder = TupleBuilder()
+    builder = TupleBuilder(_cpython_symbols)
     PYTHON_PARSER.parse_source(expr, target2, builder)
     tuples =  builder.stack[-1].as_tuple(True)
     from pypy.interpreter.stablecompiler import transformer, pycodegen, misc
@@ -221,7 +222,7 @@ def test_libstuff():
     for snippet_name in LIBSTUFF:
         filepath = os.path.join(os.path.dirname(__file__), '../../../lib', snippet_name)
         source = file(filepath).read()
-        yield check_compile, source, 'exec'        
+        yield check_compile, source, 'exec'
 
 
 def test_single_inputs():

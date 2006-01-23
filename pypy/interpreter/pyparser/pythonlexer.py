@@ -5,7 +5,7 @@ analyser in grammar.py
 import sys
 from codeop import PyCF_DONT_IMPLY_DEDENT
 
-from pypy.interpreter.pyparser.grammar import TokenSource, Token
+from pypy.interpreter.pyparser.grammar import TokenSource, Token, AbstractContext
 from pypy.interpreter.pyparser.error import SyntaxError
 import pytoken
 from pytoken import NEWLINE
@@ -293,6 +293,11 @@ def generate_tokens(lines, flags):
     #print '----------------------------------------- pyparser/pythonlexer.py'
     return token_list
 
+
+class PythonSourceContext(AbstractContext):
+    def __init__(self, pos ):
+        self.pos = pos
+
 class PythonSource(TokenSource):
     """This source uses Jonathan's tokenizer"""
     def __init__(self, strings, flags=0):
@@ -317,7 +322,7 @@ class PythonSource(TokenSource):
         self._offset = pos
         return tok
 
-    def current_line(self):
+    def current_linesource(self):
         """Returns the current line being parsed"""
         return self._current_line
 
@@ -327,11 +332,12 @@ class PythonSource(TokenSource):
 
     def context(self):
         """Returns an opaque context object for later restore"""
-        return self.stack_pos
+        return PythonSourceContext(self.stack_pos)
 
     def restore(self, ctx):
         """Restores a context"""
-        self.stack_pos = ctx
+        assert isinstance(ctx, PythonSourceContext)
+        self.stack_pos = ctx.pos
 
     def peek(self):
         """returns next token without consuming it"""
