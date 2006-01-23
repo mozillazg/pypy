@@ -1,6 +1,7 @@
 
 from grammar import AbstractBuilder, AbstractContext
 from pytoken import tok_name, tok_rpunct, NEWLINE, INDENT, DEDENT, ENDMARKER
+import pysymbol
 
 class StackElement:
     """wraps TupleBuilder's tuples"""
@@ -57,8 +58,8 @@ class TupleBuilderContext(AbstractContext):
 class TupleBuilder(AbstractBuilder):
     """A builder that directly produce the AST"""
 
-    def __init__(self, rules=None, debug=0, lineno=True):
-        AbstractBuilder.__init__(self, rules, debug)
+    def __init__(self, symbols, rules=None, debug=0, lineno=True):
+        AbstractBuilder.__init__(self, symbols, rules, debug)
         # This attribute is here for convenience
         self.source_encoding = None
         self.lineno = lineno

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-from grammar import BaseGrammarBuilder, Alternative, Sequence, Token, \
-     KleeneStar, GrammarElement, build_first_sets, EmptyToken
+from grammar import BaseGrammarBuilder, Alternative, Sequence, Token
+from grammar import GrammarProxy, KleeneStar, GrammarElement, build_first_sets
+from grammar import EmptyToken, AbstractBuilder, AbstractContext
 from ebnflexer import GrammarSource
 import ebnfgrammar
 from ebnfgrammar import GRAMMAR_GRAMMAR, sym_map
@@ -8,8 +9,32 @@ from syntaxtree import AbstractSyntaxVisitor
 import pytoken
 import pysymbol
 
-import re
-py_name = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*", re.M)
+
+ORDA = ord("A")
+ORDZ = ord("Z")
+ORDa = ord("a")
+ORDz = ord("z")
+ORD0 = ord("0")
+ORD9 = ord("9")
+ORD_ = ord("_")
+
+def is_py_name( name ):
+    if len(name)<1:
+        return False
+    v = ord(name[0])
+    if not (ORDA <= v <= ORDZ or
+            ORDa <= v <= ORDz or v == ORD_ ):
+        return False
+    for c in name:
+        v = ord(c)
+        if not (ORDA <= v <= ORDZ or 
+                ORDa <= v <= ORDz or
+                ORD0 <= v <= ORD9 or
+                v == ORD_ ):
+            return False
+    return True
+        
+            
 
 punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '//=', '%=', '^=', '<<=', '\\*\\*=', '\\', '=',
@@ -17,6 +42,8 @@ punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '>>', '&', '\\+', '\\*', '-', '/', '\\.', '\\*\\*',
        '%', '<<', '//', '\\', '', '\n\\)', '\\(', ';', ':',
        '@', '\\[', '\\]', '`', '\\{', '\\}']
+
+
 
 
 TERMINALS = [
@@ -46,7 +73,7 @@ class NameToken(Token):
         """
         ctx = source.context()
         tk = source.next()
-        if tk.codename==self.codename:
+        if tk.codename == self.codename:
             if tk.value not in self.keywords:
                 ret = builder.token( tk.codename, tk.value, source )
                 return self.debug_return( ret, tk.codename, tk.value )
@@ -57,7 +84,7 @@ class NameToken(Token):
         """special case of match token for tokens which are really keywords
         """
         if not isinstance(other, Token):
-            raise RuntimeError("Unexpected token type %r" % other)
+            raise RuntimeError("Unexpected token type")
         if other is EmptyToken:
             return False
         if other.codename != self.codename:
@@ -75,7 +102,8 @@ def ebnf_handle_grammar(self, node):
     # we do a pass through the variables to detect
     # terminal symbols from non terminals
     for r in self.items:
-	for i,a in enumerate(r.args):
+        for i in range(len(r.args)):
+            a = r.args[i]
 	    if a.codename in self.rules:
 		assert isinstance(a,Token)
 		r.args[i] = self.rules[a.codename]
@@ -148,7 +176,7 @@ def ebnf_handle_TOK_STRING( self, node ):
     value = node.value
     tokencode = pytoken.tok_punct.get( value, None )
     if tokencode is None:
-	if not py_name.match( value ):
+	if not is_py_name( value ):
 	    raise RuntimeError("Unknown STRING value ('%s')" % value )
 	# assume a keyword
 	tok = Token( pytoken.NAME, value )
@@ -177,6 +205,160 @@ def handle_unknown( self, node ):
     raise RuntimeError("Unknown Visitor for %r" % node.name)
     
 
+
+class EBNFBuilder(AbstractBuilder):
+    """Build a grammar tree"""
+    def __init__(self, rules=None, debug=0, symbols=None ):
+        if symbols is None:
+            symbols = pysymbol.SymbolMapper()
+        AbstractBuilder.__init__(self, rules, debug, symbols)
+        self.rule_stack = []
+        self.root_rules = {}
+        self.keywords = []
+        self.seqcounts = [] # number of items in the current sequence
+        self.altcounts = [] # number of sequence in the current alternative
+        self.curaltcount = 0
+        self.curseqcount = 0
+        self.current_subrule = 0
+        self.current_rule = -1
+
+    def new_symbol(self):
+        current_rule_name = self.symbols.sym_name.get(self.current_rule,"x")
+        rule_name = ":" + current_rule_name + "_%d" % self.current_subrule
+        self.current_subrule += 1
+        symval = self.symbols.add_anon_symbol( rule_name )
+        return symval
+
+    def get_symbolcode(self, name ):
+        codename = self.symbols.sym_values.get( name, -1 )
+        if codename == -1:
+            codename = self.symbols.add_symbol( name )
+        return codename
+
+    def get_rule( self, name ):
+        codename = self.get_symbolcode( name )
+        if codename in self.root_rules:
+            return self.root_rules[codename]
+        proxy = GrammarProxy( codename )
+        self.root_rules[codename] = proxy
+        return proxy
+
+    def context(self):
+        """Return an opaque context object"""
+        return None
+
+    def restore(self, ctx):
+        """Accept an opaque context object"""
+        assert False, "Not supported"
+    
+    def alternative(self, rule, source):
+#        print " alternative", rule.display(level=0,symbols=ebnfgrammar.sym_map)
+        return True
+    
+    def pop_rules( self, count ):
+        offset = len(self.rule_stack)-count
+        assert offset>=0
+        rules = self.rule_stack[offset:]
+        del self.rule_stack[offset:]
+        return rules
+
+    def sequence(self, rule, source, elts_number):
+#        print "  sequence", rule.display(level=0,symbols=ebnfgrammar.sym_map)
+        _rule = rule.codename
+        if _rule == ebnfgrammar.sequence:
+#            print "  -sequence", self.curaltcount, self.curseqcount
+            if self.curseqcount==1:
+                self.curseqcount = 0
+                self.curaltcount += 1
+                return True
+            rules = self.pop_rules(self.curseqcount)
+            new_rule = Sequence( self.new_symbol(), rules )
+            self.rule_stack.append( new_rule )
+            self.curseqcount = 0
+            self.curaltcount += 1
+        elif _rule == ebnfgrammar.alternative:
+#            print "  -alternative", self.curaltcount, self.curseqcount
+            if self.curaltcount == 1:
+                self.curaltcount = 0
+                return True
+            rules = self.pop_rules(self.curaltcount)
+            new_rule = Alternative( self.new_symbol(), rules )
+            self.rule_stack.append( new_rule )
+            self.curaltcount = 0
+        elif _rule == ebnfgrammar.group:
+#            print "  -group", self.curaltcount, self.curseqcount
+            self.curseqcount += 1
+        elif _rule == ebnfgrammar.option:
+#            print "  -option", self.curaltcount, self.curseqcount
+            self.curseqcount += 1
+        elif _rule == ebnfgrammar.rule:
+#            print "  -rule", self.curaltcount, self.curseqcount
+            assert len(self.rule_stack)==1
+            old_rule = self.rule_stack[0]
+            del self.rule_stack[0]
+            old_rule.codename = self.current_rule
+            self.root_rules[self.current_rule] = old_rule
+            self.current_subrule = 0
+        return True
+    
+    def token(self, name, value, source):
+#        print "token", name, value
+        if name == ebnfgrammar.TOK_STRING:
+            self.handle_TOK_STRING( name, value )
+            self.curseqcount += 1
+        elif name == ebnfgrammar.TOK_SYMDEF:
+            self.current_rule = self.get_symbolcode( value )
+        elif name == ebnfgrammar.TOK_SYMBOL:
+            rule = self.get_rule( value )
+            self.rule_stack.append( rule )
+            self.curseqcount += 1
+        elif name == ebnfgrammar.TOK_STAR:
+            top = self.rule_stack[-1]
+            rule = KleeneStar( self.new_symbol(), _min=0, rule=top)
+            self.rule_stack[-1] = rule
+        elif name == ebnfgrammar.TOK_ADD:
+            top = self.rule_stack[-1]
+            rule = KleeneStar( self.new_symbol(), _min=1, rule=top)
+            self.rule_stack[-1] = rule
+        elif name == ebnfgrammar.TOK_BAR:
+            assert self.curseqcount == 0
+        elif name == ebnfgrammar.TOK_LPAR:
+            self.altcounts.append( self.curaltcount )
+            self.seqcounts.append( self.curseqcount )
+            self.curseqcount = 0
+            self.curaltcount = 0
+        elif name == ebnfgrammar.TOK_RPAR:
+            assert self.curaltcount == 0
+            self.curaltcount = self.altcounts.pop()
+            self.curseqcount = self.seqcounts.pop()
+        elif name == ebnfgrammar.TOK_LBRACKET:
+            self.altcounts.append( self.curaltcount )
+            self.seqcounts.append( self.curseqcount )
+            self.curseqcount = 0
+            self.curaltcount = 0
+        elif name == ebnfgrammar.TOK_RBRACKET:
+            assert self.curaltcount == 0
+            assert self.curseqcount == 0
+            self.curaltcount = self.altcounts.pop()
+            self.curseqcount = self.seqcounts.pop()
+        return True
+
+    def handle_TOK_STRING( self, name, value ):
+        try:
+            tokencode = pytoken.tok_punct[value]
+        except KeyError:
+            if not is_py_name(value):
+                raise RuntimeError("Unknown STRING value ('%s')" % value)
+            # assume a keyword
+            tok = Token(pytoken.NAME, value)
+            if value not in self.keywords:
+                self.keywords.append(value)
+        else:
+            # punctuation
+            tok = Token(tokencode, None)
+        self.rule_stack.append(tok)
+
+
 class EBNFVisitor(AbstractSyntaxVisitor):
     
     def __init__(self):
@@ -190,7 +372,8 @@ class EBNFVisitor(AbstractSyntaxVisitor):
         self.symbols = pysymbol.SymbolMapper( pysymbol._cpython_symbols.sym_name )
 
     def new_symbol(self):
-        rule_name = ":%s_%s" % (self.current_rule, self.current_subrule)
+        current_rule_name = self.symbols.sym_name.get(self.current_rule,"x")
+        rule_name = ":" + self.current_rule + "_" + str(self.current_subrule)
         self.current_subrule += 1
         symval = self.symbols.add_anon_symbol( rule_name )
         return symval
@@ -241,25 +424,24 @@ def parse_grammar(stream):
     node.visit(vis)
     return vis
 
+
 def parse_grammar_text(txt):
     """parses a grammar input
 
     stream : file-like object representing the grammar to parse
     """
     source = GrammarSource(txt)
-    builder = BaseGrammarBuilder()
+    builder = EBNFBuilder(pysymbol._cpython_symbols)
     result = GRAMMAR_GRAMMAR.match(source, builder)
-    node = builder.stack[-1]
-    vis = EBNFVisitor()
-    node.visit(vis)
-    return vis
+    return builder
 
 def target_parse_grammar_text(txt):
     vis = parse_grammar_text(txt)
     # do nothing
+    return None
 
-from pprint import pprint
-if __name__ == "__main__":
+def main_build():
+    from pprint import pprint    
     grambuild = parse_grammar(file('data/Grammar2.3'))
     for i,r in enumerate(grambuild.items):
         print "%  3d : %s" % (i, r)
@@ -267,3 +449,9 @@ if __name__ == "__main__":
     pprint(grambuild.tokens)
     print "|".join(grambuild.tokens.keys() )
 
+def main_build():
+    import sys
+    return parse_grammar_text( file(sys.argv[-1]).read() )
+
+if __name__ == "__main__":
+    result = main_build()

@@ -27,7 +27,7 @@ class SymbolMapper(object):
             self._count = _count
 
     def add_symbol( self, sym ):
-        assert type(sym)==str
+        # assert isinstance(sym, str)
         if not sym in self.sym_values:
             self._count += 1
             val = self._count
@@ -37,7 +37,7 @@ class SymbolMapper(object):
         return self.sym_values[ sym ]
 
     def add_anon_symbol( self, sym ):
-        assert type(sym)==str
+        # assert isinstance(sym, str)
         if not sym in self.sym_values:
             self._anoncount -= 1
             val = self._anoncount
@@ -48,7 +48,7 @@ class SymbolMapper(object):
 
     def __getitem__(self, sym ):
         """NOT RPYTHON"""
-        assert type(sym)==str
+        # assert isinstance(sym, str)
         return self.sym_values[ sym ]
     
 
@@ -65,7 +65,7 @@ def update_symbols( parser ):
     """Update the symbol module according to rules
     in PythonParser instance : parser"""
     for rule in parser.rules:
-        _cpython_symbols.add_symbol( rule )
+        _cpython_symbols.add_symbol(rule)
 
 # There is no symbol in this module until the grammar is loaded
 # once loaded the grammar parser will fill the mappings with the

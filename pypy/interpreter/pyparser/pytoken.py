@@ -5,21 +5,21 @@
 
 N_TOKENS = 0
 
-tok_name = {}
-tok_values = {}
+# This is used to replace None
+NULLTOKEN = -1
 
-def add_token(name, value=None):
+tok_name = {-1 : 'NULLTOKEN'}
+tok_values = {'NULLTOKEN' : -1}
+
+def add_token(name):
     global N_TOKENS
-    if value is None:
-        value = N_TOKENS
-        N_TOKENS += 1
+    value = N_TOKENS
+    N_TOKENS += 1
     _g = globals()
     _g[name] = value
     tok_name[value] = name
     tok_values[name] = value
 
-# This is used to replace None
-add_token( 'NULLTOKEN', -1 )
 
 # For compatibility, this produces the same constant values as Python 2.4.
 add_token( 'ENDMARKER' )
