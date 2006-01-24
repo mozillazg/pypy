@@ -6,7 +6,16 @@ XXX: crashes on everything else than simple assignment (AssAttr, etc.)
 """
 
 from parser import ASTPrintnl, ASTConst, ASTName
-from parser import install_compiler_hook
+from parser import install_compiler_hook, source2ast
+
+BEFORE_LOG_SOURCE = """if '%s' in locals() or '%s' in globals():
+    print '(before) %s <--', locals().get('%s', globals().get('%s', '<XXX>'))
+"""
+AFTER_LOG_SOURCE = "print '(after) %s <--', %s"
+
+def get_statements(source):
+    module = source2ast(source)
+    return module.node.nodes
 
 class Tracer:
     def visitModule(self, module):
@@ -23,11 +32,10 @@ class Tracer:
     def visitAssign(self, assign):
         stmt = assign.parent
         varname = assign.nodes[0].name
-        lognode = ASTPrintnl([ASTConst('%s <--' % varname), ASTName(varname)], None)
-        index = stmt.nodes.index(assign)
-        newstmts = stmt.nodes
-        newstmts.insert(index + 1, lognode)
-        stmt.nodes = newstmts
+        before_stmts = get_statements(BEFORE_LOG_SOURCE % ((varname,) * 5))
+        after_stmts = get_statements(AFTER_LOG_SOURCE % (varname, varname))
+        stmt.insert_before(assign, before_stmts)
+        stmt.insert_after(assign, after_stmts)
         return assign
 
     def __getattr__(self, attrname):
