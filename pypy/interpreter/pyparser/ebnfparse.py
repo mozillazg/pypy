@@ -27,14 +27,14 @@ def is_py_name( name ):
         return False
     for c in name:
         v = ord(c)
-        if not (ORDA <= v <= ORDZ or 
+        if not (ORDA <= v <= ORDZ or
                 ORDa <= v <= ORDz or
                 ORD0 <= v <= ORD9 or
                 v == ORD_ ):
             return False
     return True
-        
-            
+
+
 
 punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '//=', '%=', '^=', '<<=', '\\*\\*=', '\\', '=',
@@ -79,7 +79,7 @@ class NameToken(Token):
                 return self.debug_return( ret, tk.codename, tk.value )
         source.restore( ctx )
         return 0
-        
+
     def match_token(self, other):
         """special case of match token for tokens which are really keywords
         """
@@ -214,7 +214,6 @@ class EBNFBuilder(AbstractBuilder):
         AbstractBuilder.__init__(self, rules, debug, symbols)
         self.rule_stack = []
         self.root_rules = {}
-        self.keywords = []
         self.seqcounts = [] # number of items in the current sequence
         self.altcounts = [] # number of sequence in the current alternative
         self.curaltcount = 0
@@ -223,8 +222,12 @@ class EBNFBuilder(AbstractBuilder):
         self.current_rule = -1
         self.all_rules = []
         self.tokens = {}
+        self.keywords = []
+        self.tokens[pytoken.NAME] = NameToken(keywords=self.keywords)
 
     def new_symbol(self):
+        """Allocate and return a new (anonymous) grammar symbol whose
+        name is based on the current grammar rule being parsed"""
         current_rule_name = self.symbols.sym_name.get(self.current_rule,"x")
         rule_name = ":" + current_rule_name + "_%d" % self.current_subrule
         self.current_subrule += 1
@@ -232,6 +235,7 @@ class EBNFBuilder(AbstractBuilder):
         return symval
 
     def new_rule(self, rule):
+        """A simple helper method that registers a new rule as 'known'"""
         self.all_rules.append(rule)
         return rule
 
@@ -255,6 +259,7 @@ class EBNFBuilder(AbstractBuilder):
             del self.root_rules[codename]
 
     def get_token(self, codename ):
+        """Returns a new or existing token"""
         if codename in self.tokens:
             return self.tokens[codename]
         token = self.tokens[codename] = Token(codename)
@@ -324,17 +329,26 @@ class EBNFBuilder(AbstractBuilder):
             self.curseqcount += 1
         elif _rule == ebnfgrammar.option:
 #            print "  -option", self.curaltcount, self.curseqcount
+            # pops the last alternative
+            rules = self.pop_rules( 1 )
+            new_rule = self.new_rule(KleeneStar( self.new_symbol(), _min=0, _max=1, rule=rules[0] ))
+            self.rule_stack.append( new_rule )
             self.curseqcount += 1
         elif _rule == ebnfgrammar.rule:
 #            print "  -rule", self.curaltcount, self.curseqcount
             assert len(self.rule_stack)==1
             old_rule = self.rule_stack[0]
             del self.rule_stack[0]
-            old_rule.codename = self.current_rule
+            if isinstance(old_rule,Token):
+                # Wrap a token into an alternative
+                old_rule = self.new_rule(Alternative( self.current_rule, [old_rule] ))
+            else:
+                # Make sure we use the codename from the named rule
+                old_rule.codename = self.current_rule
             self.root_rules[self.current_rule] = old_rule
             self.current_subrule = 0
         return True
-    
+
     def token(self, name, value, source):
 #        print "token", name, value
         if name == ebnfgrammar.TOK_STRING:
