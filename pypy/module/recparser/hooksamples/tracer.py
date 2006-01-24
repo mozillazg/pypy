@@ -5,7 +5,7 @@ that we need a nice API to define "joinpoints". Maybe a SAX-like
 XXX: crashes on everything else than simple assignment (AssAttr, etc.)
 """
 
-from parser import ASTPrintnl, ASTConst, ASTName
+from parser import ASTPrintnl, ASTConst, ASTName, ASTAssign
 from parser import install_compiler_hook, source2ast
 
 BEFORE_LOG_SOURCE = """if '%s' in locals() or '%s' in globals():
@@ -29,15 +29,18 @@ class Tracer:
             child.accept(self)
         return node 
 
-    def visitAssign(self, assign):
+    def visitAssName(self, assname):
+        assign = assname
+        while not isinstance(assign, ASTAssign):
+            assign = assign.parent
         stmt = assign.parent
-        varname = assign.nodes[0].name
+        varname = assname.name
         before_stmts = get_statements(BEFORE_LOG_SOURCE % ((varname,) * 5))
         after_stmts = get_statements(AFTER_LOG_SOURCE % (varname, varname))
         stmt.insert_before(assign, before_stmts)
         stmt.insert_after(assign, after_stmts)
-        return assign
-
+        return assname
+    
     def __getattr__(self, attrname):
         if attrname.startswith('visit'):
             return self.default
