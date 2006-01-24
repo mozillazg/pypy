@@ -294,6 +294,18 @@ class NodeInfo:
         print >> buf, "        return visitor.visit%s(self)" % self.name
 
 
+    def _gen_insertnodes_func(self, buf):
+        print >> buf, "    def descr_insert_after(space, self, node, w_added_nodes):"
+        print >> buf, "        added_nodes = [space.interp_w(Node, w_node) for w_node in space.unpackiterable(w_added_nodes)]"
+        print >> buf, "        index = self.nodes.index(node) + 1"
+        print >> buf, "        self.nodes[index:index] = added_nodes"
+        print >> buf
+        print >> buf, "    def descr_insert_before(space, self, node, w_added_nodes):"
+        print >> buf, "        added_nodes = [space.interp_w(Node, w_node) for w_node in space.unpackiterable(w_added_nodes)]"
+        print >> buf, "        index = self.nodes.index(node)"
+        print >> buf, "        self.nodes[index:index] = added_nodes"
+
+
     def _gen_fget_func(self, buf, attr, prop ):
         # FGET
         print >> buf, "    def fget_%s( space, self):" % attr
@@ -345,6 +357,8 @@ class NodeInfo:
 
             if "fset_%s" % attr not in self.additional_methods:
                 self._gen_fset_func( buf, attr, prop )
+            if prop[attr] == P_NESTED and attr == 'nodes':
+                self._gen_insertnodes_func(buf)
 
     def _gen_typedef(self, buf):
         initargs = [strip_default(arg.strip())
@@ -364,6 +378,9 @@ class NodeInfo:
         print >> buf, "                     accept=interp2app(descr_%s_accept, unwrap_spec=[ObjSpace, W_Root, W_Root] )," % self.name
         for attr in self.argnames:
             print >> buf, "                    %s=GetSetProperty(%s.fget_%s, %s.fset_%s )," % (attr,self.name,attr,self.name,attr)
+            if self.argprops[attr] == P_NESTED and attr == "nodes":
+                print >> buf, "                     insert_after=interp2app(%s.descr_insert_after.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
+                print >> buf, "                     insert_before=interp2app(%s.descr_insert_before.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
         print >> buf, "                    )"
 
 
