@@ -2,7 +2,7 @@ import operator
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import checkgraph, c_last_exception
 from pypy.rpython.lltypesystem import lltype
-from pypy.jit.llvalue import LLAbstractValue, const
+from pypy.jit.llvalue import LLAbstractValue, const, aconst, AConstant, AVariable
 from pypy.jit.llvalue import ll_no_return_value
 from pypy.jit.llvalue import FlattenMemo, MatchMemo, FreezeMemo, UnfreezeMemo
 from pypy.jit.llcontainer import LLAbstractContainer, virtualcontainervalue
@@ -41,7 +41,7 @@ class LLState(LLAbstractContainer):
             assert len(incoming_link_args) == len(selfvalues)
             for linkarg, fr in zip(incoming_link_args, selfvalues):
                 if fr.fixed:
-                    assert isinstance(linkarg, Constant), (
+                    assert isinstance(linkarg, AConstant), (
                         "unexpected Variable %r reaching the fixed input arg %r"
                         % (linkarg, fr))
                     yield linkarg
@@ -52,6 +52,10 @@ class LLState(LLAbstractContainer):
         assert not self.frozen, "getruntimevars(): not for frozen states"
         return [a.runtimevar for a in self.flatten()]
 
+    def getgenvars(self, builder):
+        assert not self.frozen, "getgenvars(): not for frozen states"
+        return [a.getgenvar(builder) for a in self.flatten()]
+    
     def flatten(self, memo=None):
         if memo is None:
             memo = FlattenMemo()
@@ -102,8 +106,8 @@ class LLState(LLAbstractContainer):
         for v, a in zip(self.getlivevars(), self.args_a):
             a = a.unfreeze(memo, block)
             # try to preserve the name
-            if isinstance(a.runtimevar, Variable):
-                a.runtimevar.rename(v)
+            #if isinstance(a.runtimevar, Variable):
+            #    a.runtimevar.rename(v)
             new_args_a.append(a)
         return self.__class__(new_back, new_args_a, *self.localkey())
 
@@ -171,10 +175,10 @@ class LLAbstractInterp(object):
         args_a = []
         for i, v in enumerate(origgraph.getargs()):
             if i in arghints:
-                a = LLAbstractValue(const(arghints[i]))
+                a = LLAbstractValue(aconst(arghints[i]))
                 a.concrete = self.policy.concrete_args
             else:
-                a = LLAbstractValue(input=v.concretetype)
+                a = LLAbstractValue(AVariable(), input=v.concretetype)
             args_a.append(a)
         graphstate = self.schedule_graph(args_a, origgraph)
         graphstate.complete()
@@ -192,10 +196,10 @@ class LLAbstractInterp(object):
         #print "SCHEDULE_GRAPH", graphstate
         return graphstate
 
-    def schedule(self, inputstate):
+    def schedule(self, inputstate, builder):
         #print "SCHEDULE", args_a, origblock
         frozenstate = self.schedule_getstate(inputstate)
-        args_v = inputstate.getruntimevars()
+        args_v = inputstate.getgenvars(builder)
         return LinkState(args_v, frozenstate)
 
     def schedule_getstate(self, inputstate):
@@ -259,7 +263,7 @@ class LinkState(object):
         self.link = None
 
     def setreturn(self):
-            rgenop.closereturnlink(self.link, self.args_v[0])
+        rgenop.closereturnlink(self.link, self.args_v[0])
 
     def settarget(self, block, blockargs):
         args = []
@@ -280,7 +284,7 @@ class GraphState(object):
         self.name = '%s_%d' % (origgraph.name, n)
         # The 'args_v' attribute is needed by try_to_complete(),
         # which looks for it on either a GraphState or a LinkState
-        self.args_v = inputstate.getruntimevars()
+        self.args_v = inputstate.getgenvars(None)
         self.frozenstate = frozenstate
         #self.a_return = None
         self.state = "before"
@@ -370,7 +374,7 @@ class GraphState(object):
                 merged_key = []
                 recompute = False
                 for c1, c2 in zip(blockargs, next.args_v):
-                    if isinstance(c1, Constant) and c1 != c2:
+                    if isinstance(c1, AConstant) and c1 != c2:
                         # incompatibility
                         merged_key.append(None)  # force a Variable
                         recompute = True
@@ -418,7 +422,7 @@ class GraphState(object):
             for a1, a2, k in zip(state.flatten(),
                                  builder.runningstate.flatten(),
                                  key):
-                if isinstance(k, Constant):
+                if isinstance(k, AConstant):
                     arglist.append('%s => %s' % (a1, k))
                 else:
                     arglist.append('%s => %s' % (a1, a2))
@@ -488,7 +492,7 @@ class GraphState(object):
                 args_a = [builder.binding(v) for v in origlink.args]
                 nextinputstate = LLBlockState(builder.runningstate.back,
                                               args_a, origlink.target)
-                newlinkstate = self.interp.schedule(nextinputstate)
+                newlinkstate = self.interp.schedule(nextinputstate, builder)
                 if newexitswitch is not None:
                     newlinkstate.exitcase = origlink.exitcase
                     newlinkstate.llexitcase = origlink.llexitcase
@@ -534,7 +538,7 @@ class BlockBuilder(object):
     
     def binding(self, v):
         if isinstance(v, Constant):
-            return LLAbstractValue(v)
+            return LLAbstractValue(aconst(v.value, v.concretetype))
         else:
             return self.bindings[v]
 
@@ -564,7 +568,7 @@ class BlockBuilder(object):
         # can constant-fold
         print 'fold:', constant_op.__name__, concretevalues
         concreteresult = constant_op(*concretevalues)
-        a_result = LLAbstractValue(const(concreteresult))
+        a_result = LLAbstractValue(aconst(concreteresult))
         if any_concrete and self.interp.policy.concrete_propagate:
             a_result.concrete = True
         else:
@@ -572,8 +576,8 @@ class BlockBuilder(object):
         return a_result
 
     def residual(self, op, args_a):
-        retvar = rgenop.genop(self.newblock, op.opname,
-                              [a.forcevarorconst(self) for a in args_a],
+        retvar = self.genop(op.opname,
+                              [a.forcegenvarorconst(self) for a in args_a],
                               op.result.concretetype)
         return LLAbstractValue(retvar)
 
@@ -723,7 +727,7 @@ class BlockBuilder(object):
         parentstate = LLSuspendedBlockState(self.runningstate.back, alive_a,
                                             origblock, origposition)
         nextstate = LLBlockState(parentstate, args_a, origgraph.startblock)
-        raise InsertNextLink(self.interp.schedule(nextstate))
+        raise InsertNextLink(self.interp.schedule(nextstate, self))
 
     def handle_call_residual(self, op, origgraph, *args_a):
         # residual call: for now we need to force all arguments
@@ -781,7 +785,7 @@ class BlockBuilder(object):
 
     def op_getarraysize(self, op, a_ptr):
         if hasllcontent(a_ptr):
-            return LLAbstractValue(const(a_ptr.content.length))
+            return LLAbstractValue(aconst(a_ptr.content.length))
         return self.residualize(op, [a_ptr], len)
 
     def op_getarrayitem(self, op, a_ptr, a_index):
@@ -846,9 +850,10 @@ class BlockBuilder(object):
         memo = FlattenMemo()
         a_ptr.flatten(memo)
         for a in memo.result:
-            v = a.runtimevar
-            if isinstance(v, Variable) and not v.concretetype._is_atomic():
-                rgenop.genop(self.newblock, 'keepalive', [v], lltype.Void)
+            if (a.is_variable and
+                not a.getconcretetype()._is_atomic()):
+                self.genop('keepalive', [a.forcegenvarorconst()],
+                             lltype.Void)
         return ll_no_return_value
 
     # High-level operation dispatcher
@@ -863,7 +868,7 @@ class BlockBuilder(object):
         args_a = []
         for a in argtuple:
             if not isinstance(a, LLAbstractValue):
-                a = LLAbstractValue(const(a))
+                a = LLAbstractValue(aconst(a))
             args_a.append(a)
         # end of rather XXX'edly hackish parsing
 

@@ -1,6 +1,18 @@
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython import rgenop
+from pypy.tool.uid import Hashable
+
+class AVariable(object):
+    def __init__(self, genvar=None):
+        self.genvar = genvar
+
+    def getgenvar(self, builder):
+        return self.genvar
+    
+class AConstant(Hashable):
+    def getgenvar(self, v, builder):
+        
 
 class LLAbstractValue(object):
     """An abstract value, propagated through the blocks of the low-level
@@ -15,13 +27,14 @@ class LLAbstractValue(object):
 
     concrete = False   # concrete constants propagate eagerly
 
-    def __init__(self, runtimevar=None, content=None, input=None):
+    def __init__(self, runtimevar=None, genvar=None, content=None, input=None):
         self.runtimevar = runtimevar    # None or a Variable or a Constant
+        self.genvar     = genvar
         self.content    = content       # None or an LLAbstractContainer
         self.origin     = []  # list of frozen values: the sources that did or
                               # could allow 'self' to be computed as a constant
         self.input = input
-
+        
     def __repr__(self):
         if self.input:
             return '<input>'
@@ -78,12 +91,26 @@ class LLAbstractValue(object):
         if self.runtimevar is None:
             if self.content is None:
                 raise ValueError("ll_dummy_value.forcevarorconst()")
-            self.runtimevar = self.content.build_runtime_container(builder)
+            XXX + self.content.build_runtime_container(builder)
             self.content = None
         return self.runtimevar
 
+    def forcegenvarorconst(self, builder):
+        if self.runtimevar is None:
+            if self.content is None:
+                raise ValueError("ll_dummy_value.forcevarorconst()")
+            self.genvar = self.content.build_runtime_container(builder)
+            self.content = None
+        return self.getgenvar(builder)
+
+    def getgenvar(self, builder):
+        if self.genvar is None:
+            assert isinstance(self.runtimevar, AConstant)
+            self.genvar = builder.genconst(self.runtimevar.value)
+        return self.genvar
+    
     def maybe_get_constant(self):
-        if isinstance(self.runtimevar, Constant):
+        if isinstance(self.runtimevar, AConstant):
             return self.runtimevar
         else:
             return None
@@ -177,12 +204,13 @@ class LLFrozenRuntimeValue(LLFrozenValue):
         # no need to worry about sharing here: LLFrozenRuntimeValues are
         # never shared
         propagateconst = memo.propagateconsts.next()
-        if isinstance(propagateconst, Constant):
+        if isinstance(propagateconst, AConstant):
             v = propagateconst        # allowed to propagate as a Constant
             assert v.concretetype == self.concretetype
+            result = LLAbstractValue(v)
         else:
             v = rgenop.geninputarg(block, self.concretetype)
-        result = LLAbstractValue(v)
+            result = LLAbstractValue(v, genvar=v)
         result.origin.append(self)
         return result
 
@@ -257,6 +285,11 @@ def const(value, T=None):
     c.concretetype = T or lltype.typeOf(value)
     return c
 
-ll_no_return_value = LLAbstractValue(const(None, lltype.Void))
+def aconst(value, T=None):
+    c = AConstant(value)
+    c.concretetype = T or lltype.typeOf(value)
+    return c
+
+ll_no_return_value = LLAbstractValue(aconst(None, lltype.Void))
 ll_dummy_value = LLAbstractValue()
 frozen_dummy_value = LLFrozenDummyValue()

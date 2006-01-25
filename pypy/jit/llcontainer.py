@@ -216,7 +216,7 @@ def make_default(T, length, a_parent, parentindex):
         a.content.parentindex = parentindex
     else:
         # primitive initialized to zero
-        a = LLAbstractValue(const(T._defl()))
+        a = LLAbstractValue(aconst(T._defl()))
     return a
 
 def hasllcontent(a_ptr):
