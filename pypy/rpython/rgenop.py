@@ -44,6 +44,7 @@ def closeblock1(block):
     return link
 
 def closeblock2(block, exitswitch):
+    assert isinstance(exitswitch, flowmodel.Variable)
     block.exitswitch = exitswitch
     false_link = flowmodel.Link([], None)
     false_link.exitcase = False
@@ -56,6 +57,8 @@ def closeblock2(block, exitswitch):
 
 def closelink(link, vars, targetblock):
     if isinstance(link, flowmodel.Link):
+        for v in vars:
+            assert isinstance(v, (flowmodel.Variable, flowmodel.Constant))
         assert ([v.concretetype for v in vars] ==
                 [v.concretetype for v in targetblock.inputargs])
         link.args[:] = vars
