@@ -28,7 +28,7 @@ def genop(block, opname, vars, RESULT_TYPE):
     block.operations.append(op)
     return v
 
-def gengraphconst(block, name, target, FUNCTYPE):
+def gencallableconst(block, name, target, FUNCTYPE):
     fptr = lltype.functionptr(FUNCTYPE, name,
                               graph=buildgraph(target))
     return genconst(block, fptr)
