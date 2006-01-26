@@ -1,6 +1,5 @@
 import sys
 from pypy.rpython.lltypesystem.lltype import *
-from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rlist import *
 from pypy.rpython.rslice import ll_newslice
 from pypy.rpython.rint import signed_repr
