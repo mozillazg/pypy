@@ -580,6 +580,18 @@ class BlockBuilder(object):
                               [a.forcegenvarorconst(self) for a in args_a],
                               T)
         return LLAbstractValue(AVariable(T, genvar=retvar))
+
+    def residual_direct_call(self, FUNCTYPE, name, target, args_a):
+        T = FUNCTYPE.RESULT
+        gen_fn_const = rgenop.gengraphconst(self.newblock,
+                                            name,
+                                            target,
+                                            FUNCTYPE)
+        retvar = self.genop('direct_call', [gen_fn_const] +
+                              [a.forcegenvarorconst(self) for a in args_a],
+                              T)
+        return LLAbstractValue(AVariable(T, genvar=retvar))
+        
     
     def residualize(self, op, args_a, constant_op=None):
         if constant_op:
@@ -751,14 +763,9 @@ class BlockBuilder(object):
             if not a.concrete:
                 ARGS.append(a.getconcretetype())
                 new_args_a.append(a)
-        args_a = new_args_a
         TYPE = lltype.FuncType(ARGS, op.result.concretetype)
-        genconst = rgenop.gengraphconst(self.newblock,
-                                        graphstate.name,
-                                        graphstate.startblock,
-                                        TYPE)
-        a_func = LLAbstractValue(AConstant(genconst.value, TYPE, genvar=genconst)) # XXX const.value!
-        return self.residual(op, [a_func] + args_a) 
+        return self.residual_direct_call(TYPE, graphstate.name,
+                                         graphstate.startblock, new_args_a)
 
     def op_getfield(self, op, a_ptr, a_attrname):
         if hasllcontent(a_ptr):
