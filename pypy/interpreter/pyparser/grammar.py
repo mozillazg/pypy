@@ -10,13 +10,13 @@ Token       : a lexer token
 try:
     from pypy.interpreter.baseobjspace import Wrappable
     from pypy.interpreter.pyparser.pytoken import NULLTOKEN
-    from pypy.interpreter.pyparser.pysymbol import SymbolMapper
+    from pypy.interpreter.pyparser.parser import Parser
 except ImportError:
     # allows standalone testing
     Wrappable = object
     NULLTOKEN = -1 # None
-    from pysymbol import SymbolMapper
-    
+    from parser import Parser
+
 
 from syntaxtree import SyntaxNode, TempSyntaxNode, TokenNode
 
@@ -75,7 +75,8 @@ class TokenSource(object):
 
 
 def build_first_sets(rules):
-    """builds the real first tokens set for each rule in <rules>
+    """XXX : dead
+    builds the real first tokens set for each rule in <rules>
 
     Because a rule can be recursive (directly or indirectly), the
     *simplest* algorithm to build each first set is to recompute them
@@ -106,17 +107,12 @@ class AbstractContext(object):
 
 class AbstractBuilder(object):
     """Abstract base class for builder objects"""
-    def __init__(self, symbols, rules=None, debug=0 ):
-        # a dictionary of grammar rules for debug/reference
-        if rules is not None:
-            self.rules = rules
-        else:
-            self.rules = {}
+    def __init__(self, parser, debug=0 ):
         # This attribute is here for convenience
         self.debug = debug
-        # mapping from codename to symbols
-        assert isinstance( symbols, SymbolMapper )
-        self.symbols = symbols
+        # the parser that represent the grammar used
+        assert isinstance( parser, Parser )
+        self.parser = parser
 
     def context(self):
         """Return an opaque context object"""
@@ -148,24 +144,20 @@ class BaseGrammarBuilderContext(AbstractContext):
 
 class BaseGrammarBuilder(AbstractBuilder):
     """Base/default class for a builder"""
-    def __init__(self, rules=None, debug=0, symbols={} ):
-        if rules is None:
-            rules = SymbolMapper()
-        AbstractBuilder.__init__(self, rules, debug, symbols )
+    def __init__(self, parser, debug=0 ):
+        AbstractBuilder.__init__(self, parser, debug )
         # stacks contain different objects depending on the builder class
         # to be RPython they should not be defined in the base class
         self.stack = []
 
     def context(self):
         """Returns the state of the builder to be restored later"""
-        #print "Save Stack:", self.stack
         return BaseGrammarBuilderContext(len(self.stack))
 
     def restore(self, ctx):
         assert isinstance(ctx, BaseGrammarBuilderContext)
         del self.stack[ctx.stackpos:]
-        #print "Restore Stack:", self.stack
-        
+
     def alternative(self, rule, source):
         # Do nothing, keep rule on top of the stack
         if rule.is_root():
@@ -216,9 +208,11 @@ class GrammarElement(Wrappable):
 
     symbols = {} # dirty trick to provide a symbols mapping while printing (and not putting it in every object)
 
-    def __init__(self, codename):
+    def __init__(self, parser, codename):
         # the rule name
         #assert type(codename)==int
+        assert isinstance(parser, Parser)
+        self.parser = parser
         self.codename = codename # integer mapping to either a token value or rule symbol value
         self.args = []
         self.first_set = []
@@ -233,7 +227,6 @@ class GrammarElement(Wrappable):
         if self.codename >=0:
             return True
         return False
-    
 
     def match(self, source, builder, level=0):
         """Try to match a grammar rule
@@ -256,17 +249,17 @@ class GrammarElement(Wrappable):
             pos1 = source.get_pos()
         in_first_set = self.match_first_set(token)
         if not in_first_set: # and not EmptyToken in self.first_set:
-            if EmptyToken in self.first_set:
+            if self.parser.EmptyToken in self.first_set:
                 ret = builder.sequence(self, source, 0 )
                 if self._trace:
-                    self._debug_display(token, level, 'eee', builder.symbols)
+                    self._debug_display(token, level, 'eee' )
                 return ret
             if self._trace:
-                self._debug_display(token, level, 'rrr', builder.symbols)
+                self._debug_display(token, level, 'rrr' )
             return 0
         elif self._trace:
-            self._debug_display(token, level, '>>>', builder.symbols)
-        
+            self._debug_display(token, level, '>>>')
+
         res = self._match(source, builder, level)
         if self._trace:
             pos2 = source.get_pos()
@@ -274,21 +267,20 @@ class GrammarElement(Wrappable):
                 prefix = '+++'
             else:
                 prefix = '---'
-            self._debug_display(token, level, prefix, builder.symbols)
+            self._debug_display(token, level, prefix)
             print ' '*level, prefix, " TEXT ='%s'" % (
                 source.get_source_text(pos1,pos2))
             if res:
                 print "*" * 50
         return res
 
-    def _debug_display(self, token, level, prefix, symbols):
+    def _debug_display(self, token, level, prefix):
         """prints context debug informations"""
         prefix = '%s%s' % (' ' * level, prefix)
         print prefix, " RULE =", self
         print prefix, " TOKEN =", token
         print prefix, " FIRST SET =", self.first_set
-        
-        
+
     def _match(self, source, builder, level=0):
         """Try to match a grammar rule
 
@@ -302,7 +294,7 @@ class GrammarElement(Wrappable):
         returns None if no match or an object build by builder
         """
         return 0
-    
+
     def parse(self, source):
         """Returns a simplified grammar if the rule matched at the source
         current context or None"""
@@ -311,43 +303,27 @@ class GrammarElement(Wrappable):
         pass
 
     def __str__(self):
-        # XXX: remove me after debug
-        symbols = {}
-        import pytoken
-        import pysymbol
-        symbols.update( pysymbol._cpython_symbols.sym_name )
-        symbols.update( pytoken.tok_name )
-        
-        return self.display(0, symbols )
-#        return self.display(0, GrammarElement.symbols )
+        return self.display(0)
 
     def __repr__(self):
-        # XXX: remove me after debug
-        symbols = {}
-        import pytoken
-        import pysymbol
-        symbols.update( pysymbol._cpython_symbols.sym_name )
-        symbols.update( pytoken.tok_name )
-        
-        return self.display(0, symbols )
-#        return self.display(0, GrammarElement.symbols )
+        return self.display(0)
 
-    def display(self, level=0, symbols={}):
+    def display(self, level=0):
         """Helper function used to represent the grammar.
         mostly used for debugging the grammar itself"""
         return "GrammarElement"
 
 
-    def debug_return(self, ret, symbols, arg="" ):
+    def debug_return(self, ret, arg="" ):
         # FIXME: use a wrapper of match() methods instead of debug_return()
         #        to prevent additional indirection even better a derived
         #        Debugging builder class
         if ret and DEBUG > 0:
             print "matched %s (%s): %s" % (self.__class__.__name__,
-                                           arg, self.display(0, symbols=symbols) )
+                                           arg, self.display(0) )
         return ret
 
-    
+
     def calc_first_set(self):
         """returns the list of possible next tokens
         *must* be implemented in subclasses
@@ -380,27 +356,27 @@ class GrammarElement(Wrappable):
 
 
 class GrammarProxy(GrammarElement):
-    def __init__(self, rule_name, codename=-1 ):
-        GrammarElement.__init__(self, codename )
+    def __init__(self, parser, rule_name, codename=-1 ):
+        GrammarElement.__init__(self, parser, codename )
         self.rule_name = rule_name
         self.object = None
 
-    def display(self, level=0, symbols={}):
+    def display(self, level=0):
         """Helper function used to represent the grammar.
         mostly used for debugging the grammar itself"""
-        name = symbols.get(self.codename, self.rule_name)
+        name = self.parser.symbol_repr(self.codename)
         repr = "Proxy("+name
         if self.object:
-            repr+=","+self.object.display(level=1,symbols=symbols)
+            repr+=","+self.object.display(1)
         repr += ")"
         return repr
-    
+
 
 
 class Alternative(GrammarElement):
     """Represents an alternative in a grammar rule (as in S -> A | B | C)"""
-    def __init__(self, name, args):
-        GrammarElement.__init__(self, name )
+    def __init__(self, parser, name, args):
+        GrammarElement.__init__(self, parser, name )
         self.args = args
         self._reordered = False
         for i in self.args:
@@ -418,7 +394,7 @@ class Alternative(GrammarElement):
         # to see if this solve our problems with infinite recursion
         for rule in self.args:
             if USE_LOOKAHEAD:
-                if not rule.match_first_set(tok) and EmptyToken not in rule.first_set:
+                if not rule.match_first_set(tok) and self.parser.EmptyToken not in rule.first_set:
                     if self._trace:
                         print "Skipping impossible rule: %s" % (rule,)
                     continue
@@ -428,15 +404,15 @@ class Alternative(GrammarElement):
                 return ret
         return 0
 
-    def display(self, level=0, symbols={}):
-        name = get_symbol( self.codename, symbols )
+    def display(self, level=0):
+        name = self.parser.symbol_repr( self.codename )
         if level == 0:
             name =  name + " -> "
         elif self.is_root():
             return name
         else:
             name = ""
-        items = [ a.display(1,symbols) for a in self.args ]
+        items = [ a.display(1) for a in self.args ]
         return name+"(" + "|".join( items ) + ")"
 
     def calc_first_set(self):
@@ -460,7 +436,7 @@ class Alternative(GrammarElement):
         # <tokens> is only needed for warning / debugging purposes
         tokens_set = []
         for rule in self.args:
-            if EmptyToken in rule.first_set:
+            if self.parser.EmptyToken in rule.first_set:
                 empty_set.append(rule)
             else:
                 not_empty_set.append(rule)
@@ -469,7 +445,7 @@ class Alternative(GrammarElement):
                 # It will check if a token is part of several first sets of
                 # a same alternative
                 for token in rule.first_set:
-                    if token is not EmptyToken and token in tokens_set:
+                    if token is not self.parser.EmptyToken and token in tokens_set:
                         print "Warning, token %s in\n\t%s's first set is " \
                             " part of a previous rule's first set in " \
                             " alternative\n\t%s" % (token, rule, self)
@@ -497,8 +473,8 @@ class Alternative(GrammarElement):
 
 class Sequence(GrammarElement):
     """Reprensents a Sequence in a grammar rule (as in S -> A B C)"""
-    def __init__(self, name, args):
-        GrammarElement.__init__(self, name )
+    def __init__(self, parser, name, args):
+        GrammarElement.__init__(self, parser, name )
         self.args = args
         for i in self.args:
             assert isinstance( i, GrammarElement )
@@ -520,15 +496,15 @@ class Sequence(GrammarElement):
         ret = builder.sequence(self, source, len(self.args))
         return ret
 
-    def display(self, level=0, symbols={}):
-        name = get_symbol( self.codename, symbols )
+    def display(self, level=0):
+        name = self.parser.symbol_repr( self.codename )
         if level ==  0:
             name = name + " -> "
         elif self.is_root():
             return name
         else:
             name = ""
-        items = [a.display(1,symbols) for a in self.args]
+        items = [a.display(1) for a in self.args]
         return name + "(" + " ".join( items ) + ")"
 
     def calc_first_set(self):
@@ -543,18 +519,18 @@ class Sequence(GrammarElement):
         for rule in self.args:
             if not rule.first_set:
                 break
-            if EmptyToken in self.first_set:
-                self.first_set.remove( EmptyToken )
+            if self.parser.EmptyToken in self.first_set:
+                self.first_set.remove( self.parser.EmptyToken )
 
-                # del self.first_set[EmptyToken]
+                # del self.first_set[self.parser.EmptyToken]
             # while we're in this loop, keep agregating possible tokens
             for t in rule.first_set:
                 if t not in self.first_set:
                     self.first_set.append(t)
                 # self.first_set[t] = 1
-            if EmptyToken not in rule.first_set:
+            if self.parser.EmptyToken not in rule.first_set:
                 break
-                
+
     def validate( self, syntax_node ):
         """validate a syntax tree/subtree from this grammar node"""
         if self.codename != syntax_node.name:
@@ -570,13 +546,10 @@ class Sequence(GrammarElement):
 
 
 
-
-
-
 class KleeneStar(GrammarElement):
     """Represents a KleeneStar in a grammar rule as in (S -> A+) or (S -> A*)"""
-    def __init__(self, name, _min = 0, _max = -1, rule=None):
-        GrammarElement.__init__( self, name )
+    def __init__(self, parser, name, _min = 0, _max = -1, rule=None):
+        GrammarElement.__init__( self, parser, name )
         self.args = [rule]
         self.min = _min
         if _max == 0:
@@ -584,8 +557,8 @@ class KleeneStar(GrammarElement):
         self.max = _max
         self.star = "x"
         if self.min == 0:
-            self.first_set.append( EmptyToken )
-            # self.first_set[EmptyToken] = 1
+            self.first_set.append( self.parser.EmptyToken )
+            # self.first_set[self.parser.EmptyToken] = 1
 
     def _match(self, source, builder, level=0):
         """matches a number of times self.args[0]. the number must be
@@ -616,14 +589,19 @@ class KleeneStar(GrammarElement):
                 ret = builder.sequence(self, source, rules)
                 return ret
 
-    def display(self, level=0, symbols={}):
-        name = get_symbol( self.codename, symbols )
+    def display(self, level=0):
+        name = self.parser.symbol_repr( self.codename )
         if level==0:
             name = name + " -> "
         elif self.is_root():
             return name
         else:
             name = ""
+        star = self.get_star()
+        s = self.args[0].display(1)
+        return name + "%s%s" % (s, star)
+
+    def get_star(self):
         star = "{%d,%d}" % (self.min,self.max)
         if self.min==0 and self.max==1:
             star = "?"
@@ -631,23 +609,21 @@ class KleeneStar(GrammarElement):
             star = "*"
         elif self.min==1 and self.max==-1:
             star = "+"
-        s = self.args[0].display(1, symbols)
-        return name + "%s%s" % (s, star)
-
+        return star
 
     def calc_first_set(self):
         """returns the list of possible next tokens
         if S -> A*:
-            LAH(S) = Union( LAH(A), EmptyToken )
+            LAH(S) = Union( LAH(A), self.parser.EmptyToken )
         if S -> A+:
             LAH(S) = LAH(A)
         """
         rule = self.args[0]
         self.first_set = rule.first_set[:]
         # self.first_set = dict(rule.first_set)
-        if self.min == 0 and EmptyToken not in self.first_set:
-            self.first_set.append(EmptyToken)
-            # self.first_set[EmptyToken] = 1
+        if self.min == 0 and self.parser.EmptyToken not in self.first_set:
+            self.first_set.append(self.parser.EmptyToken)
+            # self.first_set[self.parser.EmptyToken] = 1
 
     def validate( self, syntax_node ):
         """validate a syntax tree/subtree from this grammar node"""
@@ -666,8 +642,8 @@ class KleeneStar(GrammarElement):
 
 class Token(GrammarElement):
     """Represents a Token in a grammar rule (a lexer token)"""
-    def __init__(self, codename, value=None):
-        GrammarElement.__init__(self, codename)
+    def __init__(self, parser, codename, value=None):
+        GrammarElement.__init__(self, parser, codename)
         self.value = value
         self.first_set = [self]
         # self.first_set = {self: 1}
@@ -697,13 +673,13 @@ class Token(GrammarElement):
         source.restore( ctx )
         return 0
 
-    def display(self, level=0, symbols={}):
-        name = get_symbol( self.codename, symbols )
+    def display(self, level=0):
+        name = self.parser.symbol_repr( self.codename )
         if self.value is None:
             return "<%s>" % name
         else:
             return "<%s>=='%s'" % (name, self.value)
-    
+
 
     def match_token(self, other):
         """convenience '==' implementation, this is *not* a *real* equality test
@@ -715,12 +691,12 @@ class Token(GrammarElement):
         """
         if not isinstance(other, Token):
             raise RuntimeError("Unexpected token type")
-        if other is EmptyToken:
+        if other is self.parser.EmptyToken:
             return False
         res = other.codename == self.codename and self.value in [None, other.value]
         #print "matching", self, other, res
         return res
-    
+
     def __eq__(self, other):
         return self.codename == other.codename and self.value == other.value
 
@@ -740,8 +716,5 @@ class Token(GrammarElement):
         return False
 
 
-EmptyToken = Token(NULLTOKEN, None)
 
 
-
-    

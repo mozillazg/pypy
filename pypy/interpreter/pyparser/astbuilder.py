@@ -5,12 +5,16 @@ without going trhough the nested tuples step
 
 from grammar import BaseGrammarBuilder, AbstractContext
 from pypy.interpreter.astcompiler import ast, consts
-from pypy.interpreter.pyparser.pysymbol import _cpython_symbols as sym
-import pypy.interpreter.pyparser.pytoken as tok
+from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.parsestring import parsestr
 
 DEBUG_MODE = 0
+
+# XXX : use builder.parser instead
+sym = PYTHON_PARSER.symbols
+rsym = PYTHON_PARSER.symbol_repr
+tok = PYTHON_PARSER
 
 ### Parsing utilites #################################################
 def parse_except_clause(tokens):
@@ -1501,8 +1505,8 @@ class BaseRuleObject(ast.Node):
         self.count = count
         self.lineno = lineno # src.getline()
         self.col = 0  # src.getcol()
-        
-    
+
+# XXX : replace sym and rsym by a ref to parser
 class RuleObject(BaseRuleObject):
     """A simple object used to wrap a rule or token"""
     def __init__(self, name, count, lineno):
@@ -1510,26 +1514,25 @@ class RuleObject(BaseRuleObject):
         self.rulename = name
 
     def __str__(self):
-        return "<Rule: %s/%d>" % (sym.sym_name[self.rulename], self.count)
+        return "<Rule: %s/%d>" % ( rsym[self.rulename], self.count)
 
     def __repr__(self):
-        return "<Rule: %s/%d>" % (sym.sym_name[self.rulename], self.count)
+        return "<Rule: %s/%d>" % ( rsym[self.rulename], self.count)
 
 
 class TempRuleObject(BaseRuleObject):
     """used to keep track of how many items get_atom() should pop"""
-    
     def __init__(self, name, count, lineno):
         BaseRuleObject.__init__(self, count, lineno)
         self.temp_rulename = name
-        
+
     def __str__(self):
         return "<Rule: %s/%d>" % (self.temp_rulename, self.count)
 
     def __repr__(self):
         return "<Rule: %s/%d>" % (self.temp_rulename, self.count)
 
-    
+
 class TokenObject(ast.Node):
     """A simple object used to wrap a rule or token"""
     def __init__(self, name, value, lineno):
@@ -1539,7 +1542,7 @@ class TokenObject(ast.Node):
         # self.line = 0 # src.getline()
         self.col = 0  # src.getcol()
         self.lineno = lineno
-        
+
     def get_name(self):
         return tok.tok_rpunct.get(self.name,
                                   tok.tok_name.get(self.name, str(self.name)))
@@ -1549,10 +1552,10 @@ class TokenObject(ast.Node):
         if value is None:
             value = ''
         return value
-    
+
     def __str__(self):
         return "<Token: (%s,%s)>" % (self.get_name(), self.value)
-    
+
     def __repr__(self):
         return "<Token: (%r,%s)>" % (self.get_name(), self.value)
 
@@ -1622,8 +1625,10 @@ class AstBuilderContext(AbstractContext):
 class AstBuilder(BaseGrammarBuilder):
     """A builder that directly produce the AST"""
 
-    def __init__(self, rules=None, debug=0, space=None):
-        BaseGrammarBuilder.__init__(self, rules, debug)
+    def __init__(self, parser=None, debug=0, space=None):
+        if parser is None:
+            parser = PYTHON_PARSER
+        BaseGrammarBuilder.__init__(self, parser, debug)
         self.rule_stack = []
         self.space = space
         self.source_encoding = None
@@ -1632,8 +1637,6 @@ class AstBuilder(BaseGrammarBuilder):
         return AstBuilderContext(self.rule_stack)
 
     def restore(self, ctx):
-##         if DEBUG_MODE:
-##             print "Restoring context (%s)" % (len(ctx.rule_stack))
         assert isinstance(ctx, AstBuilderContext)
         assert len(self.rule_stack) >= ctx.d
         del self.rule_stack[ctx.d:]
@@ -1644,15 +1647,10 @@ class AstBuilder(BaseGrammarBuilder):
 
     def push(self, obj):
         self.rule_stack.append(obj)
-        if not isinstance(obj, RuleObject) and not isinstance(obj, TokenObject):
-##             if DEBUG_MODE:
-##                 print "Pushed:", str(obj), len(self.rule_stack)
-            pass
-        elif isinstance(obj, TempRuleObject):
-##             if DEBUG_MODE:
-##                 print "Pushed:", str(obj), len(self.rule_stack)
-            pass
-        # print "\t", self.rule_stack
+##         if not isinstance(obj, RuleObject) and not isinstance(obj, TokenObject):
+##             pass
+##         elif isinstance(obj, TempRuleObject):
+##             pass
 
     def push_tok(self, name, value, src ):
         self.push( TokenObject( name, value, src._token_lnum ) )
@@ -1664,48 +1662,29 @@ class AstBuilder(BaseGrammarBuilder):
         # Do nothing, keep rule on top of the stack
 ##        rule_stack = self.rule_stack[:]
         if rule.is_root():
-##             if DEBUG_MODE:
-##                 print "ALT:", sym.sym_name[rule.codename], self.rule_stack
             builder_func = ASTRULES.get(rule.codename, None)
             if builder_func:
                 builder_func(self, 1)
             else:
-##                 if DEBUG_MODE:
-##                     print "No reducing implementation for %s, just push it on stack" % (
-##                         sym.sym_name[rule.codename])
                 self.push_rule(rule.codename, 1, source)
         else:
             self.push_rule(rule.codename, 1, source)
-##         if DEBUG_MODE > 1:
-##             show_stack(rule_stack, self.rule_stack)
-##             x = raw_input("Continue ?")
         return True
 
     def sequence(self, rule, source, elts_number):
         """ """
 ##        rule_stack = self.rule_stack[:]
         if rule.is_root():
-##             if DEBUG_MODE:
-##                 print "SEQ:", sym.sym_name[rule.codename]
             builder_func = ASTRULES.get(rule.codename, None)
             if builder_func:
-                # print "REDUCING SEQUENCE %s" % sym.sym_name[rule.codename]
                 builder_func(self, elts_number)
             else:
-##                 if DEBUG_MODE:
-##                     print "No reducing implementation for %s, just push it on stack" % (
-##                         sym.sym_name[rule.codename])
                 self.push_rule(rule.codename, elts_number, source)
         else:
             self.push_rule(rule.codename, elts_number, source)
-##         if DEBUG_MODE > 1:
-##             show_stack(rule_stack, self.rule_stack)
-##             raw_input("Continue ?")
         return True
 
     def token(self, name, value, source):
-##         if DEBUG_MODE:
-##             print "TOK:", tok.tok_name[name], name, value
         self.push_tok(name, value, source)
         return True
 
@@ -1723,12 +1702,12 @@ class AstBuilder(BaseGrammarBuilder):
             l = space.builtin.get('long')
             return space.call_function(l, space.wrap(value), space.wrap(base))
         if value.endswith('j') or value.endswith('J'):
-            c = space.builtin.get('complex') 
+            c = space.builtin.get('complex')
             return space.call_function(c, space.wrap(value))
         try:
             i = space.builtin.get('int')
             return space.call_function(i, space.wrap(value), space.wrap(base))
-        except: 
+        except:
             f = space.builtin.get('float')
             return space.call_function(f, space.wrap(value))
 
@@ -1765,4 +1744,4 @@ def show_stack(before, after):
         else:
             obj2 = "-"
         print "% 3d | %30s | %30s" % (i, obj1, obj2)
-    
+

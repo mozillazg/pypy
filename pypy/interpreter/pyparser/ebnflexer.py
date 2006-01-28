@@ -4,7 +4,7 @@ analyser in grammar.py
 """
 
 from grammar import TokenSource, Token, AbstractContext
-from ebnfgrammar import *
+from ebnfgrammar import GRAMMAR_GRAMMAR as G
 
 
 def match_symbol( input, start, stop ):
@@ -31,8 +31,9 @@ class GrammarSource(TokenSource):
     SYMBOL: a rule symbol usually appeary right of a SYMDEF
     tokens: '[', ']', '(' ,')', '*', '+', '|'
     """
-    def __init__(self, inpstring):
+    def __init__(self, parser, inpstring):
         # TokenSource.__init__(self)
+        self.parser = parser
         self.input = inpstring
         self.pos = 0
         self.begin = 0
@@ -58,7 +59,6 @@ class GrammarSource(TokenSource):
         assert isinstance( ctx, GrammarSourceContext )
         self.pos = ctx.pos
         self._peeked = ctx.peek
-        
 
     def current_linesource(self):
         pos = idx = self.begin
@@ -73,7 +73,6 @@ class GrammarSource(TokenSource):
 
     def current_lineno(self):
         return self.current_line
-
 
     def skip_empty_lines(self, input, start, end ):
         idx = start
@@ -130,13 +129,13 @@ class GrammarSource(TokenSource):
             peeked = self._peeked
             self._peeked = None
             return peeked
-        
+
         pos = self.pos
         inp = self.input
         end = len(self.input)
         pos = self.skip_empty_lines(inp,pos,end)
         if pos==end:
-            return Token(EOF, None)
+            return self.parser.Token( 'EOF', None)
 
         # at this point nextchar is not a white space nor \n
         nextchr = inp[pos]
@@ -148,22 +147,22 @@ class GrammarSource(TokenSource):
             self.pos = npos
 	    _endpos = npos - 1
 	    assert _endpos>=0
-            return Token(TOK_STRING,inp[pos+1:_endpos])
+            return self.parser.Token( 'TOK_STRING', inp[pos+1:_endpos])
         else:
             npos = match_symbol( inp, pos, end)
             if npos!=pos:
                 self.pos = npos
                 if npos!=end and inp[npos]==":":
                     self.pos += 1
-                    return Token(TOK_SYMDEF,inp[pos:npos])
+                    return self.parser.Token( 'TOK_SYMDEF', inp[pos:npos])
                 else:
-                    return Token(TOK_SYMBOL,inp[pos:npos])
-        
+                    return self.parser.Token( 'TOK_SYMBOL', inp[pos:npos])
+
         # we still have pos!=end here
         chr = inp[pos]
         if chr in "[]()*+|":
             self.pos = pos+1
-            return Token(tok_rmap[chr], chr)
+            return Token( self.parser, self.parser.tok_values[chr], chr)
         self.RaiseError( "Unknown token" )
 
     def peek(self):
