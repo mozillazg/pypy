@@ -17,7 +17,7 @@ import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
 import pypy.interpreter.pyparser.ebnfparse as ebnfparse
 import pypy.interpreter.pyparser.grammar as grammar
-from pypy.interpreter.pyparser.parser import Parser
+
 try:
     from pypy.interpreter.pyparser import symbol
 except ImportError:
@@ -26,10 +26,10 @@ except ImportError:
 
 from codeop import PyCF_DONT_IMPLY_DEDENT
 
-class PythonParser(Parser):
+class PythonParser(grammar.Parser):
     """Wrapper class for python grammar"""
     def __init__(self):
-        Parser.__init__(self)
+        grammar.Parser.__init__(self)
 
     def parse_source(self, textsrc, goal, builder, flags=0):
         """Parse a python source according to goal"""
@@ -50,9 +50,9 @@ class PythonParser(Parser):
         return self.parse_lines(lines, goal, builder, flags)
 
     def parse_lines(self, lines, goal, builder, flags=0):
-        goalnumber = pysymbol._cpython_symbols.sym_values[goal]
+        goalnumber = self.symbols[goal]
         target = self.root_rules[goalnumber]
-        src = Source(lines, flags)
+        src = Source(self, lines, flags)
 
         result = target.match(src, builder)
         if not result:

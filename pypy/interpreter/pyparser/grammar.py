@@ -10,12 +10,10 @@ Token       : a lexer token
 try:
     from pypy.interpreter.baseobjspace import Wrappable
     from pypy.interpreter.pyparser.pytoken import NULLTOKEN
-    from pypy.interpreter.pyparser.parser import Parser
 except ImportError:
     # allows standalone testing
     Wrappable = object
     NULLTOKEN = -1 # None
-    from parser import Parser
 
 
 from syntaxtree import SyntaxNode, TempSyntaxNode, TokenNode
@@ -303,10 +301,18 @@ class GrammarElement(Wrappable):
         pass
 
     def __str__(self):
-        return self.display(0)
+        try:
+            return self.display(0)
+        except Exception, e:
+            import traceback
+            traceback.print_exc()
 
     def __repr__(self):
-        return self.display(0)
+        try:
+            return self.display(0)
+        except Exception, e:
+            import traceback
+            traceback.print_exc()
 
     def display(self, level=0):
         """Helper function used to represent the grammar.
@@ -717,4 +723,137 @@ class Token(GrammarElement):
 
 
 
+class Parser(object):
+    def __init__(self):
+        pass
+        _anoncount = self._anoncount = -10
+        _count = self._count = 0
+        self.sym_name = {}  # mapping symbol code -> symbol name
+        self.symbols = {}   # mapping symbol name -> symbol code
+        self.tokens = { 'NULLTOKEN' : -1 }
+        self.EmptyToken = Token( self, -1, None )
+        self.tok_name = {}  
+        self.tok_values = {}
+        self._ann_sym_count = -10
+        self._sym_count = 0
+        self.all_rules = []
+        self.root_rules = {}
 
+    def symbol_repr( self, codename ):
+        if codename in self.tok_name:
+            return self.tok_name[codename]
+        elif codename in self.sym_name:
+            return self.sym_name[codename]
+        return "%d" % codename
+
+    def add_symbol( self, sym ):
+        assert isinstance( sym, str )
+        if not sym in self.symbols:
+            val = self._sym_count
+            self._sym_count += 1
+            self.symbols[sym] = val
+            self.sym_name[val] = sym
+            return val
+        return self.symbols[ sym ]
+
+    def add_anon_symbol( self, sym ):
+        assert isinstance( sym, str )
+        if not sym in self.symbols:
+            val = self._ann_sym_count
+            self._ann_sym_count -= 1
+            self.symbols[sym] = val
+            self.sym_name[val] = sym
+            return val
+        return self.symbols[ sym ]
+
+    def add_token( self, tok, value = None ):
+        assert isinstance( tok, str )
+        if not tok in self.tokens:
+            val = self._sym_count
+            self._sym_count += 1
+            self.tokens[tok] = val
+            self.tok_name[val] = tok
+            if value is not None:
+                self.tok_values[value] = val
+            return val
+        return self.tokens[ tok ]
+
+    def load_symbols( self, symbols ):
+        for _value, _name in symbols.items():
+            if _value < self._ann_sym_count:
+                self._ann_sym_count = _value - 1
+            if _value > self._sym_count:
+                self._sym_count = _value + 1
+            self.symbols[_name] = _value
+            self.sym_name[_value] = _name
+
+    def build_first_sets(self):
+        """builds the real first tokens set for each rule in <rules>
+
+        Because a rule can be recursive (directly or indirectly), the
+        *simplest* algorithm to build each first set is to recompute them
+        until Computation(N) = Computation(N-1), N being the number of rounds.
+        As an example, on Python2.3's grammar, we need 19 cycles to compute
+        full first sets.
+        """
+        rules = self.all_rules
+        changed = True
+        while changed:
+            # loop while one first set is changed
+            changed = False
+            for rule in rules:
+                # For each rule, recompute first set
+                size = len(rule.first_set)
+                rule.calc_first_set()
+                new_size = len(rule.first_set)
+                if new_size != size:
+                    changed = True
+        for r in rules:
+            assert len(r.first_set) > 0, "Error: ot Empty firstset for %s" % r
+            r.reorder_rule()
+
+
+    def Alternative( self, name_id, args ):
+        assert isinstance( name_id, int )
+        alt = Alternative( self, name_id, args )
+        self.all_rules.append( alt )
+        return alt
+    
+    def Alternative_n(self, name, args ):
+        assert isinstance(name, str)
+        name_id = self.add_symbol( name )
+        return self.Alternative( name_id, args )
+
+    def Sequence( self, name_id, args ):
+        assert isinstance( name_id, int )
+        alt = Sequence( self, name_id, args )
+        self.all_rules.append( alt )
+        return alt
+    
+    def Sequence_n(self, name, args ):
+        assert isinstance(name, str)
+        name_id = self.add_symbol( name )
+        return self.Sequence( name_id, args )
+
+    def KleeneStar( self, name_id, _min = 0, _max = -1, rule = None ):
+        assert isinstance( name_id, int )
+        alt = KleeneStar( self, name_id, _min, _max, rule )
+        self.all_rules.append( alt )
+        return alt
+    
+    def KleeneStar_n(self, name, _min = 0, _max = -1, rule = None ):
+        assert isinstance(name, str)
+        name_id = self.add_symbol( name )
+        return self.KleeneStar( name_id, _min, _max, rule )
+
+    def Token_n(self, name, value = None ):
+        assert isinstance( name, str)
+        assert value is None or isinstance( value, str)
+        name_id = self.add_token( name, value )
+        return self.Token( name_id, value )
+
+    def Token(self, name_id, value = None ):
+        assert isinstance( name_id, int )
+        assert value is None or isinstance( value, str)
+        tok = Token( self, name_id, value )
+        return tok
