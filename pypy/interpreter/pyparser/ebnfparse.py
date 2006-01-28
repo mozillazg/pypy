@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 from grammar import BaseGrammarBuilder, Alternative, Sequence, Token
 from grammar import GrammarProxy, KleeneStar, GrammarElement, build_first_sets
-from grammar import AbstractBuilder, AbstractContext
+from grammar import AbstractBuilder, AbstractContext, Parser
 from ebnflexer import GrammarSource
 import ebnfgrammar
 from ebnfgrammar import GRAMMAR_GRAMMAR
 from syntaxtree import AbstractSyntaxVisitor
-from parser import Parser
 
 
 ORDA = ord("A")
@@ -117,7 +116,8 @@ class EBNFBuilder(AbstractBuilder):
         name is based on the current grammar rule being parsed"""
         rule_name = ":" + self.current_rule_name + "_%d" % self.current_subrule
         self.current_subrule += 1
-        return rule_name
+        name_id = self.parser.add_anon_symbol( rule_name )
+        return name_id
 
     def new_rule(self, rule):
         """A simple helper method that registers a new rule as 'known'"""
@@ -155,7 +155,7 @@ class EBNFBuilder(AbstractBuilder):
 
     def get_rule( self, name ):
         if name in self.parser.tokens:
-            return self.parser.Token( name )
+            return self.parser.Token_n( name )
         codename = self.get_symbolcode( name )
         if codename in self.parser.root_rules:
             return self.parser.root_rules[codename]
@@ -220,7 +220,7 @@ class EBNFBuilder(AbstractBuilder):
             del self.rule_stack[0]
             if isinstance(old_rule,Token):
                 # Wrap a token into an alternative
-                old_rule = self.parser.Alternative( self.current_rule_name, [old_rule] )
+                old_rule = self.parser.Alternative( self.current_rule, [old_rule] )
             else:
                 # Make sure we use the codename from the named rule
                 old_rule.codename = self.current_rule
@@ -275,12 +275,12 @@ class EBNFBuilder(AbstractBuilder):
         if value in self.parser.tok_values:
             # punctuation
             tokencode = self.parser.tok_values[value]
-            tok = Token( self.parser, tokencode, None )
+            tok = self.parser.Token( tokencode, None )
         else:
             if not is_py_name(value):
                 raise RuntimeError("Unknown STRING value ('%s')" % value)
             # assume a keyword
-            tok = Token( self.parser, self.parser.NAME, value)
+            tok = self.parser.Token( self.parser.NAME, value)
             if value not in self.keywords:
                 self.keywords.append(value)
         self.rule_stack.append(tok)

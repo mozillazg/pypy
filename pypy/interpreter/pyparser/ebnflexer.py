@@ -125,6 +125,7 @@ class GrammarSource(TokenSource):
         # means backtracking more than one token
         # will re-tokenize the stream (but this is the
         # grammar lexer so we don't care really!)
+        _p = self.parser
         if self._peeked is not None:
             peeked = self._peeked
             self._peeked = None
@@ -135,7 +136,7 @@ class GrammarSource(TokenSource):
         end = len(self.input)
         pos = self.skip_empty_lines(inp,pos,end)
         if pos==end:
-            return self.parser.Token( 'EOF', None)
+            return _p.Token( _p.EOF, None)
 
         # at this point nextchar is not a white space nor \n
         nextchr = inp[pos]
@@ -147,22 +148,22 @@ class GrammarSource(TokenSource):
             self.pos = npos
 	    _endpos = npos - 1
 	    assert _endpos>=0
-            return self.parser.Token( 'TOK_STRING', inp[pos+1:_endpos])
+            return _p.Token( _p.TOK_STRING, inp[pos+1:_endpos])
         else:
             npos = match_symbol( inp, pos, end)
             if npos!=pos:
                 self.pos = npos
                 if npos!=end and inp[npos]==":":
                     self.pos += 1
-                    return self.parser.Token( 'TOK_SYMDEF', inp[pos:npos])
+                    return _p.Token( _p.TOK_SYMDEF, inp[pos:npos])
                 else:
-                    return self.parser.Token( 'TOK_SYMBOL', inp[pos:npos])
+                    return _p.Token( _p.TOK_SYMBOL, inp[pos:npos])
 
         # we still have pos!=end here
         chr = inp[pos]
         if chr in "[]()*+|":
             self.pos = pos+1
-            return Token( self.parser, self.parser.tok_values[chr], chr)
+            return _p.Token( _p.tok_values[chr], chr)
         self.RaiseError( "Unknown token" )
 
     def peek(self):
