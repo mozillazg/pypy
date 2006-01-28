@@ -10,6 +10,7 @@ except ImportError:
 # important here
 
 class SymbolMapper(object):
+    """XXX dead"""
     def __init__(self, sym_name=None ):
         _anoncount = self._anoncount = -10
         _count = self._count = 0

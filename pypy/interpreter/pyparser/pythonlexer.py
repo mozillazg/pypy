@@ -7,8 +7,8 @@ from codeop import PyCF_DONT_IMPLY_DEDENT
 
 from pypy.interpreter.pyparser.grammar import TokenSource, Token, AbstractContext
 from pypy.interpreter.pyparser.error import SyntaxError
+
 import pytoken
-from pytoken import NEWLINE
 
 # Don't import string for that ...
 NAMECHARS = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
@@ -369,8 +369,8 @@ class PythonSource(TokenSource):
         return (self._current_line, self._lineno)
         # return 'line %s : %s' % ('XXX', self._current_line)
 
-NONE_LIST = [pytoken.ENDMARKER, pytoken.INDENT, pytoken.DEDENT]
-NAMED_LIST = [pytoken.OP]
+#NONE_LIST = [pytoken.ENDMARKER, pytoken.INDENT, pytoken.DEDENT]
+#NAMED_LIST = [pytoken.OP]
 
 Source = PythonSource
 

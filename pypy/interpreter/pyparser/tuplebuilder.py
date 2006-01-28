@@ -54,7 +54,7 @@ def expand_nodes(stack_elements):
 class TupleBuilderContext(AbstractContext):
     def __init__(self, stackpos ):
         self.stackpos = stackpos
-        
+
 class TupleBuilder(AbstractBuilder):
     """A builder that directly produce the AST"""
 
@@ -81,7 +81,7 @@ class TupleBuilder(AbstractBuilder):
             nodes = expand_nodes( [self.stack[-1]] )
             self.stack[-1] = NonTerminal( rule.codename, nodes )
         return True
-            
+
     def sequence(self, rule, source, elts_number):
         """ """
         num = rule.codename

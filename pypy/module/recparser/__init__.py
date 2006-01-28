@@ -48,6 +48,7 @@ class Module(MixedModule):
          'decode_string_literal': 'pyparser.decode_string_literal',
          'install_compiler_hook' : 'pypy.interpreter.pycompiler.install_compiler_hook',
          'rules' : 'pypy.interpreter.pyparser.pythonparse.grammar_rules',
+         'parse_grammar' : 'pypy.interpreter.pyparser.pythonparse.parse_grammar',
          }
 
 # Automatically exports each AST class
