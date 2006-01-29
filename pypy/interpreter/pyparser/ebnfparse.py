@@ -74,7 +74,7 @@ class NameToken(Token):
         if tk.codename == self.codename:
             if tk.value not in self.keywords:
                 ret = builder.token( tk.codename, tk.value, source )
-                return self.debug_return( ret, tk.codename, tk.value )
+                return ret
         source.restore( ctx )
         return 0
 
@@ -83,7 +83,7 @@ class NameToken(Token):
         """
         if not isinstance(other, Token):
             raise RuntimeError("Unexpected token type")
-        if other is EmptyToken:
+        if other is self.parser.EmptyToken:
             return False
         if other.codename != self.codename:
             return False
@@ -135,7 +135,7 @@ class EBNFBuilder(AbstractBuilder):
                         # If we still have a GrammarProxy associated to this codename
                         # this means we have encountered a terminal symbol
                         to_be_deleted[ arg.codename ] = True
-                        rule.args[i] = Token( self.parser,  arg.codename )
+                        rule.args[i] = self.get_token( arg.codename )
                         #print arg, "-> Token(",arg.rule_name,")" 
                     else:
                         #print arg, "->", real_rule
@@ -143,19 +143,20 @@ class EBNFBuilder(AbstractBuilder):
         for codename in to_be_deleted.keys():
             del self.parser.root_rules[codename]
 
-##     def get_token(self, codename ):
-##         """Returns a new or existing Token"""
-##         if codename in self.tokens:
-##             return self.tokens[codename]
-##         token = self.tokens[codename] = self.parser.Token(codename)
-##         return token
+    def get_token(self, codename ):
+        """Returns a new or existing Token"""
+        if codename in self.tokens:
+            return self.tokens[codename]
+        token = self.tokens[codename] = self.parser.Token(codename)
+        return token
 
     def get_symbolcode(self, name ):
         return self.parser.add_symbol( name )
 
     def get_rule( self, name ):
         if name in self.parser.tokens:
-            return self.parser.Token_n( name )
+            codename = self.parser.tokens[name]
+            return self.get_token( codename )
         codename = self.get_symbolcode( name )
         if codename in self.parser.root_rules:
             return self.parser.root_rules[codename]

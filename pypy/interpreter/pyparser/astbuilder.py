@@ -713,7 +713,7 @@ def build_comparison(builder, nb):
             # 'is', 'is not', 'not' or 'not in' => tok.get_value()
             token = atoms[i]
             assert isinstance(token, TokenObject)
-            op_name = tok.tok_rpunct.get(token.name, token.get_value())
+            op_name = tok.tok_rvalues.get(token.name, token.get_value())
             ops.append((op_name, atoms[i+1]))
         builder.push(ast.Compare(atoms[0], ops, atoms[0].lineno))
 
@@ -1544,7 +1544,7 @@ class TokenObject(ast.Node):
         self.lineno = lineno
 
     def get_name(self):
-        return tok.tok_rpunct.get(self.name,
+        return tok.tok_rvalues.get(self.name,
                                   tok.tok_name.get(self.name, str(self.name)))
 
     def get_value(self):

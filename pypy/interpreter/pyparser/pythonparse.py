@@ -5,7 +5,6 @@ the parser for this grammar in the global PYTHON_PARSER
 helper functions are provided that use the grammar to parse
 using file_input, single_input and eval_input targets
 """
-import autopath
 import sys
 import os
 from pypy.interpreter.error import OperationError, debug_print
