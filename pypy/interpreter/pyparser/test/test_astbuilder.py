@@ -1,6 +1,6 @@
 import os
 
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER_DYN as PYTHON_PARSER
+from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
 from pypy.interpreter.pyparser.astbuilder import AstBuilder
 from pypy.interpreter.pyparser.pythonutil import ast_from_input
 from pypy.interpreter.stablecompiler.transformer import Transformer

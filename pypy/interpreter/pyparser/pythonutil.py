@@ -61,7 +61,7 @@ def internal_pypy_parse(source, mode='exec', lineno=False, flags=0, space=None):
        tuples (StackElement is only a wrapper class around these tuples)
 
     """
-    builder = TupleBuilder(pysymbol._cpython_symbols, PYTHON_PARSER.rules, lineno=False)
+    builder = TupleBuilder(PYTHON_PARSER, lineno=False)
     if space is not None:
         builder.space = space
     target_rule = TARGET_DICT[mode]
@@ -109,6 +109,8 @@ def ast_from_input(input, mode, transformer):
           etc. This is to be fixed in a clean way
     """
     tuples = pypy_parse(input, mode, True)
+    if 'import' in input:
+        toto
     ast = transformer.compile_node(tuples)
     return ast
 

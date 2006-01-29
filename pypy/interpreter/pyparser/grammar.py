@@ -734,6 +734,7 @@ class Parser(object):
         self.EmptyToken = Token( self, -1, None )
         self.tok_name = {}  
         self.tok_values = {}
+        self.tok_rvalues = {}
         self._ann_sym_count = -10
         self._sym_count = 0
         self.all_rules = []
@@ -775,6 +776,9 @@ class Parser(object):
             self.tok_name[val] = tok
             if value is not None:
                 self.tok_values[value] = val
+                # XXX : this reverse mapping seemed only to be used
+                # because of pycodegen visitAugAssign
+                self.tok_rvalues[val] = value 
             return val
         return self.tokens[ tok ]
 
@@ -857,3 +861,14 @@ class Parser(object):
         assert value is None or isinstance( value, str)
         tok = Token( self, name_id, value )
         return tok
+
+
+    # Debugging functions
+    def show_rules(self, name):
+        import re
+        rex = re.compile(name)
+        rules =[]
+        for _name, _val in self.symbols.items():
+            if rex.search(_name) and _val>=0:
+                rules.append(self.root_rules[_val])
+        return rules
