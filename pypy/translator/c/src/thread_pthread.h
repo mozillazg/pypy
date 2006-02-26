@@ -84,6 +84,14 @@ void RPyOpaqueDealloc_ThreadLock(struct RPyOpaque_ThreadLock *lock);
 int RPyThreadAcquireLock(struct RPyOpaque_ThreadLock *lock, int waitflag);
 void RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock);
 
+/* Thread-local storage */
+#define RPyThreadTLS                    pthread_key_t
+#define RPyThreadTLS_Get(key)		pthread_getspecific(key)
+#define RPyThreadTLS_Set(key, value)	pthread_setspecific(key, value)
+
+#ifdef USE_SEMAPHORES
+
+#endif
 
 /* implementations */
 
@@ -317,8 +325,6 @@ void RPyThreadReleaseLock(struct RPyOpaque_ThreadLock *lock)
 
 
 /* Thread-local storage */
-#define RPyThreadTLS	pthread_key_t
-
 char *RPyThreadTLS_Create(RPyThreadTLS *result)
 {
 	if (pthread_key_create(result, NULL) != 0)
@@ -326,9 +332,5 @@ char *RPyThreadTLS_Create(RPyThreadTLS *result)
 	else
 		return NULL;
 }
-
-#define RPyThreadTLS_Get(key)		pthread_getspecific(key)
-#define RPyThreadTLS_Set(key, value)	pthread_setspecific(key, value)
-
 
 #endif /* PYPY_NOT_MAIN_FILE */

@@ -50,7 +50,8 @@ opts = {
 
     '2_gc': [OPT(('--gc',), "Garbage collector", ['boehm', 'ref', 'none'])],
     '3_stackless': [OPT(('--stackless',), "Stackless code generation", True)],
-    '4_merge_if_blocks': [OPT(('--no-if-blocks-merge',), "Do not merge if ... elif ... chains and use a switch statement for them.", False)],
+    '4_tsc': [OPT(('--tsc',), "(x86, PowerPC, Alpha) Timestamp counter profile", True)],
+    '5_merge_if_blocks': [OPT(('--no-if-blocks-merge',), "Do not merge if ... elif ... chains and use a switch statement for them.", False)],
     },
 
 
@@ -102,6 +103,7 @@ defaults = {
     'gc': 'boehm',
     'backend': 'c',
     'stackless': False,
+    'tsc': False,
     'merge_if_blocks': True,
     
     'batch': False,

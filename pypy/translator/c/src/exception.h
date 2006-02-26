@@ -11,26 +11,48 @@
 /******************************************************************/
 
 #ifdef PYPY_NOT_MAIN_FILE
+#ifdef WITH_THREAD
+extern RPyThreadTLS             rpython_exc_type_key;
+extern RPyThreadTLS             rpython_exc_value_key;
+#else
 extern RPYTHON_EXCEPTION_VTABLE	rpython_exc_type;
 extern RPYTHON_EXCEPTION	rpython_exc_value;
+#endif /* WITH_THREAD */
+#else
+#ifdef WITH_THREAD
+RPyThreadTLS            	rpython_exc_type_key = 0;
+RPyThreadTLS            	rpython_exc_value_key = 0;
 #else
 RPYTHON_EXCEPTION_VTABLE	rpython_exc_type = NULL;
 RPYTHON_EXCEPTION		rpython_exc_value = NULL;
-#endif
+#endif /* WITH_THREAD */
+#endif /* PYPY_NOT_MAIN_FILE */
+
+#ifdef WITH_THREAD
+#define rpython_exc_type						\
+	((RPYTHON_EXCEPTION_VTABLE)RPyThreadTLS_Get(rpython_exc_type_key))
+#define rpython_exc_value						\
+	((RPYTHON_EXCEPTION)RPyThreadTLS_Get(rpython_exc_value_key))
+#define _RPySetException(etype, evalue)                                 \
+		RPyThreadTLS_Set(rpython_exc_type_key, etype);       \
+		RPyThreadTLS_Set(rpython_exc_value_key, evalue);
+#else
+#define _RPySetException(etype, evalue)			\
+		rpython_exc_type = etype;		\
+		rpython_exc_value = evalue
+#endif /* WITH_THREAD */
 
 #define RPyExceptionOccurred()	(rpython_exc_type != NULL)
 
 #define RPyRaiseException(etype, evalue)	do {	\
 		assert(!RPyExceptionOccurred());	\
-		rpython_exc_type = etype;		\
-		rpython_exc_value = evalue;		\
+		_RPySetException(etype, evalue);	\
 	} while (0)
 
 #define RPyFetchException(etypevar, evaluevar, type_of_evaluevar) do {  \
 		etypevar = rpython_exc_type;				\
 		evaluevar = (type_of_evaluevar) rpython_exc_value;	\
-		rpython_exc_type = NULL;				\
-		rpython_exc_value = NULL;				\
+		_RPySetException(NULL, NULL);				\
 	} while (0)
 
 #define RPyMatchException(etype)	RPYTHON_EXCEPTION_MATCH(rpython_exc_type,  \
@@ -61,8 +83,7 @@ void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 {
 	/* XXX 1. uses officially bad fishing */
 	/* XXX 2. msg is ignored */
-	rpython_exc_type = rexc->o_typeptr;
-	rpython_exc_value = rexc;
+	_RPySetException(rexc->o_typeptr, rexc);
 	PUSH_ALIVE(rpython_exc_value);
 }
 
@@ -74,7 +95,7 @@ void RPyConvertExceptionFromCPython(void)
 	assert(PyErr_Occurred());
 	assert(!RPyExceptionOccurred());
 	PyErr_Fetch(&exc_type, &exc_value, &exc_tb);
-	/* XXX loosing the error message here */
+	/* XXX losing the error message here */
 	rpython_exc_value = RPYTHON_PYEXCCLASS2EXC(exc_type);
 	rpython_exc_type = RPYTHON_TYPE_OF_EXC_INST(rpython_exc_value);
 }

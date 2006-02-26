@@ -5,7 +5,8 @@ from pypy.translator.c.support import cdecl
 from pypy.rpython.rstr import STR
 from pypy.rpython import rlist, rstr
 from pypy.rpython.module import ll_os, ll_time, ll_math, ll_strtod
-from pypy.rpython.module import ll_stackless, ll_stack
+from pypy.rpython.module import ll_stackless, ll_stack, ll_tsc
+from pypy.rpython.module import ll_trans
 from pypy.module.thread.rpython import ll_thread
 from pypy.module._socket.rpython import ll__socket
 
@@ -54,6 +55,17 @@ EXTERNALS = {
     ll_thread.ll_fused_releaseacquirelock: 'LL_thread_fused_releaseacquirelock',
     ll_thread.ll_thread_start:     'LL_thread_start',
     ll_thread.ll_thread_get_ident: 'LL_thread_get_ident',
+    ll_trans.ll_trans_begin:   'LL_trans_begin',
+    ll_trans.ll_trans_end:     'LL_trans_end',
+    ll_trans.ll_trans_abort:   'LL_trans_abort',
+    ll_trans.ll_trans_pause:   'LL_trans_pause',
+    ll_trans.ll_trans_unpause: 'LL_trans_unpause',
+    ll_trans.ll_trans_verbose: 'LL_trans_verbose',
+    ll_trans.ll_trans_enable:  'LL_trans_enable',
+    ll_trans.ll_trans_disable: 'LL_trans_disable',
+    ll_tsc.ll_tsc_read:      'LL_tsc_read',
+    ll_tsc.ll_tsc_read_diff: 'LL_tsc_read_diff',
+    ll_tsc.ll_tsc_reset_diff:'LL_tsc_reset_diff',
     ll_stackless.ll_stackless_switch:             'LL_stackless_switch',
     ll_stackless.ll_stackless_stack_frames_depth: 'LL_stackless_stack_frames_depth',
     ll_stack.ll_stack_unwind: 'LL_stack_unwind',

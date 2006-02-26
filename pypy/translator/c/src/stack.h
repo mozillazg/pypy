@@ -31,6 +31,8 @@ long _LL_stack_growing_direction(char *parent)
 
 int LL_stack_too_big(void)
 {
+#warning noop pending fix for lower-overhead TLS
+#if 0
 	char local;
 	long diff;
 	char *baseptr;
@@ -94,6 +96,7 @@ int LL_stack_too_big(void)
 	baseptr = &local;
 	RPyThreadTLS_Set(stack_base_pointer_key, baseptr);
 	stack_base_pointer = baseptr;
+#endif 
 	return 0;
 }
 
