@@ -113,3 +113,18 @@ Call func(*args), while tracing is enabled.  The tracing state is
 saved, and restored afterwards.  This is intended to be called from
 a debugger from a checkpoint, to recursively debug some other code."""
     return space.getexecutioncontext().call_tracing(w_func, w_args)
+
+def settscdump(space, w_bool):
+    """settscdump(bool)
+
+If true, tell the Python interpreter to dump VM measurements to
+stderr.  If false, turn off dump.  The measurements are based on the
+processor's time-stamp counter."""
+    space.getexecutioncontext().settscdump(w_bool)
+
+def settrans(space, w_bool):
+    """settrans(bool)
+
+If true, release the global interpreter lock and wrap each bytecode
+execution in a transaction on the current thread."""
+    space.getexecutioncontext().settrans(w_bool)

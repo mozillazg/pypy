@@ -40,6 +40,8 @@
 #  include "src/ll_thread.h"
 #  include "src/ll_stackless.h"
 #  include "src/ll__socket.h"
+#  include "src/ll_trans.h"
+#  include "src/ll_tsc.h"
 #endif
 
 #include "src/stack.h"

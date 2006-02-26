@@ -20,6 +20,7 @@ DEFAULT_OPTIONS = optparse.Values(defaults={
   'thread': False, # influences GC policy
 
   'stackless': False,
+  'tsc': False,
   'debug': True,
   'insist': False,
   'backend': 'c',
@@ -217,7 +218,8 @@ class TranslationDriver(SimpleTaskEngine):
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
                             gcpolicy       = gcpolicy,
-                            thread_enabled = getattr(opt, 'thread', False))
+                            thread_enabled = getattr(opt, 'thread', False),
+                            tsc_enabled    = getattr(opt, 'tsc', False))
         cbuilder.stackless = opt.stackless
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")

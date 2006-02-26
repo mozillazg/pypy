@@ -1,4 +1,5 @@
 import autopath
+import os
 import py
 from pypy.translator.c.node import PyObjectNode
 from pypy.translator.c.database import LowLevelDatabase
@@ -21,11 +22,12 @@ class CBuilder(object):
     stackless = False
     use_stackless_transformation = False
     
-    def __init__(self, translator, entrypoint, gcpolicy=None, libraries=None, thread_enabled=False):
+    def __init__(self, translator, entrypoint, gcpolicy=None, libraries=None, thread_enabled=False, tsc_enabled=False):
         self.translator = translator
         self.entrypoint = entrypoint
         self.gcpolicy = gcpolicy
         self.thread_enabled = thread_enabled
+        self.tsc_enabled = tsc_enabled
 
         if libraries is None:
             libraries = []
@@ -84,6 +86,8 @@ class CBuilder(object):
                 if self.use_stackless_transformation: #set in test_stackless.py
                     from pypy.translator.backendopt.stackless import stackless
                     stackless(translator, db.stacklessdata)
+            if self.tsc_enabled:
+                defines['USE_TSC'] = '1'
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
                                                  entrypointname = pfname,
                                                  defines = defines)
@@ -202,10 +206,14 @@ class CStandaloneBuilder(CBuilder):
         args = ['-L'+path for path in compiler.library_dirs]
         print >> f, 'LIBDIRS =', ' '.join(args)
         args = ['-I'+path for path in compiler.include_dirs]
+        cppflags = os.getenv('CPPFLAGS')
+        if cppflags: args.insert(0, cppflags)
         write_list(args, 'INCLUDEDIRS =')
         print >> f
-        print >> f, 'CFLAGS =', ' '.join(compiler.compile_extra)
-        print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra)
+        print >> f, 'CFLAGS =', ' '.join(compiler.compile_extra), \
+              os.getenv('CFLAGS', '')
+        print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra), \
+              os.getenv('LDFLAGS', '')
         print >> f, MAKEFILE.strip()
         f.close()
 

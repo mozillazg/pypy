@@ -23,6 +23,18 @@ int main(int argc, char *argv[])
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
+#ifdef WITH_THREAD
+    int err;
+    if ( (err = pthread_key_create(&rpython_exc_type_key, free)) != 0) {
+	errmsg = strerror(err);
+	goto error;
+    }
+    if ( (err = pthread_key_create(&rpython_exc_value_key, free)) != 0) {
+	errmsg = strerror(err);
+	goto error;
+    }
+#endif
+
     list = _RPyListOfString_New(argc);
     if (RPyExceptionOccurred()) goto memory_out;
     for (i=0; i<argc; i++) {

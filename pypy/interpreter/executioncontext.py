@@ -1,4 +1,4 @@
-import sys
+import os, sys
 from pypy.interpreter.miscutils import Stack
 from pypy.interpreter.error import OperationError
 
@@ -14,6 +14,10 @@ class ExecutionContext:
         self.is_tracing = 0
         self.ticker = 0
         self.compiler = space.createcompiler()
+
+        self.tscdump = False
+        self.trans = False
+        self.ticked = False
 
     def enter(self, frame):
         if self.framestack.depth() > self.space.sys.recursionlimit:
@@ -58,13 +62,35 @@ class ExecutionContext:
 
     def bytecode_trace(self, frame):
         "Trace function called before each bytecode."
-        # First, call yield_thread() before each Nth bytecode,
-        #     as selected by sys.setcheckinterval()
-        ticker = self.ticker
-        if ticker <= 0:
-            self.space.threadlocals.yield_thread()
-            ticker = self.space.sys.checkinterval
-        self.ticker = ticker - 1
+        from pypy.module.trans import rtrans
+
+        if self.tscdump:
+            from pypy.rpython.rtsc import read_diff, reset_diff
+            from thread import get_ident
+            code = getattr(frame, 'pycode')
+            opcode = code is None and 0 or ord(code.co_code[frame.next_instr])
+            s = 'tid=%d opcode=%d t=%d inst=%d\n' % \
+                (get_ident(), opcode, int(self.ticked), read_diff())
+            if self.trans:
+                rtrans.end()
+            os.write(2, s)
+            if self.trans:
+                rtrans.begin()
+            else:
+                self.ticked = False
+            reset_diff()
+        elif self.trans:
+            rtrans.end()
+            rtrans.begin()
+        if not self.trans:
+            # First, call yield_thread() before each Nth bytecode,
+            #     as selected by sys.setcheckinterval()
+            ticker = self.ticker
+            if ticker <= 0:
+                self.space.threadlocals.yield_thread()
+                self.ticked = True
+                ticker = self.space.sys.checkinterval
+            self.ticker = ticker - 1
         if frame.w_f_trace is None or self.is_tracing:
             return
         self._do_bytecode_trace(frame)
@@ -142,6 +168,32 @@ class ExecutionContext:
             self.w_profilefunc = None
         else:
             self.w_profilefunc = w_func
+
+    def settscdump(self, w_bool):
+        from pypy.rpython.objectmodel import we_are_translated
+        if not we_are_translated():
+            raise OperationError(self.space.w_NotImplementedError,
+                                 self.space.wrap("No access to timestamp counter in untranslated PyPy"))
+        self.tscdump = self.space.is_true(w_bool)
+
+    def settrans(self, w_bool):
+        from pypy.rpython.objectmodel import we_are_translated
+        if not we_are_translated():
+            raise OperationError(self.space.w_NotImplementedError,
+                                 self.space.wrap("No transactions in untranslated PyPy"))
+        if self.space.is_true(w_bool) is self.trans:
+            return
+        from pypy.module.trans import rtrans
+        if self.trans:
+            rtrans.end()
+            rtrans.disable()
+            self.space.threadlocals.GIL.acquire(True)
+            self.trans = False
+        else:
+            self.trans = True
+            rtrans.enable()
+            self.space.threadlocals.GIL.release()
+            rtrans.begin()
 
     def call_tracing(self, w_func, w_args):
         is_tracing = self.is_tracing

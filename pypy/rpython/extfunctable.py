@@ -233,6 +233,25 @@ frametop_type_info = declareptrtype(rstack.frame_stack_top, 'frame_stack_top',
                                                   'll_stackless/switch'))
 
 # ___________________________________________________________
+# timestamp counter
+from pypy.rpython import rtsc
+declare(rtsc.read, r_longlong, 'll_tsc/read')
+declare(rtsc.read_diff, int, 'll_tsc/read_diff')
+declare(rtsc.reset_diff, noneannotation, 'll_tsc/reset_diff')
+
+# ___________________________________________________________
+# transactional execution
+from pypy.module.trans import rtrans
+declare(rtrans.begin , noneannotation, 'll_trans/begin')
+declare(rtrans.end   , noneannotation, 'll_trans/end')
+declare(rtrans.abort , noneannotation, 'll_trans/abort')
+declare(rtrans.pause , noneannotation, 'll_trans/pause')
+declare(rtrans.unpause, noneannotation, 'll_trans/unpause')
+declare(rtrans.verbose, noneannotation, 'll_trans/verbose')
+declare(rtrans.enable, noneannotation, 'll_trans/enable')
+declare(rtrans.disable, noneannotation, 'll_trans/disable')
+
+# ___________________________________________________________
 # javascript
 from pypy.rpython import rjs
 declare(rjs.jseval, str, 'll_js/jseval')

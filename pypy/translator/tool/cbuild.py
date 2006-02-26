@@ -306,6 +306,11 @@ class CCompiler:
     def _build(self):
         from distutils.ccompiler import new_compiler 
         compiler = new_compiler()
+        from distutils.sysconfig import get_config_vars, customize_compiler
+        # customize_compiler is stupid and uses OPT even if you pick a
+        # different compiler from the one used to compile Python
+        if os.environ.get('CC'): get_config_vars()['OPT'] = ''
+        customize_compiler(compiler)
         compiler.spawn = log_spawned_cmd(compiler.spawn)
         objects = []
         for cfile in self.cfilenames: 
@@ -320,10 +325,15 @@ class CCompiler:
                 assert cobjfile.check()
                 objects.append(str(cobjfile))
             finally: 
-                old.chdir() 
+                old.chdir()
+        # customize_compiler also assumes LDFLAGS only applies to
+        # building shared libraries
+        from distutils.util import split_quoted
+        ldflags = split_quoted(os.environ.get('LDFLAGS'))
         compiler.link_executable(objects, str(self.outputfilename),
                                  libraries=self.libraries,
                                  extra_preargs=self.link_extra,
+                                 extra_postargs=ldflags,
                                  library_dirs=self.library_dirs)
 
 def build_executable(*args, **kwds):

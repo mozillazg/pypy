@@ -45,6 +45,8 @@ class Module(MixedModule):
         'settrace'              : 'vm.settrace',
         'setprofile'            : 'vm.setprofile',
         'call_tracing'          : 'vm.call_tracing',
+        'settscdump'		: 'vm.settscdump',
+        'settrans'              : 'vm.settrans',
         
         'executable'            : 'space.wrap("py.py")', 
         'copyright'             : 'space.wrap("MIT-License")', 
