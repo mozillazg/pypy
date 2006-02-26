@@ -223,8 +223,7 @@ class BoehmGcPolicy(BasicGcPolicy):
     def OP_GC_FETCH_EXCEPTION(self, funcgen, op, err):
         result = funcgen.expr(op.result)
         return ('%s = rpython_exc_value;\n'
-                'rpython_exc_type = NULL;\n'
-                'rpython_exc_value = NULL;') % (result, )
+                '_RPySetException(NULL, NULL)') % (result, )
 
     def OP_GC_RESTORE_EXCEPTION(self, funcgen, op, err):
         argh = funcgen.expr(op.args[0])
