@@ -3,7 +3,6 @@ import autopath
 import py
 from pypy.annotation.model import *
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
-from pypy.rpython.ootypesystem.ootype import ROOT
 
 
 listdef1 = ListDef(None, SomeTuple([SomeInteger(nonneg=True), SomeString()]))
@@ -119,7 +118,7 @@ def test_ll_to_annotation():
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(S)
     s_p = ll_to_annotation(lltype.malloc(A, 0))
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(A)
-    C = ootype.Instance('C', ROOT, {})
+    C = ootype.Instance('C', None, {})
     s_p = ll_to_annotation(ootype.new(C))
     assert isinstance(s_p, SomeOOInstance) and s_p.ootype == C
 
@@ -144,7 +143,7 @@ def test_annotation_to_lltype():
     s_p = SomePtr(ll_ptrtype=PS)
     assert annotation_to_lltype(s_p) == PS
     py.test.raises(ValueError, "annotation_to_lltype(si0)")
-    C = ootype.Instance('C', ROOT, {})
+    C = ootype.Instance('C', None, {})
     ref = SomeOOInstance(C)
     assert annotation_to_lltype(ref) == C
     
@@ -174,10 +173,10 @@ def test_ll_union():
     py.test.raises(AssertionError, "unionof(SomeObject(), SomePtr(PS1))")
 
 def test_oo_union():
-    C1 = ootype.Instance("C1", ROOT)
+    C1 = ootype.Instance("C1", None)
     C2 = ootype.Instance("C2", C1)
     C3 = ootype.Instance("C3", C1)
-    D = ootype.Instance("D", ROOT)
+    D = ootype.Instance("D", None)
     assert unionof(SomeOOInstance(C1), SomeOOInstance(C1)) == SomeOOInstance(C1)
     assert unionof(SomeOOInstance(C1), SomeOOInstance(C2)) == SomeOOInstance(C1)
     assert unionof(SomeOOInstance(C2), SomeOOInstance(C1)) == SomeOOInstance(C1)

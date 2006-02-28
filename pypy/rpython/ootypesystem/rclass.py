@@ -59,27 +59,16 @@ class InstanceRepr(AbstractInstanceRepr):
         AbstractInstanceRepr.__init__(self, rtyper, classdef)
 
         self.baserepr = None
-        if self.classdef is None:
-            self.lowleveltype = ootype.ROOT
-        else:
-            b = self.classdef.basedef
-            if b is not None:
-                self.baserepr = getinstancerepr(rtyper, b)
-                b = self.baserepr.lowleveltype
-            else:
-                b = ootype.ROOT
+        b = self.classdef.basedef
+        if b is not None:
+            self.baserepr = getinstancerepr(rtyper, b)
+            b = self.baserepr.lowleveltype
 
-            self.lowleveltype = ootype.Instance(classdef.shortname, b, {}, {})
+        self.lowleveltype = ootype.Instance(classdef.shortname, b, {}, {})
         self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
         self.object_type = self.lowleveltype
 
     def _setup_repr(self):
-        if self.classdef is None:
-            self.allfields = {}
-            self.allmethods = {}
-            self.allclassattributes = {}
-            return
-
         if self.baserepr is not None:
             allfields = self.baserepr.allfields.copy()
             allmethods = self.baserepr.allmethods.copy()
@@ -119,14 +108,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 if mangled in allmethods:
                     raise TyperError("class attribute overrides method")
                 allclassattributes[mangled] = name, s_value
-
-        if '__init__' not in selfattrs and \
-                self.classdef.classdesc.find_source_for("__init__") is not None:
-            s_init = self.classdef.classdesc.s_get_value(self.classdef,
-                    '__init__')
-            mangled = mangle("__init__")
-            allmethods[mangled] = "__init__", s_init
-            
+                                
         #
         # hash() support
         if self.rtyper.needs_hash_support(self.classdef):

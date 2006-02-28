@@ -11,14 +11,9 @@ Class = Class()
 
 class Instance(OOType):
     """this is the type of user-defined objects"""
-    def __init__(self, name, superclass, fields={}, methods={},
-            _is_root=False):
+    def __init__(self, name, superclass, fields={}, methods={}):
         self._name = name
-        if _is_root:
-            self._superclass = None
-        else:
-            assert isinstance(superclass, Instance)
-            self._superclass = superclass
+        self._superclass = superclass
 
         self._methods = frozendict()
         self._fields = frozendict()
@@ -32,7 +27,8 @@ class Instance(OOType):
     def _defl(self):
         return self._null
 
-    def _example(self): return new(self)
+    def _example(self):
+        return new(self)
 
     def __repr__(self):
         return '<%s>' % (self,)
@@ -121,7 +117,6 @@ class Instance(OOType):
             all = self._superclass._allfields()
         all.update(self._fields)
         return all
-
 
 class StaticMethod(OOType):
     __slots__ = ['_null']
@@ -352,6 +347,3 @@ def ooidentityhash(inst):
         return id(inst)
     else:
         return 0   # for all null instances
-
-
-ROOT = Instance('Root', None, _is_root=True)
