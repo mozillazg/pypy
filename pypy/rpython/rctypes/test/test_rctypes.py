@@ -47,18 +47,10 @@ from pypy.rpython.rctypes import cdll, c_char_p, c_int, c_char, \
         c_long, c_ulong, c_longlong, c_ulonglong, c_float, c_double, \
         POINTER, Structure, byref, ARRAY
 
-# LoadLibrary is deprecated in ctypes, this should be removed at some point
-if "load" in dir(cdll):
-    cdll_load = cdll.load
-else:
-    cdll_load = cdll.LoadLibrary
-
 if sys.platform == 'win32':
-    mylib = cdll_load('msvcrt.dll')
+    mylib = cdll.LoadLibrary('msvcrt.dll')
 elif sys.platform == 'linux2':
-    mylib = cdll_load('libc.so.6')
-elif sys.platform == 'darwin':
-    mylib = cdll.c
+    mylib = cdll.LoadLibrary('libc.so.6')
 else:
     py.test.skip("don't know how to load the c lib for %s" % 
             sys.platform)
@@ -81,9 +73,9 @@ class tagpoint(Structure):
 compile_c_module([thisdir.join("_rctypes_test.c")], "_rctypes_test")
 
 if sys.platform == "win32":
-    _rctypes_test = cdll_load("_rctypes_test.pyd")
+    _rctypes_test = cdll.LoadLibrary("_rctypes_test.pyd")
 else:
-    _rctypes_test = cdll_load(str(thisdir.join("_rctypes_test.so")))
+    _rctypes_test = cdll.LoadLibrary(str(thisdir.join("_rctypes_test.so")))
 
 # _testfunc_byval
 testfunc_byval = _rctypes_test._testfunc_byval
@@ -255,7 +247,7 @@ class Test_rctypes:
         # result should be an integer
         assert s.knowntype == int
 
-    def failing_test_specialize_simple(self):
+    def test_specialize_simple(self):
         t = TranslationContext()
         a = t.buildannotator()
         s = a.build_types(o_atoi, [str])
@@ -264,7 +256,7 @@ class Test_rctypes:
         t.buildrtyper().specialize()
         #d#t.view()
 
-    def failing_test_compile_simple(self):
+    def test_compile_simple(self):
         fn = compile(o_atoi, [str])
         res = fn("42")
         assert res == 42
@@ -280,9 +272,9 @@ class Test_structure:
 
     def test_simple(self):
         if sys.platform == "win32":
-            dll = cdll_load("_rctypes_test.pyd")
+            dll = cdll.LoadLibrary("_rctypes_test.pyd")
         else:
-            dll = cdll_load(str(thisdir.join("_rctypes_test.so")))
+            dll = cdll.LoadLibrary(str(thisdir.join("_rctypes_test.so")))
         in_point = tagpoint()
         in_point.x = 42
         in_point.y = 17
@@ -365,7 +357,7 @@ class Test_structure:
         #d#t.view()
         assert s.knowntype == tagpoint
         # This memory state will be supported in the future (#f#)
-        # Obviously the test is wrong for now
+	# Obviously the test is wrong for now
         #f#assert s.memorystate == SomeCTypesObject.MIXEDMEMORYOWNERSHIP
         assert isinstance(s, SomeObject)
 
@@ -421,20 +413,21 @@ class Test_structure:
             #d#t.view()
             pass
 
-    def failing_test_specialize_pointer_to_struct(self):
+    # This does not work yet, ctype structures and pointers are
+    # missing the ll_type attribute that directly maps ctypes objects
+    # to the lltype system
+    # TODO: Find an indirect way to get that mapping done
+    def x_test_specialize_pointer_to_struct(self):
         t = self.test_annotate_pointer_to_struct()
         t.buildrtyper().specialize()
-        #d#t.view()
-
-    def x_test_compile_pointer_to_struct(self):
-        fn = compile( py_testfunc_struct_pointer_id, [ oppoint_type ] )
+        t.view()
 
     def test_compile_struct(self):
         fn = compile( py_test_compile_struct, [ int, int ] )
         res = fn( 42, -42 )
         assert res == 42
 
-    def failing_test_specialize_POINTER_dereference(self):
+    def test_specialize_POINTER_dereference(self):
         t = TranslationContext()
         a = t.buildannotator()
         s = a.build_types(py_testfunc_POINTER_dereference, [tagpoint])
