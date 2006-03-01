@@ -71,12 +71,10 @@ class ExecutionContext:
             opcode = code is None and 0 or ord(code.co_code[frame.next_instr])
             s = 'tid=%d opcode=%d t=%d inst=%d\n' % \
                 (get_ident(), opcode, int(self.ticked), read_diff())
-            if self.trans:
-                rtrans.end()
+            # if per-bytecode transactions enabled, this will function
+            # as an automatic transaction end/begin
             os.write(2, s)
-            if self.trans:
-                rtrans.begin()
-            else:
+            if not self.trans:
                 self.ticked = False
             reset_diff()
         elif self.trans:
@@ -191,8 +189,8 @@ class ExecutionContext:
             self.trans = False
         else:
             self.trans = True
-            rtrans.enable()
             self.space.threadlocals.GIL.release()
+            rtrans.enable()
             rtrans.begin()
 
     def call_tracing(self, w_func, w_args):
