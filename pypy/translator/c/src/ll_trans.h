@@ -103,4 +103,15 @@ LL_trans_disable(void)
 	set_auto_xact(0);
 }
 
+int
+LL_trans_is_active(void)
+{
+	int ret_val;
+
+	XACT_ACTIVE(ret_val);
+	assert(ret_val == 0 || ret_val == 1);
+
+	return ret_val;
+}
+
 #endif /* PYPY_NOT_MAIN_FILE */

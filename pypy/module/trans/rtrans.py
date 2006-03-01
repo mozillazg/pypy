@@ -25,3 +25,7 @@ def enable():
 
 def disable():
     os.write(2, '= rtrans.disable\n')
+
+def is_active():
+    os.write(2, '= rtrans.is_active\n')
+    return False

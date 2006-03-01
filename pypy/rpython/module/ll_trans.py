@@ -29,3 +29,7 @@ ll_trans_enable.suggested_primitive = True
 def ll_trans_disable():
     pass
 ll_trans_disable.suggested_primitive = True
+
+def ll_trans_is_active():
+    return False
+ll_trans_is_active.suggested_primitive = True
