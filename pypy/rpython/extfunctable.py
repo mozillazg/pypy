@@ -250,6 +250,7 @@ declare(rtrans.unpause, noneannotation, 'll_trans/unpause')
 declare(rtrans.verbose, noneannotation, 'll_trans/verbose')
 declare(rtrans.enable, noneannotation, 'll_trans/enable')
 declare(rtrans.disable, noneannotation, 'll_trans/disable')
+declare(rtrans.is_active, bool, 'll_trans/is_active')
 
 # ___________________________________________________________
 # javascript

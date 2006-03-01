@@ -25,3 +25,6 @@ def unpause(space):
 def verbose(space):
     rtrans.verbose()
     return space.w_None
+
+def is_active(space):
+    return space.wrap(rtrans.is_active())

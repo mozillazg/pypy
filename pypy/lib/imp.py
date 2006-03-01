@@ -160,6 +160,7 @@ except ImportError:
 else:
     del _please_provide_import_lock
     import thread
+    import trans
 
     class _ImportLock:
         def __init__(self):
@@ -169,6 +170,8 @@ else:
 
         def held(self):
             """Return True if the import lock is currently held, else False."""
+            if trans.is_active():
+                return True
             return self.in_thread is not None
 
         def acquire(self):
@@ -176,6 +179,8 @@ else:
             This lock should be used by import hooks to ensure thread-safety
             when importing modules.
             """
+            if trans.is_active():
+                return
             myident = thread.get_ident()
             if self.in_thread == myident:
                 self.recursions += 1
@@ -186,6 +191,8 @@ else:
 
         def release(self):
             """Release the interpreter's import lock."""
+            if trans.is_active():
+                return
             myident = thread.get_ident()
             if self.in_thread != myident:
                 raise RuntimeError("not holding the import lock")
