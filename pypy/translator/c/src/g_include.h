@@ -14,6 +14,7 @@
 #  include "src/standalone.h"
 #endif
 
+#include "src/ll_trans.h"
 #include "src/mem.h"
 #include "src/exception.h"
 #include "src/trace.h"
@@ -40,7 +41,6 @@
 #  include "src/ll_thread.h"
 #  include "src/ll_stackless.h"
 #  include "src/ll__socket.h"
-#  include "src/ll_trans.h"
 #  include "src/ll_tsc.h"
 #endif
 
