@@ -10,6 +10,8 @@ void LL_trans_unpause(void);
 void LL_trans_verbose(void);
 void LL_trans_enable(void);
 void LL_trans_disable(void);
+int RPyTransPause(void);
+void RPyTransUnpause(int pause_state);
 
 /* implementations */
 
@@ -37,6 +39,20 @@ LL_trans_abort(void)
 
  abort:
 	;
+}
+
+int
+RPyTransPause(void)
+{
+	int pause_state;
+	XACT_PAUSE(pause_state);
+	return pause_state;
+}
+
+void
+RPyTransUnpause(int pause_state)
+{
+	XACT_UNPAUSE(pause_state);
 }
 
 /* XXX deliberately not RPyThreadTLS here => dependency problems */
@@ -78,8 +94,6 @@ void
 LL_trans_enable(void)
 {
 	int ret_val;
-	ret_val = enable_transactions();
-	assert(ret_val == 0);
 	// XXX HACK HACK HACK, 1024 is first thread id
 	if (pthread_self() == 1024) {
 		static int suspended = 0;
@@ -89,6 +103,13 @@ LL_trans_enable(void)
 		pid_t pid = getpid();
 		fprintf(stderr, "LL_trans_enable: suspending, pid is %d\n", pid);
 		kill(pid, SIGSTOP);
+	}
+	ret_val = enable_transactions();
+	if (ret_val != 0) {
+		printf("Load transactional memory module and press return\n");
+		while (getchar() != '\n');
+		ret_val = enable_transactions();
+		assert(ret_val == 0);
 	}
 	XACT_BEGIN;
 	XACT_PAUSE(ret_val);
@@ -109,7 +130,8 @@ LL_trans_is_active(void)
 	int ret_val;
 
 	XACT_ACTIVE(ret_val);
-	assert(ret_val == 0 || ret_val == 1);
+	if (ret_val != 0 && ret_val != 1)
+		return 0;
 
 	return ret_val;
 }

@@ -2,7 +2,6 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
-
 /* a reasonably safe bound on the largest allowed argument value
    that we can pass to malloc.  This is used for var-sized mallocs
    to compute the largest allowed number of items in the array. */
@@ -69,7 +68,9 @@ PyObject* malloc_counters(PyObject* self, PyObject* args)
 /* #define BOEHM_MALLOC_1_1   GC_MALLOC_ATOMIC_IGNORE_OFF_PAGE */
 
 #define OP_BOEHM_ZERO_MALLOC(size, r, is_atomic, is_varsize, err)   {        \
+ 	int pause_state = RPyTransPause();				     \
 	r = (void*) BOEHM_MALLOC_ ## is_atomic ## _ ## is_varsize (size);    \
+	RPyTransUnpause(pause_state);					     \
 	if (r == NULL) FAIL_EXCEPTION(err, PyExc_MemoryError, "out of memory");	\
 	if (is_atomic)  /* the non-atomic versions return cleared memory */  \
 		memset((void*) r, 0, size);                                  \
@@ -93,7 +94,9 @@ if GC integration has happened and this junk is still here, please delete it :)
 #undef OP_ZERO_MALLOC
 
 #define OP_ZERO_MALLOC(size, r, err)  {                                 \
-    r = (void*) malloc(size);                                  \
+    int pause_state = RPyTransPause();				        \
+    r = (void*) malloc(size);                                           \
+    RPyTransUnpause(pause_state);					\
     if (r == NULL) FAIL_EXCEPTION(err, PyExc_MemoryError, "out of memory");\
     memset((void*) r, 0, size);                                         \
     COUNT_MALLOC;                                                       \
