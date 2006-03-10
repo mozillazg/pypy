@@ -3,6 +3,7 @@ import autopath
 import py
 from pypy.annotation.model import *
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
+from pypy.rpython.ootypesystem.ootype import ROOT
 
 
 listdef1 = ListDef(None, SomeTuple([SomeInteger(nonneg=True), SomeString()]))
@@ -118,7 +119,7 @@ def test_ll_to_annotation():
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(S)
     s_p = ll_to_annotation(lltype.malloc(A, 0))
     assert isinstance(s_p, SomePtr) and s_p.ll_ptrtype == lltype.Ptr(A)
-    C = ootype.Instance('C', None, {})
+    C = ootype.Instance('C', ROOT, {})
     s_p = ll_to_annotation(ootype.new(C))
     assert isinstance(s_p, SomeOOInstance) and s_p.ootype == C
 
@@ -143,7 +144,7 @@ def test_annotation_to_lltype():
     s_p = SomePtr(ll_ptrtype=PS)
     assert annotation_to_lltype(s_p) == PS
     py.test.raises(ValueError, "annotation_to_lltype(si0)")
-    C = ootype.Instance('C', None, {})
+    C = ootype.Instance('C', ROOT, {})
     ref = SomeOOInstance(C)
     assert annotation_to_lltype(ref) == C
     
@@ -173,10 +174,10 @@ def test_ll_union():
     py.test.raises(AssertionError, "unionof(SomeObject(), SomePtr(PS1))")
 
 def test_oo_union():
-    C1 = ootype.Instance("C1", None)
+    C1 = ootype.Instance("C1", ROOT)
     C2 = ootype.Instance("C2", C1)
     C3 = ootype.Instance("C3", C1)
-    D = ootype.Instance("D", None)
+    D = ootype.Instance("D", ROOT)
     assert unionof(SomeOOInstance(C1), SomeOOInstance(C1)) == SomeOOInstance(C1)
     assert unionof(SomeOOInstance(C1), SomeOOInstance(C2)) == SomeOOInstance(C1)
     assert unionof(SomeOOInstance(C2), SomeOOInstance(C1)) == SomeOOInstance(C1)
@@ -185,12 +186,7 @@ def test_oo_union():
     assert unionof(SomeOOInstance(C1),SomeImpossibleValue()) == SomeOOInstance(C1)
     assert unionof(SomeImpossibleValue(), SomeOOInstance(C1)) == SomeOOInstance(C1)
 
-    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeOOInstance(D))")
-    py.test.raises(AssertionError, "unionof(SomeOOInstance(D), SomeOOInstance(C1))")
-    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeInteger())")
-    py.test.raises(AssertionError, "unionof(SomeInteger(), SomeOOInstance(C1))")
-    py.test.raises(AssertionError, "unionof(SomeOOInstance(C1), SomeObject())")
-    py.test.raises(AssertionError, "unionof(SomeObject(), SomeOOInstance(C1))")
+    assert unionof(SomeOOInstance(C1), SomeOOInstance(D)) == SomeOOInstance(ROOT)
 
 if __name__ == '__main__':
     for name, value in globals().items():

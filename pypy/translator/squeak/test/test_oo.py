@@ -16,7 +16,7 @@ def build_sqfunc(func, args=[], view=False):
    GenSqueak(udir, t)
 
 
-C = Instance("test", None, {'a': (Signed, 3)})
+C = Instance("test", ROOT, {'a': (Signed, 3)})
 M = Meth([Signed], Signed)
 def m_(self, b):
    return self.a+b
@@ -27,12 +27,6 @@ def test_simple_new():
    def f_new():
       return new(C)
    build_sqfunc(f_new)
-
-def test_simple_meth():
-   def f_meth():
-      c = new(C)
-      return c.m(5)
-   build_sqfunc(f_meth)
 
 def test_simple_fields():
    def f_fields():

@@ -2,6 +2,7 @@ from pypy.rpython.lltypesystem.lltype import \
      Primitive, Ptr, typeOf, RuntimeTypeInfo, \
      Struct, Array, FuncType, PyObject, Void, \
      ContainerType, OpaqueType
+from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.llmemory import Address
 from pypy.rpython.memory.lladdress import NULL
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
@@ -107,6 +108,9 @@ class LowLevelDatabase(object):
             node = self.containernodes[container]
         except KeyError:
             T = typeOf(container)
+            if isinstance(T, (lltype.Array, lltype.Struct)):
+                if hasattr(self.gctransformer, 'consider_constant'):
+                    self.gctransformer.consider_constant(T, container)
             nodefactory = ContainerNodeFactory[T.__class__]
             node = nodefactory(self, T, container)
             self.containernodes[container] = node
@@ -178,16 +182,23 @@ class LowLevelDatabase(object):
                 if i == show_i:
                     dump()
                     show_i += 1000
+            work_to_do = False
             if not is_later_yet:
-                self.gctransformer.finish()
+                newgcdependencies = self.gctransformer.finish()
+                if newgcdependencies:
+                    work_to_do = True
+                    for value in newgcdependencies:
+                        if isinstance(typeOf(value), ContainerType):
+                            self.getcontainernode(value)
+                        else:
+                            self.get(value)
                 is_later_yet = True
             if self.latercontainerlist:
+                work_to_do = True
                 for node in self.latercontainerlist:
-                    node.make_funcgen()
+                    node.make_funcgens()
                     self.containerlist.append(node)
                 self.latercontainerlist = []
-            else:
-                work_to_do = False
         self.completed = True
         if show_progress:
             dump()

@@ -4,7 +4,7 @@ from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      Void, Bool, Float, Signed, Char, UniChar, \
-     typeOf, LowLevelType, Ptr, PyObject
+     typeOf, LowLevelType, Ptr, PyObject, isCompatibleType
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.error import TyperError, MissingRTypeOperation 
 
@@ -235,22 +235,7 @@ class __extend__(pairtype(Repr, Repr)):
     def rtype_is_((robj1, robj2), hop):
         if hop.s_result.is_constant():
             return inputconst(Bool, hop.s_result.const)
-        roriginal1 = robj1
-        roriginal2 = robj2
-        if robj1.lowleveltype is Void:
-            robj1 = robj2
-        elif robj2.lowleveltype is Void:
-            robj2 = robj1
-        if (not isinstance(robj1.lowleveltype, Ptr) or
-            not isinstance(robj2.lowleveltype, Ptr)):
-            raise TyperError('is of instances of the non-pointers: %r, %r' % (
-                roriginal1, roriginal2))
-        if robj1.lowleveltype != robj2.lowleveltype:
-            raise TyperError('is of instances of different pointer types: %r, %r' % (
-                roriginal1, roriginal2))
-            
-        v_list = hop.inputargs(robj1, robj2)
-        return hop.genop('ptr_eq', v_list, resulttype=Bool)
+        return hop.rtyper.type_system.generic_is(robj1, robj2, hop)
 
 # ____________________________________________________________
 
@@ -344,7 +329,7 @@ def inputconst(reqtype, value):
             realtype = typeOf(value)
         except (AssertionError, AttributeError):
             realtype = '???'
-        if realtype != lltype:
+        if not isCompatibleType(realtype, lltype):
             raise TyperError("inputconst(reqtype = %s, value = %s):\n"
                              "expected a %r,\n"
                              "     got a %r" % (reqtype, value,

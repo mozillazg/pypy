@@ -1,6 +1,5 @@
 """A flow graph representation for Python bytecode"""
 
-import dis
 import sys
 
 from pypy.interpreter.astcompiler import misc, ast
@@ -8,8 +7,7 @@ from pypy.interpreter.astcompiler.consts \
      import CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root
-
-
+from pypy.tool import opcode as pythonopcode
 
 class BlockSet:
     """A Set implementation specific to Blocks
@@ -633,11 +631,11 @@ class PyFlowGraph(FlowGraph):
         self.stage = FLAT
 
     hasjrel = {}
-    for i in dis.hasjrel:
-        hasjrel[dis.opname[i]] = True
+    for i in pythonopcode.hasjrel:
+        hasjrel[pythonopcode.opname[i]] = True
     hasjabs = {}
-    for i in dis.hasjabs:
-        hasjabs[dis.opname[i]] = True
+    for i in pythonopcode.hasjabs:
+        hasjabs[pythonopcode.opname[i]] = True
 
     def convertArgs(self):
         """Convert arguments from symbolic to concrete form"""
@@ -772,7 +770,7 @@ class PyFlowGraph(FlowGraph):
         index = self._lookupName(arg, self.closure)
         return InstrInt(inst.op, index)
     
-    _cmp = list(dis.cmp_op)
+    _cmp = list(pythonopcode.cmp_op)
     def _convert_COMPARE_OP(self, inst):
         assert isinstance(inst, InstrName)
         arg = inst.name                        
@@ -817,8 +815,9 @@ class PyFlowGraph(FlowGraph):
         self.stage = DONE
 
     opnum = {}
-    for num in range(len(dis.opname)):
-        opnum[dis.opname[num]] = num
+    for num in range(len(pythonopcode.opname)):
+        opnum[pythonopcode.opname[num]] = num
+        # This seems to duplicate dis.opmap from opcode.opmap
     del num
 
     def newCodeObject(self):
@@ -1048,6 +1047,7 @@ class StackDepthTracker:
         'SETUP_EXCEPT': 3,
         'SETUP_FINALLY': 3,
         'FOR_ITER': 1,
+        'WITH_CLEANUP': 3,
         }
     # use pattern match
     patterns = [

@@ -10,7 +10,8 @@ from pypy.interpreter.astcompiler import pyassem, misc, future, symbols
 from pypy.interpreter.astcompiler.consts import SC_LOCAL, SC_GLOBAL, \
     SC_FREE, SC_CELL, SC_DEFAULT, OP_APPLY, OP_ASSIGN, OP_DELETE, OP_NONE
 from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
-    CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, CO_FUTURE_DIVISION
+    CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, \
+    CO_FUTURE_DIVISION, CO_FUTURE_WITH_STATEMENT
 from pypy.interpreter.pyparser.error import SyntaxError
 
 # drop VERSION dependency since it the ast transformer for 2.4 doesn't work with 2.3 anyway
@@ -164,6 +165,8 @@ class CodeGenerator(ast.ASTVisitor):
                 self._div_op = "BINARY_TRUE_DIVIDE"
             elif feature == "generators":
                 self.graph.setFlag(CO_GENERATOR_ALLOWED)
+            elif feature == "with_statement":
+                self.graph.setFlag(CO_FUTURE_WITH_STATEMENT)
 
     def emit(self, inst ):
         return self.graph.emit( inst )
@@ -524,6 +527,76 @@ class CodeGenerator(ast.ASTVisitor):
 
     def visitOr(self, node):
         self._visitTest(node, 'JUMP_IF_TRUE')
+
+    def visitCondExpr(self, node):
+        node.test.accept(self)
+
+        end = self.newBlock()
+        falseblock = self.newBlock()
+
+        self.emitop_block('JUMP_IF_FALSE', falseblock)
+
+        self.emit('POP_TOP')
+        node.true_expr.accept(self)
+        self.emitop_block('JUMP_FORWARD', end)
+
+        self.nextBlock(falseblock)
+        self.emit('POP_TOP')
+        node.false_expr.accept(self)
+
+        self.nextBlock(end)
+
+    __with_count = 0
+
+    def visitWith(self, node):
+        node.expr.accept(self)
+        self.emitop('LOAD_ATTR', '__context__')
+        self.emitop_int('CALL_FUNCTION', 0)
+        self.emit('DUP_TOP')
+
+        ## exit = ctx.__exit__
+        self.emitop('LOAD_ATTR', '__exit__')
+        exit = "$exit%d" % self.__with_count
+        var = "$var%d" % self.__with_count
+        self.__with_count = self.__with_count + 1
+        self._implicitNameOp('STORE', exit)
+
+        self.emitop('LOAD_ATTR', '__enter__')
+        self.emitop_int('CALL_FUNCTION', 0)
+        finally_block = self.newBlock()
+        body = self.newBlock()
+
+        self.setups.append((TRY_FINALLY, body))
+
+        if node.var is not None:        # VAR is present
+            self._implicitNameOp('STORE', var)
+            self.emitop_block('SETUP_FINALLY', finally_block)
+            self.nextBlock(body)
+            self._implicitNameOp('LOAD', var)
+            self._implicitNameOp('DELETE', var)
+            node.var.accept(self)
+        else:
+            self.emit('POP_TOP')
+            self.emitop_block('SETUP_FINALLY', finally_block)
+            self.nextBlock(body)
+
+        node.body.accept(self)
+        
+        self.emit('POP_BLOCK')
+        self.setups.pop()
+        self.emitop_obj('LOAD_CONST', self.space.w_None) # WITH_CLEANUP checks for normal exit
+        self.nextBlock(finally_block)
+        self.setups.append((END_FINALLY, finally_block))
+
+        # find local variable with is context.__exit__
+        self._implicitNameOp('LOAD', exit)
+        self._implicitNameOp('DELETE', exit)
+
+        self.emit('WITH_CLEANUP')
+        self.emitop_int('CALL_FUNCTION', 3)
+        self.emit('POP_TOP')
+        self.emit('END_FINALLY')
+        self.setups.pop()
 
     def visitCompare(self, node):
         node.expr.accept( self )

@@ -64,6 +64,8 @@ class LowLevelType(object):
     def __ne__(self, other):
         return not (self == other)
 
+    _is_compatible = __eq__
+
     def __hash__(self):
         # cannot use saferecursive() -- see test_lltype.test_hash().
         # NB. the __cached_hash should neither be used nor updated
@@ -738,7 +740,12 @@ class _ptr(object):
 
     def __len__(self):
         if isinstance(self._T, Array):
+            if self._T._hints.get('nolength', False):
+                raise TypeError("%r instance has no length attribute" %
+                                    (self._T,))
+
             return len(self._obj.items)
+
         raise TypeError("%r instance is not an array" % (self._T,))
 
     def __repr__(self):
@@ -1095,6 +1102,7 @@ def runtime_type_info(p):
     return result
 
 def isCompatibleType(TYPE1, TYPE2):
+    return TYPE1._is_compatible(TYPE2)
     return TYPE1 == TYPE2
 
 # mark type ADT methods
@@ -1102,5 +1110,30 @@ def isCompatibleType(TYPE1, TYPE2):
 def typeMethod(func):
     func._type_method = True
     return func
-    
 
+def dissect_ll_instance(v, t=None, memo=None):
+    if memo is None:
+        memo = {}
+    if id(v) in memo:
+        return
+    memo[id(v)] = True
+    if t is None:
+        t = typeOf(v)
+    yield t, v
+    if isinstance(t, Ptr):
+        if v._obj:
+            for i in dissect_ll_instance(v._obj, t.TO, memo):
+                yield i
+    elif isinstance(t, Struct):
+        parent = v._parentstructure()
+        if parent:
+            for i in dissect_ll_instance(parent, typeOf(parent), memo):
+                yield i
+        for n in t._flds:
+            f = getattr(t, n)
+            for i in dissect_ll_instance(getattr(v, n), t._flds[n], memo):
+                yield i
+    elif isinstance(t, Array):
+        for item in v.items:
+            for i in dissect_ll_instance(item, t.OF, memo):
+                yield i

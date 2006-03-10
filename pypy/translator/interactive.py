@@ -48,6 +48,7 @@ class Translation(object):
     GOAL_USES_OPTS = {
         'annotate': ['debug'],
         'rtype': ['insist'],
+        'ootype': [],
         'backendopt': ['merge_if_blocks'],
         'database_c': ['gc', 'stackless'],
         'source_llvm': ['gc', 'stackless'],
@@ -81,9 +82,9 @@ class Translation(object):
         else:
             # check consistency
             if argtypes is not None and argtypes != self.ann_argtypes:
-                raise Exception("incosistent argtype supplied")
+                raise Exception("inconsistent argtype supplied")
             if policy is not None and policy != self.ann_policy:
-                raise Exception("incosistent annotation polish supplied")
+                raise Exception("inconsistent annotation polish supplied")
 
     def update_options(self, argtypes, kwds):
         if argtypes or kwds.get('policy'):
@@ -91,7 +92,7 @@ class Translation(object):
         for optname, value in kwds.iteritems():
             if optname in self.frozen_options:
                 if getattr(self.driver.options, optname) != value:
-                     raise Exception("incosistent option supplied: %s" % optname)
+                     raise Exception("inconsistent option supplied: %s" % optname)
             else:
                 setattr(self.driver.options, optname, value)
                 self.frozen_options[optname] = True
@@ -119,6 +120,10 @@ class Translation(object):
     def rtype(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
         return self.driver.rtype()
+
+    def ootype(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        return self.driver.ootype()
 
     # backend depedent
 

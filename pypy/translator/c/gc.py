@@ -192,7 +192,7 @@ class BoehmGcPolicy(BasicGcPolicy):
                                                                 is_varsize,
                                                                 err)
         if gcinfo and gcinfo.finalizer:
-            result += ('\nGC_REGISTER_FINALIZER(%s, %s, NULL, NULL, NULL);'
+            result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
                        % (eresult, gcinfo.finalizer))
         return result
 
@@ -278,6 +278,22 @@ class FrameworkGcPolicy(NoneGcPolicy):
         fnptr = self.db.gctransformer.frameworkgc_setup_ptr.value
         yield '%s();' % (self.db.get(fnptr),)
 
+    def pre_gc_code(self):
+        return []
+
     def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op, err):
         args = [funcgen.expr(v) for v in op.args]
         return '%s = %s; /* for moving GCs */' % (args[1], args[0])
+
+    def common_gcheader_definition(self, defnode):
+        return [('flags', lltype.Signed), ('typeid', lltype.Signed)]
+
+    def common_gcheader_initdata(self, defnode):
+        # this more or less assumes mark-and-sweep gc
+        o = defnode.obj
+        while True:
+            n = o._parentstructure()
+            if n is None:
+                break
+            o = n
+        return [0, defnode.db.gctransformer.id_of_type[typeOf(o)]]
