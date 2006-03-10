@@ -10,6 +10,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool.option import Options
 from pythonlexer import Source, match_encoding_declaration
+from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 import pysymbol
 import ebnfparse
 import sys
@@ -18,6 +19,9 @@ import grammar
 
 from codeop import PyCF_DONT_IMPLY_DEDENT
 
+class AlternateGrammarException(Exception):
+    pass
+
 class PythonParser(object):
     """Wrapper class for python grammar"""
     def __init__(self, grammar_builder):
@@ -25,6 +29,8 @@ class PythonParser(object):
         self.rules = grammar_builder.rules
         # Build first sets for each rule (including anonymous ones)
         grammar.build_first_sets(self.items)
+        self.symbols = grammar_builder.symbols
+        self.with_grammar = None
 
     def parse_source(self, textsrc, goal, builder, flags=0):
         """Parse a python source according to goal"""
@@ -44,19 +50,30 @@ class PythonParser(object):
             flags &= ~PyCF_DONT_IMPLY_DEDENT
         return self.parse_lines(lines, goal, builder, flags)
 
+
     def parse_lines(self, lines, goal, builder, flags=0):
-        goalnumber = pysymbol._cpython_symbols.sym_values[goal]
+        if (self.with_grammar is not None and # don't recurse into ourself
+            flags & CO_FUTURE_WITH_STATEMENT):
+            builder.enable_with()
+            return self.with_grammar.parse_lines(lines, goal, builder, flags)
+        goalnumber = self.symbols.sym_values[goal]
         target = self.rules[goalnumber]
         src = Source(lines, flags)
-    
-        result = target.match(src, builder)
+        
+        result = None
+        try:
+            result = target.match(src, builder)
+        except AlternateGrammarException: # handle from __future__ import with_statement
+            if self.with_grammar is not None:
+                builder.enable_with()
+                return self.with_grammar.parse_lines(lines, goal, builder, flags)
         if not result:
             line, lineno = src.debug()
             # XXX needs better error messages
             raise SyntaxError("invalid syntax", lineno, -1, line)
             # return None
         return builder
-    
+
 _recode_to_utf8 = gateway.applevel(r'''
     def _recode_to_utf8(text, encoding):
         return unicode(text, encoding).encode("utf-8")
@@ -96,7 +113,7 @@ def _check_for_encoding(s):
     if eol2 < 0:
         return _check_line_for_encoding(s[eol + 1:])
     return _check_line_for_encoding(s[eol + 1:eol2])
-    
+
 def _check_line_for_encoding(line):
     """returns the declared encoding or None"""
     i = 0
@@ -112,7 +129,9 @@ def get_grammar_file( version ):
     """returns the python grammar corresponding to our CPython version"""
     if version == "native":
         _ver = PYTHON_VERSION
-    elif version in ("2.3","2.4"):
+    elif version == "stable":
+        _ver = "_stablecompiler"
+    elif version in ("2.3","2.4","2.5a"):
         _ver = version
     return os.path.join( os.path.dirname(__file__), "data", "Grammar" + _ver ), _ver
 
@@ -130,6 +149,7 @@ def python_grammar(fname):
 
 debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
 PYTHON_PARSER = python_grammar( PYTHON_GRAMMAR )
+PYTHON_PARSER.with_grammar = python_grammar( PYTHON_GRAMMAR + '_with' )
 
 def reload_grammar(version):
     """helper function to test with pypy different grammars"""
@@ -141,7 +161,7 @@ def reload_grammar(version):
 def parse_file_input(pyf, gram, builder ):
     """Parse a python file"""
     return gram.parse_source( pyf.read(), "file_input", builder )
-    
+
 def parse_single_input(textsrc, gram, builder ):
     """Parse a python single statement"""
     return gram.parse_source( textsrc, "single_input", builder )
@@ -152,9 +172,12 @@ def parse_eval_input(textsrc, gram, builder):
 
 
 def grammar_rules( space ):
-    return space.wrap( PYTHON_PARSER.rules )
+    w_rules = space.newdict([])
+    for key, value in PYTHON_PARSER.rules.iteritems():
+        space.setitem(w_rules, space.wrap(key), space.wrap(value))
+    return w_rules
 
 
 def make_rule( space, w_rule ):
     rule = space.str_w( w_rule )
-    
+

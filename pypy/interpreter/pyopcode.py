@@ -14,17 +14,7 @@ from pypy.interpreter.pycode import PyCode
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.objectmodel import we_are_translated
 from pypy.rpython.rarithmetic import intmask
-
-# load opcode.py as pythonopcode from our own lib
-def load_opcode():
-    import new, py
-    global pythonopcode
-    pythonopcode = new.module('opcode')
-    opcode_path = py.path.local(__file__).dirpath().dirpath().dirpath('lib-python/2.4.1/opcode.py')
-    execfile(str(opcode_path), pythonopcode.__dict__)
-
-load_opcode()
-
+from pypy.tool import opcode as pythonopcode
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -647,6 +637,20 @@ class PyInterpFrame(pyframe.PyFrame):
         block = pyframe.FinallyBlock(f, f.next_instr + offsettoend)
         f.blockstack.push(block)
 
+    def WITH_CLEANUP(f):
+        # see comment in END_FINALLY for stack state
+        w_unroller = f.valuestack.top(3)
+        unroller = f.space.interpclass_w(w_unroller)
+        if (isinstance(unroller, pyframe.SuspendedUnroller)
+            and isinstance(unroller.flowexc, pyframe.SApplicationException)):
+            f.valuestack.push(unroller.flowexc.operr.w_type)
+            f.valuestack.push(unroller.flowexc.operr.w_value)
+            f.valuestack.push(unroller.flowexc.operr.application_traceback)
+        else:
+            f.valuestack.push(f.space.w_None)
+            f.valuestack.push(f.space.w_None)
+            f.valuestack.push(f.space.w_None)
+                      
     def call_function(f, oparg, w_star=None, w_starstar=None):
         n_arguments = oparg & 0xff
         n_keywords = (oparg>>8) & 0xff

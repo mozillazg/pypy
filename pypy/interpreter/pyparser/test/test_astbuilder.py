@@ -1,6 +1,6 @@
 import os
 
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
+from pypy.interpreter.pyparser import pythonparse
 from pypy.interpreter.pyparser.astbuilder import AstBuilder
 from pypy.interpreter.pyparser.pythonutil import ast_from_input
 from pypy.interpreter.stablecompiler.transformer import Transformer
@@ -206,8 +206,22 @@ expressions = [
     "[a, (b,c), d] = e",
     "a, (b, c), d = e",
     ]
-EXPECTED["k[v,]"] = "Module(None, Stmt([Discard(Subscript(Name('k'), 2, Tuple([Name('v')])))]))"
-EXPECTED["m[a,b]"] = "Module(None, Stmt([Discard(Subscript(Name('m'), 2, Tuple([Name('a'), Name('b')])))]))"
+
+# We do not export the following tests because we would have to implement 2.5
+# features in the stable compiler (other than just building the AST).
+expressions_inbetweenversions = expressions + [
+    "1 if True else 2",
+    "1 if False else 2",
+    ]
+
+EXPECTED["k[v,]"] = ("Module(None, Stmt([Discard(Subscript(Name('k'), 2, "
+                     "Tuple([Name('v')])))]))")
+EXPECTED["m[a,b]"] = ("Module(None, Stmt([Discard(Subscript(Name('m'), 2, "
+                      "Tuple([Name('a'), Name('b')])))]))")
+EXPECTED["1 if True else 2"] = ("Module(None, Stmt([Discard(CondExpr("
+                                "Name('True'), Const(1), Const(2)))]))")
+EXPECTED["1 if False else 2"] = ("Module(None, Stmt([Discard(CondExpr("
+                                 "Name('False'), Const(1), Const(2)))]))")
 
 funccalls = [
     "l = func()",
@@ -601,7 +615,7 @@ augassigns = [
 
 TESTS = [
     constants,
-    expressions,
+    expressions_inbetweenversions,
     augassigns,
     comparisons,
     funccalls,
@@ -690,12 +704,16 @@ class FakeSpace:
 def ast_parse_expr(expr, target='single'):
     target = TARGET_DICT[target]
     builder = AstBuilder(space=FakeSpace())
-    PYTHON_PARSER.parse_source(expr, target, builder)
+    pythonparse.PYTHON_PARSER.parse_source(expr, target, builder)
     return builder
+
+# Create parser from Grammar_stable, not current grammar.
+stable_grammar, _ = pythonparse.get_grammar_file("stable")
+stable_parser = pythonparse.python_grammar(stable_grammar)
 
 def tuple_parse_expr(expr, target='single'):
     t = Transformer("dummyfile")
-    return ast_from_input(expr, target, t)
+    return ast_from_input(expr, target, t, stable_parser)
 
 def check_expression(expr, target='single'):
     r1 = ast_parse_expr(expr, target)
@@ -726,6 +744,11 @@ def test_exec_inputs():
     for family in EXEC_INPUTS:
         for expr in family:
             yield check_expression, expr, 'exec'
+
+NEW_GRAMMAR_SNIPPETS = [    
+    'snippet_with_1.py',
+    'snippet_with_2.py',
+    ]
 
 SNIPPETS = [    
     'snippet_1.py',
@@ -769,9 +792,14 @@ LIBSTUFF = [
     ]
 
 def test_snippets():
-    for snippet_name in SNIPPETS:
+    for snippet_name in SNIPPETS + NEW_GRAMMAR_SNIPPETS:
         filepath = os.path.join(os.path.dirname(__file__), 'samples', snippet_name)
         source = file(filepath).read()
+        # To avoid using the stable compiler we pull an explicit AST out of the snippet
+        if source.startswith('# EXPECT:'):
+            firstline,_ = source.split('\n', 1)
+            firstline = firstline[len('# EXPECT:'):].strip()
+            EXPECTED[source] = firstline
         yield check_expression, source, 'exec'
 
 def test_libstuff():

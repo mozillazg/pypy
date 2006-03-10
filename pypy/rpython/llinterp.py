@@ -256,8 +256,24 @@ class LLFrame(object):
         # if these special cases pile up, do something better here
         if operation.opname in ['cast_pointer', 'ooupcast', 'oodowncast', 'cast_adr_to_ptr']:
             vals.insert(0, operation.result.concretetype)
-        retval = ophandler(*vals)
+        try:
+            retval = ophandler(*vals)
+        except LLException:
+            self.handle_cleanup(operation, exception=True)
+            raise
+        else:
+            self.handle_cleanup(operation)
         self.setvar(operation.result, retval)
+
+    def handle_cleanup(self, operation, exception=False):
+        cleanup = getattr(operation, 'cleanup', None)
+        if cleanup is not None:
+            cleanup_finally, cleanup_except = cleanup
+            for op in cleanup_finally:
+                self.eval_operation(op)
+            if exception:
+                for op in cleanup_except:
+                    self.eval_operation(op)
 
     def make_llexception(self, exc=None):
         if exc is None:
@@ -744,6 +760,9 @@ class LLFrame(object):
         assert isinstance(INST, ootype.Instance)
         return ootype.new(INST)
 
+    def op_runtimenew(self, class_):
+        return ootype.runtimenew(class_)
+
     def op_oosetfield(self, inst, name, value):
         assert isinstance(inst, ootype._instance)
         assert isinstance(name, str)
@@ -776,11 +795,16 @@ class LLFrame(object):
         assert isinstance(inst, ootype._instance)
         return bool(inst)
 
-    def op_oois(self, inst1, inst2):
-        assert isinstance(inst1, ootype._instance)
-        assert isinstance(inst2, ootype._instance)
-        return inst1 == inst2   # NB. differently-typed NULLs must be equal
-
+    def op_oois(self, obj1, obj2):
+        if isinstance(obj1, ootype._instance):
+            assert isinstance(obj2, ootype._instance)
+            return obj1 == obj2   # NB. differently-typed NULLs must be equal
+        elif isinstance(obj1, ootype._class):
+            assert isinstance(obj2, ootype._class)
+            return obj1 is obj2
+        else:
+            assert False, "oois on something silly"
+            
     def op_instanceof(self, inst, INST):
         return ootype.instanceof(inst, INST)
 
@@ -789,11 +813,6 @@ class LLFrame(object):
 
     def op_subclassof(self, class1, class2):
         return ootype.subclassof(class1, class2)
-
-    def op_oosameclass(self, class1, class2):
-        assert isinstance(class1, ootype._class)
-        assert isinstance(class2, ootype._class)
-        return class1 is class2
 
     def op_ooidentityhash(self, inst):
         return ootype.ooidentityhash(inst)

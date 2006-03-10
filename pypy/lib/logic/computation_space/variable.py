@@ -1,4 +1,5 @@
 import threading
+import time
 
 #----------- Exceptions ---------------------------------
 class VariableException(Exception):
@@ -8,6 +9,16 @@ class VariableException(Exception):
 class AlreadyInStore(VariableException):
     def __str__(self):
         return "%s already in store" % self.name
+
+class AlreadyBound(Exception):
+    def __init__(self, var, val):
+        self.var = var
+        self.val = val
+    
+    def __str__(self):
+        return "%s:%s already bound to %s" % (self.var.name,
+                                              self.var.val,
+                                              self.val)
 
 class NotAVariable(VariableException):
     def __str__(self):
@@ -20,8 +31,74 @@ class NoValue: pass
 
 class NoDom: pass
 
-class Var(object):
-    """Single-assignment variable"""
+class SimpleVar(object):
+    """Spaceless dataflow variable"""
+    
+    def __init__(self):
+        self.name = str(id(self))
+        self._val = NoValue
+        # a condition variable for concurrent access
+        self._value_condition = threading.Condition()
+
+    # value accessors
+    def _set_val(self, val):
+        self._value_condition.acquire()
+        try:
+            if self._val != NoValue:
+                if val != self._val:
+                    raise AlreadyBound(self, val)
+            self._val = val
+            self._value_condition.notifyAll()
+        finally:
+            self._value_condition.release()
+        
+    def _get_val(self):
+        return self._val
+    val = property(_get_val, _set_val)
+
+
+    # public interface
+
+    def is_bound(self):
+        return self.val != NoValue
+
+    def bind(self, val):
+        self.val = val
+
+    def get(self):
+        """Make threads wait on the variable
+           being bound in the top-level space
+        """
+        try:
+            self._value_condition.acquire()
+            while not self.is_bound():
+                t1 = time.time()
+                self._value_condition.wait(80)
+                t2 = time.time()
+                if t2-t1>80:
+                    raise RuntimeError("possible deadlock??")
+            return self.val
+        finally:
+            self._value_condition.release()
+
+
+    def reset(self):
+        self._value_condition.acquire()
+        self._val = NoValue
+        self._value_condition.release()
+
+
+class StreamVar(object):
+    def __init__(self):
+        self.var = SimpleVar()
+
+    def bind( self, val ):
+        newvar = SimpleVar()
+        self.var.bind( (val, newvar) )
+        
+
+class CsVar(SimpleVar):
+    """Dataflow variable linked to a space"""
 
     def __init__(self, name, cs):
         if name in cs.names:
@@ -56,13 +133,15 @@ class Var(object):
     # value accessors
     def _set_val(self, val):
         self._value_condition.acquire()
-        if self._cs.in_transaction:
-            if not self._changed:
-                self._previous = self._val
-                self._changed = True
-        self._val = val
-        self._value_condition.notifyAll()
-        self._value_condition.release()
+        try:
+            if self._cs.in_transaction:
+                if not self._changed:
+                    self._previous = self._val
+                    self._changed = True
+            self._val = val
+            self._value_condition.notifyAll()
+        finally:
+            self._value_condition.release()
         
     def _get_val(self):
         return self._val
@@ -76,34 +155,8 @@ class Var(object):
     def __repr__(self):
         return self.__str__()
 
-    def __eq__(self, thing):
-        return isinstance(thing, Var) \
-               and self.name == thing.name
-
-    def __hash__(self):
-        return self.name.__hash__()
-
     def bind(self, val):
-        """top-level space bind"""
+        """home space bind"""
         self._cs.bind(self, val)
 
     is_bound = _is_bound
-
-
-    #-- Dataflow ops with concurrent semantics ------
-    # should be used by threads that want to block on
-    # unbound variables
-
-    def get(self):
-        """Make threads wait on the variable
-           being bound in the top-level space
-        """
-        try:
-            self._value_condition.acquire()
-            while not self._is_bound():
-                self._value_condition.wait()
-            return self.val
-        finally:
-            self._value_condition.release()
-
-    

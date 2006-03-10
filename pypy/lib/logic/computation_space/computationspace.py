@@ -1,29 +1,53 @@
 # TODO
-# * support several distribution strategies
-# * add a linear constraint solver (vital for fast
+# * [1] adapt other distribution strategies
+# * [5] add a linear constraint solver (vital for fast
 #   constraint propagation over finite integer domains)
-# * make all propagators live in their own threads and
+#   and other kinds of specialized propagators
+# * [9] make all propagators live in their own threads and
 #   be awakened by variable/domains events
+
+
+# Gert Smolka in
+# http://www.cetic.be/moz2004/talks/MOZ2004.pdf :
+# * Abandon Logic Variables
+#  * can be bound everywhere
+#  * malicious consummer can bind tail variable of stream
+#  * break abstractions
+#  * unification not needed
+# * Have Futures instead
+#  * Multilisp [Halstead 85]
+#  * added to Mozart in 1998
+#  * refine logic variable into
+#   * consummer end (future)
+#   * producer end (promise)
+#  * dataflow synchronization + by-need synchronization
+
 
 from threading import Thread, Condition, RLock, local
 
-from state import Succeeded, Distributable, Failed, Unknown
+from state import Succeeded, Distributable, Failed, \
+     Unknown, Forsaken
 
-from variable import EqSet, Var, NoValue, NoDom, \
-     VariableException, NotAVariable, AlreadyInStore
+from variable import EqSet, CsVar, NoValue, NoDom, \
+     VariableException, NotAVariable, AlreadyInStore, \
+     AlreadyBound, SimpleVar
 from constraint import FiniteDomain, ConsistencyFailure, \
      Expression
 from distributor import DefaultDistributor
+import event # NewSpace, Clone, Revise
 
-class Alternatives(object):
+class Alternative(object):
 
-    def __init__(self, nb_alternatives):
-        self._nbalt = nb_alternatives
+    def __init__(self, choices):
+        self._choices = choices
 
     def __eq__(self, other):
         if other is None: return False
-        if not isinstance(other, Alternatives): return False
-        return self._nbalt == other._nbalt
+        if not isinstance(other, Alternative): return False
+        return self._choices == other._choices
+
+    def __str__(self):
+        return "Alternatives(%s)" % self._choices
 
 def NoProblem():
     """the empty problem, used by clone()"""
@@ -69,55 +93,59 @@ class ComputationSpace(object):
     # we have to enforce only one distributor
     # thread running in one space at the same time
     _nb_choices = 0
+    _id_count = 0
 
     def __init__(self, problem, parent=None):
+        self.id = ComputationSpace._id_count
+        ComputationSpace._id_count += 1
+        self.status = Unknown
         # consistency-preserving stuff
         self.in_transaction = False
         self.bind_lock = RLock()
         self.var_lock = RLock()
-        self.dist_lock = RLock()
         self.distributor = DefaultDistributor(self)
-        self.status = Unknown
+        # parent/children
         self.parent = parent
         self.children = set()
+        # mapping from domains to variables
+        self.doms = {}
+        # set of all constraints 
+        self.constraints = set()
+        # mapping from vars to constraints
+        self.var_const_map = {}
+        self.event_set = set()
         
         if parent is None:
             self.vars = set()
             # mapping of names to vars (all of them)
             self.names = {}
-            # mapping from vars to constraints
-            self.var_const_map = {}
-            # mapping from domains to variables
-            self.doms = {}
-            # set of all constraints 
-            self.constraints = set()
             self.root = self.var('__root__')
             # set up the problem
             self.bind(self.root, problem(self))
-            # check satisfiability of the space
             self._init_choose_commit()
+            self.distributor.start()
         else:
+            self.parent.children.add(self)
+            # shared stuff
             self.vars = parent.vars
             self.names = parent.names
-            # we should really copy stuff
-            self.var_const_map = parent.var_const_map
-            self.constraints = parent.constraints
-            self.doms = {} # shall be copied by clone
             self.root = parent.root
-            self.status = parent.status
+            # copied stuff
+            self.copy_domains(parent)
+            self.copy_constraints(parent)
+            # ...
+            self.status = Unknown
             self.distributor = parent.distributor.__class__(self)
             self._init_choose_commit()
 
-        self.distributor.start()
-
     def _init_choose_commit(self):
         # create a unique choice point
-        # using two vars as channels betwen
+        # using two spaceless vars as channels betwen
         # space and distributor threads
-        self.CHOOSE = self._make_choice_var()
-        self.STABLE = self._make_stable_var()
+        self.CHOOSE = SimpleVar()
+        self.STABLE = SimpleVar()
 
-#-- utilities -------------------------------------------------
+#-- utilities & instrumentation -----------------------------
 
     def __str__(self):
         ret = ["<space:\n"]
@@ -127,69 +155,96 @@ class ComputationSpace(object):
         ret.append(">")
         return ' '.join(ret)
 
+    def __del__(self):
+        # try to break ref. cycles and help
+        # threads terminate
+        self.status = Forsaken
+        self.parent = None
+        self.children = None
+        self.CHOOSE.bind(True)
+        self.STABLE.bind(True)
+
+    def __eq__(self, spc):
+        """space equality defined as :
+           * identity, or
+           * same set of vars with a domain, and
+           * same name set, and
+           * equal domains, and
+           * same set of constraints, and
+           * different propagators of the same type"""
+        if not isinstance(spc, ComputationSpace): return False
+        if id(self) == id(spc): return True
+        r1 = self.vars == spc.vars
+        r2 = self.names == spc.names
+        r3 = self.constraints != spc.constraints
+        r4 = self.distributor != spc.distributor
+        r5 = self.root == spc.root
+        if not r1 and r2 and r3 and r4 and r5:
+            return False
+        # now the domains
+        it1 = [item for item in self.doms.items()
+               if item[1] != NoDom]
+        it2 = [item for item in spc.doms.items()
+               if item[1] != NoDom]
+        it1.sort()
+        it2.sort()
+        for (v1, d1), (v2, d2) in zip (it1, it2):
+            if v1 != v2: return False
+            if d1 != d2: return False
+            if id(v1) != id(v2): return False
+            if id(d1) == id(d2): return False
+        return True
+
+    def __ne__(self, other):
+        return not self == other
+
     def pretty_doms(self):
         print "(-- domains --"
-        for v, d in self.doms.items():
+        doms = self.doms.items()
+        doms.sort()
+        for v, d in doms:
             if d != NoDom:
-                print ' ', str(d)
+                print ' ', str(d.get_values())
         print " -- domains --)"
 
+           
 #-- Computation Space -----------------------------------------
 
-    def _make_choice_var(self):
-        ComputationSpace._nb_choices += 1
-        ch_var = self.var('__choice__'+str(self._nb_choices))
-        return ch_var
-
-    def _make_stable_var(self):
-        ComputationSpace._nb_choices += 1
-        st_var = self.var('__stable__'+str(self._nb_choices))
-        return st_var
+    #-- space helpers -----------------------------------------
 
     def _process(self):
-        """auxilary of the distributor
-        """
-        #XXX: shouldn't only the distributor call it ?
-        #XXX: this is all sequential, but in the future
-        #     when propagators live in threads and are
-        #     awaken by events on variables, this might
-        #     completely disappear
-        try:
-            self.satisfy_all()
-        except ConsistencyFailure:
-            self.status = Failed
-        else:
-            if self._distributable():
-                self.status = Distributable
+        """wraps the propagator"""
+        if len(self.event_set):
+            try:
+                self.satisfy_all()
+            except ConsistencyFailure:
+                self.status = Failed
             else:
-                self.status = Succeeded
+                if not self._distributable():
+                    self.status = Succeeded
 
     def _distributable(self):
-        self.dist_lock.acquire()
-        try:
-            if self.status not in (Failed, Succeeded):
-                for var in self.root.val:
-                    if self.dom(var).size() > 1 :
-                        return True
-            return False
-        finally:
-            self.dist_lock.release()
-        # in The Book : "the space has one thread that is
-        # suspended on a choice point with two or more alternatives.
-        # A space can have at most one choice point; attempting to
-        # create another gives an error."
+        if self.status not in (Failed, Succeeded):
+            for var in self.root.val:
+                if self.dom(var).size() > 1 :
+                    return True
+        return False
 
     def top_level(self):
         return self.parent is None
 
+    def _notify(self, event):
+        self.event_set.add(event)
+
+    #-- space official API ------------------------------------
+
     def ask(self):
-        #print "SPACE Ask() checks stability ..."
-        self.STABLE.get() # that's real stability
-        #print "SPACE is stable, resuming Ask()"
+        self.STABLE.get() 
         status = self.status in (Failed, Succeeded)
         if status: return self.status
         if self._distributable():
-            return Alternatives(self.distributor.nb_subdomains())
+            return Alternative(self.distributor.nb_subdomains())
+
         # should be unreachable
         print "DOMS", [(var, self.doms[var]) 
                        for var in self.vars
@@ -197,11 +252,13 @@ class ComputationSpace(object):
         raise NotImplementedError
 
     def clone(self):
-        #XXX: lazy copy of domains would be nice
+        # did you ask before ... ?
+        assert self.STABLE.is_bound()
         spc = ComputationSpace(NoProblem, parent=self)
-        for var in spc.vars:
-            if self.dom(var) != NoDom:
-                spc.set_dom(var, self.dom(var).copy())
+        print "-- cloning %s to %s --" % (self.id, spc.id)
+        self._notify(event.Clone)
+        spc._process()
+        spc.distributor.start()            
         return spc
 
     def inject(self, restricting_problem):
@@ -216,14 +273,10 @@ class ComputationSpace(object):
            some_number must satisfy 1=<I=<N where N is the first arg
            of the Choose call.
         """
-        #print "SPACE commited to", choice
-        # block future calls to Ask until the distributor
-        # binds STABLE
-        old_stable_var = self.STABLE
-        self.STABLE = self._make_stable_var()
-        self._del_var(old_stable_var)
-        #print "SPACE binds CHOOSE to", choice
-        self.bind(self.CHOOSE, choice)
+        # did you ask before ... ?
+        assert self.STABLE.is_bound()
+        self.STABLE = SimpleVar()
+        self.CHOOSE.bind(choice)
 
     def choose(self, nb_choices):
         """
@@ -241,11 +294,17 @@ class ComputationSpace(object):
     def merge(self):
         """binds root vars to their singleton domains """
         assert self.status == Succeeded
-        for var in self.root.val:
-            var.bind(self.dom(var).get_values()[0])
+        # this can't work if we don't copy vars too
+        #for var in self.root.val:
+        #    var.bind(self.dom(var).get_values()[0])
         # shut down the distributor
-        self.CHOOSE.bind(0)
-        return self.root.val
+        self.CHOOSE.bind(True)
+        self.status = Forsaken
+        res = {}
+        for var in self.root.val:
+            res[var.name] = self.dom(var).get_values()[0]
+        self.distributor.join()
+        return res
 
     def set_distributor(self, dist):
         self.distributor = dist
@@ -259,7 +318,7 @@ class ComputationSpace(object):
            and puts it into the store"""
         self.var_lock.acquire()
         try:
-            v = Var(name, self)
+            v = CsVar(name, self)
             self.add_unbound(v)
             return v
         finally:
@@ -280,22 +339,6 @@ class ComputationSpace(object):
         self.names[var.name] = var
         # put into new singleton equiv. set
         var.val = EqSet([var])
-
-    def set_dom(self, var, dom):
-        """bind variable to domain"""
-        assert(isinstance(var, Var) and (var in self.vars))
-        if var.is_bound():
-            print "warning : setting domain %s to bound var %s" \
-                  % (dom, var)
-        self.doms[var] = FiniteDomain(dom)
-
-    def dom(self, var):
-        assert isinstance(var, Var)
-        try:
-            return self.doms[var]
-        except KeyError:
-            self.doms[var] = NoDom
-            return NoDom
 
     def get_var_by_name(self, name):
         """looks up one variable"""
@@ -331,21 +374,49 @@ class ComputationSpace(object):
         self.vars.remove(var)
         if self.doms.has_key(var):
             del self.doms[var]
-    
+
+    #-- Domains -----------------------------
+
+    def set_dom(self, var, dom):
+        """bind variable to domain"""
+        assert(isinstance(var, CsVar) and (var in self.vars))
+        if var.is_bound():
+            print "warning : setting domain %s to bound var %s" \
+                  % (dom, var)
+        self.doms[var] = FiniteDomain(dom)
+
+    def dom(self, var):
+        assert isinstance(var, CsVar)
+        return self.doms.get(var, NoDom)
+        try:
+            return self.doms[var]
+        except KeyError:
+            self.doms[var] = NoDom
+            return NoDom
+
+
+    def copy_domains(self, space):
+        for var in self.vars:
+            if space.dom(var) != NoDom:
+                self.set_dom(var, space.dom(var).copy())
+                assert space.dom(var) == self.dom(var)
+                assert id(self.dom(var)) != id(space.dom(var))
+
     #-- Constraints -------------------------
 
-    def add_expression(self, constraint):
+    def _add_const(self, constraint):
         self.constraints.add(constraint)
-        for var in constraint.affectedVariables():
+        self._notify(event.Inject(constraint))
+        for var in constraint.affected_variables():
             self.var_const_map.setdefault(var, set())
             self.var_const_map[var].add(constraint)
 
+    def add_expression(self, constraint):
+        self._add_const(constraint)
+        
     def add_constraint(self, vars, const):
         constraint = Expression(self, vars, const)
-        self.constraints.add(constraint)
-        for var in constraint.affectedVariables():
-            self.var_const_map.setdefault(var, set())
-            self.var_const_map[var].add(constraint)
+        self._add_const(constraint)
 
     def dependant_constraints(self, var):
         return self.var_const_map[var]
@@ -355,6 +426,11 @@ class ComputationSpace(object):
         for var in self.vars:
             if self.dom(var) != NoDom: varset.add(var)
         return varset
+
+    def copy_constraints(self, space):
+        self.constraints = set()
+        for const in space.constraints:
+            self._add_const(const.copy_to(self))
 
     #-- Constraint propagation ---------------
 
@@ -421,14 +497,34 @@ class ComputationSpace(object):
                 self.restore_domains(old_domains)
                 raise
 
+    #-- real propagation begins there -------------------------
+
+    def add_distributed(self, var):
+        self.changelog.append(var)
+
+    def _init_constraint_queue(self):
+        cqueue = []
+        init_const_set = set()
+        for ev in self.event_set:
+            if isinstance(ev, event.Revise):
+                for const in self.var_const_map[ev.var]:
+                    init_const_set.add(const)
+            elif isinstance(ev, event.Inject):
+                init_const_set.add(ev.constraint)
+                
+        cqueue = [(const.estimate_cost(), const)
+                  for const in init_const_set]
+        return cqueue
+
     def satisfy_all(self):
         """really PROPAGATE"""
-        const_q = [(const.estimateCost(), const)
-                   for const in self.constraints]
+        const_q = self._init_constraint_queue()
+        assert const_q != []
+        const_q.sort()
         affected_constraints = set()
         while True:
             if not const_q:
-                const_q = [(const.estimateCost(), const)
+                const_q = [(const.estimate_cost(), const)
                            for const in affected_constraints]
                 if not const_q:
                     break
@@ -436,7 +532,7 @@ class ComputationSpace(object):
                 affected_constraints.clear()
             cost, const = const_q.pop(0)
             entailed = const.revise3()
-            for var in const.affectedVariables():
+            for var in const.affected_variables():
                 dom = self.dom(var)
                 if not dom.has_changed():
                     continue
@@ -454,7 +550,7 @@ class ComputationSpace(object):
                                constset):
         if constraint in constset: return
         constset.add(constraint)
-        for var in constraint.affectedVariables():
+        for var in constraint.affected_variables():
             varset.add(var)
             dep_consts = self.var_const_map[var]
             for const in dep_consts:
@@ -508,7 +604,7 @@ class ComputationSpace(object):
         # removed (this last condition remains to be checked)
         self.bind_lock.acquire()
         try:
-            assert(isinstance(var, Var) and (var in self.vars))
+            assert(isinstance(var, CsVar) and (var in self.vars))
             if var == val:
                 return
             if _both_are_vars(var, val):
@@ -657,7 +753,7 @@ def _really_unifiable(term1, term2):
         return False
     if _mapping(term1) and _mapping(term2):
         return _mapping_unifiable(term1, term2)
-    if not(isinstance(term1, Var) or isinstance(term2, Var)):
+    if not(isinstance(term1, CsVar) or isinstance(term2, CsVar)):
         return term1 == term2 # same 'atomic' object
     return True
         
@@ -686,13 +782,49 @@ def _mapping_unifiable(m1, m2):
 #-- Some utilities -------------------------------------------
 
 def _both_are_vars(v1, v2):
-    return isinstance(v1, Var) and isinstance(v2, Var)
+    return isinstance(v1, CsVar) and isinstance(v2, CsVar)
     
 def _both_are_bound(v1, v2):
     return v1._is_bound() and v2._is_bound()
 
-def fif(test, iftrue, iffalse):
-    if test:
-        return iftrue
+def diff_list(l1, l2):
+    diff = {}
+    idx = 0
+    for e1, e2 in zip(l1, l2):
+        if e1 != e2: diff[idx] = (e1, e2)
+        idx += 1
+    return diff
+
+def backup_domains(space):
+    print "-- backup of domains (%s) --" % space.id
+    doms = []
+    for v, d in space.doms.items():
+        if d != NoDom:
+            doms.append((v, len(d)))
+    doms.sort()
+    print "  (", [elt[1] for elt in doms], ")"
+    return doms
+
+def print_quick_diff(space, domain_history):
+    ldh = len(domain_history)
+    if ldh > 0:
+        print "history size (%s) : %s" % (space.id, ldh)
+        last = domain_history[-1]
     else:
-        return iffalse
+        curr = [(item[0], len(item[1].get_values()))
+                for item in space.doms.items()
+                if item[1] != NoDom]
+        curr.sort()
+        print "(diff -- v : d 0        (%s)" % space.id
+        for l in curr:
+            print ' '*6, '%s :  %2d' % (l[0], l[1]) 
+        print " --)"
+        return
+    curr = [(item[0], len(item[1].get_values()))
+            for item in space.doms.items()
+            if item[1] != NoDom]
+    curr.sort()
+    print "(diff -- v : d%2d | d%2d (%s)" % (ldh, ldh+1, space.id)
+    for l1, l2 in zip(last, curr):
+        print ' '*6, '%s :  %2d | %2d ' % (l1[0], l1[1], l2[1]) 
+    print " --)"

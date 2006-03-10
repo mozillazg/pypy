@@ -209,3 +209,81 @@ def test_kill_raise_del_coro():
     
     data = wrap_stackless_function(f)
     assert int(data.strip()) == 4711
+
+def test_tree_compare():
+    class Node:
+        def __init__(self, value, left=None, right=None):
+            self.value = value
+            self.left = left
+            self.right = right
+        def __repr__(self):
+            return 'Node(%r, %r, %r)'%(self.value, self.left, self.right)
+
+    tree1 = Node(1, Node(2, Node(3)))
+    tree2 = Node(1, Node(3, Node(2)))
+    tree3 = Node(1, Node(2), Node(3))
+    
+    class Super:
+        pass
+    class Producer(Super):
+        def __init__(self, tree, objects, consumer):
+            self.tree = tree
+            self.objects = objects
+            self.consumer = consumer
+        def produce(self, t):
+            if t is None:
+                return
+            self.objects.append(t.value)
+            self.consumer.switch()
+            self.produce(t.left)
+            self.produce(t.right)
+        def call(self):
+            self.produce(self.tree)
+            while 1:
+                self.consumer.switch()
+    class Consumer(Super):
+        def __init__(self, tree, objects, producer):
+            self.tree = tree
+            self.objects = objects
+            self.producer = producer
+        def consume(self, t):
+            if t is None:
+                return True
+            self.producer.switch()
+            if not self.objects:
+                return False
+            if self.objects.pop(0) != t.value:
+                return False
+            if not self.consume(t.left):
+                return False
+            return self.consume(t.right)
+            
+        def call(self):
+            self.result = self.consume(self.tree)
+            costate.main.switch()
+
+    def pre_order_eq(t1, t2):
+        objects = []
+        producer = Coroutine()
+        consumer = Coroutine()
+        
+        producer.bind(Producer(t1, objects, consumer))
+        cons = Consumer(t2, objects, producer)
+        consumer.bind(cons)
+
+        consumer.switch()
+
+        return cons.result
+
+    def ep():
+        return "%d %d %d %d"%(pre_order_eq(tree1, tree2),
+                              pre_order_eq(tree1, tree1),
+                              pre_order_eq(tree1, tree3),
+                              pre_order_eq(tree2, tree1),
+
+                              )
+    
+    output = wrap_stackless_function(ep)
+    assert output.strip() == '0 1 1 0'
+            
+            

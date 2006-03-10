@@ -2,7 +2,7 @@ import sys
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.lltypesystem.llmemory import Address, fakeaddress, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
-     CompositeOffset
+     CompositeOffset, ArrayLengthOffset
 from pypy.rpython.memory.gc import GCHeaderOffset
 from pypy.rpython.memory.lladdress import NULL
 
@@ -23,6 +23,9 @@ def name_signed(value, db):
                 db.gettype(value.TYPE).replace('@', ''), value.repeat)
         elif isinstance(value, ArrayItemsOffset):
             return 'offsetof(%s, items)'%(
+                db.gettype(value.TYPE).replace('@', ''))
+        elif isinstance(value, ArrayLengthOffset):
+            return 'offsetof(%s, length)'%(
                 db.gettype(value.TYPE).replace('@', ''))
         elif isinstance(value, CompositeOffset):
             return '%s + %s' % (name_signed(value.first, db), name_signed(value.second, db))
@@ -83,10 +86,22 @@ def name_address(value, db):
     if value is NULL:
         return 'NULL'
     assert isinstance(value, fakeaddress)
-    if value.ob is None:
-        return 'NULL'
+    if value.offset is None:
+        if value.ob is None:
+            return 'NULL'
+        else:
+            if isinstance(typeOf(value.ob), ContainerType):
+                return db.getcontainernode(value.ob).ptrname
+            else:
+                return db.get(value.ob)
     else:
-        return db.get(value.ob)
+        assert value.offset is not None
+        if isinstance(typeOf(value.ob), ContainerType):
+            base = db.getcontainernode(value.ob).ptrname
+        else:
+            base = db.get(value.ob)
+        
+        return '(void*)(((char*)(%s)) + (%s))'%(base, db.get(value.offset))
 
 PrimitiveName = {
     Signed:   name_signed,

@@ -1,14 +1,17 @@
 """This module provides the astbuilder class which is to be used
 by GrammarElements to directly build the AST during parsing
-without going trhough the nested tuples step
+without going through the nested tuples step
 """
 
 from grammar import BaseGrammarBuilder, AbstractContext
 from pypy.interpreter.astcompiler import ast, consts
-from pypy.interpreter.pyparser.pysymbol import _cpython_symbols as sym
+from pypy.interpreter.pyparser import pythonparse
 import pypy.interpreter.pyparser.pytoken as tok
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.parsestring import parsestr
+
+sym      = pythonparse.PYTHON_PARSER.symbols
+sym_with = pythonparse.PYTHON_PARSER.with_grammar.symbols
 
 DEBUG_MODE = 0
 
@@ -257,9 +260,9 @@ def parse_listcomp(tokens):
             ifs = []
         else:
             assert False, 'Unexpected token: expecting for in listcomp'
-        # 
+        #
         # Original implementation:
-        # 
+        #
         # if tokens[index].get_value() == 'for':
         #     index += 1 # skip 'for'
         #     ass_node = to_lvalue(tokens[index], consts.OP_ASSIGN)
@@ -320,7 +323,7 @@ def parse_genexpr_for(tokens):
 
 def get_docstring(builder,stmt):
     """parses a Stmt node.
-    
+
     If a docstring if found, the Discard node is **removed**
     from <stmt> and the docstring is returned.
 
@@ -340,7 +343,7 @@ def get_docstring(builder,stmt):
                 del stmt.nodes[0]
                 doc = expr.value
     return doc
-    
+
 
 def to_lvalue(ast_node, flags):
     lineno = ast_node.lineno
@@ -388,7 +391,7 @@ def to_lvalue(ast_node, flags):
                                  lineno, 0, '')
         else:
             raise SyntaxError("can't assign to non-lvalue",
-                             lineno, 0, '') 
+                             lineno, 0, '')
 
 def is_augassign( ast_node ):
     if ( isinstance( ast_node, ast.Name ) or
@@ -410,7 +413,7 @@ def get_atoms(builder, nb):
         i -= 1
     atoms.reverse()
     return atoms
-    
+
 #def eval_string(value):
 #    """temporary implementation
 #
@@ -466,7 +469,7 @@ def reduce_slice(obj, sliceobj):
 
 def parse_attraccess(tokens):
     """parses token list like ['a', '.', 'b', '.', 'c', ...]
-    
+
     and returns an ast node : ast.Getattr(Getattr(Name('a'), 'b'), 'c' ...)
     """
     token = tokens[0]
@@ -519,7 +522,7 @@ def parse_attraccess(tokens):
 ## where Var and Expr are AST subtrees and Token is a not yet
 ## reduced token
 ##
-## AST_RULES is kept as a dictionnary to be rpython compliant this is the
+## ASTRULES is kept as a dictionnary to be rpython compliant this is the
 ## main reason why build_* functions are not methods of the AstBuilder class
 ##
 
@@ -579,7 +582,7 @@ def slicecut(lst, first, endskip): # endskip is negative
         return lst[first:last]
     else:
         return []
-    
+
 
 def build_power(builder, nb):
     """power: atom trailer* ['**' factor]"""
@@ -742,7 +745,10 @@ def build_comp_op(builder, nb):
             builder.push(TokenObject(tok.NAME, 'is not', lineno))
     else:
         assert False, "TODO" # uh ?
-        
+
+def build_or_test(builder, nb):
+    return build_binary_expr(builder, nb, ast.Or)
+
 def build_and_test(builder, nb):
     return build_binary_expr(builder, nb, ast.And)
 
@@ -756,8 +762,18 @@ def build_not_test(builder, nb):
         assert False, "not_test implementation incomplete in not_test"
 
 def build_test(builder, nb):
-    return build_binary_expr(builder, nb, ast.Or)
-    
+    atoms = get_atoms(builder, nb)
+    if len(atoms) == 1:
+        builder.push(atoms[0])
+    elif len(atoms) == 5:
+        builder.push(
+            ast.CondExpr(atoms[2], atoms[0], atoms[4], atoms[1].lineno))
+    else:
+        assert False, "invalid number of atoms for rule 'test'"
+
+# Note: we do not include a build_old_test() because it does not need to do
+# anything.
+
 def build_testlist(builder, nb):
     return build_binary_expr(builder, nb, ast.Tuple)
 
@@ -837,7 +853,7 @@ def build_file_input(builder, nb):
             stmts.extend(node.nodes)
         elif isinstance(node, TokenObject) and node.name == tok.ENDMARKER:
             # XXX Can't we just remove the last element of the list ?
-            break    
+            break
         elif isinstance(node, TokenObject) and node.name == tok.NEWLINE:
             continue
         else:
@@ -910,7 +926,6 @@ def build_lambdef(builder, nb):
     code = atoms[-1]
     names, defaults, flags = parse_arglist(slicecut(atoms, 1, -2))
     builder.push(ast.Lambda(names, defaults, flags, code, lineno))
-
 
 def build_trailer(builder, nb):
     """trailer: '(' ')' | '(' arglist ')' | '[' subscriptlist ']' | '.' NAME
@@ -1009,7 +1024,7 @@ def build_subscript(builder, nb):
         else:
             builder.push(SlicelistObject('slice', sliceinfos, lineno))
 
-        
+
 def build_listmaker(builder, nb):
     """listmaker: test ( list_for | (',' test)* [','] )"""
     atoms = get_atoms(builder, nb)
@@ -1223,6 +1238,25 @@ def build_while_stmt(builder, nb):
         else_ = atoms[6]
     builder.push(ast.While(test, body, else_, atoms[0].lineno))
 
+def build_with_stmt(builder, nb):
+    """with_stmt: 'with' test [ NAME expr ] ':' suite"""
+
+    atoms = get_atoms(builder, nb)
+    # skip 'with'
+    test =  atoms[1]
+    if len(atoms) == 4:
+        body = atoms[3]
+        var = None
+    # if there is an "as" clause
+    else:
+        token = atoms[2]
+        assert isinstance(token, TokenObject)
+        if token.get_value() != 'as':
+            raise SyntaxError("invalid syntax", token.lineno, token.col)
+        varexpr = atoms[3]
+        var = to_lvalue(varexpr, consts.OP_ASSIGN)
+        body = atoms[5]
+    builder.push(ast.With(test, body, var, atoms[0].lineno))
 
 def build_import_name(builder, nb):
     """import_name: 'import' dotted_as_names
@@ -1311,6 +1345,12 @@ def build_import_from(builder, nb):
             names.append((name, as_name))
             if index < l: # case ','
                 index += 1
+    if from_name == '__future__':
+        for name, asname in names:
+            if name == 'with_statement':
+                # found from __future__ import with_statement
+                if not builder.with_enabled:
+                    raise pythonparse.AlternateGrammarException()
     builder.push(ast.From(from_name, names, atoms[0].lineno))
 
 
@@ -1325,7 +1365,7 @@ def build_continue_stmt(builder, nb):
 def build_del_stmt(builder, nb):
     atoms = get_atoms(builder, nb)
     builder.push(to_lvalue(atoms[1], consts.OP_DELETE))
-        
+
 
 def build_assert_stmt(builder, nb):
     """assert_stmt: 'assert' test [',' test]"""
@@ -1404,7 +1444,7 @@ def build_try_stmt(builder, nb):
                ['else' ':' suite] | 'try' ':' suite 'finally' ':' suite)
     # NB compile.c makes sure that the default except clause is last
     except_clause: 'except' [test [',' test]]
-   
+
     """
     atoms = get_atoms(builder, nb)
     l = len(atoms)
@@ -1433,58 +1473,68 @@ def build_try_stmt(builder, nb):
             else_ = atoms[index+2] # skip ':'
         builder.push(ast.TryExcept(body, handlers, else_, atoms[0].lineno))
 
-
-ASTRULES = {
-    sym['atom'] : build_atom,
-    sym['power'] : build_power,
-    sym['factor'] : build_factor,
-    sym['term'] : build_term,
-    sym['arith_expr'] : build_arith_expr,
-    sym['shift_expr'] : build_shift_expr,
-    sym['and_expr'] : build_and_expr,
-    sym['xor_expr'] : build_xor_expr,
-    sym['expr'] : build_expr,
-    sym['comparison'] : build_comparison,
-    sym['comp_op'] : build_comp_op,
-    sym['and_test'] : build_and_test,
-    sym['not_test'] : build_not_test,
-    sym['test'] : build_test,
-    sym['testlist'] : build_testlist,
-    sym['expr_stmt'] : build_expr_stmt,
-    sym['small_stmt'] : return_one,
-    sym['simple_stmt'] : build_simple_stmt,
-    sym['single_input'] : build_single_input,
-    sym['file_input'] : build_file_input,
-    sym['testlist_gexp'] : build_testlist_gexp,
-    sym['lambdef'] : build_lambdef,
-    sym['trailer'] : build_trailer,
-    sym['arglist'] : build_arglist,
-    sym['subscript'] : build_subscript,
-    sym['listmaker'] : build_listmaker,
-    sym['funcdef'] : build_funcdef,
-    sym['classdef'] : build_classdef,
-    sym['return_stmt'] : build_return_stmt,
-    sym['suite'] : build_suite,
-    sym['if_stmt'] : build_if_stmt,
-    sym['pass_stmt'] : build_pass_stmt,
-    sym['break_stmt'] : build_break_stmt,
-    sym['for_stmt'] : build_for_stmt,
-    sym['while_stmt'] : build_while_stmt,
-    sym['import_name'] : build_import_name,
-    sym['import_from'] : build_import_from,
-    sym['yield_stmt'] : build_yield_stmt,
-    sym['continue_stmt'] : build_continue_stmt,
-    sym['del_stmt'] : build_del_stmt,
-    sym['assert_stmt'] : build_assert_stmt,
-    sym['exec_stmt'] : build_exec_stmt,
-    sym['print_stmt'] : build_print_stmt,
-    sym['global_stmt'] : build_global_stmt,
-    sym['raise_stmt'] : build_raise_stmt,
-    sym['try_stmt'] : build_try_stmt,
-    sym['exprlist'] : build_exprlist,
-    sym['decorator'] : build_decorator,
-    sym['eval_input'] : build_eval_input,
+ASTRULES_Template = {
+    'atom' : build_atom,
+    'power' : build_power,
+    'factor' : build_factor,
+    'term' : build_term,
+    'arith_expr' : build_arith_expr,
+    'shift_expr' : build_shift_expr,
+    'and_expr' : build_and_expr,
+    'xor_expr' : build_xor_expr,
+    'expr' : build_expr,
+    'comparison' : build_comparison,
+    'comp_op' : build_comp_op,
+    'or_test' : build_or_test,
+    'and_test' : build_and_test,
+    'not_test' : build_not_test,
+    'test' : build_test,
+    'testlist' : build_testlist,
+    'expr_stmt' : build_expr_stmt,
+    'small_stmt' : return_one,
+    'simple_stmt' : build_simple_stmt,
+    'single_input' : build_single_input,
+    'file_input' : build_file_input,
+    'testlist_gexp' : build_testlist_gexp,
+    'lambdef' : build_lambdef,
+    'old_lambdef' : build_lambdef,
+    'trailer' : build_trailer,
+    'arglist' : build_arglist,
+    'subscript' : build_subscript,
+    'listmaker' : build_listmaker,
+    'funcdef' : build_funcdef,
+    'classdef' : build_classdef,
+    'return_stmt' : build_return_stmt,
+    'suite' : build_suite,
+    'if_stmt' : build_if_stmt,
+    'pass_stmt' : build_pass_stmt,
+    'break_stmt' : build_break_stmt,
+    'for_stmt' : build_for_stmt,
+    'while_stmt' : build_while_stmt,
+    'import_name' : build_import_name,
+    'import_from' : build_import_from,
+    'yield_stmt' : build_yield_stmt,
+    'continue_stmt' : build_continue_stmt,
+    'del_stmt' : build_del_stmt,
+    'assert_stmt' : build_assert_stmt,
+    'exec_stmt' : build_exec_stmt,
+    'print_stmt' : build_print_stmt,
+    'global_stmt' : build_global_stmt,
+    'raise_stmt' : build_raise_stmt,
+    'try_stmt' : build_try_stmt,
+    'exprlist' : build_exprlist,
+    'decorator' : build_decorator,
+    'eval_input' : build_eval_input,
     }
+
+# Build two almost identical ASTRULES dictionaries
+ASTRULES      = dict([(sym[key], value) for (key, value) in
+                      ASTRULES_Template.iteritems()])
+
+ASTRULES_Template['with_stmt'] = build_with_stmt
+ASTRULES_with = dict([(sym_with[key], value) for (key, value) in
+                      (ASTRULES_Template).iteritems()])
+del ASTRULES_Template
 
 ## Stack elements definitions ###################################
 
@@ -1494,8 +1544,8 @@ class BaseRuleObject(ast.Node):
         self.count = count
         self.lineno = lineno # src.getline()
         self.col = 0  # src.getcol()
-        
-    
+
+
 class RuleObject(BaseRuleObject):
     """A simple object used to wrap a rule or token"""
     def __init__(self, name, count, lineno):
@@ -1511,18 +1561,18 @@ class RuleObject(BaseRuleObject):
 
 class TempRuleObject(BaseRuleObject):
     """used to keep track of how many items get_atom() should pop"""
-    
+
     def __init__(self, name, count, lineno):
         BaseRuleObject.__init__(self, count, lineno)
         self.temp_rulename = name
-        
+
     def __str__(self):
         return "<Rule: %s/%d>" % (self.temp_rulename, self.count)
 
     def __repr__(self):
         return "<Rule: %s/%d>" % (self.temp_rulename, self.count)
 
-    
+
 class TokenObject(ast.Node):
     """A simple object used to wrap a rule or token"""
     def __init__(self, name, value, lineno):
@@ -1532,7 +1582,7 @@ class TokenObject(ast.Node):
         # self.line = 0 # src.getline()
         self.col = 0  # src.getcol()
         self.lineno = lineno
-        
+
     def get_name(self):
         return tok.tok_rpunct.get(self.name,
                                   tok.tok_name.get(self.name, str(self.name)))
@@ -1542,10 +1592,10 @@ class TokenObject(ast.Node):
         if value is None:
             value = ''
         return value
-    
+
     def __str__(self):
         return "<Token: (%s,%s)>" % (self.get_name(), self.value)
-    
+
     def __repr__(self):
         return "<Token: (%r,%s)>" % (self.get_name(), self.value)
 
@@ -1568,13 +1618,13 @@ class ArglistObject(ObjectAccessor):
 
     def __str__(self):
         return "<ArgList: (%s, %s, %s)>" % self.value
-    
+
     def __repr__(self):
         return "<ArgList: (%s, %s, %s)>" % self.value
-    
+
 class SubscriptObject(ObjectAccessor):
     """helper class to build subscript list
-    
+
     self.value represents the __getitem__ argument
     """
     def __init__(self, name, value, lineno):
@@ -1584,7 +1634,7 @@ class SubscriptObject(ObjectAccessor):
 
     def __str__(self):
         return "<SubscriptList: (%s)>" % self.value
-    
+
     def __repr__(self):
         return "<SubscriptList: (%s)>" % self.value
 
@@ -1603,10 +1653,10 @@ class SlicelistObject(ObjectAccessor):
 
     def __str__(self):
         return "<SliceList: (%s)>" % self.value
-    
+
     def __repr__(self):
         return "<SliceList: (%s)>" % self.value
-    
+
 
 class AstBuilderContext(AbstractContext):
     """specific context management for AstBuidler"""
@@ -1622,7 +1672,13 @@ class AstBuilder(BaseGrammarBuilder):
         self.rule_stack = []
         self.space = space
         self.source_encoding = None
-        
+        self.ASTRULES = ASTRULES
+        self.with_enabled = False
+
+    def enable_with(self):
+        self.ASTRULES = ASTRULES_with
+        self.with_enabled = True
+
     def context(self):
         return AstBuilderContext(self.rule_stack)
 
@@ -1661,7 +1717,7 @@ class AstBuilder(BaseGrammarBuilder):
         if rule.is_root():
 ##             if DEBUG_MODE:
 ##                 print "ALT:", sym.sym_name[rule.codename], self.rule_stack
-            builder_func = ASTRULES.get(rule.codename, None)
+            builder_func = self.ASTRULES.get(rule.codename, None)
             if builder_func:
                 builder_func(self, 1)
             else:
@@ -1682,7 +1738,7 @@ class AstBuilder(BaseGrammarBuilder):
         if rule.is_root():
 ##             if DEBUG_MODE:
 ##                 print "SEQ:", sym.sym_name[rule.codename]
-            builder_func = ASTRULES.get(rule.codename, None)
+            builder_func = self.ASTRULES.get(rule.codename, None)
             if builder_func:
                 # print "REDUCING SEQUENCE %s" % sym.sym_name[rule.codename]
                 builder_func(self, elts_number)
@@ -1718,12 +1774,12 @@ class AstBuilder(BaseGrammarBuilder):
             l = space.builtin.get('long')
             return space.call_function(l, space.wrap(value), space.wrap(base))
         if value.endswith('j') or value.endswith('J'):
-            c = space.builtin.get('complex') 
+            c = space.builtin.get('complex')
             return space.call_function(c, space.wrap(value))
         try:
             i = space.builtin.get('int')
             return space.call_function(i, space.wrap(value), space.wrap(base))
-        except: 
+        except:
             f = space.builtin.get('float')
             return space.call_function(f, space.wrap(value))
 
@@ -1760,4 +1816,4 @@ def show_stack(before, after):
         else:
             obj2 = "-"
         print "% 3d | %30s | %30s" % (i, obj1, obj2)
-    
+

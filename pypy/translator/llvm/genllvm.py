@@ -1,6 +1,8 @@
 import time
 
-from pypy.translator.llvm import build_llvm_module
+from pypy.tool import isolate
+
+from pypy.translator.llvm import buildllvm
 from pypy.translator.llvm.database import Database 
 from pypy.translator.llvm.pyxwrapper import write_pyx_wrapper 
 from pypy.rpython.rmodel import inputconst
@@ -17,6 +19,7 @@ from pypy.translator.llvm.gc import GcPolicy
 from pypy.translator.llvm.exception import ExceptionPolicy
 from pypy.translator.llvm.log import log
 from pypy import conftest
+from pypy.translator.llvm.buildllvm import llvm_is_on_path
 
 class GenLLVM(object):
 
@@ -237,9 +240,9 @@ class GenLLVM(object):
         if exe_name is not None:
             assert self.standalone
             assert not return_fn
-            return build_llvm_module.make_module_from_llvm(self, self.filename,
-                                                           optimize=optimize,
-                                                           exe_name=exe_name)
+            return buildllvm.make_module_from_llvm(self, self.filename,
+                                                   optimize=optimize,
+                                                   exe_name=exe_name)
         else:
             assert not self.standalone
 
@@ -248,15 +251,20 @@ class GenLLVM(object):
             basename = self.filename.purebasename + '_wrapper' + postfix + '.pyx'
             pyxfile = self.filename.new(basename = basename)
             write_pyx_wrapper(self, pyxfile)    
-            res = build_llvm_module.make_module_from_llvm(self, self.filename,
-                                                          pyxfile=pyxfile,
-                                                          optimize=optimize)
-            wrap_fun = getattr(res, 'pypy_' + self.entry_func_name + "_wrapper")
+            info = buildllvm.make_module_from_llvm(self, self.filename,
+                                                   pyxfile=pyxfile,
+                                                   optimize=optimize)
+
+            mod, wrap_fun = self.isolate_module(*info)
             if return_fn:
                 return wrap_fun
+            return mod, wrap_fun
 
-            return res, wrap_fun
-        
+    def isolate_module(self, modname, dirpath):
+        ext_module = isolate.Isolate((dirpath, modname))
+        wrap_fun = getattr(ext_module, 'pypy_' + self.entry_func_name + "_wrapper")
+        return ext_module, wrap_fun
+    
     def _checkpoint(self, msg=None):
         if not self.logging:
             return
@@ -298,6 +306,8 @@ def genllvm(translator, entry_point, gcpolicy=None,
     return gen.compile_llvm_source(**kwds)
 
 def genllvm_compile(function, annotation, view=False, optimize=True, **kwds):
+    assert llvm_is_on_path()
+    
     from pypy.translator.translator import TranslationContext
     from pypy.translator.backendopt.all import backend_optimizations
     t = TranslationContext()
@@ -316,7 +326,3 @@ def genllvm_compile(function, annotation, view=False, optimize=True, **kwds):
     if view or conftest.option.view:
         t.view()
     return genllvm(t, function, optimize=optimize, **kwds)
-
-def compile_function(function, annotation, **kwds):
-    """ Helper - which get the compiled module from CPython. """
-    return compile_module(function, annotation, return_fn=True, **kwds)

@@ -193,7 +193,7 @@ from pypy.translator.c.test.test_boehm import AbstractTestClass
 class TestUsingFramework(AbstractTestClass):
     from pypy.translator.c.gc import FrameworkGcPolicy as gcpolicy
 
-    def test_nongcing_gc(self):
+    def test_framework_simple(self):
         def g(x):
             return x + 1
         class A(object):
@@ -201,7 +201,86 @@ class TestUsingFramework(AbstractTestClass):
         def f():
             a = A()
             a.b = g(1)
+            # this should trigger a couple of collections
+            # XXX make sure it triggers at least one somehow!
+            for i in range(100000):
+                [A()] * 1000
             return a.b
         fn = self.getcompiled(f)
         res = fn()
         assert res == 2
+
+    def test_framework_varsized(self):
+        S = lltype.GcStruct("S", ('x', lltype.Signed))
+        T = lltype.GcStruct("T", ('y', lltype.Signed),
+                                 ('s', lltype.Ptr(S)))
+        ARRAY_Ts = lltype.GcArray(lltype.Ptr(T))
+        
+        def f():
+            r = 0
+            for i in range(30):
+                a = lltype.malloc(ARRAY_Ts, i)
+                for j in range(i):
+                    a[j] = lltype.malloc(T)
+                    a[j].y = i
+                    a[j].s = lltype.malloc(S)
+                    a[j].s.x = 2*i
+                    r += a[j].y + a[j].s.x
+                    a[j].s = lltype.malloc(S)
+                    a[j].s.x = 3*i
+                    r -= a[j].s.x
+                for j in range(i):
+                    r += a[j].y
+            return r
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == f()
+            
+
+    def test_framework_using_lists(self):
+        class A(object):
+            pass
+        N = 1000
+        def f():
+            static_list = []
+            for i in range(N):
+                a = A()
+                a.x = i
+                static_list.append(a)
+            r = 0
+            for a in static_list:
+                r += a.x
+            return r
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == N*(N - 1)/2
+    
+    def test_framework_static_roots(self):
+        class A(object):
+            def __init__(self, y):
+                self.y = y
+        a = A(0)
+        a.x = None
+        def f():
+            a.x = A(42)
+            for i in range(1000000):
+                A(i)
+            return a.x.y
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 42
+
+    def test_framework_nongc_static_root(self):
+        S = lltype.GcStruct("S", ('x', lltype.Signed))
+        T = lltype.Struct("T", ('p', lltype.Ptr(S)))
+        t = lltype.malloc(T, immortal=True)
+        def f():
+            t.p = lltype.malloc(S)
+            t.p.x = 43
+            for i in range(1000000):
+                s = lltype.malloc(S)
+                s.x = i
+            return t.p.x
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 43

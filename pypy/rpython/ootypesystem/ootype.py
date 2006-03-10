@@ -1,19 +1,36 @@
 from pypy.rpython.lltypesystem.lltype import LowLevelType, Signed, Unsigned, Float, Char
-from pypy.rpython.lltypesystem.lltype import Bool, Void, UniChar, typeOf, Primitive
-from pypy.rpython.lltypesystem.lltype import frozendict
+from pypy.rpython.lltypesystem.lltype import Bool, Void, UniChar, typeOf, \
+        Primitive, isCompatibleType
+from pypy.rpython.lltypesystem.lltype import frozendict, isCompatibleType
 
 class OOType(LowLevelType):
-    pass
+
+    def _is_compatible(TYPE1, TYPE2):
+        if TYPE1 == TYPE2:
+            return True
+        if isinstance(TYPE1, Instance) and isinstance(TYPE2, Instance):
+            return isSubclass(TYPE1, TYPE2)
+        else:
+            return False
 
 class Class(OOType):
-    pass
+
+    def _defl(self):
+        return nullruntimeclass
+    
 Class = Class()
 
 class Instance(OOType):
     """this is the type of user-defined objects"""
-    def __init__(self, name, superclass, fields={}, methods={}):
+    def __init__(self, name, superclass, fields={}, methods={},
+            _is_root=False):
         self._name = name
-        self._superclass = superclass
+
+        if _is_root:
+            self._superclass = None
+        else:
+            assert isinstance(superclass, Instance)
+            self._superclass = superclass
 
         self._methods = frozendict()
         self._fields = frozendict()
@@ -27,8 +44,7 @@ class Instance(OOType):
     def _defl(self):
         return self._null
 
-    def _example(self):
-        return new(self)
+    def _example(self): return new(self)
 
     def __repr__(self):
         return '<%s>' % (self,)
@@ -118,6 +134,7 @@ class Instance(OOType):
         all.update(self._fields)
         return all
 
+
 class StaticMethod(OOType):
     __slots__ = ['_null']
 
@@ -129,6 +146,9 @@ class StaticMethod(OOType):
     def _example(self):
         _retval = self.RESULT._example()
         return _static_meth(self, _callable=lambda *args: _retval)
+
+    def _defl(self):
+        return null(self)
     
 class Meth(StaticMethod):
 
@@ -162,7 +182,7 @@ class _instance(object):
     def __setattr__(self, name, value):
         self.__getattr__(name)
             
-        if self._TYPE._field_type(name) != typeOf(value):
+        if not isCompatibleType(typeOf(value), self._TYPE._field_type(name)):
             raise TypeError("Expected type %r" % self._TYPE._field_type(name))
 
         self.__dict__[name] = value
@@ -325,14 +345,6 @@ def commonBaseclass(INSTANCE1, INSTANCE2):
         c = c._superclass
     return None
 
-def isCompatibleType(TYPE1, TYPE2):
-    if TYPE1 == TYPE2:
-        return True
-    if isinstance(TYPE1, Instance) and isinstance(TYPE2, Instance):
-        return isSubclass(TYPE1, TYPE2)
-    else:
-        return False
-        
 def ooupcast(INSTANCE, instance):
     assert instanceof(instance, INSTANCE)
     return instance
@@ -347,3 +359,6 @@ def ooidentityhash(inst):
         return id(inst)
     else:
         return 0   # for all null instances
+
+
+ROOT = Instance('Root', None, _is_root=True)
