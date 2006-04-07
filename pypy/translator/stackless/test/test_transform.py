@@ -2,6 +2,7 @@ from pypy.translator.stackless.transform import StacklessTransfomer
 from pypy.rpython.memory.gctransform import varoftype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.translator import TranslationContext, graphof
+from pypy.objspace.flow.model import checkgraph
 from pypy import conftest
 
 ## def test_frame_types():
@@ -25,16 +26,26 @@ from pypy import conftest
 ##     assert s2_1 is s2_2
 
 def test_simple_transform():
-    def g():
+    from pypy.translator.stackless.code import UnwindException
+    def check(x):
+        if x:
+            raise UnwindException # XXX or so
+    def g(x):
+        check(x)
         return 2
     def example(x):
-        return g() + x + 1
+        return g(x) + x + 1
     t = TranslationContext()
     t.buildannotator().build_types(example, [int])
     t.buildrtyper().specialize()
-    example_graph = graphof(t, example)
     st = StacklessTransfomer(t)
-    st.transform_graph(example_graph)
+    st.transform_graph(graphof(t, example))
+    st.transform_graph(graphof(t, g))
+    st.transform_graph(graphof(t, check))
+    #for graph in t.graphs: 
+        #checkgraph(graph) # XXX
+        #st.transform_graph(graph)
+    example_graph = graphof(t, example)
     if conftest.option.view:
         t.view()
     
