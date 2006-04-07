@@ -21,10 +21,6 @@ class StacklessData:
 
 global_state = StacklessData()
 
-class UnwindException(Exception):
-    def __init__(self):
-        self.frame = null_state
-
 void_void_func = lltype.Ptr(lltype.FuncType([], lltype.Void))
 long_void_func = lltype.Ptr(lltype.FuncType([], lltype.Signed))
 longlong_void_func = lltype.Ptr(lltype.FuncType([], lltype.SignedLongLong))
@@ -53,33 +49,33 @@ null_address = llmemory.fakeaddress(None)
 def decode_state(state):
     return null_address, 'void', 0
 
+class UnwindException(Exception):
+    def __init__(self):
+        self.frame_top = null_state   # points to frame that first caught 
+                                      # the UnwindException 
+        self.frame_bottom = null_state 
+        # walking frame_top.f_back.f_back... goes to frame_bottom 
+        #
+
 def slp_main_loop():
-    while 1:
-        pending = global_state.top
-        while 1:
-            back = pending.f_back
+    currentframe = global_state.top
+    
+    while currentframe is not None:
+        nextframe = currentframe.f_back
+        framestate = currentframe.state
+        fn, signature, global_state.restart_substate = decode_state(framestate)
+        try:
+            call_function(fn, signature)
+        except UnwindException, u:   #XXX annotation support needed 
+            nextframe = u.frame_top 
+        except Exception, e:
+            global_state.exception = e
+        else:
+            global_state.exception = None
 
-            state = pending.state
-            fn, signature, global_state.restart_substate = decode_state(state)
+        currentframe = nextframe 
 
-            try:
-                call_function(fn, signature)
-            #except Exception, e: #KeyError, u: # XXX should be UnwindException 
-            #    #pending = u.frame
-            #    break
-            except Exception, e:
-                global_state.exception = e
-            else:
-                global_state.exception = None
+    if global_state.exception is not None:
+        raise global_state.exception
 
-            if not back:
-                if global_state.exception:
-                    raise global_state.exception
-                return
 
-            pending = back
-            global_state.top = pending
-
-        if global_state.bottom:
-            assert global_state.bottom.f_back is None
-            global_state.bottom.f_back = back

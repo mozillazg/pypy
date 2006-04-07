@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython import rarithmetic
+from pypy.rpython import rarithmetic, rclass
 from pypy.translator.backendopt import support
 from pypy.objspace.flow import model
 from pypy.rpython.memory.gctransform import varoftype
@@ -143,9 +143,14 @@ class StacklessTransfomer(object):
                 
                 save_block = self.generate_save_block(link.args, var_unwind_exception)
 
-                newlink = model.Link(link.args + [var_unwind_exception], save_block, model.Constant(SystemExit))
+                newlink = model.Link(link.args + [var_unwind_exception], 
+                                     save_block, code.UnwindException)
+                r_case = rclass.get_type_repr(self.translator.rtyper)
+                newlink.llexitcase = r_case.convert_const(newlink.exitcase)
                 block.exitswitch = model.c_last_exception
-                block.exits.append(newlink)
+                block.recloseblock(link, newlink) # exits.append(newlink)
+    # ARGH ... 
+
                 block = after_block
                 i = 0
             else:
@@ -159,7 +164,8 @@ class StacklessTransfomer(object):
         var_unwind_exception0 = copyvar(self.translator, var_unwind_exception)
         from pypy.rpython.rclass import getinstancerepr
         var_unwind_exception = varoftype(getinstancerepr(self.translator.rtyper,
-            self.translator.annotator.bookkeeper.getuniqueclassdef(SystemExit)).lowleveltype)
+            self.translator.annotator.bookkeeper.getuniqueclassdef(
+                code.UnwindException)).lowleveltype)
 
         fields = []
         for i, v in enumerate(varstosave):
