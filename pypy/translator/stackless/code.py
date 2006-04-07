@@ -25,30 +25,28 @@ class UnwindException(Exception):
     def __init__(self):
         self.frame = null_state
 
-void_void_func = lltype.FuncType([], lltype.Void)
-long_void_func = lltype.FuncType([], lltype.Signed)
-longlong_void_func = lltype.FuncType([], lltype.SignedLongLong)
-pointer_void_func = lltype.FuncType([], llmemory.Address)
-float_void_func = lltype.FuncType([], lltype.Float)
+void_void_func = lltype.Ptr(lltype.FuncType([], lltype.Void))
+long_void_func = lltype.Ptr(lltype.FuncType([], lltype.Signed))
+longlong_void_func = lltype.Ptr(lltype.FuncType([], lltype.SignedLongLong))
+float_void_func = lltype.Ptr(lltype.FuncType([], lltype.Float))
+pointer_void_func = lltype.Ptr(lltype.FuncType([], llmemory.Address) )
 
 def call_function(fn, signature):
-    pass
-##     if signature == 'void':
-##         fn2 = llmemory.cast_adr_to_ptr(fn, void_void_func)
-##         fn2()
-##     elif signature == 'long':
-##         fn3 = llmemory.cast_adr_to_ptr(fn, long_void_func)
-##         global_state.long_retval = fn3()
-##     elif signature == 'long long':
-##         fn4 = llmemory.cast_adr_to_ptr(fn, longlong_void_func)
-##         global_state.longlong_retval = fn4()
-##     elif signature == 'pointer':
-##         fn5 = llmemory.cast_adr_to_ptr(fn, pointer_void_func)
-##         global_state.pointer_retval = fn5()
-##     elif signature == 'float':
-##         fn6 = llmemory.cast_adr_to_ptr(fn, float_void_func)
-##         global_state.float_retval = fn6()
-
+    if signature == 'void':
+        fn2 = llmemory.cast_adr_to_ptr(fn, void_void_func)
+        fn2()
+    elif signature == 'long':
+        fn3 = llmemory.cast_adr_to_ptr(fn, long_void_func)
+        global_state.long_retval = fn3()
+    elif signature == 'longlong':
+        fn3 = llmemory.cast_adr_to_ptr(fn, longlong_void_func)
+        global_state.longlong_retval = fn3()
+    elif signature == 'float':
+        fn3 = llmemory.cast_adr_to_ptr(fn, float_void_func)
+        global_state.float_retval = fn3()
+    elif signature == 'pointer':
+        fn5 = llmemory.cast_adr_to_ptr(fn, pointer_void_func)
+        global_state.pointer_retval = fn5()
 
 null_address = llmemory.fakeaddress(None)
 
@@ -66,9 +64,9 @@ def slp_main_loop():
 
             try:
                 call_function(fn, signature)
-##             except UnwindException, u:
-##                 pending = u.frame
-##                 break
+            #except Exception, e: #KeyError, u: # XXX should be UnwindException 
+            #    #pending = u.frame
+            #    break
             except Exception, e:
                 global_state.exception = e
             else:
