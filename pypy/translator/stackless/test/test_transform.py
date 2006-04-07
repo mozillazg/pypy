@@ -1,4 +1,4 @@
-from pypy.translator.c.stacklesstransform import StacklessTransfomer
+from pypy.translator.stackless.transform import StacklessTransfomer
 from pypy.rpython.memory.gctransform import varoftype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.translator import TranslationContext, graphof

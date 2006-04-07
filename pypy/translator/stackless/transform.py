@@ -6,7 +6,7 @@ from pypy.rpython.memory.gctransform import varoftype
 from pypy.translator.unsimplify import copyvar
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
-from pypy.translator.c import stacklesscode
+from pypy.translator.stackless import code 
 
 STORAGE_TYPES = [llmemory.Address,
                  lltype.Signed,
@@ -83,7 +83,7 @@ class StacklessTransfomer(object):
         l2a = annmodel.lltype_to_annotation
 
         slp_main_loop_graph = mixlevelannotator.getgraph(
-            stacklesscode.slp_main_loop, [], l2a(lltype.Void))
+            code.slp_main_loop, [], l2a(lltype.Void))
         SLP_MAIN_LOOP_TYPE = lltype.FuncType([], lltype.Void)
         self.slp_main_loop_type_ptr = model.Constant(lltype.functionptr(
             SLP_MAIN_LOOP_TYPE, "slp_main_loop",
