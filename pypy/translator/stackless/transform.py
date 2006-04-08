@@ -156,9 +156,8 @@ class StacklessTransfomer(object):
         while i < len(block.operations):
             op = block.operations[i]
             if op.opname in ('direct_call', 'indirect_call'):
-                after_block = support.split_block_with_keepalive(self.translator, self.curr_graph, block, i+1)
-                link = block.exits[0]
-
+                link = support.split_block_with_keepalive(self.translator, 
+                                                          self.curr_graph, block, i+1)
                 var_unwind_exception = varoftype(evalue)
                
                 args = [v for v in link.args if v is not op.result]
@@ -174,7 +173,7 @@ class StacklessTransfomer(object):
                 self.translator.rtyper._convert_link(block, newlink)
     # ARGH ... 
 
-                block = after_block
+                block = link.target
                 i = 0
             else:
                 i += 1
