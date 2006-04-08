@@ -94,7 +94,7 @@ class StacklessTransfomer(object):
         self.slp_main_loop_type_ptr = model.Constant(lltype.functionptr(
             SLP_MAIN_LOOP_TYPE, "slp_main_loop",
             graph=slp_main_loop_graph),
-            SLP_MAIN_LOOP_TYPE)
+            lltype.Ptr(SLP_MAIN_LOOP_TYPE))
 
         annotations = [annmodel.SomeInstance(bk.getuniqueclassdef(code.UnwindException)),
                        annmodel.SomePtr(lltype.Ptr(STATE_HEADER))]
