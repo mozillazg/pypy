@@ -77,6 +77,11 @@ class StacklessTransfomer(object):
         self.translator = translator
 
         edata = translator.rtyper.getexceptiondata()
+        bk = translator.annotator.bookkeeper
+
+        self.unwind_exception_type = getinstancerepr(
+            self.translator.rtyper,
+            bk.getuniqueclassdef(code.UnwindException)).lowleveltype
         self.frametypes = {}
         self.curr_graph = None
                 
@@ -90,6 +95,20 @@ class StacklessTransfomer(object):
             SLP_MAIN_LOOP_TYPE, "slp_main_loop",
             graph=slp_main_loop_graph),
             SLP_MAIN_LOOP_TYPE)
+
+        annotations = [annmodel.SomeInstance(bk.getuniqueclassdef(code.UnwindException)),
+                       annmodel.SomePtr(lltype.Ptr(STATE_HEADER))]
+
+        add_frame_state_graph = mixlevelannotator.getgraph(
+            code.add_frame_state,
+            annotations, l2a(lltype.Void))
+        ADD_FRAME_STATE_TYPE = lltype.FuncType(
+            [self.unwind_exception_type, lltype.Ptr(STATE_HEADER)],
+            lltype.Void)
+        self.add_frame_state_ptr = model.Constant(lltype.functionptr(
+            ADD_FRAME_STATE_TYPE, "add_frame_state",
+            graph=add_frame_state_graph),
+            lltype.Ptr(ADD_FRAME_STATE_TYPE))
 
         mixlevelannotator.finish()
 
@@ -178,9 +197,6 @@ class StacklessTransfomer(object):
         etype = edata.lltype_of_exception_type
         evalue = edata.lltype_of_exception_value
         inputargs = [copyvar(self.translator, v) for v in varstosave]
-        unwind_exception_type = getinstancerepr(rtyper,
-            self.translator.annotator.bookkeeper.getuniqueclassdef(
-                code.UnwindException)).lowleveltype
         var_unwind_exception = copyvar(self.translator, var_unwind_exception) 
 
         fields = []
@@ -202,31 +218,18 @@ class StacklessTransfomer(object):
         
         saveops.extend(self.generate_saveops(frame_state_var, inputargs))
 
-        var_exc = varoftype(unwind_exception_type)
+        var_exc = varoftype(self.unwind_exception_type)
         saveops.append(model.SpaceOperation("cast_pointer", [var_unwind_exception], 
                                             var_exc))
-
-##             header = state.header
-##             header.state = XXX
-##             exc.frame_bottom.f_back = state.header
-##             exc.frame_bottom = state.header
         
         var_header = varoftype(lltype.Ptr(STATE_HEADER))
     
         # XXX should this be getsubstruct?
         saveops.append(model.SpaceOperation("cast_pointer", [frame_state_var], var_header))
-        
-        var_exc_frame_bottom = varoftype(lltype.Ptr(STATE_HEADER))
+
         saveops.append(model.SpaceOperation(
-            "getfield", [var_exc, model.Constant("inst_frame_bottom", lltype.Void)],
-            var_exc_frame_bottom))
-        
-        saveops.append(model.SpaceOperation(
-            "setfield", [var_exc_frame_bottom, model.Constant("f_back", lltype.Void), 
-                         var_header],
-            varoftype(lltype.Void)))
-        saveops.append(model.SpaceOperation(
-            "setfield", [var_exc, model.Constant("inst_frame_bottom", lltype.Void), var_header],
+            "direct_call",
+            [self.add_frame_state_ptr, var_exc, var_header],
             varoftype(lltype.Void)))
 
         type_repr = rclass.get_type_repr(rtyper)

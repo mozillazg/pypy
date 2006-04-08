@@ -79,3 +79,10 @@ def slp_main_loop():
         raise global_state.exception
 
 
+def add_frame_state(u, frame_state):
+    if not u.frame_top:
+        u.frame_top = u.frame_bottom = frame_state
+    else:
+        u.frame_bottom.f_back = frame_state
+        u.frame_bottom = frame_state
+        
