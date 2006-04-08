@@ -179,19 +179,8 @@ class StacklessTransfomer(object):
             else:
                 i += 1
 
-    def _convertlink(self, block, link):
-        rtyper = self.translator.rtyper
-        if link.exitcase is not None:
-            if isinstance(block.exitswitch, model.Variable):
-                r_case = rtyper.bindingrepr(block.exitswitch)
-            else:
-                assert block.exitswitch == model.c_last_exception
-                r_case = rclass.get_type_repr(rtyper)
-            link.llexitcase = r_case.convert_const(link.exitcase)
-        else:
-            link.llexitcase = None
-
     def generate_save_block(self, varstosave, var_unwind_exception):
+        varstosave = [v for v in varstosave if v.concretetype is not lltype.Void]
         rtyper = self.translator.rtyper
         edata = rtyper.getexceptiondata()
         etype = edata.lltype_of_exception_type
@@ -201,8 +190,9 @@ class StacklessTransfomer(object):
 
         fields = []
         for i, v in enumerate(varstosave):
-            if v.concretetype is not lltype.Void:
-                fields.append(('field_%d'%(i,), v.concretetype))
+            assert v.concretetype is not lltype.Void
+            fields.append(('field_%d'%(i,), v.concretetype))
+        
         frame_type = lltype.GcStruct("S",
                             ('header', STATE_HEADER),
                             *fields)
