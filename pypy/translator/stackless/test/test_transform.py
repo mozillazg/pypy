@@ -1,8 +1,13 @@
+import py
+import os
 from pypy.translator.stackless.transform import StacklessTransfomer
+from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.rpython.memory.gctransform import varoftype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.objspace.flow.model import checkgraph
+from pypy.annotation import model as annmodel
+from pypy.annotation.listdef import ListDef 
 from pypy import conftest
 
 ## def test_frame_types():
@@ -32,18 +37,32 @@ def test_simple_transform():
             raise UnwindException # XXX or so
     def g(x):
         check(x)
-        return 2
+        return x + 1
     def example(x):
-        return g(x) + x + 1
+        return g(x) + 1
+    res = run_stackless_function(example, example, g)
+    assert res == "6"
+    
+def run_stackless_function(fn, *stacklessfuncs):
+    def entry_point(argv):
+        os.write(1, str(fn(len(argv)))+'\n')
+        return 0
+
+    s_list_of_strings = annmodel.SomeList(ListDef(None, annmodel.SomeString()))
+    s_list_of_strings.listdef.resize()
     t = TranslationContext()
-    t.buildannotator().build_types(example, [int])
+    t.buildannotator().build_types(entry_point, [s_list_of_strings])
     t.buildrtyper().specialize()
+
     st = StacklessTransfomer(t)
-    st.transform_graph(graphof(t, example))
-    st.transform_graph(graphof(t, g))
-    for graph in t.graphs: 
-        checkgraph(graph) # XXX
-    example_graph = graphof(t, example)
+    for func in stacklessfuncs: 
+        graph = graphof(t, func)
+        st.transform_graph(graph) 
+        checkgraph(graph) 
     if conftest.option.view:
         t.view()
-    
+
+    cbuilder = CStandaloneBuilder(t, entry_point)
+    cbuilder.generate_source()
+    cbuilder.compile()
+    return cbuilder.cmdexec('')

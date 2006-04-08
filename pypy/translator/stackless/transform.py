@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython import rarithmetic, rclass
+from pypy.rpython import rarithmetic, rclass, rmodel
 from pypy.translator.backendopt import support
 from pypy.objspace.flow import model
 from pypy.rpython.memory.gctransform import varoftype
@@ -120,7 +120,7 @@ class StacklessTransfomer(object):
         assert self.curr_graph is None
         self.curr_graph = graph
         
-        for block in graph.iterblocks():
+        for block in list(graph.iterblocks()):
             self.transform_block(block)
         if self.resume_points:
             XXX
@@ -141,17 +141,18 @@ class StacklessTransfomer(object):
                 link = block.exits[0]
 
                 var_unwind_exception = varoftype(evalue)
-                
+               
+                args = [v for v in link.args if v is not op.result]
                 save_block = self.generate_save_block(
-                                link.args, var_unwind_exception)
+                                args, var_unwind_exception)
 
-                newlink = model.Link(link.args + [var_unwind_exception], 
+                newlink = model.Link(args + [var_unwind_exception], 
                                      save_block, code.UnwindException)
                 block.exitswitch = model.c_last_exception
                 newlink.last_exception = model.Constant(code.UnwindException) 
                 newlink.last_exc_value = var_unwind_exception 
                 block.recloseblock(link, newlink) # exits.append(newlink)
-                self.translator.rtyper._convert_link(block, newlink)
+                self._convertlink(block, newlink)
     # ARGH ... 
 
                 block = after_block
@@ -159,20 +160,34 @@ class StacklessTransfomer(object):
             else:
                 i += 1
 
+    def _convertlink(self, block, link):
+        rtyper = self.translator.rtyper
+        if link.exitcase is not None:
+            if isinstance(block.exitswitch, model.Variable):
+                r_case = rtyper.bindingrepr(block.exitswitch)
+            else:
+                assert block.exitswitch == model.c_last_exception
+                r_case = rclass.get_type_repr(rtyper)
+            link.llexitcase = r_case.convert_const(link.exitcase)
+        else:
+            link.llexitcase = None
+
     def generate_save_block(self, varstosave, var_unwind_exception):
-        edata = self.translator.rtyper.getexceptiondata()
+        rtyper = self.translator.rtyper
+        edata = rtyper.getexceptiondata()
         etype = edata.lltype_of_exception_type
         evalue = edata.lltype_of_exception_value
         inputargs = [copyvar(self.translator, v) for v in varstosave]
-        var_unwind_exception = varoftype(getinstancerepr(self.translator.rtyper,
+        unwind_exception_type = getinstancerepr(rtyper,
             self.translator.annotator.bookkeeper.getuniqueclassdef(
-                code.UnwindException)).lowleveltype)
+                code.UnwindException)).lowleveltype
+        var_unwind_exception = copyvar(self.translator, var_unwind_exception) 
 
         fields = []
         for i, v in enumerate(varstosave):
             if v.concretetype is not lltype.Void:
                 fields.append(('field_%d'%(i,), v.concretetype))
-        frame_type = lltype.Struct("S",
+        frame_type = lltype.GcStruct("S",
                             ('header', STATE_HEADER),
                             *fields)
         
@@ -191,24 +206,30 @@ class StacklessTransfomer(object):
 ##             state.header.state = XXX
 ##             u.frame = state.header
         header_var = varoftype(lltype.Ptr(STATE_HEADER))
+        var_exc = varoftype(unwind_exception_type)
+        saveops.append(model.SpaceOperation("cast_pointer", [var_unwind_exception], 
+                                            var_exc))
+    
         saveops.append(model.SpaceOperation("cast_pointer", [frame_state_var], header_var))
         var_unwind_exception_frame = varoftype(lltype.Ptr(STATE_HEADER))
-        saveops.append(model.SpaceOperation("getfield",
-                                            [var_unwind_exception, model.Constant("frame", lltype.Void)],
-                                            var_unwind_exception_frame))
-        saveops.append(model.SpaceOperation("setfield",
-                                            [header_var, model.Constant("f_back", lltype.Void), var_unwind_exception_frame],
-                                            varoftype(lltype.Void)))
-        saveops.append(model.SpaceOperation("setfield",
-                                            [var_unwind_exception, model.Constant("frame", lltype.Void)],
-                                            varoftype(lltype.Void)))
+        # XXX 
+        saveops.append(model.SpaceOperation(
+            "getfield", [var_exc, model.Constant("frame_bottom", lltype.Void)],
+            var_unwind_exception_frame))
+        saveops.append(model.SpaceOperation(
+            "setfield", [header_var, model.Constant("f_back", lltype.Void), 
+                         var_unwind_exception_frame],
+            varoftype(lltype.Void)))
+        saveops.append(model.SpaceOperation(
+            "setfield", [var_exc, model.Constant("frame", lltype.Void), header_var],
+            varoftype(lltype.Void)))
 
-        save_state_block.closeblock(model.Link([model.Constant(code.UnwindException), 
-                                                var_unwind_exception], 
+        s_exc = self.translator.annotator.bookkeeper.immutablevalue(code.UnwindException)
+        r_exc = rtyper.getrepr(s_exc) 
+        c_unwindexception = rmodel.inputconst(r_exc, code.UnwindException)
+        save_state_block.closeblock(model.Link([c_unwindexception, var_exc], 
                                                self.curr_graph.exceptblock))
-
         return save_state_block
-
         
 
     def generate_saveops(self, frame_state_var, varstosave):
