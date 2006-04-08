@@ -149,10 +149,10 @@ class StacklessTransfomer(object):
                 newlink = model.Link(args + [var_unwind_exception], 
                                      save_block, code.UnwindException)
                 block.exitswitch = model.c_last_exception
-                newlink.last_exception = model.Constant(code.UnwindException) 
+                newlink.last_exception = model.Constant(code.UnwindException, etype) 
                 newlink.last_exc_value = var_unwind_exception 
                 block.recloseblock(link, newlink) # exits.append(newlink)
-                self._convertlink(block, newlink)
+                self.translator.rtyper._convert_link(block, newlink)
     # ARGH ... 
 
                 block = after_block
@@ -202,33 +202,38 @@ class StacklessTransfomer(object):
         
         saveops.extend(self.generate_saveops(frame_state_var, inputargs))
 
-##             state.header.f_back = u.frame
-##             state.header.state = XXX
-##             u.frame = state.header
-        header_var = varoftype(lltype.Ptr(STATE_HEADER))
         var_exc = varoftype(unwind_exception_type)
         saveops.append(model.SpaceOperation("cast_pointer", [var_unwind_exception], 
                                             var_exc))
+
+##             header = state.header
+##             header.state = XXX
+##             exc.frame_bottom.f_back = state.header
+##             exc.frame_bottom = state.header
+        
+        var_header = varoftype(lltype.Ptr(STATE_HEADER))
     
-        saveops.append(model.SpaceOperation("cast_pointer", [frame_state_var], header_var))
-        var_unwind_exception_frame = varoftype(lltype.Ptr(STATE_HEADER))
-        # XXX 
+        # XXX should this be getsubstruct?
+        saveops.append(model.SpaceOperation("cast_pointer", [frame_state_var], var_header))
+        
+        var_exc_frame_bottom = varoftype(lltype.Ptr(STATE_HEADER))
         saveops.append(model.SpaceOperation(
-            "getfield", [var_exc, model.Constant("frame_bottom", lltype.Void)],
-            var_unwind_exception_frame))
+            "getfield", [var_exc, model.Constant("inst_frame_bottom", lltype.Void)],
+            var_exc_frame_bottom))
+        
         saveops.append(model.SpaceOperation(
-            "setfield", [header_var, model.Constant("f_back", lltype.Void), 
-                         var_unwind_exception_frame],
+            "setfield", [var_exc_frame_bottom, model.Constant("f_back", lltype.Void), 
+                         var_header],
             varoftype(lltype.Void)))
         saveops.append(model.SpaceOperation(
-            "setfield", [var_exc, model.Constant("frame", lltype.Void), header_var],
+            "setfield", [var_exc, model.Constant("inst_frame_bottom", lltype.Void), var_header],
             varoftype(lltype.Void)))
 
-        s_exc = self.translator.annotator.bookkeeper.immutablevalue(code.UnwindException)
-        r_exc = rtyper.getrepr(s_exc) 
-        c_unwindexception = rmodel.inputconst(r_exc, code.UnwindException)
+        type_repr = rclass.get_type_repr(rtyper)
+        c_unwindexception = model.Constant(type_repr.convert_const(code.UnwindException), type_repr.lowleveltype)
         save_state_block.closeblock(model.Link([c_unwindexception, var_exc], 
                                                self.curr_graph.exceptblock))
+        self.translator.rtyper._convert_link(save_state_block, save_state_block.exits[0])
         return save_state_block
         
 
