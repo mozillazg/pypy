@@ -7,6 +7,7 @@ from pypy.translator.unsimplify import copyvar
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.translator.stackless import code 
+from pypy.rpython.rclass import getinstancerepr
 
 STORAGE_TYPES = [llmemory.Address,
                  lltype.Signed,
@@ -141,14 +142,16 @@ class StacklessTransfomer(object):
 
                 var_unwind_exception = varoftype(evalue)
                 
-                save_block = self.generate_save_block(link.args, var_unwind_exception)
+                save_block = self.generate_save_block(
+                                link.args, var_unwind_exception)
 
                 newlink = model.Link(link.args + [var_unwind_exception], 
                                      save_block, code.UnwindException)
-                r_case = rclass.get_type_repr(self.translator.rtyper)
-                newlink.llexitcase = r_case.convert_const(newlink.exitcase)
                 block.exitswitch = model.c_last_exception
+                newlink.last_exception = model.Constant(code.UnwindException) 
+                newlink.last_exc_value = var_unwind_exception 
                 block.recloseblock(link, newlink) # exits.append(newlink)
+                self.translator.rtyper._convert_link(block, newlink)
     # ARGH ... 
 
                 block = after_block
@@ -161,8 +164,6 @@ class StacklessTransfomer(object):
         etype = edata.lltype_of_exception_type
         evalue = edata.lltype_of_exception_value
         inputargs = [copyvar(self.translator, v) for v in varstosave]
-        var_unwind_exception0 = copyvar(self.translator, var_unwind_exception)
-        from pypy.rpython.rclass import getinstancerepr
         var_unwind_exception = varoftype(getinstancerepr(self.translator.rtyper,
             self.translator.annotator.bookkeeper.getuniqueclassdef(
                 code.UnwindException)).lowleveltype)
@@ -202,7 +203,8 @@ class StacklessTransfomer(object):
                                             [var_unwind_exception, model.Constant("frame", lltype.Void)],
                                             varoftype(lltype.Void)))
 
-        save_state_block.closeblock(model.Link([varoftype(etype), varoftype(evalue)],
+        save_state_block.closeblock(model.Link([model.Constant(code.UnwindException), 
+                                                var_unwind_exception], 
                                                self.curr_graph.exceptblock))
 
         return save_state_block
