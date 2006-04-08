@@ -41,10 +41,8 @@ def test_simple_transform():
     st = StacklessTransfomer(t)
     st.transform_graph(graphof(t, example))
     st.transform_graph(graphof(t, g))
-    st.transform_graph(graphof(t, check))
-    #for graph in t.graphs: 
-        #checkgraph(graph) # XXX
-        #st.transform_graph(graph)
+    for graph in t.graphs: 
+        checkgraph(graph) # XXX
     example_graph = graphof(t, example)
     if conftest.option.view:
         t.view()
