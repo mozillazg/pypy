@@ -10,10 +10,15 @@ from pypy.translator.simplify import eliminate_empty_blocks, join_blocks
 from pypy.rpython.module.support import init_opaque_object
 from pypy.rpython.module.support import to_opaque_object, from_opaque_object
 from pypy.rpython.module.support import from_rstr
+from pypy.rpython.extregistry import ExtRegistryEntry
 
 
 # for debugging, sanity checks in non-RPython code
 reveal = from_opaque_object
+
+def isptrtype(gv_type):
+    c = from_opaque_object(gv_type)
+    return isinstance(c.value, lltype.Ptr)
 
 def initblock(opaqueptr):
     init_opaque_object(opaqueptr, flowmodel.Block([]))
@@ -25,6 +30,8 @@ def newblock():
 
 def geninputarg(blockcontainer, gv_CONCRETE_TYPE):
     block = from_opaque_object(blockcontainer.obj)
+    assert not block.operations, "block already contains operations"
+    assert block.exits == [], "block already closed"
     CONCRETE_TYPE = from_opaque_object(gv_CONCRETE_TYPE).value
     v = flowmodel.Variable()
     v.concretetype = CONCRETE_TYPE
@@ -49,6 +56,7 @@ def genop(blockcontainer, opname, vars, gv_RESULT_TYPE):
     if not isinstance(opname, str):
         opname = from_rstr(opname)
     block = from_opaque_object(blockcontainer.obj)
+    assert block.exits == [], "block already closed"
     RESULT_TYPE = from_opaque_object(gv_RESULT_TYPE).value
     opvars = _inputvars(vars)    
     v = flowmodel.Variable()
@@ -81,7 +89,11 @@ def revealconst(T, gv_value):
         return llmemory.cast_ptr_to_adr(c.value)
     else:
         return lltype.cast_primitive(T, c.value)
-                                    
+
+def isconst(gv_value):
+    c = from_opaque_object(gv_value)
+    return isinstance(c, flowmodel.Constant)
+
 # XXX
 # temporary interface; it's unclera if genop itself should change to ease dinstinguishing
 # Void special args from the rest. Or there should be variation for the ops involving them
@@ -223,19 +235,52 @@ lltypes = [LINK]*2
 fields = tuple(zip(fieldnames, lltypes))    
 LINKPAIR = lltype.GcStruct('tuple2', *fields)
 
-# helpers
-def setannotation(func, TYPE):
-    func.compute_result_annotation = lambda *args_s: TYPE 
+# support constants and types
 
-def setspecialize(func):
-    # for now
-    def specialize_as_direct_call(hop):
-        FUNCTYPE = lltype.FuncType([r.lowleveltype for r in hop.args_r], hop.r_result.lowleveltype)
-        args_v = hop.inputargs(*hop.args_r)
-        funcptr = lltype.functionptr(FUNCTYPE, func.__name__, _callable=func)
-        cfunc = hop.inputconst(lltype.Ptr(FUNCTYPE), funcptr)
-        return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
-    func.specialize = specialize_as_direct_call
+nullvar = lltype.nullptr(CONSTORVAR.TO)
+gv_Void = constTYPE(lltype.Void)
+
+# VARLIST
+def ll_fixed_items(l):
+    return l
+
+def ll_fixed_length(l):
+    return len(l)
+
+VARLIST = lltype.Ptr(lltype.GcArray(CONSTORVAR,
+                                    adtmeths = {
+                                        "ll_items": ll_fixed_items,
+                                        "ll_length": ll_fixed_length
+                                    }))
+
+
+# helpers
+def setannotation(func, annotation, specialize_as_constant=False):
+
+    class Entry(ExtRegistryEntry):
+        "Annotation and specialization for calls to 'func'."
+        _about_ = func
+
+        if annotation is None or isinstance(annotation, annmodel.SomeObject):
+            s_result_annotation = annotation
+        else:
+            def compute_result_annotation(self, *args_s):
+                return annotation(*args_s)
+
+        if specialize_as_constant:
+            def specialize_call(self, hop):
+                llvalue = func(hop.args_s[0].const)
+                return hop.inputconst(lltype.typeOf(llvalue), llvalue)
+        else:
+            # specialize as direct_call
+            def specialize_call(self, hop):
+                FUNCTYPE = lltype.FuncType([r.lowleveltype for r in hop.args_r],
+                                           hop.r_result.lowleveltype)
+                args_v = hop.inputargs(*hop.args_r)
+                funcptr = lltype.functionptr(FUNCTYPE, func.__name__,
+                                             _callable=func)
+                cfunc = hop.inputconst(lltype.Ptr(FUNCTYPE), funcptr)
+                return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
 
 # annotations
 from pypy.annotation import model as annmodel
@@ -248,35 +293,17 @@ setannotation(initblock, None)
 setannotation(geninputarg, s_ConstOrVar)
 setannotation(genop, s_ConstOrVar)
 setannotation(genconst, s_ConstOrVar)
-revealconst.compute_result_annotation = lambda s_T, s_gv: annmodel.lltype_to_annotation(s_T.const)
+setannotation(revealconst, lambda s_T, s_gv: annmodel.lltype_to_annotation(
+                                                  s_T.const))
+setannotation(isconst, annmodel.SomeBool())
 setannotation(closeblock1, s_Link)
 setannotation(closeblock2, s_LinkPair)
 setannotation(closelink, None)
 setannotation(closereturnlink, None)
 
-# specialize
-setspecialize(initblock)
-setspecialize(geninputarg)
-setspecialize(genop)
-setspecialize(genconst)
-setspecialize(revealconst)
-setspecialize(closeblock1)
-setspecialize(closeblock2)
-setspecialize(closelink)
-setspecialize(closereturnlink)
+setannotation(isptrtype, annmodel.SomeBool())
 
 # XXX(for now) void constant constructors
-setannotation(constFieldName, s_ConstOrVar)
-setannotation(constTYPE, s_ConstOrVar)
-setannotation(placeholder, s_ConstOrVar)
-
-def set_specialize_void_constant_constructor(func):
-    # for now
-    def specialize_as_constant(hop):
-        llvalue = func(hop.args_s[0].const)
-        return hop.inputconst(lltype.typeOf(llvalue), llvalue)
-    func.specialize = specialize_as_constant
-
-set_specialize_void_constant_constructor(placeholder)
-set_specialize_void_constant_constructor(constFieldName)
-set_specialize_void_constant_constructor(constTYPE)
+setannotation(constFieldName, s_ConstOrVar, specialize_as_constant=True)
+setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
+setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)

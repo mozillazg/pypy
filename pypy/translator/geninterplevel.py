@@ -127,9 +127,9 @@ def long_helper(self, name, value):
         'def %s(value):\n'
         '    dic = space.newdict([])\n'
         '    space.exec_("", dic, dic) # init __builtins__\n'
-        '    return space.eval("long(%%r, 16)" %% value, dic, dic)' % unique)
+        '    return space.eval(value, dic, dic)' % unique)
     self.initcode.append1('%s = %s(%r)' % (
-        name, unique, hex(value)[2:-1] ) )
+        name, unique, repr(value) ) )
 
 def bltinmod_helper(self, mod):    
     name = self.uniquename("mod_%s" % mod.__name__)
@@ -560,9 +560,9 @@ else:
             namestr = "_emptystr_"
         name = self.uniquename('gs_' + namestr[:32])
         if len(value) < 30 and "\n" not in value:
-            txt = '%s = space.wrap(%r)' % (name, value)
+            txt = '%s = space.new_interned_str(%r)' % (name, value)
         else:
-            txt = render_docstr(value, '%s = space.wrap(\n' % name, ')')
+            txt = render_docstr(value, '%s = space.new_interned_str(\n' % name, ')')
             txt = txt,  # not splitted
         self.initcode.append(txt)
         return name
@@ -631,17 +631,11 @@ else:
     nameof_method = nameof_instancemethod   # when run on top of PyPy
 
     def should_translate_attr(self, pbc, attr):
-        ann = self.translator.annotator
-        if ann is None:
-            ignore = getattr(pbc.__class__, 'NOT_RPYTHON_ATTRIBUTES', [])
-            if attr in ignore:
-                return False
-            else:
-                return "probably"   # True
-        classdef = ann.getuserclasses().get(pbc.__class__)
-        if classdef and classdef.about_attribute(attr) is not None:
-            return True
-        return False
+        ignore = getattr(pbc.__class__, 'NOT_RPYTHON_ATTRIBUTES', [])
+        if attr in ignore:
+            return False
+        else:
+            return "probably"   # True
 
     def later(self, gen):
         self.latercode.append1((gen, self.debugstack))
@@ -939,11 +933,11 @@ else:
         # property is lazy loaded app-level as well, trigger it*s creation
         self.initcode.append1('space.builtin.get("property") # pull it in')
         globname = self.nameof(self.moddict)
-        self.initcode.append('space.setitem(%s, space.wrap("__builtins__"), '
+        self.initcode.append('space.setitem(%s, space.new_interned_str("__builtins__"), '
                              'space.builtin.w_dict)' % globname)
         self.initcode.append('%s = space.eval("property(%s)", %s, %s)' %(
             name, origin, globname, globname) )
-        self.initcode.append('space.delitem(%s, space.wrap("__builtins__"))'
+        self.initcode.append('space.delitem(%s, space.new_interned_str("__builtins__"))'
                              % globname)
         return name
 
@@ -1039,7 +1033,7 @@ else:
             # make sure it is not rendered again
             key = Constant(doc).key
             self.rpynames[key] = "w__doc__"
-            self.initcode.append("w__doc__ = space.wrap(__doc__)")
+            self.initcode.append("w__doc__ = space.new_interned_str(__doc__)")
 
         # info.entrypoint must be done *after* __doc__ is handled,
         # because nameof(entrypoint) might touch __doc__ early.

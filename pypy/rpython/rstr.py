@@ -1,125 +1,97 @@
-from weakref import WeakValueDictionary
+from pypy.tool.staticmethods import StaticMethods
 from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import IntegerRepr, IteratorRepr
-from pypy.rpython.rmodel import StringRepr, CharRepr, inputconst, UniCharRepr
-from pypy.rpython.rarithmetic import _hash_string
-from pypy.rpython.robject import PyObjRepr, pyobj_repr
-from pypy.rpython.rtuple import TupleRepr
+from pypy.rpython.rmodel import inputconst, Repr
+from pypy.rpython.rtuple import AbstractTupleRepr
+from pypy.rpython.rslice import AbstractSliceRepr
 from pypy.rpython import rint
-from pypy.rpython.rslice import SliceRepr
-from pypy.rpython.rslice import startstop_slice_repr, startonly_slice_repr
-from pypy.rpython.rslice import minusone_slice_repr
-from pypy.rpython.lltypesystem.lltype import \
-     GcStruct, Signed, Array, Char, Ptr, malloc, \
-     Bool, Void, GcArray, nullptr, pyobjectptr
+from pypy.rpython.lltypesystem.lltype import Signed, Bool, Void
 
+class AbstractStringRepr(Repr):
+    pass
 
-# ____________________________________________________________
-#
-#  Concrete implementation of RPython strings:
-#
-#    struct str {
-#        hash: Signed
-#        chars: array of Char
-#    }
+class AbstractCharRepr(AbstractStringRepr):
+    pass
 
-STR = GcStruct('rpy_string', ('hash',  Signed),
-                             ('chars', Array(Char, hints={'immutable': True})))
-SIGNED_ARRAY = GcArray(Signed)
+class AbstractUniCharRepr(Repr):
+    pass
 
 
 class __extend__(annmodel.SomeString):
     def rtyper_makerepr(self, rtyper):
-        return string_repr
+        return rtyper.type_system.rstr.string_repr
     def rtyper_makekey(self):
         return self.__class__,
 
 class __extend__(annmodel.SomeChar):
     def rtyper_makerepr(self, rtyper):
-        return char_repr
+        return rtyper.type_system.rstr.char_repr
     def rtyper_makekey(self):
         return self.__class__,
 
 class __extend__(annmodel.SomeUnicodeCodePoint):
     def rtyper_makerepr(self, rtyper):
-        return unichar_repr
+        return rtyper.type_system.rstr.unichar_repr
     def rtyper_makekey(self):
         return self.__class__,
 
-CONST_STR_CACHE = WeakValueDictionary()
-string_repr = StringRepr()
-char_repr   = CharRepr()
-unichar_repr = UniCharRepr()
 
-
-class __extend__(StringRepr):
-    lowleveltype = Ptr(STR)
-
-    def convert_const(self, value):
-        if value is None:
-            return nullptr(STR)
-        #value = getattr(value, '__self__', value)  # for bound string methods
-        if not isinstance(value, str):
-            raise TyperError("not a str: %r" % (value,))
-        try:
-            return CONST_STR_CACHE[value]
-        except KeyError:
-            p = malloc(STR, len(value))
-            for i in range(len(value)):
-                p.chars[i] = value[i]
-            ll_strhash(p)   # precompute the hash
-            CONST_STR_CACHE[value] = p
-            return p
+class __extend__(AbstractStringRepr):
 
     def get_ll_eq_function(self):
-        return ll_streq
+        return self.ll.ll_streq
 
     def get_ll_hash_function(self):
-        return ll_strhash
+        return self.ll.ll_strhash
 
-    def rtype_len(_, hop):
+    def get_ll_fasthash_function(self):
+        return self.ll.ll_strfasthash
+
+    def rtype_len(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, = hop.inputargs(string_repr)
-        return hop.gendirectcall(ll_strlen, v_str)
+        return hop.gendirectcall(self.ll.ll_strlen, v_str)
 
     def rtype_is_true(self, hop):
         s_str = hop.args_s[0]
         if s_str.can_be_None:
+            string_repr = hop.rtyper.type_system.rstr.string_repr
             v_str, = hop.inputargs(string_repr)
-            return hop.gendirectcall(ll_str_is_true, v_str)
+            return hop.gendirectcall(self.ll.ll_str_is_true, v_str)
         else:
             # defaults to checking the length
-            return super(StringRepr, self).rtype_is_true(hop)
+            return super(AbstractStringRepr, self).rtype_is_true(hop)
 
-    def rtype_ord(_, hop):
+    def rtype_ord(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, = hop.inputargs(string_repr)
         c_zero = inputconst(Signed, 0)
-        v_chr = hop.gendirectcall(ll_stritem_nonneg, v_str, c_zero)
+        v_chr = hop.gendirectcall(self.ll.ll_stritem_nonneg, v_str, c_zero)
         return hop.genop('cast_char_to_int', [v_chr], resulttype=Signed)
 
-    def rtype_hash(_, hop):
-        v_str, = hop.inputargs(string_repr)
-        return hop.gendirectcall(ll_strhash, v_str)
-
-    def rtype_method_startswith(_, hop):
+    def rtype_method_startswith(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, v_value = hop.inputargs(string_repr, string_repr)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_startswith, v_str, v_value)
+        return hop.gendirectcall(self.ll.ll_startswith, v_str, v_value)
 
-    def rtype_method_endswith(_, hop):
+    def rtype_method_endswith(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, v_value = hop.inputargs(string_repr, string_repr)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_endswith, v_str, v_value)
+        return hop.gendirectcall(self.ll.ll_endswith, v_str, v_value)
 
-    def rtype_method_find(_, hop, reverse=False):
-        v_str = hop.inputarg(string_repr, arg=0)
-        if hop.args_r[1] == char_repr:
-            v_value = hop.inputarg(char_repr, arg=1)
-            llfn = reverse and ll_rfind_char or ll_find_char
+    def rtype_method_find(self, hop, reverse=False):
+        rstr = hop.rtyper.type_system.rstr        
+        v_str = hop.inputarg(rstr.string_repr, arg=0)
+        if hop.args_r[1] == rstr.char_repr:
+            v_value = hop.inputarg(rstr.char_repr, arg=1)
+            llfn = reverse and self.ll.ll_rfind_char or self.ll.ll_find_char
         else:
-            v_value = hop.inputarg(string_repr, arg=1)
-            llfn = reverse and ll_rfind or ll_find
+            v_value = hop.inputarg(rstr.string_repr, arg=1)
+            llfn = reverse and self.ll.ll_rfind or self.ll.ll_find
         if hop.nb_args > 2:
             v_start = hop.inputarg(Signed, arg=2)
             if not hop.args_s[2].nonneg:
@@ -131,19 +103,20 @@ class __extend__(StringRepr):
             if not hop.args_s[2].nonneg:
                 raise TyperError("str.find() end must be proven non-negative")
         else:
-            v_end = hop.gendirectcall(ll_strlen, v_str)
+            v_end = hop.gendirectcall(self.ll.ll_strlen, v_str)
         hop.exception_cannot_occur()
         return hop.gendirectcall(llfn, v_str, v_value, v_start, v_end)
 
     def rtype_method_rfind(self, hop):
         return self.rtype_method_find(hop, reverse=True)
 
-    def rtype_method_strip(_, hop, left=True, right=True):
-        v_str = hop.inputarg(string_repr, arg=0)
-        v_char = hop.inputarg(char_repr, arg=1)
+    def rtype_method_strip(self, hop, left=True, right=True):
+        rstr = hop.rtyper.type_system.rstr
+        v_str = hop.inputarg(rstr.string_repr, arg=0)
+        v_char = hop.inputarg(rstr.char_repr, arg=1)
         v_left = hop.inputconst(Bool, left)
         v_right = hop.inputconst(Bool, right)
-        return hop.gendirectcall(ll_strip, v_str, v_char, v_left, v_right)
+        return hop.gendirectcall(self.ll.ll_strip, v_str, v_char, v_left, v_right)
 
     def rtype_method_lstrip(self, hop):
         return self.rtype_method_strip(hop, left=True, right=False)
@@ -151,250 +124,200 @@ class __extend__(StringRepr):
     def rtype_method_rstrip(self, hop):
         return self.rtype_method_strip(hop, left=False, right=True)
 
-    def rtype_method_upper(_, hop):
+    def rtype_method_upper(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, = hop.inputargs(string_repr)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_upper, v_str)
+        return hop.gendirectcall(self.ll.ll_upper, v_str)
         
-    def rtype_method_lower(_, hop):
+    def rtype_method_lower(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, = hop.inputargs(string_repr)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_lower, v_str)
-        
-    def rtype_method_join(_, hop):
+        return hop.gendirectcall(self.ll.ll_lower, v_str)
+
+    def _list_length_items(self, hop, v_lst, LIST):
+        """Return two Variables containing the length and items of a
+        list. Need to be overriden because it is typesystem-specific."""
+        raise NotImplementedError
+
+    def rtype_method_join(self, hop):
         hop.exception_cannot_occur()
+        rstr = hop.rtyper.type_system.rstr
         if hop.s_result.is_constant():
-            return inputconst(string_repr, hop.s_result.const)
+            return inputconst(rstr.string_repr, hop.s_result.const)
         r_lst = hop.args_r[1]
-        from pypy.rpython.rlist import BaseListRepr
-        if not isinstance(r_lst, BaseListRepr):
+        if not isinstance(r_lst, hop.rtyper.type_system.rlist.BaseListRepr):
             raise TyperError("string.join of non-list: %r" % r_lst)
-        v_str, v_lst = hop.inputargs(string_repr, r_lst)
-        LIST = r_lst.lowleveltype.TO
-        v_length = hop.gendirectcall(LIST.ll_length, v_lst)
-        v_items = hop.gendirectcall(LIST.ll_items, v_lst)
-                       
+        v_str, v_lst = hop.inputargs(rstr.string_repr, r_lst)
+        v_length, v_items = self._list_length_items(hop, v_lst, r_lst.lowleveltype)
+
         if hop.args_s[0].is_constant() and hop.args_s[0].const == '':
-            if r_lst.item_repr == string_repr:
-                llfn = ll_join_strs
-            elif r_lst.item_repr == char_repr:
-                llfn = ll_join_chars
+            if r_lst.item_repr == rstr.string_repr:
+                llfn = self.ll.ll_join_strs
+            elif r_lst.item_repr == rstr.char_repr:
+                llfn = self.ll.ll_join_chars
             else:
                 raise TyperError("''.join() of non-string list: %r" % r_lst)
             return hop.gendirectcall(llfn, v_length, v_items)
         else:
-            if r_lst.item_repr == string_repr:
-                llfn = ll_join
+            if r_lst.item_repr == rstr.string_repr:
+                llfn = self.ll.ll_join
             else:
                 raise TyperError("sep.join() of non-string list: %r" % r_lst)
             return hop.gendirectcall(llfn, v_str, v_length, v_items)
 
-    def rtype_method_split(_, hop):
-        v_str, v_chr = hop.inputargs(string_repr, char_repr)
-        cLIST = hop.inputconst(Void, hop.r_result.lowleveltype.TO)
+    def rtype_method_split(self, hop):
+        rstr = hop.rtyper.type_system.rstr
+        v_str, v_chr = hop.inputargs(rstr.string_repr, rstr.char_repr)
+        try:
+            list_type = hop.r_result.lowleveltype.TO
+        except AttributeError:
+            list_type = hop.r_result.lowleveltype
+        cLIST = hop.inputconst(Void, list_type)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_split_chr, cLIST, v_str, v_chr)
+        return hop.gendirectcall(self.ll.ll_split_chr, cLIST, v_str, v_chr)
 
-    def rtype_method_replace(_, hop):
-        if not (hop.args_r[1] == char_repr and hop.args_r[2] == char_repr):
+    def rtype_method_replace(self, hop):
+        rstr = hop.rtyper.type_system.rstr        
+        if not (hop.args_r[1] == rstr.char_repr and hop.args_r[2] == rstr.char_repr):
             raise TyperError, 'replace only works for char args'
-        v_str, v_c1, v_c2 = hop.inputargs(string_repr, char_repr, char_repr)
+        v_str, v_c1, v_c2 = hop.inputargs(rstr.string_repr, rstr.char_repr, rstr.char_repr)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_replace_chr_chr, v_str, v_c1, v_c2)
+        return hop.gendirectcall(self.ll.ll_replace_chr_chr, v_str, v_c1, v_c2)
 
-    def rtype_int(_, hop):
+    def rtype_int(self, hop):
         hop.has_implicit_exception(ValueError)   # record that we know about it
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         if hop.nb_args == 1:
             v_str, = hop.inputargs(string_repr)
             c_base = inputconst(Signed, 10)
             hop.exception_is_here()
-            return hop.gendirectcall(ll_int, v_str, c_base)
+            return hop.gendirectcall(self.ll.ll_int, v_str, c_base)
         if not hop.args_r[1] == rint.signed_repr:
             raise TyperError, 'base needs to be an int'
         v_str, v_base= hop.inputargs(string_repr, rint.signed_repr)
         hop.exception_is_here()
-        return hop.gendirectcall(ll_int, v_str, v_base)
+        return hop.gendirectcall(self.ll.ll_int, v_str, v_base)
 
     def ll_str(self, s):
         return s
 
-    def make_iterator_repr(self):
-        return string_iterator_repr
-
-class __extend__(pairtype(StringRepr, IntegerRepr)):
-    def rtype_getitem(_, hop):
+class __extend__(pairtype(AbstractStringRepr, IntegerRepr)):
+    def rtype_getitem((r_str, r_int), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, v_index = hop.inputargs(string_repr, Signed)
         if hop.has_implicit_exception(IndexError):
             if hop.args_s[1].nonneg:
-                llfn = ll_stritem_nonneg_checked
+                llfn = r_str.ll.ll_stritem_nonneg_checked
             else:
-                llfn = ll_stritem_checked
+                llfn = r_str.ll.ll_stritem_checked
         else:
             if hop.args_s[1].nonneg:
-                llfn = ll_stritem_nonneg
+                llfn = r_str.ll.ll_stritem_nonneg
             else:
-                llfn = ll_stritem
+                llfn = r_str.ll.ll_stritem
         hop.exception_is_here()
         return hop.gendirectcall(llfn, v_str, v_index)
 
-    def rtype_mod(_, hop):
-        return do_stringformat(hop, [(hop.args_v[1], hop.args_r[1])])
+    def rtype_mod((r_str, r_int), hop):
+        return r_str.ll.do_stringformat(hop, [(hop.args_v[1], hop.args_r[1])])
 
 
-class __extend__(pairtype(StringRepr, SliceRepr)):
+class __extend__(pairtype(AbstractStringRepr, AbstractSliceRepr)):
 
-    def rtype_getitem((_, r_slic), hop):
-        if r_slic == startonly_slice_repr:
-            v_str, v_start = hop.inputargs(string_repr, startonly_slice_repr)
-            return hop.gendirectcall(ll_stringslice_startonly, v_str, v_start)
-        if r_slic == startstop_slice_repr:
-            v_str, v_slice = hop.inputargs(string_repr, startstop_slice_repr)
-            return hop.gendirectcall(ll_stringslice, v_str, v_slice)
-        if r_slic == minusone_slice_repr:
-            v_str, v_ignored = hop.inputargs(string_repr, minusone_slice_repr)
-            return hop.gendirectcall(ll_stringslice_minusone, v_str)
+    def rtype_getitem((r_str, r_slic), hop):
+        rstr = hop.rtyper.type_system.rstr
+        rslice = hop.rtyper.type_system.rslice
+
+        if r_slic == rslice.startonly_slice_repr:
+            v_str, v_start = hop.inputargs(rstr.string_repr, rslice.startonly_slice_repr)
+            return hop.gendirectcall(r_str.ll.ll_stringslice_startonly, v_str, v_start)
+        if r_slic == rslice.startstop_slice_repr:
+            v_str, v_slice = hop.inputargs(rstr.string_repr, rslice.startstop_slice_repr)
+            return hop.gendirectcall(r_str.ll.ll_stringslice, v_str, v_slice)
+        if r_slic == rslice.minusone_slice_repr:
+            v_str, v_ignored = hop.inputargs(rstr.string_repr, rslice.minusone_slice_repr)
+            return hop.gendirectcall(r_str.ll.ll_stringslice_minusone, v_str)
         raise TyperError(r_slic)
 
 
-class __extend__(pairtype(StringRepr, StringRepr)):
-    def rtype_add(_, hop):
+class __extend__(pairtype(AbstractStringRepr, AbstractStringRepr)):
+    def rtype_add((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        return hop.gendirectcall(ll_strconcat, v_str1, v_str2)
+        return hop.gendirectcall(r_str1.ll.ll_strconcat, v_str1, v_str2)
     rtype_inplace_add = rtype_add
 
-    def rtype_eq(_, hop):
+    def rtype_eq((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        return hop.gendirectcall(ll_streq, v_str1, v_str2)
+        return hop.gendirectcall(r_str1.ll.ll_streq, v_str1, v_str2)
     
-    def rtype_ne(_, hop):
+    def rtype_ne((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        vres = hop.gendirectcall(ll_streq, v_str1, v_str2)
+        vres = hop.gendirectcall(r_str1.ll.ll_streq, v_str1, v_str2)
         return hop.genop('bool_not', [vres], resulttype=Bool)
 
-    def rtype_lt(_, hop):
+    def rtype_lt((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        vres = hop.gendirectcall(ll_strcmp, v_str1, v_str2)
+        vres = hop.gendirectcall(r_str1.ll.ll_strcmp, v_str1, v_str2)
         return hop.genop('int_lt', [vres, hop.inputconst(Signed, 0)],
                          resulttype=Bool)
 
-    def rtype_le(_, hop):
+    def rtype_le((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        vres = hop.gendirectcall(ll_strcmp, v_str1, v_str2)
+        vres = hop.gendirectcall(r_str1.ll.ll_strcmp, v_str1, v_str2)
         return hop.genop('int_le', [vres, hop.inputconst(Signed, 0)],
                          resulttype=Bool)
 
-    def rtype_ge(_, hop):
+    def rtype_ge((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        vres = hop.gendirectcall(ll_strcmp, v_str1, v_str2)
+        vres = hop.gendirectcall(r_str1.ll.ll_strcmp, v_str1, v_str2)
         return hop.genop('int_ge', [vres, hop.inputconst(Signed, 0)],
                          resulttype=Bool)
 
-    def rtype_gt(_, hop):
+    def rtype_gt((r_str1, r_str2), hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
-        vres = hop.gendirectcall(ll_strcmp, v_str1, v_str2)
+        vres = hop.gendirectcall(r_str1.ll.ll_strcmp, v_str1, v_str2)
         return hop.genop('int_gt', [vres, hop.inputconst(Signed, 0)],
                          resulttype=Bool)
 
-    def rtype_mod(_, hop):
-        return do_stringformat(hop, [(hop.args_v[1], hop.args_r[1])])
+    def rtype_mod((r_str1, r_str2), hop):
+        return r_str1.ll.do_stringformat(hop, [(hop.args_v[1], hop.args_r[1])])
 
-class __extend__(pairtype(StringRepr, CharRepr)):
-    def rtype_contains(_, hop):
-        v_str, v_chr = hop.inputargs(string_repr, char_repr)
-        return hop.gendirectcall(ll_contains, v_str, v_chr)
-    
-def parse_fmt_string(fmt):
-    # we support x, d, s, f, [r]
+class __extend__(pairtype(AbstractStringRepr, AbstractCharRepr)):
+    def rtype_contains((r_str, r_chr), hop):
+        rstr = hop.rtyper.type_system.rstr
+        v_str, v_chr = hop.inputargs(rstr.string_repr, rstr.char_repr)
+        return hop.gendirectcall(r_str.ll.ll_contains, v_str, v_chr)
 
-    it = iter(fmt)
-    r = []
-    curstr = ''
-    for c in it:
-        if c == '%':
-            f = it.next()
-            if f == '%':
-                curstr += '%'
-                continue
-
-            if curstr:
-                r.append(curstr)
-            curstr = ''
-            if f not in 'xdosrf':
-                raise TyperError("Unsupported formatting specifier: %r in %r" % (f, fmt))
-
-            r.append((f,))
-        else:
-            curstr += c
-    if curstr:
-        r.append(curstr)
-    return r
-            
-
-def do_stringformat(hop, sourcevarsrepr):
-    s_str = hop.args_s[0]
-    assert s_str.is_constant()
-    s = s_str.const
-    things = parse_fmt_string(s)
-    size = inputconst(Signed, len(things)) # could be unsigned?
-    TEMP = GcArray(Ptr(STR))
-    cTEMP = inputconst(Void, TEMP)
-    vtemp = hop.genop("malloc_varsize", [cTEMP, size],
-                      resulttype=Ptr(TEMP))
-    r_tuple = hop.args_r[1]
-    v_tuple = hop.args_v[1]
-
-    argsiter = iter(sourcevarsrepr)
-    
-    InstanceRepr = hop.rtyper.type_system.rclass.InstanceRepr
-    for i, thing in enumerate(things):
-        if isinstance(thing, tuple):
-            code = thing[0]
-            vitem, r_arg = argsiter.next()
-            if not hasattr(r_arg, 'll_str'):
-                raise TyperError("ll_str unsupported for: %r" % r_arg)
-            if code == 's' or (code == 'r' and isinstance(r_arg, InstanceRepr)):
-                vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-            elif code == 'd':
-                assert isinstance(r_arg, IntegerRepr)
-                vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-            elif code == 'f':
-                #assert isinstance(r_arg, FloatRepr)
-                vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-            elif code == 'x':
-                assert isinstance(r_arg, IntegerRepr)
-                vchunk = hop.gendirectcall(rint.ll_int2hex, vitem,
-                                           inputconst(Bool, False))
-            elif code == 'o':
-                assert isinstance(r_arg, IntegerRepr)
-                vchunk = hop.gendirectcall(rint.ll_int2oct, vitem,
-                                           inputconst(Bool, False))
-            else:
-                raise TyperError, "%%%s is not RPython" % (code, )
-        else:
-            vchunk = inputconst(string_repr, thing)
-        i = inputconst(Signed, i)
-        hop.genop('setarrayitem', [vtemp, i, vchunk])
-
-    hop.exception_cannot_occur()   # to ignore the ZeroDivisionError of '%'
-    return hop.gendirectcall(ll_join_strs, size, vtemp)
-    
-
-class __extend__(pairtype(StringRepr, TupleRepr)):
-    def rtype_mod(_, hop):
+class __extend__(pairtype(AbstractStringRepr, AbstractTupleRepr)):
+    def rtype_mod((r_str, r_tuple), hop):
         r_tuple = hop.args_r[1]
         v_tuple = hop.args_v[1]
+
+        if hop.rtyper.type_system.name == 'ootypesystem':
+            getfield = 'oogetfield'
+        else:
+            getfield = 'getfield'
 
         sourcevars = []
         for fname, r_arg in zip(r_tuple.fieldnames, r_tuple.items_r):
             cname = hop.inputconst(Void, fname)
-            vitem = hop.genop("getfield", [v_tuple, cname],
+            vitem = hop.genop(getfield, [v_tuple, cname],
                               resulttype=r_arg)
             sourcevars.append((vitem, r_arg))
 
-        return do_stringformat(hop, sourcevars)
+        return r_str.ll.do_stringformat(hop, sourcevars)
                 
 
-class __extend__(CharRepr):
+class __extend__(AbstractCharRepr):
 
     def convert_const(self, value):
         if not isinstance(value, str) or len(value) != 1:
@@ -405,10 +328,12 @@ class __extend__(CharRepr):
         return None 
 
     def get_ll_hash_function(self):
-        return ll_char_hash
+        return self.ll.ll_char_hash
+
+    get_ll_fasthash_function = get_ll_hash_function
 
     def ll_str(self, ch):
-        return ll_chr2str(ch)
+        return self.ll.ll_chr2str(ch)
 
     def rtype_len(_, hop):
         return hop.inputconst(Signed, 1)
@@ -418,41 +343,45 @@ class __extend__(CharRepr):
         return hop.inputconst(Bool, True)
 
     def rtype_ord(_, hop):
-        vlist = hop.inputargs(char_repr)
+        rstr = hop.rtyper.type_system.rstr
+        vlist = hop.inputargs(rstr.char_repr)
         return hop.genop('cast_char_to_int', vlist, resulttype=Signed)
 
     def _rtype_method_isxxx(_, llfn, hop):
-        vlist = hop.inputargs(char_repr)
+        rstr = hop.rtyper.type_system.rstr
+        vlist = hop.inputargs(rstr.char_repr)
         hop.exception_cannot_occur()
         return hop.gendirectcall(llfn, vlist[0])
 
     def rtype_method_isspace(self, hop):
-        return self._rtype_method_isxxx(ll_char_isspace, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_isspace, hop)
     def rtype_method_isdigit(self, hop):
-        return self._rtype_method_isxxx(ll_char_isdigit, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_isdigit, hop)
     def rtype_method_isalpha(self, hop):
-        return self._rtype_method_isxxx(ll_char_isalpha, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_isalpha, hop)
     def rtype_method_isalnum(self, hop):
-        return self._rtype_method_isxxx(ll_char_isalnum, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_isalnum, hop)
     def rtype_method_isupper(self, hop):
-        return self._rtype_method_isxxx(ll_char_isupper, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_isupper, hop)
     def rtype_method_islower(self, hop):
-        return self._rtype_method_isxxx(ll_char_islower, hop)
+        return self._rtype_method_isxxx(self.ll.ll_char_islower, hop)
 
-class __extend__(pairtype(CharRepr, IntegerRepr)):
+class __extend__(pairtype(AbstractCharRepr, IntegerRepr)):
     
-    def rtype_mul(_, hop):
-        v_char, v_int = hop.inputargs(char_repr, Signed)
-        return hop.gendirectcall(ll_char_mul, v_char, v_int)
+    def rtype_mul((r_chr, r_int), hop):
+        rstr = hop.rtyper.type_system.rstr
+        v_char, v_int = hop.inputargs(rstr.char_repr, Signed)
+        return hop.gendirectcall(r_chr.ll.ll_char_mul, v_char, v_int)
     rtype_inplace_mul = rtype_mul
 
-class __extend__(pairtype(IntegerRepr, CharRepr)):
-    def rtype_mul(_, hop):
-        v_int, v_char = hop.inputargs(Signed, char_repr)
-        return hop.gendirectcall(ll_char_mul, v_char, v_int)
+class __extend__(pairtype(IntegerRepr, AbstractCharRepr)):
+    def rtype_mul((r_int, r_chr), hop):
+        rstr = hop.rtyper.type_system.rstr
+        v_int, v_char = hop.inputargs(Signed, rstr.char_repr)
+        return hop.gendirectcall(r_chr.ll.ll_char_mul, v_char, v_int)
     rtype_inplace_mul = rtype_mul
 
-class __extend__(pairtype(CharRepr, CharRepr)):
+class __extend__(pairtype(AbstractCharRepr, AbstractCharRepr)):
     def rtype_eq(_, hop): return _rtype_compare_template(hop, 'eq')
     def rtype_ne(_, hop): return _rtype_compare_template(hop, 'ne')
     def rtype_lt(_, hop): return _rtype_compare_template(hop, 'lt')
@@ -463,10 +392,11 @@ class __extend__(pairtype(CharRepr, CharRepr)):
 #Helper functions for comparisons
 
 def _rtype_compare_template(hop, func):
-    vlist = hop.inputargs(char_repr, char_repr)
+    rstr = hop.rtyper.type_system.rstr
+    vlist = hop.inputargs(rstr.char_repr, rstr.char_repr)
     return hop.genop('char_'+func, vlist, resulttype=Bool)
 
-class __extend__(UniCharRepr):
+class __extend__(AbstractUniCharRepr):
 
     def convert_const(self, value):
         if not isinstance(value, unicode) or len(value) != 1:
@@ -477,7 +407,9 @@ class __extend__(UniCharRepr):
         return None 
 
     def get_ll_hash_function(self):
-        return ll_unichar_hash
+        return self.ll.ll_unichar_hash
+
+    get_ll_fasthash_function = get_ll_hash_function
 
 ##    def rtype_len(_, hop):
 ##        return hop.inputconst(Signed, 1)
@@ -487,11 +419,12 @@ class __extend__(UniCharRepr):
 ##        return hop.inputconst(Bool, True)
 
     def rtype_ord(_, hop):
-        vlist = hop.inputargs(unichar_repr)
+        rstr = hop.rtyper.type_system.rstr
+        vlist = hop.inputargs(rstr.unichar_repr)
         return hop.genop('cast_unichar_to_int', vlist, resulttype=Signed)
 
 
-class __extend__(pairtype(UniCharRepr, UniCharRepr)):
+class __extend__(pairtype(AbstractUniCharRepr, AbstractUniCharRepr)):
     def rtype_eq(_, hop): return _rtype_unchr_compare_template(hop, 'eq')
     def rtype_ne(_, hop): return _rtype_unchr_compare_template(hop, 'ne')
 ##    def rtype_lt(_, hop): return _rtype_unchr_compare_template(hop, 'lt')
@@ -502,52 +435,47 @@ class __extend__(pairtype(UniCharRepr, UniCharRepr)):
 #Helper functions for comparisons
 
 def _rtype_unchr_compare_template(hop, func):
-    vlist = hop.inputargs(unichar_repr, unichar_repr)
+    rstr = hop.rtyper.type_system.rstr
+    vlist = hop.inputargs(rstr.unichar_repr, rstr.unichar_repr)
     return hop.genop('unichar_'+func, vlist, resulttype=Bool)
 
 
 #
 # _________________________ Conversions _________________________
 
-class __extend__(pairtype(CharRepr, StringRepr)):
+class __extend__(pairtype(AbstractCharRepr, AbstractStringRepr)):
     def convert_from_to((r_from, r_to), v, llops):
-        if r_from == char_repr and r_to == string_repr:
-            return llops.gendirectcall(ll_chr2str, v)
+        rstr = llops.rtyper.type_system.rstr
+        if r_from == rstr.char_repr and r_to == rstr.string_repr:
+            return llops.gendirectcall(r_from.ll.ll_chr2str, v)
         return NotImplemented
 
-class __extend__(pairtype(StringRepr, CharRepr)):
+class __extend__(pairtype(AbstractStringRepr, AbstractCharRepr)):
     def convert_from_to((r_from, r_to), v, llops):
-        if r_from == string_repr and r_to == char_repr:
+        rstr = llops.rtyper.type_system.rstr
+        if r_from == rstr.string_repr and r_to == rstr.char_repr:
             c_zero = inputconst(Signed, 0)
-            return llops.gendirectcall(ll_stritem_nonneg, v, c_zero)
+            return llops.gendirectcall(r_from.ll.ll_stritem_nonneg, v, c_zero)
         return NotImplemented
 
-class __extend__(pairtype(PyObjRepr, StringRepr)):
-    def convert_from_to((r_from, r_to), v, llops):
-        v_len = llops.gencapicall('PyString_Size', [v], resulttype=Signed)
-        cstr = inputconst(Void, STR)
-        v_result = llops.genop('malloc_varsize', [cstr, v_len],
-                               resulttype=Ptr(STR))
-        cchars = inputconst(Void, "chars")
-        v_chars = llops.genop('getsubstruct', [v_result, cchars],
-                              resulttype=Ptr(STR.chars))
-        llops.gencapicall('PyString_ToLLCharArray', [v, v_chars])
-        v_result = llops.convertvar(v_result, string_repr, r_to)
-        return v_result
 
-class __extend__(pairtype(StringRepr, PyObjRepr)):
-    def convert_from_to((r_from, r_to), v, llops):
-        v = llops.convertvar(v, r_from, string_repr)
-        cchars = inputconst(Void, "chars")
-        v_chars = llops.genop('getsubstruct', [v, cchars],
-                              resulttype=Ptr(STR.chars))
-        v_size = llops.genop('getarraysize', [v_chars],
-                             resulttype=Signed)
-        # xxx put in table        
-        return llops.gencapicall('PyString_FromLLCharArrayAndSize',
-                                 [v_chars, v_size],
-                                 resulttype=pyobj_repr,
-                                 _callable= lambda chars, sz: pyobjectptr(''.join(chars)))
+# ____________________________________________________________
+#
+#  Iteration.
+
+class AbstractStringIteratorRepr(IteratorRepr):
+
+    def newiter(self, hop):
+        string_repr = hop.rtyper.type_system.rstr.string_repr
+        v_str, = hop.inputargs(string_repr)
+        return hop.gendirectcall(self.ll_striter, v_str)
+
+    def rtype_next(self, hop):
+        v_iter, = hop.inputargs(self)
+        hop.has_implicit_exception(StopIteration) # record that we know about it
+        hop.exception_is_here()
+        return hop.gendirectcall(self.ll_strnext, v_iter)
+
 
 # ____________________________________________________________
 #
@@ -555,583 +483,99 @@ class __extend__(pairtype(StringRepr, PyObjRepr)):
 #  be direct_call'ed from rtyped flow graphs, which means that they will
 #  get flowed and annotated, mostly with SomePtr.
 #
-def ll_char_isspace(ch):
-    c = ord(ch) 
-    return c == 32 or (c <= 13 and c >= 9)   # c in (9, 10, 11, 12, 13, 32)
 
-def ll_char_isdigit(ch):
-    c = ord(ch)
-    return c <= 57 and c >= 48
+# this class contains low level helpers used both by lltypesystem and
+# ootypesystem; each typesystem should subclass it and add its own
+# primitives.
+class AbstractLLHelpers:
+    __metaclass__ = StaticMethods
 
-def ll_char_isalpha(ch):
-    c = ord(ch)
-    if c >= 97:
-        return c <= 122
-    else:
-        return 65 <= c <= 90
+    def ll_char_isspace(ch):
+        c = ord(ch) 
+        return c == 32 or (c <= 13 and c >= 9)   # c in (9, 10, 11, 12, 13, 32)
 
-def ll_char_isalnum(ch):
-    c = ord(ch)
-    if c >= 65:
+    def ll_char_isdigit(ch):
+        c = ord(ch)
+        return c <= 57 and c >= 48
+
+    def ll_char_isalpha(ch):
+        c = ord(ch)
         if c >= 97:
             return c <= 122
         else:
-            return c <= 90
-    else:
-        return 48 <= c <= 57
+            return 65 <= c <= 90
 
-def ll_char_isupper(ch):
-    c = ord(ch)
-    return 65 <= c <= 90
-
-def ll_char_islower(ch):   
-    c = ord(ch)
-    return 97 <= c <= 122
-
-def ll_char_mul(ch, times):
-    newstr = malloc(STR, times)
-    j = 0
-    while j < times:
-        newstr.chars[j] = ch
-        j += 1
-    return newstr
-
-def ll_char_hash(ch):
-    return ord(ch)
-
-def ll_unichar_hash(ch):
-    return ord(ch)
-
-def ll_strlen(s):
-    return len(s.chars)
-
-def ll_stritem_nonneg(s, i):
-    return s.chars[i]
-
-def ll_stritem_nonneg_checked(s, i):
-    if i >= len(s.chars):
-        raise IndexError
-    return s.chars[i]
-
-def ll_stritem(s, i):
-    if i < 0:
-        i += len(s.chars)
-    return s.chars[i]
-
-def ll_stritem_checked(s, i):
-    if i < 0:
-        i += len(s.chars)
-    if i >= len(s.chars) or i < 0:
-        raise IndexError
-    return s.chars[i]
-
-def ll_str_is_true(s):
-    # check if a string is True, allowing for None
-    return bool(s) and len(s.chars) != 0
-
-def ll_chr2str(ch):
-    s = malloc(STR, 1)
-    s.chars[0] = ch
-    return s
-
-def ll_strhash(s):
-    # unlike CPython, there is no reason to avoid to return -1
-    # but our malloc initializes the memory to zero, so we use zero as the
-    # special non-computed-yet value.
-    x = s.hash
-    if x == 0:
-        x = _hash_string(s.chars)
-        s.hash = x
-    return x
-
-def ll_strconcat(s1, s2):
-    len1 = len(s1.chars)
-    len2 = len(s2.chars)
-    newstr = malloc(STR, len1 + len2)
-    j = 0
-    while j < len1:
-        newstr.chars[j] = s1.chars[j]
-        j += 1
-    i = 0
-    while i < len2:
-        newstr.chars[j] = s2.chars[i]
-        i += 1
-        j += 1
-    return newstr
-
-def ll_strcmp(s1, s2):
-    if not s1 and not s2:
-        return True
-    if not s1 or not s2:
-        return False
-    chars1 = s1.chars
-    chars2 = s2.chars
-    len1 = len(chars1)
-    len2 = len(chars2)
-
-    if len1 < len2:
-        cmplen = len1
-    else:
-        cmplen = len2
-    i = 0
-    while i < cmplen:
-        diff = ord(chars1[i]) - ord(chars2[i])
-        if diff != 0:
-            return diff
-        i += 1
-    return len1 - len2
-
-def ll_streq(s1, s2):
-    if not s1 and not s2:
-        return True
-    if not s1 or not s2:
-        return False
-    len1 = len(s1.chars)
-    len2 = len(s2.chars)
-    if len1 != len2:
-        return False
-    j = 0
-    chars1 = s1.chars
-    chars2 = s2.chars
-    while j < len1:
-        if chars1[j] != chars2[j]:
-            return False
-        j += 1
-
-    return True
-
-def ll_startswith(s1, s2):
-    len1 = len(s1.chars)
-    len2 = len(s2.chars)
-    if len1 < len2:
-        return False
-    j = 0
-    chars1 = s1.chars
-    chars2 = s2.chars
-    while j < len2:
-        if chars1[j] != chars2[j]:
-            return False
-        j += 1
-
-    return True
-
-def ll_endswith(s1, s2):
-    len1 = len(s1.chars)
-    len2 = len(s2.chars)
-    if len1 < len2:
-        return False
-    j = 0
-    chars1 = s1.chars
-    chars2 = s2.chars
-    offset = len1 - len2
-    while j < len2:
-        if chars1[offset + j] != chars2[j]:
-            return False
-        j += 1
-
-    return True
-
-def ll_find_char(s, ch, start, end):
-    i = start
-    while i < end:
-        if s.chars[i] == ch:
-            return i
-        i += 1
-    return -1
-
-def ll_rfind_char(s, ch, start, end):
-    i = end
-    while i > start:
-        i -= 1
-        if s.chars[i] == ch:
-            return i
-    return -1
-
-def ll_find(s1, s2, start, end):
-    """Knuth Morris Prath algorithm for substring match"""
-    len2 = len(s2.chars)
-    if len2 == 1:
-        return ll_find_char(s1, s2.chars[0], start, end)
-    if len2 == 0:
-        return start
-    # Construct the array of possible restarting positions
-    # T = Array_of_ints [-1..len2]
-    # T[-1] = -1 s2.chars[-1] is supposed to be unequal to everything else
-    T = malloc( SIGNED_ARRAY, len2 )
-    T[0] = 0
-    i = 1
-    j = 0
-    while i<len2:
-        if s2.chars[i] == s2.chars[j]:
-            j += 1
-            T[i] = j
-            i += 1
-        elif j>0:
-            j = T[j-1]
-        else:
-            T[i] = 0
-            i += 1
-            j = 0
-
-    # Now the find algorithm
-    i = 0
-    m = start
-    while m+i<end:
-        if s1.chars[m+i]==s2.chars[i]:
-            i += 1
-            if i==len2:
-                return m
-        else:
-            # mismatch, go back to the last possible starting pos
-            if i==0:
-                m += 1
+    def ll_char_isalnum(ch):
+        c = ord(ch)
+        if c >= 65:
+            if c >= 97:
+                return c <= 122
             else:
-                e = T[i-1]
-                m = m + i - e
-                i = e
-    return -1
-
-def ll_rfind(s1, s2, start, end):
-    """Reversed version of ll_find()"""
-    len2 = len(s2.chars)
-    if len2 == 1:
-        return ll_rfind_char(s1, s2.chars[0], start, end)
-    if len2 == 0:
-        return end
-    # Construct the array of possible restarting positions
-    T = malloc( SIGNED_ARRAY, len2 )
-    T[0] = 1
-    i = 1
-    j = 1
-    while i<len2:
-        if s2.chars[len2-i-1] == s2.chars[len2-j]:
-            j += 1
-            T[i] = j
-            i += 1
-        elif j>1:
-            j = T[j-2]
+                return c <= 90
         else:
-            T[i] = 1
-            i += 1
-            j = 1
+            return 48 <= c <= 57
 
-    # Now the find algorithm
-    i = 1
-    m = end
-    while m-i>=start:
-        if s1.chars[m-i]==s2.chars[len2-i]:
-            if i==len2:
-                return m-i
-            i += 1
-        else:
-            # mismatch, go back to the last possible starting pos
-            if i==1:
-                m -= 1
+    def ll_char_isupper(ch):
+        c = ord(ch)
+        return 65 <= c <= 90
+
+    def ll_char_islower(ch):   
+        c = ord(ch)
+        return 97 <= c <= 122
+
+    def ll_char_hash(ch):
+        return ord(ch)
+
+    def ll_unichar_hash(ch):
+        return ord(ch)
+
+    def ll_str_is_true(cls, s):
+        # check if a string is True, allowing for None
+        return bool(s) and cls.ll_strlen(s) != 0
+    ll_str_is_true = classmethod(ll_str_is_true)
+
+    def ll_stritem_nonneg_checked(cls, s, i):
+        if i >= cls.ll_strlen(s):
+            raise IndexError
+        return cls.ll_stritem_nonneg(s, i)
+    ll_stritem_nonneg_checked = classmethod(ll_stritem_nonneg_checked)
+
+    def ll_stritem(cls, s, i):
+        if i < 0:
+            i += cls.ll_strlen(s)
+        return cls.ll_stritem_nonneg(s, i)
+    ll_stritem = classmethod(ll_stritem)
+
+    def ll_stritem_checked(cls, s, i):
+        length = cls.ll_strlen(s)
+        if i < 0:
+            i += length
+        if i >= length or i < 0:
+            raise IndexError
+        return cls.ll_stritem_nonneg(s, i)
+    ll_stritem_checked = classmethod(ll_stritem_checked)
+
+    def parse_fmt_string(fmt):
+        # we support x, d, s, f, [r]
+        it = iter(fmt)
+        r = []
+        curstr = ''
+        for c in it:
+            if c == '%':
+                f = it.next()
+                if f == '%':
+                    curstr += '%'
+                    continue
+
+                if curstr:
+                    r.append(curstr)
+                curstr = ''
+                if f not in 'xdosrf':
+                    raise TyperError("Unsupported formatting specifier: %r in %r" % (f, fmt))
+
+                r.append((f,))
             else:
-                e = T[i-2]
-                m = m - i + e
-                i = e
-    return -1
-
-emptystr = string_repr.convert_const("")
-
-def ll_strip(s, ch, left, right):
-    s_len = len(s.chars)
-    if s_len == 0:
-        return emptystr
-    lpos = 0
-    rpos = s_len - 1
-    if left:
-        while lpos < rpos and s.chars[lpos] == ch:
-            lpos += 1
-    if right:
-        while lpos < rpos and s.chars[rpos] == ch:
-            rpos -= 1
-    r_len = rpos - lpos + 1
-    result = malloc(STR, r_len)
-    i = 0
-    j = lpos
-    while i < r_len:
-        result.chars[i] = s.chars[j]
-        i += 1
-        j += 1
-    return result
-
-def ll_upper(s):
-    s_chars = s.chars
-    s_len = len(s_chars)
-    if s_len == 0:
-        return emptystr
-    i = 0
-    result = malloc(STR, s_len)
-    while i < s_len:
-        ch = s_chars[i]
-        if 'a' <= ch <= 'z':
-            ch = chr(ord(ch) - 32)
-        result.chars[i] = ch
-        i += 1
-    return result
-
-def ll_lower(s):
-    s_chars = s.chars
-    s_len = len(s_chars)
-    if s_len == 0:
-        return emptystr
-    i = 0
-    result = malloc(STR, s_len)
-    while i < s_len:
-        ch = s_chars[i]
-        if 'A' <= ch <= 'Z':
-            ch = chr(ord(ch) + 32)
-        result.chars[i] = ch
-        i += 1
-    return result
-
-def ll_join(s, length, items):
-    s_chars = s.chars
-    s_len = len(s_chars)
-    num_items = length
-    if num_items == 0:
-        return emptystr
-    itemslen = 0
-    i = 0
-    while i < num_items:
-        itemslen += len(items[i].chars)
-        i += 1
-    result = malloc(STR, itemslen + s_len * (num_items - 1))
-    res_chars = result.chars
-    res_index = 0
-    i = 0
-    item_chars = items[i].chars
-    item_len = len(item_chars)
-    j = 0
-    while j < item_len:
-        res_chars[res_index] = item_chars[j]
-        j += 1
-        res_index += 1
-    i += 1
-    while i < num_items:
-        j = 0
-        while j < s_len:
-            res_chars[res_index] = s_chars[j]
-            j += 1
-            res_index += 1
-
-        item_chars = items[i].chars
-        item_len = len(item_chars)
-        j = 0
-        while j < item_len:
-            res_chars[res_index] = item_chars[j]
-            j += 1
-            res_index += 1
-        i += 1
-    return result
-
-def ll_join_strs(length, items):
-    num_items = length
-    itemslen = 0
-    i = 0
-    while i < num_items:
-        itemslen += len(items[i].chars)
-        i += 1
-    result = malloc(STR, itemslen)
-    res_chars = result.chars
-    res_index = 0
-    i = 0
-    while i < num_items:
-        item_chars = items[i].chars
-        item_len = len(item_chars)
-        j = 0
-        while j < item_len:
-            res_chars[res_index] = item_chars[j]
-            j += 1
-            res_index += 1
-        i += 1
-    return result
-
-def ll_join_chars(length, chars):
-    num_chars = length
-    result = malloc(STR, num_chars)
-    res_chars = result.chars
-    i = 0
-    while i < num_chars:
-        res_chars[i] = chars[i]
-        i += 1
-    return result
-
-def ll_stringslice_startonly(s1, start):
-    len1 = len(s1.chars)
-    newstr = malloc(STR, len1 - start)
-    j = 0
-    while start < len1:
-        newstr.chars[j] = s1.chars[start]
-        start += 1
-        j += 1
-    return newstr
-
-def ll_stringslice(s1, slice):
-    start = slice.start
-    stop = slice.stop
-    if stop > len(s1.chars):
-        stop = len(s1.chars)
-    newstr = malloc(STR, stop - start)
-    j = 0
-    while start < stop:
-        newstr.chars[j] = s1.chars[start]
-        start += 1
-        j += 1
-    return newstr
-
-def ll_stringslice_minusone(s1):
-    newlen = len(s1.chars) - 1
-    assert newlen >= 0
-    newstr = malloc(STR, newlen)
-    j = 0
-    while j < newlen:
-        newstr.chars[j] = s1.chars[j]
-        j += 1
-    return newstr
-
-def ll_split_chr(LIST, s, c):
-    chars = s.chars
-    strlen = len(chars)
-    count = 1
-    i = 0
-    while i < strlen:
-        if chars[i] == c:
-            count += 1
-        i += 1
-    res = LIST.ll_newlist(count)
-    items = res.ll_items()
-    i = 0
-    j = 0
-    resindex = 0
-    while j < strlen:
-        if chars[j] == c:
-            item = items[resindex] = malloc(STR, j - i)
-            newchars = item.chars
-            k = i
-            while k < j:
-                newchars[k - i] = chars[k]
-                k += 1
-            resindex += 1
-            i = j + 1
-        j += 1
-    item = items[resindex] = malloc(STR, j - i)
-    newchars = item.chars
-    k = i
-    while k < j:
-        newchars[k - i] = chars[k]
-        k += 1
-    resindex += 1
-
-    return res
-
-def ll_replace_chr_chr(s, c1, c2):
-    length = len(s.chars)
-    newstr = malloc(STR, length)
-    src = s.chars
-    dst = newstr.chars
-    j = 0
-    while j < length:
-        c = src[j]
-        if c == c1:
-            c = c2
-        dst[j] = c
-        j += 1
-    return newstr
-
-def ll_contains(s, c):
-    chars = s.chars
-    strlen = len(chars)
-    i = 0
-    while i < strlen:
-        if chars[i] == c:
-            return True
-        i += 1
-    return False
-
-def ll_int(s, base):
-    if not 2 <= base <= 36:
-        raise ValueError
-    chars = s.chars
-    strlen = len(chars)
-    i = 0
-    #XXX: only space is allowed as white space for now
-    while i < strlen and chars[i] == ' ':
-        i += 1
-    if not i < strlen:
-        raise ValueError
-    #check sign
-    sign = 1
-    if chars[i] == '-':
-        sign = -1
-        i += 1
-    elif chars[i] == '+':
-        i += 1;
-    #now get digits
-    val = 0
-    while i < strlen:
-        c = ord(chars[i])
-        if ord('a') <= c <= ord('z'):
-            digit = c - ord('a') + 10
-        elif ord('A') <= c <= ord('Z'):
-            digit = c - ord('A') + 10
-        elif ord('0') <= c <= ord('9'):
-            digit = c - ord('0')
-        else:
-            break
-        if digit >= base:
-            break
-        val = val * base + digit
-        i += 1
-    #skip trailing whitespace
-    while i < strlen and chars[i] == ' ':
-        i += 1
-    if not i == strlen:
-        raise ValueError
-    return sign * val
-
-# ____________________________________________________________
-#
-#  Iteration.
-
-class StringIteratorRepr(IteratorRepr):
-    lowleveltype = Ptr(GcStruct('stringiter',
-                                ('string', string_repr.lowleveltype),
-                                ('index', Signed)))
-    def newiter(self, hop):
-        v_str, = hop.inputargs(string_repr)
-        return hop.gendirectcall(ll_striter, v_str)
-
-    def rtype_next(self, hop):
-        v_iter, = hop.inputargs(self)
-        hop.has_implicit_exception(StopIteration) # record that we know about it
-        hop.exception_is_here()
-        return hop.gendirectcall(ll_strnext, v_iter)
-
-string_iterator_repr = StringIteratorRepr()
-
-def ll_striter(string):
-    iter = malloc(string_iterator_repr.lowleveltype.TO)
-    iter.string = string
-    iter.index = 0
-    return iter
-
-def ll_strnext(iter):
-    chars = iter.string.chars
-    index = iter.index
-    if index >= len(chars):
-        raise StopIteration
-    iter.index = index + 1
-    return chars[index]
-
-# these should be in rclass, but circular imports prevent (also it's
-# not that insane that a string constant is built in this file).
-
-instance_str_prefix = string_repr.convert_const("<")
-instance_str_suffix = string_repr.convert_const(" object>")
-
-list_str_open_bracket = string_repr.convert_const("[")
-list_str_close_bracket = string_repr.convert_const("]")
-list_str_sep = string_repr.convert_const(", ")
+                curstr += c
+        if curstr:
+            r.append(curstr)
+        return r

@@ -8,12 +8,13 @@ from pypy.annotation import model as annmodel
 from pypy.annotation.policy import AnnotatorPolicy
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython import extfunctable
+from pypy.objspace.flow.model import Constant
 
 def not_const(s_obj): # xxx move it somewhere else
     if s_obj.is_constant():
         new_s_obj = annmodel.SomeObject()
         new_s_obj.__class__ = s_obj.__class__
-        new_s_obj.__dict__ = s_obj.__dict__
+        new_s_obj.__dict__ = s_obj.__dict__.copy()
         del new_s_obj.const
         s_obj = new_s_obj
     return s_obj
@@ -43,12 +44,13 @@ class KeyComp(object):
 
 class LowLevelAnnotatorPolicy(AnnotatorPolicy):
     allow_someobjects = False
+    # if this exists and is boolean, then it always wins:
+    override_do_imports_immediately = True
+
+    def __init__(pol, rtyper=None):
+        pol.rtyper = rtyper
 
     def default_specialize(pol, funcdesc, args_s):
-        if hasattr(funcdesc, 'pyobj') and hasattr(funcdesc.pyobj, 'llresult'):
-            # XXX bug mwh to write some tests for this stuff
-            funcdesc.overridden = True
-            return annmodel.lltype_to_annotation(funcdesc.pyobj.llresult)
         key = []
         new_args_s = []
         for s_obj in args_s:
@@ -87,9 +89,20 @@ class LowLevelAnnotatorPolicy(AnnotatorPolicy):
         exttypeinfo = extfunctable.typetable[s_value.knowntype]
         return annmodel.SomePtr(lltype.Ptr(exttypeinfo.get_lltype()))
 
+    def specialize__ts(pol, funcdesc, args_s, ref):
+        ts = pol.rtyper.type_system
+        ref = ref.split('.')
+        x = ts
+        for part in ref:
+            x = getattr(x, part)
+        bk = pol.rtyper.annotator.bookkeeper
+        funcdesc2 = bk.getdesc(x)
+        return pol.default_specialize(funcdesc2, args_s)
 
-def annotate_lowlevel_helper(annotator, ll_function, args_s):
-    return annotator.annotate_helper(ll_function, args_s, policy= LowLevelAnnotatorPolicy())
+def annotate_lowlevel_helper(annotator, ll_function, args_s, policy=None):
+    if policy is None:
+        policy= LowLevelAnnotatorPolicy()
+    return annotator.annotate_helper(ll_function, args_s, policy)
 
 # ___________________________________________________________________
 # Mix-level helpers: combining RPython and ll-level
@@ -117,9 +130,11 @@ class MixLevelHelperAnnotator:
     def __init__(self, rtyper):
         self.rtyper = rtyper
         self.policy = MixLevelAnnotatorPolicy(rtyper)
-        self.pending = []     # list of (graph, args_s, s_result)
+        self.pending = []     # list of (ll_function, graph, args_s, s_result)
         self.delayedreprs = []
-        self.delayedconsts = [] 
+        self.delayedconsts = []
+        self.delayedfuncs = []
+        self.original_graph_count = len(rtyper.annotator.translator.graphs)
 
     def getgraph(self, ll_function, args_s, s_result):
         # get the graph of the mix-level helper ll_function and prepare it for
@@ -131,8 +146,28 @@ class MixLevelHelperAnnotator:
         for v_arg, s_arg in zip(graph.getargs(), args_s):
             self.rtyper.annotator.setbinding(v_arg, s_arg)
         self.rtyper.annotator.setbinding(graph.getreturnvar(), s_result)
-        self.pending.append((graph, args_s, s_result))
+        self.pending.append((ll_function, graph, args_s, s_result))
         return graph
+
+    def delayedfunction(self, ll_function, args_s, s_result):
+        # get a delayed pointer to the low-level function, annotated as
+        # specified.  The pointer is only valid after finish() was called.
+        graph = self.getgraph(ll_function, args_s, s_result)
+        return self.graph2delayed(graph)
+
+    def constfunc(self, ll_function, args_s, s_result):
+        p = self.delayedfunction(ll_function, args_s, s_result)
+        return Constant(p, lltype.typeOf(p))
+
+    def graph2delayed(self, graph):
+        FUNCTYPE = lltype.ForwardReference()
+        delayedptr = lltype._ptr(lltype.Ptr(FUNCTYPE), "delayed!", solid=True)
+        self.delayedfuncs.append((delayedptr, graph))
+        return delayedptr
+
+    def graph2const(self, graph):
+        p = self.graph2delayed(graph)
+        return Constant(p, lltype.typeOf(p))
 
     def getdelayedrepr(self, s_value):
         """Like rtyper.getrepr(), but the resulting repr will not be setup() at
@@ -152,30 +187,50 @@ class MixLevelHelperAnnotator:
             return repr.convert_const(obj)
 
     def finish(self):
+        self.finish_annotate()
+        self.finish_rtype()
+
+    def finish_annotate(self):
         # push all the graphs into the annotator's pending blocks dict at once
         rtyper = self.rtyper
         ann = rtyper.annotator
-        for graph, args_s, s_result in self.pending:
+        bk = ann.bookkeeper
+        for ll_function, graph, args_s, s_result in self.pending:
             # mark the return block as already annotated, because the return var
             # annotation was forced in getgraph() above.  This prevents temporary
             # less general values reaching the return block from crashing the
             # annotator (on the assert-that-new-binding-is-not-less-general).
             ann.annotated[graph.returnblock] = graph
-            ann.build_graph_types(graph, args_s, complete_now=False)
+            s_function = bk.immutablevalue(ll_function)
+            bk.emulate_pbc_call(graph, s_function, args_s)
         ann.complete_helpers(self.policy)
-        for graph, args_s, s_result in self.pending:
+        for ll_function, graph, args_s, s_result in self.pending:
             s_real_result = ann.binding(graph.getreturnvar())
             if s_real_result != s_result:
                 raise Exception("wrong annotation for the result of %r:\n"
                                 "originally specified: %r\n"
                                 " found by annotating: %r" %
                                 (graph, s_result, s_real_result))
-        rtyper.type_system.perform_normalizations(rtyper, insert_stack_checks=False)
+
+    def finish_rtype(self):
+        rtyper = self.rtyper
+        rtyper.type_system.perform_normalizations(rtyper)
         for r in self.delayedreprs:
             r.set_setup_delayed(False)
         for p, repr, obj in self.delayedconsts:
             p._become(repr.convert_const(obj))
+        for p, graph in self.delayedfuncs:
+            real_p = rtyper.getcallable(graph)
+            lltype.typeOf(p).TO.become(lltype.typeOf(real_p).TO)
+            p._become(real_p)
         rtyper.specialize_more_blocks()
         del self.pending[:]
         del self.delayedreprs[:]
         del self.delayedconsts[:]
+
+    def backend_optimize(self, **flags):
+        # only optimize the newly created graphs
+        from pypy.translator.backendopt.all import backend_optimizations
+        translator = self.rtyper.annotator.translator
+        newgraphs = translator.graphs[self.original_graph_count:]
+        backend_optimizations(translator, newgraphs, **flags)

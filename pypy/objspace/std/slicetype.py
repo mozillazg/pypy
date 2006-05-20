@@ -56,7 +56,7 @@ def descr__new__(space, w_slicetype, args_w):
         raise OperationError(space.w_TypeError,
                              space.wrap("slice() takes at least 1 argument"))
     w_obj = space.allocate_instance(W_SliceObject, w_slicetype)
-    W_SliceObject.__init__(w_obj, space, w_start, w_stop, w_step)
+    W_SliceObject.__init__(w_obj, w_start, w_stop, w_step)
     return w_obj
 #
 descr__new__.unwrap_spec = [baseobjspace.ObjSpace, baseobjspace.W_Root,
@@ -79,6 +79,7 @@ slice_typedef = StdTypeDef("slice",
 
 Create a slice object.  This is used for extended slicing (e.g. a[0:10:2]).''',
     __new__ = newmethod(descr__new__),
+    __hash__ = no_hash_descr,
     start = slicewprop('w_start'),
     stop  = slicewprop('w_stop'),
     step  = slicewprop('w_step'),

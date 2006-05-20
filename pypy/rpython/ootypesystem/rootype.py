@@ -33,7 +33,7 @@ class OOInstanceRepr(Repr):
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         s_inst = hop.args_s[0]
-        meth = self.lowleveltype._lookup(attr)
+        _, meth = self.lowleveltype._lookup(attr)
         if meth is not None:
             # just return instance - will be handled by simple_call
             return hop.inputarg(hop.r_result, arg=0)
@@ -59,6 +59,12 @@ class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
         vlist = hop.inputargs(r_ins1, r_ins2)
         return hop.genop('oois', vlist, resulttype=ootype.Bool)
 
+    rtype_eq = rtype_is_
+
+    def rtype_ne(rpair, hop):
+        v = rpair.rtype_eq(hop)
+        return hop.genop("bool_not", [v], resulttype=ootype.Bool)
+
 
 class OOBoundMethRepr(Repr):
     def __init__(self, ootype, name):
@@ -68,6 +74,7 @@ class OOBoundMethRepr(Repr):
     def rtype_simple_call(self, hop):
         vlist = hop.inputargs(self, *hop.args_r[1:])
         cname = hop.inputconst(Void, self.name)
+        hop.exception_is_here()
         return hop.genop("oosend", [cname]+vlist,
                          resulttype = hop.r_result.lowleveltype)
         

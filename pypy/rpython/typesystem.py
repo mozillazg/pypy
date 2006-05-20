@@ -5,7 +5,7 @@ from pypy.annotation.pairtype import extendabletype
 
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython import error
+from pypy.rpython.error import TyperError
 
 class TypeSystem(object):
     __metaclass__ = extendabletype
@@ -20,7 +20,8 @@ class TypeSystem(object):
                                   None, None, ['__doc__'])
             except ImportError:
                 return None
-        if name in ('rclass', 'rpbc', 'rbuiltin', 'exceptiondata'):
+        if name in ('rclass', 'rpbc', 'rbuiltin', 'rtuple', 'rlist',
+                'rslice', 'rdict', 'rrange', 'rstr', 'll_str', 'exceptiondata'):
             mod = load(name)
             if mod is not None:
                 setattr(self, name, mod)
@@ -61,16 +62,12 @@ class TypeSystem(object):
 in a graph."""
         raise NotImplementedError()
 
-    def perform_normalizations(self, rtyper, insert_stack_checks=True):
+    def perform_normalizations(self, rtyper):
         """Prepare the annotator's internal data structures for rtyping
         with the specified type system.
         """
         # default implementation
-        from pypy.translator.transform import insert_stackcheck
         from pypy.rpython.normalizecalls import perform_normalizations
-        # XXX stack checks cannot be inserted again
-        if insert_stack_checks:
-            insert_stackcheck(rtyper.annotator)
         perform_normalizations(rtyper)
 
 class LowLevelTypeSystem(TypeSystem):
@@ -91,9 +88,6 @@ class LowLevelTypeSystem(TypeSystem):
 
     def null_callable(self, T):
         return lltype.nullptr(T.TO)
-
-    def isCompatibleType(self, t1, t2):
-        return lltype.isCompatibleType(t1, t2)
 
     def generic_is(self, robj1, robj2, hop):
         roriginal1 = robj1
@@ -124,9 +118,6 @@ class ObjectOrientedTypeSystem(TypeSystem):
     def null_callable(self, T):
         return ootype.null(T)
 
-    def isCompatibleType(self, t1, t2):
-        return ootype.isCompatibleType(t1, t2)
-
     def generic_is(self, robj1, robj2, hop):
         roriginal1 = robj1
         roriginal2 = robj2
@@ -138,7 +129,7 @@ class ObjectOrientedTypeSystem(TypeSystem):
             not isinstance(robj2.lowleveltype, ootype.Instance)) and \
             (robj1.lowleveltype is not ootype.Class or
              robj2.lowleveltype is not ootype.Class):
-            raise error.TyperError('is of instances of the non-instances: %r, %r' % (
+            raise TyperError('is of instances of the non-instances: %r, %r' % (
                 roriginal1, roriginal2))
             
         v_list = hop.inputargs(robj1, robj2)

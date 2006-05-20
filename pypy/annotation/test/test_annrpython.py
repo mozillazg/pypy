@@ -10,7 +10,7 @@ from pypy.annotation import specialize
 from pypy.annotation.listdef import ListDef
 from pypy.annotation.dictdef import DictDef
 from pypy.objspace.flow.model import *
-from pypy.rpython.rarithmetic import r_uint
+from pypy.rpython.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
 from pypy.rpython import objectmodel
 from pypy.objspace.flow import FlowObjSpace
 
@@ -495,6 +495,19 @@ class TestAnnotateTestCase:
         assert isinstance(s_key, annmodel.SomeString)
         assert isinstance(s_value, annmodel.SomeInteger)
 
+    def test_dict_setdefault(self):
+        a = self.RPythonAnnotator()
+        def f():
+            d = {}
+            d.setdefault('a', 2)
+            d.setdefault('a', -3)
+            return d
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeDict)
+        assert isinstance(dictkey(s), annmodel.SomeString)
+        assert isinstance(dictvalue(s), annmodel.SomeInteger)
+        assert not dictvalue(s).nonneg
+        
     def test_exception_deduction(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet.exception_deduction, [])
@@ -941,6 +954,16 @@ class TestAnnotateTestCase:
         s = a.build_types(g, [])
         assert s.const == True
 
+    def test_isinstance_base_int(self):
+        def f(x):
+            return isinstance(x, base_int)
+        def g(n):
+            v = r_uint(n)
+            return f(v)
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [int])
+        assert s.const == True
+
     def test_alloc_like(self):
         class C1(object):
             pass
@@ -1280,6 +1303,25 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [int]*8)
         assert s == annmodel.SomeTuple([annmodel.SomeInteger(nonneg=True)] * 8)
 
+    def test_general_nonneg_cleverness(self):
+        def f(a, b, c, d, e, f, g, h):
+            if a < 0: a = 0
+            if b <= 0: b = 0
+            if c >= 0:
+                pass
+            else:
+                c = 0
+            if d < a: d = a
+            if e <= b: e = 1
+            if c > f: f = 2
+            if d >= g: g = 3
+            if h != a: h = 0
+            return a, b, c, d, e, f, g, h
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [r_longlong]*8)
+        assert s == annmodel.SomeTuple([annmodel.SomeInteger(nonneg=True, knowntype=r_longlong)] * 8)
+
+
     def test_more_nonneg_cleverness(self):
         def f(start, stop):
             assert 0 <= start <= stop
@@ -1287,6 +1329,14 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int, int])
         assert s == annmodel.SomeTuple([annmodel.SomeInteger(nonneg=True)] * 2)
+
+    def test_more_general_nonneg_cleverness(self):
+        def f(start, stop):
+            assert 0 <= start <= stop
+            return start, stop
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [r_longlong, r_longlong])
+        assert s == annmodel.SomeTuple([annmodel.SomeInteger(nonneg=True, knowntype=r_longlong)] * 2)
 
     def test_nonneg_cleverness_is_gentle_with_unsigned(self):
         def witness1(x):
@@ -1305,7 +1355,23 @@ class TestAnnotateTestCase:
         assert a.binding(wg1.getargs()[0]).unsigned is True
         assert a.binding(wg2.getargs()[0]).unsigned is True        
         
-
+    def test_general_nonneg_cleverness_is_gentle_with_unsigned(self):
+        def witness1(x):
+            pass
+        def witness2(x):
+            pass        
+        def f(x):
+            if 0 < x:
+                witness1(x)
+            if x > 0:
+                witness2(x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [annmodel.SomeInteger(knowntype=r_ulonglong)])
+        wg1 = graphof(a, witness1)
+        wg2 = graphof(a, witness2)        
+        assert a.binding(wg1.getargs()[0]).knowntype is r_ulonglong
+        assert a.binding(wg2.getargs()[0]).knowntype is r_ulonglong
+    
     def test_attr_moving_into_parent(self):
         class A: pass
         class B(A): pass
@@ -1944,6 +2010,209 @@ class TestAnnotateTestCase:
         assert s.knowntype == int
         graph = tgraphof(t, A.__del__.im_func)
         assert graph.startblock in a.annotated
+
+    def test_annotate_type(self):
+        class A:
+            pass
+        x = [A(), A()]
+        def witness(t):
+            return type(t)
+        def get(i):
+            return x[i]
+        def f(i):
+            witness(None)
+            return witness(get(i))
+            
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.__class__ == annmodel.SomeObject
+        assert s.knowntype == type
+
+    def test_annotate_iter_empty_container(self):
+        def f():
+            n = 0
+            d = {}
+            for x in []:                n += x
+            for y in d:                 n += y
+            for z in d.iterkeys():      n += z
+            for s in d.itervalues():    n += s
+            for t, u in d.items():      n += t * u
+            for t, u in d.iteritems():  n += t * u
+            return n
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert s.is_constant()
+        assert s.const == 0
+
+    def test_mixin(self):
+        class Mixin(object):
+            _mixin_ = True
+
+            def m(self, v):
+                return v
+
+        class Base(object):
+            pass
+
+        class A(Base, Mixin):
+            pass
+
+        class B(Base, Mixin):
+            pass
+
+        class C(B):
+            pass
+
+        def f():
+            a = A()
+            v0 = a.m(2)
+            b = B()
+            v1 = b.m('x')
+            c = C()
+            v2 = c.m('y')
+            return v0, v1, v2
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s.items[0], annmodel.SomeInteger)
+        assert isinstance(s.items[1], annmodel.SomeChar)        
+        assert isinstance(s.items[2], annmodel.SomeChar)        
+
+    def test___class___attribute(self):
+        class Base(object): pass
+        class A(Base): pass
+        class B(Base): pass
+        class C(A): pass
+        def seelater():
+            C()
+        def f(n):
+            if n == 1:
+                x = A()
+            else:
+                x = B()
+            y = B()
+            result = x.__class__, y.__class__
+            seelater()
+            return result
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s.items[0], annmodel.SomePBC)
+        assert len(s.items[0].descriptions) == 4
+        assert isinstance(s.items[1], annmodel.SomePBC)
+        assert len(s.items[1].descriptions) == 1
+
+    def test_slots(self):
+        # check that the annotator ignores slots instead of being
+        # confused by them showing up as 'member' objects in the class
+        class A(object):
+            __slots__ = ('a', 'b')
+        def f(x):
+            a = A()
+            a.b = x
+            return a.b
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.knowntype == int
+
+    def test_unboxed_value(self):
+        class A(object):
+            pass
+        class C(A, objectmodel.UnboxedValue):
+            __slots__ = 'smallint'
+        def f(n):
+            return C(n).smallint
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.knowntype == int
+
+
+    def test_annotate_bool(self):
+        def f(x):
+            return ~x
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool])
+        assert s.knowntype == int
+        
+
+        def f(x):
+            return -x
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool])
+        assert s.knowntype == int
+
+        def f(x):
+            return +x
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool])
+        assert s.knowntype == int
+
+        def f(x):
+            return abs(x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool])
+        assert s.knowntype == int
+
+        def f(x):
+            return int(x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool])
+        assert s.knowntype == int
+
+
+        def f(x, y):
+            return x + y
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [bool, int])
+        assert s.knowntype == int
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int, bool])
+        assert s.knowntype == int
+
+
+
+    def test_annotate_rarith(self):
+        inttypes = [int, r_uint, r_longlong, r_ulonglong]
+        for inttype in inttypes:
+            c = inttype()
+            def f():
+                return c
+            a = self.RPythonAnnotator()
+            s = a.build_types(f, [])
+            assert isinstance(s, annmodel.SomeInteger)
+            assert s.knowntype == inttype
+            assert s.unsigned == (inttype(-1) > 0)
+            
+        for inttype in inttypes:
+            def f():
+                return inttype(0)
+            a = self.RPythonAnnotator()
+            s = a.build_types(f, [])
+            assert isinstance(s, annmodel.SomeInteger)
+            assert s.knowntype == inttype
+            assert s.unsigned == (inttype(-1) > 0)
+
+        for inttype in inttypes:
+            def f(x):
+                return x
+            a = self.RPythonAnnotator()
+            s = a.build_types(f, [inttype])
+            assert isinstance(s, annmodel.SomeInteger)
+            assert s.knowntype == inttype
+            assert s.unsigned == (inttype(-1) > 0)
+
+    def test_annotate_rshift(self):
+        def f(x):
+            return x >> 2
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [annmodel.SomeInteger(nonneg=True)])
+        assert isinstance(s, annmodel.SomeInteger)
+        assert s.nonneg
+
 
 
 def g(n):

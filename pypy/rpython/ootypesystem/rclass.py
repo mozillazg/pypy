@@ -53,12 +53,11 @@ class ClassRepr(AbstractClassRepr):
             # attributes showing up in getattrs done on the class as a PBC
             extra_access_sets = self.rtyper.class_pbc_attributes.get(
                 self.classdef, {})
-            for access_set, counter in extra_access_sets.items():
-                for attr, s_value in access_set.attrs.items():
-                    r = self.rtyper.getrepr(s_value)
-                    mangled_name = pbcmangle('pbc%d' % counter, attr)
-                    pbcfields[access_set, attr] = mangled_name, r
-                    llfields.append((mangled_name, r.lowleveltype))
+            for access_set, (attr, counter) in extra_access_sets.items():
+                r = self.rtyper.getrepr(access_set.s_value)
+                mangled_name = pbcmangle('pbc%d' % counter, attr)
+                pbcfields[access_set, attr] = mangled_name, r
+                llfields.append((mangled_name, r.lowleveltype))
             
             self.rbase.setup()
             ootype.addFields(self.lowleveltype, dict(llfields))
@@ -328,6 +327,9 @@ class InstanceRepr(AbstractInstanceRepr):
                         graph=graph)
         ootype.addMethods(self.lowleveltype, {mangled: m})
 
+    def get_ll_hash_function(self):
+        return ll_inst_hash
+
     def rtype_getattr(self, hop):
         v_inst, _ = hop.inputargs(self, ootype.Void)
         s_inst = hop.args_s[0]
@@ -352,6 +354,15 @@ class InstanceRepr(AbstractInstanceRepr):
                 cname = hop.inputconst(ootype.Void, mangled)
                 return hop.genop("oosend", [cname, v_inst],
                                  resulttype = hop.r_result.lowleveltype)
+        elif attr == '__class__':
+            if hop.r_result.lowleveltype is ootype.Void:
+                # special case for when the result of '.__class__' is constant
+                [desc] = hop.s_result.descriptions
+                return hop.inputconst(ootype.Void, desc.pyobj)
+            else:
+                cmeta = inputconst(ootype.Void, "meta")
+                return hop.genop('oogetfield', [v_inst, cmeta],
+                                 resulttype=CLASSTYPE)
         else:
             raise TyperError("no attribute %r on %r" % (attr, self))
 
@@ -368,6 +379,13 @@ class InstanceRepr(AbstractInstanceRepr):
         vinst, = hop.inputargs(self)
         return hop.genop('oononnull', [vinst], resulttype=ootype.Bool)
 
+    def ll_const(c):
+        return c
+    ll_const = staticmethod(ll_const)
+
+    def ll_str(self, instance):
+        return ootype.oostring(instance, self.ll_const(-1))
+
     def rtype_type(self, hop):
         vinst, = hop.inputargs(self)
         if hop.args_s[0].can_be_none():
@@ -375,15 +393,6 @@ class InstanceRepr(AbstractInstanceRepr):
         else:
             cmeta = inputconst(ootype.Void, "meta")
             return hop.genop('oogetfield', [vinst, cmeta], resulttype=CLASSTYPE)
-
-    def rtype_hash(self, hop):
-        if self.classdef is None:
-            raise TyperError, "hash() not supported for this class"
-        if self.rtyper.needs_hash_support(self.classdef):
-            vinst, = hop.inputargs(self)
-            return hop.gendirectcall(ll_inst_hash, vinst)
-        else:
-            return self.baserepr.rtype_hash(hop)
 
     def rtype_id(self, hop):
         vinst, = hop.inputargs(self)
@@ -398,7 +407,7 @@ class InstanceRepr(AbstractInstanceRepr):
     def create_instance(self):
         return ootype.new(self.object_type)
 
-    def new_instance(self, llops):
+    def new_instance(self, llops, classcallhop=None):
         """Build a new instance, without calling __init__."""
         classrepr = getclassrepr(self.rtyper, self.classdef) 
         v_instance =  llops.genop("new",
@@ -429,6 +438,8 @@ class InstanceRepr(AbstractInstanceRepr):
                     continue
                 llattrvalue = self.allfields[mangled].convert_const(attrvalue)
             setattr(result, mangled, llattrvalue)
+
+buildinstancerepr = InstanceRepr
 
 
 class __extend__(pairtype(InstanceRepr, InstanceRepr)):

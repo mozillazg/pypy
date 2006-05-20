@@ -42,7 +42,7 @@ def descr__new__(space, w_longtype, w_x=0, w_base=NoneNotWrapped):
                     sign = 1
                 else:
                     sign = 0
-                w_value = W_LongObject(space, [abs(intval)], sign) 
+                w_value = W_LongObject([abs(intval)], sign) 
             else:
                 raise OperationError(space.w_ValueError,
                                     space.wrap("value can't be converted to long"))
@@ -66,7 +66,7 @@ def descr__new__(space, w_longtype, w_x=0, w_base=NoneNotWrapped):
                                  space.wrap(e.msg))
 
     w_obj = space.allocate_instance(W_LongObject, w_longtype)
-    W_LongObject.__init__(w_obj, space, w_value.digits, w_value.sign)
+    W_LongObject.__init__(w_obj, w_value.digits, w_value.sign)
     return w_obj
 
 # ____________________________________________________________
@@ -81,3 +81,4 @@ string, use the optional base.  It is an error to supply a base when
 converting a non-string.''',
     __new__ = newmethod(descr__new__),
     )
+long_typedef.custom_hash = True

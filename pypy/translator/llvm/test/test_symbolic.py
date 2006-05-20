@@ -3,23 +3,9 @@ from pypy.translator.interactive import Translation
 from pypy import conftest
 from pypy.rpython.lltypesystem import llmemory, lltype
 from pypy.rpython.memory import lladdress
+from pypy.rpython.objectmodel import ComputedIntSymbolic
 
 from pypy.translator.llvm.test.runtest import compile_function
-
-def test_offsetof():
-    STRUCT = lltype.GcStruct("s", ("x", lltype.Signed), ("y", lltype.Signed))
-    offsetx = llmemory.offsetof(STRUCT, 'x')
-    offsety = llmemory.offsetof(STRUCT, 'y')
-    def f():
-        s = lltype.malloc(STRUCT)
-        s.x = 1
-        adr = llmemory.cast_ptr_to_adr(s)
-        result = (adr + offsetx).signed[0]
-        (adr + offsety).signed[0] = 2
-        return result * 10 + s.y
-    fn = compile_function(f, [])
-    res = fn()
-    assert res == 12
 
 def test_offsetof():
     STRUCT = lltype.GcStruct("s", ("x", lltype.Signed), ("y", lltype.Signed))
@@ -87,4 +73,13 @@ def test_sizeof_constsize_struct():
     res = fn()
     assert res == 51
 
+def test_computed_int_symbolic():
+    def compute_fn():
+        return 7
+    k = ComputedIntSymbolic(compute_fn)
+    def f():
+        return k*6
 
+    fn = compile_function(f, [])
+    res = fn()
+    assert res == 42

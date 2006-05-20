@@ -1,67 +1,39 @@
-from pypy.annotation import model as annmodel
-from pypy.objspace.flow.model import Constant
-from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr
-from pypy.rpython.lltypesystem.lltype import \
-     GcStruct, Signed, Ptr, Void, malloc
+from pypy.rpython.lltypesystem.lltype import Signed, Void
+from pypy.objspace.flow.model import Constant
+from pypy.annotation import model as annmodel
+from pypy.rpython.error import TyperError
 
-# ____________________________________________________________
-#
-#  Concrete implementation of RPython slice objects:
-#
-#  - if stop is None, use only a Signed
-#  - if stop is not None:
-#
-#      struct slice {
-#          Signed start;
-#          Signed stop;
-#          //     step is always 1
-#      }
+class AbstractSliceRepr(Repr):
+    pass
 
-SLICE = GcStruct("slice", ("start", Signed), ("stop", Signed))
 
+def select_slice_repr(self):
+    # Select which one of the three prebuilt reprs to use.
+    # Return a name.
+    if not self.step.is_constant() or self.step.const not in (None, 1):
+        raise TyperError("only supports slices with step 1")
+    if (self.start.is_constant() and self.start.const in (None, 0) and
+        self.stop.is_constant() and self.stop.const == -1):
+        return "minusone_slice_repr"    # [:-1]
+    if isinstance(self.start, annmodel.SomeInteger):
+        if not self.start.nonneg:
+            raise TyperError("slice start must be proved non-negative")
+    if isinstance(self.stop, annmodel.SomeInteger):
+        if not self.stop.nonneg:
+            raise TyperError("slice stop must be proved non-negative")
+    if self.stop.is_constant() and self.stop.const is None:
+        return "startonly_slice_repr"
+    else:
+        return "startstop_slice_repr"
 
 class __extend__(annmodel.SomeSlice):
     def rtyper_makerepr(self, rtyper):
-        if not self.step.is_constant() or self.step.const not in (None, 1):
-            raise TyperError("only supports slices with step 1")
-        if (self.start.is_constant() and self.start.const in (None, 0) and
-            self.stop.is_constant() and self.stop.const == -1):
-            return minusone_slice_repr    # [:-1]
-        if isinstance(self.start, annmodel.SomeInteger):
-            if not self.start.nonneg:
-                raise TyperError("slice start must be proved non-negative")
-        if isinstance(self.stop, annmodel.SomeInteger):
-            if not self.stop.nonneg:
-                raise TyperError("slice stop must be proved non-negative")
-        if self.stop.is_constant() and self.stop.const is None:
-            return startonly_slice_repr
-        else:
-            return startstop_slice_repr
+        return getattr(rtyper.type_system.rslice, select_slice_repr(self))
         
     def rtyper_makekey(self):
-        # use the repr itself as the key (it can only be one of the three
-        # prebuilt reprs below).
-        return self.__class__, self.rtyper_makerepr(self)
+        return self.__class__, select_slice_repr(self)
 
-
-class SliceRepr(Repr):
-    pass
-
-startstop_slice_repr = SliceRepr()
-startstop_slice_repr.lowleveltype = Ptr(SLICE)
-startonly_slice_repr = SliceRepr()
-startonly_slice_repr.lowleveltype = Signed
-minusone_slice_repr = SliceRepr()
-minusone_slice_repr.lowleveltype = Void    # only for [:-1]
-
-# ____________________________________________________________
-
-def ll_newslice(start, stop):
-    s = malloc(SLICE)
-    s.start = start
-    s.stop = stop
-    return s
 
 def rtype_newslice(hop):
     sig = []
@@ -81,7 +53,9 @@ def rtype_newslice(hop):
     if isinstance(v_stop, Constant) and v_stop.value is None:
         # start-only slice
         # NB. cannot just return v_start in case it is a constant
-        return hop.genop('same_as', [v_start], resulttype=startonly_slice_repr)
+        return hop.genop('same_as', [v_start],
+            resulttype=hop.rtyper.type_system.rslice.startonly_slice_repr)
     else:
         # start-stop slice
-        return hop.gendirectcall(ll_newslice, v_start, v_stop)
+        return hop.gendirectcall(hop.rtyper.type_system.rslice.ll_newslice,
+                                 v_start, v_stop)

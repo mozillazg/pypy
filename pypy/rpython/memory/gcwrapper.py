@@ -1,7 +1,7 @@
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.memory.support import AddressLinkedList, INT_SIZE
+from pypy.rpython.memory.support import get_address_linked_list, INT_SIZE
 from pypy.rpython.memory.lladdress import raw_malloc, raw_free, NULL
 from pypy.rpython.memory import lltypelayout
 from pypy.rpython.memory import lltypesimulation
@@ -13,8 +13,10 @@ class QueryTypes(object):
         self.types = []
         self.type_to_typeid = {}
 
-    def get_typeid(self, TYPE):
+    def get_typeid(self, TYPE, nonewtype=False):
         if TYPE not in self.type_to_typeid:
+            if nonewtype:
+                raise Exception, "unknown type: %s" % TYPE
             index = len(self.types)
             self.type_to_typeid[TYPE] = index
             self.types.append(TYPE)
@@ -23,6 +25,7 @@ class QueryTypes(object):
         return typeid
 
     def create_query_functions(self):
+        from pypy.rpython.lltypesystem import rstr
         _is_varsize = []
         _offsets_to_gc_pointers = []
         _fixed_size = []
@@ -163,7 +166,7 @@ class SymbolicQueryTypes(QueryTypes):
     
 def getfunctionptr(annotator, graphfunc):
     """Make a functionptr from the given Python function."""
-    graph = annotator.bookkeeper.getdesc(graphfunc).cachedgraph(None)
+    graph = annotator.bookkeeper.getdesc(graphfunc).getuniquegraph()
     llinputs = [v.concretetype for v in graph.getargs()]
     lloutput = graph.getreturnvar().concretetype
     FT = lltype.FuncType(llinputs, lloutput)
@@ -175,10 +178,11 @@ def getfunctionptr(annotator, graphfunc):
 class GcWrapper(object):
     def __init__(self, llinterp, flowgraphs, gc_class):
         self.query_types = QueryTypes()
+        self.AddressLinkedList = get_address_linked_list(3, hackishpop=True)
         # XXX there might me GCs that have headers that depend on the type
         # therefore we have to change the query functions to annotatable ones
         # later
-        self.gc = gc_class()
+        self.gc = gc_class(self.AddressLinkedList)
         self.gc.set_query_functions(*self.query_types.get_setup_query_functions())
         fgcc = FlowGraphConstantConverter(flowgraphs, self.gc, self.query_types)
         fgcc.convert()
@@ -188,10 +192,11 @@ class GcWrapper(object):
         self.constantroots = fgcc.cvter.constantroots
         self.pseudo_root_pointers = NULL
         self.roots = []
+        self.gc.setup()
 
 
     def get_arg_malloc(self, TYPE, size=0):
-        typeid = self.query_types.get_typeid(TYPE)
+        typeid = self.query_types.get_typeid(TYPE, nonewtype=True)
         return [typeid, size]
 
     def get_funcptr_malloc(self):
@@ -251,7 +256,7 @@ class GcWrapper(object):
 
     def get_roots(self):
         self.get_roots_from_llinterp()
-        ll = AddressLinkedList()
+        ll = self.AddressLinkedList()
         for i, root in enumerate(self.roots):
             self.pseudo_root_pointers.address[i] = root._address
             ll.append(self.pseudo_root_pointers + INT_SIZE * i)
@@ -268,15 +273,18 @@ class AnnotatingGcWrapper(GcWrapper):
     def annotate_rtype_gc(self):
         # annotate and specialize functions
         gc_class = self.gc.__class__
+        AddressLinkedList = self.AddressLinkedList
         def instantiate_linked_list():
             return AddressLinkedList()
         f1, f2, f3, f4, f5, f6, f7 = self.query_types.create_query_functions()
+        the_gc = gc_class(AddressLinkedList)
         def instantiate_gc():
-            gc = gc_class()
-            gc.set_query_functions(f1, f2, f3, f4, f5, f6, f7)
-            return gc
-        func = gc.get_dummy_annotate(self.gc.__class__)
-        self.gc.get_roots = gc.dummy_get_roots1
+            the_gc.set_query_functions(f1, f2, f3, f4, f5, f6, f7)
+            the_gc.setup()
+            return the_gc
+        func, dummy_get_roots1, dummy_get_roots2 = gc.get_dummy_annotate(
+            the_gc, self.AddressLinkedList)
+        self.gc.get_roots = dummy_get_roots1
         a = RPythonAnnotator()
         a.build_types(instantiate_gc, [])
         a.build_types(func, [])
@@ -288,14 +296,14 @@ class AnnotatingGcWrapper(GcWrapper):
         # convert constants
         fgcc = FlowGraphConstantConverter(a.translator.graphs)
         fgcc.convert()
-        self.malloc_graph = a.bookkeeper.getdesc(self.gc.malloc.im_func).cachedgraph(None)
-        self.write_barrier_graph = a.bookkeeper.getdesc(self.gc.write_barrier.im_func).cachedgraph(None)
+        self.malloc_graph = a.bookkeeper.getdesc(self.gc.malloc.im_func).getuniquegraph()
+        self.write_barrier_graph = a.bookkeeper.getdesc(self.gc.write_barrier.im_func).getuniquegraph()
 
         # create a gc via invoking instantiate_gc
         self.gcptr = self.llinterp.eval_graph(
-            a.bookkeeper.getdesc(instantiate_gc).cachedgraph(None))
+            a.bookkeeper.getdesc(instantiate_gc).getuniquegraph())
         GETROOTS_FUNCTYPE = lltype.typeOf(
-            getfunctionptr(a, gc.dummy_get_roots1)).TO
+            getfunctionptr(a, dummy_get_roots1)).TO
         setattr(self.gcptr, "inst_get_roots",
                 lltypesimulation.functionptr(GETROOTS_FUNCTYPE, "get_roots",
                                              _callable=self.get_roots))
@@ -311,7 +319,7 @@ class AnnotatingGcWrapper(GcWrapper):
 ##         a.translator.view()
 
     def get_arg_malloc(self, TYPE, size=0):
-        typeid = self.query_types.get_typeid(TYPE)
+        typeid = self.query_types.get_typeid(TYPE, nonewtype=True)
         return [self.gcptr, typeid, size]
 
     def get_funcptr_malloc(self):

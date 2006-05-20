@@ -179,7 +179,7 @@ class GenLLVM(object):
         self.entrypoint = func
 
         bk = self.translator.annotator.bookkeeper
-        ptr = getfunctionptr(bk.getdesc(func).cachedgraph(None))
+        ptr = getfunctionptr(bk.getdesc(func).getuniquegraph())
         c = inputconst(lltype.typeOf(ptr), ptr)
         self.db.prepare_arg_value(c)
         self.entry_func_name = func.func_name
@@ -314,9 +314,10 @@ def genllvm_compile(function, annotation, view=False, optimize=True, **kwds):
     t.buildannotator().build_types(function, annotation)
     t.buildrtyper().specialize()
     if optimize:
-        backend_optimizations(t, ssa_form=False)
+        backend_optimizations(t, raisingop2direct_call_all=True)
     else:
-        backend_optimizations(t, ssa_form=False,
+        backend_optimizations(t,
+                              raisingop2direct_call_all=True,
                               inline_threshold=0,
                               mallocs=False,
                               merge_if_blocks_to_switch=False,

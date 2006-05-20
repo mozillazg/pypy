@@ -63,6 +63,16 @@ def compile_c_module(cfiles, modname, include_dirs=None, libraries=[]):
     if include_dirs is None:
         include_dirs = []
 
+    library_dirs = []
+    if sys.platform == 'darwin':    # support Fink & Darwinports
+        for s in ('/sw/', '/opt/local/'):
+            if s + 'include' not in include_dirs and \
+               os.path.exists(s + 'include'):
+                include_dirs.append(s + 'include')
+            if s + 'lib' not in library_dirs and \
+               os.path.exists(s + 'lib'):
+                library_dirs.append(s + 'lib')
+
     dirpath = cfiles[0].dirpath()
     lastdir = dirpath.chdir()
     ensure_correct_math()
@@ -95,7 +105,6 @@ def compile_c_module(cfiles, modname, include_dirs=None, libraries=[]):
                         # ensure correct math on windows
                         if sys.platform == 'win32':
                             extra_compile_args.append('/Op') # get extra precision
-                            extra_compile_args.append('/PDB:laber') # create debug info
                         if get_default_compiler() == 'unix':
                             old_version = False
                             try:
@@ -114,6 +123,7 @@ def compile_c_module(cfiles, modname, include_dirs=None, libraries=[]):
                             'ext_modules': [
                                 Extension(modname, [str(cfile) for cfile in cfiles],
                                     include_dirs=include_dirs,
+                                    library_dirs=library_dirs,
                                     extra_compile_args=extra_compile_args,
                                     libraries=libraries,)
                                 ],
@@ -143,10 +153,10 @@ def compile_c_module(cfiles, modname, include_dirs=None, libraries=[]):
     finally:
         lastdir.chdir()
 
-def make_module_from_c(cfile, include_dirs=None):
+def make_module_from_c(cfile, include_dirs=None, libraries=[]):
     cfile = py.path.local(cfile)
     modname = cfile.purebasename
-    compile_c_module([cfile], modname, include_dirs)
+    compile_c_module([cfile], modname, include_dirs, libraries)
     return import_module_from_directory(cfile.dirpath(), modname)
 
 def import_module_from_directory(dir, modname):
@@ -177,13 +187,6 @@ def make_c_from_pyxfile(pyxfile):
         print >>sys.stderr, e
     cfile = pyxfile.new(ext='.c')
     return cfile
-
-def skip_missing_compiler(fn, *args, **kwds):
-    from distutils.errors import DistutilsPlatformError
-    try:
-        return fn(*args, **kwds)
-    except DistutilsPlatformError, e:
-        py.test.skip('DistutilsPlatformError: %s' % (e,))
 
 def build_cfunc(func, simplify=1, dot=1, inputargtypes=None):
     """ return a pyrex-generated cfunction from the given func. 
@@ -277,10 +280,14 @@ class CCompiler:
         if sys.platform == 'win32':
             self.link_extra += ['/DEBUG'] # generate .pdb file
         if sys.platform == 'darwin':
-            if '/sw/include' not in self.include_dirs:
-                self.include_dirs.append('/sw/include')
-            if '/sw/lib' not in self.library_dirs:
-                self.library_dirs.append('/sw/lib')
+            # support Fink & Darwinports
+            for s in ('/sw/', '/opt/local/'):
+                if s + 'include' not in self.include_dirs and \
+                   os.path.exists(s + 'include'):
+                    self.include_dirs.append(s + 'include')
+                if s + 'lib' not in self.library_dirs and \
+                   os.path.exists(s + 'lib'):
+                    self.library_dirs.append(s + 'lib')
             self.compile_extra += ['-O2']
 
         if outputfilename is None:
@@ -360,6 +367,27 @@ int main() {
 """)
         cfile.close()
         build_executable([cfname], libraries=['gc'], noerr=True)
+    except:
+        return False
+    else:
+        return True
+
+def check_under_under_thread():
+    from pypy.tool.udir import udir
+    cfile = py.path.local(autopath.this_dir).join('__thread_test.c')
+    fsource = cfile.open('r')
+    source = fsource.read()
+    fsource.close()
+    cfile = udir.join('__thread_test.c')
+    fsource = cfile.open('w')
+    fsource.write(source)
+    fsource.close()
+    try:
+       exe = build_executable([str(cfile)], 
+                              noerr=True)
+       py.process.cmdexec(exe)
+    except (KeyboardInterrupt, SystemExit):
+        raise
     except:
         return False
     else:

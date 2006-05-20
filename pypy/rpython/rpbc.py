@@ -1,6 +1,6 @@
 import types
 import sys
-from pypy.annotation.pairtype import pairtype
+from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
@@ -349,7 +349,14 @@ def getFrozenPBCRepr(rtyper, s_pbc):
         access = descs[0].queryattrfamily()
         for desc in descs[1:]:
             access1 = desc.queryattrfamily()
-            assert access1 is access       # XXX not implemented
+            if access1 is not access:
+                try:
+                    return rtyper.pbc_reprs['unrelated']
+                except KeyError:
+                    rpbc = rtyper.type_system.rpbc
+                    result = rpbc.MultipleUnrelatedFrozenPBCRepr(rtyper)
+                    rtyper.pbc_reprs['unrelated'] = result
+                    return result
         try:
             return rtyper.pbc_reprs[access]
         except KeyError:
@@ -377,7 +384,39 @@ class SingleFrozenPBCRepr(Repr):
         return object()  # lowleveltype is Void
 
 
-class AbstractMultipleFrozenPBCRepr(CanBeNull, Repr):
+class AbstractMultipleUnrelatedFrozenPBCRepr(CanBeNull, Repr):
+    """For a SomePBC of frozen PBCs that have no common access set.
+    The only possible operation on such a thing is comparison with 'is'."""
+
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
+        self.converted_pbc_cache = {}
+
+    def convert_desc(self, frozendesc):
+        try:
+            return self.converted_pbc_cache[frozendesc]
+        except KeyError:
+            r = self.rtyper.getrepr(annmodel.SomePBC([frozendesc]))
+            if r.lowleveltype is Void:
+                # must create a new empty structure, as a placeholder
+                pbc = self.create_instance()
+            else:
+                pbc = r.convert_desc(frozendesc)
+            convpbc = self.convert_pbc(pbc)
+            self.converted_pbc_cache[frozendesc] = convpbc
+            return convpbc
+
+    def convert_const(self, pbc):
+        if pbc is None:
+            return self.null_instance() 
+        if isinstance(pbc, types.MethodType) and pbc.im_self is None:
+            value = pbc.im_func   # unbound method -> bare function
+        frozendesc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
+        return self.convert_desc(frozendesc)
+
+
+class AbstractMultipleFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
+    """For a SomePBC of frozen PBCs with a common attribute access set."""
 
     def _setup_repr_fields(self):
         fields = []
@@ -407,22 +446,14 @@ class AbstractMultipleFrozenPBCRepr(CanBeNull, Repr):
                 if r_value.lowleveltype is Void:
                     continue
                 try:
-                    thisattrvalue = frozendesc.read_attribute(attr)
-                except AttributeError:
+                    thisattrvalue = frozendesc.attrcache[attr]
+                except KeyError:
                     warning("Desc %r has no attribute %r" % (frozendesc, attr))
                     continue
                 llvalue = r_value.convert_const(thisattrvalue)
                 setattr(result, mangled_name, llvalue)
             return result
 
-    def convert_const(self, pbc):
-        if pbc is None:
-            return self.null_instance() 
-        if isinstance(pbc, types.MethodType) and pbc.im_self is None:
-            value = pbc.im_func   # unbound method -> bare function
-        frozendesc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
-        return self.convert_desc(frozendesc)
-    
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         vpbc, vattr = hop.inputargs(self, Void)
@@ -443,6 +474,11 @@ class __extend__(pairtype(SingleFrozenPBCRepr, AbstractMultipleFrozenPBCRepr)):
         if access is r_pbc2.access_set:
             return inputdesc(r_pbc2, frozendesc1)
         return NotImplemented
+
+class __extend__(pairtype(AbstractMultipleUnrelatedFrozenPBCRepr,
+                          SingleFrozenPBCRepr)):
+    def convert_from_to((r_pbc1, r_pbc2), v, llops):
+        return inputconst(Void, r_pbc2.frozendesc)
 
 
 class MethodOfFrozenPBCRepr(Repr):
@@ -516,13 +552,19 @@ class MethodOfFrozenPBCRepr(Repr):
         # now hop2 looks like simple_call(function, self, args...)
         return hop2.dispatch()
 
+class __extend__(pairtype(MethodOfFrozenPBCRepr, MethodOfFrozenPBCRepr)):
+
+    def convert_from_to((r_from, r_to), v, llops):
+        return pair(r_from.r_im_self, r_to.r_im_self).convert_from_to(v, llops)
+
 # __ None ____________________________________________________
-class NoneFrozenPBCRepr(SingleFrozenPBCRepr):
-    
+class NoneFrozenPBCRepr(Repr):
+    lowleveltype = Void
+
     def rtype_is_true(self, hop):
         return Constant(False, Bool)
 
-none_frozen_pbc_repr = NoneFrozenPBCRepr(None)
+none_frozen_pbc_repr = NoneFrozenPBCRepr()
 
 
 class __extend__(pairtype(Repr, NoneFrozenPBCRepr)):
@@ -541,11 +583,6 @@ class __extend__(pairtype(NoneFrozenPBCRepr, Repr)):
     def rtype_is_((rnone1, robj2), hop):
         return hop.rtyper.type_system.rpbc.rtype_is_None(
                                                 robj2, rnone1, hop, pos=1)
-        
-class __extend__(pairtype(NoneFrozenPBCRepr, robject.PyObjRepr)):
-
-    def convert_from_to(_, v, llops):
-        return inputconst(robject.pyobj_repr, None)
 
 # ____________________________________________________________
 
@@ -562,24 +599,22 @@ class AbstractClassesPBCRepr(Repr):
             self.lowleveltype = Void
         else:
             self.lowleveltype = rtyper.type_system.rclass.CLASSTYPE
-        self._access_set = None
-        self._class_repr = None
 
-    def get_access_set(self):
-        if self._access_set is None:
-            classdescs = self.s_pbc.descriptions.keys()
-            access = classdescs[0].getattrfamily()
-            for classdesc in classdescs[1:]:
-                access1 = classdesc.getattrfamily() 
-                assert access1 is access       # XXX not implemented
-            commonbase = access.commonbase
-            self._class_repr = rclass.getclassrepr(self.rtyper, commonbase)
-            self._access_set = access
-        return self._access_set
-
-    def get_class_repr(self):
-        self.get_access_set()
-        return self._class_repr
+    def get_access_set(self, attrname):
+        """Return the ClassAttrFamily corresponding to accesses to 'attrname'
+        and the ClassRepr of the class which stores this attribute in
+        its vtable.
+        """
+        classdescs = self.s_pbc.descriptions.keys()
+        access = classdescs[0].queryattrfamily(attrname)
+        for classdesc in classdescs[1:]:
+            access1 = classdesc.queryattrfamily(attrname)
+            assert access1 is access       # XXX not implemented
+        if access is None:
+            raise rclass.MissingRTypeAttribute(attrname)
+        commonbase = access.commonbase
+        class_repr = rclass.getclassrepr(self.rtyper, commonbase)
+        return access, class_repr
 
     def convert_desc(self, desc):
         if desc not in self.s_pbc.descriptions:
@@ -598,11 +633,10 @@ class AbstractClassesPBCRepr(Repr):
             return hop.inputconst(hop.r_result, hop.s_result.const)
         else:
             attr = hop.args_s[1].const
-            access_set = self.get_access_set()
-            class_repr = self.get_class_repr()
+            access_set, class_repr = self.get_access_set(attr)
             vcls, vattr = hop.inputargs(class_repr, Void)
             v_res = class_repr.getpbcfield(vcls, access_set, attr, hop.llops)
-            s_res = access_set.attrs[attr]
+            s_res = access_set.s_value
             r_res = self.rtyper.getrepr(s_res)
             return hop.llops.convertvar(v_res, r_res, hop.r_result)
 
@@ -626,11 +660,8 @@ class __extend__(pairtype(AbstractClassesPBCRepr, rclass.AbstractClassRepr)):
         if r_clspbc.lowleveltype is Void:
             return inputconst(r_cls, r_clspbc.s_pbc.const)
         # convert from ptr-to-object-vtable to ptr-to-more-precise-vtable
-        # but first check if it is safe
         assert (r_clspbc.lowleveltype ==
             r_clspbc.rtyper.type_system.rclass.CLASSTYPE)
-        if not r_clspbc.get_class_repr().classdef.issubclass(r_cls.classdef):
-            return NotImplemented
         return r_cls.fromclasstype(v, llops)
 
 class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):

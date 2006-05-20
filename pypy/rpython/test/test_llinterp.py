@@ -1,12 +1,13 @@
 
 import py
 from pypy.rpython.lltypesystem.lltype import typeOf, pyobjectptr, Ptr, PyObject, Void
-from pypy.rpython.llinterp import LLInterpreter, LLException,log
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.llinterp import LLInterpreter, LLException, log
 from pypy.rpython.rmodel import inputconst
 from pypy.translator.translator import TranslationContext
-from pypy.rpython.rlist import *
 from pypy.rpython.rint import signed_repr
-from pypy.rpython import rstr
+from pypy.rpython.lltypesystem import rstr
+from pypy.annotation import model as annmodel
 from pypy.annotation.model import lltype_to_annotation
 from pypy.rpython.rarithmetic import r_uint, ovfcheck
 from pypy import conftest
@@ -20,19 +21,6 @@ def setup_module(mod):
 def teardown_module(mod):
     py.log._setstate(mod.logstate)
 
-def find_exception(exc, interp):
-    assert isinstance(exc, LLException)
-    import exceptions
-    klass, inst = exc.args[0], exc.args[1]
-    # indirect way to invoke fn_pyexcclass2exc, for memory/test/test_llinterpsim
-    f = typer.getexceptiondata().fn_pyexcclass2exc
-    obj = typer.type_system.deref(f)
-    ll_pyexcclass2exc_graph = obj.graph
-    for cls in exceptions.__dict__.values():
-        if type(cls) is type(Exception):
-            if interp.eval_graph(ll_pyexcclass2exc_graph, [pyobjectptr(cls)]).typeptr == klass:
-                return cls
-    raise ValueError, "couldn't match exception"
 
 
 def timelog(prefix, call, *args, **kwds): 
@@ -109,7 +97,7 @@ def interpret_raises(exc, func, values, view='auto', viewbefore='auto',
     interp, graph  = get_interpreter(func, values, view, viewbefore, policy,
                              someobjects, type_system=type_system)
     info = py.test.raises(LLException, "interp.eval_graph(graph, values)")
-    assert find_exception(info.value, interp) is exc, "wrong exception type"
+    assert interp.find_exception(info.value) is exc, "wrong exception type"
 
 #__________________________________________________________________
 # tests
@@ -140,6 +128,8 @@ def test_raise():
     assert res == 41
     interpret_raises(IndexError, raise_exception, [42])
     interpret_raises(ValueError, raise_exception, [43])
+    interpret_raises(IndexError, raise_exception, [42], type_system="ootype")
+    interpret_raises(ValueError, raise_exception, [43], type_system="ootype")
 
 def test_call_raise():
     res = interpret(call_raise, [41])
@@ -302,7 +292,7 @@ def test_ovf():
     res = interpret(g, [-15])
     assert res == 15
 
-def test_div_ovf_zer():
+def test_floordiv_ovf_zer():
     import sys
     def f(x):
         try:
@@ -428,57 +418,6 @@ def test_invalid_stack_access():
     fgraph.startblock.operations[0].args.insert(0, inputconst(Void, "stack"))
     py.test.raises(AttributeError, "interp.eval_graph(graph, [])")
 
-
-def test_cleanup_finally():
-    interp, graph = get_interpreter(cleanup_f, [-1])
-    clear_tcache()    # because we hack the graph in place
-    operations = graph.startblock.operations
-    assert operations[0].opname == "direct_call"
-    assert operations[1].opname == "direct_call"
-    assert getattr(operations[0], 'cleanup', None) is None
-    assert getattr(operations[1], 'cleanup', None) is None
-    cleanup_finally = (operations.pop(1),)
-    cleanup_except = ()
-    operations[0].cleanup = cleanup_finally, cleanup_except
-
-    # state.current == 1
-    res = interp.eval_graph(graph, [1])
-    assert res == 102
-    # state.current == 2
-    res = interp.eval_graph(graph, [1])
-    assert res == 203
-    # state.current == 3
-    py.test.raises(LLException, "interp.eval_graph(graph, [-1])")
-    # state.current == 4
-    res = interp.eval_graph(graph, [1])
-    assert res == 405
-    # state.current == 5
-
-def test_cleanup_except():
-    interp, graph = get_interpreter(cleanup_f, [-1])
-    clear_tcache()    # because we hack the graph in place
-    operations = graph.startblock.operations
-    assert operations[0].opname == "direct_call"
-    assert operations[1].opname == "direct_call"
-    assert getattr(operations[0], 'cleanup', None) is None
-    assert getattr(operations[1], 'cleanup', None) is None
-    cleanup_finally = ()
-    cleanup_except = (operations.pop(1),)
-    operations[0].cleanup = cleanup_finally, cleanup_except
-
-    # state.current == 1
-    res = interp.eval_graph(graph, [1])
-    assert res == 101
-    # state.current == 1
-    res = interp.eval_graph(graph, [1])
-    assert res == 101
-    # state.current == 1
-    py.test.raises(LLException, "interp.eval_graph(graph, [-1])")
-    # state.current == 2
-    res = interp.eval_graph(graph, [1])
-    assert res == 202
-    # state.current == 2
-
 #__________________________________________________________________
 # example functions for testing the LLInterpreter
 _snap = globals().copy()
@@ -538,20 +477,3 @@ def call_raise_intercept(i):
         return i
     except ValueError:
         raise TypeError
-
-# test for the 'cleanup' attribute of SpaceOperations
-class CleanupState(object):
-    pass
-cleanup_state = CleanupState()
-cleanup_state.current = 1
-def cleanup_g(n):
-    cleanup_state.saved = cleanup_state.current
-    if n < 0:
-        raise ZeroDivisionError
-def cleanup_h():
-    cleanup_state.current += 1
-def cleanup_f(n):
-    cleanup_g(n)
-    cleanup_h()     # the test hacks the graph to put this h() in the
-                    # cleanup clause of the previous direct_call(g)
-    return cleanup_state.saved * 100 + cleanup_state.current

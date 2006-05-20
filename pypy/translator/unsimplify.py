@@ -7,7 +7,7 @@ def copyvar(translator, v):
     if translator is not None:
         annotator = translator.annotator
         if annotator is not None and v in annotator.bindings:
-            annotator.bindings[newvar] = annotator.bindings[v]
+            annotator.transfer_binding(newvar, v)
     if hasattr(v, 'concretetype'):
         newvar.concretetype = v.concretetype
     return newvar
@@ -35,8 +35,29 @@ def insert_empty_block(translator, link, newops=[]):
     link.target = newblock
     return newblock
 
-def split_block(translator, graph, block, index):
-    """split a block in two, inserting a proper link between the new blocks"""
+def insert_empty_startblock(translator, graph):
+    vars = [copyvar(translator, v) for v in graph.startblock.inputargs]
+    newblock = Block(vars)
+    newblock.closeblock(Link(vars, graph.startblock))
+    graph.startblock.isstartblock = False
+    graph.startblock = newblock
+    graph.startblock.isstartblock = True
+
+def starts_with_empty_block(graph):
+    return (not graph.startblock.operations
+            and graph.startblock.exitswitch is None
+            and graph.startblock.exits[0].args == graph.getargs())
+
+def remove_empty_startblock(graph):
+    graph.startblock.isstartblock = False
+    graph.startblock = graph.startblock.exits[0].target
+    graph.startblock.isstartblock = True
+
+def split_block(translator, block, index):
+    """return a link where prevblock is the block leading up but excluding the
+    index'th operation and target is a new block with the neccessary variables 
+    passed on.  NOTE: if you call this after rtyping, you WILL need to worry
+    about keepalives, you may use backendopt.support.split_block_with_keepalive."""
     assert 0 <= index <= len(block.operations)
     if block.exitswitch == c_last_exception:
         assert index < len(block.operations)
@@ -56,11 +77,17 @@ def split_block(translator, graph, block, index):
             varmap[var] = copyvar(translator, var)
         return varmap[var]
     moved_operations = block.operations[index:]
+    new_moved_ops = []
     for op in moved_operations:
-        for i, arg in enumerate(op.args):
-            op.args[i] = get_new_name(op.args[i])
+        newop = SpaceOperation(op.opname,
+                               [get_new_name(arg) for arg in op.args],
+                               op.result)
+        new_moved_ops.append(newop)
         vars_produced_in_new_block[op.result] = True
-    for link in block.exits:
+    moved_operations = new_moved_ops
+    links = block.exits
+    block.exits = None
+    for link in links:
         for i, arg in enumerate(link.args):
             #last_exception and last_exc_value are considered to be created
             #when the link is entered
@@ -71,7 +98,7 @@ def split_block(translator, graph, block, index):
     #from block the old block
     newblock = Block(varmap.values())
     newblock.operations = moved_operations
-    newblock.exits = block.exits
+    newblock.exits = links
     newblock.exitswitch = exitswitch
     newblock.exc_handler = block.exc_handler
     for link in newblock.exits:
@@ -82,8 +109,7 @@ def split_block(translator, graph, block, index):
     block.exits = [link]
     block.exitswitch = None
     block.exc_handler = False
-    checkgraph(graph)
-    return newblock
+    return link
 
 def remove_direct_loops(translator, graph):
     """This is useful for code generators: it ensures that no link has

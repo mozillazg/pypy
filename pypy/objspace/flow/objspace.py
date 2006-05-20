@@ -49,7 +49,7 @@ class FlowObjSpace(ObjSpace):
         self.w_tuple    = Constant(tuple)
         self.concrete_mode = 0
         for exc in [KeyError, ValueError, IndexError, StopIteration,
-                    AssertionError, TypeError]:
+                    AssertionError, TypeError, AttributeError, ImportError]:
             clsname = exc.__name__
             setattr(self, 'w_'+clsname, Constant(exc))
         # the following exceptions are the ones that should not show up
@@ -165,7 +165,8 @@ class FlowObjSpace(ObjSpace):
         to_check = obj
         if hasattr(to_check, 'im_self'):
             to_check = to_check.im_self
-        if (not isinstance(to_check, (type, types.ClassType)) and # classes/types are assumed immutable
+        if (not isinstance(to_check, (type, types.ClassType, types.ModuleType)) and
+            # classes/types/modules are assumed immutable
             hasattr(to_check, '__class__') and to_check.__class__.__module__ != '__builtin__'):
             frozen = hasattr(to_check, '_freeze_') and to_check._freeze_()
             if not frozen:
@@ -255,7 +256,7 @@ class FlowObjSpace(ObjSpace):
         # so that it becomes even more interchangeable with the function
         # itself
         graph.signature = cpython_code_signature(code)
-        graph.defaults = func.func_defaults
+        graph.defaults = func.func_defaults or ()
         self.setup_executioncontext(ec)
         ec.build_flow()
         checkgraph(graph)
@@ -459,6 +460,12 @@ implicit_exceptions = {
     int: [ValueError],      # built-ins that can always raise exceptions
     chr: [ValueError],
     unichr: [ValueError],
+    # specifying IndexError, and KeyError beyond Exception,
+    # allows the annotator to be more precise, see test_reraiseAnything/KeyError in
+    # the annotator tests
+    'getitem': [IndexError, KeyError, Exception],
+    'setitem': [IndexError, KeyError, Exception],
+    'delitem': [IndexError, KeyError, Exception],    
     }
 
 def _add_exceptions(names, exc):
@@ -476,13 +483,13 @@ def _add_except_ovf(names):
         lis.append(OverflowError)
         implicit_exceptions[name+"_ovf"] = lis
 
-for _err in IndexError, KeyError:
-    _add_exceptions("""getitem setitem delitem""", _err)
+#for _err in IndexError, KeyError:
+#    _add_exceptions("""getitem setitem delitem""", _err)
 for _name in 'getattr', 'delattr':
     _add_exceptions(_name, AttributeError)
 for _name in 'iter', 'coerce':
     _add_exceptions(_name, TypeError)
-del _name, _err
+del _name#, _err
 
 _add_exceptions("""div mod divmod truediv floordiv pow
                    inplace_div inplace_mod inplace_divmod inplace_truediv
@@ -591,17 +598,39 @@ def make_op(name, symbol, arity, specialnames):
 for line in ObjSpace.MethodTable:
     make_op(*line)
 
-# override getattr for not really const objects
+"""
+This is just a placeholder for some code I'm checking in elsewhere.
+It is provenly possible to determine constantness of certain expressions
+a little later. I introduced this a bit too early, together with tieing
+this to something being global, which was a bad idea.
+The concept is still valid, and it can  be used to force something to
+be evaluated immediately because it is supposed to be a constant.
+One good possible use of this is loop unrolling.
+This will be found in an 'experimental' folder with some use cases.
+"""
 
 def override():
     def getattr(self, w_obj, w_name):
+        # handling special things like sys
+        # unfortunately this will never vanish with a unique import logic :-(
         if w_obj in self.not_really_const:
             const_w = self.not_really_const[w_obj]
             if w_name not in const_w:
                 return self.do_operation_with_implicit_exceptions('getattr', w_obj, w_name)
         return self.regular_getattr(w_obj, w_name)
+
     FlowObjSpace.regular_getattr = FlowObjSpace.getattr
     FlowObjSpace.getattr = getattr
+
+    # protect us from globals write access
+    def setitem(self, w_obj, w_key, w_val):
+        ec = self.getexecutioncontext()
+        if not (ec and w_obj is ec.w_globals):
+            return self.regular_setitem(w_obj, w_key, w_val)
+        raise SyntaxError, "attempt to modify global attribute %r in %r" % (w_key, ec.graph.func)
+
+    FlowObjSpace.regular_setitem = FlowObjSpace.setitem
+    FlowObjSpace.setitem = setitem
 
 override()
 

@@ -1,37 +1,94 @@
-from pypy.rpython.memory.lladdress import raw_malloc, raw_free, NULL
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.memory.lltypelayout import sizeof
-import struct
+from pypy.rpython.objectmodel import free_non_gc_object
 
 INT_SIZE = sizeof(lltype.Signed)
 
-class AddressLinkedList(object):
-    _alloc_flavor_ = "raw"
-    def __init__(self):
-        self.first = NULL
-        self.last = NULL
+DEFAULT_CHUNK_SIZE = 1019
 
-    def append(self, addr):
-        if addr == NULL:
-            return
-        new = raw_malloc(2 * INT_SIZE)
-        if self.first == NULL:
-            self.first = new
-        else:
-            self.last.address[0] = new
-        self.last = new
-        new.address[0] = NULL
-        new.address[1] = addr
+def get_address_linked_list(chunk_size=DEFAULT_CHUNK_SIZE, hackishpop=False):
+
+    CHUNK = lltype.ForwardReference()
+    CHUNK.become(lltype.Struct('AddressLinkedListChunk',
+                               ('previous', lltype.Ptr(CHUNK)),
+                               ('length', lltype.Signed),
+                               ('items', lltype.FixedSizeArray(
+                                   llmemory.Address, chunk_size))))
+    null_chunk = lltype.nullptr(CHUNK)
+
+    class FreeList(object):
+        _alloc_flavor_ = "raw"
+
+        def __init__(self):
+            self.free_list = null_chunk
+
+        def get(self):
+            if not self.free_list:
+                return lltype.malloc(CHUNK, flavor='raw')
+            result = self.free_list
+            self.free_list = result.previous
+            return result
+
+        def put(self, chunk):
+            chunk.previous = self.free_list
+            self.free_list = chunk
+
+    unused_chunks = FreeList()
+
+    class AddressLinkedList(object):
+        _alloc_flavor_ = "raw"
         
-    def pop(self):
-        if self.first == NULL:
-            return NULL
-        result = self.first.address[1]
-        next = self.first.address[0]
-        raw_free(self.first)
-        self.first = next
-        return result
+        def __init__(self):
+            self.chunk = unused_chunks.get()
+            self.chunk.previous = null_chunk
+            self.chunk.length = 0
 
-    def free(self):
-        while self.pop() != NULL:
-            pass
+        def enlarge(self):
+            new = unused_chunks.get()
+            new.previous = self.chunk
+            new.length = 0
+            self.chunk = new
+            return new
+        enlarge.dont_inline = True
+
+        def shrink(self):
+            old = self.chunk
+            self.chunk = old.previous
+            unused_chunks.put(old)
+            return self.chunk
+        shrink.dont_inline = True
+
+        def append(self, addr):
+            if addr == llmemory.NULL:
+                return
+            chunk = self.chunk
+            if chunk.length == chunk_size:
+                chunk = self.enlarge()
+            used_chunks = chunk.length
+            chunk.length = used_chunks + 1
+            chunk.items[used_chunks] = addr
+
+        def non_empty(self):
+            chunk = self.chunk
+            return chunk.length != 0 or bool(chunk.previous)
+
+        def pop(self):
+            if hackishpop and not self.non_empty():
+                return llmemory.NULL
+            chunk = self.chunk
+            if chunk.length == 0:
+                chunk = self.shrink()
+            used_chunks = self.chunk.length - 1
+            result = chunk.items[used_chunks]
+            chunk.length = used_chunks
+            return result
+
+        def delete(self):
+            cur = self.chunk
+            while cur:
+                prev = cur.previous
+                unused_chunks.put(cur)
+                cur = prev
+            free_non_gc_object(self)
+
+    return AddressLinkedList

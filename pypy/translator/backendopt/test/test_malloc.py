@@ -1,10 +1,13 @@
 import py
-from pypy.translator.backendopt.malloc import remove_simple_mallocs
+from pypy.translator.backendopt.malloc import remove_mallocs_once
 from pypy.translator.backendopt.inline import inline_function
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.translator import TranslationContext, graphof
+from pypy.translator import simplify
 from pypy.objspace.flow.model import checkgraph, flatten, Block
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.lltypesystem import lltype
+from pypy.conftest import option
 
 def check_malloc_removed(graph):
     checkgraph(graph)
@@ -24,12 +27,22 @@ def check(fn, signature, args, expected_result, must_be_removed=True):
     t.buildannotator().build_types(fn, signature)
     t.buildrtyper().specialize()
     graph = graphof(t, fn)
-    remove_simple_mallocs(graph)
+    if option.view:
+        t.view()
+    # to detect missing keepalives and broken intermediate graphs,
+    # we do the loop ourselves instead of calling remove_simple_mallocs()
+    while True:
+        progress = remove_mallocs_once(graph)
+        simplify.transform_dead_op_vars_in_blocks(list(graph.iterblocks()))
+        if progress and option.view:
+            t.view()
+        interp = LLInterpreter(t.rtyper)
+        res = interp.eval_graph(graph, args)
+        assert res == expected_result
+        if not progress:
+            break
     if must_be_removed:
         check_malloc_removed(graph)
-    interp = LLInterpreter(t.rtyper)
-    res = interp.eval_graph(graph, args)
-    assert res == expected_result
 
 
 def test_fn1():
@@ -141,3 +154,112 @@ def test_dont_remove_with__del__():
     op = graph.startblock.exits[0].target.exits[1].target.operations[0]
     assert op.opname == "malloc"
 
+def test_add_keepalives():
+    class A:
+        pass
+    SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
+    BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
+    def fn7(i):
+        big = lltype.malloc(BIG)
+        a = A()
+        a.big = big
+        a.small = big.s
+        while i > 0:
+            a.small.x += i
+            i -= 1
+        return a.small.x
+    check(fn7, [int], [10], 55, must_be_removed=False)
+
+def test_getsubstruct():
+    SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
+    BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
+
+    def fn(n1, n2):
+        b = lltype.malloc(BIG)
+        b.z = n1
+        b.s.x = n2
+        return b.z - b.s.x
+
+    check(fn, [int, int], [100, 58], 42)
+
+def test_fixedsizearray():
+    A = lltype.FixedSizeArray(lltype.Signed, 3)
+    S = lltype.GcStruct('S', ('a', A))
+
+    def fn(n1, n2):
+        s = lltype.malloc(S)
+        a = s.a
+        a[0] = n1
+        a[2] = n2
+        return a[0]-a[2]
+
+    check(fn, [int, int], [100, 42], 58)
+
+def test_wrapper_cannot_be_removed():
+    SMALL = lltype.OpaqueType('SMALL')
+    BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
+
+    def g(small):
+        return -1
+    def fn():
+        b = lltype.malloc(BIG)
+        g(b.s)
+
+    check(fn, [], [], None, must_be_removed=False)
+
+def test_direct_fieldptr():
+    S = lltype.GcStruct('S', ('x', lltype.Signed))
+
+    def fn():
+        s = lltype.malloc(S)
+        s.x = 11
+        p = lltype.direct_fieldptr(s, 'x')
+        return p[0]
+
+    check(fn, [], [], 11)
+
+def test_direct_fieldptr_2():
+    T = lltype.GcStruct('T', ('z', lltype.Signed))
+    S = lltype.GcStruct('S', ('t', T),
+                             ('x', lltype.Signed),
+                             ('y', lltype.Signed))
+    def fn():
+        s = lltype.malloc(S)
+        s.x = 10
+        s.t.z = 1
+        px = lltype.direct_fieldptr(s, 'x')
+        py = lltype.direct_fieldptr(s, 'y')
+        pz = lltype.direct_fieldptr(s.t, 'z')
+        py[0] = 31
+        return px[0] + s.y + pz[0]
+
+    check(fn, [], [], 42)
+
+def test_getarraysubstruct():
+    U = lltype.Struct('U', ('n', lltype.Signed))
+    for length in [1, 2]:
+        S = lltype.GcStruct('S', ('a', lltype.FixedSizeArray(U, length)))
+        for index in range(length):
+
+            def fn():
+                s = lltype.malloc(S)
+                s.a[index].n = 12
+                return s.a[index].n
+            check(fn, [], [], 12)
+
+def test_ptr_nonzero():
+    S = lltype.GcStruct('S')
+    def fn():
+        s = lltype.malloc(S)
+        return bool(s)
+    check(fn, [], [], True)
+
+def test_substruct_not_accessed():
+    SMALL = lltype.Struct('SMALL', ('x', lltype.Signed))
+    BIG = lltype.GcStruct('BIG', ('z', lltype.Signed), ('s', SMALL))
+    def fn():
+        x = lltype.malloc(BIG)
+        while x.z < 10:    # makes several blocks
+            x.z += 3
+        return x.z
+    check(fn, [], [], 12)

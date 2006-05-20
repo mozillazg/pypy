@@ -37,7 +37,24 @@ def test_remove_recursive_call():
         a = rec(x)
         return x + 12
     graph, _ = translate(f, [int])
-    assert len(graph.startblock.operations)
+    assert len(graph.startblock.operations) == 1
+
+def test_remove_call_with_indirect_call():
+    def f1(x):
+        return x + 1
+    def f2(x):
+        return x + 2
+    def g(x):
+        if x == 32:
+            f = f1
+        else:
+            f = f2
+        return f(x)
+    def h(x):
+        a = g(x)
+        return x + 42
+    graph, t = translate(h, [int])
+    assert len(graph.startblock.operations) == 1
 
 def test_dont_remove_if_exception_guarded():
     def f(x):
@@ -127,3 +144,31 @@ def test_get_graph():
                 graph = get_graph(op.args[0], t)
                 assert graph is None
 
+def addone(x):
+    return x + 1
+
+def test_huge_func():
+    g = None
+    gstring = "def g(x):\n%s%s" % ("    x = x + 1\n" * 1000, "    return x\n")
+    exec gstring 
+    assert g(1) == 1001
+    # does not crash: previously join_blocks would barf on this
+    graph, t = translate(g, [int])
+
+def test_join_blocks_cleans_links():
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.objspace.flow.model import Constant
+    from pypy.translator.backendopt.removenoops import remove_same_as
+    def f(x):
+        return bool(x + 2)
+    def g(x):
+        if f(x):
+            return 1
+        else:
+            return 2
+    graph, t = translate(g, [int], backend_optimize=False)
+    fgraph = graphof(t, f)
+    fgraph.startblock.exits[0].args = [Constant(True, lltype.Bool)]
+    # does not crash: previously join_blocks would barf on this
+    remove_same_as(graph)
+    backend_optimizations(t)

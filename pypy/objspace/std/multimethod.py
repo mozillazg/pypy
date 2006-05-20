@@ -39,17 +39,21 @@ class MultiMethodTable:
             types, order)
         lst[order] = function
 
-    def install(self, prefix, list_of_typeorders, baked_perform_call=True):
+    def install(self, prefix, list_of_typeorders, baked_perform_call=True,
+                base_typeorder=None):
         "NOT_RPYTHON: initialization-time only"
         assert len(list_of_typeorders) == self.arity
         installer = Installer(self, prefix, list_of_typeorders,
-                              baked_perform_call=baked_perform_call)
+                              baked_perform_call=baked_perform_call,
+                              base_typeorder=base_typeorder)
         return installer.install()
 
-    def install_if_not_empty(self, prefix, list_of_typeorders):
+    def install_if_not_empty(self, prefix, list_of_typeorders,
+                             base_typeorder=None):
         "NOT_RPYTHON: initialization-time only"
         assert len(list_of_typeorders) == self.arity
-        installer = Installer(self, prefix, list_of_typeorders)
+        installer = Installer(self, prefix, list_of_typeorders,
+                              base_typeorder=base_typeorder)
         if installer.is_empty():
             return None
         else:
@@ -89,17 +93,18 @@ class MultiMethodTable:
         enum_keys((), self.dispatch_tree)
         return result
 
-
 # ____________________________________________________________
+# Installer version 1
 
-class Installer:
+class InstallerVersion1:
     """NOT_RPYTHON"""
 
     mmfunccache = {}
 
     prefix_memo = {}
 
-    def __init__(self, multimethod, prefix, list_of_typeorders, baked_perform_call=True):
+    def __init__(self, multimethod, prefix, list_of_typeorders,
+                 baked_perform_call=True, base_typeorder=None):
         self.multimethod = multimethod
         # avoid prefix clashes, user code should supply different prefixes
         # itself for nice names in tracebacks
@@ -214,8 +219,10 @@ class Installer:
             callargs = funcargs[:]
             if conversion is not None:
                 to_convert = func_selfarg_index
+                convert_callargs = (self.multimethod.argnames_before +
+                                    [callargs[to_convert]])
                 callargs[to_convert] = '%s(%s)' % (
-                    invent_name(conversion), callargs[to_convert])
+                    invent_name(conversion), ', '.join(convert_callargs))
             callname = invent_name(call)
             if call_selfarg_index is not None:
                 # fallback on root_class
@@ -272,3 +279,456 @@ class Installer:
         #    print "avoided duplicate function", func
         self.to_install.append((target, funcname, func, source, fallback))
         return func
+
+# ____________________________________________________________
+# Installer version 2
+
+class MMDispatcher(object):
+    """NOT_RPYTHON
+    Explicit dispatcher class.  This is not used in normal execution, which
+    uses the complex Installer below to install single-dispatch methods to
+    achieve the same result.  The MMDispatcher is only used by
+    rpython.lltypesystem.rmultimethod.  It is also nice for documentation.
+    """
+    _revcache = None
+
+    def __init__(self, multimethod, list_of_typeorders):
+        self.multimethod = multimethod
+        self.list_of_typeorders = list_of_typeorders
+
+    def __call__(self, *args):
+        # for testing only: this is slow
+        i = len(self.multimethod.argnames_before)
+        j = i + self.multimethod.arity
+        k = j + len(self.multimethod.argnames_after)
+        assert len(args) == k
+        prefixargs = args[:i]
+        dispatchargs = args[i:j]
+        suffixargs = args[j:]
+        return self.dispatch([x.__class__ for x in dispatchargs],
+                             prefixargs,
+                             dispatchargs,
+                             suffixargs)
+
+    def dispatch(self, argtypes, prefixargs, args, suffixargs):
+        # for testing only: this is slow
+        def expr(v):
+            if isinstance(v, Call):
+                return v.function(*[expr(w) for w in v.arguments])
+            else:
+                return v
+        e = None
+        for v in self.expressions(argtypes, prefixargs, args, suffixargs):
+            try:
+                return expr(v)
+            except FailedToImplement, e:
+                pass
+        else:
+            raise e or FailedToImplement()
+
+    def expressions(self, argtypes, prefixargs, args, suffixargs):
+        """Lists the possible expressions that call the appropriate
+        function for the given argument types.  Each expression is a Call
+        object.  The intent is that at run-time the first Call that doesn't
+        cause FailedToImplement to be raised is the good one.
+        """
+        prefixargs = tuple(prefixargs)
+        suffixargs = tuple(suffixargs)
+
+        def walktree(node, args_so_far):
+            if isinstance(node, list):
+                for func in node:
+                    if func is not None:
+                        result.append(Call(func, prefixargs +
+                                                 args_so_far +
+                                                 suffixargs))
+            else:
+                index = len(args_so_far)
+                typeorder = self.list_of_typeorders[index]
+                next_type = argtypes[index]
+                for target_type, converter in typeorder[next_type]:
+                    if target_type not in node:
+                        continue
+                    next_arg = args[index]
+                    if converter:
+                        next_arg = Call(converter, prefixargs + (next_arg,))
+                    walktree(node[target_type], args_so_far + (next_arg,))
+
+        result = []
+        walktree(self.multimethod.dispatch_tree, ())
+        return result
+
+    def anychance(self, typesprefix):
+        # is there any chance that a list of types starting with typesprefix
+        # could lead to a successful dispatch?
+        # (START-UP TIME OPTIMIZATION ONLY)
+        if self._revcache is None:
+
+            def build_tree(types_so_far, dispatch_node):
+                non_empty = False
+                typeorder = self.list_of_typeorders[len(types_so_far)]
+                for next_type in typeorder:
+                    if build_single_method(typeorder, types_so_far, next_type,
+                                           dispatch_node):
+                        non_empty = True
+                if non_empty:
+                    self._revcache[types_so_far] = True
+                return non_empty
+
+            def build_single_method(typeorder, types_so_far, next_type,
+                                    dispatch_node):
+                order = typeorder[next_type]
+                things_to_call = False
+                for type, conversion in order:
+                    if type not in dispatch_node:
+                        # there is no possible completion of
+                        # types_so_far+[type] that could lead to a
+                        # registered function.
+                        continue
+                    match = dispatch_node[type]
+                    if isinstance(match, dict):
+                        if build_tree(types_so_far+(next_type,), match):
+                            things_to_call = True
+                    elif match:
+                        things_to_call = True
+                return things_to_call
+
+            self._revcache = {}
+            build_tree((), self.multimethod.dispatch_tree)
+        return tuple(typesprefix) in self._revcache
+
+
+class Call(object):
+    """ Represents a call expression.
+    The arguments may themselves be Call objects.
+    """
+    def __init__(self, function, arguments):
+        self.function = function
+        self.arguments = arguments
+
+
+class CompressedArray(object):
+    def __init__(self, null_value):
+        self.null_value = null_value
+        self.items = [null_value]
+
+    def ensure_length(self, newlen):
+        if newlen > len(self.items):
+            self.items.extend([self.null_value] * (newlen - len(self.items)))
+
+    def insert_subarray(self, array):
+        # insert the given array of numbers into the indexlist,
+        # allowing null values to become non-null
+        if array.count(self.null_value) == len(array):
+            return 0
+        test = 1
+        while True:
+            self.ensure_length(test+len(array))
+            for i in range(len(array)):
+                if not (array[i] == self.items[test+i] or
+                        array[i] == self.null_value or
+                        self.items[test+i] == self.null_value):
+                    break
+            else:
+                # success
+                for i in range(len(array)):
+                    if array[i] != self.null_value:
+                        self.items[test+i] = array[i]
+                return test
+            test += 1
+
+    def _freeze_(self):
+        return True
+
+
+class MRDTable(object):
+    # Multi-Method Dispatch Using Multiple Row Displacement,
+    # Candy Pang, Wade Holst, Yuri Leontiev, and Duane Szafron
+    # University of Alberta, Edmonton AB T6G 2H1 Canada
+    # can be found on http://web.cs.ualberta.ca/~yuri/publ.htm
+
+    Counter = 0
+
+    def __init__(self, list_of_types):
+        self.id = MRDTable.Counter
+        MRDTable.Counter += 1
+        self.list_of_types = list_of_types
+        self.typenum = dict(zip(list_of_types, range(len(list_of_types))))
+        self.attrname = '__mrd%d_typenum' % self.id
+        for t1, num in self.typenum.items():
+            setattr(t1, self.attrname, num)
+        self.indexarray = CompressedArray(0)
+
+    def normalize_length(self, next_array):
+        # make sure that the indexarray is not smaller than any funcarray
+        self.indexarray.ensure_length(len(next_array.items))
+
+
+def invent_name(miniglobals, obj):
+    if isinstance(obj, str):
+        return obj
+    name = obj.__name__
+    n = 1
+    while name in miniglobals:
+        n += 1
+        name = '%s%d' % (obj.__name__, n)
+    miniglobals[name] = obj
+    return name
+
+
+class FuncEntry(object):
+
+    def __init__(self, bodylines, miniglobals, fallback):
+        self.body = '\n    '.join(bodylines)
+        self.miniglobals = miniglobals
+        self.fallback = fallback
+        self.possiblenames = []
+        self.typetree = {}
+        self._function = None
+
+    def key(self):
+        lst = self.miniglobals.items()
+        lst.sort()
+        return self.body, tuple(lst)
+
+    def make_function(self, fnargs, nbargs_before, mrdtable):
+        if self._function is not None:
+            return self._function
+        name = min(self.possiblenames)   # pick a random one, but consistently
+        self.compress_typechecks(mrdtable)
+        checklines = self.generate_typechecks(fnargs[nbargs_before:])
+        if not checklines:
+            body = self.body
+        else:
+            checklines.append(self.body)
+            body = '\n    '.join(checklines)
+        source = 'def %s(%s):\n    %s\n' % (name, ', '.join(fnargs), body)
+        #print '_' * 60
+        #print source
+        exec compile2(source) in self.miniglobals
+        self._function = self.miniglobals[name]
+        return self._function
+
+    def register_valid_types(self, types):
+        node = self.typetree
+        for t1 in types[:-1]:
+            if node is True:
+                return
+            node = node.setdefault(t1, {})
+        if node is True:
+            return
+        node[types[-1]] = True
+
+    def no_typecheck(self):
+        self.typetree = True
+
+    def compress_typechecks(self, mrdtable):
+        def full(node):
+            if node is True:
+                return 1
+            fulls = 0
+            for key, subnode in node.items():
+                if full(subnode):
+                    node[key] = True
+                    fulls += 1
+            if fulls == types_total:
+                return 1
+            return 0
+
+        types_total = len(mrdtable.list_of_types)
+        if full(self.typetree):
+            self.typetree = True
+
+    def generate_typechecks(self, args):
+        def generate(node, level=0):
+            indent = '    '*level
+            if node is True:
+                result.append('%s_failedtoimplement = False' % (indent,))
+                return
+            if not node:
+                result.append('%s_failedtoimplement = True' % (indent,))
+                return
+            keyword = 'if'
+            for key, subnode in node.items():
+                typename = invent_name(self.miniglobals, key)
+                result.append('%s%s isinstance(%s, %s):' % (indent, keyword,
+                                                            args[level],
+                                                            typename))
+                generate(subnode, level+1)
+                keyword = 'elif'
+            result.append('%selse:' % (indent,))
+            result.append('%s    _failedtoimplement = True' % (indent,))
+
+        result = []
+        if self.typetree is not True:
+            generate(self.typetree)
+            result.append('if _failedtoimplement:')
+            result.append('    raise FailedToImplement')
+        return result
+
+
+class InstallerVersion2(object):
+    """NOT_RPYTHON"""
+
+    mrdtables = {}
+
+    def __init__(self, multimethod, prefix, list_of_typeorders,
+                 baked_perform_call=True, base_typeorder=None):
+        #print 'InstallerVersion2:', prefix
+        self.multimethod = multimethod
+        self.prefix = prefix
+        self.list_of_typeorders = list_of_typeorders
+        self.baked_perform_call = baked_perform_call
+        self.mmfunccache = {}
+        args = ['arg%d' % i for i in range(multimethod.arity)]
+        self.fnargs = (multimethod.argnames_before + args +
+                       multimethod.argnames_after)
+
+        # compute the complete table
+        base_typeorder = base_typeorder or list_of_typeorders[0]
+        for typeorder in list_of_typeorders:
+            for t1 in typeorder:
+                assert t1 in base_typeorder
+
+        lst = list(base_typeorder)
+        lst.sort()
+        key = tuple(lst)
+        try:
+            self.mrdtable = self.mrdtables[key]
+        except KeyError:
+            self.mrdtable = self.mrdtables[key] = MRDTable(key)
+
+        dispatcher = MMDispatcher(multimethod, list_of_typeorders)
+        self.table = {}
+        def buildtable(prefixtypes):
+            if len(prefixtypes) == multimethod.arity:
+                calllist = dispatcher.expressions(prefixtypes,
+                                                  multimethod.argnames_before,
+                                                  args,
+                                                  multimethod.argnames_after)
+                if calllist:
+                    self.table[prefixtypes] = calllist
+            elif dispatcher.anychance(prefixtypes):
+                typeorder = list_of_typeorders[len(prefixtypes)]
+                for t1 in typeorder:
+                    buildtable(prefixtypes + (t1,))
+        buildtable(())
+        self.dispatcher = dispatcher
+
+    def is_empty(self):
+        return len(self.table) == 0
+
+    def install(self):
+        nskip = len(self.multimethod.argnames_before)
+        null_entry = self.build_funcentry(self.prefix + '_0_fail', [])
+        null_entry.no_typecheck()
+        if self.is_empty():
+            return self.answer(null_entry)
+
+        entryarray = CompressedArray(null_entry)
+        indexarray = self.mrdtable.indexarray
+        lst = self.mrdtable.list_of_types
+        indexline = []
+
+        def compress(typesprefix, typesnum):
+            if len(typesprefix) == self.multimethod.arity:
+                calllist = self.table.get(typesprefix, [])
+                funcname = [self.prefix]
+                for t1 in typesprefix:
+                    funcname.append(t1.__name__)
+                funcname = '_'.join(funcname)
+                entry = self.build_funcentry(funcname, calllist)
+                entry.register_valid_types(typesprefix)
+                return entry
+            elif self.dispatcher.anychance(typesprefix):
+                flatline = []
+                for num1, t1 in enumerate(lst):
+                    item = compress(typesprefix + (t1,), typesnum + (num1,))
+                    flatline.append(item)
+                if len(typesprefix) == self.multimethod.arity - 1:
+                    array = entryarray
+                else:
+                    array = indexarray
+                return array.insert_subarray(flatline)
+            else:
+                return 0
+
+        master_index = compress((), ())
+
+        null_func = null_entry.make_function(self.fnargs, nskip, self.mrdtable)
+        funcarray = CompressedArray(null_func)
+        # round up the length to a power of 2
+        N = 1
+        while N < len(entryarray.items):
+            N *= 2
+        funcarray.ensure_length(N)
+        for i, entry in enumerate(entryarray.items):
+            func = entry.make_function(self.fnargs, nskip, self.mrdtable)
+            funcarray.items[i] = func
+        self.mrdtable.normalize_length(funcarray)
+
+        #print master_index
+        #print indexarray.items
+        #print funcarray.items
+
+        attrname = self.mrdtable.attrname
+        exprfn = "%d" % master_index
+        for n in range(self.multimethod.arity-1):
+            exprfn = "indexarray.items[%s + arg%d.%s]" % (exprfn, n, attrname)
+        n = self.multimethod.arity-1
+        exprfn = "funcarray.items[(%s + arg%d.%s) & mmmask]" % (exprfn, n,
+                                                                attrname)
+        expr = Call(exprfn, self.fnargs)
+        entry = self.build_funcentry(self.prefix + '_0_perform_call',
+                                     [expr],
+                                     indexarray = indexarray,
+                                     funcarray = funcarray,
+                                     mmmask = N-1)
+        entry.no_typecheck()
+        return self.answer(entry)
+
+    def answer(self, entry):
+        if self.baked_perform_call:
+            nskip = len(self.multimethod.argnames_before)
+            return entry.make_function(self.fnargs, nskip, self.mrdtable)
+        else:
+            assert entry.body.startswith('return ')
+            expr = entry.body[len('return '):]
+            return self.fnargs, expr, entry.miniglobals, entry.fallback
+
+    def build_funcentry(self, funcname, calllist, **extranames):
+        def expr(v):
+            if isinstance(v, Call):
+                return '%s(%s)' % (invent_name(miniglobals, v.function),
+                                   ', '.join([expr(w) for w in v.arguments]))
+            else:
+                return v
+
+        fallback = len(calllist) == 0
+        if fallback:
+            miniglobals = {'raiseFailedToImplement': raiseFailedToImplement}
+            bodylines = ['return raiseFailedToImplement()']
+        else:
+            miniglobals = {'FailedToImplement': FailedToImplement}
+            miniglobals.update(extranames)
+            bodylines = []
+            for v in calllist[:-1]:
+                bodylines.append('try:')
+                bodylines.append('    return %s' % expr(v))
+                bodylines.append('except FailedToImplement:')
+                bodylines.append('    pass')
+            bodylines.append('return %s' % expr(calllist[-1]))
+
+        entry = FuncEntry(bodylines, miniglobals, fallback)
+        key = entry.key()
+        try:
+            entry = self.mmfunccache[key]
+        except KeyError:
+            self.mmfunccache[key] = entry
+        entry.possiblenames.append(funcname)
+        return entry
+
+# ____________________________________________________________
+# Selection of the version to use
+
+Installer = InstallerVersion1   # modified by translate.py targetpypystandalone

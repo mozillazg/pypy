@@ -2,9 +2,11 @@ from __future__ import generators
 import autopath, os, sys, __builtin__, marshal, zlib
 from types import FunctionType, CodeType, InstanceType, ClassType
 
-from pypy.objspace.flow.model import Variable, Constant
-from pypy.translator.gensupp import builtin_base
+from pypy.objspace.flow.model import Variable, Constant, FunctionGraph
+from pypy.annotation.description import NoStandardGraph
+from pypy.translator.gensupp import builtin_base, builtin_type_base
 from pypy.translator.c.support import log
+from pypy.translator.c.wrapper import gen_wrapper, new_method_graph
 
 from pypy.rpython.rarithmetic import r_int, r_uint
 from pypy.rpython.lltypesystem.lltype import pyobjectptr, LowLevelType
@@ -14,8 +16,6 @@ from pypy.rpython.lltypesystem.lltype import pyobjectptr, LowLevelType
 # to fill the space instance.
 # Should this be registered with the annotator?
 from pypy.interpreter.baseobjspace import ObjSpace
-
-from pypy.annotation.registry import IMPORT_HINTS
 
 class PyObjMaker:
     """Handles 'PyObject*'; factored out from LowLevelDatabase.
@@ -37,7 +37,11 @@ class PyObjMaker:
                                #   objects
         self.debugstack = ()  # linked list of nested nameof()
         self.wrappers = {}    # {'pycfunctionvariable': ('name', 'wrapperfn')}
-        self.import_hints = IMPORT_HINTS
+        self.import_hints = {} # I don't seem to need it any longer.
+        # leaving the import support intact, doesn't hurt.
+        self.name_for_meth = {} # get nicer wrapper names
+        self.is_method = {}
+        self.use_true_methods = False # may be overridden
 
     def nameof(self, obj, debug=None):
         if debug:
@@ -54,6 +58,8 @@ class PyObjMaker:
     def computenameof(self, obj):
         obj_builtin_base = builtin_base(obj)
         if obj_builtin_base in (object, int, long) and type(obj) is not obj_builtin_base:
+            if isinstance(obj, FunctionGraph):
+                return self.nameof_graph(obj)
             # assume it's a user defined thingy
             return self.nameof_instance(obj)
         else:
@@ -76,6 +82,8 @@ class PyObjMaker:
         self.initcode.append("%s = %s" % (name, pyexpr))
 
     def nameof_object(self, value):
+        if isinstance(object, property):
+            return self.nameof_property(value)
         if type(value) is not object:
             raise Exception, "nameof(%r)" % (value,)
         name = self.uniquename('g_object')
@@ -98,17 +106,6 @@ class PyObjMaker:
         self.initcode_python(name, repr(value))
         return name
 
-    def nameof_module(self, value):
-        assert value is os or not hasattr(value, "__file__") or \
-               not (value.__file__.endswith('.pyc') or
-                    value.__file__.endswith('.py') or
-                    value.__file__.endswith('.pyo')), \
-               "%r is not a builtin module (probably :)"%value
-        name = self.uniquename('mod%s'%value.__name__)
-        self.initcode_python(name, "__import__(%r)" % (value.__name__,))
-        return name
-
-    # try to build valid imports for external stuff        
     def nameof_module(self, value):
         easy = value is os or not hasattr(value, "__file__") or \
                not (value.__file__.endswith('.pyc') or
@@ -178,7 +175,7 @@ class PyObjMaker:
     def skipped_function(self, func):
         # debugging only!  Generates a placeholder for missing functions
         # that raises an exception when called.
-        if self.translator.frozen:
+        if self.translator.annotator.frozen:
             warning = 'NOT GENERATING'
         else:
             warning = 'skipped'
@@ -219,10 +216,14 @@ class PyObjMaker:
         if self.shouldskipfunc(func):
             return self.skipped_function(func)
 
-        from pypy.translator.c.wrapper import gen_wrapper
-        fwrapper = gen_wrapper(func, self.translator)
+        try:
+            fwrapper = gen_wrapper(func, self.translator,
+                                   newname=self.name_for_meth.get(func, func.__name__),
+                                   as_method=func in self.is_method)
+        except NoStandardGraph:
+            return self.skipped_function(func)
         pycfunctionobj = self.uniquename('gfunc_' + func.__name__)
-        self.wrappers[pycfunctionobj] = func.__name__, self.getvalue(fwrapper)
+        self.wrappers[pycfunctionobj] = func.__name__, self.getvalue(fwrapper), func.__doc__
         return pycfunctionobj
 
     def import_function(self, func):
@@ -347,6 +348,9 @@ class PyObjMaker:
         return name
 
     def nameof_classobj(self, cls):
+        if self.translator.rtyper.needs_wrapper(cls):
+            return self.wrap_exported_class(cls)
+
         if cls.__doc__ and cls.__doc__.lstrip().startswith('NOT_RPYTHON'):
             raise Exception, "%r should never be reached" % (cls,)
 
@@ -356,7 +360,7 @@ class PyObjMaker:
         if issubclass(cls, Exception):
             # if cls.__module__ == 'exceptions':
             # don't rely on this, py.magic redefines AssertionError
-            if getattr(__builtin__,cls.__name__,None) is cls:
+            if getattr(__builtin__, cls.__name__, None) is cls:
                 name = self.uniquename('gexc_' + cls.__name__)
                 self.initcode_python(name, cls.__name__)
                 return name
@@ -377,7 +381,8 @@ class PyObjMaker:
             ignore = getattr(cls, 'NOT_RPYTHON_ATTRIBUTES', [])
             for key, value in content:
                 if key.startswith('__'):
-                    if key in ['__module__', '__doc__', '__dict__',
+                    # we do not expose __del__, because it would be called twice
+                    if key in ['__module__', '__doc__', '__dict__', '__del__',
                                '__weakref__', '__repr__', '__metaclass__']:
                         continue
                     # XXX some __NAMES__ are important... nicer solution sought
@@ -532,3 +537,93 @@ class PyObjMaker:
         co = compile(source, '<initcode>', 'exec')
         del source
         return marshal.dumps(co), originalsource
+
+    # ____________________________________________________________-
+    # addition for true extension module building
+
+    def wrap_exported_class(self, cls):
+        metaclass = "type"
+        name = self.uniquename('gwcls_' + cls.__name__)
+        basenames = [self.nameof(base) for base in cls.__bases__]
+        # we merge the class dicts for more speed
+        def merge_classdicts(cls):
+            dic = {}
+            for cls in cls.mro()[:-1]:
+                for key, value in cls.__dict__.items():
+                    if key not in dic:
+                        dic[key] = value
+            return dic
+        def initclassobj():
+            content = merge_classdicts(cls).items()
+            content.sort()
+            init_seen = False
+            for key, value in content:
+                if key.startswith('__'):
+                    # we do not expose __del__, because it would be called twice
+                    if key in ['__module__', '__dict__', '__doc__', '__del__',
+                               '__weakref__', '__repr__', '__metaclass__']:
+                        continue
+                if self.shouldskipfunc(value):
+                    log.WARNING("skipped class function: %r" % value)
+                    continue
+                if isinstance(value, FunctionType):
+                    func = value
+                    fname = '%s.%s' % (cls.__name__, func.__name__)
+                    if func.__name__ == '__init__':
+                        init_seen = True
+                        # there is the problem with exposed classes inheriting from
+                        # classes which are internal. We need to create a new wrapper
+                        # for every class which uses an inherited __init__, because
+                        # this is the context where we create the instance.
+                        ann = self.translator.annotator
+                        clsdef = ann.bookkeeper.getuniqueclassdef(cls)
+                        graph = ann.bookkeeper.getdesc(func).getuniquegraph()
+                        if ann.binding(graph.getargs()[0]).classdef is not clsdef:
+                            value = new_method_graph(graph, clsdef, fname, self.translator)
+                    self.name_for_meth[value] = fname
+                    if self.use_true_methods:
+                        self.is_method[value] = True
+                elif isinstance(value, property):
+                    fget, fset, fdel, doc = value.fget, value.fset, value.fdel, value.__doc__
+                    for f in fget, fset, fdel:
+                        if f and self.use_true_methods:
+                            self.is_method[f] = True
+                    stuff = [self.nameof(x) for x in fget, fset, fdel, doc]
+                    yield '%s.%s = property(%s, %s, %s, %s)' % ((name, key) +
+                                                                tuple(stuff))
+                    continue
+                yield '%s.%s = %s' % (name, key, self.nameof(value))
+            if not init_seen:
+                log.WARNING('No __init__ found for %s - you cannot build instances' %
+                            cls.__name__)
+
+        baseargs = ", ".join(basenames)
+        if baseargs:
+            baseargs = '(%s)' % baseargs
+            
+        a = self.initcode.append
+        a('class %s%s:'                     % (name, baseargs) )
+        if cls.__doc__:
+            a('    %r'                      % str(cls.__doc__) )
+        a('    __metaclass__ = type')
+        a('    __slots__ = ["__self__"] # for PyCObject')
+        self.later(initclassobj())
+        return name
+
+    def nameof_graph(self, g):
+        newname=self.name_for_meth.get(g, g.func.__name__)
+        fwrapper = gen_wrapper(g, self.translator, newname=newname)
+        pycfunctionobj = self.uniquename('gfunc_' + newname)
+        self.wrappers[pycfunctionobj] = g.func.__name__, self.getvalue(fwrapper), g.func.__doc__
+        return pycfunctionobj
+
+    def nameof_property(self, p):
+        fget, fset, fdel, doc = p.fget, p.fset, p.fdel, p.__doc__
+        for f in fget, fset, fdel:
+            if f and self.use_true_methods:
+                self.is_method[f] = True
+        stuff = [self.nameof(x) for x in fget, fset, fdel, doc]
+        name = self.uniquename('gprop')
+        expr = 'property(%s, %s, %s, %s)' % (tuple(stuff))
+        self.initcode_python(name, expr)
+        return name

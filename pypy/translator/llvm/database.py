@@ -13,6 +13,7 @@ from pypy.translator.llvm.opaquenode import OpaqueNode, ExtOpaqueNode, \
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.memory.lladdress import NULL
+from pypy.rpython.objectmodel import Symbolic, ComputedIntSymbolic
 
 log = log.database 
 
@@ -366,8 +367,13 @@ class Database(object):
             # XXXXX things are happening in the gc world...
             # assert value == NULL
             repr = 'null' 
-        elif isinstance(value, llmemory.AddressOffset):
-            return self.offset_str(value)
+        elif isinstance(value, Symbolic):
+            if isinstance(value, llmemory.AddressOffset):
+                return self.offset_str(value)
+            elif isinstance(value, ComputedIntSymbolic):
+                repr = '%d' % (value.compute_fn(),)
+            else:
+                raise NotImplementedError("symbolic: %r" % (value,))
         else:
             repr = str(value)
         return repr
@@ -393,9 +399,9 @@ class Database(object):
 
         elif isinstance(value, llmemory.CompositeOffset):
             return "cast(%s* getelementptr(%s* null, int 0, uint 1, int %s) to int)" % (
-                self.repr_type(value.second.TYPE),
-                self.repr_type(value.first.TYPE),
-                value.second.repeat)
+                self.repr_type(value.offsets[1].TYPE),
+                self.repr_type(value.offsets[0].TYPE),
+                value.offsets[1].repeat)
         else:
             raise Exception("unsupported offset")
         

@@ -8,7 +8,7 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 import pypy.interpreter.pycode
 import pypy.interpreter.special
 
-WITHCOMPLEX = False
+WITHSMALLINT = False
 
 class StdTypeModel:
 
@@ -20,8 +20,9 @@ class StdTypeModel:
             from pypy.objspace.std.booltype   import bool_typedef
             from pypy.objspace.std.inttype    import int_typedef
             from pypy.objspace.std.floattype  import float_typedef
-            if WITHCOMPLEX:
-                from pypy.objspace.std.complextype  import complex_typedef
+            from pypy.objspace.std.complextype  import complex_typedef
+            from pypy.objspace.std.settype import set_typedef
+            from pypy.objspace.std.frozensettype import frozenset_typedef
             from pypy.objspace.std.tupletype  import tuple_typedef
             from pypy.objspace.std.listtype   import list_typedef
             from pypy.objspace.std.dicttype   import dict_typedef
@@ -44,8 +45,10 @@ class StdTypeModel:
         from pypy.objspace.std import boolobject
         from pypy.objspace.std import intobject
         from pypy.objspace.std import floatobject
-        if WITHCOMPLEX:
-            from pypy.objspace.std import complexobject
+        from pypy.objspace.std import complexobject
+        from pypy.objspace.std import setobject
+        if WITHSMALLINT:
+            from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictobject
@@ -68,7 +71,6 @@ class StdTypeModel:
             boolobject.W_BoolObject: [],
             intobject.W_IntObject: [],
             floatobject.W_FloatObject: [],
-            #complexobject.W_ComplexObject: [],
             tupleobject.W_TupleObject: [],
             listobject.W_ListObject: [],
             dictobject.W_DictObject: [],
@@ -85,8 +87,12 @@ class StdTypeModel:
             pypy.interpreter.pycode.PyCode: [],
             pypy.interpreter.special.Ellipsis: [],
             }
-        if WITHCOMPLEX:
-            self.typeorder[complexobject.W_ComplexObject] = []
+        self.typeorder[complexobject.W_ComplexObject] = []
+        self.typeorder[setobject.W_SetObject] = []
+        self.typeorder[setobject.W_FrozensetObject] = []
+        self.typeorder[setobject.W_SetIterObject] = []
+        if WITHSMALLINT:
+            self.typeorder[smallintobject.W_SmallIntObject] = []
         for type in self.typeorder:
             self.typeorder[type].append((type, None))
 
@@ -99,40 +105,40 @@ class StdTypeModel:
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
         # XXX build these lists a bit more automatically later
+        if WITHSMALLINT:
+            self.typeorder[boolobject.W_BoolObject] += [
+                (smallintobject.W_SmallIntObject, boolobject.delegate_Bool2SmallInt),
+                ]
+            self.typeorder[smallintobject.W_SmallIntObject] += [
+                (intobject.W_IntObject, smallintobject.delegate_SmallInt2Int),
+                (longobject.W_LongObject, smallintobject.delegate_SmallInt2Long),
+                (floatobject.W_FloatObject, smallintobject.delegate_SmallInt2Float),
+                (complexobject.W_ComplexObject, smallintobject.delegate_SmallInt2Complex),
+                ]
+
         self.typeorder[boolobject.W_BoolObject] += [
-            (intobject.W_IntObject,     boolobject.delegate_Bool2Int),
+            (intobject.W_IntObject,     boolobject.delegate_Bool2IntObject),
             (longobject.W_LongObject,   longobject.delegate_Bool2Long),
             (floatobject.W_FloatObject, floatobject.delegate_Bool2Float),
-            #(complexobject.W_ComplexObject, complexobject.delegate_Bool2Complex),
+            (complexobject.W_ComplexObject, complexobject.delegate_Bool2Complex),
             ]
         self.typeorder[intobject.W_IntObject] += [
             (longobject.W_LongObject,   longobject.delegate_Int2Long),
             (floatobject.W_FloatObject, floatobject.delegate_Int2Float),
-            #(complexobject.W_ComplexObject, complexobject.delegate_Int2Complex),
+            (complexobject.W_ComplexObject, complexobject.delegate_Int2Complex),
             ]
         self.typeorder[longobject.W_LongObject] += [
             (floatobject.W_FloatObject, floatobject.delegate_Long2Float),
-            #(complexobject.W_ComplexObject, complexobject.delegate_Long2Complex),
+            (complexobject.W_ComplexObject, 
+                    complexobject.delegate_Long2Complex),
             ]
         self.typeorder[floatobject.W_FloatObject] += [
-            #(complexobject.W_ComplexObject, complexobject.delegate_Float2Complex),
+            (complexobject.W_ComplexObject, 
+                    complexobject.delegate_Float2Complex),
             ]
         self.typeorder[stringobject.W_StringObject] += [
          (unicodeobject.W_UnicodeObject, unicodeobject.delegate_String2Unicode),
             ]
-        if WITHCOMPLEX:
-            self.typeorder[boolobject.W_BoolObject] += [
-                (complexobject.W_ComplexObject, complexobject.delegate_Bool2Complex),
-                ]
-            self.typeorder[intobject.W_IntObject] += [
-                (complexobject.W_ComplexObject, complexobject.delegate_Int2Complex),
-                ]
-            self.typeorder[longobject.W_LongObject] += [
-                (complexobject.W_ComplexObject, complexobject.delegate_Long2Complex),
-                ]
-            self.typeorder[floatobject.W_FloatObject] += [
-                (complexobject.W_ComplexObject, complexobject.delegate_Float2Complex),
-                ]
 
         # put W_Root everywhere
         self.typeorder[W_Root] = []
@@ -144,14 +150,10 @@ class StdTypeModel:
 
 W_ANY = W_Root
 
-class W_Object(W_Root, object):
-    "Parent base class for wrapped objects."
-
-    def __init__(w_self, space):
-        w_self.space = space    # XXX not sure this is ever used any more
-        # Note that it is wrong to depend on a .space attribute for a random
-        # wrapped object anyway, because not all wrapped objects inherit from
-        # W_Object.  (They inherit from W_Root.)
+class W_Object(W_Root):
+    "Parent base class for wrapped objects provided by the StdObjSpace."
+    # Note that not all wrapped objects in the interpreter inherit from
+    # W_Object.  (They inherit from W_Root.)
 
     def __repr__(self):
         s = '%s(%s)' % (
@@ -164,7 +166,7 @@ class W_Object(W_Root, object):
             s += ' instance of %s' % self.w__class__
         return '<%s>' % s
 
-    def unwrap(w_self):
+    def unwrap(w_self, space):
         raise UnwrapError, 'cannot unwrap %r' % (w_self,)
 
 class UnwrapError(Exception):

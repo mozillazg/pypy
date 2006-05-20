@@ -1,33 +1,26 @@
 from pypy.rpython.memory.lladdress import raw_malloc, raw_free, raw_memcopy
-from pypy.rpython.memory.lladdress import NULL, address
-from pypy.rpython.memory.support import AddressLinkedList
+from pypy.rpython.memory.lladdress import NULL, _address, raw_malloc_usage
+from pypy.rpython.memory.support import get_address_linked_list
+from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory import lltypesimulation
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.objectmodel import free_non_gc_object
+from pypy.rpython import rarithmetic
 
 import sys
 
 int_size = lltypesimulation.sizeof(lltype.Signed)
+gc_header_two_ints = 2*int_size
 
-class GCHeaderOffset(llmemory.AddressOffset):
-    def __init__(self, minimal_size):
-        self.minimal_size = minimal_size
-    def __int__(self):
-        from pypy.rpython.memory.lltypelayout import sizeof
-        return sizeof(self.minimal_size)
-    # XXX blech
-    def __radd__(self, other):
-        return int(self) + other
-
-gc_header_two_ints = GCHeaderOffset(
-    lltype.Struct("header", ("a", lltype.Signed), ("b", lltype.Signed)))
+X_CLONE = lltype.GcStruct('CloneData', ('gcobjectptr', llmemory.GCREF),
+                                       ('malloced_list', llmemory.Address))
 
 class GCError(Exception):
     pass
 
-def get_dummy_annotate(gc_class):
+def get_dummy_annotate(gc, AddressLinkedList):
     def dummy_annotate():
-        gc = gc_class()
+        gc.setup()
         gc.get_roots = dummy_get_roots1 #prevent the get_roots attribute to 
         gc.get_roots = dummy_get_roots2 #be constants
         a = gc.malloc(1, 2)
@@ -35,28 +28,29 @@ def get_dummy_annotate(gc_class):
         gc.write_barrier(raw_malloc(1), raw_malloc(2), raw_malloc(1))
         gc.collect()
         return a - b
-    return dummy_annotate
+
+    def dummy_get_roots1():
+        ll = AddressLinkedList()
+        ll.append(NULL)
+        ll.append(raw_malloc(10))
+        ll.pop() #make the annotator see pop
+        return ll
+
+    def dummy_get_roots2():
+        ll = AddressLinkedList()
+        ll.append(raw_malloc(10))
+        ll.append(NULL)
+        ll.pop() #make the annotator see pop
+        return ll
+    return dummy_annotate, dummy_get_roots1, dummy_get_roots2
+
 
 gc_interface = {
     "malloc": lltype.FuncType((lltype.Signed, lltype.Signed), lltype.Signed),
     "collect": lltype.FuncType((), lltype.Void),
     "write_barrier": lltype.FuncType((llmemory.Address, ) * 3, lltype.Void),
     }
-
-def dummy_get_roots1():
-    ll = AddressLinkedList()
-    ll.append(NULL)
-    ll.append(raw_malloc(10))
-    ll.pop() #make the annotator see pop
-    return ll
-
-def dummy_get_roots2():
-    ll = AddressLinkedList()
-    ll.append(raw_malloc(10))
-    ll.append(NULL)
-    ll.pop() #make the annotator see pop
-    return ll
-
+    
 
 class GCBase(object):
     _alloc_flavor_ = "raw"
@@ -82,10 +76,13 @@ class GCBase(object):
         "NOT_RPYTHON"
         pass
 
+    def setup(self):
+        pass
+
 class DummyGC(GCBase):
     _alloc_flavor_ = "raw"
 
-    def __init__(self, dummy=None, get_roots=None):
+    def __init__(self, AddressLinkedList, dummy=None, get_roots=None):
         self.get_roots = get_roots
         #self.set_query_functions(None, None, None, None, None, None, None)
    
@@ -104,41 +101,85 @@ class DummyGC(GCBase):
     def init_gc_object(self, addr, typeid):
         return
     init_gc_object_immortal = init_gc_object
-   
+
+DEBUG_PRINT = True
 
 class MarkSweepGC(GCBase):
     _alloc_flavor_ = "raw"
 
-    def __init__(self, start_heap_size=4096, get_roots=None):
-        self.bytes_malloced = 0
-        self.heap_size = start_heap_size
-        #need to maintain a list of malloced objects, since we used the systems
-        #allocator and can't walk the heap
-        self.malloced_objects = AddressLinkedList()
+    HDR = lltype.ForwardReference()
+    HDRPTR = lltype.Ptr(HDR)
+    # need to maintain a linked list of malloced objects, since we used the
+    # systems allocator and can't walk the heap
+    HDR.become(lltype.Struct('header', ('typeid', lltype.Signed),
+                                       ('next', HDRPTR)))
+
+    def __init__(self, AddressLinkedList, start_heap_size=4096, get_roots=None):
+        self.heap_usage = 0          # at the end of the latest collection
+        self.bytes_malloced = 0      # since the latest collection
+        self.bytes_malloced_threshold = start_heap_size
+        self.total_collection_time = 0.0
+        self.AddressLinkedList = AddressLinkedList
         #self.set_query_functions(None, None, None, None, None, None, None)
+        self.malloced_objects = lltype.nullptr(self.HDR)
         self.get_roots = get_roots
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
 
     def malloc(self, typeid, length=0):
-        if self.bytes_malloced > self.heap_size:
-            self.collect()
         size = self.fixed_size(typeid)
         if self.is_varsize(typeid):
-            size += length * self.varsize_item_sizes(typeid)
-        size_gc_header = self.size_gc_header()
-        result = raw_malloc(size + size_gc_header)
-##         print "mallocing %s, size %s at %s" % (typeid, size, result)
-        if self.is_varsize(typeid):        
-            (result + self.varsize_offset_to_length(typeid)).signed[0] = length
-        self.init_gc_object(result, typeid)
-        self.malloced_objects.append(result)
-        self.bytes_malloced += size + size_gc_header
-        return result + size_gc_header
+            itemsize = self.varsize_item_sizes(typeid)
+            offset_to_length = self.varsize_offset_to_length(typeid)
+            ref = self.malloc_varsize(typeid, length, size, itemsize,
+                                      offset_to_length, True)
+        else:
+            ref = self.malloc_fixedsize(typeid, size, True)
+        # XXX lots of cast and reverse-cast around, but this malloc()
+        # should eventually be killed
+        return llmemory.cast_ptr_to_adr(ref)
+
+    def malloc_fixedsize(self, typeid, size, can_collect):
+        if can_collect and self.bytes_malloced > self.bytes_malloced_threshold:
+            self.collect()
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        result = raw_malloc(size_gc_header + size)
+        hdr = llmemory.cast_adr_to_ptr(result, self.HDRPTR)
+        hdr.typeid = typeid << 1
+        hdr.next = self.malloced_objects
+        self.malloced_objects = hdr
+        self.bytes_malloced += raw_malloc_usage(size + size_gc_header)
+        result += size_gc_header
+        return llmemory.cast_adr_to_ptr(result, llmemory.GCREF)
+
+    def malloc_varsize(self, typeid, length, size, itemsize, offset_to_length,
+                       can_collect):
+        if can_collect and self.bytes_malloced > self.bytes_malloced_threshold:
+            self.collect()
+        try:
+            varsize = rarithmetic.ovfcheck(itemsize * length)
+        except OverflowError:
+            raise MemoryError
+        # XXX also check for overflow on the various '+' below!
+        size += varsize
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        result = raw_malloc(size_gc_header + size)
+        (result + size_gc_header + offset_to_length).signed[0] = length
+        hdr = llmemory.cast_adr_to_ptr(result, self.HDRPTR)
+        hdr.typeid = typeid << 1
+        hdr.next = self.malloced_objects
+        self.malloced_objects = hdr
+        self.bytes_malloced += raw_malloc_usage(size + size_gc_header)
+        result += size_gc_header
+        return llmemory.cast_adr_to_ptr(result, llmemory.GCREF)
 
     def collect(self):
-##         print "collecting"
-        self.bytes_malloced = 0
+        import os, time
+        if DEBUG_PRINT:
+            os.write(2, 'collecting...\n')
+        start_time = time.time()
         roots = self.get_roots()
-        objects = AddressLinkedList()
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        objects = self.AddressLinkedList()
         while 1:
             curr = roots.pop()
 ##             print "root: ", curr
@@ -146,20 +187,23 @@ class MarkSweepGC(GCBase):
                 break
             # roots is a list of addresses to addresses:
             objects.append(curr.address[0])
-            gc_info = curr.address[0] - self.size_gc_header()
-            # constants roots are not malloced and thus don't have their mark
-            # bit reset
-            gc_info.signed[0] = 0
+            # the last sweep did not clear the mark bit of static roots, 
+            # since they are not in the malloced_objects list
+            gc_info = curr.address[0] - size_gc_header
+            hdr = llmemory.cast_adr_to_ptr(gc_info, self.HDRPTR)
+            hdr.typeid = hdr.typeid & (~1)
         free_non_gc_object(roots)
-        while 1:  #mark
+        # from this point onwards, no more mallocs should be possible
+        old_malloced = self.bytes_malloced
+        self.bytes_malloced = 0
+        while objects.non_empty():  #mark
             curr = objects.pop()
 ##             print "object: ", curr
-            if curr == NULL:
-                break
-            gc_info = curr - self.size_gc_header()
-            if gc_info.signed[0] == 1:
+            gc_info = curr - size_gc_header
+            hdr = llmemory.cast_adr_to_ptr(gc_info, self.HDRPTR)
+            if hdr.typeid & 1:
                 continue
-            typeid = gc_info.signed[1]
+            typeid = hdr.typeid >> 1
             offsets = self.offsets_to_gc_pointers(typeid)
             i = 0
             while i < len(offsets):
@@ -170,9 +214,9 @@ class MarkSweepGC(GCBase):
                 offset = self.varsize_offset_to_variable_part(
                     typeid)
                 length = (curr + self.varsize_offset_to_length(typeid)).signed[0]
+                curr += offset
                 offsets = self.varsize_offsets_to_gcpointers_in_var_part(typeid)
                 itemlength = self.varsize_item_sizes(typeid)
-                curr += offset
                 i = 0
                 while i < length:
                     item = curr + itemlength * i
@@ -181,53 +225,163 @@ class MarkSweepGC(GCBase):
                         objects.append((item + offsets[j]).address[0])
                         j += 1
                     i += 1
-            gc_info.signed[0] = 1
-        free_non_gc_object(objects)
-        newmo = AddressLinkedList()
+            hdr.typeid = hdr.typeid | 1
+        objects.delete()
+        newmo = self.AddressLinkedList()
         curr_heap_size = 0
         freed_size = 0
-        while 1:  #sweep
-            curr = self.malloced_objects.pop()
-            if curr == NULL:
-                break
-            typeid = curr.signed[1]
+        hdr = self.malloced_objects
+        newmo = lltype.nullptr(self.HDR)
+        while hdr:  #sweep
+            typeid = hdr.typeid >> 1
+            next = hdr.next
+            addr = llmemory.cast_ptr_to_adr(hdr)
             size = self.fixed_size(typeid)
             if self.is_varsize(typeid):
-                length = (curr + self.size_gc_header() + self.varsize_offset_to_length(typeid)).signed[0]
-                size += length * self.varsize_item_sizes(typeid)
-            if curr.signed[0] == 1:
-                curr.signed[0] = 0
-                newmo.append(curr)
-                curr_heap_size += size + self.size_gc_header()
+                length = (addr + size_gc_header + self.varsize_offset_to_length(typeid)).signed[0]
+                size += self.varsize_item_sizes(typeid) * length
+            estimate = raw_malloc_usage(size_gc_header + size)
+            if hdr.typeid & 1:
+                hdr.typeid = hdr.typeid & (~1)
+                hdr.next = newmo
+                newmo = hdr
+                curr_heap_size += estimate
             else:
-                freed_size += size + self.size_gc_header()
-                raw_free(curr)
-##         print "free %s bytes. the heap is %s bytes." % (freed_size, curr_heap_size)
-        free_non_gc_object(self.malloced_objects)
+                freed_size += estimate
+                raw_free(addr)
+            hdr = next
         self.malloced_objects = newmo
-        if curr_heap_size > self.heap_size:
-            self.heap_size = curr_heap_size
+        if curr_heap_size > self.bytes_malloced_threshold:
+            self.bytes_malloced_threshold = curr_heap_size
+        end_time = time.time()
+        self.total_collection_time += end_time - start_time
+        # warning, the following debug print allocates memory to manipulate
+        # the strings!  so it must be at the end
+        if DEBUG_PRINT:
+            os.write(2, "  malloced since previous collection: %s bytes\n" %
+                     old_malloced)
+            os.write(2, "  heap usage at start of collection:  %s bytes\n" %
+                     (self.heap_usage + old_malloced))
+            os.write(2, "  freed:                              %s bytes\n" %
+                     freed_size)
+            os.write(2, "  new heap usage:                     %s bytes\n" %
+                     curr_heap_size)
+            os.write(2, "  total time spent collecting:        %s seconds\n" %
+                     self.total_collection_time)
+        assert self.heap_usage + old_malloced == curr_heap_size + freed_size
+        self.heap_usage = curr_heap_size
+
+    STATISTICS_NUMBERS = 2
+
+    def statistics(self):
+        return self.heap_usage, self.bytes_malloced
 
     def size_gc_header(self, typeid=0):
-        return gc_header_two_ints
+        return self.gcheaderbuilder.size_gc_header
 
     def init_gc_object(self, addr, typeid):
-        addr.signed[0] = 0
-        addr.signed[1] = typeid
+        hdr = llmemory.cast_adr_to_ptr(addr, self.HDRPTR)
+        hdr.typeid = typeid << 1
     init_gc_object_immortal = init_gc_object
+
+    # experimental support for thread cloning
+    def x_swap_list(self, malloced_list):
+        # Swap the current malloced_objects linked list with another one.
+        # All malloc'ed objects are put into the current malloced_objects
+        # list; this is a way to separate objects depending on when they
+        # were allocated.
+        current = llmemory.cast_ptr_to_adr(self.malloced_objects)
+        self.malloced_objects = llmemory.cast_adr_to_ptr(malloced_list,
+                                                         self.HDRPTR)
+        return current
+
+    def x_clone(self, clonedata):
+        # Recursively clone the gcobject and everything it points to,
+        # directly or indirectly -- but stops at objects that are not
+        # in the malloced_list.  The gcobjectptr and the malloced_list
+        # fields of clonedata are adjusted to refer to the result.
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        oldobjects = self.AddressLinkedList()
+        hdr = llmemory.cast_adr_to_ptr(clonedata.malloced_list, self.HDRPTR)
+        while hdr:
+            next = hdr.next
+            hdr.typeid |= 1    # mark all objects from malloced_list
+            hdr.next = lltype.nullptr(self.HDR)  # abused to point to the copy
+            oldobjects.append(llmemory.cast_ptr_to_adr(hdr))
+            hdr = next
+
+        # a stack of addresses of places that still points to old objects
+        # and that must possibly be fixed to point to a new copy
+        stack = self.AddressLinkedList()
+        stack.append(llmemory.cast_ptr_to_adr(clonedata)
+                     + llmemory.offsetof(X_CLONE, 'gcobjectptr'))
+        newobjectlist = lltype.nullptr(self.HDR)
+        while stack.non_empty():
+            gcptr_addr = stack.pop()
+            oldobj_addr = gcptr_addr.address[0]
+            oldhdr = llmemory.cast_adr_to_ptr(oldobj_addr - size_gc_header,
+                                              self.HDRPTR)
+            typeid = oldhdr.typeid
+            if not (typeid & 1):
+                continue   # ignore objects that were not in the malloced_list
+            newhdr = oldhdr.next      # abused to point to the copy
+            if not newhdr:
+                typeid >>= 1
+                if self.is_varsize(typeid):
+                    raise NotImplementedError
+                else:
+                    size = self.fixed_size(typeid)
+                    newmem = raw_malloc(size_gc_header + size)
+                    newhdr = llmemory.cast_adr_to_ptr(newmem, self.HDRPTR)
+                    newhdr.typeid = typeid << 1
+                    newhdr.next = newobjectlist
+                    newobjectlist = newhdr
+                    newobj_addr = newmem + size_gc_header
+                    raw_memcopy(oldobj_addr, newobj_addr, size)
+                    offsets = self.offsets_to_gc_pointers(typeid)
+                    i = 0
+                    while i < len(offsets):
+                        pointer_addr = newobj_addr + offsets[i]
+                        stack.append(pointer_addr)
+                        i += 1
+                oldhdr.next = newhdr
+            newobj_addr = llmemory.cast_ptr_to_adr(newhdr) + size_gc_header
+            gcptr_addr.address[0] = newobj_addr
+
+        clonedata.malloced_list = llmemory.cast_ptr_to_adr(newobjectlist)
+
+        # re-create the original linked list
+        next = lltype.nullptr(self.HDR)
+        while oldobjects.non_empty():
+            hdr = llmemory.cast_adr_to_ptr(oldobjects.pop(), self.HDRPTR)
+            hdr.typeid &= ~1   # reset the mark bit
+            hdr.next = next
+            next = hdr
+        oldobjects.delete()
+
 
 class SemiSpaceGC(GCBase):
     _alloc_flavor_ = "raw"
 
-    def __init__(self, space_size=1024*int_size, get_roots=None):
+    HDR = lltype.Struct('header', ('forw', lltype.Signed),
+                                  ('typeid', lltype.Signed))
+
+    def __init__(self, AddressLinkedList, space_size=1024*int_size,
+                 get_roots=None):
         self.bytes_malloced = 0
         self.space_size = space_size
-        self.tospace = raw_malloc(space_size)
-        self.top_of_space = self.tospace + space_size
-        self.fromspace = raw_malloc(space_size)
-        self.free = self.tospace
-        #self.set_query_functions(None, None, None, None, None, None, None)
+        self.tospace = NULL
+        self.top_of_space = NULL
+        self.fromspace = NULL
+        self.free = NULL
         self.get_roots = get_roots
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
+
+    def setup(self):
+        self.tospace = raw_malloc(self.space_size)
+        self.top_of_space = self.tospace + self.space_size
+        self.fromspace = raw_malloc(self.space_size)
+        self.free = self.tospace
 
     def free_memory(self):
         "NOT_RPYTHON"
@@ -239,9 +393,20 @@ class SemiSpaceGC(GCBase):
     def malloc(self, typeid, length=0):
         size = self.fixed_size(typeid)
         if self.is_varsize(typeid):
-            size += length * self.varsize_item_sizes(typeid)
-        totalsize = size + self.size_gc_header()
-        if self.free + totalsize > self.top_of_space:
+            itemsize = self.varsize_item_sizes(typeid)
+            offset_to_length = self.varsize_offset_to_length(typeid)
+            ref = self.malloc_varsize(typeid, length, size, itemsize,
+                                      offset_to_length, True)
+        else:
+            ref = self.malloc_fixedsize(typeid, size, True)
+        # XXX lots of cast and reverse-cast around, but this malloc()
+        # should eventually be killed
+        return llmemory.cast_ptr_to_adr(ref)
+    
+    def malloc_fixedsize(self, typeid, size, can_collect):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        if can_collect and self.free + totalsize > self.top_of_space:
             self.collect()
             #XXX need to increase the space size if the object is too big
             #for bonus points do big objects differently
@@ -249,9 +414,30 @@ class SemiSpaceGC(GCBase):
                 raise MemoryError
         result = self.free
         self.init_gc_object(result, typeid)
-##         print "mallocing %s, size %s at %s" % (typeid, size, result)
         self.free += totalsize
-        return result + self.size_gc_header()
+        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+
+    def malloc_varsize(self, typeid, length, size, itemsize, offset_to_length,
+                       can_collect):
+        try:
+            varsize = rarithmetic.ovfcheck(itemsize * length)
+        except OverflowError:
+            raise MemoryError
+        # XXX also check for overflow on the various '+' below!
+        size += varsize
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        if can_collect and self.free + totalsize > self.top_of_space:
+            self.collect()
+            #XXX need to increase the space size if the object is too big
+            #for bonus points do big objects differently
+            if self.free + totalsize > self.top_of_space:
+                raise MemoryError
+        result = self.free
+        self.init_gc_object(result, typeid)
+        (result + size_gc_header + offset_to_length).signed[0] = length
+        self.free += totalsize
+        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     def collect(self):
 ##         print "collecting"
@@ -345,9 +531,8 @@ class SemiSpaceGC(GCBase):
             size += length * self.varsize_item_sizes(typeid)
         return size
 
-
     def size_gc_header(self, typeid=0):
-        return gc_header_two_ints
+        return self.gcheaderbuilder.size_gc_header
 
     def init_gc_object(self, addr, typeid):
         addr.signed[0] = 0
@@ -357,13 +542,18 @@ class SemiSpaceGC(GCBase):
 class DeferredRefcountingGC(GCBase):
     _alloc_flavor_ = "raw"
 
-    def __init__(self, max_refcount_zero=50, get_roots=None):
-        self.zero_ref_counts = AddressLinkedList()
+    def __init__(self, AddressLinkedList, max_refcount_zero=50, get_roots=None):
+        self.zero_ref_counts = None
+        self.AddressLinkedList = AddressLinkedList
         self.length_zero_ref_counts = 0
         self.max_refcount_zero = max_refcount_zero
         #self.set_query_functions(None, None, None, None, None, None, None)
         self.get_roots = get_roots
         self.collecting = False
+
+    def setup(self):
+        self.zero_ref_counts = self.AddressLinkedList()
+        
 
     def malloc(self, typeid, length=0):
         size = self.fixed_size(typeid)
@@ -382,38 +572,32 @@ class DeferredRefcountingGC(GCBase):
         else:
             self.collecting = True
         roots = self.get_roots()
-        curr = roots.first
-        while 1:
-            root = curr.address[1]
+        roots_copy = self.AddressLinkedList()
+        curr = roots.pop()
+        while curr != NULL:
 ##             print "root", root, root.address[0]
 ##             assert self.refcount(root.address[0]) >= 0, "refcount negative"
-            self.incref(root.address[0])
-            if curr.address[0] == NULL:
-                break
-            curr = curr.address[0]
-        dealloc_list = AddressLinkedList()
+            self.incref(curr.address[0])
+            roots_copy.append(curr)
+            curr = roots.pop()
+        roots = roots_copy
+        dealloc_list = self.AddressLinkedList()
         self.length_zero_ref_counts = 0
-        while 1:
+        while self.zero_ref_counts.non_empty():
             candidate = self.zero_ref_counts.pop()
-            if candidate == NULL:
-                break
             refcount = self.refcount(candidate)
             typeid = (candidate - self.size_gc_header()).signed[1]
             if (refcount == 0 and typeid >= 0):
                 (candidate - self.size_gc_header()).signed[1] = -typeid - 1
                 dealloc_list.append(candidate)
-        while 1:
+        while dealloc_list.non_empty():
             deallocate = dealloc_list.pop()
-            if deallocate == NULL:
-                break
             typeid = (deallocate - self.size_gc_header()).signed[1]
             (deallocate - self.size_gc_header()).signed[1] = -typeid - 1
             self.deallocate(deallocate)
-        free_non_gc_object(dealloc_list)
-        while 1:
+        dealloc_list.delete()
+        while roots.non_empty():
             root = roots.pop()
-            if root == NULL:
-                break
             self.decref(root.address[0])
         self.collecting = False
 

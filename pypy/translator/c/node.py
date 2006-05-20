@@ -1,16 +1,15 @@
 from __future__ import generators
 from pypy.rpython.lltypesystem.lltype import \
-     Struct, Array, FuncType, PyObjectType, typeOf, \
+     Struct, Array, FixedSizeArray, FuncType, PyObjectType, typeOf, \
      GcStruct, GcArray, GC_CONTAINER, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
-     RuntimeTypeInfo, getRuntimeTypeInfo, Char
+     RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
 from pypy.translator.c.support import cdecl, somelettersfrom, c_string_constant
 from pypy.translator.c.primitive import PrimitiveType, isinf
 from pypy.translator.c import extfunc
-from pypy.rpython.rstr import STR
 
 
 def needs_gcheader(T):
@@ -45,13 +44,16 @@ class StructDefNode:
             basename = db.gettypedefnode(STRUCT).barename
             basename = '%s_len%d' % (basename, varlength)
             with_number = False
-        (self.barename,
-         self.name) = db.namespace.uniquename(basename, with_number=with_number,
-                                              bare=True)
+        if STRUCT._hints.get('c_name'):
+            self.barename = self.name = STRUCT._hints['c_name']
+            self.c_struct_field_name = self.verbatim_field_name
+        else:
+            (self.barename,
+             self.name) = db.namespace.uniquename(basename,
+                                                  with_number=with_number,
+                                                  bare=True)
+            self.prefix = somelettersfrom(STRUCT._name) + '_'
         self.dependencies = {}
-        self.prefix = somelettersfrom(STRUCT._name) + '_'
-
-        gcpolicy = db.gcpolicy
 
     def setup(self):
         # this computes self.fields
@@ -87,8 +89,17 @@ class StructDefNode:
         return self.gcinfo
     gcinfo = defaultproperty(computegcinfo)
 
+    def gettype(self):
+        return 'struct %s @' % self.name
+
     def c_struct_field_name(self, name):
+        # occasionally overridden in __init__():
+        #    self.c_struct_field_name = self.verbatim_field_name
         return self.prefix + name
+
+    def verbatim_field_name(self, name):
+        assert name.startswith('c_')   # produced in this way by rctypes
+        return name[2:]
 
     def c_struct_field_type(self, name):
         return self.STRUCT._flds[name]
@@ -97,10 +108,15 @@ class StructDefNode:
         fldname = self.c_struct_field_name(fldname)
         return '%s.%s' % (baseexpr, fldname)
 
+    def ptr_access_expr(self, baseexpr, fldname):
+        fldname = self.c_struct_field_name(fldname)
+        return '%s->%s' % (baseexpr, fldname)
+
     def definition(self):
+        if self.STRUCT._hints.get('external'):      # XXX hack
+            return
         yield 'struct %s {' % self.name
         is_empty = True
-
         for name, typename in self.fields:
             line = '%s;' % cdecl(typename, name)
             if typename == PrimitiveType[Void]:
@@ -111,6 +127,8 @@ class StructDefNode:
         if is_empty:
             yield '\t' + 'int _dummy; /* this struct is empty */'
         yield '};'
+        for line in self.db.gcpolicy.struct_after_definition(self):
+            yield line
 
     def visitor_lines(self, prefix, on_field):
         STRUCT = self.STRUCT
@@ -142,7 +160,7 @@ class ArrayDefNode:
         original_varlength = varlength
         self.gcfields = []
         
-        if ARRAY is STR.chars:
+        if ARRAY._hints.get('isrpystring'):
             varlength += 1   # for the NUL char terminator at the end of the string
         self.varlength = varlength
         if original_varlength == 1:
@@ -174,8 +192,14 @@ class ArrayDefNode:
         return self.gcinfo
     gcinfo = defaultproperty(computegcinfo)
 
+    def gettype(self):
+        return 'struct %s @' % self.name
+
     def access_expr(self, baseexpr, index):
         return '%s.items[%d]' % (baseexpr, index)
+
+    def ptr_access_expr(self, baseexpr, index):
+        return '%s->items[%d]' % (baseexpr, index)
 
     def definition(self):
         gcpolicy = self.db.gcpolicy
@@ -229,6 +253,69 @@ class ArrayDefNode:
             yield '-1'
 
 
+class FixedSizeArrayDefNode:
+    gcinfo = None
+    name = None
+
+    def __init__(self, db, FIXEDARRAY):
+        self.db = db
+        self.FIXEDARRAY = FIXEDARRAY
+        self.LLTYPE = FIXEDARRAY
+        self.dependencies = {}
+        self.itemtypename = db.gettype(FIXEDARRAY.OF, who_asks=self)
+
+    def setup(self):
+        """Loops are forbidden by ForwardReference.become() because
+        there is no way to declare them in C."""
+
+    def gettype(self):
+        FIXEDARRAY = self.FIXEDARRAY
+        return self.itemtypename.replace('@', '(@)[%d]' % FIXEDARRAY.length)
+
+    def getptrtype(self):
+        return self.itemtypename.replace('@', '*@')
+
+    def access_expr(self, baseexpr, index):
+        if not isinstance(index, int):
+            assert index.startswith('item')
+            index = int(index[4:])
+        return '%s[%d]' % (baseexpr, index)
+
+    ptr_access_expr = access_expr
+
+    def definition(self):
+        return []    # no declaration is needed
+
+    def visitor_lines(self, prefix, on_item):
+        FIXEDARRAY = self.FIXEDARRAY
+        # we need a unique name for this C variable, or at least one that does
+        # not collide with the expression in 'prefix'
+        i = 0
+        varname = 'p0'
+        while prefix.find(varname) >= 0:
+            i += 1
+            varname = 'p%d' % i
+        body = list(on_item('(*%s)' % varname, FIXEDARRAY.OF))
+        if body:
+            yield '{'
+            yield '\t%s = %s;' % (cdecl(self.itemtypename, '*' + varname),
+                                  prefix)
+            yield '\t%s = %s + %d;' % (cdecl(self.itemtypename,
+                                             '*%s_end' % varname),
+                                       varname,
+                                       FIXEDARRAY.length)
+            yield '\twhile (%s != %s_end) {' % (varname, varname)
+            for line in body:
+                yield '\t\t' + line
+            yield '\t\t%s++;' % varname
+            yield '\t}'
+            yield '}'
+
+    def debug_offsets(self):
+        # XXX not implemented
+        return []
+
+
 class ExtTypeOpaqueDefNode:
     "For OpaqueTypes created by pypy.rpython.extfunctable.ExtTypeInfo."
 
@@ -248,6 +335,7 @@ class ExtTypeOpaqueDefNode:
 
 
 class ContainerNode(object):
+    is_later_container = False
     if USESLOTS:
         __slots__ = """db T obj 
                        typename implementationtypename
@@ -256,7 +344,6 @@ class ContainerNode(object):
                         includes""".split()
 
     def __init__(self, db, T, obj):
-        self.includes = ()
         self.db = db
         self.T = T
         self.obj = obj
@@ -274,7 +361,8 @@ class ContainerNode(object):
             self.name = defnode.access_expr(parentnode.name, parentindex)
         self.ptrname = '(&%s)' % self.name
         if self.typename != self.implementationtypename:
-            self.ptrname = '((%s)(void*)%s)' % (self.typename.replace('@', '*'),
+            ptrtypename = db.gettype(Ptr(T))
+            self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
                                                 self.ptrname)
 
     def forward_declaration(self):
@@ -388,6 +476,39 @@ class ArrayNode(ContainerNode):
 
 assert not USESLOTS or '__dict__' not in dir(ArrayNode)
 
+class FixedSizeArrayNode(ContainerNode):
+    nodekind = 'array'
+    if USESLOTS:
+        __slots__ = ()
+
+    def __init__(self, db, T, obj):
+        ContainerNode.__init__(self, db, T, obj)
+        if not isinstance(obj, _subarray):   # XXX hackish
+            self.ptrname = self.name
+
+    def basename(self):
+        return self.T._name
+
+    def enum_dependencies(self):
+        for i in range(self.obj.getlength()):
+            yield self.obj.getitem(i)
+
+    def getlength(self):
+        return 1    # not variable-sized!
+
+    def initializationexpr(self, decoration=''):
+        is_empty = True
+        yield '{'
+        # _names == ['item0', 'item1', ...]
+        for j, name in enumerate(self.T._names):
+            value = getattr(self.obj, name)
+            lines = generic_initializationexpr(self.db, value,
+                                               '%s[%d]' % (self.name, j),
+                                               '%s%d' % (decoration, j))
+            for line in lines:
+                yield '\t' + line
+        yield '}'
+
 def generic_initializationexpr(db, value, access_expr, decoration):
     if isinstance(typeOf(value), ContainerType):
         node = db.getcontainernode(value)
@@ -420,8 +541,8 @@ def generic_initializationexpr(db, value, access_expr, decoration):
 
 class FuncNode(ContainerNode):
     nodekind = 'func'
-    if USESLOTS:
-        __slots__ = """funcgens""".split()
+    # there not so many node of this kind, slots should not
+    # be necessary
 
     def __init__(self, db, T, obj):
         self.globalcontainer = True
@@ -432,10 +553,11 @@ class FuncNode(ContainerNode):
             self.includes = obj.includes
             self.name = self.basename()
         else:
-            self.includes = ()
             self.name = db.namespace.uniquename('g_' + self.basename())
         if not getattr(obj, 'isgchelper', False):
             self.make_funcgens()
+        else:
+            self.is_later_container = True
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
         self.ptrname = self.name
@@ -466,7 +588,10 @@ class FuncNode(ContainerNode):
 
     def funcgen_implementation(self, funcgen):
         funcgen.implementation_begin()
-        yield '%s {' % cdecl(self.implementationtypename, funcgen.name(self.name))
+        # recompute implementationtypename as the argnames may have changed
+        argnames = funcgen.argnames()
+        implementationtypename = self.db.gettype(self.T, argnames=argnames)
+        yield '%s {' % cdecl(implementationtypename, funcgen.name(self.name))
         #
         # declare the local variables
         #
@@ -505,9 +630,8 @@ class FuncNode(ContainerNode):
             yield line
 
         yield '}'
+        del bodyiter
         funcgen.implementation_end()
-
-assert not USESLOTS or '__dict__' not in dir(FuncNode)
 
 def select_function_code_generators(fnobj, db, functionname):
     if fnobj._callable in extfunc.EXTERNALS:
@@ -521,7 +645,7 @@ def select_function_code_generators(fnobj, db, functionname):
             fnobj._callable,)
     elif hasattr(fnobj, 'graph'):
         cpython_exc = getattr(fnobj, 'exception_policy', None) == "CPython"
-        if hasattr(db, 'stacklessdata') and not db.use_stackless_transformation:
+        if hasattr(db, 'stacklessdata'):
             split_slp_function = False
             if split_slp_function:
                 from pypy.translator.c.stackless import SlpSaveOnlyFunctionCodeGenerator, \
@@ -532,10 +656,11 @@ def select_function_code_generators(fnobj, db, functionname):
                 from pypy.translator.c.stackless import SlpFunctionCodeGenerator
                 return [SlpFunctionCodeGenerator(fnobj.graph, db, cpython_exc, functionname)]
         else:
-            return [FunctionCodeGenerator(fnobj.graph, db, cpython_exc, functionname)]
+            return [FunctionCodeGenerator(fnobj.graph, db, cpython_exc, functionname,
+                       do_stackless = not getattr(fnobj, 'isgchelper', False))]
     elif getattr(fnobj, 'external', None) == 'C':
         # deprecated case
-        if getattr(fnobj, 'includes', None):
+        if hasattr(fnobj, 'includes'):
             return []   # assume no wrapper needed
         else:
             return [CExternalFunctionCodeGenerator(fnobj, db)]
@@ -576,7 +701,6 @@ class PyObjectNode(ContainerNode):
     globalcontainer = True
     typename = 'PyObject @'
     implementationtypename = 'PyObject *@'
-    includes = ()
 
     def __init__(self, db, T, obj):
         # obj is a _pyobject here; obj.value is the underlying CPython object
@@ -604,6 +728,7 @@ ContainerNodeFactory = {
     GcStruct:     StructNode,
     Array:        ArrayNode,
     GcArray:      ArrayNode,
+    FixedSizeArray: FixedSizeArrayNode,
     FuncType:     FuncNode,
     OpaqueType:   opaquenode_factory,
     PyObjectType: PyObjectNode,

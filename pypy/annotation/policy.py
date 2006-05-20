@@ -26,6 +26,10 @@ class BasicAnnotatorPolicy:
             callback()
         del annotator.bookkeeper.pending_specializations[:]
 
+    def _adjust_space_config(self, space):
+        # allow to override space options.
+        if getattr(self, 'override_do_imports_immediately', None) is not None:
+            space.do_imports_immediately = self.override_do_imports_immediately
 
 class AnnotatorPolicy(BasicAnnotatorPolicy):
     """
@@ -45,7 +49,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
             name, parms = directive_parts
             try:
                 parms = eval("(lambda *parms: parms)(%s" % parms)
-            except KeyboardInterrupt, SystemExit:
+            except (KeyboardInterrupt, SystemExit):
                 raise
             except:
                 raise Exception, "broken specialize directive parms: %s" % directive

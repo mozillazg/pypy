@@ -3,26 +3,37 @@ import sys
 import py
 from py.test import raises
 
-from pypy.translator.tool.cbuild import skip_missing_compiler
 from pypy.translator.translator import TranslationContext
+from pypy.translator.backendopt.stat import print_statistics
 from pypy.translator.c import genc, gc
-from pypy.rpython.lltypesystem import lltype
-
+from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.objectmodel import cast_weakgcaddress_to_object, cast_object_to_weakgcaddress
 from pypy.rpython.memory.gctransform import GCTransformer
 
 from pypy import conftest
 
-def compile_func(fn, inputtypes):
-    t = TranslationContext()
-    t.buildannotator().build_types(fn, inputtypes)
-    t.buildrtyper().specialize()
-    builder = genc.CExtModuleBuilder(t, fn, gcpolicy=gc.RefcountingGcPolicy)
-    builder.generate_source()
-    skip_missing_compiler(builder.compile)
+def compile_func(fn, inputtypes, t=None, gcpolicy=gc.RefcountingGcPolicy):
+    if t is None:
+        t = TranslationContext()
+    if inputtypes is not None:
+        t.buildannotator().build_types(fn, inputtypes)
+        t.buildrtyper().specialize()
+    builder = genc.CExtModuleBuilder(t, fn, gcpolicy=gcpolicy)
+    builder.generate_source(defines={'COUNT_OP_MALLOCS': 1})
+    builder.compile()
     builder.import_module()
     if conftest.option.view:
         t.view()
-    return builder.get_entry_point()
+    module = builder.c_ext_module
+    compiled_fn = builder.get_entry_point()
+    def checking_fn(*args, **kwds):
+        try:
+            return compiled_fn(*args, **kwds)
+        finally:
+            mallocs, frees = module.malloc_counters()
+            assert mallocs == frees
+    return checking_fn
 
 def test_something():
     def f():
@@ -132,6 +143,37 @@ def test_write_barrier():
     assert fn(1) == 4
     assert fn(0) == 5
 
+def test_del_basic():
+    for gcpolicy in [gc.RefcountingGcPolicy]:  #, gc.FrameworkGcPolicy]:
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        TRASH = lltype.GcStruct('TRASH', ('x', lltype.Signed))
+        lltype.attachRuntimeTypeInfo(S)
+        GLOBAL = lltype.Struct('GLOBAL', ('x', lltype.Signed))
+        glob = lltype.malloc(GLOBAL, immortal=True)
+        def destructor(s):
+            glob.x = s.x + 1
+        def type_info_S(s):
+            return lltype.getRuntimeTypeInfo(S)
+
+        def g(n):
+            s = lltype.malloc(S)
+            s.x = n
+            # now 's' should go away
+        def entrypoint(n):
+            g(n)
+            # llop.gc__collect(lltype.Void)
+            return glob.x
+
+        t = TranslationContext()
+        t.buildannotator().build_types(entrypoint, [int])
+        rtyper = t.buildrtyper()
+        destrptr = rtyper.annotate_helper_fn(destructor, [lltype.Ptr(S)])
+        rtyper.attachRuntimeTypeInfoFunc(S, type_info_S, destrptr=destrptr)
+        rtyper.specialize()
+        fn = compile_func(entrypoint, None, t, gcpolicy=gcpolicy)
+
+        res = fn(123)
+        assert res == 124
 
 def test_del_catches():
     import os
@@ -185,6 +227,152 @@ def test_wrong_order_setitem():
     res = fn(1)
     assert res == 1
 
+def test_wrong_startblock_incref():
+    class B(object):
+        pass
+    def g(b):
+        while True:
+            b.x -= 10
+            if b.x < 0:
+                return b.x
+    def f(n):
+        b = B()
+        b.x = n
+        return g(b)
+
+    # XXX obscure: remove the first empty block in the graph of 'g'
+    t = TranslationContext()
+    graph = t.buildflowgraph(g)
+    assert graph.startblock.operations == []
+    graph.startblock = graph.startblock.exits[0].target
+    graph.startblock.isstartblock = True
+    from pypy.objspace.flow.model import checkgraph
+    checkgraph(graph)
+    t._prebuilt_graphs[g] = graph
+
+    fn = compile_func(f, [int], t)
+    res = fn(112)
+    assert res == -8
+
+class Weakrefable(object):
+    __lifeline__ = None
+
+class Weakref(object):
+    def __init__(self, lifeline, index, obj, callback):
+        self.address = cast_object_to_weakgcaddress(obj)
+        self.callback = callback
+        self.lifeline_addr = cast_object_to_weakgcaddress(lifeline)
+        self.index = index
+    
+    def ref(self):
+        return cast_weakgcaddress_to_object(self.address, Weakrefable)
+
+    def invalidate(self):
+        self.address = llmemory.WEAKNULL
+        self.lifeline_addr = llmemory.WEAKNULL
+        if self.callback is not None:
+            self.callback(self)
+
+    def __del__(self):
+        lifeline = cast_weakgcaddress_to_object(self.lifeline_addr,
+                                                WeakrefLifeline)
+        if lifeline is not None:
+            lifeline.ref_is_dead(self.index)
+
+class WeakrefLifeline(object):
+    def __init__(self, obj):
+        self.refs = []
+        
+    def __del__(self):
+        i = 0
+        while i < len(self.refs):
+            addr_ref = self.refs[i]
+            if cast_weakgcaddress_to_object(addr_ref, Weakref) is not None:
+                ref = cast_weakgcaddress_to_object(addr_ref, Weakref)
+                ref.invalidate()
+            i += 1
+
+    def get_weakref(self, obj, callback):
+        ref = Weakref(self, len(self.refs), obj, callback)
+        addr_ref = cast_object_to_weakgcaddress(ref)
+        self.refs.append(addr_ref)
+        return ref
+
+    def ref_is_dead(self, index):
+        self.refs[index] = llmemory.WEAKNULL
+
+def get_weakref(obj, callback=None):
+    assert isinstance(obj, Weakrefable)
+    if obj.__lifeline__ is None:
+        obj.__lifeline__ = WeakrefLifeline(obj)
+    return obj.__lifeline__.get_weakref(obj, callback)
+
+def test_weakref_alive():
+    def func():
+        f = Weakrefable()
+        f.x = 32
+        ref1 = get_weakref(f)
+        ref2 = get_weakref(f)
+        return f.x + ref2.ref().x
+    assert func() == 64
+    f = compile_func(func, [])
+    assert f() == 64
+
+def test_weakref_dying():
+    def g():
+        f = Weakrefable()
+        f.x = 32
+        return get_weakref(f)
+    def func():
+        ref = g()
+        return ref.ref() is None
+    assert func()
+    f = compile_func(func, [])
+    assert f()
+
+def test_weakref_callback():
+    global_w = Weakrefable()
+    global_w.x = 31
+    def g(ref):
+        global_w.x = 32
+    def h():
+        f = Weakrefable()
+        f.x = 32
+        ref = get_weakref(f, g)
+        return ref
+    def func():
+        ref = h()
+        return (ref.ref() is None and ref.callback is not None and
+                global_w.x == 32)
+    assert func()
+    f = compile_func(func, [])
+    assert f()
+
+def test_weakref_dont_always_callback():
+    global_w1 = Weakrefable()
+    global_w1.x = 30
+    global_w2 = Weakrefable()
+    global_w2.x = 30
+    def g1(ref):
+        global_w1.x = 32
+    def g2(ref):
+        global_w2.x = 32
+    def h():
+        f = Weakrefable()
+        f.x = 32
+        ref1 = get_weakref(f, g1)
+        ref2 = get_weakref(f, g2)
+        if f.x % 2 == 0: # start a new block to make sure ref2 dies before f
+            ref2 = None
+        f.x = 12
+        return ref1
+    def func():
+        ref = h()
+        return global_w1.x == 32 and global_w2.x == 30
+    assert func()
+    f = compile_func(func, [])
+    assert f()
+
 # _______________________________________________________________
 # test framework
 
@@ -193,22 +381,91 @@ from pypy.translator.c.test.test_boehm import AbstractTestClass
 class TestUsingFramework(AbstractTestClass):
     from pypy.translator.c.gc import FrameworkGcPolicy as gcpolicy
 
+    def test_empty_collect(self):
+        def f():
+            llop.gc__collect(lltype.Void)
+            return 41
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 41
+
     def test_framework_simple(self):
-        def g(x):
+        def g(x): # cannot cause a collect
             return x + 1
         class A(object):
             pass
-        def f():
+        def make():
             a = A()
             a.b = g(1)
-            # this should trigger a couple of collections
-            # XXX make sure it triggers at least one somehow!
-            for i in range(100000):
-                [A()] * 1000
+            return a
+        make.dont_inline = True
+        def f():
+            a = make()
+            llop.gc__collect(lltype.Void)
             return a.b
         fn = self.getcompiled(f)
         res = fn()
         assert res == 2
+        operations = self.t.graphs[0].startblock.exits[False].target.operations
+        assert len([op for op in operations if op.opname == "gc_reload_possibly_moved"]) == 0
+
+    def test_framework_safe_pushpop(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+        def g(x): # cause a collect
+            llop.gc__collect(lltype.Void)
+        g.dont_inline = True
+        global_a = A()
+        global_a.b = B()
+        global_a.b.a = A()
+        global_a.b.a.b = B()
+        global_a.b.a.b.c = 1
+        def make():
+            global_a.b.a.b.c = 40
+            a = global_a.b.a
+            b = a.b
+            b.c = 41
+            g(1)
+            b0 = a.b
+            b0.c = b.c = 42
+        make.dont_inline = True
+        def f():
+            make()
+            llop.gc__collect(lltype.Void)
+            return global_a.b.a.b.c
+        fn = self.getcompiled(f)
+        startblock = self.t.graphs[0].startblock
+        res = fn()
+        assert res == 42
+        assert len([op for op in startblock.operations if op.opname == "gc_reload_possibly_moved"]) == 0
+
+    def test_framework_protect_getfield(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+        def prepare(b, n):
+            a = A()
+            a.value = n
+            b.a = a
+            b.othervalue = 5
+        def g(a):
+            llop.gc__collect(lltype.Void)
+            for i in range(1000):
+                prepare(B(), -1)    # probably overwrites collected memory
+            return a.value
+        g.dont_inline = True
+        def f():
+            b = B()
+            prepare(b, 123)
+            a = b.a
+            b.a = None
+            return g(a) + b.othervalue
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 128
 
     def test_framework_varsized(self):
         S = lltype.GcStruct("S", ('x', lltype.Signed))
@@ -261,10 +518,12 @@ class TestUsingFramework(AbstractTestClass):
                 self.y = y
         a = A(0)
         a.x = None
-        def f():
+        def make():
             a.x = A(42)
-            for i in range(1000000):
-                A(i)
+        make.dont_inline = True
+        def f():
+            make()
+            llop.gc__collect(lltype.Void)
             return a.x.y
         fn = self.getcompiled(f)
         res = fn()
@@ -277,10 +536,115 @@ class TestUsingFramework(AbstractTestClass):
         def f():
             t.p = lltype.malloc(S)
             t.p.x = 43
-            for i in range(1000000):
+            for i in range(2500000):
                 s = lltype.malloc(S)
                 s.x = i
             return t.p.x
         fn = self.getcompiled(f)
         res = fn()
         assert res == 43
+
+    def test_framework_void_array(self):
+        A = lltype.GcArray(lltype.Void)
+        a = lltype.malloc(A, 44)
+        def f():
+            return len(a)
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 44
+        
+        
+    def test_framework_malloc_failure(self):
+        def f():
+            a = [1] * (sys.maxint//2)
+            return len(a) + a[0]
+        fn = self.getcompiled(f)
+        py.test.raises(MemoryError, fn)
+
+    def test_framework_array_of_void(self):
+        def f():
+            a = [None] * 43
+            b = []
+            for i in range(1000000):
+                a.append(None)
+                b.append(len(a))
+            return b[-1]
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 43 + 1000000
+        
+    def test_framework_opaque(self):
+        A = lltype.GcStruct('A', ('value', lltype.Signed))
+        O = lltype.GcOpaqueType('test.framework')
+
+        def gethidden(n):
+            a = lltype.malloc(A)
+            a.value = -n * 7
+            return lltype.cast_opaque_ptr(lltype.Ptr(O), a)
+        gethidden.dont_inline = True
+        def reveal(o):
+            return lltype.cast_opaque_ptr(lltype.Ptr(A), o)
+        def overwrite(a, i):
+            a.value = i
+        overwrite.dont_inline = True
+        def f():
+            o = gethidden(10)
+            llop.gc__collect(lltype.Void)
+            for i in range(1000):    # overwrite freed memory
+                overwrite(lltype.malloc(A), i)
+            a = reveal(o)
+            return a.value
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == -70
+
+    def test_framework_malloc_raw(self):
+        A = lltype.Struct('A', ('value', lltype.Signed))
+
+        def f():
+            p = lltype.malloc(A, flavor='raw')
+            p.value = 123
+            llop.gc__collect(lltype.Void)
+            res = p.value
+            lltype.free(p, flavor='raw')
+            return res
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 123
+
+    def test_framework_malloc_gc(self):
+        py.test.skip('in-progress')
+        A = lltype.GcStruct('A', ('value', lltype.Signed))
+
+        def f():
+            p = lltype.malloc(A, flavor='gc')
+            p.value = 123
+            llop.gc__collect(lltype.Void)
+            return p.value
+        fn = self.getcompiled(f)
+        res = fn()
+        assert res == 123
+
+class TestUsingStacklessFramework(TestUsingFramework):
+    from pypy.translator.c.gc import StacklessFrameworkGcPolicy as gcpolicy
+
+    def getcompiled(self, f):
+        # XXX quick hack
+        from pypy.translator.c.test.test_stackless import StacklessTest
+        runner = StacklessTest()
+        runner.gcpolicy = self.gcpolicy
+        runner.stacklessmode = True
+        try:
+            res = runner.wrap_stackless_function(f)
+        except py.process.cmdexec.Error, e:
+            if 'Fatal PyPy error: MemoryError' in e.err:
+                res = MemoryError
+            else:
+                raise
+        self.t = runner.t
+        def compiled():
+            if res is MemoryError:
+                raise MemoryError
+            else:
+                return res
+        return compiled

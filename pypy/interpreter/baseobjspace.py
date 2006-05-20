@@ -3,8 +3,8 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
 from pypy.interpreter.miscutils import ThreadLocals
-from pypy.tool.cache import Cache 
-from pypy.rpython.rarithmetic import r_uint, intmask
+from pypy.tool.cache import Cache
+from pypy.tool.uid import HUGEVAL_BYTES
 import os
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
@@ -16,10 +16,13 @@ class W_Root(object):
     def getdict(self):
         return None
 
-    def getdictvalue(self, space, attr):
+    def getdictvalue_w(self, space, attr):
+        return self.getdictvalue(space, space.wrap(attr))
+
+    def getdictvalue(self, space, w_attr):
         w_dict = self.getdict()
         if w_dict is not None:
-            return space.finditem(w_dict, space.wrap(attr))
+            return space.finditem(w_dict, w_attr)
         return None
 
     def setdict(self, space, w_dict):
@@ -45,9 +48,23 @@ class W_Root(object):
             raise
 
     def getrepr(self, space, info):
-        id = space.int_w(space.id(self)) # xxx ids could be long
-        id = r_uint(id) # XXX what about sizeof(void*) > sizeof(long) !!
-        return space.wrap("<%s at 0x%x>" % (info, id))
+        # XXX slowish
+        w_id = space.id(self)
+        w_4 = space.wrap(4)
+        w_0x0F = space.wrap(0x0F)
+        i = 2 * HUGEVAL_BYTES
+        addrstring = [' '] * i
+        while True:
+            n = space.int_w(space.and_(w_id, w_0x0F))
+            n += ord('0')
+            if n > ord('9'):
+                n += (ord('a') - ord('9') - 1)
+            i -= 1
+            addrstring[i] = chr(n)
+            if i == 0:
+                break
+            w_id = space.rshift(w_id, w_4)
+        return space.wrap("<%s at 0x%s>" % (info, ''.join(addrstring)))
 
     def getslotvalue(self, index):
         raise NotImplementedError
@@ -55,15 +72,21 @@ class W_Root(object):
     def setslotvalue(self, index, w_val):
         raise NotImplementedError
 
-    def identity_hash(self, space):
-        return space.wrap(intmask(hash(self))) #space.id(self)
+    # used by _weakref implemenation
+
+    def getweakref(self):
+        return None
+
+    def setweakref(self, space, weakreflifeline):
+        typename = space.type(self).getname(space, '?')
+        raise OperationError(space.w_TypeError, space.wrap(
+            "cannot create weak reference to '%s' object" % typename))
 
 class Wrappable(W_Root):
     """A subclass of Wrappable is an internal, interpreter-level class
     that can nevertheless be exposed at application-level by space.wrap()."""
     def __spacebind__(self, space):
         return self
-
 
 class InternalSpaceCache(Cache):
     """A generic cache for an object space.  Arbitrary information can
@@ -127,6 +150,7 @@ class ObjSpace(object):
         self.options.usemodules = usemodules 
         self.options.translating = translating
         self.options.geninterp = geninterp
+        self.interned_strings = {}
         self.setoptions(**kw)
         self.initialize()
 
@@ -189,6 +213,7 @@ class ObjSpace(object):
 
         modules.extend(['unicodedata', '_codecs',
                          'array', 'marshal', 'errno', 'math', '_sre'])
+	modules.append('_pickle_support')
 
         if self.options.nofaking:
             modules.append('posix')
@@ -362,6 +387,10 @@ class ObjSpace(object):
         """shortcut for space.int_w(space.hash(w_obj))"""
         return self.int_w(self.hash(w_obj))
 
+    def set_str_keyed_item(self, w_obj, w_key, w_value):
+        w_strkey = self.wrap(self.str_w(w_key)) # Force the key to a space.w_str
+        return self.setitem(w_obj, w_strkey, w_value)
+    
     def finditem(self, w_obj, w_key):
         try:
             return self.getitem(w_obj, w_key)
@@ -375,6 +404,23 @@ class ObjSpace(object):
             return self.w_True
         else:
             return self.w_False
+
+    def new_interned_w_str(self, w_s):
+        s = self.str_w(w_s)
+        try:
+            return self.interned_strings[s]
+        except KeyError:
+            pass
+        self.interned_strings[s] = w_s
+        return w_s
+
+    def new_interned_str(self, s):
+        try:
+            return self.interned_strings[s]
+        except KeyError:
+            pass
+        w_s = self.interned_strings[s] = self.wrap(s)
+        return w_s
 
     # support for the deprecated __getslice__, __setslice__, __delslice__
     def getslice(self, w_obj, w_start, w_stop):
@@ -524,7 +570,7 @@ class ObjSpace(object):
         w_type = self.type(w_obj)
         w_mro = self.getattr(w_type, self.wrap("__mro__"))
         for w_supertype in self.unpackiterable(w_mro):
-            w_value = w_supertype.getdictvalue(self, name)
+            w_value = w_supertype.getdictvalue_w(self, name)
             if w_value is not None:
                 return w_value
         return None
@@ -606,14 +652,15 @@ class ObjSpace(object):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
 
-    def exec_(self, statement, w_globals, w_locals):
+    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False):
         "NOT_RPYTHON: For internal debugging."
         import types
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
             statement = compile(statement, '?', 'exec')
         if isinstance(statement, types.CodeType):
-            statement = PyCode._from_code(self, statement)
+            statement = PyCode._from_code(self, statement,
+                                          hidden_applevel=hidden_applevel)
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         w_key = self.wrap('__builtins__')

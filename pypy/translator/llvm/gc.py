@@ -1,5 +1,5 @@
 import sys
-from pypy.rpython.rstr import STR
+from pypy.rpython.lltypesystem.rstr import STR
 
 from pypy.translator.llvm.log import log
 log = log.gc
@@ -20,6 +20,9 @@ class GcPolicy:
     def malloc(self, codewriter, targetvar, type_, size=1, atomic=False):
         raise NotImplementedError, 'GcPolicy should not be used directly'
 
+    def var_malloc(self, codewriter, targetvar, type_, node, len, atomic=False):
+        raise NotImplementedError, 'GcPolicy should not be used directly'
+
     def new(db, gcpolicy=None):
         """ factory """
         gcpolicy = gcpolicy or 'boehm'
@@ -37,35 +40,44 @@ class GcPolicy:
             gcpolicy = BoehmGcPolicy(db)
         elif gcpolicy == 'ref':
             gcpolicy = RefcountingGcPolicy(db)
-        elif gcpolicy == 'raw':
+        elif gcpolicy in ('none', 'raw'):
             gcpolicy = RawGcPolicy(db)
         else:
             raise Exception, 'unknown gcpolicy: ' + str(gcpolicy)
         return gcpolicy
     new = staticmethod(new)
 
+
 class RawGcPolicy(GcPolicy):
     def __init__(self, db):
-        self.db = db
+        self.boehm = BoehmGcPolicy(db)
 
-    def malloc(self, codewriter, targetvar, type_, size=1, atomic=False):
-        codewriter.malloc(targetvar, type_, size)
-        #XXX memset
-        
+    def malloc(self, codewriter, targetvar, type_, size=1, atomic=False, exc_flag=False):
+        return self.boehm.malloc(codewriter, targetvar, type_, size, atomic, exc_flag)
+
+    def var_malloc(self, codewriter, targetvar, type_, node, len, atomic=False):
+        return self.boehm.var_malloc(codewriter, targetvar, type_, node, len, atomic)
+
+    def genextern_code(self):
+        r  = ''
+        r += '#define __GC_STARTUP_CODE__\n'
+        r += '#define __GC_SETUP_CODE__\n'
+        r += 'char* pypy_malloc(int size)        { return calloc(1, size); }\n'
+        r += 'char* pypy_malloc_atomic(int size) { return calloc(1, size); }\n'
+        return r
+
+
 class BoehmGcPolicy(GcPolicy):
 
-    def __init__(self, db, exc_useringbuf=False):
+    def __init__(self, db, exc_useringbuf=True):
         self.db = db
         self.n_malloced = 0
         self.exc_useringbuf = exc_useringbuf
         
     def genextern_code(self):
-        r = '#include "boehm.h"\n'
-
-        if self.exc_useringbuf:
-            r += '#define __GC_SETUP_CODE__ ll_ringbuffer_initialise();\n'
-        else:
-            r += '#define __GC_SETUP_CODE__\n'
+        r  = ''
+        r += '#include "boehm.h"\n'
+        r += '#define __GC_SETUP_CODE__\n'
         return r
     
     def gc_libraries(self):
@@ -97,17 +109,16 @@ def GC_get_heap_size_wrapper():
         word = self.db.get_machine_word()
         uword = self.db.get_machine_uword()
 
+        fnname = '%pypy_malloc' + (atomic and '_atomic' or '')
         if self.exc_useringbuf and exc_flag:
-            fnname = '%pypy_' + self.ringbuf_malloc_name
-            atomic = False
-        else:
-            fnname = '%pypy_malloc' + (atomic and '_atomic' or '')
+            fnname += '_ringbuffer'
+            atomic  = False #XXX performance hack to never clear the ringbuffer data
 
         # malloc_size is unsigned right now
         sizei = '%malloc_sizei' + self.get_count()        
         codewriter.cast(sizei, uword, size, word)
         codewriter.call(targetvar, 'sbyte*', fnname, [word], [sizei])
-        
+
         if atomic:
             codewriter.call(None, 'void', '%llvm.memset',
                             ['sbyte*', 'ubyte', uword, uword],
@@ -170,6 +181,7 @@ def GC_get_heap_size_wrapper():
         codewriter.getelementptr(arraylength, type_, 
                                  targetvar,  indices_to_arraylength)
         codewriter.store(lentype, len, arraylength)
+
 
 class RefcountingGcPolicy(GcPolicy):
     def __init__(self, db):

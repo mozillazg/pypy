@@ -26,12 +26,14 @@ def compile_db(db):
     targetdir = udir.join(modulename).ensure(dir=1)
     gen_source(db, modulename, str(targetdir), defines={'COUNT_OP_MALLOCS': 1})
     m = make_module_from_c(targetdir.join(modulename+'.c'),
-                           include_dirs = [os.path.dirname(autopath.this_dir)])
+                           include_dirs = [os.path.dirname(autopath.this_dir)],
+                           libraries = db.gcpolicy.gc_libraries())
     return m
 
-def compile(fn, argtypes, view=False, gcpolicy=None, backendopt=True):
+def compile(fn, argtypes, view=False, gcpolicy=None, backendopt=True,
+            annotatorpolicy=None):
     t = TranslationContext()
-    a = t.buildannotator()
+    a = t.buildannotator(policy=annotatorpolicy)
     a.build_types(fn, argtypes)
     t.buildrtyper().specialize()
     if backendopt:
@@ -44,28 +46,12 @@ def compile(fn, argtypes, view=False, gcpolicy=None, backendopt=True):
         t.view()
     compiled_fn = getattr(module, entrypoint)
     def checking_fn(*args, **kwds):
-        res = compiled_fn(*args, **kwds)
-        mallocs, frees = module.malloc_counters()
-        assert mallocs == frees
-        return res
+        try:
+            return compiled_fn(*args, **kwds)
+        finally:
+            mallocs, frees = module.malloc_counters()
+            assert mallocs == frees
     return checking_fn
-
-
-def test_untyped_func():
-    def f(x):
-        return x+1
-    graph = TranslationContext().buildflowgraph(f)
-
-    F = FuncType([Ptr(PyObject)], Ptr(PyObject))
-    S = GcStruct('testing', ('fptr', Ptr(F)))
-    f = functionptr(F, "f", graph=graph)
-    s = malloc(S)
-    s.fptr = f
-    db = LowLevelDatabase()
-    db.get(s)
-    db.complete()
-    compile_db(db)
-
 
 def test_func_as_pyobject():
     def f(x):
@@ -299,90 +285,76 @@ def test_keepalive():
     f1 = compile(f, [])
     assert f1() == 1
 
-# ____________________________________________________________
-# test for the 'cleanup' attribute of SpaceOperations
-class CleanupState(object):
-    pass
-cleanup_state = CleanupState()
-cleanup_state.current = 1
-def cleanup_g(n):
-    cleanup_state.saved = cleanup_state.current
-    try:
-        return 10 // n
-    except ZeroDivisionError:
-        raise
-def cleanup_h():
-    cleanup_state.current += 1
-def cleanup_f(n):
-    cleanup_g(n)
-    cleanup_h()     # the test hacks the graph to put this h() in the
-                    # cleanup clause of the previous direct_call(g)
-    return cleanup_state.saved * 100 + cleanup_state.current
+# this test shows if we have a problem with refcounting PyObject
+if conftest.option.gcpolicy == 'boehm':
+    def test_refcount_pyobj():
+        from pypy.rpython.lltypesystem.lloperation import llop
+        def prob_with_pyobj(b):
+            return 3, b
+        def collect():
+            llop.gc__collect(Void)
+        f = compile(prob_with_pyobj, [object])
+        c = compile(collect, [])
+        from sys import getrefcount as g
+        obj = None
+        before = g(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        c()
+        c()
+        c()
+        c()
+        c()
+        after = g(obj)
+        assert abs(before - after) < 5
+else:
+    def test_refcount_pyobj():
+        def prob_with_pyobj(b):
+            return 3, b
 
-def test_cleanup_finally():
-    class DummyGCTransformer(NoneGcPolicy.transformerclass):
-        def transform_graph(self, graph):
-            super(DummyGCTransformer, self).transform_graph(graph)
-            if graph is self.translator.graphs[0]:
-                operations = graph.startblock.operations
-                op_call_g = operations[0]
-                op_call_h = operations.pop(1)
-                assert op_call_g.opname == "direct_call"
-                assert op_call_h.opname == "direct_call"
-                assert op_call_g.cleanup == ((), ())
-                assert op_call_h.cleanup == ((), ())
-                cleanup_finally = (op_call_h,)
-                cleanup_except = ()
-                op_call_g.cleanup = cleanup_finally, cleanup_except
-                op_call_h.cleanup = None
+        f = compile(prob_with_pyobj, [object])
+        from sys import getrefcount as g
+        obj = None
+        before = g(obj)
+        f(obj)
+        after = g(obj)
+        assert before == after
 
-    class DummyGcPolicy(NoneGcPolicy):
-        transformerclass = DummyGCTransformer
+def test_refcount_pyobj_setfield():
+    import weakref, gc
+    class S(object):
+        def __init__(self):
+            self.p = None
+    def foo(wref, objfact):
+        s = S()
+        b = objfact()
+        s.p = b
+        wr = wref(b)
+        s.p = None
+        return wr
+    f = compile(foo, [object, object], backendopt=False)
+    class C(object):
+        pass
+    wref = f(weakref.ref, C)
+    gc.collect()
+    assert not wref()
 
-    f1 = compile(cleanup_f, [int], backendopt=False, gcpolicy=DummyGcPolicy)
-    # state.current == 1
-    res = f1(1)
-    assert res == 102
-    # state.current == 2
-    res = f1(1)
-    assert res == 203
-    # state.current == 3
-    py.test.raises(ZeroDivisionError, f1, 0)
-    # state.current == 4
-    res = f1(1)
-    assert res == 405
-    # state.current == 5
-
-def test_cleanup_except():
-    class DummyGCTransformer(NoneGcPolicy.transformerclass):
-        def transform_graph(self, graph):
-            super(DummyGCTransformer, self).transform_graph(graph)
-            if graph is self.translator.graphs[0]:
-                operations = graph.startblock.operations
-                op_call_g = operations[0]
-                op_call_h = operations.pop(1)
-                assert op_call_g.opname == "direct_call"
-                assert op_call_h.opname == "direct_call"
-                assert op_call_g.cleanup == ((), ())
-                assert op_call_h.cleanup == ((), ())
-                cleanup_finally = ()
-                cleanup_except = (op_call_h,)
-                op_call_g.cleanup = cleanup_finally, cleanup_except
-                op_call_h.cleanup = None
-
-    class DummyGcPolicy(NoneGcPolicy):
-        transformerclass = DummyGCTransformer
-
-    f1 = compile(cleanup_f, [int], backendopt=False, gcpolicy=DummyGcPolicy)
-    # state.current == 1
-    res = f1(1)
-    assert res == 101
-    # state.current == 1
-    res = f1(1)
-    assert res == 101
-    # state.current == 1
-    py.test.raises(ZeroDivisionError, f1, 0)
-    # state.current == 2
-    res = f1(1)
-    assert res == 202
-    # state.current == 2
+def test_refcount_pyobj_setfield_increfs():
+    class S(object):
+        def __init__(self):
+            self.p = None
+    def goo(objfact):
+        s = S()
+        b = objfact()
+        s.p = b
+        return s
+    def foo(objfact):
+        s = goo(objfact)
+        return s.p
+    f = compile(foo, [object], backendopt=False)
+    class C(object):
+        pass
+    print f(C)

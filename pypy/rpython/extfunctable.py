@@ -28,12 +28,14 @@ class ExtFuncInfo:
 
 
 class ExtTypeInfo:
-    def __init__(self, typ, tag, methods, needs_container=True):
+    def __init__(self, typ, tag, methods,
+                 needs_container=True, needs_gc=False):
         self.typ = typ
         self.tag = tag
         self._TYPE = None
         self.methods = methods     # {'name': ExtFuncInfo()}
         self.needs_container = needs_container
+        self.needs_gc = needs_gc
 
     def get_annotation(self, methodname):
         return self.methods[methodname].annotation
@@ -50,7 +52,10 @@ class ExtTypeInfo:
     def get_lltype(self):
         if self._TYPE is None:
             from pypy.rpython.lltypesystem import lltype
-            OPAQUE = lltype.OpaqueType(self.tag)
+            if self.needs_gc:
+                OPAQUE = lltype.GcOpaqueType(self.tag)
+            else:
+                OPAQUE = lltype.OpaqueType(self.tag)
             OPAQUE._exttypeinfo = self
             if self.needs_container:
                 STRUCT = lltype.GcStruct(self.tag, ('obj', OPAQUE))
@@ -93,7 +98,7 @@ def declare(func, annotation, ll_function, ll_annotable=True, backend_functionte
     return info
 
 typetable = {}
-def declaretype1(typ, tag, methodsdecl, needs_container):
+def declaretype1(typ, tag, methodsdecl, needs_container, needs_gc=False):
     assert isinstance(typ, type)
     methods = {}
     for name, args in methodsdecl.items():
@@ -105,7 +110,7 @@ def declaretype1(typ, tag, methodsdecl, needs_container):
         else:
             func = None   # failed (typical for old-style C types), ignore it
         methods[name] = declare(func, *args)
-    info = ExtTypeInfo(typ, tag, methods, needs_container)
+    info = ExtTypeInfo(typ, tag, methods, needs_container, needs_gc)
     typetable[typ] = info
     for callback in table_callbacks:
         callback()
@@ -117,9 +122,21 @@ def declaretype(typ, tag, **methodsdecl):
 def declareptrtype(typ, tag, **methodsdecl):
     return declaretype1(typ, tag, methodsdecl, needs_container=False)
 
+def declaregcptrtype(typ, tag, **methodsdecl):
+    return declaretype1(typ, tag, methodsdecl, needs_container=False,
+                        needs_gc=True)
+
 # _____________________________________________________________
 
-
+def record_call(func, args_s, symbol):
+    from pypy.annotation import bookkeeper
+    bk = bookkeeper.getbookkeeper()
+    # this would be nice!
+    #bk.pbc_call(bk.immutablevalue(func),
+    #            bk.build_args("simple_call", args_s),
+    #            emulated=True)
+    bk.annotator.translator._implicitly_called_by_externals.append(
+        (func, args_s, symbol))
 
 def noneannotation(*args):
     return None
@@ -130,14 +147,20 @@ def posannotation(*args):
 
 def statannotation(*args):
     from pypy.annotation.model import SomeInteger, SomeTuple
+    from pypy.rpython.module.ll_os import ll_stat_result
+    record_call(ll_stat_result, [SomeInteger()]*10, 'OS_STAT')
     return SomeTuple((SomeInteger(),)*10)
 
 def frexpannotation(*args):
     from pypy.annotation.model import SomeInteger, SomeTuple, SomeFloat
+    from pypy.rpython.module.ll_math import ll_frexp_result
+    record_call(ll_frexp_result, (SomeFloat(), SomeInteger()), 'MATH_FREXP')
     return SomeTuple((SomeFloat(), SomeInteger()))
 
 def modfannotation(*args):
     from pypy.annotation.model import SomeTuple, SomeFloat
+    from pypy.rpython.module.ll_math import ll_modf_result
+    record_call(ll_modf_result, (SomeFloat(), SomeFloat()), 'MATH_MODF')
     return SomeTuple((SomeFloat(), SomeFloat()))
 
 def strnullannotation(*args):
@@ -228,9 +251,12 @@ declare(rstack.stack_frames_depth, int, 'll_stackless/stack_frames_depth')
 declare(rstack.stack_too_big, bool, 'll_stack/too_big')
 declare(rstack.stack_check, noneannotation, 'll_stack/check')
 declare(rstack.stack_unwind, noneannotation, 'll_stack/unwind')
-frametop_type_info = declareptrtype(rstack.frame_stack_top, 'frame_stack_top',
+declare(rstack.stack_capture, rstack.frame_stack_top, 'll_stack/capture')
+frametop_type_info = declaregcptrtype(rstack.frame_stack_top,'frame_stack_top',
                                         switch = (rstack.frame_stack_top,
-                                                  'll_stackless/switch'))
+                                                  'll_stackless/switch'),
+                                        clone  = (rstack.frame_stack_top,
+                                                  'll_stackless/clone'))
 
 # ___________________________________________________________
 # timestamp counter

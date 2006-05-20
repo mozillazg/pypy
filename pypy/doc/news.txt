@@ -7,6 +7,50 @@ nonsense, isn't it?  `more...`_
 .. _Python: http://www.python.org/doc/current/ref/ref.html
 .. _`more...`: http://codespeak.net/pypy/dist/pypy/doc/architecture.html#mission-statement 
 
+Duesseldorf PyPy sprint 2-9 June 2006
+==================================================================
+
+The next PyPy sprint will be held in the Computer Science department of
+Heinrich-Heine Universitaet Duesseldorf from the *2nd to the 9th of June*.
+Main focus of the sprint will be on the goals of the upcoming June 0.9
+release.
+
+Read more in `the sprint announcement`_, see who is  planning to attend
+on the `people page`_.
+
+.. _`the sprint announcement`: http://codespeak.net/pypy/extradoc/sprintinfo/ddorf2006/announce.html
+.. _`people page`: http://codespeak.net/pypy/extradoc/sprintinfo/ddorf2006/people.html
+
+PyPy sprint in Tokyo 23rd - 29th April 2006
+==================================================================
+
+This sprint was in Akihabara, Tokyo, Japan, our hosts was
+FSIJ (Free Software Initiative of Japan) and we aimed for the sprint
+to promote Python and introduce people to PyPy. Good progress was also made
+on PyPy's ootypesystem for the more high level backends.
+
+PyPy at XPDay France 2006 in Paris March 23rd - March 24th 2006
+==================================================================
+
+Logilab presented PyPy at the first `french XP Day`_ that it was
+sponsoring and which was held in Paris. There was over a hundred
+attendants. Interesting talks included Python as an agile language and
+Tools for continuous integration.
+ 
+.. _`french XP Day`: http://www.xpday.fr/
+
+Logic Sprint at Louvain-la-Neuve University (Louvain-la-Neuve, Belgium)
+========================================================================
+
+*March 6th - March 10th 2006.* PyPy developers focusing on adding
+logic programming to PyPy will met with the team that developed the Oz
+programming language and the Mozart interpreter.
+
+Read the report_ and the original announcement_.
+
+.. _report: http://codespeak.net/pypy/extradoc/sprintinfo/louvain-la-neuve-2006/report.html
+.. _announcement: http://codespeak.net/pypy/extradoc/sprintinfo/louvain-la-neuve-2006/sprint-announcement.html
+
 PyCon Sprint 2006 (Dallas, Texas, USA)
 ==================================================================
 

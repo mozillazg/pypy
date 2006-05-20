@@ -1,78 +1,44 @@
-from ctypes import c_char, c_byte, c_ubyte, c_short, c_ushort, c_int, c_uint
-from ctypes import c_long, c_ulong, c_longlong, c_ulonglong, c_float
-from ctypes import c_double, c_char_p
-from pypy.annotation import model as annmodel
-from pypy.rpython import extregistry
-from pypy.rpython.rmodel import Repr, inputconst
+from pypy.rpython.rmodel import inputconst
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem.rstr import CharRepr, UniCharRepr
 from pypy.annotation.pairtype import pairtype
-from pypy.rpython.rmodel import IntegerRepr
+from pypy.rpython.rmodel import IntegerRepr, FloatRepr
+from pypy.rpython.error import TyperError
+from pypy.rpython.rctypes.rmodel import CTypesValueRepr
 
-ctypes_annotation_list = [
-    (c_char,          lltype.Char),
-    (c_byte,          lltype.Signed),
-    (c_ubyte,         lltype.Unsigned),
-    (c_short,         lltype.Signed),
-    (c_ushort,        lltype.Unsigned),
-    (c_int,           lltype.Signed),
-    (c_uint,          lltype.Unsigned),
-    (c_long,          lltype.Signed),
-    (c_ulong,         lltype.Unsigned),
-    (c_longlong,      lltype.SignedLongLong),
-    (c_ulonglong,     lltype.UnsignedLongLong),
-    (c_float,         lltype.Float),
-    (c_double,        lltype.Float),
-]
 
-class PrimitiveRepr(Repr):
-    def __init__(self, rtyper, ctype, ll_type):
-        self.ctype = ctype
-        self.ll_type = ll_type
-        self.lowleveltype = lltype.Ptr(
-            lltype.GcStruct( "CtypesBox_%s" % (ctype.__name__,),
-                ( "c_data", lltype.Struct('C_Data_%s' % (ctype.__name__,),
-                    ('value', ll_type) )
-                )
-            )
-        )
+class PrimitiveRepr(CTypesValueRepr):
 
-        self.const_cache = {} # store generated const values+original value
-
-    def get_c_data(self, llops, v_primitive):
-        inputargs = [v_primitive, inputconst(lltype.Void, "c_data")]
-        return llops.genop('getsubstruct', inputargs,
-                    lltype.Ptr(self.lowleveltype.TO.c_data) )
-
-    def setfield(self, llops, v_primitive, v_value):
-        v_c_data = self.get_c_data(llops, v_primitive)
-        cname = inputconst(lltype.Void, 'value')
-        llops.genop('setfield', [v_c_data, cname, v_value])
-
-    def getfield(self, llops, v_primitive):
-        v_c_data = self.get_c_data(llops, v_primitive)
-
-        cname = inputconst(lltype.Void, 'value')
-        return llops.genop('getfield', [v_c_data, cname],
-                resulttype=self.ll_type)
-
-    def convert_const(self, ctype_value):
-        assert isinstance(ctype_value, self.ctype)
-        key = id(ctype_value)
-        try:
-            return self.const_cache[key][0]
-        except KeyError:
-            p = lltype.malloc(self.lowleveltype.TO)
+    def __init__(self, rtyper, s_ctypesobject, ll_type):
+        CTypesValueRepr.__init__(self, rtyper, s_ctypesobject, ll_type)
+        if isinstance(ll_type, lltype.Number):
+            normalized_lltype = ll_type.normalized()
+        else:
+            normalized_lltype = ll_type
+        self.value_repr = rtyper.getprimitiverepr(ll_type)
+        self.normalized_value_repr = rtyper.getprimitiverepr(normalized_lltype)
             
-            self.const_cache[key] = p, ctype_value
-            p.c_data.value = ctype_value.value
-            return p
-        
+    def return_c_data(self, llops, v_c_data):
+        """Read out the atomic data from a raw C pointer.
+        Used when the data is returned from an operation or C function call.
+        """
+        v_value = self.getvalue_from_c_data(llops, v_c_data)
+        return self.return_value(llops, v_value)
+
+    def return_value(self, llops, v_value):
+        # like return_c_data(), but when the input is only the value
+        # field instead of the c_data pointer
+        return llops.convertvar(v_value, self.value_repr,
+                               self.normalized_value_repr)
+
     def rtype_getattr(self, hop):
         s_attr = hop.args_s[1]
         assert s_attr.is_constant()
         assert s_attr.const == 'value'
         v_primitive = hop.inputarg(self, 0)
-        return self.getfield(hop.llops, v_primitive)
+        hop.exception_cannot_occur()
+        v_c_data = self.get_c_data(hop.llops, v_primitive)
+        return self.return_c_data(hop.llops, v_c_data)
 
     def rtype_setattr(self, hop):
         s_attr = hop.args_s[1]
@@ -80,39 +46,40 @@ class PrimitiveRepr(Repr):
         assert s_attr.const == 'value'
         v_primitive, v_attr, v_value = hop.inputargs(self, lltype.Void,
                                                         self.ll_type)
-        self.setfield(hop.llops, v_primitive, v_value)
+        self.setvalue(hop.llops, v_primitive, v_value)
 
-def primitive_specialize_call(hop):
-    r_primitive = hop.r_result
-    c1 = hop.inputconst(lltype.Void, r_primitive.lowleveltype.TO) 
-    v_result = hop.genop("malloc", [c1], resulttype=r_primitive.lowleveltype)
-    if len(hop.args_s):
-        v_value, = hop.inputargs(r_primitive.ll_type)
-        r_primitive.setfield(hop.llops, v_result, v_value)
-    return v_result
+    def rtype_is_true(self, hop):
+        [v_box] = hop.inputargs(self)
+        v_value = self.return_value(hop.llops, self.getvalue(hop.llops, v_box))
+        if v_value.concretetype in (lltype.Char, lltype.UniChar):
+            llfn = ll_c_char_is_true
+        else:
+            llfn = ll_is_true
+        return hop.gendirectcall(llfn, v_value)
 
-def do_register(the_type, ll_type):
-    def compute_result_annotation_function(s_arg=None):
-        return annmodel.SomeCTypesObject(the_type,
-                annmodel.SomeCTypesObject.OWNSMEMORY)
-    extregistry.register_value(the_type,
-        compute_result_annotation=compute_result_annotation_function,
-        specialize_call=primitive_specialize_call
-        )
+    def initialize_const(self, p, value):
+        if isinstance(value, self.ctype):
+            value = value.value
+        p.c_data[0] = lltype.cast_primitive(self.ll_type, value)
 
-    def compute_prebuilt_instance_annotation(the_type, instance):
-        return annmodel.SomeCTypesObject(the_type,
-                annmodel.SomeCTypesObject.OWNSMEMORY)
+def ll_is_true(x):
+    return bool(x)
 
-    def primitive_get_repr(rtyper, s_primitive):
-        return PrimitiveRepr(rtyper, s_primitive.knowntype, ll_type)
+def ll_c_char_is_true(x):
+    return bool(ord(x))
 
-    entry = extregistry.register_type(the_type,
-            compute_annotation=compute_prebuilt_instance_annotation,
-            get_repr=primitive_get_repr,
-            )
-    entry.fields_s = {'value': annmodel.lltype_to_annotation(ll_type)}
-    entry.lowleveltype = ll_type
-
-for the_type, ll_type in ctypes_annotation_list:
-    do_register(the_type, ll_type)
+class __extend__(pairtype(IntegerRepr, PrimitiveRepr),
+                 pairtype(FloatRepr, PrimitiveRepr),
+                 pairtype(CharRepr, PrimitiveRepr),
+                 pairtype(UniCharRepr, PrimitiveRepr)):
+    def convert_from_to((r_from, r_to), v, llops):
+        # first convert 'v' to the precise expected low-level type
+        r_input = r_to.rtyper.getprimitiverepr(r_to.ll_type)
+        v = llops.convertvar(v, r_from, r_input)
+        # allocate a memory-owning box to hold a copy of the ll value 'v'
+        r_temp = r_to.r_memoryowner
+        v_owned_box = r_temp.allocate_instance(llops)
+        r_temp.setvalue(llops, v_owned_box, v)
+        # return this box possibly converted to the expected output repr,
+        # which might be a memory-aliasing box
+        return llops.convertvar(v_owned_box, r_temp, r_to)

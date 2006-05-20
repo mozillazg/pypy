@@ -1,7 +1,9 @@
+import py
+import sys
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.test.test_llinterp import interpret
+from pypy.rpython.test.test_llinterp import interpret, interpret_raises
 from pypy.rpython.rarithmetic import intmask
 
 
@@ -58,7 +60,6 @@ class BaseTestRclass:
         assert res == 12
 
     def test_classattr_both(self):
-        print self.ts
         class A:
             a = 1
         class B(A):
@@ -77,6 +78,40 @@ class BaseTestRclass:
         assert res == 2
         res = interpret(dummyfn, [1], type_system=self.ts)
         assert res == 4
+
+    def test_classattr_both2(self):
+        class Base(object):
+            a = 0
+        class A(Base):
+            a = 1
+        class B(Base):
+            a = 2
+        def pick(i):
+            if i == 0:
+                return A
+            else:
+                return B
+            
+        def dummyfn(i):
+            C = pick(i)
+            i = C()
+            return C.a + i.a
+        res = interpret(dummyfn, [0], type_system=self.ts)
+        assert res == 2
+        res = interpret(dummyfn, [1], type_system=self.ts)
+        assert res == 4
+
+    def test_runtime_exception(self):
+        def pick(flag):
+            if flag:
+                return TypeError
+            else:
+                return ValueError
+        def f(flag):
+            ex = pick(flag)
+            raise ex()
+        interpret_raises(TypeError, f, [True], type_system=self.ts)
+        interpret_raises(ValueError, f, [False], type_system=self.ts)
 
     def test_classattr_as_defaults(self):
         def dummyfn():
@@ -322,7 +357,8 @@ class BaseTestRclass:
         d = D()
         def f():
             d2 = D()
-            x = hash(d2) == id(d2) # xxx check for this CPython peculiarity for now
+            # xxx check for this CPython peculiarity for now:
+            x = (hash(d2) & sys.maxint) == (id(d2) & sys.maxint)
             return x, hash(c)+hash(d)
 
         res = interpret(f, [], type_system=self.ts)
@@ -398,7 +434,61 @@ class BaseTestRclass:
         res = interpret(f, [], type_system=self.ts)
         assert res == 1
 
-   
+    def test_mixin(self):
+        class Mixin(object):
+            _mixin_ = True
+
+            def m(self, v):
+                return v
+
+        class Base(object):
+            pass
+
+        class A(Base, Mixin):
+            pass
+
+        class B(Base, Mixin):
+            pass
+
+        class C(B):
+            pass
+
+        def f():
+            a = A()
+            v0 = a.m(2)
+            b = B()
+            v1 = b.m('x')
+            c = C()
+            v2 = c.m('y')
+            return v0, v1, v2
+
+        res = interpret(f, [], type_system=self.ts)
+        assert typeOf(res.item0) == Signed
+
+    def test___class___attribute(self):
+        class Base(object): pass
+        class A(Base): pass
+        class B(Base): pass
+        class C(A): pass
+        def seelater():
+            C()
+        def f(n):
+            if n == 1:
+                x = A()
+            else:
+                x = B()
+            y = B()
+            result = x.__class__, y.__class__
+            seelater()
+            return result
+        def g():
+            cls1, cls2 = f(1)
+            return cls1 is A, cls2 is B
+
+        res = interpret(g, [], type_system=self.ts)
+        assert res.item0
+        assert res.item1
+
 
 class TestLltype(BaseTestRclass):
 
@@ -486,7 +576,7 @@ class TestOotype(BaseTestRclass):
         t.buildrtyper(type_system=self.ts).specialize()
         graph = graphof(t, f)
         TYPE = graph.startblock.operations[0].args[0].value
-        meth = TYPE._lookup("o__del___variant0")
+        _, meth = TYPE._lookup("o__del___variant0")
         assert meth.finalizer
 
     def test_del_inheritance(self):
@@ -520,9 +610,9 @@ class TestOotype(BaseTestRclass):
         TYPEA = graph.startblock.operations[0].args[0].value
         TYPEB = graph.startblock.operations[2].args[0].value
         TYPEC = graph.startblock.operations[4].args[0].value
-        destra = TYPEA._lookup("o__del___variant0")
-        destrb = TYPEB._lookup("o__del___variant0")
-        destrc = TYPEC._lookup("o__del___variant0")
+        _, destra = TYPEA._lookup("o__del___variant0")
+        _, destrb = TYPEB._lookup("o__del___variant0")
+        _, destrc = TYPEC._lookup("o__del___variant0")
         assert destra == destrc
         assert destrb is not None
         assert destra is not None

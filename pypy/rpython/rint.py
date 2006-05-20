@@ -3,8 +3,8 @@ from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.objspace import op_appendices
 from pypy.rpython.lltypesystem.lltype import Signed, Unsigned, Bool, Float, \
-     Void, Char, UniChar, GcArray, malloc, Array, pyobjectptr, \
-     UnsignedLongLong, SignedLongLong
+     Void, Char, UniChar, malloc, pyobjectptr, UnsignedLongLong, \
+     SignedLongLong, build_number, Number, cast_primitive, typeOf
 from pypy.rpython.rmodel import IntegerRepr, inputconst
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.rarithmetic import intmask, r_int, r_uint, r_ulonglong, r_longlong
@@ -12,28 +12,27 @@ from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import log
 from pypy.rpython import objectmodel
 
+_integer_reprs = {}
+def getintegerrepr(lltype, prefix=None):
+    try:
+        return _integer_reprs[lltype]
+    except KeyError:
+        pass
+    repr = _integer_reprs[lltype] = IntegerRepr(lltype, prefix)
+    return repr
 
 class __extend__(annmodel.SomeInteger):
     def rtyper_makerepr(self, rtyper):
-        if self.unsigned:
-            if self.size == 2:
-                return unsignedlonglong_repr
-            else:
-                assert self.size == 1
-                return unsigned_repr
-        else:
-            if self.size == 2:
-                return signedlonglong_repr
-            else:
-                assert self.size == 1
-                return signed_repr
-    def rtyper_makekey(self):
-        return self.__class__, self.unsigned, self.size
+        lltype = build_number(None, self.knowntype)
+        return getintegerrepr(lltype)
 
-signed_repr = IntegerRepr(Signed, 'int_')
-signedlonglong_repr = IntegerRepr(SignedLongLong, 'llong_')
-unsigned_repr = IntegerRepr(Unsigned, 'uint_')
-unsignedlonglong_repr = IntegerRepr(UnsignedLongLong, 'ullong_')
+    def rtyper_makekey(self):
+        return self.__class__, self.knowntype
+
+signed_repr = getintegerrepr(Signed, 'int_')
+signedlonglong_repr = getintegerrepr(SignedLongLong, 'llong_')
+unsigned_repr = getintegerrepr(Unsigned, 'uint_')
+unsignedlonglong_repr = getintegerrepr(UnsignedLongLong, 'ullong_')
 
 
 class __extend__(pairtype(IntegerRepr, IntegerRepr)):
@@ -49,7 +48,7 @@ class __extend__(pairtype(IntegerRepr, IntegerRepr)):
             return llops.genop('cast_int_to_longlong', [v], resulttype=SignedLongLong)
         if r_from.lowleveltype == SignedLongLong and r_to.lowleveltype == Signed:
             return llops.genop('truncate_longlong_to_int', [v], resulttype=Signed)
-        return NotImplemented
+        return llops.genop('cast_primitive', [v], resulttype=r_to.lowleveltype)
 
     #arithmetic
 
@@ -74,14 +73,6 @@ class __extend__(pairtype(IntegerRepr, IntegerRepr)):
     def rtype_mul_ovf(_, hop):
         return _rtype_template(hop, 'mul_ovf')
 
-    def rtype_div(_, hop):
-        # turn 'div' on integers into 'floordiv'
-        return _rtype_template(hop, 'floordiv', [ZeroDivisionError])
-    rtype_inplace_div = rtype_div
-
-    def rtype_div_ovf(_, hop):
-        return _rtype_template(hop, 'div_ovf', [ZeroDivisionError])
-
     def rtype_floordiv(_, hop):
         return _rtype_template(hop, 'floordiv', [ZeroDivisionError])
     rtype_inplace_floordiv = rtype_floordiv
@@ -89,9 +80,12 @@ class __extend__(pairtype(IntegerRepr, IntegerRepr)):
     def rtype_floordiv_ovf(_, hop):
         return _rtype_template(hop, 'floordiv_ovf', [ZeroDivisionError])
 
-    def rtype_truediv(_, hop):
-        return _rtype_template(hop, 'truediv', [ZeroDivisionError])
-    rtype_inplace_truediv = rtype_truediv
+    # turn 'div' on integers into 'floordiv'
+    rtype_div         = rtype_floordiv
+    rtype_inplace_div = rtype_inplace_floordiv
+    rtype_div_ovf     = rtype_floordiv_ovf
+
+    # 'def rtype_truediv' is delegated to the superclass FloatRepr
 
     def rtype_mod(_, hop):
         return _rtype_template(hop, 'mod', [ZeroDivisionError])
@@ -123,26 +117,26 @@ class __extend__(pairtype(IntegerRepr, IntegerRepr)):
         return _rtype_template(hop, 'rshift', [ValueError])
     rtype_inplace_rshift = rtype_rshift
 
-    def rtype_pow(_, hop, suffix=''):
-        if hop.has_implicit_exception(ZeroDivisionError):
-            suffix += '_zer'
-        s_int3 = hop.args_s[2]
-        rresult = hop.rtyper.makerepr(hop.s_result)
-        if s_int3.is_constant() and s_int3.const is None:
-            vlist = hop.inputargs(rresult, rresult, Void)[:2]
-        else:
-            vlist = hop.inputargs(rresult, rresult, rresult)
-        hop.exception_is_here()
-        return hop.genop(rresult.opprefix + 'pow' + suffix, vlist, resulttype=rresult)
+##    def rtype_pow(_, hop, suffix=''):
+##        if hop.has_implicit_exception(ZeroDivisionError):
+##            suffix += '_zer'
+##        s_int3 = hop.args_s[2]
+##        rresult = hop.rtyper.makerepr(hop.s_result)
+##        if s_int3.is_constant() and s_int3.const is None:
+##            vlist = hop.inputargs(rresult, rresult, Void)[:2]
+##        else:
+##            vlist = hop.inputargs(rresult, rresult, rresult)
+##        hop.exception_is_here()
+##        return hop.genop(rresult.opprefix + 'pow' + suffix, vlist, resulttype=rresult)
 
-    def rtype_pow_ovf(_, hop):
-        if hop.s_result.unsigned:
-            raise TyperError("forbidden uint_pow_ovf")
-        hop.has_implicit_exception(OverflowError) # record that we know about it
-        return self.rtype_pow(_, hop, suffix='_ovf')
+##    def rtype_pow_ovf(_, hop):
+##        if hop.s_result.unsigned:
+##            raise TyperError("forbidden uint_pow_ovf")
+##        hop.has_implicit_exception(OverflowError) # record that we know about it
+##        return self.rtype_pow(_, hop, suffix='_ovf')
 
-    def rtype_inplace_pow(_, hop):
-        return _rtype_template(hop, 'pow', [ZeroDivisionError])
+##    def rtype_inplace_pow(_, hop):
+##        return _rtype_template(hop, 'pow', [ZeroDivisionError])
 
     #comparisons: eq is_ ne lt le gt ge
 
@@ -207,23 +201,27 @@ class __extend__(IntegerRepr):
     def convert_const(self, value):
         if isinstance(value, objectmodel.Symbolic):
             return value
-        if not isinstance(value, (int, r_uint, r_int, r_longlong, r_ulonglong)):   # can be bool
-            raise TyperError("not an integer: %r" % (value,))
-        if self.lowleveltype == Signed:
-            return intmask(value)
-        if self.lowleveltype == Unsigned:
-            return r_uint(value)
-        if self.lowleveltype == UnsignedLongLong:
-            return r_ulonglong(value)
-        if self.lowleveltype == SignedLongLong:
-            return r_longlong(value)
-        raise NotImplementedError
+        T = typeOf(value)
+        if isinstance(T, Number) or T is Bool:
+            return cast_primitive(self.lowleveltype, value)
+        raise TyperError("not an integer: %r" % (value,))
 
     def get_ll_eq_function(self):
         return None 
 
     def get_ll_hash_function(self):
         return ll_hash_int
+
+    get_ll_fasthash_function = get_ll_hash_function
+
+    def get_ll_dummyval_obj(self, rtyper, s_value):
+        # if >= 0, then all negative values are special
+        if s_value.nonneg and not s_value.unsigned:
+            return signed_repr    # whose ll_dummy_value is -1
+        else:
+            return None
+
+    ll_dummy_value = -1
 
     def rtype_chr(_, hop):
         vlist =  hop.inputargs(Signed)
@@ -300,124 +298,30 @@ class __extend__(IntegerRepr):
         vlist = hop.inputargs(Float)
         return vlist[0]
 
+    # version picked by specialisation based on which
+    # type system rtyping is using, from <type_system>.ll_str module
     def ll_str(self, i):
-        from pypy.rpython.rstr import STR
-        temp = malloc(CHAR_ARRAY, 20)
-        len = 0
-        sign = 0
-        if i < 0:
-            sign = 1
-            i = r_uint(-i)
-        else:
-            i = r_uint(i)
-        if i == 0:
-            len = 1
-            temp[0] = '0'
-        else:
-            while i:
-                temp[len] = chr(i%10+ord('0'))
-                i //= 10
-                len += 1
-        len += sign
-        result = malloc(STR, len)
-        if sign:
-            result.chars[0] = '-'
-            j = 1
-        else:
-            j = 0
-        while j < len:
-            result.chars[j] = temp[len-j-1]
-            j += 1
-        return result
+        pass
+    ll_str._annspecialcase_ = "specialize:ts('ll_str.ll_int_str')"
 
     def rtype_hex(self, hop):
         self = self.as_int
         varg = hop.inputarg(self, 0)
         true = inputconst(Bool, True)
-        return hop.gendirectcall(ll_int2hex, varg, true)
+        fn = hop.rtyper.type_system.ll_str.ll_int2hex
+        return hop.gendirectcall(fn, varg, true)
 
     def rtype_oct(self, hop):
         self = self.as_int
         varg = hop.inputarg(self, 0)
         true = inputconst(Bool, True)
-        return hop.gendirectcall(ll_int2oct, varg, true)
+        fn = hop.rtyper.type_system.ll_str.ll_int2oct        
+        return hop.gendirectcall(fn, varg, true)
 
-
-
-CHAR_ARRAY = GcArray(Char)
-
-hex_chars = malloc(Array(Char), 16, immortal=True)
-
-for i in range(16):
-    hex_chars[i] = "%x"%i
-
-def ll_int2hex(i, addPrefix):
-    from pypy.rpython.rstr import STR
-    temp = malloc(CHAR_ARRAY, 20)
-    len = 0
-    sign = 0
-    if i < 0:
-        sign = 1
-        i = -i
-    if i == 0:
-        len = 1
-        temp[0] = '0'
-    else:
-        while i:
-            temp[len] = hex_chars[i%16]
-            i //= 16
-            len += 1
-    len += sign
-    if addPrefix:
-        len += 2
-    result = malloc(STR, len)
-    j = 0
-    if sign:
-        result.chars[0] = '-'
-        j = 1
-    if addPrefix:
-        result.chars[j] = '0'
-        result.chars[j+1] = 'x'
-        j += 2
-    while j < len:
-        result.chars[j] = temp[len-j-1]
-        j += 1
-    return result
-
-def ll_int2oct(i, addPrefix):
-    from pypy.rpython.rstr import STR
-    if i == 0:
-        result = malloc(STR, 1)
-        result.chars[0] = '0'
-        return result
-    temp = malloc(CHAR_ARRAY, 25)
-    len = 0
-    sign = 0
-    if i < 0:
-        sign = 1
-        i = -i
-    while i:
-        temp[len] = hex_chars[i%8]
-        i //= 8
-        len += 1
-    len += sign
-    if addPrefix:
-        len += 1
-    result = malloc(STR, len)
-    j = 0
-    if sign:
-        result.chars[0] = '-'
-        j = 1
-    if addPrefix:
-        result.chars[j] = '0'
-        j += 1
-    while j < len:
-        result.chars[j] = temp[len-j-1]
-        j += 1
-    return result
-
-def ll_hash_int(n):
+def ll_identity(n):
     return n
+
+ll_hash_int = ll_identity
 
 def ll_check_chr(n):
     if 0 <= n <= 255:

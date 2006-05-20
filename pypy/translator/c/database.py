@@ -1,22 +1,27 @@
 from pypy.rpython.lltypesystem.lltype import \
      Primitive, Ptr, typeOf, RuntimeTypeInfo, \
      Struct, Array, FuncType, PyObject, Void, \
-     ContainerType, OpaqueType
+     ContainerType, OpaqueType, FixedSizeArray
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.llmemory import Address
 from pypy.rpython.memory.lladdress import NULL
+from pypy.tool.sourcetools import valid_identifier
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
 from pypy.translator.c.primitive import PrimitiveErrorValue
 from pypy.translator.c.node import StructDefNode, ArrayDefNode
+from pypy.translator.c.node import FixedSizeArrayDefNode
 from pypy.translator.c.node import ContainerNodeFactory, ExtTypeOpaqueDefNode
 from pypy.translator.c.support import cdecl, CNameManager, ErrorValue
 from pypy.translator.c.pyobj import PyObjMaker
 from pypy.translator.c.support import log
 from pypy.translator.c.extfunc import do_the_getting
+from pypy.translator.c.exceptiontransform import ExceptionTransformer
+from pypy import conftest
 
 # ____________________________________________________________
 
 class LowLevelDatabase(object):
+    stacklesstransformer = None
 
     def __init__(self, translator=None, standalone=False, gcpolicy=None, thread_enabled=False):
         self.translator = translator
@@ -35,9 +40,29 @@ class LowLevelDatabase(object):
         self.namespace = CNameManager()
         if not standalone:
             self.pyobjmaker = PyObjMaker(self.namespace, self.get, translator)
-        if gcpolicy is None:
+
+        gcpolicy = gcpolicy or conftest.option.gcpolicy or 'ref'
+        if isinstance(gcpolicy, str):
             from pypy.translator.c import gc
-            gcpolicy = gc.RefcountingGcPolicy
+            polname = gcpolicy
+            if polname == 'boehm':
+                gcpolicy = gc.BoehmGcPolicy
+            elif polname == 'exact_boehm':
+                gcpolicy = gc.MoreExactBoehmGcPolicy
+            elif polname == 'ref':
+                gcpolicy = gc.RefcountingGcPolicy
+            elif polname == 'none':
+                gcpolicy = gc.NoneGcPolicy
+            elif polname == 'framework':
+                gcpolicy = gc.FrameworkGcPolicy
+            elif polname == 'stacklessgc':
+                gcpolicy = gc.StacklessFrameworkGcPolicy
+            else:
+                assert False, "unknown gc policy %r"%polname
+        if translator is None or translator.rtyper is None:
+            self.exctransformer = None
+        else:
+            self.exctransformer = ExceptionTransformer(translator)
         self.gcpolicy = gcpolicy(self, thread_enabled)
         self.gctransformer = gcpolicy.transformerclass(translator)
         self.completed = False
@@ -52,7 +77,10 @@ class LowLevelDatabase(object):
             node = self.structdefnodes[key]
         except KeyError:
             if isinstance(T, Struct):
-                node = StructDefNode(self, T, varlength)
+                if isinstance(T, FixedSizeArray):
+                    node = FixedSizeArrayDefNode(self, T)
+                else:
+                    node = StructDefNode(self, T, varlength)
             elif isinstance(T, Array):
                 node = ArrayDefNode(self, T, varlength)
             elif isinstance(T, OpaqueType) and hasattr(T, '_exttypeinfo'):
@@ -67,13 +95,18 @@ class LowLevelDatabase(object):
         if isinstance(T, Primitive):
             return PrimitiveType[T]
         elif isinstance(T, Ptr):
-            typename = self.gettype(T.TO)   # who_asks not propagated
-            return typename.replace('@', '*@')
+            if isinstance(T.TO, FixedSizeArray):
+                # /me blames C
+                node = self.gettypedefnode(T.TO)
+                return node.getptrtype()
+            else:
+                typename = self.gettype(T.TO)   # who_asks not propagated
+                return typename.replace('@', '*@')
         elif isinstance(T, (Struct, Array)):
             node = self.gettypedefnode(T, varlength=varlength)
             if who_asks is not None:
                 who_asks.dependencies[node] = True
-            return 'struct %s @' % node.name
+            return node.gettype()
         elif T == PyObject:
             return 'PyObject @'
         elif isinstance(T, FuncType):
@@ -99,7 +132,9 @@ class LowLevelDatabase(object):
                     who_asks.dependencies[node] = True
                 return 'struct %s @' % node.name
             else:
-                raise Exception("don't know about opaque type %r" % (T,))
+                #raise Exception("don't know about opaque type %r" % (T,))
+                return 'struct %s @' % (
+                    valid_identifier('pypy_opaque_' + T.tag),)
         else:
             raise Exception("don't know about type %r" % (T,))
 
@@ -107,6 +142,7 @@ class LowLevelDatabase(object):
         try:
             node = self.containernodes[container]
         except KeyError:
+            assert not self.completed
             T = typeOf(container)
             if isinstance(T, (lltype.Array, lltype.Struct)):
                 if hasattr(self.gctransformer, 'consider_constant'):
@@ -114,7 +150,7 @@ class LowLevelDatabase(object):
             nodefactory = ContainerNodeFactory[T.__class__]
             node = nodefactory(self, T, container)
             self.containernodes[container] = node
-            if getattr(container, 'isgchelper', False):
+            if node.is_later_container:
                 self.latercontainerlist.append(node)
             else:
                 self.containerlist.append(node)
@@ -137,10 +173,14 @@ class LowLevelDatabase(object):
                 return PrimitiveName[T](obj, self)
             elif isinstance(T, Ptr):
                 if obj:   # test if the ptr is non-NULL
+                    if isinstance(obj._obj, int):
+                        # special case for tagged odd-valued pointers
+                        return '((%s) %d)' % (cdecl(self.gettype(T), ''),
+                                              obj._obj)
                     node = self.getcontainernode(obj._obj)
                     return node.ptrname
                 else:
-                    return 'NULL'
+                    return '((%s) NULL)' % (cdecl(self.gettype(T), ''), )
             else:
                 raise Exception("don't know about %r" % (obj,))
 
@@ -159,7 +199,17 @@ class LowLevelDatabase(object):
         else:
             show_i = -1
         work_to_do = True
-        is_later_yet = False
+        transformations_to_finish = [self.gctransformer]
+        if self.stacklesstransformer:
+            transformations_to_finish.insert(0, self.stacklesstransformer)
+
+        def add_dependencies(newdependencies):
+            for value in newdependencies:
+                if isinstance(typeOf(value), ContainerType):
+                    self.getcontainernode(value)
+                else:
+                    self.get(value)
+        
         while work_to_do:
             while True:
                 if hasattr(self, 'pyobjmaker'):
@@ -172,33 +222,28 @@ class LowLevelDatabase(object):
                 if i == len(self.containerlist):
                     break
                 node = self.containerlist[i]
-                for value in node.enum_dependencies():
-                    if isinstance(typeOf(value), ContainerType):
-                        self.getcontainernode(value)
-                    else:
-                        self.get(value)
+                add_dependencies(node.enum_dependencies())
                 i += 1
                 self.completedcontainers = i
                 if i == show_i:
                     dump()
                     show_i += 1000
             work_to_do = False
-            if not is_later_yet:
-                newgcdependencies = self.gctransformer.finish()
-                if newgcdependencies:
+
+            while transformations_to_finish:
+                transformation = transformations_to_finish.pop(0)
+                newdependencies = transformation.finish()
+                if newdependencies:
+                    add_dependencies(newdependencies)
                     work_to_do = True
-                    for value in newgcdependencies:
-                        if isinstance(typeOf(value), ContainerType):
-                            self.getcontainernode(value)
-                        else:
-                            self.get(value)
-                is_later_yet = True
-            if self.latercontainerlist:
-                work_to_do = True
-                for node in self.latercontainerlist:
-                    node.make_funcgens()
-                    self.containerlist.append(node)
-                self.latercontainerlist = []
+                    break
+            else:
+                if self.latercontainerlist:
+                    work_to_do = True
+                    for node in self.latercontainerlist:
+                        node.make_funcgens()
+                        self.containerlist.append(node)
+                    self.latercontainerlist = []
         self.completed = True
         if show_progress:
             dump()

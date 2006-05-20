@@ -1,10 +1,12 @@
 import sys
+from pypy.rpython.objectmodel import Symbolic, ComputedIntSymbolic
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.lltypesystem.llmemory import Address, fakeaddress, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
-     CompositeOffset, ArrayLengthOffset
-from pypy.rpython.memory.gc import GCHeaderOffset
+     CompositeOffset, ArrayLengthOffset, WeakGcAddress, fakeweakaddress, \
+     GCHeaderOffset
 from pypy.rpython.memory.lladdress import NULL
+from pypy.translator.c.support import cdecl
 
 # ____________________________________________________________
 #
@@ -16,25 +18,31 @@ def name_signed(value, db):
         if isinstance(value, FieldOffset):
             structnode = db.gettypedefnode(value.TYPE)
             return 'offsetof(%s, %s)'%(
-                db.gettype(value.TYPE).replace('@', ''),
+                cdecl(db.gettype(value.TYPE), ''),
                 structnode.c_struct_field_name(value.fldname))
         elif isinstance(value, ItemOffset):
             return '(sizeof(%s) * %s)'%(
-                db.gettype(value.TYPE).replace('@', ''), value.repeat)
+                cdecl(db.gettype(value.TYPE), ''), value.repeat)
         elif isinstance(value, ArrayItemsOffset):
-            return 'offsetof(%s, items)'%(
-                db.gettype(value.TYPE).replace('@', ''))
+            if isinstance(value.TYPE, FixedSizeArray):
+                return '0'
+            else:
+                return 'offsetof(%s, items)'%(
+                    cdecl(db.gettype(value.TYPE), ''))
         elif isinstance(value, ArrayLengthOffset):
             return 'offsetof(%s, length)'%(
-                db.gettype(value.TYPE).replace('@', ''))
+                cdecl(db.gettype(value.TYPE), ''))
         elif isinstance(value, CompositeOffset):
-            return '%s + %s' % (name_signed(value.first, db), name_signed(value.second, db))
+            names = [name_signed(item, db) for item in value.offsets]
+            return '(%s)' % (' + '.join(names),)
         elif type(value) == AddressOffset:
             return '0'
         elif type(value) == GCHeaderOffset:
             return '0'
         elif type(value) == REFCOUNT_IMMORTAL:
             return 'REFCOUNT_IMMORTAL'
+        elif isinstance(value, ComputedIntSymbolic):
+            value = value.compute_fn()
         else:
             raise Exception("unimplemented symbolic %r"%value)
     if value == -sys.maxint-1:   # blame C
@@ -95,13 +103,18 @@ def name_address(value, db):
             else:
                 return db.get(value.ob)
     else:
-        assert value.offset is not None
         if isinstance(typeOf(value.ob), ContainerType):
             base = db.getcontainernode(value.ob).ptrname
         else:
             base = db.get(value.ob)
         
         return '(void*)(((char*)(%s)) + (%s))'%(base, db.get(value.offset))
+
+def name_weakgcaddress(value, db):
+    assert isinstance(value, fakeweakaddress)
+    assert value.ref is None # only weak NULL supported
+    return 'HIDE_POINTER(NULL)'
+
 
 PrimitiveName = {
     Signed:   name_signed,
@@ -114,6 +127,7 @@ PrimitiveName = {
     Bool:     name_bool,
     Void:     name_void,
     Address:  name_address,
+    WeakGcAddress:  name_weakgcaddress,
     }
 
 PrimitiveType = {
@@ -127,6 +141,7 @@ PrimitiveType = {
     Bool:     'char @',
     Void:     'void @',
     Address:  'void* @',
+    WeakGcAddress:  'GC_hidden_pointer @',
     }
 
 PrimitiveErrorValue = {
@@ -140,4 +155,34 @@ PrimitiveErrorValue = {
     Bool:     '((char) -1)',
     Void:     '/* error */',
     Address:  'NULL',
+    WeakGcAddress:  'HIDE_POINTER(NULL)',
     }
+
+def define_c_primitive(ll_type, c_name):
+    if ll_type in PrimitiveName:
+        return
+    if ll_type._cast(-1) > 0:
+        name_str = '((%s) %%dULL)' % c_name
+    else:
+        name_str = '((%s) %%dLL)' % c_name
+    PrimitiveName[ll_type] = lambda value, db: name_str % value
+    PrimitiveType[ll_type] = '%s @'% c_name
+    PrimitiveErrorValue[ll_type] = '((%s) -1)'% c_name
+    
+try:
+    import ctypes
+except ImportError:
+    pass
+else:
+    from pypy.rpython.rctypes import rcarithmetic as rcarith
+    for ll_type, c_name in [(rcarith.CByte, 'signed char'),
+                            (rcarith.CUByte, 'unsigned char'),
+                            (rcarith.CShort, 'short'),
+                            (rcarith.CUShort, 'unsigned short'),
+                            (rcarith.CInt, 'int'),
+                            (rcarith.CUInt, 'unsigned int'),
+                            (rcarith.CLong, 'long'),
+                            (rcarith.CULong, 'unsigned long'),
+                            (rcarith.CLonglong, 'long long'),
+                            (rcarith.CULonglong, 'unsigned long long')]:
+        define_c_primitive(ll_type, c_name)

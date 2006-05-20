@@ -1,12 +1,18 @@
 import sys
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.rlist import *
-from pypy.rpython.rslice import ll_newslice
+from pypy.rpython.lltypesystem.rlist import ListRepr, FixedSizeListRepr, ll_newlist, ll_fixed_newlist
+from pypy.rpython.lltypesystem import rlist as ll_rlist
+from pypy.rpython.ootypesystem import rlist as oo_rlist
+from pypy.rpython.lltypesystem.rslice import ll_newslice
 from pypy.rpython.rint import signed_repr
-from pypy.rpython.test.test_llinterp import interpret, interpret_raises
+from pypy.rpython.test.test_llinterp import interpret
+from pypy.rpython.test.test_llinterp import interpret_raises
 from pypy.translator.translator import TranslationContext
 from pypy.objspace.flow.model import Constant, Variable
+from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 
 # undo the specialization parameter
 for n1 in 'get set del'.split():
@@ -70,6 +76,16 @@ class BaseTestListImpl:
                 l2 = ll_listslice(typeOf(l2).TO, l2, s)
                 ll_listsetslice(l1, s, l2)
                 self.check_list(l1, expected)
+
+
+# helper used by some tests below
+def list_is_clear(lis, idx):
+    items = lis._obj.items._obj.items
+    for i in range(idx, len(items)):
+        if items[i]._obj is not None:
+            return False
+    return True
+
 
 class TestListImpl(BaseTestListImpl):
 
@@ -158,742 +174,19 @@ class TestFixedSizeListImpl(BaseTestListImpl):
         self.check_list(lvar1, [42, 43, 44, 45] * 3)
 
 
+
 # ____________________________________________________________
 
-def test_simple():
-    def dummyfn():
-        l = [10, 20, 30]
-        return l[2]
-    res = interpret(dummyfn, [])
-    assert res == 30
-
-def test_append():
-    def dummyfn():
-        l = []
-        l.append(50)
-        l.append(60)
-        l.append(70)
-        l.append(80)
-        l.append(90)
-        return len(l), l[0], l[-1]
-    res = interpret(dummyfn, [])
-    assert res.item0 == 5 
-    assert res.item1 == 50
-    assert res.item2 == 90
-
-def test_len():
-    def dummyfn():
-        l = [5, 10]
-        return len(l)
-    res = interpret(dummyfn, [])
-    assert res == 2
-
-    def dummyfn():
-        l = [5]
-        l.append(6)
-        return len(l)
-    res = interpret(dummyfn, [])
-    assert res == 2
-
-def test_iterate():
-    def dummyfn():
-        total = 0
-        for x in [1, 3, 5, 7, 9]:
-            total += x
-        return total
-    res = interpret(dummyfn, [])
-    assert res == 25
-    def dummyfn():
-        total = 0
-        l = [1, 3, 5, 7]
-        l.append(9)
-        for x in l:
-            total += x
-        return total
-    res = interpret(dummyfn, [])
-    assert res == 25
-
-def test_recursive():
-    def dummyfn(N):
-        l = []
-        while N > 0:
-            l = [l]
-            N -= 1
-        return len(l)
-    res = interpret(dummyfn, [5])
-    assert res == 1
-
-    def dummyfn(N):
-        l = []
-        while N > 0:
-            l.append(l)
-            N -= 1
-        return len(l)
-    res = interpret(dummyfn, [5])
-    assert res == 5
-
-def tolst(l):
-    return map(None, l.ll_items())[:l.ll_length()]
-
-def test_add():
-    def dummyfn():
-        l = [5]
-        l += [6,7]
-        return l + [8]
-    res = interpret(dummyfn, [])
-    assert tolst(res) == [5, 6, 7, 8]
-
-    def dummyfn():
-        l = [5]
-        l += [6,7]
-        l2 =  l + [8]
-        l2.append(9)
-        return l2
-    res = interpret(dummyfn, [])
-    assert tolst(res) == [5, 6, 7, 8, 9]
-
-def test_slice():
-    def dummyfn():
-        l = [5, 6, 7, 8, 9]
-        return l[:2], l[1:4], l[3:]
-    res = interpret(dummyfn, [])
-    assert tolst(res.item0) == [5, 6]
-    assert tolst(res.item1) == [6, 7, 8]
-    assert tolst(res.item2) == [8, 9]
-
-    def dummyfn():
-        l = [5, 6, 7, 8]
-        l.append(9)
-        return l[:2], l[1:4], l[3:]
-    res = interpret(dummyfn, [])
-    assert tolst(res.item0) == [5, 6]
-    assert tolst(res.item1) == [6, 7, 8]
-    assert tolst(res.item2) == [8, 9]
-
-def test_set_del_item():
-    def dummyfn():
-        l = [5, 6, 7]
-        l[1] = 55
-        l[-1] = 66
-        return l
-    res = interpret(dummyfn, [])
-    assert tolst(res) == [5, 55, 66]
-
-    def dummyfn():
-        l = []
-        l.append(5)
-        l.append(6)
-        l.append(7)
-        l[1] = 55
-        l[-1] = 66
-        return l
-    res = interpret(dummyfn, [])
-    assert tolst(res) == [5, 55, 66]
-
-    def dummyfn():
-        l = [5, 6, 7]
-        l[1] = 55
-        l[-1] = 66
-        del l[0]
-        del l[-1]
-        del l[:]
-        return len(l)
-    res = interpret(dummyfn, [])
-    assert res == 0
-
-def test_setslice():
-    def dummyfn():
-        l = [10, 9, 8, 7]
-        l[:2] = [6, 5]
-        return l[0], l[1], l[2], l[3]
-    res = interpret(dummyfn, ())
-    assert res.item0 == 6
-    assert res.item1 == 5
-    assert res.item2 == 8
-    assert res.item3 == 7
-
-    def dummyfn():
-        l = [10, 9, 8]
-        l.append(7)
-        l[:2] = [6, 5]
-        return l[0], l[1], l[2], l[3]
-    res = interpret(dummyfn, ())
-    assert res.item0 == 6
-    assert res.item1 == 5
-    assert res.item2 == 8
-    assert res.item3 == 7
-
-def test_insert_pop():
-    def dummyfn():
-        l = [6, 7, 8]
-        l.insert(0, 5)
-        l.insert(1, 42)
-        l.pop(2)
-        l.pop(0)
-        l.pop(-1)
-        l.pop()
-        return l[-1]
-    res = interpret(dummyfn, ())#, view=True)
-    assert res == 42
-
-def test_insert_bug():
-    def dummyfn(n):
-        l = [1]
-        l = l[:]
-        l.pop(0)
-        if n < 0:
-            l.insert(0, 42)
-        else:
-            l.insert(n, 42)
-        return l
-    res = interpret(dummyfn, [0])
-    assert res.ll_length() == 1
-    assert res.ll_items()[0] == 42
-    res = interpret(dummyfn, [-1])
-    assert res.ll_length() == 1
-    assert res.ll_items()[0] == 42
-
-def test_inst_pop():
-    class A:
-        pass
-    l = [A(), A()]
-    def f(idx):
-        try:
-            return l.pop(idx)
-        except IndexError:
-            return None
-    res = interpret(f, [1])
-    assert ''.join(res.super.typeptr.name) == 'A\00'
-        
-
-def test_reverse():
-    def dummyfn():
-        l = [5, 3, 2]
-        l.reverse()
-        return l[0]*100 + l[1]*10 + l[2]
-    res = interpret(dummyfn, ())
-    assert res == 235
-
-    def dummyfn():
-        l = [5]
-        l.append(3)
-        l.append(2)
-        l.reverse()
-        return l[0]*100 + l[1]*10 + l[2]
-    res = interpret(dummyfn, ())
-    assert res == 235
-
-def test_prebuilt_list():
-    klist = ['a', 'd', 'z', 'k']
-    def dummyfn(n):
-        return klist[n]
-    res = interpret(dummyfn, [0])
-    assert res == 'a'
-    res = interpret(dummyfn, [3])
-    assert res == 'k'
-    res = interpret(dummyfn, [-2])
-    assert res == 'z'
-
-    klist = ['a', 'd', 'z']
-    def mkdummyfn():
-        def dummyfn(n):
-            klist.append('k')
-            return klist[n]
-        return dummyfn
-    res = interpret(mkdummyfn(), [0])
-    assert res == 'a'
-    res = interpret(mkdummyfn(), [3])
-    assert res == 'k'
-    res = interpret(mkdummyfn(), [-2])
-    assert res == 'z'
-
-def test_bound_list_method():
-    klist = [1, 2, 3]
-    # for testing constant methods without actually mutating the constant
-    def dummyfn(n):
-        klist.extend([])
-    interpret(dummyfn, [7])
-
-def test_list_is():
-    def dummyfn():
-        l1 = []
-        return l1 is l1
-    res = interpret(dummyfn, [])
-    assert res is True
-    def dummyfn():
-        l2 = [1, 2]
-        return l2 is l2
-    res = interpret(dummyfn, [])
-    assert res is True
-    def dummyfn():
-        l1 = [2]
-        l2 = [1, 2]
-        return l1 is l2
-    res = interpret(dummyfn, [])
-    assert res is False
-    def dummyfn():
-        l1 = [1, 2]
-        l2 = [1]
-        l2.append(2)
-        return l1 is l2
-    res = interpret(dummyfn, [])
-    assert res is False
-
-    def dummyfn():
-        l1 = None
-        l2 = [1, 2]
-        return l1 is l2
-    res = interpret(dummyfn, [])
-    assert res is False
-
-    def dummyfn():
-        l1 = None
-        l2 = [1]
-        l2.append(2)
-        return l1 is l2
-    res = interpret(dummyfn, [])
-    assert res is False
-
-def test_list_compare():
-    def fn(i, j, neg=False):
-        s1 = [[1, 2, 3], [4, 5, 1], None]
-        s2 = [[1, 2, 3], [4, 5, 1], [1], [1, 2], [4, 5, 1, 6],
-              [7, 1, 1, 8, 9, 10], None]
-        if neg: return s1[i] != s2[i]
-        return s1[i] == s2[j]
-    for i in range(3):
-        for j in range(7):
-            for case in False, True:
-                res = interpret(fn, [i,j,case])
-                assert res is fn(i, j, case)
-
-    def fn(i, j, neg=False):
-        s1 = [[1, 2, 3], [4, 5, 1], None]
-        l = []
-        l.extend([1,2,3])
-        s2 = [l, [4, 5, 1], [1], [1, 2], [4, 5, 1, 6],
-              [7, 1, 1, 8, 9, 10], None]
-        if neg: return s1[i] != s2[i]
-        return s1[i] == s2[j]
-    for i in range(3):
-        for j in range(7):
-            for case in False, True:
-                res = interpret(fn, [i,j,case])
-                assert res is fn(i, j, case)
-
-
-def test_list_comparestr():
-    def fn(i, j, neg=False):
-        s1 = [["hell"], ["hello", "world"]]
-        s1[0][0] += "o" # ensure no interning
-        s2 = [["hello"], ["world"]]
-        if neg: return s1[i] != s2[i]
-        return s1[i] == s2[j]
-    for i in range(2):
-        for j in range(2):
-            for case in False, True:
-                res = interpret(fn, [i,j,case])
-                assert res is fn(i, j, case)
-
-class Foo: pass
-
-class Bar(Foo): pass
-
-def test_list_compareinst():
-    def fn(i, j, neg=False):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        s1 = [[foo1], [foo2], [bar1]]
-        s2 = s1[:]
-        if neg: return s1[i] != s2[i]
-        return s1[i] == s2[j]
-    for i in range(3):
-        for j in range(3):
-            for case in False, True:
-                res = interpret(fn, [i, j, case])
-                assert res is fn(i, j, case)
-
-    def fn(i, j, neg=False):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        s1 = [[foo1], [foo2], [bar1]]
-        s2 = s1[:]
-
-        s2[0].extend([])
-        
-        if neg: return s1[i] != s2[i]
-        return s1[i] == s2[j]
-    for i in range(3):
-        for j in range(3):
-            for case in False, True:
-                res = interpret(fn, [i, j, case])
-                assert res is fn(i, j, case)
-
-
-def test_list_contains():
-    def fn(i, neg=False):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        bar2 = Bar()
-        lis = [foo1, foo2, bar1]
-        args = lis + [bar2]
-        if neg : return args[i] not in lis
-        return args[i] in lis
-    for i in range(4):
-        for case in False, True:
-            res = interpret(fn, [i, case])
-            assert res is fn(i, case)
-
-    def fn(i, neg=False):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        bar2 = Bar()
-        lis = [foo1, foo2, bar1]
-        lis.append(lis.pop())
-        args = lis + [bar2]
-        if neg : return args[i] not in lis
-        return args[i] in lis
-    for i in range(4):
-        for case in False, True:
-            res = interpret(fn, [i, case])
-            assert res is fn(i, case)
-
-
-def test_not_a_char_list_after_all():
-    def fn():
-        l = ['h', 'e', 'l', 'l', 'o']
-        return 'world' in l
-    res = interpret(fn, [])
-    assert res is False
-
-def test_list_index():
-    def fn(i):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        bar2 = Bar()
-        lis = [foo1, foo2, bar1]
-        args = lis + [bar2]
-        return lis.index(args[i])
-    for i in range(4):
-        for varsize in False, True:
-            try:
-                res2 = fn(i)
-                res1 = interpret(fn, [i])
-                assert res1 == res2
-            except Exception, e:
-                interpret_raises(e.__class__, fn, [i])
-
-    def fn(i):
-        foo1 = Foo()
-        foo2 = Foo()
-        bar1 = Bar()
-        bar2 = Bar()
-        lis = [foo1, foo2, bar1]
-        args = lis + [bar2]
-        lis.append(lis.pop())
-        return lis.index(args[i])
-    for i in range(4):
-        for varsize in False, True:
-            try:
-                res2 = fn(i)
-                res1 = interpret(fn, [i])
-                assert res1 == res2
-            except Exception, e:
-                interpret_raises(e.__class__, fn, [i])
-
-
-def test_list_str():
-    def fn():
-        return str([1,2,3])
-    
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == fn()
-
-    def fn():
-        return str([[1,2,3]])
-    
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == fn()
-
-    def fn():
-        l = [1,2]
-        l.append(3)
-        return str(l)
-    
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == fn()
-
-    def fn():
-        l = [1,2]
-        l.append(3)
-        return str([l])
-    
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == fn()
-
-def test_list_or_None():
-    empty_list = []
-    nonempty_list = [1, 2]
-    def fn(i):
-        test = [None, empty_list, nonempty_list][i]
-        if test:
-            return 1
-        else:
-            return 0
-
-    res = interpret(fn, [0])
-    assert res == 0
-    res = interpret(fn, [1])
-    assert res == 0
-    res = interpret(fn, [2])
-    assert res == 1
-
-
-    nonempty_list = [1, 2]
-    def fn(i):
-        empty_list = [1]
-        empty_list.pop()
-        nonempty_list = []
-        nonempty_list.extend([1,2])
-        test = [None, empty_list, nonempty_list][i]
-        if test:
-            return 1
-        else:
-            return 0
-
-    res = interpret(fn, [0])
-    assert res == 0
-    res = interpret(fn, [1])
-    assert res == 0
-    res = interpret(fn, [2])
-    assert res == 1
- 
-
-def test_inst_list():
-    def fn():
-        l = [None]
-        l[0] = Foo()
-        l.append(Bar())
-        l2 = [l[1], l[0], l[0]]
-        l.extend(l2)
-        for x in l2:
-            l.append(x)
-        x = l.pop()
-        x = l.pop()
-        x = l.pop()
-        x = l2.pop()
-        return str(x)+";"+str(l)
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == '<Foo object>;[<Foo object>, <Bar object>, <Bar object>, <Foo object>, <Foo object>]'
-
-    def fn():
-        l = [None] * 2
-        l[0] = Foo()
-        l[1] = Bar()
-        l2 = [l[1], l[0], l[0]]
-        l = l + [None] * 3
-        i = 2
-        for x in l2:
-            l[i] = x
-            i += 1
-        return str(l)
-    res = interpret(fn, [])
-    assert ''.join(res.chars) == '[<Foo object>, <Bar object>, <Bar object>, <Foo object>, <Foo object>]'
-
-def test_list_slice_minusone():
-    def fn(i):
-        lst = [i, i+1, i+2]
-        lst2 = lst[:-1]
-        return lst[-1] * lst2[-1]
-    res = interpret(fn, [5])
-    assert res == 42
-
-    def fn(i):
-        lst = [i, i+1, i+2, 7]
-        lst.pop()
-        lst2 = lst[:-1]
-        return lst[-1] * lst2[-1]
-    res = interpret(fn, [5])
-    assert res == 42
-
-def test_list_multiply():
-    def fn(i):
-        lst = [i] * i
-        ret = len(lst)
-        if ret:
-            ret *= lst[-1]
-        return ret
-    for arg in (1, 9, 0, -1, -27):
-        res = interpret(fn, [arg])
-        assert res == fn(arg)
-    def fn(i):
-        lst = [i, i + 1] * i
-        ret = len(lst)
-        if ret:
-            ret *= lst[-1]
-        return ret
-    for arg in (1, 9, 0, -1, -27):
-        res = interpret(fn, [arg])
-        assert res == fn(arg)
-
-def test_list_inplace_multiply():
-    def fn(i):
-        lst = [i]
-        lst *= i
-        ret = len(lst)
-        if ret:
-            ret *= lst[-1]
-        return ret
-    for arg in (1, 9, 0, -1, -27):
-        res = interpret(fn, [arg])
-        assert res == fn(arg)
-    def fn(i):
-        lst = [i, i + 1]
-        lst *= i
-        ret = len(lst)
-        if ret:
-            ret *= lst[-1]
-        return ret
-    for arg in (1, 9, 0, -1, -27):
-        res = interpret(fn, [arg])
-        assert res == fn(arg)
-
-def test_indexerror():
-    def fn(i):
-        l = [5, 8, 3]
-        try:
-            l[i] = 99
-        except IndexError:
-            pass
-        try:
-            del l[i]
-        except IndexError:
-            pass
-        try:
-            return l[2]    # implicit int->PyObj conversion here
-        except IndexError:
-            return "oups"
-    res = interpret(fn, [6])
-    assert res._obj.value == 3
-    res = interpret(fn, [-2])
-    assert res._obj.value == "oups"
-
-    def fn(i):
-        l = [5, 8]
-        l.append(3)
-        try:
-            l[i] = 99
-        except IndexError:
-            pass
-        try:
-            del l[i]
-        except IndexError:
-            pass
-        try:
-            return l[2]    # implicit int->PyObj conversion here
-        except IndexError:
-            return "oups"
-    res = interpret(fn, [6])
-    assert res._obj.value == 3
-    res = interpret(fn, [-2])
-    assert res._obj.value == "oups"
-
-def list_is_clear(lis, idx):
-    items = lis._obj.items._obj.items
-    for i in range(idx, len(items)):
-        if items[i]._obj is not None:
-            return False
-    return True
-
-def test_no_unneeded_refs():
-    def fndel(p, q):
-        lis = ["5", "3", "99"]
-        assert q >= 0
-        assert p >= 0
-        del lis[p:q]
-        return lis
-    def fnpop(n):
-        lis = ["5", "3", "99"]
-        while n:
-            lis.pop()
-            n -=1
-        return lis
-    for i in range(2, 3+1):
-        lis = interpret(fndel, [0, i])
-        assert list_is_clear(lis, 3-i)
-    for i in range(3):
-        lis = interpret(fnpop, [i])
-        assert list_is_clear(lis, 3-i)
-
-def test_list_basic_ops():
-    def list_basic_ops(i=int, j=int):
-        l = [1,2,3]
-        l.insert(0, 42)
-        del l[1]
-        l.append(i)
-        listlen = len(l)
-        l.extend(l) 
-        del l[listlen:]
-        l += [5,6] 
-        l[1] = i
-        return l[j]
-    for i in range(6): 
-        for j in range(6):
-            res = interpret(list_basic_ops, [i, j])
-            assert res == list_basic_ops(i, j)
-
-def test_valueerror():
-    def fn(i):
-        l = [4, 7, 3]
-        try:
-            j = l.index(i)
-        except ValueError:
-            j = 100
-        return j
-    res = interpret(fn, [4])
-    assert res == 0
-    res = interpret(fn, [7])
-    assert res == 1
-    res = interpret(fn, [3])
-    assert res == 2
-    res = interpret(fn, [6])
-    assert res == 100
-
-    def fn(i):
-        l = [5, 8]
-        l.append(3)
-        try:
-            l[i] = 99
-        except IndexError:
-            pass
-        try:
-            del l[i]
-        except IndexError:
-            pass
-        try:
-            return l[2]    # implicit int->PyObj conversion here
-        except IndexError:
-            return "oups"
-    res = interpret(fn, [6])
-    assert res._obj.value == 3
-    res = interpret(fn, [-2])
-    assert res._obj.value == "oups"
-
-def test_memoryerror():
-    def fn(i):
-        lst = [0] * i
-        lst[i-1] = 5
-        return lst[0]
-    res = interpret(fn, [1])
-    assert res == 5
-    res = interpret(fn, [2])
-    assert res == 0
-    interpret_raises(MemoryError, fn, [sys.maxint])
+# these classes are used in the tests below
+class Foo:
+    pass
+
+class Bar(Foo):
+    pass
+
+class Freezing:
+    def _freeze_(self):
+        return True
 
 def test_list_builder():
     def fixed_size_case():
@@ -959,89 +252,887 @@ def test_list_builder():
             assert op.args[4] is vi
             assert op.result.concretetype is Void
 
-class Freezing:
-    def _freeze_(self):
-        return True
-
-def test_voidlist_prebuilt():
-    frlist = [Freezing()] * 17
-    def mylength(l):
-        return len(l)
-    def f():
-        return mylength(frlist)
-    res = interpret(f, [])
-    assert res == 17
-
-def test_voidlist_fixed():
-    fr = Freezing()
-    def f():
-        return len([fr, fr])
-    res = interpret(f, [])
-    assert res == 2
-
-def test_voidlist_nonfixed():
-    class Freezing:
-        def _freeze_(self):
-            return True
-    fr = Freezing()
-    def f():
-        lst = [fr, fr]
-        lst.append(fr)
-        del lst[1]
-        assert lst[0] is fr
-        return len(lst)
-    res = interpret(f, [])
-    assert res == 2
 
 
-def test_type_erase_fixed_size():
-    class A(object):
-        pass
-    class B(object):
-        pass
 
-    def f():
-        return [A()], [B()]
+class BaseTestRlist(BaseRtypingTest):
 
-    t = TranslationContext()
-    s = t.buildannotator().build_types(f, [])
-    rtyper = t.buildrtyper()
-    rtyper.specialize()
+    def test_simple(self):
+        def dummyfn():
+            l = [10, 20, 30]
+            return l[2]
+        res = self.interpret(dummyfn, [])
+        assert res == 30
 
-    s_A_list = s.items[0]
-    s_B_list = s.items[1]
+    def test_append(self):
+        def dummyfn():
+            l = []
+            l.append(50)
+            l.append(60)
+            l.append(70)
+            l.append(80)
+            l.append(90)
+            return len(l), l[0], l[-1]
+        res = self.interpret(dummyfn, [])
+        assert res.item0 == 5 
+        assert res.item1 == 50
+        assert res.item2 == 90
+
+    def test_len(self):
+        def dummyfn():
+            l = [5, 10]
+            return len(l)
+        res = self.interpret(dummyfn, [])
+        assert res == 2
+
+        def dummyfn():
+            l = [5]
+            l.append(6)
+            return len(l)
+        res = self.interpret(dummyfn, [])
+        assert res == 2
+
+    def test_iterate(self):
+        def dummyfn():
+            total = 0
+            for x in [1, 3, 5, 7, 9]:
+                total += x
+            return total
+        res = self.interpret(dummyfn, [])
+        assert res == 25
+        def dummyfn():
+            total = 0
+            l = [1, 3, 5, 7]
+            l.append(9)
+            for x in l:
+                total += x
+            return total
+        res = self.interpret(dummyfn, [])
+        assert res == 25
+
+    def test_recursive(self):
+        def dummyfn(N):
+            l = []
+            while N > 0:
+                l = [l]
+                N -= 1
+            return len(l)
+        res = self.interpret(dummyfn, [5])
+        assert res == 1
+
+        def dummyfn(N):
+            l = []
+            while N > 0:
+                l.append(l)
+                N -= 1
+            return len(l)
+        res = self.interpret(dummyfn, [5])
+        assert res == 5
+
+    def test_add(self):
+        def dummyfn():
+            l = [5]
+            l += [6,7]
+            return l + [8]
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res) == [5, 6, 7, 8]
+
+        def dummyfn():
+            l = [5]
+            l += [6,7]
+            l2 =  l + [8]
+            l2.append(9)
+            return l2
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res) == [5, 6, 7, 8, 9]
+
+    def test_slice(self):
+        def dummyfn():
+            l = [5, 6, 7, 8, 9]
+            return l[:2], l[1:4], l[3:]
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res.item0) == [5, 6]
+        assert self.ll_to_list(res.item1) == [6, 7, 8]
+        assert self.ll_to_list(res.item2) == [8, 9]
+
+        def dummyfn():
+            l = [5, 6, 7, 8]
+            l.append(9)
+            return l[:2], l[1:4], l[3:]
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res.item0) == [5, 6]
+        assert self.ll_to_list(res.item1) == [6, 7, 8]
+        assert self.ll_to_list(res.item2) == [8, 9]
+
+    def test_set_del_item(self):
+        def dummyfn():
+            l = [5, 6, 7]
+            l[1] = 55
+            l[-1] = 66
+            return l
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res) == [5, 55, 66]
+
+        def dummyfn():
+            l = []
+            l.append(5)
+            l.append(6)
+            l.append(7)
+            l[1] = 55
+            l[-1] = 66
+            return l
+        res = self.interpret(dummyfn, [])
+        assert self.ll_to_list(res) == [5, 55, 66]
+
+        def dummyfn():
+            l = [5, 6, 7]
+            l[1] = 55
+            l[-1] = 66
+            del l[0]
+            del l[-1]
+            del l[:]
+            return len(l)
+        res = self.interpret(dummyfn, [])
+        assert res == 0
+        
+    def test_setslice(self):
+        def dummyfn():
+            l = [10, 9, 8, 7]
+            l[:2] = [6, 5]
+            return l[0], l[1], l[2], l[3]
+        res = self.interpret(dummyfn, ())
+        assert res.item0 == 6
+        assert res.item1 == 5
+        assert res.item2 == 8
+        assert res.item3 == 7
+
+        def dummyfn():
+            l = [10, 9, 8]
+            l.append(7)
+            l[:2] = [6, 5]
+            return l[0], l[1], l[2], l[3]
+        res = self.interpret(dummyfn, ())
+        assert res.item0 == 6
+        assert res.item1 == 5
+        assert res.item2 == 8
+        assert res.item3 == 7
+
+    def test_bltn_list(self):
+        def dummyfn():
+            l1 = [42]
+            l2 = list(l1)
+            l2[0] = 0
+            return l1[0]
+        res = self.interpret(dummyfn, ())
+        assert res == 42
+
+    def test_is_true(self):
+        def is_true(lst):
+            if lst:
+                return True
+            else:
+                return False
+        def dummyfn1():
+            return is_true(None)
+        def dummyfn2():
+            return is_true([])
+        def dummyfn3():
+            return is_true([0])
+        assert self.interpret(dummyfn1, ()) == False
+        assert self.interpret(dummyfn2, ()) == False
+        assert self.interpret(dummyfn3, ()) == True
+
+    def test_list_index_simple(self):
+        def dummyfn(i):
+            l = [5,6,7,8]
+            return l.index(i)
+        
+        res = self.interpret(dummyfn, (6,))
+        assert res == 1
+        interpret_raises(ValueError, dummyfn, [42])
+
+
+    def test_insert_pop(self):
+        def dummyfn():
+            l = [6, 7, 8]
+            l.insert(0, 5)
+            l.insert(1, 42)
+            l.pop(2)
+            l.pop(0)
+            l.pop(-1)
+            l.pop()
+            return l[-1]
+        res = self.interpret(dummyfn, ())#, view=True)
+        assert res == 42
+
+    def test_insert_bug(self):
+        def dummyfn(n):
+            l = [1]
+            l = l[:]
+            l.pop(0)
+            if n < 0:
+                l.insert(0, 42)
+            else:
+                l.insert(n, 42)
+            return l
+        res = self.interpret(dummyfn, [0])
+        assert res.ll_length() == 1
+        assert res.ll_getitem_fast(0) == 42
+        res = self.interpret(dummyfn, [-1])
+        assert res.ll_length() == 1
+        assert res.ll_getitem_fast(0) == 42
+
+    def test_inst_pop(self):
+        class A:
+            pass
+        l = [A(), A()]
+        def f(idx):
+            try:
+                return l.pop(idx)
+            except IndexError:
+                return None
+        res = self.interpret(f, [1])
+        assert self.class_name(res) == 'A'
+        #''.join(res.super.typeptr.name) == 'A\00'
+        
+
+    def test_reverse(self):
+        def dummyfn():
+            l = [5, 3, 2]
+            l.reverse()
+            return l[0]*100 + l[1]*10 + l[2]
+        res = self.interpret(dummyfn, ())
+        assert res == 235
+
+        def dummyfn():
+            l = [5]
+            l.append(3)
+            l.append(2)
+            l.reverse()
+            return l[0]*100 + l[1]*10 + l[2]
+        res = self.interpret(dummyfn, ())
+        assert res == 235
+
+    def test_prebuilt_list(self):
+        klist = ['a', 'd', 'z', 'k']
+        def dummyfn(n):
+            return klist[n]
+        res = self.interpret(dummyfn, [0])
+        assert res == 'a'
+        res = self.interpret(dummyfn, [3])
+        assert res == 'k'
+        res = self.interpret(dummyfn, [-2])
+        assert res == 'z'
+
+        klist = ['a', 'd', 'z']
+        def mkdummyfn():
+            def dummyfn(n):
+                klist.append('k')
+                return klist[n]
+            return dummyfn
+        res = self.interpret(mkdummyfn(), [0])
+        assert res == 'a'
+        res = self.interpret(mkdummyfn(), [3])
+        assert res == 'k'
+        res = self.interpret(mkdummyfn(), [-2])
+        assert res == 'z'
+
+    def test_bound_list_method(self):
+        klist = [1, 2, 3]
+        # for testing constant methods without actually mutating the constant
+        def dummyfn(n):
+            klist.extend([])
+        self.interpret(dummyfn, [7])
+
+    def test_list_is(self):
+        def dummyfn():
+            l1 = []
+            return l1 is l1
+        res = self.interpret(dummyfn, [])
+        assert res is True
+        def dummyfn():
+            l2 = [1, 2]
+            return l2 is l2
+        res = self.interpret(dummyfn, [])
+        assert res is True
+        def dummyfn():
+            l1 = [2]
+            l2 = [1, 2]
+            return l1 is l2
+        res = self.interpret(dummyfn, [])
+        assert res is False
+        def dummyfn():
+            l1 = [1, 2]
+            l2 = [1]
+            l2.append(2)
+            return l1 is l2
+        res = self.interpret(dummyfn, [])
+        assert res is False
+
+        def dummyfn():
+            l1 = None
+            l2 = [1, 2]
+            return l1 is l2
+        res = self.interpret(dummyfn, [])
+        assert res is False
+
+        def dummyfn():
+            l1 = None
+            l2 = [1]
+            l2.append(2)
+            return l1 is l2
+        res = self.interpret(dummyfn, [])
+        assert res is False
+
+    def test_list_compare(self):
+        def fn(i, j, neg=False):
+            s1 = [[1, 2, 3], [4, 5, 1], None]
+            s2 = [[1, 2, 3], [4, 5, 1], [1], [1, 2], [4, 5, 1, 6],
+                  [7, 1, 1, 8, 9, 10], None]
+            if neg: return s1[i] != s2[i]
+            return s1[i] == s2[j]
+        for i in range(3):
+            for j in range(7):
+                for case in False, True:
+                    res = self.interpret(fn, [i,j,case])
+                    assert res is fn(i, j, case)
+
+        def fn(i, j, neg=False):
+            s1 = [[1, 2, 3], [4, 5, 1], None]
+            l = []
+            l.extend([1,2,3])
+            s2 = [l, [4, 5, 1], [1], [1, 2], [4, 5, 1, 6],
+                  [7, 1, 1, 8, 9, 10], None]
+            if neg: return s1[i] != s2[i]
+            return s1[i] == s2[j]
+        for i in range(3):
+            for j in range(7):
+                for case in False, True:
+                    res = self.interpret(fn, [i,j,case])
+                    assert res is fn(i, j, case)
+
+
+    def test_list_comparestr(self):
+        def fn(i, j, neg=False):
+            s1 = [["hell"], ["hello", "world"]]
+            s1[0][0] += "o" # ensure no interning
+            s2 = [["hello"], ["world"]]
+            if neg: return s1[i] != s2[i]
+            return s1[i] == s2[j]
+        for i in range(2):
+            for j in range(2):
+                for case in False, True:
+                    res = self.interpret(fn, [i,j,case])
+                    assert res is fn(i, j, case)
+
+
+    def test_list_compareinst(self):
+        def fn(i, j, neg=False):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            s1 = [[foo1], [foo2], [bar1]]
+            s2 = s1[:]
+            if neg: return s1[i] != s2[i]
+            return s1[i] == s2[j]
+        for i in range(3):
+            for j in range(3):
+                for case in False, True:
+                    res = self.interpret(fn, [i, j, case])
+                    assert res is fn(i, j, case)
+
+        def fn(i, j, neg=False):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            s1 = [[foo1], [foo2], [bar1]]
+            s2 = s1[:]
+
+            s2[0].extend([])
+
+            if neg: return s1[i] != s2[i]
+            return s1[i] == s2[j]
+        for i in range(3):
+            for j in range(3):
+                for case in False, True:
+                    res = self.interpret(fn, [i, j, case])
+                    assert res is fn(i, j, case)
+
+
+    def test_list_contains(self):
+        def fn(i, neg=False):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            bar2 = Bar()
+            lis = [foo1, foo2, bar1]
+            args = lis + [bar2]
+            if neg : return args[i] not in lis
+            return args[i] in lis
+        for i in range(4):
+            for case in False, True:
+                res = self.interpret(fn, [i, case])
+                assert res is fn(i, case)
+
+        def fn(i, neg=False):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            bar2 = Bar()
+            lis = [foo1, foo2, bar1]
+            lis.append(lis.pop())
+            args = lis + [bar2]
+            if neg : return args[i] not in lis
+            return args[i] in lis
+        for i in range(4):
+            for case in False, True:
+                res = self.interpret(fn, [i, case])
+                assert res is fn(i, case)
+
+
+    def test_not_a_char_list_after_all(self):
+        def fn():
+            l = ['h', 'e', 'l', 'l', 'o']
+            return 'world' in l
+        res = self.interpret(fn, [])
+        assert res is False
+
+    def test_list_index(self):
+        def fn(i):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            bar2 = Bar()
+            lis = [foo1, foo2, bar1]
+            args = lis + [bar2]
+            return lis.index(args[i])
+        for i in range(4):
+            for varsize in False, True:
+                try:
+                    res2 = fn(i)
+                    res1 = self.interpret(fn, [i])
+                    assert res1 == res2
+                except Exception, e:
+                    self.interpret_raises(e.__class__, fn, [i])
+
+        def fn(i):
+            foo1 = Foo()
+            foo2 = Foo()
+            bar1 = Bar()
+            bar2 = Bar()
+            lis = [foo1, foo2, bar1]
+            args = lis + [bar2]
+            lis.append(lis.pop())
+            return lis.index(args[i])
+        for i in range(4):
+            for varsize in False, True:
+                try:
+                    res2 = fn(i)
+                    res1 = self.interpret(fn, [i])
+                    assert res1 == res2
+                except Exception, e:
+                    self.interpret_raises(e.__class__, fn, [i])
+
+
+    def test_list_str(self):
+        self._skip_oo('int to string')
+        def fn():
+            return str([1,2,3])
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == fn()
+
+        def fn():
+            return str([[1,2,3]])
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == fn()
+
+        def fn():
+            l = [1,2]
+            l.append(3)
+            return str(l)
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == fn()
+
+        def fn():
+            l = [1,2]
+            l.append(3)
+            return str([l])
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == fn()
+
+    def test_list_or_None(self):
+        empty_list = []
+        nonempty_list = [1, 2]
+        def fn(i):
+            test = [None, empty_list, nonempty_list][i]
+            if test:
+                return 1
+            else:
+                return 0
+
+        res = self.interpret(fn, [0])
+        assert res == 0
+        res = self.interpret(fn, [1])
+        assert res == 0
+        res = self.interpret(fn, [2])
+        assert res == 1
+
+
+        nonempty_list = [1, 2]
+        def fn(i):
+            empty_list = [1]
+            empty_list.pop()
+            nonempty_list = []
+            nonempty_list.extend([1,2])
+            test = [None, empty_list, nonempty_list][i]
+            if test:
+                return 1
+            else:
+                return 0
+
+        res = self.interpret(fn, [0])
+        assert res == 0
+        res = self.interpret(fn, [1])
+        assert res == 0
+        res = self.interpret(fn, [2])
+        assert res == 1
+
+
+    def test_inst_list(self):
+        self._skip_oo('strings')
+        def fn():
+            l = [None]
+            l[0] = Foo()
+            l.append(Bar())
+            l2 = [l[1], l[0], l[0]]
+            l.extend(l2)
+            for x in l2:
+                l.append(x)
+            x = l.pop()
+            x = l.pop()
+            x = l.pop()
+            x = l2.pop()
+            return str(x)+";"+str(l)
+        res = self.interpret(fn, [])
+        assert ''.join(res.chars) == '<Foo object>;[<Foo object>, <Bar object>, <Bar object>, <Foo object>, <Foo object>]'
+
+        def fn():
+            l = [None] * 2
+            l[0] = Foo()
+            l[1] = Bar()
+            l2 = [l[1], l[0], l[0]]
+            l = l + [None] * 3
+            i = 2
+            for x in l2:
+                l[i] = x
+                i += 1
+            return str(l)
+        res = self.interpret(fn, [])
+        assert ''.join(res.chars) == '[<Foo object>, <Bar object>, <Bar object>, <Foo object>, <Foo object>]'
+
+    def test_list_slice_minusone(self):
+        def fn(i):
+            lst = [i, i+1, i+2]
+            lst2 = lst[:-1]
+            return lst[-1] * lst2[-1]
+        res = self.interpret(fn, [5])
+        assert res == 42
+
+        def fn(i):
+            lst = [i, i+1, i+2, 7]
+            lst.pop()
+            lst2 = lst[:-1]
+            return lst[-1] * lst2[-1]
+        res = self.interpret(fn, [5])
+        assert res == 42
+
+    def test_list_multiply(self):
+        def fn(i):
+            lst = [i] * i
+            ret = len(lst)
+            if ret:
+                ret *= lst[-1]
+            return ret
+        for arg in (1, 9, 0, -1, -27):
+            res = self.interpret(fn, [arg])
+            assert res == fn(arg)
+        def fn(i):
+            lst = [i, i + 1] * i
+            ret = len(lst)
+            if ret:
+                ret *= lst[-1]
+            return ret
+        for arg in (1, 9, 0, -1, -27):
+            res = self.interpret(fn, [arg])
+            assert res == fn(arg)
+
+    def test_list_inplace_multiply(self):
+        def fn(i):
+            lst = [i]
+            lst *= i
+            ret = len(lst)
+            if ret:
+                ret *= lst[-1]
+            return ret
+        for arg in (1, 9, 0, -1, -27):
+            res = self.interpret(fn, [arg])
+            assert res == fn(arg)
+        def fn(i):
+            lst = [i, i + 1]
+            lst *= i
+            ret = len(lst)
+            if ret:
+                ret *= lst[-1]
+            return ret
+        for arg in (1, 9, 0, -1, -27):
+            res = self.interpret(fn, [arg])
+            assert res == fn(arg)
+
+    def test_indexerror(self):
+        def fn(i):
+            l = [5, 8, 3]
+            try:
+                l[i] = 99
+            except IndexError:
+                pass
+            try:
+                del l[i]
+            except IndexError:
+                pass
+            try:
+                return l[2]
+            except IndexError:
+                return -1
+        res = self.interpret(fn, [6])
+        assert res == 3
+        res = self.interpret(fn, [-2])
+        assert res == -1
+
+        def fn(i):
+            l = [5, 8]
+            l.append(3)
+            try:
+                l[i] = 99
+            except IndexError:
+                pass
+            try:
+                del l[i]
+            except IndexError:
+                pass
+            try:
+                return l[2]
+            except IndexError:
+                return -1
+        res = self.interpret(fn, [6])
+        assert res == 3
+        res = self.interpret(fn, [-2])
+        assert res == -1
+
+    def test_no_unneeded_refs(self):
+        self._skip_oo('assert')
+        def fndel(p, q):
+            lis = ["5", "3", "99"]
+            assert q >= 0
+            assert p >= 0
+            del lis[p:q]
+            return lis
+        def fnpop(n):
+            lis = ["5", "3", "99"]
+            while n:
+                lis.pop()
+                n -=1
+            return lis
+        for i in range(2, 3+1):
+            lis = self.interpret(fndel, [0, i])
+            assert list_is_clear(lis, 3-i)
+        for i in range(3):
+            lis = self.interpret(fnpop, [i])
+            assert list_is_clear(lis, 3-i)
+
+    def test_list_basic_ops(self):
+        def list_basic_ops(i=int, j=int):
+            l = [1,2,3]
+            l.insert(0, 42)
+            del l[1]
+            l.append(i)
+            listlen = len(l)
+            l.extend(l) 
+            del l[listlen:]
+            l += [5,6] 
+            l[1] = i
+            return l[j]
+        for i in range(6): 
+            for j in range(6):
+                res = self.interpret(list_basic_ops, [i, j])
+                assert res == list_basic_ops(i, j)
+
+    def test_valueerror(self):
+        def fn(i):
+            l = [4, 7, 3]
+            try:
+                j = l.index(i)
+            except ValueError:
+                j = 100
+            return j
+        res = self.interpret(fn, [4])
+        assert res == 0
+        res = self.interpret(fn, [7])
+        assert res == 1
+        res = self.interpret(fn, [3])
+        assert res == 2
+        res = self.interpret(fn, [6])
+        assert res == 100
+
+        def fn(i):
+            l = [5, 8]
+            l.append(3)
+            try:
+                l[i] = 99
+            except IndexError:
+                pass
+            try:
+                del l[i]
+            except IndexError:
+                pass
+            try:
+                return l[2]
+            except IndexError:
+                return -1
+        res = self.interpret(fn, [6])
+        assert res == 3
+        res = self.interpret(fn, [-2])
+        assert res == -1
+
+    def test_voidlist_prebuilt(self):
+        frlist = [Freezing()] * 17
+        def mylength(l):
+            return len(l)
+        def f():
+            return mylength(frlist)
+        res = self.interpret(f, [])
+        assert res == 17
+
+    def test_voidlist_fixed(self):
+        self._skip_oo('_freeze_')
+        fr = Freezing()
+        def f():
+            return len([fr, fr])
+        res = self.interpret(f, [])
+        assert res == 2
+
+    def test_voidlist_nonfixed(self):
+        self._skip_oo('_freeze_')
+        class Freezing:
+            def _freeze_(self):
+                return True
+        fr = Freezing()
+        def f():
+            lst = [fr, fr]
+            lst.append(fr)
+            del lst[1]
+            assert lst[0] is fr
+            return len(lst)
+        res = self.interpret(f, [])
+        assert res == 2
+
+    def test_type_erase_fixed_size(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+
+        def f():
+            return [A()], [B()]
+
+        t = TranslationContext()
+        s = t.buildannotator().build_types(f, [])
+        rtyper = t.buildrtyper(type_system=self.type_system)
+        rtyper.specialize()
+
+        s_A_list = s.items[0]
+        s_B_list = s.items[1]
+
+        r_A_list = rtyper.getrepr(s_A_list)
+        assert isinstance(r_A_list, self.rlist.FixedSizeListRepr)
+        r_B_list = rtyper.getrepr(s_B_list)
+        assert isinstance(r_B_list, self.rlist.FixedSizeListRepr)    
+
+        assert r_A_list.lowleveltype == r_B_list.lowleveltype
+
+    def test_type_erase_var_size(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+
+        def f():
+            la = [A()]
+            lb = [B()]
+            la.append(None)
+            lb.append(None)
+            return la, lb
+
+        t = TranslationContext()
+        s = t.buildannotator().build_types(f, [])
+        rtyper = t.buildrtyper(type_system=self.type_system)
+        rtyper.specialize()
+
+        s_A_list = s.items[0]
+        s_B_list = s.items[1]
+
+        r_A_list = rtyper.getrepr(s_A_list)
+        assert isinstance(r_A_list, self.rlist.ListRepr)
+        r_B_list = rtyper.getrepr(s_B_list)
+        assert isinstance(r_B_list, self.rlist.ListRepr)
+
+        assert r_A_list.lowleveltype == r_B_list.lowleveltype
+
+    def test_access_in_try(self):
+        def f(sq):
+            try:
+                return sq[2]
+            except ZeroDivisionError:
+                return 42
+            return -1
+        def g(n):
+            l = [1] * n
+            return f(l)
+        res = self.interpret(g, [3])
+        assert res == 1
+
+    def test_access_in_try_set(self):
+        def f(sq):
+            try:
+                sq[2] = 77
+            except ZeroDivisionError:
+                return 42
+            return -1
+        def g(n):
+            l = [1] * n
+            f(l)
+            return l[2]
+        res = self.interpret(g, [3])
+        assert res == 77
+
+
+class TestLLtype(BaseTestRlist, LLRtypeMixin):
+    rlist = ll_rlist
+
+    def test_memoryerror(self):
+        def fn(i):
+            lst = [0] * i
+            lst[i-1] = 5
+            return lst[0]
+        res = self.interpret(fn, [1])
+        assert res == 5
+        res = self.interpret(fn, [2])
+        assert res == 0
+        self.interpret_raises(MemoryError, fn, [sys.maxint])
     
-    r_A_list = rtyper.getrepr(s_A_list)
-    assert isinstance(r_A_list, FixedSizeListRepr)
-    r_B_list = rtyper.getrepr(s_B_list)
-    assert isinstance(r_B_list, FixedSizeListRepr)    
 
-    assert r_A_list.lowleveltype == r_B_list.lowleveltype
-
-def test_type_erase_var_size():
-    class A(object):
-        pass
-    class B(object):
-        pass
-
-    def f():
-        la = [A()]
-        lb = [B()]
-        la.append(None)
-        lb.append(None)
-        return la, lb
-
-    t = TranslationContext()
-    s = t.buildannotator().build_types(f, [])
-    rtyper = t.buildrtyper()
-    rtyper.specialize()
-
-    s_A_list = s.items[0]
-    s_B_list = s.items[1]
-    
-    r_A_list = rtyper.getrepr(s_A_list)
-    assert isinstance(r_A_list, ListRepr)    
-    r_B_list = rtyper.getrepr(s_B_list)
-    assert isinstance(r_B_list, ListRepr)    
-
-    assert r_A_list.lowleveltype == r_B_list.lowleveltype
+class TestOOtype(BaseTestRlist, OORtypeMixin):
+    rlist = oo_rlist

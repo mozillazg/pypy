@@ -3,6 +3,8 @@ from pypy.objspace.flow.model import Variable, Constant
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.simplify import get_graph
 from pypy.rpython.rmodel import inputconst
+from pypy.translator.backendopt import support
+from pypy.tool.uid import uid
 
 class CreationPoint(object):
     def __init__(self, creation_method="?"):
@@ -15,8 +17,8 @@ class CreationPoint(object):
             self.malloced = False
 
     def __repr__(self):
-        return ("CreationPoint(<%s>, %s, esc=%s, cha=%s)" %
-                (id(self), self.creation_method, self.escapes, self.changes))
+        return ("CreationPoint(<0x%x>, %s, esc=%s, cha=%s)" %
+                (uid(self), self.creation_method, self.escapes, self.changes))
 
 class VarState(object):
     def __init__(self, crep=None):
@@ -130,7 +132,7 @@ class AbstractDataFlowInterpreter(object):
         return resultstate, args
 
     def flow_block(self, block, graph):
-        print "flowing in block %s of function %s" % (block, graph.name)
+        #print "flowing in block %s of function %s" % (block, graph.name)
         self.flown_blocks[block] = True
         if block is graph.returnblock:
             if isonheap(block.inputargs[0]):
@@ -360,85 +362,33 @@ def multicontains(l1, l2):
             return False
     return True
 
-def find_backedges(graph):
-    """finds the backedges in the flow graph"""
-    scheduled = [graph.startblock]
-    seen = {}
-    backedges = []
-    while scheduled:
-        current = scheduled.pop()
-        seen[current] = True
-        for link in current.exits:
-            if link.target in seen:
-                backedges.append(link)
-            else:
-                scheduled.append(link.target)
-    return backedges
-
-def compute_reachability(graph):
-    reachable = {}
-    for block in graph.iterblocks():
-        reach = {}
-        scheduled = [block]
-        while scheduled:
-            current = scheduled.pop()
-            for link in current.exits:
-                if link.target in reachable:
-                    reach = setunion(reach, reachable[link.target])
-                    continue
-                if link.target not in reach:
-                    reach[link.target] = True
-        reachable[block] = reach
-    return reachable
-
-def find_loop_blocks(graph):
-    """find the blocks in a graph that are part of a loop"""
-    loop = {}
-    reachable = compute_reachability(graph)
-    for backedge in find_backedges(graph):
-        start = backedge.target
-        end = backedge.prevblock
-        loop[start] = start
-        loop[end] = start
-        scheduled = [start]
-        seen = {}
-        while scheduled:
-            current = scheduled.pop()
-            connects = end in reachable[current]
-            seen[current] = True
-            if connects:
-                loop[current] = start
-            for link in current.exits:
-                if link.target not in seen:
-                    scheduled.append(link.target)
-    return loop
-
 def malloc_to_stack(t):
-    aib = AbstractDataFlowInterpreter(t)
+    adi = AbstractDataFlowInterpreter(t)
     for graph in t.graphs:
-        if graph.startblock not in aib.flown_blocks:
-            aib.schedule_function(graph)
-            aib.complete()
+        if graph.startblock not in adi.flown_blocks:
+            adi.schedule_function(graph)
+            adi.complete()
     for graph in t.graphs:
-        loop_blocks = find_loop_blocks(graph)
-        for block in graph.iterblocks():
-            for op in block.operations:
-                if op.opname == 'malloc':
-                    STRUCT = op.args[0].value
-                    # must not remove mallocs of structures that have a RTTI with a destructor
-                    try:
-                        destr_ptr = lltype.getRuntimeTypeInfo(STRUCT)._obj.destructor_funcptr
-                        if destr_ptr:
-                            continue
-                    except (ValueError, AttributeError), e:
-                        pass
-                    varstate = aib.getstate(op.result)
-                    assert len(varstate.creation_points) == 1
-                    crep = varstate.creation_points.keys()[0]
-                    if not crep.escapes:
-                        if block not in loop_blocks:
-                            print "moving object from heap to stack %s in %s" % (op, graph.name)
-                            op.opname = 'flavored_malloc'
-                            op.args.insert(0, inputconst(lltype.Void, 'stack'))
-                        else:
-                            print "%s in %s is a non-escaping malloc in a loop" % (op, graph.name)
+        loop_blocks = support.find_loop_blocks(graph)
+        for block, op in graph.iterblockops():
+            if op.opname == 'malloc':
+                STRUCT = op.args[0].value
+                # must not remove mallocs of structures that have a RTTI with a destructor
+                try:
+                    destr_ptr = lltype.getRuntimeTypeInfo(STRUCT)._obj.destructor_funcptr
+                    if destr_ptr:
+                        continue
+                except (ValueError, AttributeError), e:
+                    pass
+                varstate = adi.getstate(op.result)
+                assert len(varstate.creation_points) == 1
+                crep = varstate.creation_points.keys()[0]
+                if not crep.escapes:
+                    if block not in loop_blocks:
+                        print "moving object from heap to stack %s in %s" % (op, graph.name)
+                        op.opname = 'flavored_malloc'
+                        op.args.insert(0, inputconst(lltype.Void, 'stack'))
+                    else:
+                        print "%s in %s is a non-escaping malloc in a loop" % (op, graph.name)
+
+

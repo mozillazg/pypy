@@ -1,17 +1,19 @@
 import os, sys
+
+# as of revision 27081, multimethod.py uses the InstallerVersion1 by default
+# because it is much faster both to initialize and run on top of CPython.
+# The InstallerVersion2 is optimized for making a translator-friendly
+# structure.  So we patch here...
+from pypy.objspace.std import multimethod
+multimethod.Installer = multimethod.InstallerVersion2
+
 from pypy.objspace.std.objspace import StdObjSpace
 # XXX from pypy.annotation.model import *
 # since we are execfile()'ed this would pull some
 # weird objects into the globals, which we would try to pickle.
-from pypy.annotation.model import SomeList, SomeString
-from pypy.annotation.listdef import ListDef
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
-
-# WARNING: this requires the annotator.
-# There is no easy way to build all caches manually,
-# but the annotator can do it for us for free.
 
 try:
     this_dir = os.path.dirname(__file__)
@@ -63,6 +65,7 @@ def print_help():
 
 
 def target(driver, args):
+    driver.exe_name = 'pypy-%(backend)s'
     options = driver.options
 
     tgt_options, _ = opt_parser().parse_args(args)

@@ -5,6 +5,7 @@ from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
      Void, Bool, Float, Signed, Char, UniChar, \
      typeOf, LowLevelType, Ptr, PyObject, isCompatibleType
+from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.error import TyperError, MissingRTypeOperation 
 
@@ -119,18 +120,56 @@ class Repr:
         if self.lowleveltype is not Void:
             try:
                 realtype = typeOf(value)
-            except (AssertionError, AttributeError):
+            except (AssertionError, AttributeError, TypeError):
                 realtype = '???'
             if realtype != self.lowleveltype:
                 raise TyperError("convert_const(self = %r, value = %r)" % (
                     self, value))
         return value
 
-    def get_ll_eq_function(self): 
+    def get_ll_eq_function(self):
+        """Return an eq(x,y) function to use to compare two low-level
+        values of this Repr.
+        This can return None to mean that simply using '==' is fine.
+        """
         raise TyperError, 'no equality function for %r' % self
 
     def get_ll_hash_function(self):
+        """Return a hash(x) function for low-level values of this Repr.
+        """
         raise TyperError, 'no hashing function for %r' % self
+
+    def get_ll_fasthash_function(self):
+        """Return a 'fast' hash(x) function for low-level values of this
+        Repr.  The function can assume that 'x' is already stored as a
+        key in a dict.  get_ll_fasthash_function() should return None if
+        the hash should rather be cached in the dict entry.
+        """
+        return None
+
+    def can_ll_be_null(self, s_value):
+        """Check if the low-level repr can take the value 0/NULL.
+        The annotation s_value is provided as a hint because it may
+        contain more information than the Repr.
+        """
+        return True   # conservative
+
+    def get_ll_dummyval_obj(self, rtyper, s_value):
+        """A dummy value is a special low-level value, not otherwise
+        used.  It should not be the NULL value even if it is special.
+        This returns either None, or a hashable object that has a
+        (possibly lazy) attribute 'll_dummy_value'.
+        The annotation s_value is provided as a hint because it may
+        contain more information than the Repr.
+        """
+        T = self.lowleveltype
+        if (isinstance(T, lltype.Ptr) and
+            isinstance(T.TO, (lltype.Struct,
+                              lltype.Array,
+                              lltype.ForwardReference))):
+            return DummyValueBuilder(rtyper, T.TO)
+        else:
+            return None
 
     def rtype_bltn_list(self, hop):
         raise TyperError, 'no list() support for %r' % self
@@ -163,7 +202,9 @@ class Repr:
         try:
             vlen = self.rtype_len(hop)
         except MissingRTypeOperation:
-            return hop.inputconst(Bool, True)
+            if not hop.s_result.is_constant():
+                raise TyperError("rtype_is_true(%r) not implemented" % (self,))
+            return hop.inputconst(Bool, hop.s_result.const)
         else:
             return hop.genop('int_is_true', [vlen], resulttype=Bool)
 
@@ -174,6 +215,11 @@ class Repr:
         vobj, = hop.inputargs(self)
         # XXX
         return hop.genop('cast_ptr_to_int', [vobj], resulttype=Signed)
+
+    def rtype_hash(self, hop):
+        ll_hash = self.get_ll_hash_function()
+        v, = hop.inputargs(self)
+        return hop.gendirectcall(ll_hash, v)
 
     def rtype_iter(self, hop):
         r_iter = self.make_iterator_repr()
@@ -273,9 +319,17 @@ class FloatRepr(Repr):
 class IntegerRepr(FloatRepr):
     def __init__(self, lowleveltype, opprefix):
         self.lowleveltype = lowleveltype
-        self.opprefix = opprefix
+        self._opprefix = opprefix
         self.as_int = self
 
+    def _get_opprefix(self):
+        if self._opprefix is None:
+            raise TyperError("arithmetic not supported on %r" %
+                             self.lowleveltype)
+        return self._opprefix
+
+    opprefix =property(_get_opprefix)
+    
 class BoolRepr(IntegerRepr):
     lowleveltype = Bool
     # NB. no 'opprefix' here.  Use 'as_int' systematically.
@@ -283,19 +337,11 @@ class BoolRepr(IntegerRepr):
         from pypy.rpython.rint import signed_repr
         self.as_int = signed_repr
 
-class StringRepr(Repr):
-    pass
-
-class CharRepr(StringRepr):
-    lowleveltype = Char
-
-class UniCharRepr(Repr):
-    lowleveltype = UniChar
-
 class VoidRepr(Repr):
     lowleveltype = Void
     def get_ll_eq_function(self): return None
     def get_ll_hash_function(self): return ll_hash_void
+    get_ll_fasthash_function = get_ll_hash_function
 impossible_repr = VoidRepr()
 
 # ____________________________________________________________
@@ -376,7 +422,43 @@ def externalvsinternal(rtyper, item_repr): # -> external_item_repr, (internal_)i
         return item_repr, rclass.getinstancerepr(rtyper, None)
     else:
         return item_repr, item_repr
-        
+
+
+class DummyValueBuilder(object):
+
+    def __init__(self, rtyper, TYPE):
+        self.rtyper = rtyper
+        self.TYPE = TYPE
+
+    def _freeze_(self):
+        return True
+
+    def __hash__(self):
+        return hash(self.TYPE)
+
+    def __eq__(self, other):
+        return (isinstance(other, DummyValueBuilder) and
+                self.rtyper is other.rtyper and
+                self.TYPE == other.TYPE)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def build_ll_dummy_value(self):
+        TYPE = self.TYPE
+        try:
+            return self.rtyper.cache_dummy_values[TYPE]
+        except KeyError:
+            # generate a dummy ptr to an immortal placeholder struct/array
+            if TYPE._is_varsize():
+                p = lltype.malloc(TYPE, 0, immortal=True)
+            else:
+                p = lltype.malloc(TYPE, immortal=True)
+            self.rtyper.cache_dummy_values[TYPE] = p
+            return p
+
+    ll_dummy_value = property(build_ll_dummy_value)
+
 
 # logging/warning
 

@@ -2,6 +2,7 @@ from pypy.rpython.ootypesystem.ootype import *
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import FlowObjSpace
 from pypy.annotation.annrpython import RPythonAnnotator
+import exceptions
 
 
 def test_simple_new():
@@ -185,3 +186,51 @@ def test_truth_value():
     s = a.build_types(oof, [bool])
     assert isinstance(s, annmodel.SomeBool)
     assert not s.is_constant()
+
+def test_list():
+    L = List(Signed)
+    def oof():
+        l = new(L)
+        l._ll_resize(42)
+        return l
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [])
+    #a.translator.view()
+
+    assert s == annmodel.SomeOOInstance(L)
+
+def test_string():
+    def oof():
+        return new(String)
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [])
+    assert s == annmodel.SomeOOInstance(String)
+
+def test_nullstring():
+    def oof(b):
+        if b:
+            return 'foo'
+        else:
+            return None
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [bool])
+    assert s == annmodel.SomeString(can_be_None=True)
+
+def test_oostring():
+    def oof():
+        return oostring
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [])
+    assert isinstance(s, annmodel.SomeBuiltin)
+
+def test_ooparse_int():
+    def oof(n, b):
+        return ooparse_int(oostring(n, b), b)
+
+    a = RPythonAnnotator()
+    s = a.build_types(oof, [int, int])
+    assert isinstance(s, annmodel.SomeInteger)

@@ -6,7 +6,7 @@ import sys
 from pypy.annotation.model import SomeInteger, SomeObject, SomeChar, SomeBool
 from pypy.annotation.model import SomeString, SomeTuple, SomeSlice
 from pypy.annotation.model import SomeUnicodeCodePoint, SomeAddress
-from pypy.annotation.model import SomeFloat, unionof
+from pypy.annotation.model import SomeFloat, SomeWeakGcAddress, unionof
 from pypy.annotation.model import SomePBC, SomeInstance, SomeDict
 from pypy.annotation.model import SomeExternalObject
 from pypy.annotation.model import annotation_to_lltype, lltype_to_annotation, ll_to_annotation
@@ -81,23 +81,8 @@ def builtin_int(s_obj, s_base=None):
         args_s = [s_obj]
     return constpropagate(int, args_s, SomeInteger())
 
-def restricted_uint(s_obj):    # for r_uint
-    return constpropagate(pypy.rpython.rarithmetic.r_uint, [s_obj],
-                          SomeInteger(nonneg=True, unsigned=True))
-
-def restricted_longlong(s_obj):    # for r_uint
-    return constpropagate(pypy.rpython.rarithmetic.r_longlong, [s_obj],
-                          SomeInteger(size=2))
-
-def restricted_ulonglong(s_obj):    # for r_uint
-    return constpropagate(pypy.rpython.rarithmetic.r_ulonglong, [s_obj],
-                          SomeInteger(size=2, nonneg=True, unsigned=True))
-
 def builtin_float(s_obj):
     return constpropagate(float, [s_obj], SomeFloat())
-
-def builtin_long(s_obj):
-    return SomeObject()   # XXX go away
 
 def builtin_chr(s_int):
     return constpropagate(chr, [s_int], SomeChar())
@@ -143,10 +128,7 @@ def builtin_isinstance(s_obj, s_type, variables=None):
     if s_type.is_constant():
         typ = s_type.const
         if issubclass(typ, pypy.rpython.rarithmetic.base_int):
-            if s_obj.is_constant():
-                r.const = isinstance(s_obj.const, typ)
-            else:
-                r.const = issubclass(s_obj.knowntype, typ)
+            r.const = issubclass(s_obj.knowntype, typ)
         else:
             if typ == long:
                 getbookkeeper().warning("isinstance(., long) is not RPython")
@@ -190,6 +172,7 @@ def builtin_isinstance(s_obj, s_type, variables=None):
         add_knowntypedata(r.knowntypedata, True, variables, bk.valueoftype(typ))
     return r
 
+# note that this one either needs to be constant, or we will create SomeObject
 def builtin_hasattr(s_obj, s_attr):
     if not s_attr.is_constant() or not isinstance(s_attr.const, str):
         getbookkeeper().warning('hasattr(%r, %r) is not RPythonic enough' %
@@ -288,7 +271,7 @@ def robjmodel_we_are_translated():
     return immutablevalue(True)
 
 def robjmodel_r_dict(s_eqfn, s_hashfn):
-    dictdef = getbookkeeper().getdictdef()
+    dictdef = getbookkeeper().getdictdef(is_r_dict=True)
     dictdef.dictkey.update_rdict_annotations(s_eqfn, s_hashfn)
     return SomeDict(dictdef)
 
@@ -322,6 +305,16 @@ def llmemory_cast_adr_to_ptr(s, s_type):
     assert s_type.is_constant()
     return SomePtr(s_type.const)
 
+def llmemory_cast_ptr_to_weakadr(s):
+    return SomeWeakGcAddress()
+
+def llmemory_cast_weakadr_to_ptr(s, s_type):
+    assert s_type.is_constant()
+    return SomePtr(s_type.const)
+
+def llmemory_cast_adr_to_int(s):
+    return SomeInteger() # xxx
+
 def rstack_yield_current_frame_to_caller():
     return SomeExternalObject(pypy.rpython.rstack.frame_stack_top)
     
@@ -354,9 +347,6 @@ for name, value in globals().items():
         original = getattr(__builtin__, name[8:])
         BUILTIN_ANALYZERS[original] = value
 
-BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.r_uint] = restricted_uint
-BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.r_longlong] = restricted_longlong
-BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.r_ulonglong] = restricted_ulonglong
 ##BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.ovfcheck] = rarith_ovfcheck
 ##BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.ovfcheck_lshift] = rarith_ovfcheck_lshift
 BUILTIN_ANALYZERS[pypy.rpython.rarithmetic.intmask] = rarith_intmask
@@ -369,6 +359,9 @@ BUILTIN_ANALYZERS[pypy.rpython.objectmodel.keepalive_until_here] = robjmodel_kee
 BUILTIN_ANALYZERS[pypy.rpython.objectmodel.hint] = robjmodel_hint
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_adr] = llmemory_cast_ptr_to_adr
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_ptr] = llmemory_cast_adr_to_ptr
+BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_int] = llmemory_cast_adr_to_int
+BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_weakadr] = llmemory_cast_ptr_to_weakadr
+BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_weakadr_to_ptr] = llmemory_cast_weakadr_to_ptr
 BUILTIN_ANALYZERS[pypy.rpython.rstack.yield_current_frame_to_caller] = (
     rstack_yield_current_frame_to_caller)
 
@@ -391,14 +384,24 @@ BUILTIN_ANALYZERS[__import__] = import_func
 from pypy.annotation.model import SomePtr
 from pypy.rpython.lltypesystem import lltype
 
-def malloc(T, n=None):
-    assert n is None or n.knowntype == int
+def malloc(T, n=None, s_flavor=None):
+    assert n is None or (n.knowntype == int or issubclass(n.knowntype, pypy.rpython.rarithmetic.base_int))
     assert T.is_constant()
     if n is not None:
         n = 1
-    p = lltype.malloc(T.const, n)
+    if s_flavor is None:
+        p = lltype.malloc(T.const, n)
+    else:
+        assert s_flavor.is_constant()
+        p = lltype.malloc(T.const, n, s_flavor.const)
     r = SomePtr(lltype.typeOf(p))
     return r
+
+def free(s_p, s_flavor):
+    assert s_flavor.is_constant()
+    T = s_p.ll_ptrtype.TO
+    p = lltype.malloc(T, flavor=s_flavor.const)
+    lltype.free(p, flavor=s_flavor.const)
 
 def typeOf(s_val):
     lltype = annotation_to_lltype(s_val, info="in typeOf(): ")
@@ -419,8 +422,35 @@ def cast_pointer(PtrT, s_p):
     cast_p = lltype.cast_pointer(PtrT.const, s_p.ll_ptrtype._defl())
     return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
 
+def cast_opaque_ptr(PtrT, s_p):
+    assert isinstance(s_p, SomePtr), "casting of non-pointer: %r" % s_p
+    assert PtrT.is_constant()
+    cast_p = lltype.cast_opaque_ptr(PtrT.const, s_p.ll_ptrtype._defl())
+    return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
+
+def direct_fieldptr(s_p, s_fieldname):
+    assert isinstance(s_p, SomePtr), "direct_* of non-pointer: %r" % s_p
+    assert s_fieldname.is_constant()
+    cast_p = lltype.direct_fieldptr(s_p.ll_ptrtype._example(),
+                                    s_fieldname.const)
+    return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
+
+def direct_arrayitems(s_p):
+    assert isinstance(s_p, SomePtr), "direct_* of non-pointer: %r" % s_p
+    cast_p = lltype.direct_arrayitems(s_p.ll_ptrtype._example())
+    return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
+
+def direct_ptradd(s_p, s_n):
+    assert isinstance(s_p, SomePtr), "direct_* of non-pointer: %r" % s_p
+    # don't bother with an example here: the resulting pointer is the same
+    return s_p
+
 def cast_ptr_to_int(s_ptr): # xxx
     return SomeInteger()
+
+def cast_int_to_ptr(PtrT, s_int):
+    assert PtrT.is_constant()
+    return SomePtr(ll_ptrtype=PtrT.const)
 
 def getRuntimeTypeInfo(T):
     assert T.is_constant()
@@ -430,14 +460,25 @@ def runtime_type_info(s_p):
     assert isinstance(s_p, SomePtr), "runtime_type_info of non-pointer: %r" % s_p
     return SomePtr(lltype.typeOf(lltype.runtime_type_info(s_p.ll_ptrtype._example())))
 
+def constPtr(T):
+    assert T.is_constant()
+    return immutablevalue(lltype.Ptr(T.const))
+
 BUILTIN_ANALYZERS[lltype.malloc] = malloc
+BUILTIN_ANALYZERS[lltype.free] = free
 BUILTIN_ANALYZERS[lltype.typeOf] = typeOf
 BUILTIN_ANALYZERS[lltype.cast_primitive] = cast_primitive
 BUILTIN_ANALYZERS[lltype.nullptr] = nullptr
 BUILTIN_ANALYZERS[lltype.cast_pointer] = cast_pointer
+BUILTIN_ANALYZERS[lltype.cast_opaque_ptr] = cast_opaque_ptr
+BUILTIN_ANALYZERS[lltype.direct_fieldptr] = direct_fieldptr
+BUILTIN_ANALYZERS[lltype.direct_arrayitems] = direct_arrayitems
+BUILTIN_ANALYZERS[lltype.direct_ptradd] = direct_ptradd
 BUILTIN_ANALYZERS[lltype.cast_ptr_to_int] = cast_ptr_to_int
+BUILTIN_ANALYZERS[lltype.cast_int_to_ptr] = cast_int_to_ptr
 BUILTIN_ANALYZERS[lltype.getRuntimeTypeInfo] = getRuntimeTypeInfo
 BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
+BUILTIN_ANALYZERS[lltype.Ptr] = constPtr
 
 # ootype
 from pypy.annotation.model import SomeOOInstance, SomeOOClass
@@ -480,6 +521,16 @@ def ooidentityhash(i):
     assert isinstance(i, SomeOOInstance)
     return SomeInteger()
 
+def oostring(obj, base):
+    assert isinstance(obj, (SomeInteger, SomeChar, SomeOOInstance))
+    assert isinstance(base, SomeInteger)
+    return SomeOOInstance(ootype.String)
+
+def ooparse_int(s, base):
+    assert isinstance(s, SomeOOInstance) and s.ootype is ootype.String
+    assert isinstance(base, SomeInteger)
+    return SomeInteger()
+
 BUILTIN_ANALYZERS[ootype.instanceof] = instanceof
 BUILTIN_ANALYZERS[ootype.new] = new
 BUILTIN_ANALYZERS[ootype.null] = null
@@ -487,6 +538,8 @@ BUILTIN_ANALYZERS[ootype.runtimenew] = runtimenew
 BUILTIN_ANALYZERS[ootype.classof] = classof
 BUILTIN_ANALYZERS[ootype.subclassof] = subclassof
 BUILTIN_ANALYZERS[ootype.ooidentityhash] = ooidentityhash
+BUILTIN_ANALYZERS[ootype.oostring] = oostring
+BUILTIN_ANALYZERS[ootype.ooparse_int] = ooparse_int
 
 #________________________________
 # non-gc objects
@@ -506,6 +559,10 @@ def raw_malloc(s_size):
     assert isinstance(s_size, SomeInteger) #XXX add noneg...?
     return SomeAddress()
 
+def raw_malloc_usage(s_size):
+    assert isinstance(s_size, SomeInteger) #XXX add noneg...?
+    return SomeInteger(nonneg=True)
+
 def raw_free(s_addr):
     assert isinstance(s_addr, SomeAddress)
     assert not s_addr.is_null
@@ -518,6 +575,7 @@ def raw_memcopy(s_addr1, s_addr2, s_int):
     assert isinstance(s_int, SomeInteger) #XXX add noneg...?
 
 BUILTIN_ANALYZERS[lladdress.raw_malloc] = raw_malloc
+BUILTIN_ANALYZERS[lladdress.raw_malloc_usage] = raw_malloc_usage
 BUILTIN_ANALYZERS[lladdress.raw_free] = raw_free
 BUILTIN_ANALYZERS[lladdress.raw_memcopy] = raw_memcopy
 

@@ -33,7 +33,7 @@ def getinstancerepr(rtyper, classdef, nogc=False):
         #    # see getclassrepr()
         #    result = getinstancerepr(rtyper, None, nogc=False)
         #else:
-        result = rtyper.type_system.rclass.InstanceRepr(
+        result = rtyper.type_system.rclass.buildinstancerepr(
                         rtyper, classdef, does_need_gc=does_need_gc)
 
         rtyper.instance_reprs[classdef, does_need_gc] = result
@@ -132,8 +132,8 @@ class AbstractInstanceRepr(Repr):
     def _setup_repr_final(self):
         pass
 
-    def new_instance(self, llops):
-        pass
+    def new_instance(self, llops, classcallhop=None):
+        raise NotImplementedError
 
     def convert_const(self, value):
         if value is None:
@@ -155,42 +155,41 @@ class AbstractInstanceRepr(Repr):
             result = rinstance.convert_const(value)
             return self.upcast(result)
         # common case
+        return self.convert_const_exact(value)
+
+    def convert_const_exact(self, value):
         try:
             return self.prebuiltinstances[id(value)][1]
         except KeyError:
             self.setup()
             result = self.create_instance()
             self.prebuiltinstances[id(value)] = value, result
-            self.initialize_prebuilt_instance(value, classdef, result)
+            self.initialize_prebuilt_instance(value, self.classdef, result)
             return result
 
     def rtype_type(self, hop):
-        pass
-
-    def rtype_hash(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_getattr(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_setattr(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_is_true(self, hop):
-        pass
+        raise NotImplementedError
 
     def ll_str(self, i):
-        pass
+        raise NotImplementedError
+
+    def get_ll_eq_function(self):
+        return None    # defaults to compare by identity ('==' on pointers)
+
+    def can_ll_be_null(self, s_value):
+        return s_value.can_be_none()
 
 # ____________________________________________________________
 
-def rtype_new_instance(rtyper, classdef, llops):
+def rtype_new_instance(rtyper, classdef, llops, classcallhop=None):
     rinstance = getinstancerepr(rtyper, classdef)
-    return rinstance.new_instance(llops)
-
-def instance_annotation_for_cls(rtyper, cls):
-    try:
-        classdef = rtyper.annotator.getuserclasses()[cls]
-    except KeyError:
-        raise TyperError("no classdef: %r" % (cls,))
-    return annmodel.SomeInstance(classdef)
+    return rinstance.new_instance(llops, classcallhop)

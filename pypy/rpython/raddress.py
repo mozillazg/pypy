@@ -1,14 +1,23 @@
 # rtyping of memory address operations
 from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
-from pypy.rpython.memory.lladdress import NULL, address
-from pypy.rpython.lltypesystem.llmemory import Address
+from pypy.rpython.memory.lladdress import _address
+from pypy.rpython.lltypesystem.llmemory import NULL, Address, \
+     cast_adr_to_int, WeakGcAddress
 from pypy.rpython.rmodel import Repr, IntegerRepr
+from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype
 
 class __extend__(annmodel.SomeAddress):
     def rtyper_makerepr(self, rtyper):
         return address_repr
+    
+    def rtyper_makekey(self):
+        return self.__class__,
+
+class __extend__(annmodel.SomeWeakGcAddress):
+    def rtyper_makerepr(self, rtyper):
+        return weakgcaddress_repr
     
     def rtyper_makekey(self):
         return self.__class__,
@@ -24,7 +33,7 @@ class AddressRepr(Repr):
     lowleveltype = Address
 
     def convert_const(self, value):
-        assert not isinstance(value, address) or value is NULL
+        assert not isinstance(value, _address)
         return value
 
     def rtype_getattr(self, hop):
@@ -37,6 +46,16 @@ class AddressRepr(Repr):
         return hop.genop('adr_ne', [v_addr, c_null],
                          resulttype=lltype.Bool)
 
+    def get_ll_eq_function(self):
+        return None
+
+    def get_ll_hash_function(self):
+        return ll_addrhash
+
+    get_ll_fasthash_function = get_ll_hash_function
+
+def ll_addrhash(addr1):
+    return cast_adr_to_int(addr1)
 
 address_repr = AddressRepr()
 
@@ -111,3 +130,14 @@ class __extend__(pairtype(AddressRepr, AddressRepr)):
         v_addr1, v_addr2 = hop.inputargs(Address, Address)
         return hop.genop('adr_ge', [v_addr1, v_addr2], resulttype=lltype.Bool)
 
+# conversions
+
+class __extend__(pairtype(PtrRepr, AddressRepr)):
+
+    def convert_from_to((r_ptr, r_addr), v, llops):
+        return llops.genop('cast_ptr_to_adr', [v], resulttype=Address)
+
+class WeakGcAddressRepr(Repr):
+    lowleveltype = WeakGcAddress
+
+weakgcaddress_repr = WeakGcAddressRepr()

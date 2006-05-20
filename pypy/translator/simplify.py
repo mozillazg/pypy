@@ -9,6 +9,7 @@ from pypy.objspace.flow.model import SpaceOperation
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import c_last_exception
 from pypy.objspace.flow.model import checkgraph, traverse, mkentrymap
+from pypy.rpython.lltypesystem import lloperation
 
 def get_graph(arg, translator):
     from pypy.translator.translator import graphof
@@ -35,6 +36,19 @@ def get_graph(arg, translator):
     except (AttributeError, KeyError, AssertionError):
         return None
 
+
+def replace_exitswitch_by_constant(block, const):
+    assert isinstance(const, Constant)
+    assert const != c_last_exception
+    newexits = [link for link in block.exits
+                     if link.exitcase == const.value]
+    assert len(newexits) == 1
+    newexits[0].exitcase = None
+    if hasattr(newexits[0], 'llexitcase'):
+        newexits[0].llexitcase = None
+    block.exitswitch = None
+    block.recloseblock(*newexits)
+    return newexits
 
 # ____________________________________________________________
 
@@ -201,15 +215,17 @@ def simplify_exceptions(graph):
 
     def visit(block):
         if not (isinstance(block, Block)
-                and block.exitswitch == clastexc and len(block.exits) == 2
-                and block.exits[1].exitcase is Exception):
+                and block.exitswitch == clastexc
+                and block.exits[-1].exitcase is Exception):
             return
+        covered = [link.exitcase for link in block.exits[1:-1]]
         seen = []
-        norm, exc = block.exits
+        preserve = list(block.exits[:-1])
+        exc = block.exits[-1]
         last_exception = exc.last_exception
         last_exc_value = exc.last_exc_value
         query = exc.target
-        switches = [ (None, norm) ]
+        switches = []
         # collect the targets
         while len(query.exits) == 2:
             newrenaming = {}
@@ -225,7 +241,13 @@ def simplify_exceptions(graph):
             lno, lyes = query.exits
             assert lno.exitcase == False and lyes.exitcase == True
             if case not in seen:
-                switches.append( (case, lyes) )
+                is_covered = False
+                for cov in covered:
+                    if issubclass(case, cov):
+                        is_covered = True
+                        break
+                if not is_covered:
+                    switches.append( (case, lyes) )
                 seen.append(case)
             exc = lno
             query = exc.target
@@ -235,20 +257,20 @@ def simplify_exceptions(graph):
         exits = []
         for case, oldlink in switches:
             link = oldlink.copy(rename)
-            if case is not None:
-                link.last_exception = last_exception
-                link.last_exc_value = last_exc_value
-                # make the above two variables unique
-                renaming2 = {}
-                def rename2(v):
-                    return renaming2.get(v, v)
-                for v in link.getextravars():
-                    renaming2[v] = Variable(v)
-                link = link.copy(rename2)
+            assert case is not None
+            link.last_exception = last_exception
+            link.last_exc_value = last_exc_value
+            # make the above two variables unique
+            renaming2 = {}
+            def rename2(v):
+                return renaming2.get(v, v)
+            for v in link.getextravars():
+                renaming2[v] = Variable(v)
+            link = link.copy(rename2)
             link.exitcase = case
             link.prevblock = block
             exits.append(link)
-        block.exits = tuple(exits)
+        block.exits = tuple(preserve + exits)
 
     traverse(visit, graph)
 
@@ -293,31 +315,40 @@ def join_blocks(graph):
     block (but renaming variables with the appropriate arguments.)
     """
     entrymap = mkentrymap(graph)
-    
-    def visit(link):
-        if isinstance(link, Link):
-            if (len(link.prevblock.exits) == 1 and
-                len(entrymap[link.target]) == 1 and
-                link.target.exits):  # stop at the returnblock
-                renaming = {}
-                for vprev, vtarg in zip(link.args, link.target.inputargs):
-                    renaming[vtarg] = vprev
-                def rename(v):
-                    return renaming.get(v, v)
-                for op in link.target.operations:
-                    args = [rename(a) for a in op.args]
-                    op = SpaceOperation(op.opname, args, rename(op.result))
-                    link.prevblock.operations.append(op)
-                exits = []
-                for exit in link.target.exits:
-                    newexit = exit.copy(rename)
-                    exits.append(newexit)
-                link.prevblock.exitswitch = rename(link.target.exitswitch)
-                link.prevblock.recloseblock(*exits)
-                # simplify recursively the new links
-                for exit in exits:
-                    visit(exit)
-    traverse(visit, graph)
+    block = graph.startblock
+    seen = {block: True}
+    stack = list(block.exits)
+    while stack:
+        link = stack.pop()
+        if (len(link.prevblock.exits) == 1 and
+            len(entrymap[link.target]) == 1 and
+            link.target.exits):  # stop at the returnblock
+            renaming = {}
+            for vprev, vtarg in zip(link.args, link.target.inputargs):
+                renaming[vtarg] = vprev
+            def rename(v):
+                return renaming.get(v, v)
+            def rename_op(op):
+                args = [rename(a) for a in op.args]
+                op = SpaceOperation(op.opname, args, rename(op.result))
+                return op
+            for op in link.target.operations:
+                link.prevblock.operations.append(rename_op(op))
+            exits = []
+            for exit in link.target.exits:
+                newexit = exit.copy(rename)
+                exits.append(newexit)
+            newexitswitch = rename(link.target.exitswitch)
+            link.prevblock.exitswitch = newexitswitch
+            link.prevblock.recloseblock(*exits)
+            if isinstance(newexitswitch, Constant) and newexitswitch != c_last_exception:
+                exits = replace_exitswitch_by_constant(link.prevblock,
+                                                       newexitswitch)
+            stack.extend(exits)
+        else:
+            if link.target not in seen:
+                stack.extend(link.target.exits)
+                seen[link.target] = True
 
 def remove_assertion_errors(graph):
     """Remove branches that go directly to raising an AssertionError,
@@ -351,18 +382,15 @@ def remove_assertion_errors(graph):
 
 # _____________________________________________________________________
 # decide whether a function has side effects
-lloperations_with_side_effects = {"setfield": True,
-                                  "setarrayitem": True,
-                                  }
 
 class HasSideEffects(Exception):
     pass
 
-# XXX: this could even be improved:
-# if setfield and setarrayitem only occur on things that are malloced
-# in this function then the function still does not have side effects
+def op_has_side_effects(op):
+    return lloperation.LL_OPERATIONS[op.opname].sideeffects
 
-def has_no_side_effects(translator, graph, seen=None):
+def has_no_side_effects(translator, graph, seen=None,
+                        is_operation_false=op_has_side_effects):
     #is the graph specialized? if no we can't say anything
     #don't cache the result though
     if translator.rtyper is None:
@@ -371,23 +399,30 @@ def has_no_side_effects(translator, graph, seen=None):
         if graph.startblock not in translator.rtyper.already_seen:
             return False
     if seen is None:
-        seen = []
+        seen = {}
     elif graph in seen:
         return True
+    newseen = seen.copy()
+    newseen[graph] = True
     try:
         def visit(block):
             if not isinstance(block, Block):
                 return
             for op in block.operations:
-                if op.opname in lloperations_with_side_effects:
-                    raise HasSideEffects
                 if op.opname == "direct_call":
                     g = get_graph(op.args[0], translator)
                     if g is None:
                         raise HasSideEffects
-                    if not has_no_side_effects(translator, g, seen + [graph]):
+                    if not has_no_side_effects(translator, g, newseen):
                         raise HasSideEffects
                 elif op.opname == "indirect_call":
+                    graphs = op.args[-1].value
+                    if graphs is None:
+                        raise HasSideEffects
+                    for g in graphs:
+                        if not has_no_side_effects(translator, g, newseen):
+                            raise HasSideEffects
+                elif is_operation_false(op):
                     raise HasSideEffects
         traverse(visit, graph)
     except HasSideEffects:
@@ -702,3 +737,10 @@ def simplify_graph(graph, passes=True): # can take a list of passes to apply, Tr
         pass_(graph)
     checkgraph(graph)
 
+def cleanup_graph(graph):
+    checkgraph(graph)
+    eliminate_empty_blocks(graph)
+    join_blocks(graph)
+    remove_identical_vars(graph)
+    checkgraph(graph)    
+    

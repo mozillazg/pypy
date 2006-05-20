@@ -1,18 +1,19 @@
 import autopath
 import os
 import py
-from pypy.translator.c.node import PyObjectNode
+from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import compile_c_module
 from pypy.translator.tool.cbuild import build_executable, CCompiler
 from pypy.translator.tool.cbuild import import_module_from_directory
+from pypy.translator.tool.cbuild import check_under_under_thread
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.tool import isolate
 from pypy.translator.locality.calltree import CallTree
-from pypy.translator.c.support import log
+from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
 
 class CBuilder(object):
@@ -20,11 +21,12 @@ class CBuilder(object):
     _compiled = False
     symboltable = None
     stackless = False
-    use_stackless_transformation = False
+    modulename = None
     
     def __init__(self, translator, entrypoint, gcpolicy=None, libraries=None, thread_enabled=False, tsc_enabled=False):
         self.translator = translator
         self.entrypoint = entrypoint
+        self.originalentrypoint = entrypoint
         self.gcpolicy = gcpolicy
         self.thread_enabled = thread_enabled
         self.tsc_enabled = tsc_enabled
@@ -32,16 +34,35 @@ class CBuilder(object):
         if libraries is None:
             libraries = []
         self.libraries = libraries
+        self.exports = {}
 
-    def build_database(self):
+    def build_database(self, exports=[], pyobj_options=None):
         translator = self.translator
         db = LowLevelDatabase(translator, standalone=self.standalone, 
                               gcpolicy=self.gcpolicy, thread_enabled=self.thread_enabled)
 
+        assert self.stackless in (False, 'old', True)
+        if db.gcpolicy.requires_stackless:
+            assert self.stackless != 'old'    # incompatible
+            self.stackless = True
         if self.stackless:
-            from pypy.translator.c.stackless import StacklessData
-            db.stacklessdata = StacklessData(db)
-            db.use_stackless_transformation = self.use_stackless_transformation
+            if not self.standalone:
+                raise Exception("stackless: only for stand-alone builds")
+            if self.stackless == 'old':
+                from pypy.translator.c.stackless import StacklessData
+                db.stacklessdata = StacklessData(db)
+            else:
+                from pypy.translator.stackless.transform import \
+                                                       StacklessTransformer
+                db.stacklesstransformer = StacklessTransformer(translator,
+                                              self.originalentrypoint,
+                                              db.gcpolicy.requires_stackless)
+                self.entrypoint = db.stacklesstransformer.slp_entry_point
+
+        # pass extra options into pyobjmaker
+        if pyobj_options:
+            for key, value in pyobj_options.items():
+                setattr(db.pyobjmaker, key, value)
 
         # we need a concrete gcpolicy to do this
         self.libraries += db.gcpolicy.gc_libraries()
@@ -50,15 +71,30 @@ class CBuilder(object):
         # need (we call this for its side-effects of db.get())
         list(db.gcpolicy.gc_startup_code())
 
-        # XXX the following has the side effect to generate
-        # some needed things. Find out why.
+        # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
         pfname = db.get(pf)
-        # XXX
+        self.exports[self.entrypoint.func_name] = pf
+        for obj in exports:
+            if type(obj) is tuple:
+                objname, obj = obj
+            elif hasattr(obj, '__name__'):
+                objname = obj.__name__
+            else:
+                objname = None
+            po = self.getentrypointptr(obj)
+            poname = db.get(po)
+            objname = objname or poname
+            if objname in self.exports:
+                raise NameError, 'duplicate name in export: %s is %s and %s' % (
+                    objname, db.get(self.exports[objname]), poname)
+            self.exports[objname] = po
         db.complete()
         return db
 
-    def generate_source(self, db=None):
+    have___thread = None
+
+    def generate_source(self, db=None, defines={}):
         assert self.c_source_filename is None
         translator = self.translator
 
@@ -67,25 +103,28 @@ class CBuilder(object):
         pf = self.getentrypointptr()
         pfname = db.get(pf)
 
-        modulename = uniquemodulename('testing')
+        if self.modulename is None:
+            self.modulename = uniquemodulename('testing')
+        modulename = self.modulename
         targetdir = udir.ensure(modulename, dir=1)
         self.targetdir = targetdir
-        defines = {}
+        defines = defines.copy()
         # defines={'COUNT_OP_MALLOCS': 1}
+        if CBuilder.have___thread is None:
+            CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
             from pypy.translator.c.symboltable import SymbolTable
             self.symboltable = SymbolTable()
             cfile, extra = gen_source(db, modulename, targetdir,
                                       defines = defines,
-                                      exports = {self.entrypoint.func_name: pf},
+                                      exports = self.exports,
                                       symboltable = self.symboltable)
         else:
-            if self.stackless:
+            if CBuilder.have___thread:
+                defines['HAVE___THREAD'] = 1
+            if self.stackless == 'old':
                 defines['USE_STACKLESS'] = '1'
                 defines['USE_OPTIMIZED_STACKLESS_UNWIND'] = '1'
-                if self.use_stackless_transformation: #set in test_stackless.py
-                    from pypy.translator.backendopt.stackless import stackless
-                    stackless(translator, db.stacklessdata)
             if self.tsc_enabled:
                 defines['USE_TSC'] = '1'
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
@@ -97,13 +136,26 @@ class CBuilder(object):
             self.gen_makefile(targetdir)
         return cfile 
 
+    def generate_graphs_for_llinterp(self, db=None):
+        # prepare the graphs as when the source is generated, but without
+        # actually generating the source.
+        if db is None:
+            db = self.build_database()
+        for node in db.containerlist:
+            if isinstance(node, FuncNode):
+                for funcgen in node.funcgens:
+                    funcgen.patch_graph(copy_graph=False)
+        return db
+
 
 class CExtModuleBuilder(CBuilder):
     standalone = False
     c_ext_module = None 
 
-    def getentrypointptr(self):
-        return lltype.pyobjectptr(self.entrypoint)
+    def getentrypointptr(self, obj=None):
+        if obj is None:
+            obj = self.entrypoint
+        return lltype.pyobjectptr(obj)
 
     def compile(self):
         assert self.c_source_filename 
@@ -149,7 +201,7 @@ class CStandaloneBuilder(CBuilder):
         # XXX check that the entrypoint has the correct
         # signature:  list-of-strings -> int
         bk = self.translator.annotator.bookkeeper
-        return getfunctionptr(bk.getdesc(self.entrypoint).cachedgraph(None))
+        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
     def getccompiler(self, extra_includes):
         # XXX for now, we always include Python.h
@@ -281,28 +333,34 @@ class SourceGenerator:
     def getothernodes(self):
         return self.othernodes[:]
 
-    def splitnodesimpl(self, basecname, nodes, nextra, nbetween):
+    def splitnodesimpl(self, basecname, nodes, nextra, nbetween,
+                       split_criteria=SPLIT_CRITERIA):
         # produce a sequence of nodes, grouped into files
         # which have no more than SPLIT_CRITERIA lines
-        used = nextra
-        part = []
-        for node in nodes:
-            impl = '\n'.join(list(node.implementation())).split('\n')
-            if not impl:
-                continue
-            cost = len(impl) + nbetween
-            if used + cost > SPLIT_CRITERIA and part:
-                # split if criteria met, unless we would produce nothing.
-                yield self.uniquecname(basecname), part
-                part = []
-                used = nextra
-            part.append( (node, impl) )
-            used += cost
-        # generate left pieces
-        if part:
-            yield self.uniquecname(basecname), part
+        iternodes = iter(nodes)
+        done = [False]
+        def subiter():
+            used = nextra
+            for node in iternodes:
+                impl = '\n'.join(list(node.implementation())).split('\n')
+                if not impl:
+                    continue
+                cost = len(impl) + nbetween
+                yield node, impl
+                del impl
+                if used + cost > split_criteria:
+                    # split if criteria met, unless we would produce nothing.
+                    raise StopIteration
+                used += cost
+            done[0] = True
+        while not done[0]:
+            yield self.uniquecname(basecname), subiter()
 
     def gen_readable_parts_of_source(self, f):
+        if py.std.sys.platform != "win32":
+            split_criteria_big = SPLIT_CRITERIA * 4
+        else:
+            split_criteria_big = SPLIT_CRITERIA
         if self.one_source_file:
             return gen_readable_parts_of_main_c_file(f, self.database,
                                                      self.preimpl)
@@ -369,7 +427,7 @@ class SourceGenerator:
         fc.close()
 
         nextralines = 11 + 1
-        for name, nodesimpl in self.splitnodesimpl('nonfuncnodes.c',
+        for name, nodeiter in self.splitnodesimpl('nonfuncnodes.c',
                                                    self.othernodes,
                                                    nextralines, 1):
             print >> f, '/* %s */' % name
@@ -385,16 +443,17 @@ class SourceGenerator:
             print >> fc, '#include "src/g_include.h"'
             print >> fc
             print >> fc, MARKER
-            for node, impl in nodesimpl:
+            for node, impl in nodeiter:
                 print >> fc, '\n'.join(impl)
                 print >> fc, MARKER
             print >> fc, '/***********************************************************/'
             fc.close()
 
         nextralines = 8 + len(self.preimpl) + 4 + 1
-        for name, nodesimpl in self.splitnodesimpl('implement.c',
+        for name, nodeiter in self.splitnodesimpl('implement.c',
                                                    self.funcnodes,
-                                                   nextralines, 1):
+                                                   nextralines, 1,
+                                                   split_criteria_big):
             print >> f, '/* %s */' % name
             fc = self.makefile(name)
             print >> fc, '/***********************************************************/'
@@ -411,7 +470,7 @@ class SourceGenerator:
             print >> fc, '#include "src/g_include.h"'
             print >> fc
             print >> fc, MARKER
-            for node, impl in nodesimpl:
+            for node, impl in nodeiter:
                 print >> fc, '\n'.join(impl)
                 print >> fc, MARKER
             print >> fc, '/***********************************************************/'
@@ -433,7 +492,8 @@ def gen_readable_parts_of_main_c_file(f, database, preimplementationlines=[]):
     print >> f, '/***  Structure definitions                              ***/'
     print >> f
     for node in structdeflist:
-        print >> f, 'struct %s;' % node.name
+        if node.name:
+            print >> f, 'struct %s;' % node.name
     print >> f
     for node in structdeflist:
         for line in node.definition():
@@ -522,8 +582,9 @@ def gen_source_standalone(database, modulename, targetdir,
 
     includes = {}
     for node in database.globalcontainers():
-        for include in node.includes:
-            includes[include] = True
+        if hasattr(node, 'includes'):
+            for include in node.includes:
+                includes[include] = True
     includes = includes.keys()
     includes.sort()
     for include in includes:
@@ -541,7 +602,7 @@ def gen_source_standalone(database, modulename, targetdir,
     sg.set_strategy(targetdir)
     sg.gen_readable_parts_of_source(f)
 
-    # 2bis) stackless data
+    # 2bis) old-style stackless data
     if hasattr(database, 'stacklessdata'):
         database.stacklessdata.writefiles(sg)
 
@@ -582,8 +643,9 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
 
     includes = {}
     for node in database.globalcontainers():
-        for include in node.includes:
-            includes[include] = True
+        if hasattr(node, 'includes'):
+            for include in node.includes:
+                includes[include] = True
     includes = includes.keys()
     includes.sort()
     for include in includes:
@@ -647,15 +709,17 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     print >> f, 'static globalfunctiondef_t globalfunctiondefs[] = {'
     wrappers = pyobjmaker.wrappers.items()
     wrappers.sort()
-    for globalobject_name, (base_name, wrapper_name) in wrappers:
+    for globalobject_name, (base_name, wrapper_name, func_doc) in wrappers:
         print >> f, ('\t{&%s, "%s", {"%s", (PyCFunction)%s, '
-                     'METH_VARARGS|METH_KEYWORDS}},' % (
+                     'METH_VARARGS|METH_KEYWORDS, %s}},' % (
             globalobject_name,
             globalobject_name,
             base_name,
-            wrapper_name))
+            wrapper_name,
+            func_doc and c_string_constant(func_doc) or 'NULL'))
     print >> f, '\t{ NULL }\t/* Sentinel */'
     print >> f, '};'
+    print >> f, 'static globalfunctiondef_t *globalfunctiondefsptr = &globalfunctiondefs[0];'
     print >> f
     print >> f, '/***********************************************************/'
     print >> f, '/***  Frozen Python bytecode: the initialization code    ***/'
@@ -693,6 +757,7 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
         pyobjnode = database.containernodes[pyobjptr._obj]
         print >> f, '\tPyModule_AddObject(m, "%s", %s);' % (publicname,
                                                             pyobjnode.name)
+    print >> f, '\tcall_postsetup(m);'
     print >> f, '}'
     f.close()
 
@@ -737,4 +802,10 @@ $(TARGET): $(OBJECTS)
 
 clean:
 \trm -f $(OBJECTS) $(TARGET)
+
+debug: clean
+\tmake CFLAGS="-g -pthread"
+
+profile: clean
+\tmake CFLAGS="-pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)"
 '''

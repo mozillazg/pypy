@@ -2,6 +2,7 @@ from pypy.interpreter import gateway, baseobjspace, argument
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.interpreter.typedef import descr_get_dict, descr_set_dict
+from pypy.interpreter.typedef import no_hash_descr
 from pypy.interpreter.baseobjspace import SpaceCache
 from pypy.objspace.std.model import StdObjSpaceMultiMethod
 from pypy.objspace.std.multimethod import FailedToImplement
@@ -9,7 +10,7 @@ from pypy.tool.sourcetools import compile2
 
 __all__ = ['StdTypeDef', 'newmethod', 'gateway',
            'GetSetProperty', 'Member',
-           'StdObjSpaceMultiMethod', 'descr_get_dict']
+           'StdObjSpaceMultiMethod', 'descr_get_dict', 'no_hash_descr']
 
 
 class StdTypeDef(TypeDef):
@@ -93,8 +94,13 @@ class TypeCache(SpaceCache):
 def hack_out_multimethods(ns):
     "NOT_RPYTHON: initialization-time only."
     result = []
+    seen = {}
     for value in ns.itervalues():
         if isinstance(value, StdObjSpaceMultiMethod):
+            if value.name in seen:
+                raise Exception("duplicate multimethod name %r" %
+                                (value.name,))
+            seen[value.name] = True
             result.append(value)
     return result
 
@@ -273,7 +279,8 @@ def slicemultimethod(space, multimethod, typedef, result, local=False):
             prefix, list_of_typeorders = sliced_typeorders(
                 space.model.typeorder, multimethod, typedef, i, local=local)
             exprargs, expr, miniglobals, fallback = multimethod.install(prefix, list_of_typeorders,
-                                                                        baked_perform_call=False)
+                                                                        baked_perform_call=False,
+                                                                        base_typeorder=space.model.typeorder)
             if fallback:
                 return None   # skip empty multimethods
             trampoline = make_perform_trampoline(prefix, exprargs, expr, miniglobals,

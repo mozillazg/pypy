@@ -41,6 +41,10 @@ option = py.test.Config.addoptions("pypy options",
                help="""select compiling approach. see pypy/doc/README.compiling"""),
         Option('--view', action="store_true", dest="view", default=False,
                help="view translation tests' flow graphs with Pygame"),
+        Option('--gc', action="store", default=None, 
+               type="choice", dest="gcpolicy",
+               choices=['ref', 'boehm', 'none', 'framework', 'exact_boehm'],
+               help="GcPolicy class to use for genc tests"),
     )
 
 _SPACECACHE={}
@@ -54,7 +58,7 @@ def getobjspace(name=None, **kwds):
     try:
         return _SPACECACHE[key]
     except KeyError:
-        assert name in ('std', 'thunk', 'logic'), name 
+        #assert name in ('std', 'thunk', 'logic', etc.), name 
         mod = __import__('pypy.objspace.%s' % name, None, None, ['Space'])
         Space = mod.Space
         try: 
@@ -175,6 +179,15 @@ class IntTestFunction(PyPyTestFunction):
                 target(*args)
         except OperationError, e:
             check_keyboard_interrupt(e)
+            raise
+        except Exception, e:
+            cls = e.__class__
+            while cls is not Exception:
+                if cls.__name__ == 'DistutilsPlatformError':
+                    from distutils.errors import DistutilsPlatformError
+                    if isinstance(e, DistutilsPlatformError):
+                        py.test.skip('%s: %s' % (e.__class__.__name__, e))
+                cls = cls.__bases__[0]
             raise
         if 'pygame' in sys.modules:
             global _pygame_imported

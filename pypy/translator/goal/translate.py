@@ -46,12 +46,14 @@ opts = {
     '0_source': [OPT(('-s', '--source'), "Generate source code", GOAL),
                OPT(('--no-source',), "Don't generate source code", SKIP_GOAL)],
 
-    '1_backend': [OPT(('-b', '--backend'), "Backend", ['c', 'llvm'])],
+    '1_backend': [OPT(('-b', '--backend'), "Backend", ['c', 'llvm', 'cl', 'squeak', 'js'])],
 
-    '2_gc': [OPT(('--gc',), "Garbage collector", ['boehm', 'ref', 'framework', 'none'])],
-    '3_stackless': [OPT(('--stackless',), "Stackless code generation", True)],
-    '4_tsc': [OPT(('--tsc',), "(x86, PowerPC, Alpha) Timestamp counter profile", True)],
-    '5_merge_if_blocks': [OPT(('--no-if-blocks-merge',), "Do not merge if ... elif ... chains and use a switch statement for them.", False)],
+    '2_gc': [OPT(('--gc',), "Garbage collector", ['boehm', 'ref', 'framework', 'none', 'exact_boehm', 'stacklessgc'])],
+    '3_stackless': [OPT(('--new-stackless',), "Stackless code generation (graph transformer)", True)],
+    '4_stackless': [OPT(('--stackless',), "Stackless code generation (old GenC way)", 'old')],
+    '5_tsc': [OPT(('--tsc',), "(x86, PowerPC, Alpha) Timestamp counter profile", True)],
+    '6_merge_if_blocks': [OPT(('--no-if-blocks-merge',), "Do not merge if ... elif ... chains and use a switch statement for them.", False)],
+    '7_raisingop2direct_call': [OPT(('--raisingop2direct_call',), "Convert possible exception raising operations to direct calls.", True)],
     },
 
 
@@ -104,6 +106,7 @@ defaults = {
     'backend': 'c',
     'stackless': False,
     'tsc': False,
+    'raisingop2direct_call' : False,
     'merge_if_blocks': True,
     
     'batch': False,
@@ -136,7 +139,7 @@ class OptHelpFormatter(optparse.IndentedHelpFormatter):
             if val is None:
                 pass
             elif isinstance(val, bool):
-                if bool(val) == (option.action=="store_true"):
+                if val is True and option.action=="store_true":
                     defl = "[default]"
             else:
                 defl = "[default: %s]" % val
@@ -156,8 +159,9 @@ def load_target(targetspec):
     if not targetspec.endswith('.py'):
         targetspec += '.py'
     thismod = sys.modules[__name__]
-    targetspec_dic = {'__name__':'__rpythonmain__',
-                      'translate': thismod}
+    targetspec_dic = {
+        '__name__': os.path.splitext(os.path.basename(targetspec))[0],
+        'translate': thismod}
     sys.path.insert(0, os.path.dirname(targetspec))
     execfile(targetspec, targetspec_dic)
     return targetspec_dic
@@ -193,6 +197,9 @@ def parse_options_and_load_target():
                     opt_setup['type'] = 'int'
                 elif choice is str:
                     opt_setup['type'] = 'string'
+                else:
+                    opt_setup['action'] = 'store_const'
+                    opt_setup['const'] = choice
 
                 grp.add_option(*names, **opt_setup)
 
@@ -316,6 +323,9 @@ def main():
                                                       disable=options.skipped_goals,
                                                       default_goal='compile')
         pdb_plus_show.expose({'drv': drv})
+
+        if drv.exe_name is None and '__name__' in targetspec_dic:
+            drv.exe_name = targetspec_dic['__name__'] + '-%(backend)s'
 
         goals = options.goals
         drv.proceed(goals)
