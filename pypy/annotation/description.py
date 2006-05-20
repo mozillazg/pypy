@@ -47,15 +47,15 @@ class CallFamily:
             self.total_calltable_size += 1
 
 
-class AttrFamily:
-    """A family of Desc objects that have common 'getattr' sites.
-    The attr families are conceptually a partition of FrozenDesc and ClassDesc
-    objects, where the equivalence relation is the transitive closure of
-    'd1~d2 if d1 and d2 might have an attribute read on them by the same
-    getattr operation.'
+class FrozenAttrFamily:
+    """A family of FrozenDesc objects that have any common 'getattr' sites.
+    The attr families are conceptually a partition of FrozenDesc objects,
+    where the equivalence relation is the transitive closure of:
+    d1~d2 if d1 and d2 might have some attribute read on them by the same
+    getattr operation.
     """
     def __init__(self, desc):
-        self.descs = { desc: True }
+        self.descs = {desc: True}
         self.read_locations = {}     # set of position_keys
         self.attrs = {}              # { attr: s_value }
 
@@ -63,6 +63,49 @@ class AttrFamily:
         self.descs.update(other.descs)
         self.read_locations.update(other.read_locations)
         self.attrs.update(other.attrs)
+
+    def get_s_value(self, attrname):
+        try:
+            return self.attrs[attrname]
+        except KeyError:
+            from pypy.annotation.model import s_ImpossibleValue
+            return s_ImpossibleValue
+
+    def set_s_value(self, attrname, s_value):
+        self.attrs[attrname] = s_value
+
+
+class ClassAttrFamily:
+    """A family of ClassDesc objects that have common 'getattr' sites for a
+    given attribute name.  The attr families are conceptually a partition
+    of ClassDesc objects, where the equivalence relation is the transitive
+    closure of:  d1~d2 if d1 and d2 might have a common attribute 'attrname'
+    read on them by the same getattr operation.
+
+    The 'attrname' is not explicitly stored here, but is the key used
+    in the dictionary bookkeeper.pbc_maximal_access_sets_map.
+    """
+    # The difference between ClassAttrFamily and FrozenAttrFamily is that
+    # FrozenAttrFamily is the union for all attribute names, but
+    # ClassAttrFamily is more precise: it is only about one attribut name.
+
+    def __init__(self, desc):
+        from pypy.annotation.model import s_ImpossibleValue
+        self.descs = { desc: True }
+        self.read_locations = {}     # set of position_keys
+        self.s_value = s_ImpossibleValue    # union of possible values
+
+    def update(self, other):
+        from pypy.annotation.model import unionof
+        self.descs.update(other.descs)
+        self.read_locations.update(other.read_locations)
+        self.s_value = unionof(self.s_value, other.s_value)
+
+    def get_s_value(self, attrname):
+        return self.s_value
+
+    def set_s_value(self, attrname, s_value):
+        self.s_value = s_value
 
 # ____________________________________________________________
 
@@ -102,29 +145,10 @@ class Desc(object):
             changed = changed or changed1
         return changed
 
-    def getattrfamily(self):
-        """Get the AttrFamily object. Possibly creates one."""
-        access_sets = self.bookkeeper.pbc_maximal_access_sets
-        _, _, attrfamily = access_sets.find(self)
-        return attrfamily
-
     def queryattrfamily(self):
-        """Retrieve the AttrFamily object if there is one, otherwise
-           return None."""
-        access_sets = self.bookkeeper.pbc_maximal_access_sets
-        try:
-            return access_sets[self]
-        except KeyError:
-            return None
-
-    def mergeattrfamilies(self, *others):
-        """Merge the attr families of the given Descs into one."""
-        access_sets = self.bookkeeper.pbc_maximal_access_sets
-        changed, rep, attrfamily = access_sets.find(self)
-        for desc in others:
-            changed1, rep, attrfamily = access_sets.union(rep, desc)
-            changed = changed or changed1
-        return changed
+        # no attributes supported by default;
+        # overriden in FrozenDesc and ClassDesc
+        return None
 
     def bind_under(self, classdef, name):
         return self
@@ -133,6 +157,9 @@ class Desc(object):
         pass
     simplify_desc_set = staticmethod(simplify_desc_set)
 
+
+class NoStandardGraph(Exception):
+    """The function doesn't have a single standard non-specialized graph."""
 
 class FunctionDesc(Desc):
     knowntype = types.FunctionType
@@ -165,6 +192,15 @@ class FunctionDesc(Desc):
             graph = translator.buildflowgraph(self.pyobj)
         if alt_name:
             graph.name = alt_name
+        return graph
+
+    def getuniquegraph(self):
+        if len(self._cache) != 1:
+            raise NoStandardGraph(self)
+        [graph] = self._cache.values()
+        if (graph.signature != self.signature or
+            graph.defaults  != self.defaults):
+            raise NoStandardGraph(self)
         return graph
 
     def cachedgraph(self, key, alt_name=None, builder=None):
@@ -222,8 +258,10 @@ class FunctionDesc(Desc):
         if isinstance(result, FunctionGraph):
             graph = result         # common case
             # if that graph has a different signature, we need to re-parse
-            # the arguments
-            inputcells = self.parse_arguments(args, graph)
+            # the arguments.
+            # recreate the args object because inputcells may have been changed
+            new_args = args.unmatch_signature(self.signature, inputcells)
+            inputcells = self.parse_arguments(new_args, graph)
             result = schedule(graph, inputcells)
         # Some specializations may break the invariant of returning
         # annotations that are always more general than the previous time.
@@ -331,10 +369,10 @@ class ClassDesc(Desc):
             for b1 in baselist:
                 if b1 is object:
                     continue
-                if getattr(b1, '_mixin_', False):
+                if b1.__dict__.get('_mixin_', False):
                     assert b1.__bases__ == () or b1.__bases__ == (object,), (
                         "mixin class %r should have no base" % (b1,))
-                    self.add_sources_for_class(b1)
+                    self.add_sources_for_class(b1, mixin=True)
                 else:
                     assert base is object, ("multiple inheritance only supported "
                                             "with _mixin_: %r" % (cls,))
@@ -344,31 +382,41 @@ class ClassDesc(Desc):
             if base is not object:
                 self.basedesc = bookkeeper.getdesc(base)
 
-    def add_sources_for_class(self, cls):
+    def add_source_attribute(self, name, value, mixin=False):
+        if isinstance(value, types.FunctionType):
+            # for debugging
+            if not hasattr(value, 'class_'):
+                value.class_ = self.pyobj # remember that this is really a method
+            if self.specialize:
+                # make a custom funcdesc that specializes on its first
+                # argument (i.e. 'self').
+                from pypy.annotation.specialize import specialize_argtype
+                def argtype0(funcdesc, args_s):
+                    return specialize_argtype(funcdesc, args_s, 0)
+                funcdesc = FunctionDesc(self.bookkeeper, value,
+                                        specializer=argtype0)
+                self.classdict[name] = funcdesc
+                return
+            if mixin:
+                # make a new copy of the FunctionDesc for this class,
+                # but don't specialize further for all subclasses
+                funcdesc = FunctionDesc(self.bookkeeper, value)
+                self.classdict[name] = funcdesc
+                return
+            # NB. if value is, say, AssertionError.__init__, then we
+            # should not use getdesc() on it.  Never.  The problem is
+            # that the py lib has its own AssertionError.__init__ which
+            # is of type FunctionType.  But bookkeeper.immutablevalue()
+            # will do the right thing in s_get_value().
+
+        if type(value) is MemberDescriptorType:
+            # skip __slots__, showing up in the class as 'member' objects
+            return
+        self.classdict[name] = Constant(value)
+
+    def add_sources_for_class(self, cls, mixin=False):
         for name, value in cls.__dict__.items():
-            ## -- useless? -- ignore some special attributes
-            ##if name.startswith('_') and not isinstance(value, types.FunctionType):
-            ##    continue
-            if isinstance(value, types.FunctionType):
-                # for debugging
-                if not hasattr(value, 'class_'):
-                    value.class_ = self.pyobj # remember that this is really a method
-                if self.specialize:
-                    # make a custom funcdesc that specializes on its first
-                    # argument (i.e. 'self').
-                    from pypy.annotation.specialize import specialize_argtype
-                    def argtype0(funcdesc, args_s):
-                        return specialize_argtype(funcdesc, args_s, 0)
-                    funcdesc = FunctionDesc(self.bookkeeper, value,
-                                            specializer=argtype0)
-                    self.classdict[name] = funcdesc
-                    continue
-                # NB. if value is, say, AssertionError.__init__, then we
-                # should not use getdesc() on it.  Never.  The problem is
-                # that the py lib has its own AssertionError.__init__ which
-                # is of type FunctionType.  But bookkeeper.immutablevalue()
-                # will do the right thing in s_get_value().
-            self.classdict[name] = Constant(value)
+            self.add_source_attribute(name, value, mixin)
 
     def getclassdef(self, key):
         try:
@@ -500,8 +548,9 @@ class ClassDesc(Desc):
             # there is a new attribute
             cls = self.pyobj
             if name in cls.__dict__:
-                self.classdict[name] = Constant(cls.__dict__[name])
-                return self
+                self.add_source_attribute(name, cls.__dict__[name])
+                if name in self.classdict:
+                    return self
         return None
 
     def consider_call_site(bookkeeper, family, descs, args, s_result):
@@ -539,6 +588,30 @@ class ClassDesc(Desc):
 
     def rowkey(self):
         return self
+
+    def getattrfamily(self, attrname):
+        "Get the ClassAttrFamily object for attrname. Possibly creates one."
+        access_sets = self.bookkeeper.get_classpbc_attr_families(attrname)
+        _, _, attrfamily = access_sets.find(self)
+        return attrfamily
+
+    def queryattrfamily(self, attrname):
+        """Retrieve the ClassAttrFamily object for attrname if there is one,
+           otherwise return None."""
+        access_sets = self.bookkeeper.get_classpbc_attr_families(attrname)
+        try:
+            return access_sets[self]
+        except KeyError:
+            return None
+
+    def mergeattrfamilies(self, others, attrname):
+        """Merge the attr families of the given Descs into one."""
+        access_sets = self.bookkeeper.get_classpbc_attr_families(attrname)
+        changed, rep, attrfamily = access_sets.find(self)
+        for desc in others:
+            changed1, rep, attrfamily = access_sets.union(rep, desc)
+            changed = changed or changed1
+        return changed
 
 
 class MethodDesc(Desc):
@@ -626,9 +699,17 @@ class FrozenDesc(Desc):
         super(FrozenDesc, self).__init__(bookkeeper, pyobj)
         if read_attribute is None:
             read_attribute = lambda attr: getattr(pyobj, attr)
-        self.read_attribute = read_attribute
+        self._read_attribute = read_attribute
+        self.attrcache = {}
         self.knowntype = new_or_old_class(pyobj)
         assert bool(pyobj), "__nonzero__ unsupported on frozen PBC %r" %(pyobj,)
+
+    def read_attribute(self, attr):
+        try:
+            return self.attrcache[attr]
+        except KeyError:
+            result = self.attrcache[attr] = self._read_attribute(attr)
+            return result
 
     def s_read_attribute(self, attr):
         try:
@@ -646,13 +727,31 @@ class FrozenDesc(Desc):
             pass
         else:
             raise AssertionError("name clash: %r" % (name,))
-        def extended_read_attribute(attr):
-            if attr == name:
-                return value
-            else:
-                return previous_read_attribute(attr)
-        previous_read_attribute = self.read_attribute
-        self.read_attribute = extended_read_attribute
+        self.attrcache[name] = value
+
+    def getattrfamily(self, attrname=None):
+        "Get the FrozenAttrFamily object for attrname. Possibly creates one."
+        access_sets = self.bookkeeper.frozenpbc_attr_families
+        _, _, attrfamily = access_sets.find(self)
+        return attrfamily
+
+    def queryattrfamily(self, attrname=None):
+        """Retrieve the FrozenAttrFamily object for attrname if there is one,
+           otherwise return None."""
+        access_sets = self.bookkeeper.frozenpbc_attr_families
+        try:
+            return access_sets[self]
+        except KeyError:
+            return None
+
+    def mergeattrfamilies(self, others, attrname=None):
+        """Merge the attr families of the given Descs into one."""
+        access_sets = self.bookkeeper.frozenpbc_attr_families
+        changed, rep, attrfamily = access_sets.find(self)
+        for desc in others:
+            changed1, rep, attrfamily = access_sets.union(rep, desc)
+            changed = changed or changed1
+        return changed
 
 
 class MethodOfFrozenDesc(Desc):
@@ -682,3 +781,10 @@ class MethodOfFrozenDesc(Desc):
 
     def rowkey(self):
         return self.funcdesc
+
+# ____________________________________________________________
+
+class Sample(object):
+    __slots__ = 'x'
+MemberDescriptorType = type(Sample.x)
+del Sample

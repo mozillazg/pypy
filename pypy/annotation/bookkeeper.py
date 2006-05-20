@@ -11,13 +11,14 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeInteger, SomeExternalObject, SomeOOInstance, TLS, SomeAddress, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, s_ImpossibleValue, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
-     SomeList, SomeObject
+     SomeList, SomeObject, SomeWeakGcAddress
 from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
 from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.rpython.rarithmetic import r_int, r_uint, r_ulonglong, r_longlong
+from pypy.rpython.rarithmetic import base_int
 from pypy.rpython.objectmodel import r_dict, Symbolic
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -164,7 +165,8 @@ class Bookkeeper:
         self.dictdefs = {}       # map position_keys to DictDefs
         self.immutable_cache = {}
 
-        self.pbc_maximal_access_sets = UnionFind(description.AttrFamily)
+        self.classpbc_attr_families = {} # {'attr': UnionFind(ClassAttrFamily)}
+        self.frozenpbc_attr_families = UnionFind(description.FrozenAttrFamily)
         self.pbc_maximal_call_families = UnionFind(description.CallFamily)
 
         self.emulated_pbc_calls = {}
@@ -207,7 +209,7 @@ class Bookkeeper:
                         if op.opname in ('simple_call', 'call_args'):
                             yield op
                         # some blocks are partially annotated
-                        if binding(op.result, extquery=True) is None:
+                        if binding(op.result, None) is None:
                             break   # ignore the unannotated part
 
             for call_op in call_sites():
@@ -235,9 +237,7 @@ class Bookkeeper:
             s_callable = self.immutablevalue(adtmeth.func)
             args_s = [SomePtr(adtmeth.ll_ptrtype)] + args_s
         if isinstance(s_callable, SomePBC):
-            s_result = binding(call_op.result, extquery=True)
-            if s_result is None:
-                s_result = s_ImpossibleValue
+            s_result = binding(call_op.result, s_ImpossibleValue)
             self.consider_call_site_for_pbc(s_callable,
                                             call_op.opname,
                                             args_s, s_result)
@@ -275,12 +275,13 @@ class Bookkeeper:
             listdef.generalize(s_value)
         return SomeList(listdef)
 
-    def getdictdef(self):
+    def getdictdef(self, is_r_dict=False):
         """Get the DictDef associated with the current position."""
         try:
             dictdef = self.dictdefs[self.position_key]
         except KeyError:
-            dictdef = self.dictdefs[self.position_key] = DictDef(self)
+            dictdef = DictDef(self, is_r_dict=is_r_dict)
+            self.dictdefs[self.position_key] = dictdef
         return dictdef
 
     def newdict(self, *items_s):
@@ -306,17 +307,13 @@ class Bookkeeper:
             return SomeObject()
         tp = type(x)
         if issubclass(tp, Symbolic): # symbolic constants support
-            return x.annotation()
+            result = x.annotation()
+            result.const_box = Constant(x)
+            return result
         if tp is bool:
             result = SomeBool()
-        elif tp is int or tp is r_int:
+        elif tp is int:
             result = SomeInteger(nonneg = x>=0)
-        elif tp is r_uint:
-            result = SomeInteger(nonneg = True, unsigned = True)
-        elif tp is r_ulonglong:
-            result = SomeInteger(nonneg = True, unsigned = True, size = 2)
-        elif tp is r_longlong:
-            result = SomeInteger(nonneg = x>=0, size = 2)
         elif issubclass(tp, str): # py.lib uses annotated str subclasses
             if len(x) == 1:
                 result = SomeChar()
@@ -344,7 +341,8 @@ class Bookkeeper:
             except KeyError:
                 result = SomeDict(DictDef(self, 
                                           SomeImpossibleValue(),
-                                          SomeImpossibleValue()))
+                                          SomeImpossibleValue(),
+                                          is_r_dict = tp is r_dict))
                 self.immutable_cache[key] = result
                 if tp is r_dict:
                     s_eqfn = self.immutablevalue(x.key_eq)
@@ -354,33 +352,29 @@ class Bookkeeper:
                 for ek, ev in x.iteritems():
                     result.dictdef.generalize_key(self.immutablevalue(ek))
                     result.dictdef.generalize_value(self.immutablevalue(ev))
-        elif ishashable(x) and x in DEFINED_SOMEOBJECTS: # sys by default
-            return SomeObject()
         elif ishashable(x) and x in BUILTIN_ANALYZERS:
             _module = getattr(x,"__module__","unknown")
             result = SomeBuiltin(BUILTIN_ANALYZERS[x], methodname="%s.%s" % (_module, x.__name__))
         elif extregistry.is_registered(x):
-            result = extregistry.lookup(x).get_annotation(tp, x)
-        elif hasattr(x, "compute_result_annotation"):
-            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
-        elif hasattr(tp, "compute_annotation"):
-            result = tp.compute_annotation()
-        elif tp in DEFINED_SOMEOBJECTS:
-            return SomeObject()
+            result = extregistry.lookup(x).compute_annotation()
+##        elif hasattr(x, "compute_result_annotation"):
+##            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
+##        elif hasattr(tp, "compute_annotation"):
+##            result = tp.compute_annotation()
         elif tp in EXTERNAL_TYPE_ANALYZERS:
             result = SomeExternalObject(tp)
         elif isinstance(x, lltype._ptr):
             result = SomePtr(lltype.typeOf(x))
-        elif isinstance(x, lladdress.address):
-            assert x is lladdress.NULL
-            result= SomeAddress(is_null=True)
         elif isinstance(x, llmemory.fakeaddress):
-            result = SomeAddress()
+            result = SomeAddress(is_null=not x)
+        elif isinstance(x, llmemory.fakeweakaddress):
+            assert x.ref is None # only WEAKNULL allowed
+            result = SomeWeakGcAddress()
         elif isinstance(x, ootype._static_meth):
             result = SomeOOStaticMeth(ootype.typeOf(x))
         elif isinstance(x, ootype._class):
             result = SomeOOClass(x._INSTANCE)   # NB. can be None
-        elif isinstance(x, ootype._instance):
+        elif isinstance(x, ootype.instance_impl): # XXX
             result = SomeOOInstance(ootype.typeOf(x))
         elif callable(x):
             if hasattr(x, '__self__') and x.__self__ is not None:
@@ -390,7 +384,14 @@ class Bookkeeper:
                 if result is None:
                     result = SomeObject()
             else:
-                result = SomePBC([self.getdesc(x)])
+                if (self.annotator.policy.allow_someobjects
+                    and getattr(x, '__module__', None) == '__builtin__'
+                    # XXX note that the print support functions are __builtin__
+                    and tp not in (types.FunctionType, types.MethodType)):
+                    result = SomeObject()
+                    result.knowntype = tp # at least for types this needs to be correct
+                else:
+                    result = SomePBC([self.getdesc(x)])
         elif hasattr(x, '__class__') \
                  and x.__class__.__module__ != '__builtin__':
             # user-defined classes can define a method _freeze_(), which
@@ -453,7 +454,11 @@ class Bookkeeper:
                         name)
             else:
                 # must be a frozen pre-built constant, but let's check
-                assert pyobj._freeze_()
+                try:
+                    assert pyobj._freeze_()
+                except AttributeError:
+                    raise Exception("unexpected prebuilt constant: %r" % (
+                        pyobj,))
                 result = self.getfrozen(pyobj)
             self.descs[pyobj] = result
             return result
@@ -491,14 +496,8 @@ class Bookkeeper:
         assert isinstance(t, (type, types.ClassType))
         if t is bool:
             return SomeBool()
-        elif t is int or t is r_int:
+        elif t is int:
             return SomeInteger()
-        elif t is r_uint:
-            return SomeInteger(nonneg = True, unsigned = True)
-        elif t is r_ulonglong:
-            return SomeInteger(nonneg = True, unsigned = True, size = 2)
-        elif t is r_longlong:
-            return SomeInteger(size = 2)
         elif issubclass(t, str): # py.lib uses annotated str subclasses
             return SomeString()
         elif t is float:
@@ -512,10 +511,10 @@ class Bookkeeper:
             return s_None
         elif t in EXTERNAL_TYPE_ANALYZERS:
             return SomeExternalObject(t)
-        elif hasattr(t, "compute_annotation"):
-            return t.compute_annotation()
+##        elif hasattr(t, "compute_annotation"):
+##            return t.compute_annotation()
         elif extregistry.is_registered_type(t):
-            return extregistry.lookup_type(t).get_annotation(t)
+            return extregistry.lookup_type(t).compute_annotation()
         elif t.__module__ != '__builtin__' and t not in self.pbctypes:
             classdef = self.getuniqueclassdef(t)
             return SomeInstance(classdef)
@@ -525,6 +524,17 @@ class Bookkeeper:
                 o.knowntype = t
             return o
 
+    def get_classpbc_attr_families(self, attrname):
+        """Return the UnionFind for the ClassAttrFamilies corresponding to
+        attributes of the given name.
+        """
+        map = self.classpbc_attr_families
+        try:
+            access_sets = map[attrname]
+        except KeyError:
+            access_sets = map[attrname] = UnionFind(description.ClassAttrFamily)
+        return access_sets
+
     def pbc_getattr(self, pbc, s_attr):
         assert s_attr.is_constant()
         attr = s_attr.const
@@ -533,8 +543,8 @@ class Bookkeeper:
         if not descs:
             return SomeImpossibleValue()
         first = descs[0]
-        change = first.mergeattrfamilies(*descs[1:])
-        attrfamily = first.getattrfamily()
+        change = first.mergeattrfamilies(descs[1:], attr)
+        attrfamily = first.getattrfamily(attr)
 
         position = self.position_key
         attrfamily.read_locations[position] = True
@@ -544,8 +554,8 @@ class Bookkeeper:
             actuals.append(desc.s_read_attribute(attr))
         s_result = unionof(*actuals)
 
-        attrfamily.attrs[attr] = unionof(s_result,
-            attrfamily.attrs.get(attr, s_ImpossibleValue))
+        s_oldvalue = attrfamily.get_s_value(attr)
+        attrfamily.set_s_value(attr, unionof(s_result, s_oldvalue))
 
         if change:
             for position in attrfamily.read_locations:
@@ -570,9 +580,7 @@ class Bookkeeper:
             fn, block, i = self.position_key
             op = block.operations[i]
             s_previous_result = self.annotator.binding(op.result,
-                                                       extquery=True)
-            if s_previous_result is None:
-                s_previous_result = s_ImpossibleValue
+                                                       s_ImpossibleValue)
         else:
             if emulated is True:
                 whence = None
@@ -673,7 +681,10 @@ class RPythonCallsSpace:
 
     def type(self, item):
         return type(item)
-    
+
+    def is_true(self, s_tup):
+        assert isinstance(s_tup, SomeTuple)
+        return bool(s_tup.items)
 
 class CallPatternTooComplex(Exception):
     pass
@@ -691,8 +702,7 @@ def getbookkeeper():
 
 def delayed_imports():
     # import ordering hack
-    global BUILTIN_ANALYZERS, EXTERNAL_TYPE_ANALYZERS, DEFINED_SOMEOBJECTS
+    global BUILTIN_ANALYZERS, EXTERNAL_TYPE_ANALYZERS
     from pypy.annotation.builtin import BUILTIN_ANALYZERS
     from pypy.annotation.builtin import EXTERNAL_TYPE_ANALYZERS
-    from pypy.annotation.registry import DEFINED_SOMEOBJECTS
 

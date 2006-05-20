@@ -13,6 +13,7 @@ from pypy.annotation.model import SomeInstance, SomeBuiltin, SomeIterator
 from pypy.annotation.model import SomePBC, SomeSlice, SomeFloat, s_None
 from pypy.annotation.model import SomeExternalObject
 from pypy.annotation.model import SomeAddress, SomeTypedAddressAccess
+from pypy.annotation.model import SomeWeakGcAddress
 from pypy.annotation.model import SomeCTypesObject
 from pypy.annotation.model import unionof, UnionError, set, missing_operation, TLS
 from pypy.annotation.model import add_knowntypedata, merge_knowntypedata
@@ -20,7 +21,7 @@ from pypy.annotation.model import lltype_to_annotation
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.objspace.flow.model import Variable
 from pypy.annotation.listdef import ListDef
-from pypy.rpython import extregistry
+from pypy.rpython import extregistry, rarithmetic
 
 # convenience only!
 def immutablevalue(x):
@@ -59,7 +60,7 @@ class __extend__(pairtype(SomeObject, SomeObject)):
                 result.knowntype = obj1.knowntype
             is_type_of1 = getattr(obj1, 'is_type_of', None)
             is_type_of2 = getattr(obj2, 'is_type_of', None)
-            if obj1.is_constant() and obj2.is_constant() and obj1.const == obj2.const:
+            if obj1.is_immutable_constant() and obj2.is_immutable_constant() and obj1.const == obj2.const:
                 result.const = obj1.const
                 is_type_of = {}
                 if is_type_of1:
@@ -193,7 +194,7 @@ class __extend__(pairtype(SomeObject, SomeObject)):
 
             bind(obj2, obj1, 0)
             bind(obj1, obj2, 1)
-                
+
         return r
 
     def divmod((obj1, obj2)):
@@ -212,7 +213,7 @@ class __extend__(pairtype(SomeObject, SomeObject)):
         else:
             return obj
 
-    
+
 # cloning a function with identical code, for the can_only_throw attribute
 def _clone(f, can_only_throw = None):
     newfunc = type(f)(f.func_code, f.func_globals, f.func_name,
@@ -225,10 +226,9 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
     # unsignedness is considered a rare and contagious disease
 
     def union((int1, int2)):
-        unsigned = int1.unsigned or int2.unsigned
-        return SomeInteger(nonneg = unsigned or (int1.nonneg and int2.nonneg),
-                           unsigned=unsigned,
-                           size = max(int1.size, int2.size))
+        knowntype = rarithmetic.compute_restype(int1.knowntype, int2.knowntype)
+        return SomeInteger(nonneg=int1.nonneg and int2.nonneg,
+                           knowntype=knowntype)
 
     or_ = xor = add = mul = _clone(union, [])
     add_ovf = mul_ovf = _clone(union, [OverflowError])
@@ -241,38 +241,35 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
     truediv_ovf = _clone(truediv, [ZeroDivisionError, OverflowError])
 
     def sub((int1, int2)):
-        return SomeInteger(unsigned = int1.unsigned or int2.unsigned,
-                           size = max(int1.size, int2.size))
+        knowntype = rarithmetic.compute_restype(int1.knowntype, int2.knowntype)
+        return SomeInteger(knowntype=knowntype)
     sub.can_only_throw = []
     sub_ovf = _clone(sub, [OverflowError])
 
     def and_((int1, int2)):
-        unsigned = int1.unsigned or int2.unsigned
-        return SomeInteger(nonneg = unsigned or int1.nonneg or int2.nonneg,
-                           unsigned = unsigned,
-                           size = max(int1.size, int2.size))
+        knowntype = rarithmetic.compute_restype(int1.knowntype, int2.knowntype)
+        return SomeInteger(nonneg=int1.nonneg and int2.nonneg,
+                           knowntype=knowntype)
     and_.can_only_throw = []
 
     def lshift((int1, int2)):
-        if int1.unsigned:
-            return SomeInteger(unsigned=True)
-        return SomeInteger(nonneg = int1.nonneg,
-                           size = max(int1.size, int2.size))
-    lshift.can_only_throw = [ValueError]
-    rshift = lshift
+        return SomeInteger(knowntype=int1.knowntype)
+
     lshift_ovf = _clone(lshift, [ValueError, OverflowError])
 
+    def rshift((int1, int2)):
+        return SomeInteger(nonneg=int1.nonneg, knowntype=int1.knowntype)
+    rshift.can_only_throw = [ValueError]
+
     def pow((int1, int2), obj3):
-        if int1.unsigned or int2.unsigned or getattr(obj3, 'unsigned', False):
-            return SomeInteger(unsigned=True,
-                               size = max(int1.size, int2.size))
+        knowntype = rarithmetic.compute_restype(int1.knowntype, int2.knowntype)
         return SomeInteger(nonneg = int1.nonneg,
-                           size = max(int1.size, int2.size))
+                           knowntype=knowntype)
     pow.can_only_throw = [ZeroDivisionError]
     pow_ovf = _clone(pow, [ZeroDivisionError, OverflowError])
 
     def _compare_helper((int1, int2), opname, operation):
-        if int1.is_constant() and int2.is_constant():
+        if int1.is_immutable_constant() and int2.is_immutable_constant():
             r = immutablevalue(operation(int1.const, int2.const))
         else:
             r = SomeBool()
@@ -283,14 +280,19 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
         op = block.operations[i]
         assert op.opname == opname
         assert len(op.args) == 2
+        def tointtype(int0):
+            if int1.knowntype is bool:
+                return int
+            return int0.knowntype
         if int1.nonneg and isinstance(op.args[1], Variable):
             case = opname in ('lt', 'le', 'eq')
+                
             add_knowntypedata(knowntypedata, case, [op.args[1]],
-                              SomeInteger(nonneg=True, unsigned=int2.unsigned))
+                              SomeInteger(nonneg=True, knowntype=tointtype(int2)))
         if int2.nonneg and isinstance(op.args[0], Variable):
             case = opname in ('gt', 'ge', 'eq')
             add_knowntypedata(knowntypedata, case, [op.args[0]],
-                              SomeInteger(nonneg=True, unsigned=int1.unsigned))
+                              SomeInteger(nonneg=True, knowntype=tointtype(int1)))
         if knowntypedata:
             r.knowntypedata = knowntypedata
         return r
@@ -302,6 +304,16 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
     def gt(intint): return intint._compare_helper('gt', operator.gt)
     def ge(intint): return intint._compare_helper('ge', operator.ge)
 
+class __extend__(pairtype(SomeBool, SomeInteger)):
+    def lshift((int1, int2)):
+        return SomeInteger()
+
+    lshift.can_only_throw = [ValueError]
+    lshift_ovf = _clone(lshift, [ValueError, OverflowError])
+
+    def rshift((int1, int2)):
+        return SomeInteger(nonneg=True)
+    rshift.can_only_throw = [ValueError]
 
 class __extend__(pairtype(SomeBool, SomeBool)):
 
@@ -400,22 +412,27 @@ class __extend__(pairtype(SomeDict, SomeDict)):
 
 class __extend__(pairtype(SomeDict, SomeObject)):
 
+    def _can_only_throw(dic1, *ignore):
+        if dic1.dictdef.dictkey.custom_eq_hash:
+            return None
+        return [KeyError]
+
     def getitem((dic1, obj2)):
         getbookkeeper().count("dict_getitem", dic1)
         dic1.dictdef.generalize_key(obj2)
         return dic1.dictdef.read_value()
-    getitem.can_only_throw = [KeyError]
+    getitem.can_only_throw = _can_only_throw
 
     def setitem((dic1, obj2), s_value):
         getbookkeeper().count("dict_setitem", dic1)
         dic1.dictdef.generalize_key(obj2)
         dic1.dictdef.generalize_value(s_value)
-    setitem.can_only_throw = [KeyError]
+    setitem.can_only_throw = _can_only_throw
 
     def delitem((dic1, obj2)):
         getbookkeeper().count("dict_delitem", dic1)
         dic1.dictdef.generalize_key(obj2)
-    delitem.can_only_throw = [KeyError]
+    delitem.can_only_throw = _can_only_throw
 
 
 class __extend__(pairtype(SomeSlice, SomeSlice)):
@@ -429,7 +446,7 @@ class __extend__(pairtype(SomeSlice, SomeSlice)):
 class __extend__(pairtype(SomeTuple, SomeInteger)):
     
     def getitem((tup1, int2)):
-        if int2.is_constant():
+        if int2.is_immutable_constant():
             try:
                 return tup1.items[int2.const]
             except IndexError:
@@ -724,10 +741,14 @@ class __extend__(pairtype(SomeAddress, SomeInteger)):
         return SomeAddress(is_null=False)
 
 class __extend__(pairtype(SomeAddress, SomeImpossibleValue)):
+    # need to override this specifically to hide the 'raise UnionError'
+    # of pairtype(SomeAddress, SomeObject).
     def union((s_addr, s_imp)):
         return s_addr
 
 class __extend__(pairtype(SomeImpossibleValue, SomeAddress)):
+    # need to override this specifically to hide the 'raise UnionError'
+    # of pairtype(SomeObject, SomeAddress).
     def union((s_imp, s_addr)):
         return s_addr
 
@@ -739,12 +760,21 @@ class __extend__(pairtype(SomeObject, SomeAddress)):
     def union((s_obj, s_addr)):
         raise UnionError, "union of address and anything else makes no sense"
 
+
+class __extend__(pairtype(SomeWeakGcAddress, SomeWeakGcAddress)):
+    def union((s_addr1, s_addr2)):
+        return SomeWeakGcAddress()
+    
+
 class __extend__(pairtype(SomeCTypesObject, SomeInteger)):
     def setitem((s_cto, s_index), s_value):
         pass
 
     def getitem((s_cto, s_index)):
-        if s_index.is_constant():
+        if s_index.is_immutable_constant():
+            # check that the constant index is valid, just because we
+            # are nice (users should really catch such errors by
+            # testing their programs!)
             idx = s_index.const
             knowntype = s_cto.knowntype
             try:
@@ -758,27 +788,57 @@ class __extend__(pairtype(SomeCTypesObject, SomeInteger)):
                     raise IndexError( "invalid index" )
                 elif idx < 0:
                     raise IndexError( "invalid index" )
-        try:
-            # This is the case for unboxed values, which
-            # are those having memorystate NOMEMORY
-            return s_cto.knowntype._type_.annotator_type
-        except AttributeError:
-            if extregistry.is_registered_type(s_cto.knowntype._type_):
-                entry = extregistry.lookup_type(s_cto.knowntype._type_)
-                return lltype_to_annotation(entry.lowleveltype)
-                
-            return SomeCTypesObject(
-                    s_cto.knowntype._type_,
-                    memorystate=s_cto.memorystate)
+
+        # Note: The following works for index either pointers and arrays,
+        # because both have a _type_ attribute that contains the type of the
+        # object pointed to or in the case of an array the element type.
+        result_ctype = s_cto.knowntype._type_
+        s_result = SomeCTypesObject(result_ctype,
+                                    memorystate=SomeCTypesObject.MEMORYALIAS)
+        return s_result.return_annotation()
 
 class __extend__(pairtype(SomeCTypesObject, SomeSlice)):
+    # XXX ctypes array slicing not really supported for now
     def setitem((s_cto, s_slice), s_iterable):
         pass
 
     def getitem((s_cto, s_slice)):
-        try:
-            listdef = ListDef(None, s_cto.knowntype._type_.annotator_type)
-        except AttributeError:
-            listdef = ListDef(None, SomeCTypesObject(s_cto.knowntype._type_))
+        result_ctype = s_cto.knowntype._type_
+        s_result = SomeCTypesObject(result_ctype,
+                                    memorystate=SomeCTypesObject.MEMORYALIAS)
+        list_item = s_result.return_annotation()
+        if isinstance(list_item, SomeChar):
+            return SomeString()
+        listdef = ListDef(None, list_item)
         return SomeList(listdef)
 
+class __extend__(pairtype(SomeCTypesObject, SomeCTypesObject)):
+    def union((s_cto1, s_cto2)):
+        if s_cto1.knowntype == s_cto2.knowntype:
+            states = {}
+            for s in [s_cto1, s_cto2]:
+                if s.memorystate != SomeCTypesObject.NOMEMORY:
+                    states[s.memorystate] = True
+            if len(states) == 0:
+                state = SomeCTypesObject.NOMEMORY
+            elif len(states) == 1:
+                [state] = states.keys()
+            else:
+                state = SomeCTypesObject.MIXEDMEMORYOWNERSHIP
+            return SomeCTypesObject(s_cto1.knowntype, state)
+        else:
+            return SomeObject()
+
+class __extend__(pairtype(SomeCTypesObject, SomePBC)):
+    def union((obj, pbc)):
+        if pbc.isNone() and obj.can_be_none():
+            return obj
+        else:
+            return SomeObject()
+
+class __extend__(pairtype(SomePBC, SomeCTypesObject)):
+    def union((pbc, obj)):
+        if pbc.isNone() and obj.can_be_none():
+            return obj
+        else:
+            return SomeObject()

@@ -3,6 +3,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import ObjSpace
 from pypy.interpreter.function import Function, Method
 from pypy.interpreter.argument import Arguments
+from pypy.interpreter.typedef import default_identity_hash
 from pypy.tool.sourcetools import compile2, func_with_new_name
 
 def raiseattrerror(space, w_obj, name, w_descr=None):
@@ -20,7 +21,7 @@ class Object:
         if w_descr is not None:
             if space.is_data_descr(w_descr):
                 return space.get(w_descr, w_obj)
-        w_value = w_obj.getdictvalue(space, name)
+        w_value = w_obj.getdictvalue(space, w_name)
         if w_value is not None:
             return w_value
         if w_descr is not None:
@@ -36,10 +37,7 @@ class Object:
                 return
         w_dict = w_obj.getdict()
         if w_dict is not None:
-            # note: don't use w_name as a key in w_dict directly -- the expected
-            # result of setattr() is that it never stores subclasses of 'str'
-            # in the __dict__
-            space.setitem(w_dict, space.wrap(name), w_value)
+            space.set_str_keyed_item(w_dict, w_name, w_value)
             return
         raiseattrerror(space, w_obj, name, w_descr)
 
@@ -288,7 +286,7 @@ class DescrOperation:
                space.lookup(w_obj, '__cmp__') is not None: 
                 raise OperationError(space.w_TypeError, 
                                      space.wrap("unhashable type"))
-            return w_obj.identity_hash(space) 
+            return default_identity_hash(space, w_obj)
         w_result = space.get_and_call_function(w_hash, w_obj)
         if space.is_true(space.isinstance(w_result, space.w_int)): 
             return w_result 

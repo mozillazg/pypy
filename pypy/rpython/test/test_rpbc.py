@@ -498,6 +498,8 @@ class BaseTestRPBC:
         assert self.read_attr(res, "extra") == 42
 
     def test_conv_from_None(self):
+        if self.ts == "ootype":
+            py.test.skip("disabled while ootype string support is incomplete")
         class A(object): pass
         def none():
             return None
@@ -967,7 +969,25 @@ class BaseTestRPBC:
             assert res.item0 == f(i)[0]
             assert res.item1 == f(i)[1]
 
+    def test_pbc_imprecise_attrfamily(self):
+        if self.ts == "ootype":
+            py.test.skip("disabled while ootype string support is incomplete")
+        fr1 = Freezing(); fr1.x = 5; fr1.y = [8]
+        fr2 = Freezing(); fr2.x = 6; fr2.y = ["string"]
+        def head(fr):
+            return fr.y[0]
+        def f(n):
+            if n == 1:
+                fr = fr1
+            else:
+                fr = fr2
+            return head(fr1) + fr.x
+        res = interpret(f, [2], type_system=self.ts)
+        assert res == 8 + 6
+
     def test_multiple_specialized_functions(self):
+        if self.ts == "ootype":
+            py.test.skip("disabled while ootype string support is incomplete")
         def myadder(x, y):   # int,int->int or str,str->str
             return x+y
         def myfirst(x, y):   # int,int->int or str,str->str
@@ -992,6 +1012,8 @@ class BaseTestRPBC:
             assert res == f(i)
 
     def test_specialized_method_of_frozen(self):
+        if self.ts == "ootype":
+            py.test.skip("disabled while ootype string support is incomplete")
         class space:
             def _freeze_(self):
                 return True
@@ -1019,6 +1041,8 @@ class BaseTestRPBC:
         assert ''.join(res.chars) == 'tag2:hellotag2:< 42 >'
 
     def test_specialized_method(self):
+        if self.ts == "ootype":
+            py.test.skip("disabled while ootype string support is incomplete")
         class A:
             def __init__(self, tag):
                 self.tag = tag
@@ -1093,6 +1117,150 @@ class BaseTestRPBC:
         for i in [0, 1]:
             res = interpret(f, [i, 1234], type_system=self.ts)
             assert res == f(i, 1234)
+
+    def test_disjoint_pbcs(self):
+        class Frozen(object):
+            def __init__(self, v):
+                self.v = v
+            def _freeze_(self):
+                return True
+
+        fr1 = Frozen(2)
+        fr2 = Frozen(3)
+
+        def g1(x):
+            return x.v
+        def g2(y):
+            return y.v
+        def h(x):
+            return x is not None
+        def h2(x):
+            return x is fr1
+
+        def f():
+            a = g1(fr1)
+            b = g2(fr2)
+            h(None)
+            return (h(fr1) + 10*h(fr2) + 100*a + 1000*b +
+                    10000*h2(fr1) + 100000*h2(fr2))
+
+        res = interpret(f, [], type_system=self.ts)
+        assert res == 13211
+
+    def test_disjoint_pbcs_2(self):
+        class Frozen(object):
+            def __init__(self, v):
+                self.v = v
+            def _freeze_(self):
+                return True
+        fr1 = Frozen(1)
+        fr2 = Frozen(2)
+        fr3 = Frozen(3)
+        def getv(x):
+            return x.v
+        def h(x):
+            return (x is not None) + 2*(x is fr2) + 3*(x is fr3)
+        def f(n):
+            if n == 1:
+                fr = fr1
+            else:
+                fr = fr2
+            total = getv(fr)
+            if n == 3:
+                fr = fr3
+            h(None)
+            return total + 10*h(fr)
+
+        res = interpret(f, [3], type_system=self.ts)
+        assert res == 42
+
+    def test_convert_multiple_to_single(self):
+        class A:
+            def meth(self, fr):
+                return 65
+        class B(A):
+            def meth(self, fr):
+                return 66
+        fr1 = Freezing()
+        fr2 = Freezing()
+        def f():
+            return A().meth(fr1) * B().meth(fr2)
+
+        res = interpret(f, [], type_system=self.ts)
+        assert res == 65*66
+
+    def test_convert_multiple_to_single_method_of_frozen_pbc(self):
+        class A:
+            def meth(self, frmeth):
+                return frmeth(100)
+        class B(A):
+            def meth(self, frmeth):
+                return frmeth(1000)
+        fr1 = Freezing(); fr1.x = 65
+        fr2 = Freezing(); fr2.x = 66
+        def f():
+            return A().meth(fr1.mymethod) * B().meth(fr2.mymethod)
+
+        res = interpret(f, [], type_system=self.ts)
+        assert res == 165 * 1066
+
+    def test_convert_none_to_frozen_pbc(self):
+        fr1 = Freezing(); fr1.x = 65
+        fr2 = Freezing(); fr2.y = 65
+        def g(fr):
+            return fr.x
+        def identity(z):
+            return z
+        def f(n):  # NB. this crashes with n == 0
+            if n == 0:
+                fr = identity(None)
+            else:
+                fr = fr1
+            return g(fr)
+        res = interpret(f, [1], type_system=self.ts)
+        assert res == 65
+
+    def test_multiple_attribute_access_patterns(self):
+        class Base(object):
+            pass
+        class A(Base):
+            value = 1000
+            def meth(self): return self.n + 1
+        class B(A):
+            def meth(self): return self.n + 2
+        class C(Base):
+            value = 2000
+            def meth(self): ShouldNotBeSeen
+        def AorB(n):
+            if n == 5: return A
+            else:      return B
+        def BorC(n):
+            if n == 3: return B
+            else:      return C
+        def f(n):
+            value = BorC(n).value
+            x = B()
+            x.n = 100
+            return value + AorB(n).meth(x)
+
+        for i in [1, 3, 5]:
+            res = interpret(f, [i])
+            assert res == f(i)
+
+    def test_function_as_frozen_pbc(self):
+        def f1(): pass
+        def f2(): pass
+        def choose(n):
+            if n == 1:
+                return f1
+            else:
+                return f2
+        def f(n):
+            return choose(n) is f1
+        res = interpret(f, [1], type_system=self.ts)
+        assert res == True
+        res = interpret(f, [2], type_system=self.ts)
+        assert res == False
 
 
 def test_call_from_list():
@@ -1363,7 +1531,6 @@ def test_hlinvoke_pbc_method_hltype():
     res = interp.eval_graph(ll_h_graph, [None, c_f, c_a])
     assert typeOf(res) == A_repr.lowleveltype
 
-
 class TestLltype(BaseTestRPBC):
 
     ts = "lltype"
@@ -1381,13 +1548,16 @@ class TestLltype(BaseTestRPBC):
                 return attr
         raise AttributeError()
 
+from pypy.rpython.ootypesystem import ootype
+
 class TestOotype(BaseTestRPBC):
 
     ts = "ootype"
 
     def class_name(self, value):
-        return typeOf(value)._name.split(".")[-1] 
+        return ootype.dynamicType(value)._name.split(".")[-1] 
 
     def read_attr(self, value, attr):
+        value = ootype.oodowncast(ootype.dynamicType(value), value)
         return getattr(value, "o" + attr)
 

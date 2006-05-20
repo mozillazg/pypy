@@ -2,6 +2,8 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.pyopcode import PyInterpFrame
 from pypy.interpreter import function, pycode, pyframe
 from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.mixedmodule import MixedModule
+from pypy.tool.uid import uid
 
 class Cell(Wrappable):
     "A simple container for a wrapped value."
@@ -27,7 +29,26 @@ class Cell(Wrappable):
         if self.w_value is None:
             raise ValueError, "delete() on an empty cell"
         self.w_value = None
+  
+    def descr__eq__(self, space, w_other):
+        other = space.interpclass_w(w_other)
+        if not isinstance(other, Cell):
+            return space.w_False
+        return space.eq(self.w_value, other.w_value)    
+        
+    def descr__reduce__(self, space):
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('cell_new')
+        if self.w_value is None:    #when would this happen?
+            return space.newtuple([new_inst, space.newtuple([])])
+        tup = [self.w_value]
+        return space.newtuple([new_inst, space.newtuple([]),
+                               space.newtuple(tup)])
 
+    def descr__setstate__(self, space, w_state):
+        self.w_value = space.getitem(w_state, space.wrap(0))
+        
     def __repr__(self):
         """ representation for debugging purposes """
         if self.w_value is None:
@@ -35,7 +56,7 @@ class Cell(Wrappable):
         else:
             content = repr(self.w_value)
         return "<%s(%s) at 0x%x>" % (self.__class__.__name__,
-                                     content, id(self))
+                                     content, uid(self))
 
 
 class PyNestedScopeFrame(PyInterpFrame):

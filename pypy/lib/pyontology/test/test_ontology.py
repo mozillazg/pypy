@@ -11,15 +11,17 @@ except ImportError:
 from pypy.lib.pyontology.pyontology import * # Ontology, ClassDomain, SubClassConstraint 
 from rdflib import Graph, URIRef, BNode
 
+UR = URIRef
 def rdf_list(ont, name, data):
     owllist = URIRef(name)
     obj = URIRef(namespaces['rdf']+'#List')
     ont.type(owllist, obj)
     own =owllist
     for i,dat in enumerate(data[:-1]):
-        next = URIRef( name + str(i))
-        print next,i,dat,own
+        next = BNode( name + str(i))
+        next,i,dat,own
         ont.first(own, dat)
+        ont.type(next, obj)
         ont.rest(own,  next)
         own = next
     ont.first(own, data[-1])
@@ -37,16 +39,16 @@ def test_makevar():
      
 def test_subClassof():
     O = Ontology()
-    a = URIRef(u'A')
-    b = URIRef(u'B')
-    c = URIRef(u'C')
+    a = O.make_var(ClassDomain,URIRef(u'A'))
+    b = O.make_var(ClassDomain,URIRef(u'B'))
+    c = O.make_var(ClassDomain,URIRef(u'C'))
     O.subClassOf(b, a)
     O.subClassOf(c, b)
     obj = URIRef(namespaces['owl']+'#Class')
     O.type(a,obj)
     O.consistency()
     O.consistency()
-    assert len(O.variables) == 3
+    assert len(O.variables) == 4
     assert 'C_' in O.variables['A_'].getValues()
 
 def test_addvalue():
@@ -55,7 +57,7 @@ def test_addvalue():
     O.variables[a].addValue('key', 42)
     assert O.variables[a].getValues() == [('key', 42)]
     O.variables[a].addValue('key', 43)
-    assert O.variables[a].getValues() == [('key', 42),('key',43)]
+    assert O.variables[a].getValues() == [('key', 42), ('key', 43)]
 
 def no_test_ClassDomain():
     a = ClassDomain()
@@ -102,10 +104,10 @@ def test_subClassconstraintMulti2():
     assert 'a' in c.getValues()
 
 def test_equivalentClass():
-    a = URIRef('A')
-    b = URIRef('B')
-    c = URIRef('C')
     O = Ontology()
+    a = O.make_var(ClassDomain,URIRef('A'))
+    b = O.make_var(ClassDomain,URIRef('B'))
+    c = O.make_var(ClassDomain,URIRef('C'))
     O.equivalentClass(c, a)
     O.equivalentClass(c, b)
     A = O.make_var(ClassDomain, a)
@@ -189,7 +191,7 @@ def test_domain_merge():
     assert len(O.constraints) == 2
     for con in O.constraints:
         con.narrow(O.variables)
-    assert O.variables['a_'].getValues() ==[] #O.variables['b_']
+    assert O.variables['a_'].getValues() ==[] 
 
 def test_subproperty():
     O = Ontology()
@@ -198,9 +200,8 @@ def test_subproperty():
     O.type(sub, obj)
     b = URIRef('b')
     O.type(b, obj)
-    O.subPropertyOf(sub, b)
-    assert len(O.constraints) ==1
     O.variables['a_'].setValues([('individ_',42)])
+    O.subPropertyOf(sub, b)
     O.consistency()
     for val in O.variables['a_'].getValues():
         assert  val in O.variables['b_'].getValues()
@@ -223,9 +224,8 @@ def test_functionalproperty():
     O.variables['p_'].setValues([('individ_',42)])
     #assert len(O.constraints) == 2
     #add another valueof the property
-    O.variables['p_'].setValues([('individ_',42),('individ_',43)])
+    py.test.raises(ConsistencyFailure, O.variables['p_'].setValues,[('individ_',42),('individ_',43)])
     #check that consistency raises
-    py.test.raises(ConsistencyFailure, O.consistency)
 
 def test_inversefunctionalproperty():
     
@@ -248,12 +248,9 @@ def test_inversefunctionalproperty():
     sub = URIRef('individ2')
     obj = URIRef('c')
     O.type(sub, obj)
-    O.variables['p_'].setValues([('individ_',42),('individ2_',42)])
-    #check that consistency raises
-    py.test.raises(ConsistencyFailure, O.consistency)
+    py.test.raises(ConsistencyFailure, O.variables['p_'].setValues, [('individ_',42),('individ2_',42)])
     
 def test_Transitiveproperty():
-    
     O = Ontology()
     #Make functional property
     sub = URIRef('subRegionOf')
@@ -273,10 +270,9 @@ def test_Transitiveproperty():
     O.type(sub, obj)
     O.variables['subRegionOf_'].setValues([('Italy_','Tuscanny_'),('Tuscanny_','Chianti_')])
     O.consistency()
-    assert ('Italy_', 'Chianti_') in O.variables['subRegionOf_'].getValues()
+    assert 'Chianti_' in O.variables['subRegionOf_']._dict['Italy_']
     
-def test_symmetricproperty():
-    
+def test_symmetricproperty():    
     O = Ontology()
     #Make functional property
     sub = URIRef('friend')
@@ -298,6 +294,7 @@ def test_symmetricproperty():
     assert ('Alice_', 'Bob_') in O.variables['friend_'].getValues()
 
 def test_inverseof():
+    #py.test.skip("in transit")
     O = Ontology()
     own = URIRef('owner')
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
@@ -305,7 +302,6 @@ def test_inverseof():
     owned = URIRef('ownedby')
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(owned, obj)
-    O.inverseOf(own, owned)
     #Make class
     sub = URIRef('c')
     obj = URIRef(namespaces['owl']+'#Class')
@@ -318,28 +314,32 @@ def test_inverseof():
     obj = URIRef('car')
     O.type(sub, obj)
     O.variables['owner_'].setValues([('Bob_','Fiat_')])
-    py.test.raises(ConsistencyFailure, O.consistency)
-    O.variables['ownedby_'].setValues([('Fiat_','Bob_')])
-    O.consistency()
-    
+    O.inverseOf(own, owned)
+    assert ('Fiat_','Bob_') in O.variables['ownedby_'].getValues()   
 def test_hasvalue():
     O = Ontology()
+    cls = URIRef('class')
+    obj = URIRef(namespaces['owl']+'#Class')
+    O.type(cls, obj)
     restrict = BNode('anon1')
     obj = URIRef(namespaces['owl']+'#Restriction')
     O.type(restrict, obj)
     p = URIRef('p')
-    O.onProperty(restrict,p)
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(p, obj)
+    O.consider_triple((cls, p, 2))
+    O.onProperty(restrict,p)
+    O.variables['p_'].setValues([(O.make_var(None,cls),1)])
     O.hasValue(restrict, 2)
-    cls = URIRef('class')
+    cls2 = URIRef('class2')
     obj = URIRef(namespaces['owl']+'#Class')
-    O.type(cls, obj)
-    O.subClassOf(cls,restrict)
-    O.variables['p_'].setValues([(cls,1)])
-    py.test.raises(ConsistencyFailure, O.consistency)
+    O.type(cls2, obj)
+    O.subClassOf(cls2,restrict)
+    assert O.make_var(None, cls) in O.variables[O.make_var(None, cls2)].getValues()
+#    py.test.raises(ConsistencyFailure, O.consistency)
 
 def test_List():
+    py.test.skip("Need to be rewritten using RDF-XML")
     O = Ontology()
     own = URIRef('favlist')
     obj = URIRef(namespaces['rdf']+'#List')
@@ -350,118 +350,96 @@ def test_List():
     O.rest( URIRef('1'),  URIRef('2'))
     O.first( URIRef('2'), 2)
     O.rest( URIRef('2'),  URIRef(namespaces['rdf']+'#nil'))
-    assert len(O.constraints) == 1
-    O.consistency(5)
+    O.flatten_rdf_list(own)
+    O.consistency()
     assert O.rep._domains['favlist_'].getValues() == [0,1,2]
-    
-def test_oneofrestriction():
-    O = Ontology()
-    restrict = BNode('anon')
-    obj = URIRef(namespaces['owl']+'#Restriction')
-    O.type(restrict, obj)
-    p = URIRef('p')
-    O.onProperty(restrict,p)
-    obj = URIRef(namespaces['owl']+'#ObjectProperty')
-    O.type(p, obj)
-    p = URIRef('favlist')
-    O.oneOf(restrict, p)
-    own = rdf_list(O, 'favlist', [0, 1, 2])
-    own = URIRef('class')
-    obj = URIRef(namespaces['rdf']+'#Class')
-    O.type(own, obj)
-    O.subClassOf(own,restrict)
-    py.test.raises(ConsistencyFailure, O.consistency)
 
 def test_oneofclassenumeration():
     O = Ontology()
     restrict = BNode('anon')
-    own = rdf_list(O, 'favlist', ['first', 'second', 'third'])
+    own = [UR('first'), UR('second'), UR('third')]
     O.oneOf(restrict, own)
     O.type(restrict, namespaces['owl']+'#Class')
-    O.consistency(4)
-    print O.rep._domains
+    O.consistency()
     assert len(O.rep._domains[restrict].getValues()) == 3
+    assert set(O.rep._domains[restrict].getValues()) == set(own)
 
 def test_oneofdatarange():
     O = Ontology()
     restrict = BNode('anon')
-    own = rdf_list(O, 'favlist', ['1','2','3'])
+    own = ['1','2','3'] 
     O.oneOf(restrict, own)
     O.type(restrict, namespaces['owl']+'#DataRange')
-    O.consistency(4)
-    print O.rep._domains
+    O.consistency()
     assert len(O.rep._domains[restrict].getValues()) == 3
+    assert set(O.rep._domains[restrict].getValues()) == set(own)
 
 def test_somevaluesfrom_datarange():
+
     O = Ontology()
     datarange = BNode('anon')
-    own = rdf_list(O, 'favlist', ['1','2','3'])
+    own =  ['1','2','3']
     O.oneOf(datarange, own)
     O.type(datarange, namespaces['owl']+'#DataRange')
     restrict = BNode('anon1')
     obj = URIRef(namespaces['owl']+'#Restriction')
     O.type(restrict, obj)
     p = URIRef('p')
-    O.onProperty(restrict,p)
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(p, obj)
-    O.someValuesFrom(restrict, datarange)
     cls = URIRef('class')
     obj = URIRef(namespaces['owl']+'#Class')
     O.type(cls, obj)
+    O.variables['p_'].setValues([(cls,'1')])
+    O.onProperty(restrict,p)
+    O.someValuesFrom(restrict, datarange)
     O.subClassOf(cls,restrict)
-    O.variables['p_'].setValues([(cls,1)])
-    py.test.raises(ConsistencyFailure, O.consistency)
+    assert cls in O.variables[O.make_var(None, cls)].getValues()
 
 def test_allvaluesfrom_datarange():
     O = Ontology()
     datarange = BNode('anon')
-    own = rdf_list(O, 'favlist', ['1','2','3'])
+    own = ['1','2','3']
     O.oneOf(datarange, own)
     O.type(datarange, namespaces['owl']+'#DataRange')
     restrict = BNode('anon1')
     obj = URIRef(namespaces['owl']+'#Restriction')
     O.type(restrict, obj)
     p = URIRef('p')
-    O.onProperty(restrict,p)
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(p, obj)
-    O.allValuesFrom(restrict, datarange)
     cls = URIRef('class')
+    O.variables['p_'].setValues([(cls,'1'),(cls,'2'),(cls,'3')])
     obj = URIRef(namespaces['owl']+'#Class')
     O.type(cls, obj)
+    O.onProperty(restrict,p)
+    O.allValuesFrom(restrict, datarange)
     O.subClassOf(cls,restrict)
-    O.variables['p_'].setValues([(cls,1)])
-    py.test.raises(ConsistencyFailure, O.consistency)
+    assert cls in O.variables[O.make_var(None, cls)].getValues()
 
 def test_unionof():
     O = Ontology()
     cls = BNode('anon')
     own1 = BNode('liist1')
     own2 = BNode('liist2')
-    list1 = rdf_list(O, 'favlist1', ['1', '2', '3'])
-    list2 = rdf_list(O, 'favlist2', ['3', '4', '5'])
-    own = rdf_list(O, 'favlist', [own1, own2])
+    list1 =  ['1', '2', '3'] 
+    list2 =  ['3', '4', '5'] 
+    own = [list1, list2] 
     O.oneOf( own1, list1)
     O.oneOf( own2, list2)
     O.unionOf(cls, own)
     O.type(cls, namespaces['owl']+'#Class')
-    O.consistency(3)
-    assert O.rep._domains[cls].getValues() == ['1', '2', '3', '4', '5']
+    O.consistency()
+    res = O.rep._domains[cls].getValues()
+    res.sort()
+    assert res == ['1', '2', '3', '4', '5']
 
 def test_intersectionof():
     O = Ontology()
     cls = BNode('anon')
-    own1 = BNode('liist1')
-    own2 = BNode('liist2')
-    list1 = rdf_list(O, 'favlist1', ['1', '2', '3'])
-    list2 = rdf_list(O, 'favlist2', ['3', '4', '5'])
-    own = rdf_list(O, 'favlist', [own1, own2])
-    O.oneOf( own1, list1)
-    O.oneOf( own2, list2)
-    O.intersectionOf(cls, own)
+    O.intersectionOf(cls, [['1','2','3'],['3','4','5']])
     O.type(cls, namespaces['owl']+'#Class')
-    O.consistency(3)
+    O.consistency()
     assert O.rep._domains[cls].getValues() == ['3']
 
 def test_differentfrom():
@@ -476,7 +454,7 @@ def test_differentfrom():
     O.type(cls, namespaces['owl']+'#Thing')
     O.type(own1, namespaces['owl']+'#Thing')
     O.type(own2, namespaces['owl']+'#Thing')
-    O.consistency(3)
+    O.consistency()
     assert len(O.rep._constraints) == 4
 
 def test_differentfromconsistency():
@@ -484,7 +462,7 @@ def test_differentfromconsistency():
     cls = BNode('anon')
     O.differentFrom(cls, cls)
     O.type(cls, namespaces['owl']+'#Thing')
-    py.test.raises(ConsistencyFailure, O.consistency, 3)
+    py.test.raises(ConsistencyFailure, O.consistency)
 
 def test_sameas():
     O = Ontology()
@@ -501,8 +479,7 @@ def test_sameas():
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(sub, obj)
     O.variables[O.make_var(None,sub)].setValues([(cls,'1')])
-    O.consistency(3)
-#    assert len(O.rep._constraints) == 4
+    O.consistency()
     assert ('liist1','1') in O.rep._domains[O.make_var(None,sub)].getValues()
 
 def test_sameasconsistency():
@@ -516,8 +493,88 @@ def test_sameasconsistency():
     obj = URIRef(namespaces['owl']+'#ObjectProperty')
     O.type(sub, obj)
     O.variables[O.make_var(None,sub)].setValues([(cls,'1'), (own1,'2')])
-    print O.variables
-    for dom in O.variables.values() :print type(dom)
-    py.test.raises(ConsistencyFailure, O.consistency, 3)
+    py.test.raises(ConsistencyFailure, O.consistency)
 
 
+def test_cardinality_terminology():
+    # Modeled after one of the standard tests (approved/maxCardinality)
+    # 'cls' by subclassing two maxCardinality restrictions becomes the set of
+    # individuals satisfying both restriction, ie having exactly 2 values of
+    # predicate p
+    cls = URIRef('cls')
+    O = Ontology()
+    O.add((cls, namespaces['rdfs']+'#type', namespaces['owl']+'#Class' ))
+    p = O.make_var(Property,URIRef('p'))
+    p = URIRef('p')
+    O.add((p, namespaces['rdfs']+'#type', namespaces['owl']+'#ObjectProperty' ))
+
+    restr = BNode('anon')
+    O.add((restr, namespaces['rdfs']+'#type', namespaces['owl']+'#Restriction' ))
+    O.add((restr, namespaces['rdfs']+'#onProperty', p ))
+    O.add((cls, namespaces['rdfs']+'#subClassOf',restr ))
+    O.add((restr, namespaces['rdfs']+'#maxCardinality', 2 ))
+
+    restr2 = BNode('anon2')
+    O.add((restr2, namespaces['rdfs']+'#type', namespaces['owl']+'#Restriction' ))
+    O.add((restr2, namespaces['rdfs']+'#onProperty', p ))
+    O.add((cls, namespaces['rdfs']+'#subClassOf',restr2 ))
+    O.add((restr2, namespaces['rdfs']+'#minCardinality', 3 ))
+    O.attach_fd()
+    py.test.raises(ConsistencyFailure, O.check_TBoxes)
+
+def test_subclassof_cardinality():
+    cls = URIRef('cls')
+    cls2 = URIRef('cls2')
+    O = Ontology()
+    O.add((cls, namespaces['rdfs']+'#type', namespaces['owl']+'#Class' ))
+    O.add((cls2, namespaces['rdfs']+'#type', namespaces['owl']+'#Class' ))
+    p = O.make_var(Property,URIRef('p'))
+    p = URIRef('p')
+    O.add((p, namespaces['rdfs']+'#type', namespaces['owl']+'#ObjectProperty' ))
+
+    restr = BNode('anon')
+    O.add((restr, namespaces['rdfs']+'#type', namespaces['owl']+'#Restriction' ))
+    O.add((restr, namespaces['rdfs']+'#onProperty', p ))
+    O.add((cls, namespaces['rdfs']+'#subClassOf',restr ))
+    O.add((restr, namespaces['rdfs']+'#maxCardinality', 2 ))
+
+    restr2 = BNode('anon2')
+    O.add((restr2, namespaces['rdfs']+'#type', namespaces['owl']+'#Restriction' ))
+    O.add((restr2, namespaces['rdfs']+'#onProperty', p ))
+    O.add((cls, namespaces['rdfs']+'#subClassOf',restr2 ))
+    O.add((restr2, namespaces['rdfs']+'#minCardinality', 3 ))
+    O.add((cls2, namespaces['rdfs']+'#subClassOf', cls ))
+    O.attach_fd()
+    py.test.raises(ConsistencyFailure, O.check_TBoxes)
+    assert O.variables['cls_'].TBox  == O.variables['cls2_'].TBox
+    
+def test_add_file():
+    O = Ontology()
+    O.add_file('premises001.rdf')
+    trip = list(O.graph.triples((None,)*3))
+    O.attach_fd()
+    ll = len(O.variables)
+    l = len(trip)
+    O.add_file('conclusions001.rdf')
+    O.attach_fd()
+    lll = len(O.variables)
+    assert len(list(O.graph.triples((None,)*3))) > l
+
+def test_more_cardinality():
+    O = Ontology()
+    O.add_file('premises003.rdf')
+    trip = list(O.graph.triples((None,)*3))
+    O.attach_fd()
+    ll = len(O.variables)
+    l = len(trip)
+    O.add_file('conclusions003.rdf')
+    O.attach_fd()
+    O.check_TBoxes()
+    lll = len(O.variables)
+    assert len(list(O.graph.triples((None,)*3))) > l
+
+def test_allvalues_file():
+    O = Ontology()
+    O.add_file('approved/allValuesfrom/premises002.rdf')
+    O.add_file('approved/allValuesfrom/nonconclusions002.rdf')
+    assert 1

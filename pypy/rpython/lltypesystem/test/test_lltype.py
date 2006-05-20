@@ -299,7 +299,19 @@ def test_nullptr_cast():
     p10 = cast_pointer(Ptr(S1), p0)
     assert typeOf(p10) == Ptr(S1)
     assert not p10
-    
+
+def test_nullptr_opaque_cast():
+    S = Struct('S')
+    p0 = nullptr(S)
+    O1 = OpaqueType('O1')
+    O2 = OpaqueType('O2')
+    p1 = cast_opaque_ptr(Ptr(O1), p0)
+    assert not p1
+    p2 = cast_opaque_ptr(Ptr(O2), p1)
+    assert not p2
+    p3 = cast_opaque_ptr(Ptr(S), p2)
+    assert not p3
+
 
 def test_hash():
     S = ForwardReference()
@@ -417,6 +429,11 @@ def test_flavor_malloc():
     p = malloc(S, flavor="raw")
     assert typeOf(p).TO == S
     assert not isweak(p, S)
+    free(p, flavor="raw")
+    T = GcStruct('T', ('y', Signed))
+    p = malloc(T, flavor="gc")
+    assert typeOf(p).TO == T
+    assert not isweak(p, T)
     
 def test_opaque():
     O = OpaqueType('O')
@@ -429,6 +446,31 @@ def test_opaque():
     assert typeOf(p2) == Ptr(S)
     assert typeOf(p2.stuff) == Ptr(O)
     assert parentlink(p2.stuff._obj) == (p2._obj, 'stuff')
+
+def test_cast_opaque_ptr():
+    O = GcOpaqueType('O')
+    Q = GcOpaqueType('Q')
+    S = GcStruct('S', ('x', Signed))
+    s = malloc(S)
+    o = cast_opaque_ptr(Ptr(O), s)
+    assert typeOf(o).TO == O
+    q = cast_opaque_ptr(Ptr(Q), o)
+    assert typeOf(q).TO == Q
+    p = cast_opaque_ptr(Ptr(S), q)
+    assert typeOf(p).TO == S
+    assert p == s
+    O1 = OpaqueType('O')
+    S1 = Struct('S1', ('x', Signed))
+    s1 = malloc(S1, immortal=True)
+    o1 = cast_opaque_ptr(Ptr(O1), s1)
+    assert typeOf(o1).TO == O1
+    p1 = cast_opaque_ptr(Ptr(S1), o1)
+    assert typeOf(p1).TO == S1
+    assert p1 == s1
+    py.test.raises(TypeError, "cast_opaque_ptr(Ptr(S), o1)")
+    py.test.raises(TypeError, "cast_opaque_ptr(Ptr(O1), s)")
+    S2 = Struct('S2', ('z', Signed))
+    py.test.raises(RuntimeError, "cast_opaque_ptr(Ptr(S2), o1)")
 
 def test_is_atomic():
     U = Struct('inlined', ('z', Signed))
@@ -507,6 +549,12 @@ def test_cast_primitive():
          res = cast_primitive(TGT, orig_val)
          assert typeOf(res) == TGT
          assert res == expect
+
+def test_cast_identical_array_ptr_types():
+    A = GcArray(Signed)
+    PA = Ptr(A)
+    a = malloc(A, 2)
+    assert cast_pointer(PA, a) == a
         
 def test_array_with_no_length():
     A = GcArray(Signed, hints={'nolength': True})
@@ -546,3 +594,89 @@ def test_dissect_ll_instance():
     memo = {}
     assert list(dissect_ll_instance(r, None, memo)) == r_expected
     assert list(dissect_ll_instance(b, None, memo)) == b_expected
+
+def test_fixedsizearray():
+    A = FixedSizeArray(Signed, 5)
+    assert A.OF == Signed
+    assert A.length == 5
+    assert A.item0 == A.item1 == A.item2 == A.item3 == A.item4 == Signed
+    assert A._names == ('item0', 'item1', 'item2', 'item3', 'item4')
+    a = malloc(A, immortal=True)
+    a[0] = 5
+    a[4] = 83
+    assert a[0] == 5
+    assert a[4] == 83
+    assert a.item4 == 83
+    py.test.raises(IndexError, "a[5] = 183")
+    py.test.raises(IndexError, "a[-1]")
+    assert len(a) == 5
+
+    S = GcStruct('S', ('n1', Signed),
+                      ('a', A),
+                      ('n2', Signed))
+    s = malloc(S)
+    s.a[3] = 17
+    assert s.a[3] == 17
+    assert len(s.a) == 5
+    py.test.raises(TypeError, "s.a = a")
+
+def test_direct_arrayitems():
+    for a in [malloc(GcArray(Signed), 5),
+              malloc(FixedSizeArray(Signed, 5), immortal=True)]:
+        a[0] = 0
+        a[1] = 10
+        a[2] = 20
+        a[3] = 30
+        a[4] = 40
+        b0 = direct_arrayitems(a)
+        b1 = direct_ptradd(b0, 1)
+        b2 = direct_ptradd(b1, 1)
+        b3 = direct_ptradd(b0, 3)
+        assert b0[0] == 0
+        assert b0[1] == 10
+        assert b0[4] == 40
+        assert b1[0] == 10
+        assert b1[1] == 20
+        assert b2[0] == 20
+        assert b2[1] == 30
+        assert b3[-2] == 10
+        assert b3[0] == 30
+        assert b3[1] == 40
+        assert b2[-2] == 0
+        assert b1[3] == 40
+        b2[0] = 23
+        assert a[2] == 23
+        b1[1] += 1
+        assert a[2] == 24
+        py.test.raises(IndexError, "b0[-1]")
+        py.test.raises(IndexError, "b3[2]")
+        py.test.raises(IndexError, "b1[4]")
+
+def test_direct_fieldptr():
+    S = GcStruct('S', ('x', Signed), ('y', Signed))
+    s = malloc(S)
+    a = direct_fieldptr(s, 'y')
+    a[0] = 34
+    assert s.y == 34
+    py.test.raises(IndexError, "a[1]")
+
+def test_odd_ints():
+    T = GcStruct('T')
+    S = GcStruct('S', ('t', T))
+    s = cast_int_to_ptr(Ptr(S), 21)
+    assert typeOf(s) == Ptr(S)
+    assert cast_ptr_to_int(s) == 21
+    t = cast_pointer(Ptr(T), s)
+    assert typeOf(t) == Ptr(T)
+    assert cast_ptr_to_int(t) == 21
+    assert s == cast_pointer(Ptr(S), t)
+
+def test_str_of_dead_ptr():
+    S = Struct('S', ('x', Signed))
+    T = GcStruct('T', ('s', S))
+    t = malloc(T)
+    s = t.s
+    del t
+    import gc
+    gc.collect()
+    repr(s)

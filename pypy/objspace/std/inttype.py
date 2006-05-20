@@ -3,6 +3,24 @@ from pypy.objspace.std.strutil import string_to_int, string_to_w_long, ParseStri
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import NoneNotWrapped
 
+# ____________________________________________________________
+
+from pypy.objspace.std.model import WITHSMALLINT
+if WITHSMALLINT:
+    def wrapint(x):
+        from pypy.objspace.std.smallintobject import W_SmallIntObject
+        try:
+            return W_SmallIntObject(x)
+        except OverflowError:
+            from pypy.objspace.std.intobject import W_IntObject
+            return W_IntObject(x)
+else:
+    def wrapint(x):
+        from pypy.objspace.std.intobject import W_IntObject
+        return W_IntObject(x)
+
+# ____________________________________________________________
+
 def retry_to_w_long(space, parser, base=0):
     parser.rewind()
     try:
@@ -81,9 +99,12 @@ def descr__new__(space, w_inttype, w_x=0, w_base=NoneNotWrapped):
                                  space.wrap(
                 "long int too large to convert to int"))          
         return w_longval
+    elif space.is_w(w_inttype, space.w_int):
+        # common case
+        return wrapint(value)
     else:
         w_obj = space.allocate_instance(W_IntObject, w_inttype)
-        W_IntObject.__init__(w_obj, space, value)
+        W_IntObject.__init__(w_obj, value)
         return w_obj
 
 # ____________________________________________________________
@@ -99,3 +120,4 @@ non-string. If the argument is outside the integer range a long object
 will be returned instead.''',
     __new__ = newmethod(descr__new__),
     )
+int_typedef.custom_hash = True

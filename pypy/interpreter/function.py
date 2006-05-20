@@ -169,6 +169,25 @@ class Function(Wrappable):
     def descr_function_repr(self):
         return self.getrepr(self.space, 'function %s' % (self.name,))
 
+    def descr_function__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('func_new')
+        w        = space.wrap
+        if self.closure is None:
+            w_closure = space.w_None
+        else:
+            w_closure = space.newtuple([w(cell) for cell in self.closure])
+        tup      = [
+            w(self.code),
+            self.w_func_globals,
+            w(self.name),
+            space.newtuple(self.defs_w),
+            w_closure,
+        ]
+        return space.newtuple([new_inst, space.newtuple(tup)])
+
     def fget_func_defaults(space, self):
         values_w = self.defs_w
         if not values_w:
@@ -366,10 +385,36 @@ class Method(Wrappable):
         other = space.interpclass_w(w_other)
         if not isinstance(other, Method):
             return space.w_False
-        if not space.is_w(self.w_instance, other.w_instance):
-            return space.w_False
+        if self.w_instance is None:
+            if other.w_instance is not None:
+                return space.w_False
+        else:
+            if other.w_instance is None:
+                return space.w_False
+            if not space.is_w(self.w_instance, other.w_instance):
+                return space.w_False
         return space.eq(self.w_function, other.w_function)
 
+    def descr_method_hash(self):
+        space = self.space
+        w_result = space.hash(self.w_function)
+        if self.w_instance is not None:
+            w_result = space.xor(w_result, space.hash(self.w_instance))
+        return w_result
+
+    def descr_method__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('method_new')
+        w        = space.wrap
+        w_instance = self.w_instance or space.w_None
+        if space.is_w( self.w_class, space.w_None ):
+            tup = [self.w_function, w_instance]
+        else:
+            tup = [self.w_function, w_instance, self.w_class]
+        return space.newtuple([new_inst, space.newtuple(tup)])
+        
 class StaticMethod(Wrappable):
     """A static method.  Note that there is one class staticmethod at
     app-level too currently; this is only used for __new__ methods."""

@@ -41,7 +41,7 @@ def my_contains(seq=seqtype, elem=anytype):
     return elem in seq
 
 def is_one_or_two(n=int):
-    return n in (1, 2)
+    return n in [1, 2]
 
 def two_plus_two():
     """Array test"""
@@ -622,6 +622,9 @@ def t_isinstance(x, y):
 
 def t_issubclass(x, y):
     return issubclass(type(x), (int, long)) and issubclass(type(y), int)
+
+def t_neg_long():
+    return -132L
 
 
 # --------------------(Currently) Non runnable Functions ---------------------

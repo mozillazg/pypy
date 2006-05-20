@@ -3,13 +3,14 @@ from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Ptr, PyObject, ContainerType, GcArray, GcStruct, \
-     RuntimeTypeInfo, getRuntimeTypeInfo
+     RuntimeTypeInfo, getRuntimeTypeInfo, top_container
 from pypy.rpython.memory import gctransform
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 PyObjPtr = Ptr(PyObject)
 
-class BasicGcPolicy:
+class BasicGcPolicy(object):
+    requires_stackless = False
     
     def __init__(self, db, thread_enabled=False):
         self.db = db
@@ -33,6 +34,9 @@ class BasicGcPolicy:
     def array_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
 
+    def struct_after_definition(self, defnode):
+        return []
+
     def gc_libraries(self):
         return []
 
@@ -40,18 +44,18 @@ class BasicGcPolicy:
         return []
 
     def pre_gc_code(self):
-        return []
+        return ['typedef void *GC_hidden_pointer;']
 
     def gc_startup_code(self):
         return []
 
-    def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op, err):
+    def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
         if expr == 'NULL':
             return ''
         return 'Py_XINCREF(%s);' % expr
 
-    def OP_GC_POP_ALIVE_PYOBJ(self, funcgen, op, err):
+    def OP_GC_POP_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
         return 'Py_XDECREF(%s);' % expr
 
@@ -101,40 +105,36 @@ class RefcountingGcPolicy(BasicGcPolicy):
 
     # zero malloc impl
 
-    def zero_malloc(self, TYPE, esize, eresult, err):
+    def zero_malloc(self, TYPE, esize, eresult):
         assert TYPE._gcstatus()   # we don't really support this
-        return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize,
-                                                eresult,
-                                                err)
+        return 'OP_ZERO_MALLOC(%s, %s);' % (esize,
+                                            eresult)
 
-    def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op, err):
+    def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op):
         args = [funcgen.expr(v) for v in op.args]
         line = '%s(%s);' % (args[0], ', '.join(args[1:]))
         return line	
     
-    def OP_GC_FREE(self, funcgen, op, err):
+    def OP_GC_FREE(self, funcgen, op):
         args = [funcgen.expr(v) for v in op.args]
         return 'OP_FREE(%s);' % (args[0], )    
 
-    def OP_GC_FETCH_EXCEPTION(self, funcgen, op, err):
+    def OP_GC_FETCH_EXCEPTION(self, funcgen, op):
         result = funcgen.expr(op.result)
-        return ('%s = rpython_exc_value;\n'
-                '_RPySetException(NULL, NULL)') % (result, )
+        return ('%s = RPyFetchExceptionValue();\n'
+                'RPyClearException();') % (result, )
 
-    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op, err):
+    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op):
         argh = funcgen.expr(op.args[0])
-        # XXX uses officially bad fishing
-        # see src/exception.h
-        return 'if (%s != NULL) RPyRaiseException(%s->o_typeptr, %s);' % (argh, argh, argh)
+        return 'if (%s != NULL) RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(%s), %s);' % (argh, argh, argh)
 
-    def OP_GC__COLLECT(self, funcgen, op, err):
+    def OP_GC__COLLECT(self, funcgen, op):
         return ''
 
 
 class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
     nodekind = 'refcnt rtti'
     globalcontainer = True
-    includes = ()
     typename = 'void (@)(void *)'
 
     def __init__(self, db, T, obj):
@@ -159,6 +159,9 @@ class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
 class BoehmInfo:
     finalizer = None
 
+    # for MoreExactBoehmGcPolicy
+    malloc_exact = False
+
 class BoehmGcPolicy(BasicGcPolicy):
     transformerclass = gctransform.BoehmGCTransformer
 
@@ -181,16 +184,15 @@ class BoehmGcPolicy(BasicGcPolicy):
     def rtti_node_factory(self):
         return BoehmGcRuntimeTypeInfo_OpaqueNode
 
-    def zero_malloc(self, TYPE, esize, eresult, err):
+    def zero_malloc(self, TYPE, esize, eresult):
         gcinfo = self.db.gettypedefnode(TYPE).gcinfo
         assert TYPE._gcstatus()   # _is_atomic() depends on this!
         is_atomic = TYPE._is_atomic()
         is_varsize = TYPE._is_varsize()
-        result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %d, %d, %s);' % (esize,
-                                                                eresult,
-                                                                is_atomic,
-                                                                is_varsize,
-                                                                err)
+        result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %d, %d);' % (esize,
+                                                            eresult,
+                                                            is_atomic,
+                                                            is_varsize)
         if gcinfo and gcinfo.finalizer:
             result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
                        % (eresult, gcinfo.finalizer))
@@ -206,11 +208,16 @@ class BoehmGcPolicy(BasicGcPolicy):
             yield "#define _REENTRANT 1"
             yield "#define GC_LINUX_THREADS 1"
             yield "#define GC_REDIRECT_TO_LOCAL 1"
+            yield "#define GC_I_HIDE_POINTERS 1"
             yield '#include <gc/gc_local_alloc.h>'
             yield '#define USING_BOEHM_GC'
         else:
+            yield "#define GC_I_HIDE_POINTERS 1"
             yield '#include <gc/gc.h>'
             yield '#define USING_BOEHM_GC'
+
+    def pre_gc_code(self):
+        return []
 
     def gc_startup_code(self):
         if sys.platform == 'win32':
@@ -220,25 +227,21 @@ class BoehmGcPolicy(BasicGcPolicy):
         yield 'GC_init();'
 
 
-    def OP_GC_FETCH_EXCEPTION(self, funcgen, op, err):
+    def OP_GC_FETCH_EXCEPTION(self, funcgen, op):
         result = funcgen.expr(op.result)
-        return ('%s = rpython_exc_value;\n'
-                '_RPySetException(NULL, NULL)') % (result, )
+        return ('%s = RPyFetchExceptionValue();\n'
+                'RPyClearException();') % (result, )
 
-    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op, err):
+    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op):
         argh = funcgen.expr(op.args[0])
-        # XXX uses officially bad fishing
-        # see src/exception.h
-        return 'if (%s != NULL) RPyRaiseException(%s->o_typeptr, %s);' % (argh, argh, argh)
+        return 'if (%s != NULL) RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(%s), %s);' % (argh, argh, argh)
 
-    def OP_GC__COLLECT(self, funcgen, op, err):
+    def OP_GC__COLLECT(self, funcgen, op):
         return 'GC_gcollect(); GC_invoke_finalizers();'
-
 
 class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
     nodekind = 'boehm rtti'
     globalcontainer = True
-    includes = ()
     typename = 'char @'
 
     def __init__(self, db, T, obj):
@@ -258,6 +261,81 @@ class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
     def implementation(self):
         yield 'char %s  /* uninitialized */;' % self.name
 
+
+class MoreExactBoehmGcPolicy(BoehmGcPolicy):
+    """ policy to experiment with giving some layout information to boehm. Use
+    new class to prevent breakage. """
+
+    def __init__(self, db, thread_enabled=False):
+        super(MoreExactBoehmGcPolicy, self).__init__(db, thread_enabled)
+        self.exactly_typed_structs = {}
+
+    def get_descr_name(self, defnode):
+        # XXX somewhat illegal way of introducing a name
+        return '%s__gc_descr__' % (defnode.name, )
+
+    def pre_pre_gc_code(self):
+        for line in super(MoreExactBoehmGcPolicy, self).pre_pre_gc_code():
+            yield line
+        yield "#include <gc/gc_typed.h>"
+
+    def struct_setup(self, structdefnode, rtti):
+        self.setup_gcinfo(structdefnode)
+        T = structdefnode.STRUCT
+        if T._is_atomic():
+            malloc_exact = False
+        else:
+            if T._is_varsize():
+                malloc_exact = T._flds[T._arrayfld]._is_atomic()
+            else:
+                malloc_exact = True
+        if malloc_exact:
+            if structdefnode.gcinfo is None:
+                structdefnode.gcinfo = BoehmInfo()
+            structdefnode.gcinfo.malloc_exact = True
+            self.exactly_typed_structs[structdefnode.STRUCT] = structdefnode
+
+    def struct_after_definition(self, defnode):
+        if defnode.gcinfo and defnode.gcinfo.malloc_exact:
+            yield 'GC_descr %s;' % (self.get_descr_name(defnode), )
+
+    def gc_startup_code(self):
+        for line in super(MoreExactBoehmGcPolicy, self).gc_startup_code():
+            yield line
+        for TYPE, defnode in self.exactly_typed_structs.iteritems():
+            T = defnode.gettype().replace("@", "")
+            yield "{"
+            yield "GC_word T_bitmap[GC_BITMAP_SIZE(%s)] = {0};" % (T, )
+            for field in TYPE._flds:
+                if getattr(TYPE, field) == lltype.Void:
+                    continue
+                yield "GC_set_bit(T_bitmap, GC_WORD_OFFSET(%s, %s));" % (
+                    T, defnode.c_struct_field_name(field))
+            yield "%s = GC_make_descriptor(T_bitmap, GC_WORD_LEN(%s));" % (
+                self.get_descr_name(defnode), T)
+            yield "}"
+
+    def zero_malloc(self, TYPE, esize, eresult):
+        defnode = self.db.gettypedefnode(TYPE)
+        gcinfo = defnode.gcinfo
+        if gcinfo:
+            if not gcinfo.malloc_exact:
+                assert TYPE._gcstatus()   # _is_atomic() depends on this!
+                is_atomic = TYPE._is_atomic()
+                is_varsize = TYPE._is_varsize()
+                result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %d, %d);' % (
+                    esize, eresult, is_atomic, is_varsize)
+            else:
+                result = '%s = GC_MALLOC_EXPLICITLY_TYPED(%s, %s);' % (
+                    eresult, esize, self.get_descr_name(defnode))
+            if gcinfo.finalizer:
+                result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
+                       % (eresult, gcinfo.finalizer))
+        else:
+            return super(MoreExactBoehmGcPolicy, self).zero_malloc(
+                TYPE, esize, eresult)
+        return result
+
 # to get an idea how it looks like with no refcount/gc at all
 
 class NoneGcPolicy(BoehmGcPolicy):
@@ -269,31 +347,45 @@ class NoneGcPolicy(BoehmGcPolicy):
     def pre_pre_gc_code(self):
         yield '#define USING_NO_GC'
 
-# the framework GC policy -- we are very optimistic tonight
 
-class FrameworkGcPolicy(NoneGcPolicy):
+class FrameworkGcPolicy(BasicGcPolicy):
     transformerclass = gctransform.FrameworkGCTransformer
+
+    def struct_setup(self, structdefnode, rtti):
+        pass
+
+    def array_setup(self, arraydefnode):
+        pass
+
+    def rtti_type(self):
+        return BoehmGcRuntimeTypeInfo_OpaqueNode.typename
+
+    def rtti_node_factory(self):
+        return BoehmGcRuntimeTypeInfo_OpaqueNode
 
     def gc_startup_code(self):
         fnptr = self.db.gctransformer.frameworkgc_setup_ptr.value
         yield '%s();' % (self.db.get(fnptr),)
 
-    def pre_gc_code(self):
-        return []
-
-    def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op, err):
+    def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
         args = [funcgen.expr(v) for v in op.args]
-        return '%s = %s; /* for moving GCs */' % (args[1], args[0])
+        # XXX this more or less assumes mark-and-sweep gc
+        return ''
+        # proper return value for moving GCs:
+        # %s = %s; /* for moving GCs */' % (args[1], args[0])
 
     def common_gcheader_definition(self, defnode):
-        return [('flags', lltype.Signed), ('typeid', lltype.Signed)]
+        return defnode.db.gctransformer.gc_fields()
 
     def common_gcheader_initdata(self, defnode):
-        # this more or less assumes mark-and-sweep gc
-        o = defnode.obj
-        while True:
-            n = o._parentstructure()
-            if n is None:
-                break
-            o = n
-        return [0, defnode.db.gctransformer.id_of_type[typeOf(o)]]
+        o = top_container(defnode.obj)
+        return defnode.db.gctransformer.gc_field_values_for(o)
+
+    def zero_malloc(self, TYPE, esize, eresult):
+        assert TYPE._gcstatus()   # we don't really support this
+        return 'OP_ZERO_MALLOC(%s, %s);' % (esize,
+                                            eresult)
+
+class StacklessFrameworkGcPolicy(FrameworkGcPolicy):
+    transformerclass = gctransform.StacklessFrameworkGCTransformer
+    requires_stackless = True

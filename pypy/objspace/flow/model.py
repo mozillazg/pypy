@@ -67,36 +67,43 @@ class FunctionGraph(object):
         return getsource(self.func)
     source = roproperty(getsource)
 
-    def __repr__(self):
+    def __str__(self):
         if hasattr(self, 'func'):
-            fnrepr = nice_repr_for_func(self.func, self.name)
+            return nice_repr_for_func(self.func, self.name)
         else:
-            fnrepr = self.name
-        return '<FunctionGraph of %s at 0x%x>' % (fnrepr, uid(self))
+            return self.name
+
+    def __repr__(self):
+        return '<FunctionGraph of %s at 0x%x>' % (self, uid(self))
 
     def iterblocks(self):
         block = self.startblock
         yield block
-        seen = {id(block): True}
+        seen = {block: True}
         stack = list(block.exits[::-1])
         while stack:
             block = stack.pop().target
-            if id(block) not in seen:
+            if block not in seen:
                 yield block
-                seen[id(block)] = True
+                seen[block] = True
                 stack += block.exits[::-1]
 
     def iterlinks(self):
         block = self.startblock
-        seen = {id(block): True}
+        seen = {block: True}
         stack = list(block.exits[::-1])
         while stack:
             link = stack.pop()
             yield link
             block = link.target
-            if id(block) not in seen:
-                seen[id(block)] = True
+            if block not in seen:
+                seen[block] = True
                 stack += block.exits[::-1]
+
+    def iterblockops(self):
+        for block in self.iterblocks():
+            for op in block.operations:
+                yield block, op
 
     def show(self):
         from pypy.translator.tool.graphpage import SingleGraphPage
@@ -192,14 +199,10 @@ class Block(object):
         return txt
 
     def reallyalloperations(self):
-        "Iterate over all operations, including cleanup sub-operations."
+        """Iterate over all operations, including cleanup sub-operations.
+        XXX remove!"""
         for op in self.operations:
             yield op
-            cleanup = getattr(op, 'cleanup', None)
-            if cleanup is not None:
-                for lst in cleanup:
-                    for subop in lst:
-                        yield subop
 
     def getvariables(self):
         "Return all variables mentioned in this Block."
@@ -333,21 +336,14 @@ class Constant(Hashable):
     __reduce__ = __reduce_ex__
 
 
-NOCLEANUP = object()
-
 class SpaceOperation(object):
-    __slots__ = "opname args result offset cleanup".split()
+    __slots__ = "opname args result offset".split()
 
-    def __init__(self, opname, args, result, offset=-1, cleanup=NOCLEANUP):
+    def __init__(self, opname, args, result, offset=-1):
         self.opname = intern(opname)      # operation name
         self.args   = list(args)  # mixed list of var/const
         self.result = result      # either Variable or Constant instance
         self.offset = offset      # offset in code string
-        if cleanup is not NOCLEANUP:
-            # None or a pair of tuples of operations:
-            # 0. operations to perform in all cases after 'self'
-            # 1. more operations to perform only in case of exception
-            self.cleanup = cleanup
 
     def __eq__(self, other):
         return (self.__class__ is other.__class__ and 
@@ -362,17 +358,8 @@ class SpaceOperation(object):
         return hash((self.opname,tuple(self.args),self.result))
 
     def __repr__(self):
-        s = "%r = %s(%s)" % (self.result, self.opname, ", ".join(map(repr, self.args)))
-        cleanup = getattr(self, 'cleanup', None)
-        if cleanup is not None:
-            lines = [s]
-            for case, lst in zip(("  finally: ", "   except: "), cleanup):
-                indent = case
-                for subop in lst:
-                    lines.append(indent + repr(subop))
-                    indent = ' ' * len(indent)
-            s = '\n'.join(lines)
-        return s
+        return "%r = %s(%s)" % (self.result, self.opname,
+                                ", ".join(map(repr, self.args)))
 
     def __reduce_ex__(self, *args):
         # avoid lots of useless list entities
@@ -494,12 +481,14 @@ def mkentrymap(funcgraph):
         lst.append(link)
     return result
 
-def copygraph(graph):
+def copygraph(graph, shallow=False):
     "Make a copy of a flow graph."
     blockmap = {}
     varmap = {}
 
     def copyvar(v):
+        if shallow:
+            return v
         if isinstance(v, Variable):
             try:
                 return varmap[v]
@@ -517,14 +506,14 @@ def copygraph(graph):
             newblock.operations = ()
         else:
             def copyoplist(oplist):
+                if shallow:
+                    return oplist[:]
                 result = []
                 for op in oplist:
                     copyop = SpaceOperation(op.opname,
                                             [copyvar(v) for v in op.args],
                                             copyvar(op.result))
                     copyop.offset = op.offset
-                    if hasattr(op, 'cleanup'):
-                        copyop.cleanup = copyoplist(op.cleanup)
                     result.append(copyop)
                 return result
             newblock.operations = copyoplist(block.operations)

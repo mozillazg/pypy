@@ -24,23 +24,8 @@ def rtype_builtin_isinstance(hop):
         cnone = hop.inputconst(rlist, None)
         return hop.genop('ptr_ne', [vlist, cnone], resulttype=lltype.Bool)
 
-    class_repr = rclass.get_type_repr(hop.rtyper)
     assert isinstance(hop.args_r[0], rclass.InstanceRepr)
-    instance_repr = hop.args_r[0].common_repr()
-
-    v_obj, v_cls = hop.inputargs(instance_repr, class_repr)
-    if isinstance(v_cls, Constant):
-        cls = v_cls.value
-        if cls.subclassrange_max == cls.subclassrange_min + 1:
-            # a class with no subclass
-            return hop.gendirectcall(rclass.ll_isinstance_exact, v_obj, v_cls)
-        else:
-            minid = hop.inputconst(lltype.Signed, cls.subclassrange_min)
-            maxid = hop.inputconst(lltype.Signed, cls.subclassrange_max)
-            return hop.gendirectcall(rclass.ll_isinstance_const, v_obj, minid,
-                                     maxid)
-    else:
-        return hop.gendirectcall(rclass.ll_isinstance, v_obj, v_cls)
+    return hop.args_r[0].rtype_isinstance(hop)
 
 def ll_instantiate(typeptr):   # NB. used by rpbc.ClassesPBCRepr as well
     my_instantiate = typeptr.instantiate
@@ -56,10 +41,26 @@ def rtype_instantiate(hop):
         return hop.genop('cast_pointer', [v_inst],    # v_type implicit in r_result
                          resulttype = hop.r_result.lowleveltype)
 
-
     classdef = s_class.descriptions.keys()[0].getuniqueclassdef()
     return rclass.rtype_new_instance(hop.rtyper, classdef, hop.llops)
+
+def rtype_builtin_hasattr(hop):
+    if hop.s_result.is_constant():
+        return hop.inputconst(lltype.Bool, hop.s_result.const)
+    if hop.args_r[0] == pyobj_repr:
+        v_obj, v_name = hop.inputargs(pyobj_repr, pyobj_repr)
+        c = hop.inputconst(pyobj_repr, hasattr)
+        v = hop.genop('simple_call', [c, v_obj, v_name], resulttype = pyobj_repr)
+        return hop.llops.convertvar(v, pyobj_repr, bool_repr)
+    raise TyperError("hasattr is only suported on a constant or on PyObject")
+
+def rtype_builtin___import__(hop):
+    args_v = hop.inputargs(*[pyobj_repr for ign in hop.args_r])
+    c = hop.inputconst(pyobj_repr, __import__)
+    return hop.genop('simple_call', [c] + args_v, resulttype = pyobj_repr)
 
 BUILTIN_TYPER = {}
 BUILTIN_TYPER[objectmodel.instantiate] = rtype_instantiate
 BUILTIN_TYPER[isinstance] = rtype_builtin_isinstance
+BUILTIN_TYPER[hasattr] = rtype_builtin_hasattr
+BUILTIN_TYPER[__import__] = rtype_builtin___import__

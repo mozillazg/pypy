@@ -52,7 +52,7 @@ def test_simple_backendopt():
     t.backendopt_c()
 
     t = Translation(f, [int, int])
-    py.test.raises(Exception, "t.backendopt()")
+    t.backendopt()
 
 def test_simple_source():
     def f(x, y):
@@ -95,19 +95,6 @@ def test_disable_logic():
     t.source_c()
 
     assert 'backendopt' not in t.driver.done
-
-    t = Translation(f, [int, int])
-    t.disable(['annotate'])
-    t.source_c()
-
-    assert 'annotate' not in t.driver.done and 'rtype' not in t.driver.done
-
-    t = Translation(f, [int, int])
-    t.disable(['rtype'])
-    t.source_c()
-
-    assert 'annotate' in t.driver.done
-    assert 'rtype' not in t.driver.done and 'backendopt' not in t.driver.done
 
 def test_simple_compile_c():
     def f(x,y):

@@ -24,9 +24,9 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.function import StaticMethod
 
 from pypy.module.stackless.stackless_flags import StacklessFlags
-from pypy.module.stackless.interp_coroutine import Coroutine, BaseCoState
+from pypy.module.stackless.interp_coroutine import Coroutine, BaseCoState, AbstractThunk
 
-class _AppThunk(object):
+class _AppThunk(AbstractThunk):
 
     def __init__(self, space, costate, w_obj, args):
         self.space = space
@@ -45,11 +45,13 @@ class _AppThunk(object):
 
 class AppCoroutine(Coroutine): # XXX, StacklessFlags):
 
-    def __init__(self, space):
+    def __init__(self, space, is_main=False):
         self.space = space
         state = self._get_state(space)
         Coroutine.__init__(self, state)
         self.flags = 0
+        if not is_main:
+             space.getexecutioncontext().subcontext_new(self)
 
     def descr_method__new__(space, w_subtype):
         co = space.allocate_instance(AppCoroutine, w_subtype)
@@ -75,7 +77,10 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
             raise OperationError(space.w_ValueError, space.wrap(
                 "cannot switch to an unbound Coroutine"))
         state = self.costate
+        ec = space.getexecutioncontext()
+        ec.subcontext_switch(state.current, self)
         self.switch()
+        ec.subcontext_switch(state.last, state.current)
         w_ret, state.w_tempval = state.w_tempval, space.w_None
         return w_ret
 
@@ -139,4 +144,4 @@ class AppCoState(BaseCoState):
         self.space = space
         
     def post_install(self):
-        self.current = self.main = self.last = AppCoroutine(self.space)
+        self.current = self.main = self.last = AppCoroutine(self.space, is_main=True)

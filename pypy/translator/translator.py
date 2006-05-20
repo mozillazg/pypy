@@ -34,6 +34,8 @@ class TranslationContext(object):
         self.callgraph = {}   # {opaque_tag: (caller-graph, callee-graph)}
         self._prebuilt_graphs = {}   # only used by the pygame viewer
 
+        self._implicitly_called_by_externals = []
+
     def buildflowgraph(self, func):
         """Get the flow graph for a function."""
         if not isinstance(func, types.FunctionType):
@@ -46,6 +48,8 @@ class TranslationContext(object):
                 log.start(nice_repr_for_func(func))
             space = FlowObjSpace()
             space.__dict__.update(self.flags)   # xxx push flags there
+            if self.annotator:
+                self.annotator.policy._adjust_space_config(space)
             graph = space.build_flow(func)
             if self.flags.get('simplifying'):
                 simplify_graph(graph)

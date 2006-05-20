@@ -2,13 +2,13 @@ import types
 from pypy.objspace.flow.model import FunctionGraph
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.c.support import cdecl
-from pypy.rpython.rstr import STR
-from pypy.rpython import rlist, rstr
+from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.lltypesystem import rstr
+from pypy.rpython.lltypesystem import rlist
 from pypy.rpython.module import ll_os, ll_time, ll_math, ll_strtod
 from pypy.rpython.module import ll_stackless, ll_stack, ll_tsc
 from pypy.rpython.module import ll_trans
 from pypy.module.thread.rpython import ll_thread
-from pypy.module._socket.rpython import ll__socket
 
 # table of functions hand-written in src/ll_*.h
 EXTERNALS = {
@@ -71,18 +71,6 @@ EXTERNALS = {
     ll_stackless.ll_stackless_stack_frames_depth: 'LL_stackless_stack_frames_depth',
     ll_stack.ll_stack_unwind: 'LL_stack_unwind',
     ll_stack.ll_stack_too_big: 'LL_stack_too_big',
-    ll__socket.ll__socket_gethostname:   'LL__socket_gethostname',
-    ll__socket.ll__socket_gethostbyname: 'LL__socket_gethostbyname',
-    ll__socket.ll__socket_getaddrinfo:   'LL__socket_getaddrinfo',
-    ll__socket.ll__socket_nextaddrinfo:  'LL__socket_nextaddrinfo',
-    ll__socket.ll__socket_freeaddrinfo:  'LL__socket_freeaddrinfo',
-    ll__socket.ll__socket_ntohs: 'LL__socket_ntohs',
-    ll__socket.ll__socket_htons: 'LL__socket_htons',
-    ll__socket.ll__socket_htonl: 'LL__socket_htonl',
-    ll__socket.ll__socket_ntohl: 'LL__socket_htonl',
-    ll__socket.ll__socket_newsocket: 'LL__socket_newsocket',
-    ll__socket.ll__socket_connect: 'LL__socket_connect',
-    ll__socket.ll__socket_getpeername: 'LL__socket_getpeername',
     }
 
 #______________________________________________________
@@ -113,8 +101,6 @@ def predeclare_common_types(db, rtyper, optimize=True):
     yield ('RPyFREXP_RESULT', ll_math.FREXP_RESULT)
     yield ('RPyMODF_RESULT', ll_math.MODF_RESULT)
     yield ('RPySTAT_RESULT', ll_os.STAT_RESULT)
-    yield ('RPySOCKET_ADDRINFO', ll__socket.ADDRINFO_RESULT)
-    yield ('RPySOCKET_SOCKNAME', ll__socket.SOCKNAME)
 
 def predeclare_utility_functions(db, rtyper, optimize=True):
     # Common utility functions
@@ -153,69 +139,22 @@ def predeclare_utility_functions(db, rtyper, optimize=True):
 
 
 def get_extfunc_helper_ptrs(db, rtyper, optimize=True):
-    # XXX need some way of finding out if the externals needing have
-    # been annotated -- db.externalfuncs gets filled out by
-    # select_function_code_generator which is called from
-    # FuncNode.__init__ (probably...) which is after this gets called.
-    optimize = False 
-    def annotate(func, *argtypes):
-        fptr = rtyper.annotate_helper(func, argtypes)
+
+    def annotate(func, args):
+        fptr = rtyper.annotate_helper(func, args)
         db.helper2ptr[func] = fptr
         return (func.__name__, fptr)
 
-    r = []
-
-    if ll_math.ll_math_frexp in db.externalfuncs or not optimize:
-        r.append(annotate(ll_math.ll_frexp_result, lltype.Float, lltype.Signed))
-        
-    if ll_math.ll_math_modf in db.externalfuncs or not optimize:
-        r.append(annotate(ll_math.ll_modf_result, lltype.Float, lltype.Float))
-
-    if (ll_os.ll_os_stat in db.externalfuncs or
-        ll_os.ll_os_fstat in db.externalfuncs or
-        not optimize):
-        r.append(annotate(ll_os.ll_stat_result, *([lltype.Signed] * 10)))
-
-    if (ll__socket.ll__socket_nextaddrinfo in db.externalfuncs or
-        not optimize):
-        args = [lltype.Signed, lltype.Signed, lltype.Signed, lltype.Ptr(STR),
-                lltype.Ptr(STR), lltype.Signed, lltype.Signed, lltype.Signed]
-        r.append(annotate(ll__socket.ll__socket_addrinfo, *args))
-        
-    if (ll__socket.ll__socket_getpeername in db.externalfuncs or
-        not optimize):
-        args = [lltype.Ptr(STR), lltype.Signed, lltype.Signed, lltype.Signed]
-        r.append(annotate(ll__socket.ll__socket_sockname, *args))
-
-    return r
+    for func, args, symb in db.translator._implicitly_called_by_externals:
+        yield annotate(func, args)
 
 def predeclare_extfunc_helpers(db, rtyper, optimize=True):
-    def decl(f):
-        return (f.__name__, db.helper2ptr[f])
-    
-    if ll_math.ll_math_frexp in db.externalfuncs or not optimize:
-        yield decl(ll_math.ll_frexp_result)
-        yield ('LL_NEED_MATH_FREXP', 1)
-        
-    if ll_math.ll_math_modf in db.externalfuncs or not optimize:
-        yield decl(ll_math.ll_modf_result)
-        yield ('LL_NEED_MATH_MODF', 1)
+    def decl(func):
+        return (func.__name__, db.helper2ptr[func])
 
-    if (ll_os.ll_os_stat in db.externalfuncs or
-        ll_os.ll_os_fstat in db.externalfuncs or
-        not optimize):
-        yield decl(ll_os.ll_stat_result)
-        yield ('LL_NEED_OS_STAT', 1)
-
-    if (ll__socket.ll__socket_nextaddrinfo in db.externalfuncs or
-        not optimize):
-        yield decl(ll__socket.ll__socket_addrinfo)
-        yield ('LL_NEED__SOCKET_ADDRINFO', 1)
-        
-    if (ll__socket.ll__socket_getpeername in db.externalfuncs or
-        not optimize):
-        yield decl(ll__socket.ll__socket_sockname)
-        yield ('LL_NEED__SOCKET_SOCKNAME', 1)
+    for func, args, symb in db.translator._implicitly_called_by_externals:
+        yield decl(func)
+        yield ('LL_NEED_' + symb, 1)
 
 def predeclare_extfuncs(db, rtyper, optimize=True):
     modules = {}
@@ -233,12 +172,13 @@ def predeclare_extfuncs(db, rtyper, optimize=True):
         if modname not in modules:
             modules[modname] = True
             yield 'LL_NEED_%s' % modname.upper(), 1
-        funcptr = lltype._ptr(lltype.Ptr(lltype.typeOf(funcobj)), funcobj) # hum
+        funcptr = funcobj._as_ptr()
         yield c_name, funcptr
 
 def predeclare_exception_data(db, rtyper, optimize=True):
     # Exception-related types and constants
     exceptiondata = rtyper.getexceptiondata()
+    exctransformer = db.exctransformer
 
     yield ('RPYTHON_EXCEPTION_VTABLE', exceptiondata.lltype_of_exception_type)
     yield ('RPYTHON_EXCEPTION',        exceptiondata.lltype_of_exception_value)
@@ -248,6 +188,12 @@ def predeclare_exception_data(db, rtyper, optimize=True):
     yield ('RPYTHON_RAISE_OSERROR',    exceptiondata.fn_raise_OSError)
     if not db.standalone:
         yield ('RPYTHON_PYEXCCLASS2EXC', exceptiondata.fn_pyexcclass2exc)
+
+    yield ('RPyExceptionOccurred',     exctransformer.rpyexc_occured_ptr.value)
+    yield ('RPyFetchExceptionType',    exctransformer.rpyexc_fetch_type_ptr.value)
+    yield ('RPyFetchExceptionValue',   exctransformer.rpyexc_fetch_value_ptr.value)
+    yield ('RPyClearException',        exctransformer.rpyexc_clear_ptr.value)
+    yield ('RPyRaiseException',        exctransformer.rpyexc_raise_ptr.value)
 
     for pyexccls in exceptiondata.standardexceptions:
         exc_llvalue = exceptiondata.fn_pyexcclass2exc(

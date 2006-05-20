@@ -13,7 +13,7 @@ def sum(sequence, total=0):
 
 # ____________________________________________________________
 
-def apply(function, args, kwds={}):
+def apply(function, args=(), kwds={}):
     """call a function (or other callable object) and return its result"""
     return function(*args, **kwds)
 
@@ -362,6 +362,18 @@ class xrange_iterator(object):
     def __len__(self):
         return self._remaining
 
+    def __reduce__(self):
+        tup = (self._current, self._remaining, self._step)
+        return (make_xrange_iterator, tup)
+
+def make_xrange_iterator(*args):
+    return xrange_iterator(*args)
+    
+def _install_pickle_support_for_xrange_iterator():
+    import _pickle_support
+    make_xrange_iterator.__module__ = '_pickle_support'
+    _pickle_support.make_xrange_iterator = make_xrange_iterator
+ 
 # ____________________________________________________________
 
 def sorted(lst, cmp=None, key=None, reverse=None):
@@ -406,3 +418,21 @@ class reversed_iterator(object):
         if self.remaining > len(self.seq):
             self.remaining = 0
         return self.remaining
+
+    def __reduce__(self):
+        tup = (self.seq, self.remaining)
+        return (make_reversed_iterator, tup)
+
+def make_reversed_iterator(seq, remaining):
+    ri = reversed_iterator.__new__(reversed_iterator)
+    ri.seq = seq
+    #or "ri = reversed_iterator(seq)" but that executes len(seq)
+    ri.remaining = remaining
+    return ri
+
+def _install_pickle_support_for_reversed_iterator():
+    import _pickle_support
+    make_reversed_iterator.__module__ = '_pickle_support'
+    _pickle_support.make_reversed_iterator = make_reversed_iterator
+
+

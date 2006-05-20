@@ -4,17 +4,22 @@ log = log.codewriter
 
 DEFAULT_TAIL     = ''       #/tail
 DEFAULT_CCONV    = 'fastcc'    #ccc/fastcc
+DEFAULT_LINKAGE  = 'internal '       #/internal (disabled for now because of the JIT)
 
 class CodeWriter(object): 
-    def __init__(self, file, db): 
+    def __init__(self, file, db, tail=DEFAULT_TAIL, cconv=DEFAULT_CCONV,
+                                 linkage=DEFAULT_LINKAGE): 
         self.file = file
         self.word_repr = db.get_machine_word()
+        self.tail = tail
+        self.cconv = cconv
+        self.linkage = linkage
 
     def close(self): 
         self.file.close()
 
     def _resolvetail(self, tail, cconv):
-        # from: http://llvm.cs.uiuc.edu/docs/LangRef.html
+        # from: http://llvm.org/docs/LangRef.html
         # The optional "tail" marker indicates whether the callee function
         # accesses any allocas or varargs in the caller. If the "tail" marker
         # is present, the function call is eligible for tail call
@@ -59,8 +64,10 @@ class CodeWriter(object):
         self.newline()
         self._append("    %s:" % name)
 
-    def globalinstance(self, name, typeandata):
-        self._append("%s = %s global %s" % (name, "internal", typeandata))
+    def globalinstance(self, name, typeandata, linkage=None):
+        if linkage is None:
+            linkage = self.linkage
+        self._append("%s = %sglobal %s" % (name, linkage, typeandata))
 
     def typedef(self, name, type_):
         self._append("%s = type %s" % (name, type_))
@@ -75,7 +82,9 @@ class CodeWriter(object):
         self.typedef(name, "%s (%s)" % (rettyperepr,
                                         ", ".join(argtypereprs)))
 
-    def declare(self, decl, cconv=DEFAULT_CCONV):
+    def declare(self, decl, cconv=None):
+        if cconv is None:
+            cconv = self.cconv
         self._append("declare %s %s" %(cconv, decl,))
 
     def startimpl(self):
@@ -99,9 +108,13 @@ class CodeWriter(object):
         self._indent("switch %s %s, label %%%s [%s ]"
                      % (intty, cond, defaultdest, labels))
 
-    def openfunc(self, decl, cconv=DEFAULT_CCONV): 
+    def openfunc(self, decl, cconv=None, linkage=None): 
+        if cconv is None:
+            cconv = self.cconv
+        if linkage is None:
+            linkage = self.linkage
         self.newline()
-        self._append("internal %s %s {" % (cconv, decl,))
+        self._append("%s%s %s {" % (linkage, cconv, decl,))
 
     def closefunc(self): 
         self._append("}") 
@@ -162,8 +175,12 @@ class CodeWriter(object):
         self._indent("unwind")
 
     def call(self, targetvar, returntype, functionref, argtypes, argrefs,
-             tail=DEFAULT_TAIL, cconv=DEFAULT_CCONV):
-
+             tail=None, cconv=None):
+        if tail is None:
+            tail = self.tail
+        if cconv is None:
+            cconv = self.cconv
+            
         tail = self._resolvetail(tail, cconv)        
         args = ", ".join(["%s %s" % item for item in zip(argtypes, argrefs)])
 

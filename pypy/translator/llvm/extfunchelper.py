@@ -2,8 +2,9 @@ import types
 from pypy.objspace.flow.model import FunctionGraph
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.c.support import cdecl
-from pypy.rpython.rstr import STR
-from pypy.rpython import rlist, rstr
+from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.lltypesystem import rstr
+from pypy.rpython.lltypesystem import rlist
 from pypy.rpython.module import ll_os, ll_time, ll_math, ll_strtod
 from pypy.rpython.module import ll_stackless, ll_stack
 from pypy.module.thread.rpython import ll_thread
@@ -181,7 +182,7 @@ def predeclare_extfuncs(db, rtyper, optimize=True):
         if modname not in modules:
             modules[modname] = True
             yield 'LL_NEED_%s' % modname.upper(), 1
-        funcptr = lltype._ptr(lltype.Ptr(lltype.typeOf(funcobj)), funcobj) # hum
+        funcptr = funcobj._as_ptr()
         yield c_name, funcptr
 
 def predeclare_exception_data(db, rtyper, optimize=True):

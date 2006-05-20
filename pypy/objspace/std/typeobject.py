@@ -2,6 +2,7 @@ from pypy.objspace.std.objspace import *
 from pypy.interpreter.function import Function, StaticMethod
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter import gateway
+from pypy.interpreter.typedef import weakref_descr
 from pypy.objspace.std.stdtypedef import std_dict_descr, issubtypedef, Member
 from pypy.objspace.std.objecttype import object_typedef
 from pypy.objspace.std.dictproxyobject import W_DictProxyObject
@@ -44,7 +45,7 @@ class W_TypeObject(W_Object):
 
     def __init__(w_self, space, name, bases_w, dict_w,
                  overridetypedef=None):
-        W_Object.__init__(w_self, space)
+        w_self.space = space
         w_self.name = name
         w_self.bases_w = bases_w
         w_self.dict_w = dict_w
@@ -60,6 +61,7 @@ class W_TypeObject(W_Object):
         if overridetypedef is not None:
             w_self.instancetypedef = overridetypedef
             w_self.hasdict = overridetypedef.hasdict
+            w_self.weakrefable = overridetypedef.weakrefable
             w_self.__flags__ = 0 # not a heaptype
             if overridetypedef.base is not None:
                 w_self.w_bestbase = space.gettypeobject(overridetypedef.base)
@@ -100,6 +102,7 @@ class W_TypeObject(W_Object):
                                                 instancetypedef.name))
             w_self.instancetypedef = instancetypedef
             w_self.hasdict = False
+            w_self.weakrefable = False
             hasoldstylebase = False
             w_most_derived_base_with_slots = None
             w_newstyle = None
@@ -121,6 +124,7 @@ class W_TypeObject(W_Object):
                                                             "multiple inheritance"))
                 w_self.hasdict = w_self.hasdict or w_base.hasdict
                 w_self.needsdel = w_self.needsdel or w_base.needsdel
+                w_self.weakrefable = w_self.weakrefable or w_base.weakrefable
             if not w_newstyle: # only classic bases
                 raise OperationError(space.w_TypeError,
                                      space.wrap("a new-style class can't have only classic bases"))
@@ -135,8 +139,10 @@ class W_TypeObject(W_Object):
                 w_self.w_bestbase = w_newstyle
 
             wantdict = True
+            wantweakref = True
             if '__slots__' in dict_w:
                 wantdict = False
+                wantweakref = False
 
                 w_slots = dict_w['__slots__']
                 if space.is_true(space.isinstance(w_slots, space.w_str)):
@@ -165,9 +171,17 @@ class W_TypeObject(W_Object):
                             raise OperationError(space.w_TypeError,
                                                  space.wrap("__dict__ slot disallowed: we already got one"))
                         wantdict = True
+                    elif slot_name == '__weakref__':
+                        if wantweakref or w_self.weakrefable:
+                            raise OperationError(space.w_TypeError,
+                                                 space.wrap("__weakref__ slot disallowed: we already got one"))
+                                                
+                        wantweakref = True
                     else:
                         # create member
                         slot_name = _mangle(slot_name, name)
+                        # Force interning of slot names.
+                        slot_name = space.str_w(space.new_interned_str(slot_name))
                         w_self.dict_w[slot_name] = space.wrap(Member(nslots, slot_name, w_self))
                         nslots += 1
 
@@ -180,6 +194,9 @@ class W_TypeObject(W_Object):
                 w_self.hasdict = True
             if '__del__' in dict_w:
                 w_self.needsdel = True
+            if wantweakref and not w_self.weakrefable:
+                w_self.dict_w['__weakref__'] = space.wrap(weakref_descr)
+                w_self.weakrefable = True
             w_type = space.type(w_self)
             if not space.is_w(w_type, space.w_type):
                 w_self.mro_w = []
@@ -212,12 +229,16 @@ class W_TypeObject(W_Object):
             if isinstance(w_new, Function):
                 w_self.dict_w['__new__'] = StaticMethod(w_new)
 
-    def getdictvalue(w_self, space, attr):
+    def getdictvalue(w_self, space, w_attr):
+        return w_self.getdictvalue_w(space, space.str_w(w_attr))
+    
+    def getdictvalue_w(w_self, space, attr):
         try:
             return w_self.dict_w[attr]
         except KeyError:
             if w_self.lazyloaders:
                 if attr in w_self.lazyloaders:
+                    w_attr = space.new_interned_str(attr)
                     loader = w_self.lazyloaders[attr]
                     del w_self.lazyloaders[attr]
                     w_value = loader()
@@ -230,7 +251,7 @@ class W_TypeObject(W_Object):
         # note that this doesn't call __get__ on the result at all
         space = w_self.space
         for w_class in w_self.mro_w:
-            w_value = w_class.getdictvalue(space, key)
+            w_value = w_class.getdictvalue_w(space, key)
             if w_value is not None:
                 return w_value
         return None
@@ -240,7 +261,7 @@ class W_TypeObject(W_Object):
         # attribute was found
         space = w_self.space
         for w_class in w_self.mro_w:
-            w_value = w_class.getdictvalue(space, key)
+            w_value = w_class.getdictvalue_w(space, key)
             if w_value is not None:
                 return w_class, w_value
         return None, None
@@ -265,7 +286,7 @@ class W_TypeObject(W_Object):
         "NOT_RPYTHON.  Forces the lazy attributes to be computed."
         if 'lazyloaders' in w_self.__dict__:
             for attr in w_self.lazyloaders.keys():
-                w_self.getdictvalue(w_self.space, attr)
+                w_self.getdictvalue_w(w_self.space, attr)
             del w_self.lazyloaders
         return False
 
@@ -276,7 +297,7 @@ class W_TypeObject(W_Object):
         dictspec = []
         for key, w_value in w_self.dict_w.items():
             dictspec.append((space.wrap(key), w_value))
-        return W_DictProxyObject(space, space.newdict(dictspec))
+        return W_DictProxyObject(space.newdict(dictspec))
 
     def unwrap(w_self):
         if w_self.instancetypedef.fakedcpytype is not None:
@@ -293,7 +314,14 @@ class W_TypeObject(W_Object):
             return w_self.dict_w['__module__']
         else:
             return space.wrap('__builtin__')
-        
+
+    # for now, weakref support for W_TypeObject is hard to get automatically
+    _lifeline_ = None
+    def getweakref(self):
+        return self._lifeline_
+    def setweakref(self, space, weakreflifeline):
+        self._lifeline_ = weakreflifeline
+
 
 def call__Type(space, w_type, __args__):
     # special case for type(x)

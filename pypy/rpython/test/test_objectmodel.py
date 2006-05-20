@@ -69,6 +69,16 @@ def play_with_r_dict(d):
     assert d.keys() == []
     return True   # for the tests below
 
+def test_cast_to_and_from_address():
+    class A(object):
+        pass
+    class B(object):
+        pass
+    a = A()
+    addr = cast_object_to_weakgcaddress(a)
+    py.test.raises(AssertionError, "cast_weakgcaddress_to_object(addr, B)")
+    assert a is cast_weakgcaddress_to_object(addr, A)
+
 def test_recursive_r_dict_repr():
     import operator
     rdic = r_dict(operator.eq, hash)
@@ -147,6 +157,47 @@ def test_rtype_constant_r_dicts():
     res = interpret(fn, [2])
     assert res == 2
 
+def test_rtype_r_dict_exceptions():
+    def raising_hash(obj):
+        if obj.startswith("bla"):
+            raise TypeError
+        return 1
+    def eq(obj1, obj2):
+        return obj1 is obj2
+    def f():
+        d1 = r_dict(eq, raising_hash)
+        d1['xxx'] = 1
+        try:
+            x = d1["blabla"]
+        except Exception:
+            return 42
+        return x
+    res = interpret(f, [])
+    assert res == 42
+
+    def f():
+        d1 = r_dict(eq, raising_hash)
+        d1['xxx'] = 1
+        try:
+            x = d1["blabla"]
+        except TypeError:
+            return 42
+        return x
+    res = interpret(f, [])
+    assert res == 42
+
+    def f():
+        d1 = r_dict(eq, raising_hash)
+        d1['xxx'] = 1
+        try:
+            d1["blabla"] = 2
+        except TypeError:
+            return 42
+        return 0
+    res = interpret(f, [])
+    assert res == 42
+
+
 def test_rtype_keepalive():
     from pypy.rpython import objectmodel
     def f():
@@ -167,3 +218,60 @@ def test_hint():
     assert res == 5
 
 
+def test_access_in_try():
+    h = lambda x: 1
+    eq = lambda x,y: x==y
+    def f(d):
+        try:
+            return d[2]
+        except ZeroDivisionError:
+            return 42
+        return -1
+    def g(n):
+        d = r_dict(eq, h)
+        d[1] = n
+        d[2] = 2*n
+        return f(d)
+    res = interpret(g, [3])
+    assert res == 6
+
+def test_access_in_try_set():
+    h = lambda x: 1
+    eq = lambda x,y: x==y
+    def f(d):
+        try:
+            d[2] = 77
+        except ZeroDivisionError:
+            return 42
+        return -1
+    def g(n):
+        d = r_dict(eq, h)
+        d[1] = n
+        f(d)
+        return d[2]
+    res = interpret(g, [3])
+    assert res == 77
+
+def test_unboxed_value():
+    class Base(object):
+        pass
+    class C(Base, UnboxedValue):
+        __slots__ = 'smallint'
+
+    assert C(17).smallint == 17
+    assert C(17).getvalue() == 17
+
+    class A(UnboxedValue):
+        __slots__ = ['value']
+
+    assert A(12098).value == 12098
+    assert A(12098).getvalue() == 12098
+
+def test_symbolic():
+    py.test.skip("xxx no test here")
+
+def test_symbolic_raises():
+    s1 = Symbolic()
+    s2 = Symbolic()
+    py.test.raises(TypeError, "s1 < s2")
+    py.test.raises(TypeError, "hash(s1)")

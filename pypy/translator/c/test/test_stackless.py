@@ -1,37 +1,58 @@
 from pypy.translator.translator import TranslationContext
+from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.translator.c import gc
-from pypy.annotation.model import SomeList, SomeString
-from pypy.annotation.listdef import ListDef
+from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.rstack import stack_unwind, stack_frames_depth, stack_too_big
 from pypy.rpython.rstack import yield_current_frame_to_caller
 import os
 
 
-# ____________________________________________________________
+class StacklessTest(object):
+    backendopt = False
+    stacklessmode = 'old'
 
+    def setup_class(cls):
+        import py
+        if cls.gcpolicy is None:
+            # to re-enable this, remove the two characters 'gc' in the
+            # declaregcptrtype(rstack.frame_stack_top,...) call in
+            # rpython/extfunctable.  Doing so breaks translator/stackless/.
+            import py
+            py.test.skip("stackless + refcounting doesn't work any more for now")
+        else:
+            assert cls.gcpolicy is gc.BoehmGcPolicy
+            from pypy.translator.tool.cbuild import check_boehm_presence
+            if not check_boehm_presence():
+                py.test.skip("Boehm GC not present")
 
-class TestStackless(object):
-    gcpolicy = None # Refcounting
-    
     def wrap_stackless_function(self, fn):
         def entry_point(argv):
             os.write(1, str(fn())+"\n")
             return 0
 
-        s_list_of_strings = SomeList(ListDef(None, SomeString()))
-        s_list_of_strings.listdef.resize()
         t = TranslationContext()
+        self.t = t
         t.buildannotator().build_types(entry_point, [s_list_of_strings])
         t.buildrtyper().specialize()
+        if self.backendopt:
+            backend_optimizations(t)
+
+        from pypy.translator.transform import insert_ll_stackcheck
+        insert_ll_stackcheck(t)
 
         cbuilder = CStandaloneBuilder(t, entry_point, gcpolicy=self.gcpolicy)
-        cbuilder.stackless = True
-        #cbuilder.use_stackless_transformation = True
+        cbuilder.stackless = self.stacklessmode
         cbuilder.generate_source()
         cbuilder.compile()
-        return cbuilder.cmdexec('')
+        res = cbuilder.cmdexec('')
+        return int(res.strip())
 
+# ____________________________________________________________
+
+
+class TestStackless(StacklessTest):
+    gcpolicy = None # Refcounting
 
     def test_stack_depth(self):
         def g1():
@@ -52,8 +73,8 @@ class TestStackless(object):
             count10 = f(10)
             return count10 - count0
 
-        data = self.wrap_stackless_function(fn)
-        assert data.strip() == '10'
+        res = self.wrap_stackless_function(fn)
+        assert res == 10
 
     def test_stack_withptr(self):
         def f(n):
@@ -68,8 +89,8 @@ class TestStackless(object):
             count10, _ = f(10)
             return count10 - count0
 
-        data = self.wrap_stackless_function(fn)
-        assert data.strip() == '10'
+        res = self.wrap_stackless_function(fn)
+        assert res == 10
 
     def test_stackless_manytimes(self):
         def f(n):
@@ -85,8 +106,8 @@ class TestStackless(object):
             count10, _ = f(100)
             return count10 - count0
 
-        data = self.wrap_stackless_function(fn)
-        assert data.strip() == '100'
+        res = self.wrap_stackless_function(fn)
+        assert res == 100
 
     def test_stackless_arguments(self):
         def f(n, d, t):
@@ -99,10 +120,14 @@ class TestStackless(object):
         def fn():
             count0, d, t = f(0, 5.5, (1, 2))
             count10, d, t = f(10, 5.5, (1, 2))
-            return "[" + str(count10 - count0) + ", " + str(d) + ", " + str(t[0]) + ", " + str(t[1]) + "]"
+            result = (count10 - count0) * 1000000
+            result += t[0]              * 10000
+            result += t[1]              * 100
+            result += int(d*10)
+            return result
 
-        data = self.wrap_stackless_function(fn)
-        assert eval(data) == [10, 5.5, 1, 2]
+        res = self.wrap_stackless_function(fn)
+        assert res == 10010255
 
 
     def test_stack_too_big(self):
@@ -125,8 +150,8 @@ class TestStackless(object):
 
         def fn():
             return f(0)
-        data = self.wrap_stackless_function(fn)
-        assert int(data.strip()) > 500
+        res = self.wrap_stackless_function(fn)
+        assert res > 500
 
 
     def test_stack_unwind(self):
@@ -134,8 +159,8 @@ class TestStackless(object):
             stack_unwind()
             return 42
 
-        data = self.wrap_stackless_function(f)
-        assert int(data.strip()) == 42
+        res = self.wrap_stackless_function(f)
+        assert res == 42
 
     def test_auto_stack_unwind(self):
         def f(n):
@@ -145,8 +170,8 @@ class TestStackless(object):
 
         def fn():
             return f(10**6)
-        data = self.wrap_stackless_function(fn)
-        assert int(data.strip()) == 704
+        res = self.wrap_stackless_function(fn)
+        assert res == 704
 
     def test_yield_frame(self):
 
@@ -172,8 +197,20 @@ class TestStackless(object):
                 n = n*10 + i
             return n
 
-        data = self.wrap_stackless_function(f)
-        assert int(data.strip()) == 1234567
+        res = self.wrap_stackless_function(f)
+        assert res == 1234567
+
+    def test_foo(self):
+        def f():
+            c = g()
+            c.switch()
+            return 1
+        def g():
+            d = yield_current_frame_to_caller()
+            return d
+        res = self.wrap_stackless_function(f)
+        assert res == 1
+        
 
     def test_yield_noswitch_frame(self):
         # this time we make sure that function 'g' does not
@@ -197,8 +234,8 @@ class TestStackless(object):
                 n = n*10 + i
             return n
 
-        data = self.wrap_stackless_function(f)
-        assert int(data.strip()) == 12345
+        res = self.wrap_stackless_function(f)
+        assert res == 12345
 
     # tested with refcounting too for sanity checking
     def test_yield_frame_mem_pressure(self):
@@ -239,8 +276,8 @@ class TestStackless(object):
                 n = n*10 + i
             return n
 
-        data = self.wrap_stackless_function(f)
-        assert int(data.strip()) == 1234567
+        res = self.wrap_stackless_function(f)
+        assert res == 1234567
 
 
 # ____________________________________________________________
@@ -263,9 +300,8 @@ def malloc_a_lot():
 class TestStacklessBoehm(TestStackless):
     gcpolicy = gc.BoehmGcPolicy
 
-    def setup_class(cls):
-        import py
-        from pypy.translator.tool.cbuild import check_boehm_presence
-        if not check_boehm_presence():
-            py.test.skip("Boehm GC not present")
 
+# ____________________________________________________________
+
+class TestStacklessTransformBoehm(TestStacklessBoehm):
+    stacklessmode = True

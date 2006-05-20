@@ -28,36 +28,17 @@ generic element in some specific subset of the set of all objects.
 #
 
 
-from types import BuiltinFunctionType, MethodType
-import pypy
+from types import BuiltinFunctionType, MethodType, FunctionType
+import pypy.tool.instancemethod
 from pypy.annotation.pairtype import pair, extendabletype
 from pypy.tool.tls import tlsobject
-from pypy.rpython.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rpython.rarithmetic import r_uint, r_longlong, r_ulonglong, base_int
 import inspect
 from sys import maxint
 
 
 DEBUG = True    # set to False to disable recording of debugging information
 TLS = tlsobject()
-
-"""
-Some history (Chris):
-
-As a first approach to break this thing down, I slottified
-all of these objects. The result was not overwhelming:
-A savingof 5MB, but four percent of slowdown, since object
-comparison got much more expensive, by lacking a __dict__.
-
-So I trashed 8 hours of work, without a check-in. (Just
-writing this here to leave *some* trace of work).
-
-Then I tried to make all instances unique and wrote a lot
-of attribute tracking code here, locked write access
-outside of __init__, and patched many modules and several
-hundred lines of code.
-Finally I came up with a better concept, which is postponed.
-
-"""
 
 class SomeObject:
     """The set of all objects.  Each instance stands
@@ -113,10 +94,21 @@ class SomeObject:
             TLS.no_side_effects_in_union -= 1
 
     def is_constant(self):
-        return hasattr(self, 'const')
+        d = self.__dict__
+        return 'const' in d or 'const_box' in d
 
     def is_immutable_constant(self):
-        return self.immutable and hasattr(self, 'const')
+        return self.immutable and 'const' in self.__dict__
+
+    # delegate accesses to 'const' to accesses to 'const_box.value',
+    # where const_box is a Constant.  XXX the idea is to eventually
+    # use systematically 'const_box' instead of 'const' for
+    # non-immutable constant annotations
+    class ConstAccessDelegator(object):
+        def __get__(self, obj, cls=None):
+            return obj.const_box.value
+    const = ConstAccessDelegator()
+    del ConstAccessDelegator
 
     # for debugging, record where each instance comes from
     # this is disabled if DEBUG is set to False
@@ -166,34 +158,26 @@ class SomeInteger(SomeFloat):
     "Stands for an object which is known to be an integer."
     knowntype = int
     # size is in multiples of C's sizeof(long)!
-    def __init__(self, nonneg=False, unsigned=False, size=1):
+    def __init__(self, nonneg=False, unsigned=None, knowntype=None):
+        assert (knowntype is None or knowntype is int or
+                issubclass(knowntype, base_int))
+        if knowntype is None:
+            if unsigned:
+                knowntype = r_uint
+            else:
+                knowntype = int
+        elif unsigned is not None:
+            raise TypeError('Conflicting specification for SomeInteger')
+        self.knowntype = knowntype
+        unsigned = self.knowntype(-1) > 0
         self.nonneg = unsigned or nonneg
         self.unsigned = unsigned  # pypy.rpython.rarithmetic.r_uint
-        if maxint != 2**31-1:
-            size = 1    #XXX don't support longlong on 64 bits systems
-        self.size = size
-        if self.unsigned:
-            if self.size == 2:
-                self.knowntype = r_ulonglong
-            else:
-                self.knowntype = r_uint
-        else:
-            if self.size == 2:
-                self.knowntype = r_longlong
-            else:
-                self.knowntype = int
-
-    def fmt_size(self, s):
-        if s != 1:
-            return str(s)
-
 
 class SomeBool(SomeInteger):
     "Stands for true or false."
     knowntype = bool
     nonneg = True
     unsigned = False
-    size = 1
     def __init__(self):
         pass
 
@@ -407,6 +391,11 @@ class SomeBuiltin(SomeObject):
     immutable = True
 
     def __init__(self, analyser, s_self=None, methodname=None):
+        if isinstance(analyser, MethodType):
+            analyser = pypy.tool.instancemethod.InstanceMethod(
+                analyser.im_func,
+                analyser.im_self,
+                analyser.im_class)
         self.analyser = analyser
         self.s_self = s_self
         self.methodname = methodname
@@ -434,14 +423,28 @@ class SomeCTypesObject(SomeObject):
     MEMORYALIAS = "MEMORYALIAS"
     MIXEDMEMORYOWNERSHIP = "MIXEDMEMORYOWNERSHIP"
     
-    def __init__(self, knowntype, memorystate=None):
+    def __init__(self, knowntype, memorystate):
         if memorystate is None:
             memorystate = knowntype.default_memorystate
         self.knowntype = knowntype
         self.memorystate = memorystate 
 
     def can_be_none(self):
-        return False
+        # only 'py_object' can also be None
+        import ctypes
+        return issubclass(self.knowntype, ctypes.py_object)
+
+    def return_annotation(self):
+        """Returns either 'self' or the annotation of the unwrapped version
+        of this ctype, following the logic used when ctypes operations
+        return a value.
+        """
+        from pypy.rpython import extregistry
+        assert extregistry.is_registered_type(self.knowntype)
+        entry = extregistry.lookup_type(self.knowntype)
+        # special case for returning primitives or c_char_p
+        return getattr(entry, 's_return_trick', self)
+
 
 class SomeImpossibleValue(SomeObject):
     """The empty set.  Instances are placeholders for objects that
@@ -469,6 +472,8 @@ class SomeAddress(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeWeakGcAddress(SomeObject):
+    immutable = True
 
 # The following class is used to annotate the intermediate value that
 # appears in expressions of the form:
@@ -487,6 +492,7 @@ class SomeTypedAddressAccess(SomeObject):
 class SomePtr(SomeObject):
     immutable = True
     def __init__(self, ll_ptrtype):
+        assert isinstance(ll_ptrtype, lltype.Ptr)
         self.ll_ptrtype = ll_ptrtype
 
     def can_be_none(self):
@@ -523,17 +529,16 @@ class SomeOOStaticMeth(SomeObject):
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 
+NUMBER = object()
 annotation_to_ll_map = [
     (s_None, lltype.Void),   # also matches SomeImpossibleValue()
     (SomeBool(), lltype.Bool),
-    (SomeInteger(), lltype.Signed),
-    (SomeInteger(size=2), lltype.SignedLongLong),    
-    (SomeInteger(nonneg=True, unsigned=True), lltype.Unsigned),    
-    (SomeInteger(nonneg=True, unsigned=True, size=2), lltype.UnsignedLongLong),    
+    (SomeInteger(knowntype=r_ulonglong), NUMBER),    
     (SomeFloat(), lltype.Float),
     (SomeChar(), lltype.Char),
     (SomeUnicodeCodePoint(), lltype.UniChar),
     (SomeAddress(), llmemory.Address),
+    (SomeWeakGcAddress(), llmemory.WeakGcAddress),
 ]
 
 def annotation_to_lltype(s_val, info=None):
@@ -543,9 +548,11 @@ def annotation_to_lltype(s_val, info=None):
         return s_val.method
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
-    for witness, lltype in annotation_to_ll_map:
+    for witness, T in annotation_to_ll_map:
         if witness.contains(s_val):
-            return lltype
+            if T is NUMBER:
+                return lltype.build_number(None, s_val.knowntype)
+            return T
     if info is None:
         info = ''
     else:
@@ -553,7 +560,7 @@ def annotation_to_lltype(s_val, info=None):
     raise ValueError("%sshould return a low-level type,\ngot instead %r" % (
         info, s_val))
 
-ll_to_annotation_map = dict([(ll, ann) for ann,ll in annotation_to_ll_map])
+ll_to_annotation_map = dict([(ll, ann) for ann, ll in annotation_to_ll_map if ll is not NUMBER])
 
 def lltype_to_annotation(T):
     try:
@@ -561,7 +568,9 @@ def lltype_to_annotation(T):
     except TypeError:
         s = None    # unhashable T, e.g. a Ptr(GcForwardReference())
     if s is None:
-        if isinstance(T, ootype.Instance):
+        if isinstance(T, lltype.Number):
+            return SomeInteger(knowntype=T._type)
+        if isinstance(T, (ootype.Instance, ootype.BuiltinType)):
             return SomeOOInstance(T)
         elif isinstance(T, ootype.StaticMethod):
             return SomeOOStaticMeth(T)
@@ -582,6 +591,11 @@ def ll_to_annotation(v):
         ll_ptrtype = lltype.typeOf(v.im_self)
         assert isinstance(ll_ptrtype, lltype.Ptr)
         return SomeLLADTMeth(ll_ptrtype, v.im_func)
+    if isinstance(v, FunctionType):
+        # this case should only be for staticmethod instances used in
+        # adtmeths: the getattr() result is then a plain FunctionType object.
+        from pypy.annotation.bookkeeper import getbookkeeper
+        return getbookkeeper().immutablevalue(v)
     return lltype_to_annotation(lltype.typeOf(v))
     
 # ____________________________________________________________
@@ -659,7 +673,7 @@ def missing_operation(cls, name):
         else:
             flattened = args
         for arg in flattened:
-            if arg.__class__ == SomeObject and arg.knowntype != type:
+            if arg.__class__ is SomeObject and arg.knowntype is not type:
                 return  SomeObject()
         bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
         bookkeeper.warning("no precise annotation supplied for %s%r" % (name, args))

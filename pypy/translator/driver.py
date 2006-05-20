@@ -4,7 +4,7 @@ from pypy.translator.translator import TranslationContext
 from pypy.translator.tool.taskengine import SimpleTaskEngine
 from pypy.translator.goal import query
 from pypy.annotation import model as annmodel
-from pypy.annotation import listdef
+from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
 import optparse
 
@@ -26,6 +26,7 @@ DEFAULT_OPTIONS = optparse.Values(defaults={
   'backend': 'c',
   'lowmem': False,
   'fork_before': None,
+  'raisingop2direct_call' : False,
   'merge_if_blocks': True
 })
 
@@ -42,7 +43,8 @@ def taskdef(taskfunc, deps, title, new_state=None, expected_states=[], idemp=Fal
 
 class TranslationDriver(SimpleTaskEngine):
 
-    def __init__(self, options=None, default_goal=None, disable=[]): 
+    def __init__(self, options=None, default_goal=None, disable=[],
+                 exe_name=None, extmod_name=None):
         SimpleTaskEngine.__init__(self)
 
         self.log = log
@@ -50,7 +52,9 @@ class TranslationDriver(SimpleTaskEngine):
         if options is None:
             options = DEFAULT_OPTIONS
         self.options = options
- 
+        self.exe_name = exe_name
+        self.extmod_name = extmod_name
+
         self.done = {}
 
         self.disable(disable)
@@ -104,9 +108,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.standalone = standalone
 
         if standalone:
-            ldef = listdef.ListDef(None, annmodel.SomeString())
-            ldef.resize()
-            inputtypes = [annmodel.SomeList(ldef)]
+            inputtypes = [s_list_of_strings]
         self.inputtypes = inputtypes
 
         if policy is None:
@@ -153,6 +155,10 @@ class TranslationDriver(SimpleTaskEngine):
         annotator = translator.buildannotator(policy=policy)
         s = annotator.build_types(self.entry_point, self.inputtypes)
         self.sanity_check_annotation()
+        if self.standalone and s.knowntype != int:
+            raise Exception("stand-alone program entry point must return an "
+                            "int (and not, e.g., None or always raise an "
+                            "exception).")
         annotator.simplify()
         return s
     #
@@ -200,11 +206,21 @@ class TranslationDriver(SimpleTaskEngine):
     def task_backendopt(self):
         from pypy.translator.backendopt.all import backend_optimizations
         opt = self.options
-        backend_optimizations(self.translator, ssa_form=opt.backend != 'llvm',
+        backend_optimizations(self.translator,
+                              raisingop2direct_call_all=opt.raisingop2direct_call,
                               merge_if_blocks_to_switch=opt.merge_if_blocks)
     #
     task_backendopt = taskdef(task_backendopt, 
                                         ['rtype'], "Back-end optimisations") 
+
+    def task_stackcheckinsertion(self):
+        from pypy.translator.transform import insert_ll_stackcheck
+        insert_ll_stackcheck(self.translator)
+        
+    task_stackcheckinsertion = taskdef(
+        task_stackcheckinsertion, 
+        ['?backendopt', 'rtype', 'annotate'], 
+        "inserting stack checks")
 
     def task_database_c(self):
         translator = self.translator
@@ -213,33 +229,25 @@ class TranslationDriver(SimpleTaskEngine):
             translator.frozen = True
 
         standalone = self.standalone
-        gcpolicy = None
-        if opt.gc =='boehm':
-            from pypy.translator.c import gc
-            gcpolicy = gc.BoehmGcPolicy
-        if opt.gc == 'none':
-            from pypy.translator.c import gc
-            gcpolicy = gc.NoneGcPolicy
-        if opt.gc == 'framework':
-            from pypy.translator.c import gc
-            gcpolicy = gc.FrameworkGcPolicy
 
         if standalone:
             from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
         else:
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
-                            gcpolicy       = gcpolicy,
+                            gcpolicy       = opt.gc,
                             thread_enabled = getattr(opt, 'thread', False),
                             tsc_enabled    = getattr(opt, 'tsc', False))
         cbuilder.stackless = opt.stackless
+        if not standalone:     # xxx more messy
+            cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")
         self.cbuilder = cbuilder
         self.database = database
     #
     task_database_c = taskdef(task_database_c, 
-                            ['?backendopt', '?rtype', '?annotate'], 
+                            ['stackcheckinsertion', '?backendopt', '?rtype', '?annotate'], 
                             "Creating database for generating c source")
     
     def task_source_c(self):  # xxx messy
@@ -252,11 +260,15 @@ class TranslationDriver(SimpleTaskEngine):
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 
     def create_exe(self):
-        import shutil
-        exename = mkexename(self.c_entryp)
-        newexename = mkexename('./pypy-%s' % self.options.backend)
-        shutil.copy(exename, newexename)
-        self.c_entryp = newexename
+        if self.exe_name is not None:
+            import shutil
+            exename = mkexename(self.c_entryp)
+            newexename = self.exe_name % self.options.__dict__
+            if '/' not in newexename and '\\' not in newexename:
+                newexename = './' + newexename
+            newexename = mkexename(newexename)
+            shutil.copy(exename, newexename)
+            self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
     def task_compile_c(self): # xxx messy
@@ -295,7 +307,7 @@ class TranslationDriver(SimpleTaskEngine):
         translator = self.translator
         interp = LLInterpreter(translator.rtyper)
         bk = translator.annotator.bookkeeper
-        graph = bk.getdesc(self.entry_point).cachedgraph(None)
+        graph = bk.getdesc(self.entry_point).getuniquegraph()
         v = interp.eval_graph(graph,
                               self.extra.get('get_llinterp_args',
                                              lambda: [])())
@@ -303,7 +315,7 @@ class TranslationDriver(SimpleTaskEngine):
         log.llinterpret.event("result -> %s" % v)
     #
     task_llinterpret = taskdef(task_llinterpret, 
-                               ['?backendopt', 'rtype'], 
+                               ['stackcheckinsertion', '?backendopt', 'rtype'], 
                                "LLInterpreting")
 
     def task_source_llvm(self):
@@ -322,13 +334,14 @@ class TranslationDriver(SimpleTaskEngine):
         self.log.info("written: %s" % (llvm_filename,))
     #
     task_source_llvm = taskdef(task_source_llvm, 
-                               ['backendopt', 'rtype'], 
+                               ['stackcheckinsertion', 'backendopt', 'rtype'], 
                                "Generating llvm source")
 
     def task_compile_llvm(self):
         gen = self.llvmgen
         if self.standalone:
-            self.c_entryp = gen.compile_llvm_source(exe_name='pypy-llvm')
+            exe_name = (self.exe_name or 'testing') % self.options.__dict__
+            self.c_entryp = gen.compile_llvm_source(exe_name=exe_name)
             self.create_exe()
         else:
             self.c_entryp = gen.compile_llvm_source(return_fn=True)
@@ -343,6 +356,62 @@ class TranslationDriver(SimpleTaskEngine):
     task_run_llvm = taskdef(task_run_llvm, ['compile_llvm'], 
                             "Running compiled llvm source",
                             idemp=True)
+
+    def task_source_cl(self):
+        from pypy.translator.cl.gencl import GenCL
+        self.gen = GenCL(self.translator, self.entry_point)
+        filename = self.gen.emitfile()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_cl = taskdef(task_source_cl, ['ootype'],
+                             'Generating Common Lisp source')
+
+    def task_compile_cl(self):
+        pass
+    task_compile_cl = taskdef(task_compile_cl, ['source_cl'],
+                              'XXX')
+
+    def task_run_cl(self):
+        pass
+    task_run_cl = taskdef(task_run_cl, ['compile_cl'],
+                              'XXX')
+
+    def task_source_squeak(self):
+        from pypy.translator.squeak.gensqueak import GenSqueak
+        self.gen = GenSqueak(dir, self.translator)
+        filename = self.gen.gen()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_squeak = taskdef(task_source_squeak, ['ootype'],
+                             'Generating Squeak source')
+
+    def task_compile_squeak(self):
+        pass
+    task_compile_squeak = taskdef(task_compile_squeak, ['source_squeak'],
+                              'XXX')
+
+    def task_run_squeak(self):
+        pass
+    task_run_squeak = taskdef(task_run_squeak, ['compile_squeak'],
+                              'XXX')
+
+    def task_source_js(self):
+        from pypy.translator.js.js import JS
+        self.gen = JS(self.translator, functions=[self.entry_point],
+                      stackless=self.options.stackless)
+        filename = self.gen.write_source()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_js = taskdef(task_source_js, 
+                        ['stackcheckinsertion', 'backendopt', 'rtype'],
+                        'Generating Javascript source')
+
+    def task_compile_js(self):
+        pass
+    task_compile_js = taskdef(task_compile_js, ['source_js'],
+                              'Skipping Javascript compilation')
+
+    def task_run_js(self):
+        pass
+    task_run_js = taskdef(task_run_js, ['compile_js'],
+                              'Please manually run the generated code')
 
     def proceed(self, goals):
         if not goals:
@@ -365,7 +434,6 @@ class TranslationDriver(SimpleTaskEngine):
             options = DEFAULT_OPTIONS
 
         driver = TranslationDriver(options, default_goal, disable)
-            
         target = targetspec_dic['target']
         spec = target(driver, args)
 

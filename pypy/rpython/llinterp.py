@@ -1,8 +1,8 @@
 from pypy.objspace.flow.model import FunctionGraph, Constant, Variable, c_last_exception
 from pypy.rpython.rarithmetic import intmask, r_uint, ovfcheck, r_longlong, r_ulonglong
-from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.memory import lladdress
+from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.objectmodel import ComputedIntSymbolic
 
 import sys
 import math
@@ -24,12 +24,19 @@ class LLException(Exception):
             extra = extra.replace('\n', '\n | ') + '\n `------'
         else:
             extra = ''
-        return '<LLException %r%s>' % (''.join(etype.name).rstrip('\x00'), extra)
+        return '<LLException %r%s>' % (type_name(etype), extra)
+
+def type_name(etype):
+    if isinstance(lltype.typeOf(etype), lltype.Ptr):
+        return ''.join(etype.name).rstrip('\x00')
+    else:
+        # ootype!
+        return etype.class_._INSTANCE._name.split(".")[-1] 
 
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
 
-    def __init__(self, typer, heap=lltype):
+    def __init__(self, typer, heap=llheap, tracing=True):
         self.bindings = {}
         self.typer = typer
         self.heap = heap  #module that provides malloc, etc for lltypes
@@ -37,22 +44,44 @@ class LLInterpreter(object):
         # XXX hack: set gc to None because
         # prepare_graphs_and_create_gc might already use the llinterpreter!
         self.gc = None
+        self.tracer = None
+        self.frame_class = LLFrame
         if hasattr(heap, "prepare_graphs_and_create_gc"):
             flowgraphs = typer.annotator.translator.graphs
             self.gc = heap.prepare_graphs_and_create_gc(self, flowgraphs)
+        if tracing:
+            self.tracer = Tracer()
 
     def eval_graph(self, graph, args=()):
-        llframe = LLFrame(graph, args, self)
+        llframe = self.frame_class(graph, args, self)
+        if self.tracer:
+            self.tracer.start()
+        retval = None
         try:
-            return llframe.eval()
-        except LLException, e:
-            log.error("LLEXCEPTION: %s" % (e, ))
-            self.print_traceback()
-            raise
-        except Exception, e:
-            log.error("AN ERROR OCCURED: %s" % (e, ))
-            self.print_traceback()
-            raise
+            try:
+                retval = llframe.eval()
+            except LLException, e:
+                log.error("LLEXCEPTION: %s" % (e, ))
+                self.print_traceback()
+                if self.tracer:
+                    self.tracer.dump('LLException: %s\n' % (e,))
+                raise
+            except Exception, e:
+                log.error("AN ERROR OCCURED: %s" % (e, ))
+                self.print_traceback()
+                if self.tracer:
+                    line = str(e)
+                    if line:
+                        line = ': ' + line
+                    line = '* %s' % (e.__class__.__name__,) + line
+                    self.tracer.dump(line + '\n')
+                raise
+        finally:
+            if self.tracer:
+                if retval is not None:
+                    self.tracer.dump('   ---> %r\n' % (retval,))
+                self.tracer.stop()
+        return retval
 
     def print_traceback(self):
         frame = self.active_frame
@@ -61,11 +90,12 @@ class LLInterpreter(object):
             frames.append(frame)
             frame = frame.f_back
         frames.reverse()
+        lines = []
         for frame in frames:
             logline = frame.graph.name
             if frame.curr_block is None:
                 logline += " <not running yet>"
-                log.traceback(logline)
+                lines.append(logline)
                 continue
             try:
                 logline += " " + self.typer.annotator.annotated[frame.curr_block].__module__
@@ -73,13 +103,19 @@ class LLInterpreter(object):
                 # if the graph is from the GC it was not produced by the same
                 # translator :-(
                 logline += " <unknown module>"
-            log.traceback(logline)
+            lines.append(logline)
             for i, operation in enumerate(frame.curr_block.operations):
                 if i == frame.curr_operation_index:
                     logline = "E  %s"
                 else:
                     logline = "   %s"
-                log.traceback(logline % (operation, ))
+                lines.append(logline % (operation, ))
+        if self.tracer:
+            self.tracer.dump('Traceback\n', bold=True)
+            for line in lines:
+                self.tracer.dump(line + '\n')
+        for line in lines:
+            log.traceback(line)
 
     def find_roots(self):
         #log.findroots("starting")
@@ -91,6 +127,25 @@ class LLInterpreter(object):
             frame = frame.f_back
         return roots
 
+    def find_exception(self, exc):
+        assert isinstance(exc, LLException)
+        import exceptions
+        klass, inst = exc.args[0], exc.args[1]
+        exdata = self.typer.getexceptiondata()
+        frame = self.frame_class(None, [], self)
+        old_active_frame = self.active_frame
+        try:
+            for cls in exceptions.__dict__.values():
+                if type(cls) is type(Exception):
+                    evalue = frame.op_direct_call(exdata.fn_pyexcclass2exc,
+                            lltype.pyobjectptr(cls))
+                    etype = frame.op_direct_call(exdata.fn_type_of_exc_inst, evalue)
+                    if etype == klass:
+                        return cls
+        finally:
+            self.active_frame = old_active_frame
+        raise ValueError, "couldn't match exception"
+
 
 # implementations of ops from flow.operation
 from pypy.objspace.flow.operation import FunctionByName
@@ -101,15 +156,19 @@ ops_returning_a_bool = {'gt': True, 'ge': True,
                         'lt': True, 'le': True,
                         'eq': True, 'ne': True,
                         'is_true': True}
+
 def checkptr(ptr):
     return isinstance(lltype.typeOf(ptr), lltype.Ptr)
 
 def checkadr(addr):
     return lltype.typeOf(addr) == llmemory.Address
+    
+def checkinst(inst):
+    return isinstance(lltype.typeOf(inst), (ootype.Instance, ootype.BuiltinType))
 
 class LLFrame(object):
     def __init__(self, graph, args, llinterpreter, f_back=None):
-        assert isinstance(graph, FunctionGraph)
+        assert not graph or isinstance(graph, FunctionGraph)
         self.graph = graph
         self.args = args
         self.llinterpreter = llinterpreter
@@ -136,7 +195,10 @@ class LLFrame(object):
 
     def setvar(self, var, val):
         if var.concretetype is not lltype.Void:
-            assert self.llinterpreter.typer.type_system.isCompatibleType(lltype.typeOf(val), var.concretetype)
+            try:
+                val = lltype.enforce(var.concretetype, val)
+            except TypeError:
+                assert False, "type error: %r val -> %r var" % (lltype.typeOf(val), var.concretetype)
         assert isinstance(var, Variable)
         self.bindings[var] = val
 
@@ -149,8 +211,13 @@ class LLFrame(object):
             val = varorconst.value
         except AttributeError:
             val = self.bindings[varorconst]
+        if isinstance(val, ComputedIntSymbolic):
+            val = val.compute_fn()
         if varorconst.concretetype is not lltype.Void:
-            assert self.llinterpreter.typer.type_system.isCompatibleType(lltype.typeOf(val), varorconst.concretetype)
+            try:
+                val = lltype.enforce(varorconst.concretetype, val)
+            except TypeError:
+                assert False, "type error: %r val from %r var/const" % (lltype.typeOf(val), varorconst.concretetype)
         return val
 
     # _______________________________________________________
@@ -166,19 +233,25 @@ class LLFrame(object):
     def eval(self):
         self.llinterpreter.active_frame = self
         graph = self.graph
-        #log.frame("evaluating", graph.name)
-        nextblock = graph.startblock
-        args = self.args
-        while 1:
-            self.clear()
-            self.fillvars(nextblock, args)
-            nextblock, args = self.eval_block(nextblock)
-            if nextblock is None:
-                self.llinterpreter.active_frame = self.f_back
-                for obj in self.alloca_objects:
-                    #XXX slighly unclean
-                    obj._setobj(None)
-                return args
+        tracer = self.llinterpreter.tracer
+        if tracer:
+            tracer.enter(graph)
+        try:
+            nextblock = graph.startblock
+            args = self.args
+            while 1:
+                self.clear()
+                self.fillvars(nextblock, args)
+                nextblock, args = self.eval_block(nextblock)
+                if nextblock is None:
+                    self.llinterpreter.active_frame = self.f_back
+                    for obj in self.alloca_objects:
+                        #XXX slighly unclean
+                        obj._setobj(None)
+                    return args
+        finally:
+            if tracer:
+                tracer.leave()
 
     def eval_block(self, block):
         """ return (nextblock, values) tuple. If nextblock
@@ -199,16 +272,20 @@ class LLFrame(object):
         # determine nextblock and/or return value
         if len(block.exits) == 0:
             # return block
+            tracer = self.llinterpreter.tracer
             if len(block.inputargs) == 2:
                 # exception
+                if tracer:
+                    tracer.dump('raise')
                 etypevar, evaluevar = block.getvariables()
                 etype = self.getval(etypevar)
                 evalue = self.getval(evaluevar)
                 # watch out, these are _ptr's
                 raise LLException(etype, evalue)
+            if tracer:
+                tracer.dump('return')
             resultvar, = block.getvariables()
             result = self.getval(resultvar)
-            #log.operation("returning", repr(result))
             return None, result
         elif block.exitswitch is None:
             # single-exit block
@@ -245,7 +322,9 @@ class LLFrame(object):
         return link.target, [self.getval(x) for x in link.args]
 
     def eval_operation(self, operation):
-        #log.operation("considering", operation)
+        tracer = self.llinterpreter.tracer
+        if tracer:
+            tracer.dump(str(operation))
         ophandler = self.getoperationhandler(operation.opname)
         # XXX slighly unnice but an important safety check
         if operation.opname == 'direct_call':
@@ -253,27 +332,34 @@ class LLFrame(object):
         elif operation.opname == 'indirect_call':
             assert isinstance(operation.args[0], Variable)
         vals = [self.getval(x) for x in operation.args]
-        # if these special cases pile up, do something better here
-        if operation.opname in ['cast_pointer', 'ooupcast', 'oodowncast', 'cast_adr_to_ptr']:
+        # XXX these special cases DO pile up, do something better here
+        if operation.opname in ['cast_pointer', 'ooupcast', 'oodowncast',
+                                'cast_adr_to_ptr', 'cast_weakadr_to_ptr',
+                                'cast_int_to_ptr',
+                                'cast_opaque_ptr', 'unsafe_call',
+                                'cast_primitive']:
             vals.insert(0, operation.result.concretetype)
         try:
             retval = ophandler(*vals)
-        except LLException:
-            self.handle_cleanup(operation, exception=True)
+        except LLException, e:
+            # safety check check that the operation is allowed to raise that
+            # exception
+            if operation.opname in lloperation.LL_OPERATIONS:
+                canraise = lloperation.LL_OPERATIONS[operation.opname].canraise
+                if Exception not in canraise:
+                    exc = self.llinterpreter.find_exception(e)
+                    for canraiseexc in canraise:
+                        if issubclass(exc, canraiseexc):
+                            break
+                    else:
+                        raise TypeError("the operation %s is not expected to raise %s" % (operation, exc))
             raise
-        else:
-            self.handle_cleanup(operation)
         self.setvar(operation.result, retval)
-
-    def handle_cleanup(self, operation, exception=False):
-        cleanup = getattr(operation, 'cleanup', None)
-        if cleanup is not None:
-            cleanup_finally, cleanup_except = cleanup
-            for op in cleanup_finally:
-                self.eval_operation(op)
-            if exception:
-                for op in cleanup_except:
-                    self.eval_operation(op)
+        if tracer:
+            if retval is None:
+                tracer.dump('\n')
+            else:
+                tracer.dump('   ---> %r\n' % (retval,))
 
     def make_llexception(self, exc=None):
         if exc is None:
@@ -324,6 +410,21 @@ class LLFrame(object):
     def op_hint(self, x, hints):
         return x
 
+    def op_decode_arg(self, fname, i, name, vargs, vkwds):
+        raise NotImplementedError("decode_arg")
+
+    def op_decode_arg_def(self, fname, i, name, vargs, vkwds, default):
+        raise NotImplementedError("decode_arg_def")
+
+    def op_check_no_more_arg(self, fname, n, vargs):
+        raise NotImplementedError("check_no_more_arg")
+
+    def op_getslice(self, vargs, start, stop_should_be_None):
+        raise NotImplementedError("getslice")   # only for argument parsing
+
+    def op_check_self_nonzero(self, fname, vself):
+        raise NotImplementedError("check_self_nonzero")
+
     def op_setfield(self, obj, fieldname, fieldvalue):
         # obj should be pointer
         FIELDTYPE = getattr(lltype.typeOf(obj).TO, fieldname)
@@ -335,6 +436,8 @@ class LLFrame(object):
                 args = gc.get_arg_write_barrier(obj, fieldname, fieldvalue)
                 write_barrier = gc.get_funcptr_write_barrier()
                 result = self.op_direct_call(write_barrier, *args)
+
+    op_bare_setfield = op_setfield
 
     def op_getarrayitem(self, array, index):
         return array[index]
@@ -364,6 +467,8 @@ class LLFrame(object):
         frame = self.__class__(graph, args, self.llinterpreter, self)
         return frame.eval()
 
+    op_safe_call = op_direct_call
+
     def op_indirect_call(self, f, *args):
         graphs = args[-1]
         args = args[:-1]
@@ -372,8 +477,21 @@ class LLFrame(object):
             if hasattr(obj, 'graph'):
                 assert obj.graph in graphs 
         else:
-            print "this should ideally not happen", f, graphs, args
+            log.warn("op_indirect_call with graphs=None:", f)
         return self.op_direct_call(f, *args)
+
+    def op_unsafe_call(self, TGT, f):
+        checkadr(f)
+        assert f.offset is None
+        obj = self.llinterpreter.typer.type_system.deref(f.ob)
+        assert hasattr(obj, 'graph') # don't want to think about that
+        graph = obj.graph
+        args = []
+        for arg in obj.graph.startblock.inputargs:
+            args.append(arg.concretetype._defl())
+        frame = self.__class__(graph, args, self.llinterpreter, self)
+        result = frame.eval()
+        return lltype._cast_whatever(TGT, result)
 
     def op_malloc(self, obj):
         if self.llinterpreter.gc is not None:
@@ -413,20 +531,17 @@ class LLFrame(object):
 
     def op_getfield(self, obj, field):
         assert checkptr(obj)
-        result = getattr(obj, field)
         # check the difference between op_getfield and op_getsubstruct:
-        # the former returns the real field, the latter a pointer to it
-        assert lltype.typeOf(result) == getattr(lltype.typeOf(obj).TO, field)
-        return result
+        assert not isinstance(getattr(lltype.typeOf(obj).TO, field),
+                              lltype.ContainerType)
+        return getattr(obj, field)
 
     def op_getsubstruct(self, obj, field):
         assert checkptr(obj)
-        result = getattr(obj, field)
         # check the difference between op_getfield and op_getsubstruct:
-        # the former returns the real field, the latter a pointer to it
-        assert (lltype.typeOf(result) ==
-                lltype.Ptr(getattr(lltype.typeOf(obj).TO, field)))
-        return result
+        assert isinstance(getattr(lltype.typeOf(obj).TO, field),
+                          lltype.ContainerType)
+        return getattr(obj, field)
 
     def op_getarraysubstruct(self, array, index):
         assert checkptr(array)
@@ -441,8 +556,10 @@ class LLFrame(object):
         return len(array)
 
     def op_cast_pointer(self, tp, obj):
-        # well, actually this is what's now in the globals.
         return lltype.cast_pointer(tp, obj)
+
+    def op_cast_opaque_ptr(self, tp, obj):
+        return lltype.cast_opaque_ptr(tp, obj)
 
     def op_ptr_eq(self, ptr1, ptr2):
         assert checkptr(ptr1)
@@ -462,10 +579,31 @@ class LLFrame(object):
         assert checkptr(ptr1)
         return not bool(ptr1)
 
+    def op_direct_fieldptr(self, obj, field):
+        assert checkptr(obj)
+        assert isinstance(field, str)
+        return lltype.direct_fieldptr(obj, field)
+
+    def op_direct_arrayitems(self, obj):
+        assert checkptr(obj)
+        return lltype.direct_arrayitems(obj)
+
+    def op_direct_ptradd(self, obj, index):
+        assert checkptr(obj)
+        assert isinstance(index, int)
+        return lltype.direct_ptradd(obj, index)
+
+    def op_cast_primitive(self, TYPE, value):
+        assert isinstance(lltype.typeOf(value), lltype.Primitive)
+        return lltype.cast_primitive(TYPE, value)
+
     def op_cast_ptr_to_int(self, ptr1):
         assert checkptr(ptr1)
         assert isinstance(lltype.typeOf(ptr1).TO, (lltype.Array, lltype.Struct))
         return lltype.cast_ptr_to_int(ptr1)
+
+    def op_cast_int_to_ptr(self, tp, int1):
+        return lltype.cast_int_to_ptr(tp, int1)
 
     def op_cast_ptr_to_adr(self, ptr):
         assert checkptr(ptr)
@@ -474,6 +612,18 @@ class LLFrame(object):
     def op_cast_adr_to_ptr(self, TYPE, adr):
         assert checkadr(adr)
         return llmemory.cast_adr_to_ptr(adr, TYPE)
+
+    def op_cast_adr_to_int(self, adr):
+        assert checkadr(adr)
+        return llmemory.cast_adr_to_int(adr)
+
+    def op_cast_ptr_to_weakadr(self, ptr):
+        assert checkptr(ptr)
+        return llmemory.cast_ptr_to_weakadr(ptr)
+
+    def op_cast_weakadr_to_ptr(self, TYPE, wadr):
+        assert lltype.typeOf(wadr) == llmemory.WeakGcAddress
+        return llmemory.cast_weakadr_to_ptr(wadr, TYPE)
 
     def op_cast_int_to_float(self, i):
         assert type(i) is int
@@ -536,20 +686,6 @@ class LLFrame(object):
         assert -sys.maxint-1 <= b <= sys.maxint
         return int(b)
 
-    def op_int_floordiv_ovf_zer(self, a, b):
-        assert type(a) is int
-        assert type(b) is int
-        if b == 0:
-            self.make_llexception(ZeroDivisionError())
-        return self.op_int_floordiv_ovf(a, b)
-            
-    def op_int_mod_ovf_zer(self, a, b):
-        assert type(a) is int
-        assert type(b) is int
-        if b == 0:
-            self.make_llexception(ZeroDivisionError())
-        return self.op_int_mod_ovf(a, b)
-            
     def op_float_floor(self, b):
         assert type(b) is float
         return math.floor(b)
@@ -558,6 +694,11 @@ class LLFrame(object):
         assert type(b) is float
         assert type(c) is float
         return math.fmod(b,c)
+
+    def op_float_pow(self, b,c):
+        assert type(b) is float
+        assert type(c) is float
+        return math.pow(b,c)
 
     def op_gc__collect(self):
         import gc
@@ -574,6 +715,27 @@ class LLFrame(object):
 
     def op_gc_call_rtti_destructor(self, rtti, addr):
         raise NotImplementedError("gc_call_rtti_destructor")
+
+    def op_gc_push_alive_pyobj(self, pyobj):
+        raise NotImplementedError("gc_push_alive_pyobj")
+
+    def op_gc_pop_alive_pyobj(self, pyobj):
+        raise NotImplementedError("gc_pop_alive_pyobj")
+
+    def op_gc_protect(self, obj):
+        raise NotImplementedError("gc_protect")
+
+    def op_gc_unprotect(self, obj):
+        raise NotImplementedError("gc_unprotect")
+
+    def op_gc_reload_possibly_moved(self, newaddr, ptr):
+        raise NotImplementedError("gc_reload_possibly_moved")
+
+    def op_yield_current_frame_to_caller(self):
+        raise NotImplementedError("yield_current_frame_to_caller")
+
+    def op_call_boehm_gc_alloc(self):
+        raise NotImplementedError("call_boehm_gc_alloc")
 
     # operations on pyobjects!
     for opname in opimpls.keys():
@@ -603,6 +765,10 @@ class LLFrame(object):
     def op_raw_malloc(self, size):
         assert lltype.typeOf(size) == lltype.Signed
         return self.heap.raw_malloc(size)
+
+    def op_raw_malloc_usage(self, size):
+        assert lltype.typeOf(size) == lltype.Signed
+        return self.heap.raw_malloc_usage(size)
 
     def op_raw_free(self, addr):
         assert checkadr(addr) 
@@ -643,89 +809,119 @@ class LLFrame(object):
                        ("gt", ">"), ("ge", ">=")):
         exec py.code.Source("""
             def op_adr_%s(self, addr1, addr2):
-                assert isinstance(addr1, lladdress.address)
-                assert isinstance(addr2, lladdress.address)
+                checkadr(addr1)
+                checkadr(addr2)
                 return addr1 %s addr2""" % (opname, op)).compile()
 
     # __________________________________________________________
     # primitive operations
 
-    for typ in (float, int, r_uint, r_longlong, r_ulonglong):
-        typname = typ.__name__
-        optup = ('add', 'sub', 'mul', 'div', 'truediv', 'floordiv',
-                 'mod', 'gt', 'lt', 'ge', 'ne', 'le', 'eq',)
-        if typ is r_uint:
-            opnameprefix = 'uint'
-        elif typ is r_longlong:
-            opnameprefix = 'llong'
-        elif typ is r_ulonglong:
-            opnameprefix = 'ullong'
-        else:
-            opnameprefix = typname
-        if typ in (int, r_uint):
-            optup += 'and_', 'or_', 'lshift', 'rshift', 'xor'
-        for opname in optup:
-            assert opname in opimpls
-            if typ is int and opname not in ops_returning_a_bool:
-                adjust_result = 'intmask'
+    def setup_primitive_operations():
+        for typ in (float, int, r_uint, r_longlong, r_ulonglong):
+            typname = typ.__name__
+            optup = ('add', 'sub', 'mul', 'truediv', 'floordiv',
+                     'mod', 'gt', 'lt', 'ge', 'ne', 'le', 'eq',)
+            overflowing_operations = ('add', 'sub', 'mul', 'floordiv',
+                                      'mod', 'lshift')
+            if typ is r_uint:
+                opnameprefix = 'uint'
+            elif typ is r_longlong:
+                opnameprefix = 'llong'
+            elif typ is r_ulonglong:
+                opnameprefix = 'ullong'
             else:
-                adjust_result = ''
-            pureopname = opname.rstrip('_')
-            exec py.code.Source("""
-                def op_%(opnameprefix)s_%(pureopname)s(self, x, y):
-                    assert isinstance(x, %(typname)s)
-                    assert isinstance(y, %(typname)s)
-                    func = opimpls[%(opname)r]
-                    return %(adjust_result)s(func(x, y))
-            """ % locals()).compile()
-            if typ is int:
-                opname += '_ovf'
-                exec py.code.Source("""
-                    def op_%(opnameprefix)s_%(pureopname)s_ovf(self, x, y):
+                opnameprefix = typname
+            if typ is not float:
+                optup += 'and_', 'or_', 'lshift', 'rshift', 'xor'
+            for opname in optup:
+                assert opname in opimpls
+                if typ is float and opname == 'floordiv':
+                    continue    # 'floordiv' is for integer types
+                if typ is not float and opname == 'truediv':
+                    continue    # 'truediv' is for floats only
+                if typ is int and opname not in ops_returning_a_bool:
+                    adjust_result = 'intmask'
+                else:
+                    adjust_result = ''
+                pureopname = opname.rstrip('_')
+                yield """
+                    def op_%(opnameprefix)s_%(pureopname)s(self, x, y):
                         assert isinstance(x, %(typname)s)
                         assert isinstance(y, %(typname)s)
                         func = opimpls[%(opname)r]
-                        try:
-                            return %(adjust_result)s(func(x, y))
-                        except OverflowError:
-                            self.make_llexception()
-                """ % locals()).compile()
-        for opname in 'is_true', 'neg', 'abs', 'invert':
-            assert opname in opimpls
-            if typ is float and opname == 'invert':
-                continue
-            if typ is int and opname not in ops_returning_a_bool:
-                adjust_result = 'intmask'
-            else:
-                adjust_result = ''
-            exec py.code.Source("""
-                def op_%(opnameprefix)s_%(opname)s(self, x):
-                    assert isinstance(x, %(typname)s)
-                    func = opimpls[%(opname)r]
-                    return %(adjust_result)s(func(x))
-            """ % locals()).compile()
-            if typ is int and opname in ('neg', 'abs'):
-                opname += '_ovf'
-                exec py.code.Source("""
+                        return %(adjust_result)s(func(x, y))
+                """ % locals()
+
+                suffixes = []
+                if typ is not float:
+                    if opname in ('lshift', 'rshift'):
+                        suffixes.append(('_val', 'ValueError'))
+                    if opname in ('floordiv', 'mod'):
+                        suffixes.append(('_zer', 'ZeroDivisionError'))
+                    if typ is int and opname in overflowing_operations:
+                        for suffix1, exccls1 in suffixes[:]:
+                            suffixes.append(('_ovf'+suffix1,
+                                             '(OverflowError, %s)' % exccls1))
+                        suffixes.append(('_ovf', 'OverflowError'))
+
+                for suffix, exceptionclasses in suffixes:
+                    if '_ovf' in suffix:
+                        opname_ex = opname + '_ovf'
+                    else:
+                        opname_ex = opname
+                    yield """
+                        def op_%(opnameprefix)s_%(pureopname)s%(suffix)s(self, x, y):
+                            assert isinstance(x, %(typname)s)
+                            assert isinstance(y, %(typname)s)
+                            func = opimpls[%(opname_ex)r]
+                            try:
+                                return %(adjust_result)s(func(x, y))
+                            except %(exceptionclasses)s:
+                                self.make_llexception()
+                    """ % locals()
+            for opname in 'is_true', 'neg', 'abs', 'invert':
+                assert opname in opimpls
+                if typ is float and opname == 'invert':
+                    continue
+                if typ is int and opname not in ops_returning_a_bool:
+                    adjust_result = 'intmask'
+                else:
+                    adjust_result = ''
+                yield """
                     def op_%(opnameprefix)s_%(opname)s(self, x):
                         assert isinstance(x, %(typname)s)
                         func = opimpls[%(opname)r]
-                        try:
-                            return %(adjust_result)s(func(x))
-                        except OverflowError:
-                            self.make_llexception()
-                """ % locals()).compile()
-            
-    for opname in ('gt', 'lt', 'ge', 'ne', 'le', 'eq'):
-        assert opname in opimpls
-        exec py.code.Source("""
-            def op_char_%(opname)s(self, x, y):
-                assert isinstance(x, str) and len(x) == 1
-                assert isinstance(y, str) and len(y) == 1
-                func = opimpls[%(opname)r]
-                return func(x, y)
-        """ % locals()).compile()
-    
+                        return %(adjust_result)s(func(x))
+                """ % locals()
+                if typ is int and opname in ('neg', 'abs'):
+                    opname += '_ovf'
+                    yield """
+                        def op_%(opnameprefix)s_%(opname)s(self, x):
+                            assert isinstance(x, %(typname)s)
+                            func = opimpls[%(opname)r]
+                            try:
+                                return %(adjust_result)s(func(x))
+                            except OverflowError:
+                                self.make_llexception()
+                    """ % locals()
+
+        for opname in ('gt', 'lt', 'ge', 'ne', 'le', 'eq'):
+            assert opname in opimpls
+            yield """
+                def op_char_%(opname)s(self, x, y):
+                    assert isinstance(x, str) and len(x) == 1
+                    assert isinstance(y, str) and len(y) == 1
+                    func = opimpls[%(opname)r]
+                    return func(x, y)
+            """ % locals()
+
+    for _src in setup_primitive_operations():
+        exec py.code.Source(_src).compile()
+        del _src
+    del setup_primitive_operations
+
+    # ____________________________________________________________
+
     original_int_add = op_int_add
 
     def op_int_add(self, x, y):
@@ -742,45 +938,52 @@ class LLFrame(object):
         else:
             return self.original_int_mul(x, y)
 
+    original_int_mul_ovf = op_int_mul_ovf
+
+    def op_int_mul_ovf(self, x, y):
+        if isinstance(x, llmemory.AddressOffset):
+            return x * y
+        else:
+            return self.original_int_mul_ovf(x, y)
+
     def op_unichar_eq(self, x, y):
         assert isinstance(x, unicode) and len(x) == 1
         assert isinstance(y, unicode) and len(y) == 1
-        func = opimpls['eq']
-        return func(x, y)
+        return x == y
 
     def op_unichar_ne(self, x, y):
         assert isinstance(x, unicode) and len(x) == 1
         assert isinstance(y, unicode) and len(y) == 1
-        func = opimpls['ne']
-        return func(x, y)
+        return x != y
 
     #Operation of ootype
 
     def op_new(self, INST):
-        assert isinstance(INST, ootype.Instance)
+        assert isinstance(INST, (ootype.Instance, ootype.BuiltinType))
         return ootype.new(INST)
 
     def op_runtimenew(self, class_):
         return ootype.runtimenew(class_)
 
     def op_oosetfield(self, inst, name, value):
-        assert isinstance(inst, ootype._instance)
+        assert checkinst(inst)
         assert isinstance(name, str)
         FIELDTYPE = lltype.typeOf(inst)._field_type(name)
         if FIELDTYPE != lltype.Void:
             setattr(inst, name, value)
 
     def op_oogetfield(self, inst, name):
-        assert isinstance(inst, ootype._instance)
+        assert checkinst(inst)
         assert isinstance(name, str)
         return getattr(inst, name)
 
     def op_oosend(self, message, inst, *args):
-        assert isinstance(inst, ootype._instance)
+        assert checkinst(inst)
         assert isinstance(message, str)
         bm = getattr(inst, message)
+        inst = bm.inst
         m = bm.meth
-        m._checkargs(args, check_callable=False)
+        args = m._checkargs(args, check_callable=False)
         if getattr(m, 'abstract', False):
             raise RuntimeError("calling abstract method %r" % (m,))
         return self.op_direct_call(m, inst, *args)
@@ -792,12 +995,12 @@ class LLFrame(object):
         return ootype.oodowncast(INST, inst)
 
     def op_oononnull(self, inst):
-        assert isinstance(inst, ootype._instance)
+        assert checkinst(inst)
         return bool(inst)
 
     def op_oois(self, obj1, obj2):
-        if isinstance(obj1, ootype._instance):
-            assert isinstance(obj2, ootype._instance)
+        if checkinst(obj1):
+            assert checkinst(obj2)
             return obj1 == obj2   # NB. differently-typed NULLs must be equal
         elif isinstance(obj1, ootype._class):
             assert isinstance(obj2, ootype._class)
@@ -816,6 +1019,94 @@ class LLFrame(object):
 
     def op_ooidentityhash(self, inst):
         return ootype.ooidentityhash(inst)
+
+    def op_oostring(self, obj, base):
+        return ootype.oostring(obj, base)
+
+    def op_ooparse_int(self, s, base):
+        try:
+            return ootype.ooparse_int(s, base)
+        except ValueError:
+            self.make_llexception()
+
+class Tracer(object):
+    Counter = 0
+    file = None
+
+    HEADER = """<html><head>
+        <script language=javascript type='text/javascript'>
+        function togglestate(name) {
+          item = document.getElementById(name)
+          if (item.style.display == 'none')
+            item.style.display = 'block';
+          else
+            item.style.display = 'none';
+        }
+        </script>
+        </head>
+
+        <body><pre>
+    """
+
+    FOOTER = """</pre></body></html>"""
+
+    ENTER = ('''\n\t<a href="javascript:togglestate('div%d')">%s</a>'''
+             '''\n<div id="div%d" style="display: %s">\t''')
+    LEAVE = '''\n</div>\t'''
+
+    def htmlquote(self, s, text_to_html={}):
+        # HTML quoting, lazily initialized
+        if not text_to_html:
+            import htmlentitydefs
+            for key, value in htmlentitydefs.entitydefs.items():
+                text_to_html[value] = '&' + key + ';'
+        return ''.join([text_to_html.get(c, c) for c in s])
+
+    def start(self):
+        # start of a dump file
+        from pypy.tool.udir import udir
+        n = Tracer.Counter
+        Tracer.Counter += 1
+        self.file = udir.join('llinterp_trace_%d.html' % n).open('w')
+        print >> self.file, self.HEADER
+        self.count = 0
+        self.indentation = ''
+
+    def stop(self):
+        # end of a dump file
+        if self.file:
+            print >> self.file, self.FOOTER
+            self.file.close()
+            self.file = None
+
+    def enter(self, graph):
+        # enter evaluation of a graph
+        if self.file:
+            s = self.htmlquote(str(graph))
+            i = s.rfind(')')
+            s = s[:i+1] + '<b>' + s[i+1:] + '</b>'
+            if self.count == 0:
+                display = 'block'
+            else:
+                display = 'none'
+            text = self.ENTER % (self.count, s, self.count, display)
+            self.indentation += '    '
+            self.file.write(text.replace('\t', self.indentation))
+            self.count += 1
+
+    def leave(self):
+        # leave evaluation of a graph
+        if self.file:
+            self.indentation = self.indentation[:-4]
+            self.file.write(self.LEAVE.replace('\t', self.indentation))
+
+    def dump(self, text, bold=False):
+        if self.file:
+            text = self.htmlquote(text)
+            if bold:
+                text = '<b>%s</b>' % (text,)
+            self.file.write(text.replace('\n', '\n'+self.indentation))
+
 
 # by default we route all logging messages to nothingness
 # e.g. tests can then switch on logging to get more help

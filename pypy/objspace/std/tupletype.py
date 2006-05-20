@@ -11,7 +11,7 @@ def descr__new__(space, w_tupletype, w_sequence=NoneNotWrapped):
     else:
         tuple_w = space.unpackiterable(w_sequence)
     w_obj = space.allocate_instance(W_TupleObject, w_tupletype)
-    W_TupleObject.__init__(w_obj, space, tuple_w)
+    W_TupleObject.__init__(w_obj, tuple_w)
     return w_obj
 
 # ____________________________________________________________
@@ -23,3 +23,4 @@ tuple(sequence) -> tuple initialized from sequence's items
 If the argument is a tuple, the return value is the same object.''',
     __new__ = newmethod(descr__new__),
     )
+tuple_typedef.custom_hash = True

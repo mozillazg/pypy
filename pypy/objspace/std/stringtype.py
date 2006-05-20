@@ -48,7 +48,7 @@ def descr__new__(space, w_stringtype, w_object=''):
         return w_obj  # XXX might be reworked when space.str() typechecks
     value = space.str_w(w_obj)
     w_obj = space.allocate_instance(W_StringObject, w_stringtype)
-    W_StringObject.__init__(w_obj, space, value)
+    W_StringObject.__init__(w_obj, value)
     return w_obj
 
 # ____________________________________________________________
@@ -60,4 +60,6 @@ str_typedef = StdTypeDef("str", basestring_typedef,
 Return a nice string representation of the object.
 If the argument is a string, the return value is the same object.'''
     )
+
+str_typedef.custom_hash = True
 str_typedef.registermethods(globals())

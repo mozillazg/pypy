@@ -1,5 +1,6 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import gateway
+from pypy.interpreter.typedef import weakref_descr
 from pypy.objspace.std.stdtypedef import *
 
 def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
@@ -103,7 +104,7 @@ def descr__doc(space, w_type):
         return space.wrap("""type(object) -> the object's type
 type(name, bases, dict) -> a new type""")
     w_type = _check(space, w_type)
-    w_result = w_type.getdictvalue(space, '__doc__')
+    w_result = w_type.getdictvalue_w(space, '__doc__')
     if w_result is None:
         return space.w_None
     else:
@@ -150,4 +151,5 @@ type_typedef = StdTypeDef("type",
     mro = gateway.interp2app(descr_mro),
     __flags__ = GetSetProperty(descr__flags),
     __module__ = GetSetProperty(descr_get__module, descr_set__module),
+    __weakref__ = weakref_descr,
     )

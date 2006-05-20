@@ -1,6 +1,7 @@
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper, LowLevelAnnotatorPolicy
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.lltypesystem import llmemory
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.annotation import model as annmodel
 
@@ -93,3 +94,90 @@ def test_adtmeths():
         return A.flag
     res = interpret(f, [], policy=policy)
     assert res
+
+def test_odd_ints():
+    T = GcStruct('T')
+    S = GcStruct('S', ('t', T))
+    PT = Ptr(T)
+    PS = Ptr(S)
+    def fn(n):
+        s = cast_int_to_ptr(PS, n)
+        assert typeOf(s) == PS
+        assert cast_ptr_to_int(s) == n
+        t = cast_pointer(PT, s)
+        assert typeOf(t) == PT
+        assert cast_ptr_to_int(t) == n
+        assert s == cast_pointer(PS, t)
+
+    interpret(fn, [11521])
+
+
+def test_Ptr():
+    S = GcStruct('s')
+    def ll_example():
+        return malloc(Ptr(S).TO)
+    
+    p = interpret(ll_example, [])
+    assert typeOf(p) == Ptr(S)
+
+def test_cast_opaque_ptr():
+    O = GcOpaqueType('O')
+    Q = GcOpaqueType('Q')
+    S = GcStruct('S', ('x', Signed))
+    def fn():
+        s = malloc(S)
+        o = cast_opaque_ptr(Ptr(O), s)
+        q = cast_opaque_ptr(Ptr(Q), o)
+        p = cast_opaque_ptr(Ptr(S), q)
+        return p == s
+    res = interpret(fn, [])
+    assert res is True
+
+    O1 = OpaqueType('O')
+    S1 = Struct('S1', ('x', Signed))
+    s1 = malloc(S1, immortal=True)
+    def fn1():
+        o1 = cast_opaque_ptr(Ptr(O1), s1)
+        p1 = cast_opaque_ptr(Ptr(S1), o1)
+        return p1 == s1
+    res = interpret(fn1, [])
+    assert res is True
+
+def test_address():
+    S = GcStruct('S')
+    p1 = nullptr(S)
+    p2 = malloc(S)
+    
+    def g(p):
+        return bool(llmemory.cast_ptr_to_adr(p))
+    def fn(n):
+        if n < 0:
+            return g(p1)
+        else:
+            return g(p2)
+
+    res = interpret(fn, [-5])
+    assert res is False
+    res = interpret(fn, [5])
+    assert res is True
+
+def test_flavored_malloc():
+    T = GcStruct('T', ('y', Signed))
+    def fn(n):
+        p = malloc(T, flavor='gc')
+        p.y = n
+        return p.y
+
+    res = interpret(fn, [232])
+    assert res == 232
+
+    S = Struct('S', ('x', Signed))
+    def fn(n):
+        p = malloc(S, flavor='whatever')
+        p.x = n
+        result = p.x
+        free(p, flavor='whatever')
+        return n
+
+    res = interpret(fn, [23])
+    assert res == 23

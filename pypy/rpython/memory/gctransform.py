@@ -1,25 +1,24 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.lltypesystem.lloperation import llop, LL_OPERATIONS
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, \
      c_last_exception, FunctionGraph, Block, Link, checkgraph
 from pypy.translator.unsimplify import insert_empty_block
+from pypy.translator.unsimplify import insert_empty_startblock
+from pypy.translator.unsimplify import starts_with_empty_block
+from pypy.translator.unsimplify import remove_empty_startblock
 from pypy.translator.translator import graphof
+from pypy.translator.backendopt.support import var_needsgc, needs_conservative_livevar_calculation
+from pypy.translator.backendopt import inline
+from pypy.translator.backendopt import graphanalyze
+from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.annotation import model as annmodel
-from pypy.rpython import rmodel, rptr, annlowlevel
+from pypy.rpython import rmodel, rptr, annlowlevel, typesystem
 from pypy.rpython.memory import gc, lladdress
+from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.rpython.extregistry import ExtRegistryEntry
 import sets, os
-
-EXCEPTION_RAISING_OPS = ['direct_call', 'indirect_call']
-
-def var_needsgc(var):
-    if hasattr(var, 'concretetype'):
-        vartype = var.concretetype
-        return isinstance(vartype, lltype.Ptr) and vartype._needsgc()
-    else:
-        # assume PyObjPtr
-        return True
 
 def var_ispyobj(var):
     if hasattr(var, 'concretetype'):
@@ -35,33 +34,56 @@ def var_ispyobj(var):
 class GCTransformer(object):
     finished = False
 
-    def __init__(self, translator):
+    def __init__(self, translator, inline=False):
         self.translator = translator
         self.seen_graphs = {}
+        self.minimal_transform = {}
         if translator:
             self.mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
         else:
             self.mixlevelannotator = None
+        self.inline = inline
+        if inline:
+            self.lltype_to_classdef = translator.rtyper.lltype_to_classdef_mapping()
+        self.graphs_to_inline = {}
+        if self.MinimalGCTransformer:
+            self.minimalgctransformer = self.MinimalGCTransformer(self)
+        else:
+            self.minimalgctransformer = None
 
     def get_lltype_of_exception_value(self):
-        if self.translator is not None and self.translator.rtyper is not None:
+        if self.translator is not None:
             exceptiondata = self.translator.rtyper.getexceptiondata()
             return exceptiondata.lltype_of_exception_value
         else:
             return lltype.Ptr(lltype.PyObject)
+
+    def need_minimal_transform(self, graph):
+        self.seen_graphs[graph] = True
+        self.minimal_transform[graph] = True
 
     def transform(self, graphs):
         for graph in graphs:
             self.transform_graph(graph)
 
     def transform_graph(self, graph):
+        if graph in self.minimal_transform:
+            if self.minimalgctransformer:
+                self.minimalgctransformer.transform_graph(graph)
+            del self.minimal_transform[graph]
+            return
         if graph in self.seen_graphs:
             return
         self.seen_graphs[graph] = True
         self.links_to_split = {} # link -> vars to pop_alive across the link
-        
+
+        # for sanity, we need an empty block at the start of the graph
+        if not starts_with_empty_block(graph):
+            insert_empty_startblock(self.translator, graph)
+        is_borrowed = self.compute_borrowed_vars(graph)
+
         for block in graph.iterblocks():
-            self.transform_block(block)
+            self.transform_block(block, is_borrowed)
         for link, livecounts in self.links_to_split.iteritems():
             newops = []
             for var, livecount in livecounts.iteritems():
@@ -70,110 +92,112 @@ class GCTransformer(object):
                 for i in range(-livecount):
                     newops.extend(self.push_alive(var))
             if newops:
-                if len(link.prevblock.exits) == 1:
+                if link.prevblock.exitswitch is None:
                     link.prevblock.operations.extend(newops)
                 else:
-                    insert_empty_block(None, link, newops)
+                    insert_empty_block(self.translator, link, newops)
 
+        # remove the empty block at the start of the graph, which should
+        # still be empty (but let's check)
+        if starts_with_empty_block(graph):
+            remove_empty_startblock(graph)
+
+        self.links_to_split = None
         v = Variable('vanishing_exc_value')
         v.concretetype = self.get_lltype_of_exception_value()
         graph.exc_cleanup = (v, self.pop_alive(v))
+        return is_borrowed    # xxx for tests only
 
-    def transform_block(self, block):
+    def compute_borrowed_vars(self, graph):
+        # the input args are borrowed, and stay borrowed for as long as they
+        # are not merged with other values.
+        var_families = DataFlowFamilyBuilder(graph).get_variable_families()
+        borrowed_reps = {}
+        for v in graph.getargs():
+            borrowed_reps[var_families.find_rep(v)] = True
+        # no support for returning borrowed values so far
+        retvar = graph.getreturnvar()
+
+        def is_borrowed(v1):
+            return (var_families.find_rep(v1) in borrowed_reps
+                    and v1 is not retvar)
+        return is_borrowed
+
+    def inline_helpers(self, graph):
+        if self.inline:
+            for inline_graph in self.graphs_to_inline:
+                try:
+                    # XXX quite inefficient: we go over the function lots of times
+                    inline.inline_function(self.translator, inline_graph, graph,
+                                           self.lltype_to_classdef)
+                except inline.CannotInline, e:
+                    print 'CANNOT INLINE:', e
+                    print '\t%s into %s' % (inline_graph, graph)
+            checkgraph(graph)
+
+    def transform_block(self, block, is_borrowed):
         newops = []
-        livevars = [var for var in block.inputargs if var_needsgc(var)]
-        livevars2cleanup = {}
+        livevars = [var for var in block.inputargs if var_needsgc(var)
+                                                   and not is_borrowed(var)]
         newops = []
-        if block.isstartblock:
-            for var in block.inputargs:
-                if var_needsgc(var):
-                    newops.extend(self.push_alive(var))
         # XXX this is getting obscure.  Maybe we should use the basic
         # graph-transforming capabilities of the RTyper instead, as we
         # seem to run into all the same problems as the ones we already
         # had to solve there.
-        num_ops_after_exc_raising = 0
-        for op in block.operations:
+        for i, op in enumerate(block.operations):
             num_ops_after_exc_raising = 0
-            res = self.replacement_operations(op, livevars)
-            try:
-                ops, cleanup_before_exception = res
-            except ValueError:
-                ops, cleanup_before_exception, num_ops_after_exc_raising = res
+            ops, index = self.replacement_operations(op, livevars, block)
+            if not ops:
+                continue # may happen when we eat gc_protect/gc_unprotect.
             newops.extend(ops)
-            op = ops[-1-num_ops_after_exc_raising]
-            # XXX for now we assume that everything can raise
-            if 1 or op.opname in EXCEPTION_RAISING_OPS:
-                if tuple(livevars) in livevars2cleanup:
-                    cleanup_on_exception = livevars2cleanup[tuple(livevars)]
-                else:
-                    cleanup_on_exception = []
-                    for var in livevars:
-                        cleanup_on_exception.extend(self.pop_alive(var))
-                    cleanup_on_exception = tuple(cleanup_on_exception)
-                    livevars2cleanup[tuple(livevars)] = cleanup_on_exception
-                op.cleanup = tuple(cleanup_before_exception), cleanup_on_exception
-            op = ops[-1]
+            origname = op.opname
+            op = ops[index]
             if var_needsgc(op.result):
-                if op.opname not in ('direct_call', 'indirect_call') and not var_ispyobj(op.result):
+                if var_ispyobj(op.result):
+                    assert op.opname != 'cast_pointer', 'casting to a PyObject*??'
+                    if op.opname in ('getfield', 'getarrayitem', 'same_as'):
+                        lst = list(self.push_alive(op.result))
+                        newops.extend(lst)
+                elif op.opname not in ('direct_call', 'indirect_call'):
                     lst = list(self.push_alive(op.result))
                     newops.extend(lst)
-                    num_ops_after_exc_raising += len(lst)
-                livevars.append(op.result)
+                if not is_borrowed(op.result):
+                    livevars.append(op.result)
         if len(block.exits) == 0:
             # everything is fine already for returnblocks and exceptblocks
             pass
         else:
-            if block.exitswitch is c_last_exception:
-                # if we're in a try block, the last operation must
-                # remain the last operation, so don't add a pop_alive
-                # to the block, even if the variable dies in all
-                # linked blocks.
-                deadinallexits = sets.Set([])
-                if num_ops_after_exc_raising > 0:
-                    # No place to put the remaining pending operations!
-                    # Need a new block along the non-exceptional link.
-                    # XXX test this.
-                    tail = newops[-num_ops_after_exc_raising:]
-                    del newops[-num_ops_after_exc_raising:]
-                    link = block.exits[0]
-                    assert link.exitcase is None
-                    insert_empty_block(self.translator, link, tail)
-            else:
-                deadinallexits = sets.Set(livevars)
-                for link in block.exits:
-                    deadinallexits.difference_update(sets.Set(link.args))
+            assert block.exitswitch is not c_last_exception
+            deadinallexits = sets.Set(livevars)
+            for link in block.exits:
+                deadinallexits.difference_update(sets.Set(link.args))
             for var in deadinallexits:
                 newops.extend(self.pop_alive(var))
             for link in block.exits:
                 livecounts = dict.fromkeys(sets.Set(livevars) - deadinallexits, 1)
-                if (block.exitswitch is c_last_exception and
-                    link.exitcase is not None):
-                    if livevars and livevars[-1] is block.operations[-1].result:
-                        # if the last operation in the block raised an
-                        # exception, it can't have returned anything that
-                        # might need pop_aliving.
-                        del livecounts[livevars[-1]]
-                    for v in link.last_exception, link.last_exc_value:
-                        if var_needsgc(v):
-                            livecounts[v] = 1
-                for v in link.args:
+                for v, v2 in zip(link.args, link.target.inputargs):
+                    if is_borrowed(v2):
+                        continue
                     if v in livecounts:
                         livecounts[v] -= 1
                     elif var_needsgc(v):
-                        assert isinstance(v, Constant)
+                        # 'v' is typically a Constant here, but it can be
+                        # a borrowed variable going into a non-borrowed one
                         livecounts[v] = -1
                 self.links_to_split[link] = livecounts
         if newops:
             block.operations = newops
 
-    def replacement_operations(self, op, livevars):
+    def replacement_operations(self, op, livevars, block):
         m = getattr(self, 'replace_' + op.opname, None)
         if m:
-            return m(op, livevars)
+            r = m(op, livevars, block)
+            if not isinstance(r, tuple):
+                return r, -1
+            else:
+                return r
         else:
-            return [op], []
-
+            return [op], 0
 
     def push_alive(self, var):
         if var_ispyobj(var):
@@ -203,6 +227,43 @@ class GCTransformer(object):
         result = varoftype(lltype.Void)
         return [SpaceOperation("gc_pop_alive_pyobj", [var], result)]
 
+    def replace_gc_protect(self, op, livevars, block):
+        """ protect this object from gc (make it immortal). the specific
+        gctransformer needs to overwrite this"""
+        raise NotImplementedError("gc_protect does not make sense for this gc")
+
+    def replace_gc_unprotect(self, op, livevars, block):
+        """ get this object back into gc control. the specific gctransformer
+        needs to overwrite this"""
+        raise NotImplementedError("gc_protect does not make sense for this gc")
+
+    def replace_setfield(self, op, livevars, block):
+        if not var_ispyobj(op.args[2]):
+            return [op]
+        oldval = varoftype(op.args[2].concretetype)
+        getoldvalop = SpaceOperation("getfield",
+                                     [op.args[0], op.args[1]], oldval)
+        result = [getoldvalop]
+        result.extend(self.push_alive(op.args[2]))
+        result.append(op)
+        result.extend(self.pop_alive(oldval))
+        return result
+
+    def replace_setarrayitem(self, op, livevars, block):
+        if not var_ispyobj(op.args[2]):
+            return [op]
+        oldval = varoftype(op.args[2].concretetype)
+        getoldvalop = SpaceOperation("getarrayitem",
+                                     [op.args[0], op.args[1]], oldval)
+        result = [getoldvalop]
+        result.extend(self.push_alive(op.args[2]))
+        result.append(op)
+        result.extend(self.pop_alive(oldval))
+        return result
+
+    def replace_safe_call(self, op, livevars, block):
+        return [SpaceOperation("direct_call", op.args, op.result)]
+
     def annotate_helper(self, ll_helper, ll_args, ll_result):
         assert not self.finished
         args_s = map(annmodel.lltype_to_annotation, ll_args)
@@ -216,32 +277,73 @@ class GCTransformer(object):
 
     def inittime_helper(self, ll_helper, ll_args, ll_result):
         graph, ptr = self.annotate_helper(ll_helper, ll_args, ll_result)
-        self.seen_graphs[graph] = True
+        self.need_minimal_transform(graph)
         return Constant(ptr, lltype.Ptr(lltype.FuncType(ll_args, ll_result)))
 
     def finish(self):
+        if self.translator is not None:
+            self.mixlevelannotator.finish_annotate()
         self.finished = True
-        if self.translator and self.translator.rtyper:
-            self.mixlevelannotator.finish()
-    
-def exception_clean(graph):
-    c = 0
-    for block in graph.iterblocks():
-        for op in block.operations:
-            if op.opname in ('direct_call', 'indirect_call'):
-                op.cleanup = None
-                c += 1
-    return c
+        if self.translator is not None:
+            self.mixlevelannotator.finish_rtype()
 
 class MinimalGCTransformer(GCTransformer):
-    def push_alive_nopyobj(self, var):
+    def __init__(self, parenttransformer):
+        GCTransformer.__init__(self, parenttransformer.translator)
+        self.parenttransformer = parenttransformer
+
+    def push_alive(self, var):
         return []
 
-    def pop_alive_nopyobj(self, var):
+    def pop_alive(self, var):
         return []
 
+GCTransformer.MinimalGCTransformer = MinimalGCTransformer
+MinimalGCTransformer.MinimalGCTransformer = None
 
-    # ----------------------------------------------------------------
+# ----------------------------------------------------------------
+
+class LLTransformerOp(object):
+    """Objects that can be called in ll functions.
+    Their calls are replaced by a simple operation of the GC transformer,
+    e.g. ll_pop_alive.
+    """
+    def __init__(self, transformer_method, see_type=None):
+        self.transformer_method = transformer_method
+        self.see_type = see_type
+
+class LLTransformerOpEntry(ExtRegistryEntry):
+    "Annotation and specialization of LLTransformerOp() instances."
+    _type_ = LLTransformerOp
+
+    def compute_result_annotation(self, s_arg):
+        op = self.instance   # the LLTransformerOp instance
+        if op.see_type is not None:
+            assert isinstance(s_arg, annmodel.SomePtr)
+            PTRTYPE = s_arg.ll_ptrtype
+            if PTRTYPE.TO is not lltype.PyObject:
+                # look for and annotate a dynamic deallocator if necessary;
+                # doing so implicitly in specialize_call() is too late.
+                op.see_type(PTRTYPE.TO)
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        op = self.instance   # the LLTransformerOp instance
+        newops = op.transformer_method(hop.args_v[0])
+        hop.llops.extend(newops)
+        hop.exception_cannot_occur()
+        return hop.inputconst(hop.r_result.lowleveltype, hop.s_result.const)
+
+# ----------------------------------------------------------------
+
+def ll_call_destructor(destrptr, destr_v):
+    try:
+        destrptr(destr_v)
+    except:
+        try:
+            os.write(2, "a destructor raised an exception, ignoring it\n")
+        except:
+            pass
 
 def _static_deallocator_body_for_type(v, TYPE, depth=1):
     if isinstance(TYPE, lltype.Array):
@@ -288,33 +390,33 @@ ADDRESS_VOID_FUNC = lltype.FuncType([llmemory.Address], lltype.Void)
 
 class RefcountingGCTransformer(GCTransformer):
 
-    gc_header_offset = gc.GCHeaderOffset(lltype.Struct("header", ("refcount", lltype.Signed)))
+    HDR = lltype.Struct("header", ("refcount", lltype.Signed))
 
     def __init__(self, translator):
         super(RefcountingGCTransformer, self).__init__(translator)
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
+        gc_header_offset = self.gcheaderbuilder.size_gc_header
         self.deallocator_graphs_needing_transforming = []
-        self.graphs_needing_exception_cleaning = {}
         # create incref graph
         def ll_incref(adr):
             if adr:
-                gcheader = adr - RefcountingGCTransformer.gc_header_offset
+                gcheader = adr - gc_header_offset
                 gcheader.signed[0] = gcheader.signed[0] + 1
         def ll_decref(adr, dealloc):
             if adr:
-                gcheader = adr - RefcountingGCTransformer.gc_header_offset
+                gcheader = adr - gc_header_offset
                 refcount = gcheader.signed[0] - 1
                 gcheader.signed[0] = refcount
                 if refcount == 0:
                     dealloc(adr)
         def ll_no_pointer_dealloc(adr):
             llop.gc_free(lltype.Void, adr)
-        if self.translator is not None and self.translator.rtyper is not None:
+        if self.translator:
             self.increfptr = self.inittime_helper(
                 ll_incref, [llmemory.Address], lltype.Void)
             self.decref_ptr = self.inittime_helper(
                 ll_decref, [llmemory.Address, lltype.Ptr(ADDRESS_VOID_FUNC)],
                 lltype.Void)
-            self.graphs_needing_exception_cleaning[self.decref_ptr.value._obj.graph] = 1
             self.no_pointer_dealloc_ptr = self.inittime_helper(
                 ll_no_pointer_dealloc, [llmemory.Address], lltype.Void)
         # cache graphs:
@@ -328,7 +430,7 @@ class RefcountingGCTransformer(GCTransformer):
         adr1 = varoftype(llmemory.Address)
         result = [SpaceOperation("cast_ptr_to_adr", [var], adr1)]
         result.append(SpaceOperation("direct_call", [self.increfptr, adr1],
-                                     varoftype(lltype.Void), cleanup=None))
+                                     varoftype(lltype.Void)))
         return result
 
     def pop_alive_nopyobj(self, var):
@@ -342,30 +444,44 @@ class RefcountingGCTransformer(GCTransformer):
              
         result.append(SpaceOperation("direct_call",
                                      [self.decref_ptr, adr1, cdealloc_fptr],
-                                     varoftype(lltype.Void), cleanup=None))
+                                     varoftype(lltype.Void)))
         return result
 
-    def replace_setfield(self, op, livevars):
+    def replace_gc_protect(self, op, livevars, block):
+        """ protect this object from gc (make it immortal) """
+        newops = self.push_alive(op.args[0])
+        newops[-1].result = op.result
+        return newops
+
+    def replace_gc_unprotect(self, op, livevars, block):
+        """ get this object back into gc control """
+        newops = self.pop_alive(op.args[0])
+        newops[-1].result = op.result
+        return newops
+
+    def replace_setfield(self, op, livevars, block):
         if not var_needsgc(op.args[2]):
-            return [op], []
+            return [op]
         oldval = varoftype(op.args[2].concretetype)
         getoldvalop = SpaceOperation("getfield",
                                      [op.args[0], op.args[1]], oldval)
         result = [getoldvalop]
         result.extend(self.push_alive(op.args[2]))
         result.append(op)
-        return result, self.pop_alive(oldval)
+        result.extend(self.pop_alive(oldval))
+        return result
 
-    def replace_setarrayitem(self, op, livevars):
+    def replace_setarrayitem(self, op, livevars, block):
         if not var_needsgc(op.args[2]):
-            return [op], []
+            return [op]
         oldval = varoftype(op.args[2].concretetype)
         getoldvalop = SpaceOperation("getarrayitem",
                                      [op.args[0], op.args[1]], oldval)
         result = [getoldvalop]
         result.extend(self.push_alive(op.args[2]))
         result.append(op)
-        return result, self.pop_alive(oldval)
+        result.extend(self.pop_alive(oldval))
+        return result
 
     def get_rtti(self, TYPE):
         if isinstance(TYPE, lltype.GcStruct):
@@ -377,25 +493,18 @@ class RefcountingGCTransformer(GCTransformer):
 
     def finish(self):
         super(RefcountingGCTransformer, self).finish()
-        if self.translator and self.translator.rtyper:
-            for g in self.deallocator_graphs_needing_transforming:
-                MinimalGCTransformer(self.translator).transform_graph(g)
-            for g, nsafecalls in self.graphs_needing_exception_cleaning.iteritems():
-                n = exception_clean(g)
-                assert n == nsafecalls
+
+##    -- maybe add this for tests and for consistency --
+##    def consider_constant(self, TYPE, value):
+##        p = value._as_ptr()
+##        if not self.gcheaderbuilder.get_header(p):
+##            hdr = new_header(p)
+##            hdr.refcount = sys.maxint // 2
 
     def static_deallocation_funcptr_for_type(self, TYPE):
         if TYPE in self.static_deallocator_funcptrs:
             return self.static_deallocator_funcptrs[TYPE]
         #print_call_chain(self)
-        def compute_pop_alive_ll_ops(hop):
-            hop.llops.extend(self.pop_alive(hop.args_v[1]))
-            hop.exception_cannot_occur()
-            return hop.inputconst(hop.r_result.lowleveltype, hop.s_result.const)
-        def ll_pop_alive(var):
-            pass
-        ll_pop_alive.compute_ll_ops = compute_pop_alive_ll_ops
-        ll_pop_alive.llresult = lltype.Void
 
         rtti = self.get_rtti(TYPE) 
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
@@ -422,13 +531,7 @@ def ll_deallocator(addr):
         # refcount is at zero, temporarily bump it to 1:
         gcheader.signed[0] = 1
         destr_v = cast_pointer(DESTR_ARG, v)
-        try:
-            destrptr(destr_v)
-        except:
-            try:
-                os.write(2, "a destructor raised an exception, ignoring it\\n")
-            except:
-                pass
+        ll_call_destructor(destrptr, destr_v)
         refcount = gcheader.signed[0] - 1
         gcheader.signed[0] = refcount
         if refcount == 0:
@@ -437,34 +540,32 @@ def ll_deallocator(addr):
     except:
         pass
     llop.gc_restore_exception(lltype.Void, exc_instance)
-        
+    pop_alive(exc_instance)
+    # XXX layering of exceptiontransform versus gcpolicy
+
 """ % (body, )
         else:
             call_del = None
             body = '\n'.join(_static_deallocator_body_for_type('v', TYPE))
             src = ('def ll_deallocator(addr):\n    v = cast_adr_to_ptr(addr, PTR_TYPE)\n' +
                    body + '\n    llop.gc_free(lltype.Void, addr)\n')
-        d = {'pop_alive': ll_pop_alive,
+        d = {'pop_alive': LLTransformerOp(self.pop_alive,
+                                  self.dynamic_deallocation_funcptr_for_type),
              'llop': llop,
              'lltype': lltype,
              'destrptr': destrptr,
-             'gc_header_offset': RefcountingGCTransformer.gc_header_offset,
+             'gc_header_offset': self.gcheaderbuilder.size_gc_header,
              'cast_adr_to_ptr': llmemory.cast_adr_to_ptr,
              'cast_pointer': lltype.cast_pointer,
              'PTR_TYPE': lltype.Ptr(TYPE),
              'DESTR_ARG': DESTR_ARG,
              'EXC_INSTANCE_TYPE': self.translator.rtyper.exceptiondata.lltype_of_exception_value,
-             'os': py.std.os}
+             'll_call_destructor': ll_call_destructor}
         exec src in d
         this = d['ll_deallocator']
         g, fptr = self.annotate_helper(this, [llmemory.Address], lltype.Void)
         # the produced deallocator graph does not need to be transformed
-        self.seen_graphs[g] = True
-        if destrptr:
-            # however, the direct_call to the destructor needs to get
-            # .cleanup attached
-            self.deallocator_graphs_needing_transforming.append(g)
-
+        self.need_minimal_transform(g)
         self.static_deallocator_funcptrs[TYPE] = fptr
         for p in find_gc_ptrs_in_type(TYPE):
             self.static_deallocation_funcptr_for_type(p.TO)
@@ -487,17 +588,17 @@ def ll_deallocator(addr):
         
         RTTI_PTR = lltype.Ptr(lltype.RuntimeTypeInfo)
         QUERY_ARG_TYPE = lltype.typeOf(queryptr).TO.ARGS[0]
+        gc_header_offset = self.gcheaderbuilder.size_gc_header
         def ll_dealloc(addr):
             # bump refcount to 1
-            gcheader = addr - RefcountingGCTransformer.gc_header_offset
+            gcheader = addr - gc_header_offset
             gcheader.signed[0] = 1
             v = llmemory.cast_adr_to_ptr(addr, QUERY_ARG_TYPE)
             rtti = queryptr(v)
             gcheader.signed[0] = 0
             llop.gc_call_rtti_destructor(lltype.Void, rtti, addr)
         g, fptr = self.annotate_helper(ll_dealloc, [llmemory.Address], lltype.Void)
-        self.graphs_needing_exception_cleaning[g] = 1
-        self.seen_graphs[g] = True
+        self.need_minimal_transform(g)
         
         self.dynamic_deallocator_funcptrs[TYPE] = fptr
         self.queryptr2dynamic_deallocator_funcptr[queryptr._obj] = fptr
@@ -507,12 +608,6 @@ def varoftype(concretetype):
     var = Variable()
     var.concretetype = concretetype
     return var
-
-def const_funcptr_fromgraph(graph):
-    FUNC = lltype.FuncType([v.concretetype for v in graph.startblock.inputargs],
-                           graph.returnblock.inputargs[0].concretetype)
-    return rmodel.inputconst(lltype.Ptr(FUNC),
-                             lltype.functionptr(FUNC, graph.name, graph=graph))
 
 def find_gc_ptrs_in_type(TYPE):
     if isinstance(TYPE, lltype.Array):
@@ -524,6 +619,11 @@ def find_gc_ptrs_in_type(TYPE):
         return result
     elif isinstance(TYPE, lltype.Ptr) and TYPE._needsgc():
         return [TYPE]
+    elif isinstance(TYPE, lltype.GcOpaqueType):
+        # heuristic: in theory the same problem exists with OpaqueType, but
+        # we use OpaqueType for other things too that we know are safely
+        # empty of further gc pointers
+        raise Exception("don't know what is in %r" % (TYPE,))
     else:
         return []
 
@@ -543,10 +643,8 @@ def type_contains_pyobjs(TYPE):
 
 
 class BoehmGCTransformer(GCTransformer):
-    gc_header_offset = gc.GCHeaderOffset(lltype.Void)
-
-    def __init__(self, translator):
-        super(BoehmGCTransformer, self).__init__(translator)
+    def __init__(self, translator, inline=False):
+        super(BoehmGCTransformer, self).__init__(translator, inline=inline)
         self.finalizer_funcptrs = {}
 
     def push_alive_nopyobj(self, var):
@@ -554,6 +652,14 @@ class BoehmGCTransformer(GCTransformer):
 
     def pop_alive_nopyobj(self, var):
         return []
+
+    def replace_gc_protect(self, op, livevars, block):
+        """ for boehm it is enough to do nothing"""
+        return [SpaceOperation("same_as", [Constant(None, lltype.Void)], op.result)]
+
+    def replace_gc_unprotect(self, op, livevars, block):
+        """ for boehm it is enough to do nothing"""
+        return [SpaceOperation("same_as", [Constant(None, lltype.Void)], op.result)]
 
     def get_rtti(self, TYPE):
         if isinstance(TYPE, lltype.GcStruct):
@@ -564,24 +670,12 @@ class BoehmGCTransformer(GCTransformer):
         return None
 
     def finish(self):
-        self.mixlevelannotator.finish()
-        for fptr in self.finalizer_funcptrs.itervalues():
-            if fptr:
-                g = fptr._obj.graph
-                MinimalGCTransformer(self.translator).transform_graph(g)
+        super(BoehmGCTransformer, self).finish()
 
     def finalizer_funcptr_for_type(self, TYPE):
         if TYPE in self.finalizer_funcptrs:
             return self.finalizer_funcptrs[TYPE]
-        
-        def compute_pop_alive_ll_ops(hop):
-            hop.llops.extend(self.pop_alive(hop.args_v[1]))
-            return hop.inputconst(hop.r_result.lowleveltype, hop.s_result.const)
-        def ll_pop_alive(var):
-            pass
-        ll_pop_alive.compute_ll_ops = compute_pop_alive_ll_ops
-        ll_pop_alive.llresult = lltype.Void
-        
+
         rtti = self.get_rtti(TYPE)
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
             destrptr = rtti._obj.destructor_funcptr
@@ -595,7 +689,7 @@ class BoehmGCTransformer(GCTransformer):
                 raise Exception("can't mix PyObjects and __del__ with Boehm")
 
             static_body = '\n'.join(_static_deallocator_body_for_type('v', TYPE))
-            d = {'pop_alive':ll_pop_alive,
+            d = {'pop_alive': LLTransformerOp(self.pop_alive),
                  'PTR_TYPE':lltype.Ptr(TYPE),
                  'cast_adr_to_ptr': llmemory.cast_adr_to_ptr}
             src = ("def ll_finalizer(addr):\n"
@@ -607,21 +701,15 @@ class BoehmGCTransformer(GCTransformer):
             EXC_INSTANCE_TYPE = self.translator.rtyper.exceptiondata.lltype_of_exception_value
             def ll_finalizer(addr):
                 exc_instance = llop.gc_fetch_exception(EXC_INSTANCE_TYPE)
-                try:
-                    v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
-                    destrptr(v)
-                except:
-                    try:
-                        os.write(2, "a destructor raised an exception, ignoring it\n")
-                    except:
-                        pass
+                v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
+                ll_call_destructor(destrptr, v)
                 llop.gc_restore_exception(lltype.Void, exc_instance)
             g, fptr = self.annotate_helper(ll_finalizer, [llmemory.Address], lltype.Void)
         else:
             g = fptr = None
 
         if g:
-            self.seen_graphs[g] = True
+            self.need_minimal_transform(g)
         self.finalizer_funcptrs[TYPE] = fptr
         return fptr
 
@@ -644,18 +732,29 @@ def gc_pointers_inside(v, adr):
                 for a in gc_pointers_inside(v.items[i], adr + llmemory.itemoffsetof(t, i)):
                     yield a
 
-class FrameworkGCTransformer(BoehmGCTransformer):
 
+class CollectAnalyzer(graphanalyze.GraphAnalyzer):
+    def operation_is_true(self, op):
+        return op.opname in ("malloc", "malloc_varsize", "gc__collect")
+
+class FrameworkGCTransformer(GCTransformer):
+    use_stackless = False
+    extra_static_slots = 0
+
+    from pypy.rpython.memory.gc import MarkSweepGC as GCClass
+    GC_PARAMS = {'start_heap_size': 8*1024*1024 # XXX adjust
+                 }
+    
     def __init__(self, translator):
-        super(FrameworkGCTransformer, self).__init__(translator)
+        from pypy.rpython.memory.support import get_address_linked_list
+        super(FrameworkGCTransformer, self).__init__(translator, inline=True)
+        AddressLinkedList = get_address_linked_list()
+        GCClass = self.GCClass
         class GCData(object):
-            from pypy.rpython.memory.gc import MarkSweepGC as GCClass
-            startheapsize = 640*1024    # XXX adjust
-            rootstacksize = 640*1024    # XXX adjust
-
             # types of the GC information tables
             OFFSETS_TO_GC_PTR = lltype.Array(lltype.Signed)
             TYPE_INFO = lltype.Struct("type_info",
+                ("isvarsize",   lltype.Bool),
                 ("fixedsize",   lltype.Signed),
                 ("ofstoptrs",   lltype.Ptr(OFFSETS_TO_GC_PTR)),
                 ("varitemsize", lltype.Signed),
@@ -666,7 +765,7 @@ class FrameworkGCTransformer(BoehmGCTransformer):
             TYPE_INFO_TABLE = lltype.Array(TYPE_INFO)
 
         def q_is_varsize(typeid):
-            return gcdata.type_info_table[typeid].varitemsize != 0
+            return gcdata.type_info_table[typeid].isvarsize
 
         def q_offsets_to_gc_pointers(typeid):
             return gcdata.type_info_table[typeid].ofstoptrs
@@ -692,7 +791,12 @@ class FrameworkGCTransformer(BoehmGCTransformer):
                                                immortal=True)
         gcdata.static_roots = lltype.malloc(lltype.Array(llmemory.Address), 0,
                                             immortal=True)
-        gcdata.static_root_start = gcdata.static_root_end = llmemory.cast_ptr_to_adr(gcdata.static_roots)
+        # initialize the following two fields with a random non-NULL address,
+        # to make the annotator happy.  The fields are patched in finish()
+        # to point to a real array (not 'static_roots', another one).
+        a_random_address = llmemory.cast_ptr_to_adr(gcdata.type_info_table)
+        gcdata.static_root_start = a_random_address   # patched in finish()
+        gcdata.static_root_end = a_random_address     # patched in finish()
         self.gcdata = gcdata
         self.type_info_list = []
         self.id_of_type = {}      # {LLTYPE: type_id}
@@ -703,32 +807,14 @@ class FrameworkGCTransformer(BoehmGCTransformer):
         self.malloc_fnptr_cache = {}
 
         sizeofaddr = llmemory.sizeof(llmemory.Address)
-        from pypy.rpython.memory.lladdress import NULL
 
-        class StackRootIterator:
-            _alloc_flavor_ = 'raw'
-            def __init__(self):
-                self.stack_current = gcdata.root_stack_top
-                self.static_current = gcdata.static_root_start
-
-            def pop(self):
-                while self.static_current != gcdata.static_root_end:
-                    result = self.static_current
-                    self.static_current += sizeofaddr
-                    if result.address[0].address[0] != NULL:
-                        return result.address[0]
-                while self.stack_current != gcdata.root_stack_base:
-                    self.stack_current -= sizeofaddr
-                    if self.stack_current.address[0] != NULL:
-                        return self.stack_current
-                return NULL
+        StackRootIterator = self.build_stack_root_iterator()
+        gcdata.gc = GCClass(AddressLinkedList, get_roots=StackRootIterator, **self.GC_PARAMS)
 
         def frameworkgc_setup():
             # run-time initialization code
-            stackbase = lladdress.raw_malloc(GCData.rootstacksize)
-            gcdata.root_stack_top  = stackbase
-            gcdata.root_stack_base = stackbase
-            gcdata.gc = GCData.GCClass(GCData.startheapsize, StackRootIterator)
+            StackRootIterator.setup_root_stack()
+            gcdata.gc.setup()
             gcdata.gc.set_query_functions(
                 q_is_varsize,
                 q_offsets_to_gc_pointers,
@@ -737,21 +823,6 @@ class FrameworkGCTransformer(BoehmGCTransformer):
                 q_varsize_offset_to_variable_part,
                 q_varsize_offset_to_length,
                 q_varsize_offsets_to_gcpointers_in_var_part)
-            i = 0
-            while i < len(gcdata.static_roots):
-                push_root(gcdata.static_roots[i])
-                i += 1
-
-        def push_root(addr):
-            top = gcdata.root_stack_top
-            top.address[0] = addr
-            gcdata.root_stack_top = top + sizeofaddr
-
-        def pop_root():
-            top = gcdata.root_stack_top - sizeofaddr
-            result = top.address[0]
-            gcdata.root_stack_top = top
-            return result
 
         bk = self.translator.annotator.bookkeeper
 
@@ -772,33 +843,119 @@ class FrameworkGCTransformer(BoehmGCTransformer):
             annmodel.SomeAddress())
         
         annhelper = annlowlevel.MixLevelHelperAnnotator(self.translator.rtyper)
-        frameworkgc_setup_graph = annhelper.getgraph(frameworkgc_setup, [],
-                                                     annmodel.s_None)
-        push_root_graph = annhelper.getgraph(push_root,
-                                             [annmodel.SomeAddress()],
-                                             annmodel.s_None)
-        pop_root_graph = annhelper.getgraph(pop_root, [],
-                                            annmodel.SomeAddress())
 
-        classdef = bk.getuniqueclassdef(GCData.GCClass)
-        s_gcdata = annmodel.SomeInstance(classdef)
-        malloc_graph = annhelper.getgraph(GCData.GCClass.malloc.im_func,
-                                          [s_gcdata,
-                                           annmodel.SomeInteger(nonneg=True),
-                                           annmodel.SomeInteger(nonneg=True)],
-                                          annmodel.SomeAddress())
+        def getfn(ll_function, args_s, s_result, inline=False):
+            graph = annhelper.getgraph(ll_function, args_s, s_result)
+            self.need_minimal_transform(graph)
+            if inline:
+                self.graphs_to_inline[graph] = True
+            return annhelper.graph2const(graph)
+
+        self.frameworkgc_setup_ptr = getfn(frameworkgc_setup, [],
+                                           annmodel.s_None)
+        if StackRootIterator.push_root is None:
+            self.push_root_ptr = None
+        else:
+            self.push_root_ptr = getfn(StackRootIterator.push_root,
+                                       [annmodel.SomeAddress()],
+                                       annmodel.s_None,
+                                       inline = True)
+        if StackRootIterator.pop_root is None:
+            self.pop_root_ptr = None
+        else:
+            self.pop_root_ptr = getfn(StackRootIterator.pop_root, [],
+                                      annmodel.s_None,
+                                      inline = True)
+
+        classdef = bk.getuniqueclassdef(GCClass)
+        s_gc = annmodel.SomeInstance(classdef)
+        s_gcref = annmodel.SomePtr(llmemory.GCREF)
+        self.malloc_fixedsize_ptr = getfn(
+            GCClass.malloc_fixedsize.im_func,
+            [s_gc, annmodel.SomeInteger(nonneg=True),
+             annmodel.SomeInteger(nonneg=True),
+             annmodel.SomeBool()], s_gcref,
+            inline = True)
+        self.malloc_varsize_ptr = getfn(
+            GCClass.malloc_varsize.im_func,
+            [s_gc] + [annmodel.SomeInteger(nonneg=True) for i in range(5)]
+            + [annmodel.SomeBool()], s_gcref)
+        self.collect_ptr = getfn(GCClass.collect.im_func,
+            [s_gc], annmodel.s_None)
+
+        statics_s = (annmodel.SomeInteger(),)*GCClass.STATISTICS_NUMBERS
+        self.statistics_ptr = getfn(GCClass.statistics.im_func,
+                                    [s_gc], annmodel.SomeTuple(statics_s))
+
+        # experimental gc_x_* operations
+        self.x_swap_list_ptr = getfn(GCClass.x_swap_list.im_func,
+                                     [s_gc, annmodel.SomeAddress()],
+                                     annmodel.SomeAddress())
+        self.x_clone_ptr = getfn(GCClass.x_clone.im_func,
+                                 [s_gc,
+                                  annmodel.SomePtr(lltype.Ptr(gc.X_CLONE))],
+                                 annmodel.s_None)
+
         annhelper.finish()   # at this point, annotate all mix-level helpers
-        self.frameworkgc_setup_ptr = self.graph2funcptr(frameworkgc_setup_graph,
-                                                        attach_empty_cleanup=True)
-        self.push_root_ptr = self.graph2funcptr(push_root_graph)
-        self.pop_root_ptr  = self.graph2funcptr(pop_root_graph)
-        self.malloc_ptr    = self.graph2funcptr(malloc_graph, True)
+        annhelper.backend_optimize()
 
-    def graph2funcptr(self, graph, attach_empty_cleanup=False):
-        self.seen_graphs[graph] = True
-        if attach_empty_cleanup:
-            MinimalGCTransformer(self.translator).transform_graph(graph)
-        return const_funcptr_fromgraph(graph)
+        self.collect_analyzer = CollectAnalyzer(self.translator)
+        self.collect_analyzer.analyze_all()
+
+        s_gc = self.translator.annotator.bookkeeper.valueoftype(GCClass)
+        r_gc = self.translator.rtyper.getrepr(s_gc)
+        self.c_const_gc = rmodel.inputconst(r_gc, self.gcdata.gc)
+
+        HDR = self._gc_HDR = self.gcdata.gc.gcheaderbuilder.HDR
+        self._gc_fields = fields = []
+        for fldname in HDR._names:
+            FLDTYPE = getattr(HDR, fldname)
+            fields.append((fldname, FLDTYPE))
+
+    def build_stack_root_iterator(self):
+        gcdata = self.gcdata
+        sizeofaddr = llmemory.sizeof(llmemory.Address)
+        rootstacksize = sizeofaddr * 163840    # XXX adjust
+
+        class StackRootIterator:
+            _alloc_flavor_ = 'raw'
+            def setup_root_stack():
+                stackbase = lladdress.raw_malloc(rootstacksize)
+                gcdata.root_stack_top  = stackbase
+                gcdata.root_stack_base = stackbase
+                i = 0
+                while i < len(gcdata.static_roots):
+                    StackRootIterator.push_root(gcdata.static_roots[i])
+                    i += 1
+            setup_root_stack = staticmethod(setup_root_stack)
+
+            def push_root(addr):
+                top = gcdata.root_stack_top
+                top.address[0] = addr
+                gcdata.root_stack_top = top + sizeofaddr
+            push_root = staticmethod(push_root)
+
+            def pop_root():
+                gcdata.root_stack_top -= sizeofaddr
+            pop_root = staticmethod(pop_root)
+
+            def __init__(self):
+                self.stack_current = gcdata.root_stack_top
+                self.static_current = gcdata.static_root_start
+
+            def pop(self):
+                while self.static_current != gcdata.static_root_end:
+                    result = self.static_current
+                    self.static_current += sizeofaddr
+                    if result.address[0].address[0] != llmemory.NULL:
+                        return result.address[0]
+                while self.stack_current != gcdata.root_stack_base:
+                    self.stack_current -= sizeofaddr
+                    if self.stack_current.address[0] != llmemory.NULL:
+                        return self.stack_current
+                return llmemory.NULL
+
+        return StackRootIterator
 
     def get_type_id(self, TYPE):
         try:
@@ -813,60 +970,91 @@ class FrameworkGCTransformer(BoehmGCTransformer):
             self.type_info_list.append(info)
             self.id_of_type[TYPE] = type_id
             offsets = offsets_to_gc_pointers(TYPE)
-            info["ofstoptrs"] = self.offsets2table(offsets)
+            info["ofstoptrs"] = self.offsets2table(offsets, TYPE)
             if not TYPE._is_varsize():
+                info["isvarsize"] = False
                 info["fixedsize"] = llmemory.sizeof(TYPE)
+                info["ofstolength"] = -1
             else:
+                info["isvarsize"] = True
                 info["fixedsize"] = llmemory.sizeof(TYPE, 0)
                 if isinstance(TYPE, lltype.Struct):
                     ARRAY = TYPE._flds[TYPE._arrayfld]
                     ofs1 = llmemory.offsetof(TYPE, TYPE._arrayfld)
-                    info["ofstolength"] = ofs1
-                    info["ofstovar"] = ofs1 + llmemory.itemoffsetof(ARRAY, 0)
+                    info["ofstolength"] = ofs1 + llmemory.ArrayLengthOffset(ARRAY)
+                    if ARRAY.OF != lltype.Void:
+                        info["ofstovar"] = ofs1 + llmemory.itemoffsetof(ARRAY, 0)
+                    else:
+                        info["fixedsize"] = ofs1 + llmemory.sizeof(lltype.Signed)
+                    if ARRAY._hints.get('isrpystring'):
+                        info["fixedsize"] = llmemory.sizeof(TYPE, 1)
                 else:
                     ARRAY = TYPE
                     info["ofstolength"] = llmemory.ArrayLengthOffset(ARRAY)
-                    info["ofstovar"] = llmemory.itemoffsetof(TYPE, 0)
+                    if ARRAY.OF != lltype.Void:
+                        info["ofstovar"] = llmemory.itemoffsetof(TYPE, 0)
+                    else:
+                        info["fixedsize"] = llmemory.ArrayLengthOffset(ARRAY) + llmemory.sizeof(lltype.Signed)
                 assert isinstance(ARRAY, lltype.Array)
-                offsets = offsets_to_gc_pointers(ARRAY.OF)
-                info["varofstoptrs"] = self.offsets2table(offsets)
-                info["varitemsize"] = llmemory.sizeof(ARRAY.OF)
+                if ARRAY.OF != lltype.Void:
+                    offsets = offsets_to_gc_pointers(ARRAY.OF)
+                    info["varofstoptrs"] = self.offsets2table(offsets, ARRAY.OF)
+                    info["varitemsize"] = llmemory.sizeof(ARRAY.OF)
+                else:
+                    info["varofstoptrs"] = self.offsets2table((), lltype.Void)
+                    info["varitemsize"] = 0
             return type_id
 
     def consider_constant(self, TYPE, value):
-        if id(value) not in self.seen_roots:
-            self.seen_roots[id(value)] = True
+        if id(value) in self.seen_roots:
+            return
+        self.seen_roots[id(value)] = True
+
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
-            self.get_type_id(TYPE)
+            typeid = self.get_type_id(TYPE)
+            if lltype.top_container(value) is value:
+                hdrbuilder = self.gcdata.gc.gcheaderbuilder
+                hdr = hdrbuilder.new_header(value)
+                adr = llmemory.cast_ptr_to_adr(hdr)
+                self.gcdata.gc.init_gc_object(adr, typeid)
+
         if TYPE != lltype.PyObject and find_gc_ptrs_in_type(TYPE):
+            adr = llmemory.cast_ptr_to_adr(value._as_ptr())
             if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
-                self.static_gc_roots.append(value)
+                self.static_gc_roots.append(adr)
             else: 
-                for a in gc_pointers_inside(value, llmemory.fakeaddress(value)):
+                for a in gc_pointers_inside(value, adr):
                     self.addresses_of_static_ptrs_in_nongc.append(a)
 
-    def offsets2table(self, offsets):
-        key = tuple(offsets)
+    def gc_fields(self):
+        return self._gc_fields
+
+    def gc_field_values_for(self, obj):
+        hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
+        HDR = self._gc_HDR
+        return [getattr(hdr, fldname) for fldname in HDR._names]
+
+    def offsets2table(self, offsets, TYPE):
         try:
-            return self.offsettable_cache[key]
+            return self.offsettable_cache[TYPE]
         except KeyError:
             cachedarray = lltype.malloc(self.gcdata.OFFSETS_TO_GC_PTR,
                                         len(offsets), immortal=True)
             for i, value in enumerate(offsets):
                 cachedarray[i] = value
-            self.offsettable_cache[key] = cachedarray
+            self.offsettable_cache[TYPE] = cachedarray
             return cachedarray
 
     def finish(self):
+        finished = self.finished
         newgcdependencies = super(FrameworkGCTransformer, self).finish()
-        if self.type_info_list is not None:
+        if not finished:
 
             table = lltype.malloc(self.gcdata.TYPE_INFO_TABLE,
                                   len(self.type_info_list), immortal=True)
             for tableentry, newcontent in zip(table, self.type_info_list):
                 for key, value in newcontent.items():
                     setattr(tableentry, key, value)
-            self.type_info_list = None
             self.offsettable_cache = None
             
             # replace the type_info_table pointer in gcdata -- at this point,
@@ -887,11 +1075,12 @@ class FrameworkGCTransformer(BoehmGCTransformer):
             #self.gcdata.type_info_table = table
 
             ll_static_roots = lltype.malloc(lltype.Array(llmemory.Address),
-                                            len(self.static_gc_roots),
+                                            len(self.static_gc_roots) +
+                                                self.extra_static_slots,
                                             immortal=True)
             for i in range(len(self.static_gc_roots)):
-                c = self.static_gc_roots[i]
-                ll_static_roots[i] = llmemory.fakeaddress(c)
+                adr = self.static_gc_roots[i]
+                ll_static_roots[i] = adr
             ll_instance.inst_static_roots = ll_static_roots
 
             ll_static_roots_inside = lltype.malloc(lltype.Array(llmemory.Address),
@@ -908,47 +1097,86 @@ class FrameworkGCTransformer(BoehmGCTransformer):
             newgcdependencies.append(ll_static_roots_inside)
         return newgcdependencies
 
-    def protect_roots(self, op, livevars):
+    def protect_roots(self, op, livevars, block, index=-1):
         livevars = [var for var in livevars if not var_ispyobj(var)]
         newops = list(self.push_roots(livevars))
+        index = len(newops)
         newops.append(op)
-        return newops, tuple(self.pop_roots(livevars))
+        newops.extend(self.pop_roots(livevars))
+        return newops, index
 
-    replace_direct_call    = protect_roots
-    replace_indirect_call  = protect_roots
+    def replace_direct_call(self, op, livevars, block):
+        if self.collect_analyzer.analyze(op):
+            return self.protect_roots(op, livevars, block)
+        else:
+            return [op], 0
+    
+    replace_indirect_call  = replace_direct_call
 
-    def replace_malloc(self, op, livevars):
-        TYPE = op.args[0].value
+    def replace_malloc(self, op, livevars, block):
+        if op.opname.startswith('flavored_'):
+            flavor = op.args[0].value
+            TYPE = op.args[1].value
+        else:
+            flavor = 'gc'
+            TYPE = op.args[0].value
+
+        if not flavor.startswith('gc'):
+            return [op], 0
+        c_can_collect = rmodel.inputconst(lltype.Bool,
+                                          flavor != 'gc_nocollect')
         PTRTYPE = op.result.concretetype
         assert PTRTYPE.TO == TYPE
         type_id = self.get_type_id(TYPE)
 
-        v = varoftype(llmemory.Address)
         c_type_id = rmodel.inputconst(lltype.Signed, type_id)
-        if len(op.args) == 1:
-            v_length = rmodel.inputconst(lltype.Signed, 0)
+        info = self.type_info_list[type_id]
+        c_size = rmodel.inputconst(lltype.Signed, info["fixedsize"])
+        if not op.opname.endswith('_varsize'):
+            args = [self.malloc_fixedsize_ptr, self.c_const_gc, c_type_id,
+                    c_size, c_can_collect]
         else:
-            v_length = op.args[1]
-
-        # surely there's a better way of doing this?
-        s_gcdata = self.translator.annotator.bookkeeper.immutablevalue(self.gcdata)
-        r_gcdata = self.translator.rtyper.getrepr(s_gcdata)
-        s_gc = self.translator.annotator.bookkeeper.valueoftype(self.gcdata.GCClass)
-        r_gc = self.translator.rtyper.getrepr(s_gc)
-        
-        newop0 = SpaceOperation(
-            "getfield",
-            [rmodel.inputconst(r_gcdata, self.gcdata), Constant("inst_gc", lltype.Void)],
-            varoftype(r_gc.lowleveltype))
-        newop = SpaceOperation("direct_call",
-                               [self.malloc_ptr, newop0.result, c_type_id, v_length],
-                               v)
-        ops, finally_ops = self.protect_roots(newop, livevars)
-        ops.insert(0, newop0)
-        ops.append(SpaceOperation("cast_adr_to_ptr", [v], op.result))
-        return ops, finally_ops, 1
+            v_length = op.args[-1]
+            c_ofstolength = rmodel.inputconst(lltype.Signed, info['ofstolength'])
+            c_varitemsize = rmodel.inputconst(lltype.Signed, info['varitemsize'])
+            args = [self.malloc_varsize_ptr, self.c_const_gc, c_type_id,
+                    v_length, c_size, c_varitemsize, c_ofstolength,
+                    c_can_collect]
+        v = varoftype(llmemory.GCREF)
+        newop = SpaceOperation("direct_call", args, v)
+        ops, index = self.protect_roots(newop, livevars, block,
+                                        block.operations.index(op))
+        ops.append(SpaceOperation("cast_opaque_ptr", [v], op.result))
+        return ops
 
     replace_malloc_varsize = replace_malloc
+    replace_flavored_malloc = replace_malloc
+    replace_flavored_malloc_varsize = replace_malloc
+
+    def replace_gc__collect(self, op, livevars, block):
+        newop = SpaceOperation(
+                    "direct_call",
+                    [self.collect_ptr, self.c_const_gc],
+                    op.result)
+        ops, index = self.protect_roots(newop, livevars, block,
+                                        block.operations.index(op))
+        return ops
+
+    def replace_gc_x_swap_list(self, op, livevars, block):
+        [v_malloced] = op.args
+        newop = SpaceOperation("direct_call",
+                               [self.x_swap_list_ptr, self.c_const_gc,
+                                                      v_malloced],
+                               op.result)
+        return [newop]
+
+    def replace_gc_x_clone(self, op, livevars, block):
+        [v_clonedata] = op.args
+        newop = SpaceOperation("direct_call",
+                               [self.x_clone_ptr, self.c_const_gc,
+                                                  v_clonedata],
+                               op.result)
+        return [newop]
 
     def push_alive_nopyobj(self, var):
         return []
@@ -957,19 +1185,24 @@ class FrameworkGCTransformer(BoehmGCTransformer):
         return []
 
     def push_roots(self, vars):
+        if self.push_root_ptr is None:
+            return
         for var in vars:
             v = varoftype(llmemory.Address)
             yield SpaceOperation("cast_ptr_to_adr", [var], v)
             yield SpaceOperation("direct_call", [self.push_root_ptr, v],
-                                 varoftype(lltype.Void), cleanup=None)
+                                 varoftype(lltype.Void))
 
     def pop_roots(self, vars):
+        if self.pop_root_ptr is None:
+            return
         for var in vars[::-1]:
-            v = varoftype(llmemory.Address)
+            v = varoftype(lltype.Void)
+            # XXX specific to non-moving collectors
             yield SpaceOperation("direct_call", [self.pop_root_ptr],
-                                 v, cleanup=None)
-            yield SpaceOperation("gc_reload_possibly_moved", [v, var],
-                                 varoftype(lltype.Void))
+                                 v)
+            #yield SpaceOperation("gc_reload_possibly_moved", [v, var],
+            #                     varoftype(lltype.Void))
 
 # XXX copied and modified from lltypelayout.py
 def offsets_to_gc_pointers(TYPE):
@@ -982,14 +1215,112 @@ def offsets_to_gc_pointers(TYPE):
             baseofs = llmemory.offsetof(TYPE, name)
             suboffsets = offsets_to_gc_pointers(FIELD)
             for s in suboffsets:
-                if s == 0:
+                try:
+                    knownzero = s == 0
+                except TypeError:
+                    knownzero = False
+                if knownzero:
                     offsets.append(baseofs)
                 else:
                     offsets.append(baseofs + s)
+        # sanity check
+        #ex = lltype.Ptr(TYPE)._example()
+        #adr = llmemory.cast_ptr_to_adr(ex)
+        #for off in offsets:
+        #    (adr + off)
     elif (isinstance(TYPE, lltype.Ptr) and TYPE._needsgc() and
           TYPE.TO is not lltype.PyObject):
         offsets.append(0)
     return offsets
+
+# ____________________________________________________________
+
+
+class StacklessFrameworkMinimalGCTransformer(MinimalGCTransformer):
+    def replace_flavored_malloc(self, op, livevars, block):
+        flavor = op.args[0].value
+        if flavor == 'gc_nocollect':
+            return self.parenttransformer.replace_flavored_malloc(op,
+                                                                  livevars,
+                                                                  block)
+        else:
+            return [op], 0
+    replace_flavored_malloc_varsize = replace_flavored_malloc
+
+
+class StacklessFrameworkGCTransformer(FrameworkGCTransformer):
+    use_stackless = True
+    extra_static_slots = 1     # for the stack_capture()'d frame
+    MinimalGCTransformer = StacklessFrameworkMinimalGCTransformer
+
+    def __init__(self, translator):
+        FrameworkGCTransformer.__init__(self, translator)
+        # and now, fun fun fun, we need to inline malloc_fixedsize
+        # manually into all 'malloc' operation users, because inlining
+        # it after it has been stackless transformed is both a Very
+        # Bad Idea and forbidden by the fact that stackless transform
+        # makes it self-recursive!  Argh.
+        self.replace_and_inline_malloc_already_now()
+        # nothing left to inline during code generation
+        self.inline = False
+
+    def replace_and_inline_malloc_already_now(self):
+        for graph in self.translator.graphs:
+            any_malloc = False
+            for block in graph.iterblocks():
+                if block.operations:
+                    newops = []
+                    for op in block.operations:
+                        if op.opname.startswith('malloc'):
+                            any_malloc = True
+                            ops = self.replace_malloc(op, [], block)
+                            if isinstance(ops, tuple):
+                                ops = ops[0]
+                            newops.extend(ops)
+                        else:
+                            newops.append(op)
+                    block.operations = newops
+            if any_malloc:
+                self.inline_helpers(graph)
+
+    def build_stack_root_iterator(self):
+        from pypy.rpython.rstack import stack_capture
+        sizeofaddr = llmemory.sizeof(llmemory.Address)
+        gcdata = self.gcdata
+
+        class StackRootIterator:
+            _alloc_flavor_ = 'raw'
+
+            def setup_root_stack():
+                pass
+            setup_root_stack = staticmethod(setup_root_stack)
+
+            push_root = None
+            pop_root = None
+
+            def __init__(self):
+                frame = llmemory.cast_ptr_to_adr(stack_capture())
+                self.static_current = gcdata.static_root_start
+                index = len(gcdata.static_roots)
+                self.static_roots_index = index
+                gcdata.static_roots[index-1] = frame
+
+            def pop(self):
+                while self.static_current != gcdata.static_root_end:
+                    result = self.static_current
+                    self.static_current += sizeofaddr
+                    if result.address[0].address[0] != llmemory.NULL:
+                        return result.address[0]
+                i = self.static_roots_index
+                if i > 0:
+                    i -= 1
+                    self.static_roots_index = i
+                    p = lltype.direct_arrayitems(gcdata.static_roots)
+                    p = lltype.direct_ptradd(p, i)
+                    return llmemory.cast_ptr_to_adr(p)
+                return llmemory.NULL
+
+        return StackRootIterator
 
 # ___________________________________________________________________
 # calculate some statistics about the number of variables that need

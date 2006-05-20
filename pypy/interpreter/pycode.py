@@ -10,6 +10,7 @@ from pypy.interpreter import eval
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import NoneNotWrapped 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root 
+from pypy.rpython.rarithmetic import intmask
 
 # helper
 
@@ -95,7 +96,7 @@ class PyCode(eval.Code):
         self.co_flags = flags
         self.co_code = code
         self.co_consts_w = consts
-        self.co_names_w = [space.wrap(aname) for aname in names]
+        self.co_names_w = [space.new_interned_str(aname) for aname in names]
         self.co_varnames = varnames
         self.co_freevars = freevars
         self.co_cellvars = cellvars
@@ -342,7 +343,25 @@ class PyCode(eval.Code):
                 return space.w_False
 
         return space.w_True
-   
+
+    def descr_code__hash__(self):
+        space = self.space
+        result =  hash(self.co_name)
+        result ^= self.co_argcount
+        result ^= self.co_nlocals
+        result ^= self.co_flags
+        result ^= self.co_firstlineno
+        result ^= hash(self.co_code)
+        for name in self.co_varnames:  result ^= hash(name)
+        for name in self.co_freevars:  result ^= hash(name)
+        for name in self.co_cellvars:  result ^= hash(name)
+        w_result = space.wrap(intmask(result))
+        for w_name in self.co_names_w:
+            w_result = space.xor(w_result, space.hash(w_name))
+        for w_const in self.co_consts_w:
+            w_result = space.xor(w_result, space.hash(w_const))
+        return w_result
+
     unwrap_spec =        [ObjSpace, W_Root, 
                           int, int, int, int,
                           str, W_Root, W_Root, 
@@ -380,3 +399,27 @@ class PyCode(eval.Code):
         return space.wrap(code)
     descr_code__new__.unwrap_spec = unwrap_spec 
 
+    def descr__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('code_new')
+        w        = space.wrap
+        tup      = [
+            w(self.co_argcount), 
+            w(self.co_nlocals), 
+            w(self.co_stacksize), 
+            w(self.co_flags),
+            w(self.co_code), 
+            space.newtuple(self.co_consts_w), 
+            space.newtuple(self.co_names_w), 
+            space.newtuple([w(v) for v in self.co_varnames]), 
+            w(self.co_filename),
+            w(self.co_name), 
+            w(self.co_firstlineno),
+            w(self.co_lnotab), 
+            space.newtuple([w(v) for v in self.co_freevars]),
+            space.newtuple([w(v) for v in self.co_cellvars]),
+            #hidden_applevel=False, magic = 62061 | 0x0a0d0000
+        ]
+        return space.newtuple([new_inst, space.newtuple(tup)])

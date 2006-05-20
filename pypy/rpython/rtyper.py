@@ -22,13 +22,13 @@ from pypy.rpython.lltypesystem.lltype import \
      Signed, Unsigned, Float, Char, Bool, Void, \
      LowLevelType, Ptr, ContainerType, \
      FuncType, functionptr, typeOf, RuntimeTypeInfo, \
-     attachRuntimeTypeInfo, Primitive
+     attachRuntimeTypeInfo, Primitive, Number
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, inputconst, BrokenReprTyperError
 from pypy.rpython.rmodel import warning, HalfConcreteWrapper
-from pypy.rpython.annlowlevel import annotate_lowlevel_helper
+from pypy.rpython.annlowlevel import annotate_lowlevel_helper, LowLevelAnnotatorPolicy
 from pypy.rpython.rmodel import log
 from pypy.rpython.typesystem import LowLevelTypeSystem,\
                                     ObjectOrientedTypeSystem
@@ -38,6 +38,8 @@ class RPythonTyper:
 
     def __init__(self, annotator, type_system="lltype"):
         self.annotator = annotator
+
+        self.lowlevel_ann_policy = LowLevelAnnotatorPolicy(self)
 
         if isinstance(type_system, str):
             if type_system == "lltype":
@@ -56,16 +58,16 @@ class RPythonTyper:
         self.class_reprs = {}
         self.instance_reprs = {}
         self.pbc_reprs = {}
+        self.classes_with_wrapper = {}
+        self.wrapper_context = None # or add an extra arg to convertvar?
         self.concrete_calltables = {}
         self.class_pbc_attributes = {}
         self.oo_meth_impls = {}
+        self.cache_dummy_values = {}
         self.typererrors = []
         self.typererror_count = 0
         # make the primitive_to_repr constant mapping
         self.primitive_to_repr = {}
-        for s_primitive, lltype in annmodel.annotation_to_ll_map:
-            r = self.getrepr(s_primitive)
-            self.primitive_to_repr[r.lowleveltype] = r
         if self.type_system.offers_exceptiondata:
             self.exceptiondata = self.type_system.exceptiondata.ExceptionData(self)
         else:
@@ -86,6 +88,26 @@ class RPythonTyper:
             log.info(s)
         self.crash_on_first_typeerror = True
 
+    def getprimitiverepr(self, lltype):
+        try:
+            return self.primitive_to_repr[lltype]
+        except KeyError:
+            pass
+        if isinstance(lltype, Primitive):
+            repr = self.primitive_to_repr[lltype] = self.getrepr(annmodel.lltype_to_annotation(lltype))
+            return repr
+        raise TyperError('There is no primitive repr for %r'%(lltype,))
+    
+    def add_wrapper(self, clsdef):
+        # record that this class has a wrapper, and what the __init__ is
+        cls = clsdef.classdesc.pyobj
+        init = getattr(cls.__init__, 'im_func', None)
+        self.classes_with_wrapper[cls] = init
+
+    def set_wrapper_context(self, obj):
+        # not nice, but we sometimes need to know which function we are wrapping
+        self.wrapper_context = obj
+
     def add_pendingsetup(self, repr): 
         assert isinstance(repr, Repr)
         if repr in self._seen_reprs_must_call_setup: 
@@ -96,6 +118,12 @@ class RPythonTyper:
         
     def getexceptiondata(self):
         return self.exceptiondata    # built at the end of specialize()
+
+    def lltype_to_classdef_mapping(self):
+        result = {}
+        for (classdef, _), repr in self.instance_reprs.iteritems():
+            result[repr.lowleveltype] = classdef
+        return result
 
     def makekey(self, s_obj):
         return pair(self.type_system, s_obj).rtyper_makekey(self)
@@ -118,10 +146,8 @@ class RPythonTyper:
             self.add_pendingsetup(result)
         return result
 
-    def binding(self, var):
-        s_obj = self.annotator.binding(var, True)
-        if s_obj is None:
-            s_obj = annmodel.SomeObject()
+    def binding(self, var, default=annmodel.SomeObject()):
+        s_obj = self.annotator.binding(var, default)
         return s_obj
 
     def bindingrepr(self, var):
@@ -137,6 +163,7 @@ class RPythonTyper:
         # first make sure that all functions called in a group have exactly
         # the same signature, by hacking their flow graphs if needed
         self.type_system.perform_normalizations(self)
+        self.exceptiondata.finish(self)
         # new blocks can be created as a result of specialize_block(), so
         # we need to be careful about the loop here.
         self.already_seen = {}
@@ -264,6 +291,9 @@ class RPythonTyper:
         return LowLevelOpList(self, block)
 
     def specialize_block(self, block):
+        graph = self.annotator.annotated[block]
+        self.annotator.fixed_graphs[graph] = True
+
         # give the best possible types to the input args
         try:
             self.setup_block_entry(block)
@@ -328,34 +358,36 @@ class RPythonTyper:
             # consider it as a link source instead
             self.insert_link_conversions(extrablock)
 
+    def _convert_link(self, block, link):  
+        if link.exitcase is not None:
+            if isinstance(block.exitswitch, Variable):
+                r_case = self.bindingrepr(block.exitswitch)
+            else:
+                assert block.exitswitch == c_last_exception
+                r_case = rclass.get_type_repr(self)
+            link.llexitcase = r_case.convert_const(link.exitcase)
+        else:
+            link.llexitcase = None
+
+        a = link.last_exception
+        if isinstance(a, Variable):
+            a.concretetype = self.exceptiondata.lltype_of_exception_type
+        elif isinstance(a, Constant):
+            link.last_exception = inputconst(
+                self.exceptiondata.r_exception_type, a.value)
+
+        a = link.last_exc_value
+        if isinstance(a, Variable):
+            a.concretetype = self.exceptiondata.lltype_of_exception_value
+        elif isinstance(a, Constant):
+            link.last_exc_value = inputconst(
+                self.exceptiondata.r_exception_value, a.value)
+
     def insert_link_conversions(self, block, skip=0):
         # insert the needed conversions on the links
         can_insert_here = block.exitswitch is None and len(block.exits) == 1
         for link in block.exits[skip:]:
-            if link.exitcase is not None:
-                if isinstance(block.exitswitch, Variable):
-                    r_case = self.bindingrepr(block.exitswitch)
-                else:
-                    assert block.exitswitch == c_last_exception
-                    r_case = rclass.get_type_repr(self)
-                link.llexitcase = r_case.convert_const(link.exitcase)
-            else:
-                link.llexitcase = None
-
-            a = link.last_exception
-            if isinstance(a, Variable):
-                a.concretetype = self.exceptiondata.lltype_of_exception_type
-            elif isinstance(a, Constant):
-                link.last_exception = inputconst(
-                    self.exceptiondata.r_exception_type, a.value)
-
-            a = link.last_exc_value
-            if isinstance(a, Variable):
-                a.concretetype = self.exceptiondata.lltype_of_exception_value
-            elif isinstance(a, Constant):
-                link.last_exc_value = inputconst(
-                    self.exceptiondata.r_exception_value, a.value)
-
+            self._convert_link(block, link)
             inputargs_reprs = self.setup_block_entry(link.target)
             newops = self.make_new_lloplist(block)
             newlinkargs = {}
@@ -499,16 +531,16 @@ class RPythonTyper:
     # __________ irregular operations __________
 
     def translate_op_newlist(self, hop):
-        return rlist.rtype_newlist(hop)
+        return self.type_system.rlist.rtype_newlist(hop)
 
     def translate_op_newdict(self, hop):
-        return rdict.rtype_newdict(hop)
+        return self.type_system.rdict.rtype_newdict(hop)
 
     def translate_op_alloc_and_set(self, hop):
-        return rlist.rtype_alloc_and_set(hop)
+        return self.type_system.rlist.rtype_alloc_and_set(hop)
 
     def translate_op_newtuple(self, hop):
-        return rtuple.rtype_newtuple(hop)
+        return self.type_system.rtuple.rtype_newtuple(hop)
 
     def translate_op_newslice(self, hop):
         return rslice.rtype_newslice(hop)
@@ -529,6 +561,13 @@ class RPythonTyper:
 
     def needs_hash_support(self, clsdef):
         return clsdef in self.annotator.bookkeeper.needs_hash_support
+
+    def needs_wrapper(self, cls):
+        return cls in self.classes_with_wrapper
+
+    def get_wrapping_hint(self, clsdef):
+        cls = clsdef.classdesc.pyobj
+        return self.classes_with_wrapper[cls], self.wrapper_context
 
     def getcallable(self, graph):
         def getconcretetype(v):
@@ -551,7 +590,8 @@ class RPythonTyper:
             args_s.insert(0, bk.immutablevalue(ll_function.im_self))
             ll_function = ll_function.im_func
         helper_graph = annotate_lowlevel_helper(self.annotator,
-                                                ll_function, args_s)
+                                                ll_function, args_s,
+                                                policy=self.lowlevel_ann_policy)
         return helper_graph
 
     def annotate_helper_fn(self, ll_function, argtypes):
@@ -567,8 +607,7 @@ class RPythonTyper:
         if ARG_GCSTRUCT is None:
             ARG_GCSTRUCT = GCSTRUCT
         args_s = [annmodel.SomePtr(Ptr(ARG_GCSTRUCT))]
-        graph = annotate_lowlevel_helper(self.annotator,
-                                         func, args_s)
+        graph = self.annotate_helper(func, args_s)
         s = self.annotator.binding(graph.getreturnvar())
         if (not isinstance(s, annmodel.SomePtr) or
             s.ll_ptrtype != Ptr(RuntimeTypeInfo)):
@@ -631,7 +670,7 @@ class HighLevelOp(object):
         type.
         """
         if not isinstance(converted_to, Repr):
-            converted_to = self.rtyper.primitive_to_repr[converted_to]
+            converted_to = self.rtyper.getprimitiverepr(converted_to)
         v = self.args_v[arg]
         if isinstance(v, Constant):
             return inputconst(converted_to, v.value)
@@ -732,7 +771,7 @@ class LowLevelOpList(list):
     llop_raising_exceptions = None
     implicit_exceptions_checked = None
 
-    def __init__(self, rtyper, originalblock=None):
+    def __init__(self, rtyper=None, originalblock=None):
         self.rtyper = rtyper
         self.originalblock = originalblock
 
@@ -806,7 +845,8 @@ class LowLevelOpList(list):
             newargs_v.insert(0, inputconst(Void, ll_function.im_self))
             ll_function = ll_function.im_func
 
-        graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s)
+        graph = annotate_lowlevel_helper(rtyper.annotator, ll_function, args_s,
+                                         rtyper.lowlevel_ann_policy)
         self.record_extra_call(graph)
 
         # build the 'direct_call' operation
@@ -834,7 +874,7 @@ class LowLevelOpList(list):
 from pypy.rpython import robject
 from pypy.rpython import rint, rbool, rfloat
 from pypy.rpython import rslice, rrange
-from pypy.rpython import rlist, rstr, rtuple, rdict 
+from pypy.rpython import rstr, rdict
 from pypy.rpython import rclass, rbuiltin, rpbc, rspecialcase
 from pypy.rpython import rexternalobj
 from pypy.rpython import rptr

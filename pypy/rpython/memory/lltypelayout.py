@@ -75,6 +75,8 @@ def get_variable_size(TYPE):
         return 0
     elif isinstance(TYPE, lltype.PyObjectType):
         return 0
+    elif isinstance(TYPE, lltype.Ptr):
+        return 0
     else:
         assert 0, "not yet implemented"
 
@@ -88,21 +90,19 @@ def sizeof(TYPE, i=None):
         return fixedsize + i * varsize
 
 def convert_offset_to_int(offset):
-    from pypy.rpython.memory.gc import GCHeaderOffset
     if isinstance(offset, llmemory.FieldOffset):
         layout = get_layout(offset.TYPE)
         return layout[offset.fldname]
     elif isinstance(offset, llmemory.CompositeOffset):
-        return convert_offset_to_int(offset.first) + \
-               convert_offset_to_int(offset.second)
+        return sum([convert_offset_to_int(item) for item in offset.offsets])
     elif type(offset) == llmemory.AddressOffset:
         return 0
     elif isinstance(offset, llmemory.ItemOffset):
         return sizeof(offset.TYPE) * offset.repeat
     elif isinstance(offset, llmemory.ArrayItemsOffset):
         return get_fixed_size(lltype.Signed)
-    elif isinstance(offset, GCHeaderOffset):
-        return sizeof(offset.minimal_size)
+    elif isinstance(offset, llmemory.GCHeaderOffset):
+        return sizeof(offset.gcheaderbuilder.HDR)
     else:
         raise Exception("unknown offset type %r"%offset)
         

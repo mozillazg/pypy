@@ -7,24 +7,28 @@ from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, \
      Ptr, malloc, nullptr
 from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc
-from pypy.rpython import robject
-from pypy.rpython import rtuple
 from pypy.rpython.rpbc import samesig,\
      commonbase, allattributenames, adjust_shape, \
      AbstractClassesPBCRepr, AbstractMethodsPBCRepr, OverriddenFunctionPBCRepr, \
      AbstractMultipleFrozenPBCRepr, MethodOfFrozenPBCRepr, \
-     AbstractFunctionsPBCRepr
-from pypy.rpython.lltypesystem import rclass
+     AbstractFunctionsPBCRepr, AbstractMultipleUnrelatedFrozenPBCRepr, \
+     SingleFrozenPBCRepr
+from pypy.rpython.lltypesystem import rclass, llmemory
 from pypy.tool.sourcetools import has_varargs
 
 from pypy.rpython import callparse
 
 def rtype_is_None(robj1, rnone2, hop, pos=0):
-    if not isinstance(robj1.lowleveltype, Ptr):
-        raise TyperError('is None of instance of the non-pointer: %r' % (robj1))           
-    v1 = hop.inputarg(robj1, pos)
-    return hop.genop('ptr_iszero', [v1], resulttype=Bool)
-    
+    if isinstance(robj1.lowleveltype, Ptr):
+        v1 = hop.inputarg(robj1, pos)
+        return hop.genop('ptr_iszero', [v1], resulttype=Bool)
+    elif robj1.lowleveltype == llmemory.Address:
+        v1 = hop.inputarg(robj1, pos)
+        cnull = hop.inputconst(llmemory.Address, robj1.null_instance())
+        return hop.genop('adr_eq', [v1, cnull], resulttype=Bool)
+    else:
+        raise TyperError('rtype_is_None of %r' % (robj1))
+
 # ____________________________________________________________
 
 class MultipleFrozenPBCRepr(AbstractMultipleFrozenPBCRepr):
@@ -51,6 +55,42 @@ class MultipleFrozenPBCRepr(AbstractMultipleFrozenPBCRepr):
         cmangledname = inputconst(Void, mangled_name)
         return llops.genop('getfield', [vpbc, cmangledname],
                            resulttype = r_value)
+
+
+class MultipleUnrelatedFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
+    """Representation selected for multiple non-callable pre-built constants
+    with no common access set."""
+
+    lowleveltype = llmemory.Address
+    EMPTY = Struct('pbc')
+
+    def convert_pbc(self, pbcptr):
+        return llmemory.fakeaddress(pbcptr)
+
+    def create_instance(self):
+        return malloc(self.EMPTY, immortal=True)
+
+    def null_instance(self):
+        return llmemory.Address._defl()
+
+class __extend__(pairtype(MultipleUnrelatedFrozenPBCRepr,
+                          MultipleUnrelatedFrozenPBCRepr),
+                 pairtype(MultipleUnrelatedFrozenPBCRepr,
+                          SingleFrozenPBCRepr),
+                 pairtype(SingleFrozenPBCRepr,
+                          MultipleUnrelatedFrozenPBCRepr)):
+    def rtype_is_((robj1, robj2), hop):
+        if isinstance(robj1, MultipleUnrelatedFrozenPBCRepr):
+            r = robj1
+        else:
+            r = robj2
+        vlist = hop.inputargs(r, r)
+        return hop.genop('adr_eq', vlist, resulttype=Bool)
+
+class __extend__(pairtype(MultipleFrozenPBCRepr,
+                          MultipleUnrelatedFrozenPBCRepr)):
+    def convert_from_to((robj1, robj2), v, llops):
+        return llops.genop('cast_ptr_to_adr', [v], resulttype=llmemory.Address)
 
 # ____________________________________________________________
 
@@ -126,21 +166,25 @@ class ClassesPBCRepr(AbstractClassesPBCRepr):
             assert isinstance(s_instance, annmodel.SomeInstance)
             classdef = hop.s_result.classdef
             v_instance = rclass.rtype_new_instance(hop.rtyper, classdef,
-                                                   hop.llops)
+                                                   hop.llops, hop)
+            if isinstance(v_instance, tuple):
+                v_instance, must_call_init = v_instance
+                if not must_call_init:
+                    return v_instance
             s_init = classdef.classdesc.s_read_attribute('__init__')
             v_init = Constant("init-func-dummy")   # this value not really used
         else:
             # instantiating a class from multiple possible classes
             from pypy.rpython.lltypesystem.rbuiltin import ll_instantiate
             vtypeptr = hop.inputarg(self, arg=0)
-            access_set = self.get_access_set()
-            r_class = self.get_class_repr()
-            if '__init__' in access_set.attrs:
-                s_init = access_set.attrs['__init__']
+            try:
+                access_set, r_class = self.get_access_set('__init__')
+            except MissingRTypeAttribute:
+                s_init = annmodel.s_ImpossibleValue
+            else:
+                s_init = access_set.s_value
                 v_init = r_class.getpbcfield(vtypeptr, access_set, '__init__',
                                              hop.llops)
-            else:
-                s_init = annmodel.s_ImpossibleValue
             v_inst1 = hop.gendirectcall(ll_instantiate, vtypeptr)
             v_instance = hop.genop('cast_pointer', [v_inst1],
                                    resulttype = r_instance)

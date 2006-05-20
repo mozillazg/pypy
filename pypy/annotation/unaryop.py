@@ -7,7 +7,7 @@ from pypy.annotation.model import \
      SomeDict, SomeUnicodeCodePoint, SomeTuple, SomeImpossibleValue, \
      SomeInstance, SomeBuiltin, SomeFloat, SomeIterator, SomePBC, \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
-     SomeCTypesObject,\
+     SomeCTypesObject, s_ImpossibleValue, \
      unionof, set, missing_operation, add_knowntypedata
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
@@ -71,7 +71,7 @@ class __extend__(SomeObject):
             return immutablevalue(bool(obj.const))
         else:
             s_len = obj.len()
-            if s_len.is_constant():
+            if s_len.is_immutable_constant():
                 return immutablevalue(s_len.const > 0)
             else:
                 return SomeBool()
@@ -188,7 +188,7 @@ class __extend__(SomeFloat):
     abs = neg
 
     def is_true(self):
-        if self.is_constant():
+        if self.is_immutable_constant():
             return getbookkeeper().immutablevalue(bool(self.const))
         return SomeBool()
 
@@ -198,14 +198,12 @@ class __extend__(SomeFloat):
 class __extend__(SomeInteger):
 
     def invert(self):
-        if self.unsigned:
-            return SomeInteger(unsigned=True, size=self.size)
-        return SomeInteger(size=self.size)
+        return SomeInteger(knowntype=self.knowntype)
 
     invert.can_only_throw = []
 
     def pos(self):
-        return self
+        return SomeInteger(knowntype=self.knowntype)
 
     pos.can_only_throw = []
     int = pos
@@ -213,17 +211,13 @@ class __extend__(SomeInteger):
     # these are the only ones which can overflow:
 
     def neg(self):
-        if self.unsigned:
-            return SomeInteger(unsigned=True, size=self.size)
-        return SomeInteger(size=self.size)
+        return SomeInteger(knowntype=self.knowntype)
 
     neg.can_only_throw = []
     neg_ovf = _clone(neg, [OverflowError])
 
     def abs(self):
-        if self.unsigned:
-            return self
-        return SomeInteger(nonneg=True, size=self.size)
+        return SomeInteger(nonneg=True, knowntype=self.knowntype)
 
     abs.can_only_throw = []
     abs_ovf = _clone(abs, [OverflowError])
@@ -232,6 +226,28 @@ class __extend__(SomeBool):
     def is_true(self):
         return self
 
+    def invert(self):
+        return SomeInteger()
+
+    invert.can_only_throw = []
+
+    def neg(self):
+        return SomeInteger()
+
+    neg.can_only_throw = []
+    neg_ovf = _clone(neg, [OverflowError])
+
+    def abs(self):
+        return SomeInteger(nonneg=True)
+
+    abs.can_only_throw = []
+    abs_ovf = _clone(abs, [OverflowError])
+
+    def pos(self):
+        return SomeInteger(nonneg=True)
+
+    pos.can_only_throw = []
+    int = pos
 
 class __extend__(SomeTuple):
 
@@ -245,6 +261,11 @@ class __extend__(SomeTuple):
 
     def getanyitem(tup):
         return unionof(*tup.items)
+
+    def hash(tup):
+        for s_item in tup.items:
+            s_item.hash()    # record that we need the hash of each item
+        return SomeInteger()
 
 
 class __extend__(SomeList):
@@ -312,8 +333,13 @@ class __extend__(SomeDict):
         elif variant == 'values':
             return dct.dictdef.read_value()
         elif variant == 'items':
-            return SomeTuple((dct.dictdef.read_key(),
-                              dct.dictdef.read_value()))
+            s_key   = dct.dictdef.read_key()
+            s_value = dct.dictdef.read_value()
+            if (isinstance(s_key, SomeImpossibleValue) or
+                isinstance(s_value, SomeImpossibleValue)):
+                return s_ImpossibleValue
+            else:
+                return SomeTuple((s_key, s_value))
         else:
             raise ValueError
 
@@ -321,6 +347,8 @@ class __extend__(SomeDict):
         dct.dictdef.generalize_key(key)
         dct.dictdef.generalize_value(dfl)
         return dct.dictdef.read_value()
+
+    method_setdefault = method_get
 
     def method_copy(dct):
         return SomeDict(dct.dictdef)
@@ -335,8 +363,7 @@ class __extend__(SomeDict):
         return getbookkeeper().newlist(dct.dictdef.read_value())
 
     def method_items(dct):
-        return getbookkeeper().newlist(SomeTuple((dct.dictdef.read_key(),
-                                                  dct.dictdef.read_value())))
+        return getbookkeeper().newlist(dct.getanyitem('items'))
 
     def method_iterkeys(dct):
         return SomeIterator(dct, 'keys')
@@ -381,7 +408,7 @@ class __extend__(SomeString):
     def method_join(str, s_list):
         getbookkeeper().count("str_join", str)
         s_item = s_list.listdef.read_item()
-        if s_item == SomeImpossibleValue():
+        if isinstance(s_item, SomeImpossibleValue):
             return immutablevalue("")
         return SomeString()
 
@@ -456,6 +483,8 @@ class __extend__(SomeInstance):
     def getattr(ins, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
             attr = s_attr.const
+            if attr == '__class__':
+                return ins.classdef.read_attr__class__()
             attrdef = ins.classdef.find_attribute(attr)
             position = getbookkeeper().position_key
             attrdef.read_locations[position] = True
@@ -501,7 +530,8 @@ class __extend__(SomeBuiltin):
         if bltn.s_self is not None:
             return bltn.analyser(bltn.s_self, *args)
         else:
-            getbookkeeper().count(bltn.methodname.replace('.', '_'), *args)
+            if bltn.methodname:
+                getbookkeeper().count(bltn.methodname.replace('.', '_'), *args)
             return bltn.analyser(*args)
 
     def call(bltn, args, implicit_init=False):
@@ -556,7 +586,7 @@ class __extend__(SomeExternalObject):
 # annotation of low-level types
 from pypy.annotation.model import SomePtr, SomeLLADTMeth 
 from pypy.annotation.model import SomeOOInstance, SomeOOBoundMeth, SomeOOStaticMeth
-from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
+from pypy.annotation.model import ll_to_annotation, lltype_to_annotation, annotation_to_lltype
 
 class __extend__(SomePtr):
 
@@ -614,8 +644,8 @@ class __extend__(SomeOOBoundMeth):
     def simple_call(m, *args_s):
         llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
         inst = m.ootype._example()
-        v = getattr(inst, m.name)(*llargs)
-        return ll_to_annotation(v)
+        RESULT = ootype.typeOf(m.ootype._lookup(m.name)[1]).RESULT
+        return lltype_to_annotation(RESULT)
 
 class __extend__(SomeOOStaticMeth):
     def simple_call(m, *args_s):
@@ -631,32 +661,14 @@ class __extend__(SomeCTypesObject):
     def getattr(cto, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
             attr = s_attr.const
-            # We reactivate the old contents field hack
-            if False:
-                try:
-                    atype = cto.knowntype._fields_def_[attr]
-                except AttributeError:
-                    # We are dereferencing a pointer by accessing its contents attribute
-                    if s_attr.const == "contents":
-                        return SomeCTypesObject(
-                                cto.knowntype._type_, cto.MEMORYALIAS)
-                    else:
-                        raise AttributeError(
-                                "%r object has no attribute %r" % (
-                                    cto.knowntype, s_attr.const))
-            else:
-                if extregistry.is_registered_type(cto.knowntype):
-                    entry = extregistry.lookup_type(cto.knowntype)
-                    s_value = entry.fields_s[attr]
-                    return s_value
-                else:
-                    atype = cto.knowntype._fields_def_[attr]
-            try:
-                return atype.annotator_type
-            except AttributeError:
-                return SomeCTypesObject(atype)
+            entry = extregistry.lookup_type(cto.knowntype)
+            s_value = entry.get_field_annotation(cto, attr)
+            return s_value
         else:
             return SomeObject()
+
+    def is_true(cto):
+        return SomeBool()
 
 #_________________________________________
 # memory addresses
@@ -671,3 +683,6 @@ class __extend__(SomeAddress):
         return SomeTypedAddressAccess(
             lladdress.supported_access_types[s_attr.const])
     getattr.can_only_throw = []
+
+    def is_true(s_addr):
+        return SomeBool()

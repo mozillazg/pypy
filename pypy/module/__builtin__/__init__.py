@@ -31,13 +31,16 @@ class Module(MixedModule):
         'any'           : 'app_functional.any',
         'enumerate'     : 'app_functional.enumerate',
         'xrange'        : 'app_functional.xrange',
+        '_install_pickle_support_for_xrange_iterator':
+        'app_functional._install_pickle_support_for_xrange_iterator',
         'sorted'        : 'app_functional.sorted',
         'reversed'      : 'app_functional.reversed',
+        '_install_pickle_support_for_reversed_iterator':
+        'app_functional._install_pickle_support_for_reversed_iterator',
 
         'issubclass'    : 'app_inspect.issubclass',
         'isinstance'    : 'app_inspect.isinstance',
         'hasattr'       : 'app_inspect.hasattr',
-        'callable'      : 'app_inspect.callable',
         'globals'       : 'app_inspect.globals',
         'locals'        : 'app_inspect.locals',
         'vars'          : 'app_inspect.vars',
@@ -50,7 +53,6 @@ class Module(MixedModule):
 
         'complex'       : 'app_complex.complex',
 
-        'intern'        : 'app_misc.intern',
         'buffer'        : 'app_buffer.buffer',
         'reload'        : 'app_misc.reload',
 
@@ -81,6 +83,7 @@ class Module(MixedModule):
         # default __metaclass__
         '__metaclass__' : '(space.w_type)',
         '_isfake'       : 'special._isfake',
+        '_pdb'          : 'special._pdb',
 
         # interp-level function definitions
         'abs'           : 'operation.abs',
@@ -105,6 +108,8 @@ class Module(MixedModule):
         'hash'          : 'operation.hash',
         'id'            : 'operation.id',
         '_seqiter'      : 'operation._seqiter',
+        'intern'        : 'operation.intern',
+        'callable'      : 'operation.callable',
 
         'compile'       : 'compiling.compile',
         'eval'          : 'compiling.eval',
@@ -112,7 +117,6 @@ class Module(MixedModule):
         '__import__'    : 'importing.importhook',
 
         'range'         : 'functional.range_int',
-
         # float->string helper
         '_formatd'      : 'special._formatd'
     }
@@ -137,3 +141,15 @@ class Module(MixedModule):
        builtin = module.Module(space, None)
        space.setitem(builtin.w_dict, space.wrap('None'), space.w_None)
        return builtin
+
+    def setup_after_space_initialization(self):
+        """NOT_RPYTHON"""
+        space = self.space
+        # call installations for pickle support
+        for name in self.loaders.keys():
+            if name.startswith('_install_pickle_support_for_'):
+                w_install = self.get(name)
+                space.call_function(w_install)
+                # xxx hide the installer
+                space.delitem(self.w_dict, space.wrap(name))
+                del self.loaders[name]

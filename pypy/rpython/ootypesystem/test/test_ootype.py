@@ -55,6 +55,17 @@ def test_classof():
     assert classof(i2) is not classof(i)
     assert classof(i2) != classof(i)
     
+def test_dynamictype():
+    A = Instance("A", ROOT)
+    B = Instance("B", A)
+    a = new(A)
+    b = new(B)
+    assert dynamicType(a) is A
+    assert dynamicType(b) is B
+
+    b = ooupcast(A, b)
+    assert dynamicType(b) is B
+
 def test_simple_default_class():
     I = Instance("test", ROOT, {"a": (Signed, 3)})
     i = new(I)
@@ -300,3 +311,83 @@ def test_static_method_equality():
     sm = static_meth(SM, 'f', graph='graph')
     sm1 = static_meth(SM1, 'f', graph='graph')
     assert sm == sm1
+
+def test_casts():
+    A = Instance('A', ROOT)
+    B = Instance('B', A)
+    b = new(B)
+    assert instanceof(b, B)
+    assert instanceof(b, A)
+    assert typeOf(b) == B
+    bA = ooupcast(A, b)
+    assert instanceof(bA, B)
+    if STATICNESS:
+        assert typeOf(bA) == A
+    bB = oodowncast(B, bA)
+    assert instanceof(bB, A)
+    assert instanceof(bB, B)
+    assert typeOf(bB) == B
+
+def test_visibility():
+    if not STATICNESS:
+        py.test.skip("static types not enforced in ootype")
+    M = Meth([], Signed)
+    def mA_(a):
+        return 1
+    def mB_(b):
+        return 2
+    def nB_(b):
+        return 3
+    mA = meth(M, name="m", _callable=mA_)
+    mB = meth(M, name="m", _callable=mB_)
+    nB = meth(M, name="n", _callable=nB_)
+    A = Instance('A', ROOT, {}, {'m': mA})
+    B = Instance('B', A, {}, {'m': mB, 'n': nB})
+    b = new(B)
+    assert b.m() == 2
+    assert b.n() == 3
+    bA = ooupcast(A, b)
+    assert bA.m() == 2
+    py.test.raises(TypeError, "bA.n()")
+    assert oodowncast(B, bA).n() == 3
+    M = Meth([A], Signed)
+    def xA_(slf, a):
+        return a.n()
+    xA = meth(M, name="x", _callable=xA_)
+    addMethods(A, {'x': xA})
+    a = new(A)
+    py.test.raises(TypeError, "a.x(b)")
+    def yA_(slf, a):
+        if instanceof(a, B):
+            return oodowncast(B, a).n()
+        return a.m()
+    yA = meth(M, name="y", _callable=yA_)
+    addMethods(A, {'y': yA})
+    assert a.y(a) == 1
+    assert a.y(b) == 3
+    #
+    M = Meth([], Signed)
+    def zA_(slf):
+        return slf.n()
+    zA = meth(M, name="z", _callable=zA_)
+    addMethods(A, {'z': zA})
+    py.test.raises(TypeError, "b.z()")
+    def zzA_(slf):
+        if instanceof(slf, B):
+            return oodowncast(B, slf).n()
+        return slf.m()
+    zzA = meth(M, name="zz", _callable=zzA_)
+    addMethods(A, {'zz': zzA})
+    assert a.zz() == 1
+    assert b.zz() == 3
+
+def test_view_instance_hash():
+    I = Instance("Foo", ROOT)
+
+    inst = new(I)
+    inst_up = ooupcast(ROOT, inst)
+    inst_up2 = ooupcast(ROOT, inst)
+
+    assert inst_up == inst_up2
+    assert hash(inst_up) == hash(inst_up2)
+
