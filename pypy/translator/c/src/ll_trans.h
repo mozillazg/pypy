@@ -85,6 +85,15 @@ LL_trans_enable(void)
 	int ret_val;
 	ret_val = enable_transactions();
 	if (ret_val != 0) {
+		pid_t pid = getpid();
+		char *map_path;
+		asprintf(&map_path, "/proc/%d/maps", pid);
+		if ( (pid = fork()) == 0) {
+			execlp("cat", "cat", map_path, NULL);
+			exit(0);
+		}
+		free(map_path);
+		waitpid(pid, NULL, 0);
 		printf("Load transactional memory module and press return\n");
 		while (getchar() != '\n');
 		ret_val = enable_transactions();
