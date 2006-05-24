@@ -342,10 +342,10 @@ class InstanceRepr(AbstractInstanceRepr):
                 MkStruct = GcStruct
             else:
                 MkStruct = Struct
-            
+
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
-                                   *llfields)
+                                   *llfields, **dict(hints=self.gethints()))
             self.object_type.become(object_type)
             allinstancefields.update(self.rbase.allinstancefields)
         allinstancefields.update(fields)
@@ -379,6 +379,9 @@ class InstanceRepr(AbstractInstanceRepr):
 
     def getflavor(self):
         return self.classdef.classdesc.read_attribute('_alloc_flavor_', Constant('gc')).value
+
+    def gethints(self):
+        return self.classdef.classdesc.read_attribute('_rpython_hints_', Constant({})).value
 
     def null_instance(self):
         return nullptr(self.object_type)

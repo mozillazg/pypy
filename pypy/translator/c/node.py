@@ -365,15 +365,18 @@ class ContainerNode(object):
             self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
                                                 self.ptrname)
 
+    def declaration(self):
+        decl = cdecl(self.implementationtypename, self.name)
+        if hasattr(self.T, '_hints') and self.T._hints.get('thread_local'):
+            decl = '__thread ' + decl # XXX make conditional
+        return decl
+
     def forward_declaration(self):
-        yield '%s;' % (
-            cdecl(self.implementationtypename, self.name))
+        yield 'extern %s;' % self.declaration()
 
     def implementation(self):
         lines = list(self.initializationexpr())
-        lines[0] = '%s = %s' % (
-            cdecl(self.implementationtypename, self.name),
-            lines[0])
+        lines[0] = '%s = %s' % (self.declaration(), lines[0])
         lines[-1] += ';'
         return lines
 

@@ -42,7 +42,7 @@ class ExceptionTransformer(object):
         l2a = annmodel.lltype_to_annotation
 
         class ExcData(object):
-            pass
+            _rpython_hints_ = {'thread_local': True}
             #exc_type = lltype.nullptr(self.exc_data.lltype_of_exception_type.TO)
             #exc_value = lltype.nullptr(self.exc_data.lltype_of_exception_value.TO)
 
