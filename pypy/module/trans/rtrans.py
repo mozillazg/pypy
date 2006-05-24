@@ -29,3 +29,6 @@ def disable():
 def is_active():
     os.write(2, '= rtrans.is_active\n')
     return False
+
+def reset_stats():
+    os.write(2, '= rtrans.reset_stats\n')

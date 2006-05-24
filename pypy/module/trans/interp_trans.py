@@ -28,3 +28,7 @@ def verbose(space):
 
 def is_active(space):
     return space.wrap(rtrans.is_active())
+
+def reset_stats(space):
+    rtrans.reset_stats()
+    return space.w_None

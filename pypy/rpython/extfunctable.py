@@ -277,6 +277,7 @@ declare(rtrans.verbose, noneannotation, 'll_trans/verbose')
 declare(rtrans.enable, noneannotation, 'll_trans/enable')
 declare(rtrans.disable, noneannotation, 'll_trans/disable')
 declare(rtrans.is_active, bool, 'll_trans/is_active')
+declare(rtrans.reset_stats, noneannotation, 'll_trans/reset_stats')
 
 # ___________________________________________________________
 # javascript
