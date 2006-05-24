@@ -124,4 +124,10 @@ LL_trans_is_active(void)
 	return ret_val;
 }
 
+void
+LL_trans_reset_stats(void)
+{
+	XACT_DUMP_STATS(2);
+}
+
 #endif /* PYPY_NOT_MAIN_FILE */

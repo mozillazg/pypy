@@ -63,6 +63,7 @@ EXTERNALS = {
     ll_trans.ll_trans_verbose: 'LL_trans_verbose',
     ll_trans.ll_trans_enable:  'LL_trans_enable',
     ll_trans.ll_trans_disable: 'LL_trans_disable',
+    ll_trans.ll_trans_reset_stats: 'LL_trans_reset_stats',
     ll_trans.ll_trans_is_active: 'LL_trans_is_active',
     ll_tsc.ll_tsc_read:      'LL_tsc_read',
     ll_tsc.ll_tsc_read_diff: 'LL_tsc_read_diff',
