@@ -279,7 +279,8 @@ def translator2database(translator, entrypoint):
 
 # ____________________________________________________________
 
-SPLIT_CRITERIA = 65535 # support VC++ 7.2
+SPLIT_CRITERIA = 32767
+#SPLIT_CRITERIA = 65535 # support VC++ 7.2
 #SPLIT_CRITERIA = 32767 # enable to support VC++ 6.0
 
 MARKER = '/*/*/' # provide an easy way to split after generating
@@ -357,10 +358,11 @@ class SourceGenerator:
             yield self.uniquecname(basecname), subiter()
 
     def gen_readable_parts_of_source(self, f):
-        if py.std.sys.platform != "win32":
-            split_criteria_big = SPLIT_CRITERIA * 4
-        else:
-            split_criteria_big = SPLIT_CRITERIA
+        # if py.std.sys.platform != "win32":
+        #     split_criteria_big = SPLIT_CRITERIA * 4
+        # else:
+        # XXX njr hack - STABS doesn't support >65535 lines either
+        split_criteria_big = SPLIT_CRITERIA
         if self.one_source_file:
             return gen_readable_parts_of_main_c_file(f, self.database,
                                                      self.preimpl)
