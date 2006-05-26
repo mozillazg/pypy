@@ -9,6 +9,7 @@ class Module(MixedModule):
     interpleveldefs = {
         'begin'       : 'interp_trans.begin',
         'end'         : 'interp_trans.end',
+        'retry'       : 'interp_trans.retry',
         'abort'       : 'interp_trans.abort',
         'pause'       : 'interp_trans.pause',
         'unpause'     : 'interp_trans.unpause',

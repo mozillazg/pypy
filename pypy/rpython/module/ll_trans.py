@@ -6,6 +6,10 @@ def ll_trans_end():
     pass
 ll_trans_end.suggested_primitive = True
 
+def ll_trans_retry():
+    pass
+ll_trans_retry.suggested_primitive = True
+
 def ll_trans_abort():
     pass
 ll_trans_abort.suggested_primitive = True
