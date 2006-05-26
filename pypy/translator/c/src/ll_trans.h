@@ -4,6 +4,7 @@
 /* prototypes */
 void LL_trans_begin(void);
 void LL_trans_end(void);
+void LL_trans_retry(void);
 void LL_trans_abort(void);
 void LL_trans_pause(void);
 void LL_trans_unpause(void);
@@ -12,6 +13,7 @@ void LL_trans_enable(void);
 void LL_trans_disable(void);
 int RPyTransPause(void);
 void RPyTransUnpause(int pause_state);
+void RPyTransSurroundSyscalls(int surround);
 
 /* implementations */
 
@@ -29,6 +31,12 @@ void
 LL_trans_end(void)
 {
 	XACT_END;
+}
+
+void
+LL_trans_retry(void)
+{
+	XACT_RETRY;
 }
 
 void
@@ -53,6 +61,19 @@ void
 RPyTransUnpause(int pause_state)
 {
 	XACT_UNPAUSE(pause_state);
+}
+
+void
+RPyTransSurroundSyscalls(int surround)
+{
+	if (surround) {
+		int pause_state;
+		XACT_PAUSE(pause_state);
+		set_auto_xact(1);
+		XACT_UNPAUSE(pause_state);
+	} else {
+		set_auto_xact(0);
+	}
 }
 
 static __thread int pause_state;
@@ -100,16 +121,14 @@ LL_trans_enable(void)
 		assert(ret_val == 0);
 	}
 	XACT_BEGIN;
-	XACT_PAUSE(ret_val);
-	set_auto_xact(1);
-	XACT_UNPAUSE(ret_val);
+	RPyTransSurroundSyscalls(1);
 	XACT_END;
 }
 
 void
 LL_trans_disable(void)
 {
-	set_auto_xact(0);
+	RPyTransSurroundSyscalls(0);
 }
 
 int

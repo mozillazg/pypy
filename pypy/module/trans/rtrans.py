@@ -8,6 +8,9 @@ def begin():
 def end():
     os.write(2, '= rtrans.end\n')
 
+def retry():
+    os.write(2, '= rtrans.retry\n')
+
 def abort():
     os.write(2, '= rtrans.abort\n')
 

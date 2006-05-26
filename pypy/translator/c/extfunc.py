@@ -57,6 +57,7 @@ EXTERNALS = {
     ll_thread.ll_thread_get_ident: 'LL_thread_get_ident',
     ll_trans.ll_trans_begin:   'LL_trans_begin',
     ll_trans.ll_trans_end:     'LL_trans_end',
+    ll_trans.ll_trans_retry:   'LL_trans_retry',
     ll_trans.ll_trans_abort:   'LL_trans_abort',
     ll_trans.ll_trans_pause:   'LL_trans_pause',
     ll_trans.ll_trans_unpause: 'LL_trans_unpause',

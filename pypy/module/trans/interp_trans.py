@@ -10,6 +10,10 @@ def end(space):
     rtrans.end()
     return space.w_None
 
+def retry(space):
+    rtrans.retry()
+    return space.w_None
+
 def abort(space):
     rtrans.abort()
     return space.w_None
