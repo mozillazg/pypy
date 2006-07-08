@@ -142,14 +142,14 @@ def marshal_w__Int(space, w_int, m):
             m.atom_int(TYPE_INT, w_int.intval)
 
 def unmarshal_Int(space, u, tc):
-    return wrapint(u.get_int())
+    return wrapint(space, u.get_int())
 register(TYPE_INT, unmarshal_Int)
 
 def unmarshal_Int64(space, u, tc):
     if LONG_BIT >= 64:
         lo = u.get_int() & (2**32-1)
         hi = u.get_int()
-        return wrapint((hi << 32) | lo)
+        return wrapint(space, (hi << 32) | lo)
     else:
         # fall back to a long
         # XXX at some point, we need to extend longobject

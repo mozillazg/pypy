@@ -45,14 +45,14 @@ class StdObjSpace(ObjSpace, DescrOperation):
     PACKAGE_PATH = 'objspace.std'
 
     def setoptions(self, oldstyle=False):
-        self.options.oldstyle = oldstyle
+        self.config.objspace.std.oldstyle = oldstyle
 
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
         self._typecache = Cache()
 
         # Import all the object types and implementations
-        self.model = StdTypeModel()
+        self.model = StdTypeModel(self.config)
 
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
@@ -78,8 +78,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # hack to avoid imports in the time-critical functions below
         for cls in self.model.typeorder:
             globals()[cls.__name__] = cls
-        from pypy.objspace.std.inttype import wrapint
-        self.newint = wrapint
 
         # singletons
         self.w_None  = W_NoneObject()
@@ -116,10 +114,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 dict.fromkeys = classmethod(fromkeys)
         """) 
 
-        if self.options.uselibfile:
+        if self.config.objspace.uselibfile:
             self.inituselibfile() 
 
-        if self.options.oldstyle: 
+        if self.config.objspace.std.oldstyle: 
             self.enable_old_style_classes_as_default_metaclass()
 
         # final setup
@@ -171,7 +169,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         """ NOT_RPYTHON use our application level file implementation
             including re-wrapping sys.stdout/err/in
         """ 
-        assert self.options.uselibfile 
+        assert self.config.objspace.uselibfile 
         space = self
         # nice print helper if the below does not work 
         # (we dont have prints working at applevel before
@@ -312,7 +310,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             # '__builtin__.Ellipsis' avoids confusion with special.Ellipsis
             return self.w_Ellipsis
 
-        if self.options.nofaking:
+        if self.config.objspace.nofaking:
             # annotation should actually not get here.  If it does, you get
             # an error during rtyping because '%r' is not supported.  It tells
             # you that there was a space.wrap() on a strange object.
@@ -344,9 +342,12 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return w_obj.unwrap(self)
         raise UnwrapError, "cannot unwrap: %r" % w_obj
 
-    #def newint(self, intval):
-    #    this time-critical and circular-imports-funny method is stored
-    #    on 'self' by initialize()
+    def newint(self, intval):
+        # this time-critical and circular-imports-funny method was stored
+        # on 'self' by initialize()
+        # not sure how bad this is:
+        from pypy.objspace.std.inttype import wrapint
+        return wrapint(self, intval)
 
     def newfloat(self, floatval):
         return W_FloatObject(floatval)

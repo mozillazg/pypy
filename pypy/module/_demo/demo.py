@@ -46,3 +46,13 @@ def sieve(space, n):
         head += 1
 sieve.unwrap_spec = [ObjSpace, int]
  
+def fib(n):
+    if n <= 2:
+        return 1
+    return fib(n - 1) + fib(n - 2)
+
+def recfib(space, n):
+    return space.newint(fib(n))
+
+recfib.unwrap_spec = [ObjSpace, int]
+
