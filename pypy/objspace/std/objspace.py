@@ -452,16 +452,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        if self.config.objspace.std.withstrdict:
-            from pypy.objspace.std.dictstrobject import W_DictStrObject
-            if type(w_obj) is W_DictStrObject:
-                return w_obj.len() != 0
+        from pypy.objspace.std.dictstrobject import W_DictStrObject
+        if type(w_obj) is W_DictStrObject:
+            return w_obj.len() != 0
         else:
-            # XXX don't look!
-            if type(w_obj) is W_DictObject:
-                return len(w_obj.content) != 0
-            else:
-                return DescrOperation.is_true(self, w_obj)
+            return DescrOperation.is_true(self, w_obj)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)
@@ -476,7 +471,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def set_str_keyed_item(self, w_obj, w_key, w_value):
         # performance shortcut to avoid creating the OperationError(KeyError)
         if type(w_obj) is self.DictObjectCls:
-            w_obj.content[w_key] = w_value
+            w_obj.set_str_keyed_item(w_key, w_value)
         else:
             self.setitem(w_obj, w_key, w_value)
 
