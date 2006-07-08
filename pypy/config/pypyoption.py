@@ -1,6 +1,6 @@
 import py
 from pypy.config.config import OptionDescription, BoolOption, IntOption
-from pypy.config.config import ChoiceOption
+from pypy.config.config import ChoiceOption, to_optparse, Config
 
 modulepath = py.magic.autopath().dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
@@ -75,3 +75,11 @@ pypy_optiondescription = OptionDescription("pypy", [
     BoolOption("translating", "indicates whether we are translating currently",
                default=False),
 ])
+
+if __name__ == '__main__':
+    config = Config(pypy_optiondescription)
+    parser = to_optparse(config, ["objspace.name",
+                                  "objspace.std.oldstyle",
+                                  "objspace.std.withstrdict"])
+    option, args = parser.parse_args()
+    print config
