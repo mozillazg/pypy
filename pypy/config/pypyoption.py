@@ -59,6 +59,10 @@ pypy_optiondescription = OptionDescription("pypy", [
             BoolOption("withstrslice", "use strings optimized for slicing",
                        default=False),
 
+            BoolOption("withstrdict",
+                       "use dictionaries optimized for string keys",
+                       default=False),
+
             BoolOption("oldstyle",
                        "specify whether the default metaclass should be classobj",
                        default=False),
