@@ -152,3 +152,14 @@ def test_to_optparse_bool():
 
     py.test.raises(SystemExit,
             "(options, args) = parser.parse_args(args=['-bfoo'])")
+
+def test_optparse_path_options():
+    gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
+    gcgroup = OptionDescription('gc', [gcoption])
+    descr = OptionDescription('pypy', [gcgroup])
+    config = Config(descr)
+    
+    parser = to_optparse(config, ['gc.name'])
+    (options, args) = parser.parse_args(args=['--gc-name=framework'])
+
+    assert config.gc.name == 'framework'
