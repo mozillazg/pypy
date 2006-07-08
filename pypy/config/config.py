@@ -80,6 +80,11 @@ class Config(object):
                 yield child._name, getattr(self, child._name)
 
 class Option(object):
+    def __init__(self, name, doc, cmdline=None):
+        self._name = name
+        self.doc = doc
+        self.cmdline = cmdline
+        
     def validate(self, value):
         raise NotImplementedError('abstract base class')
 
@@ -96,9 +101,8 @@ class Option(object):
         return value
 
 class ChoiceOption(Option):
-    def __init__(self, name, doc, values, default):
-        self._name = name
-        self.doc = doc
+    def __init__(self, name, doc, values, default, cmdline=None):
+        super(ChoiceOption, self).__init__(name, doc, cmdline)
         self.values = values
         self.default = default
 
@@ -118,26 +122,8 @@ class BoolOption(ChoiceOption):
         super(BoolOption, self).setoption(config, value)
 
 class IntOption(Option):
-    def __init__(self, name, doc, default=True):
-        self._name = name
-        self.doc = doc
-        self.default = default
-
-    def validate(self, value):
-        try:
-            int(value)
-        except TypeError:
-            return False
-        return True
-
-    def setoption(self, config, value):
-        super(IntOption, self).setoption(config, int(value))
-
-
-class IntOption(Option):
-    def __init__(self, name, doc, default=0):
-        self._name = name
-        self.doc = doc
+    def __init__(self, name, doc, default=0, cmdline=None):
+        super(IntOption, self).__init__(name, doc, cmdline)
         self.default = default
 
     def validate(self, value):
@@ -153,11 +139,9 @@ class IntOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
-
 class FloatOption(Option):
-    def __init__(self, name, doc, default=0.0):
-        self._name = name
-        self.doc = doc
+    def __init__(self, name, doc, default=0.0, cmdline=None):
+        super(FloatOption, self).__init__(name, doc, cmdline)
         self.default = default
 
     def validate(self, value):
@@ -172,7 +156,6 @@ class FloatOption(Option):
             super(FloatOption, self).setoption(config, float(value))
         except TypeError, e:
             raise ValueError(*e.args)
-
 
 class OptionDescription(object):
     def __init__(self, name, children):
