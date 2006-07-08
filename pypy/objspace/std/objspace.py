@@ -463,9 +463,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if type(w_obj) is self.DictObjectCls:
             if not self.config.objspace.std.withstrdict:
                 return w_obj.content.get(w_key, None)
-        else:
-            #XXX fix this here!
-            pass
+            else:
+                # XXX fix this here
+                pass
         return ObjSpace.finditem(self, w_obj, w_key)
 
     def set_str_keyed_item(self, w_obj, w_key, w_value):
