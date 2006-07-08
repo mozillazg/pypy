@@ -131,3 +131,24 @@ def test_to_optparse_number():
     assert config.int == 2
     assert config.float == 0.1
     
+    py.test.raises(SystemExit, 
+        "(options, args) = parser.parse_args(args=['--int=foo', '-f bar'])")
+    
+def test_to_optparse_bool():
+    booloption = BoolOption('bool', 'Boolean option test', default=False,
+                            cmdline='--bool -b')
+    descr = OptionDescription('test', [booloption])
+    config = Config(descr)
+
+    parser = to_optparse(config, ['bool'])
+    (options, args) = parser.parse_args(args=['-b'])
+
+    assert config.bool
+
+    config = Config(descr)
+    parser = to_optparse(config, ['bool'])
+    (options, args) = parser.parse_args(args=[])
+    assert not config.bool
+
+    py.test.raises(SystemExit,
+            "(options, args) = parser.parse_args(args=['-bfoo'])")

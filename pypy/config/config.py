@@ -103,14 +103,7 @@ class Option(object):
         return value
 
     def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                config.setoption(self._name, value.strip(), who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self.doc,
-                            action='callback', type='string', 
-                            callback=_callback, *argnames)
+        raise NotImplemented('abstract base class')
 
 class ChoiceOption(Option):
     def __init__(self, name, doc, values, default, cmdline=None):
@@ -121,9 +114,20 @@ class ChoiceOption(Option):
     def validate(self, value):
         return value in self.values
 
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            try:
+                config.setoption(self._name, value.strip(), who='cmdline')
+            except ValueError, e:
+                raise optparse.OptionValueError(e.args[0])
+        parser.add_option(help=self.doc,
+                            action='callback', type='string', 
+                            callback=_callback, *argnames)
+
 class BoolOption(ChoiceOption):
-    def __init__(self, name, doc, default=True, requires=None):
-        super(BoolOption, self).__init__(name, doc, [True, False], default)
+    def __init__(self, name, doc, default=True, requires=None, cmdline=None):
+        super(BoolOption, self).__init__(name, doc, [True, False], default,
+                                            cmdline=cmdline)
         self._requires = requires or []
 
     def setoption(self, config, value):
@@ -132,6 +136,13 @@ class BoolOption(ChoiceOption):
             subconfig, name = config._get_by_path(path)
             subconfig.require(name, reqvalue)
         super(BoolOption, self).setoption(config, value)
+
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            config.setoption(self._name, True, who='cmdline')
+        parser.add_option(help=self.doc,
+                            action='callback', 
+                            callback=_callback, *argnames)
 
 class IntOption(Option):
     def __init__(self, name, doc, default=0, cmdline=None):
