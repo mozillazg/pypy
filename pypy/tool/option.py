@@ -53,10 +53,11 @@ def get_standard_options():
         help="use web browser for traceback info"))
     options.append(make_option(
         '--compiler', action="store", type="string", dest="compiler",
+        default=None,
         help="""select compiling approach. see pypy/doc/README.compiling""",
         metavar="[ast|cpython]")) 
     options.append(make_option(
-        '--parser', action="store",type="string", dest="parser",
+        '--parser', action="store",type="string", dest="parser", default=None,
         help="select the parser module to use",
         metavar="[pypy|cpython]"))
 ## for this to work the option module need to be loaded before the grammar!
@@ -74,3 +75,44 @@ def process_options(optionlist, input_options, argv=None):
     op.add_options(optionlist)
     options, args = op.parse_args(argv, input_options)
     return args
+
+def make_config(cmdlineopt, **kwds):
+    """ make a config from cmdline options (which overrides everything)
+    and kwds """
+
+    # XXX this whole file should sooner or later go away and the cmd line
+    # options be generated from the option description. it's especially messy
+    # since we have to check whether the default was actually overwritten
+    from pypy.config.pypyoption import pypy_optiondescription
+    from pypy.config.config import Config
+    conf = Config(pypy_optiondescription)
+    if kwds.get("objspace", None) is not None:
+        conf.objspace.name = kwds["objspace"]
+    if cmdlineopt.objspace is not None:
+        conf.objspace.name = cmdlineopt.objspace
+    for modname in cmdlineopt.usemodules:
+        setattr(conf.objspace.usemodules, modname, True)
+    for modname in kwds.get("usemodules", []):
+        setattr(conf.objspace.usemodules, modname, True)
+    if cmdlineopt.nofaking or kwds.get("nofaking", False):
+        conf.objspace.nofaking = True
+    if cmdlineopt.uselibfile or kwds.get("uselibfile", False):
+        conf.objspace.uselibfile = True
+    if cmdlineopt.oldstyle or kwds.get("oldstyle", False):
+        conf.objspace.oldstyle = True
+    if hasattr(cmdlineopt, "parser") and cmdlineopt.parser is not None:
+        conf.objspace.parser = cmdlineopt.parser
+    if kwds.get("compiler") is not None:
+        conf.obspace.compiler = kwds['compiler']
+    if cmdlineopt.compiler is not None:
+        conf.objspace.compiler = cmdlineopt.compiler
+    for names, value in kwds.iteritems():
+        if "." not in names:
+            continue
+        names = names.split(".")
+        subconf = conf
+        for name in names[:-1]:
+            subconf = getattr(subconf, name)
+        setattr(subconf, names[-1], value)
+    return conf
+

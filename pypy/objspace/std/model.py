@@ -8,14 +8,11 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 import pypy.interpreter.pycode
 import pypy.interpreter.special
 
-WITHSMALLINT = False
-WITHPREBUILTINT = None   # or e.g. range(-5, 100); not used if WITHSMALLINT
-WITHSTRSLICE = False
-WITHSTRJOIN = False
+option_to_typedef
 
 class StdTypeModel:
 
-    def __init__(self):
+    def __init__(self, config):
         """NOT_RPYTHON: inititialization only"""
         # All the Python types that we want to provide in this StdObjSpace
         class result:
@@ -50,15 +47,15 @@ class StdTypeModel:
         from pypy.objspace.std import floatobject
         from pypy.objspace.std import complexobject
         from pypy.objspace.std import setobject
-        if WITHSMALLINT:
+        if config.objspace.std.withsmallint:
             from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictobject
         from pypy.objspace.std import stringobject
-        if WITHSTRSLICE:
+        if config.objspace.std.withstrslice:
             from pypy.objspace.std import strsliceobject
-        if WITHSTRJOIN:
+        if config.objspace.std.withstrjoin:
             from pypy.objspace.std import strjoinobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
@@ -98,16 +95,16 @@ class StdTypeModel:
         self.typeorder[setobject.W_SetObject] = []
         self.typeorder[setobject.W_FrozensetObject] = []
         self.typeorder[setobject.W_SetIterObject] = []
-        if WITHSMALLINT:
+        if config.objspace.std.withsmallint:
             self.typeorder[smallintobject.W_SmallIntObject] = []
-        if WITHSTRSLICE:
+        if config.objspace.std.withstrslice:
             self.typeorder[strsliceobject.W_StringSliceObject] = []
-        if WITHSTRJOIN:
+        if config.objspace.std.withstrjoin:
             self.typeorder[strjoinobject.W_StringJoinObject] = []
         for type in self.typeorder:
             self.typeorder[type].append((type, None))
 
-        # check if we missed implementations
+        #check if we missed implementations
         from pypy.objspace.std.objspace import _registered_implementations
         for implcls in _registered_implementations:
             assert implcls in self.typeorder, (
@@ -116,7 +113,7 @@ class StdTypeModel:
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
         # XXX build these lists a bit more automatically later
-        if WITHSMALLINT:
+        if config.objspace.std.withsmallint:
             self.typeorder[boolobject.W_BoolObject] += [
                 (smallintobject.W_SmallIntObject, boolobject.delegate_Bool2SmallInt),
                 ]
@@ -151,14 +148,14 @@ class StdTypeModel:
          (unicodeobject.W_UnicodeObject, unicodeobject.delegate_String2Unicode),
             ]
 
-        if WITHSTRSLICE:
+        if config.objspace.std.withstrslice:
             self.typeorder[strsliceobject.W_StringSliceObject] += [
                 (stringobject.W_StringObject,
                                        strsliceobject.delegate_slice2str),
                 (unicodeobject.W_UnicodeObject,
                                        strsliceobject.delegate_slice2unicode),
                 ]
-        if WITHSTRJOIN:
+        if config.objspace.std.withstrjoin:
             self.typeorder[strjoinobject.W_StringJoinObject] += [
                 (stringobject.W_StringObject,
                                        strjoinobject.delegate_join2str),
@@ -170,6 +167,20 @@ class StdTypeModel:
         self.typeorder[W_Root] = []
         for type in self.typeorder:
             self.typeorder[type].append((W_Root, None))
+
+        # ____________________________________________________________
+        # Prebuilt common integer values
+
+        if config.objspace.std.withprebuiltint:
+            intobject.W_IntObject.PREBUILT = []
+            for i in range(config.objspace.std.prebuiltintfrom,
+                           config.objspace.std.prebuiltintto):
+                intobject.W_IntObject.PREBUILT.append(intobject.W_IntObject(i))
+            del i
+        else:
+            intobject.W_IntObject.PREBUILT = None
+
+        # ____________________________________________________________
 
 
 # ____________________________________________________________
