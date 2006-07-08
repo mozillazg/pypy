@@ -54,6 +54,8 @@ class W_DictStrObject(W_Object):
         else:
             w_self.content[w_k] = w_v
 
+    set_str_keyed_item = setitem
+
     def str2object(w_self):
         """ Moves all items in the content_str dict to content. """
         assert w_self.content_str is not None and w_self.content is None

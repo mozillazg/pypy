@@ -357,6 +357,9 @@ class FakeSpace:
     def newlist(self, l):
         return []
     DictObjectCls = W_DictObject
+    def type(self, w_obj):
+        return type(w_obj)
+    w_str = str
 
 from pypy.objspace.std.dictobject import getitem__Dict_ANY, setitem__Dict_ANY_ANY
 
