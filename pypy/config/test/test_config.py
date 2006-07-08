@@ -17,7 +17,6 @@ def make_description():
     descr = OptionDescription('pypy', [gcgroup, booloption, objspaceoption,
                                        wantref_option, intoption])
     return descr
-    
 
 def test_base_config():
     descr = make_description()
@@ -100,3 +99,35 @@ def test_loop():
         assert name == gname
         assert value == gvalue
         
+def test_to_optparse():
+    gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref',
+                                cmdline='--gc -g')
+    gcgroup = OptionDescription('gc', [gcoption])
+    descr = OptionDescription('pypy', [gcgroup])
+    config = Config(descr)
+    
+    parser = to_optparse(config, ['gc.name'])
+    (options, args) = parser.parse_args(args=['--gc=framework'])
+    
+    assert config.gc.name == 'framework'
+    
+    (options, args) = parser.parse_args(args=['-g ref'])
+    assert config.gc.name == 'ref'
+
+    # XXX strange exception
+    py.test.raises(SystemExit, 
+                    "(options, args) = parser.parse_args(args=['-g foobar'])")
+
+def test_to_optparse_number():
+    intoption = IntOption('int', 'Int option test', cmdline='--int -i')
+    floatoption = FloatOption('float', 'Float option test', 
+                                cmdline='--float -f')
+    descr = OptionDescription('test', [intoption, floatoption])
+    config = Config(descr)
+
+    parser = to_optparse(config, ['int', 'float'])
+    (options, args) = parser.parse_args(args=['-i 2', '--float=0.1'])
+
+    assert config.int == 2
+    assert config.float == 0.1
+    

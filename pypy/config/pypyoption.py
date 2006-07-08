@@ -13,7 +13,8 @@ default_modules = dict.fromkeys(
 pypy_optiondescription = OptionDescription("pypy", [
     OptionDescription("objspace", [
         ChoiceOption("name", "Object Space name",
-                     ["std", "flow", "logic", "thunk", "cpy"], "std"),
+                     ["std", "flow", "logic", "thunk", "cpy"], "std",
+                     cmdline='--objspace -o'),
 
         ChoiceOption("parser", "parser",
                      ["pypy", "cpython"], "pypy"),

@@ -1,4 +1,6 @@
 
+import optparse
+
 class Config(object):
     """main config
 
@@ -100,6 +102,16 @@ class Option(object):
     def getkey(self, value):
         return value
 
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            try:
+                config.setoption(self._name, value.strip(), who='cmdline')
+            except ValueError, e:
+                raise optparse.OptionValueError(e.args[0])
+        parser.add_option(help=self.doc,
+                            action='callback', type='string', 
+                            callback=_callback, *argnames)
+
 class ChoiceOption(Option):
     def __init__(self, name, doc, values, default, cmdline=None):
         super(ChoiceOption, self).__init__(name, doc, cmdline)
@@ -139,6 +151,13 @@ class IntOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            config.setoption(self._name, value, who='cmdline')
+        parser.add_option(help=self.doc,
+                            action='callback', type='int', 
+                            callback=_callback, *argnames)
+
 class FloatOption(Option):
     def __init__(self, name, doc, default=0.0, cmdline=None):
         super(FloatOption, self).__init__(name, doc, cmdline)
@@ -157,6 +176,13 @@ class FloatOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            config.setoption(self._name, value, who='cmdline')
+        parser.add_option(help=self.doc,
+                            action='callback', type='float', 
+                            callback=_callback, *argnames)
+
 class OptionDescription(object):
     def __init__(self, name, children):
         self._name = name
@@ -170,3 +196,16 @@ class OptionDescription(object):
     def getkey(self, config):
         return tuple([child.getkey(getattr(config, child._name))
                       for child in self._children])
+
+def to_optparse(config, useoptions, parser=None):
+    if parser is None:
+        parser = optparse.OptionParser()
+    for path in useoptions:
+        subconf, name = config._get_by_path(path)
+        option = getattr(subconf._descr, name)
+        if option.cmdline is None:
+            chunks = ('--%s' % (path.replace('.', '-'),),)
+        else:
+            chunks = option.cmdline.split(' ')
+        option.add_optparse_option(chunks, parser, subconf)
+    return parser
