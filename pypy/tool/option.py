@@ -88,23 +88,24 @@ def make_config(cmdlineopt, **kwds):
     conf = Config(pypy_optiondescription)
     if kwds.get("objspace", None) is not None:
         conf.objspace.name = kwds["objspace"]
-    if cmdlineopt.objspace is not None:
+    if getattr(cmdlineopt, "objspace", None) is not None:
         conf.objspace.name = cmdlineopt.objspace
     for modname in cmdlineopt.usemodules:
         setattr(conf.objspace.usemodules, modname, True)
     for modname in kwds.get("usemodules", []):
         setattr(conf.objspace.usemodules, modname, True)
-    if cmdlineopt.nofaking or kwds.get("nofaking", False):
+    if getattr(cmdlineopt, "nofaking", False) or kwds.get("nofaking", False):
         conf.objspace.nofaking = True
-    if cmdlineopt.uselibfile or kwds.get("uselibfile", False):
+    if (getattr(cmdlineopt, "uselibfile", False) or
+        kwds.get("uselibfile", False)):
         conf.objspace.uselibfile = True
-    if cmdlineopt.oldstyle or kwds.get("oldstyle", False):
+    if getattr(cmdlineopt, "oldstyle", False) or kwds.get("oldstyle", False):
         conf.objspace.oldstyle = True
     if hasattr(cmdlineopt, "parser") and cmdlineopt.parser is not None:
         conf.objspace.parser = cmdlineopt.parser
     if kwds.get("compiler") is not None:
         conf.obspace.compiler = kwds['compiler']
-    if cmdlineopt.compiler is not None:
+    if getattr(cmdlineopt, "compiler", None) is not None:
         conf.objspace.compiler = cmdlineopt.compiler
     for names, value in kwds.iteritems():
         if "." not in names:
