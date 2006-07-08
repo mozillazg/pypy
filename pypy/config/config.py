@@ -23,7 +23,8 @@ class Config(object):
             elif isinstance(child, OptionDescription):
                 self.__dict__[child._name] = Config(child)
         for name, value in overrides.iteritems():
-            setattr(self, name, value)
+            subconfig, name = self._get_by_path(name)
+            setattr(subconfig, name, value)
 
     def __setattr__(self, name, value):
         if self._frozen:
@@ -58,7 +59,7 @@ class Config(object):
         return self, path[-1]
 
     def _freeze_(self):
-        self._frozen = True
+        self.__dict__['_frozen'] = True
         return True
 
     def getkey(self):

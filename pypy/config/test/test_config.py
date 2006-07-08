@@ -77,7 +77,7 @@ def test_annotator_folding():
     assert len(block.exits) == 1
     assert block.operations[0].opname == 'int_add'
 
-    # the config should be frozen now
+    assert config._freeze_()
     py.test.raises(TypeError, 'config.gc.name = "framework"')
 
 def test_compare_configs():
