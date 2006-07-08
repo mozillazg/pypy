@@ -8,7 +8,11 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 import pypy.interpreter.pycode
 import pypy.interpreter.special
 
-option_to_typedef
+option_to_typename = {
+    "withsmallint"   : "smallintobject.W_SmallIntObject",
+    "withstrslice"   : "strsliceobject.W_StringSliceObject",
+    "withstrjoin"    : "strjoinobject.W_StringJoinObject",
+}
 
 class StdTypeModel:
 
@@ -47,16 +51,13 @@ class StdTypeModel:
         from pypy.objspace.std import floatobject
         from pypy.objspace.std import complexobject
         from pypy.objspace.std import setobject
-        if config.objspace.std.withsmallint:
-            from pypy.objspace.std import smallintobject
+        from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictobject
         from pypy.objspace.std import stringobject
-        if config.objspace.std.withstrslice:
-            from pypy.objspace.std import strsliceobject
-        if config.objspace.std.withstrjoin:
-            from pypy.objspace.std import strjoinobject
+        from pypy.objspace.std import strsliceobject
+        from pypy.objspace.std import strjoinobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
         from pypy.objspace.std import longobject
@@ -95,20 +96,24 @@ class StdTypeModel:
         self.typeorder[setobject.W_SetObject] = []
         self.typeorder[setobject.W_FrozensetObject] = []
         self.typeorder[setobject.W_SetIterObject] = []
-        if config.objspace.std.withsmallint:
-            self.typeorder[smallintobject.W_SmallIntObject] = []
-        if config.objspace.std.withstrslice:
-            self.typeorder[strsliceobject.W_StringSliceObject] = []
-        if config.objspace.std.withstrjoin:
-            self.typeorder[strjoinobject.W_StringJoinObject] = []
-        for type in self.typeorder:
-            self.typeorder[type].append((type, None))
-
+        imported_but_not_registered = {}
+        for option, value in config.objspace.std:
+            if option.startswith("with") and option in option_to_typename:
+                implcls = eval(option_to_typename[option])
+                if value:
+                    self.typeorder[implcls] = []
+                else:
+                    imported_but_not_registered[implcls] = True
         #check if we missed implementations
         from pypy.objspace.std.objspace import _registered_implementations
         for implcls in _registered_implementations:
-            assert implcls in self.typeorder, (
+            assert (implcls in self.typeorder or
+                    implcls in imported_but_not_registered), (
                 "please add %r in StdTypeModel.typeorder" % (implcls,))
+
+
+        for type in self.typeorder:
+            self.typeorder[type].append((type, None))
 
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
