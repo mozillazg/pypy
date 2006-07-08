@@ -2,14 +2,6 @@
 import optparse
 
 class Config(object):
-    """main config
-
-        there's 3 levels of configuration values: default ones, stuff from
-        config files and command-line options, all cascading
-        
-        config is divided in groups, each group is an instance on the root
-        (this object)
-    """
     _frozen = False
     
     def __init__(self, descr, **overrides):
@@ -80,6 +72,22 @@ class Config(object):
         for child in self._descr._children:
             if isinstance(child, Option):
                 yield child._name, getattr(self, child._name)
+
+    def __str__(self):
+        result = "[%s]\n" % (self._descr._name, )
+        for child in self._descr._children:
+            if isinstance(child, Option):
+                if self._value_owners[child._name] == 'default':
+                    continue
+                result += "    %s = %s\n" % (
+                    child._name, getattr(self, child._name))
+            else:
+                substr = str(getattr(self, child._name))
+                substr = "    " + substr.replace("\n", "\n    ")
+                result += substr
+        return result
+
+
 
 class Option(object):
     def __init__(self, name, doc, cmdline=None):
