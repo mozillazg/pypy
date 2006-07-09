@@ -153,6 +153,46 @@ def test_to_optparse_bool():
     py.test.raises(SystemExit,
             "(options, args) = parser.parse_args(args=['-bfoo'])")
 
+def test_optparse_boolgroup():
+    group = OptionDescription("test", [
+        BoolOption("smallint", "use tagged integers",
+                   default=False),
+        BoolOption("strjoin", "use strings optimized for addition",
+                   default=False),
+        BoolOption("strslice", "use strings optimized for slicing",
+                   default=False),
+        BoolOption("strdict", "use dictionaries optimized for string keys",
+                   default=False),
+    ], cmdline="--test")
+    descr = OptionDescription("all", [group])
+    config = Config(descr)
+    parser = to_optparse(config, ['test'])
+    (options, args) = parser.parse_args(
+        args=['--test=smallint,strjoin,strdict'])
+    
+    assert config.test.smallint
+    assert config.test.strjoin
+    assert config.test.strdict
+
+    config = Config(descr)
+    parser = to_optparse(config, ['test'])
+    (options, args) = parser.parse_args(
+        args=['--test=smallint'])
+    
+    assert config.test.smallint
+    assert not config.test.strjoin
+    assert not config.test.strdict
+
+def test_config_start():
+    descr = make_description()
+    config = Config(descr)
+    parser = to_optparse(config, ["gc.*"])
+
+    options, args = parser.parse_args(args=["--gc-name=framework", "--gc-dummy"])
+    assert config.gc.name == "framework"
+    assert config.gc.dummy
+
+
 def test_optparse_path_options():
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
     gcgroup = OptionDescription('gc', [gcoption])
