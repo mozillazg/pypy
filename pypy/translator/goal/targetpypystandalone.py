@@ -73,11 +73,14 @@ take_options = True
 def opt_parser():
     import py
     defl = {'thread': False, 'usemodules': ''}
-    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", add_help_option=False)
+    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", 
+                                                add_help_option=False)
     parser.set_defaults(**defl)
-    parser.add_option("--thread", action="store_true", dest="thread", help="enable threading")
-    parser.add_option("--usemodules", action="store", type="string", dest="usemodules",
-            help="list of mixed modules to include, comma-separated")
+    parser.add_option("--thread", action="store_true", dest="thread", 
+                        help="enable threading")
+    parser.add_option("--usemodules", action="store", type="string", 
+                        dest="usemodules", help=("list of mixed modules to "
+                                            "include, comma-separated"))
     return parser
 
 def print_help():
@@ -118,11 +121,11 @@ def target(driver, args):
     usemodules = []
     if tgt_options.usemodules:
         for modname in tgt_options.usemodules.split(","):
-            setattr(config.objspace.usemodule, modname, True)
+            setattr(config.objspace.usemodules, modname, True)
     if tgt_options.thread:
-        config.objspace.usemodule.thread = True
+        config.objspace.usemodules.thread = True
     if options.stackless:
-        config.objspace.usemodule._stackless = True
+        config.objspace.usemodules._stackless = True
     config.objspace.nofaking = True
     config.objspace.compiler = "ast"
     config.translating = True
