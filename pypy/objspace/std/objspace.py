@@ -452,8 +452,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        from pypy.objspace.std.dictstrobject import W_DictStrObject
-        if type(w_obj) is W_DictStrObject:
+        if type(w_obj) is self.DictObjectCls:
             return w_obj.len() != 0
         else:
             return DescrOperation.is_true(self, w_obj)
