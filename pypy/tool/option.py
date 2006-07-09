@@ -90,7 +90,7 @@ def make_config(cmdlineopt, **kwds):
         conf.objspace.name = kwds["objspace"]
     if getattr(cmdlineopt, "objspace", None) is not None:
         conf.objspace.name = cmdlineopt.objspace
-    for modname in cmdlineopt.usemodules:
+    for modname in getattr(cmdlineopt, "usemodules", []):
         setattr(conf.objspace.usemodules, modname, True)
     for modname in kwds.get("usemodules", []):
         setattr(conf.objspace.usemodules, modname, True)
