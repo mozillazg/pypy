@@ -83,7 +83,7 @@ class Config(object):
                     child._name, getattr(self, child._name))
             else:
                 substr = str(getattr(self, child._name))
-                substr = "    " + substr.replace("\n", "\n    ")
+                substr = "    " + substr[:-1].replace("\n", "\n    ") + "\n"
                 result += substr
         return result
 
@@ -147,7 +147,10 @@ class BoolOption(ChoiceOption):
 
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
-            config.setoption(self._name, True, who='cmdline')
+            try:
+                config.setoption(self._name, True, who='cmdline')
+            except ValueError, e:
+                raise optparse.OptionValueError(e.args[0])
         parser.add_option(help=self.doc,
                             action='callback', 
                             callback=_callback, *argnames)
@@ -203,10 +206,11 @@ class FloatOption(Option):
                             callback=_callback, *argnames)
 
 class OptionDescription(object):
-    def __init__(self, name, children):
+    def __init__(self, name, children, cmdline=None):
         self._name = name
         self._children = children
         self._build()
+        self.cmdline = cmdline
 
     def _build(self):
         for child in self._children:
@@ -216,15 +220,46 @@ class OptionDescription(object):
         return tuple([child.getkey(getattr(config, child._name))
                       for child in self._children])
 
+    def add_optparse_option(self, argnames, parser, config):
+        for child in self._children:
+            if not isinstance(child, BoolOption):
+                raise ValueError(
+                    "cannot make OptionDescription %s a cmdline option" % (
+                        self._name, ))
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            try:
+                values = value.split(",")
+                for value in values:
+                    value = value.strip()
+                    option = getattr(self, value, None)
+                    if option is None:
+                        raise ValueError("did not find option %s" % (value, ))
+                    getattr(config, self._name).setoption(
+                        value, True, who='cmdline')
+            except ValueError, e:
+                raise optparse.OptionValueError(e.args[0])
+        parser.add_option(help=self._name, action='callback', type='string',
+                          callback=_callback, *argnames)
+
+
 def to_optparse(config, useoptions, parser=None):
     if parser is None:
         parser = optparse.OptionParser()
     for path in useoptions:
-        subconf, name = config._get_by_path(path)
-        option = getattr(subconf._descr, name)
-        if option.cmdline is None:
-            chunks = ('--%s' % (path.replace('.', '-'),),)
+        if path.endswith("*"):
+            assert path.endswith("*")
+            path = path[:-2]
+            subconf, name = config._get_by_path(path)
+            children = [
+                path + "." + child._name
+                for child in getattr(subconf, name)._descr._children]
+            useoptions.extend(children)
         else:
-            chunks = option.cmdline.split(' ')
-        option.add_optparse_option(chunks, parser, subconf)
+            subconf, name = config._get_by_path(path)
+            option = getattr(subconf._descr, name)
+            if option.cmdline is None:
+                chunks = ('--%s' % (path.replace('.', '-'),),)
+            else:
+                chunks = option.cmdline.split(' ')
+            option.add_optparse_option(chunks, parser, subconf)
     return parser

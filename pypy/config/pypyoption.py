@@ -49,10 +49,10 @@ pypy_optiondescription = OptionDescription("pypy", [
                        default=False, requires=[("withsmallint", False)]),
 
             IntOption("prebuiltintfrom", "lowest integer which is prebuilt",
-                      default=-5),
+                      default=-5, cmdline="--prebuiltinfrom"),
 
             IntOption("prebuiltintto", "highest integer which is prebuilt",
-                      default=100),
+                      default=100, cmdline="--prebuiltintto"),
 
             BoolOption("withstrjoin", "use strings optimized for addition",
                        default=False),
@@ -79,7 +79,10 @@ pypy_optiondescription = OptionDescription("pypy", [
 if __name__ == '__main__':
     config = Config(pypy_optiondescription)
     parser = to_optparse(config, ["objspace.name",
-                                  "objspace.std.oldstyle",
-                                  "objspace.std.withstrdict"])
+                                  "objspace.std.*",
+                                  "objspace.std.withsmallint",
+                                  "objspace.std.withprebuiltint",
+                                  "objspace.usemodules",
+                                  "objspace.std.prebuiltintfrom",])
     option, args = parser.parse_args()
     print config
