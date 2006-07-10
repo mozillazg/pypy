@@ -164,7 +164,7 @@ def descr_dictiter__reduce__(w_self, space):
     a registration with copy_reg, instead.
     """
     from pypy.interpreter.mixedmodule import MixedModule
-    if space.config.objspace.std.withdictstr:
+    if space.config.objspace.std.withstrdict:
         from pypy.objspace.std.dictobject import \
              W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
     else:
