@@ -164,8 +164,12 @@ def descr_dictiter__reduce__(w_self, space):
     a registration with copy_reg, instead.
     """
     from pypy.interpreter.mixedmodule import MixedModule
-    from pypy.objspace.std.dictobject import \
-         W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
+    if space.config.objspace.std.withdictstr:
+        from pypy.objspace.std.dictobject import \
+             W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
+    else:
+        from pypy.objspace.std.dictobject import \
+             W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
     w_mod    = space.getbuiltinmodule('_pickle_support')
     mod      = space.interp_w(MixedModule, w_mod)
     new_inst = mod.get('dictiter_surrogate_new')
