@@ -165,7 +165,7 @@ def descr_dictiter__reduce__(w_self, space):
     """
     from pypy.interpreter.mixedmodule import MixedModule
     if space.config.objspace.std.withstrdict:
-        from pypy.objspace.std.dictobject import \
+        from pypy.objspace.std.dictstrobject import \
              W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
     else:
         from pypy.objspace.std.dictobject import \
