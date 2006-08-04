@@ -3,6 +3,7 @@ from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.error import OperationError
 from pypy.tool.pytest import appsupport 
 from pypy.tool.option import make_config
+from pypy.config.config import to_optparse
 from inspect import isclass
 
 rootdir = py.magic.autopath().dirpath()
@@ -20,38 +21,27 @@ Option = py.test.Config.Option
 def usemodules_callback(option, opt, value, parser):
     parser.values.usemodules.append(value)
 
-# XXX these options should go away
+_config = make_config(None)
+_opts = to_optparse(_config, _config.getpaths()).option_list[1:] + [
+    # XXX these options should go away too... but are not yet available in
+    # pypy.config.Config format yet
+    # XXX strange... this one I would have expected to find in the pypy_optdesc
+    Option('--gc', action="store", default=None, 
+           type="choice", dest="gcpolicy",
+           choices=['ref', 'boehm', 'none', 'framework', 'exact_boehm'],
+           help="GcPolicy class to use for genc tests"),
 
-option = py.test.Config.addoptions("pypy options", 
-        Option('-O', '--objspace', action="store", default=None, 
-               type="string", dest="objspace", 
-               help="object space to run tests on."),
-        Option('--oldstyle', action="store_true",dest="oldstyle", default=False,
-               help="enable oldstyle classes as default metaclass"),
-        Option('--uselibfile', action="store_true", 
-               dest="uselibfile", default=False,
-               help="enable our applevel file implementation"),
-        Option('--nofaking', action="store_true", 
-               dest="nofaking", default=False,
-               help="avoid faking of modules and objects completely."),
-        Option('--allpypy', action="store_true",dest="allpypy", default=False, 
-               help="run everything possible on top of PyPy."),
-        Option('--usemodules', action="callback", type="string", metavar="NAME",
-               callback=usemodules_callback, default=[],
-               help="(mixed) modules to use."),
-        Option('--compiler', action="store", type="string", dest="compiler",
-               metavar="[ast|cpython]", default='ast',
-               help="""select compiling approach. see pypy/doc/README.compiling"""),
-        Option('--view', action="store_true", dest="view", default=False,
-               help="view translation tests' flow graphs with Pygame"),
-        Option('--gc', action="store", default=None, 
-               type="choice", dest="gcpolicy",
-               choices=['ref', 'boehm', 'none', 'framework', 'exact_boehm'],
-               help="GcPolicy class to use for genc tests"),
-        Option('-A', '--runappdirect', action="store_true", 
-               default=False, dest="runappdirect",
-               help="run applevel tests directly on python interpreter (not through PyPy)"), 
-    )
+    # XXX the options below are specific to the tests
+    Option('--allpypy', action="store_true",dest="allpypy", default=False, 
+           help="run everything possible on top of PyPy."),
+    Option('--view', action="store_true", dest="view", default=False,
+           help="view translation tests' flow graphs with Pygame"),
+    Option('-A', '--runappdirect', action="store_true", 
+           default=False, dest="runappdirect",
+           help=("run applevel tests directly on python interpreter (not "
+                    "through PyPy)")),
+]
+option = py.test.Config.addoptions('pypy options', *_opts)
 
 _SPACECACHE={}
 def getobjspace(name=None, **kwds): 
