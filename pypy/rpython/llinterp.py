@@ -532,6 +532,10 @@ class LLFrame(object):
         else:
             return self.heap.malloc(obj)
 
+    def op_zero_malloc(self, obj):
+        assert self.llinterpreter.gc is None
+        return self.heap.malloc(obj, zero=True)
+
     def op_malloc_varsize(self, obj, size):
         if self.llinterpreter.gc is not None:
             args = self.llinterpreter.gc.get_arg_malloc(obj, size)
@@ -543,6 +547,10 @@ class LLFrame(object):
                 return self.heap.malloc(obj, size)
             except MemoryError:
                 self.make_llexception()
+
+    def op_zero_malloc_varsize(self, obj, size):
+        assert self.llinterpreter.gc is None
+        return self.heap.malloc(obj, size, zero=True)
 
     def op_flavored_malloc(self, flavor, obj):
         assert isinstance(flavor, str)

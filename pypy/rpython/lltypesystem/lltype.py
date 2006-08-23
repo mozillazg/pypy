@@ -1555,7 +1555,7 @@ def functionptr(TYPE, name, **attrs):
     return _ptr(Ptr(TYPE), o)
 
 def nullptr(T):
-    return Ptr(T)._defl()
+    return Ptr(T)._defl(example=True)
 
 def opaqueptr(TYPE, name, **attrs):
     if not isinstance(TYPE, OpaqueType):
