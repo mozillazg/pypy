@@ -1526,9 +1526,9 @@ class _pyobjheader(_parentable):
 
 def malloc(T, n=None, flavor='gc', immortal=False, extra_args=(), zero=False):
     if isinstance(T, Struct):
-        o = _struct(T, n, example=zero)
+        o = _struct(T, n, example=zero or immortal)
     elif isinstance(T, Array):
-        o = _array(T, n, example=zero)
+        o = _array(T, n, example=zero or immortal)
     else:
         raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
