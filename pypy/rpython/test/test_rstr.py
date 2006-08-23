@@ -600,6 +600,7 @@ class TestLLtype(BaseTestRstr, LLRtypeMixin):
         p = malloc(STR, len(s))
         for i in range(len(s)):
             p.chars[i] = s[i]
+        p.hash = 0
         return p
 
     def test_ll_find_rfind(self):
