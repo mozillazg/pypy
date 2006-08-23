@@ -669,7 +669,7 @@ class __extend__(pairtype(SomePtr, SomeInteger)):
         example = p.ll_ptrtype._example()
         if example[0] is not None:  # ignore Void s_value
             v_lltype = annotation_to_lltype(s_value)
-            example[0] = v_lltype._defl()
+            example[0] = v_lltype._defl(example=True)
     setitem.can_only_throw = []
 
 class __extend__(pairtype(SomePtr, SomeObject)):

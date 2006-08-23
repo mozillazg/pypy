@@ -48,6 +48,7 @@ class StringRepr(AbstractStringRepr):
             p = malloc(STR, len(value))
             for i in range(len(value)):
                 p.chars[i] = value[i]
+            p.hash = 0
             self.ll.ll_strhash(p)   # precompute the hash
             CONST_STR_CACHE[value] = p
             return p

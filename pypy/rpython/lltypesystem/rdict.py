@@ -551,7 +551,7 @@ DICT_INITSIZE = 8
 def ll_newdict(DICT):
     d = lltype.malloc(DICT)
     d.entries = lltype.malloc(DICT.entries.TO, DICT_INITSIZE)
-    #d.num_items = 0    -- defaults
+    d.num_items = 0
     d.num_pristine_entries = DICT_INITSIZE
     return d
 
@@ -562,7 +562,7 @@ def ll_newdict_size(DICT, length_estimate):
         n *= 2
     d = lltype.malloc(DICT)
     d.entries = lltype.malloc(DICT.entries.TO, n)
-    #d.num_items = 0    -- defaults
+    d.num_items = 0
     d.num_pristine_entries = DICT_INITSIZE
     return d
 
