@@ -117,15 +117,11 @@ class __extend__(pairtype(AbstractStringRepr, PyObjRepr)):
 #  get flowed and annotated, mostly with SomePtr.
 #
 
-def mallocstr(size):
-    r = malloc(STR, size)
-    r.hash = 0
-    return r
-
 class LLHelpers(AbstractLLHelpers):
 
     def ll_char_mul(ch, times):
-        newstr = mallocstr(times)
+        newstr = malloc(STR, times)
+        newstr.hash = 0
         j = 0
         while j < times:
             newstr.chars[j] = ch
@@ -139,7 +135,8 @@ class LLHelpers(AbstractLLHelpers):
         return s.chars[i]
 
     def ll_chr2str(ch):
-        s = mallocstr(1)
+        s = malloc(STR, 1)
+        s.hash = 0
         s.chars[0] = ch
         return s
 
@@ -159,7 +156,8 @@ class LLHelpers(AbstractLLHelpers):
     def ll_strconcat(s1, s2):
         len1 = len(s1.chars)
         len2 = len(s2.chars)
-        newstr = mallocstr(len1 + len2)
+        newstr = malloc(STR, len1 + len2)
+        newstr.hash = 0
         j = 0
         while j < len1:
             newstr.chars[j] = s1.chars[j]
@@ -184,7 +182,8 @@ class LLHelpers(AbstractLLHelpers):
             while lpos < rpos and s.chars[rpos] == ch:
                 rpos -= 1
         r_len = rpos - lpos + 1
-        result = mallocstr(r_len)
+        result = malloc(STR, r_len)
+        result.hash = 0
         i = 0
         j = lpos
         while i < r_len:
@@ -199,7 +198,8 @@ class LLHelpers(AbstractLLHelpers):
         if s_len == 0:
             return emptystr
         i = 0
-        result = mallocstr(s_len)
+        result = malloc(STR, s_len)
+        result.hash = 0
         while i < s_len:
             ch = s_chars[i]
             if 'a' <= ch <= 'z':
@@ -214,7 +214,8 @@ class LLHelpers(AbstractLLHelpers):
         if s_len == 0:
             return emptystr
         i = 0
-        result = mallocstr(s_len)
+        result = malloc(STR, s_len)
+        result.hash = 0
         while i < s_len:
             ch = s_chars[i]
             if 'A' <= ch <= 'Z':
@@ -234,7 +235,8 @@ class LLHelpers(AbstractLLHelpers):
         while i < num_items:
             itemslen += len(items[i].chars)
             i += 1
-        result = mallocstr(itemslen + s_len * (num_items - 1))
+        result = malloc(STR, itemslen + s_len * (num_items - 1))
+        result.hash = 0
         res_chars = result.chars
         res_index = 0
         i = 0
@@ -454,7 +456,8 @@ class LLHelpers(AbstractLLHelpers):
         while i < num_items:
             itemslen += len(items[i].chars)
             i += 1
-        result = mallocstr(itemslen)
+        result = malloc(STR, itemslen)
+        result.hash = 0
         res_chars = result.chars
         res_index = 0
         i = 0
@@ -471,7 +474,8 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_join_chars(length, chars):
         num_chars = length
-        result = mallocstr(num_chars)
+        result = malloc(STR, num_chars)
+        result.hash = 0
         res_chars = result.chars
         i = 0
         while i < num_chars:
@@ -481,7 +485,8 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
-        newstr = mallocstr(len1 - start)
+        newstr = malloc(STR, len1 - start)
+        newstr.hash = 0
         j = 0
         while start < len1:
             newstr.chars[j] = s1.chars[start]
@@ -496,7 +501,8 @@ class LLHelpers(AbstractLLHelpers):
             if start == 0:
                 return s1
             stop = len(s1.chars)
-        newstr = mallocstr(stop - start)
+        newstr = malloc(STR, stop - start)
+        newstr.hash = 0
         j = 0
         while start < stop:
             newstr.chars[j] = s1.chars[start]
@@ -507,7 +513,8 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
         assert newlen >= 0
-        newstr = mallocstr(newlen)
+        newstr = malloc(STR, newlen)
+        newstr.hash = 0
         j = 0
         while j < newlen:
             newstr.chars[j] = s1.chars[j]
@@ -530,7 +537,8 @@ class LLHelpers(AbstractLLHelpers):
         resindex = 0
         while j < strlen:
             if chars[j] == c:
-                item = items[resindex] = mallocstr(j - i)
+                item = items[resindex] = malloc(STR, j - i)
+                item.hash = 0
                 newchars = item.chars
                 k = i
                 while k < j:
@@ -539,7 +547,8 @@ class LLHelpers(AbstractLLHelpers):
                 resindex += 1
                 i = j + 1
             j += 1
-        item = items[resindex] = mallocstr(j - i)
+        item = items[resindex] = malloc(STR, j - i)
+        item.hash = 0
         newchars = item.chars
         k = i
         while k < j:
@@ -551,7 +560,8 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_replace_chr_chr(s, c1, c2):
         length = len(s.chars)
-        newstr = mallocstr(length)
+        newstr = malloc(STR, length)
+        newstr.hash = 0
         src = s.chars
         dst = newstr.chars
         j = 0
