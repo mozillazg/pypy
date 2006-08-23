@@ -508,6 +508,8 @@ class FunctionCodeGenerator(object):
 
         return self.gcpolicy.zero_malloc(TYPE, esize, eresult)
 
+    OP_ZERO_MALLOC = OP_MALLOC
+    
     def OP_MALLOC_VARSIZE(self, op):
         TYPE = self.lltypemap(op.result).TO
         typename = self.db.gettype(TYPE)
@@ -546,6 +548,8 @@ class FunctionCodeGenerator(object):
         result += '\n}'
         return result
 
+    OP_ZERO_MALLOC_VARSIZE = OP_MALLOC_VARSIZE
+    
     def OP_RAW_MALLOC(self, op):
         eresult = self.expr(op.result)
         esize = self.expr(op.args[0])
