@@ -140,6 +140,7 @@ if GC integration has happened and this junk is still here, please delete it :)
     /* XXX add tp_itemsize later */                             \
     OP_RAW_MALLOC(((PyTypeObject *)cpytype)->tp_basicsize, r, restype);  \
     if (r) {                                                    \
+        OP_RAW_MEM_ZERO(r, ((PyTypeObject *)cpytype)->tp_basicsize); \
         PyObject_Init((PyObject *)r, (PyTypeObject *)cpytype);  \
     }                                                           \
   }
