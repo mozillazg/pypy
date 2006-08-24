@@ -2,7 +2,20 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
-#define OP_RAW_MALLOC(size,r,restype) OP_ZERO_MALLOC(size, r, restype)
+#define OP_RAW_MALLOC(size, r, restype)  {				\
+		r = (restype) PyObject_Malloc(size);			\
+		if (r == NULL) {					\
+			FAIL_EXCEPTION(PyExc_MemoryError,		\
+				       "out of memory");		\
+		} 							\
+		else {							\
+			COUNT_MALLOC;					\
+		}							\
+	}
+
+#define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
+
+#define OP_RAW_MEM_ZERO(p, size) memset((void*)p, 0, size)
 
 #define OP_RAW_MALLOC_USAGE(size, r) r = size
 
@@ -17,7 +30,6 @@
     if (r == NULL) FAIL_EXCEPTION(PyExc_MemoryError, "out of memory");  \
     memset((void*) r, 0, size);
 
-#define OP_RAW_FREE(x,r)           OP_FREE(x)
 #define OP_RAW_MEMCOPY(x,y,size,r) memcpy(y,x,size);
 
 /************************************************************/
@@ -41,16 +53,12 @@
    other globals, plus one.  This upper bound "approximation" will do... */
 #define REFCOUNT_IMMORTAL  (INT_MAX/2)
 
-#define OP_ZERO_MALLOC(size, r, restype)  {                                      \
-    r = (restype) PyObject_Malloc(size);                                  \
-    if (r == NULL) {FAIL_EXCEPTION(PyExc_MemoryError, "out of memory"); } \
-    else {                                                              \
-        memset((void*) r, 0, size);                                     \
-        COUNT_MALLOC;                                                   \
-    }                                                                   \
-  }
+#define OP_ZERO_MALLOC(size, r, restype)  {				\
+		OP_RAW_MALLOC(size, r, restype);			\
+		if (r != NULL) OP_RAW_MEM_ZERO(r, size);		\
+	}
 
-#define OP_FREE(p)	{ PyObject_Free(p); COUNT_FREE; }
+#define OP_FREE(p)	OP_RAW_FREE(p, do_not_use)
 
 /*------------------------------------------------------------*/
 #ifndef COUNT_OP_MALLOCS

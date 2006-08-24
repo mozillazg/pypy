@@ -500,13 +500,21 @@ class FunctionCodeGenerator(object):
                                      self.expr(op.args[0]),
                                      self.expr(op.args[1]))
 
-    def OP_MALLOC(self, op):
+    def OP_ZERO_MALLOC(self, op):
         TYPE = self.lltypemap(op.result).TO
         typename = self.db.gettype(TYPE)
         eresult = self.expr(op.result)
         esize = 'sizeof(%s)' % cdecl(typename, '')
 
         return self.gcpolicy.zero_malloc(TYPE, esize, eresult)
+
+    def OP_MALLOC(self, op):
+        TYPE = self.lltypemap(op.result).TO
+        typename = self.db.gettype(TYPE)
+        eresult = self.expr(op.result)
+        esize = 'sizeof(%s)' % cdecl(typename, '')
+
+        return self.gcpolicy.malloc(TYPE, esize, eresult)
 
     OP_ZERO_MALLOC = OP_MALLOC
     
@@ -553,7 +561,8 @@ class FunctionCodeGenerator(object):
     def OP_RAW_MALLOC(self, op):
         eresult = self.expr(op.result)
         esize = self.expr(op.args[0])
-        return "OP_RAW_MALLOC(%s, %s, void *);" % (esize, eresult)
+        return ("OP_RAW_MALLOC(%s, %s, void *);\n\t" % (esize, eresult) +
+                "if (%s) OP_RAW_MEM_ZERO(%s, %s);" % (eresult, eresult, esize))
 
     def OP_FLAVORED_MALLOC(self, op):
         TYPE = self.lltypemap(op.result).TO
