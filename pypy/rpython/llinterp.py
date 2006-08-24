@@ -661,6 +661,10 @@ class LLFrame(object):
         checkadr(addr) 
         self.heap.raw_free(addr)
 
+    def op_raw_memclear(self, addr, size):
+        checkadr(addr)
+        self.heap.raw_memclear(addr, size)
+
     def op_raw_memcopy(self, fromaddr, toaddr, size):
         checkadr(fromaddr)
         checkadr(toaddr)

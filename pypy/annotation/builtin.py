@@ -562,6 +562,11 @@ def raw_free(s_addr):
     assert isinstance(s_addr, SomeAddress)
     assert not s_addr.is_null
 
+def raw_memclear(s_addr, s_int):
+    assert isinstance(s_addr, SomeAddress)
+    assert not s_addr.is_null
+    assert isinstance(s_int, SomeInteger)
+
 def raw_memcopy(s_addr1, s_addr2, s_int):
     assert isinstance(s_addr1, SomeAddress)
     assert not s_addr1.is_null
@@ -572,6 +577,7 @@ def raw_memcopy(s_addr1, s_addr2, s_int):
 BUILTIN_ANALYZERS[lladdress.raw_malloc] = raw_malloc
 BUILTIN_ANALYZERS[lladdress.raw_malloc_usage] = raw_malloc_usage
 BUILTIN_ANALYZERS[lladdress.raw_free] = raw_free
+BUILTIN_ANALYZERS[lladdress.raw_memclear] = raw_memclear
 BUILTIN_ANALYZERS[lladdress.raw_memcopy] = raw_memcopy
 
 #_________________________________
