@@ -103,6 +103,8 @@ class RefcountingGcPolicy(BasicGcPolicy):
         erestype = cdecl(typename, '*')
         return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize, eresult, erestype)
 
+    malloc = zero_malloc
+
     def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op):
         args = [funcgen.expr(v) for v in op.args]
         line = '%s(%s);' % (args[0], ', '.join(args[1:]))
@@ -193,6 +195,8 @@ class BoehmGcPolicy(BasicGcPolicy):
             result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
                        % (eresult, gcinfo.finalizer))
         return result
+
+    malloc = zero_malloc
 
     def gc_libraries(self):
         if sys.platform == 'win32':
@@ -339,6 +343,8 @@ class MoreExactBoehmGcPolicy(BoehmGcPolicy):
                 TYPE, esize, eresult)
         return result
 
+    malloc = zero_malloc
+
 # to get an idea how it looks like with no refcount/gc at all
 
 class NoneGcPolicy(BoehmGcPolicy):
@@ -400,6 +406,8 @@ class FrameworkGcPolicy(BasicGcPolicy):
         typename = self.db.gettype(TYPE)
         erestype = cdecl(typename, '*')
         return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize, eresult, erestype)
+
+    malloc = zero_malloc
 
 class StacklessFrameworkGcPolicy(FrameworkGcPolicy):
     transformerclass = gctransform.StacklessFrameworkGCTransformer
