@@ -252,12 +252,37 @@ def test_raw_malloc_struct():
     S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Ptr(T)))
     adr = raw_malloc(sizeof(S))
     s = cast_adr_to_ptr(adr, lltype.Ptr(S))
+    py.test.raises(lltype.UninitializedMemoryAccess, "s.x")
+    raw_memclear(adr, sizeof(S))
+    assert s.x == 0
     assert lltype.typeOf(s) == lltype.Ptr(S)
     s.x = 123
     x_adr = adr + offsetof(S, 'x')
     assert x_adr.signed[0] == 123
     x_adr.signed[0] = 124
     assert s.x == 124
+
+def test_llinterp_raw_malloc_struct():
+    T = lltype.GcStruct('T', ('z', lltype.Signed))
+    S = lltype.Struct('S', ('x', lltype.Signed), ('y', lltype.Ptr(T)))
+
+    from pypy.rpython.memory import lladdress # GRUMBLE!
+
+    size = sizeof(S)
+
+    def test_read_uninit():
+        adr = lladdress.raw_malloc(size)
+        s = cast_adr_to_ptr(adr, lltype.Ptr(S))
+        return s.x
+    py.test.raises(lltype.UninitializedMemoryAccess, "interpret(test_read_uninit, [])")
+    def test_read_init():
+        adr = lladdress.raw_malloc(size)
+        lladdress.raw_memclear(adr, size)
+        s = cast_adr_to_ptr(adr, lltype.Ptr(S))
+        return s.x
+    res = interpret(test_read_init, [])
+    assert res == 0
+
 
 def test_raw_malloc_signed():
     adr = raw_malloc(sizeof(lltype.Signed))
