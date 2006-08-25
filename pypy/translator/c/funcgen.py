@@ -561,8 +561,7 @@ class FunctionCodeGenerator(object):
     def OP_RAW_MALLOC(self, op):
         eresult = self.expr(op.result)
         esize = self.expr(op.args[0])
-        return ("OP_RAW_MALLOC(%s, %s, void *);\n\t" % (esize, eresult) +
-                "if (%s) OP_RAW_MEM_ZERO(%s, %s);" % (eresult, eresult, esize))
+        return "OP_RAW_MALLOC(%s, %s, void *);" % (esize, eresult)
 
     def OP_FLAVORED_MALLOC(self, op):
         TYPE = self.lltypemap(op.result).TO
