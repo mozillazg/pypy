@@ -402,10 +402,7 @@ class FrameworkGcPolicy(BasicGcPolicy):
         return defnode.db.gctransformer.gc_field_values_for(o)
 
     def zero_malloc(self, TYPE, esize, eresult):
-        assert TYPE._gckind == 'gc'   # we don't really support this
-        typename = self.db.gettype(TYPE)
-        erestype = cdecl(typename, '*')
-        return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize, eresult, erestype)
+        assert False, "a malloc operation in a framework build??"
 
     malloc = zero_malloc
 
