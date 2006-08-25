@@ -73,7 +73,7 @@ class MultipleUnrelatedFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
         return malloc(self.EMPTY, immortal=True)
 
     def null_instance(self):
-        return llmemory.Address._defl(example=True)
+        return llmemory.Address._defl()
 
 class __extend__(pairtype(MultipleUnrelatedFrozenPBCRepr,
                           MultipleUnrelatedFrozenPBCRepr),

@@ -30,7 +30,7 @@ class OOType(LowLevelType):
 
 class Class(OOType):
 
-    def _defl(self, example=False):
+    def _defl(self):
         return nullruntimeclass
     
 Class = Class()
@@ -66,7 +66,7 @@ class Instance(OOType):
     def __hash__(self):
         return object.__hash__(self)
         
-    def _defl(self, example=False):
+    def _defl(self):
         return self._null
 
     def _example(self): return new(self)
@@ -92,7 +92,7 @@ class Instance(OOType):
                 if isinstance(defn, Meth):
                     raise TypeError("Attempting to store method in field")
                 
-                fields[name] = (defn, defn._defl(example=True))
+                fields[name] = (defn, defn._defl())
             else:
                 ootype, default = defn
 
@@ -195,7 +195,7 @@ class StaticMethod(SpecializableType):
         _retval = self.RESULT._example()
         return _static_meth(self, _callable=lambda *args: _retval)
 
-    def _defl(self, example=False):
+    def _defl(self):
         return null(self)
 
     def __repr__(self):
@@ -219,7 +219,7 @@ class BuiltinType(SpecializableType):
     def _example(self):
         return new(self)
 
-    def _defl(self, example=False):
+    def _defl(self):
         return self._null
 
     def _get_interp_class(self):
@@ -233,10 +233,10 @@ class Record(BuiltinType):
     def __init__(self, fields):
         self._fields = frozendict()
         for name, ITEMTYPE in fields.items():
-            self._fields[name] = ITEMTYPE, ITEMTYPE._defl(example=True)
+            self._fields[name] = ITEMTYPE, ITEMTYPE._defl()
         self._null = _null_record(self)
 
-    def _defl(self, example=False):
+    def _defl(self):
         return self._null
 
     def _get_interp_class(self):
@@ -321,7 +321,7 @@ class String(BuiltinADTType):
             return BuiltinADTType._enforce(self, value)
 
     # TODO: should it return _null or ''?
-    def _defl(self, example=False):
+    def _defl(self):
         return make_string("")
     def _example(self):
         return self._defl()
@@ -344,7 +344,7 @@ class StringBuilder(BuiltinADTType):
             })
         self._setup_methods({})
 
-    def _defl(self, example=False):
+    def _defl(self):
         return self._null
 
     def _get_interp_class(self):
@@ -430,7 +430,7 @@ class List(BuiltinADTType):
         ITEMTYPE = self._specialize_type(self._ITEMTYPE, generic_types)
         return self.__class__(ITEMTYPE)
     
-    def _defl(self, example=False):
+    def _defl(self):
         return self._null
 
     def _set_itemtype(self, ITEMTYPE):

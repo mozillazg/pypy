@@ -295,6 +295,20 @@ def test_raw_malloc_signed():
     py.test.raises(IndexError, "adr.signed[-1]")
     py.test.raises(IndexError, "adr.signed[1]")
 
+def test_raw_malloc_access():
+    S = lltype.GcStruct("S", ('x', lltype.Signed))
+    T = lltype.GcStruct("T", ('y', lltype.Signed), ('s', lltype.Ptr(S)))
+    # regular malloc zeros GC pointers
+    p_t = lltype.malloc(T)
+    assert p_t.s == lltype.nullptr(S)
+    # raw malloc does not
+    p_raw_t = lltype.malloc(T, flavor="raw")
+    py.test.raises(lltype.UninitializedMemoryAccess, "p_raw_t.s")
+    # this sort of raw_malloc too
+    p_raw_t = cast_adr_to_ptr(raw_malloc(sizeof(T)), lltype.Ptr(T))
+    py.test.raises(lltype.UninitializedMemoryAccess, "p_raw_t.s")
+    
+
 def test_raw_malloc_signed_bunch():
     adr = raw_malloc(sizeof(lltype.Signed) * 50)
     p = cast_adr_to_ptr(adr,
