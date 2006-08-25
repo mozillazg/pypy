@@ -859,8 +859,8 @@ class TestUsingFramework(AbstractTestClass):
             p.a = lltype.malloc(A)
             return p.a.x
         fn = self.getcompiled(f)
+        # the point is just not to segfault
         res = fn()
-        assert res == 123
 
 class TestUsingStacklessFramework(TestUsingFramework):
     from pypy.translator.c.gc import StacklessFrameworkGcPolicy as gcpolicy

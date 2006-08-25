@@ -15,7 +15,7 @@
 
 #define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
 
-#define OP_RAW_MEM_ZERO(p, size) memset((void*)p, 0, size)
+#define OP_RAW_MEMCLEAR(p, size, r) memset((void*)p, 0, size)
 
 #define OP_RAW_MALLOC_USAGE(size, r) r = size
 
@@ -55,7 +55,7 @@
 
 #define OP_ZERO_MALLOC(size, r, restype)  {				\
 		OP_RAW_MALLOC(size, r, restype);			\
-		if (r != NULL) OP_RAW_MEM_ZERO(r, size);		\
+		if (r != NULL) OP_RAW_MEMCLEAR(r, size, /* */);		\
 	}
 
 #define OP_FREE(p)	OP_RAW_FREE(p, do_not_use)
@@ -136,12 +136,12 @@ if GC integration has happened and this junk is still here, please delete it :)
 /************************************************************/
 /* rcpy support */
 
-#define OP_CPY_MALLOC(cpytype, r, restype)  {                            \
-    /* XXX add tp_itemsize later */                             \
-    OP_RAW_MALLOC(((PyTypeObject *)cpytype)->tp_basicsize, r, restype);  \
-    if (r) {                                                    \
-        OP_RAW_MEM_ZERO(r, ((PyTypeObject *)cpytype)->tp_basicsize); \
-        PyObject_Init((PyObject *)r, (PyTypeObject *)cpytype);  \
-    }                                                           \
-  }
+#define OP_CPY_MALLOC(cpytype, r, restype)  {			\
+	/* XXX add tp_itemsize later */				\
+	OP_RAW_MALLOC(((PyTypeObject *)cpytype)->tp_basicsize, r, restype); \
+	if (r) {						\
+	    OP_RAW_MEMCLEAR(r, ((PyTypeObject *)cpytype)->tp_basicsize, /* */); \
+	    PyObject_Init((PyObject *)r, (PyTypeObject *)cpytype); \
+	}							\
+    }
 #define OP_CPY_FREE(x)   OP_RAW_FREE(x, /*nothing*/)
