@@ -416,7 +416,7 @@ def typeOf(s_val):
 
 def cast_primitive(T, s_v):
     assert T.is_constant()
-    return ll_to_annotation(lltype.cast_primitive(T.const, annotation_to_lltype(s_v)._defl(example=True)))
+    return ll_to_annotation(lltype.cast_primitive(T.const, annotation_to_lltype(s_v)._defl()))
 
 def nullptr(T):
     assert T.is_constant()
@@ -426,13 +426,13 @@ def nullptr(T):
 def cast_pointer(PtrT, s_p):
     assert isinstance(s_p, SomePtr), "casting of non-pointer: %r" % s_p
     assert PtrT.is_constant()
-    cast_p = lltype.cast_pointer(PtrT.const, s_p.ll_ptrtype._defl(example=True))
+    cast_p = lltype.cast_pointer(PtrT.const, s_p.ll_ptrtype._defl())
     return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
 
 def cast_opaque_ptr(PtrT, s_p):
     assert isinstance(s_p, SomePtr), "casting of non-pointer: %r" % s_p
     assert PtrT.is_constant()
-    cast_p = lltype.cast_opaque_ptr(PtrT.const, s_p.ll_ptrtype._defl(example=True))
+    cast_p = lltype.cast_opaque_ptr(PtrT.const, s_p.ll_ptrtype._defl())
     return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
 
 def direct_fieldptr(s_p, s_fieldname):

@@ -605,10 +605,10 @@ class __extend__(SomePtr):
         example = p.ll_ptrtype._example()
         if getattr(example, s_attr.const) is not None:  # ignore Void s_value
             v_lltype = annotation_to_lltype(s_value)
-            setattr(example, s_attr.const, v_lltype._defl(example=True))
+            setattr(example, s_attr.const, v_lltype._defl())
 
     def simple_call(p, *args_s):
-        llargs = [annotation_to_lltype(arg_s)._defl(example=True) for arg_s in args_s]
+        llargs = [annotation_to_lltype(arg_s)._defl() for arg_s in args_s]
         v = p.ll_ptrtype._example()(*llargs)
         return ll_to_annotation(v)
 

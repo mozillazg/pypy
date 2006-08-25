@@ -115,7 +115,11 @@ class LowLevelType(object):
     def _short_name(self):
         return str(self)
 
-    def _defl(self, parent=None, parentindex=None, example=False):
+    def _defl(self, parent=None, parentindex=None):
+        raise NotImplementedError
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        assert initialization in ('raw', 'malloc', 'example')
         raise NotImplementedError
 
     def _freeze_(self):
@@ -254,16 +258,19 @@ class Struct(ContainerType):
     def _short_name(self):
         return "%s %s" % (self.__class__.__name__, self._name)
 
-    def _defl(self, parent=None, parentindex=None, example=False):
-        return _struct(self, parent=parent, parentindex=parentindex,
-                       example=example)
+##     def _defl(self, parent=None, parentindex=None):
+##         return _struct(self, parent=parent, parentindex=parentindex)
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        return _struct(self, initialization=initialization,
+                       parent=parent, parentindex=parentindex)
 
     def _container_example(self):
         if self._arrayfld is None:
             n = None
         else:
             n = 1
-        return _struct(self, n, example=True)
+        return _struct(self, n, initialization='example')
 
 class RttiStruct(Struct):
     _runtime_type_info = None
@@ -359,7 +366,7 @@ class Array(ContainerType):
     _short_name = saferecursive(_short_name, '...')
 
     def _container_example(self):
-        return _array(self, 1, example=True)
+        return _array(self, 1, initialization='example')
 
 class GcArray(Array):
     _gckind = 'gc'
@@ -425,7 +432,7 @@ class FuncType(ContainerType):
 
     def _container_example(self):
         def ex(*args):
-            return self.RESULT._defl(example=True)
+            return self.RESULT._defl()
         return _func(self, _callable=ex)
 
     def _trueargs(self):
@@ -448,8 +455,11 @@ class OpaqueType(ContainerType):
     def _container_example(self):
         return _opaque(self)
 
-    def _defl(self, parent=None, parentindex=None, example=False):
+    def _defl(self, parent=None, parentindex=None):
         return _opaque(self, parent=parent, parentindex=parentindex)
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        return self._defl(parent=parent, parentindex=parentindex)
 
 RuntimeTypeInfo = OpaqueType("RuntimeTypeInfo")
 
@@ -469,8 +479,10 @@ class PyObjectType(ContainerType):
         return "PyObject"
     def _inline_is_varsize(self, last):
         return False
-    def _defl(self, parent=None, parentindex=None, example=False):
+    def _defl(self, parent=None, parentindex=None):
         return _pyobjheader(parent, parentindex)
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        return self._defl(parent=parent, parentindex=parentindex)
 
 PyObject = PyObjectType()
 
@@ -508,15 +520,19 @@ class Primitive(LowLevelType):
     def __str__(self):
         return self._name
 
-    def _defl(self, parent=None, parentindex=None, example=False):
-        if not example and self is not Void:
-            return Uninitialized
+    def _defl(self, parent=None, parentindex=None):
         return self._default
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        if self is not Void and initialization != 'example':
+            return Uninitialized
+        else:
+            return self._default
 
     def _is_atomic(self):
         return True
 
-    def _example(self, parent=None, parentindex=None, example=False):
+    def _example(self, parent=None, parentindex=None):
         return self._default
 
 class Number(Primitive):
@@ -580,8 +596,13 @@ class Ptr(LowLevelType):
     def _is_atomic(self):
         return self.TO._gckind == 'raw'
 
-    def _defl(self, parent=None, parentindex=None, example=False):
-        if example or self._needsgc:
+    def _defl(self, parent=None, parentindex=None):
+        return _ptr(self, None)
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        if initialization == 'example':
+            return _ptr(self, None)
+        elif initialization == 'malloc' and self._needsgc():
             return _ptr(self, None)
         else:
             return Uninitialized
@@ -1210,11 +1231,11 @@ class _struct(_parentable):
 
     __slots__ = ()
 
-    def __new__(self, TYPE, n=None, parent=None, parentindex=None, example=False):
+    def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
         my_variety = _struct_variety(TYPE._names)
         return object.__new__(my_variety)
 
-    def __init__(self, TYPE, n=None, parent=None, parentindex=None, example=False):
+    def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
         _parentable.__init__(self, TYPE)
         if n is not None and TYPE._arrayfld is None:
             raise TypeError("%r is not variable-sized" % (TYPE,))
@@ -1223,9 +1244,9 @@ class _struct(_parentable):
         first, FIRSTTYPE = TYPE._first_struct()
         for fld, typ in TYPE._flds.items():
             if fld == TYPE._arrayfld:
-                value = _array(typ, n, parent=self, parentindex=fld, example=example)
+                value = _array(typ, n, initialization=initialization, parent=self, parentindex=fld)
             else:
-                value = typ._defl(parent=self, parentindex=fld, example=example)
+                value = typ._allocate(initialization=initialization, parent=self, parentindex=fld)
             setattr(self, fld, value)
         if parent is not None:
             self._setparentstructure(parent, parentindex)
@@ -1287,13 +1308,13 @@ class _array(_parentable):
 
     __slots__ = ('items',)
 
-    def __init__(self, TYPE, n, parent=None, parentindex=None, example=False):
+    def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None):
         if not isinstance(n, int):
             raise TypeError, "array length must be an int"
         if n < 0:
             raise ValueError, "negative array length"
         _parentable.__init__(self, TYPE)
-        self.items = [TYPE.OF._defl(parent=self, parentindex=j, example=example)
+        self.items = [TYPE.OF._allocate(initialization=initialization, parent=self, parentindex=j)
                       for j in range(n)]
         if parent is not None:
             self._setparentstructure(parent, parentindex)
@@ -1525,10 +1546,16 @@ class _pyobjheader(_parentable):
 
 
 def malloc(T, n=None, flavor='gc', immortal=False, extra_args=(), zero=False):
+    if zero or immortal:
+        initialization = 'example'
+    elif flavor == 'raw':
+        initialization = 'raw'
+    else:
+        initialization = 'malloc'
     if isinstance(T, Struct):
-        o = _struct(T, n, example=zero or immortal)
+        o = _struct(T, n, initialization=initialization)
     elif isinstance(T, Array):
-        o = _array(T, n, example=zero or immortal)
+        o = _array(T, n, initialization=initialization)
     else:
         raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
@@ -1555,7 +1582,7 @@ def functionptr(TYPE, name, **attrs):
     return _ptr(Ptr(TYPE), o)
 
 def nullptr(T):
-    return Ptr(T)._defl(example=True)
+    return Ptr(T)._defl()
 
 def opaqueptr(TYPE, name, **attrs):
     if not isinstance(TYPE, OpaqueType):

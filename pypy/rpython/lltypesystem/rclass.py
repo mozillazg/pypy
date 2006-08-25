@@ -440,7 +440,7 @@ class InstanceRepr(AbstractInstanceRepr):
                         if attrvalue is None:
                             warning("prebuilt instance %r has no attribute %r" % (
                                     value, name))
-                            llattrvalue = r.lowleveltype._defl(example=True)
+                            llattrvalue = r.lowleveltype._defl()
                         else:
                             llattrvalue = r.convert_desc_or_const(attrvalue)
                     else:

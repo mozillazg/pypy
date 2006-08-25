@@ -56,7 +56,7 @@ class ItemOffset(AddressOffset):
         if (isinstance(self.TYPE, lltype.ContainerType)
             and self.TYPE._gckind == 'gc'):
             assert self.repeat == 1
-            p = lltype.malloc(self.TYPE)
+            p = lltype.malloc(self.TYPE, flavor='raw')
             return cast_ptr_to_adr(p)
         else:
             T = lltype.FixedSizeArray(self.TYPE, self.repeat)
