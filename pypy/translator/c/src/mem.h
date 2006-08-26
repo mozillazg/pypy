@@ -23,7 +23,11 @@
 #define alloca  _alloca
 #endif
 
+#ifdef USING_BOEHM_GC
 #define MALLOC_ZERO_FILLED 1
+#else
+#define MALLOC_ZERO_FILLED 0
+#endif
 
 #define OP_STACK_MALLOC(size,r,restype)                                 \
     r = (restype) alloca(size);                                         \

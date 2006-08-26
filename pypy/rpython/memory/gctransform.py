@@ -20,6 +20,7 @@ from pypy.rpython.memory import gc, lladdress
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rpython.rtyper import LowLevelOpList
 import sets, os
 
 def var_ispyobj(var):
@@ -1216,28 +1217,33 @@ class FrameworkGCTransformer(GCTransformer):
         c_size = rmodel.inputconst(lltype.Signed, info["fixedsize"])
         if not op.opname.endswith('_varsize'):
             if op.opname.startswith('zero'):
-                p = self.malloc_fixedsize_clear_ptr
+                malloc_ptr = self.malloc_fixedsize_clear_ptr
             else:
-                p = self.malloc_fixedsize_clear_ptr
-            args = [p, self.c_const_gc, c_type_id, c_size, c_can_collect]
+                malloc_ptr = self.malloc_fixedsize_ptr
+            args = [self.c_const_gc, c_type_id, c_size, c_can_collect]
         else:
             v_length = op.args[-1]
             c_ofstolength = rmodel.inputconst(lltype.Signed, info['ofstolength'])
             c_varitemsize = rmodel.inputconst(lltype.Signed, info['varitemsize'])
-            if op.opname.startswith('zero'):
-                p = self.malloc_varsize_clear_ptr
-            else:
-                p = self.malloc_varsize_clear_ptr
-            args = [p, self.c_const_gc, c_type_id, v_length, c_size,
+            malloc_ptr = self.malloc_varsize_clear_ptr
+##             if op.opname.startswith('zero'):
+##                 p = self.malloc_varsize_clear_ptr
+##             else:
+##                 p = self.malloc_varsize_clear_ptr
+            args = [self.c_const_gc, c_type_id, v_length, c_size,
                     c_varitemsize, c_ofstolength, c_can_collect]
         c_has_finalizer = rmodel.inputconst(
             lltype.Bool, bool(self.finalizer_funcptr_for_type(TYPE)))
         args.append(c_has_finalizer)
         v = varoftype(llmemory.GCREF)
-        newop = SpaceOperation("direct_call", args, v)
+        newop = SpaceOperation("direct_call", [malloc_ptr] + args, v)
         ops, index = self.protect_roots(newop, livevars, block,
                                         block.operations.index(op))
         ops.append(SpaceOperation("cast_opaque_ptr", [v], op.result))
+        if malloc_ptr == self.malloc_fixedsize_ptr:
+            llops = LowLevelOpList(None)
+            gen_zero_gc_pointers(TYPE, op.result, llops)
+            ops.extend(llops)            
         return ops
 
     replace_zero_malloc = replace_malloc
@@ -1341,6 +1347,21 @@ def offsets_to_gc_pointers(TYPE):
     elif isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
         offsets.append(0)
     return offsets
+
+def gen_zero_gc_pointers(TYPE, v, llops):
+    assert isinstance(TYPE, lltype.Struct)
+    for name in TYPE._names:
+        FIELD = getattr(TYPE, name)
+        if isinstance(FIELD, lltype.Ptr) and FIELD._needsgc():
+            c_name = Constant(name, lltype.Void)
+            c_null = Constant(lltype.nullptr(FIELD.TO), FIELD)
+            llops.genop('bare_setfield', [v, c_name, c_null])
+        elif isinstance(FIELD, lltype.Struct):
+            c_name = Constant(name, lltype.Void)
+            v1 = llops.genop('getsubstruct', [v, c_name],
+                             resulttype = lltype.Ptr(FIELD))
+            gen_zero_gc_pointers(FIELD, v1, llops)
+
 
 # ____________________________________________________________
 
