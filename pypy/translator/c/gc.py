@@ -350,6 +350,7 @@ class MoreExactBoehmGcPolicy(BoehmGcPolicy):
 class NoneGcPolicy(BoehmGcPolicy):
 
     zero_malloc = RefcountingGcPolicy.zero_malloc.im_func
+    malloc = RefcountingGcPolicy.malloc.im_func
     gc_libraries = RefcountingGcPolicy.gc_libraries.im_func
     gc_startup_code = RefcountingGcPolicy.gc_startup_code.im_func
 
