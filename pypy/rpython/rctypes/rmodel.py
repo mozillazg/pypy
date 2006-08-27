@@ -277,6 +277,7 @@ def reccopy(source, dest):
                 subdst = dest[i]
                 reccopy(subsrc, subdst)
             else:
+                # this is a hack XXX de-hack this
                 try:
                     llvalue = source[i]
                     dest[i] = llvalue
@@ -290,6 +291,7 @@ def reccopy(source, dest):
                 subdst = getattr(dest,   name)
                 reccopy(subsrc, subdst)
             else:
+                # this is a hack XXX de-hack this
                 try:
                     llvalue = getattr(source, name)
                     setattr(dest, name, llvalue)
