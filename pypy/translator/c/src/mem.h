@@ -2,6 +2,24 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
+#define RAW_MALLOC_ZERO_FILLED 0
+
+#if RAW_MALLOC_ZERO_FILLED
+
+#define OP_RAW_MALLOC(size, r, restype)  {				\
+		r = (restype) PyObject_Malloc(size);			\
+		if (r == NULL) {					\
+			FAIL_EXCEPTION(PyExc_MemoryError,		\
+				       "out of memory");		\
+		} 							\
+		else {							\
+			memset((void*)r, 0, size);			\
+			COUNT_MALLOC;					\
+		}							\
+	}
+
+#else
+
 #define OP_RAW_MALLOC(size, r, restype)  {				\
 		r = (restype) PyObject_Malloc(size);			\
 		if (r == NULL) {					\
@@ -12,6 +30,8 @@
 			COUNT_MALLOC;					\
 		}							\
 	}
+
+#endif
 
 #define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
 
@@ -26,7 +46,7 @@
 #ifdef USING_BOEHM_GC
 #define MALLOC_ZERO_FILLED 1
 #else
-#define MALLOC_ZERO_FILLED 0
+#define MALLOC_ZERO_FILLED 1
 #endif
 
 #define OP_STACK_MALLOC(size,r,restype)                                 \
@@ -57,10 +77,18 @@
    other globals, plus one.  This upper bound "approximation" will do... */
 #define REFCOUNT_IMMORTAL  (INT_MAX/2)
 
+#if RAW_MALLOC_ZERO_FILLED
+
+#define OP_ZERO_MALLOC OP_RAW_MALLOC
+
+#else
+
 #define OP_ZERO_MALLOC(size, r, restype)  {				\
 		OP_RAW_MALLOC(size, r, restype);			\
 		if (r != NULL) OP_RAW_MEMCLEAR(r, size, /* */);		\
 	}
+
+#endif
 
 #define OP_FREE(p)	OP_RAW_FREE(p, do_not_use)
 
@@ -117,25 +145,6 @@ if GC integration has happened and this junk is still here, please delete it :)
 #define OP_CALL_BOEHM_GC_ALLOC(size, r) OP_BOEHM_ZERO_MALLOC(size, r, void *, 0, 0)
 
 #endif /* USING_BOEHM_GC */
-
-/* for no GC */
-#ifdef USING_NO_GC
-
-#undef OP_ZERO_MALLOC
-
-#define OP_ZERO_MALLOC(size, r, restype)  {                                 \
-    r = (restype) malloc(size);                                  \
-    if (r == NULL) { FAIL_EXCEPTION(PyExc_MemoryError, "out of memory"); } \
-    else {                                                                  \
-        memset((void*) r, 0, size);                                         \
-        COUNT_MALLOC;                                                       \
-    }                                                                       \
-  }
-
-#undef PUSH_ALIVE
-#define PUSH_ALIVE(obj)
-
-#endif /* USING_NO_GC */
 
 /************************************************************/
 /* rcpy support */
