@@ -2,7 +2,7 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
-#define RAW_MALLOC_ZERO_FILLED 0
+#define RAW_MALLOC_ZERO_FILLED 1
 
 #if RAW_MALLOC_ZERO_FILLED
 
