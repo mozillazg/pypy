@@ -153,6 +153,9 @@ class MemorySimulator(object):
         offset2 = address2 - block2.baseaddress
         block1.memcopy(offset1, block2, offset2, size)
 
+    def memclear(self, offset, size):
+        self.setbytes(offset, "\x00" * size)
+
     def get_py_object(self, address):
         block = self.objectblock
         offset = address - block.baseaddress
