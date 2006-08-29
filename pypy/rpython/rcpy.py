@@ -255,8 +255,7 @@ def build_pytypeobject(r_inst):
 
         # build the PyTypeObject structure
         pytypeobj = lltype.malloc(PY_TYPE_OBJECT, flavor='cpy',
-                                  extra_args=(typetype,),
-                                  zero=True)
+                                  extra_args=(typetype,))
         name = cpytype.name
         T = lltype.FixedSizeArray(lltype.Char, len(name)+1)
         p = lltype.malloc(T, immortal=True)
