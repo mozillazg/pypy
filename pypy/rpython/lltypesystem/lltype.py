@@ -14,7 +14,12 @@ log = py.log.Producer('lltype')
 
 TLS = tlsobject()
 
-Uninitialized = object()
+class _uninitialized(object):
+    def __init__(self, TYPE):
+        self.TYPE = TYPE
+    def __repr__(self):
+        return '<Uninitialized %r'%(self.TYPE,)
+        
 
 def saferecursive(func, defl):
     def safe(*args):
@@ -525,7 +530,7 @@ class Primitive(LowLevelType):
 
     def _allocate(self, initialization, parent=None, parentindex=None):
         if self is not Void and initialization != 'example':
-            return Uninitialized
+            return _uninitialized(self)
         else:
             return self._default
 
@@ -605,7 +610,7 @@ class Ptr(LowLevelType):
         elif initialization == 'malloc' and self._needsgc():
             return _ptr(self, None)
         else:
-            return Uninitialized
+            return _uninitialized(self)
 
     def _example(self):
         o = self.TO._container_example()
@@ -619,9 +624,9 @@ def typeOf(val):
     try:
         return val._TYPE
     except AttributeError:
-        if val is Uninitialized:
-            raise UninitializedMemoryAccess("typeOf uninitialized value")
         tp = type(val)
+        if tp is _uninitialized:
+            raise UninitializedMemoryAccess("typeOf uninitialized value")
         if tp is NoneType:
             return Void   # maybe
         if tp is int:
@@ -954,10 +959,7 @@ class _ptr(object):
     def __getattr__(self, field_name): # ! can only return basic or ptr !
         if isinstance(self._T, Struct):
             if field_name in self._T._flds:
-                o = getattr(self._obj, field_name)
-                if o is Uninitialized:
-                    raise UninitializedMemoryAccess(
-                        "%r->%s"%(self, field_name))
+                o = self._obj._getattr(field_name)
                 return _expose(o, self._solid)
         if isinstance(self._T, ContainerType):
             try:
@@ -1285,18 +1287,26 @@ class _struct(_parentable):
 
     __setstate__ = setstate_with_slots
 
-    def getlength(self):              # for FixedSizeArray kind of structs
+    def _getattr(self, field_name, uninitialized_ok=False):
+        r = getattr(self, field_name)
+        if isinstance(r, _uninitialized) and not uninitialized_ok:
+            raise UninitializedMemoryAccess("%r.%s"%(self, field_name))
+        return r
+    
+    # for FixedSizeArray kind of structs:
+    
+    def getlength(self):
         assert isinstance(self._TYPE, FixedSizeArray)
         return self._TYPE.length
 
     def getbounds(self):
         return 0, self.getlength()
 
-    def getitem(self, index):         # for FixedSizeArray kind of structs
+    def getitem(self, index, uninitialized_ok=False):
         assert isinstance(self._TYPE, FixedSizeArray)
-        return getattr(self, 'item%d' % index)
+        return self._getattr('item%d' % index, uninitialized_ok)
 
-    def setitem(self, index, value):  # for FixedSizeArray kind of structs
+    def setitem(self, index, value):
         assert isinstance(self._TYPE, FixedSizeArray)
         setattr(self, 'item%d' % index, value)
 
@@ -1327,7 +1337,7 @@ class _array(_parentable):
         return '<%s>' % (self,)
 
     def _str_item(self, item):
-        if type(item) is object:
+        if isinstance(item, _uninitialized):
             return '#'
         if isinstance(self._TYPE.OF, Struct):
             of = self._TYPE.OF
@@ -1361,10 +1371,10 @@ class _array(_parentable):
             stop += 1
         return 0, stop
 
-    def getitem(self, index):
+    def getitem(self, index, uninitialized_ok=False):
         try:
             v = self.items[index]
-            if v is Uninitialized:
+            if isinstance(v, _uninitialized) and not uninitialized_ok:
                 raise UninitializedMemoryAccess("%r[%s]"%(self, index))
             return v
         except IndexError:
