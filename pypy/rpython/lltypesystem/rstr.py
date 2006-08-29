@@ -48,6 +48,7 @@ class StringRepr(AbstractStringRepr):
             p = malloc(STR, len(value))
             for i in range(len(value)):
                 p.chars[i] = value[i]
+            p.hash = 0
             self.ll.ll_strhash(p)   # precompute the hash
             CONST_STR_CACHE[value] = p
             return p
@@ -120,6 +121,7 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_char_mul(ch, times):
         newstr = malloc(STR, times)
+        newstr.hash = 0
         j = 0
         while j < times:
             newstr.chars[j] = ch
@@ -134,6 +136,7 @@ class LLHelpers(AbstractLLHelpers):
 
     def ll_chr2str(ch):
         s = malloc(STR, 1)
+        s.hash = 0
         s.chars[0] = ch
         return s
 
@@ -154,6 +157,7 @@ class LLHelpers(AbstractLLHelpers):
         len1 = len(s1.chars)
         len2 = len(s2.chars)
         newstr = malloc(STR, len1 + len2)
+        newstr.hash = 0
         j = 0
         while j < len1:
             newstr.chars[j] = s1.chars[j]
@@ -179,6 +183,7 @@ class LLHelpers(AbstractLLHelpers):
                 rpos -= 1
         r_len = rpos - lpos + 1
         result = malloc(STR, r_len)
+        result.hash = 0
         i = 0
         j = lpos
         while i < r_len:
@@ -194,6 +199,7 @@ class LLHelpers(AbstractLLHelpers):
             return emptystr
         i = 0
         result = malloc(STR, s_len)
+        result.hash = 0
         while i < s_len:
             ch = s_chars[i]
             if 'a' <= ch <= 'z':
@@ -209,6 +215,7 @@ class LLHelpers(AbstractLLHelpers):
             return emptystr
         i = 0
         result = malloc(STR, s_len)
+        result.hash = 0
         while i < s_len:
             ch = s_chars[i]
             if 'A' <= ch <= 'Z':
@@ -229,6 +236,7 @@ class LLHelpers(AbstractLLHelpers):
             itemslen += len(items[i].chars)
             i += 1
         result = malloc(STR, itemslen + s_len * (num_items - 1))
+        result.hash = 0
         res_chars = result.chars
         res_index = 0
         i = 0
@@ -449,6 +457,7 @@ class LLHelpers(AbstractLLHelpers):
             itemslen += len(items[i].chars)
             i += 1
         result = malloc(STR, itemslen)
+        result.hash = 0
         res_chars = result.chars
         res_index = 0
         i = 0
@@ -466,6 +475,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_join_chars(length, chars):
         num_chars = length
         result = malloc(STR, num_chars)
+        result.hash = 0
         res_chars = result.chars
         i = 0
         while i < num_chars:
@@ -476,6 +486,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
         newstr = malloc(STR, len1 - start)
+        newstr.hash = 0
         j = 0
         while start < len1:
             newstr.chars[j] = s1.chars[start]
@@ -491,6 +502,7 @@ class LLHelpers(AbstractLLHelpers):
                 return s1
             stop = len(s1.chars)
         newstr = malloc(STR, stop - start)
+        newstr.hash = 0
         j = 0
         while start < stop:
             newstr.chars[j] = s1.chars[start]
@@ -502,6 +514,7 @@ class LLHelpers(AbstractLLHelpers):
         newlen = len(s1.chars) - 1
         assert newlen >= 0
         newstr = malloc(STR, newlen)
+        newstr.hash = 0
         j = 0
         while j < newlen:
             newstr.chars[j] = s1.chars[j]
@@ -525,6 +538,7 @@ class LLHelpers(AbstractLLHelpers):
         while j < strlen:
             if chars[j] == c:
                 item = items[resindex] = malloc(STR, j - i)
+                item.hash = 0
                 newchars = item.chars
                 k = i
                 while k < j:
@@ -534,6 +548,7 @@ class LLHelpers(AbstractLLHelpers):
                 i = j + 1
             j += 1
         item = items[resindex] = malloc(STR, j - i)
+        item.hash = 0
         newchars = item.chars
         k = i
         while k < j:
@@ -546,6 +561,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_replace_chr_chr(s, c1, c2):
         length = len(s.chars)
         newstr = malloc(STR, length)
+        newstr.hash = 0
         src = s.chars
         dst = newstr.chars
         j = 0
@@ -618,6 +634,7 @@ class LLHelpers(AbstractLLHelpers):
         cTEMP = inputconst(Void, TEMP)
         vtemp = hop.genop("malloc_varsize", [cTEMP, size],
                           resulttype=Ptr(TEMP))
+        # XXX hash
         r_tuple = hop.args_r[1]
         v_tuple = hop.args_v[1]
 
