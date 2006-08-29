@@ -571,8 +571,7 @@ class InstanceRepr(AbstractInstanceRepr):
         instance = cast_pointer(OBJECTPTR, i)
         from pypy.rpython.lltypesystem import rstr
         nameLen = len(instance.typeptr.name)
-        nameString = malloc(rstr.STR, nameLen-1)
-        nameString.hash = 0
+        nameString = rstr.mallocstr(nameLen-1)
         i = 0
         while i < nameLen - 1:
             nameString.chars[i] = instance.typeptr.name[i]
