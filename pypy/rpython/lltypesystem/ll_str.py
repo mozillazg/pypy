@@ -26,6 +26,7 @@ def ll_int2dec(i):
             len += 1
     len += sign
     result = malloc(STR, len)
+    result.hash = 0
     if sign:
         result.chars[0] = '-'
         j = 1
@@ -61,6 +62,7 @@ def ll_int2hex(i, addPrefix):
     if addPrefix:
         len += 2
     result = malloc(STR, len)
+    result.hash = 0
     j = 0
     if sign:
         result.chars[0] = '-'
@@ -78,6 +80,7 @@ def ll_int2oct(i, addPrefix):
     from pypy.rpython.lltypesystem.rstr import STR
     if i == 0:
         result = malloc(STR, 1)
+        result.hash = 0
         result.chars[0] = '0'
         return result
     temp = malloc(CHAR_ARRAY, 25)
@@ -94,6 +97,7 @@ def ll_int2oct(i, addPrefix):
     if addPrefix:
         len += 1
     result = malloc(STR, len)
+    result.hash = 0
     j = 0
     if sign:
         result.chars[0] = '-'
