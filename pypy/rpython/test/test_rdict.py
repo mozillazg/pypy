@@ -513,6 +513,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
             p = lltype.malloc(rstr.STR, len(value))
             for i in range(len(value)):
                 p.chars[i] = value[i]
+            p.hash = 0
             return rstr.LLHelpers.ll_strhash(p) 
 
         def func(c1, c2): 
