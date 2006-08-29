@@ -1560,7 +1560,7 @@ class _pyobjheader(_parentable):
 
 
 def malloc(T, n=None, flavor='gc', immortal=False, extra_args=(), zero=False):
-    if zero or immortal:
+    if zero or immortal or flavor == 'cpy':
         initialization = 'example'
     elif flavor == 'raw':
         initialization = 'raw'
