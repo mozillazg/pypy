@@ -1,7 +1,7 @@
 import random
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.rstr import AbstractLLHelpers
-from pypy.rpython.lltypesystem.rstr import LLHelpers, STR
+from pypy.rpython.lltypesystem.rstr import LLHelpers, mallocstr
 from pypy.rpython.rtyper import RPythonTyper, TyperError
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.llinterp import LLException
@@ -597,10 +597,9 @@ class TestLLtype(BaseTestRstr, LLRtypeMixin):
     EMPTY_STRING_HASH = -1
 
     def llstr(self, s):
-        p = malloc(STR, len(s))
+        p = mallocstr(len(s))
         for i in range(len(s)):
             p.chars[i] = s[i]
-        p.hash = 0
         return p
 
     def test_ll_find_rfind(self):
