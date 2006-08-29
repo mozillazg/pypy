@@ -278,11 +278,8 @@ def reccopy(source, dest):
                 reccopy(subsrc, subdst)
             else:
                 # this is a hack XXX de-hack this
-                try:
-                    llvalue = source[i]
-                    dest[i] = llvalue
-                except lltype.UninitializedMemoryAccess:
-                    pass # oh well
+                llvalue = source._obj.getitem(i, uninitialized_ok=True)
+                dest._obj.setitem(i, llvalue)
     elif isinstance(T, lltype.Struct):
         for name in T._names:
             FIELDTYPE = getattr(T, name)
@@ -292,11 +289,8 @@ def reccopy(source, dest):
                 reccopy(subsrc, subdst)
             else:
                 # this is a hack XXX de-hack this
-                try:
-                    llvalue = getattr(source, name)
-                    setattr(dest, name, llvalue)
-                except lltype.UninitializedMemoryAccess:
-                    pass # oh well
+                llvalue = source._obj._getattr(name, uninitialized_ok=True)
+                setattr(dest._obj, name, llvalue)
     else:
         raise TypeError(T)
 
