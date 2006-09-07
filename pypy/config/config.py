@@ -87,7 +87,7 @@ class Config(object):
                 result += substr
         return result
 
-    def getpaths(self, currpath=None):
+    def getpaths(self, include_groups=False, currpath=None):
         """returns a list of all paths in self, recursively
         
             currpath should not be provided (helps with recursion)
@@ -95,12 +95,16 @@ class Config(object):
         if currpath is None:
             currpath = []
         paths = []
-        for attr, value in self.__dict__.iteritems():
+        for option in self._descr._children:
+            attr = option._name
             if attr.startswith('_'):
                 continue
+            value = getattr(self, attr)
             if isinstance(value, Config):
+                if include_groups:
+                    paths.append('.'.join(currpath + [attr]))
                 currpath.append(attr)
-                paths += value.getpaths(currpath)
+                paths += value.getpaths(currpath=currpath)
                 currpath.pop()
             else:
                 paths.append('.'.join(currpath + [attr]))
@@ -263,12 +267,11 @@ class OptionDescription(object):
                           callback=_callback, *argnames)
 
 
-def to_optparse(config, useoptions, parser=None):
+def to_optparse(config, parser=None):
     if parser is None:
         parser = optparse.OptionParser()
     for path in useoptions:
-        if path.endswith("*"):
-            assert path.endswith("*")
+        if path.endswith(".*"):
             path = path[:-2]
             subconf, name = config._get_by_path(path)
             children = [
