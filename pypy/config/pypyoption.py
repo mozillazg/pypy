@@ -86,7 +86,7 @@ pypy_optiondescription = OptionDescription("pypy", [
     ]),
 
     BoolOption("translating", "indicates whether we are translating currently",
-               default=False),
+               default=False, cmdline=None),
 ])
 
 if __name__ == '__main__':
