@@ -10,7 +10,7 @@ from pypy.rpython.lltypesystem.lltype import Unsigned, SignedLongLong, Float
 from pypy.rpython.lltypesystem.lltype import UnsignedLongLong, Char, UniChar
 from pypy.rpython.lltypesystem.lltype import pyobjectptr, ContainerType
 from pypy.rpython.lltypesystem.lltype import Struct, Array, FixedSizeArray
-from pypy.rpython.lltypesystem.lltype import FuncForwardReference
+from pypy.rpython.lltypesystem.lltype import ForwardReference
 from pypy.rpython.lltypesystem.llmemory import Address, WeakGcAddress
 from pypy.translator.backendopt.ssa import SSI_to_SSA
 
@@ -58,7 +58,7 @@ class FunctionCodeGenerator(object):
             T = getattr(v, 'concretetype', PyObjPtr)
             # obscure: skip forward references and hope for the best
             # (needed for delayed function pointers)
-            if isinstance(T, Ptr) and T.TO.__class__ == FuncForwardReference:
+            if isinstance(T, Ptr) and T.TO.__class__ == ForwardReference:
                 continue
             db.gettype(T)  # force the type to be considered by the database
        

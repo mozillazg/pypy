@@ -168,13 +168,14 @@ class ContainerType(LowLevelType):
         
 
 class Struct(ContainerType):
-    _gckind = 'raw'
+    _gckind = 'prebuilt'
 
     def __init__(self, name, *fields, **kwds):
         self._name = self.__name__ = name
         flds = {}
         names = []
         self._arrayfld = None
+        firstfield = True
         for name, typ in fields:
             if name.startswith('_'):
                 raise NameError, ("%s: field name %r should not start with "
@@ -183,12 +184,19 @@ class Struct(ContainerType):
             if name in flds:
                 raise TypeError("%s: repeated field name" % self._name)
             flds[name] = typ
-            if isinstance(typ, ContainerType) and typ._gckind != 'raw':
-                if name == fields[0][0] and typ._gckind == self._gckind:
+            if isinstance(typ, ContainerType):
+                if firstfield and typ._gckind == self._gckind:
                     pass  # can inline a XxContainer as 1st field of XxStruct
+                elif self._gckind == 'prebuilt' and typ._gckind == 'prebuilt':
+                    pass
+                elif typ._gckind == 'raw':
+                    1/0
+                elif typ._gckind == 'gcinterior' and self._gckind in ('gcinterior', 'gc'):
+                    pass
                 else:
                     raise TypeError("%s: cannot inline %s container %r" % (
                         self._name, typ._gckind, typ))
+            firstfield = False
 
         # look if we have an inlined variable-sized array as the last field
         if fields:
@@ -277,6 +285,12 @@ class Struct(ContainerType):
             n = 1
         return _struct(self, n, initialization='example')
 
+class EmbeddedStruct(Struct):
+    _gckind = 'gcinterior'
+
+class RawStruct(Struct):
+    _gckind = 'raw'
+
 class RttiStruct(Struct):
     _runtime_type_info = None
 
@@ -316,12 +330,13 @@ class PyStruct(RttiStruct):
             raise TypeError("a PyStruct must have another PyStruct or "
                             "PyObject as first field")
 
-STRUCT_BY_FLAVOR = {'raw': Struct,
+STRUCT_BY_FLAVOR = {'prebuilt': Struct,
+                    'gcinterior': EmbeddedStruct,
                     'gc':  GcStruct,
                     'cpy': PyStruct}
 
 class Array(ContainerType):
-    _gckind = 'raw'
+    _gckind = 'prebuilt'
     __name__ = 'array'
     _anonym_struct = False
     
@@ -329,11 +344,16 @@ class Array(ContainerType):
         if len(fields) == 1 and isinstance(fields[0], LowLevelType):
             self.OF = fields[0]
         else:
-            self.OF = Struct("<arrayitem>", *fields)
+            self.OF = EmbeddedStruct("<arrayitem>", *fields)
             self._anonym_struct = True
-        if isinstance(self.OF, ContainerType) and self.OF._gckind != 'raw':
-            raise TypeError("cannot have a %s container as array item type"
-                            % (self.OF._gckind,))
+        if isinstance(self.OF, ContainerType):
+            if self._gckind in ('gcinterior', 'gc') and self.OF._gckind == 'gcinterior':
+                pass
+            elif self._gckind == 'prebuilt' and self.OF._gckind == 'prebuilt':
+                pass
+            else:
+                raise TypeError("cannot have a %s container as array item type"
+                                % (self.OF._gckind,))
         self.OF._inline_is_varsize(False)
 
         self._install_extras(**kwds)
@@ -373,6 +393,9 @@ class Array(ContainerType):
     def _container_example(self):
         return _array(self, 1, initialization='example')
 
+class EmbeddedArray(Array):
+    _gckind = 'gcinterior'
+
 class GcArray(Array):
     _gckind = 'gc'
     def _inline_is_varsize(self, last):
@@ -389,9 +412,14 @@ class FixedSizeArray(Struct):
                                              **kwds)
         self.OF = OF
         self.length = length
-        if isinstance(self.OF, ContainerType) and self.OF._gckind != 'raw':
-            raise TypeError("cannot have a %s container as array item type"
-                            % (self.OF._gckind,))
+        if isinstance(self.OF, ContainerType):
+            if self._gckind in ('gcinterior', 'gc') and self.OF._gckind == 'gcinterior':
+                pass
+            elif self._gckind == 'prebuilt' and self.OF._gckind == 'prebuilt':
+                pass
+            else:
+                raise TypeError("cannot have a %s container as array item type"
+                                % (self.OF._gckind,))
         self.OF._inline_is_varsize(False)
 
     def _str_fields(self):
@@ -408,6 +436,9 @@ class FixedSizeArray(Struct):
                              self.length,
                              self.OF._short_name(),)
     _short_name = saferecursive(_short_name, '...')
+
+class EmbeddedFixedSizeArray(FixedSizeArray):
+    _gckind = 'gcinterior'
 
 
 class FuncType(ContainerType):
@@ -445,7 +476,8 @@ class FuncType(ContainerType):
 
 
 class OpaqueType(ContainerType):
-    _gckind = 'raw'
+    _gckind = 'prebuilt' # XXX ?
+    _gckind = 'gcinterior' # XXX ?
     
     def __init__(self, tag):
         self.tag = tag
@@ -492,7 +524,7 @@ class PyObjectType(ContainerType):
 PyObject = PyObjectType()
 
 class ForwardReference(ContainerType):
-    _gckind = 'raw'
+    _gckind = 'prebuilt'
     def become(self, realcontainertype):
         if not isinstance(realcontainertype, ContainerType):
             raise TypeError("ForwardReference can only be to a container, "
@@ -512,12 +544,13 @@ class GcForwardReference(ForwardReference):
 class PyForwardReference(ForwardReference):
     _gckind = 'cpy'
 
-class FuncForwardReference(ForwardReference):
-    _gckind = 'prebuilt'
+class EmbeddedForwardReference(ForwardReference):
+    _gckind = 'gcinterior'
 
-FORWARDREF_BY_FLAVOR = {'raw': ForwardReference,
+FORWARDREF_BY_FLAVOR = {'prebuilt': ForwardReference,
                         'gc':  GcForwardReference,
-                        'cpy': PyForwardReference}
+                        'cpy': PyForwardReference,
+                        'gcinterior': EmbeddedForwardReference}
 
 
 class Primitive(LowLevelType):
@@ -593,7 +626,7 @@ class Ptr(LowLevelType):
 
     def _needsgc(self):
         # XXX deprecated interface
-        return self.TO._gckind != 'raw'
+        return self.TO._gckind not in ('gcinterior', 'prebuilt')
 
     def __str__(self):
         return '* %s' % (self.TO, )
@@ -602,7 +635,7 @@ class Ptr(LowLevelType):
         return 'Ptr %s' % (self.TO._short_name(), )
     
     def _is_atomic(self):
-        return self.TO._gckind == 'raw'
+        return not self.TO._gckind not in ('gcinterior', 'prebuilt')
 
     def _defl(self, parent=None, parentindex=None):
         return _ptr(self, None)
@@ -943,8 +976,7 @@ class _ptr(object):
     def _setobj(self, pointing_to, solid=False):        
         if pointing_to is None:
             obj0 = None
-        elif (solid or self._T._gckind != 'raw' or
-              isinstance(self._T, FuncType)):
+        elif (solid or self._T._gckind != 'gcinterior'):
             obj0 = pointing_to
         else:
             self._set_weak(True)
@@ -1589,9 +1621,7 @@ def malloc(T, n=None, flavor='gc', immortal=False, extra_args=(), zero=False):
     solid = immortal or not flavor.startswith('gc') # immortal or non-gc case
     return _ptr(Ptr(T), o, solid)
 
-def free(p, flavor):
-    if flavor.startswith('gc'):
-        raise TypeError, "gc flavor free"
+def free(p):
     T = typeOf(p)
     if not isinstance(T, Ptr) or p._togckind() != 'raw':
         raise TypeError, "free(): only for pointers to non-gc containers"
