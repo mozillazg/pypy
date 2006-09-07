@@ -1,6 +1,6 @@
-import os, sys
+import py
 
-from pypy.tool.option import make_config
+import os, sys
 
 # as of revision 27081, multimethod.py uses the InstallerVersion1 by default
 # because it is much faster both to initialize and run on top of CPython.
@@ -16,6 +16,9 @@ from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
+from pypy.config.pypyoption import pypy_optiondescription
+from pypy.config.config import Config, to_optparse
+
 
 try:
     this_dir = os.path.dirname(__file__)
@@ -70,22 +73,25 @@ def create_entry_point(space, w_dict):
 
 take_options = True
 
-def opt_parser():
-    import py
-    defl = {'thread': False, 'usemodules': ''}
-    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", 
-                                                add_help_option=False)
-    parser.set_defaults(**defl)
-    parser.add_option("--thread", action="store_true", dest="thread", 
-                        help="enable threading")
-    parser.add_option("--usemodules", action="store", type="string", 
-                        dest="usemodules", help=("list of mixed modules to "
-                                            "include, comma-separated"))
-    return parser
+#def opt_parser():
+#    import py
+#    defl = {'thread': False, 'usemodules': ''}
+#    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", 
+#                                                add_help_option=False)
+#    parser.set_defaults(**defl)
+#    parser.add_option("--thread", action="store_true", dest="thread", 
+#                        help="enable threading")
+#    parser.add_option("--usemodules", action="store", type="string", 
+#                        dest="usemodules", help=("list of mixed modules to "
+#                                            "include, comma-separated"))
+#    return parser
 
 def print_help():
-    opt_parser().print_help()
-
+    config = Config(pypy_optiondescription)
+    opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
+                                                 add_help_option=False)
+    to_optparse(config, parser=opt_parser)
+    opt_parser.print_help()
 
 def call_finish(space):
     space.finish()
@@ -95,14 +101,18 @@ def call_startup(space):
 
 
 def target(driver, args):
+    global config, opt_parser
     driver.exe_name = 'pypy-%(backend)s'
     options = driver.options
 
-    tgt_options, _ = opt_parser().parse_args(args)
-
-    config = make_config(tgt_options)
+    config = Config(pypy_optiondescription)
+    opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
+                                                 add_help_option=False)
+    to_optparse(config, parser=parser)
 
     translate.log_options(tgt_options, "target PyPy options in effect")
+
+    opt_parser().parse_args(args)
 
     # expose the following variables to ease debugging
     global space, entry_point
@@ -118,14 +128,6 @@ def target(driver, args):
     # disable translation of the whole of classobjinterp.py
     StdObjSpace.setup_old_style_classes = lambda self: None
 
-    usemodules = []
-    if tgt_options.usemodules:
-        for modname in tgt_options.usemodules.split(","):
-            setattr(config.objspace.usemodules, modname, True)
-    if tgt_options.thread:
-        config.objspace.usemodules.thread = True
-    if options.stackless:
-        config.objspace.usemodules._stackless = True
     config.objspace.nofaking = True
     config.objspace.compiler = "ast"
     config.translating = True
