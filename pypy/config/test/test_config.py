@@ -221,7 +221,7 @@ def test_none():
     group = OptionDescription('group', [dummy1, dummy2])
     config = Config(group)
 
-    parser = to_optparse(config, config.getpaths())
+    parser = to_optparse(config)
     py.test.raises(SystemExit,
         "(options, args) = parser.parse_args(args=['--dummy1'])")
  

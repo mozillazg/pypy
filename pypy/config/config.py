@@ -104,7 +104,8 @@ class Config(object):
                 if include_groups:
                     paths.append('.'.join(currpath + [attr]))
                 currpath.append(attr)
-                paths += value.getpaths(currpath=currpath)
+                paths += value.getpaths(include_groups=include_groups,
+                                        currpath=currpath)
                 currpath.pop()
             else:
                 paths.append('.'.join(currpath + [attr]))
@@ -267,9 +268,11 @@ class OptionDescription(object):
                           callback=_callback, *argnames)
 
 
-def to_optparse(config, parser=None):
+def to_optparse(config, useoptions=None, parser=None):
     if parser is None:
         parser = optparse.OptionParser()
+    if useoptions is None:
+        useoptions = config.getpaths(include_groups=True)
     for path in useoptions:
         if path.endswith(".*"):
             path = path[:-2]
@@ -287,6 +290,10 @@ def to_optparse(config, parser=None):
                 continue
             else:
                 chunks = option.cmdline.split(' ')
-            option.add_optparse_option(chunks, parser, subconf)
+            try:
+                option.add_optparse_option(chunks, parser, subconf)
+            except ValueError:
+                # an option group that does not only contain bool values
+                pass
     return parser
 
