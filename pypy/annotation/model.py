@@ -515,13 +515,6 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
-class SomeInteriorPtr(SomeObject):
-    immutable = True
-    def __init__(self, ll_parentptrtype, field):
-        assert isinstance(ll_ptrtype, lltype.Ptr)
-        self.ll_parentptrtype = ll_parentptrtype
-        self.field = field
-
 class SomeLLADTMeth(SomeObject):
     immutable = True
     def __init__(self, ll_ptrtype, func):

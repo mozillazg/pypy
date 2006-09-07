@@ -178,7 +178,7 @@ class MixLevelHelperAnnotator:
         return Constant(p, lltype.typeOf(p))
 
     def graph2delayed(self, graph):
-        FUNCTYPE = lltype.ForwardReference()
+        FUNCTYPE = lltype.FuncForwardReference()
         # obscure hack: embed the name of the function in the string, so
         # that the genc database can get it even before the delayedptr
         # is really computed
