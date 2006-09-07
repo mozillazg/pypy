@@ -82,14 +82,14 @@ def test_basics():
     assert iwitem(l, 1).v == 3
 
     # not allowed
-    S = EmbeddedStruct("s", ('v', Signed))
+    S = Struct("s", ('v', Signed))
     List_typ, iwnewlistzzz, iwappendzzz, iwitemzzz = define_list(S) # works but
     l = iwnewlistzzz()
     S1 = GcStruct("strange", ('s', S))
     py.test.raises(TypeError, "iwappendzzz(l, malloc(S1).s)")
 
 def test_varsizestruct():
-    S1 = GcStruct("s1", ('a', Signed), ('rest', EmbeddedArray(('v', Signed))))
+    S1 = GcStruct("s1", ('a', Signed), ('rest', Array(('v', Signed))))
     py.test.raises(TypeError, "malloc(S1)")
     s1 = malloc(S1, 4)
     s1.a = 0
@@ -114,8 +114,8 @@ def test_varsizestruct():
     py.test.raises(TypeError, "Struct('invalid', ('x', S1))")
 
 def test_substructure_ptr():
-    S3 = EmbeddedStruct("s3", ('a', Signed))
-    S2 = EmbeddedStruct("s2", ('s3', S3))
+    S3 = Struct("s3", ('a', Signed))
+    S2 = Struct("s2", ('s3', S3))
     S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2))
     p1 = malloc(S1)
     assert isweak(p1.sub1, S2)
@@ -126,7 +126,7 @@ def test_substructure_ptr():
 
 def test_gc_substructure_ptr():
     S1 = GcStruct("s2", ('a', Signed))
-    S2 = EmbeddedStruct("s3", ('a', Signed))
+    S2 = Struct("s3", ('a', Signed))
     S0 = GcStruct("s1", ('sub1', S1), ('sub2', S2))
     p1 = malloc(S0)
     assert typeOf(p1.sub1) == Ptr(S1)
@@ -202,8 +202,8 @@ def test_cast_pointer():
     py.test.raises(RuntimeError, "cast_pointer(Ptr(S1), p3)")
 
 def test_best_effort_gced_parent_detection():
-    S2 = EmbeddedStruct("s2", ('a', Signed))
-    S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2), ('tail', EmbeddedArray(('e', Signed))))
+    S2 = Struct("s2", ('a', Signed))
+    S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2), ('tail', Array(('e', Signed))))
     p1 = malloc(S1, 1)
     p2 = p1.sub2
     p3 = p1.tail
@@ -229,7 +229,7 @@ def test_best_effort_gced_parent_for_arrays():
 def test_examples():
     A1 = GcArray(('v', Signed))
     S = GcStruct("s", ('v', Signed))
-    St = GcStruct("st", ('v', Signed),('trail', EmbeddedArray(('v', Signed))))
+    St = GcStruct("st", ('v', Signed),('trail', Array(('v', Signed))))
 
     PA1 = Ptr(A1)
     PS = Ptr(S)
@@ -263,7 +263,6 @@ def test_truargs():
     assert Void not in F._trueargs()
 
 def test_inconsistent_gc_containers():
-    # XXX write more here!
     A = GcArray(('y', Signed))
     S = GcStruct('b', ('y', Signed))
     py.test.raises(TypeError, "Struct('a', ('x', S))")
@@ -334,12 +333,12 @@ def test_array_with_non_container_elements():
     S = GcStruct('s', ('x', Signed))
     py.test.raises(TypeError, "Array(S)")
     py.test.raises(TypeError, "Array(As)")
-    S = EmbeddedStruct('s', ('x', Signed))
+    S = Struct('s', ('x', Signed))
     A = GcArray(S)
     a = malloc(A, 2)
     s = S._container_example() # should not happen anyway
     py.test.raises(TypeError, "a[0] = s")
-    S = EmbeddedStruct('s', ('last', EmbeddedArray(S)))
+    S = Struct('s', ('last', Array(S)))
     py.test.raises(TypeError, "Array(S)")
 
 def test_immortal_parent():
@@ -423,13 +422,14 @@ def test_runtime_type_info():
     assert runtime_type_info(s1.sub) == getRuntimeTypeInfo(S1)
     
 def test_flavor_malloc():
-    S = RawStruct('s', ('x', Signed))
-    p = malloc(S, flavor='raw')
+    S = Struct('s', ('x', Signed))
+    py.test.raises(TypeError, malloc, S)
+    p = malloc(S, flavor="raw")
     assert typeOf(p).TO == S
     assert not isweak(p, S)
-    free(p)
+    free(p, flavor="raw")
     T = GcStruct('T', ('y', Signed))
-    p = malloc(T)
+    p = malloc(T, flavor="gc")
     assert typeOf(p).TO == T
     assert not isweak(p, T)
     

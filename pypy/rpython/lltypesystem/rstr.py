@@ -10,7 +10,7 @@ from pypy.rpython.rstr import AbstractStringRepr,AbstractCharRepr,\
      AbstractLLHelpers
 from pypy.rpython.lltypesystem import ll_str
 from pypy.rpython.lltypesystem.lltype import \
-     GcStruct, Signed, EmbeddedArray, Char, UniChar, Ptr, malloc, \
+     GcStruct, Signed, Array, Char, UniChar, Ptr, malloc, \
      Bool, Void, GcArray, nullptr, pyobjectptr
 
 
@@ -24,8 +24,8 @@ from pypy.rpython.lltypesystem.lltype import \
 #    }
 
 STR = GcStruct('rpy_string', ('hash',  Signed),
-                             ('chars', EmbeddedArray(Char, hints={'immutable': True,
-                                                                  'isrpystring': True})))
+                             ('chars', Array(Char, hints={'immutable': True,
+                                                          'isrpystring': True})))
 SIGNED_ARRAY = GcArray(Signed)
 CONST_STR_CACHE = WeakValueDictionary()
 
