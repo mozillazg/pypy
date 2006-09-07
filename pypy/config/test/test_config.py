@@ -208,10 +208,12 @@ def test_getpaths():
     descr = make_description()
     config = Config(descr)
     
-    assert set(config.getpaths()) == set(
-        ['gc.name', 'gc.dummy', 'gc.float', 'bool',
-         'objspace', 'wantref', 'int'])
-    assert set(config.gc.getpaths()) == set(['name', 'dummy', 'float'])
+    assert config.getpaths() == ['gc.name', 'gc.dummy', 'gc.float', 'bool',
+                                 'objspace', 'wantref', 'int']
+    assert config.gc.getpaths() == ['name', 'dummy', 'float']
+    assert config.getpaths(include_groups=True) == [
+        'gc', 'gc.name', 'gc.dummy', 'gc.float',
+        'bool', 'objspace', 'wantref', 'int']
 
 def test_none():
     dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
