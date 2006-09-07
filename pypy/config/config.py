@@ -269,6 +269,18 @@ class OptionDescription(object):
 
 
 def to_optparse(config, useoptions=None, parser=None):
+    grps = {}
+    def get_group(name):
+        steps = name.split('.')
+        if len(steps) < 2:
+            return parser
+        grpname = steps[0]
+        grp = grps.get(grpname, None)
+        if grp is None:
+            print "groupname", grpname
+            grp = grps[grpname] = parser.add_option_group(grpname)
+        return grp
+
     if parser is None:
         parser = optparse.OptionParser()
     if useoptions is None:
@@ -291,7 +303,8 @@ def to_optparse(config, useoptions=None, parser=None):
             else:
                 chunks = option.cmdline.split(' ')
             try:
-                option.add_optparse_option(chunks, parser, subconf)
+                grp = get_group(path)
+                option.add_optparse_option(chunks, grp, subconf)
             except ValueError:
                 # an option group that does not only contain bool values
                 pass
