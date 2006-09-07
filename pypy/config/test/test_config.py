@@ -4,7 +4,7 @@ import py
 def make_description():
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
     gcdummy = BoolOption('dummy', 'dummy', default=False)
-    objspaceoption = ChoiceOption('objspace', 'Object space', 
+    objspaceoption = ChoiceOption('objspace', 'Object space',
                                 ['std', 'logic'], 'std')
     booloption = BoolOption('bool', 'Test boolean option')
     intoption = IntOption('int', 'Test int option')
@@ -115,7 +115,7 @@ def test_to_optparse():
     assert config.gc.name == 'ref'
 
     # XXX strange exception
-    py.test.raises(SystemExit, 
+    py.test.raises(SystemExit,
                     "(options, args) = parser.parse_args(args=['-g foobar'])")
 
 def test_to_optparse_number():
@@ -211,3 +211,14 @@ def test_getpaths():
     assert config.getpaths(), ['gc.name', 'gc.dummy', 'gc.float', 'bool', 
                                 'objspace', 'wantref', 'int']
     assert config.gc.getpaths(), ['name', 'dummy', 'float']
+
+def test_none():
+    dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
+    dummy2 = BoolOption('dummy2', 'doc dummy', default=False, cmdline='--dummy')
+    group = OptionDescription('group', [dummy1, dummy2])
+    config = Config(group)
+
+    parser = to_optparse(config, config.getpaths())
+    py.test.raises(SystemExit,
+        "(options, args) = parser.parse_args(args=['--dummy1'])")
+ 

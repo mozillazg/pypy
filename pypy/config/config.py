@@ -106,8 +106,12 @@ class Config(object):
                 paths.append('.'.join(currpath + [attr]))
         return paths
 
+
+DEFAULT_OPTION_NAME = object()
+
+
 class Option(object):
-    def __init__(self, name, doc, cmdline=None):
+    def __init__(self, name, doc, cmdline=DEFAULT_OPTION_NAME):
         self._name = name
         self.doc = doc
         self.cmdline = cmdline
@@ -131,7 +135,7 @@ class Option(object):
         raise NotImplemented('abstract base class')
 
 class ChoiceOption(Option):
-    def __init__(self, name, doc, values, default, cmdline=None):
+    def __init__(self, name, doc, values, default, cmdline=DEFAULT_OPTION_NAME):
         super(ChoiceOption, self).__init__(name, doc, cmdline)
         self.values = values
         self.default = default
@@ -150,7 +154,7 @@ class ChoiceOption(Option):
                             callback=_callback, *argnames)
 
 class BoolOption(ChoiceOption):
-    def __init__(self, name, doc, default=True, requires=None, cmdline=None):
+    def __init__(self, name, doc, default=True, requires=None, cmdline=DEFAULT_OPTION_NAME):
         super(BoolOption, self).__init__(name, doc, [True, False], default,
                                             cmdline=cmdline)
         self._requires = requires or []
@@ -173,7 +177,7 @@ class BoolOption(ChoiceOption):
                             callback=_callback, *argnames)
 
 class IntOption(Option):
-    def __init__(self, name, doc, default=0, cmdline=None):
+    def __init__(self, name, doc, default=0, cmdline=DEFAULT_OPTION_NAME):
         super(IntOption, self).__init__(name, doc, cmdline)
         self.default = default
 
@@ -198,7 +202,7 @@ class IntOption(Option):
                             callback=_callback, *argnames)
 
 class FloatOption(Option):
-    def __init__(self, name, doc, default=0.0, cmdline=None):
+    def __init__(self, name, doc, default=0.0, cmdline=DEFAULT_OPTION_NAME):
         super(FloatOption, self).__init__(name, doc, cmdline)
         self.default = default
 
@@ -223,7 +227,7 @@ class FloatOption(Option):
                             callback=_callback, *argnames)
 
 class OptionDescription(object):
-    def __init__(self, name, children, cmdline=None):
+    def __init__(self, name, children, cmdline=DEFAULT_OPTION_NAME):
         self._name = name
         self._children = children
         self._build()
@@ -274,8 +278,10 @@ def to_optparse(config, useoptions, parser=None):
         else:
             subconf, name = config._get_by_path(path)
             option = getattr(subconf._descr, name)
-            if option.cmdline is None:
+            if option.cmdline is DEFAULT_OPTION_NAME:
                 chunks = ('--%s' % (path.replace('.', '-'),),)
+            elif option.cmdline is None:
+                continue
             else:
                 chunks = option.cmdline.split(' ')
             option.add_optparse_option(chunks, parser, subconf)
