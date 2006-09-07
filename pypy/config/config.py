@@ -1,5 +1,5 @@
 
-import optparse
+from py.compat import optparse
 
 class Config(object):
     _frozen = False
