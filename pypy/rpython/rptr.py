@@ -2,7 +2,8 @@ from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem.lltype import \
-     Ptr, ContainerType, Void, Signed, Bool, FuncType, typeOf, FixedSizeArray
+     Ptr, ContainerType, Void, Signed, Bool, FuncType, typeOf, FixedSizeArray, \
+     InteriorPtr
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr
 
@@ -21,9 +22,6 @@ class __extend__(annmodel.SomePtr):
 
 class __extend__(annmodel.SomeInteriorPtr):
     def rtyper_makerepr(self, rtyper):
-##        if self.is_constant() and not self.const:   # constant NULL
-##            return nullptr_repr
-##        else:
         return InteriorPtrRepr(self.ll_ptrtype)
 
 class PtrRepr(Repr):
@@ -187,4 +185,26 @@ class __extend__(pairtype(PtrRepr, LLADTMethRepr)):
             return v
         return NotImplemented
 
+class InteriorPtrRepr(Repr):
+    def __init__(self, ptrtype):
+        assert isinstance(ptrtype, InteriorPtr)
+        assert len(ptrtype.offsets) == 1
+        offset, = ptrtype.offsets
+        assert isinstance(offset, str)
+        self.lowleveltype = Ptr(ptrtype.PARENTTYPE)
+        self.coffset = flowmodel.Constant(offset, Void)
+        self.resulttype = Ptr(ptrtype.TO)
+
+    def access(self, hop):
+        assert hop.args_r[0] is self
+        return hop.genop('getsubstruct', [hop.args_v[0], self.coffset],
+                         resulttype=self.resulttype)
     
+    def rtype_getattr(self, hop):
+        hop2 = hop.copy()
+        v_ptr = self.access(hop2)
+        hop2.r_s_popfirstarg()
+        hop2.v_s_insertfirstarg(v_ptr, annmodel.SomePtr(self.resulttype))
+        return hop2.dispatch()
+
+    rtype_setattr = rtype_getattr
