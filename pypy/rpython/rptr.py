@@ -19,6 +19,12 @@ class __extend__(annmodel.SomePtr):
 ##        else:
         return self.__class__, self.ll_ptrtype
 
+class __extend__(annmodel.SomeInteriorPtr):
+    def rtyper_makerepr(self, rtyper):
+##        if self.is_constant() and not self.const:   # constant NULL
+##            return nullptr_repr
+##        else:
+        return InteriorPtrRepr(self.ll_ptrtype)
 
 class PtrRepr(Repr):
 

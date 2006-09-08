@@ -515,6 +515,11 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeInteriorPtr(SomePtr):
+    def __init__(self, ll_ptrtype):
+        assert isinstance(ll_ptrtype, lltype.InteriorPtr)
+        self.ll_ptrtype = ll_ptrtype
+        
 class SomeLLADTMeth(SomeObject):
     immutable = True
     def __init__(self, ll_ptrtype, func):
@@ -596,6 +601,8 @@ def lltype_to_annotation(T):
             return SomeOOClass(ootype.ROOT)
         elif isinstance(T, ExternalType):
             return SomeExternalBuiltin(T)
+        elif isinstance(T, lltype.InteriorPtr):
+            return SomeInteriorPtr(T)
         else:
             return SomePtr(T)
     else:
