@@ -629,12 +629,12 @@ class InteriorPtr(LowLevelType):
                              self.PARENTTYPE._short_name(),
                              '.'.join(map(str, self.offsets)))
     def _example(self):
-        ob = self.PARENTTYPE._container_example()
+        ob = Ptr(self.PARENTTYPE)._example()
         for o in self.offsets:
             if isinstance(o, str):
-                ob = ob._getattr(o)
+                ob = getattr(ob, o)
             else:
-                ob = ob.getitem(0)
+                ob = ob[0]
         return ob
 
 # ____________________________________________________________
