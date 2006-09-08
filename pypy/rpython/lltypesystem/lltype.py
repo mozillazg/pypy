@@ -919,12 +919,6 @@ class _abstract_ptr(object):
     def __hash__(self):
         raise TypeError("pointer objects are not hashable")
 
-    def __nonzero__(self):
-        try:
-            return self._obj is not None
-        except DelayedPointer:
-            return True    # assume it's not a delayed null
-
     def __getattr__(self, field_name): # ! can only return basic or ptr !
         if isinstance(self._T, Struct):
             if field_name in self._T._flds:
@@ -1059,6 +1053,11 @@ class _ptr(_abstract_ptr):
         assert not self._weak
         self._setobj(other._obj, other._solid)
 
+    def __nonzero__(self):
+        try:
+            return self._obj is not None
+        except DelayedPointer:
+            return True    # assume it's not a delayed null
 
     # _setobj, _getobj and _obj0 are really _internal_ implementations details of _ptr,
     # use _obj if necessary instead !
@@ -1154,7 +1153,7 @@ class _ptr(_abstract_ptr):
         """XXX A nice docstring here"""
         T = typeOf(val)
         if isinstance(T, ContainerType):
-            if T._gckind == 'raw':
+            if self._T._gckind == 'gc' and T._gckind == 'raw':
                 val = _interior_ptr(T, self._obj, [offset])
             else:
                 val = _ptr(Ptr(T), val, solid=self._solid)
@@ -1174,6 +1173,9 @@ class _interior_ptr(_abstract_ptr):
         #self._set_parent(weakref.ref(_parent))
         self._set_parent(_parent)
         self._set_offsets(_offsets)
+
+    def __nonzero__(self):
+        raise RuntimeError, "do not test an interior pointer for nullity"
 
     def _get_obj(self):
         ob = self._parent
