@@ -55,11 +55,11 @@ from pypy.rpython.rarithmetic import intmask
 #
 # there's also a nongcobject 
 
-OBJECT_VTABLE = lltype.ForwardReference()
+OBJECT_VTABLE = lltype.GcForwardReference()
 CLASSTYPE = Ptr(OBJECT_VTABLE)
 OBJECT = GcStruct('object', ('typeptr', CLASSTYPE))
 OBJECTPTR = Ptr(OBJECT)
-OBJECT_VTABLE.become(Struct('object_vtable',
+OBJECT_VTABLE.become(GcStruct('object_vtable',
                             ('parenttypeptr', CLASSTYPE),
                             ('subclassrange_min', Signed),
                             ('subclassrange_max', Signed),
@@ -100,7 +100,7 @@ class ClassRepr(AbstractClassRepr):
             # 'object' root type
             self.vtable_type = OBJECT_VTABLE
         else:
-            self.vtable_type = lltype.ForwardReference()
+            self.vtable_type = lltype.GcForwardReference()
         self.lowleveltype = Ptr(self.vtable_type)
 
     def _setup_repr(self):
@@ -139,7 +139,7 @@ class ClassRepr(AbstractClassRepr):
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
             self.rbase.setup()
             kwds = {'hints': {'immutable': True}}
-            vtable_type = Struct('%s_vtable' % self.classdef.name,
+            vtable_type = GcStruct('%s_vtable' % self.classdef.name,
                                  ('super', self.rbase.vtable_type),
                                  *llfields, **kwds)
             self.vtable_type.become(vtable_type)
