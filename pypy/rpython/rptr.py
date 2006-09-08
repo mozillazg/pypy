@@ -36,7 +36,10 @@ class PtrRepr(Repr):
             return hop.inputarg(hop.r_result, arg=0)
         FIELD_TYPE = getattr(self.lowleveltype.TO, attr)
         if isinstance(FIELD_TYPE, ContainerType):
-            newopname = 'getsubstruct'
+            if self.lowleveltype.TO._gckind == 'gc' and FIELD_TYPE._gckind == 'raw':
+                newopname = 'getinteriorfield'
+            else:
+                newopname = 'getsubstruct'
         else:
             newopname = 'getfield'
         vlist = hop.inputargs(self, Void)
@@ -192,19 +195,19 @@ class InteriorPtrRepr(Repr):
         offset, = ptrtype.offsets
         assert isinstance(offset, str)
         self.lowleveltype = Ptr(ptrtype.PARENTTYPE)
-        self.coffset = flowmodel.Constant(offset, Void)
+        self.v_offsets = [flowmodel.Constant(offset, Void)]
         self.resulttype = Ptr(ptrtype.TO)
 
-    def access(self, hop):
-        assert hop.args_r[0] is self
-        return hop.genop('getsubstruct', [hop.args_v[0], self.coffset],
-                         resulttype=self.resulttype)
-    
     def rtype_getattr(self, hop):
-        hop2 = hop.copy()
-        v_ptr = self.access(hop2)
-        hop2.r_s_popfirstarg()
-        hop2.v_s_insertfirstarg(v_ptr, annmodel.SomePtr(self.resulttype))
-        return hop2.dispatch()
-
-    rtype_setattr = rtype_getattr
+        vlist = [hop.inputarg(hop.args_r[0], 0)] + self.v_offsets
+        vlist.append(hop.inputarg(Void, 1))        
+        return hop.genop('getinteriorfield', vlist,
+                         resulttype=hop.r_result.lowleveltype)
+        
+    def rtype_setattr(self, hop):
+        vlist = [hop.inputarg(hop.args_r[0], 0)] + self.v_offsets
+        vlist.append(hop.inputarg(Void, 1))
+        vlist.append(hop.inputarg(hop.args_r[2], 2))
+        
+        return hop.genop('setinteriorfield', vlist,
+                         resulttype=hop.r_result.lowleveltype)
