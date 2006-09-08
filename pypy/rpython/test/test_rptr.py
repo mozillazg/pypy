@@ -204,3 +204,16 @@ def test_call_ptr():
         fptr(*(x,y))
 
     py.test.raises(TypeError, "interpret(wrong, [1, 2])")
+
+
+def test_interior_ptr():
+    S = Struct("S", ('x', Signed))
+    T = GcStruct("T", ('s', S))
+    def g(s):
+        s.x = 1
+    def f():
+        t = malloc(T)
+        g(t.s)
+        return t.s.x
+    res = interpret(f, [])
+    assert res == 1
