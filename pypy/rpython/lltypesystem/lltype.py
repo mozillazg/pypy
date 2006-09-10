@@ -619,6 +619,11 @@ class Ptr(LowLevelType):
         o = self.TO._container_example()
         return _ptr(self, o, solid=True)
 
+    def _interior_ptr_type_with_index(self):
+        R = GcStruct("Interior", ('ptr', self), ('index', Signed),
+                     hints={'interior_ptr_type':True})
+        return R
+
 class InteriorPtr(LowLevelType):
     def __init__(self, PARENTTYPE, TO, offsets):
         self.PARENTTYPE = PARENTTYPE

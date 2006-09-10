@@ -22,7 +22,10 @@ class __extend__(annmodel.SomePtr):
 
 class __extend__(annmodel.SomeInteriorPtr):
     def rtyper_makerepr(self, rtyper):
-        return InteriorPtrRepr(self.ll_ptrtype)
+        for offset in self.ll_ptrtype.offsets:
+            if isinstance(offset, int):
+                return InteriorPtrRepr(self.ll_ptrtype)
+        return FieldOnlyInteriorPtrRepr(self.ll_ptrtype)
 
 class PtrRepr(Repr):
 
@@ -100,7 +103,18 @@ class __extend__(pairtype(PtrRepr, IntegerRepr)):
         ARRAY = r_ptr.lowleveltype.TO
         ITEM_TYPE = ARRAY.OF
         if isinstance(ITEM_TYPE, ContainerType):
-            newopname = 'getarraysubstruct'
+            if ARRAY._gckind == 'gc' and ITEM_TYPE._gckind == 'raw':
+                v_array, v_index = hop.inputargs(r_ptr, Signed)
+                INTERIOR_PTR_TYPE = Ptr(ARRAY)._interior_ptr_type_with_index()
+                v_interior_ptr = hop.genop('malloc', [flowmodel.Constant(INTERIOR_PTR_TYPE, Void)],
+                                           resulttype = Ptr(INTERIOR_PTR_TYPE))
+                hop.genop('setfield',
+                          [v_interior_ptr, flowmodel.Constant('ptr', Void), v_array])
+                hop.genop('setfield',
+                          [v_interior_ptr, flowmodel.Constant('index', Void), v_index])
+                return v_interior_ptr
+            else:
+                newopname = 'getarraysubstruct'
         else:
             newopname = 'getarrayitem'
         vlist = hop.inputargs(r_ptr, Signed)
@@ -188,14 +202,13 @@ class __extend__(pairtype(PtrRepr, LLADTMethRepr)):
             return v
         return NotImplemented
 
-class InteriorPtrRepr(Repr):
+class FieldOnlyInteriorPtrRepr(Repr):
     def __init__(self, ptrtype):
         assert isinstance(ptrtype, InteriorPtr)
-        assert len(ptrtype.offsets) == 1
-        offset, = ptrtype.offsets
-        assert isinstance(offset, str)
+        for offset in ptrtype.offsets:
+            assert isinstance(offset, str)
         self.lowleveltype = Ptr(ptrtype.PARENTTYPE)
-        self.v_offsets = [flowmodel.Constant(offset, Void)]
+        self.v_offsets = [flowmodel.Constant(offset, Void) for offset in ptrtype.offsets]
         self.resulttype = Ptr(ptrtype.TO)
 
     def rtype_getattr(self, hop):
@@ -203,7 +216,7 @@ class InteriorPtrRepr(Repr):
         vlist.append(hop.inputarg(Void, 1))        
         return hop.genop('getinteriorfield', vlist,
                          resulttype=hop.r_result.lowleveltype)
-        
+
     def rtype_setattr(self, hop):
         vlist = [hop.inputarg(hop.args_r[0], 0)] + self.v_offsets
         vlist.append(hop.inputarg(Void, 1))
@@ -211,3 +224,36 @@ class InteriorPtrRepr(Repr):
         
         return hop.genop('setinteriorfield', vlist,
                          resulttype=hop.r_result.lowleveltype)
+
+class InteriorPtrRepr(Repr):
+    def __init__(self, ptrtype):
+        assert isinstance(ptrtype, InteriorPtr)
+        assert len(ptrtype.offsets) == 1, "for now"
+        numitemoffsets = 0
+        for offset in ptrtype.offsets:
+            if isinstance(offset, int):
+                numitemoffsets += 1
+        assert numitemoffsets == 1
+        self.parentptrtype = Ptr(ptrtype.PARENTTYPE)
+        self.lowleveltype = Ptr(self.parentptrtype._interior_ptr_type_with_index())
+        self.resulttype = Ptr(ptrtype.TO)
+        assert not isinstance(self.resulttype, ContainerType)
+
+    def rtype_getattr(self, hop):
+        v_interior_ptr, v_fieldname = hop.inputargs(self, Void)
+        v_ptr = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('ptr', Void)],
+                          resulttype=self.parentptrtype)
+        v_offset = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('index', Void)],
+                             resulttype=Signed)
+        return hop.genop('getinteriorfield', [v_ptr, v_offset, v_fieldname],
+                         resulttype=hop.r_result.lowleveltype)
+
+    def rtype_setattr(self, hop):
+        v_interior_ptr, v_fieldname, v_value = hop.inputargs(self, Void, hop.args_r[2])
+        v_ptr = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('ptr', Void)],
+                          resulttype=self.parentptrtype)
+        v_offset = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('index', Void)],
+                             resulttype=Signed)
+        return hop.genop('setinteriorfield', [v_ptr, v_offset, v_fieldname, v_value],
+                         resulttype=hop.r_result.lowleveltype)
+
