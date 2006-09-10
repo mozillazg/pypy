@@ -226,6 +226,10 @@ class FieldOnlyInteriorPtrRepr(Repr):
         return hop.genop('setinteriorfield', vlist,
                          resulttype=hop.r_result.lowleveltype)
 
+## class __extend__(FieldOnlyInteriorPtrRepr, IntegerRepr):
+##     def rtype_getitem((r_ptr, r_item), hop):
+##         pass
+
 class InteriorPtrRepr(Repr):
     def __init__(self, ptrtype):
         assert isinstance(ptrtype, InteriorPtr)
@@ -240,21 +244,25 @@ class InteriorPtrRepr(Repr):
         self.resulttype = Ptr(ptrtype.TO)
         assert not isinstance(self.resulttype, ContainerType)
 
+    def getinteriorfieldargs(self, hop, v_interior_ptr):
+        vlist = []
+        INTERIOR_TYPE = v_interior_ptr.concretetype.TO
+        for name in INTERIOR_TYPE._names:
+            vlist.append(
+                hop.genop('getfield',
+                          [v_interior_ptr, flowmodel.Constant(name, Void)],
+                          resulttype=INTERIOR_TYPE._flds[name]))
+        return vlist
+
     def rtype_getattr(self, hop):
         v_interior_ptr, v_fieldname = hop.inputargs(self, Void)
-        v_ptr = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('ptr', Void)],
-                          resulttype=self.parentptrtype)
-        v_offset = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('index', Void)],
-                             resulttype=Signed)
-        return hop.genop('getinteriorfield', [v_ptr, v_offset, v_fieldname],
+        vlist = self.getinteriorfieldargs(hop, v_interior_ptr)
+        return hop.genop('getinteriorfield', vlist + [v_fieldname],
                          resulttype=hop.r_result.lowleveltype)
 
     def rtype_setattr(self, hop):
         v_interior_ptr, v_fieldname, v_value = hop.inputargs(self, Void, hop.args_r[2])
-        v_ptr = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('ptr', Void)],
-                          resulttype=self.parentptrtype)
-        v_offset = hop.genop('getfield', [v_interior_ptr, flowmodel.Constant('index', Void)],
-                             resulttype=Signed)
-        return hop.genop('setinteriorfield', [v_ptr, v_offset, v_fieldname, v_value],
+        vlist = self.getinteriorfieldargs(hop, v_interior_ptr)
+        return hop.genop('setinteriorfield', vlist + [v_fieldname, v_value],
                          resulttype=hop.r_result.lowleveltype)
 
