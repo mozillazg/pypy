@@ -218,7 +218,7 @@ def test_interior_ptr():
     res = interpret(f, [])
     assert res == 1
 
-def test_interior_ptr_with_offset():
+def test_interior_ptr_with_index():
     S = Struct("S", ('x', Signed))
     T = GcArray(S)
     def g(s):
@@ -227,5 +227,30 @@ def test_interior_ptr_with_offset():
         t = malloc(T, 1)
         g(t[0])
         return t[0].x
+    res = interpret(f, [])
+    assert res == 1
+
+def test_interior_ptr_with_field_and_index():
+    S = Struct("S", ('x', Signed))
+    T = GcStruct("T", ('items', Array(S)))
+    def g(s):
+        s.x = 1
+    def f():
+        t = malloc(T, 1)
+        g(t.items[0])
+        return t.items[0].x
+    res = interpret(f, [])
+    assert res == 1
+
+def test_interior_ptr_with_index_and_field():
+    S = Struct("S", ('x', Signed))
+    T = Struct("T", ('s', S))
+    U = GcArray(T)
+    def g(s):
+        s.x = 1
+    def f():
+        u = malloc(U, 1)
+        g(u[0].s)
+        return u[0].s.x
     res = interpret(f, [])
     assert res == 1

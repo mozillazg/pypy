@@ -620,6 +620,7 @@ class Ptr(LowLevelType):
         return _ptr(self, o, solid=True)
 
     def _interior_ptr_type_with_index(self):
+        assert self.TO._gckind == 'gc'
         R = GcStruct("Interior", ('ptr', self), ('index', Signed),
                      hints={'interior_ptr_type':True})
         return R
