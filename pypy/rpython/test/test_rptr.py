@@ -217,3 +217,15 @@ def test_interior_ptr():
         return t.s.x
     res = interpret(f, [])
     assert res == 1
+
+def test_interior_ptr_with_offset():
+    S = Struct("S", ('x', Signed))
+    T = GcArray(S)
+    def g(s):
+        s.x = 1
+    def f():
+        t = malloc(T, 1)
+        g(t[0])
+        return t[0].x
+    res = interpret(f, [])
+    assert res == 1
