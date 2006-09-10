@@ -173,15 +173,15 @@ class __extend__(pairtype(Repr, PtrRepr)):
 
 class __extend__(annmodel.SomeLLADTMeth):
     def rtyper_makerepr(self, rtyper):
-        return LLADTMethRepr(self)
+        return LLADTMethRepr(self, rtyper)
     def rtyper_makekey(self):
         return self.__class__, self.ll_ptrtype, self.func
 
 class LLADTMethRepr(Repr):
 
-    def __init__(self, adtmeth):
+    def __init__(self, adtmeth, rtyper):
         self.func = adtmeth.func
-        self.lowleveltype = adtmeth.ll_ptrtype
+        self.lowleveltype = rtyper.getrepr(annmodel.lltype_to_annotation(adtmeth.ll_ptrtype)).lowleveltype
 
     def rtype_simple_call(self, hop):
         hop2 = hop.copy()
@@ -297,3 +297,9 @@ class __extend__(pairtype(InteriorPtrRepr, IntegerRepr)):
             return hop.genop('getinteriorfield', vlist,
                              resulttype=ITEM_TYPE)
             
+class __extend__(pairtype(InteriorPtrRepr, LLADTMethRepr)):
+
+    def convert_from_to((r_from, r_to), v, llops):
+        if r_from.lowleveltype == r_to.lowleveltype:
+            return v
+        return NotImplemented

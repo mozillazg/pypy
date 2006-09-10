@@ -389,7 +389,7 @@ def ll_dict_is_true(d):
     return bool(d) and d.num_items != 0
 
 def ll_dict_getitem(d, key):
-    entry = ll_dict_lookup(d, key, d.keyhash(key))
+    entry = d.entries[ll_dict_lookup(d, key, d.keyhash(key))]
     if entry.valid():
         return entry.value 
     else: 
@@ -397,7 +397,7 @@ def ll_dict_getitem(d, key):
 
 def ll_dict_setitem(d, key, value):
     hash = d.keyhash(key)
-    entry = ll_dict_lookup(d, key, hash)
+    entry = d.entries[ll_dict_lookup(d, key, hash)]
     everused = entry.everused()
     valid    = entry.valid()
     # set up the new entry
@@ -421,7 +421,7 @@ def ll_dict_insertclean(d, key, value, hash):
     # the dict contains no deleted entries.  This routine has the advantage
     # of never calling d.keyhash() and d.keyeq(), so it cannot call back
     # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
-    entry = ll_dict_lookup_clean(d, hash)
+    entry = d.entries[ll_dict_lookup_clean(d, hash)]
     ENTRY = lltype.typeOf(entry).TO
     entry.value = value
     entry.key = key
@@ -432,7 +432,7 @@ def ll_dict_insertclean(d, key, value, hash):
     d.num_pristine_entries -= 1
 
 def ll_dict_delitem(d, key):
-    entry = ll_dict_lookup(d, key, d.keyhash(key))
+    entry = d.entries[ll_dict_lookup(d, key, d.keyhash(key))]
     if not entry.valid():
         raise KeyError
     entry.mark_deleted()
@@ -481,7 +481,7 @@ def ll_dict_lookup(d, key, hash):
     if entry.valid():
         checkingkey = entry.key
         if checkingkey == key:
-            return entry   # found the entry
+            return i   # found the entry
         if d.keyeq is not None and entry.hash() == hash:
             # correct hash, maybe the key is e.g. a different pointer to
             # an equal object
@@ -492,12 +492,12 @@ def ll_dict_lookup(d, key, hash):
                     # the compare did major nasty stuff to the dict: start over
                     return ll_dict_lookup(d, key, hash)
             if found:
-                return entry   # found the entry
-        freeslot = lltype.nullptr(lltype.typeOf(entry).TO)
+                return i   # found the entry
+        freeslot_index = -1
     elif entry.everused():
-        freeslot = entry
+        freeslot_index = i
     else:
-        return entry    # pristine entry -- lookup failed
+        return i    # pristine entry -- lookup failed
 
     # In the loop, a deleted entry (everused and not valid) is by far
     # (factor of 100s) the least likely outcome, so test for that last.
@@ -506,11 +506,14 @@ def ll_dict_lookup(d, key, hash):
         i = ((i << 2) + i + perturb + 1) & mask
         entry = entries[i]
         if not entry.everused():
-            return freeslot or entry 
+            if freeslot_index >= 0:
+                return freeslot_index
+            else:
+                return i
         elif entry.valid():
             checkingkey = entry.key
             if checkingkey == key:
-                return entry
+                return i
             if d.keyeq is not None and entry.hash() == hash:
                 # correct hash, maybe the key is e.g. a different pointer to
                 # an equal object
@@ -522,9 +525,9 @@ def ll_dict_lookup(d, key, hash):
                         # start over
                         return ll_dict_lookup(d, key, hash)
                 if found:
-                    return entry   # found the entry
-        elif not freeslot:
-            freeslot = entry 
+                    return i
+        elif freeslot_index < 0:
+            freeslot_index = i 
         perturb >>= PERTURB_SHIFT
 
 def ll_dict_lookup_clean(d, hash):
@@ -540,7 +543,7 @@ def ll_dict_lookup_clean(d, hash):
         i = ((i << 2) + i + perturb + 1) & mask
         entry = entries[i]
         perturb >>= PERTURB_SHIFT
-    return entry
+    return i
 
 # ____________________________________________________________
 #
@@ -636,14 +639,14 @@ def ll_dictnext(iter, func, RETURNTYPE):
 # methods
 
 def ll_get(dict, key, default):
-    entry = ll_dict_lookup(dict, key, dict.keyhash(key))
+    entry = d.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
     if entry.valid():
         return entry.value
     else: 
         return default
 
 def ll_setdefault(dict, key, default):
-    entry = ll_dict_lookup(dict, key, dict.keyhash(key))
+    entry = d.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
     if entry.valid():
         return entry.value
     else:
@@ -727,5 +730,5 @@ def ll_kvi(dic, LIST, func):
     return res
 
 def ll_contains(d, key):
-    entry = ll_dict_lookup(d, key, d.keyhash(key))
+    entry = d.entries[ll_dict_lookup(d, key, d.keyhash(key))]
     return entry.valid()
