@@ -254,3 +254,12 @@ def test_interior_ptr_with_index_and_field():
         return u[0].s.x
     res = interpret(f, [])
     assert res == 1
+
+def test_interior_ptr_len():
+    S = Struct("S", ('x', Signed))
+    T = GcStruct("T", ('items', Array(S)))
+    def f():
+        t = malloc(T, 1)
+        return len(t.items)
+    res = interpret(f, [])
+    assert res == 1
