@@ -616,7 +616,7 @@ def ll_to_annotation(v):
         return getbookkeeper().immutablevalue(None)
     if isinstance(v, MethodType):
         ll_ptrtype = lltype.typeOf(v.im_self)
-        assert isinstance(ll_ptrtype, lltype.Ptr)
+        assert isinstance(ll_ptrtype, (lltype.Ptr, lltype.InteriorPtr))
         return SomeLLADTMeth(ll_ptrtype, v.im_func)
     if isinstance(v, FunctionType):
         # this case should only be for staticmethod instances used in
