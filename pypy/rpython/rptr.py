@@ -251,6 +251,12 @@ class InteriorPtrRepr(Repr):
                 assert False
         return vlist
 
+    def rtype_len(self, hop):
+        v_self, = hop.inputargs(self)
+        vlist = self.getinteriorfieldargs(hop, v_self)
+        return hop.genop('getinteriorarraysize', vlist,
+                         resulttype=Signed)
+
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         if isinstance(hop.s_result, annmodel.SomeLLADTMeth):
