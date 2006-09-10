@@ -135,10 +135,8 @@ def op_getinteriorfield(obj, *offsets):
         else:
             #1/0
             ob = ob[o]
-    if isinstance(ob, lltype._interior_ptr):
-        return obj
-    else:
-        return ob
+    assert not isinstance(ob, lltype._interior_ptr)
+    return ob
 
 def op_getarraysubstruct(array, index):
     checkptr(array)

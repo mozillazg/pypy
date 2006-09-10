@@ -40,7 +40,8 @@ class PtrRepr(Repr):
         FIELD_TYPE = getattr(self.lowleveltype.TO, attr)
         if isinstance(FIELD_TYPE, ContainerType):
             if self.lowleveltype.TO._gckind == 'gc' and FIELD_TYPE._gckind == 'raw':
-                newopname = 'getinteriorfield'
+                return hop.genop('same_as', [hop.inputarg(hop.args_r[0], 0)],
+                                 resulttype=self.lowleveltype)
             else:
                 newopname = 'getsubstruct'
         else:
