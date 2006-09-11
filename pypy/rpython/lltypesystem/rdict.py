@@ -478,6 +478,8 @@ def ll_dict_lookup(d, key, hash):
     i = r_uint(hash & mask) 
     # do the first try before any looping 
     entry = entries[i]
+    found_freeslot = False
+    freeslot_index = r_uint(0)
     if entry.valid():
         checkingkey = entry.key
         if checkingkey == key:
@@ -493,9 +495,9 @@ def ll_dict_lookup(d, key, hash):
                     return ll_dict_lookup(d, key, hash)
             if found:
                 return i   # found the entry
-        freeslot_index = -1
     elif entry.everused():
         freeslot_index = i
+        found_freeslot = True
     else:
         return i    # pristine entry -- lookup failed
 
@@ -506,7 +508,7 @@ def ll_dict_lookup(d, key, hash):
         i = ((i << 2) + i + perturb + 1) & mask
         entry = entries[i]
         if not entry.everused():
-            if freeslot_index >= 0:
+            if found_freeslot:
                 return freeslot_index
             else:
                 return i
@@ -526,8 +528,9 @@ def ll_dict_lookup(d, key, hash):
                         return ll_dict_lookup(d, key, hash)
                 if found:
                     return i
-        elif freeslot_index < 0:
-            freeslot_index = i 
+        elif not found_freeslot:
+            freeslot_index = i
+            found_freeslot = True
         perturb >>= PERTURB_SHIFT
 
 def ll_dict_lookup_clean(d, hash):
