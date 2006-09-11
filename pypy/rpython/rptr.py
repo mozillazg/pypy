@@ -278,8 +278,7 @@ class InteriorPtrRepr(Repr):
         assert not isinstance(FIELD_TYPE, ContainerType)
         v_self, v_fieldname, v_value = hop.inputargs(self, Void, hop.args_r[2])
         vlist = self.getinteriorfieldargs(hop, v_self) + [v_fieldname, v_value]
-        return hop.genop('setinteriorfield', vlist,
-                         resulttype=hop.r_result.lowleveltype)
+        return hop.genop('setinteriorfield', vlist)
 
 
 
@@ -303,6 +302,14 @@ class __extend__(pairtype(InteriorPtrRepr, IntegerRepr)):
             vlist = r_ptr.getinteriorfieldargs(hop, v_self) + [v_index]
             return hop.genop('getinteriorfield', vlist,
                              resulttype=ITEM_TYPE)
+        
+    def rtype_setitem((r_ptr, r_index), hop):
+        ARRAY = r_ptr.resulttype.TO
+        ITEM_TYPE = ARRAY.OF
+        assert not isinstance(ITEM_TYPE, ContainerType)
+        v_self, v_index, v_value = hop.inputargs(r_ptr, Signed, hop.args_r[2])
+        vlist = r_ptr.getinteriorfieldargs(hop, v_self) + [v_index, v_value]
+        hop.genop('setinteriorfield', vlist)
             
 class __extend__(pairtype(InteriorPtrRepr, LLADTMethRepr)):
 
