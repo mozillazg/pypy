@@ -639,14 +639,14 @@ def ll_dictnext(iter, func, RETURNTYPE):
 # methods
 
 def ll_get(dict, key, default):
-    entry = d.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
+    entry = dict.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
     if entry.valid():
         return entry.value
     else: 
         return default
 
 def ll_setdefault(dict, key, default):
-    entry = d.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
+    entry = dict.entries[ll_dict_lookup(dict, key, dict.keyhash(key))]
     if entry.valid():
         return entry.value
     else:
