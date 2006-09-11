@@ -1193,12 +1193,10 @@ class _interior_ptr(_abstract_ptr):
         if ob is None:
             raise RuntimeError
         for o in self._offsets:
-            if isinstance(o, int):
-                ob = ob.getitem(o)
-            elif isinstance(o, str):
+            if isinstance(o, str):
                 ob = ob._getattr(o)
             else:
-                1/0
+                ob = ob.getitem(o)
         return ob
     _obj = property(_get_obj)
 

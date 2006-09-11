@@ -263,3 +263,14 @@ def test_interior_ptr_len():
         return len(t.items)
     res = interpret(f, [])
     assert res == 1
+
+def test_interior_ptr_with_setitem():
+    T = GcStruct("T", ('s', Array(Signed)))
+    def g(a):
+        a[0] = 1
+    def f():
+        t = malloc(T, 1)
+        g(t.s)
+        return t.s[0]
+    res = interpret(f, [])
+    assert res == 1
