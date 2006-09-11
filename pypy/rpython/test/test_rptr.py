@@ -209,11 +209,9 @@ def test_call_ptr():
 def test_interior_ptr():
     S = Struct("S", ('x', Signed))
     T = GcStruct("T", ('s', S))
-    def g(s):
-        s.x = 1
     def f():
         t = malloc(T)
-        g(t.s)
+        t.s.x = 1
         return t.s.x
     res = interpret(f, [])
     assert res == 1
@@ -221,11 +219,9 @@ def test_interior_ptr():
 def test_interior_ptr_with_index():
     S = Struct("S", ('x', Signed))
     T = GcArray(S)
-    def g(s):
-        s.x = 1
     def f():
         t = malloc(T, 1)
-        g(t[0])
+        t[0].x = 1
         return t[0].x
     res = interpret(f, [])
     assert res == 1
@@ -233,11 +229,9 @@ def test_interior_ptr_with_index():
 def test_interior_ptr_with_field_and_index():
     S = Struct("S", ('x', Signed))
     T = GcStruct("T", ('items', Array(S)))
-    def g(s):
-        s.x = 1
     def f():
         t = malloc(T, 1)
-        g(t.items[0])
+        t.items[0].x = 1
         return t.items[0].x
     res = interpret(f, [])
     assert res == 1
@@ -246,11 +240,9 @@ def test_interior_ptr_with_index_and_field():
     S = Struct("S", ('x', Signed))
     T = Struct("T", ('s', S))
     U = GcArray(T)
-    def g(s):
-        s.x = 1
     def f():
         u = malloc(U, 1)
-        g(u[0].s)
+        u[0].s.x = 1
         return u[0].s.x
     res = interpret(f, [])
     assert res == 1
@@ -266,11 +258,9 @@ def test_interior_ptr_len():
 
 def test_interior_ptr_with_setitem():
     T = GcStruct("T", ('s', Array(Signed)))
-    def g(a):
-        a[0] = 1
     def f():
         t = malloc(T, 1)
-        g(t.s)
+        t.s[0] = 1
         return t.s[0]
     res = interpret(f, [])
     assert res == 1

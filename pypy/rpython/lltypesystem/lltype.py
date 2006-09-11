@@ -1205,7 +1205,7 @@ class _interior_ptr(_abstract_ptr):
         if ob is None:
             raise RuntimeError
         return InteriorPtr(typeOf(ob), self._T, self._offsets)
-    _TYPE = property(_get_TYPE)
+##     _TYPE = property(_get_TYPE)
 
     def _expose(self, offset, val):
         """XXX A nice docstring here"""

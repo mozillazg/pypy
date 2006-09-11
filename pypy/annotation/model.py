@@ -630,6 +630,12 @@ def ll_to_annotation(v):
         # adtmeths: the getattr() result is then a plain FunctionType object.
         from pypy.annotation.bookkeeper import getbookkeeper
         return getbookkeeper().immutablevalue(v)
+    if isinstance(v, lltype._interior_ptr):
+        ob = v._parent
+        if ob is None:
+            raise RuntimeError
+        T = lltype.InteriorPtr(lltype.typeOf(ob), v._T, v._offsets)
+        return SomeInteriorPtr(T)
     return lltype_to_annotation(lltype.typeOf(v))
     
 # ____________________________________________________________
