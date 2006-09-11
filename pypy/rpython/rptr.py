@@ -103,7 +103,7 @@ class __extend__(pairtype(PtrRepr, IntegerRepr)):
         if isinstance(ITEM_TYPE, ContainerType):
             if ARRAY._gckind == 'gc' and ITEM_TYPE._gckind == 'raw':
                 v_array, v_index = hop.inputargs(r_ptr, Signed)
-                INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index()
+                INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index(ITEM_TYPE)
                 v_interior_ptr = hop.genop('malloc', [flowmodel.Constant(INTERIOR_PTR_TYPE, Void)],
                                            resulttype = Ptr(INTERIOR_PTR_TYPE))
                 hop.genop('setfield',
@@ -181,6 +181,7 @@ class LLADTMethRepr(Repr):
 
     def __init__(self, adtmeth, rtyper):
         self.func = adtmeth.func
+        self.ll_ptrtype = adtmeth.ll_ptrtype
         self.lowleveltype = rtyper.getrepr(annmodel.lltype_to_annotation(adtmeth.ll_ptrtype)).lowleveltype
 
     def rtype_simple_call(self, hop):
@@ -189,7 +190,7 @@ class LLADTMethRepr(Repr):
         s_func = hop.rtyper.annotator.bookkeeper.immutablevalue(func)
         v_ptr = hop2.args_v[0]
         hop2.r_s_popfirstarg()
-        hop2.v_s_insertfirstarg(v_ptr, annmodel.SomePtr(self.lowleveltype))
+        hop2.v_s_insertfirstarg(v_ptr, annmodel.lltype_to_annotation(self.ll_ptrtype))
         hop2.v_s_insertfirstarg(flowmodel.Constant(func), s_func)
         return hop2.dispatch()
 
@@ -217,7 +218,7 @@ class InteriorPtrRepr(Repr):
         self.resulttype = Ptr(ptrtype.TO)
         assert numitemoffsets <= 1
         if numitemoffsets > 0:
-            self.lowleveltype = Ptr(self.parentptrtype._interior_ptr_type_with_index())
+            self.lowleveltype = Ptr(self.parentptrtype._interior_ptr_type_with_index(self.resulttype.TO))
         else:
             self.lowleveltype = self.parentptrtype            
 
@@ -289,7 +290,7 @@ class __extend__(pairtype(InteriorPtrRepr, IntegerRepr)):
         ITEM_TYPE = ARRAY.OF
         if isinstance(ITEM_TYPE, ContainerType):
             v_array, v_index = hop.inputargs(r_ptr, Signed)
-            INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index()
+            INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index(ITEM_TYPE)
             v_interior_ptr = hop.genop('malloc', [flowmodel.Constant(INTERIOR_PTR_TYPE, Void)],
                                        resulttype = Ptr(INTERIOR_PTR_TYPE))
             hop.genop('setfield',

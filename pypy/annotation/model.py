@@ -568,6 +568,13 @@ def annotation_to_lltype(s_val, info=None):
         return s_val.ootype
     if isinstance(s_val, SomeOOStaticMeth):
         return s_val.method
+    if isinstance(s_val, SomeInteriorPtr):
+        p = s_val.ll_ptrtype
+        if 0 in p.offsets:
+            assert list(p.offsets).count(0) == 1
+            return lltype.Ptr(lltype.Ptr(p.PARENTTYPE)._interior_ptr_type_with_index(p.TO))
+        else:
+            return lltype.Ptr(p.PARENTTYPE)
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
     for witness, T in annotation_to_ll_map:
