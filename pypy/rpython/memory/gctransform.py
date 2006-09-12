@@ -1349,10 +1349,15 @@ def gen_zero_gc_pointers(TYPE, v, llops):
             c_null = Constant(lltype.nullptr(FIELD.TO), FIELD)
             llops.genop('bare_setfield', [v, c_name, c_null])
         elif isinstance(FIELD, lltype.Struct):
-            c_name = Constant(name, lltype.Void)
-            v1 = llops.genop('getsubstruct', [v, c_name],
-                             resulttype = lltype.Ptr(FIELD))
-            gen_zero_gc_pointers(FIELD, v1, llops)
+            # XXX this is insufficient!
+            for name2 in FIELD._names:
+                FIELD_TYPE = getattr(FIELD, name2)
+                if isinstance(FIELD_TYPE, lltype.Ptr) and FIELD_TYPE._needsgc():
+                    c_name = Constant(name, lltype.Void)
+                    v1 = llops.genop('getsubstruct', [v, c_name],
+                                     resulttype = lltype.Ptr(FIELD))
+                    gen_zero_gc_pointers(FIELD, v1, llops)
+                    break
 
 
 # ____________________________________________________________
