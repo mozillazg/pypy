@@ -1,7 +1,5 @@
 from pypy.rpython.lltypesystem.lltype import *
-
-def isweak(p, T):
-    return p._weak and typeOf(p).TO == T
+import py
 
 def test_basics():
     S0 = GcStruct("s0", ('a', Signed), ('b', Signed))
@@ -24,7 +22,7 @@ def test_basics():
     x = malloc(Ar,3)
     print x
     assert typeOf(x) == Ptr(Ar)
-    assert isweak(x[0], Ar.OF)
+    py.test.raises(TypeError, "typeOf(x[0])")
     x[0].v = 1
     x[1].v = 2
     x[2].v = 3
@@ -94,9 +92,7 @@ def test_varsizestruct():
     s1 = malloc(S1, 4)
     s1.a = 0
     assert s1.a == 0
-    assert isweak(s1.rest, S1.rest)
     assert len(s1.rest) == 4
-    assert isweak(s1.rest[0], S1.rest.OF)
     s1.rest[0].v = 0
     assert typeOf(s1.rest[0].v) == Signed
     assert s1.rest[0].v == 0
@@ -118,11 +114,13 @@ def test_substructure_ptr():
     S2 = Struct("s2", ('s3', S3))
     S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2))
     p1 = malloc(S1)
-    assert isweak(p1.sub1, S2)
-    assert isweak(p1.sub2, S2)
-    assert isweak(p1.sub1.s3, S3)
+    py.test.raises(TypeError, "typeOf(p1.sub1)")
+    # _T isn't really a public API, but there's not much else to test.
+    assert p1.sub1._T == S2
+    assert p1.sub2._T == S2
+    assert p1.sub1.s3._T == S3
     p2 = p1.sub1
-    assert isweak(p2.s3, S3)
+    assert p2.s3._T == S3
 
 def test_gc_substructure_ptr():
     S1 = GcStruct("s2", ('a', Signed))
@@ -130,7 +128,7 @@ def test_gc_substructure_ptr():
     S0 = GcStruct("s1", ('sub1', S1), ('sub2', S2))
     p1 = malloc(S0)
     assert typeOf(p1.sub1) == Ptr(S1)
-    assert isweak(p1.sub2, S2)
+    py.test.raises(TypeError, "typeOf(p1.sub2)")
 
 def test_cast_simple_widening():
     S2 = Struct("s2", ('a', Signed))
@@ -202,6 +200,7 @@ def test_cast_pointer():
     py.test.raises(RuntimeError, "cast_pointer(Ptr(S1), p3)")
 
 def test_best_effort_gced_parent_detection():
+    py.test.skip("test not relevant any more")
     S2 = Struct("s2", ('a', Signed))
     S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2), ('tail', Array(('e', Signed))))
     p1 = malloc(S1, 1)
@@ -216,6 +215,7 @@ def test_best_effort_gced_parent_detection():
     py.test.raises(RuntimeError, "p3[0]")
 
 def test_best_effort_gced_parent_for_arrays():
+    py.test.skip("test not relevant any more")
     A1 = GcArray(('v', Signed))
     p1 = malloc(A1, 10)
     p1[5].v=3
