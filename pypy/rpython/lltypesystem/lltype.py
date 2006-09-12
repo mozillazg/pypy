@@ -1192,6 +1192,8 @@ class _interior_ptr(_abstract_ptr):
         ob = self._parent
         if ob is None:
             raise RuntimeError
+        if isinstance(ob, _container):
+            ob._check()
         for o in self._offsets:
             if isinstance(o, str):
                 ob = ob._getattr(o)
