@@ -36,7 +36,7 @@ class PtrRepr(Repr):
             return hop.inputarg(hop.r_result, arg=0)
         FIELD_TYPE = getattr(self.lowleveltype.TO, attr)
         if isinstance(FIELD_TYPE, ContainerType):
-            if self.lowleveltype.TO._gckind == 'gc' and FIELD_TYPE._gckind == 'raw' and not isinstance(FIELD_TYPE, OpaqueType):
+            if isinstance(hop.r_result, InteriorPtrRepr):
                 return hop.genop('same_as', [hop.inputarg(self, 0)],
                                  resulttype=self.lowleveltype)
             else:
@@ -101,7 +101,7 @@ class __extend__(pairtype(PtrRepr, IntegerRepr)):
         ARRAY = r_ptr.lowleveltype.TO
         ITEM_TYPE = ARRAY.OF
         if isinstance(ITEM_TYPE, ContainerType):
-            if ARRAY._gckind == 'gc' and ITEM_TYPE._gckind == 'raw' and not isinstance(ITEM_TYPE, OpaqueType):
+            if isinstance(hop.r_result, InteriorPtrRepr):
                 v_array, v_index = hop.inputargs(r_ptr, Signed)
                 INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index(ITEM_TYPE)
                 v_interior_ptr = hop.genop('malloc', [flowmodel.Constant(INTERIOR_PTR_TYPE, Void)],
