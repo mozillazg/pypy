@@ -1,4 +1,6 @@
 import py
+print py.magic.autopath().dirpath().dirpath().dirpath()
+py.std.sys.path.insert(0, py.magic.autopath().dirpath().dirpath().dirpath())
 from pypy.config.config import OptionDescription, BoolOption, IntOption
 from pypy.config.config import ChoiceOption, to_optparse, Config
 
@@ -11,8 +13,8 @@ default_modules = dict.fromkeys(
      "math", "_sre", "_pickle_support", "sys", "exceptions", "__builtins__",
      "recparser", "symbol"])
                               
-pypy_optiondescription = OptionDescription("pypy", [
-    OptionDescription("objspace", [
+pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
+    OptionDescription("objspace", "Object Space Option", [
         ChoiceOption("name", "Object Space name",
                      ["std", "flow", "logic", "thunk", "cpy"], "std",
                      cmdline='--objspace -o'),
@@ -26,18 +28,19 @@ pypy_optiondescription = OptionDescription("pypy", [
         BoolOption("nofaking", "disallow faking in the object space",
                    default=False,
                    requires=[
-                       ("uselibfile", True),
-                       ("usemodules.posix", True),
-                       ("usemodules.time", True),
-                       ("usemodules.errno", True)]),
+                       ("objspace.uselibfile", True),
+                       ("objspace.usemodules.posix", True),
+                       ("objspace.usemodules.time", True),
+                       ("objspace.usemodules.errno", True)]),
 
         BoolOption("uselibfile", "use the applevel file implementation",
                    default=False),
 
-        OptionDescription("usemodules", [
+        OptionDescription("usemodules", "Which Modules should be used", [
             BoolOption(modname, "use module %s" % (modname, ),
-                       default=modname in default_modules)
-            for modname in all_modules]),
+                       default=modname in default_modules,
+                       cmdline=None)
+            for modname in all_modules], cmdline="--usemodules"),
 
         BoolOption("geninterp", "specify whether geninterp should be used"),
 
@@ -45,12 +48,13 @@ pypy_optiondescription = OptionDescription("pypy", [
                    "keep track of bytecode usage",
                    default=False),
        
-        OptionDescription("std", [
+        OptionDescription("std", "Standard Object Space Options", [
             BoolOption("withsmallint", "use tagged integers",
                        default=False),
 
             BoolOption("withprebuiltint", "prebuilt commonly used int objects",
-                       default=False, requires=[("withsmallint", False)]),
+                       default=False,
+                       requires=[("objspace.std.withsmallint", False)]),
 
             IntOption("prebuiltintfrom", "lowest integer which is prebuilt",
                       default=-5, cmdline="--prebuiltinfrom"),
@@ -70,16 +74,18 @@ pypy_optiondescription = OptionDescription("pypy", [
 
             BoolOption("withmultidict",
                        "use dictionaries optimized for flexibility",
-                       default=False, requires=[("withstrdict", False)]),
+                       default=False,
+                       requires=[("objspace.std.withstrdict", False)]),
 
             BoolOption("withdictmeasurement",
                        "create huge files with masses of information "
                        "about dictionaries",
-                       default=False, requires=[("withmultidict", True)]),
+                       default=False,
+                       requires=[("objspace.std.withmultidict", True)]),
 
             BoolOption("oldstyle",
                        "specify whether the default metaclass should be classobj",
-                       default=False),
+                       default=False, cmdline="--oldstyle"),
          ]),
 
 
@@ -89,9 +95,10 @@ pypy_optiondescription = OptionDescription("pypy", [
                default=False, cmdline=None),
 ])
 
+
 if __name__ == '__main__':
     config = Config(pypy_optiondescription)
-    paths = config.getpaths()
-    parser = to_optparse(config, paths)
+    print config.getpaths()
+    parser = to_optparse(config)
     option, args = parser.parse_args()
     print config

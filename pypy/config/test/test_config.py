@@ -225,3 +225,34 @@ def test_none():
     py.test.raises(SystemExit,
         "(options, args) = parser.parse_args(args=['--dummy1'])")
  
+def test_requirements_from_top():
+    descr = OptionDescription("test", [
+        BoolOption("toplevel", "", default=False),
+        OptionDescription("sub", [
+            BoolOption("opt", "", default=False,
+                       requires=[("toplevel", True)])
+        ])
+    ])
+    config = Config(descr)
+    config.sub.opt = True
+    assert config.toplevel
+
+def test_requirements_for_choice():
+    descr = OptionDescription("test", [
+        BoolOption("toplevel", "", default=False),
+        OptionDescription("s", [
+            ChoiceOption("type_system", "", ["ll", "oo"], "ll"),
+            ChoiceOption("backend", "",
+                         ["c", "llvm", "cli"], "llvm",
+                         requires={
+                             "c": [("s.type_system", "ll"),
+                                   ("toplevel", True)],
+                             "llvm": [("s.type_system", "ll")],
+                             "cli": [("s.type_system", "oo")],
+                         })
+        ])
+    ])
+    config = Config(descr)
+    config.s.backend = "cli"
+    assert config.s.type_system == "oo"
+
