@@ -1,9 +1,6 @@
 from pypy.rpython.lltypesystem.lltype import *
 
-import pickle
-
-def isweak(p, T):
-    return p._weak and typeOf(p).TO == T
+import pickle, py
 
 def test_pickle_types():
     S0 = GcStruct("s0", ('a', Signed), ('b', Signed))
@@ -33,7 +30,6 @@ def test_pickle_types():
     p_x = pickle.dumps(x)
     r_x = pickle.loads(p_x)
     assert typeOf(x) == Ptr(Ar)
-    assert isweak(x[0], Ar.OF)
     assert typeOf(x[0].v) == Signed
     assert [x[z].v for z in range(3)] == [1, 2, 3]
     #
@@ -98,9 +94,7 @@ def test_varsizestruct():
     p_s1 = pickle.dumps(s1)
     r_s1 = pickle.loads(p_s1)
     assert r_s1.a == 0
-    assert isweak(r_s1.rest, S1.rest)
     assert len(r_s1.rest) == 4
-    assert isweak(r_s1.rest[0], S1.rest.OF)
     assert typeOf(r_s1.rest[0].v) == Signed
     assert r_s1.rest[0].v == 0
     py.test.raises(IndexError, "r_s1.rest[4]")
@@ -120,11 +114,13 @@ def test_substructure_ptr():
     p1 = malloc(S1)
     p_p1 = pickle.dumps(p1)
     r_p1 = pickle.loads(p_p1)
-    assert isweak(r_p1.sub1, S2)
-    assert isweak(r_p1.sub2, S2)
-    assert isweak(r_p1.sub1.s3, S3)
+    py.test.raises(TypeError, "typeOf(p1.sub1)")
+    # _T isn't really a public API, but there's not much else to test.
+    assert r_p1.sub1._T == S2
+    assert r_p1.sub2._T == S2
+    assert r_p1.sub1.s3._T == S3
     r_p2 = r_p1.sub1
-    assert isweak(r_p2.s3, S3)
+    assert r_p2.s3._T == S3
 
 def test_gc_substructure_ptr():
     S1 = GcStruct("s2", ('a', Signed))
@@ -133,7 +129,7 @@ def test_gc_substructure_ptr():
     p1 = malloc(S0)
     r_p1 = pickle.loads(pickle.dumps(p1))
     assert typeOf(r_p1.sub1) == Ptr(S1)
-    assert isweak(r_p1.sub2, S2)
+    py.test.raises(TypeError, "typeOf(r_p1.sub2)")
 
 def test_cast_simple_widening():
     S2 = Struct("s2", ('a', Signed))
@@ -148,6 +144,7 @@ def test_cast_simple_widening():
     assert p4 == r_p1
 
 def test_best_effort_gced_parent_detection():
+    py.test.skip("test not relevant any more")
     S2 = Struct("s2", ('a', Signed))
     S1 = GcStruct("s1", ('sub1', S2), ('sub2', S2), ('tail', Array(('e', Signed))))
     p1 = malloc(S1, 1)
@@ -167,6 +164,7 @@ def test_best_effort_gced_parent_detection():
     py.test.raises(RuntimeError, "r_p3[0]")
 
 def test_best_effort_gced_parent_for_arrays():
+    py.test.skip("test not relevant any more")
     A1 = GcArray(('v', Signed))
     p1 = malloc(A1, 10)
     for i in range(10):
@@ -340,6 +338,8 @@ def DONOTtest_runtime_type_info():
     assert runtime_type_info(s1.sub) == getRuntimeTypeInfo(S1)
     
 def test_flavor_malloc():
+    def isweak(p, T):
+        return p._weak and typeOf(p).TO == T
     S = Struct('s', ('x', Signed))
     py.test.raises(TypeError, malloc, S)
     p = malloc(S, flavor="raw")
