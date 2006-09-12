@@ -229,7 +229,7 @@ class _arrayitemref(object):
     def __ne__(self, other):
         return not (self == other)
     def type(self):
-        return lltype.typeOf(self.array).TO.OF
+        return lltype.rawTypeOf(self.array).TO.OF
 
 class _arraylenref(object):
     def __init__(self, array):
@@ -264,7 +264,7 @@ class _structfieldref(object):
     def __ne__(self, other):
         return not (self == other)
     def type(self):
-        return getattr(lltype.typeOf(self.struct).TO, self.fieldname)
+        return getattr(lltype.rawTypeOf(self.struct).TO, self.fieldname)
 
 class _obref(object):
     def __init__(self, ob):
