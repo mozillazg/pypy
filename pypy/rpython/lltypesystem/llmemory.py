@@ -47,7 +47,7 @@ class ItemOffset(AddressOffset):
     def ref(self, firstitemref):
         assert isinstance(firstitemref, _arrayitemref)
         array = firstitemref.array
-        assert array._T.OF == self.TYPE
+        assert lltype.rawTypeOf(array).TO.OF == self.TYPE
         index = firstitemref.index + self.repeat
         return _arrayitemref(array, index)
 
@@ -76,7 +76,7 @@ class FieldOffset(AddressOffset):
 
     def ref(self, containerref):
         struct = containerref.get()
-        if struct._T != self.TYPE:
+        if lltype.rawTypeOf(struct).TO != self.TYPE:
             struct = lltype.cast_pointer(lltype.Ptr(self.TYPE), struct)
         return _structfieldref(struct, self.fldname)
 
@@ -136,7 +136,7 @@ class ArrayItemsOffset(AddressOffset):
 
     def ref(self, arrayref):
         array = arrayref.get()
-        assert array._T == self.TYPE
+        assert lltype.rawTypeOf(array).TO == self.TYPE
         return _arrayitemref(array, index=0)
 
     def raw_malloc(self, rest, parenttype=None):
@@ -164,7 +164,7 @@ class ArrayLengthOffset(AddressOffset):
 
     def ref(self, arrayref):
         array = arrayref.get()
-        assert array._T == self.TYPE
+        assert lltype.rawTypeOf(array).TO == self.TYPE
         return _arraylenref(array)
 
 
