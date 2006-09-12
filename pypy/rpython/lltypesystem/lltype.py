@@ -1164,7 +1164,7 @@ class _ptr(_abstract_ptr):
         """XXX A nice docstring here"""
         T = typeOf(val)
         if isinstance(T, ContainerType):
-            if self._T._gckind == 'gc' and T._gckind == 'raw':
+            if self._T._gckind == 'gc' and T._gckind == 'raw' and not isinstance(T, OpaqueType):
                 val = _interior_ptr(T, self._obj, [offset])
             else:
                 val = _ptr(Ptr(T), val, solid=self._solid)
@@ -1211,10 +1211,8 @@ class _interior_ptr(_abstract_ptr):
         """XXX A nice docstring here"""
         T = typeOf(val)
         if isinstance(T, ContainerType):
-            if T._gckind == 'raw':
-                val = _interior_ptr(T, self._parent, self._offsets + [offset])
-            else:
-                1/0
+            assert T._gckind == 'raw'
+            val = _interior_ptr(T, self._parent, self._offsets + [offset])
         return val
     
     
