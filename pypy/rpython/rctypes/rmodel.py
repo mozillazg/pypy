@@ -266,8 +266,8 @@ C_ZERO = inputconst(lltype.Signed, 0)
 
 def reccopy(source, dest):
     # copy recursively a structure or array onto another.
-    T = lltype.typeOf(source).TO
-    assert T == lltype.typeOf(dest).TO
+    T = lltype.rawTypeOf(source).TO
+    assert T == lltype.rawTypeOf(dest).TO
     if isinstance(T, (lltype.Array, lltype.FixedSizeArray)):
         assert len(source) == len(dest)
         ITEMTYPE = T.OF
@@ -295,7 +295,7 @@ def reccopy(source, dest):
         raise TypeError(T)
 
 def reccopy_arrayitem(source, destarray, destindex):
-    ITEMTYPE = lltype.typeOf(destarray).TO.OF
+    ITEMTYPE = lltype.rawTypeOf(destarray).TO.OF
     if isinstance(ITEMTYPE, lltype.Primitive):
         destarray[destindex] = source
     else:
