@@ -34,7 +34,7 @@ class LLTypeConverter(object):
         self.query_types = qt
 
     def convert(self, val_or_ptr, inline_to_ptr=None):
-        TYPE = lltype.typeOf(val_or_ptr)
+        TYPE = lltype.rawTypeOf(val_or_ptr)
         if isinstance(TYPE, lltype.Primitive):
             assert inline_to_ptr is None
             return get_real_value(val_or_ptr)
@@ -58,7 +58,7 @@ class LLTypeConverter(object):
             ptr = self.converted[_array]
             assert inline_to_ptr is None or ptr == inline_to_ptr
             return ptr
-        TYPE = lltype.typeOf(_array)
+        TYPE = lltype.rawTypeOf(_array)
         arraylength = len(_array.items)
         size = sizeof(TYPE, arraylength)
         if inline_to_ptr is not None:
@@ -95,7 +95,7 @@ class LLTypeConverter(object):
                 return getattr(ptr, _struct._parent_index)
             else:
                 return ptr[_struct._parent_index]
-        TYPE = lltype.typeOf(_struct)
+        TYPE = lltype.rawTypeOf(_struct)
         if TYPE._arrayfld is not None:
             inlinedarraylength = len(getattr(_struct, TYPE._arrayfld).items)
             size = sizeof(TYPE, inlinedarraylength)
@@ -127,7 +127,7 @@ class LLTypeConverter(object):
 
     def convert_pointer(self, _ptr, inline_to_ptr):
         assert inline_to_ptr is None, "can't inline pointer"
-        TYPE = lltype.typeOf(_ptr)
+        TYPE = lltype.rawTypeOf(_ptr)
         if _ptr._obj is not None:
             return self.convert(_ptr._obj)
         else:
@@ -135,7 +135,7 @@ class LLTypeConverter(object):
 
     def convert_object(self, _obj, inline_to_ptr):
         assert inline_to_ptr is None, "can't inline function or pyobject"
-        return simulatorptr(lltype.Ptr(lltype.typeOf(_obj)),
+        return simulatorptr(lltype.Ptr(lltype.rawTypeOf(_obj)),
                             lladdress.get_address_of_object(_obj))
 def collect_constants_and_types(graphs):
     constants = {}
@@ -190,7 +190,7 @@ class FlowGraphConstantConverter(object):
                 continue
             elif isinstance(cand, str):
                 continue
-            elif isinstance(lltype.typeOf(cand), lltype.Primitive):
+            elif isinstance(lltype.rawTypeOf(cand), lltype.Primitive):
                 continue
             elif cand in seen:
                 continue
