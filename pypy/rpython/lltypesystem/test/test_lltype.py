@@ -422,6 +422,8 @@ def test_runtime_type_info():
     assert runtime_type_info(s1.sub) == getRuntimeTypeInfo(S1)
     
 def test_flavor_malloc():
+    def isweak(p, T):
+        return p._weak and typeOf(p).TO == T
     S = Struct('s', ('x', Signed))
     py.test.raises(TypeError, malloc, S)
     p = malloc(S, flavor="raw")
