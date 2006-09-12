@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem.lltype import \
      Ptr, ContainerType, Void, Signed, Bool, FuncType, typeOf, FixedSizeArray, \
-     InteriorPtr
+     InteriorPtr, OpaqueType
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr
 
@@ -36,7 +36,7 @@ class PtrRepr(Repr):
             return hop.inputarg(hop.r_result, arg=0)
         FIELD_TYPE = getattr(self.lowleveltype.TO, attr)
         if isinstance(FIELD_TYPE, ContainerType):
-            if self.lowleveltype.TO._gckind == 'gc' and FIELD_TYPE._gckind == 'raw':
+            if self.lowleveltype.TO._gckind == 'gc' and FIELD_TYPE._gckind == 'raw' and not isinstance(FIELD_TYPE, OpaqueType):
                 return hop.genop('same_as', [hop.inputarg(self, 0)],
                                  resulttype=self.lowleveltype)
             else:
@@ -101,7 +101,7 @@ class __extend__(pairtype(PtrRepr, IntegerRepr)):
         ARRAY = r_ptr.lowleveltype.TO
         ITEM_TYPE = ARRAY.OF
         if isinstance(ITEM_TYPE, ContainerType):
-            if ARRAY._gckind == 'gc' and ITEM_TYPE._gckind == 'raw':
+            if ARRAY._gckind == 'gc' and ITEM_TYPE._gckind == 'raw' and not isinstance(ITEM_TYPE, OpaqueType):
                 v_array, v_index = hop.inputargs(r_ptr, Signed)
                 INTERIOR_PTR_TYPE = r_ptr.lowleveltype._interior_ptr_type_with_index(ITEM_TYPE)
                 v_interior_ptr = hop.genop('malloc', [flowmodel.Constant(INTERIOR_PTR_TYPE, Void)],
