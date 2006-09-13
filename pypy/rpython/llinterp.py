@@ -486,6 +486,18 @@ class LLFrame(object):
 
     op_bare_setfield = op_setfield
 
+    def op_setinteriorfield(self, obj, *fieldnamesval):
+        prefields, finalfield, fieldvalue = fieldnamesval[:-2], fieldnamesval[-2], fieldnamesval[-1]
+        for o in prefields:
+            if isinstance(o, str):
+                obj = getattr(obj, o)
+            else:
+                obj = obj[o]
+        if isinstance(finalfield, str):
+            setattr(obj, finalfield, fieldvalue)
+        else:
+            obj[finalfield] = fieldvalue
+
     def op_getarrayitem(self, array, index):
         return array[index]
 

@@ -515,6 +515,11 @@ class SomePtr(SomeObject):
     def can_be_none(self):
         return False
 
+class SomeInteriorPtr(SomePtr):
+    def __init__(self, ll_ptrtype):
+        assert isinstance(ll_ptrtype, lltype.InteriorPtr)
+        self.ll_ptrtype = ll_ptrtype
+        
 class SomeLLADTMeth(SomeObject):
     immutable = True
     def __init__(self, ll_ptrtype, func):
@@ -563,6 +568,13 @@ def annotation_to_lltype(s_val, info=None):
         return s_val.ootype
     if isinstance(s_val, SomeOOStaticMeth):
         return s_val.method
+    if isinstance(s_val, SomeInteriorPtr):
+        p = s_val.ll_ptrtype
+        if 0 in p.offsets:
+            assert list(p.offsets).count(0) == 1
+            return lltype.Ptr(lltype.Ptr(p.PARENTTYPE)._interior_ptr_type_with_index(p.TO))
+        else:
+            return lltype.Ptr(p.PARENTTYPE)
     if isinstance(s_val, SomePtr):
         return s_val.ll_ptrtype
     for witness, T in annotation_to_ll_map:
@@ -596,6 +608,8 @@ def lltype_to_annotation(T):
             return SomeOOClass(ootype.ROOT)
         elif isinstance(T, ExternalType):
             return SomeExternalBuiltin(T)
+        elif isinstance(T, lltype.InteriorPtr):
+            return SomeInteriorPtr(T)
         else:
             return SomePtr(T)
     else:
@@ -609,13 +623,19 @@ def ll_to_annotation(v):
         return getbookkeeper().immutablevalue(None)
     if isinstance(v, MethodType):
         ll_ptrtype = lltype.typeOf(v.im_self)
-        assert isinstance(ll_ptrtype, lltype.Ptr)
+        assert isinstance(ll_ptrtype, (lltype.Ptr, lltype.InteriorPtr))
         return SomeLLADTMeth(ll_ptrtype, v.im_func)
     if isinstance(v, FunctionType):
         # this case should only be for staticmethod instances used in
         # adtmeths: the getattr() result is then a plain FunctionType object.
         from pypy.annotation.bookkeeper import getbookkeeper
         return getbookkeeper().immutablevalue(v)
+    if isinstance(v, lltype._interior_ptr):
+        ob = v._parent
+        if ob is None:
+            raise RuntimeError
+        T = lltype.InteriorPtr(lltype.typeOf(ob), v._T, v._offsets)
+        return SomeInteriorPtr(T)
     return lltype_to_annotation(lltype.typeOf(v))
     
 # ____________________________________________________________

@@ -126,6 +126,27 @@ def op_getsubstruct(obj, field):
                       lltype.ContainerType)
     return getattr(obj, field)
 
+def op_getinteriorfield(obj, *offsets):
+    checkptr(obj)
+    ob = obj
+    for o in offsets:
+        if isinstance(o, str):
+            ob = getattr(ob, o)
+        else:
+            ob = ob[o]
+    assert not isinstance(ob, lltype._interior_ptr)
+    return ob
+
+def op_getinteriorarraysize(obj, *offsets):
+    checkptr(obj)
+    ob = obj
+    for o in offsets:
+        if isinstance(o, str):
+            ob = getattr(ob, o)
+        else:
+            ob = ob[o]
+    return len(ob)
+
 def op_getarraysubstruct(array, index):
     checkptr(array)
     result = array[index]
