@@ -582,7 +582,7 @@ class StacklessTransformer(object):
             link = block.exits[0]
             nextblock = None
         else:
-            link = support.split_block_with_keepalive(block, i+1)
+            link = unsimplify.split_block(None, block, i+1)
             i = 0
             nextblock = link.target
 
@@ -746,7 +746,7 @@ class StacklessTransformer(object):
             exitcases = dict.fromkeys(l.exitcase for l in block.exits)
             nextblock = None
         else:
-            link = support.split_block_with_keepalive(block, i+1)
+            link = unsimplify.split_block(None, block, i+1)
             nextblock = link.target
             block.exitswitch = model.c_last_exception
             link.llexitcase = None

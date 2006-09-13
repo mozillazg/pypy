@@ -1,9 +1,8 @@
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.objspace.flow.model import c_last_exception
-from pypy.translator.backendopt.support import split_block_with_keepalive
 from pypy.translator.backendopt.support import log
 from pypy.translator.simplify import eliminate_empty_blocks
-from pypy.translator.unsimplify import insert_empty_block
+from pypy.translator.unsimplify import insert_empty_block, split_block
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem import lltype
 
@@ -186,7 +185,7 @@ def rewire_links(splitblocks, graph):
                 splitlink = block.exits[0]
             else:
                 # split the block at the given position
-                splitlink = split_block_with_keepalive(block, position)
+                splitlink = split_block(None, block, position)
                 assert list(block.exits) == [splitlink]
             assert link.target is block
             assert splitlink.prevblock is block
