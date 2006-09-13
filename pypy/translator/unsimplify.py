@@ -59,8 +59,7 @@ def remove_empty_startblock(graph):
 def split_block(annotator, block, index, dontshuffle=False):
     """return a link where prevblock is the block leading up but excluding the
     index'th operation and target is a new block with the neccessary variables 
-    passed on.  NOTE: if you call this after rtyping, you WILL need to worry
-    about keepalives, you may use backendopt.support.split_block_with_keepalive.
+    passed on.
     """
     assert 0 <= index <= len(block.operations)
     if block.exitswitch == c_last_exception:
