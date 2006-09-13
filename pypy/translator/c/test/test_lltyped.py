@@ -1,6 +1,6 @@
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.translator.c.test import test_typed
-
+import py
 
 class TestLowLevelType(test_typed.CompilationTestCase):
 
@@ -52,6 +52,7 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         assert fn() == 607
 
     def test_recursivearray(self):
+        py.test.skip("not allowed any more")
         A = ForwardReference()
         A.become(FixedSizeArray(Struct("S", ('a', Ptr(A))), 5))
         TREE = GcStruct("TREE", ("root", A), ("other", A))
@@ -95,6 +96,7 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         assert res == 123
 
     def test_more_prebuilt_arrays(self):
+        py.test.skip("not allowed any more")
         A = FixedSizeArray(Struct('s1', ('x', Signed)), 5)
         S = GcStruct('s', ('a1', Ptr(A)), ('a2', A))
         s = malloc(S, zero=True)
