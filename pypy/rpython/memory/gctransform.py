@@ -258,28 +258,18 @@ class GCTransformer(object):
         raise NotImplementedError("gc_protect does not make sense for this gc")
 
     def replace_setfield(self, op, livevars, block):
-        if not var_ispyobj(op.args[2]):
-            return [op]
-        oldval = varoftype(op.args[2].concretetype)
-        getoldvalop = SpaceOperation("getfield",
-                                     [op.args[0], op.args[1]], oldval)
-        result = [getoldvalop]
-        result.extend(self.push_alive(op.args[2]))
-        result.append(op)
+        if not var_ispyobj(op.args[-1]):
+            return [SpaceOperation("bare_" + op.opname, op.args, op.result)]
+        oldval = varoftype(op.args[-1].concretetype)
+        result = []
+        result.append(SpaceOperation("g" + op.opname[1:],
+                                     op.args[:-1], oldval))
+        result.extend(self.push_alive(op.args[-1]))
+        result.append(SpaceOperation("bare_" + op.opname, op.args, op.result))
         result.extend(self.pop_alive(oldval))
         return result
-
-    def replace_setarrayitem(self, op, livevars, block):
-        if not var_ispyobj(op.args[2]):
-            return [op]
-        oldval = varoftype(op.args[2].concretetype)
-        getoldvalop = SpaceOperation("getarrayitem",
-                                     [op.args[0], op.args[1]], oldval)
-        result = [getoldvalop]
-        result.extend(self.push_alive(op.args[2]))
-        result.append(op)
-        result.extend(self.pop_alive(oldval))
-        return result
+    replace_setinteriorfield = replace_setfield
+    replace_setarrayitem = replace_setfield
 
     def replace_safe_call(self, op, livevars, block):
         return [SpaceOperation("direct_call", op.args, op.result)]
@@ -502,29 +492,20 @@ class RefcountingGCTransformer(GCTransformer):
         newops[-1].result = op.result
         return newops
 
-    def replace_setfield(self, op, livevars, block):
-        if not var_needsgc(op.args[2]):
-            return [op]
-        oldval = varoftype(op.args[2].concretetype)
-        getoldvalop = SpaceOperation("getfield",
-                                     [op.args[0], op.args[1]], oldval)
-        result = [getoldvalop]
-        result.extend(self.push_alive(op.args[2]))
-        result.append(op)
-        result.extend(self.pop_alive(oldval))
-        return result
 
-    def replace_setarrayitem(self, op, livevars, block):
-        if not var_needsgc(op.args[2]):
-            return [op]
-        oldval = varoftype(op.args[2].concretetype)
-        getoldvalop = SpaceOperation("getarrayitem",
-                                     [op.args[0], op.args[1]], oldval)
-        result = [getoldvalop]
-        result.extend(self.push_alive(op.args[2]))
-        result.append(op)
+    def replace_setfield(self, op, livevars, block):
+        if not var_needsgc(op.args[-1]):
+            return [SpaceOperation("bare_" + op.opname, op.args, op.result)]
+        oldval = varoftype(op.args[-1].concretetype)
+        result = []
+        result.append(SpaceOperation("g" + op.opname[1:],
+                                     op.args[:-1], oldval))
+        result.extend(self.push_alive(op.args[-1]))
+        result.append(SpaceOperation("bare_" + op.opname, op.args, op.result))
         result.extend(self.pop_alive(oldval))
         return result
+    replace_setinteriorfield = replace_setfield
+    replace_setarrayitem = replace_setfield
 
 ##    -- maybe add this for tests and for consistency --
 ##    def consider_constant(self, TYPE, value):
