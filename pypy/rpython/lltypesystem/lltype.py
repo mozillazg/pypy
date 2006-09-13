@@ -411,7 +411,7 @@ class FixedSizeArray(Struct):
 
 
 class FuncType(ContainerType):
-    _gckind = 'prebuilt'
+    _gckind = 'raw'
     __name__ = 'func'
     def __init__(self, args, result):
         for arg in args:
@@ -511,9 +511,6 @@ class GcForwardReference(ForwardReference):
 
 class PyForwardReference(ForwardReference):
     _gckind = 'cpy'
-
-class FuncForwardReference(ForwardReference):
-    _gckind = 'prebuilt'
 
 FORWARDREF_BY_FLAVOR = {'raw': ForwardReference,
                         'gc':  GcForwardReference,
