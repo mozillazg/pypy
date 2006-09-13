@@ -52,12 +52,11 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         assert fn() == 607
 
     def test_recursivearray(self):
-        py.test.skip("not allowed any more")
         A = ForwardReference()
         A.become(FixedSizeArray(Struct("S", ('a', Ptr(A))), 5))
-        TREE = GcStruct("TREE", ("root", A), ("other", A))
+        TREE = Struct("TREE", ("root", A), ("other", A))
+        tree = malloc(TREE, immortal=True)
         def llf():
-            tree = malloc(TREE)
             tree.root[0].a = tree.root
             tree.root[1].a = tree.other
             assert tree.root[0].a[0].a[0].a[0].a[0].a[1].a == tree.other
