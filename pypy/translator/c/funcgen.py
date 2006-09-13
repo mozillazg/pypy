@@ -416,9 +416,9 @@ class FunctionCodeGenerator(object):
         return result
 
     def generic_set(self, op, targetexpr):
-        newvalue = self.expr(op.args[2], special_case_void=False)
+        newvalue = self.expr(op.args[-1], special_case_void=False)
         result = ['%s = %s;' % (targetexpr, newvalue)]
-        T = self.lltypemap(op.args[2])
+        T = self.lltypemap(op.args[-1])
         result = '\n'.join(result)
         if T is Void:
             result = '/* %s */' % result
@@ -432,7 +432,7 @@ class FunctionCodeGenerator(object):
                                                      op.args[1].value)
         return self.generic_get(op, expr)
 
-    def OP_SETFIELD(self, op):
+    def OP_BARE_SETFIELD(self, op):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
@@ -440,7 +440,7 @@ class FunctionCodeGenerator(object):
                                          op.args[1].value)
         return self.generic_set(op, expr)
 
-    OP_BARE_SETFIELD = OP_SETFIELD
+    #OP_SETFIELD = OP_BARE_SETFIELD
 
     def OP_GETSUBSTRUCT(self, op):
         RESULT = self.lltypemap(op.result).TO
@@ -466,13 +466,49 @@ class FunctionCodeGenerator(object):
         return self.generic_get(op, '%s[%s]' % (items,
                                                 self.expr(op.args[1])))
 
-    def OP_SETARRAYITEM(self, op):
+    def OP_BARE_SETARRAYITEM(self, op):
         ARRAY = self.lltypemap(op.args[0]).TO
         items = self.expr(op.args[0])
         if not isinstance(ARRAY, FixedSizeArray):
             items += '->items'
         return self.generic_set(op, '%s[%s]' % (items,
                                                 self.expr(op.args[1])))
+
+    def interior_expr(self, args, rettype=False):
+        TYPE = args[0].concretetype.TO
+        expr = '(*(' + self.expr(args[0]) + '))'
+        for arg in args[1:]:
+            defnode = self.db.gettypedefnode(TYPE)
+            if arg.concretetype is Void:
+                fieldname = arg.value
+                expr = defnode.access_expr(expr, fieldname)
+                TYPE = getattr(TYPE, fieldname)
+            else:
+                if not isinstance(TYPE, FixedSizeArray):
+                    expr = '(%s).items[%s]'%(expr, self.expr(arg))
+                else:
+                    expr = '(%s)[%s]'%(expr, self.expr(arg))
+                TYPE = TYPE.OF
+        if rettype:
+            return expr, TYPE
+        else:
+            return expr
+
+    def OP_GETINTERIORFIELD(self, op):
+        return self.generic_get(op, self.interior_expr(op.args))
+
+    def OP_BARE_SETINTERIORFIELD(self, op):
+        return self.generic_set(op, self.interior_expr(op.args[:-1]))
+
+    def OP_GETINTERIORARRAYSIZE(self, op):
+        expr, ARRAY = self.interior_expr(op.args, True)
+        if isinstance(ARRAY, FixedSizeArray):
+            return '%s = %d;'%(self.expr(op.result), ARRAY.length)
+        else:
+            assert isinstance(ARRAY, Array)
+            return '%s = %s.length;'%(self.expr(op.result), expr)
+
+    #OP_SETINTERIORFIELD = OP_BARE_SETINTERIORFIELD
 
     def OP_GETARRAYSUBSTRUCT(self, op):
         ARRAY = self.lltypemap(op.args[0]).TO
