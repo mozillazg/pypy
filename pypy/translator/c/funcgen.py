@@ -474,7 +474,7 @@ class FunctionCodeGenerator(object):
         return self.generic_set(op, '%s[%s]' % (items,
                                                 self.expr(op.args[1])))
 
-    def interior_expr(self, args):
+    def interior_expr(self, args, rettype=False):
         TYPE = args[0].concretetype.TO
         expr = '(*(' + self.expr(args[0]) + '))'
         for arg in args[1:]:
@@ -489,7 +489,10 @@ class FunctionCodeGenerator(object):
                 else:
                     expr = '(%s)[%s]'%(expr, self.expr(arg))
                 TYPE = TYPE.OF
-        return expr
+        if rettype:
+            return expr, TYPE
+        else:
+            return expr
 
     def OP_GETINTERIORFIELD(self, op):
         return self.generic_get(op, self.interior_expr(op.args))
@@ -498,8 +501,12 @@ class FunctionCodeGenerator(object):
         return self.generic_set(op, self.interior_expr(op.args[:-1]))
 
     def OP_GETINTERIORARRAYSIZE(self, op):
-        expr = self.interior_expr(op.args)
-        return '%s = %s.length;'%(self.expr(op.result), expr)
+        expr, ARRAY = self.interior_expr(op.args, True)
+        if isinstance(ARRAY, FixedSizeArray):
+            return '%s = %d;'%(self.expr(op.result), ARRAY.length)
+        else:
+            assert isinstance(ARRAY, Array)
+            return '%s = %s.length;'%(self.expr(op.result), expr)
 
     #OP_SETINTERIORFIELD = OP_BARE_SETINTERIORFIELD
 
