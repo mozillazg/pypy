@@ -34,6 +34,7 @@ def check(fn, signature, args, expected_result, must_be_removed=True):
     if option.view:
         t.view()
     def callback(progress=True):
+        checkgraph(graph)
         if progress and option.view:
             t.view()
         if expected_result is not Ellipsis:
