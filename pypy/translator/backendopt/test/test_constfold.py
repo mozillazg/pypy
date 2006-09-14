@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython import objectmodel
 from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy import conftest
+import py
 
 def get_graph(fn, signature):
     t = TranslationContext()
