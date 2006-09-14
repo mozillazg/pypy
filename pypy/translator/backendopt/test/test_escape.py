@@ -3,6 +3,7 @@ from pypy.translator.backendopt.escape import AbstractDataFlowInterpreter, mallo
 from pypy.translator.backendopt.support import find_backedges, find_loop_blocks
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.objectmodel import instantiate
+from pypy import conftest
 
 def build_adi(function, types):
     t = TranslationContext()
@@ -12,6 +13,8 @@ def build_adi(function, types):
     graph = graphof(t, function)
     adi.schedule_function(graph)
     adi.complete()
+    if conftest.option.view:
+        t.view()
     return t, adi, graph
 
 def check_malloc_removal(function, types, args, expected_result, must_remove=True):
