@@ -176,6 +176,14 @@ def _try_inline_malloc(info):
                 return False    # non-constant array index
         if op.opname in FIELD_ACCESS:
             pass   # ok
+        elif op.opname == 'getinteriorfield':
+            for arg in op.args[1:]:
+                if not isinstance(arg, Constant):
+                    return False
+        elif op.opname == 'setinteriorfield':
+            for arg in op.args[1:-1]:
+                if not isinstance(arg, Constant):
+                    return False
         elif op.opname in SUBSTRUCT_ACCESS:
             S = op.args[0].concretetype.TO
             name = op.args[1].value
@@ -297,6 +305,19 @@ def _try_inline_malloc(info):
                                                    [newvarsmap[key]],
                                                    op.result)
                         newops.append(newop)
+                        last_removed_access = len(newops)
+                    elif op.opname == "getinteriorfield":
+                        S = op.args[0].concretetype.TO
+                        key = tuple([S] + [a.value for a in op.args[1:]])
+                        newop = SpaceOperation("same_as",
+                                               [newvarsmap[key]],
+                                               op.result)
+                        newops.append(newop)
+                        last_removed_access = len(newops)
+                    elif op.opname == "setinteriorfield":
+                        S = op.args[0].concretetype.TO
+                        key = tuple([S] + [a.value for a in op.args[1:-1]])
+                        newvarsmap[key] = op.args[-1]
                         last_removed_access = len(newops)
                     elif op.opname in ("setfield", "setarrayitem"):
                         S = op.args[0].concretetype.TO
