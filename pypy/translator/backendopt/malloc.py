@@ -164,6 +164,21 @@ def _try_inline_malloc(info):
                                        "setarrayitem",
                                        "getarraysubstruct"])
     accessed_substructs = {}
+    interior_fields = {}
+
+    def add_interior_access(CONTAINER, FIELD_TYPE, args):
+        assert not isinstance(FIELD_TYPE, lltype.ContainerType)
+        assert isinstance(CONTAINER, lltype.ContainerType)
+        for arg in args:
+            if not isinstance(arg, Constant):
+                return False
+        key = tuple([CONTAINER] + [a.value for a in args])
+        if key in interior_fields:
+            assert interior_fields[key] == FIELD_TYPE
+        else:
+            interior_fields[key] = FIELD_TYPE
+        return True
+
 
     for up in info.usepoints:
         if up[0] != "op":
@@ -177,13 +192,15 @@ def _try_inline_malloc(info):
         if op.opname in FIELD_ACCESS:
             pass   # ok
         elif op.opname == 'getinteriorfield':
-            for arg in op.args[1:]:
-                if not isinstance(arg, Constant):
-                    return False
+            if not add_interior_access(op.args[0].concretetype.TO,
+                                       op.result.concretetype,
+                                       op.args[1:]):
+                return False
         elif op.opname == 'setinteriorfield':
-            for arg in op.args[1:-1]:
-                if not isinstance(arg, Constant):
-                    return False
+            if not add_interior_access(op.args[0].concretetype.TO,
+                                       op.args[-1].concretetype,
+                                       op.args[1:-1]):
+                return False
         elif op.opname in SUBSTRUCT_ACCESS:
             S = op.args[0].concretetype.TO
             name = op.args[1].value
@@ -252,6 +269,11 @@ def _try_inline_malloc(info):
                 newvarstype[key] = FIELDTYPE
             #else:
             #   the inlined substructure is never accessed, drop it
+
+    for key, T in interior_fields.iteritems():
+        flatconstants[key] = Constant(T._defl(), T)
+        flatnames.append(key)
+        newvarstype[key] = T
 
     flatten(STRUCT)
     assert len(direct_fieldptr_key) <= 1
