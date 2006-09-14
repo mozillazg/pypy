@@ -4,6 +4,7 @@ from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.simplify import remove_identical_vars
 from pypy.translator.backendopt.support import log
+from pypy.translator.backendopt.constfold import constant_fold_graph
 
 class LifeTime:
 
@@ -479,13 +480,16 @@ def remove_mallocs_once(graph):
         progress += _try_inline_malloc(info)
     return progress
 
-def remove_simple_mallocs(graph):
+def remove_simple_mallocs(graph, callback=None):
     """Iteratively remove (inline) the mallocs that can be simplified away."""
     tot = 0
     while True:
         count = remove_mallocs_once(graph)
         if count:
             log.malloc('%d simple mallocs removed in %r' % (count, graph.name))
+            constant_fold_graph(graph)
+            if callback:
+                callback()
             tot += count
         else:
             break
