@@ -452,9 +452,9 @@ def ll_dict_delitem(d, key):
         key = entry.key   # careful about destructor side effects:
                           # keep key alive until entry.value has also
                           # been zeroed (if it must be)
-        entry.key = lltype.nullptr(DICT.entries.OF.key.TO)
+        entry.key = lltype.nullptr(DICT.entries.TO.OF.key.TO)
     if DICT.must_clear_value:
-        entry.value = lltype.nullptr(DICT.entries.OF.value.TO)
+        entry.value = lltype.nullptr(DICT.entries.TO.OF.value.TO)
     num_entries = len(d.entries)
     if num_entries > DICT_INITSIZE and d.num_items < num_entries / 4:
         ll_dict_resize(d)
