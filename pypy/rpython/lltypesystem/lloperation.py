@@ -303,7 +303,7 @@ LL_OPERATIONS = {
     'getarrayitem':         LLOp(sideeffects=False, canrun=True),
     'getarraysize':         LLOp(canfold=True),
     'getsubstruct':         LLOp(canfold=True),
-    'getinteriorfield':     LLOp(canfold=True), # XXX not sure about the foldability...
+    'getinteriorfield':     LLOp(sideeffects=False, canrun=True),
     'getinteriorarraysize': LLOp(canfold=True),
     'getarraysubstruct':    LLOp(canfold=True),
     'setfield':             LLOp(),
