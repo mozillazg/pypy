@@ -180,7 +180,7 @@ def test_keepalive_const_substruct():
     def fn():
         return s1.sub.x
     graph, t = get_graph(fn, [])
-    assert summary(graph) == {'getsubstruct': 1, 'getfield': 1}
+    assert summary(graph) == {'getinteriorfield': 1}
     constant_fold_graph(graph)
 
     # kill all references to 's1'
@@ -188,7 +188,7 @@ def test_keepalive_const_substruct():
     del graph.func
     import gc; gc.collect()
 
-    assert summary(graph) == {'getfield': 1}
+    assert summary(graph) == {}
     check_graph(graph, [], 1234, t)
 
 
