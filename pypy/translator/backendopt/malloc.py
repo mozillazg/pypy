@@ -285,15 +285,17 @@ def _try_inline_malloc(info):
     flatten(STRUCT)
     assert len(direct_fieldptr_key) <= 1
 
-    def key_for_field_access(S, fldname):
+    def key_for_field_access(S, *fldnames):
         if isinstance(S, lltype.FixedSizeArray):
+            assert len(fldnames) == 1, "embedded FixedSizeArrays should be accessed by getinteriorfield"
+            fldname, = fldnames
             if not isinstance(fldname, str):      # access by index
                 fldname = 'item%d' % (fldname,)
             try:
                 return direct_fieldptr_key[S, fldname]
             except KeyError:
                 pass
-        return S, fldname
+        return (S,) + fldnames
 
     variables_by_block = {}
     for block, var in info.variables:
@@ -320,10 +322,10 @@ def _try_inline_malloc(info):
                 for arg in op.args[1:]:   # should be the first arg only
                     assert arg not in vars
                 if op.args and op.args[0] in vars:
-                    if op.opname in ("getfield", "getarrayitem"):
+                    if op.opname in ("getfield", "getarrayitem", "getinteriorfield"):
                         S = op.args[0].concretetype.TO
-                        fldname = op.args[1].value
-                        key = key_for_field_access(S, fldname)
+                        fldnames = [a.value for a in op.args[1:]]
+                        key = key_for_field_access(S, *fldnames)
                         if key in accessed_substructs:
                             c_name = Constant('data', lltype.Void)
                             newop = SpaceOperation("getfield",
@@ -335,23 +337,10 @@ def _try_inline_malloc(info):
                                                    op.result)
                         newops.append(newop)
                         last_removed_access = len(newops)
-                    elif op.opname == "getinteriorfield":
+                    elif op.opname in ("setfield", "setarrayitem", "setinteriorfield"):
                         S = op.args[0].concretetype.TO
-                        key = tuple([S] + [a.value for a in op.args[1:]])
-                        newop = SpaceOperation("same_as",
-                                               [newvarsmap[key]],
-                                               op.result)
-                        newops.append(newop)
-                        last_removed_access = len(newops)
-                    elif op.opname == "setinteriorfield":
-                        S = op.args[0].concretetype.TO
-                        key = tuple([S] + [a.value for a in op.args[1:-1]])
-                        newvarsmap[key] = op.args[-1]
-                        last_removed_access = len(newops)
-                    elif op.opname in ("setfield", "setarrayitem"):
-                        S = op.args[0].concretetype.TO
-                        fldname = op.args[1].value
-                        key = key_for_field_access(S, fldname)
+                        fldnames = [a.value for a in op.args[1:-1]]
+                        key = key_for_field_access(S, *fldnames)
                         assert key in newvarsmap
                         if key in accessed_substructs:
                             c_name = Constant('data', lltype.Void)
@@ -360,7 +349,7 @@ def _try_inline_malloc(info):
                                                    op.result)
                             newops.append(newop)
                         else:
-                            newvarsmap[key] = op.args[2]
+                            newvarsmap[key] = op.args[-1]
                         last_removed_access = len(newops)
                     elif op.opname in ("same_as", "cast_pointer"):
                         assert op.result not in vars
