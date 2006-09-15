@@ -17,7 +17,7 @@ def check_malloc_removed(graph):
     for node in flatten(graph):
         if isinstance(node, Block):
             for op in node.operations:
-                if op.opname == 'malloc':
+                if op.opname in ('malloc', 'zero_malloc'):
                     S = op.args[0].value
                     if not union_wrapper(S):   # union wrappers are fine
                         count1 += 1
@@ -296,3 +296,10 @@ def test_simple_destructor():
         return g.p.x
     graph = check(f, [], [], 1)
     assert 'flavored_free' in summary(graph)
+
+def test_remove_zero_malloc():
+    S = lltype.GcStruct("S", ("x", lltype.Signed))
+    def f():
+        s = lltype.malloc(S, zero=True)
+        return s.x
+    check(f, [], [], 0)

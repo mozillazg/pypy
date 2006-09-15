@@ -137,7 +137,7 @@ def _try_inline_malloc(info):
         if cp[0] != "op":
             return False
         op = cp[2]
-        if op.opname != "malloc":
+        if op.opname not in ("malloc", "zero_malloc"):
             return False
         lltypes[op.result.concretetype] = True
 
@@ -393,7 +393,7 @@ def _try_inline_malloc(info):
                     else:
                         raise AssertionError, op.opname
                 elif op.result in vars:
-                    assert op.opname == "malloc"
+                    assert op.opname in ("malloc", "zero_malloc")
                     assert vars == {var: True}
                     progress = True
                     # drop the "malloc" operation
@@ -468,7 +468,7 @@ def _try_inline_malloc(info):
         # look for variables created inside the block by a malloc
         vars_created_here = []
         for op in block.operations:
-            if op.opname == "malloc" and op.result in vars:
+            if op.opname in ("malloc", "zero_malloc") and op.result in vars:
                 vars_created_here.append(op.result)
         for var in vars_created_here:
             flowin(var, newvarsmap=None)
