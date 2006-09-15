@@ -79,6 +79,39 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn = self.getcompiled(llf)
         fn()
 
+    def test_prebuilt_nolength_array(self):
+        A = Array(Signed, hints={'nolength': True})
+        a = malloc(A, 5, immortal=True)
+        a[0] = 8
+        a[1] = 5
+        a[2] = 12
+        a[3] = 12
+        a[4] = 15
+        def llf():
+            s = ''
+            for i in range(5):
+                s += chr(64+a[i])
+            assert s == "HELLO"
+        fn = self.getcompiled(llf)
+        fn()
+
+    def test_prebuilt_nolength_char_array(self):
+        for lastchar in ('\x00', 'X'):
+            A = Array(Char, hints={'nolength': True})
+            a = malloc(A, 5, immortal=True)
+            a[0] = '8'
+            a[1] = '5'
+            a[2] = '?'
+            a[3] = '!'
+            a[4] = lastchar
+            def llf():
+                s = ''
+                for i in range(5):
+                    s += a[i]
+                assert s == "85?!" + lastchar
+            fn = self.getcompiled(llf)
+            fn()
+
     def test_call_with_fixedsizearray(self):
         A = FixedSizeArray(Struct('s1', ('x', Signed)), 5)
         S = GcStruct('s', ('a', Ptr(A)))
