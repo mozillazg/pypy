@@ -5,7 +5,7 @@ from pypy.translator.backendopt.inline import inline_function
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator import simplify
-from pypy.objspace.flow.model import checkgraph, flatten, Block
+from pypy.objspace.flow.model import checkgraph, flatten, Block, summary
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype
 from pypy.conftest import option
@@ -45,6 +45,7 @@ def check(fn, signature, args, expected_result, must_be_removed=True):
     callback(False)
     if must_be_removed:
         check_malloc_removed(graph)
+    return graph
 
 
 def test_fn1():
@@ -277,3 +278,21 @@ def test_union():
         x.u2.b = 6
         return x.u1.b * x.u2.a
     check(fn, [], [], Ellipsis)
+
+def test_simple_destructor():
+    R = lltype.Struct("R", ("x", lltype.Signed))
+    G = lltype.GcStruct("G", ("p", lltype.Ptr(R)),
+                        hints={'autofree_fields':('p',)})
+    def destr(g):
+        lltype.raw_free(g.p)
+    destrptr = lltype.functionptr(lltype.FuncType([lltype.Ptr(G)], lltype.Void),
+                                  "destr",
+                                  _callable=destr)
+    lltype.attachRuntimeTypeInfo(G, destrptr=destrptr)
+    def f():
+        g = lltype.malloc(G)
+        g.p = lltype.malloc(R, flavor='raw')
+        g.p.x = 1
+        return g.p.x
+    graph = check(f, [], [], 1)
+    assert 'flavored_free' in summary(graph)

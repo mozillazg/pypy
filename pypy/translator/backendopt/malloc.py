@@ -3,6 +3,7 @@ from pypy.objspace.flow.model import SpaceOperation, traverse
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.simplify import remove_identical_vars
+from pypy.translator.unsimplify import varoftype
 from pypy.translator.backendopt.support import log
 from pypy.translator.backendopt.constfold import constant_fold_graph
 
@@ -211,12 +212,17 @@ def _try_inline_malloc(info):
         else:
             return False
 
-    # must not remove mallocs of structures that have a RTTI with a destructor
+    # must not remove mallocs of structures that have a RTTI with a
+    # destructor, unless there's a hint that tells us what the
+    # destructor does.
+
+    fields_to_raw_free = ()
 
     try:
         destr_ptr = lltype.getRuntimeTypeInfo(STRUCT)._obj.destructor_funcptr
-        if destr_ptr:
+        if destr_ptr and 'autofree_fields' not in STRUCT._hints:
             return False
+        fields_to_raw_free = STRUCT._hints['autofree_fields']
     except (ValueError, AttributeError), e:
         pass
 
@@ -422,15 +428,24 @@ def _try_inline_malloc(info):
 
             assert block.exitswitch not in vars
 
+            var_exits = False
             for link in block.exits:
                 newargs = []
                 for arg in link.args:
                     if arg in vars:
                         newargs += list_newvars()
                         insert_keepalive = False   # kept alive by the link
+                        var_exits = True
                     else:
                         newargs.append(arg)
                 link.args[:] = newargs
+
+            if not var_exits:
+                for field in fields_to_raw_free:
+                    newops.append(SpaceOperation("flavored_free",
+                                                 [Constant("raw", lltype.Void),
+                                                  newvarsmap[key_for_field_access(STRUCT, field)]],
+                                                 varoftype(lltype.Void)))
 
             if insert_keepalive and last_removed_access is not None:
                 keepalives = []
