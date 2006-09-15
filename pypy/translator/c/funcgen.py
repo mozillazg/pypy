@@ -476,18 +476,25 @@ class FunctionCodeGenerator(object):
 
     def interior_expr(self, args, rettype=False):
         TYPE = args[0].concretetype.TO
-        expr = '(*(' + self.expr(args[0]) + '))'
-        for arg in args[1:]:
+        expr = self.expr(args[0])
+        for i, arg in enumerate(args[1:]):
             defnode = self.db.gettypedefnode(TYPE)
             if arg.concretetype is Void:
                 fieldname = arg.value
-                expr = defnode.access_expr(expr, fieldname)
-                TYPE = getattr(TYPE, fieldname)
-            else:
-                if not isinstance(TYPE, FixedSizeArray):
-                    expr = '(%s).items[%s]'%(expr, self.expr(arg))
+                if i == 0:
+                    expr = defnode.ptr_access_expr(expr, fieldname)
                 else:
-                    expr = '(%s)[%s]'%(expr, self.expr(arg))
+                    expr = defnode.access_expr(expr, fieldname)
+                if isinstance(TYPE, lltype.FixedSizeArray):
+                    TYPE = TYPE.OF
+                else:
+                    TYPE = getattr(TYPE, fieldname)
+            else:
+                indexexpr = self.expr(arg)
+                if i == 0:
+                    expr = defnode.ptr_access_expr_varindex(expr, indexexpr)
+                else:
+                    expr = defnode.access_expr_varindex(expr, indexexpr)
                 TYPE = TYPE.OF
         if rettype:
             return expr, TYPE

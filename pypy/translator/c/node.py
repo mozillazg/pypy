@@ -237,10 +237,13 @@ class ArrayDefNode:
         return 'struct %s @' % self.name
 
     def access_expr(self, baseexpr, index):
-        return '%s.items[%d]' % (baseexpr, index)
+        return '%s.items[%s]' % (baseexpr, index)
 
     def ptr_access_expr(self, baseexpr, index):
-        return '%s->items[%d]' % (baseexpr, index)
+        return '%s->items[%s]' % (baseexpr, index)
+
+    access_expr_varindex     = access_expr
+    ptr_access_expr_varindex = ptr_access_expr
 
     def definition(self):
         gcpolicy = self.db.gcpolicy
@@ -318,12 +321,18 @@ class FixedSizeArrayDefNode:
         return self.itemtypename.replace('@', '*@')
 
     def access_expr(self, baseexpr, index):
-        if not isinstance(index, int):
-            assert index.startswith('item')
-            index = int(index[4:])
+        if isinstance(index, int):
+            return self.access_expr_varindex(baseexpr, str(index))
+        assert index.startswith('item')
+        index = int(index[4:])
         return '%s[%d]' % (baseexpr, index)
 
     ptr_access_expr = access_expr
+
+    def access_expr_varindex(self, baseexpr, indexexpr):
+        return '%s[%s]' % (baseexpr, indexexpr)
+
+    ptr_access_expr_varindex = access_expr_varindex
 
     def definition(self):
         return []    # no declaration is needed
