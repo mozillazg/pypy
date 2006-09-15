@@ -29,6 +29,8 @@ class CTypesRepr(Repr):
     #  * 'r_memoryowner.lowleveltype' is the lowleveltype of the repr for the
     #                                 same ctype but for ownsmemory=True.
 
+    autofree_fields = ()
+
     def __init__(self, rtyper, s_ctypesobject, ll_type):
         # s_ctypesobject: the annotation to represent
         # ll_type: the low-level type representing the raw
@@ -42,32 +44,57 @@ class CTypesRepr(Repr):
 
         self.c_data_type = self.get_c_data_type(ll_type)
 
-        fields = []
+        fields = [("c_data", lltype.Ptr(self.c_data_type))]
         content_keepalive_type = self.get_content_keepalive_type()
         if content_keepalive_type:
             fields.append(( "keepalive", content_keepalive_type ))
 
         if self.ownsmemory:
+            self.autofree_fields = ("c_data",) + self.__class__.autofree_fields
             self.r_memoryowner = self
-            fields.append(( "c_data", self.c_data_type ))
         else:
             s_memoryowner = SomeCTypesObject(ctype, ownsmemory=True)
             self.r_memoryowner = rtyper.getrepr(s_memoryowner)
-            fields += [
-                ( "c_data_owner_keepalive", self.r_memoryowner.lowleveltype ),
-                ( "c_data", lltype.Ptr(self.c_data_type) ),
-                ]
+            fields.append(
+                ( "c_data_owner_keepalive", self.r_memoryowner.lowleveltype ))
+
+        keywords = {'hints': {'autofree_fields': self.autofree_fields}}
         self.lowleveltype = lltype.Ptr(
                 lltype.GcStruct( "CtypesBox_%s" % (ctype.__name__,),
-                    *fields
+                    *fields,
+                    **keywords
                 )
             )
+        if self.autofree_fields:
+            lltype.attachRuntimeTypeInfo(self.lowleveltype.TO)
         self.const_cache = {} # store generated const values+original value
+
+    def _setup_repr_final(self):
+        if self.autofree_fields:
+            # XXX should be done by the gctransform from the GcStruct hint
+            from pypy.annotation import model as annmodel
+            from pypy.rpython.unroll import unrolling_iterable
+            autofree_fields = unrolling_iterable(self.autofree_fields)
+
+            def ll_rctypes_free(box):
+                for fieldname in autofree_fields:
+                    p = getattr(box, fieldname)
+                    if p:
+                        llmemory.raw_free(llmemory.cast_ptr_to_adr(p))
+
+            args_s = [annmodel.SomePtr(self.lowleveltype)]
+            graph = self.rtyper.annotate_helper(ll_rctypes_free, args_s)
+            destrptr = self.rtyper.getcallable(graph)
+            lltype.attachRuntimeTypeInfo(self.lowleveltype.TO,
+                                         destrptr = destrptr)
 
     def get_content_keepalive_type(self):
         """Return the type of the extra keepalive field used for the content
         of this object."""
         return None
+
+    def get_extra_autofree_fields(self):
+        return []
 
     def ctypecheck(self, value):
         return isinstance(value, self.ctype)
@@ -86,28 +113,29 @@ class CTypesRepr(Repr):
             return self.const_cache[key][0]
         except KeyError:
             self.setup()
-            p = lltype.malloc(self.r_memoryowner.lowleveltype.TO, zero=True)
+            p = lltype.malloc(self.r_memoryowner.lowleveltype.TO,
+                              immortal = True)
+            p.c_data = lltype.malloc(self.r_memoryowner.c_data_type,
+                                     immortal = True,
+                                     zero = True)
             self.initialize_const(p, value)
             if self.ownsmemory:
                 result = p
             else:
                 # we must return a non-memory-owning box that keeps the
                 # memory-owning box alive
-                result = lltype.malloc(self.lowleveltype.TO, zero=True)
+                result = lltype.malloc(self.lowleveltype.TO,
+                                       immortal = True,
+                                       zero = True)
                 result.c_data = p.c_data    # initialize c_data pointer
                 result.c_data_owner_keepalive = p
             self.const_cache[key] = result, keepalive
             return result
 
     def get_c_data(self, llops, v_box):
-        if self.ownsmemory:
-            inputargs = [v_box, inputconst(lltype.Void, "c_data")]
-            return llops.genop('getsubstruct', inputargs,
-                        lltype.Ptr(self.c_data_type) )
-        else:
-            inputargs = [v_box, inputconst(lltype.Void, "c_data")]
-            return llops.genop('getfield', inputargs,
-                        lltype.Ptr(self.c_data_type) )
+        inputargs = [v_box, inputconst(lltype.Void, "c_data")]
+        return llops.genop('getfield', inputargs,
+                           lltype.Ptr(self.c_data_type))
 
     def get_c_data_owner(self, llops, v_box):
         if self.ownsmemory:
@@ -120,18 +148,55 @@ class CTypesRepr(Repr):
 
     def allocate_instance(self, llops):
         TYPE = self.lowleveltype.TO
+        c1 = inputconst(lltype.Void, TYPE)
+        v_box = llops.genop("zero_malloc", [c1], resulttype=self.lowleveltype)
+        # XXX don't use zero_malloc, but just make sure there is a NULL
+        # in the autofreed field(s)
+
+        TYPE = self.c_data_type
         if TYPE._is_varsize():
             raise TyperError("allocating array with unknown length")
-        c1 = inputconst(lltype.Void, TYPE)
-        return llops.genop("zero_malloc", [c1], resulttype=self.lowleveltype)
+        if self.ownsmemory:
+            # XXX use zero=True instead, and malloc instead of raw_malloc?
+            c_size = inputconst(lltype.Signed, llmemory.sizeof(TYPE))
+            v_rawaddr = llops.genop("raw_malloc", [c_size],
+                                    resulttype=llmemory.Address)
+            llops.genop("raw_memclear", [v_rawaddr, c_size])
+            v_rawdata = llops.genop("cast_adr_to_ptr", [v_rawaddr],
+                                    resulttype=lltype.Ptr(TYPE))
+            c_datafieldname = inputconst(lltype.Void, "c_data")
+            llops.genop("setfield", [v_box, c_datafieldname, v_rawdata])
+        return v_box
 
     def allocate_instance_varsize(self, llops, v_length):
         TYPE = self.lowleveltype.TO
-        if not TYPE._is_varsize():
-            raise TyperError("allocating non-array with a specified length")
         c1 = inputconst(lltype.Void, TYPE)
-        return llops.genop("zero_malloc_varsize", [c1, v_length],
-                           resulttype=self.lowleveltype)
+        v_box = llops.genop("zero_malloc", [c1], resulttype=self.lowleveltype)
+        # XXX don't use zero_malloc, but just make sure there is a NULL
+        # in the autofreed field(s)
+
+        TYPE = self.c_data_type
+        if not TYPE._is_varsize():
+            raise TyperError("allocating non-array with specified length")
+        if self.ownsmemory:
+            # XXX use zero=True instead, and malloc instead of raw_malloc?
+            assert isinstance(TYPE, lltype.Array)
+            c_fixedsize = inputconst(lltype.Signed, llmemory.sizeof(TYPE, 0))
+            c_itemsize = inputconst(lltype.Signed, llmemory.sizeof(TYPE.OF))
+            v_varsize = llops.genop("int_mul", [c_itemsize, v_length],
+                                    resulttype=lltype.Signed)
+            v_size = llops.genop("int_add", [c_fixedsize, v_varsize],
+                                 resulttype=lltype.Signed)
+            v_rawaddr = llops.genop("raw_malloc", [v_size],
+                                    resulttype=llmemory.Address)
+            llops.genop("raw_memclear", [v_rawaddr, v_size])
+            v_rawdata = llops.genop("cast_adr_to_ptr", [v_rawaddr],
+                                    resulttype=lltype.Ptr(TYPE))
+            c_datafieldname = inputconst(lltype.Void, "c_data")
+            llops.genop("setfield", [v_box, c_datafieldname, v_rawdata])
+        else:
+            raise TyperError("allocate_instance_varsize on an alias box")
+        return v_box
 
     def allocate_instance_ref(self, llops, v_c_data, v_c_data_owner=None):
         """Only if self.ownsmemory is false.  This allocates a new instance

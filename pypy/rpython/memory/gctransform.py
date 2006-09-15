@@ -1018,6 +1018,7 @@ class FrameworkGCTransformer(GCTransformer):
                     if ARRAY.OF != lltype.Void:
                         info["ofstovar"] = ofs1 + llmemory.itemoffsetof(ARRAY, 0)
                     else:
+                        # XXX ?
                         info["fixedsize"] = ofs1 + llmemory.sizeof(lltype.Signed)
                     if ARRAY._hints.get('isrpystring'):
                         info["fixedsize"] = llmemory.sizeof(TYPE, 1)
@@ -1034,6 +1035,7 @@ class FrameworkGCTransformer(GCTransformer):
                     info["varofstoptrs"] = self.offsets2table(offsets, ARRAY.OF)
                     info["varitemsize"] = llmemory.sizeof(ARRAY.OF)
                 else:
+                    # XXX ?
                     info["varofstoptrs"] = self.offsets2table((), lltype.Void)
                     info["varitemsize"] = llmemory.sizeof(ARRAY.OF)
             return type_id

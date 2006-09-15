@@ -21,7 +21,7 @@ class AddressOffset(Symbolic):
             return NotImplemented
         return CompositeOffset(self, other)
 
-    def raw_malloc(self, rest):
+    def raw_malloc(self, rest, zero=False):
         raise NotImplementedError("raw_malloc(%r, %r)" % (self, rest))
 
 
@@ -51,16 +51,16 @@ class ItemOffset(AddressOffset):
         index = firstitemref.index + self.repeat
         return _arrayitemref(array, index)
 
-    def raw_malloc(self, rest):
+    def raw_malloc(self, rest, zero=False):
         assert not rest
         if (isinstance(self.TYPE, lltype.ContainerType)
             and self.TYPE._gckind == 'gc'):
             assert self.repeat == 1
-            p = lltype.malloc(self.TYPE, flavor='raw')
+            p = lltype.malloc(self.TYPE, flavor='raw', zero=zero)
             return cast_ptr_to_adr(p)
         else:
             T = lltype.FixedSizeArray(self.TYPE, self.repeat)
-            p = lltype.malloc(T, flavor='raw')
+            p = lltype.malloc(T, flavor='raw', zero=zero)
             array_adr = cast_ptr_to_adr(p)
             return array_adr + ArrayItemsOffset(T)
 
@@ -80,11 +80,13 @@ class FieldOffset(AddressOffset):
             struct = lltype.cast_pointer(lltype.Ptr(self.TYPE), struct)
         return _structfieldref(struct, self.fldname)
 
-    def raw_malloc(self, rest, parenttype=None):
+    def raw_malloc(self, rest, parenttype=None, zero=False):
         if self.fldname != self.TYPE._arrayfld:
-            return AddressOffset.raw_malloc(self, rest)   # for the error msg
+            return AddressOffset.raw_malloc(self, rest,   # for the error msg
+                                            zero=zero)
         assert rest
-        return rest[0].raw_malloc(rest[1:], parenttype=parenttype or self.TYPE)
+        return rest[0].raw_malloc(rest[1:], parenttype=parenttype or self.TYPE,
+                                  zero=zero)
 
 
 class CompositeOffset(AddressOffset):
@@ -122,8 +124,8 @@ class CompositeOffset(AddressOffset):
             ref = item.ref(ref)
         return ref
 
-    def raw_malloc(self, rest):
-        return self.offsets[0].raw_malloc(self.offsets[1:] + rest)
+    def raw_malloc(self, rest, zero=False):
+        return self.offsets[0].raw_malloc(self.offsets[1:] + rest, zero=zero)
 
 
 class ArrayItemsOffset(AddressOffset):
@@ -139,7 +141,7 @@ class ArrayItemsOffset(AddressOffset):
         assert lltype.rawTypeOf(array).TO == self.TYPE
         return _arrayitemref(array, index=0)
 
-    def raw_malloc(self, rest, parenttype=None):
+    def raw_malloc(self, rest, parenttype=None, zero=False):
         if rest:
             assert len(rest) == 1
             assert isinstance(rest[0], ItemOffset)
@@ -149,7 +151,7 @@ class ArrayItemsOffset(AddressOffset):
             count = 0
         if self.TYPE._hints.get('isrpystring'):
             count -= 1  # because malloc() will give us the extra char for free
-        p = lltype.malloc(parenttype or self.TYPE, count,
+        p = lltype.malloc(parenttype or self.TYPE, count, zero=zero,
                           immortal = self.TYPE._gckind == 'raw')
         return cast_ptr_to_adr(p)
 
@@ -183,11 +185,11 @@ class GCHeaderOffset(AddressOffset):
         gcptr = self.gcheaderbuilder.object_from_header(header)
         return _obref(gcptr)
 
-    def raw_malloc(self, rest):
+    def raw_malloc(self, rest, zero=False):
         assert rest
         if isinstance(rest[0], GCHeaderAntiOffset):
-            return rest[1].raw_malloc(rest[2:])    # just for fun
-        gcobjadr = rest[0].raw_malloc(rest[1:])
+            return rest[1].raw_malloc(rest[2:], zero=zero)    # just for fun
+        gcobjadr = rest[0].raw_malloc(rest[1:], zero=zero)
         headerptr = self.gcheaderbuilder.new_header(gcobjadr.get())
         return cast_ptr_to_adr(headerptr)
 
@@ -207,10 +209,10 @@ class GCHeaderAntiOffset(AddressOffset):
         headerptr = self.gcheaderbuilder.header_of_object(gcptr)
         return _obref(headerptr)
 
-    def raw_malloc(self, rest):
+    def raw_malloc(self, rest, zero=False):
         assert len(rest) >= 2
         assert isinstance(rest[0], GCHeaderOffset)
-        return rest[1].raw_malloc(rest[2:])
+        return rest[1].raw_malloc(rest[2:], zero=zero)
 
 
 class _arrayitemref(object):
@@ -560,15 +562,11 @@ def raw_malloc_usage(size):
     return size
 
 def raw_memclear(adr, size):
-    # hack hack hack
-    # stab stab stab
-    assert (adr.offset is None or
-            (isinstance(adr.offset, ArrayItemsOffset)
-             and isinstance(lltype.typeOf(adr.ob).TO, lltype.FixedSizeArray)))
-    TYPE = lltype.typeOf(adr.ob)
-    fresh = lltype.malloc(TYPE.TO, zero=True, flavor='raw')
+    if not isinstance(size, AddressOffset):
+        raise NotImplementedError(size)
+    fresh = size.raw_malloc([], zero=True)
     from pypy.rpython.rctypes.rmodel import reccopy
-    reccopy(fresh, adr.ob)
+    reccopy(fresh.get(), adr.get())
 
 def raw_memcopy(source, dest, size):
     source = source.get()
@@ -603,8 +601,9 @@ class ArenaRange(AddressOffset):
         self.unitsize = unitsize
         self.n = n
 
-    def raw_malloc(self, rest):
+    def raw_malloc(self, rest, zero=False):
         assert not rest
+        assert not zero   # for now
         return fakeaddress(_arena(self), ArenaItem(0))
         
 def arena(TYPE, n):

@@ -34,11 +34,7 @@ class CreateStringBufferFnEntry(ExtRegistryEntry):
         [v_length] = hop.inputargs(lltype.Signed)
         r_stringbuf = hop.r_result
         hop.exception_cannot_occur()
-        return hop.genop("zero_malloc_varsize", [
-            hop.inputconst(lltype.Void, r_stringbuf.lowleveltype.TO),
-            v_length,
-            ], resulttype=r_stringbuf.lowleveltype,
-        )
+        return r_stringbuf.allocate_instance_varsize(hop.llops, v_length)
 
 
 class ObjEntry(CTypesObjEntry):

@@ -1,5 +1,5 @@
 from pypy.rpython.rmodel import inputconst
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.rstr import AbstractStringRepr
 from pypy.rpython.lltypesystem.rstr import string_repr
 from pypy.rpython.rctypes.rmodel import CTypesValueRepr, C_ZERO
@@ -11,6 +11,8 @@ from ctypes import c_char, c_char_p, cast
 
 
 class CCharPRepr(CTypesValueRepr):
+
+    autofree_fields = ("keepalive",)
 
     def return_c_data(self, llops, v_c_data):
         """Read out the RPython string from a raw C pointer.
@@ -25,8 +27,8 @@ class CCharPRepr(CTypesValueRepr):
         return llops.gendirectcall(ll_charp2str, v_value)
 
     def get_content_keepalive_type(self):
-        "An extra keepalive used for the RPython string."
-        return string_repr.lowleveltype
+        "An extra keepalive used for the raw copy the RPython string."
+        return lltype.Ptr(CHARSCOPY)  # raw_malloc'ed, automatically raw_free'd
 
     def getstring(self, llops, v_box):
         return llops.gendirectcall(ll_getstring, v_box)
@@ -111,9 +113,6 @@ def ll_strnlen(p, maxlen):
         i += 1
     return i
 
-def ll_str2charp(s):
-    return lltype.direct_arrayitems(s.chars)
-
 def ll_charp2str(p):
     if not p:
         return lltype.nullptr(string_repr.lowleveltype.TO)
@@ -127,14 +126,7 @@ def ll_charp2str(p):
 def ll_getstring(box):
     p = box.c_data[0]
     if p:
-        if box.keepalive and ll_str2charp(box.keepalive) == p:
-            maxlen = len(box.keepalive.chars)
-            length = ll_strnlen(p, maxlen)
-            if length == maxlen:
-                # no embedded zero in the string
-                return box.keepalive
-        else:
-            length = ll_strlen(p)
+        length = ll_strlen(p)
         newstr = lltype.malloc(string_repr.lowleveltype.TO, length)
         newstr.hash = 0
         for i in range(length):
@@ -144,8 +136,24 @@ def ll_getstring(box):
         return lltype.nullptr(string_repr.lowleveltype.TO)
 
 def ll_setstring(box, string):
-    if string:
-        box.c_data[0] = ll_str2charp(string)
-    else:
-        box.c_data[0] = lltype.nullptr(CCHARP.TO)
-    box.keepalive = string
+    # XXX the copying of the string is often not needed, but it is
+    # very hard to avoid in the general case of a moving GC that can
+    # move 'string' around unpredictably.
+    n = len(string.chars)
+    buffer = llmemory.raw_malloc(NULL_HEADER + SIZEOF_CHAR * (n+1))
+    charscopy = llmemory.cast_adr_to_ptr(buffer, PCHARSCOPY)
+    for i in range(n):
+        charscopy[i] = string.chars[i]
+    charscopy[n] = '\x00'
+    # store a 'char *' pointer in the box.c_data
+    box.c_data[0] = lltype.direct_arrayitems(charscopy)
+    # keep the ownership of the buffer in the box.keepalive field
+    prev = box.keepalive
+    box.keepalive = charscopy
+    if prev:
+        llmemory.raw_free(llmemory.cast_ptr_to_adr(prev))
+
+CHARSCOPY = lltype.Array(lltype.Char, hints={'nolength': True})
+PCHARSCOPY = lltype.Ptr(CHARSCOPY)
+NULL_HEADER = llmemory.itemoffsetof(CHARSCOPY)
+SIZEOF_CHAR = llmemory.sizeof(lltype.Char)
