@@ -291,7 +291,15 @@ class GCTransformer(object):
 
     def finish_helpers(self):
         if self.translator is not None:
-            self.mixlevelannotator.finish_annotate()
+            while 1:
+                self.do_before_rtyping = []
+                self.mixlevelannotator.finish_annotate()
+                # anything more to annotate?
+                if not self.do_before_rtyping:
+                    break   # no, done
+                for fn, args in self.do_before_rtyping:
+                    fn(*args)
+            del self.do_before_rtyping
         self.finished_helpers = True
         if self.translator is not None:
             self.mixlevelannotator.finish_rtype()
@@ -324,14 +332,28 @@ class LLTransformerOp(object):
     Their calls are replaced by a simple operation of the GC transformer,
     e.g. ll_pop_alive.
     """
-    def __init__(self, transformer_method):
+    def __init__(self, transformer, transformer_method, see_type=None):
+        self.transformer = transformer
         self.transformer_method = transformer_method
+        self.see_type = see_type
 
 class LLTransformerOpEntry(ExtRegistryEntry):
     "Annotation and specialization of LLTransformerOp() instances."
     _type_ = LLTransformerOp
 
     def compute_result_annotation(self, s_arg):
+        op = self.instance   # the LLTransformerOp instance
+        if op.see_type is not None:
+            assert isinstance(s_arg, annmodel.SomePtr)
+            PTRTYPE = s_arg.ll_ptrtype
+            if PTRTYPE.TO is not lltype.PyObject:
+                # look for and annotate a dynamic deallocator if necessary;
+                # doing so implicitly in specialize_call() is too late.
+                # Note that we cannot do it *right now* because if
+                # annotation is required, we are already annotating
+                # ---> boom
+                delayed = (op.see_type, (PTRTYPE.TO,))
+                op.transformer.do_before_rtyping.append(delayed)
         return annmodel.s_None
 
     def specialize_call(self, hop):
@@ -562,7 +584,8 @@ def ll_deallocator(addr):
             body = '\n'.join(_static_deallocator_body_for_type('v', TYPE))
             src = ('def ll_deallocator(addr):\n    v = cast_adr_to_ptr(addr, PTR_TYPE)\n' +
                    body + '\n    llop.gc_free(lltype.Void, addr)\n')
-        d = {'pop_alive': LLTransformerOp(self.pop_alive),
+        d = {'pop_alive': LLTransformerOp(self, self.pop_alive,
+                                  self.dynamic_deallocation_funcptr_for_type),
              'llop': llop,
              'lltype': lltype,
              'destrptr': destrptr,
@@ -691,7 +714,7 @@ class BoehmGCTransformer(GCTransformer):
                 raise Exception("can't mix PyObjects and __del__ with Boehm")
 
             static_body = '\n'.join(_static_deallocator_body_for_type('v', TYPE))
-            d = {'pop_alive': LLTransformerOp(self.pop_alive),
+            d = {'pop_alive': LLTransformerOp(self, self.pop_alive),
                  'PTR_TYPE':lltype.Ptr(TYPE),
                  'cast_adr_to_ptr': llmemory.cast_adr_to_ptr}
             src = ("def ll_finalizer(addr):\n"
