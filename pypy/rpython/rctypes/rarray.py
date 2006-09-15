@@ -105,11 +105,7 @@ class ArrayRepr(CTypesRefRepr):
         v_c_array = self.get_c_data(llops, v_array)
         genreccopy_arrayitem(llops, v_newvalue, v_c_array, v_index)
         # copy the keepalive information too
-        v_keepalive_array = self.getkeepalive(llops, v_array)
-        if v_keepalive_array is not None:
-            v_newkeepalive = self.r_item.getkeepalive(llops, v_item)
-            genreccopy_arrayitem(llops, v_newkeepalive,
-                                 v_keepalive_array, v_index)
+        self.r_item.copykeepalive(llops, v_item, v_array, (v_index,))
 
     def initializeitems(self, llops, v_array, items_v):
         for i, v_item in enumerate(items_v):

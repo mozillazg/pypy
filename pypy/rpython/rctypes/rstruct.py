@@ -117,11 +117,8 @@ class StructRepr(CTypesRefRepr):
         v_c_struct = self.get_c_data(llops, v_struct)
         genreccopy_structfield(llops, v_newvalue, v_c_struct, cmangle(name))
         # copy the keepalive information too
-        v_newkeepalive = r_field.getkeepalive(llops, v_item)
-        if v_newkeepalive is not None:
-            v_keepalive_struct = self.getkeepalive(llops, v_struct)
-            genreccopy_structfield(llops, v_newkeepalive,
-                                   v_keepalive_struct, cmangle(name))
+        c_name = inputconst(lltype.Void, cmangle(name))
+        r_field.copykeepalive(llops, v_item, v_struct, (c_name,))
 
 def cmangle(name):
     # obscure: names starting with '_' are not allowed in

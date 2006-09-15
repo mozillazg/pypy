@@ -83,10 +83,14 @@ class CTypesRepr(Repr):
                         llmemory.raw_free(llmemory.cast_ptr_to_adr(p))
 
             args_s = [annmodel.SomePtr(self.lowleveltype)]
+            graph = self.rtyper.annotate_helper(ll_rctypes_query, args_s)
+            queryptr = self.rtyper.getcallable(graph)
+
+            args_s = [annmodel.SomePtr(self.lowleveltype)]
             graph = self.rtyper.annotate_helper(ll_rctypes_free, args_s)
             destrptr = self.rtyper.getcallable(graph)
             lltype.attachRuntimeTypeInfo(self.lowleveltype.TO,
-                                         destrptr = destrptr)
+                                         queryptr, destrptr)
 
     def get_content_keepalive_type(self):
         """Return the type of the extra keepalive field used for the content
@@ -224,20 +228,19 @@ class CTypesRepr(Repr):
         # XXX add v_c_data_owner
         return self.allocate_instance_ref(llops, v_c_data)
 
-    def getkeepalive(self, llops, v_box):
+    def copykeepalive(self, llops, v_box, v_destbox, destsuboffset=()):
+        # copy the 'keepalive' data over, unless it's an autofree
+        assert v_box.concretetype == self.lowleveltype
         try:
             TYPE = self.lowleveltype.TO.keepalive
         except AttributeError:
-            return None
+            pass
         else:
-            if isinstance(TYPE, lltype.ContainerType):
-                TYPE = lltype.Ptr(TYPE)
-                opname = 'getsubstruct'
-            else:
-                opname = 'getfield'
-            c_name = inputconst(lltype.Void, 'keepalive')
-            return llops.genop(opname, [v_box, c_name],
-                               resulttype = TYPE)
+            if 'keepalive' not in self.autofree_fields:
+                c_keepalive = inputconst(lltype.Void, 'keepalive')
+                genreccopy_rel(llops, TYPE,
+                               v_box,     (c_keepalive,),
+                               v_destbox, (c_keepalive,) + destsuboffset)
 
 
 class __extend__(pairtype(CTypesRepr, CTypesRepr)):
@@ -249,11 +252,9 @@ class __extend__(pairtype(CTypesRepr, CTypesRepr)):
             r_from.ownsmemory and not r_to.ownsmemory):
             v_c_data = r_from.get_c_data(llops, v)
             v_result =  r_to.allocate_instance_ref(llops, v_c_data, v)
-            # copy of the 'keepalive' field over
-            v_keepalive = r_from.getkeepalive(llops, v)
-            if v_keepalive is not None:
-                genreccopy_structfield(llops, v_keepalive,
-                                       v_result, 'keepalive')
+            # copy the 'keepalive' information
+            c_keepalive = inputconst(lltype.Void, 'keepalive')
+            r_from.copykeepalive(llops, v, v_result)
             return v_result
         else:
             return NotImplemented
@@ -313,30 +314,27 @@ class CTypesValueRepr(CTypesRepr):
     def rtype_is_true(self, hop):
         [v_box] = hop.inputargs(self)
         v_value = self.getvalue(hop.llops, v_box)
-        if v_value.concretetype == llmemory.Address:
-            llfn = ll_address_is_true
-        else:
-            llfn = ll_is_true
-        return hop.gendirectcall(llfn, v_value)
+        return hop.gendirectcall(ll_is_true, v_value)
 
 # ____________________________________________________________
 
 def ll_is_true(x):
     return bool(x)
 
-def ll_address_is_true(x):
-    return x != llmemory.NULL
-
 C_ZERO = inputconst(lltype.Signed, 0)
+
+def ll_rctypes_query(p):
+    S = lltype.typeOf(p).TO
+    return lltype.getRuntimeTypeInfo(S)
 
 def reccopy(source, dest):
     # copy recursively a structure or array onto another.
     T = lltype.rawTypeOf(source).TO
     assert T == lltype.rawTypeOf(dest).TO
     if isinstance(T, (lltype.Array, lltype.FixedSizeArray)):
-        assert len(source) == len(dest)
+        assert source._obj.getlength() == dest._obj.getlength()
         ITEMTYPE = T.OF
-        for i in range(len(source)):
+        for i in range(source._obj.getlength()):
             if isinstance(ITEMTYPE, lltype.ContainerType):
                 subsrc = source[i]
                 subdst = dest[i]
@@ -366,67 +364,86 @@ def reccopy_arrayitem(source, destarray, destindex):
     else:
         reccopy(source, destarray[destindex])
 
-def genreccopy(llops, v_source, v_dest):
-    # helper to generate the llops that copy recursively a structure
-    # or array onto another.  'v_source' and 'v_dest' can also be pairs
-    # (v, i) to mean the ith item of the array that v points to.
-    T = v_source.concretetype.TO
-    assert T == v_dest.concretetype.TO
+def enum_interior_offsets(T, prefix=()):
+    # generate all (offsets-tuple, FIELD_TYPE) for all interior fields
+    # in TYPE and in substructs of TYPE.  Not for arrays so far.
 
-    if isinstance(T, lltype.FixedSizeArray):
-        # XXX don't do that if the length is large
-        ITEMTYPE = T.OF
-        for i in range(T.length):
-            c_i = inputconst(lltype.Signed, i)
-            if isinstance(ITEMTYPE, lltype.ContainerType):
-                RESTYPE = lltype.Ptr(ITEMTYPE)
-                v_subsrc = llops.genop('getarraysubstruct', [v_source, c_i],
-                                       resulttype = RESTYPE)
-                v_subdst = llops.genop('getarraysubstruct', [v_dest,   c_i],
-                                       resulttype = RESTYPE)
-                genreccopy(llops, v_subsrc, v_subdst)
-            else:
-                v_value = llops.genop('getarrayitem', [v_source, c_i],
-                                      resulttype = ITEMTYPE)
-                llops.genop('setarrayitem', [v_dest, c_i, v_value])
+    if isinstance(T, lltype.ContainerType):
+        if isinstance(T, lltype.FixedSizeArray):
+            # XXX don't do that if the length is large
+            ITEMTYPE = T.OF
+            for i in range(T.length):
+                c_i = inputconst(lltype.Signed, i)
+                offsets = prefix + (c_i,)
+                for access in enum_interior_offsets(ITEMTYPE, offsets):
+                    yield access
 
-    elif isinstance(T, lltype.Array):
-        raise NotImplementedError("XXX genreccopy() for arrays")
+        elif isinstance(T, lltype.Array):
+            raise NotImplementedError("XXX genreccopy() for arrays")
 
-    elif isinstance(T, lltype.Struct):
-        for name in T._names:
-            FIELDTYPE = getattr(T, name)
-            cname = inputconst(lltype.Void, name)
-            if isinstance(FIELDTYPE, lltype.ContainerType):
-                RESTYPE = lltype.Ptr(FIELDTYPE)
-                v_subsrc = llops.genop('getsubstruct', [v_source, cname],
-                                       resulttype = RESTYPE)
-                v_subdst = llops.genop('getsubstruct', [v_dest,   cname],
-                                       resulttype = RESTYPE)
-                genreccopy(llops, v_subsrc, v_subdst)
-            else:
-                v_value = llops.genop('getfield', [v_source, cname],
-                                      resulttype = FIELDTYPE)
-                llops.genop('setfield', [v_dest, cname, v_value])
+        elif isinstance(T, lltype.Struct):
+            for name in T._names:
+                FIELDTYPE = getattr(T, name)
+                cname = inputconst(lltype.Void, name)
+                offsets = prefix + (cname,)
+                for access in enum_interior_offsets(FIELDTYPE, offsets):
+                    yield access
+
+        else:
+            raise TypeError(T)
 
     else:
-        raise TypeError(T)
+        yield prefix, T
+
+
+def genreccopy_rel(llops, TYPE, v_source, sourceoffsets, v_dest, destoffsets):
+    # helper to generate the llops that copy recursively a structure
+    # or array onto another.  The copy starts at the given tuple-of-offsets
+    # prefixes, e.g. (Constant(5),) to mean the 5th sub-element of a
+    # fixed-size array.  This function doesn't work for general arrays yet.
+    # It works with primitive types too, as long as destoffsets != ().
+
+    for offsets, FIELDTYPE in enum_interior_offsets(TYPE):
+        if sourceoffsets or offsets:
+            args = [v_source]
+            args.extend(sourceoffsets)
+            args.extend(offsets)
+            v_value = llops.genop('getinteriorfield', args,
+                                  resulttype=FIELDTYPE)
+        else:
+            v_value = v_source
+        if destoffsets or offsets:
+            args = [v_dest]
+            args.extend(destoffsets)
+            args.extend(offsets)
+            args.append(v_value)
+            llops.genop('setinteriorfield', args)
+        else:
+            assert TYPE == v_dest.concretetype
+            raise TypeError("cannot copy into a v_dest of type %r" % (TYPE,))
+
+def genreccopy(llops, v_source, v_dest):
+    TYPE = v_source.concretetype.TO
+    assert TYPE == v_dest.concretetype.TO
+    genreccopy_rel(llops, TYPE, v_source, (), v_dest, ())
 
 def genreccopy_arrayitem(llops, v_source, v_destarray, v_destindex):
     ITEMTYPE = v_destarray.concretetype.TO.OF
     if isinstance(ITEMTYPE, lltype.ContainerType):
-        v_dest = llops.genop('getarraysubstruct', [v_destarray, v_destindex],
-                             resulttype = lltype.Ptr(ITEMTYPE))
-        genreccopy(llops, v_source, v_dest)
+        # copy into the array's substructure
+        assert ITEMTYPE == v_source.concretetype.TO
     else:
-        llops.genop('setarrayitem', [v_destarray, v_destindex, v_source])
+        # copy a primitive or pointer value into the array item
+        assert ITEMTYPE == v_source.concretetype
+    genreccopy_rel(llops, ITEMTYPE, v_source, (), v_destarray, (v_destindex,))
 
 def genreccopy_structfield(llops, v_source, v_deststruct, fieldname):
     c_name = inputconst(lltype.Void, fieldname)
     FIELDTYPE = getattr(v_deststruct.concretetype.TO, fieldname)
     if isinstance(FIELDTYPE, lltype.ContainerType):
-        v_dest = llops.genop('getsubstruct', [v_deststruct, c_name],
-                             resulttype = lltype.Ptr(FIELDTYPE))
-        genreccopy(llops, v_source, v_dest)
+        # copy into the substructure
+        assert FIELDTYPE == v_source.concretetype.TO
     else:
-        llops.genop('setfield', [v_deststruct, c_name, v_source])
+        # copy a primitive or pointer value into the struct field
+        assert FIELDTYPE == v_source.concretetype
+    genreccopy_rel(llops, FIELDTYPE, v_source, (), v_deststruct, (c_name,))
