@@ -485,7 +485,7 @@ class FunctionCodeGenerator(object):
                     expr = defnode.ptr_access_expr(expr, fieldname)
                 else:
                     expr = defnode.access_expr(expr, fieldname)
-                if isinstance(TYPE, lltype.FixedSizeArray):
+                if isinstance(TYPE, FixedSizeArray):
                     TYPE = TYPE.OF
                 else:
                     TYPE = getattr(TYPE, fieldname)
