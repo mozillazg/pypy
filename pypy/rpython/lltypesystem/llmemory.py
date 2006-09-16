@@ -550,6 +550,8 @@ def raw_malloc(size):
     return size.raw_malloc([])
 
 def raw_free(adr):
+    if not adr:      # ignore NULLs
+        return
     # xxx crash if you get only the header of a gc object
     assert isinstance(adr.ob._obj, lltype._parentable)
     adr.ob._as_obj()._free()
