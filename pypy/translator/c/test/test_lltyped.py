@@ -48,7 +48,6 @@ class TestLowLevelType(test_typed.CompilationTestCase):
             assert a42[5][6] == -6
             return len(a42)*100 + len(a42[4])
         fn = self.getcompiled(llf)
-        res = fn()
         assert fn() == 607
 
     def test_recursivearray(self):
@@ -62,6 +61,19 @@ class TestLowLevelType(test_typed.CompilationTestCase):
             assert tree.root[0].a[0].a[0].a[0].a[0].a[1].a == tree.other
         fn = self.getcompiled(llf)
         fn()
+
+    def test_array_of_array(self):
+        C = FixedSizeArray(Signed, 7)
+        B = Array(C)
+        A = FixedSizeArray(C, 6)
+        b = malloc(B, 5, immortal=True)
+        b[3][4] = 999
+        a = malloc(A, immortal=True)
+        a[2][5] = 888000
+        def llf():
+            return b[3][4] + a[2][5]
+        fn = self.getcompiled(llf)
+        assert fn() == 888999
 
     def test_prebuilt_array(self):
         A = FixedSizeArray(Signed, 5)
@@ -128,10 +140,9 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         assert res == 123
 
     def test_more_prebuilt_arrays(self):
-        py.test.skip("not allowed any more")
         A = FixedSizeArray(Struct('s1', ('x', Signed)), 5)
-        S = GcStruct('s', ('a1', Ptr(A)), ('a2', A))
-        s = malloc(S, zero=True)
+        S = Struct('s', ('a1', Ptr(A)), ('a2', A))
+        s = malloc(S, zero=True, immortal=True)
         s.a1 = malloc(A, immortal=True)
         s.a1[2].x = 50
         s.a2[2].x = 60
