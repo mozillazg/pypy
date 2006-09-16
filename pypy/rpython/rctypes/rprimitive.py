@@ -18,14 +18,14 @@ class PrimitiveRepr(CTypesValueRepr):
         self.value_repr = rtyper.getprimitiverepr(ll_type)
         self.normalized_value_repr = rtyper.getprimitiverepr(normalized_lltype)
             
-    def return_c_data(self, llops, v_c_data):
+    def return_c_data(self, llops, v_c_data, v_c_data_owner):
         """Read out the atomic data from a raw C pointer.
         Used when the data is returned from an operation or C function call.
         """
         v_value = self.getvalue_from_c_data(llops, v_c_data)
         return self.return_value(llops, v_value)
 
-    def return_value(self, llops, v_value):
+    def return_value(self, llops, v_value, v_content_owner=None):
         # like return_c_data(), but when the input is only the value
         # field instead of the c_data pointer
         return llops.convertvar(v_value, self.value_repr,
@@ -38,7 +38,7 @@ class PrimitiveRepr(CTypesValueRepr):
         v_primitive = hop.inputarg(self, 0)
         hop.exception_cannot_occur()
         v_c_data = self.get_c_data(hop.llops, v_primitive)
-        return self.return_c_data(hop.llops, v_c_data)
+        return self.return_c_data(hop.llops, v_c_data, None)
 
     def rtype_setattr(self, hop):
         s_attr = hop.args_s[1]

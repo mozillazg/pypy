@@ -116,6 +116,7 @@ class ArrayRepr(CTypesRefRepr):
 class __extend__(pairtype(ArrayRepr, IntegerRepr)):
     def rtype_getitem((r_array, r_int), hop):
         v_array, v_index = hop.inputargs(r_array, lltype.Signed)
+        v_owner = r_array.get_c_data_owner(hop.llops, v_array)
         hop.exception_cannot_occur()
         if isinstance(r_array.r_item, PrimitiveRepr):
             # primitive case (optimization; the below also works in this case)
@@ -123,11 +124,11 @@ class __extend__(pairtype(ArrayRepr, IntegerRepr)):
             # example:  a[0].contents = ...  to change the first pointer of
             # an array of pointers.
             v_value = r_array.get_item_value(hop.llops, v_array, v_index)
-            return r_array.r_item.return_value(hop.llops, v_value)
+            return r_array.r_item.return_value(hop.llops, v_value, v_owner)
         else:
             # ByRef case
             v_c_data = r_array.get_c_data_of_item(hop.llops, v_array, v_index)
-            return r_array.r_item.return_c_data(hop.llops, v_c_data)
+            return r_array.r_item.return_c_data(hop.llops, v_c_data, v_owner)
 
     def rtype_setitem((r_array, r_int), hop):
         v_array, v_index, v_item = hop.inputargs(r_array, lltype.Signed,

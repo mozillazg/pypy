@@ -43,18 +43,18 @@ class __extend__(pairtype(StringBufRepr, CVoidPRepr),
                             
         return r_to.return_value(llops, v_adr)
 
-class __extend__(pairtype(AbstractStringRepr, CVoidPRepr)):
-    def convert_from_to((r_from, r_to), v, llops):
-        # warning: no keepalives, only for short-lived conversions like
-        # in argument passing
-        # r_from could be char_repr: first convert it to string_repr
-        v = llops.convertvar(v, r_from, string_repr)
-        v_adr = llops.gendirectcall(ll_string2addr, v)
-        return r_to.return_value(llops, v_adr)
+##class __extend__(pairtype(AbstractStringRepr, CVoidPRepr)):
+##    def convert_from_to((r_from, r_to), v, llops):
+##        # warning: no keepalives, only for short-lived conversions like
+##        # in argument passing
+##        # r_from could be char_repr: first convert it to string_repr
+##        v = llops.convertvar(v, r_from, string_repr)
+##        v_adr = llops.gendirectcall(ll_string2addr, v)
+##        return r_to.return_value(llops, v_adr)
 
-def ll_string2addr(s):
-    if s:
-        ptr = lltype.direct_arrayitems(s.chars)
-        return llmemory.cast_ptr_to_adr(ptr)
-    else:
-        return llmemory.NULL
+##def ll_string2addr(s):
+##    if s:
+##        ptr = lltype.direct_arrayitems(s.chars)
+##        return llmemory.cast_ptr_to_adr(ptr)
+##    else:
+##        return llmemory.NULL

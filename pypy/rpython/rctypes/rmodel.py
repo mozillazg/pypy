@@ -5,6 +5,12 @@ from pypy.annotation.model import SomeCTypesObject
 from pypy.annotation.pairtype import pairtype
 
 
+# header common to boxes with a destructor
+RCBOX_HEADER = lltype.GcStruct('rcbox',
+                               ('rtti', lltype.Ptr(lltype.RuntimeTypeInfo)))
+P_RCBOX_HEADER = lltype.Ptr(RCBOX_HEADER)
+
+
 class CTypesRepr(Repr):
     "Base class for the Reprs representing ctypes object."
 
@@ -55,8 +61,15 @@ class CTypesRepr(Repr):
         else:
             s_memoryowner = SomeCTypesObject(ctype, ownsmemory=True)
             self.r_memoryowner = rtyper.getrepr(s_memoryowner)
+            # the box that really owns our C data - it is usually a box of
+            # type r_memoryowner.lowleveltype, but ocasionally it can be
+            # any larger struct or array type and we only point somewhere
+            # inside it
             fields.append(
-                ( "c_data_owner_keepalive", self.r_memoryowner.lowleveltype ))
+                ( "c_data_owner_keepalive", P_RCBOX_HEADER ))
+
+        if self.autofree_fields:
+            fields.insert(0, ("header", RCBOX_HEADER))
 
         keywords = {'hints': {'autofree_fields': self.autofree_fields}}
         self.lowleveltype = lltype.Ptr(
@@ -79,10 +92,9 @@ class CTypesRepr(Repr):
             def ll_rctypes_free(box):
                 for fieldname in autofree_fields:
                     p = getattr(box, fieldname)
-                    if p:
-                        llmemory.raw_free(llmemory.cast_ptr_to_adr(p))
+                    llmemory.raw_free(llmemory.cast_ptr_to_adr(p))
 
-            args_s = [annmodel.SomePtr(self.lowleveltype)]
+            args_s = [annmodel.SomePtr(P_RCBOX_HEADER)]
             graph = self.rtyper.annotate_helper(ll_rctypes_query, args_s)
             queryptr = self.rtyper.getcallable(graph)
 
@@ -103,6 +115,31 @@ class CTypesRepr(Repr):
     def ctypecheck(self, value):
         return isinstance(value, self.ctype)
 
+    def basic_instantiate_prebuilt(self):
+        TYPE = self.lowleveltype.TO
+        result = lltype.malloc(TYPE, immortal = True, zero = True)
+        if self.autofree_fields:
+            result.header.rtti = lltype.getRuntimeTypeInfo(TYPE)
+        return result
+
+    def genop_basic_instantiate(self, llops):
+        # XXX the whole rtti business is a bit over-obscure
+        TYPE = self.lowleveltype.TO
+        c1 = inputconst(lltype.Void, TYPE)
+        v_box = llops.genop("malloc", [c1], resulttype=self.lowleveltype)
+        if self.autofree_fields:
+            c_hdr = inputconst(lltype.Void, 'header')
+            c_rtti = inputconst(lltype.Void, 'rtti')
+            rtti = lltype.getRuntimeTypeInfo(TYPE)
+            v_rtti = inputconst(lltype.typeOf(rtti), rtti)
+            llops.genop("setinteriorfield", [v_box, c_hdr, c_rtti, v_rtti])
+            for fieldname in self.autofree_fields:
+                FIELDTYPE = getattr(TYPE, fieldname)
+                c_name = inputconst(lltype.Void, fieldname)
+                v_null = inputconst(FIELDTYPE, lltype.nullptr(FIELDTYPE.TO))
+                llops.genop("setfield", [v_box, c_name, v_null])
+        return v_box
+
     def convert_const(self, value):
         if self.ctypecheck(value):
             key = "by_id", id(value)
@@ -117,8 +154,7 @@ class CTypesRepr(Repr):
             return self.const_cache[key][0]
         except KeyError:
             self.setup()
-            p = lltype.malloc(self.r_memoryowner.lowleveltype.TO,
-                              immortal = True)
+            p = self.r_memoryowner.basic_instantiate_prebuilt()
             p.c_data = lltype.malloc(self.r_memoryowner.c_data_type,
                                      immortal = True,
                                      zero = True)
@@ -128,11 +164,9 @@ class CTypesRepr(Repr):
             else:
                 # we must return a non-memory-owning box that keeps the
                 # memory-owning box alive
-                result = lltype.malloc(self.lowleveltype.TO,
-                                       immortal = True,
-                                       zero = True)
+                result = self.basic_instantiate_prebuilt()
                 result.c_data = p.c_data    # initialize c_data pointer
-                result.c_data_owner_keepalive = p
+                result.c_data_owner_keepalive = p.header
             self.const_cache[key] = result, keepalive
             return result
 
@@ -143,20 +177,15 @@ class CTypesRepr(Repr):
 
     def get_c_data_owner(self, llops, v_box):
         if self.ownsmemory:
-            return v_box
+            return llops.genop('cast_pointer', [v_box],
+                               resulttype=P_RCBOX_HEADER)
         else:
-            inputargs = [v_box, inputconst(lltype.Void,
-                                           "c_data_owner_keepalive")]
-            return llops.genop('getfield', inputargs,
-                               self.r_memoryowner.lowleveltype)
+            c_name = inputconst(lltype.Void, "c_data_owner_keepalive")
+            return llops.genop('getfield', [v_box, c_name],
+                               resulttype=P_RCBOX_HEADER)
 
     def allocate_instance(self, llops):
-        TYPE = self.lowleveltype.TO
-        c1 = inputconst(lltype.Void, TYPE)
-        v_box = llops.genop("zero_malloc", [c1], resulttype=self.lowleveltype)
-        # XXX don't use zero_malloc, but just make sure there is a NULL
-        # in the autofreed field(s)
-
+        v_box = self.genop_basic_instantiate(llops)
         TYPE = self.c_data_type
         if TYPE._is_varsize():
             raise TyperError("allocating array with unknown length")
@@ -173,12 +202,7 @@ class CTypesRepr(Repr):
         return v_box
 
     def allocate_instance_varsize(self, llops, v_length):
-        TYPE = self.lowleveltype.TO
-        c1 = inputconst(lltype.Void, TYPE)
-        v_box = llops.genop("zero_malloc", [c1], resulttype=self.lowleveltype)
-        # XXX don't use zero_malloc, but just make sure there is a NULL
-        # in the autofreed field(s)
-
+        v_box = self.genop_basic_instantiate(llops)
         TYPE = self.c_data_type
         if not TYPE._is_varsize():
             raise TyperError("allocating non-array with specified length")
@@ -202,7 +226,7 @@ class CTypesRepr(Repr):
             raise TyperError("allocate_instance_varsize on an alias box")
         return v_box
 
-    def allocate_instance_ref(self, llops, v_c_data, v_c_data_owner=None):
+    def allocate_instance_ref(self, llops, v_c_data, v_c_data_owner):
         """Only if self.ownsmemory is false.  This allocates a new instance
         and initialize its c_data pointer."""
         if self.ownsmemory:
@@ -211,22 +235,17 @@ class CTypesRepr(Repr):
         v_box = self.allocate_instance(llops)
         inputargs = [v_box, inputconst(lltype.Void, "c_data"), v_c_data]
         llops.genop('setfield', inputargs)
-        if v_c_data_owner is not None:
-            assert (v_c_data_owner.concretetype ==
-                    self.r_memoryowner.lowleveltype)
-            inputargs = [v_box,
-                         inputconst(lltype.Void, "c_data_owner_keepalive"),
-                         v_c_data_owner]
-            llops.genop('setfield', inputargs)
+        v_c_data_owner = cast_to_header(llops, v_c_data_owner)
+        c_name = inputconst(lltype.Void, "c_data_owner_keepalive")
+        llops.genop('setfield', [v_box, c_name, v_c_data_owner])
         return v_box
 
-    def return_c_data(self, llops, v_c_data):
+    def return_c_data(self, llops, v_c_data, v_c_data_owner):
         """Turn a raw C pointer to the data into a memory-alias box.
         Used when the data is returned from an operation or C function call.
         Special-cased in PrimitiveRepr.
         """
-        # XXX add v_c_data_owner
-        return self.allocate_instance_ref(llops, v_c_data)
+        return self.allocate_instance_ref(llops, v_c_data, v_c_data_owner)
 
     def copykeepalive(self, llops, v_box, v_destbox, destsuboffset=()):
         # copy the 'keepalive' data over, unless it's an autofree
@@ -303,7 +322,7 @@ class CTypesValueRepr(CTypesRepr):
             value = value.value
         p.c_data[0] = value
 
-    def return_value(self, llops, v_value):
+    def return_value(self, llops, v_value, v_content_owner=None):
         # like return_c_data(), but when the input is only the value
         # field instead of the c_data pointer
         r_temp = self.r_memoryowner
@@ -323,9 +342,15 @@ def ll_is_true(x):
 
 C_ZERO = inputconst(lltype.Signed, 0)
 
-def ll_rctypes_query(p):
-    S = lltype.typeOf(p).TO
-    return lltype.getRuntimeTypeInfo(S)
+def ll_rctypes_query(rcboxheader):
+    return rcboxheader.rtti
+
+def cast_to_header(llops, v_box):
+    if v_box.concretetype != P_RCBOX_HEADER:
+        assert v_box.concretetype.TO.header == RCBOX_HEADER
+        v_box = llops.genop('cast_pointer', [v_box],
+                            resulttype=P_RCBOX_HEADER)
+    return v_box
 
 def reccopy(source, dest):
     # copy recursively a structure or array onto another.

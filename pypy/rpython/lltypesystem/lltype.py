@@ -1292,7 +1292,8 @@ class _parentable(_container):
             if parent is None:
                 break
             T = typeOf(parent)
-            if not isinstance(T, Struct) or T._first_struct()[0] != index:
+            if (not isinstance(T, Struct) or T._first_struct()[0] != index
+                or isinstance(T, FixedSizeArray)):
                 break
             container = parent
         return container

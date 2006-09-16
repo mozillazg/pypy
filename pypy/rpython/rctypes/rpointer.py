@@ -3,6 +3,7 @@ from pypy.rpython.error import TyperError
 from pypy.rpython.lltypesystem import lltype
 from pypy.annotation.pairtype import pairtype
 from pypy.rpython.rctypes.rmodel import CTypesValueRepr, genreccopy
+from pypy.rpython.rctypes.rmodel import P_RCBOX_HEADER, cast_to_header
 from pypy.annotation.model import SomeCTypesObject
 from pypy.objspace.flow.model import Constant
 
@@ -12,7 +13,6 @@ class PointerRepr(CTypesValueRepr):
         # For recursive types, getting the r_contents is delayed until
         # _setup_repr().
         ll_contents = lltype.Ptr(lltype.ForwardReference())
-        self.keepalive_box_type = lltype.GcForwardReference()
         super(PointerRepr, self).__init__(rtyper, s_pointer, ll_contents)
 
     def _setup_repr(self):
@@ -23,18 +23,26 @@ class PointerRepr(CTypesValueRepr):
                                                           ownsmemory=False))
         if isinstance(self.ll_type.TO, lltype.ForwardReference):
             self.ll_type.TO.become(self.r_contents.c_data_type)
-        if isinstance(self.keepalive_box_type, lltype.GcForwardReference):
-            self.keepalive_box_type.become(
-                self.r_contents.r_memoryowner.lowleveltype.TO)
 
     def get_content_keepalive_type(self):
         "Keepalive for the box that holds the data that 'self' points to."
-        return lltype.Ptr(self.keepalive_box_type)
+        return P_RCBOX_HEADER
+
+    def getkeepalive(self, llops, v_box):
+        c_name = inputconst(lltype.Void, 'keepalive')
+        return llops.genop('getfield', [v_box, c_name],
+                           resulttype=P_RCBOX_HEADER)
 
     def setkeepalive(self, llops, v_box, v_owner):
-        inputargs = [v_box, inputconst(lltype.Void, 'keepalive'),
-                     v_owner]
-        llops.genop('setfield', inputargs)
+        c_name = inputconst(lltype.Void, 'keepalive')
+        v_owner = cast_to_header(llops, v_owner)
+        llops.genop('setfield', [v_box, c_name, v_owner])
+
+    def return_value(self, llops, v_value, v_content_owner=None):
+        v_box = super(PointerRepr, self).return_value(llops, v_value)
+        if v_content_owner is not None:
+            self.setkeepalive(llops, v_box, v_content_owner)
+        return v_box
 
     def initialize_const(self, p, ptr):
         if not ptr:   # NULL pointer, or literal None passed as argument to
@@ -58,7 +66,9 @@ class PointerRepr(CTypesValueRepr):
         v_ptr = hop.inputarg(self, 0)
         v_c_ptr = self.getvalue(hop.llops, v_ptr)
         hop.exception_cannot_occur()
-        return self.r_contents.allocate_instance_ref(hop.llops, v_c_ptr)
+        v_content_owner = self.getkeepalive(hop.llops, v_ptr)
+        return self.r_contents.allocate_instance_ref(hop.llops, v_c_ptr,
+                                                     v_content_owner)
 
     def rtype_setattr(self, hop):
         s_attr = hop.args_s[1]
@@ -81,7 +91,9 @@ class __extend__(pairtype(PointerRepr, IntegerRepr)):
         else:
             v_c_ptr = hop.genop('direct_ptradd', [v_c_ptr, v_index],
                                 resulttype = r_ptr.ll_type)
-        return self.r_contents.return_c_data(hop.llops, v_c_ptr)
+        v_content_owner = self.getkeepalive(hop.llops, v_ptr)
+        return self.r_contents.return_c_data(hop.llops, v_c_ptr,
+                                             v_content_owner)
 
     def rtype_setitem((r_ptr, _), hop):
         # p[0] = x  is not the same as  p.contents.value = x
