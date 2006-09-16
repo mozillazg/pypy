@@ -2,6 +2,7 @@ from pypy.rpython.rmodel import inputconst
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.rctypes.rmodel import CTypesRefRepr, CTypesValueRepr
 from pypy.rpython.rctypes.rmodel import genreccopy_structfield, reccopy
+from pypy.rpython.rctypes.rmodel import copykeepalive
 from pypy.rpython.rctypes.rprimitive import PrimitiveRepr
 from pypy.annotation.model import SomeCTypesObject
 
@@ -97,11 +98,17 @@ class StructRepr(CTypesRefRepr):
             # example:  s.p.contents = ...  to change the pointer field 'p'
             # of 's'.
             v_value = self.get_field_value(hop.llops, v_struct, name)
-            return r_field.return_value(hop.llops, v_value, v_owner)
+            v_item = r_field.return_value(hop.llops, v_value, v_owner)
         else:
             # ByRef case
             v_c_data = self.get_c_data_of_field(hop.llops, v_struct, name)
-            return r_field.return_c_data(hop.llops, v_c_data, v_owner)
+            v_item = r_field.return_c_data(hop.llops, v_c_data, v_owner)
+        # copy the keepalive information too
+        if hasattr(r_field.lowleveltype.TO, 'keepalive'):
+            c_name = inputconst(lltype.Void, cmangle(name))
+            copykeepalive(hop.llops, r_field.lowleveltype.TO.keepalive,
+                          v_struct, (c_name,), v_item, ())
+        return v_item
 
     def rtype_setattr(self, hop):
         s_attr = hop.args_s[1]
@@ -118,8 +125,10 @@ class StructRepr(CTypesRefRepr):
         v_c_struct = self.get_c_data(llops, v_struct)
         genreccopy_structfield(llops, v_newvalue, v_c_struct, cmangle(name))
         # copy the keepalive information too
-        c_name = inputconst(lltype.Void, cmangle(name))
-        r_field.copykeepalive(llops, v_item, v_struct, (c_name,))
+        if hasattr(r_field.lowleveltype.TO, 'keepalive'):
+            c_name = inputconst(lltype.Void, cmangle(name))
+            copykeepalive(llops, r_field.lowleveltype.TO.keepalive,
+                          v_item, (), v_struct, (c_name,))
 
 def cmangle(name):
     # obscure: names starting with '_' are not allowed in

@@ -12,8 +12,6 @@ from ctypes import c_char, c_char_p, cast
 
 class CCharPRepr(CTypesValueRepr):
 
-    autofree_fields = ("keepalive",)
-
     def return_c_data(self, llops, v_c_data, v_c_data_owner):
         """Read out the RPython string from a raw C pointer.
         Used when the data is returned from an operation or C function call.

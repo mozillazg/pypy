@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.annotation.pairtype import pairtype
 from pypy.rpython.rctypes.rmodel import CTypesRefRepr, CTypesValueRepr
 from pypy.rpython.rctypes.rmodel import genreccopy_arrayitem, reccopy, C_ZERO
+from pypy.rpython.rctypes.rmodel import copykeepalive
 from pypy.rpython.rctypes.rprimitive import PrimitiveRepr
 from pypy.rpython.rctypes.rpointer import PointerRepr
 from pypy.rpython.rctypes.aarray import VarSizedArrayType
@@ -105,7 +106,9 @@ class ArrayRepr(CTypesRefRepr):
         v_c_array = self.get_c_data(llops, v_array)
         genreccopy_arrayitem(llops, v_newvalue, v_c_array, v_index)
         # copy the keepalive information too
-        self.r_item.copykeepalive(llops, v_item, v_array, (v_index,))
+        if hasattr(self.r_item.lowleveltype.TO, 'keepalive'):
+            copykeepalive(llops, self.r_item.lowleveltype.TO.keepalive,
+                          v_item, (), v_array, (v_index,))
 
     def initializeitems(self, llops, v_array, items_v):
         for i, v_item in enumerate(items_v):
@@ -123,12 +126,16 @@ class __extend__(pairtype(ArrayRepr, IntegerRepr)):
             # NB. this optimization is invalid for PointerReprs!  See for
             # example:  a[0].contents = ...  to change the first pointer of
             # an array of pointers.
-            v_value = r_array.get_item_value(hop.llops, v_array, v_index)
-            return r_array.r_item.return_value(hop.llops, v_value, v_owner)
+            v_c_data = r_array.get_item_value(hop.llops, v_array, v_index)
         else:
             # ByRef case
             v_c_data = r_array.get_c_data_of_item(hop.llops, v_array, v_index)
-            return r_array.r_item.return_c_data(hop.llops, v_c_data, v_owner)
+        v_item = r_array.r_item.return_c_data(hop.llops, v_c_data, v_owner)
+        # copy the keepalive information too
+        if hasattr(r_array.r_item.lowleveltype.TO, 'keepalive'):
+            copykeepalive(hop.llops, r_array.r_item.lowleveltype.TO.keepalive,
+                          v_array, (v_index,), v_item, ())
+        return v_item
 
     def rtype_setitem((r_array, r_int), hop):
         v_array, v_index, v_item = hop.inputargs(r_array, lltype.Signed,
