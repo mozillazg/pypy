@@ -522,9 +522,10 @@ class FunctionCodeGenerator(object):
         items = self.expr(op.args[0])
         if not isinstance(ARRAY, FixedSizeArray):
             items += '->items'
-        return '%s = %s + %s;' % (self.expr(op.result),
-                                  items,
-                                  self.expr(op.args[1]))
+        result = '%s + %s' % (items, self.expr(op.args[1]))
+        if isinstance(ARRAY.OF, FixedSizeArray):   # more C blaming here
+            result = '*(%s)' % (result,)
+        return '%s = %s;' % (self.expr(op.result), result)
 
     def OP_PTR_NONZERO(self, op):
         return '%s = (%s != NULL);' % (self.expr(op.result),
