@@ -33,7 +33,7 @@
 
 #endif
 
-#define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
+#define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE(p);
 
 #define OP_RAW_MEMCLEAR(p, size, r) memset((void*)p, 0, size)
 
@@ -97,7 +97,7 @@
 /*------------------------------------------------------------*/
 
 #define COUNT_MALLOC	/* nothing */
-#define COUNT_FREE	/* nothing */
+#define COUNT_FREE(p)	/* nothing */
 
 /*------------------------------------------------------------*/
 #else /*COUNT_OP_MALLOCS*/
@@ -106,7 +106,7 @@
 static int count_mallocs=0, count_frees=0;
 
 #define COUNT_MALLOC	count_mallocs++
-#define COUNT_FREE	count_frees++
+#define COUNT_FREE(p)	do { if (p) count_frees++; } while (0)
 
 PyObject* malloc_counters(PyObject* self, PyObject* args)
 {
