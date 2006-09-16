@@ -174,6 +174,7 @@ class CTypesRepr(Repr):
             return result
 
     def get_c_data(self, llops, v_box):
+        assert v_box.concretetype == self.lowleveltype
         inputargs = [v_box, inputconst(lltype.Void, "c_data")]
         return llops.genop('getfield', inputargs,
                            lltype.Ptr(self.c_data_type))
@@ -248,6 +249,7 @@ class CTypesRepr(Repr):
         Used when the data is returned from an operation or C function call.
         Special-cased in PrimitiveRepr.
         """
+        assert v_c_data.concretetype.TO == self.c_data_type
         return self.allocate_instance_ref(llops, v_c_data, v_c_data_owner)
 
 
@@ -289,6 +291,7 @@ class CTypesValueRepr(CTypesRepr):
         return lltype.FixedSizeArray(ll_type, 1)
 
     def getvalue_from_c_data(self, llops, v_c_data):
+        assert v_c_data.concretetype.TO == self.c_data_type
         return llops.genop('getarrayitem', [v_c_data, C_ZERO],
                 resulttype=self.ll_type)
 

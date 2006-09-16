@@ -104,7 +104,8 @@ class StructRepr(CTypesRefRepr):
             v_c_data = self.get_c_data_of_field(hop.llops, v_struct, name)
             v_item = r_field.return_c_data(hop.llops, v_c_data, v_owner)
         # copy the keepalive information too
-        if hasattr(r_field.lowleveltype.TO, 'keepalive'):
+        if (v_item.concretetype == r_field.lowleveltype
+            and hasattr(r_field.lowleveltype.TO, 'keepalive')):
             c_name = inputconst(lltype.Void, cmangle(name))
             copykeepalive(hop.llops, r_field.lowleveltype.TO.keepalive,
                           v_struct, (c_name,), v_item, ())

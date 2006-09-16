@@ -4,8 +4,10 @@ from pypy.rpython.rstr import AbstractStringRepr
 from pypy.rpython.lltypesystem.rstr import string_repr
 from pypy.rpython.rctypes.rmodel import CTypesValueRepr, C_ZERO
 from pypy.rpython.rctypes.rarray import ArrayRepr
-from pypy.rpython.rctypes.rstringbuf import StringBufRepr
+from pypy.rpython.rctypes.rstringbuf import StringBufRepr, ll_stringbufnew
+from pypy.rpython.rctypes.astringbuf import StringBufferType
 from pypy.annotation.pairtype import pairtype
+from pypy.annotation import model as annmodel
 
 from ctypes import c_char, c_char_p, cast
 
@@ -25,14 +27,19 @@ class CCharPRepr(CTypesValueRepr):
         return llops.gendirectcall(ll_charp2str, v_value)
 
     def get_content_keepalive_type(self):
-        "An extra keepalive used for the raw copy the RPython string."
-        return lltype.Ptr(CHARSCOPY)  # raw_malloc'ed, automatically raw_free'd
+        """An extra keepalive used for the box that holds the raw copy
+        of the RPython string."""
+        s_buf = annmodel.SomeCTypesObject(StringBufferType, ownsmemory=True)
+        r_buf = self.rtyper.getrepr(s_buf)
+        return r_buf.lowleveltype
 
     def getstring(self, llops, v_box):
         return llops.gendirectcall(ll_getstring, v_box)
 
     def setstring(self, llops, v_box, v_str):
-        llops.gendirectcall(ll_setstring, v_box, v_str)
+        RCBOX_STRBUF = self.lowleveltype.TO.keepalive.TO
+        c_r_buf = inputconst(lltype.Void, RCBOX_STRBUF)
+        llops.gendirectcall(ll_setstring, c_r_buf, v_box, v_str)
 
     def convert_const(self, value):
         if value is not None and not isinstance(value, (str, c_char_p)):
@@ -44,8 +51,9 @@ class CCharPRepr(CTypesValueRepr):
     def initialize_const(self, p, string):
         if isinstance(string, c_char_p):
             string = string.value
+        RCBOX_STRBUF = self.lowleveltype.TO.keepalive.TO
         llstring = string_repr.convert_const(string)
-        ll_setstring(p, llstring)
+        ll_setstring(RCBOX_STRBUF, p, llstring)
 
     def rtype_getattr(self, hop):
         s_attr = hop.args_s[1]
@@ -133,29 +141,17 @@ def ll_getstring(box):
     else:
         return lltype.nullptr(string_repr.lowleveltype.TO)
 
-def ll_setstring(box, string):
+def ll_setstring(RCBOX_STRBUF, box, string):
     if not string:
         new_c_data = lltype.nullptr(CCHARP.TO)
-        charscopy = lltype.nullptr(CHARSCOPY)
+        new_buf = lltype.nullptr(RCBOX_STRBUF)
     else:
         # XXX the copying of the string is often not needed, but it is
         # very hard to avoid in the general case of a moving GC that can
         # move 'string' around unpredictably.
-        n = len(string.chars)
-        buffer = llmemory.raw_malloc(NULL_HEADER + SIZEOF_CHAR * (n+1))
-        charscopy = llmemory.cast_adr_to_ptr(buffer, PCHARSCOPY)
-        for i in range(n):
-            charscopy[i] = string.chars[i]
-        charscopy[n] = '\x00'
-        new_c_data = lltype.direct_arrayitems(charscopy)
+        new_buf = ll_stringbufnew(RCBOX_STRBUF, string)
+        new_c_data = lltype.direct_arrayitems(new_buf.c_data)
     # store a 'char *' pointer in the box.c_data
     box.c_data[0] = new_c_data
     # keep the ownership of the buffer in the box.keepalive field
-    prev = box.keepalive
-    box.keepalive = charscopy
-    llmemory.raw_free(llmemory.cast_ptr_to_adr(prev))
-
-CHARSCOPY = lltype.Array(lltype.Char, hints={'nolength': True})
-PCHARSCOPY = lltype.Ptr(CHARSCOPY)
-NULL_HEADER = llmemory.itemoffsetof(CHARSCOPY)
-SIZEOF_CHAR = llmemory.sizeof(lltype.Char)
+    box.keepalive = new_buf
