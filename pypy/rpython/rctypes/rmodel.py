@@ -9,6 +9,7 @@ from pypy.annotation.pairtype import pairtype
 RCBOX_HEADER = lltype.GcStruct('rcbox',
                                ('rtti', lltype.Ptr(lltype.RuntimeTypeInfo)))
 P_RCBOX_HEADER = lltype.Ptr(RCBOX_HEADER)
+lltype.attachRuntimeTypeInfo(RCBOX_HEADER)
 
 
 class CTypesRepr(Repr):
@@ -35,8 +36,6 @@ class CTypesRepr(Repr):
     #  * 'r_memoryowner.lowleveltype' is the lowleveltype of the repr for the
     #                                 same ctype but for ownsmemory=True.
 
-    autofree_fields = ()
-
     def __init__(self, rtyper, s_ctypesobject, ll_type):
         # s_ctypesobject: the annotation to represent
         # ll_type: the low-level type representing the raw
@@ -56,9 +55,10 @@ class CTypesRepr(Repr):
             fields.append(( "keepalive", content_keepalive_type ))
 
         if self.ownsmemory:
-            self.autofree_fields = ("c_data",) + self.__class__.autofree_fields
+            self.autofree_fields = ("c_data",)
             self.r_memoryowner = self
         else:
+            self.autofree_fields = ()
             s_memoryowner = SomeCTypesObject(ctype, ownsmemory=True)
             self.r_memoryowner = rtyper.getrepr(s_memoryowner)
             # the box that really owns our C data - it is usually a box of
@@ -103,6 +103,9 @@ class CTypesRepr(Repr):
             destrptr = self.rtyper.getcallable(graph)
             lltype.attachRuntimeTypeInfo(self.lowleveltype.TO,
                                          queryptr, destrptr)
+
+            # make sure the RCBOX_HEADER itself has got a query function
+            lltype.attachRuntimeTypeInfo(RCBOX_HEADER, queryptr)
 
     def get_content_keepalive_type(self):
         """Return the type of the extra keepalive field used for the content
@@ -247,20 +250,6 @@ class CTypesRepr(Repr):
         """
         return self.allocate_instance_ref(llops, v_c_data, v_c_data_owner)
 
-    def copykeepalive(self, llops, v_box, v_destbox, destsuboffset=()):
-        # copy the 'keepalive' data over, unless it's an autofree
-        assert v_box.concretetype == self.lowleveltype
-        try:
-            TYPE = self.lowleveltype.TO.keepalive
-        except AttributeError:
-            pass
-        else:
-            if 'keepalive' not in self.autofree_fields:
-                c_keepalive = inputconst(lltype.Void, 'keepalive')
-                genreccopy_rel(llops, TYPE,
-                               v_box,     (c_keepalive,),
-                               v_destbox, (c_keepalive,) + destsuboffset)
-
 
 class __extend__(pairtype(CTypesRepr, CTypesRepr)):
 
@@ -271,9 +260,10 @@ class __extend__(pairtype(CTypesRepr, CTypesRepr)):
             r_from.ownsmemory and not r_to.ownsmemory):
             v_c_data = r_from.get_c_data(llops, v)
             v_result =  r_to.allocate_instance_ref(llops, v_c_data, v)
-            # copy the 'keepalive' information
-            c_keepalive = inputconst(lltype.Void, 'keepalive')
-            r_from.copykeepalive(llops, v, v_result)
+            # copy all the 'keepalive' information
+            if hasattr(r_from.lowleveltype.TO, 'keepalive'):
+                copykeepalive(llops, r_from.lowleveltype.TO.keepalive,
+                              v, (), v_result, ())
             return v_result
         else:
             return NotImplemented
@@ -351,6 +341,14 @@ def cast_to_header(llops, v_box):
         v_box = llops.genop('cast_pointer', [v_box],
                             resulttype=P_RCBOX_HEADER)
     return v_box
+
+def copykeepalive(llops, TYPE, v_box,     srcsuboffset,
+                               v_destbox, destsuboffset):
+    # copy (a part of) the 'keepalive' data over
+    c_keepalive = inputconst(lltype.Void, 'keepalive')
+    genreccopy_rel(llops, TYPE,
+                   v_box,     (c_keepalive,) + srcsuboffset,
+                   v_destbox, (c_keepalive,) + destsuboffset)
 
 def reccopy(source, dest):
     # copy recursively a structure or array onto another.
