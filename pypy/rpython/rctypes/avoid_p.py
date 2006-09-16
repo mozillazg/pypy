@@ -96,5 +96,9 @@ class CastFnEntry(ExtRegistryEntry):
             # cast to pointer
             v_result = hop.genop('cast_adr_to_ptr', [v_adr],
                                  resulttype = hop.r_result.ll_type)
+        if isinstance(r_arg, PointerRepr):
+            v_content_owner = r_arg.getkeepalive(hop.llops, v_box)
+        else:
+            v_content_owner = None
         hop.exception_cannot_occur()
-        return hop.r_result.return_value(hop.llops, v_result)
+        return hop.r_result.return_value(hop.llops, v_result, v_content_owner)

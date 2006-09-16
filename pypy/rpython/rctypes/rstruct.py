@@ -89,6 +89,7 @@ class StructRepr(CTypesRefRepr):
         name = s_attr.const
         r_field = self.r_fields[name]
         v_struct, v_attr = hop.inputargs(self, lltype.Void)
+        v_owner = self.get_c_data_owner(hop.llops, v_struct)
         hop.exception_cannot_occur()
         if isinstance(r_field, PrimitiveRepr):
             # primitive case (optimization; the below also works in this case)
@@ -96,11 +97,11 @@ class StructRepr(CTypesRefRepr):
             # example:  s.p.contents = ...  to change the pointer field 'p'
             # of 's'.
             v_value = self.get_field_value(hop.llops, v_struct, name)
-            return r_field.return_value(hop.llops, v_value)
+            return r_field.return_value(hop.llops, v_value, v_owner)
         else:
             # ByRef case
             v_c_data = self.get_c_data_of_field(hop.llops, v_struct, name)
-            return r_field.return_c_data(hop.llops, v_c_data)
+            return r_field.return_c_data(hop.llops, v_c_data, v_owner)
 
     def rtype_setattr(self, hop):
         s_attr = hop.args_s[1]

@@ -14,14 +14,14 @@ class CCharPRepr(CTypesValueRepr):
 
     autofree_fields = ("keepalive",)
 
-    def return_c_data(self, llops, v_c_data):
+    def return_c_data(self, llops, v_c_data, v_c_data_owner):
         """Read out the RPython string from a raw C pointer.
         Used when the data is returned from an operation or C function call.
         """
         v_char_p = self.getvalue_from_c_data(llops, v_c_data)
         return llops.gendirectcall(ll_charp2str, v_char_p)
 
-    def return_value(self, llops, v_value):
+    def return_value(self, llops, v_value, v_content_owner=None):
         # like return_c_data(), but when the input is only the value
         # field instead of the c_data pointer
         return llops.gendirectcall(ll_charp2str, v_value)
@@ -136,22 +136,26 @@ def ll_getstring(box):
         return lltype.nullptr(string_repr.lowleveltype.TO)
 
 def ll_setstring(box, string):
-    # XXX the copying of the string is often not needed, but it is
-    # very hard to avoid in the general case of a moving GC that can
-    # move 'string' around unpredictably.
-    n = len(string.chars)
-    buffer = llmemory.raw_malloc(NULL_HEADER + SIZEOF_CHAR * (n+1))
-    charscopy = llmemory.cast_adr_to_ptr(buffer, PCHARSCOPY)
-    for i in range(n):
-        charscopy[i] = string.chars[i]
-    charscopy[n] = '\x00'
+    if not string:
+        new_c_data = lltype.nullptr(CCHARP.TO)
+        charscopy = lltype.nullptr(CHARSCOPY)
+    else:
+        # XXX the copying of the string is often not needed, but it is
+        # very hard to avoid in the general case of a moving GC that can
+        # move 'string' around unpredictably.
+        n = len(string.chars)
+        buffer = llmemory.raw_malloc(NULL_HEADER + SIZEOF_CHAR * (n+1))
+        charscopy = llmemory.cast_adr_to_ptr(buffer, PCHARSCOPY)
+        for i in range(n):
+            charscopy[i] = string.chars[i]
+        charscopy[n] = '\x00'
+        new_c_data = lltype.direct_arrayitems(charscopy)
     # store a 'char *' pointer in the box.c_data
-    box.c_data[0] = lltype.direct_arrayitems(charscopy)
+    box.c_data[0] = new_c_data
     # keep the ownership of the buffer in the box.keepalive field
     prev = box.keepalive
     box.keepalive = charscopy
-    if prev:
-        llmemory.raw_free(llmemory.cast_ptr_to_adr(prev))
+    llmemory.raw_free(llmemory.cast_ptr_to_adr(prev))
 
 CHARSCOPY = lltype.Array(lltype.Char, hints={'nolength': True})
 PCHARSCOPY = lltype.Ptr(CHARSCOPY)
