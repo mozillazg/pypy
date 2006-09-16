@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.annotation.pairtype import pairtype
 from pypy.rpython.rmodel import IntegerRepr, inputconst
 from pypy.rpython.rctypes.rmodel import CTypesRefRepr
@@ -128,4 +128,23 @@ def ll_stringbufraw(box):
         newstr.chars[i] = p[i]
     return newstr
 
+def ll_stringbufnew(RCBOX_STRBUF, s):
+    n = len(s.chars) + 1
+    box = lltype.malloc(RCBOX_STRBUF)
+    box.header.rtti = lltype.getRuntimeTypeInfo(RCBOX_STRBUF)
+    box.c_data = lltype.nullptr(STRBUFTYPE)
+    # no flavored_malloc_varsize operation so far :-(
+    a = llmemory.raw_malloc(FIRST_CHAR + SIZEOF_CHAR * n)
+    # puf puf
+    (a + LENGTH_POS).signed[0] = n
+    p = llmemory.cast_adr_to_ptr(a, PSTRBUFTYPE)
+    box.c_data = p
+    for i in range(n):
+        p[i] = s.chars[i]
+    return box
+
 STRBUFTYPE = lltype.Array(lltype.Char)
+PSTRBUFTYPE = lltype.Ptr(STRBUFTYPE)
+LENGTH_POS = llmemory.ArrayLengthOffset(STRBUFTYPE)
+FIRST_CHAR = llmemory.itemoffsetof(STRBUFTYPE)
+SIZEOF_CHAR = llmemory.sizeof(lltype.Char)

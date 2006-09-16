@@ -22,6 +22,7 @@ class PrimitiveRepr(CTypesValueRepr):
         """Read out the atomic data from a raw C pointer.
         Used when the data is returned from an operation or C function call.
         """
+        assert v_c_data.concretetype.TO == self.c_data_type
         v_value = self.getvalue_from_c_data(llops, v_c_data)
         return self.return_value(llops, v_value)
 
