@@ -209,3 +209,11 @@ class Test_compilation:
         fn = compile(func, [int])
         res = fn(0x12345678)
         assert res == 0x12345678
+
+    def test_compile_len(self):
+        def func(n):
+            buf = create_string_buffer(n)
+            return len(buf)
+        fn = compile(func, [int])
+        res = fn(321)
+        assert res == 321

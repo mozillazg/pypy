@@ -107,9 +107,12 @@ def test_atoi():
 def test_ll_atoi():
     keepalive = []
     def str2subarray(string):
-        llstring = string_repr.convert_const(string)
-        keepalive.append(llstring)
-        return lltype.direct_arrayitems(llstring.chars)
+        p = lltype.malloc(lltype.Array(lltype.Char), len(string)+1,
+                          immortal=True)
+        for i in range(len(string)):
+            p[i] = string[i]
+        p[len(string)] = '\x00'
+        return p
     assert ll_atoi(str2subarray("")) == 0
     assert ll_atoi(str2subarray("42z7")) == 42
     assert ll_atoi(str2subarray("blah")) == 0

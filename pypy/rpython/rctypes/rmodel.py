@@ -222,6 +222,16 @@ class CTypesRepr(Repr):
             v_rawaddr = llops.genop("raw_malloc", [v_size],
                                     resulttype=llmemory.Address)
             llops.genop("raw_memclear", [v_rawaddr, v_size])
+            assert isinstance(TYPE, lltype.Array)   # XXX for now
+            if not TYPE._hints.get('nolength', False):
+                # initialize the length field, if any
+                c_lengthofs = inputconst(lltype.Signed,
+                                         llmemory.ArrayLengthOffset(TYPE))
+                v_p = llops.genop("adr_add", [v_rawaddr, c_lengthofs],
+                                  resulttype=llmemory.Address)
+                c_Signed = inputconst(lltype.Void, lltype.Signed)
+                c_zero = inputconst(lltype.Signed, 0)
+                llops.genop("raw_store", [v_p, c_Signed, c_zero, v_length])
             v_rawdata = llops.genop("cast_adr_to_ptr", [v_rawaddr],
                                     resulttype=lltype.Ptr(TYPE))
             c_datafieldname = inputconst(lltype.Void, "c_data")
