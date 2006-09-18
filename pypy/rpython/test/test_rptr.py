@@ -205,6 +205,23 @@ def test_call_ptr():
 
     py.test.raises(TypeError, "interpret(wrong, [1, 2])")
 
+def test_first_subfield_access_is_cast_pointer():
+    B = GcStruct("B", ('x', Signed))
+    C = GcStruct("C", ('super', B), ('y', Signed))
+    def f():
+        c = malloc(C)
+        c.super.x = 1
+        c.y = 2
+        return c.super.x + c.y
+    s, t = ll_rtype(f, [])
+    from pypy.translator.translator import graphof
+    from pypy.objspace.flow.model import summary
+    graph = graphof(t, f)
+    graphsum = summary(graph)
+    assert 'getsubstruct' not in graphsum
+    assert 'cast_pointer' in graphsum
+    
+        
 
 def test_interior_ptr():
     S = Struct("S", ('x', Signed))
