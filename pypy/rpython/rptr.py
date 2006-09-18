@@ -36,7 +36,10 @@ class PtrRepr(Repr):
             return hop.inputarg(hop.r_result, arg=0)
         FIELD_TYPE = getattr(self.lowleveltype.TO, attr)
         if isinstance(FIELD_TYPE, ContainerType):
-            if isinstance(hop.r_result, InteriorPtrRepr):
+            if (attr, FIELD_TYPE) == self.lowleveltype.TO._first_struct():
+                return hop.genop('cast_pointer', [hop.inputarg(self, 0)],
+                                 resulttype=hop.r_result.lowleveltype)
+            elif isinstance(hop.r_result, InteriorPtrRepr):
                 return hop.genop('same_as', [hop.inputarg(self, 0)],
                                  resulttype=self.lowleveltype)
             else:
