@@ -151,22 +151,25 @@ def variables_created_in(block):
     return result
 
 
-def SSA_to_SSI(blocks, annotator=None):
+def SSA_to_SSI(graph_or_blocks, annotator=None):
     """Turn a number of blocks belonging to a flow graph into valid (i.e. SSI)
     form, assuming that they are only in SSA form (i.e. they can use each
     other's variables directly, without having to pass and rename them along
     links).
 
-    'blocks' is a mapping {block: reachable-from-outside-flag}.
+    'graph_or_blocks' can be a graph, or just a dict that lists some blocks
+    from a graph, as follows: {block: reachable-from-outside-flag}.
     """
     from pypy.translator.unsimplify import copyvar
 
-    entrymap = mkinsideentrymap(blocks)
-    variable_families = DataFlowFamilyBuilder(blocks).get_variable_families()
+    entrymap = mkinsideentrymap(graph_or_blocks)
+    builder = DataFlowFamilyBuilder(graph_or_blocks)
+    variable_families = builder.get_variable_families()
+    del builder
 
     pending = []     # list of (block, var-used-but-not-defined)
 
-    for block in blocks:
+    for block in entrymap:
         variables_created = variables_created_in(block)
         variables_used = {}
         for op in block.operations:
