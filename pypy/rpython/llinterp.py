@@ -751,6 +751,11 @@ class LLFrame(object):
         assert lltype.typeOf(value) == typ
         getattr(addr, str(typ).lower())[offset] = value
 
+    def op_local_raw_malloc(self, size):
+        r = self.heap.raw_malloc(size)
+        self.local_mallocs.append(r)
+        return r
+
     # ____________________________________________________________
     # Overflow-detecting variants
 
