@@ -138,35 +138,36 @@ class GCTransformer(object):
 
                 variables_by_block = {}
                 for block, var in info.variables:
-                    vars = variables_by_block.setdefault(block, {})
-                    vars[var] = True
+                    vars = variables_by_block.setdefault(block, set())
+                    vars.add(var)
                 for block, vars in variables_by_block.iteritems():
                     links_with_a_var = []
                     links_without_a_var = []
                     for link in block.exits:
-                        if set(vars) & set(link.args):
+                        if vars & set(link.args):
                             links_with_a_var.append(link)
                         else:
                             links_without_a_var.append(link)
                     #if not links_without_a_var:
                     #    continue
                     for link in links_without_a_var:
+                        vv = iter(vars).next()
                         for v in vars:
                             assert v not in link.args
                             if v.concretetype == llmemory.Address:
-                                break
+                                vv = v
                         newblock = insert_empty_block(None, link)
-                        link.args.append(v)
-                        newblock.inputargs.append(copyvar(None, v))
-                        if v.concretetype != llmemory.Address:
+                        link.args.append(vv)
+                        newblock.inputargs.append(copyvar(None, vv))
+                        if vv.concretetype != llmemory.Address:
                             newv = varoftype(llmemory.Address)
                             newblock.operations.append(SpaceOperation(
                                 "cast_ptr_to_adr", [newblock.inputargs[-1]], newv))
-                            v = newv
+                            vv = newv
                         else:
-                            v = newblock.inputargs[-1]
+                            vv = newblock.inputargs[-1]
                         newblock.operations.append(SpaceOperation(
-                            "raw_free", [v], varoftype(lltype.Void)))
+                            "raw_free", [vv], varoftype(lltype.Void)))
         checkgraph(graph)
 
     def compute_borrowed_vars(self, graph):
