@@ -171,6 +171,7 @@ class LLFrame(object):
         self.curr_block = None
         self.curr_operation_index = 0
         self.alloca_objects = []
+        self.local_mallocs = []
 
     # _______________________________________________________
     # variable setters/getters helpers
@@ -244,6 +245,8 @@ class LLFrame(object):
                     for obj in self.alloca_objects:
                         #XXX slighly unclean
                         obj._setobj(None)
+                    for adr in self.local_mallocs:
+                        self.heap.raw_free(adr)
                     return args
         finally:
             if tracer:
