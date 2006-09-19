@@ -42,10 +42,11 @@ class OpDesc(object):
 _opdesc_cache = {}
 
 def make_opdesc(hop):
+    from pypy.jit.timeshifter.rtyper import originalconcretetype
     hrtyper = hop.rtyper
     op_key = (hrtyper.RGenOp, hop.spaceop.opname,
-              tuple([hrtyper.originalconcretetype(s_arg) for s_arg in hop.args_s]),
-              hrtyper.originalconcretetype(hop.s_result))
+              tuple([originalconcretetype(s_arg) for s_arg in hop.args_s]),
+              originalconcretetype(hop.s_result))
     try:
         return _opdesc_cache[op_key]
     except KeyError:
@@ -253,7 +254,8 @@ def dispatch_next(oldjitstate, return_cache):
 def getexitindex(jitstate):
     return jitstate.exitindex
 
-def save_locals(jitstate, redboxes):
+def save_locals(jitstate, *redboxes):
+    redboxes = list(redboxes)
     assert None not in redboxes
     jitstate.frame.local_boxes = redboxes
 
@@ -415,18 +417,17 @@ class JITState(object):
 def enter_graph(jitstate):
     jitstate.frame = VirtualFrame(jitstate.frame, [], [])
 
-def leave_graph(return_queue, return_cache):
-    for jitstate in return_queue[:-1]:
-        res = retrieve_jitstate_for_merge(return_cache, jitstate, (),
-                                          # XXX strange next argument
-                                          jitstate.frame.local_boxes)
-        assert res is True   # finished
-    frozen, block = return_cache[()]
-    jitstate = return_queue[-1]
+def leave_graph(jitstate):
+##    for jitstate in return_queue[:-1]:
+##        res = retrieve_jitstate_for_merge(return_cache, jitstate, (),
+##                                          # XXX strange next argument
+##                                          jitstate.frame.local_boxes)
+##        assert res is True   # finished
+##    frozen, block = return_cache[()]
+##    jitstate = return_queue[-1]
     myframe = jitstate.frame
     if myframe.local_boxes:             # else it's a green Void return
         jitstate.returnbox = myframe.local_boxes[0]
         # ^^^ fetched by a 'fetch_return' operation
     jitstate.frame = myframe.backframe
-    jitstate.exitindex = -1
-    return jitstate
+##    jitstate.exitindex = -1
