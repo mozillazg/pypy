@@ -329,6 +329,7 @@ LL_OPERATIONS = {
     # __________ address operations __________
 
     'raw_malloc':           LLOp(canraise=(MemoryError,)),
+    'local_raw_malloc':     LLOp(canraise=(MemoryError,)),
     'raw_malloc_usage':     LLOp(sideeffects=False),
     'raw_free':             LLOp(),
     'raw_memclear':         LLOp(),
