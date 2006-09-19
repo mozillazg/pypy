@@ -152,6 +152,7 @@ class GCTransformer(object):
                     #    continue
                     for link in links_without_a_var:
                         for v in vars:
+                            assert v not in link.args
                             if v.concretetype == llmemory.Address:
                                 break
                         newblock = insert_empty_block(None, link)
