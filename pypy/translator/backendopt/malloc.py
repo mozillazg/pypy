@@ -87,7 +87,7 @@ def compute_lifetimes(graph):
     def visit(node):
         if isinstance(node, Block):
             for op in node.operations:
-                if op.opname in ("same_as", "cast_pointer"):
+                if op.opname in ("same_as", "cast_pointer", "cast_adr_to_ptr"):
                     # special-case these operations to identify their input
                     # and output variables
                     union(node, op.args[0], node, op.result)
