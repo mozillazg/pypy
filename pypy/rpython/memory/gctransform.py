@@ -144,7 +144,7 @@ class GCTransformer(object):
                     links_with_a_var = []
                     links_without_a_var = []
                     for link in block.exits:
-                        if set(vars) ^ set(link.args):
+                        if set(vars) & set(link.args):
                             links_with_a_var.append(link)
                         else:
                             links_without_a_var.append(link)
