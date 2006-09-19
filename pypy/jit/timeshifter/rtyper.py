@@ -563,29 +563,55 @@ class HintRTyper(RPythonTyper):
                                         [v_jitstate     ],
                                         annmodel.s_None)
 
-    def translate_op_leave_graph(self, hop):
+    def translate_op_leave_graph_red(self, hop):
         v_jitstate = hop.llops.getjitstate()
-        hop.llops.genmixlevelhelpercall(rtimeshift.leave_graph,
+        v_newjs = hop.llops.genmixlevelhelpercall(rtimeshift.leave_graph_red,
+                                                  [self.s_JITState],
+                                                  [v_jitstate     ],
+                                                  self.s_JITState)
+        hop.llops.setjitstate(v_newjs)
+
+    def translate_op_save_locals(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        boxes_r = [self.getredrepr(originalconcretetype(hs))
+                   for hs in hop.args_s]
+        boxes_v = hop.inputargs(*boxes_r)
+        boxes_s = [self.s_RedBox] * len(hop.args_v)
+        hop.llops.genmixlevelhelpercall(rtimeshift.save_locals,
+                                        [self.s_JITState] + boxes_s,
+                                        [v_jitstate     ] + boxes_v,
+                                        annmodel.s_None)
+
+    def translate_op_enter_block(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        hop.llops.genmixlevelhelpercall(rtimeshift.enter_block,
                                         [self.s_JITState],
                                         [v_jitstate     ],
                                         annmodel.s_None)
 
-    def translate_op_save_locals(self, hop):
-        ts = self
-        v_jitstate = hop.llops.getjitstate()
-        boxes_s = [ts.s_RedBox] * len(hop.args_v)
-        boxes_v = hop.args_v
-        hop.llops.genmixlevelhelpercall(rtimeshift.save_locals,
-                                        [ts.s_JITState] + boxes_s,
-                                        [v_jitstate   ] + boxes_v,
-                                        annmodel.s_None)
-
     def translate_op_restore_local(self, hop):
-        ts = self
         assert isinstance(hop.args_v[0], flowmodel.Constant)
         index = hop.args_v[0].value
+        c_index = hop.inputconst(lltype.Signed, index)
         v_jitstate = hop.llops.getjitstate()
-        return ts.read_out_box(hop.llops, v_jitstate, index)
+        return hop.llops.genmixlevelhelpercall(rtimeshift.getlocalbox,
+                    [self.s_JITState, annmodel.SomeInteger(nonneg=True)],
+                    [v_jitstate     , c_index                          ],
+                    self.s_RedBox)
+
+    def translate_op_restore_green(self, hop):
+        assert isinstance(hop.args_v[0], flowmodel.Constant)
+        index = hop.args_v[0].value
+        c_index = hop.inputconst(lltype.Signed, index)
+        TYPE = originalconcretetype(hop.s_result)
+        s_TYPE = self.rtyper.annotator.bookkeeper.immutablevalue(TYPE)
+        c_TYPE = hop.inputconst(lltype.Void, TYPE)
+        s_result = annmodel.lltype_to_annotation(TYPE)
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(rtimeshift.getgreenbox,
+                  [self.s_JITState, annmodel.SomeInteger(nonneg=True), s_TYPE],
+                  [v_jitstate     , c_index                          , c_TYPE],
+                  s_result)
 
     def translate_op_fetch_return(self, hop):
         ts = self
@@ -594,6 +620,77 @@ class HintRTyper(RPythonTyper):
                                                [ts.s_JITState],
                                                [v_jitstate   ],
                                                ts.s_RedBox)
+
+    def translate_op_is_constant(self, hop):
+        hs = hop.args_s[0]
+        r_arg = self.getredrepr(originalconcretetype(hs))
+        [v_arg] = hop.inputargs(r_arg)
+        return hop.llops.genmixlevelhelpercall(rvalue.ll_is_constant,
+                                               [self.s_RedBox],
+                                               [v_arg        ],
+                                               annmodel.SomeBool())
+
+    def translate_op_revealconst(self, hop):
+        hs = hop.args_s[0]
+        TYPE = originalconcretetype(hs)
+        r_arg = self.getredrepr(TYPE)
+        [v_arg] = hop.inputargs(r_arg)
+        s_TYPE = self.rtyper.annotator.bookkeeper.immutablevalue(TYPE)
+        c_TYPE = hop.inputconst(lltype.Void, TYPE)
+        s_result = annmodel.lltype_to_annotation(TYPE)
+        return hop.llops.genmixlevelhelpercall(rvalue.ll_getvalue,
+                                               [self.s_RedBox, s_TYPE],
+                                               [v_arg        , c_TYPE],
+                                               s_result)
+
+    def wrap_green_vars(self, llops, vars):
+        v_jitstate = llops.getjitstate()
+        for var in vars:
+            s_var = annmodel.lltype_to_annotation(var.concretetype)
+            yield llops.genmixlevelhelpercall(rvalue.ll_gv_fromvalue,
+                                              [self.s_JITState, s_var],
+                                              [v_jitstate,      var  ],
+                                              self.s_ConstOrVar)
+
+    def translate_op_split(self, hop):
+        r_switch = self.getredrepr(lltype.Bool)
+        GREENS = [v.concretetype for v in hop.args_v[2:]]
+        greens_r = [self.getgreenrepr(TYPE) for TYPE in GREENS]
+        vlist = hop.inputargs(r_switch, lltype.Signed, *greens_r)
+
+        v_jitstate = hop.llops.getjitstate()
+        v_switch = vlist[0]
+        c_resumepoint = vlist[1]
+        greens_v = list(self.wrap_green_vars(hop.llops, vlist[2:]))
+
+        s_Int = annmodel.SomeInteger(nonneg=True)
+        args_s = [self.s_JITState, self.s_RedBox, s_Int]
+        args_s += [self.s_ConstOrVar] * len(greens_v)
+        args_v = [v_jitstate, v_switch, c_resumepoint]
+        args_v += greens_v
+        hop.llops.genmixlevelhelpercall(rtimeshift.split, args_s, args_v,
+                                        annmodel.s_None)
+
+    def translate_op_save_return(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(rtimeshift.save_return,
+                                               [self.s_JITState],
+                                               [v_jitstate     ],
+                                               annmodel.s_None)
+
+    def translate_op_dispatch_next(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        v_newjs = hop.llops.genmixlevelhelpercall(rtimeshift.dispatch_next,
+                                                  [self.s_JITState],
+                                                  [v_jitstate     ],
+                                                  self.s_JITState)
+        hop.llops.setjitstate(v_newjs)
+        return hop.llops.genmixlevelhelpercall(rtimeshift.getresumepoint,
+                                               [self.s_JITState],
+                                               [v_newjs        ],
+                                               annmodel.SomeInteger())
+
+    # handling of the various kinds of calls
 
     def handle_oopspec_call(self, hop):
         # special-cased call, for things like list methods

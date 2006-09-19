@@ -194,8 +194,7 @@ def start_new_block(states_dic, jitstate, key):
     states_dic[key] = frozen, newblock
 start_new_block._annspecialcase_ = "specialize:arglltype(2)"
 
-def retrieve_jitstate_for_merge(states_dic, jitstate, key, redboxes):
-    save_locals(jitstate, redboxes)
+def retrieve_jitstate_for_merge(states_dic, jitstate, key):
     if key not in states_dic:
         start_new_block(states_dic, jitstate, key)
         return False   # continue
@@ -229,30 +228,23 @@ def enter_block(jitstate):
     jitstate.enter_block(incoming, memo)
     enter_next_block(jitstate, incoming)
 
-def leave_block_split(jitstate, switchredbox, exitindex,
-                      redboxes_true, redboxes_false):
-    if switchredbox.is_constant():
-        return rvalue.ll_getvalue(switchredbox, lltype.Bool)
-    else:
-        exitgvar = switchredbox.getgenvar(jitstate.curbuilder)
-        later_builder = jitstate.curbuilder.jump_if_false(exitgvar)
-        save_locals(jitstate, redboxes_false)
-        jitstate.split(later_builder, exitindex)
-        save_locals(jitstate, redboxes_true)
-        enter_block(jitstate)
-        return True
+def split(jitstate, switchredbox, resumepoint, *greens_gv):
+    exitgvar = switchredbox.getgenvar(jitstate.curbuilder)
+    later_builder = jitstate.curbuilder.jump_if_false(exitgvar)
+    jitstate.split(later_builder, resumepoint, list(greens_gv))
 
-def dispatch_next(oldjitstate, return_cache):
+def dispatch_next(oldjitstate):
     split_queue = oldjitstate.frame.split_queue
     if split_queue:
         jitstate = split_queue.pop()
         enter_block(jitstate)
         return jitstate
     else:
-        return leave_graph(oldjitstate.frame.return_queue, return_cache)
+        oldjitstate.resumepoint = -1
+        return oldjitstate
 
-def getexitindex(jitstate):
-    return jitstate.exitindex
+def getresumepoint(jitstate):
+    return jitstate.resumepoint
 
 def save_locals(jitstate, *redboxes):
     redboxes = list(redboxes)
@@ -261,6 +253,9 @@ def save_locals(jitstate, *redboxes):
 
 def getlocalbox(jitstate, i):
     return jitstate.frame.local_boxes[i]
+
+def getgreenbox(jitstate, i, T):
+    return jitstate.greens[i].revealconst(T)
 
 def getreturnbox(jitstate):
     return jitstate.returnbox
@@ -380,20 +375,22 @@ class JITState(object):
     returnbox = None
 
     def __init__(self, builder, frame, exc_type_box, exc_value_box,
-                 exitindex=-1):
+                 resumepoint=-1, newgreens=[]):
         self.curbuilder = builder
         self.frame = frame
         self.exc_type_box = exc_type_box
         self.exc_value_box = exc_value_box
-        self.exitindex = exitindex
+        self.resumepoint = resumepoint
+        self.greens = newgreens
 
-    def split(self, newbuilder, newexitindex):
+    def split(self, newbuilder, newresumepoint, newgreens):
         memo = rvalue.copy_memo()
         later_jitstate = JITState(newbuilder,
                                   self.frame.copy(memo),
                                   self.exc_type_box .copy(memo),
                                   self.exc_value_box.copy(memo),
-                                  newexitindex)
+                                  newresumepoint,
+                                  newgreens)
         self.frame.split_queue.append(later_jitstate)
 
     def enter_block(self, incoming, memo):
@@ -417,17 +414,21 @@ class JITState(object):
 def enter_graph(jitstate):
     jitstate.frame = VirtualFrame(jitstate.frame, [], [])
 
-def leave_graph(jitstate):
-##    for jitstate in return_queue[:-1]:
-##        res = retrieve_jitstate_for_merge(return_cache, jitstate, (),
-##                                          # XXX strange next argument
-##                                          jitstate.frame.local_boxes)
-##        assert res is True   # finished
-##    frozen, block = return_cache[()]
-##    jitstate = return_queue[-1]
+def leave_graph_red(jitstate):
+    return_queue = jitstate.frame.return_queue
+    return_cache = {}
+    still_pending = []
+    for jitstate in return_queue:
+        res = retrieve_jitstate_for_merge(return_cache, jitstate, ())
+        if res is False:    # not finished
+            still_pending.append(jitstate)
+    for jitstate in still_pending[:-1]:
+        res = retrieve_jitstate_for_merge(return_cache, jitstate, ())
+        assert res is True   # finished
+    jitstate = still_pending[-1]
     myframe = jitstate.frame
     if myframe.local_boxes:             # else it's a green Void return
         jitstate.returnbox = myframe.local_boxes[0]
         # ^^^ fetched by a 'fetch_return' operation
     jitstate.frame = myframe.backframe
-##    jitstate.exitindex = -1
+    return jitstate

@@ -1,10 +1,12 @@
-from pypy.objspace.flow     import model as flowmodel
+from pypy.objspace.flow.model import Variable, Constant, Block, Link
+from pypy.objspace.flow.model import SpaceOperation
 from pypy.annotation        import model as annmodel
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import split_block, split_block_at_start
+from pypy.translator.backendopt.ssa import SSA_to_SSI
 
 
 class HintGraphTransformer(object):
@@ -12,16 +14,18 @@ class HintGraphTransformer(object):
     def __init__(self, hannotator, graph):
         self.hannotator = hannotator
         self.graph = graph
-        self.dispatch_to = []
-        self.latestexitindex = -1
+        self.resumepoints = {}
 
     def transform(self):
+        self.insert_save_return()
+        self.insert_splits()
+        self.insert_dispatcher()
         self.insert_enter_graph()
         self.insert_leave_graph()
 
     # __________ helpers __________
 
-    def genop(self, llops, opname, args, result_type=None):
+    def genop(self, block, opname, args, result_type=None):
         # 'result_type' can be a LowLevelType (for green returns)
         # or a template variable whose hintannotation is copied
         if result_type is None:
@@ -30,15 +34,23 @@ class HintGraphTransformer(object):
             v_res = varoftype(result_type)
             hs = hintmodel.SomeLLAbstractConstant(result_type, {})
             self.hannotator.setbinding(v_res, hs)
-        elif isinstance(result_type, flowmodel.Variable):
+        elif isinstance(result_type, Variable):
             var = result_type
             v_res = copyvar(self.hannotator, var)
         else:
             raise TypeError("result_type=%r" % (result_type,))
 
-        spaceop = flowmodel.SpaceOperation(opname, args, v_res)
-        llops.append(spaceop)
+        spaceop = SpaceOperation(opname, args, v_res)
+        block.operations.append(spaceop)
         return v_res
+
+    def genswitch(self, block, v_exitswitch, false, true):
+        block.exitswitch = v_exitswitch
+        link_f = Link([], false)
+        link_f.exitcase = False
+        link_t = Link([], true)
+        link_t.exitcase = True
+        block.recloseblock(link_f, link_t)
 
     def new_void_var(self, name=None):
         v_res = varoftype(lltype.Void, name)
@@ -48,24 +60,23 @@ class HintGraphTransformer(object):
     def new_block_before(self, block):
         newinputargs = [copyvar(self.hannotator, var)
                         for var in block.inputargs]
-        newblock = flowmodel.Block(newinputargs)
-        bridge = flowmodel.Link(newinputargs, block)
+        newblock = Block(newinputargs)
+        bridge = Link(newinputargs, block)
         newblock.closeblock(bridge)
         return newblock
 
-    # __________ transformation steps __________
+    def sort_by_color(self, vars):
+        reds = []
+        greens = []
+        for v in vars:
+            if self.hannotator.binding(v).is_green():
+                greens.append(v)
+            else:
+                reds.append(v)
+        return reds, greens
 
-    def insert_enter_graph(self):
-        entryblock = self.new_block_before(self.graph.startblock)
-        entryblock.isstartblock = True
-        self.graph.startblock.isstartblock = False
-        self.graph.startblock = entryblock
-
-        self.genop(entryblock.operations, 'enter_graph', [])
-
-    def insert_leave_graph(self):
+    def before_return_block(self):
         block = self.graph.returnblock
-        [v_retbox] = block.inputargs
         block.operations = []
         split_block(self.hannotator, block, 0)
         [link] = block.exits
@@ -74,6 +85,112 @@ class HintGraphTransformer(object):
         link.target.inputargs = [self.new_void_var('dummy')]
         self.graph.returnblock = link.target
         self.graph.returnblock.operations = ()
+        return block
 
-        self.genop(block.operations, 'save_locals', [v_retbox])
-        self.genop(block.operations, 'leave_graph', [])
+    # __________ transformation steps __________
+
+    def insert_splits(self):
+        hannotator = self.hannotator
+        for block in self.graph.iterblocks():
+            if block.exitswitch is not None:
+                assert isinstance(block.exitswitch, Variable)
+                hs_switch = hannotator.binding(block.exitswitch)
+                if not hs_switch.is_green():
+                    self.insert_split_handling(block)
+
+    def insert_split_handling(self, block):
+        v_redswitch = block.exitswitch
+        link_f, link_t = block.exits
+        if link_f.exitcase:
+            link_f, link_t = link_t, link_f
+        assert link_f.exitcase is False
+        assert link_t.exitcase is True
+
+        constant_block = Block([])
+        nonconstant_block = Block([])
+
+        v_flag = self.genop(block, 'is_constant', [v_redswitch],
+                            result_type = lltype.Bool)
+        self.genswitch(block, v_flag, true  = constant_block,
+                                      false = nonconstant_block)
+
+        v_greenswitch = self.genop(constant_block, 'revealconst',
+                                   [v_redswitch],
+                                   result_type = lltype.Bool)
+        constant_block.exitswitch = v_greenswitch
+        constant_block.closeblock(link_f, link_t)
+
+        reds, greens = self.sort_by_color(link_f.args)
+        self.genop(nonconstant_block, 'save_locals', reds)
+        resumepoint = self.get_resume_point(link_f.target)
+        c_resumepoint = inputconst(lltype.Signed, resumepoint)
+        self.genop(nonconstant_block, 'split',
+                   [v_redswitch, c_resumepoint] + greens)
+
+        reds, greens = self.sort_by_color(link_t.args)
+        self.genop(nonconstant_block, 'save_locals', reds)
+        self.genop(nonconstant_block, 'enter_block', [])
+        nonconstant_block.closeblock(Link(link_t.args, link_t.target))
+
+        SSA_to_SSI({block            : True,    # reachable from outside
+                    constant_block   : False,
+                    nonconstant_block: False}, self.hannotator)
+
+    def get_resume_point(self, block):
+        try:
+            reenter_link = self.resumepoints[block]
+        except KeyError:
+            resumeblock = Block([])
+            redcount   = 0
+            greencount = 0
+            newvars = []
+            for v in block.inputargs:
+                if self.hannotator.binding(v).is_green():
+                    c = inputconst(lltype.Signed, greencount)
+                    v1 = self.genop(resumeblock, 'restore_green', [c],
+                                    result_type = v)
+                    greencount += 1
+                else:
+                    c = inputconst(lltype.Signed, redcount)
+                    v1 = self.genop(resumeblock, 'restore_local', [c],
+                                    result_type = v)
+                    redcount += 1
+                newvars.append(v1)
+
+            resumeblock.closeblock(Link(newvars, block))
+            reenter_link = Link([], resumeblock)
+            N = len(self.resumepoints)
+            reenter_link.exitcase = N
+            self.resumepoints[block] = reenter_link
+        return reenter_link.exitcase
+
+    def insert_dispatcher(self):
+        if self.resumepoints:
+            block = self.before_return_block()
+            v_switchcase = self.genop(block, 'dispatch_next', [],
+                                      result_type = lltype.Signed)
+            block.exitswitch = v_switchcase
+            defaultlink = block.exits[0]
+            defaultlink.exitcase = 'default'
+            links = self.resumepoints.values()
+            links.sort(lambda l, r: cmp(l.exitcase, r.exitcase))
+            links.append(defaultlink)
+            block.recloseblock(*links)
+
+    def insert_save_return(self):
+        block = self.before_return_block()
+        [v_retbox] = block.inputargs
+        self.genop(block, 'save_locals', [v_retbox])
+        self.genop(block, 'save_return', [])
+
+    def insert_enter_graph(self):
+        entryblock = self.new_block_before(self.graph.startblock)
+        entryblock.isstartblock = True
+        self.graph.startblock.isstartblock = False
+        self.graph.startblock = entryblock
+
+        self.genop(entryblock, 'enter_graph', [])
+
+    def insert_leave_graph(self):
+        block = self.before_return_block()
+        self.genop(block, 'leave_graph_red', [])
