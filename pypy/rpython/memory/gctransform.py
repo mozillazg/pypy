@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop, LL_OPERATIONS
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, \
      c_last_exception, FunctionGraph, Block, Link, checkgraph
-from pypy.translator.unsimplify import varoftype
+from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.translator.unsimplify import insert_empty_startblock
 from pypy.translator.unsimplify import starts_with_empty_block
@@ -81,6 +81,7 @@ class GCTransformer(object):
             return
         self.seen_graphs[graph] = True
         self.links_to_split = {} # link -> vars to pop_alive across the link
+        self.seen_local_raw_malloc = False
 
         # for sanity, we need an empty block at the start of the graph
         if not starts_with_empty_block(graph):
@@ -107,11 +108,65 @@ class GCTransformer(object):
         if starts_with_empty_block(graph):
             remove_empty_startblock(graph)
 
+        if self.seen_local_raw_malloc:
+            self.remove_local_mallocs(graph)
+
         self.links_to_split = None
         v = Variable('vanishing_exc_value')
         v.concretetype = self.get_lltype_of_exception_value()
         graph.exc_cleanup = (v, self.pop_alive(v))
         return is_borrowed    # xxx for tests only
+
+    def remove_local_mallocs(self, graph):
+        from pypy.translator.backendopt.malloc import compute_lifetimes
+        lifetimes = compute_lifetimes(graph)
+        for info in lifetimes:
+            cand = True
+            # XXX do checking
+            for cp in info.creationpoints:
+                if cp[0] != "op":
+                    cand = False
+                    break
+                op = cp[2]
+                if op.opname != 'local_raw_malloc':
+                    cand = False
+                    break
+                op.opname = 'raw_malloc'
+            if cand:
+                for cp in info.creationpoints:
+                    cp[2].opname = 'raw_malloc'
+
+                variables_by_block = {}
+                for block, var in info.variables:
+                    vars = variables_by_block.setdefault(block, {})
+                    vars[var] = True
+                for block, vars in variables_by_block.iteritems():
+                    links_with_a_var = []
+                    links_without_a_var = []
+                    for link in block.exits:
+                        if set(vars) ^ set(link.args):
+                            links_with_a_var.append(link)
+                        else:
+                            links_without_a_var.append(link)
+                    #if not links_without_a_var:
+                    #    continue
+                    for link in links_without_a_var:
+                        for v in vars:
+                            if v.concretetype == llmemory.Address:
+                                break
+                        newblock = insert_empty_block(None, link)
+                        link.args.append(v)
+                        newblock.inputargs.append(copyvar(None, v))
+                        if v.concretetype != llmemory.Address:
+                            newv = varoftype(llmemory.Address)
+                            newblock.operations.append(SpaceOperation(
+                                "cast_ptr_to_adr", [newblock.inputargs[-1]], newv))
+                            v = newv
+                        else:
+                            v = newblock.inputargs[-1]
+                        newblock.operations.append(SpaceOperation(
+                            "raw_free", [v], varoftype(lltype.Void)))
+        checkgraph(graph)
 
     def compute_borrowed_vars(self, graph):
         # the input args are borrowed, and stay borrowed for as long as they
@@ -270,6 +325,10 @@ class GCTransformer(object):
         return result
     replace_setinteriorfield = replace_setfield
     replace_setarrayitem = replace_setfield
+
+    def replace_local_raw_malloc(self, op, livevars, block):
+        self.seen_local_raw_malloc = True
+        return [op]
 
     def replace_safe_call(self, op, livevars, block):
         return [SpaceOperation("direct_call", op.args, op.result)]

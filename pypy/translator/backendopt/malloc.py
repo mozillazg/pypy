@@ -341,6 +341,15 @@ def _try_inline_malloc(info):
                         S = op.args[0].concretetype.TO
                         fldnames = [a.value for a in op.args[1:-1]]
                         key = key_for_field_access(S, *fldnames)
+                        if len(fldnames) == 1 and fldnames[0] in fields_to_raw_free and not isinstance(op.args[2], Constant):
+                            # find the raw malloc and replace it with a local_raw_malloc
+                            # XXX delicate in the extreme!
+                            i = -1
+                            while newops[i].opname != 'raw_malloc':
+                                i -= 1
+                            newops[i] = SpaceOperation("local_raw_malloc",
+                                                       newops[i].args,
+                                                       newops[i].result)
                         assert key in newvarsmap
                         if key in accessed_substructs:
                             c_name = Constant('data', lltype.Void)
@@ -429,12 +438,12 @@ def _try_inline_malloc(info):
                         newargs.append(arg)
                 link.args[:] = newargs
 
-            if not var_exits:
-                for field in fields_to_raw_free:
-                    newops.append(SpaceOperation("flavored_free",
-                                                 [Constant("raw", lltype.Void),
-                                                  newvarsmap[key_for_field_access(STRUCT, field)]],
-                                                 varoftype(lltype.Void)))
+##             if not var_exits:
+##                 for field in fields_to_raw_free:
+##                     newops.append(SpaceOperation("flavored_free",
+##                                                  [Constant("raw", lltype.Void),
+##                                                   newvarsmap[key_for_field_access(STRUCT, field)]],
+##                                                  varoftype(lltype.Void)))
 
             if insert_keepalive and last_removed_access is not None:
                 keepalives = []
