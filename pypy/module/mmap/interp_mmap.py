@@ -427,6 +427,8 @@ class W_MMap(Wrappable):
             start = self.getptr(offset)
             if _MS_WINDOWS:
                 res = FlushViewOfFile(start, size)
+                # XXX res == 0 means that an error occurred, but in CPython
+                # this is not checked
                 return self.space.wrap(res)
             elif _POSIX:
 ##                XXX why is this code here?  There is no equivalent in CPython
