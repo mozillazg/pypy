@@ -255,7 +255,7 @@ def save_locals(jitstate, *redboxes):
 def getlocalbox(jitstate, i):
     return jitstate.frame.local_boxes[i]
 
-def getgreenbox(jitstate, i, T):
+def ll_getgreenbox(jitstate, i, T):
     return jitstate.greens[i].revealconst(T)
 
 def getreturnbox(jitstate):
