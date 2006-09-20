@@ -10,6 +10,7 @@ from pypy.rpython.typesystem import LowLevelTypeSystem
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.hintannotator import container as hintcontainer
+from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, oop
 from pypy.jit.timeshifter.transform import HintGraphTransformer
 from pypy.jit.codegen import model as cgmodel
@@ -38,12 +39,6 @@ HintTypeSystem.instance = HintTypeSystem()
 # ___________________________________________________________
 
 
-def originalconcretetype(hs):
-    if isinstance(hs, annmodel.SomeImpossibleValue):
-        return lltype.Void
-    else:
-        return hs.concretetype
-
 class HintRTyper(RPythonTyper):
 
     def __init__(self, hannotator, rtyper, RGenOp):
@@ -53,7 +48,7 @@ class HintRTyper(RPythonTyper):
         self.RGenOp = RGenOp
         self.green_reprs = PRECOMPUTED_GREEN_REPRS.copy()
         self.red_reprs = {}
-        self.color_cache = {}
+        #self.color_cache = {}
 
         self.annhelper = annlowlevel.MixLevelHelperAnnotator(rtyper)
         self.timeshift_mapping = {}
@@ -216,16 +211,16 @@ class HintRTyper(RPythonTyper):
             self.red_reprs[lowleveltype] = r
             return r
 
-    def gethscolor(self, hs):
-        try:
-            return self.color_cache[id(hs)]
-        except KeyError:
-            if hs.is_green():
-                color = "green"
-            else:
-                color = "red"
-            self.color_cache[id(hs)] = color
-            return color
+##    def gethscolor(self, hs):
+##        try:
+##            return self.color_cache[id(hs)]
+##        except KeyError:
+##            if hs.is_green():
+##                color = "green"
+##            else:
+##                color = "red"
+##            self.color_cache[id(hs)] = color
+##            return color
 
     def get_dispatch_subclass(self, mergepointfamily):
         try:
@@ -235,6 +230,20 @@ class HintRTyper(RPythonTyper):
             subclass = rtimeshift.build_dispatch_subclass(attrnames)
             self.dispatchsubclasses[mergepointfamily] = subclass
             return subclass
+
+    def get_timeshifted_fnptr(self, graph, specialization_key):
+        bk = self.annotator.bookkeeper
+        tsgraph = bk.get_graph_by_key(graph, specialization_key)
+        args_hs, hs_res = self.get_sig_hs(tsgraph)
+        args_r = [self.getrepr(hs_arg) for hs_arg in args_hs]
+        ARGS = [self.r_JITState.lowleveltype]
+        ARGS += [r.lowleveltype for r in args_r]
+        RESULT = self.r_JITState.lowleveltype
+        fnptr = lltype.functionptr(lltype.FuncType(ARGS, RESULT),
+                                   tsgraph.name,
+                                   graph=tsgraph,
+                                   _callable = graph.func)
+        return fnptr, args_r
 
     def insert_v_jitstate_everywhere(self, graph):
         from pypy.translator.unsimplify import varoftype
@@ -511,33 +520,8 @@ class HintRTyper(RPythonTyper):
         return self.translate_op_ptr_nonzero(hop, reverse=True)
 
 
-    def guess_call_kind(self, spaceop):
-        if spaceop.opname == 'indirect_call':
-            return 'red'  # for now
-        assert spaceop.opname == 'direct_call'
-        c_func = spaceop.args[0]
-        fnobj = c_func.value._obj
-        s_result = self.annotator.binding(spaceop.result)
-        r_result = self.getrepr(s_result)
-        if hasattr(fnobj._callable, 'oopspec'):
-            return 'oopspec'
-        elif (originalconcretetype(s_result) is not lltype.Void and
-              isinstance(r_result, GreenRepr)):
-            for v in spaceop.args:
-                s_arg = self.annotator.binding(v)
-                r_arg = self.getrepr(s_arg)
-                if not isinstance(r_arg, GreenRepr):
-                    return 'yellow'
-            return 'green'
-        else:
-            return 'red'
-
-    def translate_op_direct_call(self, hop):
-        kind = self.guess_call_kind(hop.spaceop)
-        meth = getattr(self, 'handle_%s_call' % (kind,))
-        return meth(hop)
-
     def translate_op_indirect_call(self, hop):
+        XXX
         bk = self.annotator.bookkeeper
         ts = self
         v_jitstate = hop.llops.getjitstate()
@@ -580,6 +564,14 @@ class HintRTyper(RPythonTyper):
     def translate_op_leave_graph_red(self, hop):
         v_jitstate = hop.llops.getjitstate()
         v_newjs = hop.llops.genmixlevelhelpercall(rtimeshift.leave_graph_red,
+                                                  [self.s_JITState],
+                                                  [v_jitstate     ],
+                                                  self.s_JITState)
+        hop.llops.setjitstate(v_newjs)
+
+    def translate_op_leave_graph_void(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        v_newjs = hop.llops.genmixlevelhelpercall(rtimeshift.leave_graph_void,
                                                   [self.s_JITState],
                                                   [v_jitstate     ],
                                                   self.s_JITState)
@@ -697,9 +689,17 @@ class HintRTyper(RPythonTyper):
             return rtimeshift.retrieve_jitstate_for_merge(states_dic,
                                                           jitstate, key)
 
-        greens_v = hop.args_v[2:]
-        greens_s = [annmodel.lltype_to_annotation(originalconcretetype(hs))
-                    for hs in hop.args_s[2:]]
+        greens_v = []
+        greens_s = []
+        for r, v in zip(hop.args_r[2:], hop.args_v[2:]):
+            s_precise_type = r.annotation()
+            s_erased_type  = r.erased_annotation()
+            r_precise_type = self.rtyper.getrepr(s_precise_type)
+            r_erased_type  = self.rtyper.getrepr(s_erased_type)
+            greens_v.append(hop.llops.convertvar(v, r_precise_type,
+                                                    r_erased_type))
+            greens_s.append(s_erased_type)
+
         v_jitstate = hop.llops.getjitstate()
         return hop.llops.genmixlevelhelpercall(merge_point,
                              [self.s_JITState] + greens_s,
@@ -784,7 +784,7 @@ class HintRTyper(RPythonTyper):
         v = hop.genop('direct_call', hop.args_v, hop.r_result.lowleveltype)
         return v
 
-    def handle_red_call(self, hop):
+    def translate_op_red_call(self, hop):
         bk = self.annotator.bookkeeper
         ts = self
         v_jitstate = hop.llops.getjitstate()
@@ -855,14 +855,14 @@ class HintLowLevelOpList(LowLevelOpList):
 class __extend__(pairtype(HintTypeSystem, hintmodel.SomeLLAbstractValue)):
 
     def rtyper_makerepr((ts, hs_c), hrtyper):
-        if hrtyper.gethscolor(hs_c) == 'green':
+        if hs_c.is_green():
             return hrtyper.getgreenrepr(hs_c.concretetype)
         else:
             return hrtyper.getredrepr(hs_c.concretetype)
 
     def rtyper_makekey((ts, hs_c), hrtyper):
-        color = hrtyper.gethscolor(hs_c)
-        return hs_c.__class__, color, hs_c.concretetype
+        is_green = hs_c.is_green()
+        return hs_c.__class__, is_green, hs_c.concretetype
 
 class __extend__(pairtype(HintTypeSystem, hintmodel.SomeLLAbstractContainer)):
 
@@ -909,13 +909,13 @@ class RedRepr(Repr):
         self.lowleveltype = hrtyper.r_RedBox.lowleveltype
         self.hrtyper = hrtyper
 
-    def get_genop_var(self, v, llops):
-        ts = self.hrtyper
-        v_jitstate = hop.llops.getjitstate()
-        return llops.genmixlevelhelpercall(rtimeshift.ll_gvar_from_redbox,
-                       [ts.s_JITState, llops.hrtyper.s_RedBox],
-                       [v_jitstate,    v],
-                       ts.s_ConstOrVar)
+##    def get_genop_var(self, v, llops):
+##        ts = self.hrtyper
+##        v_jitstate = hop.llops.getjitstate()
+##        return llops.genmixlevelhelpercall(rtimeshift.ll_gvar_from_redbox,
+##                       [ts.s_JITState, llops.hrtyper.s_RedBox],
+##                       [v_jitstate,    v],
+##                       ts.s_ConstOrVar)
 
     def convert_const(self, ll_value):
         RGenOp = self.hrtyper.RGenOp
@@ -963,13 +963,13 @@ class GreenRepr(Repr):
         else:
             return annmodel.SomeInteger()
 
-    def get_genop_var(self, v, llops):
-        ts = self.hrtyper
-        v_jitstate = hop.llops.getjitstate()
-        return llops.genmixlevelhelpercall(rtimeshift.ll_gvar_from_constant,
-                                           [ts.s_JITState, self.annotation()],
-                                           [v_jitstate,    v],
-                                           ts.s_ConstOrVar)
+##    def get_genop_var(self, v, llops):
+##        ts = self.hrtyper
+##        v_jitstate = hop.llops.getjitstate()
+##        return llops.genmixlevelhelpercall(rtimeshift.ll_gvar_from_constant,
+##                                           [ts.s_JITState, self.annotation()],
+##                                           [v_jitstate,    v],
+##                                           ts.s_ConstOrVar)
 
     def convert_const(self, ll_value):
         return ll_value
