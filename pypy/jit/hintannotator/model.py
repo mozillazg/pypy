@@ -33,6 +33,7 @@ class OriginFlags(object):
     fixed = False
     read_positions = None
     greenargs_cached = None
+    is_call_result = False
 
     def __init__(self, bookkeeper=None, spaceop=None):
         self.bookkeeper = bookkeeper
@@ -65,7 +66,7 @@ class OriginFlags(object):
             if self.greenargs_cached is not None:
                 return self.greenargs_cached
             frame = GreenHandlerFrame(annotator)
-        if self.spaceop.opname == 'direct_call':     # ah haa
+        if self.is_call_result:
             return frame.greencallresult(self.spaceop)
         else:
             for v in self.spaceop.args:
@@ -345,6 +346,7 @@ class __extend__(SomeLLAbstractConstant):
 
         if isinstance(hs_res, SomeLLAbstractConstant):
             hs_res.myorigin = bookkeeper.myorigin()
+            hs_res.myorigin.is_call_result = True
 
         # we need to make sure that hs_res does not become temporarily less
         # general as a result of calling another specialized version of the
