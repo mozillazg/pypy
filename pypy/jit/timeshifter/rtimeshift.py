@@ -1,6 +1,7 @@
 import operator, weakref
 from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
 from pypy.jit.timeshifter import rvalue
+from pypy.rpython.unroll import unrolling_iterable
 
 FOLDABLE_OPS = dict.fromkeys(lloperation.enum_foldable_ops())
 
@@ -234,7 +235,7 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
     jitstate.split(later_builder, resumepoint, list(greens_gv))
 
 def dispatch_next(oldjitstate):
-    split_queue = oldjitstate.frame.split_queue
+    split_queue = oldjitstate.frame.dispatch_queue.split_queue
     if split_queue:
         jitstate = split_queue.pop()
         enter_block(jitstate)
@@ -273,7 +274,7 @@ def setexcvaluebox(jitstate, box):
     jitstate.exc_value_box = box
 
 def save_return(jitstate):
-    jitstate.frame.return_queue.append(jitstate)
+    jitstate.frame.dispatch_queue.return_queue.append(jitstate)
 
 def ll_gvar_from_redbox(jitstate, redbox):
     return redbox.getgenvar(jitstate.curbuilder)
@@ -282,6 +283,22 @@ def ll_gvar_from_constant(jitstate, ll_value):
     return jitstate.curbuilder.rgenop.genconst(ll_value)
 
 # ____________________________________________________________
+
+class BaseDispatchQueue(object):
+    def __init__(self):
+        self.split_queue = []      # XXX could be turned into a linked list
+        self.return_queue = []     # XXX could be turned into a linked list
+
+def build_dispatch_subclass(attrnames):
+    if len(attrnames) == 0:
+        return BaseDispatchQueue
+    attrnames = unrolling_iterable(attrnames)
+    class DispatchQueue(BaseDispatchQueue):
+        def __init__(self):
+            BaseDispatchQueue.__init__(self)
+            for name in attrnames:
+                setattr(self, name, {})     # the new dicts have various types!
+    return DispatchQueue
 
 
 class FrozenVirtualFrame(object):
@@ -332,10 +349,9 @@ class FrozenJITState(object):
 
 class VirtualFrame(object):
 
-    def __init__(self, backframe, split_queue, return_queue):
+    def __init__(self, backframe, dispatch_queue):
         self.backframe = backframe
-        self.split_queue = split_queue
-        self.return_queue = return_queue
+        self.dispatch_queue = dispatch_queue
         #self.local_boxes = ... set by callers
 
     def enter_block(self, incoming, memo):
@@ -357,9 +373,7 @@ class VirtualFrame(object):
             newbackframe = None
         else:
             newbackframe = self.backframe.copy(memo)
-        result = VirtualFrame(newbackframe,
-                              self.split_queue,
-                              self.return_queue)
+        result = VirtualFrame(newbackframe, self.dispatch_queue)
         result.local_boxes = [box.copy(memo) for box in self.local_boxes]
         return result
 
@@ -391,7 +405,7 @@ class JITState(object):
                                   self.exc_value_box.copy(memo),
                                   newresumepoint,
                                   newgreens)
-        self.frame.split_queue.append(later_jitstate)
+        self.frame.dispatch_queue.split_queue.append(later_jitstate)
 
     def enter_block(self, incoming, memo):
         self.frame.enter_block(incoming, memo)
@@ -411,11 +425,13 @@ class JITState(object):
         self.exc_value_box = self.exc_value_box.replace(memo)
 
 
-def enter_graph(jitstate):
-    jitstate.frame = VirtualFrame(jitstate.frame, [], [])
+def enter_graph(jitstate, DispatchQueueClass):
+    jitstate.frame = VirtualFrame(jitstate.frame, DispatchQueueClass())
+enter_graph._annspecialcase_ = 'specialize:arg(1)'
+# XXX is that too many specializations? ^^^
 
 def leave_graph_red(jitstate):
-    return_queue = jitstate.frame.return_queue
+    return_queue = jitstate.frame.dispatch_queue.return_queue
     return_cache = {}
     still_pending = []
     for jitstate in return_queue:
