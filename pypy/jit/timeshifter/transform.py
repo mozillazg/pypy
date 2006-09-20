@@ -1,5 +1,5 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
-from pypy.objspace.flow.model import SpaceOperation
+from pypy.objspace.flow.model import SpaceOperation, mkentrymap
 from pypy.annotation        import model as annmodel
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -9,19 +9,41 @@ from pypy.translator.unsimplify import split_block, split_block_at_start
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 
 
+class MergePointFamily(object):
+    def __init__(self):
+        self.count = 0
+    def add(self):
+        result = self.count
+        self.count += 1
+        return 'mp%d' % result
+    def getattrnames(self):
+        return ['mp%d' % i for i in range(self.count)]
+
+
 class HintGraphTransformer(object):
 
     def __init__(self, hannotator, graph):
         self.hannotator = hannotator
         self.graph = graph
         self.resumepoints = {}
+        self.mergepointfamily = MergePointFamily()
+        self.c_mpfamily = inputconst(lltype.Void, self.mergepointfamily)
 
     def transform(self):
+        mergepoints = list(self.enumerate_merge_points())
         self.insert_save_return()
         self.insert_splits()
+        for block in mergepoints:
+            self.insert_merge(block)
         self.insert_dispatcher()
         self.insert_enter_graph()
         self.insert_leave_graph()
+
+    def enumerate_merge_points(self):
+        entrymap = mkentrymap(self.graph)
+        for block, links in entrymap.items():
+            if len(links) > 1 and block is not self.graph.returnblock:
+                yield block
 
     # __________ helpers __________
 
@@ -41,7 +63,10 @@ class HintGraphTransformer(object):
             raise TypeError("result_type=%r" % (result_type,))
 
         spaceop = SpaceOperation(opname, args, v_res)
-        block.operations.append(spaceop)
+        if isinstance(block, list):
+            block.append(spaceop)
+        else:
+            block.operations.append(spaceop)
         return v_res
 
     def genswitch(self, block, v_exitswitch, false, true):
@@ -63,6 +88,16 @@ class HintGraphTransformer(object):
         newblock = Block(newinputargs)
         bridge = Link(newinputargs, block)
         newblock.closeblock(bridge)
+        return newblock
+
+    def naive_split_block(self, block, position):
+        newblock = Block([])
+        newblock.operations = block.operations[position:]
+        del block.operations[position:]
+        newblock.exitswitch = block.exitswitch
+        block.exitswitch = None
+        newblock.recloseblock(*block.exits)
+        block.recloseblock(Link([], newblock))
         return newblock
 
     def sort_by_color(self, vars):
@@ -164,6 +199,36 @@ class HintGraphTransformer(object):
             self.resumepoints[block] = reenter_link
         return reenter_link.exitcase
 
+    def insert_merge(self, block):
+        reds, greens = self.sort_by_color(block.inputargs)
+        nextblock = self.naive_split_block(block, 0)
+
+        self.genop(block, 'save_locals', reds)
+        mp   = self.mergepointfamily.add()
+        c_mp = inputconst(lltype.Void, mp)
+        v_finished_flag = self.genop(block, 'merge_point',
+                                     [self.c_mpfamily, c_mp] + greens,
+                                     result_type = lltype.Bool)
+        block.exitswitch = v_finished_flag
+        [link_f] = block.exits
+        link_t = Link([inputconst(lltype.Void, None)], self.graph.returnblock)
+        link_f.exitcase = False
+        link_t.exitcase = True
+        block.recloseblock(link_f, link_t)
+
+        restoreops = []
+        mapping = {}
+        for i, v in enumerate(reds):
+            c = inputconst(lltype.Signed, i)
+            v1 = self.genop(restoreops, 'restore_local', [c],
+                            result_type = v)
+            mapping[v] = v1
+        nextblock.renamevariables(mapping)
+        nextblock.operations[:0] = restoreops
+
+        SSA_to_SSI({block    : True,    # reachable from outside
+                    nextblock: False}, self.hannotator)
+
     def insert_dispatcher(self):
         if self.resumepoints:
             block = self.before_return_block()
@@ -189,7 +254,7 @@ class HintGraphTransformer(object):
         self.graph.startblock.isstartblock = False
         self.graph.startblock = entryblock
 
-        self.genop(entryblock, 'enter_graph', [])
+        self.genop(entryblock, 'enter_graph', [self.c_mpfamily])
 
     def insert_leave_graph(self):
         block = self.before_return_block()

@@ -58,6 +58,7 @@ class HintRTyper(RPythonTyper):
         self.annhelper = annlowlevel.MixLevelHelperAnnotator(rtyper)
         self.timeshift_mapping = {}
         self.sigs = {}
+        self.dispatchsubclasses = {}
 
         (self.s_CodeGenerator,
          self.r_CodeGenerator) = self.s_r_instanceof(cgmodel.CodeGenerator)
@@ -225,6 +226,15 @@ class HintRTyper(RPythonTyper):
                 color = "red"
             self.color_cache[id(hs)] = color
             return color
+
+    def get_dispatch_subclass(self, mergepointfamily):
+        try:
+            return self.dispatchsubclasses[mergepointfamily]
+        except KeyError:
+            attrnames = mergepointfamily.getattrnames()
+            subclass = rtimeshift.build_dispatch_subclass(attrnames)
+            self.dispatchsubclasses[mergepointfamily] = subclass
+            return subclass
 
     def insert_v_jitstate_everywhere(self, graph):
         from pypy.translator.unsimplify import varoftype
@@ -557,10 +567,14 @@ class HintRTyper(RPythonTyper):
     # special operations inserted by the HintGraphTransformer
 
     def translate_op_enter_graph(self, hop):
+        mpfamily = hop.args_v[0].value
+        subclass = self.get_dispatch_subclass(mpfamily)
+        s_subclass = self.rtyper.annotator.bookkeeper.immutablevalue(subclass)
+        c_subclass = inputconst(lltype.Void, subclass)
         v_jitstate = hop.llops.getjitstate()
         hop.llops.genmixlevelhelpercall(rtimeshift.enter_graph,
-                                        [self.s_JITState],
-                                        [v_jitstate     ],
+                                        [self.s_JITState, s_subclass],
+                                        [v_jitstate     , c_subclass],
                                         annmodel.s_None)
 
     def translate_op_leave_graph_red(self, hop):
@@ -670,6 +684,23 @@ class HintRTyper(RPythonTyper):
         args_v += greens_v
         hop.llops.genmixlevelhelpercall(rtimeshift.split, args_s, args_v,
                                         annmodel.s_None)
+
+    def translate_op_merge_point(self, hop):
+        mpfamily = hop.args_v[0].value
+        attrname = hop.args_v[1].value
+        DispatchQueueSubclass = self.get_dispatch_subclass(mpfamily)
+
+        def merge_point(jitstate, *key):
+            dispatch_queue = jitstate.frame.dispatch_queue
+            assert isinstance(dispatch_queue, DispatchQueueSubclass)
+            states_dic = getattr(dispatch_queue, attrname)
+            return rtimeshift.retrieve_jitstate_for_merge(states_dic,
+                                                          jitstate, key)
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(merge_point,
+                             [self.s_JITState] + hop.args_s[2:],
+                             [v_jitstate     ] + hop.args_v[2:],
+                             annmodel.SomeBool())
 
     def translate_op_save_return(self, hop):
         v_jitstate = hop.llops.getjitstate()
