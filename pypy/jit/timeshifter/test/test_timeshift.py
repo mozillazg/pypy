@@ -900,7 +900,6 @@ class TestTimeshift(TimeshiftingTests):
         self.check_insns({})
 
     def test_split_on_green_return(self):
-        py.test.skip("in-progress")
         def ll_two(x):
             if x > 0:
                 return 17
@@ -908,7 +907,7 @@ class TestTimeshift(TimeshiftingTests):
                 return 22
         def ll_function(x):
             n = ll_two(x)
-            return n+1
+            return hint(n+1, variable=True)
         res = self.timeshift(ll_function, [-70], [])
         assert res == 23
         self.check_insns({'int_gt': 1})

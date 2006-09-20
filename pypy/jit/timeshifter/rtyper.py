@@ -577,6 +577,14 @@ class HintRTyper(RPythonTyper):
                                                   self.s_JITState)
         hop.llops.setjitstate(v_newjs)
 
+    def translate_op_leave_graph_yellow(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        v_njs = hop.llops.genmixlevelhelpercall(rtimeshift.leave_graph_yellow,
+                                                [self.s_JITState],
+                                                [v_jitstate     ],
+                                                self.s_JITState)
+        hop.llops.setjitstate(v_njs)
+
     def translate_op_save_locals(self, hop):
         v_jitstate = hop.llops.getjitstate()
         boxes_r = [self.getredrepr(originalconcretetype(hs))
@@ -587,6 +595,15 @@ class HintRTyper(RPythonTyper):
                                         [self.s_JITState] + boxes_s,
                                         [v_jitstate     ] + boxes_v,
                                         annmodel.s_None)
+
+    def translate_op_save_greens(self, hop):
+        v_jitstate = hop.llops.getjitstate()
+        greens_v = list(self.wrap_green_vars(hop.llops, hop.args_v))
+        greens_s = [self.s_ConstOrVar] * len(greens_v)
+        return hop.llops.genmixlevelhelpercall(rtimeshift.save_greens,
+                                               [self.s_JITState] + greens_s,
+                                               [v_jitstate     ] + greens_v,
+                                               annmodel.s_None)
 
     def translate_op_enter_block(self, hop):
         v_jitstate = hop.llops.getjitstate()
@@ -675,6 +692,24 @@ class HintRTyper(RPythonTyper):
         args_v = [v_jitstate, v_switch, c_resumepoint]
         args_v += greens_v
         hop.llops.genmixlevelhelpercall(rtimeshift.split, args_s, args_v,
+                                        annmodel.s_None)
+
+    def translate_op_collect_split(self, hop):
+        GREENS = [v.concretetype for v in hop.args_v[1:]]
+        greens_r = [self.getgreenrepr(TYPE) for TYPE in GREENS]
+        vlist = hop.inputargs(lltype.Signed, *greens_r)
+
+        v_jitstate = hop.llops.getjitstate()
+        c_resumepoint = vlist[0]
+        greens_v = list(self.wrap_green_vars(hop.llops, vlist[1:]))
+
+        s_Int = annmodel.SomeInteger(nonneg=True)
+        args_s = [self.s_JITState, s_Int]
+        args_s += [self.s_ConstOrVar] * len(greens_v)
+        args_v = [v_jitstate, c_resumepoint]
+        args_v += greens_v
+        hop.llops.genmixlevelhelpercall(rtimeshift.collect_split,
+                                        args_s, args_v,
                                         annmodel.s_None)
 
     def translate_op_merge_point(self, hop):
@@ -799,6 +834,8 @@ class HintRTyper(RPythonTyper):
         RESULT = lltype.typeOf(fnptr).TO.RESULT
         v_newjitstate = hop.genop('direct_call', args_v, RESULT)
         hop.llops.setjitstate(v_newjitstate)
+
+    translate_op_yellow_call = translate_op_red_call
 
 
 class HintLowLevelOpList(LowLevelOpList):
