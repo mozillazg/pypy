@@ -1,5 +1,6 @@
 import operator, weakref
 from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
+from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue
 from pypy.rpython.unroll import unrolling_iterable
 
@@ -43,7 +44,6 @@ class OpDesc(object):
 _opdesc_cache = {}
 
 def make_opdesc(hop):
-    from pypy.jit.timeshifter.rtyper import originalconcretetype
     hrtyper = hop.rtyper
     op_key = (hrtyper.RGenOp, hop.spaceop.opname,
               tuple([originalconcretetype(s_arg) for s_arg in hop.args_s]),
@@ -276,11 +276,11 @@ def setexcvaluebox(jitstate, box):
 def save_return(jitstate):
     jitstate.frame.dispatch_queue.return_queue.append(jitstate)
 
-def ll_gvar_from_redbox(jitstate, redbox):
-    return redbox.getgenvar(jitstate.curbuilder)
+##def ll_gvar_from_redbox(jitstate, redbox):
+##    return redbox.getgenvar(jitstate.curbuilder)
 
-def ll_gvar_from_constant(jitstate, ll_value):
-    return jitstate.curbuilder.rgenop.genconst(ll_value)
+##def ll_gvar_from_constant(jitstate, ll_value):
+##    return jitstate.curbuilder.rgenop.genconst(ll_value)
 
 # ____________________________________________________________
 
@@ -430,7 +430,7 @@ def enter_graph(jitstate, DispatchQueueClass):
 enter_graph._annspecialcase_ = 'specialize:arg(1)'
 # XXX is that too many specializations? ^^^
 
-def leave_graph_red(jitstate):
+def merge_returning_jitstates(jitstate):
     return_queue = jitstate.frame.dispatch_queue.return_queue
     return_cache = {}
     still_pending = []
@@ -441,10 +441,18 @@ def leave_graph_red(jitstate):
     for jitstate in still_pending[:-1]:
         res = retrieve_jitstate_for_merge(return_cache, jitstate, ())
         assert res is True   # finished
-    jitstate = still_pending[-1]
+    return still_pending[-1]
+
+def leave_graph_red(jitstate):
+    jitstate = merge_returning_jitstates(jitstate)
     myframe = jitstate.frame
-    if myframe.local_boxes:             # else it's a green Void return
-        jitstate.returnbox = myframe.local_boxes[0]
-        # ^^^ fetched by a 'fetch_return' operation
+    jitstate.returnbox = myframe.local_boxes[0]
+    # ^^^ fetched by a 'fetch_return' operation
+    jitstate.frame = myframe.backframe
+    return jitstate
+
+def leave_graph_void(jitstate):
+    jitstate = merge_returning_jitstates(jitstate)
+    myframe = jitstate.frame
     jitstate.frame = myframe.backframe
     return jitstate

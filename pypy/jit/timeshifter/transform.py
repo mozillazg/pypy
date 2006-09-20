@@ -2,6 +2,7 @@ from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, mkentrymap
 from pypy.annotation        import model as annmodel
 from pypy.jit.hintannotator import model as hintmodel
+from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
@@ -35,6 +36,7 @@ class HintGraphTransformer(object):
         self.insert_splits()
         for block in mergepoints:
             self.insert_merge(block)
+        self.split_after_calls()
         self.insert_dispatcher()
         self.insert_enter_graph()
         self.insert_leave_graph()
@@ -47,20 +49,17 @@ class HintGraphTransformer(object):
 
     # __________ helpers __________
 
-    def genop(self, block, opname, args, result_type=None):
+    def genop(self, block, opname, args, result_type=None, result_like=None):
         # 'result_type' can be a LowLevelType (for green returns)
         # or a template variable whose hintannotation is copied
-        if result_type is None:
-            v_res = self.new_void_var()
-        elif isinstance(result_type, lltype.LowLevelType):
+        if result_type is not None:
             v_res = varoftype(result_type)
             hs = hintmodel.SomeLLAbstractConstant(result_type, {})
             self.hannotator.setbinding(v_res, hs)
-        elif isinstance(result_type, Variable):
-            var = result_type
-            v_res = copyvar(self.hannotator, var)
+        elif result_like is not None:
+            v_res = copyvar(self.hannotator, result_like)
         else:
-            raise TypeError("result_type=%r" % (result_type,))
+            v_res = self.new_void_var()
 
         spaceop = SpaceOperation(opname, args, v_res)
         if isinstance(block, list):
@@ -99,6 +98,19 @@ class HintGraphTransformer(object):
         newblock.recloseblock(*block.exits)
         block.recloseblock(Link([], newblock))
         return newblock
+
+    def variables_alive(self, block, before_position):
+        created_before = dict.fromkeys(block.inputargs)
+        for op in block.operations[:before_position]:
+            created_before[op.result] = True
+        used = {}
+        for op in block.operations[before_position:]:
+            for v in op.args:
+                used[v] = True
+        for link in block.exits:
+            for v in link.args:
+                used[v] = True
+        return [v for v in used if v in created_before]
 
     def sort_by_color(self, vars):
         reds = []
@@ -183,12 +195,12 @@ class HintGraphTransformer(object):
                 if self.hannotator.binding(v).is_green():
                     c = inputconst(lltype.Signed, greencount)
                     v1 = self.genop(resumeblock, 'restore_green', [c],
-                                    result_type = v)
+                                    result_like = v)
                     greencount += 1
                 else:
                     c = inputconst(lltype.Signed, redcount)
                     v1 = self.genop(resumeblock, 'restore_local', [c],
-                                    result_type = v)
+                                    result_like = v)
                     redcount += 1
                 newvars.append(v1)
 
@@ -221,7 +233,7 @@ class HintGraphTransformer(object):
         for i, v in enumerate(reds):
             c = inputconst(lltype.Signed, i)
             v1 = self.genop(restoreops, 'restore_local', [c],
-                            result_type = v)
+                            result_like = v)
             mapping[v] = v1
         nextblock.renamevariables(mapping)
         nextblock.operations[:0] = restoreops
@@ -245,7 +257,13 @@ class HintGraphTransformer(object):
     def insert_save_return(self):
         block = self.before_return_block()
         [v_retbox] = block.inputargs
-        self.genop(block, 'save_locals', [v_retbox])
+        hs_retbox = self.hannotator.binding(v_retbox)
+        if originalconcretetype(hs_retbox) is lltype.Void:
+            self.leave_graph_opname = 'leave_graph_void'
+            self.genop(block, 'save_locals', [])
+        else:
+            self.leave_graph_opname = 'leave_graph_red'
+            self.genop(block, 'save_locals', [v_retbox])
         self.genop(block, 'save_return', [])
 
     def insert_enter_graph(self):
@@ -258,4 +276,74 @@ class HintGraphTransformer(object):
 
     def insert_leave_graph(self):
         block = self.before_return_block()
-        self.genop(block, 'leave_graph_red', [])
+        self.genop(block, self.leave_graph_opname, [])
+
+    # __________ handling of the various kinds of calls __________
+
+    def guess_call_kind(self, spaceop):
+        if spaceop.opname == 'indirect_call':
+            return 'red'  # for now
+        assert spaceop.opname == 'direct_call'
+        c_func = spaceop.args[0]
+        fnobj = c_func.value._obj
+        s_result = self.hannotator.binding(spaceop.result)
+        if hasattr(fnobj._callable, 'oopspec'):
+            return 'oopspec'
+        elif (originalconcretetype(s_result) is not lltype.Void and
+              s_result.is_green()):
+            for v in spaceop.args:
+                s_arg = self.hannotator.binding(v)
+                if not s_arg.is_green():
+                    return 'yellow'
+            return 'green'
+        else:
+            return 'red'
+
+    def split_after_calls(self):
+        for block in list(self.graph.iterblocks()):
+            for i in range(len(block.operations)-1, -1, -1):
+                op = block.operations[i]
+                if op.opname in ('direct_call', 'indirect_call'):
+                    call_kind = self.guess_call_kind(op)
+                    handler = getattr(self, 'handle_%s_call' % (call_kind,))
+                    handler(block, i)
+
+    def handle_red_call(self, block, pos):
+        # the 'save_locals' pseudo-operation is used to save all
+        # alive local variables into the current JITState
+        beforeops = block.operations[:pos]
+        op        = block.operations[pos]
+        afterops  = block.operations[pos+1:]
+
+        varsalive = self.variables_alive(block, pos+1)
+        try:
+            varsalive.remove(op.result)
+            uses_retval = True      # it will be restored by 'fetch_return'
+        except ValueError:
+            uses_retval = False
+        reds, greens = self.sort_by_color(varsalive)
+
+        newops = []
+        self.genop(newops, 'save_locals', reds)
+        self.genop(newops, 'red_call', op.args)    # Void result,
+        # because the call doesn't return its redbox result, but only
+        # has the hidden side-effect of putting it in the jitstate
+        mapping = {}
+        for i, var in enumerate(reds):
+            c_index = Constant(i, concretetype=lltype.Signed)
+            newvar = self.genop(newops, 'restore_local', [c_index],
+                                result_like = var)
+            mapping[var] = newvar
+
+        if uses_retval and not self.hannotator.binding(op.result).is_green():
+            var = op.result
+            newvar = self.genop(newops, 'fetch_return', [],
+                                result_like = var)
+            mapping[var] = newvar
+
+        saved = block.inputargs
+        block.inputargs = []     # don't rename these!
+        block.operations = afterops
+        block.renamevariables(mapping)
+        block.inputargs = saved
+        block.operations[:0] = beforeops + newops

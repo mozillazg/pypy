@@ -32,6 +32,7 @@ class OriginFlags(object):
 
     fixed = False
     read_positions = None
+    greenargs_cached = None
 
     def __init__(self, bookkeeper=None, spaceop=None):
         self.bookkeeper = bookkeeper
@@ -61,6 +62,8 @@ class OriginFlags(object):
     def greenargs(self, frame=None):
         annotator = self.bookkeeper.annotator
         if frame is None:
+            if self.greenargs_cached is not None:
+                return self.greenargs_cached
             frame = GreenHandlerFrame(annotator)
         if self.spaceop.opname == 'direct_call':     # ah haa
             return frame.greencallresult(self.spaceop)
@@ -228,6 +231,12 @@ def reorigin(hs_v1, *deps_hs):
         return SomeLLAbstractConstant(hs_v1.concretetype, d, eager_concrete=hs_v1.eager_concrete)
     else:
         return hs_v1
+
+def originalconcretetype(hs):
+    if isinstance(hs, annmodel.SomeImpossibleValue):
+        return lltype.Void
+    else:
+        return hs.concretetype
 
 # ____________________________________________________________
 # operations
