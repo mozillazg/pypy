@@ -696,10 +696,14 @@ class HintRTyper(RPythonTyper):
             states_dic = getattr(dispatch_queue, attrname)
             return rtimeshift.retrieve_jitstate_for_merge(states_dic,
                                                           jitstate, key)
+
+        greens_v = hop.args_v[2:]
+        greens_s = [annmodel.lltype_to_annotation(originalconcretetype(hs))
+                    for hs in hop.args_s[2:]]
         v_jitstate = hop.llops.getjitstate()
         return hop.llops.genmixlevelhelpercall(merge_point,
-                             [self.s_JITState] + hop.args_s[2:],
-                             [v_jitstate     ] + hop.args_v[2:],
+                             [self.s_JITState] + greens_s,
+                             [v_jitstate     ] + greens_v,
                              annmodel.SomeBool())
 
     def translate_op_save_return(self, hop):
