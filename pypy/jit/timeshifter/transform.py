@@ -8,6 +8,7 @@ from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import split_block, split_block_at_start
 from pypy.translator.backendopt.ssa import SSA_to_SSI
+from pypy.translator.backendopt import support
 
 
 class MergePointFamily(object):
@@ -22,6 +23,7 @@ class MergePointFamily(object):
 
 
 class HintGraphTransformer(object):
+    c_dummy = inputconst(lltype.Void, None)
 
     def __init__(self, hannotator, graph):
         self.hannotator = hannotator
@@ -128,7 +130,7 @@ class HintGraphTransformer(object):
         split_block(self.hannotator, block, 0)
         [link] = block.exits
         assert len(link.args) == 0
-        link.args = [inputconst(lltype.Void, None)]
+        link.args = [self.c_dummy]
         link.target.inputargs = [self.new_void_var('dummy')]
         self.graph.returnblock = link.target
         self.graph.returnblock.operations = ()
@@ -183,9 +185,9 @@ class HintGraphTransformer(object):
                     constant_block   : False,
                     nonconstant_block: False}, self.hannotator)
 
-    def get_resume_point(self, block):
+    def get_resume_point_link(self, block):
         try:
-            reenter_link = self.resumepoints[block]
+            return self.resumepoints[block]
         except KeyError:
             resumeblock = Block([])
             redcount   = 0
@@ -209,7 +211,10 @@ class HintGraphTransformer(object):
             N = len(self.resumepoints)
             reenter_link.exitcase = N
             self.resumepoints[block] = reenter_link
-        return reenter_link.exitcase
+            return reenter_link
+
+    def get_resume_point(self, block):
+        return self.get_resume_point_link(block).exitcase
 
     def insert_merge(self, block):
         reds, greens = self.sort_by_color(block.inputargs)
@@ -223,7 +228,7 @@ class HintGraphTransformer(object):
                                      result_type = lltype.Bool)
         block.exitswitch = v_finished_flag
         [link_f] = block.exits
-        link_t = Link([inputconst(lltype.Void, None)], self.graph.returnblock)
+        link_t = Link([self.c_dummy], self.graph.returnblock)
         link_f.exitcase = False
         link_t.exitcase = True
         block.recloseblock(link_f, link_t)
@@ -261,6 +266,9 @@ class HintGraphTransformer(object):
         if originalconcretetype(hs_retbox) is lltype.Void:
             self.leave_graph_opname = 'leave_graph_void'
             self.genop(block, 'save_locals', [])
+        elif hs_retbox.is_green():
+            self.leave_graph_opname = 'leave_graph_yellow'
+            self.genop(block, 'save_greens', [v_retbox])
         else:
             self.leave_graph_opname = 'leave_graph_red'
             self.genop(block, 'save_locals', [v_retbox])
@@ -359,3 +367,32 @@ class HintGraphTransformer(object):
         op = block.operations[pos]
         assert op.opname == 'direct_call'
         op.opname = 'green_call'
+
+    def handle_yellow_call(self, block, pos):
+        link = support.split_block_with_keepalive(block, pos+1,
+                                                  annotator=self.hannotator)
+        op = block.operations.pop(pos)
+        assert len(block.operations) == pos
+        nextblock = link.target
+        varsalive = link.args
+        try:
+            index = varsalive.index(op.result)
+        except ValueError:
+            XXX-later
+
+        del varsalive[index]
+        v_result = nextblock.inputargs.pop(index)
+        nextblock.inputargs.insert(0, v_result)
+
+        reds, greens = self.sort_by_color(varsalive)
+        self.genop(block, 'save_locals', reds)
+        self.genop(block, 'yellow_call', op.args)  # Void result, like red_call
+
+        resumepoint = self.get_resume_point(nextblock)
+        c_resumepoint = inputconst(lltype.Signed, resumepoint)
+        self.genop(block, 'collect_split', [c_resumepoint] + greens)
+        link.args = []
+        link.target = self.get_resume_point_link(nextblock).target
+
+        self.insert_merge(nextblock)  # to merge some of the possibly many
+                                      # return jitstates
