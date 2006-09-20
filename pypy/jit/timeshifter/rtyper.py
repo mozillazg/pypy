@@ -727,7 +727,7 @@ class HintRTyper(RPythonTyper):
 
     # handling of the various kinds of calls
 
-    def handle_oopspec_call(self, hop):
+    def translate_op_oopspec_call(self, hop):
         # special-cased call, for things like list methods
         from pypy.jit.timeshifter.oop import OopSpecDesc, Index
 
@@ -776,9 +776,7 @@ class HintRTyper(RPythonTyper):
                                       [v_jitstate,    c_oopspecdesc] + args_v,
                                       s_result)
 
-    def handle_green_call(self, hop):
-        # green-returning call, for now (XXX) we assume it's an
-        # all-green function that we can just call
+    def translate_op_green_call(self, hop):
         for r_arg in hop.args_r:
             assert isinstance(r_arg, GreenRepr)
         v = hop.genop('direct_call', hop.args_v, hop.r_result.lowleveltype)

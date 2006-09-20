@@ -887,6 +887,18 @@ class TestTimeshift(TimeshiftingTests):
         res = self.timeshift(ll_function, [3], [], policy=P_NOVIRTUAL)
         assert res == 3
 
+    def test_green_call(self):
+        def ll_add_one(x):
+            return x+1
+        def ll_function(y):
+            z = ll_add_one(y)
+            z = hint(z, concrete=True)
+            return hint(z, variable=True)
+
+        res = self.timeshift(ll_function, [3], [0], policy=P_NOVIRTUAL)
+        assert res == 4
+        self.check_insns({})
+
     def test_split_on_green_return(self):
         py.test.skip("in-progress")
         def ll_two(x):
