@@ -96,6 +96,8 @@ class GreenHandlerFrame(object):
 ##            import pdb; pdb.set_trace()
         args_hs = [self.annotator.binding(v) for v in spaceop.args]
         hs_result = self.annotator.binding(spaceop.result)
+        if not isinstance(hs_result, SomeLLAbstractConstant):
+            return False     # was generalized, e.g. to SomeLLAbstractVariable
         hs_f1 = args_hs.pop(0)
         fnobj = hs_f1.const._obj
         if (getattr(self.annotator.policy, 'oopspec', False) and

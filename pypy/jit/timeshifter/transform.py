@@ -347,3 +347,15 @@ class HintGraphTransformer(object):
         block.renamevariables(mapping)
         block.inputargs = saved
         block.operations[:0] = beforeops + newops
+
+    def handle_oopspec_call(self, block, pos):
+        op = block.operations[pos]
+        assert op.opname == 'direct_call'
+        op.opname = 'oopspec_call'
+
+    def handle_green_call(self, block, pos):
+        # green-returning call, for now (XXX) we assume it's an
+        # all-green function that we can just call
+        op = block.operations[pos]
+        assert op.opname == 'direct_call'
+        op.opname = 'green_call'
