@@ -614,7 +614,7 @@ class HintRTyper(RPythonTyper):
         c_TYPE = hop.inputconst(lltype.Void, TYPE)
         s_result = annmodel.lltype_to_annotation(TYPE)
         v_jitstate = hop.llops.getjitstate()
-        return hop.llops.genmixlevelhelpercall(rtimeshift.getgreenbox,
+        return hop.llops.genmixlevelhelpercall(rtimeshift.ll_getgreenbox,
                   [self.s_JITState, annmodel.SomeInteger(nonneg=True), s_TYPE],
                   [v_jitstate     , c_index                          , c_TYPE],
                   s_result)
