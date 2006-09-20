@@ -181,7 +181,7 @@ elif _MS_WINDOWS:
         dwErr = GetLastError()
         if low.value == INVALID_FILE_SIZE and dwErr != NO_ERROR:
             raise OperationError(space.w_EnvironmentError,
-                                 space.wrap(_get_error_msg(dwErr)))
+                                 space.wrap(os.strerror(dwErr)))
         return low.value, high.value
 
     def _get_error_msg():
