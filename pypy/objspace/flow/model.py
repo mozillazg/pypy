@@ -42,7 +42,7 @@ class roproperty(object):
 
 
 class FunctionGraph(object):
-    __slots__ = ['startblock', 'returnblock', 'exceptblock', '__dict__']
+    __slots__ = ['startblock', 'returnblock', 'exceptblock', '__dict__', 'needs_more_malloc_removal']
     
     def __init__(self, name, startblock, return_var=None):
         self.name        = name    # function name (possibly mangled already)
@@ -57,6 +57,7 @@ class FunctionGraph(object):
                                   Variable('evalue')])  # exception value
         self.exceptblock.operations = ()
         self.exceptblock.exits      = ()
+        self.needs_more_malloc_removal = False
 
     def getargs(self):
         return self.startblock.inputargs
