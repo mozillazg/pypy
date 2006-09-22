@@ -494,7 +494,7 @@ def _try_inline_malloc(graph, info, links_to_split, remove_autofrees=False):
         if for_field_freeing_varmap is None:
             for_field_freeing_varmap = newmap
 
-        if fields_to_raw_free and links:
+        if fields_to_raw_free and links_without_vars:
             for link in links_without_vars:
                 varstofree = [for_field_freeing_varmap[key_for_field_access(STRUCT, field)] for field in fields_to_raw_free]
                 varstofree = [v for v in varstofree if isinstance(v, Variable)]
