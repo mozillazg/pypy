@@ -48,6 +48,9 @@ class FunctionCodeGenerator(object):
         # apply the exception transformation
         if self.db.exctransformer:
             self.db.exctransformer.create_exception_handling(self.graph)
+        if graph.needs_more_malloc_removal:
+            from pypy.translator.backendopt.malloc import remove_simple_mallocs
+            remove_simple_mallocs(graph, remove_autofrees=True)
         # apply the gc transformation
         if self.db.gctransformer:
             self.db.gctransformer.transform_graph(self.graph)
@@ -753,6 +756,9 @@ class FunctionCodeGenerator(object):
                     format.append(arg.value.replace('%', '%%'))
                     continue
                 format.append('%c')
+            elif T == Void and isinstance(arg, Constant) and isinstance(arg.value, str):
+                format.append(arg.value.replace('%', '%%'))
+                continue                
             else:
                 raise Exception("don't know how to debug_print %r" % (T,))
             argv.append(self.expr(arg))

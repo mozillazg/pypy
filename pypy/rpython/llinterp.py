@@ -171,7 +171,6 @@ class LLFrame(object):
         self.curr_block = None
         self.curr_operation_index = 0
         self.alloca_objects = []
-        self.local_mallocs = []
 
     # _______________________________________________________
     # variable setters/getters helpers
@@ -245,8 +244,6 @@ class LLFrame(object):
                     for obj in self.alloca_objects:
                         #XXX slighly unclean
                         obj._setobj(None)
-                    for adr in self.local_mallocs:
-                        self.heap.raw_free(adr)
                     return args
         finally:
             if tracer:
@@ -511,6 +508,7 @@ class LLFrame(object):
             setattr(obj, finalfield, fieldvalue)
         else:
             obj[finalfield] = fieldvalue
+    op_bare_setinteriorfield = op_setinteriorfield
 
     def op_getarrayitem(self, array, index):
         return array[index]
@@ -526,7 +524,7 @@ class LLFrame(object):
                 args = gc.get_arg_write_barrier(array, index, item)
                 write_barrier = gc.get_funcptr_write_barrier()
                 self.op_direct_call(write_barrier, *args)
-
+    op_bare_setarrayitem = op_setarrayitem
 
     def perform_call(self, f, ARGS, args):
         fobj = self.llinterpreter.typer.type_system.deref(f)
@@ -750,11 +748,6 @@ class LLFrame(object):
         checkadr(addr)
         assert lltype.typeOf(value) == typ
         getattr(addr, str(typ).lower())[offset] = value
-
-    def op_local_raw_malloc(self, size):
-        r = self.heap.raw_malloc(size)
-        self.local_mallocs.append(r)
-        return r
 
     # ____________________________________________________________
     # Overflow-detecting variants

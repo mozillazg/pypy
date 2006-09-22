@@ -1,9 +1,9 @@
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
-from pypy.objspace.flow.model import SpaceOperation, traverse
+from pypy.objspace.flow.model import SpaceOperation, traverse, checkgraph
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype
-from pypy.translator.simplify import remove_identical_vars
-from pypy.translator.unsimplify import varoftype
+from pypy.translator.simplify import remove_identical_vars, join_blocks
+from pypy.translator.unsimplify import varoftype, insert_empty_block, copyvar
 from pypy.translator.backendopt.support import log
 from pypy.translator.backendopt.constfold import constant_fold_graph
 
@@ -87,7 +87,7 @@ def compute_lifetimes(graph):
     def visit(node):
         if isinstance(node, Block):
             for op in node.operations:
-                if op.opname in ("same_as", "cast_pointer", "cast_adr_to_ptr"):
+                if op.opname in ("same_as", "cast_pointer"):
                     # special-case these operations to identify their input
                     # and output variables
                     union(node, op.args[0], node, op.result)
@@ -128,7 +128,7 @@ def compute_lifetimes(graph):
     traverse(visit, graph)
     return lifetimes.infos()
 
-def _try_inline_malloc(info):
+def _try_inline_malloc(graph, info, links_to_split, remove_autofrees=False):
     """Try to inline the mallocs creation and manipulation of the Variables
     in the given LifeTime."""
     # the values must be only ever created by a "malloc"
@@ -220,17 +220,28 @@ def _try_inline_malloc(info):
 
     try:
         destr_ptr = lltype.getRuntimeTypeInfo(STRUCT)._obj.destructor_funcptr
-        if destr_ptr and 'autofree_fields' not in STRUCT._hints:
-            return False
-        fields_to_raw_free = STRUCT._hints['autofree_fields']
+        if destr_ptr:
+            if 'autofree_fields' in STRUCT._hints:
+                if remove_autofrees:
+                    fields_to_raw_free = STRUCT._hints['autofree_fields']
+                    assert len(info.creationpoints) == 1
+                else:
+                    graph.needs_more_malloc_removal = True
+                    return False
+            else:
+                return False
     except (ValueError, AttributeError), e:
         pass
+
+    assert not fields_to_raw_free or remove_autofrees
 
     # must not remove unions inlined as the only field of a GcStruct
     if union_wrapper(STRUCT):
         return False
 
     # success: replace each variable with a family of variables (one per field)
+
+    # print 'removing malloc of', STRUCT, fields_to_raw_free
 
     # 'flatnames' is a list of (STRUCTTYPE, fieldname_in_that_struct) that
     # describes the list of variables that should replace the single
@@ -306,6 +317,16 @@ def _try_inline_malloc(info):
 
     for block, vars in variables_by_block.items():
 
+        links_without_vars = []
+
+        if fields_to_raw_free:
+            for link in block.exits:
+                if not set(link.args) & set(vars):
+                    links_without_vars.append(link)
+##                     print "link hasn't var", link, 'args:', link.args, 'vars', vars
+##                     print [(c, c.concretetype) for c in link.args]
+##                     print [(c, c.concretetype) for c in vars]
+
         def flowin(var, newvarsmap, insert_keepalive=False):
             # in this 'block', follow where the 'var' goes to and replace
             # it by a flattened-out family of variables.  This family is given
@@ -341,15 +362,6 @@ def _try_inline_malloc(info):
                         S = op.args[0].concretetype.TO
                         fldnames = [a.value for a in op.args[1:-1]]
                         key = key_for_field_access(S, *fldnames)
-                        if len(fldnames) == 1 and fldnames[0] in fields_to_raw_free and not isinstance(op.args[2], Constant):
-                            # find the raw malloc and replace it with a local_raw_malloc
-                            # XXX delicate in the extreme!
-                            i = -1
-                            while newops[i].opname != 'raw_malloc':
-                                i -= 1
-                            newops[i] = SpaceOperation("local_raw_malloc",
-                                                       newops[i].args,
-                                                       newops[i].result)
                         assert key in newvarsmap
                         if key in accessed_substructs:
                             c_name = Constant('data', lltype.Void)
@@ -423,27 +435,21 @@ def _try_inline_malloc(info):
                     count[0] += progress
                 else:
                     newops.append(op)
+##                 if newops[-1:] != [op] and remove_autofrees:
+##                     newops.append(SpaceOperation("debug_print", [Constant(str(op), lltype.Void)], varoftype(lltype.Void)))
 
             assert block.exitswitch not in vars
 
-            var_exits = False
             for link in block.exits:
                 newargs = []
+                oldargs = link.args[:]
                 for arg in link.args:
                     if arg in vars:
                         newargs += list_newvars()
                         insert_keepalive = False   # kept alive by the link
-                        var_exits = True
                     else:
                         newargs.append(arg)
                 link.args[:] = newargs
-
-##             if not var_exits:
-##                 for field in fields_to_raw_free:
-##                     newops.append(SpaceOperation("flavored_free",
-##                                                  [Constant("raw", lltype.Void),
-##                                                   newvarsmap[key_for_field_access(STRUCT, field)]],
-##                                                  varoftype(lltype.Void)))
 
             if insert_keepalive and last_removed_access is not None:
                 keepalives = []
@@ -458,6 +464,10 @@ def _try_inline_malloc(info):
 
             block.operations[:] = newops
 
+            return newvarsmap
+
+        for_field_freeing_varmap = None
+
         # look for variables arriving from outside the block
         for var in vars:
             if var in block.inputargs:
@@ -465,14 +475,14 @@ def _try_inline_malloc(info):
                 newinputargs = block.inputargs[:i]
                 newvarsmap = {}
                 for key in flatnames:
-                    newvar = Variable()
+                    newvar = Variable(key[0]._name + ''.join(map(str, key[1:])))
                     newvar.concretetype = newvarstype[key]
                     newvarsmap[key] = newvar
                     newinputargs.append(newvar)
                 newinputargs += block.inputargs[i+1:]
                 block.inputargs[:] = newinputargs
                 assert var not in block.inputargs
-                flowin(var, newvarsmap, insert_keepalive=True)
+                for_field_freeing_varmap = flowin(var, newvarsmap, insert_keepalive=True)
 
         # look for variables created inside the block by a malloc
         vars_created_here = []
@@ -480,24 +490,50 @@ def _try_inline_malloc(info):
             if op.opname in ("malloc", "zero_malloc") and op.result in vars:
                 vars_created_here.append(op.result)
         for var in vars_created_here:
-            flowin(var, newvarsmap=None)
+            newmap = flowin(var, newvarsmap=None)
+        if for_field_freeing_varmap is None:
+            for_field_freeing_varmap = newmap
+
+        if fields_to_raw_free and links:
+            for link in links_without_vars:
+                varstofree = [for_field_freeing_varmap[key_for_field_access(STRUCT, field)] for field in fields_to_raw_free]
+                varstofree = [v for v in varstofree if isinstance(v, Variable)]
+                if varstofree:
+                    links_to_split.setdefault(link, []).extend(varstofree)
 
     return count[0]
 
-def remove_mallocs_once(graph):
+def remove_mallocs_once(graph, remove_autofrees=False):
     """Perform one iteration of malloc removal."""
     remove_identical_vars(graph)
     lifetimes = compute_lifetimes(graph)
     progress = 0
+    links_to_split = {}
     for info in lifetimes:
-        progress += _try_inline_malloc(info)
+        progress += _try_inline_malloc(graph, info, links_to_split, remove_autofrees)
+        checkgraph(graph)
+        join_blocks(graph)
+    for link, vars_to_free in links_to_split.iteritems():
+        newblock = None
+        for v in vars_to_free:
+            if isinstance(v, Variable):
+                if not newblock:
+                    newblock = insert_empty_block(None, link)
+                link.args.append(v)
+                newblock.inputargs.append(copyvar(None, v))
+                newblock.operations.append(SpaceOperation("flavored_free",
+                                                          [Constant("raw", lltype.Void),
+                                                           newblock.inputargs[-1]],
+                                                          varoftype(lltype.Void)))
+##     if graph.name == "func" and remove_autofrees and progress:
+##         graph.show()
     return progress
 
-def remove_simple_mallocs(graph, callback=None):
+def remove_simple_mallocs(graph, callback=None, remove_autofrees=False):
     """Iteratively remove (inline) the mallocs that can be simplified away."""
     tot = 0
     while True:
-        count = remove_mallocs_once(graph)
+        count = remove_mallocs_once(graph, remove_autofrees)
         if count:
             log.malloc('%d simple mallocs removed in %r' % (count, graph.name))
             constant_fold_graph(graph)
