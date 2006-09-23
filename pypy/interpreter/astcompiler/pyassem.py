@@ -705,7 +705,6 @@ class PyFlowGraph(FlowGraph):
 
     def _lookupConst(self, w_obj, list_w):
         space = self.space
-        w_obj_type = space.type(w_obj)
         for i in range(len(list_w)):
             if self._cmpConsts(w_obj, list_w[i]):
                 return i
@@ -776,7 +775,18 @@ class PyFlowGraph(FlowGraph):
         arg = inst.name                        
         index = self._cmp.index(arg)
         return InstrInt(inst.op, index)
-    
+
+    def _convert_CALL_METHOD(self, inst):
+        assert isinstance(inst, InstrObj)
+        w_cache = inst.obj
+        index = self._lookupConst(w_cache, self.consts)
+        return InstrInt(inst.op, index)
+
+    _convert_CALL_METHOD_KW     = _convert_CALL_METHOD
+    _convert_CALL_METHOD_VAR    = _convert_CALL_METHOD
+    _convert_CALL_METHOD_VAR_KW = _convert_CALL_METHOD
+    _convert_CALL_METHOD_FAST   = _convert_CALL_METHOD
+
 
     # similarly for other opcodes...
 
@@ -980,6 +990,7 @@ class StackDepthTracker:
     # XXX 1. need to keep track of stack depth on jumps
     # XXX 2. at least partly as a result, this code is broken
     # XXX 3. Don't need a class here!
+    # XXX CALL_METHOD_* NOT TRACKED YET, we get a bad but safe upper bound
 
     def findDepth(self, insts, debug=0):
         depth = 0

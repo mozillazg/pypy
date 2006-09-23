@@ -139,6 +139,7 @@ def descr_set__module(space, w_type, w_value):
                              space.wrap("can't set %s.__module__" %
                                         w_type.name))
     w_type.dict_w['__module__'] = w_value
+    w_type.mutated()
 
 def descr___subclasses__(space, w_type):
     """Return the list of immediate subclasses."""
