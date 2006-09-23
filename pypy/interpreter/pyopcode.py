@@ -684,9 +684,9 @@ class PyInterpFrame(pyframe.PyFrame):
         
     def CALL_FUNCTION(f, oparg):
         # XXX start of hack for performance
-        if (oparg >> 8) & 0xff == 0:
+        if oparg <= 0xff:
             # Only positional arguments
-            nargs = oparg & 0xff
+            nargs = oparg
             w_function = f.valuestack.top(nargs)
             try:
                 w_result = f.space.call_valuestack(w_function, nargs, f.valuestack)
@@ -712,6 +712,57 @@ class PyInterpFrame(pyframe.PyFrame):
         w_varargs = f.valuestack.pop()
         f.call_function(oparg, w_varargs, w_varkw)
 
+    def CALL_METHOD(f, constindex, w_star=None, w_starstar=None):
+        from pypy.interpreter.methodcache import MethodCache
+        w_methodcache = f.getconstant_w(constindex)
+        methodcache = f.space.interp_w(MethodCache, w_methodcache)
+        oparg = methodcache.argkwcount
+        n_arguments = oparg & 0xff
+        n_keywords = (oparg>>8) & 0xff
+        keywords = None
+        if n_keywords:
+            keywords = {}
+            for i in range(n_keywords):
+                w_value = f.valuestack.pop()
+                w_key   = f.valuestack.pop()
+                key = f.space.str_w(w_key)
+                keywords[key] = w_value
+        arguments = [None] * n_arguments
+        for i in range(n_arguments - 1, -1, -1):
+            arguments[i] = f.valuestack.pop()
+        args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
+        w_self = f.valuestack.pop()
+        w_result = methodcache.call_args(f.space, w_self, args)
+        #rstack.resume_point("call_function", f, returns=w_result)  XXX
+        f.valuestack.push(w_result)
+
+    def CALL_METHOD_VAR(f, oparg):
+        w_varargs = f.valuestack.pop()
+        f.CALL_METHOD(oparg, w_varargs, None)
+
+    def CALL_METHOD_KW(f, oparg):
+        w_varkw = f.valuestack.pop()
+        f.CALL_METHOD(oparg, None, w_varkw)
+
+    def CALL_METHOD_VAR_KW(f, oparg):
+        w_varkw = f.valuestack.pop()
+        w_varargs = f.valuestack.pop()
+        f.CALL_METHOD(oparg, w_varargs, w_varkw)
+
+    def CALL_METHOD_FAST(f, constindex):
+        # Only positional arguments
+        from pypy.interpreter.methodcache import MethodCache
+        w_methodcache = f.getconstant_w(constindex)
+        methodcache = f.space.interp_w(MethodCache, w_methodcache)
+        nargs = methodcache.argkwcount
+        try:
+            w_result = methodcache.call_valuestack(f.space, f.valuestack)
+            #rstack.resume_point("CALL_FUNCTION", f, nargs, returns=w_result)
+            #   XXX
+        finally:
+            f.valuestack.drop(nargs + 1)
+        f.valuestack.push(w_result)
+
     def MAKE_FUNCTION(f, numdefaults):
         w_codeobj = f.valuestack.pop()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
@@ -735,6 +786,7 @@ class PyInterpFrame(pyframe.PyFrame):
     def LIST_APPEND(f):
         w = f.valuestack.pop()
         v = f.valuestack.pop()
+        # XXX could use a MethodCache here too, or even something more direct
         f.space.call_method(v, 'append', w)
 
     def SET_LINENO(f, lineno):

@@ -259,6 +259,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # unique-for-this-space W_TypeObject instance
         return self.fromcache(stdtypedef.TypeCache).getorbuild(typedef)
 
+    def gettypeversion(self, w_type):
+        assert isinstance(w_type, W_TypeObject)
+        return w_type.version_tag
+
     def wrap(self, x):
         "Wraps the Python value 'x' into one of the wrapper classes."
         # You might notice that this function is rather conspicuously

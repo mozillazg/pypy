@@ -38,6 +38,11 @@ def _mangle(name, klass):
 
     return "_%s%s" % (klass, name)
 
+
+class VersionTag(object):
+    pass
+
+
 class W_TypeObject(W_Object):
     from pypy.objspace.std.typetype import type_typedef as typedef
 
@@ -207,12 +212,18 @@ class W_TypeObject(W_Object):
                 w_self.mro_w = space.unpackiterable(w_mro)
                 return
         w_self.mro_w = w_self.compute_mro()
+        w_self.mutated()
 
     def ready(w_self):
         for w_base in w_self.bases_w:
             if not isinstance(w_base, W_TypeObject):
                 continue
             w_base.add_subclass(w_self)
+
+    def mutated(w_self):
+        """Relevant changes are only the ones that change the result
+        of a lookup(), i.e. changes to dict_w or mro_w."""
+        w_self.version_tag = VersionTag()
 
     # compute the most parent class with the same layout as us
     def get_layout(w_self):
@@ -407,6 +418,7 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
             space.set(w_descr, w_type, w_value)
             return
     w_type.dict_w[name] = w_value
+    w_type.mutated()
 
 def delattr__Type_ANY(space, w_type, w_name):
     if w_type.lazyloaders:
@@ -419,9 +431,10 @@ def delattr__Type_ANY(space, w_type, w_name):
             return
     try:
         del w_type.dict_w[name]
-        return
     except KeyError:
         raise OperationError(space.w_AttributeError, w_name)
+    else:
+        w_type.mutated()
 
 # ____________________________________________________________
 

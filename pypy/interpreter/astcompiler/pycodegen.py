@@ -13,6 +13,7 @@ from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
     CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, \
     CO_FUTURE_DIVISION, CO_FUTURE_WITH_STATEMENT
 from pypy.interpreter.pyparser.error import SyntaxError
+from pypy.interpreter.methodcache import MethodCache
 
 # drop VERSION dependency since it the ast transformer for 2.4 doesn't work with 2.3 anyway
 VERSION = 2
@@ -23,6 +24,13 @@ callfunc_opcode_info = [
     "CALL_FUNCTION_KW",
     "CALL_FUNCTION_VAR",
     "CALL_FUNCTION_VAR_KW",
+]
+callmeth_opcode_info = [
+    # (Have *args, Have **args) : opcode
+    "CALL_METHOD",
+    "CALL_METHOD_KW",
+    "CALL_METHOD_VAR",
+    "CALL_METHOD_VAR_KW",
 ]
 
 LOOP = 1
@@ -1032,7 +1040,12 @@ class CodeGenerator(ast.ASTVisitor):
         pos = 0
         kw = 0
         self.set_lineno(node)
-        node.node.accept( self )
+        is_method = isinstance(node.node, ast.Getattr)
+        if is_method:
+            # special case for calls that "look like" method calls
+            node.node.expr.accept( self )
+        else:
+            node.node.accept( self )
         for arg in node.args:
             arg.accept( self )
             if isinstance(arg, ast.Keyword):
@@ -1045,8 +1058,17 @@ class CodeGenerator(ast.ASTVisitor):
             node.dstar_args.accept( self )
         have_star = node.star_args is not None
         have_dstar = node.dstar_args is not None
-        opcode = callfunc_opcode_info[ have_star*2 + have_dstar]
-        self.emitop_int(opcode, kw << 8 | pos)
+        argkwcount = kw << 8 | pos
+        if is_method:
+            if not have_star and not have_dstar and not kw:
+                opcode = 'CALL_METHOD_FAST'
+            else:
+                opcode = callmeth_opcode_info[ have_star*2 + have_dstar]
+            cache = MethodCache(node.node.attrname, argkwcount)
+            self.emitop_obj(opcode, self.space.wrap(cache))
+        else:
+            opcode = callfunc_opcode_info[ have_star*2 + have_dstar]
+            self.emitop_int(opcode, argkwcount)
 
     def visitPrint(self, node):
         self.set_lineno(node)
