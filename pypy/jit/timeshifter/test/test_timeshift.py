@@ -99,8 +99,6 @@ class TimeshiftingTests(object):
 
         fresh_jitstate = hrtyper.ll_fresh_jitstate
         finish_jitstate = hrtyper.ll_finish_jitstate
-        args_hs, hs_res = hrtyper.get_sig_hs(ha.translator.graphs[0])
-        RESTYPE = originalconcretetype(hs_res)
         t = rtyper.annotator.translator
         for graph in ha.translator.graphs:
             checkgraph(graph)
@@ -119,11 +117,10 @@ class TimeshiftingTests(object):
         assert len(graph1.getargs()) == 1 + len(values)
         graph1varargs = graph1.getargs()[1:]
         timeshifted_entrypoint_args_s = []
-        residual_argtypes = []
         argcolors = []
         generate_code_args_s = []
 
-        for v, hs_arg, llvalue in zip(graph1varargs, args_hs, values):
+        for v, llvalue in zip(graph1varargs, values):
             s_var = annmodel.ll_to_annotation(llvalue)
             r = hrtyper.bindingrepr(v)
             residual_v = r.residual_values(llvalue)
@@ -133,8 +130,6 @@ class TimeshiftingTests(object):
             else:
                 color = "red"
                 assert residual_v == [llvalue], "XXX for now"
-                ARGTYPE = originalconcretetype(hs_arg)
-                residual_argtypes.append(ARGTYPE)
                 timeshifted_entrypoint_args_s.append(hrtyper.s_RedBox)
                 generate_code_args_s.append(annmodel.SomeBool())
             argcolors.append(color)
@@ -147,7 +142,7 @@ class TimeshiftingTests(object):
             [hrtyper.s_JITState]
             + timeshifted_entrypoint_args_s,
             hrtyper.s_JITState)
-        FUNC = lltype.FuncType(residual_argtypes, RESTYPE)
+        FUNC = hrtyper.get_residual_functype(ha.translator.graphs[0])
         argcolors = unrolling_iterable(argcolors)
         self.argcolors = argcolors
 
@@ -180,9 +175,13 @@ class TimeshiftingTests(object):
                     timeshifted_entrypoint_args += (box,)
 
             top_jitstate = fresh_jitstate(builder)
-            top_jitstate = timeshifted_entrypoint(top_jitstate,
+            try:
+                top_jitstate = timeshifted_entrypoint(top_jitstate,
                                                   *timeshifted_entrypoint_args)
-            finish_jitstate(top_jitstate, sigtoken)
+            except rtimeshift.CompilationInterrupted:
+                pass
+            else:
+                finish_jitstate(top_jitstate, sigtoken)
 
             gv_generated = rgenop.gencallableconst(sigtoken, "generated",
                                                    entrypoint)

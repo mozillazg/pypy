@@ -13,8 +13,11 @@ from pypy.translator.backendopt import support
 
 
 class MergePointFamily(object):
-    def __init__(self):
+    def __init__(self, tsgraph, is_global=False):
+        self.tsgraph = tsgraph
+        self.is_global = is_global
         self.count = 0
+        self.resumepoint_after_mergepoint = {}
     def add(self):
         result = self.count
         self.count += 1
@@ -30,27 +33,32 @@ class HintGraphTransformer(object):
         self.hannotator = hannotator
         self.graph = graph
         self.graphcolor = self.graph_calling_color(graph)
+        self.global_merge_points = self.graph_global_mps(self.graph)
         self.resumepoints = {}
-        self.mergepointfamily = MergePointFamily()
+        self.mergepoint_set = {}    # set of blocks
+        self.mergepointfamily = MergePointFamily(graph,
+                                                 self.global_merge_points)
         self.c_mpfamily = inputconst(lltype.Void, self.mergepointfamily)
         self.tsgraphs_seen = []
 
     def transform(self):
-        mergepoints = list(self.enumerate_merge_points())
+        self.compute_merge_points()
         self.insert_save_return()
         self.insert_splits()
-        for block in mergepoints:
-            self.insert_merge(block)
         self.split_after_calls()
-        self.insert_dispatcher()
+        self.handle_hints()
+        self.insert_merge_points()
         self.insert_enter_graph()
+        self.insert_dispatcher()
         self.insert_leave_graph()
 
-    def enumerate_merge_points(self):
+    def compute_merge_points(self):
         entrymap = mkentrymap(self.graph)
         for block, links in entrymap.items():
             if len(links) > 1 and block is not self.graph.returnblock:
-                yield block
+                self.mergepoint_set[block] = True
+        if self.global_merge_points:
+            self.mergepoint_set[self.graph.startblock] = True
 
     def graph_calling_color(self, tsgraph):
         args_hs, hs_res = self.hannotator.bookkeeper.tsgraphsigs[tsgraph]
@@ -60,6 +68,12 @@ class HintGraphTransformer(object):
             return 'yellow'
         else:
             return 'red'
+
+    def graph_global_mps(self, tsgraph):
+        try:
+            return tsgraph.func._global_merge_points_
+        except AttributeError:
+            return False
 
     def timeshifted_graph_of(self, graph, args_v):
         bk = self.hannotator.bookkeeper
@@ -146,6 +160,13 @@ class HintGraphTransformer(object):
             else:
                 reds.append(v)
         return reds, greens
+
+    def before_start_block(self):
+        entryblock = self.new_block_before(self.graph.startblock)
+        entryblock.isstartblock = True
+        self.graph.startblock.isstartblock = False
+        self.graph.startblock = entryblock
+        return entryblock
 
     def before_return_block(self):
         block = self.graph.returnblock
@@ -239,6 +260,21 @@ class HintGraphTransformer(object):
     def get_resume_point(self, block):
         return self.get_resume_point_link(block).exitcase
 
+    def go_to_if(self, block, target, v_finished_flag):
+        block.exitswitch = v_finished_flag
+        [link_f] = block.exits
+        link_t = Link([self.c_dummy], target)
+        link_f.exitcase = False
+        link_t.exitcase = True
+        block.recloseblock(link_f, link_t)
+
+    def go_to_dispatcher_if(self, block, v_finished_flag):
+        self.go_to_if(block, self.graph.returnblock, v_finished_flag)
+
+    def insert_merge_points(self):
+        for block in self.mergepoint_set:
+            self.insert_merge(block)
+
     def insert_merge(self, block):
         reds, greens = self.sort_by_color(block.inputargs)
         nextblock = self.naive_split_block(block, 0)
@@ -246,15 +282,15 @@ class HintGraphTransformer(object):
         self.genop(block, 'save_locals', reds)
         mp   = self.mergepointfamily.add()
         c_mp = inputconst(lltype.Void, mp)
-        v_finished_flag = self.genop(block, 'merge_point',
+        if self.global_merge_points:
+            self.genop(block, 'save_greens', greens)
+            prefix = 'global_'
+        else:
+            prefix = ''
+        v_finished_flag = self.genop(block, '%smerge_point' % (prefix,),
                                      [self.c_mpfamily, c_mp] + greens,
                                      resulttype = lltype.Bool)
-        block.exitswitch = v_finished_flag
-        [link_f] = block.exits
-        link_t = Link([self.c_dummy], self.graph.returnblock)
-        link_f.exitcase = False
-        link_t.exitcase = True
-        block.recloseblock(link_f, link_t)
+        self.go_to_dispatcher_if(block, v_finished_flag)
 
         restoreops = []
         mapping = {}
@@ -269,10 +305,26 @@ class HintGraphTransformer(object):
         SSA_to_SSI({block    : True,    # reachable from outside
                     nextblock: False}, self.hannotator)
 
+        if self.global_merge_points:
+            N = self.get_resume_point(nextblock)
+            self.mergepointfamily.resumepoint_after_mergepoint[mp] = N
+
     def insert_dispatcher(self):
-        if self.resumepoints:
+        if self.global_merge_points or self.resumepoints:
             block = self.before_return_block()
-            v_switchcase = self.genop(block, 'dispatch_next', [],
+            self.genop(block, 'dispatch_next', [])
+            if self.global_merge_points:
+                block = self.before_return_block()
+                entryblock = self.before_start_block()
+                v_rp = self.genop(entryblock, 'getresumepoint', [],
+                                  resulttype = lltype.Signed)
+                c_zero = inputconst(lltype.Signed, 0)
+                v_abnormal_entry = self.genop(entryblock, 'int_ge',
+                                              [v_rp, c_zero],
+                                              resulttype = lltype.Bool)
+                self.go_to_if(entryblock, block, v_abnormal_entry)
+
+            v_switchcase = self.genop(block, 'getresumepoint', [],
                                       resulttype = lltype.Signed)
             block.exitswitch = v_switchcase
             defaultlink = block.exits[0]
@@ -297,11 +349,7 @@ class HintGraphTransformer(object):
         self.genop(block, 'save_return', [])
 
     def insert_enter_graph(self):
-        entryblock = self.new_block_before(self.graph.startblock)
-        entryblock.isstartblock = True
-        self.graph.startblock.isstartblock = False
-        self.graph.startblock = entryblock
-
+        entryblock = self.before_start_block()
         self.genop(entryblock, 'enter_graph', [self.c_mpfamily])
 
     def insert_leave_graph(self):
@@ -363,6 +411,11 @@ class HintGraphTransformer(object):
     def make_call(self, block, op, save_locals_vars, color='red'):
         self.genop(block, 'save_locals', save_locals_vars)
         targets = dict(self.graphs_from(op))
+        for tsgraph in targets.values():
+            if self.graph_global_mps(tsgraph):
+                # make sure jitstate.resumepoint is set to zero
+                self.genop(block, 'resetresumepoint', [])
+                break
         if len(targets) == 1:
             [tsgraph] = targets.values()
             c_tsgraph = inputconst(lltype.Void, tsgraph)
@@ -475,5 +528,56 @@ class HintGraphTransformer(object):
         link.args = []
         link.target = self.get_resume_point_link(nextblock).target
 
-        self.insert_merge(nextblock)  # to merge some of the possibly many
-                                      # return jitstates
+        self.mergepoint_set[nextblock] = True  # to merge some of the possibly
+                                               # many return jitstates
+
+    # __________ hints __________
+
+    def handle_hints(self):
+        for block in list(self.graph.iterblocks()):
+            for i in range(len(block.operations)-1, -1, -1):
+                op = block.operations[i]
+                if op.opname == 'hint':
+                    hints = op.args[1].value
+                    for key, value in hints.items():
+                        if value == True:
+                            methname = 'handle_%s_hint' % (key,)
+                            if hasattr(self, methname):
+                                handler = getattr(self, methname)
+                                break
+                    else:
+                        handler = self.handle_default_hint
+                    handler(block, i)
+
+    def handle_default_hint(self, block, i):
+        # just discard the hint by default
+        op = block.operations[i]
+        newop = SpaceOperation('same_as', [op.args[0]], op.result)
+        block.operations[i] = newop
+
+    def handle_forget_hint(self, block, i):
+        # a hint for testing only
+        op = block.operations[i]
+        assert self.binding(op.result).is_green()
+        assert not self.binding(op.args[0]).is_green()
+        newop = SpaceOperation('revealconst', [op.args[0]], op.result)
+        block.operations[i] = newop
+
+    def handle_promote_hint(self, block, i):
+        op = block.operations[i]
+        c_zero = inputconst(lltype.Signed, 0)
+        newop = SpaceOperation('restore_green', [c_zero], op.result)
+        block.operations[i] = newop
+
+        link = support.split_block_with_keepalive(block, i,
+                                                  annotator=self.hannotator)
+        nextblock = link.target
+
+        reds, greens = self.sort_by_color(link.args)
+        v_promote = op.args[0]
+        if v_promote not in reds:
+            reds.append(v_promote)
+        self.genop(block, 'save_locals', reds)
+        v_finished_flag = self.genop(block, 'promote', [v_promote],
+                                     resulttype = lltype.Bool)
+        self.go_to_dispatcher_if(block, v_finished_flag)
