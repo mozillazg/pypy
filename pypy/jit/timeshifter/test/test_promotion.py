@@ -1,6 +1,7 @@
 import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
+from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL
 from pypy.rpython.objectmodel import hint
 
 
@@ -24,3 +25,19 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, [20], [])
         assert res == 42
         self.check_insns(int_add=0, int_mul=0)
+
+    def test_many_promotions(self):
+        def ll_two(k):
+            return k*k
+        def ll_function(n, total):
+            while n > 0:
+                k = hint(n, promote=True)
+                k = ll_two(k)
+                total += hint(k, variable=True)
+                n -= 1
+            return total
+        ll_function._global_merge_points_ = True
+
+        res = self.timeshift(ll_function, [10, 0], [], policy=P_NOVIRTUAL)
+        assert res == ll_function(10, 0)
+        self.check_insns(int_add=10, int_mul=0)

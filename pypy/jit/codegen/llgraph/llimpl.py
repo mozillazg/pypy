@@ -41,6 +41,11 @@ def geninputarg(blockcontainer, gv_CONCRETE_TYPE):
     block.inputargs.append(v)
     return to_opaque_object(v)
 
+def getinputarg(blockcontainer, i):
+    block = from_opaque_object(blockcontainer.obj)
+    v = block.inputargs[i]
+    return to_opaque_object(v)
+
 def _inputvars(vars):
     newvars = []
     if not isinstance(vars, list):
@@ -218,7 +223,7 @@ def add_case(blockcontainer, exitcase):
     block = from_opaque_object(blockcontainer.obj)
     exitcase = from_opaque_object(exitcase)
     assert isinstance(exitcase, flowmodel.Constant)
-    assert isinstance(block.exitswitch, Variable)
+    assert isinstance(block.exitswitch, flowmodel.Variable)
     case_link = flowmodel.Link([], None)
     case_link.exitcase = exitcase.value
     case_link.llexitcase = exitcase.value
@@ -258,10 +263,15 @@ def _closelink(link, vars, targetblock):
         raise TypeError
 
 def closelink(link, vars, targetblockcontainer):
-    link = from_opaque_object(link)
-    targetblock = from_opaque_object(targetblockcontainer.obj)
-    vars = _inputvars(vars)
-    _closelink(link, vars, targetblock)
+    try:
+        link = from_opaque_object(link)
+        targetblock = from_opaque_object(targetblockcontainer.obj)
+        vars = _inputvars(vars)
+        _closelink(link, vars, targetblock)
+    except Exception, e:
+        import sys; tb = sys.exc_info()[2]
+        import pdb; pdb.post_mortem(tb)
+        raise
 
 ##def closereturnlink(link, returnvar):
 ##    returnvar = from_opaque_object(returnvar)
@@ -355,6 +365,17 @@ def runblock(blockcontainer, returncontainer, FUNCTYPE, args,
     graph = buildgraph(blockcontainer, returncontainer, FUNCTYPE)
     return testgengraph(graph, args, viewbefore, executor)
 
+def show_incremental_progress(someblockcontainer):
+    from pypy import conftest
+    if conftest.option.view:
+        try:
+            someblock = from_opaque_object(someblockcontainer.obj)
+            someblock.show()
+        except Exception, e:
+            import sys; tb = sys.exc_info()[2]
+            import pdb; pdb.post_mortem(tb)
+            raise
+
 # ____________________________________________________________
 # RTyping of the above functions
 
@@ -419,6 +440,7 @@ s_LinkPair = annmodel.SomeTuple([s_Link, s_Link])
 
 setannotation(initblock, None)
 setannotation(geninputarg, s_ConstOrVar)
+setannotation(getinputarg, s_ConstOrVar)
 setannotation(genop, s_ConstOrVar)
 setannotation(gencallableconst, s_ConstOrVar)
 setannotation(genconst, s_ConstOrVar)
@@ -439,3 +461,5 @@ setannotation(isptrtype, annmodel.SomeBool())
 setannotation(constFieldName, s_ConstOrVar, specialize_as_constant=True)
 setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
 #setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)
+
+setannotation(show_incremental_progress, None)

@@ -241,8 +241,15 @@ def enter_block(jitstate):
 
 def split(jitstate, switchredbox, resumepoint, *greens_gv):
     exitgvar = switchredbox.getgenvar(jitstate.curbuilder)
-    later_builder = jitstate.curbuilder.jump_if_false(exitgvar)
-    jitstate.split(later_builder, resumepoint, list(greens_gv))
+    if exitgvar.is_const:
+        return exitgvar.revealconst(lltype.Bool)
+    else:
+        if jitstate.resuming is None:
+            later_builder = jitstate.curbuilder.jump_if_false(exitgvar)
+            jitstate.split(later_builder, resumepoint, list(greens_gv))
+            return True
+        else:
+            return jitstate.resuming.path.pop()
 
 def collect_split(jitstate_chain, resumepoint, *greens_gv):
     greens_gv = list(greens_gv)
@@ -323,9 +330,10 @@ class ResumingInfo(object):
         self.path = path
 
 class PromotionPoint(object):
-    def __init__(self, flexswitch, promotion_path):
+    def __init__(self, flexswitch, switchblock, promotion_path):
         assert promotion_path is not None
         self.flexswitch = flexswitch
+        self.switchblock = switchblock
         self.promotion_path = promotion_path
 
 class AbstractPromotionPath(object):
@@ -355,6 +363,7 @@ class PromotionPathRoot(AbstractPromotionPath):
         jitstate.resuming = resuminginfo
         assert jitstate.frame.backframe is None
         self.global_resumer(jitstate)
+        builder.show_incremental_progress()
 
 class PromotionPathNode(AbstractPromotionPath):
     def __init__(self, next):
@@ -379,7 +388,8 @@ def ll_continue_compilation(promotion_point_ptr, value):
         resuminginfo = ResumingInfo(promotion_point, gv_value, path)
         root.continue_compilation(resuminginfo)
     except Exception, e:
-        llop.debug_fatalerror(lltype.Void, "compilation-time error", e)
+        lloperation.llop.debug_fatalerror(lltype.Void,
+                                          "compilation-time error", e)
 
 class PromotionDesc:
     __metatype__ = cachedtype
@@ -401,8 +411,9 @@ class PromotionDesc:
         return True
 
 def ll_promote(jitstate, box, promotiondesc):
-    if box.is_constant():
-        save_greens(jitstate, box.genvar)
+    builder = jitstate.curbuilder
+    gv_switchvar = box.getgenvar(builder)
+    if gv_switchvar.is_const:
         return False
     else:
         incoming = []
@@ -411,16 +422,18 @@ def ll_promote(jitstate, box, promotiondesc):
         switchblock = enter_next_block(jitstate, incoming)
 
         if jitstate.resuming is None:
-            builder = jitstate.curbuilder
-            flexswitch = builder.flexswitch(box.getgenvar(builder))
+            gv_switchvar = box.genvar
+            flexswitch = builder.flexswitch(gv_switchvar)
             # default case of the switch:
             enter_block(jitstate)
-            pm = PromotionPoint(flexswitch, jitstate.promotion_path)
+            pm = PromotionPoint(flexswitch, switchblock,
+                                jitstate.promotion_path)
             ll_pm = cast_instance_to_base_ptr(pm)
             gv_pm = builder.rgenop.genconst(ll_pm)
+            gv_switchvar = box.genvar
             builder.genop_call(promotiondesc.sigtoken,
                                promotiondesc.gv_continue_compilation,
-                               [gv_pm, box.getgenvar(builder)])
+                               [gv_pm, gv_switchvar])
             linkargs = []
             for box in incoming:
                 linkargs.append(box.getgenvar(builder))
@@ -431,13 +444,20 @@ def ll_promote(jitstate, box, promotiondesc):
             resuming = jitstate.resuming
             assert len(resuming.path) == 0
             pm = resuming.promotion_point
+
+            kinds = [box.kind for box in incoming]
+            vars_gv = jitstate.curbuilder.rgenop.stop_replay(pm.switchblock,
+                                                             kinds)
+            for i in range(len(incoming)):
+                incoming[i].genvar = vars_gv[i]
+            box.genvar = resuming.gv_value
+
             newbuilder = pm.flexswitch.add_case(resuming.gv_value)
 
             jitstate.resuming = None
             jitstate.promotion_path = pm.promotion_path
             jitstate.curbuilder = newbuilder
             enter_block(jitstate)
-            save_greens(jitstate, resuming.gv_value)
             return False
 
 # ____________________________________________________________

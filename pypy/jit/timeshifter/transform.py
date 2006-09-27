@@ -192,6 +192,7 @@ class HintGraphTransformer(object):
                     self.insert_split_handling(block)
 
     def insert_split_handling(self, block):
+        # lots of clever in-line logic commented out
         v_redswitch = block.exitswitch
         link_f, link_t = block.exits
         if link_f.exitcase:
@@ -199,35 +200,42 @@ class HintGraphTransformer(object):
         assert link_f.exitcase is False
         assert link_t.exitcase is True
 
-        constant_block = Block([])
-        nonconstant_block = Block([])
+##        constant_block = Block([])
+##        nonconstant_block = Block([])
 
-        v_flag = self.genop(block, 'is_constant', [v_redswitch],
-                            resulttype = lltype.Bool)
-        self.genswitch(block, v_flag, true  = constant_block,
-                                      false = nonconstant_block)
+##        v_flag = self.genop(block, 'is_constant', [v_redswitch],
+##                            resulttype = lltype.Bool)
+##        self.genswitch(block, v_flag, true  = constant_block,
+##                                      false = nonconstant_block)
 
-        v_greenswitch = self.genop(constant_block, 'revealconst',
-                                   [v_redswitch],
-                                   resulttype = lltype.Bool)
-        constant_block.exitswitch = v_greenswitch
-        constant_block.closeblock(link_f, link_t)
+##        v_greenswitch = self.genop(constant_block, 'revealconst',
+##                                   [v_redswitch],
+##                                   resulttype = lltype.Bool)
+##        constant_block.exitswitch = v_greenswitch
+##        constant_block.closeblock(link_f, link_t)
 
         reds, greens = self.sort_by_color(link_f.args, link_f.target.inputargs)
-        self.genop(nonconstant_block, 'save_locals', reds)
+        self.genop(block, 'save_locals', reds)
         resumepoint = self.get_resume_point(link_f.target)
         c_resumepoint = inputconst(lltype.Signed, resumepoint)
-        self.genop(nonconstant_block, 'split',
-                   [v_redswitch, c_resumepoint] + greens)
+        v_flag = self.genop(block, 'split',
+                            [v_redswitch, c_resumepoint] + greens,
+                            resulttype = lltype.Bool)
+
+        block.exitswitch = v_flag
+        true_block = Block([])
+        true_link  = Link([], true_block)
+        true_link.exitcase   = True
+        true_link.llexitcase = True
+        block.recloseblock(link_f, true_link)
 
         reds, greens = self.sort_by_color(link_t.args)
-        self.genop(nonconstant_block, 'save_locals', reds)
-        self.genop(nonconstant_block, 'enter_block', [])
-        nonconstant_block.closeblock(Link(link_t.args, link_t.target))
+        self.genop(true_block, 'save_locals', reds)
+        self.genop(true_block, 'enter_block', [])
+        true_block.closeblock(Link(link_t.args, link_t.target))
 
-        SSA_to_SSI({block            : True,    # reachable from outside
-                    constant_block   : False,
-                    nonconstant_block: False}, self.hannotator)
+        SSA_to_SSI({block     : True,    # reachable from outside
+                    true_block: False}, self.hannotator)
 
     def get_resume_point_link(self, block):
         try:
@@ -565,8 +573,8 @@ class HintGraphTransformer(object):
 
     def handle_promote_hint(self, block, i):
         op = block.operations[i]
-        c_zero = inputconst(lltype.Signed, 0)
-        newop = SpaceOperation('restore_green', [c_zero], op.result)
+        v_promote = op.args[0]
+        newop = SpaceOperation('revealconst', [v_promote], op.result)
         block.operations[i] = newop
 
         link = support.split_block_with_keepalive(block, i,
@@ -574,9 +582,6 @@ class HintGraphTransformer(object):
         nextblock = link.target
 
         reds, greens = self.sort_by_color(link.args)
-        v_promote = op.args[0]
-        if v_promote not in reds:
-            reds.append(v_promote)
         self.genop(block, 'save_locals', reds)
         v_finished_flag = self.genop(block, 'promote', [v_promote],
                                      resulttype = lltype.Bool)
