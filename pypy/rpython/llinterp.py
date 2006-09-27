@@ -27,6 +27,10 @@ class LLException(Exception):
             extra = ''
         return '<LLException %r%s>' % (type_name(etype), extra)
 
+class LLFatalError(Exception):
+    def __str__(self):
+        return ': '.join([str(x) for x in self.args])
+
 def type_name(etype):
     if isinstance(lltype.typeOf(etype), lltype.Ptr):
         return ''.join(etype.name).rstrip('\x00')
@@ -441,6 +445,14 @@ class LLFrame(object):
     def op_debug_log_exc(self, exc_type):
         # do nothing, this is useful in compiled code
         pass
+
+    def op_debug_fatalerror(self, ll_msg, ll_exc=None):
+        msg = ''.join(ll_msg.chars)
+        if ll_exc is None:
+            raise LLFatalError(msg)
+        else:
+            ll_exc_type = lltype.cast_pointer(rclass.OBJECTPTR, ll_exc).typeptr
+            raise LLFatalError(msg, LLException(ll_exc_type, ll_exc))
 
     def op_keepalive(self, value):
         pass
@@ -903,12 +915,18 @@ class Tracer(object):
 
     HEADER = """<html><head>
         <script language=javascript type='text/javascript'>
-        function togglestate(name) {
-          item = document.getElementById(name)
+        function togglestate(n) {
+          var item = document.getElementById('div'+n)
           if (item.style.display == 'none')
             item.style.display = 'block';
           else
             item.style.display = 'none';
+        }
+
+        function toggleall(lst) {
+          for (var i = 0; i<lst.length; i++) {
+            togglestate(lst[i]);
+          }
         }
         </script>
         </head>
@@ -916,9 +934,14 @@ class Tracer(object):
         <body><pre>
     """
 
-    FOOTER = """</pre></body></html>"""
+    FOOTER = """</pre>
+        <script language=javascript type='text/javascript'>
+        toggleall(%r);
+        </script>
 
-    ENTER = ('''\n\t<a href="javascript:togglestate('div%d')">%s</a>'''
+    </body></html>"""
+
+    ENTER = ('''\n\t<a href="javascript:togglestate(%d)">%s</a>'''
              '''\n<div id="div%d" style="display: %s">\t''')
     LEAVE = '''\n</div>\t'''
 
@@ -951,17 +974,22 @@ class Tracer(object):
 
         self.count = 0
         self.indentation = ''
+        self.depth = 0
+        self.latest_call_chain = []
 
     def stop(self):
         # end of a dump file
         if self.file:
-            print >> self.file, self.FOOTER
+            print >> self.file, self.FOOTER % (self.latest_call_chain[1:])
             self.file.close()
             self.file = None
 
     def enter(self, graph):
         # enter evaluation of a graph
         if self.file:
+            del self.latest_call_chain[self.depth:]
+            self.depth += 1
+            self.latest_call_chain.append(self.count)
             s = self.htmlquote(str(graph))
             i = s.rfind(')')
             s = s[:i+1] + '<b>' + s[i+1:] + '</b>'
@@ -979,6 +1007,7 @@ class Tracer(object):
         if self.file:
             self.indentation = self.indentation[:-4]
             self.file.write(self.LEAVE.replace('\t', self.indentation))
+            self.depth -= 1
 
     def dump(self, text, bold=False):
         if self.file:

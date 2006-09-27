@@ -163,6 +163,9 @@ class LLBuilder(CodeGenerator):
         self.lnk = l_default
         return flexswitch
 
+    def show_incremental_progress(self):
+        llimpl.show_incremental_progress(self.g)
+
 
 class RGenOp(AbstractRGenOp):
     gv_Void = gv_Void
@@ -229,6 +232,10 @@ class RGenOp(AbstractRGenOp):
         builder = LLBuilder(block.g)
         args_gv = builder._newblock(kinds)
         return builder, args_gv
+
+    def stop_replay(self, endblock, kinds):
+        return [LLVar(llimpl.getinputarg(endblock.b, i))
+                for i in range(len(kinds))]
 
     # not RPython, just for debugging.  Specific to llgraph.
     @staticmethod

@@ -710,8 +710,9 @@ class HintRTyper(RPythonTyper):
         args_s += [self.s_ConstOrVar] * len(greens_v)
         args_v = [v_jitstate, v_switch, c_resumepoint]
         args_v += greens_v
-        hop.llops.genmixlevelhelpercall(rtimeshift.split, args_s, args_v,
-                                        annmodel.s_None)
+        return hop.llops.genmixlevelhelpercall(rtimeshift.split,
+                                               args_s, args_v,
+                                               annmodel.SomeBool())
 
     def translate_op_collect_split(self, hop):
         GREENS = [v.concretetype for v in hop.args_v[1:]]
