@@ -12,7 +12,7 @@ except ImportError:
     pass
 
 from pypy.tool import option
-from optparse import make_option
+from py.compat.optparse import make_option
 from pypy.interpreter import main, interactive, error
 import os, sys
 import time
@@ -67,14 +67,6 @@ def get_main_options():
         
     return options
 
-def make_objspace(conf):
-    mod = __import__('pypy.objspace.%s' % conf.objspace.name,
-                     None, None, ['Space'])
-    Space = mod.Space
-    #conf.objspace.logbytecodes = True
-    space = Space(conf) 
-    return space 
-            
 def main_(argv=None):
     starttime = time.time() 
     args = option.process_options(get_main_options(), Options, argv[1:])
@@ -84,7 +76,7 @@ def main_(argv=None):
     # create the object space
 
     config = option.make_config(Options)
-    space = make_objspace(config)
+    space = option.make_objspace(config)
 
     space._starttime = starttime
     #assert 'pypy.tool.udir' not in sys.modules, (
