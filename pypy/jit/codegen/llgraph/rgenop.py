@@ -138,7 +138,9 @@ class LLBuilder(CodeGenerator):
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         gv_returnvar = gv_returnvar or gv_dummy_placeholder
-        self.finish_and_goto([gv_returnvar], LLBlock(self.g, self.g))
+        lnk = self.lnk or llimpl.closeblock1(self.b)
+        self.lnk = llimpl.nulllink
+        llimpl.closereturnlink(lnk, gv_returnvar.v, self.g)
 
     def jump_if_true(self, gv_cond):
         l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
@@ -172,17 +174,15 @@ class RGenOp(AbstractRGenOp):
 
 
     def newgraph(self, (ARGS_gv, gv_RESULT, gv_FUNCTYPE)):
-        returnblock = llimpl.newblock()
-        llimpl.geninputarg(returnblock, gv_RESULT.v)
-        g = returnblock   # for now
-        builder = LLBuilder(g)
-        inputargs_gv = builder._newblock(ARGS_gv)
-        return builder, LLBlock(builder.b, builder.g), inputargs_gv
+        graph = llimpl.newgraph(gv_FUNCTYPE.v)
+        builder = LLBuilder(graph)
+        builder.b = llimpl.getstartblock(graph)
+        inputargs_gv = [LLVar(llimpl.getinputarg(builder.b, i))
+                        for i in range(len(ARGS_gv))]
+        return builder, graph, inputargs_gv
 
-    def gencallableconst(self, (ARGS_gv, gv_RESULT, gv_FUNCTYPE), name,
-                         entrypoint):
-        return LLConst(llimpl.gencallableconst(name, entrypoint.b,
-                                               entrypoint.g,
+    def gencallableconst(self, (ARGS_gv, gv_RESULT, gv_FUNCTYPE), name, graph):
+        return LLConst(llimpl.gencallableconst(name, graph,
                                                gv_FUNCTYPE.v))
 
     @staticmethod

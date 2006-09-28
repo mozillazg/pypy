@@ -23,16 +23,41 @@ def isptrtype(gv_type):
     c = from_opaque_object(gv_type)
     return isinstance(c.value, lltype.Ptr)
 
-def initblock(opaqueptr):
-    init_opaque_object(opaqueptr, flowmodel.Block([]))
-
 def newblock():
-    blockcontainer = lltype.malloc(BLOCKCONTAINERTYPE)
-    initblock(blockcontainer.obj)
-    return blockcontainer
+    block = flowmodel.Block([])
+    return to_opaque_object(block)
 
-def geninputarg(blockcontainer, gv_CONCRETE_TYPE):
-    block = from_opaque_object(blockcontainer.obj)
+def newgraph(gv_FUNCTYPE):
+    FUNCTYPE = from_opaque_object(gv_FUNCTYPE).value
+    inputargs = []
+    erasedinputargs = []
+    for ARG in FUNCTYPE.ARGS:
+        v = flowmodel.Variable()
+        v.concretetype = ARG
+        inputargs.append(v)
+        v = flowmodel.Variable()
+        v.concretetype = lltype.erasedType(ARG)
+        erasedinputargs.append(v)
+    startblock = flowmodel.Block(inputargs)
+    return_var = flowmodel.Variable()
+    return_var.concretetype = FUNCTYPE.RESULT
+    graph = flowmodel.FunctionGraph("in_progress", startblock, return_var)
+    v1 = flowmodel.Variable()
+    v1.concretetype = lltype.erasedType(FUNCTYPE.RESULT)
+    graph.prereturnblock = flowmodel.Block([v1])
+    casting_link(graph.prereturnblock, [v1], graph.returnblock)
+    substartblock = flowmodel.Block(erasedinputargs)
+    casting_link(graph.startblock, inputargs, substartblock)
+    return to_opaque_object(graph)
+
+def getstartblock(graph):
+    graph = from_opaque_object(graph)
+    [link] = graph.startblock.exits
+    substartblock = link.target
+    return to_opaque_object(substartblock)
+
+def geninputarg(block, gv_CONCRETE_TYPE):
+    block = from_opaque_object(block)
     assert not block.operations, "block already contains operations"
     assert block.exits == [], "block already closed"
     CONCRETE_TYPE = from_opaque_object(gv_CONCRETE_TYPE).value
@@ -41,8 +66,8 @@ def geninputarg(blockcontainer, gv_CONCRETE_TYPE):
     block.inputargs.append(v)
     return to_opaque_object(v)
 
-def getinputarg(blockcontainer, i):
-    block = from_opaque_object(blockcontainer.obj)
+def getinputarg(block, i):
+    block = from_opaque_object(block)
     v = block.inputargs[i]
     return to_opaque_object(v)
 
@@ -72,12 +97,12 @@ def _inputvars(vars):
         res.append(v)
     return res
 
-def cast(blockcontainer, gv_TYPE, gv_var):
+def cast(block, gv_TYPE, gv_var):
     TYPE = from_opaque_object(gv_TYPE).value
     v = from_opaque_object(gv_var)
     if TYPE != v.concretetype:
         assert v.concretetype == lltype.erasedType(TYPE)
-        block = from_opaque_object(blockcontainer.obj)
+        block = from_opaque_object(block)
         v2 = flowmodel.Variable()
         v2.concretetype = TYPE
         op = flowmodel.SpaceOperation('cast_pointer', [v], v2)
@@ -95,12 +120,12 @@ def erasedvar(v, block):
         return v2
     return v
 
-def genop(blockcontainer, opname, vars_gv, gv_RESULT_TYPE):
+def genop(block, opname, vars_gv, gv_RESULT_TYPE):
     # 'opname' is a constant string
     # gv_RESULT_TYPE comes from constTYPE
     if not isinstance(opname, str):
         opname = LLSupport.from_rstr(opname)
-    block = from_opaque_object(blockcontainer.obj)
+    block = from_opaque_object(block)
     assert block.exits == [], "block already closed"
     opvars = _inputvars(vars_gv)
     if gv_RESULT_TYPE is guess:
@@ -130,15 +155,15 @@ def guess_result_type(opname, opvars):
     result = op.fold(*examples)
     return lltype.typeOf(result)
 
-def gencallableconst(name, targetcontainer, returncontainer, gv_FUNCTYPE):
+def gencallableconst(name, graph, gv_FUNCTYPE):
     # 'name' is just a way to track things
     if not isinstance(name, str):
         name = LLSupport.from_rstr(name)
-    target = from_opaque_object(targetcontainer.obj)
-    returnblock = from_opaque_object(returncontainer.obj)
+    graph = from_opaque_object(graph)
+    graph.name = name
     FUNCTYPE = from_opaque_object(gv_FUNCTYPE).value
     fptr = lltype.functionptr(FUNCTYPE, name,
-                              graph=_buildgraph(target, returnblock, FUNCTYPE))
+                              graph=_buildgraph(graph, FUNCTYPE))
     return genconst(fptr)
 
 def genconst(llvalue):
@@ -187,14 +212,14 @@ def constTYPE(TYPE):
     c.concretetype = lltype.Void
     return to_opaque_object(c)
 
-def closeblock1(blockcontainer):
-    block = from_opaque_object(blockcontainer.obj)
+def closeblock1(block):
+    block = from_opaque_object(block)
     link = flowmodel.Link([], None)
     block.closeblock(link)
     return to_opaque_object(link)
 
-def closeblock2(blockcontainer, exitswitch):
-    block = from_opaque_object(blockcontainer.obj)
+def closeblock2(block, exitswitch):
+    block = from_opaque_object(block)
     exitswitch = from_opaque_object(exitswitch)
     assert isinstance(exitswitch, flowmodel.Variable)
     block.exitswitch = exitswitch
@@ -208,8 +233,8 @@ def closeblock2(blockcontainer, exitswitch):
     return pseudotuple(to_opaque_object(false_link),
                        to_opaque_object(true_link))
 
-def closeblockswitch(blockcontainer, exitswitch):
-    block = from_opaque_object(blockcontainer.obj)
+def closeblockswitch(block, exitswitch):
+    block = from_opaque_object(block)
     exitswitch = from_opaque_object(exitswitch)
     assert isinstance(exitswitch, flowmodel.Variable)
     block.exitswitch = exitswitch
@@ -219,8 +244,8 @@ def closeblockswitch(blockcontainer, exitswitch):
     block.closeblock(default_link)
     return to_opaque_object(default_link)
 
-def add_case(blockcontainer, exitcase):
-    block = from_opaque_object(blockcontainer.obj)
+def add_case(block, exitcase):
+    block = from_opaque_object(block)
     exitcase = from_opaque_object(exitcase)
     assert isinstance(exitcase, flowmodel.Constant)
     assert isinstance(block.exitswitch, flowmodel.Variable)
@@ -262,10 +287,10 @@ def _closelink(link, vars, targetblock):
     else:
         raise TypeError
 
-def closelink(link, vars, targetblockcontainer):
+def closelink(link, vars, targetblock):
     try:
         link = from_opaque_object(link)
-        targetblock = from_opaque_object(targetblockcontainer.obj)
+        targetblock = from_opaque_object(targetblock)
         vars = _inputvars(vars)
         _closelink(link, vars, targetblock)
     except Exception, e:
@@ -273,86 +298,44 @@ def closelink(link, vars, targetblockcontainer):
         import pdb; pdb.post_mortem(tb)
         raise
 
-##def closereturnlink(link, returnvar):
-##    returnvar = from_opaque_object(returnvar)
-##    link = from_opaque_object(link)
-##    v = flowmodel.Variable()
-##    v.concretetype = returnvar.concretetype
-##    pseudoreturnblock = flowmodel.Block([v])
-##    pseudoreturnblock.operations = ()
-##    _closelink(link, [returnvar], pseudoreturnblock)
+def closereturnlink(link, returnvar, graph):
+    returnvar = from_opaque_object(returnvar)
+    link = from_opaque_object(link)
+    graph = from_opaque_object(graph)
+    _closelink(link, [returnvar], graph.prereturnblock)
 
-##def _patchgraph(graph, RESULT):
-##    returntype = None
-##    links = []
-##    for link in graph.iterlinks():
-##        if link.target.operations == ():
-##            assert len(link.args) == 1    # for now
-##            if returntype is None:
-##                returntype = link.target.inputargs[0].concretetype
-##            else:
-##                assert returntype == link.target.inputargs[0].concretetype
-##            links.append(link)
-##    if returntype is None:
-##        returntype = lltype.Void
-##    graph.returnblock.inputargs[0].concretetype = RESULT
-##    targetblock = casting_bridge([returntype], [RESULT], graph.returnblock)
-##    for link in links:
-##        link.target = targetblock
+def casting_link(source, sourcevars, target):
+    assert len(sourcevars) == len(target.inputargs)
+    linkargs = []
+    for v, target_v in zip(sourcevars, target.inputargs):
+        if v.concretetype == target_v.concretetype:
+            linkargs.append(v)
+        else:
+            erasedv = flowmodel.Variable()
+            erasedv.concretetype = target_v.concretetype
+            source.operations.append(flowmodel.SpaceOperation('cast_pointer',
+                                                              [v],
+                                                              erasedv))
+            linkargs.append(erasedv)
+    source.closeblock(flowmodel.Link(linkargs, target))
+
+# ____________________________________________________________
 
 class PseudoRTyper(object):
     def __init__(self):
         from pypy.rpython.typesystem import LowLevelTypeSystem
         self.type_system = LowLevelTypeSystem.instance
 
-def casting_bridge(FROMS, TOS, target):
-    if FROMS != TOS:
-        operations = []
-        inputargs = []
-        linkargs = []
-        for FROM, TO  in zip(FROMS, TOS):
-            v = flowmodel.Variable()
-            v.concretetype = FROM
-            inputargs.append(v)
-            if FROM == TO:
-                linkargs.append(v)
-            else:
-                erasedv = flowmodel.Variable()
-                erasedv.concretetype = TO
-                operations.append(flowmodel.SpaceOperation('cast_pointer',
-                                                           [v],
-                                                           erasedv))
-                linkargs.append(erasedv)
-        bridgeblock = flowmodel.Block(inputargs)
-        bridgeblock.operations = operations
-        bridge = flowmodel.Link(linkargs, target)
-        bridgeblock.closeblock(bridge)
-        return bridgeblock
-    else:
-        return target
-        
-def _buildgraph(block, existingreturnblock, FUNCTYPE):
-    ARGS = [v.concretetype for v in block.inputargs]
-    startblock =casting_bridge(FUNCTYPE.ARGS, ARGS, block)
-    graph = flowmodel.FunctionGraph('generated', startblock)
-
-    returntype = existingreturnblock.inputargs[0].concretetype
-    RESULT = FUNCTYPE.RESULT
-    graph.returnblock.inputargs[0].concretetype = RESULT
-    prereturnblock = casting_bridge([returntype], [RESULT], graph.returnblock)
-    existingreturnblock.closeblock(flowmodel.Link(
-        [existingreturnblock.inputargs[0]],
-        prereturnblock))
+def _buildgraph(graph, FUNCTYPE):
     flowmodel.checkgraph(graph)
     eliminate_empty_blocks(graph)
     join_blocks(graph)
     graph.rgenop = True
     return graph
 
-def buildgraph(blockcontainer, returncontainer, FUNCTYPE):
-    block = from_opaque_object(blockcontainer.obj)
-    returnblock = from_opaque_object(returncontainer.obj)
-    return _buildgraph(block, returnblock, FUNCTYPE)
+def buildgraph(graph, FUNCTYPE):
+    graph = from_opaque_object(graph)
+    return _buildgraph(graph, FUNCTYPE)
 
 def testgengraph(gengraph, args, viewbefore=False, executor=LLInterpreter):
     if viewbefore:
@@ -360,43 +343,40 @@ def testgengraph(gengraph, args, viewbefore=False, executor=LLInterpreter):
     llinterp = executor(PseudoRTyper())
     return llinterp.eval_graph(gengraph, args)
     
-def runblock(blockcontainer, returncontainer, FUNCTYPE, args,
+def runblock(graph, FUNCTYPE, args,
              viewbefore=False, executor=LLInterpreter):
-    graph = buildgraph(blockcontainer, returncontainer, FUNCTYPE)
+    graph = buildgraph(graph, FUNCTYPE)
     return testgengraph(graph, args, viewbefore, executor)
 
-def show_incremental_progress(someblockcontainer):
+def show_incremental_progress(graph):
     from pypy import conftest
     if conftest.option.view:
-        try:
-            someblock = from_opaque_object(someblockcontainer.obj)
-            someblock.show()
-        except Exception, e:
-            import sys; tb = sys.exc_info()[2]
-            import pdb; pdb.post_mortem(tb)
-            raise
+        graph = from_opaque_object(graph)
+        graph.show()
 
 # ____________________________________________________________
 # RTyping of the above functions
 
-from pypy.rpython.extfunctable import declaretype, declareptrtype, declare
+from pypy.rpython.extfunctable import declareptrtype
 
-blocktypeinfo = declaretype(flowmodel.Block, "Block")
+blocktypeinfo = declareptrtype(flowmodel.Block, "Block")
 consttypeinfo = declareptrtype(flowmodel.Constant, "ConstOrVar")
 vartypeinfo   = declareptrtype(flowmodel.Variable, "ConstOrVar")
 vartypeinfo.set_lltype(consttypeinfo.get_lltype())   # force same lltype
 linktypeinfo  = declareptrtype(flowmodel.Link, "Link")
+graphtypeinfo = declareptrtype(flowmodel.FunctionGraph, "FunctionGraph")
 
 CONSTORVAR = lltype.Ptr(consttypeinfo.get_lltype())
-BLOCKCONTAINERTYPE = blocktypeinfo.get_lltype()
-BLOCK = lltype.Ptr(BLOCKCONTAINERTYPE)
+BLOCK = lltype.Ptr(blocktypeinfo.get_lltype())
 LINK = lltype.Ptr(linktypeinfo.get_lltype())
+GRAPH = lltype.Ptr(graphtypeinfo.get_lltype())
 
 # support constants and types
 
 nullvar = lltype.nullptr(CONSTORVAR.TO)
 nullblock = lltype.nullptr(BLOCK.TO)
 nulllink = lltype.nullptr(LINK.TO)
+nullgraph = lltype.nullptr(GRAPH.TO)
 gv_Void = constTYPE(lltype.Void)
 
 dummy_placeholder = placeholder(None)
@@ -437,8 +417,12 @@ from pypy.annotation import model as annmodel
 s_ConstOrVar = annmodel.SomePtr(CONSTORVAR)#annmodel.SomeExternalObject(flowmodel.Variable)
 s_Link = annmodel.SomePtr(LINK)#annmodel.SomeExternalObject(flowmodel.Link)
 s_LinkPair = annmodel.SomeTuple([s_Link, s_Link])
+s_Block = annmodel.SomePtr(BLOCK)
+s_Graph = annmodel.SomePtr(GRAPH)
 
-setannotation(initblock, None)
+setannotation(newblock, s_Block)
+setannotation(newgraph, s_Graph)
+setannotation(getstartblock, s_Block)
 setannotation(geninputarg, s_ConstOrVar)
 setannotation(getinputarg, s_ConstOrVar)
 setannotation(genop, s_ConstOrVar)
@@ -453,7 +437,7 @@ setannotation(closeblock2, s_LinkPair)
 setannotation(closeblockswitch, s_Link)
 setannotation(add_case, s_Link)
 setannotation(closelink, None)
-#setannotation(closereturnlink, None)
+setannotation(closereturnlink, None)
 
 setannotation(isptrtype, annmodel.SomeBool())
 
