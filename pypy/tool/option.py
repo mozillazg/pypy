@@ -6,7 +6,6 @@ from py.compat import optparse
 make_option = optparse.make_option
 
 class Options:
-    showwarning = 0
     objspace = "std" 
     oldstyle = 0
     uselibfile = 0
@@ -46,9 +45,6 @@ def get_standard_options():
         '--nofaking', action="store_true", dest="nofaking",
         help="avoid faking of modules or objects"))
     options.append(make_option(
-        '-w', action="store_true", dest="showwarning",
-        help="enable warnings (disabled by default)"))
-    options.append(make_option(
         '-H', action="callback",
         callback=run_tb_server,
         help="use web browser for traceback info"))
@@ -61,11 +57,6 @@ def get_standard_options():
         '--parser', action="store",type="string", dest="parser", default=None,
         help="select the parser module to use",
         metavar="[pypy|cpython]"))
-## for this to work the option module need to be loaded before the grammar!
-##     options.append(make_option(
-##         '--version', action="store",type="string", dest="version",
-##         help="select the Python version to emulate",
-##         metavar="[native|2.3|2.4]"))
 
     return options
 
