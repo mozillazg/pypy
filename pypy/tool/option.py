@@ -2,7 +2,7 @@
 # XXX needs clean-up and reorganization.
 
 import os
-import optparse
+from py.compat import optparse
 make_option = optparse.make_option
 
 class Options:
@@ -22,6 +22,7 @@ def run_tb_server(option, opt, value, parser):
     from pypy.tool import tb_server
     tb_server.start()
 
+ 
 def get_standard_options():
     options = []
 
@@ -120,4 +121,12 @@ def make_config(cmdlineopt, **kwds):
             subconf = getattr(subconf, name)
         setattr(subconf, names[-1], value)
     return conf
+
+def make_objspace(conf):
+    mod = __import__('pypy.objspace.%s' % conf.objspace.name,
+                     None, None, ['Space'])
+    Space = mod.Space
+    #conf.objspace.logbytecodes = True
+    space = Space(conf) 
+    return space 
 
