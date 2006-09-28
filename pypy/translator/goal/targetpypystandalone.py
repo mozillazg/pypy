@@ -10,14 +10,12 @@ from pypy.objspace.std import multimethod
 multimethod.Installer = multimethod.InstallerVersion2
 
 from pypy.objspace.std.objspace import StdObjSpace
-# XXX from pypy.annotation.model import *
-# since we are execfile()'ed this would pull some
-# weird objects into the globals, which we would try to pickle.
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
 from pypy.config.pypyoption import pypy_optiondescription
 from pypy.config.config import Config, to_optparse
+from pypy.tool.option import make_objspace
 
 
 try:
@@ -126,14 +124,15 @@ def target(driver, args):
     wrapstr = 'space.wrap(%r)' % (options.__dict__)
     pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
 
-    # disable translation of the whole of classobjinterp.py
-    StdObjSpace.setup_old_style_classes = lambda self: None
-
     config.objspace.nofaking = True
     config.objspace.compiler = "ast"
     config.translating = True
         
-    space = StdObjSpace(config)
+    space = make_objspace(config)
+
+    # disable translation of the whole of classobjinterp.py
+    StdObjSpace.setup_old_style_classes = lambda self: None
+
 
     # manually imports app_main.py
     filename = os.path.join(this_dir, 'app_main.py')
