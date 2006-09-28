@@ -139,66 +139,6 @@ def main_(argv=None):
 
     return exit_status
 
-##def main_(argv=None):
-##    starttime = time.time() 
-##    from pypy.tool import tb_server
-##    args = option.process_options(get_main_options(), Options, argv[1:])
-##    space = None
-##    exit_status = 1   # until proven otherwise
-##                      # XXX should review what CPython's policy is for
-##                      # the exit status code
-##    try:
-##        space = option.objspace()
-##        space._starttime = starttime
-##        assert 'pypy.tool.udir' not in sys.modules, (
-##            "running py.py should not import pypy.tool.udir, which is\n"
-##            "only for testing or translating purposes.")
-##        go_interactive = Options.interactive
-##        if Options.verbose:
-##            error.RECORD_INTERPLEVEL_TRACEBACK = True
-##        banner = ''
-##        space.setitem(space.sys.w_dict,space.wrap('executable'),space.wrap(argv[0]))
-##        if Options.command:
-##            args = ['-c'] + Options.command[1:]
-##        for arg in args:
-##            space.call_method(space.sys.get('argv'), 'append', space.wrap(arg))
-##        try:
-##            if Options.command:
-##                main.run_string(Options.command[0], '<string>', space)
-##            elif args:
-##                main.run_file(args[0], space)
-##            else:
-##                space.call_method(space.sys.get('argv'), 'append', space.wrap(''))
-##                go_interactive = 1
-##                banner = None
-##            exit_status = 0
-##        except error.OperationError, operationerr:
-##            if Options.verbose:
-##                operationerr.print_detailed_traceback(space)
-##            else:
-##                operationerr.print_application_traceback(space)
-##        if go_interactive:
-##            con = interactive.PyPyConsole(space, verbose=Options.verbose, completer=Options.completer)
-##            if banner == '':
-##                banner = '%s / %s'%(con.__class__.__name__,
-##                                    repr(space))
-##            con.interact(banner)
-##    except:
-##        exc_type, value, tb = sys.exc_info()
-##        sys.last_type = exc_type
-##        sys.last_value = value
-##        sys.last_traceback = tb
-##        if issubclass(exc_type, SystemExit):
-##            pass   # don't print tracebacks for SystemExit
-##        elif isinstance(value, error.OperationError):
-##            value.print_detailed_traceback(space=space)
-##        else:
-##            sys.excepthook(exc_type, value, tb)
-##        tb_server.wait_until_interrupt()
-##        exit_status = 1
-            
-##    tb_server.stop()
-##    return exit_status
 
 if __name__ == '__main__':
     try:
