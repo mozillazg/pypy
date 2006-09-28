@@ -108,12 +108,13 @@ def target(driver, args):
     config = Config(pypy_optiondescription)
     opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
                                                  add_help_option=False)
-    to_optparse(config, parser=parser)
+    to_optparse(config, parser=opt_parser)
+
+
+    tgt_options, _ = opt_parser.parse_args(args)
 
     translate.log_options(tgt_options, "target PyPy options in effect")
-
-    opt_parser().parse_args(args)
-
+    translate.log_config(config, "PyPy config object")
     # expose the following variables to ease debugging
     global space, entry_point
 
