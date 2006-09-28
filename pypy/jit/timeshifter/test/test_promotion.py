@@ -41,3 +41,17 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, [10, 0], [], policy=P_NOVIRTUAL)
         assert res == ll_function(10, 0)
         self.check_insns(int_add=10, int_mul=0)
+
+##    def test_method_call(self):
+##        class Base(object):
+##            pass
+##        class Int(Base):
+##            def __init__(self, n):
+##                self.n = n
+##            def double(self):
+##                return Int(self.n * 2)
+##        class Str(Base):
+##            def __init__(self, s):
+##                self.s = s
+##            def double(self):
+##                return Str(self.s + self.s)
