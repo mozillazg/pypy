@@ -566,8 +566,8 @@ class HintGraphTransformer(object):
     def handle_forget_hint(self, block, i):
         # a hint for testing only
         op = block.operations[i]
-        assert self.binding(op.result).is_green()
-        assert not self.binding(op.args[0]).is_green()
+        assert self.hannotator.binding(op.result).is_green()
+        assert not self.hannotator.binding(op.args[0]).is_green()
         newop = SpaceOperation('revealconst', [op.args[0]], op.result)
         block.operations[i] = newop
 
