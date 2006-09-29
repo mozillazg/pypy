@@ -176,7 +176,7 @@ class TranslationDriver(SimpleTaskEngine):
 
         if empty_translator:
             # set verbose flags
-            empty_translator.flags['verbose'] = True
+            empty_translator.config.translation.verbose = True
             translator = empty_translator
         else:
             translator = TranslationContext(verbose=True)

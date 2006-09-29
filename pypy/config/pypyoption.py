@@ -122,7 +122,20 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         ChoiceOption("gc", "Garbage Collection Strategy",
                      ["boehm", "ref", "framework", "none", "stacklessgc"],
                       "boehm", requires={
-                         "stacklessgc": [("translation.stackless", True)]})
+                         "stacklessgc": [("translation.stackless", True)]}),
+
+        BoolOption("verbose", "Print extra information", default=False),
+
+        # Flags of the TranslationContext:
+        BoolOption("verbose", "Print extra information", default=False),
+        BoolOption("simplifying", "Simplify flow graphs", default=True),
+        BoolOption("do_imports_immediately", "XXX", default=True,
+                   cmdline=None),
+        BoolOption("builtins_can_raise_exceptions", "XXX", default=False,
+                   cmdline=None),
+        BoolOption("list_comprehension_operations", "XXX", default=False,
+                   cmdline=None),
+
     ])
 ])
 
