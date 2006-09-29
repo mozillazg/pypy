@@ -26,8 +26,9 @@ class Options(option.Options):
     module_args = []
 
 def get_main_options():
-    options = option.get_standard_options()
+    config, parser = option.get_standard_options()
 
+    options = []
     options.append(make_option(
         '-v', action='store_true', dest='verbose',
         help='show verbose interpreter-level traceback'))
@@ -63,19 +64,19 @@ def get_main_options():
         callback=runmodule_callback, type="string",
         help="library module to be run as a script (terminates option list)"))
 
-    
+    parser.add_options(options)
         
-    return options
+    return config, parser
 
 def main_(argv=None):
-    starttime = time.time() 
-    args = option.process_options(get_main_options(), Options, argv[1:])
+    starttime = time.time()
+    config, parser = get_main_options()
+    args = option.process_options(parser, Options, argv[1:])
     if Options.verbose:
         error.RECORD_INTERPLEVEL_TRACEBACK = True
 
     # create the object space
 
-    config = option.make_config(Options)
     space = option.make_objspace(config)
 
     space._starttime = starttime
