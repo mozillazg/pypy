@@ -102,7 +102,7 @@ class TranslationDriver(SimpleTaskEngine):
                 if task in ('rtype', 'backendopt', 'llinterpret'):
                     if ts:
                         if ts == postfix:
-                            expose_task(task, explicit_task)                        
+                            expose_task(task, explicit_task)
                     else:
                         expose_task(explicit_task)
                 elif task in ('source', 'compile', 'run'):
@@ -167,7 +167,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.inputtypes = inputtypes
 
         if policy is None:
-            policy = annpolicy.AnnotatorPolicy()            
+            policy = annpolicy.AnnotatorPolicy()
         if standalone:
             policy.allow_someobjects = False
         self.policy = policy
