@@ -17,13 +17,19 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
     OptionDescription("objspace", "Object Space Option", [
         ChoiceOption("name", "Object Space name",
                      ["std", "flow", "logic", "thunk", "cpy"], "std",
+                     requires = {
+                         "thunk": [("objspace.geninterp", False)],
+                         "logic": [("objspace.geninterp", False)],
+                     },
                      cmdline='--objspace -o'),
 
         ChoiceOption("parser", "parser",
-                     ["pypy", "cpython"], "pypy"),
+                     ["pypy", "cpython"], "pypy",
+                     cmdline='--parser'),
 
         ChoiceOption("compiler", "compiler",
-                     ["cpython", "ast"], "ast"),
+                     ["cpython", "ast"], "ast",
+                     cmdline='--compiler'),
 
         BoolOption("nofaking", "disallow faking in the object space",
                    default=False,
@@ -31,10 +37,12 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        ("objspace.uselibfile", True),
                        ("objspace.usemodules.posix", True),
                        ("objspace.usemodules.time", True),
-                       ("objspace.usemodules.errno", True)]),
+                       ("objspace.usemodules.errno", True)],
+                   cmdline='--nofaking'),
 
         BoolOption("uselibfile", "use the applevel file implementation",
-                   default=False),
+                   default=False,
+                   cmdline='--uselibfile'),
 
         OptionDescription("usemodules", "Which Modules should be used", [
             BoolOption(modname, "use module %s" % (modname, ),
