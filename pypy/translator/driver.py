@@ -274,7 +274,7 @@ class TranslationDriver(SimpleTaskEngine):
                               raisingop2direct_call_all=opt.raisingop2direct_call,
                               merge_if_blocks_to_switch=opt.merge_if_blocks)
     #
-    task_backendopt_lltype = taskdef(task_backendopt_lltype, 
+    task_backendopt_lltype = taskdef(task_backendopt_lltype,
                                         [RTYPE], "Back-end optimisations")
     BACKENDOPT = 'backendopt_lltype'
 
