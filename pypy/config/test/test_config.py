@@ -13,9 +13,9 @@ def make_description():
     wantref_option = BoolOption('wantref', 'Test requires', default=False,
                                     requires=[('gc.name', 'ref')])
     
-    gcgroup = OptionDescription('gc', [gcoption, gcdummy, floatoption])
-    descr = OptionDescription('pypy', [gcgroup, booloption, objspaceoption,
-                                       wantref_option, intoption])
+    gcgroup = OptionDescription('gc', '', [gcoption, gcdummy, floatoption])
+    descr = OptionDescription('pypy', '', [gcgroup, booloption, objspaceoption,
+                                           wantref_option, intoption])
     return descr
 
 def test_base_config():
@@ -57,8 +57,8 @@ def test_annotator_folding():
     from pypy.translator.interactive import Translation
 
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
-    gcgroup = OptionDescription('gc', [gcoption])
-    descr = OptionDescription('pypy', [gcgroup])
+    gcgroup = OptionDescription('gc', '', [gcoption])
+    descr = OptionDescription('pypy', '', [gcgroup])
     config = Config(descr)
     
     def f(x):
@@ -102,8 +102,8 @@ def test_loop():
 def test_to_optparse():
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref',
                                 cmdline='--gc -g')
-    gcgroup = OptionDescription('gc', [gcoption])
-    descr = OptionDescription('pypy', [gcgroup])
+    gcgroup = OptionDescription('gc', '', [gcoption])
+    descr = OptionDescription('pypy', '', [gcgroup])
     config = Config(descr)
     
     parser = to_optparse(config, ['gc.name'])
@@ -122,7 +122,7 @@ def test_to_optparse_number():
     intoption = IntOption('int', 'Int option test', cmdline='--int -i')
     floatoption = FloatOption('float', 'Float option test', 
                                 cmdline='--float -f')
-    descr = OptionDescription('test', [intoption, floatoption])
+    descr = OptionDescription('test', '', [intoption, floatoption])
     config = Config(descr)
 
     parser = to_optparse(config, ['int', 'float'])
@@ -137,7 +137,7 @@ def test_to_optparse_number():
 def test_to_optparse_bool():
     booloption = BoolOption('bool', 'Boolean option test', default=False,
                             cmdline='--bool -b')
-    descr = OptionDescription('test', [booloption])
+    descr = OptionDescription('test', '', [booloption])
     config = Config(descr)
 
     parser = to_optparse(config, ['bool'])
@@ -154,7 +154,7 @@ def test_to_optparse_bool():
             "(options, args) = parser.parse_args(args=['-bfoo'])")
 
 def test_optparse_boolgroup():
-    group = OptionDescription("test", [
+    group = OptionDescription("test", '', [
         BoolOption("smallint", "use tagged integers",
                    default=False),
         BoolOption("strjoin", "use strings optimized for addition",
@@ -164,7 +164,7 @@ def test_optparse_boolgroup():
         BoolOption("strdict", "use dictionaries optimized for string keys",
                    default=False),
     ], cmdline="--test")
-    descr = OptionDescription("all", [group])
+    descr = OptionDescription("all", '', [group])
     config = Config(descr)
     parser = to_optparse(config, ['test'])
     (options, args) = parser.parse_args(
@@ -195,8 +195,8 @@ def test_config_start():
 
 def test_optparse_path_options():
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
-    gcgroup = OptionDescription('gc', [gcoption])
-    descr = OptionDescription('pypy', [gcgroup])
+    gcgroup = OptionDescription('gc', '', [gcoption])
+    descr = OptionDescription('pypy', '', [gcgroup])
     config = Config(descr)
     
     parser = to_optparse(config, ['gc.name'])
@@ -218,7 +218,7 @@ def test_getpaths():
 def test_none():
     dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
     dummy2 = BoolOption('dummy2', 'doc dummy', default=False, cmdline='--dummy')
-    group = OptionDescription('group', [dummy1, dummy2])
+    group = OptionDescription('group', '', [dummy1, dummy2])
     config = Config(group)
 
     parser = to_optparse(config)
@@ -226,9 +226,9 @@ def test_none():
         "(options, args) = parser.parse_args(args=['--dummy1'])")
  
 def test_requirements_from_top():
-    descr = OptionDescription("test", [
+    descr = OptionDescription("test", '', [
         BoolOption("toplevel", "", default=False),
-        OptionDescription("sub", [
+        OptionDescription("sub", '', [
             BoolOption("opt", "", default=False,
                        requires=[("toplevel", True)])
         ])
@@ -238,9 +238,9 @@ def test_requirements_from_top():
     assert config.toplevel
 
 def test_requirements_for_choice():
-    descr = OptionDescription("test", [
+    descr = OptionDescription("test", '', [
         BoolOption("toplevel", "", default=False),
-        OptionDescription("s", [
+        OptionDescription("s", '', [
             ChoiceOption("type_system", "", ["ll", "oo"], "ll"),
             ChoiceOption("backend", "",
                          ["c", "llvm", "cli"], "llvm",
