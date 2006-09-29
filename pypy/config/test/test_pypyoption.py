@@ -24,3 +24,9 @@ def test_objspace_incopatibilities():
     conf = Config(pypy_optiondescription)
     conf.objspace.name = "logic"
     assert not conf.objspace.geninterp
+
+def test_stacklessgc_required():
+    conf = Config(pypy_optiondescription)
+    conf.translation.gc = "stacklessgc"
+    assert conf.translation.stackless
+    assert conf.translation.typesystem == "lltype"
