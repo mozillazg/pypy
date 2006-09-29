@@ -136,6 +136,27 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         BoolOption("list_comprehension_operations", "XXX", default=False,
                    cmdline=None),
 
+        OptionDescription("backendopt", "Backend Optimization Options", [
+            BoolOption("print_statistics", "Print statistics while optimizing",
+                       default=False),
+            BoolOption("merge_if_blocks", "Remove mallocs", default=True),
+            BoolOption("raisingop2direct_call",
+                       "Transform exception raising operations",
+                       default=False, cmdline="--raisingop2direct_call"),
+            BoolOption("mallocs", "Remove mallocs", default=True),
+            BoolOption("merge_if_blocks", "Remove mallocs", default=True),
+            BoolOption("propagate", "Constant propagation, deprecated",
+                       default=False),
+            BoolOption("constfold", "Constant propagation",
+                       default=True),
+            BoolOption("heap2stack", "Escape analysis and stack allocation",
+                       default=False,
+                       requires=[("translation.stackless", False)]),
+            BoolOption("clever_malloc_removal",
+                       "Remove mallocs in a clever way", default=False),
+            IntOption("inline_threshold", "Threshold when to inline functions",
+                      default=1, cmdline=None),
+            ]),
     ])
 ])
 
