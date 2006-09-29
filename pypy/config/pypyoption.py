@@ -101,6 +101,29 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
 
     BoolOption("translating", "indicates whether we are translating currently",
                default=False, cmdline=None),
+
+    OptionDescription("translation", "Translation Options", [
+        BoolOption("stackless", "compile stackless features in",
+                   default=False, cmdline="--stackless",
+                   requires=[("translation.typesystem", "lltype")]),
+        ChoiceOption("typesystem", "Type system to use when RTyping",
+                     ["lltype", "ootype"], "lltype", cmdline=None),
+        ChoiceOption("backend", "Backend to use for code generation",
+                     ["c", "llvm", "cli", "js", "squeak", "cl"], "c",
+                     cmdline="--gc",
+                     requires={
+                         "c":      [("translation.typesystem", "lltype")],
+                         "llvm":   [("translation.typesystem", "lltype")],
+                         "cli":    [("translation.typesystem", "ootype")],
+                         "js":     [("translation.typesystem", "ootype")],
+                         "squeak": [("translation.typesystem", "ootype")],
+                         "cl":     [("translation.typesystem", "ootype")],
+                         }),
+        ChoiceOption("gc", "Garbage Collection Strategy",
+                     ["boehm", "ref", "framework", "none", "stacklessgc"],
+                      "boehm", requires={
+                         "stacklessgc": [("translation.stackless", True)]})
+    ])
 ])
 
 
