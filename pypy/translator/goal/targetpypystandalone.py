@@ -71,25 +71,20 @@ def create_entry_point(space, w_dict):
 
 take_options = True
 
-#def opt_parser():
-#    import py
-#    defl = {'thread': False, 'usemodules': ''}
-#    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", 
-#                                                add_help_option=False)
-#    parser.set_defaults(**defl)
-#    parser.add_option("--thread", action="store_true", dest="thread", 
-#                        help="enable threading")
-#    parser.add_option("--usemodules", action="store", type="string", 
-#                        dest="usemodules", help=("list of mixed modules to "
-#                                            "include, comma-separated"))
-#    return parser
-
-def print_help():
+def opt_parser_config():
+    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
+                                                add_help_option=False)
+    parser.set_defaults(thread=False)
+    parser.add_option("--thread", action="store_true", dest="thread",
+                      help="enable threading")
     config = Config(pypy_optiondescription)
     opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
                                                  add_help_option=False)
-    to_optparse(config, parser=opt_parser)
-    opt_parser.print_help()
+    to_optparse(config, parser=parser)
+    return config, parser
+
+def print_help():
+    opt_parser_config()[1].print_help()
 
 def call_finish(space):
     space.finish()
@@ -103,16 +98,10 @@ def target(driver, args):
     driver.exe_name = 'pypy-%(backend)s'
     options = driver.options
 
-    config = Config(pypy_optiondescription)
-    opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
-                                                 add_help_option=False)
-    to_optparse(config, parser=opt_parser)
-
+    config, opt_parser = opt_parser_config()
 
     tgt_options, _ = opt_parser.parse_args(args)
 
-    translate.log_options(tgt_options, "target PyPy options in effect")
-    translate.log_config(config, "PyPy config object")
     # expose the following variables to ease debugging
     global space, entry_point
 
@@ -124,9 +113,22 @@ def target(driver, args):
     wrapstr = 'space.wrap(%r)' % (options.__dict__)
     pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
 
+    if tgt_options.thread:
+        config.objspace.usemodules.thread = True
+    elif config.objspace.usemodules.thread:
+        tgt_options.thread = True
+
+    if options.stackless:
+        config.objspace.usemodules._stackless = True
+    elif config.objspace.usemodules._stackless:
+        options.stackless = True
+
     config.objspace.nofaking = True
     config.objspace.compiler = "ast"
     config.translating = True
+
+    translate.log_options(tgt_options, "target PyPy options in effect")
+    translate.log_config(config, "PyPy config object")
         
     space = make_objspace(config)
 
