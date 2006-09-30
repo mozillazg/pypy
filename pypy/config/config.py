@@ -2,29 +2,33 @@
 from py.compat import optparse
 
 class Config(object):
-    _frozen = False
+    _cprefix_frozen = False
     
     def __init__(self, descr, parent=None, **overrides):
-        self._descr = descr
-        self._value_owners = {}
-        self._parent = parent
-        self._build(overrides)
+        self._cprefix_descr = descr
+        self._cprefix_value_owners = {}
+        self._cprefix_parent = parent
+        self._cprefix_build(overrides)
+        self._cprefix_read = {}
 
-    def _build(self, overrides):
-        for child in self._descr._children:
+    def _cprefix_build(self, overrides):
+        for child in self._cprefix_descr._children:
             if isinstance(child, Option):
                 self.__dict__[child._name] = child.default
-                self._value_owners[child._name] = 'default'
+                self._cprefix_value_owners[child._name] = 'default'
             elif isinstance(child, OptionDescription):
                 self.__dict__[child._name] = Config(child, parent=self)
+        self.override(overrides)
+
+    def override(self, overrides):
         for name, value in overrides.iteritems():
-            subconfig, name = self._get_by_path(name)
+            subconfig, name = self._cprefix_get_by_path(name)
             setattr(subconfig, name, value)
 
     def __setattr__(self, name, value):
-        if self._frozen:
+        if self._cprefix_frozen:
             raise TypeError("trying to change a frozen option object")
-        if name.startswith('_'):
+        if name.startswith('_cprefix_'):
             self.__dict__[name] = value
             return
         self.setoption(name, value, 'user')
@@ -32,8 +36,8 @@ class Config(object):
     def setoption(self, name, value, who):
         if name not in self.__dict__:
             raise ValueError('unknown option %s' % (name,))
-        child = getattr(self._descr, name)
-        oldowner = self._value_owners[child._name]
+        child = getattr(self._cprefix_descr, name)
+        oldowner = self._cprefix_value_owners[child._name]
         oldvalue = getattr(self, name)
         if oldowner == 'required':
             if oldvalue != value:
@@ -41,29 +45,29 @@ class Config(object):
                                     (value, name))
             return
         child.setoption(self, value)
-        self._value_owners[name] = who
+        self._cprefix_value_owners[name] = who
 
     def require(self, name, value):
         self.setoption(name, value, "required")
 
-    def _get_by_path(self, path):
+    def _cprefix_get_by_path(self, path):
         """returns tuple (config, name)"""
         path = path.split('.')
         for step in path[:-1]:
             self = getattr(self, step)
         return self, path[-1]
 
-    def _get_toplevel(self):
-        while self._parent is not None:
-            self = self._parent
+    def _cprefix_get_toplevel(self):
+        while self._cprefix_parent is not None:
+            self = self._cprefix_parent
         return self
 
     def _freeze_(self):
-        self.__dict__['_frozen'] = True
+        self.__dict__['_cprefix_frozen'] = True
         return True
 
     def getkey(self):
-        return self._descr.getkey(self)
+        return self._cprefix_descr.getkey(self)
 
     def __hash__(self):
         return hash(self.getkey())
@@ -75,15 +79,15 @@ class Config(object):
         return not self == other
 
     def __iter__(self):
-        for child in self._descr._children:
+        for child in self._cprefix_descr._children:
             if isinstance(child, Option):
                 yield child._name, getattr(self, child._name)
 
     def __str__(self):
         result = "[%s]\n" % (self._descr._name, )
-        for child in self._descr._children:
+        for child in self._cprefix_descr._children:
             if isinstance(child, Option):
-                if self._value_owners[child._name] == 'default':
+                if self._cprefix_value_owners[child._name] == 'default':
                     continue
                 result += "    %s = %s\n" % (
                     child._name, getattr(self, child._name))
@@ -101,7 +105,7 @@ class Config(object):
         if currpath is None:
             currpath = []
         paths = []
-        for option in self._descr._children:
+        for option in self._cprefix_descr._children:
             attr = option._name
             if attr.startswith('_'):
                 continue
@@ -158,7 +162,8 @@ class ChoiceOption(Option):
     def setoption(self, config, value):
         name = self._name
         for path, reqvalue in self._requires.get(value, []):
-            subconfig, name = config._get_toplevel()._get_by_path(path)
+            toplevel = config._cprefix_get_toplevel()
+            subconfig, name = toplevel._cprefix_get_by_path(path)
             subconfig.require(name, reqvalue)
         super(ChoiceOption, self).setoption(config, value)
 
@@ -301,14 +306,14 @@ def to_optparse(config, useoptions=None, parser=None):
     for path in useoptions:
         if path.endswith(".*"):
             path = path[:-2]
-            subconf, name = config._get_by_path(path)
+            subconf, name = config._cprefix_get_by_path(path)
             children = [
                 path + "." + child._name
-                for child in getattr(subconf, name)._descr._children]
+                for child in getattr(subconf, name)._cprefix_descr._children]
             useoptions.extend(children)
         else:
-            subconf, name = config._get_by_path(path)
-            option = getattr(subconf._descr, name)
+            subconf, name = config._cprefix_get_by_path(path)
+            option = getattr(subconf._cprefix_descr, name)
             if option.cmdline is DEFAULT_OPTION_NAME:
                 chunks = ('--%s' % (path.replace('.', '-'),),)
             elif option.cmdline is None:
@@ -316,7 +321,7 @@ def to_optparse(config, useoptions=None, parser=None):
             else:
                 chunks = option.cmdline.split(' ')
             try:
-                grp = get_group(path, subconf._descr.doc)
+                grp = get_group(path, subconf._cprefix_descr.doc)
                 option.add_optparse_option(chunks, grp, subconf)
             except ValueError:
                 # an option group that does not only contain bool values
