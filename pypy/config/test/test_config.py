@@ -77,6 +77,8 @@ def test_annotator_folding():
     assert block.operations[0].opname == 'int_add'
 
     assert config._freeze_()
+    # does not raise, since it does not change the attribute
+    config.gc.name = "ref"
     py.test.raises(TypeError, 'config.gc.name = "framework"')
 
 def test_compare_configs():

@@ -8,16 +8,17 @@ class Config(object):
         self._cprefix_descr = descr
         self._cprefix_value_owners = {}
         self._cprefix_parent = parent
+        self._cprefix_values = {}
         self._cprefix_build(overrides)
         self._cprefix_read = {}
 
     def _cprefix_build(self, overrides):
         for child in self._cprefix_descr._children:
             if isinstance(child, Option):
-                self.__dict__[child._name] = child.default
+                self._cprefix_values[child._name] = child.default
                 self._cprefix_value_owners[child._name] = 'default'
             elif isinstance(child, OptionDescription):
-                self.__dict__[child._name] = Config(child, parent=self)
+                self._cprefix_values[child._name] = Config(child, parent=self)
         self.override(overrides)
 
     def override(self, overrides):
@@ -26,15 +27,21 @@ class Config(object):
             setattr(subconfig, name, value)
 
     def __setattr__(self, name, value):
-        if self._cprefix_frozen:
+        if self._cprefix_frozen and getattr(self, name) != value:
             raise TypeError("trying to change a frozen option object")
         if name.startswith('_cprefix_'):
             self.__dict__[name] = value
             return
         self.setoption(name, value, 'user')
 
+    def __getattr__(self, name):
+        if name not in self._cprefix_values:
+            raise AttributeError("%s object has no attribute %s" %
+                                 (self.__class__, name))
+        return self._cprefix_values[name]
+
     def setoption(self, name, value, who):
-        if name not in self.__dict__:
+        if name not in self._cprefix_values:
             raise ValueError('unknown option %s' % (name,))
         child = getattr(self._cprefix_descr, name)
         oldowner = self._cprefix_value_owners[child._name]
@@ -141,7 +148,7 @@ class Option(object):
         name = self._name
         if not self.validate(value):
             raise ValueError('invalid value %s for option %s' % (value, name))
-        config.__dict__[name] = value
+        config._cprefix_values[name] = value
 
     def getkey(self, value):
         return value
