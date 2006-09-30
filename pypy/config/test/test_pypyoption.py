@@ -29,4 +29,4 @@ def test_stacklessgc_required():
     conf = Config(pypy_optiondescription)
     conf.translation.gc = "stacklessgc"
     assert conf.translation.stackless
-    assert conf.translation.typesystem == "lltype"
+    assert conf.translation.type_system == "lltype"
