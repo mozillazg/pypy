@@ -57,14 +57,42 @@ def backend_to_typesystem(backend):
 class TranslationDriver(SimpleTaskEngine):
 
     def __init__(self, options=None, default_goal=None, disable=[],
-                 exe_name=None, extmod_name=None):
+                 exe_name=None, extmod_name=None,
+                 config=None):
         SimpleTaskEngine.__init__(self)
 
         self.log = log
 
+        if config is None:
+            from pypy.config.config import Config
+            from pypy.config.pypyoption import pypy_optiondescription
+            config = Config(pypy_optiondescription)
+        self.config = config
+
+        # YYY the option argument should disappear
         if options is None:
             options = _default_options
+        else:
+            # move options over to config
+
+            # YYY debug
+            # YYY fork_before
+            # YYY debug_transform
+            tconf = config.translation
+            tconf.gc = options.gc
+            tconf.thread = options.thread
+            tconf.stackless = options.stackless
+            tconf.backend = options.backend
+            tconf.type_system = options.type_system
+            tconf.insist = options.insist
+            tconf.lowmem = options.lowmem
+            tconf.backendopt.merge_if_blocks = options.merge_if_blocks
+            tconf.backendopt.raisingop2direct_call = (
+                    options.raisingop2direct_call)
+
+
         self.options = options
+
         self.exe_name = exe_name
         self.extmod_name = extmod_name
 
@@ -179,7 +207,7 @@ class TranslationDriver(SimpleTaskEngine):
             empty_translator.config.translation.verbose = True
             translator = empty_translator
         else:
-            translator = TranslationContext(verbose=True)
+            translator = TranslationContext(config=self.config, verbose=True)
 
         self.entry_point = entry_point
         self.translator = translator
@@ -249,30 +277,27 @@ class TranslationDriver(SimpleTaskEngine):
 
 
     def task_rtype_lltype(self):
-        opt = self.options
         rtyper = self.translator.buildrtyper(type_system='lltype')
+        insist = not self.config.translation.insist
         rtyper.specialize(dont_simplify_again=True,
-                          crash_on_first_typeerror=not opt.insist)
+                          crash_on_first_typeerror=insist)
     #
     task_rtype_lltype = taskdef(task_rtype_lltype, ['annotate'], "RTyping")
     RTYPE = 'rtype_lltype'
 
     def task_rtype_ootype(self):
         # Maybe type_system should simply be an option used in task_rtype
-        opt = self.options
+        insist = not self.config.translation.insist
         rtyper = self.translator.buildrtyper(type_system="ootype")
         rtyper.specialize(dont_simplify_again=True,
-                          crash_on_first_typeerror=not opt.insist)
+                          crash_on_first_typeerror=insist)
     #
     task_rtype_ootype = taskdef(task_rtype_ootype, ['annotate'], "ootyping")
     OOTYPE = 'rtype_ootype'
 
     def task_backendopt_lltype(self):
         from pypy.translator.backendopt.all import backend_optimizations
-        opt = self.options
-        backend_optimizations(self.translator,
-                              raisingop2direct_call_all=opt.raisingop2direct_call,
-                              merge_if_blocks_to_switch=opt.merge_if_blocks)
+        backend_optimizations(self.translator)
     #
     task_backendopt_lltype = taskdef(task_backendopt_lltype,
                                         [RTYPE], "Back-end optimisations")
@@ -290,7 +315,6 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_database_c(self):
         translator = self.translator
-        opt = self.options
         if translator.annotator is not None:
             translator.frozen = True
 
@@ -301,9 +325,9 @@ class TranslationDriver(SimpleTaskEngine):
         else:
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
-                            gcpolicy       = opt.gc,
-                            thread_enabled = getattr(opt, 'thread', False))
-        cbuilder.stackless = opt.stackless
+                            gcpolicy       = self.config.translation.gc,
+                            thread_enabled = self.config.translation.thread)
+        cbuilder.stackless = self.config.translation.stackless
         if not standalone:     # xxx more messy
             cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
@@ -385,14 +409,14 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_source_llvm(self):
         translator = self.translator
-        opts = self.options
         if translator.annotator is None:
             raise ValueError, "llvm requires annotation."
 
         from pypy.translator.llvm import genllvm
 
         # XXX Need more options for policies/llvm-backendoptions here?
-        self.llvmgen = genllvm.GenLLVM(translator, self.options.gc, self.standalone)
+        self.llvmgen = genllvm.GenLLVM(translator, self.config.translation.gc,
+                                       self.standalone)
 
         llvm_filename = self.llvmgen.gen_llvm_source(self.entry_point)
         self.log.info("written: %s" % (llvm_filename,))
@@ -460,7 +484,8 @@ class TranslationDriver(SimpleTaskEngine):
     def task_source_js(self):
         from pypy.translator.js.js import JS
         self.gen = JS(self.translator, functions=[self.entry_point],
-                      stackless=self.options.stackless, use_debug=self.options.debug_transform)
+                      stackless=self.config.translation.stackless,
+                      use_debug=self.options.debug_transform)
         filename = self.gen.write_source()
         self.log.info("Wrote %s" % (filename,))
     task_source_js = taskdef(task_source_js, 
@@ -519,13 +544,12 @@ class TranslationDriver(SimpleTaskEngine):
         goals = self.backend_select_goals(goals)
         return self._execute(goals, task_skip = self._maybe_skip())
 
-    def from_targetspec(targetspec_dic, options=None, args=None, empty_translator=None, 
+    def from_targetspec(targetspec_dic, options=None, args=None,
+                        empty_translator=None,
                         disable=[],
                         default_goal=None):
         if args is None:
             args = []
-        if options is None:
-            options = _default_options
 
         driver = TranslationDriver(options, default_goal, disable)
         # patch some attributes of the os module to make sure they
