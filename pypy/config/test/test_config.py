@@ -282,3 +282,8 @@ def test_overrides_are_defaults():
     config.b1 = True
     assert not config.b2
     print config._cfgimpl_value_owners
+
+def test_str():
+    descr = make_description()
+    c = Config(descr)
+    print c # does not crash
