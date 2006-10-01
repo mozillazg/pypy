@@ -146,13 +146,13 @@ class TranslationDriver(SimpleTaskEngine):
     def get_backend_and_type_system(self):
         type_system = None
         backend = None
-        opts = self.options
-        if opts.type_system:
-            type_system = opts.type_system
-        if opts.backend:
-            backend = opts.backend
+        if self.config.translation.type_system:
+            type_system = self.config.translation.type_system
+        if self.config.translation.backend:
+            backend = self.config.translation.backend
             ts = backend_to_typesystem(backend)
             if type_system:
+                # YYY should be dead code
                 if ts != type_system:
                     raise ValueError, ("incosistent type-system and backend:"
                                        " %s and %s" % (type_system, backend))
@@ -234,7 +234,7 @@ class TranslationDriver(SimpleTaskEngine):
         policy = self.policy
         self.log.info('with policy: %s.%s' % (policy.__class__.__module__, policy.__class__.__name__))
 
-        annmodel.DEBUG = self.options.debug
+        annmodel.DEBUG = self.config.translation.debug
         annotator = translator.buildannotator(policy=policy)
         
         s = annotator.build_types(self.entry_point, self.inputtypes)

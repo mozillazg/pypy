@@ -3,6 +3,8 @@ import optparse
 import autopath
 from pypy.translator.translator import TranslationContext
 from pypy.translator import driver
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 
 DEFAULT_OPTIONS = driver.DEFAULT_OPTIONS.copy()
 DEFAULT_OPTIONS.update({
@@ -18,8 +20,9 @@ class Translation(object):
         graph = self.context.buildflowgraph(entry_point)
         self.context._prebuilt_graphs[entry_point] = graph
 
-        self.driver = driver.TranslationDriver(
-            optparse.Values(defaults=DEFAULT_OPTIONS))
+        self.config = Config(pypy_optiondescription)
+
+        self.driver = driver.TranslationDriver(config=self.config)
          
         # hook into driver events
         driver_own_event = self.driver._event
@@ -93,27 +96,46 @@ class Translation(object):
             if optname in ('policy', 'standalone'):
                 continue
             if optname in self.frozen_options:
-                if getattr(self.driver.options, optname) != value:
-                     raise Exception("inconsistent option supplied: %s" % optname)
+                if self.get_option(optname) != value:
+                     raise Exception("inconsistent option supplied: %s" %
+                                     optname)
             else:
-                if not hasattr(self.driver.options, optname):
+                try:
+                    self.get_option(optname)
+                except AttributeError:
                     raise TypeError('driver has no option %r' % (optname,))
-                setattr(self.driver.options, optname, value)
+                self.set_option(optname, value)
                 self.frozen_options[optname] = True
+
+    def get_option(self, name):
+        # convenience function to look through the translation and
+        # translation.backendopt namespaces of the config object
+        try:
+            return getattr(self.config.translation, name)
+        except AttributeError:
+            return getattr(self.config.translation.backendopt, name)
+    
+    def set_option(self, name, value):
+        try:
+            setattr(self.config.translation, name, value)
+        except AttributeError:
+            setattr(self.config.translation.backendopt, name, value)
 
     def ensure_opt(self, name, value=None, fallback=None):
         if value is not None:
             self.update_options(None, {name: value})
         elif fallback is not None and name not in self.frozen_options:
             self.update_options(None, {name: fallback})
-        val =  getattr(self.driver.options, name)
+        val =  self.get_option(name)
         if val is None:
-            raise Exception("the %r option should have been specified at this point" % name)
+            raise Exception(
+                "the %r option should have been specified at this point" %name)
         return val
 
     def ensure_type_system(self, type_system=None):
         if type_system is None:
-            backend = self.driver.options.backend
+            backend = self.config.translation.backend
+            # YYY the next two lines are unreachable now?
             if backend is not None:
                 type_system = driver.backend_to_typesystem(backend)
         return self.ensure_opt('type_system', type_system, 'lltype')
