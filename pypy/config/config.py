@@ -42,7 +42,7 @@ class Config(object):
 
     def setoption(self, name, value, who):
         if name not in self._cfgimpl_values:
-            raise ValueError('unknown option %s' % (name,))
+            raise AttributeError('unknown option %s' % (name,))
         child = getattr(self._cfgimpl_descr, name)
         oldowner = self._cfgimpl_value_owners[child._name]
         oldvalue = getattr(self, name)

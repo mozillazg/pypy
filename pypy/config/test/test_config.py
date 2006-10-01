@@ -46,7 +46,7 @@ def test_base_config():
 
     py.test.raises(ValueError, 'config.objspace = "foo"')
     py.test.raises(ValueError, 'config.gc.name = "foo"')
-    py.test.raises(ValueError, 'config.gc.foo = "bar"')
+    py.test.raises(AttributeError, 'config.gc.foo = "bar"')
     py.test.raises(ValueError, 'config.bool = 123')
     py.test.raises(ValueError, 'config.int = "hello"')
     py.test.raises(ValueError, 'config.gc.float = None')
