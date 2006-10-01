@@ -105,11 +105,12 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
     OptionDescription("translation", "Translation Options", [
         BoolOption("stackless", "compile stackless features in",
                    default=False, cmdline="--stackless",
-                   requires=[("translation.type_system", "lltype")]),
+                   requires=[("translation.type_system", "lltype"),
+                             ("objspace.usemodules._stackless", True)]),
         ChoiceOption("type_system", "Type system to use when RTyping",
-                     [None, "lltype", "ootype"], "lltype", cmdline=None),
+                     [None, "lltype", "ootype"], cmdline=None),
         ChoiceOption("backend", "Backend to use for code generation",
-                     [None, "c", "llvm", "cli", "js", "squeak", "cl"], "c",
+                     [None, "c", "llvm", "cli", "js", "squeak", "cl"],
                      requires={
                          "c":      [("translation.type_system", "lltype")],
                          "llvm":   [("translation.type_system", "lltype")],
@@ -127,13 +128,15 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         BoolOption("thread", "enable use of threading primitives",
                    default=False),
         BoolOption("verbose", "Print extra information", default=False),
+        BoolOption("debug", "Record extra annotation information",
+                   default=False),
         BoolOption("insist", "Try hard to go on RTyping", default=False),
         BoolOption("lowmem", "Try to use little memory during translation",
-                   default=False, cmdline="--lowmem"),
+                   default=False, cmdline="--lowmem",
+                   requires=[("objspace.geninterp", False)]),
 
 
         # Flags of the TranslationContext:
-        BoolOption("verbose", "Print extra information", default=False),
         BoolOption("simplifying", "Simplify flow graphs", default=True),
         BoolOption("do_imports_immediately", "XXX", default=True,
                    cmdline=None),
@@ -150,7 +153,6 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        "Transform exception raising operations",
                        default=False, cmdline="--raisingop2direct_call"),
             BoolOption("mallocs", "Remove mallocs", default=True),
-            BoolOption("merge_if_blocks", "Remove mallocs", default=True),
             BoolOption("propagate", "Constant propagation, deprecated",
                        default=False),
             BoolOption("constfold", "Constant propagation",
