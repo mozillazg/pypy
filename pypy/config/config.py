@@ -24,6 +24,7 @@ class Config(object):
         for name, value in overrides.iteritems():
             subconfig, name = self._cfgimpl_get_by_path(name)
             setattr(subconfig, name, value)
+            subconfig._cfgimpl_value_owners[name] = 'default'
 
     def __setattr__(self, name, value):
         if self._cfgimpl_frozen and getattr(self, name) != value:
@@ -45,11 +46,9 @@ class Config(object):
         child = getattr(self._cfgimpl_descr, name)
         oldowner = self._cfgimpl_value_owners[child._name]
         oldvalue = getattr(self, name)
-        if oldowner == 'required':
-            if oldvalue != value:
-                raise ValueError('can not override value %s for option %s' %
-                                    (value, name))
-            return
+        if oldvalue != value and oldowner != "default":
+            raise ValueError('can not override value %s for option %s' %
+                                (value, name))
         child.setoption(self, value)
         self._cfgimpl_value_owners[name] = who
 
@@ -156,7 +155,7 @@ class Option(object):
         raise NotImplemented('abstract base class')
 
 class ChoiceOption(Option):
-    def __init__(self, name, doc, values, default, requires=None,
+    def __init__(self, name, doc, values, default=None, requires=None,
                  cmdline=DEFAULT_OPTION_NAME):
         super(ChoiceOption, self).__init__(name, doc, cmdline)
         self.values = values
@@ -174,7 +173,7 @@ class ChoiceOption(Option):
         super(ChoiceOption, self).setoption(config, value)
 
     def validate(self, value):
-        return value in self.values
+        return value is None or value in self.values
 
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
@@ -195,6 +194,9 @@ class BoolOption(ChoiceOption):
                                          requires=requires,
                                          cmdline=cmdline)
 
+    def validate(self, value):
+        return isinstance(value, bool)
+
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             try:
@@ -204,6 +206,7 @@ class BoolOption(ChoiceOption):
         parser.add_option(help=self.doc,
                             action='callback',
                             callback=_callback, *argnames)
+
 
 class IntOption(Option):
     def __init__(self, name, doc, default=0, cmdline=DEFAULT_OPTION_NAME):
