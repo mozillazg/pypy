@@ -5,13 +5,15 @@ from pypy.translator.c import gc
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.rstack import stack_unwind, stack_frames_depth, stack_too_big
 from pypy.rpython.rstack import yield_current_frame_to_caller
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 import os
 
 
 class StacklessTest(object):
     backendopt = False
     stacklessmode = True
-    gcpolicy = gc.BoehmGcPolicy
+    gcpolicy = "boehm"
 
     def setup_class(cls):
         import py
@@ -31,7 +33,10 @@ class StacklessTest(object):
             os.write(1, str(fn())+"\n")
             return 0
 
-        t = TranslationContext()
+        config = Config(pypy_optiondescription)
+        config.translation.gc = self.gcpolicy
+        config.translation.stackless = True
+        t = TranslationContext(config=config)
         self.t = t
         t.buildannotator().build_types(entry_point, [s_list_of_strings])
         t.buildrtyper().specialize()
@@ -41,7 +46,7 @@ class StacklessTest(object):
         from pypy.translator.transform import insert_ll_stackcheck
         insert_ll_stackcheck(t)
 
-        cbuilder = CStandaloneBuilder(t, entry_point, gcpolicy=self.gcpolicy)
+        cbuilder = CStandaloneBuilder(t, entry_point, config=config)
         cbuilder.stackless = self.stacklessmode
         cbuilder.generate_source()
         cbuilder.compile()

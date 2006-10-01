@@ -10,16 +10,19 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.objectmodel import cast_weakgcaddress_to_object, cast_object_to_weakgcaddress
 from pypy.rpython.memory.gctransform import GCTransformer
-
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 from pypy import conftest
 
-def compile_func(fn, inputtypes, t=None, gcpolicy=gc.RefcountingGcPolicy):
+def compile_func(fn, inputtypes, t=None, gcpolicy="ref"):
+    config = Config(pypy_optiondescription)
+    config.translation.gc = gcpolicy
     if t is None:
-        t = TranslationContext()
+        t = TranslationContext(config=config)
     if inputtypes is not None:
         t.buildannotator().build_types(fn, inputtypes)
         t.buildrtyper().specialize()
-    builder = genc.CExtModuleBuilder(t, fn, gcpolicy=gcpolicy)
+    builder = genc.CExtModuleBuilder(t, fn, config=config)
     builder.generate_source(defines={'COUNT_OP_MALLOCS': 1})
     builder.compile()
     builder.import_module()
@@ -144,7 +147,7 @@ def test_write_barrier():
     assert fn(0) == 5
 
 def test_del_basic():
-    for gcpolicy in [gc.RefcountingGcPolicy]:  #, gc.FrameworkGcPolicy]:
+    for gcpolicy in ["ref"]: #, "framework"]:
         S = lltype.GcStruct('S', ('x', lltype.Signed))
         TRASH = lltype.GcStruct('TRASH', ('x', lltype.Signed))
         lltype.attachRuntimeTypeInfo(S)
@@ -400,7 +403,7 @@ def test_gc_x_operations():
 from pypy.translator.c.test.test_boehm import AbstractTestClass
 
 class TestUsingFramework(AbstractTestClass):
-    from pypy.translator.c.gc import FrameworkGcPolicy as gcpolicy
+    gcpolicy = "framework"
 
     def test_empty_collect(self):
         def f():
@@ -863,7 +866,7 @@ class TestUsingFramework(AbstractTestClass):
         res = fn()
 
 class TestUsingStacklessFramework(TestUsingFramework):
-    from pypy.translator.c.gc import StacklessFrameworkGcPolicy as gcpolicy
+    gcpolicy = "stacklessgc"
 
     def getcompiled(self, f):
         # XXX quick hack
