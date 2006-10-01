@@ -39,7 +39,7 @@ class CBuilder(object):
         db = LowLevelDatabase(translator, standalone=self.standalone, 
                               gcpolicy=self.gcpolicy, thread_enabled=self.thread_enabled)
 
-        assert self.stackless in (False, 'old', True)
+        assert self.stackless in (False, True)
         if db.gcpolicy.requires_stackless:
             assert self.stackless != 'old'    # incompatible
             self.stackless = True
@@ -125,9 +125,6 @@ class CBuilder(object):
         else:
             if CBuilder.have___thread:
                 defines['HAVE___THREAD'] = 1
-            if self.stackless == 'old':
-                defines['USE_STACKLESS'] = '1'
-                defines['USE_OPTIMIZED_STACKLESS_UNWIND'] = '1'
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
                                                  entrypointname = pfname,
                                                  defines = defines)
@@ -135,7 +132,7 @@ class CBuilder(object):
         self.extrafiles = extra
         if self.standalone:
             self.gen_makefile(targetdir)
-        return cfile 
+        return cfile
 
     def generate_graphs_for_llinterp(self, db=None):
         # prepare the graphs as when the source is generated, but without
@@ -625,10 +622,6 @@ def gen_source_standalone(database, modulename, targetdir,
     sg = SourceGenerator(database, preimplementationlines)
     sg.set_strategy(targetdir)
     sg.gen_readable_parts_of_source(f)
-
-    # 2bis) old-style stackless data
-    if hasattr(database, 'stacklessdata'):
-        database.stacklessdata.writefiles(sg)
 
     # 3) start-up code
     print >> f
