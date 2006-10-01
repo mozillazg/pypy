@@ -89,7 +89,7 @@ class Config(object):
                 yield child._name, getattr(self, child._name)
 
     def __str__(self):
-        result = "[%s]\n" % (self._descr._name, )
+        result = "[%s]\n" % (self._cfgimpl_descr._name, )
         for child in self._cfgimpl_descr._children:
             if isinstance(child, Option):
                 if self._cfgimpl_value_owners[child._name] == 'default':
