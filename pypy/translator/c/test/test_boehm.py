@@ -3,6 +3,8 @@ from pypy.translator.translator import TranslationContext
 from pypy.translator.tool.cbuild import check_boehm_presence
 from pypy.translator.c.genc import CExtModuleBuilder
 from pypy import conftest
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 
 def setup_module(mod):
     if not check_boehm_presence():
@@ -32,7 +34,9 @@ class AbstractTestClass:
         t.buildrtyper().specialize()
         t.checkgraphs()
         def compile():
-            cbuilder = CExtModuleBuilder(t, func, gcpolicy=self.gcpolicy)
+            config = Config(pypy_optiondescription)
+            config.translation.gc = self.gcpolicy
+            cbuilder = CExtModuleBuilder(t, func, config=config)
             c_source_filename = cbuilder.generate_source()
             if conftest.option.view:
                 t.view()
@@ -44,7 +48,7 @@ class AbstractTestClass:
 
 
 class TestUsingBoehm(AbstractTestClass):
-    from pypy.translator.c.gc import BoehmGcPolicy as gcpolicy
+    gcpolicy = "boehm"
 
     def test_malloc_a_lot(self):
         def malloc_a_lot():
@@ -140,7 +144,7 @@ class TestUsingBoehm(AbstractTestClass):
         s = State()
         s.dels = 0
         def g():
-            a = A()            
+            a = A()
         def f():
             s.dels = 0
             for i in range(10):
@@ -178,6 +182,6 @@ class TestUsingBoehm(AbstractTestClass):
         
 
 class TestUsingExactBoehm(TestUsingBoehm):
-    from pypy.translator.c.gc import MoreExactBoehmGcPolicy as gcpolicy
+    gcpolicy = "exact_boehm"
 
 

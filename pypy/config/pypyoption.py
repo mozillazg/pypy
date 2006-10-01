@@ -120,7 +120,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                          "cl":     [("translation.type_system", "ootype")],
                          }),
         ChoiceOption("gc", "Garbage Collection Strategy",
-                     ["boehm", "ref", "framework", "none", "stacklessgc"],
+                     ["boehm", "ref", "framework", "none", "stacklessgc",
+                      "exact_boehm"],
                       "boehm", requires={
                          "stacklessgc": [("translation.stackless", True)]},
                       cmdline="--gc"),
@@ -131,6 +132,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         BoolOption("debug", "Record extra annotation information",
                    default=True),
         BoolOption("insist", "Try hard to go on RTyping", default=False),
+        BoolOption("countmallocs", "Count mallocs and frees", default=False,
+                   cmdline=None),
         BoolOption("lowmem", "Try to use little memory during translation",
                    default=False, cmdline="--lowmem",
                    requires=[("objspace.geninterp", False)]),

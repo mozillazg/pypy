@@ -14,20 +14,23 @@ from pypy.tool import isolate
 from pypy.translator.locality.calltree import CallTree
 from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
+from pypy.translator.c import gc
 
 class CBuilder(object):
     c_source_filename = None
     _compiled = False
     symboltable = None
-    stackless = False
     modulename = None
     
-    def __init__(self, translator, entrypoint, gcpolicy=None, libraries=None, thread_enabled=False):
+    def __init__(self, translator, entrypoint, config=None, libraries=None):
         self.translator = translator
         self.entrypoint = entrypoint
         self.originalentrypoint = entrypoint
-        self.gcpolicy = gcpolicy
-        self.thread_enabled = thread_enabled
+        if config is None:
+            from pypy.config.config import Config
+            from pypy.config.pypyoption import pypy_optiondescription
+            config = Config(pypy_optiondescription)
+        self.config = config
 
         if libraries is None:
             libraries = []
@@ -36,23 +39,25 @@ class CBuilder(object):
 
     def build_database(self, exports=[], pyobj_options=None):
         translator = self.translator
-        db = LowLevelDatabase(translator, standalone=self.standalone, 
-                              gcpolicy=self.gcpolicy, thread_enabled=self.thread_enabled)
 
-        assert self.stackless in (False, True)
-        if db.gcpolicy.requires_stackless:
-            assert self.stackless != 'old'    # incompatible
-            self.stackless = True
-        if self.stackless:
+        gcpolicyclass = gc.name_to_gcpolicy[self.config.translation.gc]
+
+        if self.config.translation.stackless:
             if not self.standalone:
                 raise Exception("stackless: only for stand-alone builds")
-
+            
             from pypy.translator.stackless.transform import StacklessTransformer
-            db.stacklesstransformer = StacklessTransformer(translator,
-                                                           self.originalentrypoint,
-                                                           db.gcpolicy.requires_stackless)
-            self.entrypoint = db.stacklesstransformer.slp_entry_point
+            stacklesstransformer = StacklessTransformer(
+                translator, self.originalentrypoint,
+                gcpolicyclass.requires_stackless)
+            self.entrypoint = stacklesstransformer.slp_entry_point
+        else:
+            stacklesstransformer = None
 
+        db = LowLevelDatabase(translator, standalone=self.standalone,
+                              gcpolicyclass=gcpolicyclass,
+                              stacklesstransformer=stacklesstransformer,
+                              thread_enabled=self.config.translation.thread)
         # pass extra options into pyobjmaker
         if pyobj_options:
             for key, value in pyobj_options.items():
@@ -112,7 +117,8 @@ class CBuilder(object):
         targetdir = udir.ensure(modulename, dir=1)
         self.targetdir = targetdir
         defines = defines.copy()
-        # defines={'COUNT_OP_MALLOCS': 1}
+        if self.config.translation.countmallocs:
+            defines['COUNT_OP_MALLOCS'] = 1
         if CBuilder.have___thread is None:
             CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
@@ -281,7 +287,10 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
         print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra)
-        print >> f, 'TFLAGS  = ' + ('', '-pthread')[self.thread_enabled]
+        if self.config.translation.thread:
+            print >> f, 'TFLAGS  = ' + '-pthread'
+        else:
+            print >> f, 'TFLAGS  = ' + ''
         print >> f, 'PROFOPT = ' + profopt
         print >> f, 'CC      = ' + cc
         print >> f

@@ -308,8 +308,8 @@ class TranslationDriver(SimpleTaskEngine):
         insert_ll_stackcheck(self.translator)
         
     task_stackcheckinsertion_lltype = taskdef(
-        task_stackcheckinsertion_lltype, 
-        ['?'+BACKENDOPT, RTYPE, 'annotate'], 
+        task_stackcheckinsertion_lltype,
+        ['?'+BACKENDOPT, RTYPE, 'annotate'],
         "inserting stack checks")
     STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
 
@@ -325,8 +325,7 @@ class TranslationDriver(SimpleTaskEngine):
         else:
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
-                            gcpolicy       = self.config.translation.gc,
-                            thread_enabled = self.config.translation.thread)
+                            config=self.config)
         cbuilder.stackless = self.config.translation.stackless
         if not standalone:     # xxx more messy
             cbuilder.modulename = self.extmod_name
@@ -335,7 +334,7 @@ class TranslationDriver(SimpleTaskEngine):
         self.cbuilder = cbuilder
         self.database = database
     #
-    task_database_c = taskdef(task_database_c, 
+    task_database_c = taskdef(task_database_c,
                             [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'], 
                             "Creating database for generating c source")
     
