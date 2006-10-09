@@ -22,14 +22,18 @@ class CBuilder(object):
     symboltable = None
     modulename = None
     
-    def __init__(self, translator, entrypoint, config=None, libraries=None):
+    def __init__(self, translator, entrypoint, config=None, libraries=None,
+                 gcpolicy=None):
         self.translator = translator
         self.entrypoint = entrypoint
         self.originalentrypoint = entrypoint
+        self.gcpolicy = gcpolicy
         if config is None:
             from pypy.config.config import Config
             from pypy.config.pypyoption import pypy_optiondescription
             config = Config(pypy_optiondescription)
+        if gcpolicy is not None and gcpolicy.requires_stackless:
+            config.translation.stackless = True
         self.config = config
 
         if libraries is None:
@@ -40,7 +44,7 @@ class CBuilder(object):
     def build_database(self, exports=[], pyobj_options=None):
         translator = self.translator
 
-        gcpolicyclass = gc.name_to_gcpolicy[self.config.translation.gc]
+        gcpolicyclass = self.get_gcpolicyclass()
 
         if self.config.translation.stackless:
             if not self.standalone:
@@ -101,6 +105,12 @@ class CBuilder(object):
         return db
 
     have___thread = None
+
+
+    def get_gcpolicyclass(self):
+        if self.gcpolicy is None:
+            return gc.name_to_gcpolicy[self.config.translation.gc]
+        return self.gcpolicy
 
     def generate_source(self, db=None, defines={}):
         assert self.c_source_filename is None
