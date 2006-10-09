@@ -12,10 +12,15 @@ def make_description():
 
     wantref_option = BoolOption('wantref', 'Test requires', default=False,
                                     requires=[('gc.name', 'ref')])
+    wantframework_option = BoolOption('wantframework', 'Test requires',
+                                      default=False,
+                                      requires=[('gc.name', 'framework')])
     
     gcgroup = OptionDescription('gc', '', [gcoption, gcdummy, floatoption])
     descr = OptionDescription('pypy', '', [gcgroup, booloption, objspaceoption,
-                                           wantref_option, intoption])
+                                           wantref_option,
+                                           wantframework_option,
+                                           intoption])
     return descr
 
 def test_base_config():
@@ -41,17 +46,16 @@ def test_base_config():
 
     py.test.raises(ValueError, 'config.objspace = "foo"')
     py.test.raises(ValueError, 'config.gc.name = "foo"')
-    py.test.raises(ValueError, 'config.gc.foo = "bar"')
+    py.test.raises(AttributeError, 'config.gc.foo = "bar"')
     py.test.raises(ValueError, 'config.bool = 123')
     py.test.raises(ValueError, 'config.int = "hello"')
     py.test.raises(ValueError, 'config.gc.float = None')
 
-    # test whether the gc.name is set to 'ref' when wantref is true (note that
-    # the current value of gc.name is 'framework')
-    config.wantref = True
+    config = Config(descr, bool=False)
     assert config.gc.name == 'ref'
-    py.test.raises(ValueError, 'config.gc.name = "framework"')
-    config.gc.name = "ref"
+    config.wantframework = True
+    py.test.raises(ValueError, 'config.gc.name = "ref"')
+    config.gc.name = "framework"
 
 def test_annotator_folding():
     from pypy.translator.interactive import Translation
@@ -77,6 +81,8 @@ def test_annotator_folding():
     assert block.operations[0].opname == 'int_add'
 
     assert config._freeze_()
+    # does not raise, since it does not change the attribute
+    config.gc.name = "ref"
     py.test.raises(TypeError, 'config.gc.name = "framework"')
 
 def test_compare_configs():
@@ -111,6 +117,9 @@ def test_to_optparse():
     
     assert config.gc.name == 'framework'
     
+
+    config = Config(descr)
+    parser = to_optparse(config, ['gc.name'])
     (options, args) = parser.parse_args(args=['-g ref'])
     assert config.gc.name == 'ref'
 
@@ -227,11 +236,11 @@ def test_getpaths():
     config = Config(descr)
     
     assert config.getpaths() == ['gc.name', 'gc.dummy', 'gc.float', 'bool',
-                                 'objspace', 'wantref', 'int']
+                                 'objspace', 'wantref', 'wantframework', 'int']
     assert config.gc.getpaths() == ['name', 'dummy', 'float']
     assert config.getpaths(include_groups=True) == [
         'gc', 'gc.name', 'gc.dummy', 'gc.float',
-        'bool', 'objspace', 'wantref', 'int']
+        'bool', 'objspace', 'wantref', 'wantframework', 'int']
 
 def test_none():
     dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
@@ -274,3 +283,25 @@ def test_requirements_for_choice():
     config.s.backend = "cli"
     assert config.s.type_system == "oo"
 
+def test_choice_with_no_default():
+    descr = OptionDescription("test", "", [
+        ChoiceOption("backend", "", ["c", "llvm"])])
+    config = Config(descr)
+    assert config.backend is None
+    config.backend = "c"
+
+def test_overrides_are_defaults():
+    descr = OptionDescription("test", "", [
+        BoolOption("b1", "", default=False, requires=[("b2", False)]),
+        BoolOption("b2", "", default=False),
+        ])
+    config = Config(descr, b2=True)
+    assert config.b2
+    config.b1 = True
+    assert not config.b2
+    print config._cfgimpl_value_owners
+
+def test_str():
+    descr = make_description()
+    c = Config(descr)
+    print c # does not crash

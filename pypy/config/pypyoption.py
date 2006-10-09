@@ -101,6 +101,74 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
 
     BoolOption("translating", "indicates whether we are translating currently",
                default=False, cmdline=None),
+
+    OptionDescription("translation", "Translation Options", [
+        BoolOption("stackless", "compile stackless features in",
+                   default=False, cmdline="--stackless",
+                   requires=[("translation.type_system", "lltype"),
+                             ("objspace.usemodules._stackless", True)]),
+        ChoiceOption("type_system", "Type system to use when RTyping",
+                     ["lltype", "ootype"], cmdline=None),
+        ChoiceOption("backend", "Backend to use for code generation",
+                     ["c", "llvm", "cli", "js", "squeak", "cl"],
+                     requires={
+                         "c":      [("translation.type_system", "lltype")],
+                         "llvm":   [("translation.type_system", "lltype")],
+                         "cli":    [("translation.type_system", "ootype")],
+                         "js":     [("translation.type_system", "ootype")],
+                         "squeak": [("translation.type_system", "ootype")],
+                         "cl":     [("translation.type_system", "ootype")],
+                         }),
+        ChoiceOption("gc", "Garbage Collection Strategy",
+                     ["boehm", "ref", "framework", "none", "stacklessgc",
+                      "exact_boehm"],
+                      "boehm", requires={
+                         "stacklessgc": [("translation.stackless", True)]},
+                      cmdline="--gc"),
+
+        BoolOption("thread", "enable use of threading primitives",
+                   default=False),
+        BoolOption("verbose", "Print extra information", default=False),
+        BoolOption("debug", "Record extra annotation information",
+                   default=True),
+        BoolOption("insist", "Try hard to go on RTyping", default=False),
+        BoolOption("countmallocs", "Count mallocs and frees", default=False,
+                   cmdline=None),
+        BoolOption("lowmem", "Try to use little memory during translation",
+                   default=False, cmdline="--lowmem",
+                   requires=[("objspace.geninterp", False)]),
+
+
+        # Flags of the TranslationContext:
+        BoolOption("simplifying", "Simplify flow graphs", default=True),
+        BoolOption("do_imports_immediately", "XXX", default=True,
+                   cmdline=None),
+        BoolOption("builtins_can_raise_exceptions", "XXX", default=False,
+                   cmdline=None),
+        BoolOption("list_comprehension_operations", "XXX", default=False,
+                   cmdline=None),
+
+        OptionDescription("backendopt", "Backend Optimization Options", [
+            BoolOption("print_statistics", "Print statistics while optimizing",
+                       default=False),
+            BoolOption("merge_if_blocks", "Remove mallocs", default=True),
+            BoolOption("raisingop2direct_call",
+                       "Transform exception raising operations",
+                       default=False, cmdline="--raisingop2direct_call"),
+            BoolOption("mallocs", "Remove mallocs", default=True),
+            BoolOption("propagate", "Constant propagation, deprecated",
+                       default=False),
+            BoolOption("constfold", "Constant propagation",
+                       default=True),
+            BoolOption("heap2stack", "Escape analysis and stack allocation",
+                       default=False,
+                       requires=[("translation.stackless", False)]),
+            BoolOption("clever_malloc_removal",
+                       "Remove mallocs in a clever way", default=False),
+            IntOption("inline_threshold", "Threshold when to inline functions",
+                      default=1, cmdline=None),
+            ]),
+    ])
 ])
 
 
