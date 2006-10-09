@@ -49,7 +49,7 @@ class CBuilder(object):
             from pypy.translator.stackless.transform import StacklessTransformer
             stacklesstransformer = StacklessTransformer(
                 translator, self.originalentrypoint,
-                gcpolicyclass.requires_stackless)
+                stackless_gc=gcpolicyclass.requires_stackless)
             self.entrypoint = stacklesstransformer.slp_entry_point
         else:
             stacklesstransformer = None
@@ -123,7 +123,8 @@ class CBuilder(object):
             CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
             from pypy.translator.c.symboltable import SymbolTable
-            self.symboltable = SymbolTable()
+            # XXX fix symboltable
+            #self.symboltable = SymbolTable()
             cfile, extra = gen_source(db, modulename, targetdir,
                                       defines = defines,
                                       exports = self.exports,
