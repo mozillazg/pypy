@@ -390,8 +390,8 @@ class TestTypedTestCase(CompilationTestCase):
         def testfn(i, j):
             s1 = ['one', 'two']
             s2 = ['one', 'two', 'o', 'on', 'ne', 'e', 'twos', 'foobar', 'fortytwo']
-            return s1[i].startswith(s2[j], [int, int])
-        fn = self.getcompiled(testfn)
+            return s1[i].startswith(s2[j])
+        fn = self.getcompiled(testfn, [int, int])
         for i in range(2):
             for j in range(9):
                 res = fn(i, j)
