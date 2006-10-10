@@ -301,32 +301,7 @@ class OptionDescription(object):
                       for child in self._children])
 
     def add_optparse_option(self, argnames, parser, config):
-        for child in self._children:
-            if (not isinstance(child, BoolOption) or
-                child.cmdline is not DEFAULT_OPTION_NAME):
-                raise ValueError(
-                    "cannot make OptionDescription %s a cmdline option" % (
-                        self._name, ))
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                values = value.split(",")
-                for value in values:
-                    value = value.strip()
-                    if value.startswith("-"):
-                        value = value[1:]
-                        set_to = False
-                    else:
-                        set_to = True
-                    option = getattr(self, value, None)
-                    if option is None:
-                        raise ValueError("did not find option %s" % (value, ))
-                    getattr(config, self._name).setoption(
-                        value, set_to, who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        option = parser.add_option(help=self.doc, action='callback',
-                                   type='string', callback=_callback,
-                                   *argnames)
+        return
 
 
 def to_optparse(config, useoptions=None, parser=None):
@@ -362,11 +337,7 @@ def to_optparse(config, useoptions=None, parser=None):
                 continue
             else:
                 chunks = option.cmdline.split(' ')
-            try:
-                grp = get_group(path, subconf._cfgimpl_descr.doc)
-                option.add_optparse_option(chunks, grp, subconf)
-            except ValueError:
-                # an option group that does not only contain bool values
-                pass
+            grp = get_group(path, subconf._cfgimpl_descr.doc)
+            option.add_optparse_option(chunks, grp, subconf)
     return parser
 

@@ -174,50 +174,6 @@ def test_to_optparse_bool():
     py.test.raises(SystemExit,
             "(options, args) = parser.parse_args(args=['--no-bool4'])")
 
-def test_optparse_boolgroup():
-    group = OptionDescription("test", '', [
-        BoolOption("smallint", "use tagged integers",
-                   default=False),
-        BoolOption("strjoin", "use strings optimized for addition",
-                   default=False),
-        BoolOption("strslice", "use strings optimized for slicing",
-                   default=False),
-        BoolOption("strdict", "use dictionaries optimized for string keys",
-                   default=False),
-        BoolOption("normal", "do nothing special",
-                   default=True),
-    ], cmdline="--test")
-    descr = OptionDescription("all", '', [group])
-    config = Config(descr)
-    parser = to_optparse(config, ['test'])
-    (options, args) = parser.parse_args(
-        args=['--test=smallint,strjoin,strdict'])
-    
-    assert config.test.smallint
-    assert config.test.strjoin
-    assert config.test.strdict
-    assert config.test.normal
-
-    config = Config(descr)
-    parser = to_optparse(config, ['test'])
-    (options, args) = parser.parse_args(
-        args=['--test=smallint'])
-    
-    assert config.test.smallint
-    assert not config.test.strjoin
-    assert not config.test.strdict
-    assert config.test.normal
-
-    config = Config(descr)
-    parser = to_optparse(config, ['test'])
-    (options, args) = parser.parse_args(
-        args=['--test=-normal,smallint'])
-    
-    assert config.test.smallint
-    assert not config.test.strjoin
-    assert not config.test.strdict
-    assert not config.test.normal
-
 def test_config_start():
     descr = make_description()
     config = Config(descr)
