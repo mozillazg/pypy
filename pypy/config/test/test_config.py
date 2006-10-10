@@ -164,7 +164,8 @@ def test_to_optparse_bool():
 
     config = Config(descr)
     parser = to_optparse(config, ['bool1', 'bool2', 'bool3', 'bool4'])
-    (options, args) = parser.parse_args(args=['--without-bool2', '--no-bool3'])
+    (options, args) = parser.parse_args(args=['--without-bool2', '--no-bool3',
+                                              '--bool4'])
     assert not config.bool1
     assert not config.bool2
     assert not config.bool3
