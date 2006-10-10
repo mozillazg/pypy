@@ -191,16 +191,17 @@ def _getnegation(optname):
         return "with" + optname[len("without"):]
     if optname.startswith("with"):
         return "without" + optname[len("with"):]
-    return "no" + optname
+    return "no-" + optname
 
 class BoolOption(ChoiceOption):
     def __init__(self, name, doc, default=True, requires=None,
-                 cmdline=DEFAULT_OPTION_NAME):
+                 cmdline=DEFAULT_OPTION_NAME, negation=True):
         if requires is not None:
             requires = {True: requires}
         super(BoolOption, self).__init__(name, doc, [True, False], default,
                                          requires=requires,
                                          cmdline=cmdline)
+        self.negation = negation
 
     def validate(self, value):
         return isinstance(value, bool)
@@ -211,6 +212,8 @@ class BoolOption(ChoiceOption):
                 config.setoption(self._name, True, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
+        if not self.negation:
+            return
         option = parser.add_option(help=self.doc,
                                    action='callback',
                                    callback=_callback, *argnames)

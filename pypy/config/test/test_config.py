@@ -148,7 +148,12 @@ def test_to_optparse_bool():
                              cmdline='--bool1 -b')
     booloption2 = BoolOption('bool2', 'Boolean option test', default=True,
                              cmdline='--with-bool2 -c')
-    descr = OptionDescription('test', '', [booloption1, booloption2])
+    booloption3 = BoolOption('bool3', 'Boolean option test', default=True,
+                             cmdline='--bool3')
+    booloption4 = BoolOption('bool4', 'Boolean option test', default=True,
+                             cmdline='--bool4', negation=False)
+    descr = OptionDescription('test', '', [booloption1, booloption2,
+                                           booloption3, booloption4])
     config = Config(descr)
 
     parser = to_optparse(config, ['bool1', 'bool2'])
@@ -158,13 +163,16 @@ def test_to_optparse_bool():
     assert config.bool2
 
     config = Config(descr)
-    parser = to_optparse(config, ['bool1', 'bool2'])
-    (options, args) = parser.parse_args(args=['--without-bool2'])
+    parser = to_optparse(config, ['bool1', 'bool2', 'bool3', 'bool4'])
+    (options, args) = parser.parse_args(args=['--without-bool2', '--no-bool3'])
     assert not config.bool1
     assert not config.bool2
+    assert not config.bool3
 
     py.test.raises(SystemExit,
             "(options, args) = parser.parse_args(args=['-bfoo'])")
+    py.test.raises(SystemExit,
+            "(options, args) = parser.parse_args(args=['--no-bool4'])")
 
 def test_optparse_boolgroup():
     group = OptionDescription("test", '', [
