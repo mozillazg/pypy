@@ -212,11 +212,11 @@ class BoolOption(ChoiceOption):
                 config.setoption(self._name, True, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        if not self.negation:
-            return
         option = parser.add_option(help=self.doc,
                                    action='callback',
                                    callback=_callback, *argnames)
+        if not self.negation:
+            return
         no_argnames = ["--" + _getnegation(argname.lstrip("-"))
                            for argname in argnames
                                if argname.startswith("--")]
