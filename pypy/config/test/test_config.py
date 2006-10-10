@@ -147,7 +147,7 @@ def test_to_optparse_bool():
     booloption1 = BoolOption('bool1', 'Boolean option test', default=False,
                              cmdline='--bool1 -b')
     booloption2 = BoolOption('bool2', 'Boolean option test', default=True,
-                             cmdline='--bool2 -c')
+                             cmdline='--with-bool2 -c')
     descr = OptionDescription('test', '', [booloption1, booloption2])
     config = Config(descr)
 
@@ -159,7 +159,7 @@ def test_to_optparse_bool():
 
     config = Config(descr)
     parser = to_optparse(config, ['bool1', 'bool2'])
-    (options, args) = parser.parse_args(args=['--no-bool2'])
+    (options, args) = parser.parse_args(args=['--without-bool2'])
     assert not config.bool1
     assert not config.bool2
 

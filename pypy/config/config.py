@@ -181,9 +181,17 @@ class ChoiceOption(Option):
                 config.setoption(self._name, value.strip(), who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self.doc,
-                            action='callback', type='string',
-                            callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='string',
+                                   callback=_callback, *argnames)
+
+
+def _getnegation(optname):
+    if optname.startswith("without"):
+        return "with" + optname[len("without"):]
+    if optname.startswith("with"):
+        return "without" + optname[len("with"):]
+    return "no" + optname
 
 class BoolOption(ChoiceOption):
     def __init__(self, name, doc, default=True, requires=None,
@@ -203,22 +211,24 @@ class BoolOption(ChoiceOption):
                 config.setoption(self._name, True, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self.doc,
-                            action='callback',
-                            callback=_callback, *argnames)
-        no_argnames = ["--no-" + argname.lstrip("-") for argname in argnames
-                           if argname.startswith("--")]
+        option = parser.add_option(help=self.doc,
+                                   action='callback',
+                                   callback=_callback, *argnames)
+        no_argnames = ["--" + _getnegation(argname.lstrip("-"))
+                           for argname in argnames
+                               if argname.startswith("--")]
         if len(no_argnames) == 0:
-            no_argnames = ["--no-" + argname.lstrip("-")
+            no_argnames = ["--" + _getnegation(argname.lstrip("-"))
                                for argname in argnames]
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             try:
                 config.setoption(self._name, False, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help="unset option set by %s" % (argnames[0], ),
-                            action='callback',
-                            callback=_callback, *no_argnames)
+        option = parser.add_option(help="unset option set by %s" % (argname, ),
+                                   action='callback',
+                                   callback=_callback, *no_argnames)
+
         
 
 class IntOption(Option):
@@ -242,9 +252,9 @@ class IntOption(Option):
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             config.setoption(self._name, value, who='cmdline')
-        parser.add_option(help=self.doc,
-                            action='callback', type='int',
-                            callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='int',
+                                   callback=_callback, *argnames)
 
 class FloatOption(Option):
     def __init__(self, name, doc, default=0.0, cmdline=DEFAULT_OPTION_NAME):
@@ -267,9 +277,9 @@ class FloatOption(Option):
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             config.setoption(self._name, value, who='cmdline')
-        parser.add_option(help=self.doc,
-                          action='callback', type='float',
-                          callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='float',
+                                   callback=_callback, *argnames)
 
 class OptionDescription(object):
     def __init__(self, name, doc, children, cmdline=DEFAULT_OPTION_NAME):
@@ -289,7 +299,8 @@ class OptionDescription(object):
 
     def add_optparse_option(self, argnames, parser, config):
         for child in self._children:
-            if not isinstance(child, BoolOption):
+            if (not isinstance(child, BoolOption) or
+                child.cmdline is not DEFAULT_OPTION_NAME):
                 raise ValueError(
                     "cannot make OptionDescription %s a cmdline option" % (
                         self._name, ))
@@ -310,8 +321,9 @@ class OptionDescription(object):
                         value, set_to, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self._name, action='callback', type='string',
-                          callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc, action='callback',
+                                   type='string', callback=_callback,
+                                   *argnames)
 
 
 def to_optparse(config, useoptions=None, parser=None):
