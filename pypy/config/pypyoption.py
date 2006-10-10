@@ -47,8 +47,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         OptionDescription("usemodules", "Which Modules should be used", [
             BoolOption(modname, "use module %s" % (modname, ),
                        default=modname in default_modules,
-                       cmdline=None)
-            for modname in all_modules], cmdline="--usemodules"),
+                       cmdline="--withmod-%s" % (modname, ))
+            for modname in all_modules]),
 
         BoolOption("geninterp", "specify whether geninterp should be used"),
 
@@ -167,14 +167,14 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        "Remove mallocs in a clever way", default=False),
             IntOption("inline_threshold", "Threshold when to inline functions",
                       default=1, cmdline=None),
-            ]),
-    ])
+        ]),
+    ]),
 ])
 
 
 if __name__ == '__main__':
     config = Config(pypy_optiondescription)
     print config.getpaths()
-    parser = to_optparse(config)
+    parser = to_optparse(config) #, useoptions=["translation.*"])
     option, args = parser.parse_args()
     print config
