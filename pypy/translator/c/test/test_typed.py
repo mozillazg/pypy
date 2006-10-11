@@ -5,18 +5,24 @@ import py
 from py.test import raises
 
 from pypy import conftest
-from pypy.translator.test import snippet 
+from pypy.translator.test import snippet
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.rarithmetic import r_uint, r_ulonglong, r_longlong, intmask
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 
 # XXX this tries to make compiling faster for full-scale testing
 from pypy.translator.tool import cbuild
 cbuild.enable_fast_compilation()
 
+
 class CompilationTestCase:
 
     def annotatefunc(self, func, argtypes=None):
-        t = TranslationContext(simplifying=True)
+        config = Config(pypy_optiondescription)
+        config.translation.gc = "ref"
+        config.translation.simplifying = True
+        t = TranslationContext(config=config)
         if argtypes is None:
             argtypes = []
         a = t.buildannotator()
@@ -26,7 +32,7 @@ class CompilationTestCase:
 
     def compilefunc(self, t, func):
         from pypy.translator.c import genc
-        builder = genc.CExtModuleBuilder(t, func)
+        builder = genc.CExtModuleBuilder(t, func, config=t.config)
         builder.generate_source()
         builder.compile()
         builder.import_module()
