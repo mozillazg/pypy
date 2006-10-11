@@ -1,3 +1,4 @@
+import py
 from pypy.translator.c.symboltable import getsymboltable
 from pypy.translator.c.test import test_typed
 
