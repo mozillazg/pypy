@@ -2,68 +2,77 @@
 from py.compat import optparse
 
 class Config(object):
-    _frozen = False
+    _cfgimpl_frozen = False
     
     def __init__(self, descr, parent=None, **overrides):
-        self._descr = descr
-        self._value_owners = {}
-        self._parent = parent
-        self._build(overrides)
+        self._cfgimpl_descr = descr
+        self._cfgimpl_value_owners = {}
+        self._cfgimpl_parent = parent
+        self._cfgimpl_values = {}
+        self._cfgimpl_build(overrides)
 
-    def _build(self, overrides):
-        for child in self._descr._children:
+    def _cfgimpl_build(self, overrides):
+        for child in self._cfgimpl_descr._children:
             if isinstance(child, Option):
-                self.__dict__[child._name] = child.default
-                self._value_owners[child._name] = 'default'
+                self._cfgimpl_values[child._name] = child.default
+                self._cfgimpl_value_owners[child._name] = 'default'
             elif isinstance(child, OptionDescription):
-                self.__dict__[child._name] = Config(child, parent=self)
+                self._cfgimpl_values[child._name] = Config(child, parent=self)
+        self.override(overrides)
+
+    def override(self, overrides):
         for name, value in overrides.iteritems():
-            subconfig, name = self._get_by_path(name)
+            subconfig, name = self._cfgimpl_get_by_path(name)
             setattr(subconfig, name, value)
+            subconfig._cfgimpl_value_owners[name] = 'default'
 
     def __setattr__(self, name, value):
-        if self._frozen:
+        if self._cfgimpl_frozen and getattr(self, name) != value:
             raise TypeError("trying to change a frozen option object")
-        if name.startswith('_'):
+        if name.startswith('_cfgimpl_'):
             self.__dict__[name] = value
             return
         self.setoption(name, value, 'user')
 
+    def __getattr__(self, name):
+        if name not in self._cfgimpl_values:
+            raise AttributeError("%s object has no attribute %s" %
+                                 (self.__class__, name))
+        return self._cfgimpl_values[name]
+
     def setoption(self, name, value, who):
-        if name not in self.__dict__:
-            raise ValueError('unknown option %s' % (name,))
-        child = getattr(self._descr, name)
-        oldowner = self._value_owners[child._name]
+        if name not in self._cfgimpl_values:
+            raise AttributeError('unknown option %s' % (name,))
+        child = getattr(self._cfgimpl_descr, name)
+        oldowner = self._cfgimpl_value_owners[child._name]
         oldvalue = getattr(self, name)
-        if oldowner == 'required':
-            if oldvalue != value:
-                raise ValueError('can not override value %s for option %s' %
-                                    (value, name))
-            return
+        if oldvalue != value and oldowner != "default":
+            raise ValueError('can not override value %s for option %s' %
+                                (value, name))
         child.setoption(self, value)
-        self._value_owners[name] = who
+        self._cfgimpl_value_owners[name] = who
 
     def require(self, name, value):
         self.setoption(name, value, "required")
 
-    def _get_by_path(self, path):
+    def _cfgimpl_get_by_path(self, path):
         """returns tuple (config, name)"""
         path = path.split('.')
         for step in path[:-1]:
             self = getattr(self, step)
         return self, path[-1]
 
-    def _get_toplevel(self):
-        while self._parent is not None:
-            self = self._parent
+    def _cfgimpl_get_toplevel(self):
+        while self._cfgimpl_parent is not None:
+            self = self._cfgimpl_parent
         return self
 
     def _freeze_(self):
-        self.__dict__['_frozen'] = True
+        self.__dict__['_cfgimpl_frozen'] = True
         return True
 
     def getkey(self):
-        return self._descr.getkey(self)
+        return self._cfgimpl_descr.getkey(self)
 
     def __hash__(self):
         return hash(self.getkey())
@@ -75,15 +84,15 @@ class Config(object):
         return not self == other
 
     def __iter__(self):
-        for child in self._descr._children:
+        for child in self._cfgimpl_descr._children:
             if isinstance(child, Option):
                 yield child._name, getattr(self, child._name)
 
     def __str__(self):
-        result = "[%s]\n" % (self._descr._name, )
-        for child in self._descr._children:
+        result = "[%s]\n" % (self._cfgimpl_descr._name, )
+        for child in self._cfgimpl_descr._children:
             if isinstance(child, Option):
-                if self._value_owners[child._name] == 'default':
+                if self._cfgimpl_value_owners[child._name] == 'default':
                     continue
                 result += "    %s = %s\n" % (
                     child._name, getattr(self, child._name))
@@ -101,7 +110,7 @@ class Config(object):
         if currpath is None:
             currpath = []
         paths = []
-        for option in self._descr._children:
+        for option in self._cfgimpl_descr._children:
             attr = option._name
             if attr.startswith('_'):
                 continue
@@ -137,7 +146,7 @@ class Option(object):
         name = self._name
         if not self.validate(value):
             raise ValueError('invalid value %s for option %s' % (value, name))
-        config.__dict__[name] = value
+        config._cfgimpl_values[name] = value
 
     def getkey(self, value):
         return value
@@ -146,7 +155,7 @@ class Option(object):
         raise NotImplemented('abstract base class')
 
 class ChoiceOption(Option):
-    def __init__(self, name, doc, values, default, requires=None,
+    def __init__(self, name, doc, values, default=None, requires=None,
                  cmdline=DEFAULT_OPTION_NAME):
         super(ChoiceOption, self).__init__(name, doc, cmdline)
         self.values = values
@@ -158,12 +167,13 @@ class ChoiceOption(Option):
     def setoption(self, config, value):
         name = self._name
         for path, reqvalue in self._requires.get(value, []):
-            subconfig, name = config._get_toplevel()._get_by_path(path)
+            toplevel = config._cfgimpl_get_toplevel()
+            subconfig, name = toplevel._cfgimpl_get_by_path(path)
             subconfig.require(name, reqvalue)
         super(ChoiceOption, self).setoption(config, value)
 
     def validate(self, value):
-        return value in self.values
+        return value is None or value in self.values
 
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
@@ -171,18 +181,30 @@ class ChoiceOption(Option):
                 config.setoption(self._name, value.strip(), who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self.doc,
-                            action='callback', type='string',
-                            callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='string',
+                                   callback=_callback, *argnames)
+
+
+def _getnegation(optname):
+    if optname.startswith("without"):
+        return "with" + optname[len("without"):]
+    if optname.startswith("with"):
+        return "without" + optname[len("with"):]
+    return "no-" + optname
 
 class BoolOption(ChoiceOption):
     def __init__(self, name, doc, default=True, requires=None,
-                 cmdline=DEFAULT_OPTION_NAME):
+                 cmdline=DEFAULT_OPTION_NAME, negation=True):
         if requires is not None:
             requires = {True: requires}
         super(BoolOption, self).__init__(name, doc, [True, False], default,
                                          requires=requires,
                                          cmdline=cmdline)
+        self.negation = negation
+
+    def validate(self, value):
+        return isinstance(value, bool)
 
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
@@ -190,23 +212,28 @@ class BoolOption(ChoiceOption):
                 config.setoption(self._name, True, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self.doc,
-                            action='callback',
-                            callback=_callback, *argnames)
-        no_argnames = ["--no-" + argname.lstrip("-") for argname in argnames
-                           if argname.startswith("--")]
+        option = parser.add_option(help=self.doc,
+                                   action='callback',
+                                   callback=_callback, *argnames)
+        if not self.negation:
+            return
+        no_argnames = ["--" + _getnegation(argname.lstrip("-"))
+                           for argname in argnames
+                               if argname.startswith("--")]
         if len(no_argnames) == 0:
-            no_argnames = ["--no-" + argname.lstrip("-")
+            no_argnames = ["--" + _getnegation(argname.lstrip("-"))
                                for argname in argnames]
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             try:
                 config.setoption(self._name, False, who='cmdline')
             except ValueError, e:
                 raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help="unset option set by %s" % (argnames[0], ),
-                            action='callback',
-                            callback=_callback, *no_argnames)
+        option = parser.add_option(help="unset option set by %s" % (argname, ),
+                                   action='callback',
+                                   callback=_callback, *no_argnames)
+
         
+
 class IntOption(Option):
     def __init__(self, name, doc, default=0, cmdline=DEFAULT_OPTION_NAME):
         super(IntOption, self).__init__(name, doc, cmdline)
@@ -228,9 +255,9 @@ class IntOption(Option):
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             config.setoption(self._name, value, who='cmdline')
-        parser.add_option(help=self.doc,
-                            action='callback', type='int',
-                            callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='int',
+                                   callback=_callback, *argnames)
 
 class FloatOption(Option):
     def __init__(self, name, doc, default=0.0, cmdline=DEFAULT_OPTION_NAME):
@@ -253,9 +280,34 @@ class FloatOption(Option):
     def add_optparse_option(self, argnames, parser, config):
         def _callback(option, opt_str, value, parser, *args, **kwargs):
             config.setoption(self._name, value, who='cmdline')
-        parser.add_option(help=self.doc,
-                          action='callback', type='float',
-                          callback=_callback, *argnames)
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='float',
+                                   callback=_callback, *argnames)
+
+class StrOption(Option):
+    def __init__(self, name, doc, default='', cmdline=DEFAULT_OPTION_NAME):
+        super(StrOption, self).__init__(name, doc, cmdline)
+        self.default = default
+
+    def validate(self, value):
+        try:
+            str(value)
+        except TypeError:
+            return False
+        return True
+
+    def setoption(self, config, value):
+        try:
+            super(StrOption, self).setoption(config, str(value))
+        except TypeError, e:
+            raise ValueError(*e.args)
+
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            config.setoption(self._name, value, who='cmdline')
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='str',
+                                   callback=_callback, *argnames)
 
 class OptionDescription(object):
     def __init__(self, name, doc, children, cmdline=DEFAULT_OPTION_NAME):
@@ -274,30 +326,7 @@ class OptionDescription(object):
                       for child in self._children])
 
     def add_optparse_option(self, argnames, parser, config):
-        for child in self._children:
-            if not isinstance(child, BoolOption):
-                raise ValueError(
-                    "cannot make OptionDescription %s a cmdline option" % (
-                        self._name, ))
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                values = value.split(",")
-                for value in values:
-                    value = value.strip()
-                    if value.startswith("-"):
-                        value = value[1:]
-                        set_to = False
-                    else:
-                        set_to = True
-                    option = getattr(self, value, None)
-                    if option is None:
-                        raise ValueError("did not find option %s" % (value, ))
-                    getattr(config, self._name).setoption(
-                        value, set_to, who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        parser.add_option(help=self._name, action='callback', type='string',
-                          callback=_callback, *argnames)
+        return
 
 
 def to_optparse(config, useoptions=None, parser=None):
@@ -319,25 +348,21 @@ def to_optparse(config, useoptions=None, parser=None):
     for path in useoptions:
         if path.endswith(".*"):
             path = path[:-2]
-            subconf, name = config._get_by_path(path)
+            subconf, name = config._cfgimpl_get_by_path(path)
             children = [
                 path + "." + child._name
-                for child in getattr(subconf, name)._descr._children]
+                for child in getattr(subconf, name)._cfgimpl_descr._children]
             useoptions.extend(children)
         else:
-            subconf, name = config._get_by_path(path)
-            option = getattr(subconf._descr, name)
+            subconf, name = config._cfgimpl_get_by_path(path)
+            option = getattr(subconf._cfgimpl_descr, name)
             if option.cmdline is DEFAULT_OPTION_NAME:
                 chunks = ('--%s' % (path.replace('.', '-'),),)
             elif option.cmdline is None:
                 continue
             else:
                 chunks = option.cmdline.split(' ')
-            try:
-                grp = get_group(path, subconf._descr.doc)
-                option.add_optparse_option(chunks, grp, subconf)
-            except ValueError:
-                # an option group that does not only contain bool values
-                pass
+            grp = get_group(path, subconf._cfgimpl_descr.doc)
+            option.add_optparse_option(chunks, grp, subconf)
     return parser
 
