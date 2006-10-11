@@ -130,13 +130,29 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    default=False),
         BoolOption("verbose", "Print extra information", default=False),
         BoolOption("debug", "Record extra annotation information",
-                   default=True),
-        BoolOption("insist", "Try hard to go on RTyping", default=False),
+                   cmdline="-d --debug", default=False),
+        BoolOption("insist", "Try hard to go on RTyping", default=False,
+                   cmdline="--insist"),
         BoolOption("countmallocs", "Count mallocs and frees", default=False,
                    cmdline=None),
         BoolOption("lowmem", "Try to use little memory during translation",
                    default=False, cmdline="--lowmem",
                    requires=[("objspace.geninterp", False)]),
+
+        # misc
+        # XXX cc missing, no support for general string options yet
+        # XXX profopt missing, no support for general string options yet
+        StrOption("cc", "Specify compiler", default='', cmdline="--cc"),
+        StrOption("profopt", "Specify profile based optimization script",
+                  default="", cmdline="--profopt"),
+        BoolOption("batch", "Don't run interactive helpers", default=False,
+                   cmdline="--batch", negation=False),
+        IntOption("huge", "Threshold in the number of functions after which"
+                          "a local call graph and not a full one is displayed",
+                  default=100, cmdline="--huge"),
+        BoolOption("text", "Don't start the pygame viewer", default=False,
+                   cmdline="--text", negation=False),
+
 
 
         # Flags of the TranslationContext:
@@ -151,7 +167,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         OptionDescription("backendopt", "Backend Optimization Options", [
             BoolOption("print_statistics", "Print statistics while optimizing",
                        default=False),
-            BoolOption("merge_if_blocks", "Remove mallocs", default=True),
+            BoolOption("merge_if_blocks", "Merge if ... elif chains",
+                       cmdline="--if-block-merge", default=True),
             BoolOption("raisingop2direct_call",
                        "Transform exception raising operations",
                        default=False, cmdline="--raisingop2direct_call"),
