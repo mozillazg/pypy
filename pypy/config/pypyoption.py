@@ -1,7 +1,7 @@
 import autopath
 import py
 from pypy.config.config import OptionDescription, BoolOption, IntOption
-from pypy.config.config import ChoiceOption, to_optparse, Config
+from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 
 modulepath = py.magic.autopath().dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
