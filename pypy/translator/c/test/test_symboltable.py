@@ -1,6 +1,7 @@
 from pypy.translator.c.symboltable import getsymboltable
 from pypy.translator.c.test import test_typed
 
+py.test.skip("XXX symboltable not supported currently")
 getcompiled = test_typed.TestTypedTestCase().getcompiled
 
 def test_simple():
