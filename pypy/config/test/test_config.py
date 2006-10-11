@@ -9,6 +9,7 @@ def make_description():
     booloption = BoolOption('bool', 'Test boolean option')
     intoption = IntOption('int', 'Test int option')
     floatoption = FloatOption('float', 'Test float option', default=2.3)
+    stroption = StrOption('str', 'Test string option', default="abc")
 
     wantref_option = BoolOption('wantref', 'Test requires', default=False,
                                     requires=[('gc.name', 'ref')])
@@ -18,7 +19,7 @@ def make_description():
     
     gcgroup = OptionDescription('gc', '', [gcoption, gcdummy, floatoption])
     descr = OptionDescription('pypy', '', [gcgroup, booloption, objspaceoption,
-                                           wantref_option,
+                                           wantref_option, stroption,
                                            wantframework_option,
                                            intoption])
     return descr
@@ -43,6 +44,10 @@ def test_base_config():
     assert config.int == 123
 
     assert not config.wantref
+
+    assert config.str == "abc"
+    config.str = "def"
+    assert config.str == "def"
 
     py.test.raises(ValueError, 'config.objspace = "foo"')
     py.test.raises(ValueError, 'config.gc.name = "foo"')
@@ -201,11 +206,12 @@ def test_getpaths():
     config = Config(descr)
     
     assert config.getpaths() == ['gc.name', 'gc.dummy', 'gc.float', 'bool',
-                                 'objspace', 'wantref', 'wantframework', 'int']
+                                 'objspace', 'wantref', 'str', 'wantframework',
+                                 'int']
     assert config.gc.getpaths() == ['name', 'dummy', 'float']
     assert config.getpaths(include_groups=True) == [
         'gc', 'gc.name', 'gc.dummy', 'gc.float',
-        'bool', 'objspace', 'wantref', 'wantframework', 'int']
+        'bool', 'objspace', 'wantref', 'str', 'wantframework', 'int']
 
 def test_none():
     dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
