@@ -284,6 +284,31 @@ class FloatOption(Option):
                                    action='callback', type='float',
                                    callback=_callback, *argnames)
 
+class StrOption(Option):
+    def __init__(self, name, doc, default='', cmdline=DEFAULT_OPTION_NAME):
+        super(StrOption, self).__init__(name, doc, cmdline)
+        self.default = default
+
+    def validate(self, value):
+        try:
+            str(value)
+        except TypeError:
+            return False
+        return True
+
+    def setoption(self, config, value):
+        try:
+            super(StrOption, self).setoption(config, str(value))
+        except TypeError, e:
+            raise ValueError(*e.args)
+
+    def add_optparse_option(self, argnames, parser, config):
+        def _callback(option, opt_str, value, parser, *args, **kwargs):
+            config.setoption(self._name, value, who='cmdline')
+        option = parser.add_option(help=self.doc,
+                                   action='callback', type='str',
+                                   callback=_callback, *argnames)
+
 class OptionDescription(object):
     def __init__(self, name, doc, children, cmdline=DEFAULT_OPTION_NAME):
         self._name = name
