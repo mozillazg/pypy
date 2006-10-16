@@ -22,9 +22,9 @@ class Config(object):
 
     def override(self, overrides):
         for name, value in overrides.iteritems():
-            subconfig, name = self._cfgimpl_get_by_path(name)
-            setattr(subconfig, name, value)
-            subconfig._cfgimpl_value_owners[name] = 'default'
+            homeconfig, name = self._cfgimpl_get_home_by_path(name)
+            setattr(homeconfig, name, value)
+            homeconfig._cfgimpl_value_owners[name] = 'default'
 
     def __setattr__(self, name, value):
         if self._cfgimpl_frozen and getattr(self, name) != value:
@@ -55,7 +55,7 @@ class Config(object):
     def require(self, name, value):
         self.setoption(name, value, "required")
 
-    def _cfgimpl_get_by_path(self, path):
+    def _cfgimpl_get_home_by_path(self, path):
         """returns tuple (config, name)"""
         path = path.split('.')
         for step in path[:-1]:
@@ -168,8 +168,8 @@ class ChoiceOption(Option):
         name = self._name
         for path, reqvalue in self._requires.get(value, []):
             toplevel = config._cfgimpl_get_toplevel()
-            subconfig, name = toplevel._cfgimpl_get_by_path(path)
-            subconfig.require(name, reqvalue)
+            homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
+            homeconfig.require(name, reqvalue)
         super(ChoiceOption, self).setoption(config, value)
 
     def validate(self, value):
@@ -349,29 +349,25 @@ def to_optparse(config, useoptions=None, parser=None):
     for path in useoptions:
         if path.endswith(".*"):
             path = path[:-2]
-            subconf, name = config._cfgimpl_get_by_path(path)
-            path = path.rsplit(".", 1)
-            if len(path)==1:
-                path = ""
-            else:
-                path = path[0] + "."
+            homeconf, name = config._cfgimpl_get_home_by_path(path)
+            subconf = getattr(homeconf, name)
             children = [
-                path + child
+                path + "." + child
                 for child in subconf.getpaths()]
             useoptions.extend(children)
         else:
             if path in seen:
                 continue
             seen[path] = True
-            subconf, name = config._cfgimpl_get_by_path(path)
-            option = getattr(subconf._cfgimpl_descr, name)
+            homeconf, name = config._cfgimpl_get_home_by_path(path)
+            option = getattr(homeconf._cfgimpl_descr, name)
             if option.cmdline is DEFAULT_OPTION_NAME:
                 chunks = ('--%s' % (path.replace('.', '-'),),)
             elif option.cmdline is None:
                 continue
             else:
                 chunks = option.cmdline.split(' ')
-            grp = get_group(path, subconf._cfgimpl_descr.doc)
-            option.add_optparse_option(chunks, grp, subconf)
+            grp = get_group(path, homeconf._cfgimpl_descr.doc)
+            option.add_optparse_option(chunks, grp, homeconf)
     return parser
 

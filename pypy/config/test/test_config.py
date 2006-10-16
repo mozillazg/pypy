@@ -196,7 +196,8 @@ def test_star_works_recursively():
             OptionDescription("sub", "", [
                 BoolOption("b2", "", default=False, cmdline="--b2")
             ])
-        ])
+        ]),
+        BoolOption("b3", "", default=False, cmdline="--b3"),
     ])
     config = Config(descr)
     assert not config.a.b1
@@ -205,6 +206,8 @@ def test_star_works_recursively():
     options, args = parser.parse_args(args=["--b1", "--b2"])
     assert config.a.b1
     assert config.a.sub.b2
+    py.test.raises(SystemExit,
+            "(options, args) = parser.parse_args(args=['--b3'])")
 
     config = Config(descr)
     assert not config.a.b1
