@@ -140,8 +140,6 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    requires=[("objspace.geninterp", False)]),
 
         # misc
-        # XXX cc missing, no support for general string options yet
-        # XXX profopt missing, no support for general string options yet
         StrOption("cc", "Specify compiler", default='', cmdline="--cc"),
         StrOption("profopt", "Specify profile based optimization script",
                   default="", cmdline="--profopt"),
@@ -152,8 +150,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                   default=100, cmdline="--huge"),
         BoolOption("text", "Don't start the pygame viewer", default=False,
                    cmdline="--text", negation=False),
-
-
+        BoolOption("debug_transform", "Perform the debug transformation",
+                   default=False, cmdline=None, negation=False),
 
         # Flags of the TranslationContext:
         BoolOption("simplifying", "Simplify flow graphs", default=True),
@@ -187,7 +185,6 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         ]),
         OptionDescription("goals",
                           "Goals that should be reached during translation", [
-            # XXX not sure what the defaults should be here
             BoolOption("annotate", "Do type inference", default=False,
                        cmdline="-a --annotate", negation=False),
             BoolOption("no_annotate", "Don't do type inference", default=False,
@@ -210,6 +207,11 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        cmdline="--no-compile", negation=False),
             BoolOption("llinterpret", "Interpret the rtyped flow graphs",
                        default=False, cmdline="--llinterpret", negation=False),
+            ChoiceOption("fork_before",
+                         "(UNIX) Create restartable checkpoint before step",
+                         ["annotate", "rtype", "backendopt", "database",
+                          "source"], default=None, cmdline="--fork-before"),
+
         ]),
     ]),
 ])
