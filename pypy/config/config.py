@@ -112,7 +112,7 @@ class Config(object):
         paths = []
         for option in self._cfgimpl_descr._children:
             attr = option._name
-            if attr.startswith('_'):
+            if attr.startswith('_cfgimpl'):
                 continue
             value = getattr(self, attr)
             if isinstance(value, Config):

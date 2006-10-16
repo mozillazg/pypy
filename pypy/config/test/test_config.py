@@ -229,6 +229,7 @@ def test_optparse_path_options():
 
     assert config.gc.name == 'framework'
 
+
 def test_getpaths():
     descr = make_description()
     config = Config(descr)
@@ -240,6 +241,14 @@ def test_getpaths():
     assert config.getpaths(include_groups=True) == [
         'gc', 'gc.name', 'gc.dummy', 'gc.float',
         'bool', 'objspace', 'wantref', 'str', 'wantframework', 'int']
+
+def test_underscore_in_option_name():
+    descr = OptionDescription("opt", "", [
+        BoolOption("_stackless", "", default=False),
+    ])
+    config = Config(descr)
+    parser = to_optparse(config)
+    assert parser.has_option("--_stackless")
 
 def test_none():
     dummy1 = BoolOption('dummy1', 'doc dummy', default=False, cmdline=None)
