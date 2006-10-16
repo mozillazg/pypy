@@ -189,7 +189,32 @@ def test_config_start():
     assert config.gc.name == "framework"
     assert config.gc.dummy
 
+def test_star_works_recursively():
+    descr = OptionDescription("top", "", [
+        OptionDescription("a", "", [
+            BoolOption("b1", "", default=False, cmdline="--b1"),
+            OptionDescription("sub", "", [
+                BoolOption("b2", "", default=False, cmdline="--b2")
+            ])
+        ])
+    ])
+    config = Config(descr)
+    assert not config.a.b1
+    assert not config.a.sub.b2
+    parser = to_optparse(config, ['a.*'])
+    options, args = parser.parse_args(args=["--b1", "--b2"])
+    assert config.a.b1
+    assert config.a.sub.b2
 
+    config = Config(descr)
+    assert not config.a.b1
+    assert not config.a.sub.b2
+    # does not lead to an option conflict
+    parser = to_optparse(config, ['a.*', 'a.sub.*']) 
+    options, args = parser.parse_args(args=["--b1", "--b2"])
+    assert config.a.b1
+    assert config.a.sub.b2
+    
 def test_optparse_path_options():
     gcoption = ChoiceOption('name', 'GC name', ['ref', 'framework'], 'ref')
     gcgroup = OptionDescription('gc', '', [gcoption])

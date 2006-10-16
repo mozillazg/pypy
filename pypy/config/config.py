@@ -345,15 +345,24 @@ def to_optparse(config, useoptions=None, parser=None):
         parser = optparse.OptionParser()
     if useoptions is None:
         useoptions = config.getpaths(include_groups=True)
+    seen = {}
     for path in useoptions:
         if path.endswith(".*"):
             path = path[:-2]
             subconf, name = config._cfgimpl_get_by_path(path)
+            path = path.rsplit(".", 1)
+            if len(path)==1:
+                path = ""
+            else:
+                path = path[0] + "."
             children = [
-                path + "." + child._name
-                for child in getattr(subconf, name)._cfgimpl_descr._children]
+                path + child
+                for child in subconf.getpaths()]
             useoptions.extend(children)
         else:
+            if path in seen:
+                continue
+            seen[path] = True
             subconf, name = config._cfgimpl_get_by_path(path)
             option = getattr(subconf._cfgimpl_descr, name)
             if option.cmdline is DEFAULT_OPTION_NAME:
