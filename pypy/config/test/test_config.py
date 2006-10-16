@@ -313,3 +313,25 @@ def test_str():
     descr = make_description()
     c = Config(descr)
     print c # does not crash
+
+def test_dwim_set():
+    descr = OptionDescription("opt", "", [
+        OptionDescription("sub", "", [
+            BoolOption("b1", ""),
+            ChoiceOption("c1", "", ['a', 'b', 'c'], 'a'),
+            BoolOption("d1", ""),
+        ]),
+        BoolOption("b2", ""),
+        BoolOption("d1", ""),
+    ])
+    c = Config(descr)
+    c.set(b1=False, c1='b')
+    assert not c.sub.b1
+    assert c.sub.c1 == 'b'
+    # new config, because you cannot change values once they are set
+    c = Config(descr)
+    c.set(b2=False, **{'sub.c1': 'c'})
+    assert not c.b2
+    assert c.sub.c1 == 'c'
+    py.test.raises(AmbigousOptionError, "c.set(d1=True)")
+    py.test.raises(NoMatchingOptionFound, "c.set(unknown='foo')")

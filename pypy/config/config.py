@@ -1,6 +1,12 @@
 
 from py.compat import optparse
 
+class AmbigousOptionError(Exception):
+    pass
+
+class NoMatchingOptionFound(AttributeError):
+    pass
+
 class Config(object):
     _cfgimpl_frozen = False
     
@@ -54,6 +60,22 @@ class Config(object):
 
     def require(self, name, value):
         self.setoption(name, value, "required")
+
+    def set(self, **kwargs):
+        all_paths = [p.split(".") for p in self.getpaths()]
+        for key, value in kwargs.iteritems():
+            key_p = key.split('.')
+            candidates = [p for p in all_paths if p[-len(key_p):] == key_p]
+            if len(candidates) == 1:
+                name = '.'.join(candidates[0])
+                homeconfig, name = self._cfgimpl_get_home_by_path(name)
+                homeconfig.setoption(name, value, "user")
+            elif len(candidates) > 1:
+                raise AmbigousOptionError(
+                    'more than one option that ends with %s' % (key, ))
+            else:
+                raise NoMatchingOptionFound(
+                    'there is no option that matches %s' % (key, ))
 
     def _cfgimpl_get_home_by_path(self, path):
         """returns tuple (config, name)"""
