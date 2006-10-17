@@ -50,7 +50,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        cmdline="--withmod-%s" % (modname, ))
             for modname in all_modules]),
 
-        BoolOption("geninterp", "specify whether geninterp should be used"),
+        BoolOption("geninterp", "specify whether geninterp should be used",
+                   default=True),
 
         BoolOption("logbytecodes",
                    "keep track of bytecode usage",
@@ -141,9 +142,9 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    requires=[("objspace.geninterp", False)]),
 
         # misc
-        StrOption("cc", "Specify compiler", default='', cmdline="--cc"),
+        StrOption("cc", "Specify compiler", cmdline="--cc"),
         StrOption("profopt", "Specify profile based optimization script",
-                  default="", cmdline="--profopt"),
+                  cmdline="--profopt"),
         BoolOption("debug_transform", "Perform the debug transformation",
                    default=False, cmdline=None, negation=False),
 
