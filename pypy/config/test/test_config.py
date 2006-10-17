@@ -31,6 +31,7 @@ def test_base_config():
     assert config.gc.name == 'ref'
     config.gc.name = 'framework'
     assert config.gc.name == 'framework'
+    assert getattr(config, "gc.name") == 'framework'
 
     assert config.objspace == 'std'
     config.objspace = 'logic'
