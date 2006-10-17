@@ -20,7 +20,7 @@ class Config(object):
     def _cfgimpl_build(self, overrides):
         for child in self._cfgimpl_descr._children:
             if isinstance(child, Option):
-                self._cfgimpl_values[child._name] = child.default
+                self._cfgimpl_values[child._name] = child.getdefault()
                 self._cfgimpl_value_owners[child._name] = 'default'
             elif isinstance(child, OptionDescription):
                 self._cfgimpl_values[child._name] = Config(child, parent=self)
@@ -331,6 +331,25 @@ class StrOption(Option):
         option = parser.add_option(help=self.doc,
                                    action='callback', type='str',
                                    callback=_callback, *argnames)
+
+class ArbitraryOption(Option):
+    def __init__(self, name, doc, default=None, defaultfactory=None):
+        super(ArbitraryOption, self).__init__(name, doc, cmdline=None)
+        self.default = default
+        self.defaultfactory = defaultfactory
+        if defaultfactory is not None:
+            assert default is None
+
+    def validate(self, value):
+        return True
+
+    def add_optparse_option(self, *args, **kwargs):
+        return
+
+    def getdefault(self):
+        if self.defaultfactory is not None:
+            return self.defaultfactory()
+        return self.default
 
 class OptionDescription(object):
     def __init__(self, name, doc, children, cmdline=DEFAULT_OPTION_NAME):
