@@ -533,14 +533,15 @@ class TranslationDriver(SimpleTaskEngine):
         goals = self.backend_select_goals(goals)
         return self._execute(goals, task_skip = self._maybe_skip())
 
-    def from_targetspec(targetspec_dic, options=None, args=None,
+    def from_targetspec(targetspec_dic, config=None, args=None,
                         empty_translator=None,
                         disable=[],
                         default_goal=None):
         if args is None:
             args = []
 
-        driver = TranslationDriver(options, default_goal, disable)
+        driver = TranslationDriver(config=config, default_goal=default_goal,
+                                   disable=disable)
         # patch some attributes of the os module to make sure they
         # have the same value on every platform.
         backend, ts = driver.get_backend_and_type_system()
@@ -575,7 +576,7 @@ class TranslationDriver(SimpleTaskEngine):
     # checkpointing support
     def _event(self, kind, goal, func):
         if kind == 'pre':
-            fork_before = self.config.translation.goals.fork_before
+            fork_before = self.config.translation.fork_before
             if fork_before:
                 fork_before, = self.backend_select_goals([fork_before])
                 if not fork_before in self.done and fork_before == goal:
