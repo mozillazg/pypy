@@ -14,26 +14,24 @@ log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
 
-DEFAULT_OPTIONS = {
-  'gc': 'ref',
-  'cc': None,
-  'profopt': None,
+DEFAULTS = {
+  'translation.gc': 'ref',
+  'translation.cc': None,
+  'translation.profopt': None,
 
-  'thread': False, # influences GC policy
+  'translation.thread': False, # influences GC policy
 
-  'stackless': False,
-  'debug': True,
-  'insist': False,
-  'backend': 'c',
-  'type_system': None,
-  'lowmem': False,
-  'fork_before': None,
-  'raisingop2direct_call' : False,
-  'merge_if_blocks': True,
-  'debug_transform' : False,
+  'translation.stackless': False,
+  'translation.debug': True,
+  'translation.insist': False,
+  'translation.backend': 'c',
+  'translation.lowmem': False,
+  'translation.goals.fork_before': None,
+  'translation.backendopt.raisingop2direct_call' : False,
+  'translation.backendopt.merge_if_blocks': True,
+  'translation.debug_transform' : False,
 }
 
-_default_options = optparse.Values(defaults=DEFAULT_OPTIONS)
 
 def taskdef(taskfunc, deps, title, new_state=None, expected_states=[], idemp=False):
     taskfunc.task_deps = deps
@@ -56,9 +54,9 @@ def backend_to_typesystem(backend):
 
 class TranslationDriver(SimpleTaskEngine):
 
-    def __init__(self, options=None, default_goal=None, disable=[],
+    def __init__(self, setopts=None, default_goal=None, disable=[],
                  exe_name=None, extmod_name=None,
-                 config=None):
+                 config=None, overrides=None):
         SimpleTaskEngine.__init__(self)
 
         self.log = log
@@ -66,33 +64,15 @@ class TranslationDriver(SimpleTaskEngine):
         if config is None:
             from pypy.config.config import Config
             from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription)
+            config = Config(pypy_optiondescription,
+                            **DEFAULTS)
         self.config = config
+        if overrides is not None:
+            self.config.override(overrides)
 
-        # YYY the option argument should disappear
-        if options is None:
-            options = _default_options
-        else:
-            # move options over to config
-
-            # YYY debug
-            # YYY fork_before
-            # YYY debug_transform
-            tconf = config.translation
-            tconf.gc = options.gc
-            tconf.thread = options.thread
-            tconf.stackless = options.stackless
-            tconf.backend = options.backend
-            tconf.type_system = options.type_system
-            tconf.insist = options.insist
-            tconf.lowmem = options.lowmem
-            tconf.backendopt.merge_if_blocks = options.merge_if_blocks
-            tconf.backendopt.raisingop2direct_call = (
-                    options.raisingop2direct_call)
-
-
-        self.options = options
-
+        if setopts is not None:
+            self.config.set(**setopts)
+        
         self.exe_name = exe_name
         self.extmod_name = extmod_name
 
@@ -142,22 +122,14 @@ class TranslationDriver(SimpleTaskEngine):
                             expose_task(explicit_task)
                     else:
                         expose_task(explicit_task)
+    
+    def get_info(self): # XXX more?
+        d = {'backend': self.config.translation.backend}
+        return d
 
     def get_backend_and_type_system(self):
-        type_system = None
-        backend = None
-        if self.config.translation.type_system:
-            type_system = self.config.translation.type_system
-        if self.config.translation.backend:
-            backend = self.config.translation.backend
-            ts = backend_to_typesystem(backend)
-            if type_system:
-                # YYY should be dead code
-                if ts != type_system:
-                    raise ValueError, ("incosistent type-system and backend:"
-                                       " %s and %s" % (type_system, backend))
-            else:
-                type_system = ts
+        type_system = self.config.translation.type_system
+        backend = self.config.translation.backend
         return backend, type_system
 
     def backend_select_goals(self, goals):
@@ -239,7 +211,7 @@ class TranslationDriver(SimpleTaskEngine):
         
         s = annotator.build_types(self.entry_point, self.inputtypes)
         
-        if self.options.debug_transform:
+        if self.config.translation.debug_transform:
             from pypy.translator.transformer.debug import DebugTransformer
             dt = DebugTransformer(translator)
             dt.transform_all()
@@ -305,7 +277,6 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_backendopt_ootype(self):
         from pypy.translator.backendopt.all import backend_optimizations
-        opt = self.options
         backend_optimizations(self.translator,
                               raisingop2direct_call_all=False,
                               inline_threshold=0,
@@ -369,7 +340,8 @@ class TranslationDriver(SimpleTaskEngine):
         if self.exe_name is not None:
             import shutil
             exename = mkexename(self.c_entryp)
-            newexename = self.exe_name % self.options.__dict__
+            info = {'backend': self.config.translation.backend}
+            newexename = self.exe_name % self.get_info()
             if '/' not in newexename and '\\' not in newexename:
                 newexename = './' + newexename
             newexename = mkexename(newexename)
@@ -445,7 +417,7 @@ class TranslationDriver(SimpleTaskEngine):
     def task_compile_llvm(self):
         gen = self.llvmgen
         if self.standalone:
-            exe_name = (self.exe_name or 'testing') % self.options.__dict__
+            exe_name = (self.exe_name or 'testing') % self.get_info()
             self.c_entryp = gen.compile_llvm_source(exe_name=exe_name)
             self.create_exe()
         else:
@@ -502,7 +474,7 @@ class TranslationDriver(SimpleTaskEngine):
         from pypy.translator.js.js import JS
         self.gen = JS(self.translator, functions=[self.entry_point],
                       stackless=self.config.translation.stackless,
-                      use_debug=self.options.debug_transform)
+                      use_debug=self.config.translation.debug_transform)
         filename = self.gen.write_source()
         self.log.info("Wrote %s" % (filename,))
     task_source_js = taskdef(task_source_js, 
@@ -603,7 +575,7 @@ class TranslationDriver(SimpleTaskEngine):
     # checkpointing support
     def _event(self, kind, goal, func):
         if kind == 'pre':
-            fork_before = self.options.fork_before
+            fork_before = self.config.translation.goals.fork_before
             if fork_before:
                 fork_before, = self.backend_select_goals([fork_before])
                 if not fork_before in self.done and fork_before == goal:
