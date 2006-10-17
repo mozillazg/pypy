@@ -113,7 +113,8 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                      ["c", "llvm", "cli", "js", "squeak", "cl"],
                      requires={
                          "c":      [("translation.type_system", "lltype")],
-                         "llvm":   [("translation.type_system", "lltype")],
+                         "llvm":   [("translation.type_system", "lltype"),
+                                    ("translation.gc", "boehm")],
                          "cli":    [("translation.type_system", "ootype")],
                          "js":     [("translation.type_system", "ootype")],
                          "squeak": [("translation.type_system", "ootype")],
