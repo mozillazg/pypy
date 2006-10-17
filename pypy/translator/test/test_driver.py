@@ -1,6 +1,6 @@
 import py
 
-from pypy.translator.driver import TranslationDriver, DEFAULT_OPTIONS
+from pypy.translator.driver import TranslationDriver
 from pypy.config.config import Config
 from pypy.config.pypyoption import pypy_optiondescription
 from py.compat import optparse
@@ -13,8 +13,7 @@ def cmpl(l1, l2):
     return l1 == l2
 
 def test_ctr():
-    config = Config(pypy_optiondescription, **{"translation.backend": "c"})
-    td = TranslationDriver(config=config)
+    td = TranslationDriver()
 
     assert cmpl(td.exposed,
                 ['annotate', 'backendopt', 'llinterpret', 'rtype', 'source', 'compile', 'run'])
@@ -27,8 +26,7 @@ def test_ctr():
     assert td.backend_select_goals(['backendopt_lltype']) == [
         'backendopt_lltype']
 
-    config = Config(pypy_optiondescription)
-    td = TranslationDriver(config=config)
+    td = TranslationDriver({'backend': None, 'type_system': None})
 
     assert td.backend_select_goals(['compile_c']) == ['compile_c']
     py.test.raises(Exception, td.backend_select_goals, ['compile'])
@@ -48,9 +46,7 @@ def test_ctr():
                  'compile_llvm', 'compile_js', 'run_cl', 'run_squeak',
                  'run_llvm', 'run_c', 'run_js', 'run_cli'])
 
-    config = Config(pypy_optiondescription,
-                    **{"translation.type_system": "lltype"})
-    td = TranslationDriver(config=config)
+    td = TranslationDriver({'backend': None, 'type_system': 'lltype'})
 
     assert td.backend_select_goals(['compile_c']) == ['compile_c']
     py.test.raises(Exception, td.backend_select_goals, ['compile'])
