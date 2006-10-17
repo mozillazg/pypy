@@ -63,6 +63,24 @@ def test_base_config():
     py.test.raises(ValueError, 'config.gc.name = "ref"')
     config.gc.name = "framework"
 
+def test_arbitrary_option():
+    descr = OptionDescription("top", "", [
+        ArbitraryOption("a", "no help", default=None)
+    ])
+    config = Config(descr)
+    config.a = []
+    config.a.append(1)
+    assert config.a == [1]
+
+    descr = OptionDescription("top", "", [
+        ArbitraryOption("a", "no help", defaultfactory=list)
+    ])
+    c1 = Config(descr)
+    c2 = Config(descr)
+    c1.a.append(1)
+    assert c2.a == []
+    assert c1.a == [1]
+
 def test_annotator_folding():
     from pypy.translator.interactive import Translation
 
