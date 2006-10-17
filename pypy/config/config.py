@@ -167,17 +167,70 @@ class Option(object):
 
     def setoption(self, config, value, who):
         name = self._name
-        if not self.validate(value):
+        if who == "default" and value is None:
+            pass
+        elif not self.validate(value):
             raise ValueError('invalid value %s for option %s' % (value, name))
         config._cfgimpl_values[name] = value
 
     def getkey(self, value):
         return value
 
-    def add_optparse_option(self, argnames, parser, config):
-        raise NotImplemented('abstract base class')
+    def convert_from_cmdline(self, value):
+        return value
 
+    def add_optparse_option(self, argnames, parser, config):
+        callback = ConfigUpdate(config, self)
+        option = parser.add_option(help=self.doc+" %default",
+                                   action='callback', type=self.opt_type,
+                                   callback=callback, *argnames)
+
+class ConfigUpdate(object):
+
+    def __init__(self, config, option):
+        self.config = config
+        self.option = option
+
+    def convert_from_cmdline(self, value):
+        return self.option.convert_from_cmdline(value)
+
+    def __call__(self, option, opt_str, value, parser, *args, **kwargs):
+        try:
+            value = self.convert_from_cmdline(value)
+            self.config.setoption(self.option._name, value, who='cmdline')
+        except ValueError, e:
+            raise optparse.OptionValueError(e.args[0])
+
+    def help_default(self):
+        default = getattr(self.config, self.option._name)
+        owner = self.config._cfgimpl_value_owners[self.option._name]
+        if default is None:
+            if owner == 'default':
+                return ''
+            else:
+                default = '???'
+        return "[%s: %s]" % (owner, default)
+
+class BoolConfigUpdate(ConfigUpdate):
+    def __init__(self, config, option, which_value):
+        super(BoolConfigUpdate, self).__init__(config, option)
+        self.which_value = which_value
+
+    def convert_from_cmdline(self, value):
+        return self.which_value
+
+    def help_default(self):
+        default = getattr(self.config, self.option._name)
+        owner = self.config._cfgimpl_value_owners[self.option._name]
+        if default == self.which_value:
+            default = "[%s]" % owner
+        else:
+            default = ""
+        return default
+        
 class ChoiceOption(Option):
+    opt_type = 'string'
+    
     def __init__(self, name, doc, values, default=None, requires=None,
                  cmdline=DEFAULT_OPTION_NAME):
         super(ChoiceOption, self).__init__(name, doc, cmdline)
@@ -198,16 +251,8 @@ class ChoiceOption(Option):
     def validate(self, value):
         return value is None or value in self.values
 
-    def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                config.setoption(self._name, value.strip(), who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        option = parser.add_option(help=self.doc,
-                                   action='callback', type='string',
-                                   callback=_callback, *argnames)
-
+    def convert_from_cmdline(self, value):
+        return value.strip()
 
 def _getnegation(optname):
     if optname.startswith("without"):
@@ -216,28 +261,31 @@ def _getnegation(optname):
         return "without" + optname[len("with"):]
     return "no-" + optname
 
-class BoolOption(ChoiceOption):
-    def __init__(self, name, doc, default=True, requires=None,
+class BoolOption(Option):
+    def __init__(self, name, doc, default=None, requires=None,
                  cmdline=DEFAULT_OPTION_NAME, negation=True):
-        if requires is not None:
-            requires = {True: requires}
-        super(BoolOption, self).__init__(name, doc, [True, False], default,
-                                         requires=requires,
-                                         cmdline=cmdline)
+        super(BoolOption, self).__init__(name, doc, cmdline=cmdline)
+        self._requires = requires
+        self.default = default
         self.negation = negation
 
     def validate(self, value):
         return isinstance(value, bool)
 
+    def setoption(self, config, value, who):
+        name = self._name
+        if value and self._requires is not None:
+            for path, reqvalue in self._requires:
+                toplevel = config._cfgimpl_get_toplevel()
+                homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
+                homeconfig.setoption(name, reqvalue, who)
+        super(BoolOption, self).setoption(config, value, who)
+
     def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                config.setoption(self._name, True, who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        option = parser.add_option(help=self.doc,
+        callback = BoolConfigUpdate(config, self, True)
+        option = parser.add_option(help=self.doc+" %default",
                                    action='callback',
-                                   callback=_callback, *argnames)
+                                   callback=callback, *argnames)
         if not self.negation:
             return
         no_argnames = ["--" + _getnegation(argname.lstrip("-"))
@@ -246,19 +294,16 @@ class BoolOption(ChoiceOption):
         if len(no_argnames) == 0:
             no_argnames = ["--" + _getnegation(argname.lstrip("-"))
                                for argname in argnames]
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            try:
-                config.setoption(self._name, False, who='cmdline')
-            except ValueError, e:
-                raise optparse.OptionValueError(e.args[0])
-        option = parser.add_option(help="unset option set by %s" % (argname, ),
+        callback = BoolConfigUpdate(config, self, False)
+        option = parser.add_option(help="unset option set by %s %%default" % (argname, ),
                                    action='callback',
-                                   callback=_callback, *no_argnames)
+                                   callback=callback, *no_argnames)
 
         
-
 class IntOption(Option):
-    def __init__(self, name, doc, default=0, cmdline=DEFAULT_OPTION_NAME):
+    opt_type = 'int'
+    
+    def __init__(self, name, doc, default=None, cmdline=DEFAULT_OPTION_NAME):
         super(IntOption, self).__init__(name, doc, cmdline)
         self.default = default
 
@@ -275,15 +320,10 @@ class IntOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
-    def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            config.setoption(self._name, value, who='cmdline')
-        option = parser.add_option(help=self.doc,
-                                   action='callback', type='int',
-                                   callback=_callback, *argnames)
-
 class FloatOption(Option):
-    def __init__(self, name, doc, default=0.0, cmdline=DEFAULT_OPTION_NAME):
+    opt_type = 'float'
+
+    def __init__(self, name, doc, default=None, cmdline=DEFAULT_OPTION_NAME):
         super(FloatOption, self).__init__(name, doc, cmdline)
         self.default = default
 
@@ -300,37 +340,21 @@ class FloatOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
-    def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            config.setoption(self._name, value, who='cmdline')
-        option = parser.add_option(help=self.doc,
-                                   action='callback', type='float',
-                                   callback=_callback, *argnames)
-
 class StrOption(Option):
-    def __init__(self, name, doc, default='', cmdline=DEFAULT_OPTION_NAME):
+    opt_type = 'string'
+    
+    def __init__(self, name, doc, default=None, cmdline=DEFAULT_OPTION_NAME):
         super(StrOption, self).__init__(name, doc, cmdline)
         self.default = default
 
     def validate(self, value):
-        try:
-            str(value)
-        except TypeError:
-            return False
-        return True
+        return isinstance(value, str)
 
     def setoption(self, config, value, who):
         try:
-            super(StrOption, self).setoption(config, str(value), who)
+            super(StrOption, self).setoption(config, value, who)
         except TypeError, e:
             raise ValueError(*e.args)
-
-    def add_optparse_option(self, argnames, parser, config):
-        def _callback(option, opt_str, value, parser, *args, **kwargs):
-            config.setoption(self._name, value, who='cmdline')
-        option = parser.add_option(help=self.doc,
-                                   action='callback', type='str',
-                                   callback=_callback, *argnames)
 
 class ArbitraryOption(Option):
     def __init__(self, name, doc, default=None, defaultfactory=None):
@@ -371,6 +395,42 @@ class OptionDescription(object):
         return
 
 
+class OptHelpFormatter(optparse.IndentedHelpFormatter):
+
+    def expand_default(self, option):
+        assert self.parser
+        dfls = self.parser.defaults
+        defl = ""
+        choices = None
+        if option.action == 'callback' and isinstance(option.callback, ConfigUpdate):
+            callback = option.callback
+            defl = callback.help_default()
+            if isinstance(callback.option, ChoiceOption):
+                choices = callback.option.values
+        else:
+            val = dfls.get(option.dest)
+            if val is None:
+                pass
+            elif isinstance(val, bool):
+                if val is True and option.action=="store_true":
+                    defl = "default"
+            else:
+                defl = "default: %s" % val
+                
+        if option.type == 'choice':
+            choices = option.choices
+            
+        if choices is not None:
+            choices = "%s=%s, " % (option.metavar, '|'.join(choices))
+        
+        if '%default' in option.help:
+            defl = '[%s%s]' % (choices, defl)
+            return option.help.replace("%default", defl)
+        elif choices:
+            return option.help + ' [%s]' % choices 
+
+        return option.help
+
 def to_optparse(config, useoptions=None, parser=None):
     grps = {}
     def get_group(name, doc):
@@ -384,7 +444,7 @@ def to_optparse(config, useoptions=None, parser=None):
         return grp
 
     if parser is None:
-        parser = optparse.OptionParser()
+        parser = optparse.OptionParser(formatter=OptHelpFormatter())
     if useoptions is None:
         useoptions = config.getpaths(include_groups=True)
     seen = {}

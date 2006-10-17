@@ -6,8 +6,8 @@ def make_description():
     gcdummy = BoolOption('dummy', 'dummy', default=False)
     objspaceoption = ChoiceOption('objspace', 'Object space',
                                 ['std', 'logic'], 'std')
-    booloption = BoolOption('bool', 'Test boolean option')
-    intoption = IntOption('int', 'Test int option')
+    booloption = BoolOption('bool', 'Test boolean option', default=True)
+    intoption = IntOption('int', 'Test int option', default=0)
     floatoption = FloatOption('float', 'Test float option', default=2.3)
     stroption = StrOption('str', 'Test string option', default="abc")
 
@@ -376,3 +376,26 @@ def test_dwim_set():
     assert c.sub.c1 == 'c'
     py.test.raises(AmbigousOptionError, "c.set(d1=True)")
     py.test.raises(NoMatchingOptionFound, "c.set(unknown='foo')")
+
+def test_optparse_help():
+    import cStringIO
+    descr = OptionDescription("opt", "", [
+        BoolOption("bool1", 'do bool1', default=False, cmdline='--bool1'),
+        BoolOption("bool2", 'do bool2', default=False, cmdline='--bool2', negation=False),
+        BoolOption("bool3", 'do bool3', default=True, cmdline='--bool3'),
+        ChoiceOption("choice", "choose!", ['a', 'b', 'c'], 'a', '--choice'),
+        StrOption("str", 'specify xyz', default='hello', cmdline='--str'),
+    ])
+    conf = Config(descr)
+    parser = to_optparse(conf)
+    out = cStringIO.StringIO()
+    parser.print_help(out)
+    help = out.getvalue()
+    print help
+    return
+    assert "do bool1\n" in help
+    assert "unset option set by --bool1 [default]" in help
+    assert "do bool2\n" in help
+    assert "do bool3 [default]" in help
+    assert "choose! [default: a]" in help
+    assert "specify xyz [default: hello]" in help
