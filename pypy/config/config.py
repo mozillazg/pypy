@@ -40,6 +40,9 @@ class Config(object):
         self.setoption(name, value, 'user')
 
     def __getattr__(self, name):
+        if '.' in name:
+            homeconfig, name = self._cfgimpl_get_home_by_path(name)
+            return getattr(homeconfig, name)
         if name not in self._cfgimpl_values:
             raise AttributeError("%s object has no attribute %s" %
                                  (self.__class__, name))
