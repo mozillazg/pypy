@@ -324,6 +324,14 @@ def test_overrides_require_as_default():
     assert config.backend == 'cli'
     assert config.type_system == 'oo'
     
+def test_overrides_dont_change_user_options():
+    descr = OptionDescription("test", "", [
+        BoolOption("b", "", default=False)])
+    config = Config(descr)
+    config.b = True
+    config.override({'b': False})
+    assert config.b
+    
 def test_str():
     descr = make_description()
     c = Config(descr)

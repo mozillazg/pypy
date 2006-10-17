@@ -55,6 +55,8 @@ class Config(object):
         oldowner = self._cfgimpl_value_owners[child._name]
         oldvalue = getattr(self, name)
         if oldvalue != value and oldowner != "default":
+            if who == "default":
+                return
             raise ValueError('can not override value %s for option %s' %
                                 (value, name))
         child.setoption(self, value, who)
