@@ -29,8 +29,7 @@ class Config(object):
     def override(self, overrides):
         for name, value in overrides.iteritems():
             homeconfig, name = self._cfgimpl_get_home_by_path(name)
-            setattr(homeconfig, name, value)
-            homeconfig._cfgimpl_value_owners[name] = 'default'
+            homeconfig.setoption(name, value, 'default')
 
     def __setattr__(self, name, value):
         if self._cfgimpl_frozen and getattr(self, name) != value:
@@ -55,11 +54,8 @@ class Config(object):
         if oldvalue != value and oldowner != "default":
             raise ValueError('can not override value %s for option %s' %
                                 (value, name))
-        child.setoption(self, value)
+        child.setoption(self, value, who)
         self._cfgimpl_value_owners[name] = who
-
-    def require(self, name, value):
-        self.setoption(name, value, "required")
 
     def set(self, **kwargs):
         all_paths = [p.split(".") for p in self.getpaths()]
@@ -164,7 +160,7 @@ class Option(object):
     def getdefault(self):
         return self.default
 
-    def setoption(self, config, value):
+    def setoption(self, config, value, who):
         name = self._name
         if not self.validate(value):
             raise ValueError('invalid value %s for option %s' % (value, name))
@@ -186,13 +182,13 @@ class ChoiceOption(Option):
             requires = {}
         self._requires = requires
 
-    def setoption(self, config, value):
+    def setoption(self, config, value, who):
         name = self._name
         for path, reqvalue in self._requires.get(value, []):
             toplevel = config._cfgimpl_get_toplevel()
             homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
-            homeconfig.require(name, reqvalue)
-        super(ChoiceOption, self).setoption(config, value)
+            homeconfig.setoption(name, reqvalue, who)
+        super(ChoiceOption, self).setoption(config, value, who)
 
     def validate(self, value):
         return value is None or value in self.values
@@ -268,9 +264,9 @@ class IntOption(Option):
             return False
         return True
 
-    def setoption(self, config, value):
+    def setoption(self, config, value, who):
         try:
-            super(IntOption, self).setoption(config, int(value))
+            super(IntOption, self).setoption(config, int(value), who)
         except TypeError, e:
             raise ValueError(*e.args)
 
@@ -293,9 +289,9 @@ class FloatOption(Option):
             return False
         return True
 
-    def setoption(self, config, value):
+    def setoption(self, config, value, who):
         try:
-            super(FloatOption, self).setoption(config, float(value))
+            super(FloatOption, self).setoption(config, float(value), who)
         except TypeError, e:
             raise ValueError(*e.args)
 
@@ -318,9 +314,9 @@ class StrOption(Option):
             return False
         return True
 
-    def setoption(self, config, value):
+    def setoption(self, config, value, who):
         try:
-            super(StrOption, self).setoption(config, str(value))
+            super(StrOption, self).setoption(config, str(value), who)
         except TypeError, e:
             raise ValueError(*e.args)
 

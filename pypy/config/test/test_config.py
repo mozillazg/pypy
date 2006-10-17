@@ -309,6 +309,20 @@ def test_overrides_are_defaults():
     assert not config.b2
     print config._cfgimpl_value_owners
 
+def test_overrides_require_as_default():
+    descr = OptionDescription("test", "", [
+        ChoiceOption("backend", "", ['c', 'cli'], 'c',
+                     requires={'c': [('type_system', 'll')],
+                               'cli': [('type_system', 'oo')]}),
+        ChoiceOption("type_system", "", ['ll', 'oo'], 'll')
+        ])
+    config = Config(descr, backend='c')
+    config.set(backend=None, type_system=None)
+    config = Config(descr, backend='c')
+    config.set(backend='cli')
+    assert config.backend == 'cli'
+    assert config.type_system == 'oo'
+    
 def test_str():
     descr = make_description()
     c = Config(descr)
