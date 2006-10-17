@@ -26,7 +26,7 @@ DEFAULTS = {
   'translation.insist': False,
   'translation.backend': 'c',
   'translation.lowmem': False,
-  'translation.goals.fork_before': None,
+  'translation.fork_before': None,
   'translation.backendopt.raisingop2direct_call' : False,
   'translation.backendopt.merge_if_blocks': True,
   'translation.debug_transform' : False,
