@@ -80,7 +80,7 @@ def opt_parser_config():
     config = Config(pypy_optiondescription)
     opt_parser = py.compat.optparse.OptionParser(usage="target PyPy standalone",
                                                  add_help_option=False)
-    to_optparse(config, useoption=["objspace.*"], parser=parser)
+    to_optparse(config, useoptions=["objspace.*"], parser=parser)
     return config, parser
 
 def print_help():
