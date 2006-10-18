@@ -376,12 +376,11 @@ class ArbitraryOption(Option):
         return self.default
 
 class OptionDescription(object):
-    def __init__(self, name, doc, children, cmdline=DEFAULT_OPTION_NAME):
+    def __init__(self, name, doc, children):
         self._name = name
         self.doc = doc
         self._children = children
         self._build()
-        self.cmdline = cmdline
 
     def _build(self):
         for child in self._children:
