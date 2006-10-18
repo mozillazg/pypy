@@ -45,7 +45,7 @@ __init__.allow_someobjects = True
 
 # _____ Define and setup target ___
 
-def target(driver, args, config):
+def target(driver, args):
     driver.extmod_name = '_demo'
     return __init__, [object], CPyAnnotatorPolicy(space)
 
