@@ -92,10 +92,10 @@ def load_target(targetspec):
     if not targetspec.endswith('.py'):
         targetspec += '.py'
     thismod = sys.modules[__name__]
+    sys.modules['translate'] = thismod
     targetspec_dic = {
         '__name__': os.path.splitext(os.path.basename(targetspec))[0],
-        '__file__': targetspec,
-        'translate': thismod}
+        '__file__': targetspec}
     sys.path.insert(0, os.path.dirname(targetspec))
     execfile(targetspec, targetspec_dic)
     return targetspec_dic
@@ -143,17 +143,15 @@ def parse_options_and_load_target():
     if args and not targetspec_dic.get('take_options', False):
         log.WARNING("target specific arguments supplied but will be ignored: %s" % ' '.join(args))
 
-    # target specific defaults taking over
-    # xxx change this interface
-    if 'opt_defaults' in targetspec_dic:
-        config.translation.override(targetspec_dic['opt_defaults'])
+    # let the target modify or prepare itself
+    # based on the config
+    if 'handle_config' in targetspec_dic:
+        targetspec_dic['handle_config'](config)
 
     if translateconfig.help: 
-        # xxx change interface
         opt_parser.print_help()
         if 'print_help' in targetspec_dic:
-            print
-            targetspec_dic['print_help']()
+            targetspec_dic['print_help'](config)
         sys.exit(0)
     
     return targetspec_dic, translateconfig, config, args
@@ -236,14 +234,14 @@ def main():
 
         pdb_plus_show.start(tb, server_setup, graphic=not translateconfig.text)
 
-    log_config(translateconfig)
-    log_config(config)
+    log_config(translateconfig, "translate.py configuration")
 
     try:
         drv = driver.TranslationDriver.from_targetspec(targetspec_dic, config, args,
                                                        empty_translator=t,
                                                        disable=translateconfig.skipped_goals,
                                                        default_goal='compile')
+        log_config(config.translation, "translation configuration")
         pdb_plus_show.expose({'drv': drv, 'prof': prof})
 
         if drv.exe_name is None and '__name__' in targetspec_dic:
