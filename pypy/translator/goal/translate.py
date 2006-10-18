@@ -10,104 +10,25 @@ import autopath
 
 from pypy.config.config import to_optparse, OptionDescription, BoolOption, \
                                ArbitraryOption, StrOption, IntOption, Config, \
-                               ChoiceOption
+                               ChoiceOption, OptHelpFormatter
 from pypy.config.pypyoption import pypy_optiondescription
 
 
-# dict are not ordered, cheat with #_xyz keys and bunchiter
-def OPT(*args):
-    return args
-
-def bunchiter(d):
-    purify = lambda name: name.split('_',1)[1]
-    items = d.items()
-    items.sort()
-    for name, val in items:
-        yield purify(name), val
-
-GOAL = object()
-SKIP_GOAL = object()
-
-opts = {
-
-    '0_Annotation': {
-    '0_annotate': [OPT(('-a', '--annotate'), "Annotate", GOAL),
-                 OPT(('--no-annotate',), "Don't annotate", SKIP_GOAL)],
-    '1_debug': [OPT(('-d', '--debug'), "Record annotation debug info", True)]
-    },
-
-    '1_RTyping': {
-    '0_rtype':  [OPT(('-t', '--rtype'), "RType", GOAL),
-               OPT(('--no-rtype',), "Don't rtype", SKIP_GOAL)],
-    '1_insist': [OPT(('--insist',), "Dont' stop on first rtyper error", True)]
-    },
-    
-    '2_Backend optimisations': {
-    '_backendopt':  [OPT(('-o', '--backendopt'), "Do backend optimisations", GOAL),
-                 OPT(('--no-backendopt',), "Don't do backend optimisations", SKIP_GOAL)],
-    },
-
-    '3_Code generation options': {
-    '0_source': [OPT(('-s', '--source'), "Generate source code", GOAL),
-               OPT(('--no-source',), "Don't generate source code", SKIP_GOAL)],
-
-    '1_backend': [OPT(('-b', '--backend'), "Backend", ['c', 'llvm', 'cl', 'squeak', 'js', 'cli'])],
-
-    '2_gc': [OPT(('--gc',), "Garbage collector", ['boehm', 'ref', 'framework', 'none', 'exact_boehm', 'stacklessgc'])],
-    '4_stackless': [OPT(('--stackless',), "Stackless code generation (graph transformer)", True)],
-    '5_merge_if_blocks': [OPT(('--no-if-blocks-merge',), "Do not merge if ... elif ... chains and use a switch statement for them.", False)],
-    '6_raisingop2direct_call': [OPT(('--raisingop2direct_call',), "Convert possible exception raising operations to direct calls.", True)],
-    },
-
-
-    '4_Compilation options':{
-    '_compile': [OPT(('-c', '--compile'), "Compile generated source", GOAL),
-                OPT(('--no-compile',), "Don't compile", SKIP_GOAL)],
-    '2_cc': [OPT(('--cc',), "Set compiler", str)],
-    '3_profopt': [OPT(('--profopt',), "Set profile based optimization script", str)],
-    },
-               
-    '5_Run options': {
-    '_run': [OPT(('-r', '--run'), "Run compiled code", GOAL),
-            OPT(('--no-run',), "Don't run compiled code", SKIP_GOAL)],
-    },
-    
-    '6_General&other options': {
-    '0_batch': [OPT(('--batch',), "Don't run interactive helpers", True)],
-    '1_lowmem': [OPT(('--lowmem',), "Target should try to save memory", True)],
-
-    '2_huge': [OPT(('--huge',), "Threshold in the number of functions after which only a local call graph and not a full one is displayed", int)],
-
-    '3_text': [OPT(('--text',), "Don't start the pygame viewer", True)], 
-
-    '4_graphserve': [OPT(('--graphserve',), """Serve analysis graphs on port number
-(see pypy/translator/tool/pygame/graphclient.py)""", int)],
-
-    '5_fork_before':  [OPT(('--fork-before',), """(UNIX) Create restartable checkpoint before step""", 
-                           ['annotate', 'rtype', 'backendopt', 'database', 'source'])],
-  
-    '6_llinterpret':  [OPT(('--llinterpret',), "Interpret the rtyped flow graphs", GOAL)],
-
-    '7_profile':  [OPT(('--profile',), "cProfile (to debug the speed of the translation process)", True)],
-    },
-
-            
-}
-
 GOALS= [
-        ("annotate", "do type inference", "-a --annotate"),
-        ("rtype", "do rtyping", "-t --rtype"),
-        ("backendopt", "do backend optimizations", "--backendopt"),
-        ("source", "create source", "-s --source"),
-        ("compile", "compile", "-c --compile"),
-        ("run", "run the resulting binary", "--run"),
-        ("llinterpret", "interpret the rtyped flow graphs", "--llinterpret"),
+        ("annotate", "do type inference", "-a --annotate", ""),
+        ("rtype", "do rtyping", "-t --rtype", ""),
+        ("backendopt", "do backend optimizations", "--backendopt", ""),
+        ("source", "create source", "-s --source", ""),
+        ("compile", "compile", "-c --compile", " (default goal)"),
+        ("run", "run the resulting binary", "--run", ""),
+        ("llinterpret", "interpret the rtyped flow graphs", "--llinterpret", ""),
        ]
 
 def goal_options():
     result = []
-    for name, doc, cmdline in GOALS:
-        result.append(BoolOption(name, doc.title(), default=False, cmdline=cmdline,
+    for name, doc, cmdline, extra in GOALS:
+        yesdoc = doc[0].upper()+doc[1:]+extra
+        result.append(BoolOption(name, yesdoc, default=False, cmdline=cmdline,
                                  negation=False))
         result.append(BoolOption("no_%s" % name, "Don't "+doc, default=False,
                                  cmdline="--no-"+name, negation=False))
@@ -115,7 +36,7 @@ def goal_options():
 
 translate_optiondescr = OptionDescription("translate", "XXX", [
     IntOption("graphserve", """Serve analysis graphs on port number
-(see pypy/translator/tool/pygame/graphclient.py)""", default=0,
+(see pypy/translator/tool/pygame/graphclient.py)""",
               cmdline="--graphserve"),
     StrOption("targetspec", "XXX", default='targetpypystandalone',
               cmdline=None),
@@ -166,36 +87,6 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
-class OptHelpFormatter(optparse.IndentedHelpFormatter):
-
-    def expand_default(self, option):
-        assert self.parser
-        dfls = self.parser.defaults
-        defl = ""
-        if option.action == 'callback' and option.callback == goal_cb:
-            enable, goal = option.callback_args
-            if enable == (goal in dfls['default_goals']):
-                defl = "[default]"
-        else:
-            val = dfls.get(option.dest)
-            if val is None:
-                pass
-            elif isinstance(val, bool):
-                if val is True and option.action=="store_true":
-                    defl = "[default]"
-            else:
-                defl = "[default: %s]" % val
-
-        return option.help.replace("%defl", defl)
-        
-def goal_cb(option, opt, value, parser, enable, goal):
-    if enable:
-        if goal not in parser.values.ensure_value('goals', []):
-            parser.values.goals = parser.values.goals + [goal]
-    else:
-        if goal not in parser.values.ensure_value('skipped_goals', []):
-            parser.values.skipped_goals = parser.values.skipped_goals + [goal]
-
 def load_target(targetspec):
     log.info("Translating target as defined by %s" % targetspec)
     if not targetspec.endswith('.py'):
@@ -212,7 +103,7 @@ def load_target(targetspec):
 def parse_options_and_load_target():
     opt_parser = optparse.OptionParser(usage="%prog [options] [target] [target-specific-options]",
                                        prog="translate",
-                                       #formatter=OptHelpFormatter(),
+                                       formatter=OptHelpFormatter(),
                                        add_help_option=False)
 
     opt_parser.disable_interspersed_args()
@@ -226,7 +117,7 @@ def parse_options_and_load_target():
     options, args = opt_parser.parse_args()
 
     # set goals and skipped_goals
-    for name, _, _ in GOALS:
+    for name, _, _, _ in GOALS:
         if getattr(translateconfig.goal_options, name):
             if name not in translateconfig.goals:
                 translateconfig.goals.append(name)
@@ -301,7 +192,7 @@ def main():
         def __call__(self, port=None, async_only=False):
             if self.async_server is not None:
                 return self.async_server
-            elif port != 0:
+            elif port is not None:
                 from pypy.translator.tool.graphserver import run_async_server
                 serv_start, serv_show, serv_stop = self.async_server = run_async_server(t, translateconfig, port)
                 return serv_start, serv_show, serv_stop
