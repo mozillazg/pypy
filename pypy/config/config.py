@@ -183,7 +183,8 @@ class Option(object):
         callback = ConfigUpdate(config, self)
         option = parser.add_option(help=self.doc+" %default",
                                    action='callback', type=self.opt_type,
-                                   callback=callback, *argnames)
+                                   callback=callback, metavar=self._name.upper(),
+                                   *argnames)
 
 class ConfigUpdate(object):
 
@@ -209,7 +210,7 @@ class ConfigUpdate(object):
                 return ''
             else:
                 default = '???'
-        return "[%s: %s]" % (owner, default)
+        return "%s: %s" % (owner, default)
 
 class BoolConfigUpdate(ConfigUpdate):
     def __init__(self, config, option, which_value):
@@ -223,10 +224,9 @@ class BoolConfigUpdate(ConfigUpdate):
         default = getattr(self.config, self.option._name)
         owner = self.config._cfgimpl_value_owners[self.option._name]
         if default == self.which_value:
-            default = "[%s]" % owner
+            return owner
         else:
-            default = ""
-        return default
+            return ""
         
 class ChoiceOption(Option):
     opt_type = 'string'
@@ -421,10 +421,18 @@ class OptHelpFormatter(optparse.IndentedHelpFormatter):
             choices = option.choices
             
         if choices is not None:
-            choices = "%s=%s, " % (option.metavar, '|'.join(choices))
+            choices = "%s=%s" % (option.metavar, '|'.join(choices))
+        else:
+            choices = ""
         
         if '%default' in option.help:
-            defl = '[%s%s]' % (choices, defl)
+            if choices and defl:
+                sep = ", "
+            else:
+                sep = ""
+            defl = '[%s%s%s]' % (choices, sep, defl)
+            if defl == '[]':
+                defl = ""
             return option.help.replace("%default", defl)
         elif choices:
             return option.help + ' [%s]' % choices 

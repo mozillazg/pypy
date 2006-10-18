@@ -384,6 +384,7 @@ def test_optparse_help():
         BoolOption("bool2", 'do bool2', default=False, cmdline='--bool2', negation=False),
         BoolOption("bool3", 'do bool3', default=True, cmdline='--bool3'),
         ChoiceOption("choice", "choose!", ['a', 'b', 'c'], 'a', '--choice'),
+        ChoiceOption("choice2", "choose2!", ['x', 'y', 'z'], None, '--choice2'),
         StrOption("str", 'specify xyz', default='hello', cmdline='--str'),
     ])
     conf = Config(descr)
@@ -391,11 +392,11 @@ def test_optparse_help():
     out = cStringIO.StringIO()
     parser.print_help(out)
     help = out.getvalue()
-    print help
-    return
+    #print help
     assert "do bool1\n" in help
     assert "unset option set by --bool1 [default]" in help
     assert "do bool2\n" in help
     assert "do bool3 [default]" in help
-    assert "choose! [default: a]" in help
+    assert "choose! [CHOICE=a|b|c, default: a]" in help
+    assert "choose2! [CHOICE2=x|y|z]" in help
     assert "specify xyz [default: hello]" in help
