@@ -18,20 +18,20 @@ Main Assumption
 
 Configuration objects are produced at the entry points  and handed down to
 where they are actually used. This keeps configuration local but available
-everywhere and consistent. The confirugation values can be created using the
+everywhere and consistent. The configuration values can be created using the
 command line (already implemented) or a file (still to be done).
 
 
 API Details
 ===========
 
-The handling of options is split into two parts: The description of which
+The handling of options is split into two parts: the description of which
 options are available, what there possible values and defaults are and how they
 are organized into a tree. A specific choice of options is bundled into a
 configuration object which has a reference to its option description (and
 therefore makes sure that the configuration adheres to the option description).
 This splitting is remotely similar to the distinction between types and
-instances in the type systems of the rtyper: The types describe what sort of
+instances in the type systems of the rtyper: the types describe what sort of
 fields the instances have.
 
 The Options are organized in a tree. Every option has a name, as does every
