@@ -438,7 +438,8 @@ class OptHelpFormatter(optparse.IndentedHelpFormatter):
 
         return option.help
 
-def to_optparse(config, useoptions=None, parser=None):
+def to_optparse(config, useoptions=None, parser=None,
+                parserargs=None, parserkwargs=None):
     grps = {}
     def get_group(name, doc):
         steps = name.split('.')
@@ -451,7 +452,13 @@ def to_optparse(config, useoptions=None, parser=None):
         return grp
 
     if parser is None:
-        parser = optparse.OptionParser(formatter=OptHelpFormatter())
+        if parserargs is None:
+            parserargs = []
+        if parserkwargs is None:
+            parserkwargs = {}
+        parser = optparse.OptionParser(
+            formatter=OptHelpFormatter(),
+            *parserargs, **parserkwargs)
     if useoptions is None:
         useoptions = config.getpaths(include_groups=True)
     seen = {}

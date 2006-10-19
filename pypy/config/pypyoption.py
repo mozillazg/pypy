@@ -96,6 +96,9 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        "specify whether the default metaclass should be classobj",
                        default=False, cmdline="--oldstyle"),
          ]),
+        BoolOption("lowmem", "Try to use little memory during translation",
+                   default=False, cmdline="--lowmem",
+                   requires=[("objspace.geninterp", False)]),
 
 
     ]),
@@ -106,8 +109,7 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
     OptionDescription("translation", "Translation Options", [
         BoolOption("stackless", "compile stackless features in",
                    default=False, cmdline="--stackless",
-                   requires=[("translation.type_system", "lltype"),
-                             ("objspace.usemodules._stackless", True)]),
+                   requires=[("translation.type_system", "lltype")]),
         ChoiceOption("type_system", "Type system to use when RTyping",
                      ["lltype", "ootype"], cmdline=None),
         ChoiceOption("backend", "Backend to use for code generation",
@@ -129,7 +131,7 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                       cmdline="--gc"),
 
         BoolOption("thread", "enable use of threading primitives",
-                   default=False),
+                   default=False, cmdline="--thread"),
         BoolOption("verbose", "Print extra information", default=False),
         BoolOption("debug", "Record extra annotation information",
                    cmdline="-d --debug", default=False),
@@ -137,9 +139,6 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    cmdline="--insist"),
         BoolOption("countmallocs", "Count mallocs and frees", default=False,
                    cmdline=None),
-        BoolOption("lowmem", "Try to use little memory during translation",
-                   default=False, cmdline="--lowmem",
-                   requires=[("objspace.geninterp", False)]),
 
         # misc
         StrOption("cc", "Specify compiler", cmdline="--cc"),
