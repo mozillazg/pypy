@@ -182,6 +182,11 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
             IntOption("inline_threshold", "Threshold when to inline functions",
                       default=1, cmdline=None),
         ]),
+
+        OptionDescription("cli", "GenCLI options", [
+            BoolOption("trace_calls", "Trace function calls", default=False,
+                       cmdline="--cli-trace-calls")
+        ])
     ]),
 ])
 
