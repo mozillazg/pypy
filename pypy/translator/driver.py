@@ -497,7 +497,8 @@ class TranslationDriver(SimpleTaskEngine):
         from pypy.tool.udir import udir
 
         entry_point_graph = self.translator.graphs[0]
-        self.gen = GenCli(udir, self.translator, get_entrypoint(entry_point_graph))
+        self.gen = GenCli(udir, self.translator, get_entrypoint(entry_point_graph),
+                          config=self.config)
         filename = self.gen.generate_source()
         self.log.info("Wrote %s" % (filename,))
     task_source_cli = taskdef(task_source_cli, [OOBACKENDOPT, OOTYPE],
