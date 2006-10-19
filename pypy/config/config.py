@@ -376,6 +376,7 @@ class ArbitraryOption(Option):
         return self.default
 
 class OptionDescription(object):
+    cmdline = None
     def __init__(self, name, doc, children):
         self._name = name
         self.doc = doc
