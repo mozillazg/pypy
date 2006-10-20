@@ -104,10 +104,12 @@ class PyPyTarget(object):
         global space, entry_point
 
         # obscure hack to stuff the translation options into the translated PyPy
-        # XXX fix this
-        #import pypy.module.sys
-        #wrapstr = 'space.wrap(%r)' % (options.__dict__)
-        #pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
+        import pypy.module.sys
+        paths = config.getpaths()
+        options = dict([(path, getattr(config, path)) for path in paths])
+        wrapstr = 'space.wrap(%r)' % (options)
+        print wrapstr
+        pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
 
         if config.translation.thread:
             config.objspace.usemodules.thread = True
@@ -125,7 +127,7 @@ class PyPyTarget(object):
 
         import translate
         translate.log_config(config.objspace, "PyPy config object")
-            
+ 
         return self.get_entry_point(config)
 
     def get_entry_point(self, config):
