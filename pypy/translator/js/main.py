@@ -126,7 +126,7 @@ def rpython2javascript(mod, function_names, opts=Options):
     from pypy.config.config import Config
     from pypy.config.pypyoption import pypy_optiondescription
     config = Config(pypy_optiondescription)
-    config.translation.js.debug_transform = opts.debug_transform
+    config.translation.debug_transform = opts.debug_transform
     driver = TranslationDriver(config=config)
     try:
         driver.setup(some_strange_function_which_will_never_be_called, [], policy = JsPolicy())
