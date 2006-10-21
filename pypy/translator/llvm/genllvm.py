@@ -25,7 +25,7 @@ class GenLLVM(object):
     function_count = {}
 
     def __init__(self, translator, gcpolicy, standalone,
-                 debug=False, logging=True, stackless=False):
+                 debug=False, logging=True, stackless=False, config=None):
     
         # reset counters
         LLVMNode.nodename_count = {}    
@@ -39,9 +39,11 @@ class GenLLVM(object):
         self.standalone = standalone
         self.translator = translator
         
-        from pypy.config.config import Config
-        from pypy.config.pypyoption import pypy_optiondescription
-        self.config = Config(pypy_optiondescription)
+        if config is None:
+            from pypy.config.config import Config
+            from pypy.config.pypyoption import pypy_optiondescription
+            config = Config(pypy_optiondescription)
+        self.config = config
         self.stackless = stackless
 
         # the debug flag is for creating comments of every operation
@@ -81,7 +83,7 @@ class GenLLVM(object):
         # please dont ask!
         from pypy.translator.c.genc import CStandaloneBuilder
         from pypy.translator.c import gc
-        cbuild = CStandaloneBuilder(self.translator, func) # XXX gc policy here?
+        cbuild = CStandaloneBuilder(self.translator, func, config=self.config)
         cbuild.stackless = self.stackless
         c_db = cbuild.generate_graphs_for_llinterp()
 

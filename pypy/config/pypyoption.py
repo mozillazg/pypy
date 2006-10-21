@@ -146,7 +146,7 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         StrOption("profopt", "Specify profile based optimization script",
                   cmdline="--profopt"),
         BoolOption("debug_transform", "Perform the debug transformation",
-                   default=False, cmdline=None, negation=False),
+                   default=False, cmdline="--debug-transform", negation=False),
 
         # Flags of the TranslationContext:
         BoolOption("simplifying", "Simplify flow graphs", default=True),
@@ -187,10 +187,6 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
             BoolOption("trace_calls", "Trace function calls", default=False,
                        cmdline="--cli-trace-calls")
         ]),
-        OptionDescription("js", "JavaScript options", [
-            BoolOption("debug_transform", "Debug transform graph", default=False,
-                       cmdline="--debug-transform")
-        ])
     ]),
 ])
 
