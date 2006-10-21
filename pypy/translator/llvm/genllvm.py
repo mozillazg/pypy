@@ -32,12 +32,17 @@ class GenLLVM(object):
 
         if gcpolicy is None:
             gcpolicy = "boehm"
-            
+        
         self.gcpolicy = gcpolicy
+        
 
-        self.stackless = stackless
         self.standalone = standalone
         self.translator = translator
+        
+        from pypy.config.config import Config
+        from pypy.config.pypyoption import pypy_optiondescription
+        self.config = Config(pypy_optiondescription)
+        self.stackless = stackless
 
         # the debug flag is for creating comments of every operation
         # that may be executed
@@ -76,7 +81,7 @@ class GenLLVM(object):
         # please dont ask!
         from pypy.translator.c.genc import CStandaloneBuilder
         from pypy.translator.c import gc
-        cbuild = CStandaloneBuilder(self.translator, func, self.gcpolicy)
+        cbuild = CStandaloneBuilder(self.translator, func) # XXX gc policy here?
         cbuild.stackless = self.stackless
         c_db = cbuild.generate_graphs_for_llinterp()
 
