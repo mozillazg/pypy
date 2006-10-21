@@ -186,6 +186,10 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         OptionDescription("cli", "GenCLI options", [
             BoolOption("trace_calls", "Trace function calls", default=False,
                        cmdline="--cli-trace-calls")
+        ]),
+        OptionDescription("js", "JavaScript options", [
+            BoolOption("debug_transform", "Debug transform graph", default=False,
+                       cmdline="--debug-transform")
         ])
     ]),
 ])
