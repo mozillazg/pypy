@@ -108,7 +108,6 @@ class PyPyTarget(object):
         paths = config.getpaths()
         options = dict([(path, getattr(config, path)) for path in paths])
         wrapstr = 'space.wrap(%r)' % (options)
-        print wrapstr
         pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
 
         if config.translation.thread:
