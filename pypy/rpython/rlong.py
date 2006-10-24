@@ -1467,7 +1467,7 @@ def _bitwise(a, op, b): # '&', '|', '^'
     else:
         maska = 0
     if b.sign < 0:
-        b.invert()
+        b = b.invert()
         maskb = MASK
     else:
         maskb = 0

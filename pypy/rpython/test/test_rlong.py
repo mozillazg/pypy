@@ -289,6 +289,18 @@ class Test_rlong(object):
                 assert res1 == x << y
                 assert res2 == x >> y
 
+    def test_bitwise(self):
+        for x in gen_signs([0, 1, 5, 11, 42, 43, 3 ** 30]):
+            for y in gen_signs([0, 1, 5, 11, 42, 43, 3 ** 30, 3 ** 31]):
+                lx = rlong.fromlong(x)
+                ly = rlong.fromlong(y)
+                for mod in "xor and_ or_".split():
+                    res1 = getattr(lx, mod)(ly).tolong()
+                    res2 = getattr(operator, mod)(x, y)
+                    assert res1 == res2
+
+
+
 class TestInternalFunctions(object):
     def test__inplace_divrem1(self):
         # signs are not handled in the helpers!
@@ -396,3 +408,4 @@ class TestTranslatable(object):
                     rlong.fromrarith_int(r_uint(0)),
                     rlong.fromrarith_int(r_uint(17)))
         interpret(fn, [])
+
