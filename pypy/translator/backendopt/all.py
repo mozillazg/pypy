@@ -30,7 +30,7 @@ def backend_optimizations(translator, graphs=None,
     merge_if_blocks_to_switch = (config.merge_if_blocks or
         merge_if_blocks_to_switch)
     propagate = config.propagate or propagate
-    constfold = config.propagate or propagate
+    constfold = config.constfold or constfold
     heap2stack = config.heap2stack or heap2stack
     clever_malloc_removal = config.clever_malloc_removal or clever_malloc_removal
 
