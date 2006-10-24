@@ -32,7 +32,8 @@ def compile_db(db):
 
 def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
             annotatorpolicy=None):
-    t = Translation(fn, argtypes, gc=gcpolicy, backend="c")
+    t = Translation(fn, argtypes, gc=gcpolicy, backend="c",
+                    policy=annotatorpolicy)
     if not backendopt:
         t.disable(["backendopt_lltype"])
     t.annotate()
