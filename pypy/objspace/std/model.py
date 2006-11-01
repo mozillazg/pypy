@@ -66,6 +66,7 @@ class StdTypeModel:
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import strsliceobject
         from pypy.objspace.std import strjoinobject
+        from pypy.objspace.std import tlistobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
         from pypy.objspace.std import longobject
@@ -119,6 +120,9 @@ class StdTypeModel:
                     else:
                         imported_but_not_registered[implcls] = True
 
+        # xxx config
+        self.typeorder[tlistobject.W_TransparentList] = []
+
         if config.objspace.std.withstrdict:
             del self.typeorder[dictobject.W_DictObject]
             del self.typeorder[dictobject.W_DictIterObject]
@@ -137,6 +141,7 @@ class StdTypeModel:
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
         # XXX build these lists a bit more automatically later
+        
         if config.objspace.std.withsmallint:
             self.typeorder[boolobject.W_BoolObject] += [
                 (smallintobject.W_SmallIntObject, boolobject.delegate_Bool2SmallInt),
