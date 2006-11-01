@@ -78,6 +78,13 @@ def iter__List(space, w_list):
 def add__List_List(space, w_list1, w_list2):
     return W_ListObject(w_list1.wrappeditems + w_list2.wrappeditems)
 
+def add__List_ANY(space, w_list, w_any):
+    if space.is_true(space.isinstance(w_any, space.w_list)):
+        items1_w = w_list.wrappeditems
+        items2_w = space.unpackiterable(w_any)
+        return W_ListObject(items1_w + items2_w)
+    raise FailedToImplement
+
 def inplace_add__List_ANY(space, w_list1, w_iterable2):
     list_extend__List_ANY(space, w_list1, w_iterable2)
     return w_list1
@@ -109,14 +116,27 @@ def inplace_mul__List_ANY(space, w_list, w_times):
 
 def eq__List_List(space, w_list1, w_list2):
     # needs to be safe against eq_w() mutating the w_lists behind our back
-    if len(w_list1.wrappeditems) != len(w_list2.wrappeditems):
+    items1_w = w_list1.wrappeditems
+    items2_w = w_list2.wrappeditems
+    return equal_wrappeditems(space, items1_w, items2_w)
+
+def equal_wrappeditems(space, items1_w, items2_w):
+    if len(items1_w) != len(items2_w):
         return space.w_False
     i = 0
-    while i < len(w_list1.wrappeditems) and i < len(w_list2.wrappeditems):
-        if not space.eq_w(w_list1.wrappeditems[i], w_list2.wrappeditems[i]):
+    while i < len(items1_w) and i < len(items2_w):
+        if not space.eq_w(items1_w[i], items2_w[i]):
             return space.w_False
         i += 1
-    return space.newbool(len(w_list1.wrappeditems) == len(w_list2.wrappeditems))
+    return space.w_True
+    #return space.newbool(len(w_list1.wrappeditems) == len(w_list2.wrappeditems))
+
+def eq__List_ANY(space, w_list1, w_any):
+    if space.is_true(space.isinstance(w_any, space.w_list)):
+        items1_w = w_list1.wrappeditems
+        items2_w = space.unpackiterable(w_any)
+        return equal_wrappeditems(space, items1_w, items2_w)
+    raise FailedToImplement
 
 def _min(a, b):
     if a < b:
