@@ -61,3 +61,13 @@ class AppTestProxy(object):
         assert lst[2] == 3
         lst[1] = 0
         assert lst[0] + lst[1] == 1
+
+    def test_dict(self):
+        c = self.Controller({"xx":1})
+        d = proxy(dict, c.perform)
+        assert d['xx'] == 1
+        assert 'yy' not in d
+        #d2 = {'yy':3}
+        #d.update(d2)
+        #assert sorted(d.keys()) == ['xx', 'yy']
+        #assert sorted(d.values()) == [1, 3]
