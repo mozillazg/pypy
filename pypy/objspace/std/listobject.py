@@ -123,12 +123,10 @@ def _min(a, b):
         return a
     return b
 
-def lt__List_List(space, w_list1, w_list2):
+def lessthan_unwrappeditems(space, items1_w, items2_w):
     # needs to be safe against eq_w() mutating the w_lists behind our back
     # Search for the first index where items are different
     i = 0
-    items1_w = w_list1.wrappeditems
-    items2_w = w_list2.wrappeditems
     while i < len(items1_w) and i < len(items2_w):
         w_item1 = items1_w[i]
         w_item2 = items2_w[i]
@@ -138,13 +136,11 @@ def lt__List_List(space, w_list1, w_list2):
     # No more items to compare -- compare sizes
     return space.newbool(len(items1_w) < len(items2_w))
 
-def gt__List_List(space, w_list1, w_list2):
+def greaterthan_unwrappeditems(space, items1_w, items2_w):
     # needs to be safe against eq_w() mutating the w_lists behind our back
     # Search for the first index where items are different
     i = 0
-    items1_w = w_list1.wrappeditems
-    items2_w = w_list2.wrappeditems
-    while i < len(w_list1.wrappeditems) and i < len(w_list2.wrappeditems):
+    while i < len(items1_w) and i < len(items2_w):
         w_item1 = items1_w[i]
         w_item2 = items2_w[i]
         if not space.eq_w(w_item1, w_item2):
@@ -153,6 +149,29 @@ def gt__List_List(space, w_list1, w_list2):
     # No more items to compare -- compare sizes
     return space.newbool(len(items1_w) > len(items2_w))
 
+def lt__List_List(space, w_list1, w_list2):
+    return lessthan_unwrappeditems(space, w_list1.wrappeditems,
+        w_list2.wrappeditems)
+
+def lt__List_ANY(space, w_list1, w_any):
+    # XXX: Implement it not unpacking all the elements
+    if space.is_true(space.isinstance(w_any, space.w_list)):
+        items1_w = w_list1.wrappeditems
+        items2_w = space.unpackiterable(w_any)
+        return lessthan_unwrappeditems(space, items1_w, items2_w)
+    raise FailedToImplement
+
+def gt__List_List(space, w_list1, w_list2):
+    return greaterthan_unwrappeditems(space, w_list1.wrappeditems,
+        w_list2.wrappeditems)
+
+def gt__List_ANY(space, w_list1, w_any):
+    # XXX: Implement it not unpacking all the elements
+    if space.is_true(space.isinstance(w_any, space.w_list)):
+        items1_w = w_list1.wrappeditems
+        items2_w = space.unpackiterable(w_any)
+        return greaterthan_unwrappeditems(space, items1_w, items2_w)
+    raise FailedToImplement
 
 def delitem__List_ANY(space, w_list, w_idx):
     idx = space.int_w(w_idx)
