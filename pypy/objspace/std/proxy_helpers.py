@@ -5,6 +5,7 @@ of cyclic imports
 
 from pypy.objspace.std.model import W_ANY, W_Object
 from pypy.interpreter import baseobjspace
+from pypy.interpreter.argument import Arguments
 
 def create_mm_names(classname, mm, is_local):
     s = ""
@@ -16,9 +17,31 @@ def create_mm_names(classname, mm, is_local):
         return s, '__' + mm.name + '__'
     return s, mm.name
 
+def install_general_args_trampoline(type_, mm, is_local):
+    def function(space, w_transparent_list, __args__):
+        args = __args__.prepend(space.wrap(mm.name))
+        return space.call_args(w_transparent_list.controller, args)
+    
+    function.func_name = mm.name
+    mm.register(function, type_)
+
+def install_w_args_trampoline(type_, mm, is_local):
+    def function(space, w_transparent_list, *args_w):
+        args = Arguments(space, [space.wrap(mm.name)] + list(args_w[:-1]), w_stararg=args_w[-1])
+        return space.call_args(w_transparent_list.controller, args)
+    
+    function.func_name = mm.name
+    mm.register(function, type_, *([W_ANY] * (mm.arity - 1)))
+
 def install_mm_trampoline(type_, mm, is_local):
     classname = type_.__name__[2:]
     mm_name, op_name = create_mm_names(classname, mm, is_local)
+    
+    if ['__args__'] == mm.argnames_after:
+        return install_general_args_trampoline(type_, mm, is_local)
+    if ['w_args'] == mm.argnames_after:
+        return install_w_args_trampoline(type_, mm, is_local)
+    assert not mm.argnames_after
     # we search here for special-cased stuff
     def function(space, w_transparent_list, *args_w):
         return space.call_function(w_transparent_list.controller, space.wrap\
