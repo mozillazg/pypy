@@ -486,7 +486,6 @@ class ObjSpace(object):
             return None
         obj = self.interpclass_w(w_obj)
         if not isinstance(obj, RequiredClass):   # or obj is None
-            import pdb;pdb.set_trace()
             msg = "'%s' object expected, got '%s' instead" % (
                 RequiredClass.typedef.name,
             w_obj.getclass(self).getname(self, '?'))
