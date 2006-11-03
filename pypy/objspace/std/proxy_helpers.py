@@ -20,7 +20,7 @@ def create_mm_names(classname, mm, is_local):
 def install_general_args_trampoline(type_, mm, is_local):
     def function(space, w_transparent_list, __args__):
         args = __args__.prepend(space.wrap(mm.name))
-        return space.call_args(w_transparent_list.controller, args)
+        return space.call_args(w_transparent_list.w_controller, args)
     
     function.func_name = mm.name
     mm.register(function, type_)
@@ -28,7 +28,7 @@ def install_general_args_trampoline(type_, mm, is_local):
 def install_w_args_trampoline(type_, mm, is_local):
     def function(space, w_transparent_list, *args_w):
         args = Arguments(space, [space.wrap(mm.name)] + list(args_w[:-1]), w_stararg=args_w[-1])
-        return space.call_args(w_transparent_list.controller, args)
+        return space.call_args(w_transparent_list.w_controller, args)
     
     function.func_name = mm.name
     mm.register(function, type_, *([W_ANY] * (mm.arity - 1)))
@@ -44,7 +44,7 @@ def install_mm_trampoline(type_, mm, is_local):
     assert not mm.argnames_after
     # we search here for special-cased stuff
     def function(space, w_transparent_list, *args_w):
-        return space.call_function(w_transparent_list.controller, space.wrap\
+        return space.call_function(w_transparent_list.w_controller, space.wrap\
             (op_name), *args_w)
     function.func_name = mm_name
     mm.register(function, type_, *([W_ANY] * (mm.arity - 1)))
@@ -70,7 +70,7 @@ def install_mm_special(type_, mm, is_local):
     #mm_name, op_name = create_mm_names(classname, mm, is_local)
     
     def function(space, w_any, w_transparent_list):
-        retval = space.call_function(w_transparent_list.controller, space.wrap(mm.specialnames[1]),
+        retval = space.call_function(w_transparent_list.w_controller, space.wrap(mm.specialnames[1]),
             w_any)
         return retval
         
