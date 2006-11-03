@@ -13,11 +13,11 @@ def proxy(space, w_type, w_controller):
         raise OperationError(space.w_TypeError, space.wrap("controller should be function"))
     
     if space.is_true(space.issubtype(w_type, space.w_list)):
-        return W_TransparentList(w_type, w_controller)
+        return W_TransparentList(space, w_type, w_controller)
     if space.is_true(space.issubtype(w_type, space.w_dict)):
-        return W_TransparentDict(w_type, w_controller)
+        return W_TransparentDict(space, w_type, w_controller)
     if w_type.instancetypedef is space.w_object.instancetypedef:
-       return W_Transparent(w_type, w_controller)
+       return W_Transparent(space, w_type, w_controller)
     #return type_cache[w_type or w_type.w_bestbase]
     raise OperationError(space.w_TypeError, space.wrap("Object type %s could not"\
           "be wrapped (YET)" % w_type.getname(space, "?")))

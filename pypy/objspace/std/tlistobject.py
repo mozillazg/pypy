@@ -11,9 +11,10 @@ from pypy.interpreter.error import OperationError
 #        self.controller = w_controller
 
 class W_Transparent(W_Object):
-    def __init__(self, w_type, w_controller):
+    def __init__(self, space, w_type, w_controller):
         self.w_type = w_type
         self.w_controller = w_controller
+        self.space = space
     
     def getclass(self, space):
         return self.w_type
@@ -51,6 +52,13 @@ class W_Transparent(W_Object):
                 raise
             return False
     
+    def getdict(self):
+        return self.getdictvalue(self.space, self.space.wrap('__dict__'))
+    
+    def setdict(self, space, w_dict):
+        if not self.setdictvalue(space, space.wrap('__dict__'), w_dict):
+            W_Root.setdict(self, space, w_dict)
+
     from pypy.objspace.std.objecttype import object_typedef as typedef
 
 class W_TransparentList(W_Transparent):
