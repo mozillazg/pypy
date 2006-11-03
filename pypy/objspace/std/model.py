@@ -201,6 +201,9 @@ class StdTypeModel:
         # put W_Root everywhere
         self.typeorder[W_Root] = []
         for type in self.typeorder:
+            from pypy.objspace.std import stdtypedef
+            if type is not W_Root and isinstance(type.typedef, stdtypedef.StdTypeDef):
+                self.typeorder[type].append((type.typedef.any, None))
             self.typeorder[type].append((W_Root, None))
 
         # ____________________________________________________________

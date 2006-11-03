@@ -35,15 +35,14 @@ class AppTestProxy(object):
         assert repr(lst) == repr([1,2])
 
     def test_gt_lt_list(self):
-        skip("FAILS RANDOMLY (~73% works)")
         c = self.Controller([])
         lst = proxy(list, c.perform)
         lst.append(1)
         lst.append(2)
-        #assert lst < [1,2,3]
-        #assert [1,2,3] > lst
-        #assert lst == [1,2]
-        #assert [1,2] == lst
+        assert lst < [1,2,3]
+        assert [1,2,3] > lst
+        assert lst == [1,2]
+        assert [1,2] == lst
         assert [2,3] >= list(iter(lst))
         assert lst < [2,3]
         assert [2,3] >= lst
@@ -54,6 +53,8 @@ class AppTestProxy(object):
         lst = proxy(list, c.perform)
         lst.append(1)
         assert lst + lst == [1,1]
+        assert lst + [1] == [1,1]
+        assert [1] + lst == [1,1]
 
     def test_list_getitem(self):
         c = self.Controller([1,2,3])
