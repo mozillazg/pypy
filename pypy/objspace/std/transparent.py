@@ -7,6 +7,7 @@ from pypy.interpreter.function import Function
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.tlistobject import W_TransparentList, W_TransparentDict,\
     W_Transparent
+from pypy.objspace.std.typeobject import W_TypeObject
 
 def proxy(space, w_type, w_controller):
     if not space.is_true(space.callable(w_controller)):
@@ -16,8 +17,9 @@ def proxy(space, w_type, w_controller):
         return W_TransparentList(space, w_type, w_controller)
     if space.is_true(space.issubtype(w_type, space.w_dict)):
         return W_TransparentDict(space, w_type, w_controller)
-    if w_type.instancetypedef is space.w_object.instancetypedef:
-       return W_Transparent(space, w_type, w_controller)
+    if isinstance(w_type, W_TypeObject):
+        if w_type.instancetypedef is space.w_object.instancetypedef:
+            return W_Transparent(space, w_type, w_controller)
     #return type_cache[w_type or w_type.w_bestbase]
     raise OperationError(space.w_TypeError, space.wrap("Object type %s could not"\
           "be wrapped (YET)" % w_type.getname(space, "?")))
