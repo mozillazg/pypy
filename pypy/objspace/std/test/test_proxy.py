@@ -9,8 +9,8 @@ class AppTestProxy(object):
             def __init__(self, obj):
                 self.obj = obj
     
-            def perform(self, name, *args):
-                return getattr(self.obj, name)(*args)
+            def perform(self, name, *args, **kwargs):
+                return getattr(self.obj, name)(*args, **kwargs)
         return Controller
         """)
     
@@ -63,12 +63,34 @@ class AppTestProxy(object):
         lst[1] = 0
         assert lst[0] + lst[1] == 1
 
+    def test_list_setitem(self):
+        c = self.Controller([1,2,3])
+        lst = proxy(list, c.perform)
+        try:
+            lst[3] = "x"
+        except IndexError:
+            pass
+        else:
+            fail("Accessing outside a list didn't raise")
+
     def test_dict(self):
         c = self.Controller({"xx":1})
         d = proxy(dict, c.perform)
         assert d['xx'] == 1
         assert 'yy' not in d
-        #d2 = {'yy':3}
-        #d.update(d2)
-        #assert sorted(d.keys()) == ['xx', 'yy']
-        #assert sorted(d.values()) == [1, 3]
+        d2 = {'yy':3}
+        d.update(d2, x=4)
+        assert sorted(d.keys()) == ['x', 'xx', 'yy']
+        assert sorted(d.values()) == [1, 3, 4]
+    
+    def test_dict_pop(self):
+        c = self.Controller({'x':1})
+        d = proxy(dict, c.perform)
+        assert d.pop('x') == 1
+        assert d.pop('x', None) is None
+
+    def test_dict_iter(self):
+        c = self.Controller({'a':1, 'b':2, 'c':3})
+        d = proxy(dict, c.perform)
+        d['z'] = 4
+        assert sorted(list(d.iterkeys())) == ['a', 'b', 'c', 'z']
