@@ -197,9 +197,9 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
         self.run_args.append("space.%s_w(%s)" %
                              (typ.__name__, self.scopenext()))
 
-    def _make_unwrap_activation_class(self, unwrap_spec, cache={}):
+    def _make_unwrap_activation_class(self, unwrap_spec, not_understood, cache={}):
         try:
-            key = tuple(unwrap_spec)
+            key = (tuple(unwrap_spec), not_understood)
             activation_factory_cls, run_args = cache[key]
             assert run_args == self.run_args, (
                 "unexpected: same spec, different run_args")
@@ -216,10 +216,23 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
             #print label
 
             d = {}
-            source = """if 1: 
-                def _run_UWS_%s(self, space, scope_w):
-                    return self.behavior(%s)
-                \n""" % (label, ', '.join(self.run_args))
+            if not_understood is None:
+                source = """if 1: 
+                    def _run_UWS_%s(self, space, scope_w):
+                        return self.behavior(%s)
+                    \n""" % (label, ', '.join(self.run_args))
+            else:
+                assert issubclass(unwrap_spec[0], Wrappable)
+                args = ', '.join(self.run_args[1:])
+                reqcls = self.use(unwrap_spec[0])
+                source = """if 1: 
+                    def _run_UWS_%s(self, space, scope_w):
+                        w_self = scope_w[0]
+                        if not isinstance(w_self, %s):
+                            return w_self.descr_call_not_understood(space, %s, %r, %s)
+                        return self.behavior(w_self, %s)
+                    \n""" % (label, reqcls, reqcls, not_understood, args, args)
+                
             exec compile2(source) in self.miniglobals, d
             d['_run'] = d['_run_UWS_%s' % label]
             del d['_run_UWS_%s' % label]
@@ -230,10 +243,11 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
             cache[key] = activation_cls, self.run_args
             return activation_cls
 
-    def make_activation(unwrap_spec, func):
+    def make_activation(unwrap_spec, func, not_understood):
         emit = UnwrapSpec_EmitRun()
         emit.apply_over(unwrap_spec)
-        activation_uw_cls = emit._make_unwrap_activation_class(unwrap_spec)
+        activation_uw_cls = emit._make_unwrap_activation_class(unwrap_spec,
+                                                               not_understood)
         return activation_uw_cls(func)
     make_activation = staticmethod(make_activation)
 
@@ -302,12 +316,12 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
         self.unwrap.append("space.%s_w(%s)" % (typ.__name__,
                                                self.nextarg()))
 
-    def make_fastfunc(unwrap_spec, func):
+    def make_fastfunc(unwrap_spec, func, not_understood):
         unwrap_info = UnwrapSpec_FastFunc_Unwrap()
         unwrap_info.apply_over(unwrap_spec)
         narg = unwrap_info.n
         args = ['space'] + unwrap_info.args
-        if args == unwrap_info.unwrap:
+        if args == unwrap_info.unwrap and not_understood is None:
             fastfunc = func
         else:
             # try to avoid excessive bloat
@@ -320,12 +334,28 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
                     raise FastFuncNotSupported
             d = {}
             unwrap_info.miniglobals['func'] = func
-            source = """if 1: 
-                def fastfunc_%s_%d(%s):
-                    return func(%s)
-                \n""" % (func.__name__, narg,
-                         ', '.join(args),
-                         ', '.join(unwrap_info.unwrap))
+            if not_understood is None:
+                source = """if 1: 
+                    def fastfunc_%s_%d(%s):
+                        return func(%s)
+                    \n""" % (func.__name__, narg,
+                             ', '.join(args),
+                             ', '.join(unwrap_info.unwrap))
+            else:
+                #def _run_UWS_%s(self, space, scope_w):
+                #        w_self = scope_w[0]
+                #        if not isinstance(w_self, %s):
+                #            return w_self.descr_call_not_understood(space, %r, %s)
+                #        return self.behavior(w_self, %s)
+                assert issubclass(unwrap_spec[0], Wrappable)
+                reqcls = self.use(unwrap_spec[0])
+                source = """if 1:
+                    def fastfunc_%s_%d(%s):
+                        if not isinstance(w0, %s):
+                            return w0.descr_call_not_understood(space, %s, %r, %s)
+                        return func(%s)
+                    \n""" % (func.__name__, narg, ",".join(args), reqcls, reqcls,
+                        not_understood, ",".join(args[2:]), ",".join(unwrap_info.unwrap))
             exec compile2(source) in unwrap_info.miniglobals, d
             fastfunc = d['fastfunc_%s_%d' % (func.__name__, narg)]
         return narg, fastfunc
@@ -340,7 +370,7 @@ class BuiltinCode(eval.Code):
 
     NOT_RPYTHON_ATTRIBUTES = ['_bltin', '_unwrap_spec']
 
-    def __init__(self, func, unwrap_spec = None, self_type = None):
+    def __init__(self, func, unwrap_spec = None, self_type = None, not_understood=None):
         "NOT_RPYTHON"
         # 'implfunc' is the interpreter-level function.
         # Note that this uses a lot of (construction-time) introspection.
@@ -376,6 +406,8 @@ class BuiltinCode(eval.Code):
             assert unwrap_spec[0] == 'self',"self_type without 'self' spec element"
             unwrap_spec = list(unwrap_spec)
             unwrap_spec[0] = self_type
+        else:
+            assert not_understood is None, "not_understood without a self-type specified"
 
         orig_sig = Signature(func, argnames, varargname, kwargname)
         app_sig = Signature(func)
@@ -391,7 +423,8 @@ class BuiltinCode(eval.Code):
         else:
             self.maxargs = self.minargs
 
-        self.activation = UnwrapSpec_EmitRun.make_activation(unwrap_spec, func)
+        self.activation = UnwrapSpec_EmitRun.make_activation(unwrap_spec, func,
+                                                             not_understood=not_understood)
         self._bltin = func
         self._unwrap_spec = unwrap_spec
 
@@ -399,12 +432,15 @@ class BuiltinCode(eval.Code):
         if 0 <= len(unwrap_spec) <= 5:
             try:
                 arity, fastfunc = UnwrapSpec_FastFunc_Unwrap.make_fastfunc(
-                                                 unwrap_spec, func)
+                                                 unwrap_spec, func,
+                                                 not_understood=not_understood)
             except FastFuncNotSupported:
                 if unwrap_spec == [ObjSpace, Arguments]:
+                    assert not_understood is None
                     self.__class__ = BuiltinCodePassThroughArguments0
                     self.func__args__ = func
                 elif unwrap_spec == [ObjSpace, W_Root, Arguments]:
+                    assert not_understood is None
                     self.__class__ = BuiltinCodePassThroughArguments1
                     self.func__args__ = func
             else:
@@ -569,7 +605,7 @@ class interp2app(Wrappable):
 
     NOT_RPYTHON_ATTRIBUTES = ['_staticdefs']
     
-    def __init__(self, f, app_name=None, unwrap_spec = None):
+    def __init__(self, f, app_name=None, unwrap_spec = None, not_understood=None):
         "NOT_RPYTHON"
         Wrappable.__init__(self)
         # f must be a function whose name does NOT start with 'app_'
@@ -584,7 +620,8 @@ class interp2app(Wrappable):
                 raise ValueError, ("function name %r suspiciously starts "
                                    "with 'app_'" % f.func_name)
             app_name = f.func_name
-        self._code = BuiltinCode(f, unwrap_spec=unwrap_spec, self_type = self_type)
+        self._code = BuiltinCode(f, unwrap_spec=unwrap_spec, self_type = self_type, 
+            not_understood=not_understood)
         self.__name__ = f.func_name
         self.name = app_name
         self._staticdefs = list(f.func_defaults or ())

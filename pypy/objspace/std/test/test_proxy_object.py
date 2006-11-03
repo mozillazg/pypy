@@ -86,6 +86,12 @@ class AppTestProxyObj(AppProxyBasic):
         obj.__dict__ = {'x':3}
         assert obj.x == 3
         assert obj.__dict__.keys() == ['x']
+    
+    def test_repr(self):
+        a = self.A()
+        c = self.Controller(a)
+        obj = proxy(self.A, c.perform)
+        assert repr(obj)[:6] == repr(a)[:6]
 
 class AppTestProxyObjectList(AppTestProxyObj):
     def setup_method(self, meth):
