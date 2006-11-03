@@ -2,7 +2,9 @@
 """ test transparent proxy features
 """
 
-class AppTestProxy(object):
+from pypy.conftest import gettestobjspace
+
+class AppProxyBasic(object):
     def setup_method(self, meth):
         self.w_Controller = self.space.appexec([], """():
         class Controller(object):
@@ -13,7 +15,8 @@ class AppTestProxy(object):
                 return getattr(self.obj, name)(*args, **kwargs)
         return Controller
         """)
-    
+
+class AppTestListProxy(AppProxyBasic):
     def test_proxy(self):
         lst = proxy(list, lambda : None)
         assert type(lst) is list
@@ -73,6 +76,7 @@ class AppTestProxy(object):
         else:
             fail("Accessing outside a list didn't raise")
 
+class AppTestDictProxy(AppProxyBasic):
     def test_dict(self):
         c = self.Controller({"xx":1})
         d = proxy(dict, c.perform)
@@ -94,3 +98,7 @@ class AppTestProxy(object):
         d = proxy(dict, c.perform)
         d['z'] = 4
         assert sorted(list(d.iterkeys())) == ['a', 'b', 'c', 'z']
+
+class AppTestDictStrProxy(AppTestDictProxy):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withstrdict": True})
