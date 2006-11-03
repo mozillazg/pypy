@@ -5,6 +5,7 @@
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.proxy_helpers import register_type
 from pypy.interpreter.error import OperationError
+from pypy.interpreter import baseobjspace
 
 #class W_Transparent(W_Object):
 #    def __init__(self, w_controller):
@@ -57,7 +58,7 @@ class W_Transparent(W_Object):
     
     def setdict(self, space, w_dict):
         if not self.setdictvalue(space, space.wrap('__dict__'), w_dict):
-            W_Root.setdict(self, space, w_dict)
+            baseobjspace.W_Root.setdict(self, space, w_dict)
 
     from pypy.objspace.std.objecttype import object_typedef as typedef
 
