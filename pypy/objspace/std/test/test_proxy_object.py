@@ -4,6 +4,20 @@
 
 from pypy.objspace.std.test.test_proxy import AppProxyBasic
 
+class AppTestProxyNoDict(AppProxyBasic):
+    def setup_method(self, meth):
+        super(AppTestProxyNoDict, self).setup_method(meth)
+        self.w_A = self.space.appexec([], """():
+        class A(object):
+            __slots__ = []
+        return A
+        """)
+    
+    def test_write_dict(self):
+        c = self.Controller(self.A())
+        obj = proxy(self.A, c.perform)
+        raises(AttributeError, "obj.__dict__ = {}")
+
 class AppTestProxyObj(AppProxyBasic):
     def setup_method(self, meth):
         super(AppTestProxyObj, self).setup_method(meth)
