@@ -27,6 +27,24 @@ class W_Root(object):
             return space.finditem(w_dict, w_attr)
         return None
 
+    def setdictvalue(self, space, w_attr, w_value):
+        w_dict = self.getdict()
+        if w_dict is not None:
+            space.set_str_keyed_item(w_dict, w_attr, w_value)
+            return True
+        return False
+    
+    def deldictvalue(self, space, w_name):
+        w_dict = self.getdict()
+        if w_dict is not None:
+            try:
+                space.delitem(w_dict, w_name)
+                return True
+            except OperationError, ex:
+                if not ex.match(space, space.w_KeyError):
+                    raise
+        return False
+
     def setdict(self, space, w_dict):
         typename = space.type(self).getname(space, '?')
         raise OperationError(space.w_TypeError,
