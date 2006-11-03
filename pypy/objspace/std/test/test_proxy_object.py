@@ -57,6 +57,21 @@ class AppTestProxyObj(AppProxyBasic):
         obj = proxy(self.A, c.perform)
         del obj.f
         raises(AttributeError, "obj.f")
+    
+    def test__dict__(self):
+        a = self.A()
+        a.x = 3
+        c = self.Controller(a)
+        obj = proxy(self.A, c.perform)
+        assert 'x' in obj.__dict__
+    
+    def test_set__dict__(self):
+        a = self.A()
+        c = self.Controller(a)
+        obj = proxy(self.A, c.perform)
+        obj.__dict__ = {'x':3}
+        assert obj.x == 3
+        assert obj.__dict__.keys() == ['x']
 
 class AppTestProxyObjectList(AppTestProxyObj):
     def setup_method(self, meth):
