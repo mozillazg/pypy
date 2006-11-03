@@ -554,7 +554,7 @@ def old_slice_range(space, w_obj, w_start, w_stop):
         w_start = space.add(w_start, space.len(w_obj))
         # NB. the language ref is inconsistent with the new-style class
         # behavior when w_obj doesn't implement __len__(), so we just
-        # ignore this case.
+        # ignore this case.eq
     if space.is_w(w_stop, space.w_None):
         w_stop = space.wrap(slice_max)
     elif space.is_true(space.lt(w_stop, space.wrap(0))):
