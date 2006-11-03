@@ -101,6 +101,12 @@ class W_Root(object):
         typename = space.type(self).getname(space, '?')
         raise OperationError(space.w_TypeError, space.wrap(
             "cannot create weak reference to '%s' object" % typename))
+    
+    def descr_call_not_understood(self, space, reqcls, name, args):
+        msg = "'%s' object expected, got '%s' instead" % (
+                reqcls.typedef.name,
+            self.getclass(space).getname(space, '?'))
+        raise OperationError(space.w_TypeError, space.wrap(msg))
 
 class Wrappable(W_Root):
     """A subclass of Wrappable is an internal, interpreter-level class
@@ -480,6 +486,7 @@ class ObjSpace(object):
             return None
         obj = self.interpclass_w(w_obj)
         if not isinstance(obj, RequiredClass):   # or obj is None
+            import pdb;pdb.set_trace()
             msg = "'%s' object expected, got '%s' instead" % (
                 RequiredClass.typedef.name,
             w_obj.getclass(self).getname(self, '?'))

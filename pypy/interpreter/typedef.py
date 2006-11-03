@@ -583,7 +583,7 @@ getset_func_dict = GetSetProperty(descr_get_dict, descr_set_dict, cls=Function)
 Function.typedef = TypeDef("function",
     __new__ = interp2app(Function.descr_method__new__.im_func),
     __call__ = interp2app(Function.descr_function_call,
-                          unwrap_spec=['self', Arguments]),
+                          unwrap_spec=['self', Arguments], not_understood="__call__"),
     __get__ = interp2app(descr_function_get),
     __repr__ = interp2app(Function.descr_function_repr),
     __reduce__ = interp2app(Function.descr_function__reduce__,

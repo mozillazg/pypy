@@ -62,6 +62,14 @@ class W_Transparent(W_Object):
 
     from pypy.objspace.std.objecttype import object_typedef as typedef
 
+class W_TransparentFunction(W_Transparent):
+    from pypy.interpreter.function import Function
+    typedef = Function.typedef
+    
+    def descr_call_not_understood(self, space, reqcls, name, args):
+        args = args.prepend(space.wrap(name))
+        return space.call_args(self.w_controller, args)
+
 class W_TransparentList(W_Transparent):
     from pypy.objspace.std.listobject import W_ListObject as original
     from pypy.objspace.std.listtype import list_typedef as typedef
