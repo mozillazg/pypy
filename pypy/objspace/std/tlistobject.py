@@ -6,11 +6,11 @@ from pypy.objspace.std.objspace import *
 from pypy.objspace.std.proxy_helpers import register_type
 from pypy.interpreter.error import OperationError
 
-class W_Transparent(W_Object):
-    def __init__(self, w_controller):
-        self.controller = w_controller
+#class W_Transparent(W_Object):
+#    def __init__(self, w_controller):
+#        self.controller = w_controller
 
-class W_TransparentObject(W_Object):
+class W_Transparent(W_Object):
     def __init__(self, w_type, w_controller):
         self.w_type = w_type
         self.w_controller = w_controller
@@ -35,6 +35,16 @@ class W_TransparentObject(W_Object):
         try:
             space.call_function(self.w_controller, space.wrap('__setattr__'),
                w_attr, w_value)
+            return True
+        except OperationError, e:
+            if not e.match(space, space.w_AttributeError):
+                raise
+            return False
+    
+    def deldictvalue(self, space, w_attr):
+        try:
+            space.call_function(self.w_controller, space.wrap('__delattr__'),
+               w_attr)
             return True
         except OperationError, e:
             if not e.match(space, space.w_AttributeError):
