@@ -27,7 +27,7 @@ class W_Stream(Wrappable):
     def __init__(self, space, stream):
         self.stream = stream
 
-for name, argtypes in streamio.STREAM_METHODS:
+for name, argtypes in streamio.STREAM_METHODS.iteritems():
     numargs = len(argtypes)
     args = ", ".join(["v%s" % i for i in range(numargs)])
     exec py.code.Source("""
@@ -44,7 +44,7 @@ for name, argtypes in streamio.STREAM_METHODS:
 
 W_Stream.typedef = TypeDef("Stream",
     **dict([(name, interp2app(globals()[name]))
-                for name, _ in streamio.STREAM_METHODS]))
+                for name, _ in streamio.STREAM_METHODS.iteritems()]))
 
 
 def is_mode_ok(space, mode):
