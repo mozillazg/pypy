@@ -92,6 +92,12 @@ class W_Root(object):
     def setslotvalue(self, index, w_val):
         raise NotImplementedError
 
+    def descr_call_mismatch(self, space, opname, RequiredClass, args):
+        msg = "'%s' object expected, got '%s' instead" % (
+            RequiredClass.typedef.name,
+            self.getclass(space).getname(space, '?'))
+        raise OperationError(space.w_TypeError, space.wrap(msg))
+
     # used by _weakref implemenation
 
     def getweakref(self):
@@ -101,12 +107,6 @@ class W_Root(object):
         typename = space.type(self).getname(space, '?')
         raise OperationError(space.w_TypeError, space.wrap(
             "cannot create weak reference to '%s' object" % typename))
-    
-    def descr_call_not_understood(self, space, reqcls, name, args):
-        msg = "'%s' object expected, got '%s' instead" % (
-                reqcls.typedef.name,
-            self.getclass(space).getname(space, '?'))
-        raise OperationError(space.w_TypeError, space.wrap(msg))
 
 class Wrappable(W_Root):
     """A subclass of Wrappable is an internal, interpreter-level class
@@ -153,6 +153,9 @@ class UnpackValueError(ValueError):
         self.msg = msg
     def __str__(self):
         return self.msg
+
+class DescrMismatch(Exception):
+    pass
 
 class ObjSpace(object):
     """Base class for the interpreter-level implementations of object spaces.
@@ -477,6 +480,13 @@ class ObjSpace(object):
             return w_obj
         return None
 
+    def descr_self_interp_w(self, RequiredClass, w_obj):
+        obj = self.interpclass_w(w_obj)
+        if not isinstance(obj, RequiredClass):
+            raise DescrMismatch()
+        return obj
+    descr_self_interp_w._annspecialcase_ = 'specialize:arg(1)'
+    
     def interp_w(self, RequiredClass, w_obj, can_be_None=False):
         """
         Unwrap w_obj, checking that it is an instance of the required internal
