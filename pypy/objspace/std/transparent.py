@@ -9,7 +9,7 @@ from pypy.objspace.std.proxyobject import *
 from pypy.objspace.std.typeobject import W_TypeObject
 
 def proxy(space, w_type, w_controller):
-    from pypy.interpreter.typedef import Function, PyTraceback, PyFrame
+    from pypy.interpreter.typedef import Function, PyTraceback, PyFrame, GeneratorIterator
     
     if not space.is_true(space.callable(w_controller)):
         raise OperationError(space.w_TypeError, space.wrap("controller should be function"))
@@ -25,6 +25,8 @@ def proxy(space, w_type, w_controller):
             return W_TransparentTraceback(space, w_type, w_controller)
         if space.is_true(space.issubtype(w_type, space.gettypeobject(PyFrame.typedef))):
             return W_TransparentFrame(space, w_type, w_controller)
+        if space.is_true(space.issubtype(w_type, space.gettypeobject(GeneratorIterator.typedef))):
+            return W_TransparentGenerator(space, w_type, w_controller)
         if w_type.instancetypedef is space.w_object.instancetypedef:
             return W_Transparent(space, w_type, w_controller)
     else:

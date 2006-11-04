@@ -78,17 +78,19 @@ W_TransparentObject = transparent_class('W_TransparentObject', W_Object)
 from pypy.objspace.std.objecttype import object_typedef
 W_TransparentObject.typedef = object_typedef
 
+from pypy.interpreter.typedef import Function, GeneratorIterator, PyTraceback, PyFrame
+
 class W_TransparentFunction(W_Transparent):
-    from pypy.interpreter.function import Function
     typedef = Function.typedef
 
 class W_TransparentTraceback(W_Transparent):
-    from pypy.interpreter.pytraceback import PyTraceback
     typedef = PyTraceback.typedef
 
 class W_TransparentFrame(W_Transparent):
-    from pypy.interpreter.pyframe import PyFrame
     typedef = PyFrame.typedef
+
+class W_TransparentGenerator(W_Transparent):
+    typedef = GeneratorIterator.typedef
 
 class W_TransparentList(W_TransparentObject):
     from pypy.objspace.std.listobject import W_ListObject as original

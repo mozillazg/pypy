@@ -2,7 +2,7 @@
 """ test proxy internals like code, traceback, frame
 """
 
-class AppTestProxyInternals(object):
+class AppProxy(object):
     def setup_method(self, meth):
         self.w_get_proxy = self.space.appexec([], """():
         class Controller(object):
@@ -16,6 +16,7 @@ class AppTestProxyInternals(object):
         return get_proxy
         """)
 
+class AppTestProxyInternals(AppProxy):
     def test_traceback_basic(self):
         try:
             1/0
