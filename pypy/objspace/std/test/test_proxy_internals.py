@@ -27,7 +27,7 @@ class AppTestProxyInternals(object):
         assert tb.tb_frame is e[2].tb_frame
 
     def test_traceback_reraise(self):
-        py.test.skip("Not implemented yet")
+        #skip("Not implemented yet")
         try:
             1/0
         except:
@@ -37,3 +37,5 @@ class AppTestProxyInternals(object):
         tb = self.get_proxy(e[2])
         raises(ZeroDivisionError, "raise e[0], e[1], tb")
         raises(ZeroDivisionError, "raise e[0], self.get_proxy(e[1]), tb")
+        import traceback
+        assert len(traceback.format_tb(tb)) == 1
