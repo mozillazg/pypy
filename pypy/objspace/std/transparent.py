@@ -5,7 +5,7 @@
 from pypy.interpreter import gateway
 from pypy.interpreter.function import Function
 from pypy.interpreter.error import OperationError
-from pypy.objspace.std.tlistobject import W_TransparentList, W_TransparentDict,\
+from pypy.objspace.std.proxyobject import W_TransparentList, W_TransparentDict,\
     W_Transparent, W_TransparentFunction
 from pypy.objspace.std.typeobject import W_TypeObject
 

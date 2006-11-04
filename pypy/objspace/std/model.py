@@ -66,7 +66,7 @@ class StdTypeModel:
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import strsliceobject
         from pypy.objspace.std import strjoinobject
-        from pypy.objspace.std import tlistobject
+        from pypy.objspace.std import proxyobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
         from pypy.objspace.std import longobject
@@ -121,8 +121,8 @@ class StdTypeModel:
                         imported_but_not_registered[implcls] = True
 
         # xxx config
-        self.typeorder[tlistobject.W_TransparentList] = []
-        self.typeorder[tlistobject.W_TransparentDict] = []
+        self.typeorder[proxyobject.W_TransparentList] = []
+        self.typeorder[proxyobject.W_TransparentDict] = []
 
         if config.objspace.std.withstrdict:
             del self.typeorder[dictobject.W_DictObject]
