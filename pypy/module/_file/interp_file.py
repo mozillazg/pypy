@@ -81,3 +81,4 @@ def fdopen_as_stream(space, fd, mode="r", buffering=-1):
     return space.wrap(W_Stream(
             space, streamio.fdopen_as_stream(fd, mode, buffering)))
 fdopen_as_stream.unwrap_spec = [ObjSpace, int, str, int]
+
