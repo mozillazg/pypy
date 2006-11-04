@@ -66,7 +66,8 @@ class W_TransparentFunction(W_Transparent):
     from pypy.interpreter.function import Function
     typedef = Function.typedef
     
-    def descr_call_not_understood(self, space, reqcls, name, args):
+    def descr_call_mismatch(self, space, name, reqcls, args):
+        _, args = args.popfirst()
         args = args.prepend(space.wrap(name))
         return space.call_args(self.w_controller, args)
 
