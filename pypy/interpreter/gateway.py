@@ -513,7 +513,7 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
                 raise OperationError(space.w_RuntimeError, 
                                      space.wrap("internal error: " + str(e))) 
             except DescrMismatch, e:
-                return scope_w[0].descr_call_mismatch(space,
+                return args.firstarg().descr_call_mismatch(space,
                                                       self.descrmismatch_op,
                                                       self.descr_reqcls,
                                                       args)
