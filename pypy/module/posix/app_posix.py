@@ -28,8 +28,5 @@ def fdopen(fd, mode='r', buffering=None):
 
     Return an open file object connected to a file descriptor."""
 
-    try:
-        return file.fdopen(fd, mode, buffering)
-    except AttributeError:
-        raise NotImplementedError, "fdopen only works if you use PyPy's file implementation."
+    return file.fdopen(fd, mode, buffering)
 
