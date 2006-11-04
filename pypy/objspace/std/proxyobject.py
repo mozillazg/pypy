@@ -59,18 +59,22 @@ class W_Transparent(W_Object):
     def setdict(self, space, w_dict):
         if not self.setdictvalue(space, space.wrap('__dict__'), w_dict):
             baseobjspace.W_Root.setdict(self, space, w_dict)
-
-    from pypy.objspace.std.objecttype import object_typedef as typedef
-
-class W_TransparentFunction(W_Transparent):
-    from pypy.interpreter.function import Function
-    typedef = Function.typedef
     
     def descr_call_mismatch(self, space, name, reqcls, args):
         _, args = args.popfirst()
         args = args.prepend(space.wrap(name))
         return space.call_args(self.w_controller, args)
 
+    from pypy.objspace.std.objecttype import object_typedef as typedef
+
+class W_TransparentFunction(W_Transparent):
+    from pypy.interpreter.function import Function
+    typedef = Function.typedef
+
+class W_TransparentTraceback(W_Transparent):
+    from pypy.interpreter.pytraceback import PyTraceback
+    typedef = PyTraceback.typedef
+    
 class W_TransparentList(W_Transparent):
     from pypy.objspace.std.listobject import W_ListObject as original
     from pypy.objspace.std.listtype import list_typedef as typedef
