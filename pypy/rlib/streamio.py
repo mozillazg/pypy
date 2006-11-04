@@ -29,8 +29,19 @@ an outout-buffering stream.
 
 import os, sys
 
-# ____________________________________________________________
+from os import O_RDONLY, O_WRONLY, O_RDWR, O_CREAT, O_TRUNC
+O_BINARY = getattr(os, "O_BINARY", 0)
 
+#          (basemode, plus)
+OS_MODE = {('r', False): O_RDONLY,
+           ('r', True):  O_RDWR,
+           ('w', False): O_WRONLY | O_CREAT | O_TRUNC,
+           ('w', True):  O_RDWR   | O_CREAT | O_TRUNC,
+           ('a', False): O_WRONLY | O_CREAT,
+           ('a', True):  O_RDWR   | O_CREAT,
+           }
+
+# ____________________________________________________________
 
 
 def replace_crlf_with_lf(s):
@@ -47,6 +58,85 @@ def replace_crlf_with_lf(s):
 
 def replace_char_with_str(string, c, s):
     return s.join(string.split(c))
+
+
+def open_file_as_stream(path, mode="r", buffering=-1):
+    os_flags, universal, reading, writing, basemode = decode_mode(mode)
+    stream = open_path_helper(path, os_flags, basemode == "a")
+    return construct_stream_tower(stream, buffering, universal, reading,
+                                  writing)
+
+def fdopen_as_stream(fd, mode, buffering):
+    # XXX XXX XXX you want do check whether the modes are compatible
+    # otherwise you get funny results
+    os_flags, universal, reading, writing, basemode = decode_mode(mode)
+    stream = DiskFile(fd)
+    return construct_stream_tower(stream, buffering, universal, reading,
+                                  writing)
+
+def open_path_helper(path, os_flags, append):
+    # XXX for now always return DiskFile
+    fd = os.open(path, os_flags)
+    if append:
+        try:
+            os.lseek(fd, 0, 2)
+        except OSError:
+            # XXX does this pass make sense?
+            pass
+    return DiskFile(fd)
+
+def decode_mode(mode):
+    if mode[0] == 'U':
+        mode = 'r' + mode
+
+    basemode  = mode[0]    # 'r', 'w' or 'a'
+    plus      = False
+    universal = False
+    binary    = False
+
+    for c in mode[1:]:
+        if c == '+':
+            plus = True
+        elif c == 'U':
+            universal = True
+        elif c == 'b':
+            binary = True
+        else:
+            break
+
+    flag = OS_MODE[basemode, plus]
+    if binary or universal:
+        flag |= O_BINARY
+
+    reading = basemode == 'r' or plus
+    writing = basemode != 'r' or plus
+
+    return flag, universal, reading, writing, basemode
+
+
+def construct_stream_tower(stream, buffering, universal, reading, writing):
+    if buffering == 0:   # no buffering
+        pass
+    elif buffering == 1:   # line-buffering
+        if writing:
+            stream = LineBufferingOutputStream(stream)
+        if reading:
+            stream = BufferingInputStream(stream)
+
+    else:     # default or explicit buffer sizes
+        if buffering is not None and buffering < 0:
+            buffering = -1
+        if writing:
+            stream = BufferingOutputStream(stream, buffering)
+        if reading:
+            stream = BufferingInputStream(stream, buffering)
+
+    if universal:     # Wants universal newlines
+        if writing and os.linesep != '\n':
+            stream = TextOutputFilter(stream)
+        if reading:
+            stream = TextInputFilter(stream)
+    return stream
 
 
 class StreamError(Exception):
