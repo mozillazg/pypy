@@ -86,6 +86,10 @@ class W_TransparentTraceback(W_Transparent):
     from pypy.interpreter.pytraceback import PyTraceback
     typedef = PyTraceback.typedef
 
+class W_TransparentFrame(W_Transparent):
+    from pypy.interpreter.pyframe import PyFrame
+    typedef = PyFrame.typedef
+
 class W_TransparentList(W_TransparentObject):
     from pypy.objspace.std.listobject import W_ListObject as original
     from pypy.objspace.std.listtype import list_typedef as typedef
