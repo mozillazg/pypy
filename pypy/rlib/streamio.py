@@ -203,6 +203,9 @@ class Stream(object):
     def peek(self):
         return ''
 
+    def try_to_find_file_descriptor(self):
+        return -1
+
 
 class DiskFile(Stream):
 
@@ -215,7 +218,8 @@ class DiskFile(Stream):
         os.lseek(self.fd, offset, whence)
 
     def tell(self):
-        return os.lseek(self.fd, 0, 1)
+        #XXX for running on top of the cpy objspace. later we want r_longlong
+        return int(os.lseek(self.fd, 0, 1))
 
     def read(self, n):
         return os.read(self.fd, n)
@@ -235,6 +239,8 @@ class DiskFile(Stream):
         def truncate(self, size):
             os.ftruncate(self.fd, size)
 
+    def try_to_find_file_descriptor(self):
+        return self.fd
 
 # next class is not RPython
 
@@ -328,6 +334,9 @@ class MMapFile(Stream):
 
     def flush(self):
         self.mm.flush()
+
+    def try_to_find_file_descriptor(self):
+        return self.fd
 
 # ____________________________________________________________
 
@@ -583,6 +592,9 @@ class BufferingInputStream(Stream):
     flush      = PassThrough("flush",     flush_buffers=True)
     close      = PassThrough("close",     flush_buffers=False)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
+
 
 class BufferingOutputStream(Stream):
 
@@ -635,6 +647,9 @@ class BufferingOutputStream(Stream):
     flush      = PassThrough("flush",    flush_buffers=True)
     close      = PassThrough("close",    flush_buffers=True)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
+
 
 class LineBufferingOutputStream(BufferingOutputStream):
 
@@ -649,6 +664,10 @@ class LineBufferingOutputStream(BufferingOutputStream):
         if p >= 0:
             self.do_write(self.buf[:p])
             self.buf = self.buf[p:]
+
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
+
 
 # ____________________________________________________________
 
@@ -680,6 +699,8 @@ class CRLFFilter(Stream):
     flush    = PassThrough("flush", flush_buffers=False)
     close    = PassThrough("close", flush_buffers=False)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
 
 class TextInputFilter(Stream):
 
@@ -829,6 +850,9 @@ class TextInputFilter(Stream):
     flush      = PassThrough("flush",     flush_buffers=True)
     close      = PassThrough("close",     flush_buffers=False)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
+
 
 class TextOutputFilter(Stream):
 
@@ -852,6 +876,8 @@ class TextOutputFilter(Stream):
     flush      = PassThrough("flush",     flush_buffers=False)
     close      = PassThrough("close",     flush_buffers=False)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
 
 
 # _________________________________________________
@@ -901,6 +927,8 @@ class DecodingInputFilter(Stream):
     flush      = PassThrough("flush",     flush_buffers=False)
     close      = PassThrough("close",     flush_buffers=False)
 
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
 
 class EncodingOutputFilter(Stream):
 
@@ -926,3 +954,7 @@ class EncodingOutputFilter(Stream):
     truncate   = PassThrough("truncate",  flush_buffers=False)
     flush      = PassThrough("flush",     flush_buffers=False)
     close      = PassThrough("close",     flush_buffers=False)
+
+    def try_to_find_file_descriptor(self):
+        return self.base.try_to_find_file_descriptor()
+
