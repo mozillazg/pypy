@@ -73,7 +73,7 @@ def open_file_as_stream(space, path, mode="r", buffering=-1):
         return space.wrap(W_Stream(
             space, streamio.open_file_as_stream(path, mode, buffering)))
     except OSError, e:
-        raise wrap_oserror_as_ioerror(e)
+        raise wrap_oserror_as_ioerror(space, e)
 open_file_as_stream.unwrap_spec = [ObjSpace, str, str, int]
 
 def fdopen_as_stream(space, fd, mode="r", buffering=-1):

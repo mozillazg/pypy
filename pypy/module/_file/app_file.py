@@ -211,7 +211,7 @@ Sets data attribute .closed to True.  A closed file cannot be used for
 further I/O operations.  close() may be called more than once without
 error.  Some kinds of file objects (for example, opened by popen())
 may return an exit status upon closing."""
-        if not self._closed:
+        if not self._closed and hasattr(self, 'stream'):
             self._closed = True
             self.stream.close()
 
