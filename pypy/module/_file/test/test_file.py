@@ -45,3 +45,7 @@ class AppTestFile(object):
     def test_badmode(self):
         import _file
         raises(IOError, _file.file, "foo", "bar")
+
+    def test_wraposerror(self):
+        import _file
+        raises(IOError, _file.file, "hopefully/not/existant.bar")
