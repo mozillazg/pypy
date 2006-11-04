@@ -188,18 +188,13 @@ class BaseTestBufferingInputStreamTests(BaseRtypingTest):
         def f():
             assert file.readline() == "ab\n"
             assert file.readline() == "def\n"
-            os.write(1, "3\n")
             blocks = []
             while 1:
                 block = file.read(1)
-                os.write(1, "XXXX" + block + "YYYY")
-                os.write(1, "4\n")
                 if not block:
                     break
-                os.write(1, "5\n")
                 blocks.append(block)
                 assert file.read(0) == ""
-            os.write(1, "6\n")
             return "".join(blocks) == "".join(self.lines)[7:]
         res = self.interpret(f, [])
         assert res
@@ -250,23 +245,16 @@ class BaseTestBufferingInputStreamTests(BaseRtypingTest):
     def test_read_4_after_readline(self):
         file = self.makeStream()
         def f():
-            os.write(1, "1\n")
             res = file.readline()
             assert res == "ab\n"
-            os.write(1, "2\n")
             assert file.readline() == "def\n"
-            os.write(1, "3\n")
             blocks = [file.read(4)]
             while 1:
                 block = file.read(4)
                 if not block:
                     break
                 blocks.append(block)
-                os.write(1, "4\n")
                 assert file.read(0) == ""
-            os.write(1, "5\n")
-            for element in blocks:
-                os.write(1, element + "XXX\n")
             return blocks == ["xy\np", "q\nuv", "wx"]
         res = self.interpret(f, [])
         assert res
