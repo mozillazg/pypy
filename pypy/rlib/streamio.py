@@ -340,19 +340,37 @@ class MMapFile(Stream):
 
 # ____________________________________________________________
 
+STREAM_METHODS = [
+    ("read", [int]),
+    ("write", [str]),
+    ("tell", []),
+    ("seek", [int, int]),
+    ("readall", []),
+    ("readline", []),
+    ("truncate", [int]),
+    ("flush", []),
+    ("close", []),
+    ("peek", []),
+    ("try_to_find_file_descriptor", []),
+    ]
 
 def PassThrough(meth_name, flush_buffers):
+    if meth_name in STREAM_METHODS:
+        signature = STREAM_METHODS[meth_name]
+        args = ", ".join(["v%s" % (i, ) for i in range(len(signature))])
+    else:
+        args = "*args"
     if flush_buffers:
-        code = """def %s(self, *args):
+        code = """def %s(self, %s):
                       self.flush_buffers()
-                      return self.base.%s(*args)
+                      return self.base.%s(%s)
 """
     else:
-        code = """def %s(self, *args):
-                      return self.base.%s(*args)
+        code = """def %s(self, %s):
+                      return self.base.%s(%s)
 """
     d = {}
-    exec code % (meth_name, meth_name) in d
+    exec code % (meth_name, args, meth_name, args) in d
     return d[meth_name]
 
 

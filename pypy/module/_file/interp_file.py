@@ -23,25 +23,11 @@ def wrap_oserror_as_ioerror(space, e):
     return OperationError(space.w_IOError, w_error)
 
 
-EXPOSED_STREAM_METHODS = [
-    ("read", [int]),
-    ("write", [str]),
-    ("tell", []),
-    ("seek", [int, int]),
-    ("readall", []),
-    ("readline", []),
-    ("truncate", [int]),
-    ("flush", []),
-    ("close", []),
-    ("peek", []),
-    ("try_to_find_file_descriptor", []),
-    ]
-
 class W_Stream(Wrappable):
     def __init__(self, space, stream):
         self.stream = stream
 
-for name, argtypes in EXPOSED_STREAM_METHODS:
+for name, argtypes in streamio.STREAM_METHODS:
     numargs = len(argtypes)
     args = ", ".join(["v%s" % i for i in range(numargs)])
     exec py.code.Source("""
@@ -58,7 +44,7 @@ for name, argtypes in EXPOSED_STREAM_METHODS:
 
 W_Stream.typedef = TypeDef("Stream",
     **dict([(name, interp2app(globals()[name]))
-                for name, _ in EXPOSED_STREAM_METHODS]))
+                for name, _ in streamio.STREAM_METHODS]))
 
 
 def is_mode_ok(space, mode):
