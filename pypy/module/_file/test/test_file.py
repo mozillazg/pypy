@@ -41,3 +41,7 @@ class AppTestFile(object):
             assert s == "foobar"
         finally:
             f.close()
+
+    def test_badmode(self):
+        import _file
+        raises(IOError, _file.file, "foo", "bar")

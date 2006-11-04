@@ -64,7 +64,7 @@ W_Stream.typedef = TypeDef("Stream",
 def is_mode_ok(space, mode):
     if not mode or mode[0] not in ['r', 'w', 'a', 'U']:
         raise OperationError(
-                IOError,
+                space.w_IOError,
                 space.wrap('invalid mode : %s' % mode))
 
 def open_file_as_stream(space, path, mode="r", buffering=-1):
