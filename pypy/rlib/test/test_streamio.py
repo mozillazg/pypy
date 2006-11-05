@@ -349,7 +349,7 @@ class BaseTestBufferingInputStreamTests(BaseRtypingTest):
     def test_seek(self):
         file = self.makeStream(tell=True, seek=True)
         end = len(file.readall())
-        file.seek(0)
+        file.seek(0, 0)
         cases = [(readto, seekto, whence) for readto in range(0, end+1)
                                           for seekto in range(0, end+1)
                                           for whence in [0, 1, 2]]
@@ -360,7 +360,7 @@ class BaseTestBufferingInputStreamTests(BaseRtypingTest):
             all = file.readall()
             assert end == len(all)
             for readto, seekto, whence in cases:
-                file.seek(0)
+                file.seek(0, 0)
                 assert file.tell() == 0
                 head = file.read(readto)
                 assert head == all[:readto]
@@ -461,7 +461,7 @@ class BaseTestBufferingOutputStream(BaseRtypingTest):
             base = TWriter()
             filter = streamio.BufferingOutputStream(base, 4)
             filter.write("x"*6)
-            filter.seek(3)
+            filter.seek(3, 0)
             filter.write("y"*2)
             filter.close()
             assert base.buf == "x"*3 + "y"*2 + "x"*1
@@ -472,7 +472,7 @@ class BaseTestBufferingOutputStream(BaseRtypingTest):
         def f():
             base = TWriter()
             filter = streamio.BufferingOutputStream(base, 4)
-            filter.seek(3)
+            filter.seek(3, 0)
             filter.write("y"*2)
             filter.close()
             assert base.buf == "\0"*3 + "y"*2
@@ -537,7 +537,7 @@ class BaseTestLineBufferingOutputStream(BaseRtypingTest):
         filter = streamio.BufferingOutputStream(base, 4)
         def f():
             filter.write("x"*6)
-            filter.seek(3)
+            filter.seek(3, 0)
             filter.write("y"*2)
             filter.close()
             assert base.buf == "x"*3 + "y"*2 + "x"*1
@@ -620,9 +620,9 @@ class TestMMapFile(BaseTestBufferingInputStreamTests):
         file.write("Barf\n")
         file.writelines(["a\n", "b\n", "c\n"])
         assert file.tell() == len("BooHoo\nBarf\na\nb\nc\n")
-        file.seek(0)
+        file.seek(0, 0)
         assert file.read() == "BooHoo\nBarf\na\nb\nc\n"
-        file.seek(0)
+        file.seek(0, 0)
         assert file.readlines() == (
                          ["BooHoo\n", "Barf\n", "a\n", "b\n", "c\n"])
         assert file.tell() == len("BooHoo\nBarf\na\nb\nc\n")
@@ -663,7 +663,7 @@ class BaseTestBufferingInputOutputStreamTests(BaseRtypingTest):
         filter = streamio.BufferingInputStream(
             streamio.BufferingOutputStream(base, 4), 4)
         def f():
-            filter.seek(3)
+            filter.seek(3, 0)
             filter.write("y"*2)
             filter.close()
             assert base.buf == "\0"*3 + "y"*2
@@ -762,7 +762,7 @@ class BaseTestTextInputFilter(BaseRtypingTest):
             all = sofar
             for i in range(len(pairs)):
                 sofar, pos = pairs[i]
-                filter.seek(pos)
+                filter.seek(pos, 0)
                 assert filter.tell() == pos
                 assert filter.tell() == pos
                 bufs = [sofar]
@@ -850,7 +850,7 @@ class BaseTestTextOutputFilter(BaseRtypingTest):
             base = TWriter()
             filter = streamio.TextOutputFilter(base, linesep="\n")
             filter.write("x"*100)
-            filter.seek(50)
+            filter.seek(50, 0)
             filter.write("y"*10)
             assert base.buf == "x"*50 + "y"*10 + "x"*40
         self.interpret(f, [])

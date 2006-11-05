@@ -158,7 +158,7 @@ class Stream(object):
     def tell(self):
         raise NotImplementedError
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset, whence):
         raise NotImplementedError
 
     def readall(self):
@@ -214,7 +214,7 @@ class DiskFile(Stream):
     def __init__(self, fd):
         self.fd = fd
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset, whence):
         os.lseek(self.fd, offset, whence)
 
     def tell(self):
@@ -267,7 +267,7 @@ class MMapFile(Stream):
     def tell(self):
         return self.pos
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset, whence):
         if whence == 0:
             self.pos = max(0, offset)
         elif whence == 1:
@@ -403,7 +403,7 @@ class BufferingInputStream(Stream):
     def flush_buffers(self):
         if self.lines or self.buf:
             try:
-                self.do_seek(self.tell())
+                self.do_seek(self.tell(), 0)
             except NotImplementedError:
                 pass
             else:
@@ -418,7 +418,7 @@ class BufferingInputStream(Stream):
         assert bytes >= offset #, (locals(), self.__dict__)
         return bytes - offset
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset, whence):
         # This may fail on the do_seek() or do_tell() call.
         # But it won't call either on a relative forward seek.
         # Nor on a seek to the very end.
@@ -818,7 +818,7 @@ class TextInputFilter(Stream):
                 break
         return ''.join(result)
 
-    def seek(self, offset, whence=0):
+    def seek(self, offset, whence):
         """Seeks based on knowledge that does not come from a tell()
            may go to the wrong place, since the number of
            characters seen may not match the number of characters
