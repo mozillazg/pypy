@@ -49,3 +49,15 @@ class AppTestFile(object):
     def test_wraposerror(self):
         import _file
         raises(IOError, _file.file, "hopefully/not/existant.bar")
+
+    def test_correct_file_mode(self):
+        import _file, os
+        f = _file.file(self.temppath, "w")
+        umask = os.umask(18)
+        os.umask(umask)
+        try:
+            f.write("foo")
+        finally:
+            f.close()
+        assert oct(os.stat(self.temppath).st_mode & 0777 | umask) == oct(0666)
+
