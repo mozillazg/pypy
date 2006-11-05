@@ -18,6 +18,8 @@ option_to_typename = {
                         "dictmultiobject.W_DictMultiIterObject"],
     "withrangelist"  : ["rangeobject.W_RangeListObject",
                         "rangeobject.W_RangeIterObject"],
+    "withtproxy" : ["proxyobject.W_TransparentList",
+                    "proxyobject.W_TransparentDict"],
 }
 
 class StdTypeModel:
@@ -66,7 +68,6 @@ class StdTypeModel:
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import strsliceobject
         from pypy.objspace.std import strjoinobject
-        from pypy.objspace.std import proxyobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
         from pypy.objspace.std import longobject
@@ -75,6 +76,7 @@ class StdTypeModel:
         from pypy.objspace.std import unicodeobject
         from pypy.objspace.std import dictproxyobject
         from pypy.objspace.std import rangeobject
+        from pypy.objspace.std import proxyobject
         from pypy.objspace.std import fake
         import pypy.objspace.std.default # register a few catch-all multimethods
 
@@ -119,10 +121,6 @@ class StdTypeModel:
                         self.typeorder[implcls] = []
                     else:
                         imported_but_not_registered[implcls] = True
-
-        # xxx config
-        self.typeorder[proxyobject.W_TransparentList] = []
-        self.typeorder[proxyobject.W_TransparentDict] = []
 
         if config.objspace.std.withstrdict:
             del self.typeorder[dictobject.W_DictObject]

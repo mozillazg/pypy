@@ -2,9 +2,13 @@
 """ test proxy on functions and other crazy goodies
 """
 
+from pypy.conftest import gettestobjspace
 from pypy.objspace.std.test.test_proxy import AppProxyBasic
 
 class AppTestProxyFunction(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withtproxy": True})
+
     def setup_method(self, meth):
         self.w_get_proxy = self.space.appexec([], """():
         class Controller(object):

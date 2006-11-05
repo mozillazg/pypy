@@ -1,8 +1,12 @@
 
 """ test proxy internals like code, traceback, frame
 """
+from pypy.conftest import gettestobjspace
 
 class AppProxy(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withtproxy": True})
+
     def setup_method(self, meth):
         self.w_get_proxy = self.space.appexec([], """():
         class Controller(object):
@@ -47,7 +51,7 @@ class AppTestProxyInternals(AppProxy):
         fp = self.get_proxy(frame)
         assert fp.f_locals == frame.f_locals
 
-class AppTestProxyTracebackController(object):
+class AppTestProxyTracebackController(AppProxy):
     def test_controller(self):
         import types
         import sys
