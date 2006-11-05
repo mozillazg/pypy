@@ -96,7 +96,7 @@ class AppTestProxyTracebackController(object):
         
         assert traceback.format_tb(last_tb) == traceback.format_tb(e[2])
 
-class AppTestProxyType(AppProxy):
+class DONTAppTestProxyType(AppProxy):
     def test_filetype(self):
         f = self.get_proxy(file)
         f("/tmp/sth", "w").write("aaa")
@@ -108,3 +108,16 @@ class AppTestProxyType(AppProxy):
         fp.write("aaa")
         fp.close()
         assert open("/tmp/sth").read() == "aaa"
+
+    def test_isinstance(self):
+        class A:
+            pass
+
+        a = A()
+        Ap = self.get_proxy(A)
+        ap = self.get_proxy(a)
+        assert isinstance(a, A)
+        assert isinstance(a, Ap)
+        assert isinstance(ap, A)
+        assert isinstance(ap, Ap)
+        assert type(a) is type(ap)
