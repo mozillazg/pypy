@@ -76,7 +76,7 @@ def fdopen_as_stream(fd, mode, buffering):
 
 def open_path_helper(path, os_flags, append):
     # XXX for now always return DiskFile
-    fd = os.open(path, os_flags)
+    fd = os.open(path, os_flags, 0666)
     if append:
         try:
             os.lseek(fd, 0, 2)
