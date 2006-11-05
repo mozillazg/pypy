@@ -101,3 +101,10 @@ class AppTestProxyType(AppProxy):
         f = self.get_proxy(file)
         f("/tmp/sth", "w").write("aaa")
         assert open("/tmp/sth").read() == "aaa"
+
+    def test_fileobject(self):
+        f = open("/tmp/sth", "w")
+        fp = self.get_proxy(f)
+        fp.write("aaa")
+        fp.close()
+        assert open("/tmp/sth").read() == "aaa"
