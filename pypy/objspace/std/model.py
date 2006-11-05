@@ -123,6 +123,7 @@ class StdTypeModel:
         # xxx config
         self.typeorder[proxyobject.W_TransparentList] = []
         self.typeorder[proxyobject.W_TransparentDict] = []
+        self.typeorder[proxyobject.W_TransparentType] = []
 
         if config.objspace.std.withstrdict:
             del self.typeorder[dictobject.W_DictObject]

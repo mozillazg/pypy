@@ -27,6 +27,8 @@ def proxy(space, w_type, w_controller):
             return W_TransparentFrame(space, w_type, w_controller)
         if space.is_true(space.issubtype(w_type, space.gettypeobject(GeneratorIterator.typedef))):
             return W_TransparentGenerator(space, w_type, w_controller)
+        if isinstance(w_type, W_TypeObject):
+            return W_TransparentType(space, w_type, w_controller)
         if w_type.instancetypedef is space.w_object.instancetypedef:
             return W_Transparent(space, w_type, w_controller)
     else:

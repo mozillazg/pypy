@@ -95,3 +95,9 @@ class AppTestProxyTracebackController(object):
             e = sys.exc_info()
         
         assert traceback.format_tb(last_tb) == traceback.format_tb(e[2])
+
+class AppTestProxyType(AppProxy):
+    def test_filetype(self):
+        f = self.get_proxy(file)
+        f("/tmp/sth", "w").write("aaa")
+        assert open("/tmp/sth").read() == "aaa"
