@@ -109,6 +109,9 @@ class ResumePointFnEntry(ExtRegistryEntry):
                          hop.r_result)
 
 def resume_state_create(prevstate, label, func, *args):
+    if label == "yield_current_frame_to_caller_1":
+        assert func is None
+        XXX
     return ResumeData(prevstate, label, func, *args)
 
 def concretify_argument(hop, index):
@@ -265,6 +268,8 @@ class ResumeData(object):
         self.local_changes = []
         self.goto_after = goto_after
         self.name = name
+        if isinstance(func, type(self.__init__)):
+            func = func.im_func
         self.func = func
         self.args = args
         self.decision_stack = None
@@ -303,7 +308,7 @@ class ResumeData(object):
                 result = self.func(*dummy_args)
             except Exception, e:
                 if self.goto_after is not None:
-                    print "caught something, handing it on..."
+                    print "caught %s, handing it on..." % (e, )
                     return self.goto_after.resume(raising=e)
                 raise
         finally:
@@ -345,7 +350,7 @@ class ResumeData(object):
                     val = HomingBlackhole()
                     newlocals[name] = val
             if newlocals:
-#                print "fixing locals", newlocals
+                print "fixing locals", newlocals
                 frame.f_locals.update(newlocals)
             if self.fix_globals:
                 self.previous_globals = {}
@@ -373,6 +378,9 @@ class ResumeData(object):
             print 'changes', dict(changes), changes
             frame.f_locals.update(dict(changes))
         return self.resume_tracer
+
+    def switch(self):
+        return self.resume()
 
 
 # _________________________________________________________________________
@@ -474,7 +482,7 @@ def _get_targets_with_condition(pos, name, arg):
             return [(target, "bool", True), (pos + 3, "bool", False)]
         elif name == "JUMP_FORWARD":
             return [(target, None, None)]
-        elif name == "SETUP_LOOP" or name == "SETUP_EXCEPT":
+        elif name in ("SETUP_LOOP", "SETUP_FINALLY", "SETUP_EXCEPT"):
             return [(pos + 3, None, None)] #XXX not sure
         elif name == "FOR_ITER":
             return [(target, "next", "stop")]

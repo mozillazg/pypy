@@ -288,6 +288,28 @@ def DONOTtest_resume_in_except_block(): # probably not necessary
     res = resume_state_invoke(int, s)
     assert res == 42
 
+def test_resume_in_finally_block():
+    def g(x):
+        x += 1
+        resume_point("rp0", x)
+        return x + 1
+    def f(x):
+        x = x - 1
+        try:
+            r = g(x)
+            resume_point("rp1", returns=r)
+        finally:
+            r = 42 + r
+        return r - 1
+    def example():
+        s1 = resume_state_create(None, "rp1", f)
+        s0 = resume_state_create(s1, "rp0", g, 0)
+        v2 = resume_state_invoke(int, s0)
+        return v2
+    res = example()
+    assert res == 42
+
+
 def test_jump_over_for():
     def f(x):
         result = 0
