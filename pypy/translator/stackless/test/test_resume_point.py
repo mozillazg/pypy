@@ -30,13 +30,14 @@ def transform_stackless_function(fn, callback_for_transform=None):
 def test_no_call():
     def f(x, y):
         x = x-1
-        rstack.resume_point("rp0", x, y) 
+        rstack.resume_point("rp0", x, y)
         r = x+y
         rstack.stack_unwind()
         return r
     def example():
         v1 = f(one(),one()+one())
-        state = rstack.resume_state_create(None, "rp0", one(), one()+one()+one())
+        state = rstack.resume_state_create(None, "rp0", f,
+                                           one(), one()+one()+one())
         v2 = rstack.resume_state_invoke(int, state)
         return v1*10 + v2
 ##     transform_stackless_function(example)
@@ -46,14 +47,16 @@ def test_no_call():
 def test_bogus_restart_state_create():
     def f(x, y):
         x = x-1
-        rstack.resume_point("rp0", x, y) 
+        rstack.resume_point("rp0", x, y)
         return x+y
     def example():
         v1 = f(one(),one()+one())
-        state = rstack.resume_state_create(None, "rp0", one())
-        return v1
+        state = rstack.resume_state_create(None, "rp0", f, one())
+        v2 = rstack.resume_state_invoke(int, state)
+        return v1 + v2
     info = py.test.raises(AssertionError, "transform_stackless_function(example)")
     assert 'rp0' in str(info.value)
+    py.test.raises(AssertionError, example)
     
 
 def test_call():
@@ -65,12 +68,14 @@ def test_call():
         return z+y
     def example():
         v1 = f(one(),one()+one())
-        s = rstack.resume_state_create(None, "rp1", 5*one())
+        s = rstack.resume_state_create(None, "rp1", f, 5*one())
         v2 = rstack.resume_state_invoke(int, s, returning=one()*7)
         return v1*100 + v2
     res = llinterp_stackless_function(example)
     assert res == 412
     res = run_stackless_function(example)
+    assert res == 412
+    res = example()
     assert res == 412
 
 def test_returns_with_instance():
@@ -85,12 +90,14 @@ def test_returns_with_instance():
         return r.x + y
     def example():
         v1 = f(one(),one()+one())
-        s = rstack.resume_state_create(None, "rp1", 5*one())
+        s = rstack.resume_state_create(None, "rp1", f, 5*one())
         v2 = rstack.resume_state_invoke(int, s, returning=C(one()*3))
         return v1*100 + v2
     res = llinterp_stackless_function(example, assert_unwind=False)
     assert res == 408
     res = run_stackless_function(example)
+    assert res == 408
+    res = example()
     assert res == 408
 
 def test_call_uncovered():
@@ -119,12 +126,14 @@ def test_chained_states():
         return r + z
     def example():
         v1 = f(one(), 2*one(), 3*one())
-        s2 = rstack.resume_state_create(None, "rp2", 2*one())
-        s1 = rstack.resume_state_create(s2, "rp1", 4*one(), 5*one())
+        s2 = rstack.resume_state_create(None, "rp2", f, 2*one())
+        s1 = rstack.resume_state_create(s2, "rp1", g, 4*one(), 5*one())
         return 100*v1 + rstack.resume_state_invoke(int, s1)
     res = llinterp_stackless_function(example)
     assert res == 811
     res = run_stackless_function(example)
+    assert res == 811
+    res = example()
     assert res == 811
 
 def test_return_instance():
@@ -141,14 +150,16 @@ def test_return_instance():
         return r.x + y
     def example():
         v1 = f(one(), 2*one())
-        s2 = rstack.resume_state_create(None, "rp2", 2*one())
+        s2 = rstack.resume_state_create(None, "rp2", f, 2*one())
         c = C()
         c.x = 4*one()
-        s1 = rstack.resume_state_create(s2, "rp1", c)
+        s1 = rstack.resume_state_create(s2, "rp1", g, c)
         return v1*100 + rstack.resume_state_invoke(int, s1)
     res = llinterp_stackless_function(example)
     assert res == 406
     res = run_stackless_function(example)
+    assert res == 406
+    res = example()
     assert res == 406
 
 def test_really_return_instance():
@@ -163,11 +174,13 @@ def test_really_return_instance():
         v1 = g(one()).x
         c = C()
         c.x = 4*one()
-        s1 = rstack.resume_state_create(None, "rp1", c)
+        s1 = rstack.resume_state_create(None, "rp1", g, c)
         return v1*100 + rstack.resume_state_invoke(C, s1).x
     res = llinterp_stackless_function(example)
     assert res == 204
     res = run_stackless_function(example)
+    assert res == 204
+    res = example()
     assert res == 204
 
 def test_resume_and_raise():
@@ -178,7 +191,7 @@ def test_resume_and_raise():
         return x + 1
     def example():
         v1 = g(one())
-        s = rstack.resume_state_create(None, "rp0", one()-1)
+        s = rstack.resume_state_create(None, "rp0", g, one()-1)
         try:
             v2 = rstack.resume_state_invoke(int, s)
         except KeyError:
@@ -187,6 +200,8 @@ def test_resume_and_raise():
     res = llinterp_stackless_function(example)
     assert res == 242
     res = run_stackless_function(example)
+    assert res == 242
+    res = example()
     assert res == 242
     
 def test_resume_and_raise_and_catch():
@@ -205,13 +220,15 @@ def test_resume_and_raise_and_catch():
         return r - 1
     def example():
         v1 = f(one()+one())
-        s1 = rstack.resume_state_create(None, "rp1")
-        s0 = rstack.resume_state_create(s1, "rp0", one()-1)
+        s1 = rstack.resume_state_create(None, "rp1", f)
+        s0 = rstack.resume_state_create(s1, "rp0", g, one()-1)
         v2 = rstack.resume_state_invoke(int, s0)
         return v1*100 + v2
     res = llinterp_stackless_function(example)
     assert res == 141
     res = run_stackless_function(example)
+    assert res == 141
+    res = example()
     assert res == 141
 
 def test_invoke_raising():
@@ -228,21 +245,23 @@ def test_invoke_raising():
         return r - 1
     def example():
         v1 = f(one()+one())
-        s1 = rstack.resume_state_create(None, "rp1")
-        s0 = rstack.resume_state_create(s1, "rp0", 0)
+        s1 = rstack.resume_state_create(None, "rp1", f)
+        s0 = rstack.resume_state_create(s1, "rp0", g, 0)
         v2 = rstack.resume_state_invoke(int, s0, raising=KeyError())
         return v1*100 + v2
     res = llinterp_stackless_function(example)
     assert res == 141
     res = run_stackless_function(example)
     assert res == 141
+    res = example()
+    assert res == 141
     
 
 def test_finally():
     def f(x):
-        rstack.resume_point("rp1", x)        
+        rstack.resume_point("rp1", x)
         return 1/x
-    def in_finally(x): 
+    def in_finally(x):
         rstack.resume_point("rp1.5", x)
         return 2/x
     def g(x):
@@ -257,6 +276,7 @@ def test_finally():
     def example():
         return g(one())
     transform_stackless_function(example)
+    res = example()
 
 def test_except():
     py.test.skip("please don't write code like this")
@@ -340,8 +360,8 @@ def test_always_raising():
         out = []
         x = h(out)
         l  = len(out)
-        chain = rstack.resume_state_create(None, 'h', out)
-        chain = rstack.resume_state_create(chain, 'g')
+        chain = rstack.resume_state_create(None, 'h', h, out)
+        chain = rstack.resume_state_create(chain, 'g', g)
         x += rstack.resume_state_invoke(int, chain)
         l += len(out)
         return l*100+x
@@ -349,6 +369,8 @@ def test_always_raising():
     res = llinterp_stackless_function(example)
     assert res == 200
     res = run_stackless_function(example)
+    assert res == 200
+    res = example()
     assert res == 200
 
 def test_more_mess():
