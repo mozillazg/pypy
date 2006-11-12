@@ -1,8 +1,10 @@
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.backendopt.escape import AbstractDataFlowInterpreter, malloc_to_stack
 from pypy.translator.backendopt.support import find_backedges, find_loop_blocks
+from pypy.translator.simplify import join_blocks
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import instantiate
+from pypy import conftest
 
 def build_adi(function, types):
     t = TranslationContext()
@@ -23,6 +25,9 @@ def check_malloc_removal(function, types, args, expected_result, must_remove=Tru
     res = interp.eval_graph(graph, args)
     assert res == expected_result
     malloc_to_stack(t)
+    join_blocks(graph)
+    if conftest.option.view:
+        t.view()
     if must_remove:
         for block in graph.iterblocks():
             for op in block.operations:
@@ -456,7 +461,11 @@ def test_dont_alloca_in_loops():
         return result
     t = check_malloc_removal(f, [int], [3], 3, must_remove=False)
     graph = graphof(t, f)
-    assert graph.startblock.exits[0].target.exits[0].target.operations[0].opname == "malloc"
+    ops = graph.startblock.exits[0].target.exits[0].target.operations
+    n = 0
+    while ops[n].opname == "keepalive":
+        n += 1
+    assert ops[n].opname == "malloc"
 
 def test_dont_remove_del_objects():
     class A(object):

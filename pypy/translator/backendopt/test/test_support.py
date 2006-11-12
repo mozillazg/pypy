@@ -1,4 +1,5 @@
 from pypy.translator.unsimplify import varoftype
+from pypy.translator.simplify import join_blocks
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.backendopt.support import \
      needs_conservative_livevar_calculation, split_block_with_keepalive, \
@@ -54,40 +55,40 @@ def test_nclc_ignore_functype():
     block.closeblock(model.Link([v_res], None))
     assert not needs_conservative_livevar_calculation(block)
 
-def test_sbwk_should_insert_keepalives():
-    # this is testing something like:
-    # v0 <- op_producing_non_gc
-    # v1 <- op_using_v0        <- split here
-    llops = LowLevelOpList()
-    ptr_a = varoftype(lltype.Ptr(GcA))
-    v_res = llops.genop("getfield", [ptr_a, model.Constant('b', lltype.Void)],
-                        resulttype=lltype.Ptr(NonGcB))
-    llops.genop("direct_call", [model.Constant(None, lltype.Void), v_res],
-                resulttype=lltype.Void)
-    block = model.Block([ptr_a])
-    block.operations.extend(llops)
-    block.closeblock(model.Link([], None))
-    link = split_block_with_keepalive(block, 1)
-    assert 'keepalive' in [op.opname for op in link.target.operations]
+##def test_sbwk_should_insert_keepalives():
+##    # this is testing something like:
+##    # v0 <- op_producing_non_gc
+##    # v1 <- op_using_v0        <- split here
+##    llops = LowLevelOpList()
+##    ptr_a = varoftype(lltype.Ptr(GcA))
+##    v_res = llops.genop("getfield", [ptr_a, model.Constant('b', lltype.Void)],
+##                        resulttype=lltype.Ptr(NonGcB))
+##    llops.genop("direct_call", [model.Constant(None, lltype.Void), v_res],
+##                resulttype=lltype.Void)
+##    block = model.Block([ptr_a])
+##    block.operations.extend(llops)
+##    block.closeblock(model.Link([], None))
+##    link = split_block_with_keepalive(block, 1)
+##    assert 'keepalive' in [op.opname for op in link.target.operations]
 
-def test_sbwk_should_insert_keepalives_2():
-    # this is testing something like:
-    # v0 <- op_producing_non_gc
-    # v1 <- op_not_using_v0        <- split here
-    # v2 <- op_using_v0
-    llops = LowLevelOpList()
-    ptr_a = varoftype(lltype.Ptr(GcA))
-    v_res = llops.genop("getfield", [ptr_a, model.Constant('b', lltype.Void)],
-                        resulttype=lltype.Ptr(NonGcB))
-    llops.genop("direct_call", [model.Constant(None, lltype.Void)],
-                resulttype=lltype.Void)
-    llops.genop("direct_call", [model.Constant(None, lltype.Void), v_res],
-                resulttype=lltype.Void)
-    block = model.Block([ptr_a])
-    block.operations.extend(llops)
-    block.closeblock(model.Link([], None))
-    link = split_block_with_keepalive(block, 1)
-    assert 'keepalive' in [op.opname for op in link.target.operations]
+##def test_sbwk_should_insert_keepalives_2():
+##    # this is testing something like:
+##    # v0 <- op_producing_non_gc
+##    # v1 <- op_not_using_v0        <- split here
+##    # v2 <- op_using_v0
+##    llops = LowLevelOpList()
+##    ptr_a = varoftype(lltype.Ptr(GcA))
+##    v_res = llops.genop("getfield", [ptr_a, model.Constant('b', lltype.Void)],
+##                        resulttype=lltype.Ptr(NonGcB))
+##    llops.genop("direct_call", [model.Constant(None, lltype.Void)],
+##                resulttype=lltype.Void)
+##    llops.genop("direct_call", [model.Constant(None, lltype.Void), v_res],
+##                resulttype=lltype.Void)
+##    block = model.Block([ptr_a])
+##    block.operations.extend(llops)
+##    block.closeblock(model.Link([], None))
+##    link = split_block_with_keepalive(block, 1)
+##    assert 'keepalive' in [op.opname for op in link.target.operations]
 
 #__________________________________________________________
 # test compute_reachability
@@ -140,6 +141,7 @@ def test_find_loop_blocks():
     t.buildannotator().build_types(f, [int])
     t.buildrtyper().specialize()
     graph = graphof(t, f)
+    join_blocks(graph)
     loop_blocks = find_loop_blocks(graph)
     assert len(loop_blocks) == 4
 

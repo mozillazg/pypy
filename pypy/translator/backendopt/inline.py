@@ -12,7 +12,7 @@ from pypy.rpython.lltypesystem.lltype import normalizeptr
 from pypy.rpython import rmodel
 from pypy.tool.algo import sparsemat
 from pypy.translator.backendopt.support import log, split_block_with_keepalive
-from pypy.translator.backendopt.support import generate_keepalive, find_backedges, find_loop_blocks
+from pypy.translator.backendopt.support import find_backedges, find_loop_blocks
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
 
 BASE_INLINE_THRESHOLD = 32.4    # just enough to inline add__Int_Int()
@@ -315,7 +315,7 @@ class BaseInliner(object):
             for exceptionlink in afterblock.exits[1:]:
                 if exc_match(vtable, exceptionlink.llexitcase):
                     passon_vars = self.passon_vars(link.prevblock)
-                    copiedblock.operations += generate_keepalive(passon_vars)
+                    #copiedblock.operations += generate_keepalive(passon_vars)
                     copiedlink.target = exceptionlink.target
                     linkargs = self.find_args_in_exceptional_case(
                         exceptionlink, link.prevblock, var_etype, var_evalue, afterblock, passon_vars)
@@ -363,7 +363,7 @@ class BaseInliner(object):
         del blocks[-1].exits[0].llexitcase
         linkargs = copiedexceptblock.inputargs
         copiedexceptblock.closeblock(Link(linkargs, blocks[0]))
-        copiedexceptblock.operations += generate_keepalive(linkargs)
+        #copiedexceptblock.operations += generate_keepalive(linkargs)
 
       
     def do_inline(self, block, index_operation):

@@ -330,6 +330,9 @@ class HintRTyper(RPythonTyper):
     def make_new_lloplist(self, block):
         return HintLowLevelOpList(self)
 
+    def finish_block(self, block, newops):
+        pass
+
     def getgreenrepr(self, lowleveltype):
         try:
             return self.green_reprs[lowleveltype]

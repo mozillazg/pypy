@@ -334,6 +334,7 @@ class RPythonTyper(object):
                 self.gottypererror(e, block, hop.spaceop, newops)
                 return  # cannot continue this block: no op.result.concretetype
 
+        self.finish_block(block, newops)
         block.operations[:] = newops
         block.renamevariables(varmapping)
 
@@ -398,6 +399,13 @@ class RPythonTyper(object):
         elif isinstance(a, Constant):
             link.last_exc_value = inputconst(
                 self.exceptiondata.r_exception_value, a.value)
+
+    def finish_block(self, block, newops):
+        allvars = block.inputargs + [op.result for op in newops]
+        for v in allvars:
+            T = v.concretetype
+            if isinstance(T, Ptr) and T._needsgc():
+                newops.genop('keepalive', [v])
 
     def insert_link_conversions(self, block, skip=0):
         # insert the needed conversions on the links
