@@ -5,7 +5,7 @@ from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import compile_c_module
-from pypy.translator.tool.cbuild import build_executable, CCompiler
+from pypy.translator.tool.cbuild import build_executable, CCompiler, ProfOpt
 from pypy.translator.tool.cbuild import import_module_from_directory
 from pypy.translator.tool.cbuild import check_under_under_thread
 from pypy.rpython.lltypesystem import lltype
@@ -132,6 +132,7 @@ class CBuilder(object):
         if CBuilder.have___thread is None:
             CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
+            assert not self.config.translation.instrument
             from pypy.translator.c.symboltable import SymbolTable
             # XXX fix symboltable
             #self.symboltable = SymbolTable()
@@ -140,6 +141,8 @@ class CBuilder(object):
                                       exports = self.exports,
                                       symboltable = self.symboltable)
         else:
+            if self.config.translation.instrument:
+                defines['INSTRUMENT'] = 1
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
@@ -224,12 +227,19 @@ class CStandaloneBuilder(CBuilder):
         from distutils import sysconfig
         python_inc = sysconfig.get_python_inc()
         cc = self.config.translation.cc
-        profopt = self.config.translation.profopt
+        profbased = None
+        if self.config.translation.instrumentctl is not None:
+            profbased = self.config.translation.instrumentctl
+        else:
+            profopt = self.config.translation.profopt
+            if profopt is not None:
+                profbased = (ProfOpt, profopt)
+
         return CCompiler(
             [self.c_source_filename] + self.extrafiles,
             include_dirs = [autopath.this_dir, python_inc] + extra_includes,
             libraries    = self.libraries,
-            compiler_exe = cc, profopt = profopt)
+            compiler_exe = cc, profbased = profbased)
 
     def compile(self):
         assert self.c_source_filename
@@ -641,6 +651,13 @@ def gen_source_standalone(database, modulename, targetdir,
     gen_startupcode(f, database)
 
     f.close()
+
+    if 'INSTRUMENT' in defines:
+        fi = incfilename.open('a')
+        n = database.instrument_ncounter
+        print >>fi, "#define INSTRUMENT_NCOUNTER %d" % n
+        fi.close()
+    
     return filename, sg.getextrafiles()
 
 
@@ -842,10 +859,13 @@ clean:
 \trm -f $(OBJECTS) $(TARGET)
 
 debug:
-\tmake CFLAGS="-g"
+\tmake CFLAGS="-g -DRPY_ASSERT"
 
 debug_exc:
-\tmake CFLAGS="-g -DDO_LOG_EXC"
+\tmake CFLAGS="-g -DRPY_ASSERT -DDO_LOG_EXC"
+
+debug_mem:
+\tmake CFLAGS="-g -DRPY_ASSERT -DNO_OBMALLOC"
 
 profile:
 \tmake CFLAGS="-pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)"

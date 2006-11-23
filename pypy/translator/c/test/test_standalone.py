@@ -1,7 +1,10 @@
+import py
+import sys, os
+
 from pypy.translator.translator import TranslationContext
 from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.annotation.listdef import s_list_of_strings
-import os
+from pypy.tool.udir import udir
 
 
 def test_hello_world():
@@ -47,3 +50,61 @@ def test_print():
                            '''argument lengths: [2, 5]\n''')
     # NB. RPython has only str, not repr, so str() on a list of strings
     # gives the strings unquoted in the list
+
+def test_counters():
+    if sys.platform == 'win32':
+        py.test.skip("instrument counters support is unix only for now")
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.rpython.lltypesystem.lloperation import llop
+    def entry_point(argv):
+        llop.instrument_count(lltype.Void, 'test', 2)
+        llop.instrument_count(lltype.Void, 'test', 1)
+        llop.instrument_count(lltype.Void, 'test', 1)
+        llop.instrument_count(lltype.Void, 'test', 2)
+        llop.instrument_count(lltype.Void, 'test', 1)        
+        return 0
+    t = TranslationContext()
+    t.config.translation.instrument = True
+    t.buildannotator().build_types(entry_point, [s_list_of_strings])
+    t.buildrtyper().specialize()
+
+    cbuilder = CStandaloneBuilder(t, entry_point, config=t.config) # xxx
+    cbuilder.generate_source()
+    cbuilder.compile()
+
+    counters_fname = udir.join("_counters_")
+    os.putenv('_INSTRUMENT_COUNTERS', str(counters_fname))
+    try:
+        data = cbuilder.cmdexec()
+    finally:
+        os.unsetenv('_INSTRUMENT_COUNTERS')
+
+    f = counters_fname.open('rb')
+    counters_data = f.read()
+    f.close()
+
+    import struct
+    counters = struct.unpack("LLL", counters_data)
+
+    assert counters == (0,3,2)
+
+def test_prof_inline():
+    if sys.platform == 'win32':
+        py.test.skip("instrumentation support is unix only for now")
+    def add(a,b):
+        return a + b - b + b - b + b - b + b - b + b - b + b - b + b
+    def entry_point(argv):
+        tot =  0
+        x = int(argv[1])
+        while x > 0:
+            tot = add(tot, x)
+            x -= 1
+        os.write(1, str(tot))
+        return 0
+    from pypy.translator.interactive import Translation
+    t = Translation(entry_point, backend='c', standalone=True)
+    t.backendopt(profile_based_inline="500")
+    exe = t.compile()
+    out = py.process.cmdexec("%s 500" % exe)
+    assert int(out) == 500*501/2
+    
