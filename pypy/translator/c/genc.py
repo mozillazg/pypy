@@ -275,6 +275,8 @@ class CStandaloneBuilder(CBuilder):
 
         if self.config.translation.cc:
             cc = self.config.translation.cc
+#            if cc == 'avr-gcc':
+#                compiler.compile_extra.append('-DAVR')
         else:
             cc = 'gcc'
 
