@@ -567,6 +567,12 @@ class NoneFrozenPBCRepr(Repr):
     def rtype_is_true(self, hop):
         return Constant(False, Bool)
 
+    def none_call(self, hop):
+        raise TyperError("attempt to call constant None")
+
+    rtype_simple_call = none_call
+    rtype_call_args = none_call
+
 none_frozen_pbc_repr = NoneFrozenPBCRepr()
 
 
@@ -744,6 +750,8 @@ class __extend__(pairtype(AbstractClassesPBCRepr, AbstractClassesPBCRepr)):
             return v
         if r_clspbc1.lowleveltype is Void:
             return inputconst(r_clspbc2, r_clspbc1.s_pbc.const)
+        if r_clspbc2.lowleveltype is Void:
+            return inputconst(Void, r_clspbc2.s_pbc.const)
         return NotImplemented
 
 def adjust_shape(hop2, s_shape):

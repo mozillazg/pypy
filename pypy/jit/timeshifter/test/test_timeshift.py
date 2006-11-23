@@ -5,7 +5,7 @@ from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue
-from pypy.objspace.flow.model import summary
+from pypy.objspace.flow.model import summary, Variable
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rlib.objectmodel import hint, keepalive_until_here
 from pypy.rlib.unroll import unrolling_iterable
@@ -63,6 +63,8 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
 class TimeshiftingTests(object):
     from pypy.jit.codegen.llgraph.rgenop import RGenOp
 
+    small = True
+
     def setup_class(cls):
         cls._cache = {}
         cls._cache_order = []
@@ -98,7 +100,7 @@ class TimeshiftingTests(object):
 
         # make the timeshifted graphs
         hrtyper = HintRTyper(ha, rtyper, self.RGenOp)
-        hrtyper.specialize(view = conftest.option.view)
+        hrtyper.specialize(view = conftest.option.view and self.small)
 
         fresh_jitstate = hrtyper.ll_fresh_jitstate
         finish_jitstate = hrtyper.ll_finish_jitstate
@@ -218,7 +220,7 @@ class TimeshiftingTests(object):
         self.rtyper = rtyper
         self.hrtyper = hrtyper
         self.annotate_interface_functions()
-        if conftest.option.view:
+        if conftest.option.view and self.small:
             from pypy.translator.tool.graphpage import FlowGraphPage
             FlowGraphPage(t, ha.translator.graphs).display()
 
@@ -319,6 +321,14 @@ class TimeshiftingTests(object):
             assert self.insns == expected
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
+
+    def check_flexswitches(self, expected_count):
+        count = 0
+        for block in self.residual_graph.iterblocks():
+            if (isinstance(block.exitswitch, Variable) and
+                block.exitswitch.concretetype is lltype.Signed):
+                count += 1
+        assert count == expected_count
 
 
 class TestTimeshift(TimeshiftingTests):
@@ -739,6 +749,32 @@ class TestTimeshift(TimeshiftingTests):
                            'setarrayitem': 2, 'getarrayitem': 1,
                            'getarraysize': 1, 'int_mul': 1})
 
+    def test_red_struct_array(self):
+         S = lltype.Struct('s', ('x', lltype.Signed))
+         A = lltype.GcArray(S)
+         def ll_function(x, y, n):
+             a = lltype.malloc(A, 2)
+             a[0].x = x
+             a[1].x = y
+             return a[n].x*len(a)
+
+         res = self.timeshift(ll_function, [21, -21, 0], [],
+                              policy=P_NOVIRTUAL)
+         assert res == 42
+         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+                           'getarraysubstruct': 3,
+                           'setfield': 2, 'getfield': 1,
+                           'getarraysize': 1, 'int_mul': 1})
+
+         res = self.timeshift(ll_function, [21, -21, 1], [],
+                              policy=P_NOVIRTUAL)
+         assert res == -42
+         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+                           'getarraysubstruct': 3,
+                           'setfield': 2, 'getfield': 1,
+                           'getarraysize': 1, 'int_mul': 1})
+
+
     def test_red_varsized_struct(self):
          A = lltype.Array(lltype.Signed)
          S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
@@ -1040,5 +1076,15 @@ class TestTimeshift(TimeshiftingTests):
             return o.m()
 
         res = self.timeshift(f, [0], [0], policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns({})
+
+    def test_compile_time_const_tuple(self):
+        d = {(4, 5): 42, (6, 7): 12}
+        def f(a, b):
+            d1 = hint(d, deepfreeze=True)
+            return d1[a, b]
+
+        res = self.timeshift(f, [4, 5], [0, 1], policy=P_NOVIRTUAL)
         assert res == 42
         self.check_insns({})

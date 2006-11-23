@@ -1,5 +1,6 @@
 from pypy.rpython.lltypesystem import lltype
-from pypy.jit.timeshifter.rcontainer import AbstractContainer, cachedtype
+from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
+from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue
 
 
@@ -26,6 +27,9 @@ class ListTypeDesc(object):
         self.tok_ll_setitem_fast = RGenOp.sigToken(
             lltype.typeOf(ll_setitem_fast).TO)
 
+    def _freeze_(self):
+        return True
+
     def factory(self, length, itembox):
         vlist = VirtualList(self, length, itembox)
         box = rvalue.PtrRedBox(self.ptrkind)
@@ -36,7 +40,7 @@ class ListTypeDesc(object):
 TypeDesc = ListTypeDesc
 
 
-class FrozenVirtualList(AbstractContainer):
+class FrozenVirtualList(FrozenContainer):
 
     def __init__(self, typedesc):
         self.typedesc = typedesc
@@ -70,8 +74,26 @@ class FrozenVirtualList(AbstractContainer):
                 fullmatch = False
         return fullmatch
 
+    def unfreeze(self, incomingvarboxes, memo):
+        contmemo = memo.containers
+        if self in contmemo:
+            return contmemo[self]
+        typedesc = self.typedesc
+        self_boxes = self.fz_item_boxes
+        length = len(self_boxes)
+        ownbox = typedesc.factory(length, None)
+        contmemo[self] = ownbox
+        vlist = ownbox.content
+        assert isinstance(vlist, VirtualList)
+        for i in range(length):
+            fz_box = self_boxes[i]
+            vlist.item_boxes[i] = fz_box.unfreeze(incomingvarboxes,
+                                                  memo)
+        return ownbox
 
-class VirtualList(AbstractContainer):
+
+
+class VirtualList(VirtualContainer):
 
     def __init__(self, typedesc, length=0, itembox=None):
         self.typedesc = typedesc

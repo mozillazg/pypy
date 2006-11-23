@@ -1,6 +1,6 @@
 import autopath
 import py, os
-from pypy.config.config import OptionDescription, BoolOption, IntOption
+from pypy.config.config import OptionDescription, BoolOption, IntOption, ArbitraryOption
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 
 modulepath = py.magic.autopath().dirpath().dirpath().join("module")
@@ -58,6 +58,9 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         BoolOption("logbytecodes",
                    "keep track of bytecode usage",
                    default=False),
+
+        BoolOption("usepycfiles", "Write and read pyc files when importing",
+                   default=True),
        
         OptionDescription("std", "Standard Object Space Options", [
             BoolOption("withtproxy", "support transparent proxies",
@@ -159,6 +162,12 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
         BoolOption("debug_transform", "Perform the debug transformation",
                    default=False, cmdline="--debug-transform", negation=False),
 
+        BoolOption("instrument", "internal: turn instrumentation on",
+                   default=False, cmdline=None),
+
+        ArbitraryOption("instrumentctl", "internal",
+                   default=None),        
+
         # portability options
         BoolOption("vanilla",
                    "Try to be as portable as possible, which is not much",
@@ -203,6 +212,10 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                        "optimizer remove the asserts", default=False),
             IntOption("inline_threshold", "Threshold when to inline functions",
                       default=1, cmdline=None),
+            StrOption("profile_based_inline",
+                      "Use call count profiling to drive inlining"
+                      ", specify arguments",
+                      default=None, cmdline="--prof-based-inline"),
         ]),
 
         OptionDescription("cli", "GenCLI options", [

@@ -474,6 +474,7 @@ class SomeImpossibleValue(SomeObject):
 
 
 s_None = SomePBC([], can_be_None=True)
+s_Bool = SomeBool()
 s_ImpossibleValue = SomeImpossibleValue()
 
 # ____________________________________________________________
@@ -549,7 +550,7 @@ from pypy.rpython.ootypesystem import ootype
 NUMBER = object()
 annotation_to_ll_map = [
     (s_None, lltype.Void),   # also matches SomeImpossibleValue()
-    (SomeBool(), lltype.Bool),
+    (s_Bool, lltype.Bool),
     (SomeInteger(knowntype=r_ulonglong), NUMBER),    
     (SomeFloat(), lltype.Float),
     (SomeChar(), lltype.Char),
@@ -658,6 +659,18 @@ def merge_knowntypedata(ktd1, ktd2):
             r[truth_v] = unionof(ktd1[truth_v], ktd2[truth_v])
     return r
 
+def not_const(s_obj):
+    if s_obj.is_constant():
+        new_s_obj = SomeObject()
+        new_s_obj.__class__ = s_obj.__class__
+        dic = new_s_obj.__dict__ = s_obj.__dict__.copy()
+        if 'const' in dic:
+            del new_s_obj.const
+        else:
+            del new_s_obj.const_box
+        s_obj = new_s_obj
+    return s_obj
+
 # ____________________________________________________________
 # internal
 
@@ -699,6 +712,11 @@ def missing_operation(cls, name):
         bookkeeper.warning("no precise annotation supplied for %s%r" % (name, args))
         return s_ImpossibleValue
     setattr(cls, name, default_op)
+
+class HarmlesslyBlocked(Exception):
+    """Raised by the unaryop/binaryop to signal a harmless kind of
+    BlockedInference: the current block is blocked, but not in a way
+    that gives 'Blocked block' errors at the end of annotation."""
 
 #
 # safety check that no-one is trying to make annotation and translation

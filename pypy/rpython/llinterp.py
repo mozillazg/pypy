@@ -448,9 +448,8 @@ class LLFrame(object):
         import pdb
         pdb.set_trace()
 
-    def op_debug_log_exc(self, exc_type):
-        # do nothing, this is useful in compiled code
-        pass
+    def op_debug_assert(self, x, msg):
+        assert x, msg
 
     def op_debug_fatalerror(self, ll_msg, ll_exc=None):
         msg = ''.join(ll_msg.chars)
@@ -459,6 +458,9 @@ class LLFrame(object):
         else:
             ll_exc_type = lltype.cast_pointer(rclass.OBJECTPTR, ll_exc).typeptr
             raise LLFatalError(msg, LLException(ll_exc_type, ll_exc))
+
+    def op_instrument_count(self, ll_tag, ll_label):
+        pass # xxx for now
 
     def op_keepalive(self, value):
         pass
@@ -555,8 +557,6 @@ class LLFrame(object):
                 from pypy.translator.c import exceptiontransform
                 return exceptiontransform.error_value(FTYPE.RESULT)
             raise
-
-    op_safe_call = op_direct_call
 
     def op_indirect_call(self, f, *args):
         graphs = args[-1]
