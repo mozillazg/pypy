@@ -7,6 +7,7 @@
     This file contains the ctypes specification to use the llvmjit library!
 '''
 from pypy.rpython.rctypes import implementation
+from pypy.rpython.rctypes.tool.util import load_library
 
 from ctypes import _CFuncPtr, _FUNCFLAG_CDECL
 from ctypes import *
@@ -31,10 +32,10 @@ os.chdir(curdir)
 
 if not os.path.exists(path):
     import py
-    py.test.skip("libllvmjit.so compilation failed (no llvm headers?)")
+    py.test.skip("libllvmjit.so compilation failed (no llvm headers or llvm version not up to date?)")
 
 #load the actual library
-llvmjit = cdll.LoadLibrary(os.path.abspath(path))
+llvmjit = load_library(os.path.abspath(path))
 class _FuncPtr(_CFuncPtr):
     _flags_ = _FUNCFLAG_CDECL
     # aaarghdistutilsunixaaargh (may need something different for standalone builds...)
@@ -55,12 +56,4 @@ find_function.argtypes = [c_char_p]
 execute = llvmjit.execute
 execute.restype  = c_int
 execute.argtypes = [c_void_p, c_int]
-
-#helpers...
-class FindFunction(object):
-    def __init__(self, function_name):
-        self.function = find_function(function_name)
-
-    def __call__(self, param):  #XXX this does not seem to translate, how to do it instead?
-        return execute(self.function, param)
 

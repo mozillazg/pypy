@@ -3,6 +3,7 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, rtimeshift
 from pypy.translator.c import exceptiontransform
+from pypy.rlib.unroll import unrolling_iterable
 
 
 class Index:
@@ -13,6 +14,8 @@ class Index:
 class OopSpecDesc:
     __metaclass__ = cachedtype
 
+    do_call = None
+
     def __init__(self, hrtyper, fnobj):
         ll_func = fnobj._callable
         FUNCTYPE = lltype.typeOf(fnobj)
@@ -22,6 +25,8 @@ class OopSpecDesc:
         operation_name, args = ll_func.oopspec.split('(', 1)
         assert args.endswith(')')
         args = args[:-1] + ','     # trailing comma to force tuple syntax
+        if args.strip() == ',':
+            args = '()'
         argnames = ll_func.func_code.co_varnames[:nb_args]
         d = dict(zip(argnames, [Index(n) for n in range(nb_args)]))
         self.argtuple = eval(args, d)
@@ -40,19 +45,26 @@ class OopSpecDesc:
 
         RGenOp = hrtyper.RGenOp
         self.args_gv = [None] * nb_args
-        self.gv_fnptr = RGenOp.constPrebuiltGlobal(fnobj._as_ptr())
-        self.result_kind = RGenOp.kindToken(FUNCTYPE.RESULT)
+        fnptr = fnobj._as_ptr()
+        self.gv_fnptr = RGenOp.constPrebuiltGlobal(fnptr)
+        result_kind = RGenOp.kindToken(FUNCTYPE.RESULT)
+        self.result_kind = result_kind
         if FUNCTYPE.RESULT is lltype.Void:
             self.errorbox = None
         else:
             error_value = exceptiontransform.error_value(FUNCTYPE.RESULT)
             self.errorbox = rvalue.redbox_from_prebuilt_value(RGenOp,
                                                               error_value)
-        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.RESULT)
+        redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.RESULT)
+        self.redboxbuilder = redboxbuilder
         self.sigtoken = RGenOp.sigToken(FUNCTYPE)
 
         if operation_name == 'newlist':
             typename, method = 'list', 'oop_newlist'
+            SELFTYPE = FUNCTYPE.RESULT.TO
+            self.is_method = False
+        elif operation_name == 'newdict':
+            typename, method = 'dict', 'oop_newdict'
             SELFTYPE = FUNCTYPE.RESULT.TO
             self.is_method = False
         else:
@@ -65,6 +77,7 @@ class OopSpecDesc:
                              None, None, [method])
         self.typedesc = vmodule.TypeDesc(hrtyper, SELFTYPE)
         self.ll_handler = getattr(vmodule, method)
+        self.couldfold = getattr(self.ll_handler, 'couldfold', False)
 
         # exception handling
         graph = fnobj.graph
@@ -72,15 +85,41 @@ class OopSpecDesc:
         self.can_raise = etrafo.raise_analyzer.analyze_direct_call(graph)
         self.fetch_global_excdata = hrtyper.fetch_global_excdata
 
-    def residual_call(self, jitstate, argboxes):
+        if self.couldfold:
+            ARGS = FUNCTYPE.ARGS
+            argpos = unrolling_iterable(enumerate(self.argpositions))
+
+            def do_call(jitstate, argboxes):
+                args = (None,)*nb_args
+                for i, pos in argpos:
+                    if pos >= 0:
+                        T = ARGS[pos]
+                        v = rvalue.ll_getvalue(argboxes[i], T)
+                        args = args[:pos] +(v,) + args[pos+1:]
+                result = fnptr(*args)
+                if FUNCTYPE.RESULT == lltype.Void:
+                    return None
+                return rvalue.ll_fromvalue(jitstate, result)
+
+            self.do_call = do_call
+            
+    def residual_call(self, jitstate, argboxes, deepfrozen=False):
         builder = jitstate.curbuilder
         args_gv = self.args_gv[:]
         argpositions = self.argpositions
+        fold = deepfrozen
         for i in range(len(argpositions)):
             pos = argpositions[i]
             if pos >= 0:
                 gv_arg = argboxes[i].getgenvar(builder)
                 args_gv[pos] = gv_arg
+                fold &= gv_arg.is_const
+        if fold:
+            try:
+                return self.do_call(jitstate, argboxes)
+            except Exception, e:
+                jitstate.residual_exception(e)
+                return self.errorbox
         gv_result = builder.genop_call(self.sigtoken, self.gv_fnptr, args_gv)
         if self.can_raise:
             self.fetch_global_excdata(jitstate)
@@ -88,11 +127,7 @@ class OopSpecDesc:
 
     def residual_exception(self, jitstate, ExcCls):
         ll_evalue = get_ll_instance_for_exccls(ExcCls)
-        ll_etype  = ll_evalue.typeptr
-        etypebox  = rvalue.ll_fromvalue(jitstate, ll_etype)
-        evaluebox = rvalue.ll_fromvalue(jitstate, ll_evalue)
-        rtimeshift.setexctypebox (jitstate, etypebox )
-        rtimeshift.setexcvaluebox(jitstate, evaluebox)
+        jitstate.residual_ll_exception(ll_evalue)
         return self.errorbox
     residual_exception._annspecialcase_ = 'specialize:arg(2)'
 

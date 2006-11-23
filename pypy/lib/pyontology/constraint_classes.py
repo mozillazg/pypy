@@ -1,11 +1,115 @@
 from logilab.constraint.propagation import AbstractDomain, AbstractConstraint,\
-       ConsistencyFailure
+       ConsistencyFailure, Solver
+from logilab.constraint.distributors import DichotomyDistributor, SplitDistributor
+from logilab.constraint.fd import Expression
 from rdflib import URIRef
 import autopath
 import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("Constraint")
 py.log.setconsumer("Constraint", None)
+import math
+
+class MySolver(Solver):
+
+    def _solve(self, repository, recursion_level=0):
+        """main generator"""
+        solve = self._solve
+        verbose = self.verbose
+        if recursion_level > self.max_depth:
+            self.max_depth = recursion_level
+        if verbose:
+            print strftime('%H:%M:%S'),
+            print '*** [%d] Solve called with repository' % recursion_level,
+            print repository
+        try:
+            foundSolution = repository.consistency(verbose)
+        except ConsistencyFailure, exc:
+            if verbose:
+                print strftime('%H:%M:%S'), exc
+            pass
+        else:
+            if foundSolution: 
+                solution = {}
+                for variable, domain in repository.getDomains().items():
+                    solution[variable] = list(domain.getValues())[0]
+                if verbose:
+                    print strftime('%H:%M:%S'), '### Found Solution', solution
+                    print '-'*80
+                yield solution
+            else:
+                for repo in repository.distribute(self._distributor,
+                                                  verbose):
+                    for solution in solve(repo, recursion_level+1):
+                        if solution is not None:
+                            yield solution
+                            
+        if recursion_level == 0 and self.verbose:
+            print strftime('%H:%M:%S'),'Finished search'
+            print strftime('%H:%M:%S'),
+            print 'Maximum recursion depth = ', self.max_depth
+
+class MyExpression(Expression):
+
+    def _assign_values(self, domains):
+        variables = []
+        kwargs = {}
+        for variable in self._variables:
+            domain = domains[variable]
+            values = list(domain.getValues())
+            variables.append((domain.size(), [variable, values, 0, len(values)]))
+            kwargs[variable] = values[0]
+        # sort variables to instanciate those with fewer possible values first
+        variables.sort()
+
+        go_on = 1
+        while go_on:
+            yield kwargs
+            # try to instanciate the next variable
+            for size, curr in variables:
+                if (curr[2] + 1) < curr[-1]:
+                    curr[2] += 1
+                    kwargs[curr[0]] = curr[1][curr[2]]
+                    break
+                else:
+                    curr[2] = 0
+                    kwargs[curr[0]] = curr[1][0]
+            else:
+                # it's over
+                go_on = 0
+ 
+
+class MyDistributor(SplitDistributor):
+
+    def __init__(self):
+        SplitDistributor.__init__(self,2)
+        self.to_split = None
+
+    def nb_subdomains(self, domains):
+        """See AbstractDistributor"""
+        self.to_split = self.findSmallestDomain(domains)
+        if self.nb_subspaces:
+            return min(self.nb_subspaces, domains[self.to_split].size())
+        else:
+            return domains[self.to_split].size()
+ 
+    def _distribute(self, *args):
+        """See AbstractDistributor"""
+        variable = self.to_split
+        nb_subspaces = len(args)
+        values = list(args[0][variable].getValues())
+        nb_elts = max(1, len(values)*1./nb_subspaces)
+        slices = [(int(math.floor(index * nb_elts)),
+                   int(math.floor((index + 1) * nb_elts)))
+                  for index in range(nb_subspaces)]
+        if self.verbose:
+            print 'Distributing domain for variable', variable
+        modified = []
+        for (dom, (end, start)) in zip(args, slices) :
+            dom[variable].removeValues(values[:end])
+            dom[variable].removeValues(values[start:])
+            modified.append(dom[variable])
+        return modified
 
 class OwlConstraint(AbstractConstraint):
 
@@ -115,7 +219,7 @@ class PropertyConstrain(AbstractConstraint):
         # Narrow the list of properties (instances of some property type)
         # to those who has a pair (self.variable, self.object)
         dom = domains[self.prop]
-        vals = list(dom.getValues())
+        vals = dom.getValues()
         for p in vals:
             if not ((self.variable, self.object) in domains[p]):
                 dom.removeValue(p)
@@ -133,7 +237,7 @@ class PropertyConstrain2(AbstractConstraint):
         # to those who has a pair (self.variable, self.object)
         dom = domains[self.prop]
         sub = domains[self.variable]
-        vals = list(dom.getValues())
+        vals = dom.getValues()
         keep = []
         for p in vals:
             items = domains[p].getValuesPrKey()
@@ -143,6 +247,36 @@ class PropertyConstrain2(AbstractConstraint):
                 else:
                     keep.append(key)
         sub.removeValues([v for v in sub.getValues() if not v in keep])
+
+import time
+class PropertyConstrain3(AbstractConstraint):
+    cost = 1
+    def __init__(self, prop, variable, cls_or_restriction):
+        AbstractConstraint.__init__(self, [ prop])
+        self.object = cls_or_restriction
+        self.variable = variable
+        self.prop = prop
+    
+    def narrow(self, domains):
+        # Narrow the domains of object and variable to those values 
+        # that are connected by self.prop
+        dom = domains[self.prop]
+        sub = domains[self.variable]
+        obj = domains[self.object]
+        vals_dict = dom._dict 
+
+        keep = set()
+        sub_rem = []
+        for v in sub.getValues():
+            if not v in vals_dict:
+                sub_rem.append(v)
+                #sub.removeValue(v)
+            else:
+                for o in dom.getValuesPrKey(v):
+                    keep.add(o)
+        remove = [x for x in obj.getValues() if not x in keep]
+        sub.removeValues(sub_rem)
+        obj.removeValues(remove)
 
 class MemberConstraint(AbstractConstraint):
     cost = 1
@@ -485,12 +619,13 @@ class AllValueConstraint(OneofPropertyConstraint):
         remove = []
         for v in indi:
             if not v in prop:
-                dom.removeValue(v)
+                remove.append(v)
             else:
                 prop_val = prop[v]
                 for p in prop_val:
                     if not p in val:
-                       dom.removeValue(v)
+                       remove.append(v)
+        dom.removeValues(remove)
 
 class HasvalueConstraint(OneofPropertyConstraint):
 
@@ -502,11 +637,14 @@ class HasvalueConstraint(OneofPropertyConstraint):
         property = dom.property
         indi = dom.getValues()
         prop = Linkeddict(domains[property].getValues())
+        remove = []
         for v in indi:
             if not v in prop:
-                dom.removeValue(v)
+                remove.append(v)
             else:
                 prop_val = prop[v] 
                 if not val in prop_val:
-                       dom.removeValue(v)
+                    remove.append(v)
+        dom.removeValues(remove)
+
 

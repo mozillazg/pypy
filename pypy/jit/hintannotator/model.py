@@ -125,9 +125,10 @@ class GreenHandlerFrame(object):
 
 class SomeLLAbstractValue(annmodel.SomeObject):
 
-    def __init__(self, T):
+    def __init__(self, T, deepfrozen=False):
         self.concretetype = T
         assert self.__class__ != SomeLLAbstractValue
+        self.deepfrozen = deepfrozen
 
     def is_green(self, frame=None):
         return False
@@ -138,11 +139,10 @@ class SomeLLAbstractConstant(SomeLLAbstractValue):
 
     def __init__(self, T, origins, eager_concrete=False, myorigin=None,
                  deepfrozen=False):
-        SomeLLAbstractValue.__init__(self, T)
+        SomeLLAbstractValue.__init__(self, T, deepfrozen)
         self.origins = origins
         self.eager_concrete = eager_concrete
         self.myorigin = myorigin
-        self.deepfrozen = deepfrozen
         assert myorigin is None or myorigin.spaceop is not None
 
     def fmt_origins(self, origins):
@@ -198,6 +198,7 @@ class SomeLLAbstractVariable(SomeLLAbstractValue):
 
 
 class SomeLLAbstractContainer(SomeLLAbstractValue):
+    deepfrozen = False     # XXX for now
 
     def __init__(self, contentdef):
         self.contentdef = contentdef
@@ -249,6 +250,15 @@ def originalconcretetype(hs):
     else:
         return hs.concretetype
 
+def deepunfreeze(hs):
+    if hs.deepfrozen:
+        hs1 = annmodel.SomeObject()
+        hs1.__class__ = hs.__class__
+        hs1.__dict__ = hs.__dict__.copy()
+        hs1.deepfrozen = False
+        hs = hs1
+    return hs
+
 # ____________________________________________________________
 # operations
 
@@ -281,7 +291,7 @@ class __extend__(SomeLLAbstractValue):
     def getfield(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
-        return SomeLLAbstractVariable(FIELD_TYPE)
+        return SomeLLAbstractVariable(FIELD_TYPE, hs_v1.deepfrozen)
 
     def setfield(hs_v1, hs_fieldname, hs_value):
         pass
@@ -289,7 +299,7 @@ class __extend__(SomeLLAbstractValue):
     def getsubstruct(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
-        return SomeLLAbstractVariable(lltype.Ptr(FIELD_TYPE))
+        return SomeLLAbstractVariable(lltype.Ptr(FIELD_TYPE), hs_v1.deepfrozen)
 
 ##    def getarrayitem(hs_v1, hs_index):
 ##        ARRAY = hs_v1.concretetype.TO
@@ -437,28 +447,44 @@ class __extend__(SomeLLAbstractContainer):
 class __extend__(pairtype(SomeLLAbstractValue, SomeLLAbstractValue)):
 
     def getarrayitem((hs_v1, hs_v2)):
-        return SomeLLAbstractVariable(hs_v1.concretetype.TO.OF)
+        return SomeLLAbstractVariable(hs_v1.concretetype.TO.OF,
+                                      hs_v1.deepfrozen)
 
     def setarrayitem((hs_v1, hs_v2), hs_v3):
         pass
 
+    def getarraysubstruct((hs_v1, hs_v2)):
+        return SomeLLAbstractVariable(lltype.Ptr(hs_v1.concretetype.TO.OF),
+                                      hs_v1.deepfrozen)
+
     def union((hs_v1, hs_v2)):
+        if hs_v1.deepfrozen != hs_v2.deepfrozen:
+            hs_v1 = deepunfreeze(hs_v1)
+            hs_v2 = deepunfreeze(hs_v2)
+            if hs_v1 == hs_v2:
+                return hs_v1
+        return pair(hs_v1, hs_v2).union_frozen_equal()
+
+    def invalid_union((hs_v1, hs_v2)):
         raise annmodel.UnionError("%s %s don't mix" % (hs_v1, hs_v2))
+
+    union_frozen_equal = invalid_union
 
 
 class __extend__(pairtype(SomeLLAbstractVariable, SomeLLAbstractConstant),
                  pairtype(SomeLLAbstractConstant, SomeLLAbstractVariable)):
 
-    def union((hs_v1, hs_v2)):
+    def union_frozen_equal((hs_v1, hs_v2)):
         assert hs_v1.concretetype == hs_v2.concretetype
-        if getattr(hs_v1, 'eager_concrete', False) or getattr(hs_v2, 'eager_concrete', False):
-            raise annmodel.UnionError("%s %s don't mix" % (hs_v1, hs_v2))
-        return SomeLLAbstractVariable(hs_v1.concretetype)
+        if (getattr(hs_v1, 'eager_concrete', False) or
+            getattr(hs_v2, 'eager_concrete', False)):
+            pair(hs_v1, hs_v2).invalid_union()
+        return SomeLLAbstractVariable(hs_v1.concretetype, hs_v1.deepfrozen)
 
 
 class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
 
-    def union((hs_c1, hs_c2)):
+    def union_frozen_equal((hs_c1, hs_c2)):
         assert hs_c1.concretetype == hs_c2.concretetype
         d = newset(hs_c1.origins, hs_c2.origins)
         if hs_c1.myorigin is hs_c2.myorigin:
@@ -469,7 +495,7 @@ class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
                                       eager_concrete = hs_c1.eager_concrete and
                                                        hs_c2.eager_concrete,
                                       myorigin = myorigin,
-                                      deepfrozen = hs_c1.deepfrozen and hs_c2.deepfrozen)
+                                      deepfrozen = hs_c1.deepfrozen)
 
 
     def getarrayitem((hs_c1, hs_index)):
@@ -496,9 +522,9 @@ class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
         
 class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractContainer)):
 
-    def union((hs_cont1, hs_cont2)):
+    def union_frozen_equal((hs_cont1, hs_cont2)):
         contentdef = hs_cont1.contentdef.union(hs_cont2.contentdef)
-        return SomeLLAbstractContainer(contentdef)
+        return SomeLLAbstractContainer(contentdef)   # XXX deepfrozen?
 
     def ptr_eq((hs_cont1, hs_cont2)):
         return SomeLLAbstractConstant(lltype.Bool, {})
@@ -508,15 +534,15 @@ class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractContainer)):
 
 
 class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractValue)):
-    def union((hs_cont1, hs_val2)):
+    def union_frozen_equal((hs_cont1, hs_val2)):
         hs_cont1.contentdef.mark_degenerated()
         assert hs_cont1.concretetype == hs_val2.concretetype
-        return SomeLLAbstractVariable(hs_cont1.concretetype)
+        return SomeLLAbstractVariable(hs_cont1.concretetype) # XXX deepfrozen?
 
 
 class __extend__(pairtype(SomeLLAbstractValue, SomeLLAbstractContainer)):
-    def union((hs_val1, hs_cont2)):
-        return pair(hs_cont2, hs_val1).union()
+    def union_frozen_equal((hs_val1, hs_cont2)):
+        return pair(hs_cont2, hs_val1).union_frozen_equal()
 
 
 class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractValue),
@@ -550,6 +576,8 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
     operation_name, args = ll_func.oopspec.split('(', 1)
     assert args.endswith(')')
     args = args[:-1] + ','     # trailing comma to force tuple syntax
+    if args.strip() == ',':
+        args = '()'
     argnames = ll_func.func_code.co_varnames[:len(args_hs)]
     d = dict(zip(argnames, args_hs))
     argtuple = eval(args, d)

@@ -112,6 +112,42 @@ It provides the following methods and attributes:
     catch it, and that ``try: finally:`` clauses are not honored.  This
     will be fixed in the future.)
 
+Example
+~~~~~~~
+
+Here is a classical producer/consumer example: an algorithm computes a
+sequence of values, while another consumes them.  For our purposes we
+assume that the producer can generate several values at once, and the
+consumer can process up to 3 values in a batch - it can also process
+batches with less than 3 values without waiting for the producer (which
+would be messy to express with a classical Python generator). ::
+
+    def producer(lst):
+        while True:
+            ...compute some more values...
+            lst.extend(new_values)
+            coro_consumer.switch()
+
+    def consumer(lst):
+        while True:
+            # First ask the producer for more values if needed
+            while len(lst) == 0:
+                coro_producer.switch()
+            # Process the available values in a batch, but at most 3
+            batch = lst[:3]
+            del lst[:3]
+            ...process batch...
+
+    # Initialize two coroutines with a shared list as argument
+    exchangelst = []
+    coro_producer = coroutine()
+    coro_producer.bind(producer, exchangelst)
+    coro_consumer = coroutine()
+    coro_consumer.bind(consumer, exchangelst)
+
+    # Start running the consumer coroutine
+    coro_consumer.switch()
+
 
 Tasklets and channels
 +++++++++++++++++++++
@@ -135,7 +171,7 @@ The stackless.py code tries to resemble the stackless C code as much
 as possible. This makes the code somewhat unpythonic.
 
 Bird's eye view of tasklets and channels
-----------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tasklets are a bit like threads: they encapsulate a function in such a way that
 they can be suspended/restarted any time. Unlike threads, they won't
@@ -158,6 +194,44 @@ Scheduling is done in strictly round-robin manner. A blocked tasklet
 is removed from the scheduling queue and will be reinserted when it
 becomes unblocked.
 
+Example
+~~~~~~~
+
+Here is a many-producers many-consumers example, where any consumer can
+process the result of any producer.  For this situation we set up a
+single channel where all producer send, and on which all consumers
+wait::
+
+    def producer(chan):
+        while True:
+            chan.send(...next value...)
+
+    def consumer(chan):
+        while True:
+            x = chan.receive()
+            ...do something with x...
+
+    # Set up the N producer and M consumer tasklets
+    common_channel = stackless.channel()
+    for i in range(N):
+        stackless.tasklet(producer, common_channel)()
+    for i in range(M):
+        stackless.tasklet(consumer, common_channel)()
+
+    # Run it all
+    stackless.run()
+
+Each item sent over the channel is received by one of the waiting
+consumers; which one is not specified.  The producers block until their
+item is consumed: the channel is not a queue, but rather a meeting point
+which causes tasklets to block until both a consumer and a producer are
+ready.  In practice, the reason for having several consumers receiving
+on a single channel is that some of the consumers can be busy in other
+ways part of the time.  For example, each consumer might receive a
+database request, process it, and send the result to a further channel
+before it asks for the next request.  In this situation, further
+requests can still be received by other consumers.
+
 
 Greenlets
 +++++++++
@@ -169,8 +243,14 @@ emphasis on a tree structure.  The various greenlets of a program form a
 precise tree, which fully determines their order of execution.
 
 For usage reference, see the documentation of the `Py lib greenlets`_.
-The PyPy interface is identical, except that the ``greenlet`` class is
-in the ``stackless`` module instead of in the ``py.magic`` module.
+The PyPy interface is identical.  You should use ``py.magic.greenlet``
+instead of ``stackless.greenlet`` directly, because the Py lib can now
+give you the latter when you ask for the former on top of PyPy.
+
+PyPy's greenlets do not suffer from the cyclic GC limitation that the
+CPython greenlets have: greenlets referencing each other via local
+variables tend to leak on top of CPython (where it is mostly impossible
+to do the right thing).  It works correctly on top of PyPy.
 
 
 Coroutine Pickling
@@ -222,7 +302,99 @@ motivation for implementing the interpreter-level primitives
 interface that allows an RPython program to artifically rebuild a chain
 of calls in a reflective way, completely from scratch, and jump to it.
 
-XXX examples, limitations?
+Example
+~~~~~~~
+
+(See `demo/pickle_coroutine.py`_ for the complete source of this demo.)
+
+Consider a program which contains a part performing a long-running
+computation::
+
+    def ackermann(x, y):
+        if x == 0:
+            return y + 1
+        if y == 0:
+            return ackermann(x - 1, 1)
+        return ackermann(x - 1, ackermann(x, y - 1))
+
+By using pickling, we can save the state of the computation while it is
+running, for the purpose of restoring it later and continuing the
+computation at another time or on a different machine.  However,
+pickling does not produce a whole-program dump: it can only pickle
+individual coroutines.  This means that the computation should be
+started in its own coroutine::
+
+    # Make a coroutine that will run 'ackermann(3, 8)'
+    coro = coroutine()
+    coro.bind(ackermann, 3, 8)
+
+    # Now start running the coroutine
+    result = coro.switch()
+
+The coroutine itself must switch back to the main program when it needs
+to be interrupted (we can only pickle suspended coroutines).  Due to
+current limitations this requires an explicit check in the
+``ackermann()`` function::
+
+    def ackermann(x, y):
+        if interrupt_flag:      # test a global flag
+            main.switch()       # and switch back to 'main' if it is set
+        if x == 0:
+            return y + 1
+        if y == 0:
+            return ackermann(x - 1, 1)
+        return ackermann(x - 1, ackermann(x, y - 1))
+
+The global ``interrupt_flag`` would be set for example by a timeout, or
+by a signal handler reacting to Ctrl-C, etc.  It causes the coroutine to
+transfer control back to the main program.  The execution comes back
+just after the line ``coro.switch()``, where we can pickle the coroutine
+if necessary::
+
+    if not coro.is_alive:
+        print "finished; the result is:", result
+    else:
+        # save the state of the suspended coroutine
+        f = open('demo.pickle', 'w')
+        pickle.dump(coro, f)
+        f.close()
+
+The process can then stop.  At any later time, or on another machine,
+we can reload the file and restart the coroutine with::
+
+    f = open('demo.pickle', 'r')
+    coro = pickle.load(f)
+    f.close()
+    result = coro.switch()
+
+Limitations
+~~~~~~~~~~~
+
+Coroutine pickling is subject to some limitations.  First of all, it is
+not a whole-program "memory dump".  It means that only the "local" state
+of a coroutine is saved.  The local state is defined to include the
+chain of calls and the local variables, but not for example the value of
+any global variable.
+
+As in normal Python, the pickle will not include any function object's
+code, any class definition, etc., but only references to functions and
+classes.  Unlike normal Python, the pickle contains frames.  A pickled
+frame stores a bytecode index, representing the current execution
+position.  This means that the user program cannot be modified *at all*
+between pickling and unpickling!
+
+On the other hand, the pickled data is fairly independent from the
+platform and from the PyPy version.
+
+Pickling/unpickling fails if the coroutine is suspended in a state that
+involves Python frames which were *indirectly* called.  To define this
+more precisely, a Python function can issue a regular function or method
+call to invoke another Python function - this is a *direct* call and can
+be pickled and unpickled.  But there are many ways to invoke a Python
+function indirectly.  For example, most operators can invoke a special
+method ``__xyz__()`` on a class, various built-in functions can call
+back Python functions, signals can invoke signal handlers, and so on.
+These cases are not supported yet.
 
 
 Coroutine Cloning
@@ -413,9 +585,34 @@ and::
 
             ...generators_view.getcurrent()...
 
-Then the composition ``grab_values()`` works as expected.
+Then the composition ``grab_values()`` works as expected, because the
+two views are independent.  The coroutine captured as ``self.caller`` in
+the ``generator_iterator.next()`` method is the main coroutine of the
+``generators_view``.  It is no longer the same object as the main
+coroutine of the ``producer_view``, so when ``data_producer()`` issues
+the following command::
 
-XXX a few words about how
+    main_coro.switch()
+
+the control flow cannot accidentally jump back to
+``generator_iterator.next()``.  In other words, from the point of view
+of ``producer_view``, the function ``grab_next_value()`` always runs in
+its main coroutine ``main_coro`` and the function ``data_producer`` in
+its coroutine ``producer_coro``.  This is the case independently of
+which ``generators_view``-based coroutine is the current one when
+``grab_next_value()`` is called.
+
+Only code that has explicit access to the ``producer_view`` or its
+coroutine objects can perform switches that are relevant for the
+generator code.  If the view object and the coroutine objects that share
+this view are all properly encapsulated inside the generator logic, no
+external code can accidentally temper with the expected control flow any
+longer.
+
+In conclusion: we will probably change the app-level interface of PyPy's
+stackless module in the future to not expose coroutines and greenlets at
+all, but only views.  They are not much more difficult to use, and they
+scale automatically to larger programs.
 
 
 .. _`Stackless Python`: http://www.stackless.com

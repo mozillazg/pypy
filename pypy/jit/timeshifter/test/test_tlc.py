@@ -21,6 +21,7 @@ tlc_interp_without_call.convert_arguments = [build_bytecode, int, int]
 
 
 class TestTLC(PortalTest):
+    small = False
 
     def test_factorial(self):
         code = tlc.compile(FACTORIAL_SOURCE)
@@ -36,7 +37,6 @@ class TestTLC(PortalTest):
         assert res == expected
 
     def test_nth_item(self):
-        py.test.skip("in-progress")
         # get the nth item of a chained list
         code = tlc.compile("""
             NIL
@@ -50,6 +50,8 @@ class TestTLC(PortalTest):
             DIV
         """)
         bytecode = ','.join([str(ord(c)) for c in code])
-        res = self.timeshift(tlc_interp_without_call, [bytecode, 0, 1],
-                             [0, 1], policy=P_OOPSPEC)#, backendoptimize=True)
+        res = self.timeshift_from_portal(tlc_interp_without_call,
+                                         tlc_interp_eval_without_call,
+                                         [bytecode, 0, 1],
+                                         policy=P_OOPSPEC)#, backendoptimize=True)
         assert res == 20

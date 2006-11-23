@@ -10,36 +10,20 @@ Try to type:  import time; time.sleep(2); print 'hi'
 
 import autopath
 
-import new, sys, os, cStringIO
+import sys, os, cStringIO
 from cgi import parse_qs
 from pypy.translator.js.modules.dom import setTimeout, get_document
-from pypy.translator.js.main import rpython2javascript
 from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal
 from pypy.translator.js import commproxy
 from pypy.translator.js.modules.mochikit import escapeHTML
+
+from pypy.translator.js.demo.jsdemo import support
 
 commproxy.USE_MOCHIKIT = True
 
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 #from SimpleHTTPServer import SimpleHTTPRequestHandler
 
-def js_source(functions):
-    mod = new.module('_js_src')
-    function_names = []
-    for func in functions:
-        name = func.__name__
-        if hasattr(mod, name):
-            raise ValueError("exported function name %r is duplicated"
-                             % (name,))
-        mod.__dict__[name] = func
-        function_names.append(name)
-    sys.modules['_js_src'] = mod
-    try:
-        return rpython2javascript(mod, function_names)
-    finally:
-        del sys.modules['_js_src']
-
-# ____________________________________________________________
 
 HTML_PAGE = """
 <html>
@@ -181,7 +165,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         if self.server.source:
             source = self.server.source
         else:
-            source = js_source([setup_page])
+            source = support.js_source([setup_page])
             self.server.source = source
         self.serve_data("text/javascript", source)
     
@@ -192,13 +176,14 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-def _main(server_class=Server,
-          handler_class=RequestHandler):
-    global httpd
 
-    server_address = ('127.0.0.1', 8000)
-    httpd = server_class(server_address, handler_class)
+def build_http_server(server_address=('', 8000)):
+    global httpd
+    httpd = Server(server_address, RequestHandler)
     print 'http://127.0.0.1:%d' % (server_address[1],)
+
+def _main():
+    build_http_server()
     httpd.serve_forever()
 
 if __name__ == '__main__':

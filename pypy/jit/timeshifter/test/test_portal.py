@@ -3,6 +3,7 @@ from pypy.translator.translator import graphof
 from pypy.jit.timeshifter.test.test_timeshift import hannotate, getargtypes
 from pypy.jit.timeshifter.hrtyper import HintRTyper
 from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL
+from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.objspace.flow.model import checkgraph, summary
 from pypy.rlib.objectmodel import hint
@@ -11,6 +12,8 @@ import py.test
 
 class PortalTest(object):
     from pypy.jit.codegen.llgraph.rgenop import RGenOp
+
+    small = True
 
     def setup_class(cls):
         cls._cache = {}
@@ -52,13 +55,13 @@ class PortalTest(object):
         self.hrtyper = HintRTyper(ha, self.rtyper, self.RGenOp)
         origportalgraph = graphof(t, portal)
         self.hrtyper.specialize(origportalgraph=origportalgraph,
-                           view = conftest.option.view)
+                           view = conftest.option.view and self.small)
 
         for graph in ha.translator.graphs:
             checkgraph(graph)
             t.graphs.append(graph)
 
-        if conftest.option.view:
+        if conftest.option.view and self.small:
             t.view()
         self.postprocess_timeshifting()
         self.readportalgraph = self.hrtyper.readportalgraph
@@ -169,6 +172,21 @@ class TestPortal(PortalTest):
 
         # XXX unfortunately we have to create a new version each time - because of pbc
         res = self.timeshift_from_portal(main, recognizeparts, [1, 0], policy=P_NOVIRTUAL)
+        assert not res
+
+    def test_dfa_compile3(self):
+        from pypy.lang.automata.dfa import getautomaton, recognize3
+        def main(gets):
+            auto = getautomaton()
+            s = ["aaaaaaaaaab", "aaaa"][gets]
+            return recognize3(auto, s)
+
+        res = self.timeshift_from_portal(main, recognize3, [0],
+                                         policy=P_OOPSPEC)
+        assert res
+
+        res = self.timeshift_from_portal(main, recognize3, [1],
+                                         policy=P_OOPSPEC)
         assert not res
 
     def test_method_call_promote(self):

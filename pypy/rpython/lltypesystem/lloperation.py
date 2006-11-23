@@ -123,7 +123,7 @@ LL_OPERATIONS = {
 
     'direct_call':          LLOp(canraise=(Exception,)),
     'indirect_call':        LLOp(canraise=(Exception,)),
-    'safe_call':            LLOp(),
+    #'safe_call':            LLOp(),
     'unsafe_call':          LLOp(canraise=(Exception,)),
 
     # __________ numeric operations __________
@@ -399,9 +399,11 @@ LL_OPERATIONS = {
     'debug_view':           LLOp(),
     'debug_print':          LLOp(),
     'debug_pdb':            LLOp(),
-    'debug_log_exc':        LLOp(),
-    'debug_assert':         LLOp(canfold=True),
+    'debug_assert':         LLOp(),
     'debug_fatalerror':     LLOp(),
+
+    # __________ instrumentation _________
+    'instrument_count':     LLOp(),
 }
 
     # __________ operations on PyObjects __________

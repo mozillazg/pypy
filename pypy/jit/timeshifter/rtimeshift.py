@@ -2,13 +2,17 @@ import operator, weakref
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.jit.timeshifter import rvalue
+from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 
 FOLDABLE_OPS = dict.fromkeys(lloperation.enum_foldable_ops())
+
+FOLDABLE_GREEN_OPS = FOLDABLE_OPS.copy()
+FOLDABLE_GREEN_OPS['getfield'] = None
+FOLDABLE_GREEN_OPS['getarrayitem'] = None
 
 debug_view = lloperation.llop.debug_view
 debug_print = lloperation.llop.debug_print
@@ -96,8 +100,8 @@ def ll_genmalloc_varsize(jitstate, contdesc, sizebox):
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
     return rvalue.PtrRedBox(contdesc.ptrkind, genvar)
 
-def ll_gengetfield(jitstate, fielddesc, argbox):
-    if fielddesc.immutable and argbox.is_constant():
+def ll_gengetfield(jitstate, deepfrozen, fielddesc, argbox):
+    if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
         res = getattr(rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE),
                       fielddesc.fieldname)
         return rvalue.ll_fromvalue(jitstate, res)
@@ -113,8 +117,9 @@ def ll_gengetsubstruct(jitstate, fielddesc, argbox):
         return rvalue.ll_fromvalue(jitstate, res)
     return argbox.op_getsubstruct(jitstate, fielddesc)
 
-def ll_gengetarrayitem(jitstate, fielddesc, argbox, indexbox):
-    if fielddesc.immutable and argbox.is_constant() and indexbox.is_constant():
+def ll_gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
+    if ((fielddesc.immutable or deepfrozen) and argbox.is_constant()
+                                            and indexbox.is_constant()):
         array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
         res = array[rvalue.ll_getvalue(indexbox, lltype.Signed)]
         return rvalue.ll_fromvalue(jitstate, res)
@@ -124,6 +129,19 @@ def ll_gengetarrayitem(jitstate, fielddesc, argbox, indexbox):
         indexbox.getgenvar(jitstate.curbuilder))
                                                     
     return fielddesc.redboxcls(fielddesc.kind, genvar)
+
+def ll_gengetarraysubstruct(jitstate, fielddesc, argbox, indexbox):
+    if argbox.is_constant() and indexbox.is_constant():
+        array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
+        res = array[rvalue.ll_getvalue(indexbox, lltype.Signed)]
+        return rvalue.ll_fromvalue(jitstate, res)
+    genvar = jitstate.curbuilder.genop_getarraysubstruct(
+        fielddesc.arraytoken,
+        argbox.getgenvar(jitstate.curbuilder),
+        indexbox.getgenvar(jitstate.curbuilder))
+                                                    
+    return fielddesc.redboxcls(fielddesc.kind, genvar)
+
 
 def ll_gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
     genvar = jitstate.curbuilder.genop_setarrayitem(
@@ -149,7 +167,6 @@ def ll_genptrnonzero(jitstate, argbox, reverse):
     if argbox.is_constant():
         addr = rvalue.ll_getvalue(argbox, llmemory.Address)
         return rvalue.ll_fromvalue(jitstate, bool(addr) ^ reverse)
-    assert isinstance(argbox, rvalue.PtrRedBox)
     builder = jitstate.curbuilder
     if argbox.content is None:
         gv_addr = argbox.getgenvar(builder)
@@ -159,6 +176,23 @@ def ll_genptrnonzero(jitstate, argbox, reverse):
             gv_res = builder.genop1("ptr_nonzero", gv_addr)
     else:
         gv_res = builder.rgenop.genconst(True ^ reverse)
+    return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
+
+def ll_genptreq(jitstate, argbox0, argbox1, reverse):
+    builder = jitstate.curbuilder
+    if argbox0.content is not None or argbox1.content is not None:
+        equal = argbox0.content is argbox1.content
+        return rvalue.ll_fromvalue(jitstate, equal ^ reverse)
+    elif argbox0.is_constant() and argbox1.is_constant():
+        addr0 = rvalue.ll_getvalue(argbox0, llmemory.Address)
+        addr1 = rvalue.ll_getvalue(argbox1, llmemory.Address)
+        return rvalue.ll_fromvalue(jitstate, (addr0 == addr1) ^ reverse)
+    gv_addr0 = argbox0.getgenvar(builder)
+    gv_addr1 = argbox1.getgenvar(builder)
+    if reverse:
+        gv_res = builder.genop2("ptr_ne", gv_addr0, gv_addr1)
+    else:
+        gv_res = builder.genop2("ptr_eq", gv_addr0, gv_addr1)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
 
 # ____________________________________________________________
@@ -185,6 +219,7 @@ def start_new_block(states_dic, jitstate, key, global_resumer):
     outgoingvarboxes = []
     res = frozen.exactmatch(jitstate, outgoingvarboxes, memo)
     assert res, "exactmatch() failed"
+    cleanup_partial_data(memo.partialdatamatch)
     newblock = enter_next_block(jitstate, outgoingvarboxes)
     states_dic[key] = frozen, newblock
     if global_resumer is not None and global_resumer is not return_marker:
@@ -217,6 +252,7 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer):
     # We need a more general block.  Do it by generalizing all the
     # redboxes from outgoingvarboxes, by making them variables.
     # Then we make a new block based on this new state.
+    cleanup_partial_data(memo.partialdatamatch)
     replace_memo = rvalue.copy_memo()
     for box in outgoingvarboxes:
         box.forcevar(jitstate.curbuilder, replace_memo)
@@ -227,6 +263,14 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer):
         merge_generalized(jitstate)
     return False       # continue
 retrieve_jitstate_for_merge._annspecialcase_ = "specialize:arglltype(2)"
+
+def cleanup_partial_data(partialdatamatch):
+    # remove entries from PartialDataStruct unless they matched
+    # their frozen equivalent
+    for box, keep in partialdatamatch.iteritems():
+        content = box.content
+        if isinstance(content, rcontainer.PartialDataStruct):
+            box.content = content.cleanup_partial_data(keep)
 
 def merge_generalized(jitstate):
     resuming = jitstate.resuming
@@ -793,6 +837,17 @@ class JITState(object):
         self.exc_type_box  = self.exc_type_box .replace(memo)
         self.exc_value_box = self.exc_value_box.replace(memo)
 
+
+    def residual_ll_exception(self, ll_evalue):
+        ll_etype  = ll_evalue.typeptr
+        etypebox  = rvalue.ll_fromvalue(self, ll_etype)
+        evaluebox = rvalue.ll_fromvalue(self, ll_evalue)
+        setexctypebox (self, etypebox )
+        setexcvaluebox(self, evaluebox)
+
+    def residual_exception(self, e):
+        self.residual_ll_exception(cast_instance_to_base_ptr(e))
+        
 
 def ensure_queue(jitstate, DispatchQueueClass):
     return DispatchQueueClass()

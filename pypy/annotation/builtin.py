@@ -4,13 +4,13 @@ Built-in functions.
 
 import sys
 from pypy.annotation.model import SomeInteger, SomeObject, SomeChar, SomeBool
-from pypy.annotation.model import SomeString, SomeTuple, SomeSlice
+from pypy.annotation.model import SomeString, SomeTuple, SomeSlice, s_Bool
 from pypy.annotation.model import SomeUnicodeCodePoint, SomeAddress
 from pypy.annotation.model import SomeFloat, SomeWeakGcAddress, unionof
 from pypy.annotation.model import SomePBC, SomeInstance, SomeDict
 from pypy.annotation.model import SomeExternalObject
 from pypy.annotation.model import annotation_to_lltype, lltype_to_annotation, ll_to_annotation
-from pypy.annotation.model import add_knowntypedata
+from pypy.annotation.model import add_knowntypedata, not_const
 from pypy.annotation.model import s_ImpossibleValue
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import description
@@ -299,7 +299,7 @@ def robjmodel_keepalive_until_here(*args_s):
     return immutablevalue(None)
 
 def robjmodel_hint(s, **kwds_s):
-    return s
+    return not_const(s)
 
 def llmemory_cast_ptr_to_adr(s):
     return SomeAddress()
@@ -339,7 +339,7 @@ def unicodedata_decimal(s_uchr):
     raise TypeError, "unicodedate.decimal() calls should not happen at interp-level"    
 
 def test(*args):
-    return SomeBool()
+    return s_Bool
 
 def import_func(*args):
     return SomeObject()
@@ -517,7 +517,7 @@ def null(I_OR_SM):
 def instanceof(i, I):
     assert I.is_constant()
     assert isinstance(I.const, ootype.Instance)
-    return SomeBool()
+    return s_Bool
 
 def classof(i):
     assert isinstance(i, SomeOOInstance) 
@@ -526,7 +526,7 @@ def classof(i):
 def subclassof(class1, class2):
     assert isinstance(class1, SomeOOClass) 
     assert isinstance(class2, SomeOOClass) 
-    return SomeBool()
+    return s_Bool
 
 def runtimenew(c):
     assert isinstance(c, SomeOOClass)
