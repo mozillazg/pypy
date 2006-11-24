@@ -269,6 +269,10 @@ class CStandaloneBuilder(CBuilder):
                 prefix = ' ' * len(prefix)
 
         compiler = self.getccompiler(extra_includes=['.'])
+        if self.config.translation.compilerflags:
+            compiler.compile_extra.append(self.config.translation.compilerflags)
+        if self.config.translation.linkerflags:
+            compiler.link_extra.append(self.config.translation.compilerflags)
         cfiles = []
         ofiles = []
         for fn in compiler.cfilenames:
