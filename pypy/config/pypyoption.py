@@ -59,6 +59,9 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    "keep track of bytecode usage",
                    default=False),
 
+        BoolOption("withfastbuiltins", "speed up calls to builtin functions",
+                   default=False, requires=[("objspace.usepycfiles", False)]),
+
         BoolOption("usepycfiles", "Write and read pyc files when importing",
                    default=True),
        

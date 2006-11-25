@@ -363,7 +363,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newlist(self, list_w):
         return W_ListObject(list_w)
 
-    def newdict(self):
+    def newdict(self, track_builtin_shadowing=False):
+        if self.config.objspace.withfastbuiltins and track_builtin_shadowing:
+            from pypy.objspace.std.warydictobject import W_WaryDictObject
+            return W_WaryDictObject(self)
         return self.DictObjectCls(self)
 
     def newslice(self, w_start, w_end, w_step):

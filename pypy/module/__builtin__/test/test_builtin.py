@@ -433,6 +433,38 @@ class AppTestBuiltinApp:
         raises(TypeError, hasattr, x, None)
         raises(TypeError, hasattr, x, 42)
 
+class AppTestBuiltinOptimized(object):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.withfastbuiltins": True})
+        assert cls.space.config.objspace.withfastbuiltins
+
+    # hum, we need to invoke the compiler explicitely
+    def test_xrange_len(self):
+        s = """def test():
+        x = xrange(33)
+        assert len(x) == 33
+        x = xrange(33.2)
+        assert len(x) == 33
+        x = xrange(33,0,-1)
+        assert len(x) == 33
+        x = xrange(33,0)
+        assert len(x) == 0
+        x = xrange(33,0.2)
+        assert len(x) == 0
+        x = xrange(0,33)
+        assert len(x) == 33
+        x = xrange(0,33,-1)
+        assert len(x) == 0
+        x = xrange(0,33,2)
+        assert len(x) == 17
+        x = xrange(0,32,2)
+        assert len(x) == 16
+        """
+        ns = {}
+        exec s in ns
+        ns["test"]()
+
 class TestInternal:
 
     def setup_method(self,method):
