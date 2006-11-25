@@ -51,6 +51,7 @@ cpython_magic, = struct.unpack("<i", imp.get_magic())
 
 NESTED    = 1
 GENERATOR = 2
+CALLSPECIAL = 4
 
 frame_classes = []
 
@@ -59,6 +60,8 @@ def setup_frame_classes():
     from pypy.interpreter.pyopcode import PyInterpFrame
     from pypy.interpreter.nestedscope import PyNestedScopeFrame
     from pypy.interpreter.generator import GeneratorFrameMixin
+    from pypy.interpreter.generator import GeneratorFrameMixin
+    from pypy.interpreter.specialcode import CallLikelyBuiltinMixin
 
     class PyGeneratorFrame(GeneratorFrameMixin, PyInterpFrame):
         pass
@@ -66,11 +69,30 @@ def setup_frame_classes():
     class PyNestedScopeGeneratorFrame(GeneratorFrameMixin, PyNestedScopeFrame):
         pass
 
-    frame_classes.extend([None]*4)
+    class PyCallSpecialInterpFrame(PyInterpFrame, CallLikelyBuiltinMixin):
+        pass
+
+    class PyCallSpecialNestedScopeFrame(
+        PyNestedScopeFrame, CallLikelyBuiltinMixin):
+        pass
+
+    class PyCallSpecialGeneratorFrame(
+        PyGeneratorFrame, CallLikelyBuiltinMixin):
+        pass
+
+    class PyCallSpecialNestedScopeGeneratorFrame(
+        PyNestedScopeGeneratorFrame, CallLikelyBuiltinMixin):
+        pass
+
+    frame_classes.extend([None] * 8)
     frame_classes[0]                = PyInterpFrame
     frame_classes[NESTED]           = PyNestedScopeFrame
     frame_classes[GENERATOR]        = PyGeneratorFrame
     frame_classes[NESTED|GENERATOR] = PyNestedScopeGeneratorFrame
+    frame_classes[CALLSPECIAL]      = PyCallSpecialInterpFrame
+    frame_classes[NESTED|CALLSPECIAL]           = PyCallSpecialNestedScopeFrame
+    frame_classes[GENERATOR|CALLSPECIAL]        = PyCallSpecialGeneratorFrame
+    frame_classes[NESTED|GENERATOR|CALLSPECIAL] = PyCallSpecialNestedScopeGeneratorFrame
 
 
 class PyCode(eval.Code):
@@ -257,6 +279,8 @@ class PyCode(eval.Code):
             choose |= NESTED
         if self.co_flags & CO_GENERATOR:
             choose |= GENERATOR
+        if self.space.config.objspace.withfastbuiltins:
+            choose |= CALLSPECIAL
         Frame = frame_classes[choose]
         return Frame
 
