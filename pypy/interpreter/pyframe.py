@@ -5,7 +5,11 @@ from pypy.interpreter import eval, baseobjspace
 from pypy.interpreter.miscutils import Stack, FixedStack
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pytraceback
+from pypy.rlib.rarithmetic import r_uint, intmask
 import opcode
+from pypy.rlib.objectmodel import we_are_translated, instantiate
+from pypy.rlib import rstack # for resume points
+
 
 # Define some opcodes used
 g = globals()
@@ -48,7 +52,7 @@ class PyFrame(eval.EvalFrame):
             self.valuestack = Stack()
         self.blockstack = Stack()
         self.last_exception = None
-        self.next_instr = 0
+        self.next_instr = r_uint(0) # Force it unsigned for performance reasons.
         self.builtin = space.builtin.pick_builtin(w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
         # class bodies only have CO_NEWLOCALS.
@@ -62,8 +66,122 @@ class PyFrame(eval.EvalFrame):
         # For tracing
         self.instr_lb = 0
         self.instr_ub = -1
-        self.instr_prev = -1;
+        self.instr_prev = -1
+
+    def descr__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        from pypy.module._pickle_support import maker # helper fns
+        from pypy.interpreter.nestedscope import PyNestedScopeFrame
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('frame_new')
+        w        = space.wrap
+        nt = space.newtuple
+
+        if isinstance(self, PyNestedScopeFrame):
+            w_cells = space.newlist([w(cell) for cell in self.cells])
+        else:
+            w_cells = space.w_None
+
+        if self.w_f_trace is None:
+            f_lineno = self.get_last_lineno()
+        else:
+            f_lineno = self.f_lineno
+
+        values_w = self.valuestack.items[0:self.valuestack.ptr]
+        w_valuestack = maker.slp_into_tuple_with_nulls(space, values_w)
         
+        w_blockstack = nt([block._get_state_(space) for block in self.blockstack.items])
+        w_fastlocals = maker.slp_into_tuple_with_nulls(space, self.fastlocals_w)
+        tup_base = [
+            w(self.pycode),
+            ]
+
+        if self.last_exception is None:
+            w_exc_value = space.w_None
+            w_tb = space.w_None
+        else:
+            w_exc_value = self.last_exception.w_value
+            w_tb = w(self.last_exception.application_traceback)
+        
+        tup_state = [
+            w(self.f_back),
+            w(self.builtin),
+            w(self.pycode),
+            w_valuestack,
+            w_blockstack,
+            w_exc_value, # last_exception
+            w_tb,        #
+            self.w_globals,
+            w(self.last_instr),
+            w(self.next_instr),
+            w(f_lineno),
+            w_fastlocals,
+            space.w_None,           #XXX placeholder for f_locals
+            
+            #f_restricted requires no additional data!
+            space.w_None, ## self.w_f_trace,  ignore for now
+
+            w(self.instr_lb), #do we need these three (that are for tracing)
+            w(self.instr_ub),
+            w(self.instr_prev),
+            w_cells,
+            ]
+
+        return nt([new_inst, nt(tup_base), nt(tup_state)])
+
+    def descr__setstate__(self, space, w_args):
+        from pypy.module._pickle_support import maker # helper fns
+        from pypy.interpreter.pycode import PyCode
+        from pypy.interpreter.module import Module
+        from pypy.interpreter.nestedscope import PyNestedScopeFrame, Cell
+        args_w = space.unpackiterable(w_args)
+        w_f_back, w_builtin, w_pycode, w_valuestack, w_blockstack, w_exc_value, w_tb,\
+            w_globals, w_last_instr, w_next_instr, w_f_lineno, w_fastlocals, w_f_locals, \
+            w_f_trace, w_instr_lb, w_instr_ub, w_instr_prev, w_cells = args_w
+
+        #new_frame = PyFrame(space, pycode, w(globals), None)
+        # let the code object create the right kind of frame
+        # the distinction is a little over-done but computable
+        new_frame = self
+        pycode = space.interp_w(PyCode, w_pycode)
+        # do not use the instance's __init__ but the base's, because we set
+        # everything like cells from here
+        PyFrame.__init__(self, space, pycode, w_globals, None)
+        new_frame.f_back = space.interp_w(PyFrame, w_f_back, can_be_None=True)
+        new_frame.builtin = space.interp_w(Module, w_builtin)
+        new_frame.blockstack.items = [unpickle_block(space, w_blk)
+                                      for w_blk in space.unpackiterable(w_blockstack)]
+        values_w = maker.slp_from_tuple_with_nulls(space, w_valuestack)
+        valstack = new_frame.valuestack
+        for w_value in values_w:
+            valstack.push(w_value)
+        if space.is_w(w_exc_value, space.w_None):
+            new_frame.last_exception = None
+        else:
+            from pypy.interpreter.pytraceback import PyTraceback
+            tb = space.interp_w(PyTraceback, w_tb)
+            new_frame.last_exception = OperationError(space.type(w_exc_value),
+                                                      w_exc_value, tb
+                                                      )
+        new_frame.last_instr = space.int_w(w_last_instr)
+        new_frame.next_instr = space.int_w(w_next_instr)
+        new_frame.f_lineno = space.int_w(w_f_lineno)
+        new_frame.fastlocals_w = maker.slp_from_tuple_with_nulls(space, w_fastlocals)
+
+        if space.is_w(w_f_trace, space.w_None):
+            new_frame.w_f_trace = None
+        else:
+            new_frame.w_f_trace = w_f_trace
+
+        new_frame.instr_lb = space.int_w(w_instr_lb)   #the three for tracing
+        new_frame.instr_ub = space.int_w(w_instr_ub)
+        new_frame.instr_prev = space.int_w(w_instr_prev)
+
+        if isinstance(self, PyNestedScopeFrame):
+            cells_w = space.unpackiterable(w_cells)
+            self.cells = [space.interp_w(Cell, w_cell) for w_cell in cells_w]
+
     def hide(self):
         return self.pycode.hidden_applevel
 
@@ -77,10 +195,17 @@ class PyFrame(eval.EvalFrame):
     def setfastscope(self, scope_w):
         """Initialize the fast locals from a list of values,
         where the order is according to self.pycode.signature()."""
-        if len(scope_w) > len(self.fastlocals_w):
+        scope_len = len(scope_w)
+        if scope_len > len(self.fastlocals_w):
             raise ValueError, "new fastscope is longer than the allocated area"
-        self.fastlocals_w[:len(scope_w)] = scope_w
-        
+        self.fastlocals_w[:scope_len] = scope_w
+        self.init_cells()
+
+    def init_cells(self):
+        """Initialize cellvars from self.fastlocals_w
+        This is overridden in PyNestedScopeFrame"""
+        pass
+    
     def getclosure(self):
         return None
 
@@ -88,18 +213,17 @@ class PyFrame(eval.EvalFrame):
         "Interpreter main loop!"
         try:
             executioncontext.call_trace(self)
-            self.last_instr = -1
+            self.last_instr = 0
             while True:
                 try:
                     try:
                         try:
-                            while True:
-                                # fetch and dispatch the next opcode
-                                # dispatch() is abstract, see pyopcode.
-                                self.last_instr = self.next_instr
-                                executioncontext.bytecode_trace(self)
-                                self.next_instr = self.last_instr
-                                self.dispatch()
+                            if we_are_translated():
+                                # always raising, put the resume point just before!
+                                rstack.resume_point("eval", self, executioncontext)
+                                self.dispatch_translated(executioncontext)
+                            else:
+                                self.dispatch(executioncontext)
                         # catch asynchronous exceptions and turn them
                         # into OperationErrors
                         except KeyboardInterrupt:
@@ -136,7 +260,8 @@ class PyFrame(eval.EvalFrame):
             # obvious reference cycle, so it helps refcounting implementations
             self.last_exception = None
             return w_exitvalue
-
+    eval.insert_stack_check_here = True
+    
     ### line numbers ###
 
     # for f*_f_* unwrapping through unwrap_spec in typedef.py
@@ -242,7 +367,7 @@ class PyFrame(eval.EvalFrame):
             op = ord(code[addr])
 
             if op in (SETUP_LOOP, SETUP_EXCEPT, SETUP_FINALLY):
-                delta_iblock += 1;
+                delta_iblock += 1
             elif op == POP_BLOCK:
                 delta_iblock -= 1
                 if delta_iblock < min_delta_iblock:
@@ -274,11 +399,11 @@ class PyFrame(eval.EvalFrame):
             
     def get_last_lineno(self):
         "Returns the line number of the instruction currently being executed."
-        return pytraceback.offset2lineno(self.pycode, self.next_instr-1)
+        return pytraceback.offset2lineno(self.pycode, intmask(self.next_instr)-1)
 
     def get_next_lineno(self):
         "Returns the line number of the next instruction to execute."
-        return pytraceback.offset2lineno(self.pycode, self.next_instr)
+        return pytraceback.offset2lineno(self.pycode, intmask(self.next_instr))
 
     def fget_f_builtins(space, self):
         return self.builtin.getdict()
@@ -367,9 +492,16 @@ class FrameBlock:
         self.cleanupstack(frame)
         return False  # continue to unroll
 
+    # internal pickling interface, not using the standard protocol
+    def _get_state_(self, space):
+        w = space.wrap
+        return space.newtuple([w(self._opname), w(self.handlerposition),
+                               w(self.valuestackdepth)])
 
 class LoopBlock(FrameBlock):
     """A loop block.  Stores the end-of-loop pointer in case of 'break'."""
+
+    _opname = 'SETUP_LOOP'
 
     def unroll(self, frame, unroller):
         if isinstance(unroller, SContinueLoop):
@@ -389,6 +521,8 @@ class LoopBlock(FrameBlock):
 
 class ExceptBlock(FrameBlock):
     """An try:except: block.  Stores the position of the exception handler."""
+
+    _opname = 'SETUP_EXCEPT'
 
     def unroll(self, frame, unroller):
         self.cleanupstack(frame)
@@ -411,6 +545,8 @@ class ExceptBlock(FrameBlock):
 
 class FinallyBlock(FrameBlock):
     """A try:finally: block.  Stores the position of the exception handler."""
+
+    _opname = 'SETUP_FINALLY'
 
     def cleanup(self, frame):
         # upon normal entry into the finally: part, the standard Python
@@ -497,7 +633,16 @@ class SApplicationException(ControlFlowException):
 
     def emptystack(self, frame):
         # propagate the exception to the caller
-        raise self.operr
+        from pypy.rlib.objectmodel import we_are_translated
+        if we_are_translated():
+            raise self.operr
+        else:
+            # try to preserve the interp-level traceback
+            if self.operr.debug_excs:
+                _, _, tb = self.operr.debug_excs[-1]
+            else:
+                tb = None
+            raise OperationError, self.operr, tb
 
     def state_unpack_variables(self, space):
         return [self.operr.w_type, self.operr.w_value]
@@ -542,3 +687,29 @@ class ExitFrame(Exception):
 
 class BytecodeCorruption(ValueError):
     """Detected bytecode corruption.  Never caught; it's an error."""
+
+# ____________________________________________________________
+
+def setup_block_classes():
+    "NOT_RPYTHON"
+    import types
+    for cls in globals().values():
+        if isinstance(cls, (types.ClassType,type)):
+            if issubclass(cls, FrameBlock) and hasattr(cls, '_opname'):
+                block_classes[cls._opname] = cls
+block_classes = {}
+setup_block_classes()
+
+def get_block_class(opname):
+    # select the appropriate kind of block
+    return block_classes[opname]
+
+def unpickle_block(space, w_tup):
+    w_opname, w_handlerposition, w_valuestackdepth = space.unpackiterable(w_tup)
+    opname = space.str_w(w_opname)
+    handlerposition = space.int_w(w_handlerposition)
+    valuestackdepth = space.int_w(w_valuestackdepth)
+    blk = instantiate(get_block_class(opname))
+    blk.handlerposition = handlerposition
+    blk.valuestackdepth = valuestackdepth
+    return blk

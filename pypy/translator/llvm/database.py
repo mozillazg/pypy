@@ -5,15 +5,18 @@ from pypy.translator.llvm.log import log
 from pypy.translator.llvm.funcnode import FuncNode, FuncTypeNode
 from pypy.translator.llvm.extfuncnode import ExternalFuncNode
 from pypy.translator.llvm.structnode import StructNode, StructVarsizeNode, \
-     StructTypeNode, StructVarsizeTypeNode
+     StructTypeNode, StructVarsizeTypeNode, getindexhelper, \
+     FixedSizeArrayTypeNode, FixedSizeArrayNode
 from pypy.translator.llvm.arraynode import ArrayNode, StrArrayNode, \
      VoidArrayNode, ArrayTypeNode, VoidArrayTypeNode
 from pypy.translator.llvm.opaquenode import OpaqueNode, ExtOpaqueNode, \
      OpaqueTypeNode, ExtOpaqueTypeNode
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.objspace.flow.model import Constant, Variable
-from pypy.rpython.memory.lladdress import Address, NULL
-            
+from pypy.rpython.memory.lladdress import NULL
+from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
+
 log = log.database 
 
 class Database(object): 
@@ -23,51 +26,10 @@ class Database(object):
         self.obj2node = {}
         self._pendingsetup = []
         self._tmpcount = 1
+        self.helper2ptr = {}
+        self.externalfuncs = {}
 
-        # debug operation comments
-        self._opcomments = {}
-
-        self.primitives_init()
-
-    def primitives_init(self):
-        primitives = {
-            lltype.Char: "sbyte",
-            lltype.Bool: "bool",
-            lltype.Float: "double",
-            lltype.UniChar: "uint",
-            lltype.Void: "void",
-            lltype.UnsignedLongLong: "ulong",
-            lltype.SignedLongLong: "long",
-            Address: "sbyte*"}
-
-        # 32 bit platform
-        if sys.maxint == 2**31-1:
-            primitives.update({
-                lltype.Signed: "int",
-                lltype.Unsigned: "uint" })
-            
-        # 64 bit platform
-        elif sys.maxint == 2**63-1:        
-            primitives.update({
-                lltype.Signed: "long",
-                lltype.Unsigned: "ulong" })
-            
-        else:
-            assert False, "Unsupported platform"        
-
-        self.primitives = primitives
-        
-    #_______for debugging llvm code_________________________
-
-    def add_op2comment(self, lenofopstr, op):
-        """ internal method for adding comments on each operation """
-        tmpname = self.repr_tmpvar() + ".comment"
-        self._opcomments[op] = (lenofopstr, tmpname)
-        return tmpname
-        
-    def get_op2comment(self, op):
-        """ internal method for adding comments on each operation """
-        return self._opcomments.get(op, None)
+        self.primitives = Primitives(self)
     
     #_______debuggging______________________________________
 
@@ -97,8 +59,12 @@ class Database(object):
         if isinstance(type_, lltype.FuncType):
             if getattr(value._callable, "suggested_primitive", False):
                 node = ExternalFuncNode(self, value)
+                self.externalfuncs[node.callable] = value
             else:
                 node = FuncNode(self, value)
+
+        elif isinstance(type_, lltype.FixedSizeArray):
+            node = FixedSizeArrayNode(self, value)
 
         elif isinstance(type_, lltype.Struct):
             if type_._arrayfld:
@@ -144,11 +110,15 @@ class Database(object):
         elif isinstance(type_, lltype.Ptr): 
             self.prepare_type(type_.TO)
 
+        elif isinstance(type_, lltype.FixedSizeArray):
+            self.addpending(type_, FixedSizeArrayTypeNode(self, type_))
+            
         elif isinstance(type_, lltype.Struct):
             if type_._arrayfld:
                 self.addpending(type_, StructVarsizeTypeNode(self, type_))
             else:
                 self.addpending(type_, StructTypeNode(self, type_))                
+
         elif isinstance(type_, lltype.FuncType): 
             self.addpending(type_, FuncTypeNode(self, type_))
 
@@ -174,10 +144,14 @@ class Database(object):
     def prepare_constant(self, type_, value):
         if isinstance(type_, lltype.Primitive):
             #log.prepareconstant(value, "(is primitive)")
+            if type_ is llmemory.Address:
+                # prepare the constant data which this address references
+                assert isinstance(value, llmemory.fakeaddress)
+                if value.ob is not None:
+                    self.prepare_constant(lltype.typeOf(value.ob), value.ob)
             return
         
-        if isinstance(type_, lltype.Ptr):        
-            
+        if isinstance(type_, lltype.Ptr):
             type_ = type_.TO
             value = value._obj
 
@@ -201,11 +175,23 @@ class Database(object):
         if isinstance(const_or_var, Constant):
             ct = const_or_var.concretetype
             if isinstance(ct, lltype.Primitive):
-                #log.prepare(const_or_var, "(is primitive)")
-                return
-
-            assert isinstance(ct, lltype.Ptr), "Preparation of non primitive and non pointer" 
-            value = const_or_var.value._obj
+                # special cases for address
+                if ct is llmemory.Address:
+                    fakedaddress = const_or_var.value
+                    if fakedaddress is not None and fakedaddress.ob is not None:
+                        ptrvalue = fakedaddress.ob
+                        ct = lltype.typeOf(ptrvalue)
+                    else:
+                        return                        
+                elif ct is llmemory.WeakGcAddress:
+                    return # XXX sometime soon
+                else:
+                    return
+            else:
+                assert isinstance(ct, lltype.Ptr), "Preparation of non primitive and non pointer" 
+                ptrvalue = const_or_var.value
+                
+            value = ptrvalue._obj
 
             # Only prepare root values at this point 
             if isinstance(ct, lltype.Array) or isinstance(ct, lltype.Struct):
@@ -245,13 +231,13 @@ class Database(object):
     def repr_arg(self, arg):
         if isinstance(arg, Constant):
             if isinstance(arg.concretetype, lltype.Primitive):
-                return self.primitive_to_str(arg.concretetype, arg.value)
+                return self.primitives.repr(arg.concretetype, arg.value)
             else:
                 assert isinstance(arg.value, lltype._ptr)
-                node = self.obj2node.get(arg.value._obj)
-                if node is None:
+                if not arg.value:
                     return 'null'
                 else:
+                    node = self.obj2node[arg.value._obj]
                     return node.get_ref()
         else:
             assert isinstance(arg, Variable)
@@ -286,7 +272,7 @@ class Database(object):
         " returns node and repr as tuple "
         type_ = lltype.typeOf(value)
         if isinstance(type_, lltype.Primitive):
-            repr = self.primitive_to_str(type_, value)
+            repr = self.primitives.repr(type_, value)
             return None, "%s %s" % (self.repr_type(type_), repr)
 
         elif isinstance(type_, lltype.Ptr):
@@ -295,7 +281,7 @@ class Database(object):
 
             # special case, null pointer
             if value is None:
-                return None, "%s null" % (toptr,)
+                return None, "%s null" % toptr
 
             node = self.obj2node[value]
             ref = node.get_pbcref(toptr)
@@ -321,6 +307,7 @@ class Database(object):
         return self.obj2node[type_].constructor_ref
 
     def repr_name(self, obj):
+        " simply returns a reference to constant value "
         return self.obj2node[obj].ref
 
     def repr_value(self, value):
@@ -328,9 +315,128 @@ class Database(object):
         return self.obj2node[value].get_ref()
 
     # __________________________________________________________
-    # Primitive stuff
+    # Other helpers
 
-    def float_to_str(self, value):
+    def get_machine_word(self):
+        return self.primitives[lltype.Signed]
+
+    def get_machine_uword(self):
+        return self.primitives[lltype.Unsigned]
+
+    def is_function_ptr(self, arg):
+        if isinstance(arg, (Constant, Variable)): 
+            arg = arg.concretetype 
+            if isinstance(arg, lltype.Ptr):
+                if isinstance(arg.TO, lltype.FuncType):
+                    return True
+        return False
+
+    def get_childref(self, parent, child):
+        node = self.obj2node[parent]
+        return node.get_childref(child)
+
+
+class Primitives(object):
+    def __init__(self, database):        
+        self.database = database
+        self.types = {
+            lltype.Char: "sbyte",
+            lltype.Bool: "bool",
+            lltype.Float: "double",
+            lltype.UniChar: "uint",
+            lltype.Void: "void",
+            lltype.UnsignedLongLong: "ulong",
+            lltype.SignedLongLong: "long",
+            llmemory.Address: "sbyte*",
+            llmemory.WeakGcAddress: "sbyte*",
+            }
+
+        # 32 bit platform
+        if sys.maxint == 2**31-1:
+            self.types.update({
+                lltype.Signed: "int",
+                lltype.Unsigned: "uint" })
+            
+        # 64 bit platform
+        elif sys.maxint == 2**63-1:        
+            self.types.update({
+                lltype.Signed: "long",
+                lltype.Unsigned: "ulong" })            
+        else:
+            raise Exception("Unsupported platform - unknown word size")
+
+        self.reprs = {
+            lltype.SignedLongLong : self.repr_signed,
+            lltype.Signed : self.repr_signed,
+            lltype.UnsignedLongLong : self.repr_default,
+            lltype.Unsigned : self.repr_default,
+            lltype.Float : self.repr_float,
+            lltype.Char : self.repr_char,
+            lltype.UniChar : self.repr_unichar,
+            lltype.Bool : self.repr_bool,
+            lltype.Void : self.repr_void,
+            llmemory.Address : self.repr_address,
+            llmemory.WeakGcAddress : self.repr_weakgcaddress,
+            }        
+
+        try:
+            import ctypes
+        except ImportError:
+            pass
+        else:
+            from pypy.rpython.rctypes import rcarithmetic as rcarith
+
+            def update(from_, type):
+                if from_ not in self.types:
+                    self.types[from_] = type
+                if from_ not in self.reprs:
+                    self.reprs[from_] = self.repr_default
+            
+            for k, v in [
+                (rcarith.CByte, self.types[lltype.Char]),
+                (rcarith.CUByte, 'ubyte'),
+                (rcarith.CShort, 'short'),
+                (rcarith.CUShort, 'ushort'),
+                (rcarith.CInt, 'int'),
+                (rcarith.CUInt, 'uint'),
+                (rcarith.CLong, self.types[lltype.Signed]),
+                (rcarith.CULong, self.types[lltype.Unsigned]),
+                (rcarith.CLonglong, self.types[lltype.SignedLongLong]),
+                (rcarith.CULonglong, self.types[lltype.UnsignedLongLong])]:
+                update(k, v)
+        
+    def __getitem__(self, key):
+        return self.types[key]
+        
+    def repr(self, type_, value):
+        try:
+            reprfn = self.reprs[type_]
+        except KeyError:
+            raise Exception, "unsupported primitive type %r, value %r" % (type_, value)
+        else:
+            return reprfn(type_, value)
+        
+    def repr_default(self, type_, value):
+        return str(value)
+
+    def repr_bool(self, type_, value):
+        return str(value).lower() #False --> false
+
+    def repr_void(self, type_, value):
+        return 'void'
+  
+    def repr_char(self, type_, value):
+        x = ord(value)
+        if x >= 128:
+            r = "cast (ubyte %s to sbyte)" % x
+        else:
+            r = str(x)
+        return r
+
+    def repr_unichar(self, type_, value):
+        return str(ord(value))
+
+    def repr_float(self, type_, value):
         repr = "%f" % value
         # llvm requires a . when using e notation
         if "e" in repr and "." not in repr:
@@ -345,47 +451,123 @@ class Database(object):
             repr = "0x" + "".join([("%02x" % ord(ii)) for ii in packed])
         return repr
 
-    def char_to_str(self, value):
-        x = ord(value)
-        if x >= 128:
-            r = "cast (ubyte %s to sbyte)" % x
+    def repr_address(self, type_, value):
+        if value is NULL:
+            return 'null'
+
+        assert isinstance(value, llmemory.fakeaddress)
+
+        if value.offset is None:
+            if value.ob is None:
+                return 'null'
+            else:
+                obj = value.ob._obj
+                typename = self.database.repr_type(lltype.typeOf(obj))
+                ref = self.database.repr_name(obj)
         else:
-            r = str(x)
-        return r
+            from_, indices, to = self.get_offset(value.offset)
+            indices_as_str = ", ".join("%s %s" % (w, i) for w, i in indices)
+
+            #original_typename = self.database.repr_type(from_)
+            #orignal_ref = self.database.repr_name(value.ob._obj)
+            #
+            #typename = self.database.repr_type(to)
+            #ref = "getelementptr(%s* %s, %s)" % (original_typename,
+            #                                     orignal_ref,
+            #                                     indices_as_str)
+
+            ptrtype = self.database.repr_type(lltype.Ptr(from_))
+            node = self.database.obj2node[value.ob._obj]
+            parentref = node.get_pbcref(ptrtype)
+
+            typename = self.database.repr_type(to)
+            ref = "getelementptr(%s %s, %s)" % (ptrtype, parentref,
+                                                indices_as_str)
+
+        res = "cast(%s* %s to sbyte*)" % (typename, ref)
+        return res    
     
-    def primitive_to_str(self, type_, value):
-        if type_ is lltype.Bool:
-            repr = str(value).lower() #False --> false
-        elif type_ is lltype.Char:
-            repr = self.char_to_str(value)
-        elif type_ is lltype.UniChar:
-            repr = str(ord(value))
-        elif type_ is lltype.Float:
-            repr = self.float_to_str(value)
-        elif type_ is Address:
-            assert value == NULL
-            repr = 'null' 
+    def repr_weakgcaddress(self, type_, value):
+        assert isinstance(value, llmemory.fakeweakaddress)
+        log.WARNING("XXX weakgcaddress completely ignored...")
+        return 'null'
+
+    def repr_signed(self, type_, value):
+        if isinstance(value, Symbolic):
+            return self.repr_symbolic(type_, value)
+        return str(value)
+    
+    def repr_symbolic(self, type_, value):
+        """ returns an int value for pointer arithmetic - not sure this is the
+        llvm way, but well XXX need to fix adr_xxx operations  """
+        if (type(value) == llmemory.GCHeaderOffset or
+            type(value) == llmemory.AddressOffset):
+            repr = 0
+        
+        elif isinstance(value, llmemory.AddressOffset):
+            from_, indices, to = self.get_offset(value)
+            indices_as_str = ", ".join("%s %s" % (w, i) for w, i in indices)
+            r = self.database.repr_type
+            repr = "cast(%s* getelementptr(%s* null, %s) to int)" % (r(to),
+                                                                     r(from_),
+                                                                     indices_as_str)
+        elif isinstance(value, ComputedIntSymbolic):
+            # force the ComputedIntSymbolic to become a real integer value now
+            repr = '%d' % value.compute_fn()
+        elif isinstance(value, CDefinedIntSymbolic):
+            repr = CDEFINED_VALUE[value.expr]
         else:
-            repr = str(value)
+            raise NotImplementedError("symbolic: %r" % (value,))
+        
         return repr
+    
+    def get_offset(self, value, initialindices=None):
+        " return (from_type, (indices, ...), to_type) "        
+        word = self.database.get_machine_word()
+        uword = self.database.get_machine_uword()
+        indices = initialindices or [(word, 0)]
 
-    def get_machine_word(self):
-        return self.primitives[lltype.Signed]
+        if isinstance(value, llmemory.ItemOffset):
+            # skips over a fixed size item (eg array access)
+            from_ = value.TYPE
+            lasttype, lastvalue = indices[-1]
+            assert lasttype == word
+            indices[-1] = (word, lastvalue + value.repeat)
+            to = value.TYPE
+        
+        elif isinstance(value, llmemory.FieldOffset):
+            # jumps to a field position in a struct
+            from_ = value.TYPE
+            pos = getindexhelper(value.fldname, value.TYPE)
+            indices.append((uword, pos))
+            to = getattr(value.TYPE, value.fldname)            
 
-    def get_machine_uword(self):
-        return self.primitives[lltype.Unsigned]
+        elif isinstance(value, llmemory.ArrayLengthOffset):
+            # jumps to the place where the array length is stored
+            from_ = value.TYPE     # <Array of T> or <GcArray of T>
+            assert isinstance(value.TYPE, lltype.Array)
+            indices.append((uword, 0))
+            to = lltype.Signed
 
-    # __________________________________________________________
-    # Other helpers
+        elif isinstance(value, llmemory.ArrayItemsOffset):
+            # jumps to the beginning of array area
+            from_ = value.TYPE
+            if not isinstance(value.TYPE, lltype.FixedSizeArray):
+                indices.append((uword, 1))
+            indices.append((word, 0))    # go to the 1st item
+            to = value.TYPE.OF
 
-    def is_function_ptr(self, arg):
-        if isinstance(arg, (Constant, Variable)): 
-            arg = arg.concretetype 
-            if isinstance(arg, lltype.Ptr):
-                if isinstance(arg.TO, lltype.FuncType):
-                    return True
-        return False
+        elif isinstance(value, llmemory.CompositeOffset):
+            from_, indices, to = self.get_offset(value.offsets[0], indices)
+            for item in value.offsets[1:]:
+                _, indices, to = self.get_offset(item, indices)
 
-    def get_childref(self, parent, child):
-        node = self.obj2node[parent]
-        return node.get_childref(child)
+        else:
+            raise Exception("unsupported offset")
+
+        return from_, indices, to    
+
+# reprs for specific CDefinedIntSymbolic constants
+CDEFINED_VALUE = {
+    'MALLOC_ZERO_FILLED': '1',
+    }

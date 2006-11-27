@@ -54,6 +54,9 @@ class UniqueList(list):
 
 def builtin_base(obj):
     typ = type(obj)
+    return builtin_type_base(typ)
+
+def builtin_type_base(typ):
     from copy_reg import _HEAPTYPE
     while typ.__flags__&_HEAPTYPE:
         typ = typ.__base__
@@ -85,11 +88,12 @@ C_IDENTIFIER = ''.join([(('0' <= chr(i) <= '9' or
 # while always keeping all globals visible.
 
 class NameManager(object):
-    def __init__(self, global_prefix=''):
+    def __init__(self, global_prefix='', number_sep='_'):
         self.seennames = {}
         self.scope = 0
         self.scopelist = []
         self.global_prefix = global_prefix
+        self.number_sep = number_sep
 
     def make_reserved_names(self, txt):
         """add names to list of known names. If one exists already,
@@ -113,7 +117,7 @@ class NameManager(object):
         self.seennames[basename] = n+1
         if with_number is None:
             with_number = basename in ('v', 'w_')
-        fmt = '%s_%d'
+        fmt = '%%s%s%%d' % self.number_sep
         if with_number and not basename[-1].isdigit():
             fmt = '%s%d'
         if n != 0 or with_number:

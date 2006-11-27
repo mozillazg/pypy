@@ -12,6 +12,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.tool.option import Options
 from pypy.interpreter.pyparser.pythonlexer import Source, match_encoding_declaration
+from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
 import pypy.interpreter.pyparser.ebnfparse as ebnfparse
@@ -25,11 +26,20 @@ except ImportError:
 
 from codeop import PyCF_DONT_IMPLY_DEDENT
 
+class AlternateGrammarException(Exception):
+    pass
+
 class PythonParser(grammar.Parser):
     """Wrapper class for python grammar"""
     def __init__(self):
         grammar.Parser.__init__(self)
-
+        # XXX (adim): this is trunk's keyword management
+        # self.with_grammar = None
+        # self.keywords = dict.fromkeys(grammar_builder.keywords)
+        # # Only when with_statement is enabled
+        # self.keywords.pop('with', None)
+        # self.keywords.pop('as', None)
+        
     def parse_source(self, textsrc, goal, builder, flags=0):
         """Parse a python source according to goal"""
         # Detect source encoding.
@@ -48,13 +58,17 @@ class PythonParser(grammar.Parser):
             flags &= ~PyCF_DONT_IMPLY_DEDENT
         return self.parse_lines(lines, goal, builder, flags)
 
+
     def parse_lines(self, lines, goal, builder, flags=0):
+        # XXX (adim): this is trunk's keyword management
+        # builder.keywords = self.keywords.copy()
+        # if flags & CO_FUTURE_WITH_STATEMENT:
+        #     builder.enable_with()
         goalnumber = self.symbols[goal]
         target = self.root_rules[goalnumber]
         src = Source(self, lines, flags)
 
-        result = target.match(src, builder)
-        if not result:
+        if not target.match(src, builder):
             line, lineno = src.debug()
             # XXX needs better error messages
             raise SyntaxError("invalid syntax", lineno, -1, line)
@@ -116,7 +130,9 @@ def get_grammar_file( version ):
     """returns the python grammar corresponding to our CPython version"""
     if version == "native":
         _ver = PYTHON_VERSION
-    elif version in ("2.3","2.4"):
+    elif version == "stable":
+        _ver = "_stablecompiler"
+    elif version in ("2.3","2.4","2.5a"):
         _ver = version
     return os.path.join( os.path.dirname(__file__), "data", "Grammar" + _ver ), _ver
 
@@ -131,6 +147,14 @@ def load_python_grammar(fname):
     # populate symbols
     ebnfparse.parse_grammar_text( parser, file(fname).read() )
     return parser
+
+debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
+PYTHON_PARSER = PythonParser()
+# print "sym_name ===>", symbol.sym_name
+PYTHON_PARSER.load_symbols( symbol.sym_name )
+# debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
+# PYTHON_PARSER = python_grammar( PYTHON_GRAMMAR)
+#PYTHON_PARSER.with_grammar = python_grammar( PYTHON_GRAMMAR + '_with' )
 
 def reload_grammar(version):
     """helper function to test with pypy different grammars"""
@@ -152,7 +176,10 @@ def parse_eval_input(textsrc, gram, builder):
     return gram.parse_source( textsrc, "eval_input", builder )
 
 def grammar_rules( space ):
-    return space.wrap( PYTHON_PARSER.root_rules )
+    w_rules = space.newdict()
+    for key, value in PYTHON_PARSER.rules.iteritems():
+        space.setitem(w_rules, space.wrap(key), space.wrap(value))
+    return w_rules
 
 def dot_node( gen, rule_name, rule, symbols, edges, count ):
     from pypy.interpreter.pyparser.grammar import KleeneStar, Sequence, Alternative, Token
@@ -218,12 +245,15 @@ def parse_grammar(space, w_src):
     grammar.build_first_sets(ebnfbuilder.all_rules)
     return space.wrap( ebnfbuilder.root_rules )
 
-debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
-PYTHON_PARSER = PythonParser()
-PYTHON_PARSER.load_symbols( symbol.sym_name )
+## debug_print( "Loading grammar %s" % PYTHON_GRAMMAR )
+## PYTHON_PARSER = PythonParser()
+## PYTHON_PARSER.load_symbols( symbol.sym_name )
 pytoken.setup_tokens( PYTHON_PARSER )
 load_python_grammar( PYTHON_GRAMMAR )
+#PYTHON_PARSER.with_grammar = python_grammar( PYTHON_GRAMMAR + '_with' )
 
+def make_rule( space, w_rule ):
+    rule = space.str_w( w_rule )
 
 if __name__=="__main__":
     symbols = {}

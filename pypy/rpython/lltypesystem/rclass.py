@@ -8,22 +8,26 @@ from pypy.rpython.rclass import AbstractClassRepr,\
                                 AbstractInstanceRepr,\
                                 MissingRTypeAttribute,\
                                 getclassrepr, getinstancerepr,\
-                                get_type_repr, rtype_new_instance,\
-                                instance_annotation_for_cls
+                                get_type_repr, rtype_new_instance
 from pypy.rpython.lltypesystem.lltype import \
-     ForwardReference, GcForwardReference, \
      Ptr, Struct, GcStruct, malloc, \
      cast_pointer, castable, nullptr, \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
      Array, Char, Void, attachRuntimeTypeInfo, \
-     FuncType, Bool, Signed, functionptr, FuncType
+     FuncType, Bool, Signed, functionptr, FuncType, PyObject
+from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.robject import PyObjRepr, pyobj_repr
+from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.annotation import model as annmodel
+from pypy.rlib.objectmodel import UnboxedValue
+from pypy.rlib.rarithmetic import intmask
 
 #
 #  There is one "vtable" per user class, with the following structure:
 #  A root class "object" has:
 #
 #      struct object_vtable {
-#          struct object_vtable* parenttypeptr;
+#          // struct object_vtable* parenttypeptr;  not used any more
 #          RuntimeTypeInfo * rtti;
 #          Signed subclassrange_min;  //this is also the id of the class itself
 #          Signed subclassrange_max;
@@ -51,20 +55,38 @@ from pypy.rpython.lltypesystem.lltype import \
 #
 # there's also a nongcobject 
 
-OBJECT_VTABLE = ForwardReference()
+OBJECT_VTABLE = lltype.ForwardReference()
 CLASSTYPE = Ptr(OBJECT_VTABLE)
-OBJECT = GcStruct('object', ('typeptr', CLASSTYPE))
+OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
+                            hints = {'immutable': True})
 OBJECTPTR = Ptr(OBJECT)
 OBJECT_VTABLE.become(Struct('object_vtable',
-                            ('parenttypeptr', CLASSTYPE),
+                            #('parenttypeptr', CLASSTYPE),
                             ('subclassrange_min', Signed),
                             ('subclassrange_max', Signed),
                             ('rtti', Ptr(RuntimeTypeInfo)),
                             ('name', Ptr(Array(Char))),
-                            ('instantiate', Ptr(FuncType([], OBJECTPTR)))))
+                            ('instantiate', Ptr(FuncType([], OBJECTPTR))),
+                            hints = {'immutable': True}))
 # non-gc case
 NONGCOBJECT = Struct('nongcobject', ('typeptr', CLASSTYPE))
 NONGCOBJECTPTR = Ptr(OBJECT)
+
+# cpy case (XXX try to merge the typeptr with the ob_type)
+CPYOBJECT = lltype.PyStruct('cpyobject', ('head', PyObject),
+                                         ('typeptr', CLASSTYPE))
+CPYOBJECTPTR = Ptr(CPYOBJECT)
+
+OBJECT_BY_FLAVOR = {'gc': OBJECT,
+                    'raw': NONGCOBJECT,
+                    'cpy': CPYOBJECT}
+
+LLFLAVOR = {'gc'   : 'gc',
+            'raw'  : 'raw',
+            'cpy'  : 'cpy',
+            'stack': 'raw',
+            }
+RTTIFLAVORS = ('gc', 'cpy')
 
 def cast_vtable_to_typeptr(vtable):
     while typeOf(vtable).TO != OBJECT_VTABLE:
@@ -79,7 +101,7 @@ class ClassRepr(AbstractClassRepr):
             # 'object' root type
             self.vtable_type = OBJECT_VTABLE
         else:
-            self.vtable_type = ForwardReference()
+            self.vtable_type = lltype.ForwardReference()
         self.lowleveltype = Ptr(self.vtable_type)
 
     def _setup_repr(self):
@@ -109,18 +131,18 @@ class ClassRepr(AbstractClassRepr):
             # attributes showing up in getattrs done on the class as a PBC
             extra_access_sets = self.rtyper.class_pbc_attributes.get(
                 self.classdef, {})
-            for access_set, counter in extra_access_sets.items():
-                for attr, s_value in access_set.attrs.items():
-                    r = self.rtyper.getrepr(s_value)
-                    mangled_name = mangle('pbc%d' % counter, attr)
-                    pbcfields[access_set, attr] = mangled_name, r
-                    llfields.append((mangled_name, r.lowleveltype))
+            for access_set, (attr, counter) in extra_access_sets.items():
+                r = self.rtyper.getrepr(access_set.s_value)
+                mangled_name = mangle('pbc%d' % counter, attr)
+                pbcfields[access_set, attr] = mangled_name, r
+                llfields.append((mangled_name, r.lowleveltype))
             #
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
             self.rbase.setup()
+            kwds = {'hints': {'immutable': True}}
             vtable_type = Struct('%s_vtable' % self.classdef.name,
                                  ('super', self.rbase.vtable_type),
-                                 *llfields)
+                                 *llfields, **kwds)
             self.vtable_type.become(vtable_type)
             allmethods.update(self.rbase.allmethods)
         self.clsfields = clsfields
@@ -158,9 +180,9 @@ class ClassRepr(AbstractClassRepr):
         """Initialize the 'self' portion of the 'vtable' belonging to the
         given subclass."""
         if self.classdef is None:
-            # initialize the 'parenttypeptr' and 'name' fields
+            # initialize the 'subclassrange_*' and 'name' fields
             if rsubcls.classdef is not None:
-                vtable.parenttypeptr = rsubcls.rbase.getvtable()
+                #vtable.parenttypeptr = rsubcls.rbase.getvtable()
                 vtable.subclassrange_min = rsubcls.classdef.minid
                 vtable.subclassrange_max = rsubcls.classdef.maxid
             else: #for the root class
@@ -168,7 +190,7 @@ class ClassRepr(AbstractClassRepr):
                 vtable.subclassrange_max = sys.maxint
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
-            if rinstance.needsgc: # only gc-case
+            if rinstance.gcflavor in RTTIFLAVORS:
                 vtable.rtti = getRuntimeTypeInfo(rinstance.object_type)
             if rsubcls.classdef is None:
                 name = 'object'
@@ -224,6 +246,8 @@ class ClassRepr(AbstractClassRepr):
         return llops.genop('cast_pointer', [vcls],
                            resulttype=self.lowleveltype)
 
+    fromclasstype = fromtypeptr
+
     def getclsfield(self, vcls, attr, llops):
         """Read the given attribute of 'vcls'."""
         if attr in self.clsfields:
@@ -261,14 +285,15 @@ class ClassRepr(AbstractClassRepr):
         v_cls1, v_cls2 = hop.inputargs(class_repr, class_repr)
         if isinstance(v_cls2, Constant):
             cls2 = v_cls2.value
-            if cls2.subclassrange_max == cls2.subclassrange_min + 1:
-                # a class with no subclass
-                return hop.genop('ptr_eq', [v_cls1, v_cls2], resulttype=Bool)
-            else:
-                minid = hop.inputconst(Signed, cls2.subclassrange_min)
-                maxid = hop.inputconst(Signed, cls2.subclassrange_max)
-                return hop.gendirectcall(ll_issubclass_const, v_cls1, minid,
-                                         maxid)
+            # XXX re-implement the following optimization
+##            if cls2.subclassrange_max == cls2.subclassrange_min:
+##                # a class with no subclass
+##                return hop.genop('ptr_eq', [v_cls1, v_cls2], resulttype=Bool)
+##            else:
+            minid = hop.inputconst(Signed, cls2.subclassrange_min)
+            maxid = hop.inputconst(Signed, cls2.subclassrange_max)
+            return hop.gendirectcall(ll_issubclass_const, v_cls1, minid,
+                                     maxid)
         else:
             v_cls1, v_cls2 = hop.inputargs(class_repr, class_repr)
             return hop.gendirectcall(ll_issubclass, v_cls1, v_cls2)
@@ -277,22 +302,17 @@ class ClassRepr(AbstractClassRepr):
 
 
 class InstanceRepr(AbstractInstanceRepr):
-    def __init__(self, rtyper, classdef, does_need_gc=True):
+    def __init__(self, rtyper, classdef, gcflavor='gc'):
         AbstractInstanceRepr.__init__(self, rtyper, classdef)
         if classdef is None:
-            if does_need_gc:
-                self.object_type = OBJECT
-            else:
-                self.object_type = NONGCOBJECT
+            self.object_type = OBJECT_BY_FLAVOR[LLFLAVOR[gcflavor]]
         else:
-            if does_need_gc:
-                self.object_type = GcForwardReference()
-            else:
-                self.object_type = ForwardReference()
+            ForwardRef = lltype.FORWARDREF_BY_FLAVOR[LLFLAVOR[gcflavor]]
+            self.object_type = ForwardRef()
             
         self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
         self.lowleveltype = Ptr(self.object_type)
-        self.needsgc = does_need_gc
+        self.gcflavor = gcflavor
 
     def _setup_repr(self):
         # NOTE: don't store mutable objects like the dicts below on 'self'
@@ -322,13 +342,16 @@ class InstanceRepr(AbstractInstanceRepr):
                 fields['_hash_cache_'] = 'hash_cache', rint.signed_repr
                 llfields.append(('hash_cache', Signed))
 
-            self.rbase = getinstancerepr(self.rtyper, self.classdef.basedef, not self.needsgc)
+            self.rbase = getinstancerepr(self.rtyper, self.classdef.basedef,
+                                         self.gcflavor)
             self.rbase.setup()
-            if self.needsgc:
-                MkStruct = GcStruct
-            else:
-                MkStruct = Struct
-            
+            #
+            # PyObject wrapper support
+            if self.has_wrapper and '_wrapper_' not in self.rbase.allinstancefields:
+                fields['_wrapper_'] = 'wrapper', pyobj_repr
+                llfields.append(('wrapper', Ptr(PyObject)))
+
+            MkStruct = lltype.STRUCT_BY_FLAVOR[LLFLAVOR[self.gcflavor]]
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    *llfields)
@@ -337,11 +360,11 @@ class InstanceRepr(AbstractInstanceRepr):
         allinstancefields.update(fields)
         self.fields = fields
         self.allinstancefields = allinstancefields
-        if self.needsgc: # only gc-case
+        if self.gcflavor in RTTIFLAVORS:
             attachRuntimeTypeInfo(self.object_type)
 
     def _setup_repr_final(self):
-        if self.needsgc: # only gc-case
+        if self.gcflavor in RTTIFLAVORS:
             if (self.classdef is not None and
                 self.classdef.classdesc.lookup('__del__') is not None):
                 s_func = self.classdef.classdesc.s_read_attribute('__del__')
@@ -350,55 +373,43 @@ class InstanceRepr(AbstractInstanceRepr):
                 source_repr = getinstancerepr(self.rtyper, source_classdef)
                 assert len(s_func.descriptions) == 1
                 funcdesc = s_func.descriptions.keys()[0]
-                graph = funcdesc.cachedgraph(None)
+                graph = funcdesc.getuniquegraph()
                 FUNCTYPE = FuncType([Ptr(source_repr.object_type)], Void)
                 destrptr = functionptr(FUNCTYPE, graph.name,
                                        graph=graph,
                                        _callable=graph.func)
             else:
                 destrptr = None
+            OBJECT = OBJECT_BY_FLAVOR[LLFLAVOR[self.gcflavor]]
             self.rtyper.attachRuntimeTypeInfoFunc(self.object_type,
                                                   ll_runtime_type_info,
                                                   OBJECT, destrptr)
     def common_repr(self): # -> object or nongcobject reprs
-        return getinstancerepr(self.rtyper, None, nogc=not self.needsgc)
+        return getinstancerepr(self.rtyper, None, self.gcflavor)
 
-    def getflavor(self):
-        return self.classdef.classdesc.read_attribute('_alloc_flavor_', Constant('gc')).value
+    def null_instance(self):
+        return nullptr(self.object_type)
 
-    def convert_const(self, value):
-        if value is None:
-            return nullptr(self.object_type)
-        if isinstance(value, types.MethodType):
-            value = value.im_self   # bound method -> instance
-        cls = value.__class__
-        bk = self.rtyper.annotator.bookkeeper
-        classdef = bk.getdesc(cls).getuniqueclassdef()
-        if classdef != self.classdef:
-            # if the class does not match exactly, check that 'value' is an
-            # instance of a subclass and delegate to that InstanceRepr
-            if classdef.commonbase(self.classdef) != self.classdef:
-                raise TyperError("not an instance of %r: %r" % (
-                    self.classdef.name, value))
-            rinstance = getinstancerepr(self.rtyper, classdef)
-            result = rinstance.convert_const(value)
-            return cast_pointer(self.lowleveltype, result)
-        # common case
-        try:
-            return self.prebuiltinstances[id(value)][1]
-        except KeyError:
-            self.setup()
-            result = malloc(self.object_type, flavor=self.getflavor()) # pick flavor
-            self.prebuiltinstances[id(value)] = value, result
-            self.initialize_prebuilt_instance(value, classdef, result)
-            return result
+    def upcast(self, result):
+        return cast_pointer(self.lowleveltype, result)
 
-    def get_ll_eq_function(self):
-        return ll_inst_eq
+    def create_instance(self):
+        if self.gcflavor == 'cpy':
+            from pypy.rpython import rcpy
+            extra_args = (rcpy.build_pytypeobject(self),)
+        else:
+            extra_args = ()
+        return malloc(self.object_type, flavor=self.gcflavor,
+                      extra_args=extra_args)
+
+    def has_wrapper(self):
+        return self.classdef is not None and (
+            self.rtyper.needs_wrapper(self.classdef.classdesc.pyobj))
+    has_wrapper = property(has_wrapper)
 
     def get_ll_hash_function(self):
         if self.classdef is None:
-            return None
+            raise TyperError, 'missing hash support flag in classdef'
         if self.rtyper.needs_hash_support(self.classdef):
             try:
                 return self._ll_hash_function
@@ -430,8 +441,9 @@ class InstanceRepr(AbstractInstanceRepr):
                         if attrvalue is None:
                             warning("prebuilt instance %r has no attribute %r" % (
                                     value, name))
-                            continue
-                        llattrvalue = r.convert_desc_or_const(attrvalue)
+                            llattrvalue = r.lowleveltype._defl()
+                        else:
+                            llattrvalue = r.convert_desc_or_const(attrvalue)
                     else:
                         llattrvalue = r.convert_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
@@ -463,31 +475,38 @@ class InstanceRepr(AbstractInstanceRepr):
                 raise MissingRTypeAttribute(attr)
             return self.rbase.getfield(vinst, attr, llops, force_cast=True)
 
-    def setfield(self, vinst, attr, vvalue, llops, force_cast=False):
+    def setfield(self, vinst, attr, vvalue, llops, force_cast=False, opname='setfield'):
         """Write the given attribute (or __class__ for the type) of 'vinst'."""
         if attr in self.fields:
             mangled_name, r = self.fields[attr]
             cname = inputconst(Void, mangled_name)
             if force_cast:
                 vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
-            llops.genop('setfield', [vinst, cname, vvalue])
+            llops.genop(opname, [vinst, cname, vvalue])
+            # XXX this is a temporary hack to clear a dead PyObject
         else:
             if self.classdef is None:
                 raise MissingRTypeAttribute(attr)
-            self.rbase.setfield(vinst, attr, vvalue, llops, force_cast=True)
+            self.rbase.setfield(vinst, attr, vvalue, llops, force_cast=True, opname=opname)
 
-    def new_instance(self, llops):
+    def new_instance(self, llops, classcallhop=None, v_cpytype=None):
         """Build a new instance, without calling __init__."""
         mallocop = 'malloc'
         ctype = inputconst(Void, self.object_type)
         vlist = [ctype]
         if self.classdef is not None:
-            flavor = self.getflavor()
-            if flavor != 'gc': # not defalut flavor
+            flavor = self.gcflavor
+            if flavor != 'gc': # not default flavor
                 mallocop = 'flavored_malloc'
-                vlist = [inputconst(Void, flavor)] + vlist
+                vlist.insert(0, inputconst(Void, flavor))
+                if flavor == 'cpy':
+                    if v_cpytype is None:
+                        from pypy.rpython import rcpy
+                        cpytype = rcpy.build_pytypeobject(self)
+                        v_cpytype = inputconst(Ptr(PyObject), cpytype)
+                    vlist.append(v_cpytype)
         vptr = llops.genop(mallocop, vlist,
-                           resulttype = Ptr(self.object_type)) # xxx flavor
+                           resulttype = Ptr(self.object_type))
         ctypeptr = inputconst(CLASSTYPE, self.rclass.getvtable())
         self.setfield(vptr, '__class__', ctypeptr, llops)
         # initialize instance attributes from their defaults from the class
@@ -500,7 +519,10 @@ class InstanceRepr(AbstractInstanceRepr):
                 mangled_name, r = self.allinstancefields[fldname]
                 if r.lowleveltype is Void:
                     continue
-                value = self.classdef.classdesc.read_attribute(fldname, None)
+                if fldname == '_hash_cache_':
+                    value = Constant(0, Signed)
+                else:
+                    value = self.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
                     cvalue = inputconst(r.lowleveltype,
                                         r.convert_desc_or_const(value))
@@ -509,6 +531,8 @@ class InstanceRepr(AbstractInstanceRepr):
         return vptr
 
     def rtype_type(self, hop):
+        if hop.s_result.is_constant():
+            return hop.inputconst(hop.r_result, hop.s_result.const)
         instance_repr = self.common_repr()
         vinst, = hop.inputargs(instance_repr)
         if hop.args_s[0].can_be_none():
@@ -516,18 +540,13 @@ class InstanceRepr(AbstractInstanceRepr):
         else:
             return instance_repr.getfield(vinst, '__class__', hop.llops)
 
-    def rtype_hash(self, hop):
-        if self.classdef is None:
-            raise TyperError, "hash() not supported for this class"                        
-        if self.rtyper.needs_hash_support(self.classdef):
-            vinst, = hop.inputargs(self)
-            return hop.gendirectcall(ll_inst_hash, vinst)
-        else:
-            return self.rbase.rtype_hash(hop)
-
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         vinst, vattr = hop.inputargs(self, Void)
+        if attr == '__class__' and hop.r_result.lowleveltype is Void:
+            # special case for when the result of '.__class__' is a constant
+            [desc] = hop.s_result.descriptions
+            return hop.inputconst(Void, desc.pyobj)
         if attr in self.allinstancefields:
             return self.getfield(vinst, attr, hop.llops)
         elif attr in self.rclass.allmethods:
@@ -550,10 +569,12 @@ class InstanceRepr(AbstractInstanceRepr):
         return hop.genop('ptr_nonzero', [vinst], resulttype=Bool)
 
     def ll_str(self, i): # doesn't work for non-gc classes!
+        from pypy.rpython.lltypesystem import rstr
+        if not i:
+            return rstr.null_str
         instance = cast_pointer(OBJECTPTR, i)
-        from pypy.rpython import rstr
         nameLen = len(instance.typeptr.name)
-        nameString = malloc(rstr.STR, nameLen-1)
+        nameString = rstr.mallocstr(nameLen-1)
         i = 0
         while i < nameLen - 1:
             nameString.chars[i] = instance.typeptr.name[i]
@@ -561,6 +582,44 @@ class InstanceRepr(AbstractInstanceRepr):
         return rstr.ll_strconcat(rstr.instance_str_prefix,
                                  rstr.ll_strconcat(nameString,
                                                    rstr.instance_str_suffix))
+
+    def rtype_isinstance(self, hop):
+        class_repr = get_type_repr(hop.rtyper)
+        instance_repr = self.common_repr()
+
+        v_obj, v_cls = hop.inputargs(instance_repr, class_repr)
+        if isinstance(v_cls, Constant):
+            cls = v_cls.value
+            # XXX re-implement the following optimization
+            #if cls.subclassrange_max == cls.subclassrange_min:
+            #    # a class with no subclass
+            #    return hop.gendirectcall(rclass.ll_isinstance_exact, v_obj, v_cls)
+            #else:
+            minid = hop.inputconst(Signed, cls.subclassrange_min)
+            maxid = hop.inputconst(Signed, cls.subclassrange_max)
+            return hop.gendirectcall(ll_isinstance_const, v_obj, minid, maxid)
+        else:
+            return hop.gendirectcall(ll_isinstance, v_obj, v_cls)
+
+
+def buildinstancerepr(rtyper, classdef, gcflavor='gc'):
+    if classdef is None:
+        unboxed = []
+    else:
+        unboxed = [subdef for subdef in classdef.getallsubdefs()
+                          if subdef.classdesc.pyobj is not None and
+                             issubclass(subdef.classdesc.pyobj, UnboxedValue)]
+    if len(unboxed) == 0:
+        return InstanceRepr(rtyper, classdef, gcflavor)
+    else:
+        # the UnboxedValue class and its parent classes need a
+        # special repr for their instances
+        if len(unboxed) != 1:
+            raise TyperError("%r has several UnboxedValue subclasses" % (
+                classdef,))
+        assert gcflavor == 'gc'
+        from pypy.rpython.lltypesystem import rtagged
+        return rtagged.TaggedInstanceRepr(rtyper, classdef, unboxed[0])
 
 
 class __extend__(pairtype(InstanceRepr, InstanceRepr)):
@@ -586,16 +645,15 @@ class __extend__(pairtype(InstanceRepr, InstanceRepr)):
             return NotImplemented
 
     def rtype_is_((r_ins1, r_ins2), hop):
-        if r_ins1.needsgc != r_ins2.needsgc:
+        if r_ins1.gcflavor != r_ins2.gcflavor:
             # obscure logic, the is can be true only if both are None
             v_ins1, v_ins2 = hop.inputargs(r_ins1.common_repr(), r_ins2.common_repr())
             return hop.gendirectcall(ll_both_none, v_ins1, v_ins2)
-        nogc = not (r_ins1.needsgc and r_ins2.needsgc)
         if r_ins1.classdef is None or r_ins2.classdef is None:
             basedef = None
         else:
             basedef = r_ins1.classdef.commonbase(r_ins2.classdef)
-        r_ins = getinstancerepr(r_ins1.rtyper, basedef, nogc=nogc)
+        r_ins = getinstancerepr(r_ins1.rtyper, basedef, r_ins1.gcflavor)
         return pairtype(Repr, Repr).rtype_is_(pair(r_ins, r_ins), hop)
 
     rtype_eq = rtype_is_
@@ -604,9 +662,128 @@ class __extend__(pairtype(InstanceRepr, InstanceRepr)):
         v = rpair.rtype_eq(hop)
         return hop.genop("bool_not", [v], resulttype=Bool)
 
+#
+# _________________________ Conversions for CPython _________________________
 
-def ll_both_none(ins1, ins2):
-    return not ins1 and not ins2
+# part I: wrapping, destructor, preserving object identity
+
+def call_destructor(thing, repr):
+    ll_call_destructor(thing, repr)
+
+def ll_call_destructor(thang, repr):
+    return 42 # will be mapped
+
+class Entry(ExtRegistryEntry):
+    _about_ = ll_call_destructor
+    s_result_annotation = None
+
+    def specialize_call(self, hop):
+        v_inst, c_spec = hop.inputargs(*hop.args_r)
+        repr = c_spec.value
+        if repr.has_wrapper:
+            null = hop.inputconst(Ptr(PyObject), nullptr(PyObject))
+            # XXX this bare_setfield is needed because we cannot do refcount operations
+            # XXX on a dead object. Actually this is an abuse. Instead,
+            # XXX we should consider a different operation for 'uninitialized fields'
+            repr.setfield(v_inst, '_wrapper_', null, hop.llops,
+                          opname='bare_setfield')
+        hop.genop('gc_unprotect', [v_inst])
+
+
+def create_pywrapper(thing, repr):
+    return ll_create_pywrapper(thing, repr)
+
+def ll_create_pywrapper(thing, repr):
+    return 42
+
+def into_cobject(v_inst, repr, llops):
+    llops.genop('gc_protect', [v_inst])
+    ARG = repr.lowleveltype
+    reprPBC = llops.rtyper.annotator.bookkeeper.immutablevalue(repr)
+    fp_dtor = llops.rtyper.annotate_helper_fn(call_destructor, [ARG, reprPBC])
+    FUNC = FuncType([ARG, Void], Void)
+    c_dtor = inputconst(Ptr(FUNC), fp_dtor)
+    return llops.gencapicall('PyCObject_FromVoidPtr', [v_inst, c_dtor], resulttype=pyobj_repr)
+
+def outof_cobject(v_obj, repr, llops):
+    v_inst = llops.gencapicall('PyCObject_AsVoidPtr', [v_obj], resulttype=repr)
+    llops.genop('gc_protect', [v_inst])
+    return v_inst
+
+class Entry(ExtRegistryEntry):
+    _about_ = ll_create_pywrapper
+    s_result_annotation = annmodel.SomePtr(Ptr(PyObject))
+
+    def specialize_call(self, hop):
+        v_inst, c_spec = hop.inputargs(*hop.args_r)
+        repr = c_spec.value
+        v_res = into_cobject(v_inst, repr, hop.llops)
+        v_cobj = v_res
+        c_cls = hop.inputconst(pyobj_repr, repr.classdef.classdesc.pyobj)
+        c_0 = hop.inputconst(Signed, 0)
+        v_res = hop.llops.gencapicall('PyType_GenericAlloc', [c_cls, c_0],
+                                      resulttype=pyobj_repr)
+        c_self = hop.inputconst(pyobj_repr, '__self__')
+        hop.genop('setattr', [v_res, c_self, v_cobj], resulttype=pyobj_repr)
+        if repr.has_wrapper:
+            repr.setfield(v_inst, '_wrapper_', v_res, hop.llops)
+            hop.genop('gc_unprotect', [v_res]) # yes a weak ref
+        return v_res
+
+
+def fetch_pywrapper(thing, repr):
+    return ll_fetch_pywrapper(thing, repr)
+
+def ll_fetch_pywrapper(thing, repr):
+    return 42
+
+class Entry(ExtRegistryEntry):
+    _about_ = ll_fetch_pywrapper
+    s_result_annotation = annmodel.SomePtr(Ptr(PyObject))
+
+    def specialize_call(self, hop):
+        v_inst, c_spec = hop.inputargs(*hop.args_r)
+        repr = c_spec.value
+        if repr.has_wrapper:
+            return repr.getfield(v_inst, '_wrapper_', hop.llops)
+        else:
+            null = hop.inputconst(Ptr(PyObject), nullptr(PyObject))
+            return null
+
+
+def ll_wrap_object(obj, repr):
+    ret = fetch_pywrapper(obj, repr)
+    if not ret:
+        ret = create_pywrapper(obj, repr)
+    return ret
+
+class __extend__(pairtype(InstanceRepr, PyObjRepr)):
+    def convert_from_to((r_from, r_to), v, llops):
+        c_repr = inputconst(Void, r_from)
+        if r_from.has_wrapper:
+            return llops.gendirectcall(ll_wrap_object, v, c_repr)
+        else:
+            return llops.gendirectcall(create_pywrapper, v, c_repr)
+
+# part II: unwrapping, creating the instance
+
+class __extend__(pairtype(PyObjRepr, InstanceRepr)):
+    def convert_from_to((r_from, r_to), v, llops):
+        if r_to.has_wrapper:
+            init, context = llops.rtyper.get_wrapping_hint(r_to.classdef)
+            if context is init:
+                # saving an extra __new__ method, we create the instance on __init__
+                v_inst = r_to.new_instance(llops)
+                v_cobj = into_cobject(v_inst, r_to, llops)
+                c_self = inputconst(pyobj_repr, '__self__')
+                llops.genop('setattr', [v, c_self, v_cobj], resulttype=pyobj_repr)
+                r_to.setfield(v_inst, '_wrapper_', v, llops)
+                llops.genop('gc_unprotect', [v])
+                return v_inst
+        # if we don't have a wrapper field, we just don't support __init__
+        c_self = inputconst(pyobj_repr, '__self__')
+        v = llops.genop('getattr', [v, c_self], resulttype=r_from)
+        return outof_cobject(v, r_to, llops)
 
 # ____________________________________________________________
 #
@@ -621,10 +798,10 @@ def ll_type(obj):
     return cast_pointer(OBJECTPTR, obj).typeptr
 
 def ll_issubclass(subcls, cls):
-    return cls.subclassrange_min <= subcls.subclassrange_min < cls.subclassrange_max
+    return cls.subclassrange_min <= subcls.subclassrange_min <= cls.subclassrange_max
 
 def ll_issubclass_const(subcls, minid, maxid):
-    return minid <= subcls.subclassrange_min < maxid
+    return minid <= subcls.subclassrange_min <= maxid
 
 
 def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT
@@ -648,13 +825,12 @@ def ll_runtime_type_info(obj):
     return obj.typeptr.rtti
 
 def ll_inst_hash(ins):
+    if not ins:
+        return 0    # for None
     cached = ins.hash_cache
     if cached == 0:
-       cached = ins.hash_cache = id(ins)
+       cached = ins.hash_cache = intmask(id(ins))
     return cached
-
-def ll_inst_eq(ins1, ins2):
-    return ins1 == ins2
 
 def ll_inst_type(obj):
     if obj:
@@ -662,3 +838,40 @@ def ll_inst_type(obj):
     else:
         # type(None) -> NULL  (for now)
         return nullptr(typeOf(obj).TO.typeptr.TO)
+
+def ll_both_none(ins1, ins2):
+    return not ins1 and not ins2
+
+# ____________________________________________________________
+
+_missing = object()
+
+def fishllattr(inst, name, default=_missing):
+    p = widest = lltype.normalizeptr(inst)
+    while True:
+        try:
+            return getattr(p, 'inst_' + name)
+        except AttributeError:
+            pass
+        try:
+            p = p.super
+        except AttributeError:
+            break
+    if default is _missing:
+        raise AttributeError("%s has no field %s" % (lltype.typeOf(widest),
+                                                     name))
+    return default
+
+def feedllattr(inst, name, llvalue):
+    p = widest = lltype.normalizeptr(inst)
+    while True:
+        try:
+            return setattr(p, 'inst_' + name, llvalue)
+        except AttributeError:
+            pass
+        try:
+            p = p.super
+        except AttributeError:
+            break
+    raise AttributeError("%s has no field %s" % (lltype.typeOf(widest),
+                                                 name))

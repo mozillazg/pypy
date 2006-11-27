@@ -1,6 +1,7 @@
 from pypy.interpreter.pyframe import PyFrame, SuspendedUnroller
 from pypy.interpreter.error import OperationError
-from pypy.rpython.objectmodel import instantiate
+from pypy.rlib.objectmodel import instantiate
+from pypy.rlib.unroll import SpecTag
 from pypy.objspace.flow.model import *
 
 class FrameState:
@@ -131,18 +132,6 @@ def union(w1, w2):
             return Variable()  # generalize different constants
     raise TypeError('union of %r and %r' % (w1.__class__.__name__,
                                             w2.__class__.__name__))
-
-# ____________________________________________________________
-#
-# Support for explicit specialization: in code using global constants
-# that are instances of SpecTag, code paths are not merged when
-# the same variable holds a different SpecTag instance.
-
-class SpecTag(object):
-    def __repr__(self):
-        return 'SpecTag(%d)' % id(self)
-    def _freeze_(self):
-        return True
 
 # ____________________________________________________________
 #

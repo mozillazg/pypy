@@ -3,21 +3,46 @@ from pypy.objspace.std.stdtypedef import *
 from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.error import OperationError
 
-dict_copy       = StdObjSpaceMultiMethod('copy',          1)
-dict_items      = StdObjSpaceMultiMethod('items',         1)
-dict_keys       = StdObjSpaceMultiMethod('keys',          1)
-dict_values     = StdObjSpaceMultiMethod('values',        1)
-dict_has_key    = StdObjSpaceMultiMethod('has_key',       2)
-dict_clear      = StdObjSpaceMultiMethod('clear',         1)
-dict_get        = StdObjSpaceMultiMethod('get',           3, defaults=(None,))
-dict_pop        = StdObjSpaceMultiMethod('pop',           2, w_varargs=True)
-dict_popitem    = StdObjSpaceMultiMethod('popitem',       1)
-dict_setdefault = StdObjSpaceMultiMethod('setdefault',    3, defaults=(None,))
-dict_update     = StdObjSpaceMultiMethod('update',        2, defaults=((),))
-dict_iteritems  = StdObjSpaceMultiMethod('iteritems',     1)
-dict_iterkeys   = StdObjSpaceMultiMethod('iterkeys',      1)
-dict_itervalues = StdObjSpaceMultiMethod('itervalues',    1)
-dict_reversed   = StdObjSpaceMultiMethod('__reversed__',      1)
+dict_copy       = SMM('copy',          1,
+                      doc='D.copy() -> a shallow copy of D')
+dict_items      = SMM('items',         1,
+                      doc="D.items() -> list of D's (key, value) pairs, as"
+                          ' 2-tuples')
+dict_keys       = SMM('keys',          1,
+                      doc="D.keys() -> list of D's keys")
+dict_values     = SMM('values',        1,
+                      doc="D.values() -> list of D's values")
+dict_has_key    = SMM('has_key',       2,
+                      doc='D.has_key(k) -> True if D has a key k, else False')
+dict_clear      = SMM('clear',         1,
+                      doc='D.clear() -> None.  Remove all items from D.')
+dict_get        = SMM('get',           3, defaults=(None,),
+                      doc='D.get(k[,d]) -> D[k] if k in D, else d.  d defaults'
+                          ' to None.')
+dict_pop        = SMM('pop',           2, w_varargs=True,
+                      doc='D.pop(k[,d]) -> v, remove specified key and return'
+                          ' the corresponding value\nIf key is not found, d is'
+                          ' returned if given, otherwise KeyError is raised')
+dict_popitem    = SMM('popitem',       1,
+                      doc='D.popitem() -> (k, v), remove and return some (key,'
+                          ' value) pair as a\n2-tuple; but raise KeyError if D'
+                          ' is empty')
+dict_setdefault = SMM('setdefault',    3, defaults=(None,),
+                      doc='D.setdefault(k[,d]) -> D.get(k,d), also set D[k]=d'
+                          ' if k not in D')
+dict_update     = SMM('update',        1, general__args__=True,
+                      doc='D.update(E, **F) -> None.  Update D from E and F:'
+                          ' for k in E: D[k] = E[k]\n(if E has keys else: for'
+                          ' (k, v) in E: D[k] = v) then: for k in F: D[k] ='
+                          ' F[k]')
+dict_iteritems  = SMM('iteritems',     1,
+                      doc='D.iteritems() -> an iterator over the (key, value)'
+                          ' items of D')
+dict_iterkeys   = SMM('iterkeys',      1,
+                      doc='D.iterkeys() -> an iterator over the keys of D')
+dict_itervalues = SMM('itervalues',    1,
+                      doc='D.itervalues() -> an iterator over the values of D')
+dict_reversed   = SMM('__reversed__',      1)
 
 def dict_reversed__ANY(space, w_dict):
     raise OperationError(space.w_TypeError, space.wrap('argument to reversed() must be a sequence'))
@@ -30,13 +55,21 @@ def dict_reversed__ANY(space, w_dict):
 # gateway is imported in the stdtypedef module
 app = gateway.applevel('''
 
-    def update(d, o):
+    def update1(d, o):
         if hasattr(o, 'keys'):
             for k in o.keys():
                 d[k] = o[k]
         else:
             for k,v in o:
                 d[k] = v
+
+    def update(d, *args, **kwargs):
+        if len(args) == 1:
+            update1(d, args[0])
+        elif len(args) > 1:
+            raise TypeError("update takes at most 1 (non-keyword) argument")
+        if kwargs:
+            update1(d, kwargs)
 
     def popitem(d):
         k = d.keys()
@@ -85,7 +118,7 @@ app = gateway.applevel('''
 ''', filename=__file__)
 #XXX what about dict.fromkeys()?
 
-dict_update__ANY_ANY         = app.interphook("update")
+dict_update__ANY             = app.interphook("update")
 dict_popitem__ANY            = app.interphook("popitem")
 dict_get__ANY_ANY_ANY        = app.interphook("get")
 dict_setdefault__ANY_ANY_ANY = app.interphook("setdefault")
@@ -93,15 +126,15 @@ dict_pop__ANY_ANY            = app.interphook("pop")
 dict_iteritems__ANY          = app.interphook("iteritems")
 dict_iterkeys__ANY           = app.interphook("iterkeys")
 dict_itervalues__ANY         = app.interphook("itervalues")
+update1                      = app.interphook("update1")
 
 register_all(vars(), globals())
 
 # ____________________________________________________________
 
 def descr__new__(space, w_dicttype, __args__):
-    from pypy.objspace.std.dictobject import W_DictObject
-    w_obj = space.allocate_instance(W_DictObject, w_dicttype)
-    W_DictObject.__init__(w_obj, space)
+    w_obj = space.allocate_instance(space.DictObjectCls, w_dicttype)
+    space.DictObjectCls.__init__(w_obj, space)
     return w_obj
 
 # ____________________________________________________________
@@ -118,9 +151,97 @@ dict(**kwargs) -> new dictionary initialized with the name=value pairs
     in the keyword argument list.  For example:  dict(one=1, two=2)''',
     __new__ = newmethod(descr__new__,
                         unwrap_spec=[gateway.ObjSpace,gateway.W_Root,gateway.Arguments]),
+    __hash__ = no_hash_descr,
     )
 dict_typedef.registermethods(globals())
 
+# ____________________________________________________________
+
+def descr_dictiter__reduce__(w_self, space):
+    """
+    This is a slightly special case of pickling.
+    Since iteration over a dict is a bit hairy,
+    we do the following:
+    - create a clone of the dict iterator
+    - run it to the original position
+    - collect all remaining elements into a list
+    At unpickling time, we just use that list
+    and create an iterator on it.
+    This is of course not the standard way.
+
+    XXX to do: remove this __reduce__ method and do
+    a registration with copy_reg, instead.
+    """
+    from pypy.interpreter.mixedmodule import MixedModule
+    w_mod    = space.getbuiltinmodule('_pickle_support')
+    mod      = space.interp_w(MixedModule, w_mod)
+    new_inst = mod.get('dictiter_surrogate_new')
+    w_typeobj = space.gettypeobject(dictiter_typedef)
+    
+    from pypy.interpreter.mixedmodule import MixedModule
+    if space.config.objspace.std.withstrdict:
+        from pypy.objspace.std.dictstrobject import \
+            W_DictStrIter_Keys as W_DictIter_Keys, \
+            W_DictStrIter_Values as W_DictIter_Values, \
+            W_DictStrIter_Items as W_DictIter_Items
+    else:
+        from pypy.objspace.std.dictobject import \
+            W_DictIter_Keys, W_DictIter_Values, W_DictIter_Items
+    
+    # we cannot call __init__ since we don't have the original dict
+    if isinstance(w_self, W_DictIter_Keys):
+        w_clone = space.allocate_instance(W_DictIter_Keys, w_typeobj)
+    elif isinstance(w_self, W_DictIter_Values):
+        w_clone = space.allocate_instance(W_DictIter_Values, w_typeobj)
+    elif isinstance(w_self, W_DictIter_Items):
+        w_clone = space.allocate_instance(W_DictIter_Items, w_typeobj)
+    else:
+        msg = "unsupported dictiter type '%s' during pickling" % (w_self, )
+        raise OperationError(space.w_TypeError, space.wrap(msg))
+    w_clone.space = space
+    w_clone.content = w_self.content
+    if space.config.objspace.std.withstrdict:
+        w_clone.content_str = w_self.content_str
+    w_clone.len = w_self.len
+    w_clone.pos = 0
+    w_clone.setup_iterator()
+    # spool until we have the same pos
+    while w_clone.pos < w_self.pos:
+        w_obj = w_clone.next_entry()
+        w_clone.pos += 1
+    stuff = [w_clone.next_entry() for i in range(w_clone.pos, w_clone.len)]
+    w_res = space.newlist(stuff)
+    tup      = [
+        w_res
+    ]
+    w_ret = space.newtuple([new_inst, space.newtuple(tup)])
+    return w_ret    
+
+# ____________________________________________________________
+
 
 dictiter_typedef = StdTypeDef("dictionaryiterator",
+    __reduce__ = gateway.interp2app(descr_dictiter__reduce__,
+                           unwrap_spec=[gateway.W_Root, gateway.ObjSpace]),
     )
+#note: registering in dictobject.py
+
+
+### fragment for frame object left here
+        #w(10),
+        #w(self.co_argcount), 
+        #w(self.co_nlocals), 
+        #w(self.co_stacksize), 
+        #w(self.co_flags),
+        #w(self.co_code), 
+        #space.newtuple(self.co_consts_w), 
+        #space.newtuple(self.co_names_w), 
+        #space.newtuple([w(v) for v in self.co_varnames]), 
+        #w(self.co_filename),
+        #w(self.co_name), 
+        #w(self.co_firstlineno),
+        #w(self.co_lnotab), 
+        #space.newtuple([w(v) for v in self.co_freevars]),
+        #space.newtuple([w(v) for v in self.co_cellvars]),
+        #hidden_applevel=False, magic = 62061 | 0x0a0d0000
+

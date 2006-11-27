@@ -1,56 +1,118 @@
 import autopath
 import py
-from pypy.translator.c.node import PyObjectNode
+from pypy.translator.c.node import PyObjectNode, PyObjHeadNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import compile_c_module
-from pypy.translator.tool.cbuild import build_executable, CCompiler
+from pypy.translator.tool.cbuild import build_executable, CCompiler, ProfOpt
 from pypy.translator.tool.cbuild import import_module_from_directory
+from pypy.translator.tool.cbuild import check_under_under_thread
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.tool import isolate
 from pypy.translator.locality.calltree import CallTree
-from pypy.translator.c.support import log
+from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
+from pypy.translator.c import gc
 
 class CBuilder(object):
     c_source_filename = None
     _compiled = False
     symboltable = None
-    stackless = False
+    modulename = None
     
-    def __init__(self, translator, entrypoint, gcpolicy=None, libraries=None, thread_enabled=False):
+    def __init__(self, translator, entrypoint, config=None, libraries=None,
+                 gcpolicy=None):
         self.translator = translator
         self.entrypoint = entrypoint
+        self.originalentrypoint = entrypoint
         self.gcpolicy = gcpolicy
-        self.thread_enabled = thread_enabled
+        if config is None:
+            from pypy.config.config import Config
+            from pypy.config.pypyoption import pypy_optiondescription
+            config = Config(pypy_optiondescription)
+        if gcpolicy is not None and gcpolicy.requires_stackless:
+            config.translation.stackless = True
+        self.config = config
 
         if libraries is None:
             libraries = []
         self.libraries = libraries
+        self.exports = {}
 
-    def build_database(self):
+    def build_database(self, exports=[], pyobj_options=None):
         translator = self.translator
-        db = LowLevelDatabase(translator, standalone=self.standalone, 
-                              gcpolicy=self.gcpolicy, thread_enabled=self.thread_enabled)
 
-        if self.stackless:
-            from pypy.translator.c.stackless import StacklessData
-            db.stacklessdata = StacklessData(db)
+        gcpolicyclass = self.get_gcpolicyclass()
+
+        if self.config.translation.stackless:
+            if not self.standalone:
+                raise Exception("stackless: only for stand-alone builds")
+            
+            from pypy.translator.stackless.transform import StacklessTransformer
+            stacklesstransformer = StacklessTransformer(
+                translator, self.originalentrypoint,
+                stackless_gc=gcpolicyclass.requires_stackless)
+            self.entrypoint = stacklesstransformer.slp_entry_point
+        else:
+            stacklesstransformer = None
+
+        db = LowLevelDatabase(translator, standalone=self.standalone,
+                              gcpolicyclass=gcpolicyclass,
+                              stacklesstransformer=stacklesstransformer,
+                              thread_enabled=self.config.translation.thread)
+        # pass extra options into pyobjmaker
+        if pyobj_options:
+            for key, value in pyobj_options.items():
+                setattr(db.pyobjmaker, key, value)
 
         # we need a concrete gcpolicy to do this
         self.libraries += db.gcpolicy.gc_libraries()
 
-        # XXX the following has the side effect to generate
-        # some needed things. Find out why.
+        # give the gc a chance to register interest in the start-up functions it
+        # need (we call this for its side-effects of db.get())
+        list(db.gcpolicy.gc_startup_code())
+
+        # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
         pfname = db.get(pf)
-        # XXX
+        self.exports[self.entrypoint.func_name] = pf
+        for obj in exports:
+            if type(obj) is tuple:
+                objname, obj = obj
+            elif hasattr(obj, '__name__'):
+                objname = obj.__name__
+            else:
+                objname = None
+            po = self.getentrypointptr(obj)
+            poname = db.get(po)
+            objname = objname or poname
+            if objname in self.exports:
+                raise NameError, 'duplicate name in export: %s is %s and %s' % (
+                    objname, db.get(self.exports[objname]), poname)
+            self.exports[objname] = po
         db.complete()
+
+        # add library dependencies
+        seen = dict.fromkeys(self.libraries)
+        for node in db.globalcontainers():
+            if hasattr(node, 'libraries'):
+                for library in node.libraries:
+                    if library not in seen:
+                        self.libraries.append(library)
+                        seen[library] = True
         return db
 
-    def generate_source(self, db=None):
+    have___thread = None
+
+
+    def get_gcpolicyclass(self):
+        if self.gcpolicy is None:
+            return gc.name_to_gcpolicy[self.config.translation.gc]
+        return self.gcpolicy
+
+    def generate_source(self, db=None, defines={}):
         assert self.c_source_filename is None
         translator = self.translator
 
@@ -59,21 +121,31 @@ class CBuilder(object):
         pf = self.getentrypointptr()
         pfname = db.get(pf)
 
-        modulename = uniquemodulename('testing')
+        if self.modulename is None:
+            self.modulename = uniquemodulename('testing')
+        modulename = self.modulename
         targetdir = udir.ensure(modulename, dir=1)
         self.targetdir = targetdir
-        defines = {}
-        # defines={'COUNT_OP_MALLOCS': 1}
+        defines = defines.copy()
+        if self.config.translation.countmallocs:
+            defines['COUNT_OP_MALLOCS'] = 1
+        if CBuilder.have___thread is None:
+            CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
+            assert not self.config.translation.instrument
             from pypy.translator.c.symboltable import SymbolTable
-            self.symboltable = SymbolTable()
+            # XXX fix symboltable
+            #self.symboltable = SymbolTable()
             cfile, extra = gen_source(db, modulename, targetdir,
                                       defines = defines,
-                                      exports = {self.entrypoint.func_name: pf},
+                                      exports = self.exports,
                                       symboltable = self.symboltable)
         else:
-            if self.stackless:
-                defines['USE_STACKLESS'] = '1'
+            if self.config.translation.instrument:
+                defines['INSTRUMENT'] = 1
+            if CBuilder.have___thread:
+                if not self.config.translation.no__thread:
+                    defines['USE___THREAD'] = 1
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
                                                  entrypointname = pfname,
                                                  defines = defines)
@@ -81,15 +153,28 @@ class CBuilder(object):
         self.extrafiles = extra
         if self.standalone:
             self.gen_makefile(targetdir)
-        return cfile 
+        return cfile
+
+    def generate_graphs_for_llinterp(self, db=None):
+        # prepare the graphs as when the source is generated, but without
+        # actually generating the source.
+        if db is None:
+            db = self.build_database()
+        for node in db.containerlist:
+            if isinstance(node, FuncNode):
+                for funcgen in node.funcgens:
+                    funcgen.patch_graph(copy_graph=False)
+        return db
 
 
 class CExtModuleBuilder(CBuilder):
     standalone = False
     c_ext_module = None 
 
-    def getentrypointptr(self):
-        return lltype.pyobjectptr(self.entrypoint)
+    def getentrypointptr(self, obj=None):
+        if obj is None:
+            obj = self.entrypoint
+        return lltype.pyobjectptr(obj)
 
     def compile(self):
         assert self.c_source_filename 
@@ -135,16 +220,26 @@ class CStandaloneBuilder(CBuilder):
         # XXX check that the entrypoint has the correct
         # signature:  list-of-strings -> int
         bk = self.translator.annotator.bookkeeper
-        return getfunctionptr(bk.getdesc(self.entrypoint).cachedgraph(None))
+        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
     def getccompiler(self, extra_includes):
         # XXX for now, we always include Python.h
         from distutils import sysconfig
         python_inc = sysconfig.get_python_inc()
+        cc = self.config.translation.cc
+        profbased = None
+        if self.config.translation.instrumentctl is not None:
+            profbased = self.config.translation.instrumentctl
+        else:
+            profopt = self.config.translation.profopt
+            if profopt is not None:
+                profbased = (ProfOpt, profopt)
+
         return CCompiler(
             [self.c_source_filename] + self.extrafiles,
             include_dirs = [autopath.this_dir, python_inc] + extra_includes,
-            libraries    = self.libraries)
+            libraries    = self.libraries,
+            compiler_exe = cc, profbased = profbased)
 
     def compile(self):
         assert self.c_source_filename
@@ -178,6 +273,16 @@ class CStandaloneBuilder(CBuilder):
             cfiles.append(fn)
             ofiles.append(fn[:-2] + '.o')
 
+        if self.config.translation.cc:
+            cc = self.config.translation.cc
+        else:
+            cc = 'gcc'
+
+        if self.config.translation.profopt:
+            profopt = self.config.translation.profopt
+        else:
+            profopt = ''
+
         f = targetdir.join('Makefile').open('w')
         print >> f, '# automatically generated Makefile'
         print >> f
@@ -194,8 +299,15 @@ class CStandaloneBuilder(CBuilder):
         args = ['-I'+path for path in compiler.include_dirs]
         write_list(args, 'INCLUDEDIRS =')
         print >> f
-        print >> f, 'CFLAGS =', ' '.join(compiler.compile_extra)
+        print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
         print >> f, 'LDFLAGS =', ' '.join(compiler.link_extra)
+        if self.config.translation.thread:
+            print >> f, 'TFLAGS  = ' + '-pthread'
+        else:
+            print >> f, 'TFLAGS  = ' + ''
+        print >> f, 'PROFOPT = ' + profopt
+        print >> f, 'CC      = ' + cc
+        print >> f
         print >> f, MAKEFILE.strip()
         f.close()
 
@@ -263,28 +375,34 @@ class SourceGenerator:
     def getothernodes(self):
         return self.othernodes[:]
 
-    def splitnodesimpl(self, basecname, nodes, nextra, nbetween):
+    def splitnodesimpl(self, basecname, nodes, nextra, nbetween,
+                       split_criteria=SPLIT_CRITERIA):
         # produce a sequence of nodes, grouped into files
         # which have no more than SPLIT_CRITERIA lines
-        used = nextra
-        part = []
-        for node in nodes:
-            impl = '\n'.join(list(node.implementation())).split('\n')
-            if not impl:
-                continue
-            cost = len(impl) + nbetween
-            if used + cost > SPLIT_CRITERIA and part:
-                # split if criteria met, unless we would produce nothing.
-                yield self.uniquecname(basecname), part
-                part = []
-                used = nextra
-            part.append( (node, impl) )
-            used += cost
-        # generate left pieces
-        if part:
-            yield self.uniquecname(basecname), part
+        iternodes = iter(nodes)
+        done = [False]
+        def subiter():
+            used = nextra
+            for node in iternodes:
+                impl = '\n'.join(list(node.implementation())).split('\n')
+                if not impl:
+                    continue
+                cost = len(impl) + nbetween
+                yield node, impl
+                del impl
+                if used + cost > split_criteria:
+                    # split if criteria met, unless we would produce nothing.
+                    raise StopIteration
+                used += cost
+            done[0] = True
+        while not done[0]:
+            yield self.uniquecname(basecname), subiter()
 
     def gen_readable_parts_of_source(self, f):
+        if py.std.sys.platform != "win32":
+            split_criteria_big = SPLIT_CRITERIA * 4 
+        else:
+            split_criteria_big = SPLIT_CRITERIA
         if self.one_source_file:
             return gen_readable_parts_of_main_c_file(f, self.database,
                                                      self.preimpl)
@@ -300,10 +418,12 @@ class SourceGenerator:
         print >> fi, '/***  Structure definitions                              ***/'
         print >> fi
         for node in structdeflist:
-            print >> fi, 'struct %s;' % node.name
+            if getattr(node, 'is_external', False):
+                continue
+            print >> fi, '%s %s;' % (node.typetag, node.name)
         print >> fi
         for node in structdeflist:
-            for line in node.definition(phase=1):
+            for line in node.definition():
                 print >> fi, line
         print >> fi
         print >> fi, '/***********************************************************/'
@@ -347,21 +467,11 @@ class SourceGenerator:
         print >> fc
         print >> fc, MARKER
 
-        def render_nonempty(seq):
-            lines = list(seq)
-            if lines:
-                print >> fc, '\n'.join(lines)
-                print >> fc, MARKER
-                return len(lines) + 1
-            return 0
-
-        for node in structdeflist:
-            render_nonempty(node.definition(phase=2))
         print >> fc, '/***********************************************************/'
         fc.close()
 
         nextralines = 11 + 1
-        for name, nodesimpl in self.splitnodesimpl('nonfuncnodes.c',
+        for name, nodeiter in self.splitnodesimpl('nonfuncnodes.c',
                                                    self.othernodes,
                                                    nextralines, 1):
             print >> f, '/* %s */' % name
@@ -377,16 +487,17 @@ class SourceGenerator:
             print >> fc, '#include "src/g_include.h"'
             print >> fc
             print >> fc, MARKER
-            for node, impl in nodesimpl:
+            for node, impl in nodeiter:
                 print >> fc, '\n'.join(impl)
                 print >> fc, MARKER
             print >> fc, '/***********************************************************/'
             fc.close()
 
         nextralines = 8 + len(self.preimpl) + 4 + 1
-        for name, nodesimpl in self.splitnodesimpl('implement.c',
+        for name, nodeiter in self.splitnodesimpl('implement.c',
                                                    self.funcnodes,
-                                                   nextralines, 1):
+                                                   nextralines, 1,
+                                                   split_criteria_big):
             print >> f, '/* %s */' % name
             fc = self.makefile(name)
             print >> fc, '/***********************************************************/'
@@ -403,7 +514,7 @@ class SourceGenerator:
             print >> fc, '#include "src/g_include.h"'
             print >> fc
             print >> fc, MARKER
-            for node, impl in nodesimpl:
+            for node, impl in nodeiter:
                 print >> fc, '\n'.join(impl)
                 print >> fc, MARKER
             print >> fc, '/***********************************************************/'
@@ -425,10 +536,11 @@ def gen_readable_parts_of_main_c_file(f, database, preimplementationlines=[]):
     print >> f, '/***  Structure definitions                              ***/'
     print >> f
     for node in structdeflist:
-        print >> f, 'struct %s;' % node.name
+        if node.name and not getattr(node, 'is_external', False):
+            print >> f, '%s %s;' % (node.typetag, node.name)
     print >> f
     for node in structdeflist:
-        for line in node.definition(phase=1):
+        for line in node.definition():
             print >> f, line
     print >> f
     print >> f, '/***********************************************************/'
@@ -449,11 +561,7 @@ def gen_readable_parts_of_main_c_file(f, database, preimplementationlines=[]):
         print >> f, line
     print >> f, '#include "src/g_include.h"'
     print >> f
-    blank = False
-    for node in structdeflist:
-        for line in node.definition(phase=2):
-            print >> f, line
-        blank = True
+    blank = True
     for node in database.globalcontainers():
         if blank:
             print >> f
@@ -471,7 +579,7 @@ def gen_startupcode(f, database):
 
     # put float infinities in global constants, we should not have so many of them for now to make
     # a table+loop preferable
-    for dest, value in database.infs:
+    for dest, value in database.late_initializations:
         print >> f, "\t%s = %s;" % (dest, value)
 
     firsttime = True
@@ -518,8 +626,9 @@ def gen_source_standalone(database, modulename, targetdir,
 
     includes = {}
     for node in database.globalcontainers():
-        for include in node.includes:
-            includes[include] = True
+        if hasattr(node, 'includes'):
+            for include in node.includes:
+                includes[include] = True
     includes = includes.keys()
     includes.sort()
     for include in includes:
@@ -537,15 +646,18 @@ def gen_source_standalone(database, modulename, targetdir,
     sg.set_strategy(targetdir)
     sg.gen_readable_parts_of_source(f)
 
-    # 2bis) stackless data
-    if hasattr(database, 'stacklessdata'):
-        database.stacklessdata.writefiles(sg)
-
     # 3) start-up code
     print >> f
     gen_startupcode(f, database)
 
     f.close()
+
+    if 'INSTRUMENT' in defines:
+        fi = incfilename.open('a')
+        n = database.instrument_ncounter
+        print >>fi, "#define INSTRUMENT_NCOUNTER %d" % n
+        fi.close()
+    
     return filename, sg.getextrafiles()
 
 
@@ -578,8 +690,9 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
 
     includes = {}
     for node in database.globalcontainers():
-        for include in node.includes:
-            includes[include] = True
+        if hasattr(node, 'includes'):
+            for include in node.includes:
+                includes[include] = True
     includes = includes.keys()
     includes.sort()
     for include in includes:
@@ -630,11 +743,20 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     print >> f, '/***  Table of global PyObjects                          ***/'
     print >> f
     print >> f, 'static globalobjectdef_t globalobjectdefs[] = {'
-    for node in database.globalcontainers():
-        if isinstance(node, PyObjectNode):
+    for node in database.containerlist:
+        if isinstance(node, (PyObjectNode, PyObjHeadNode)):
             for target in node.where_to_copy_me:
-                print >> f, '\t{%s, "%s"},' % (target, node.name)
-    print >> f, '\t{ NULL }\t/* Sentinel */'
+                print >> f, '\t{%s, "%s"},' % (target, node.exported_name)
+    print >> f, '\t{ NULL, NULL }\t/* Sentinel */'
+    print >> f, '};'
+    print >> f
+    print >> f, 'static cpyobjheaddef_t cpyobjheaddefs[] = {'
+    for node in database.containerlist:
+        if isinstance(node, PyObjHeadNode):
+            print >> f, '\t{"%s", %s, %s},' % (node.exported_name,
+                                               node.ptrname,
+                                               node.get_setupfn_name())
+    print >> f, '\t{ NULL, NULL, NULL }\t/* Sentinel */'
     print >> f, '};'
     print >> f
     print >> f, '/***********************************************************/'
@@ -643,15 +765,17 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     print >> f, 'static globalfunctiondef_t globalfunctiondefs[] = {'
     wrappers = pyobjmaker.wrappers.items()
     wrappers.sort()
-    for globalobject_name, (base_name, wrapper_name) in wrappers:
+    for globalobject_name, (base_name, wrapper_name, func_doc) in wrappers:
         print >> f, ('\t{&%s, "%s", {"%s", (PyCFunction)%s, '
-                     'METH_VARARGS|METH_KEYWORDS}},' % (
+                     'METH_VARARGS|METH_KEYWORDS, %s}},' % (
             globalobject_name,
             globalobject_name,
             base_name,
-            wrapper_name))
+            wrapper_name,
+            func_doc and c_string_constant(func_doc) or 'NULL'))
     print >> f, '\t{ NULL }\t/* Sentinel */'
     print >> f, '};'
+    print >> f, 'static globalfunctiondef_t *globalfunctiondefsptr = &globalfunctiondefs[0];'
     print >> f
     print >> f, '/***********************************************************/'
     print >> f, '/***  Frozen Python bytecode: the initialization code    ***/'
@@ -689,6 +813,7 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
         pyobjnode = database.containernodes[pyobjptr._obj]
         print >> f, '\tPyModule_AddObject(m, "%s", %s);' % (publicname,
                                                             pyobjnode.name)
+    print >> f, '\tcall_postsetup(m);'
     print >> f, '}'
     f.close()
 
@@ -723,14 +848,31 @@ setup(name="%(modulename)s",
 '''
 
 MAKEFILE = '''
-CC = gcc
 
 $(TARGET): $(OBJECTS)
-\t$(CC) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
+\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
 
 %.o: %.c
 \t$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)
 
 clean:
-\trm -f $(OBJECTS)
+\trm -f $(OBJECTS) $(TARGET)
+
+debug:
+\tmake CFLAGS="-g -DRPY_ASSERT"
+
+debug_exc:
+\tmake CFLAGS="-g -DRPY_ASSERT -DDO_LOG_EXC"
+
+debug_mem:
+\tmake CFLAGS="-g -DRPY_ASSERT -DNO_OBMALLOC"
+
+profile:
+\tmake CFLAGS="-pg $(CFLAGS)" LDFLAGS="-pg $(LDFLAGS)"
+
+profopt:
+\tmake CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)"
+\t./$(TARGET) $(PROFOPT)
+\trm -f $(OBJECTS) $(TARGET)
+\tmake CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)"
 '''

@@ -4,7 +4,7 @@ import os, time, sys
 from pypy.tool.udir import udir
 from pypy.translator.c.test.test_genc import compile
 from pypy.translator.c.extfunc import EXTERNALS
-from pypy.rpython import ros
+from pypy.rlib import ros
 
 def test_all_suggested_primitives():
     for modulename in ['ll_math', 'll_os', 'll_os_path', 'll_time']:
@@ -294,7 +294,7 @@ def test_time_time():
 
 
 def test_rarith_parts_to_float():
-    from pypy.rpython.rarithmetic import parts_to_float
+    from pypy.rlib.rarithmetic import parts_to_float
     def fn(sign, beforept, afterpt, exponent):
         return parts_to_float(sign, beforept, afterpt, exponent)
 
@@ -313,7 +313,7 @@ def test_rarith_parts_to_float():
         assert f(*parts) == val
 
 def test_rarith_formatd():
-    from pypy.rpython.rarithmetic import formatd
+    from pypy.rlib.rarithmetic import formatd
     def fn(x):
         return formatd("%.2f", x)
 
@@ -457,6 +457,143 @@ def test_strerror():
     for i in range(4):
         res = f1(i)
         assert res == os.strerror(i)
+
+def test_pipe_dup_dup2():
+    def does_stuff():
+        a, b = os.pipe()
+        c = os.dup(a)
+        d = os.dup(b)
+        assert a != b
+        assert a != c
+        assert a != d
+        assert b != c
+        assert b != d
+        assert c != d
+        os.close(c)
+        os.dup2(d, c)
+        e, f = os.pipe()
+        assert e != a
+        assert e != b
+        assert e != c
+        assert e != d
+        assert f != a
+        assert f != b
+        assert f != c
+        assert f != d
+        assert f != e
+        os.close(a)
+        os.close(b)
+        os.close(c)
+        os.close(d)
+        os.close(e)
+        os.close(f)
+        return 42
+    f1 = compile(does_stuff, [])
+    res = f1()
+    assert res == 42
+
+def test_os_chmod():
+    tmpfile = str(udir.join('test_os_chmod.txt'))
+    f = open(tmpfile, 'w')
+    f.close()
+    # use a witness for the permissions we should expect -
+    # on Windows it is not possible to change all the bits with chmod()
+    tmpfile2 = str(udir.join('test_os_chmod_witness.txt'))
+    f = open(tmpfile2, 'w')
+    f.close()
+    def does_stuff(mode):
+        os.chmod(tmpfile, mode)
+    f1 = compile(does_stuff, [int])
+    f1(0000)
+    os.chmod(tmpfile2, 0000)
+    assert os.stat(tmpfile).st_mode & 0777 == os.stat(tmpfile2).st_mode & 0777
+    f1(0644)
+    os.chmod(tmpfile2, 0644)
+    assert os.stat(tmpfile).st_mode & 0777 == os.stat(tmpfile2).st_mode & 0777
+
+def test_os_rename():
+    tmpfile1 = str(udir.join('test_os_rename_1.txt'))
+    tmpfile2 = str(udir.join('test_os_rename_2.txt'))
+    f = open(tmpfile1, 'w')
+    f.close()
+    def does_stuff():
+        os.rename(tmpfile1, tmpfile2)
+    f1 = compile(does_stuff, [])
+    f1()
+    assert os.path.exists(tmpfile2)
+    assert not os.path.exists(tmpfile1)
+
+if hasattr(os, 'getpid'):
+    def test_os_getpid():
+        def does_stuff():
+            return os.getpid()
+        f1 = compile(does_stuff, [])
+        res = f1()
+        assert res == os.getpid()
+
+if hasattr(os, 'link'):
+    def test_links():
+        import stat
+        tmpfile1 = str(udir.join('test_links_1.txt'))
+        tmpfile2 = str(udir.join('test_links_2.txt'))
+        tmpfile3 = str(udir.join('test_links_3.txt'))
+        f = open(tmpfile1, 'w')
+        f.close()
+        def does_stuff():
+            os.symlink(tmpfile1, tmpfile2)
+            os.link(tmpfile1, tmpfile3)
+            assert os.readlink(tmpfile2) == tmpfile1
+            flag= 0
+            st = os.lstat(tmpfile1)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            st = os.lstat(tmpfile2)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            st = os.lstat(tmpfile3)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            return flag
+        f1 = compile(does_stuff, [])
+        res = f1()
+        assert res == 100110
+        assert os.path.islink(tmpfile2)
+        assert not os.path.islink(tmpfile3)
+
+if hasattr(os, 'fork'):
+    def test_fork():
+        def does_stuff():
+            pid = os.fork()
+            if pid == 0:   # child
+                os._exit(4)
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            return status1
+        f1 = compile(does_stuff, [])
+        status1 = f1()
+        assert os.WIFEXITED(status1)
+        assert os.WEXITSTATUS(status1) == 4
+elif hasattr(os, 'waitpid'):
+    # windows has no fork but some waitpid to be emulated
+    def test_waitpid():
+        def does_stuff():
+            prog = sys.executable
+            prog = str(prog)
+            args = [prog]
+#            args = [prog, '-c', '"import os;os._exit(4)"']
+#           note that the above variant creates a bad array
+            args.append('-c')
+            args.append('"import os;os._exit(4)"')
+            pid = os.spawnv(os.P_NOWAIT, prog, args)
+            #if pid == 0:   # child
+            #    os._exit(4)
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            return status1
+        f1 = compile(does_stuff, [])
+        status1 = f1()
+        # for what reason do they want us to shift by 8? See the doc
+        assert status1 >> 8 == 4
 
 # ____________________________________________________________
 

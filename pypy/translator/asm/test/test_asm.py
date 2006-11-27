@@ -1,7 +1,8 @@
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.backendopt.all import backend_optimizations
-from pypy.rpython.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.translator.asm import genasm
+from pypy import conftest
 import py
 import os
 
@@ -27,7 +28,7 @@ class TestAsm(object):
         t.checkgraphs()
         
         backend_optimizations(t)
-        if view:
+        if view or conftest.option.view:
             t.view()
         graph = graphof(t, func)
         return genasm.genasm(graph, self.processor)

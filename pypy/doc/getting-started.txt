@@ -7,53 +7,67 @@ PyPy - Getting Started
 
 .. _howtopypy: 
 
+What is PyPy ?
+==============
+
+PyPy is an implementation of the Python_ programming language written in
+Python itself, flexible and easy to experiment with.  Our long-term goals are
+to target a large variety of platforms, small and large, by providing a
+compiler toolsuite that can produce custom Python versions.  Platform, memory
+and threading models are to become aspects of the translation process - as
+opposed to encoding low level details into the language implementation itself.
+Eventually, dynamic optimization techniques - implemented as another
+translation aspect - should become robust against language changes. `more...`_
+
+.. _Python: http://docs.python.org/ref
+.. _`more...`: http://codespeak.net/pypy/dist/pypy/doc/architecture.html
+
 Just the facts 
 ============== 
 
-getting & running the PyPy 0.8 release 
------------------------------------------
+.. _gettingpypy: 
+
+Downloading & running the PyPy 0.9 release 
+-------------------------------------------
 
 Download one of the following release files and unpack it: 
 
-*pypy-0.8*
+*pypy-0.9*
     
   * download one of 
 
-    * `pypy-0.8.0.tar.bz2`_ (unix line endings) or
-    * `pypy-0.8.0.tar.gz`_ (unix line endings) or
-    * `pypy-0.8.0.zip`_ (windows line-endings) and unpack it 
+    * `pypy-0.9.0.tar.bz2`_ (unix line endings) or
+    * `pypy-0.9.0.tar.gz`_ (unix line endings) or
+    * `pypy-0.9.0.zip`_ (windows line-endings) and unpack it 
     
   * alternatively run 
   
-    * ``svn co http://codespeak.net/svn/pypy/release/0.8.x pypy-0.8.x``
-      (the 0.8 maintenance branch)
+    * ``svn co http://codespeak.net/svn/pypy/release/0.9.x pypy-0.9.x``
+      (the 0.9 maintenance branch)
 
-then change to the ``pypy-0.8.0`` or ``pypy-0.8.x`` directory
-and execute the following command line:: 
+to get it from the subversion repository then change to the
+``pypy-0.9.0`` or ``pypy-0.9.x`` directory and execute the following
+command line::
 
     python pypy/bin/py.py 
 
-This will give you a PyPy prompt, i.e. a very compliant 
-Python interpreter implemented in Python.  PyPy passes 
-around `90% of CPythons core language regression tests`_. 
-Because this invocation of PyPy still runs on top of 
-CPython, it runs around 2000 times slower than the 
-original CPython.  
+This will give you a PyPy prompt, i.e. a very compliant Python
+interpreter implemented in Python.  PyPy passes around `95% of
+CPythons core language regression tests`_.  Because this invocation of
+PyPy still runs on top of CPython, it runs around 2000 times slower
+than the original CPython.
 
 However, since the 0.7.0 release it is possible to use PyPy to `translate
 itself to lower level languages`_ after which it runs standalone, is not
 dependant on CPython anymore and becomes faster.
 
-.. _`90% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
-.. _`pypy-0.8.0.tar.bz2`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.tar.bz2
-.. _`pypy-0.8.0.zip`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.zip
-.. _`pypy-0.8.0.tar.gz`: http://code2.codespeak.net/download/pypy/pypy-0.8.0.tar.gz
+.. _`95% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
+.. _`pypy-0.9.0.tar.bz2`: http://codespeak.net/download/pypy/pypy-0.9.0.tar.bz2
+.. _`pypy-0.9.0.zip`: http://codespeak.net/download/pypy/pypy-0.9.0.zip
+.. _`pypy-0.9.0.tar.gz`: http://codespeak.net/download/pypy/pypy-0.9.0.tar.gz
 
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
-
-**WARNING**: because of an ongoing major refactoring some of the examples
-below don't work in the svn version. Please use the 0.8.0 release for now!
 
 If you want to play with the ongoing development PyPy version 
 you can check it out from the repository using subversion. Download 
@@ -89,7 +103,7 @@ may just `start reading sources`_ .
 
 .. _`documentation section`: index.html 
 
-running all of PyPy's tests  
+Running all of PyPy's tests  
 ---------------------------
 
 If you want to see if PyPy works on your machine/platform 
@@ -146,8 +160,9 @@ in pystones::
     >>>> pystone.main(10)
 
 The parameter is the number of loops to run through the test. The
-default is 50000, which is far too many to run in a reasonable time
-on the current PyPy implementation.
+default is 50000, which is far too many to run in a non-translated
+PyPy version (i.e. when PyPy's interpreter itself is being interpreted 
+by CPython). 
 
 py.py options
 +++++++++++++
@@ -166,7 +181,7 @@ script name on the command line::
 
     python py.py ../../lib-python/2.4.1/test/pystone.py 10
 
-special PyPy features 
+Special PyPy features 
 -------------------------- 
 
 Interpreter-level console
@@ -221,7 +236,7 @@ it, set ``__pytrace__=1`` on the interactive PyPy console::
 
 .. _ `lazily computed objects`:
 
-lazily computed objects 
+Lazily computed objects 
 +++++++++++++++++++++++
 
 One of the original features provided by PyPy is the "thunk" 
@@ -231,6 +246,7 @@ transparent manner::
     cd pypy/bin
     python py.py -o thunk
 
+    >>>> from pypymagic import thunk
     >>>> def longcomputation(lst):
     ....     print "computing..."
     ....     return sum(lst)
@@ -258,6 +274,40 @@ It is interesting to note that this lazy-computing Python extension
 is solely implemented in a small `objspace/thunk.py`_ file consisting 
 of around 100 lines of code. Since the 0.8.0 release it is even possible
 to `translate PyPy with the thunk object space`_.
+
+Logic programming
++++++++++++++++++
+
+People familiar with logic programming languages will be interested to
+know that PyPy optionally supports logic variables and constraint-based
+programming.  Among the many interesting features of logic programming
+-- like unification -- this subsumes the thunk object space by
+providing a more extensive way to deal with laziness.
+
+Try it out::
+
+    cd pypy/bin
+    python py.py -o logic
+
+    >>>> X = newvar()         # a logic variable
+    >>>> bind(X, 42)          # give it a value
+    >>>> assert X / 2 == 21   # then use it
+    >>>> assert type(X) is int
+
+    >>>> X, Y, Z = newvar(), newvar(), newvar()  # three logic vars
+    >>>> unify({'hello': Y, 'world': Z}, X)      # a complex unification
+    >>>> bind(Y, 5)                              # then give values to Y
+    >>>> bind(Z, 7)                              # ... and Z
+    >>>> X
+    {'hello': 5, 'world': 7}
+
+    >>>> bind(Z, 8)
+    RuntimeError: Cannot bind twice
+
+Read more about `Logic Object space features`_.
+
+.. _`Logic Object space features`: howto-logicobjspace-0.9.html
+
 
 Running the tests
 +++++++++++++++++
@@ -320,48 +370,45 @@ you need to:
     `Dot Graphviz`_ that does not crash. This is only needed if you want to
     look at the flowgraphs.
 
-To start the interactive translator do::
+To start the interactive translator shell do::
 
     cd pypy/bin
-    python translator.py
+    python translatorshell.py
 
 Test snippets of translatable code are provided in the file
 ``pypy/translator/test/snippet.py``, which is imported under the name
-``test``.  For example::
+``snippet``.  For example::
 
-    >>> t = Translator(test.is_perfect_number)
+    >>> t = Translation(snippet.is_perfect_number)
     >>> t.view()
         
 After that, the graph viewer pops up, that lets you interactively inspect the
 flowgraph. To move around, click on something that you want to inspect.
 To get help about how to use it, press 'H'. To close it again, press 'Q'.
 
-trying out the type annotator
+Trying out the type annotator
 +++++++++++++++++++++++++++++
 
 We have a type annotator that can completely infer types for functions like
 ``is_perfect_number`` (as well as for much larger examples)::
 
-    >>> a = t.annotate([int])
+    >>> t.annotate([int])
     >>> t.view()
 
-Move the mouse over variable names (in red) to see their inferred types. To
-perform simplifications based on the annotation you can do::
-
-    >>> a.simplify()
+Move the mouse over variable names (in red) to see their inferred types.
 
 
-translating the flow graph to C code
+Translating the flow graph to C code
 ++++++++++++++++++++++++++++++++++++
 
 The graph can be turned into C code::
 
-   >>> t.specialize()
-   >>> f = t.ccompile()
+   >>> t.rtype()
+   >>> f = t.compile_c()
 
 The first command replaces the operations with other low level versions that
-only use low level types that are available in C (e.g. int). This can also be
-ommited although it is not recommended. To try out the compiled version::
+only use low level types that are available in C (e.g. int). To try out the
+compiled version::
 
    >>> f(5)
    False
@@ -370,37 +417,86 @@ ommited although it is not recommended. To try out the compiled version::
 
 .. _LLVM:
 
-translating the flow graph to LLVM code
+Translating the flow graph to LLVM code
 +++++++++++++++++++++++++++++++++++++++
 
 To translate for LLVM (`low level virtual machine`_) you must first have `LLVM
-installed with version 1.6`_ - the `how to install LLVM`_ provides some helpful
+installed with version 1.7`_ - the `how to install LLVM`_ provides some helpful
 hints.  Please note that you do not need the CFrontend to compile, make
 tools-only.
 
 The LLVM backend is still experimental.  However, it is very close to C backend
-functionality.  At the point of writing, it is missing a few essential
-operations, stackless support and threading support.  Calling compiled LLVM
-code from CPython is more restrictive than the C backend - the return type and
-the arguments of the entry function must be ints, floats or bools.  The
-emphasis of the LLVM backend is to compile standalone executables - please see
-the pypy/translator/llvm/demo directory for examples.
+functionality. At the point of writing, it is mostly missing stackless and
+threading support as well as the possibility to use reference counting. Calling
+compiled LLVM code from CPython is more restrictive than the C backend - the
+return type and the arguments of the entry function must be ints, floats or
+bools.  The emphasis of the LLVM backend is to compile standalone executables -
+please see the pypy/translator/llvm/demo directory for examples.
 
 Here is a simple example to try::
 
-   >>> t = Translator(test.my_gcd)
+   >>> t = Translation(snippet.my_gcd)
    >>> a = t.annotate([int, int])
-   >>> t.specialize()
-   >>> print t.llvm()
-
-   <...  really huge amount of LLVM code  ...>
-
-   >>> f = t.llvmcompile()
-   >>> f.pypy_my_gcd_wrapper(15, 10)
+   >>> t.rtype()
+   >>> f = t.compile_llvm()
+   >>> f(15, 10)
    5
 
 
-a slightly larger example
+Translating the flow graph to Javascript code
++++++++++++++++++++++++++++++++++++++++++++++
+
+The Javascript backend is still experimental but will be worked on during this
+years `Google summer of code`_. It contains some rudimentary support
+for the document object model and a good integration with PyPy's unittesting
+framework. Code can be tested with the `Spidermonkey`_ commandline javascript
+interpreter in addition to a multitude of javascript capable browsers. 
+The emphasis of the Javascript backend is to compile RPython code into
+javascript snippets that can be used in a range of browsers. The goal is
+to make it more and more capable to produce full featured web applications.
+Please see the pypy/translator/js/test directory for example unittests.
+
+Here is a simple example to try::
+.. >>> from pypy.translator.interactive import Translation
+.. >>> from pypy.translator.test import snippet 
+
+   >>> t = Translation(snippet.my_gcd)
+   >>> a = t.annotate([int, int])
+   >>> source = t.source_js()
+
+Translating the flow graph to CLI code
+++++++++++++++++++++++++++++++++++++++
+
+The CLI backend aim to translate RPython code into .NET executables:
+it is still work-in-progress, but it is already somewhat usable for
+small snippets of code since it supports classes, list, dictionaries,
+and strings. You can try out the CLI backend from the interactive
+translator shell::
+
+    >>> def myfunc(a, b): return a+b
+    ... 
+    >>> t = Translation(myfunc)
+    >>> t.annotate([int, int])
+    >>> f = t.compile_cli()
+    >>> f(4, 5)
+    9
+
+The object returned by ``compile_cli`` is a wrapper around the real
+executable: the parameters are passed as command line arguments, and
+the returned value is read from the standard output.
+
+Once you have compiled the snippet, you can also try to launch the
+executable directly from the shell; you can find the executable in one
+of the ``/tmp/usession-*`` directories::
+
+    anto@anto anto$ mono /tmp/usession-anto/main.exe 4 5
+    9
+
+To translate and run for CLI you must have the SDK installed: Windows
+users need the `.NET Frameword SDK 2.0`_, while Linux and Mac users
+can use Mono_.
+
+A slightly larger example
 +++++++++++++++++++++++++
 
 There is a small-to-medium demo showing the translator and the annotator::
@@ -419,7 +515,7 @@ compiled and executed.
 
 .. _`translate itself to lower level languages`: 
 
-translating the PyPy interpreter
+Translating the PyPy interpreter
 --------------------------------
 
 Not for the faint of heart nor the owner of a very old machine: you can
@@ -427,7 +523,7 @@ translate the whole of PyPy to low level C code. This is the largest and
 ultimate example of source that our translation toolchain can process::
 
     cd pypy/translator/goal
-    python translate_pypy.py --run
+    python translate.py --run
 
 By default the translation process will try to use the
 `Boehm-Demers-Weiser garbage collector`_ for the translated PyPy (Use
@@ -470,22 +566,27 @@ you get at the end has been enhanced with commands to facilitate locating
 functions and classes. Type ``help graphs`` for a list of the new commands.
 Help is also available on each of these new commands.
 
-The ``translate_pypy`` script itself takes a number of options controlling
-what to translate and how.  See ``translate_pypy.py -h``. Some of the more
+The ``translate.py`` script itself takes a number of options controlling
+what to translate and how.  See ``translate.py -h``. Some of the more
 interesting options are:
 
-   * ``--text``: don't show the flowgraph after the translation is done. This
-     is useful if you don't have pygame installed.
+   * ``--text``: don't show the flowgraph after the translation is
+     done. This is useful if you don't have pygame installed.
 
-   * ``--gc=boehm|ref``: choose between using the `Boehm-Demers-Weiser
-     garbage collector`_ or our own reference counting implementation
-     (as we have seen Boehm's collector is the default). 
+   * ``--stackless``: this produces a pypy-c that includes features
+     inspired by `Stackless Python <http://www.stackless.com>`__.
 
-You can also use the translate_pypy.py script to try out several smaller
+   * ``--gc=boehm|ref|framework|stacklessgc``: choose between using
+     the `Boehm-Demers-Weiser garbage collector`_, our reference
+     counting implementation or our own implementation of a mark and
+     sweep collector, with two different approaches for finding roots
+     (as we have seen Boehm's collector is the default).
+
+You can also use the translate.py script to try out several smaller
 programs, e.g. a slightly changed version of Pystone::
 
     cd pypy/translator/goal
-    python translate_pypy.py targetrpystone
+    python translate.py targetrpystone
 
 
 .. _`translate PyPy with the thunk object space`:
@@ -498,7 +599,7 @@ It is also possible to experimentally translate a PyPy version using
 the "thunk" object space::
 
     cd pypy/translator/goal
-    python translate_pypy.py --run targetthunkstandalone
+    python translate.py targetpypystandalone.py --objspace=thunk
 
 the examples in `lazily computed objects`_ should work in the translated
 result.
@@ -510,7 +611,7 @@ Translating using the LLVM backend
 To create a standalone executable using the experimental LLVM_ compiler
 infrastructure::
 
-    ./run_pypy-llvm.sh
+    ./translate.py --text --batch --backend=llvm --raisingop2direct_call targetpypystandalone.py
 
 .. _`start reading sources`: 
 
@@ -581,7 +682,7 @@ graphviz & pygame for flowgraph viewing (highly recommended)
 graphviz and pygame are both neccessary if you
 want to look at generated flowgraphs: 
 
-	graphviz: http://www.research.att.com/sw/tools/graphviz/download.html 
+	graphviz: http://www.graphviz.org/Download.php 
 
 	pygame: http://www.pygame.org/download.shtml
 
@@ -614,24 +715,31 @@ path, you might like to visit:
 Getting involved 
 ================================== 
 
-PyPy employs an open development process.  You are invited 
-to join our `pypy-dev mailing list`_ or look at the other 
-`contact possibilities`_.   We are also doing coding Sprints
-which are separatedly announced and often happen around Python
-conferences such as EuroPython or Pycon. 
+PyPy employs an open development process.  You are invited to join our
+`pypy-dev mailing list`_ or look at the other `contact
+possibilities`_.  We are also doing coding Sprints which are
+separatedly announced and often happen around Python conferences such
+as EuroPython or Pycon. Take a look at the list of upcoming events_ to
+plan where to meet with us.
 
+.. _events: http://codespeak.net/pypy/dist/pypy/doc/events.html
 .. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
 .. _`contact possibilities`: contact.html
 
 .. _`py library`: http://codespeak.net/py 
 .. _`PyPy/LLVM backend`: translation.html#llvm 
-.. _`low level virtual machine`: http://llvm.cs.uiuc.edu/
-.. _`how to install LLVM`: http://llvm.cs.uiuc.edu/docs/GettingStarted.html
+.. _`low level virtual machine`: http://llvm.org/
+.. _`how to install LLVM`: http://llvm.org/docs/GettingStarted.html
 .. _`LLVM mailing list`: http://mail.cs.uiuc.edu/mailman/listinfo/llvmdev
-.. _`LLVM installed with version 1.6`: http://llvm.cs.uiuc.edu/releases
+.. _`LLVM installed with version 1.7`: http://llvm.org/releases
 
+.. _`Spidermonkey`: http://www.mozilla.org/js/spidermonkey/
+.. _`Google summer of code`: http://code.google.com/soc
 
-.. _Dot Graphviz:           http://www.research.att.com/sw/tools/graphviz/
+.. _`.NET Frameword SDK 2.0`: http://msdn.microsoft.com/netframework/downloads/updates/default.aspx
+.. _Mono: http://www.mono-project.com/Main_Page
+
+.. _Dot Graphviz:           http://www.graphviz.org/
 .. _Pygame:                 http://www.pygame.org/
 .. _pyopcode.py:            http://codespeak.net/svn/pypy/dist/pypy/interpreter/pyopcode.py
 .. _eval.py:                http://codespeak.net/svn/pypy/dist/pypy/interpreter/eval.py

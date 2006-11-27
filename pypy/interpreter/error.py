@@ -1,8 +1,8 @@
-import autopath
 import os, sys
+from pypy.rlib.objectmodel import we_are_translated
 
 AUTO_DEBUG = os.getenv('PYPY_DEBUG')
-RECORD_INTERPLEVEL_TRACEBACK = False
+RECORD_INTERPLEVEL_TRACEBACK = True
 
 
 class OperationError(Exception):
@@ -11,22 +11,27 @@ class OperationError(Exception):
 
     OperationError instances have three public attributes (and no .args),
     w_type, w_value and application_traceback, which contain the wrapped
-    type and value describing the exception, and the unwrapped list of
-    (frame, instruction_position) making the application-level traceback.
+    type and value describing the exception, and a chained list of
+    PyTraceback objects making the application-level traceback.
     """
 
     def __init__(self, w_type, w_value, tb=None):
-        assert w_type is not None, w_value
+        if w_type is None:
+            from pypy.tool.error import FlowingError
+            raise FlowingError(w_value)
         self.w_type = w_type
         self.w_value = w_value
         self.application_traceback = tb
-        self.debug_excs = []
+        if not we_are_translated():
+            self.debug_excs = []
 
     def clear(self, space):
         # for sys.exc_clear()
         self.w_type = space.w_None
         self.w_value = space.w_None
         self.application_traceback = None
+        if not we_are_translated():
+            del self.debug_excs[:]
 
     def match(self, space, w_check_class):
         "Check if this application-level exception matches 'w_check_class'."
@@ -73,9 +78,9 @@ class OperationError(Exception):
         """Records the current traceback inside the interpreter.
         This traceback is only useful to debug the interpreter, not the
         application."""
-        if RECORD_INTERPLEVEL_TRACEBACK:
-            self.debug_excs.append(sys.exc_info())
-    record_interpreter_traceback._annspecialcase_ = "override:ignore"
+        if not we_are_translated():
+            if RECORD_INTERPLEVEL_TRACEBACK:
+                self.debug_excs.append(sys.exc_info())
 
     def print_application_traceback(self, space, file=None):
         "NOT_RPYTHON: Dump a standard application-level traceback."

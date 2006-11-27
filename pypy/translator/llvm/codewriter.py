@@ -4,17 +4,22 @@ log = log.codewriter
 
 DEFAULT_TAIL     = ''       #/tail
 DEFAULT_CCONV    = 'fastcc'    #ccc/fastcc
+DEFAULT_LINKAGE  = 'internal '       #/internal (disabled for now because of the JIT)
 
 class CodeWriter(object): 
-    def __init__(self, file, db): 
+    def __init__(self, file, db, tail=DEFAULT_TAIL, cconv=DEFAULT_CCONV,
+                                 linkage=DEFAULT_LINKAGE): 
         self.file = file
         self.word_repr = db.get_machine_word()
+        self.tail = tail
+        self.cconv = cconv
+        self.linkage = linkage
 
     def close(self): 
         self.file.close()
 
     def _resolvetail(self, tail, cconv):
-        # from: http://llvm.cs.uiuc.edu/docs/LangRef.html
+        # from: http://llvm.org/docs/LangRef.html
         # The optional "tail" marker indicates whether the callee function
         # accesses any allocas or varargs in the caller. If the "tail" marker
         # is present, the function call is eligible for tail call
@@ -59,8 +64,10 @@ class CodeWriter(object):
         self.newline()
         self._append("    %s:" % name)
 
-    def globalinstance(self, name, typeandata):
-        self._append("%s = %s global %s" % (name, "internal", typeandata))
+    def globalinstance(self, name, typeandata, linkage=None):
+        if linkage is None:
+            linkage = self.linkage
+        self._append("%s = %sglobal %s" % (name, linkage, typeandata))
 
     def typedef(self, name, type_):
         self._append("%s = type %s" % (name, type_))
@@ -71,11 +78,16 @@ class CodeWriter(object):
     def arraydef(self, name, lentype, typerepr):
         self.typedef(name, "{ %s, [0 x %s] }" % (lentype, typerepr))
 
+    def fixedarraydef(self, name, arraylen, typerepr):
+        self.typedef(name, "[%s x %s]" % (arraylen, typerepr))
+
     def funcdef(self, name, rettyperepr, argtypereprs):
         self.typedef(name, "%s (%s)" % (rettyperepr,
                                         ", ".join(argtypereprs)))
 
-    def declare(self, decl, cconv=DEFAULT_CCONV):
+    def declare(self, decl, cconv=None):
+        if cconv is None:
+            cconv = self.cconv
         self._append("declare %s %s" %(cconv, decl,))
 
     def startimpl(self):
@@ -99,9 +111,13 @@ class CodeWriter(object):
         self._indent("switch %s %s, label %%%s [%s ]"
                      % (intty, cond, defaultdest, labels))
 
-    def openfunc(self, decl, cconv=DEFAULT_CCONV): 
+    def openfunc(self, decl, cconv=None, linkage=None): 
+        if cconv is None:
+            cconv = self.cconv
+        if linkage is None:
+            linkage = self.linkage
         self.newline()
-        self._append("internal %s %s {" % (cconv, decl,))
+        self._append("%s%s %s {" % (linkage, cconv, decl,))
 
     def closefunc(self): 
         self._append("}") 
@@ -135,7 +151,16 @@ class CodeWriter(object):
                      "%(fromvar)s to %(targettype)s" % locals())
 
     def getelementptr(self, targetvar, type, typevar, indices, getptr=True):
-        # XXX comment getptr
+        # getelementptr gives you back a value for the last thing indexed
+
+        # what is getptr?
+        # ---------------
+        # All global variables in LLVM are pointers, and pointers must also be
+        # dereferenced with the getelementptr instruction (hence the int 0)
+
+        # not only that, but if we need to look into something (ie a struct)
+        # then we must get the initial pointer to ourself
+
         if getptr:
             indices = [(self.word_repr, 0)] + list(indices)
         res = "%(targetvar)s = getelementptr %(type)s %(typevar)s, " % locals()
@@ -153,8 +178,12 @@ class CodeWriter(object):
         self._indent("unwind")
 
     def call(self, targetvar, returntype, functionref, argtypes, argrefs,
-             tail=DEFAULT_TAIL, cconv=DEFAULT_CCONV):
-
+             tail=None, cconv=None):
+        if tail is None:
+            tail = self.tail
+        if cconv is None:
+            cconv = self.cconv
+            
         tail = self._resolvetail(tail, cconv)        
         args = ", ".join(["%s %s" % item for item in zip(argtypes, argrefs)])
 
@@ -173,8 +202,15 @@ class CodeWriter(object):
     def alloca(self, targetvar, vartype):
         self._indent("%s = alloca %s" % (targetvar, vartype))
 
-    def malloc(self, targetvar, vartype):
-        self._indent("%s = malloc %s" % (targetvar, vartype))
+    def malloc(self, targetvar, vartype, numelements=1):
+        if numelements == 1:
+            self._indent("%s = malloc %s" % (targetvar, vartype))
+        else:
+            assert numelements > 1
+            self._indent("%s = malloc %s, uint %s" % (targetvar,
+                                                      vartype,
+                                                      numelements))
+            
 
     def free(self, vartype, varref):
         self._indent("free %s %s" % (vartype, varref))

@@ -1,11 +1,11 @@
-# functions to query information out of the translator and annotator from the debug prompt of translate_pypy
+# functions to query information out of the translator and annotator from the debug prompt of translate
 import types
 import re
 
 import pypy.annotation.model as annmodel
 import pypy.objspace.flow.model as flowmodel
 
-# query used for sanity checks by translate_pypy
+# query used for sanity checks by translate
 
 def short_binding(annotator, var):
     try:
@@ -33,7 +33,7 @@ def polluted_qgen(translator):
     def visit(block):
         if isinstance(block, flowmodel.Block):
             for v in block.getvariables():
-                s = annotator.binding(v, extquery=True)
+                s = annotator.binding(v, None)
                 if s and s.__class__ == annmodel.SomeObject and s.knowntype != type:
                     raise Found
     for g in translator.graphs:
@@ -47,8 +47,8 @@ def check_exceptblocks_qgen(translator):
     annotator = translator.annotator
     for graph in translator.graphs:
         et, ev = graph.exceptblock.inputargs
-        s_et = annotator.binding(et, extquery=True)
-        s_ev = annotator.binding(ev, extquery=True)
+        s_et = annotator.binding(et, None)
+        s_ev = annotator.binding(ev, None)
         if s_et:
             if s_et.knowntype == type:
                 if s_et.__class__ == annmodel.SomeObject:

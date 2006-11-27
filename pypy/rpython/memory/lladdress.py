@@ -1,33 +1,39 @@
 import struct
 from pypy.rpython.memory.simulator import MemorySimulator, MemorySimulatorError
-from pypy.rpython.rarithmetic import r_uint
+from pypy.rlib.rarithmetic import r_uint
+from pypy.rpython.lltypesystem import llmemory
+from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.memory.lltypelayout import convert_offset_to_int
+from pypy.rlib.objectmodel import ComputedIntSymbolic
+
+NULL = llmemory.NULL
 
 
-class address(object):
+class _address(object):
+
     def __new__(cls, intaddress=0):
         if intaddress == 0:
-            null = cls.__dict__.get("NULL")
-            if null is not None:
-                return null
-            cls.NULL = object.__new__(cls)
-            return cls.NULL
+            return NULL
         else:
             return object.__new__(cls)
 
     def __init__(self, intaddress=0):
         self.intaddress = intaddress
 
-    def _getintattr(self): #needed to make _accessor easy
-        return self.intaddress
-
     def __add__(self, offset):
-        assert isinstance(offset, int)
-        return address(self.intaddress + offset)
+        if isinstance(offset, int):
+            return _address(self.intaddress + offset)
+        else:
+            assert isinstance(offset, llmemory.AddressOffset)
+            return _address(self.intaddress + convert_offset_to_int(offset))
 
     def __sub__(self, other):
         if isinstance(other, int):
-            return address(self.intaddress - other)
+            return _address(self.intaddress - other)
+        elif isinstance(other, llmemory.AddressOffset):
+            return _address(self.intaddress - convert_offset_to_int(other))
         else:
+            assert isinstance(other, _address)
             return self.intaddress - other.intaddress
 
     def __cmp__(self, other):
@@ -40,10 +46,23 @@ class address(object):
         return simulator.getstruct(fmt, self.intaddress)
 
     def _store(self, fmt, *values):
+        # XXX annoyance: suddenly a Symbolic changes into a Signed?!
+        from pypy.rpython.memory.lltypelayout import convert_offset_to_int
+        if len(values) == 1 and isinstance(values[0], llmemory.AddressOffset):
+            values = [convert_offset_to_int(values[0])]
+        elif len(values) == 1 and isinstance(values[0], ComputedIntSymbolic):
+            values = [values[0].compute_fn()]
         simulator.setstruct(fmt, self.intaddress, *values)
 
     def __nonzero__(self):
         return self.intaddress != 0
+
+    def _cast_to_ptr(self, EXPECTED_TYPE):
+        from pypy.rpython.memory.lltypesimulation import simulatorptr
+        return simulatorptr(EXPECTED_TYPE, self)
+
+    def _cast_to_int(self):
+        return self.intaddress
     
 
 class _accessor(object):
@@ -59,12 +78,19 @@ class _accessor(object):
     def __setitem__(self, offset, value):
         simulator.setstruct(self.format, self.intaddress + offset * self.size,
                             self.convert_to(value))
-           
+
+
 class _signed_accessor(_accessor):
     format = "l"
     size = struct.calcsize("l")
     convert_from = int
-    convert_to = int
+
+    def convert_to(self, offset):
+        from pypy.rpython.memory.lltypelayout import convert_offset_to_int
+        # XXX same annoyance as in _store
+        if isinstance(offset, llmemory.AddressOffset):
+            return convert_offset_to_int(offset)
+        return int(offset)
 
 class _unsigned_accessor(_accessor):
     format = "L"
@@ -79,70 +105,49 @@ class _char_accessor(_accessor):
     convert_to = str
 
 class _address_accessor(_accessor):
-    format = "P"
-    size = struct.calcsize("P")
-    convert_from = address
-    convert_to = address._getintattr
+    from pypy.tool.uid import HUGEVAL_FMT as format
+    from pypy.tool.uid import HUGEVAL_BYTES as size
+    convert_from = _address
+    convert_to = staticmethod(lambda addr: addr.intaddress)
 
 
-address.signed = property(_signed_accessor)
-address.unsigned = property(_unsigned_accessor)
-address.char = property(_char_accessor)
-address.address = property(_address_accessor)
+_address.signed = property(_signed_accessor)
+_address.unsigned = property(_unsigned_accessor)
+_address.char = property(_char_accessor)
+_address.address = property(_address_accessor)
 
-NULL = address()
 simulator = MemorySimulator()
 
 def raw_malloc(size):
-    return address(simulator.malloc(size))
+    return _address(simulator.malloc(size))
+
+def raw_malloc_usage(size):
+    assert isinstance(size, int)
+    return size
 
 def raw_free(addr):
     simulator.free(addr.intaddress)
+
+def raw_memclear(addr, size):
+    from pypy.rpython.lltypesystem.llmemory import fakeaddress, raw_memclear
+    if isinstance(addr, fakeaddress):
+        raw_memclear(addr, size)
+    else:
+        simulator.memclear(addr.intaddress, size)
 
 def raw_memcopy(addr1, addr2, size):
     simulator.memcopy(addr1.intaddress, addr2.intaddress, size)
 
 def get_address_of_object(obj):
-    return address(simulator.get_address_of_object(obj))
+    return _address(simulator.get_address_of_object(obj))
 
 def get_py_object(address):
     return simulator.get_py_object(address.intaddress)
 
-
-from pypy.rpython.lltypesystem import lltype
-Address = lltype.Primitive("Address", NULL)
-
-address._TYPE = Address
+_address._TYPE = llmemory.Address
 
 supported_access_types = {"signed":    lltype.Signed,
                           "unsigned":  lltype.Unsigned,
                           "char":      lltype.Char,
-                          "address":   Address,
+                          "address":   llmemory.Address,
                           }
-
-# sizeof, offsetof
-
-from pypy.rpython.objectmodel import Symbolic
-
-class OffsetOf(Symbolic):
-
-    def __init__(self, TYPE, fldname):
-        self.TYPE = TYPE
-        self.fldname = fldname
-
-    def annotation(self):
-        from pypy.annotation import model
-        return model.SomeInteger()
-
-    def __repr__(self):
-        return "<OffsetOf %r %r>" % (self.TYPE, self.fldname)
-
-def sizeof(TYPE, n=None):
-    pass
-
-def offsetof(TYPE, fldname):
-    assert fldname in TYPE._flds
-    return OffsetOf(TYPE, fldname)
-
-def itemoffsetof(TYPE, n=None):
-    pass

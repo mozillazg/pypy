@@ -2,7 +2,7 @@ from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
 from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.rpython.objectmodel import instantiate
+from pypy.rlib.objectmodel import instantiate
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
 from pypy.tool.sourcetools import func_with_new_name
@@ -11,9 +11,23 @@ from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std import stdtypedef
-from pypy.rpython.rarithmetic import r_longlong
+from pypy.rlib.rarithmetic import base_int
 import sys
 import os
+import __builtin__
+
+#check for sets
+try:
+    s = set()
+    del s
+except NameError:
+    try:
+        from sets import Set as set
+        from sets import ImmutableSet as frozenset
+    except ImportError:
+        class DummySet(object):pass
+        set = DummySet
+        frozenset = DummySet
 
 _registered_implementations = {}
 def registerimplementation(implcls):
@@ -30,15 +44,28 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     PACKAGE_PATH = 'objspace.std'
 
-    def setoptions(self, oldstyle=False):
-        self.options.oldstyle = oldstyle
+    def setoptions(self, **kwds):
+        if "oldstyle" in kwds:
+            self.config.objspace.std.oldstyle = kwds["oldstyle"]
 
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
         self._typecache = Cache()
 
         # Import all the object types and implementations
-        self.model = StdTypeModel()
+        self.model = StdTypeModel(self.config)
+
+        # XXX store the dict class on the space to access it in various places
+        if self.config.objspace.std.withstrdict:
+            from pypy.objspace.std import dictstrobject
+            self.DictObjectCls = dictstrobject.W_DictStrObject
+        elif self.config.objspace.std.withmultidict:
+            from pypy.objspace.std import dictmultiobject
+            self.DictObjectCls = dictmultiobject.W_DictMultiObject
+            self.emptydictimpl = dictmultiobject.EmptyDictImplementation(self)
+        else:
+            from pypy.objspace.std import dictobject
+            self.DictObjectCls = dictobject.W_DictObject
 
         # install all the MultiMethods into the space instance
         for name, mm in self.MM.__dict__.items():
@@ -66,9 +93,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
             globals()[cls.__name__] = cls
 
         # singletons
-        self.w_None  = W_NoneObject(self)
-        self.w_False = W_BoolObject(self, False)
-        self.w_True  = W_BoolObject(self, True)
+        self.w_None  = W_NoneObject()
+        self.w_False = W_BoolObject(False)
+        self.w_True  = W_BoolObject(True)
         from pypy.interpreter.special import NotImplemented, Ellipsis
         self.w_NotImplemented = self.wrap(NotImplemented(self))  
         self.w_Ellipsis = self.wrap(Ellipsis(self))  
@@ -98,16 +125,22 @@ class StdObjSpace(ObjSpace, DescrOperation):
                         r[s] = value
                     return r
                 dict.fromkeys = classmethod(fromkeys)
-        """) 
+        """)
 
-        if self.options.uselibfile:
-            self.inituselibfile() 
-
-        if self.options.oldstyle: 
+        if self.config.objspace.std.oldstyle:
             self.enable_old_style_classes_as_default_metaclass()
 
         # final setup
         self.setup_builtin_modules()
+        # Adding transparent proxy call
+        if self.config.objspace.std.withtproxy:
+            w_pypymagic = self.getbuiltinmodule("pypymagic")
+            from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
+        
+            self.setattr(w_pypymagic, self.wrap('transparent_proxy'),
+                          self.wrap(app_proxy))
+            self.setattr(w_pypymagic, self.wrap('get_transparent_controller'),
+                          self.wrap(app_proxy_controller))
 
     def enable_old_style_classes_as_default_metaclass(self):
         self.setitem(self.builtin.w_dict, self.wrap('__metaclass__'), self.w_classobj)
@@ -123,13 +156,13 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def setup_old_style_classes(self):
         """NOT_RPYTHON"""
         # sanity check that this approach is working and is not too late
-        assert not self.is_true(self.contains(self.builtin.w_dict,self.wrap('_classobj'))),"app-level code has seen dummy old style classes"
-        assert not self.is_true(self.contains(self.builtin.w_dict,self.wrap('_instance'))),"app-level code has seen dummy old style classes"
         w_mod, w_dic = self.create_builtin_module('_classobj.py', 'classobj')
         w_purify = self.getitem(w_dic, self.wrap('purify'))
         w_classobj = self.getitem(w_dic, self.wrap('classobj'))
         w_instance = self.getitem(w_dic, self.wrap('instance'))
         self.call_function(w_purify)
+        assert not self.is_true(self.contains(self.builtin.w_dict,self.wrap('_classobj'))),"app-level code has seen dummy old style classes"
+        assert not self.is_true(self.contains(self.builtin.w_dict,self.wrap('_instance'))),"app-level code has seen dummy old style classes"
         self.w_classobj = w_classobj
         self.w_instance = w_instance
 
@@ -151,36 +184,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         w_mod = self.wrap(mod)
         return w_mod, w_dic
 
-    def inituselibfile(self): 
-        """ NOT_RPYTHON use our application level file implementation
-            including re-wrapping sys.stdout/err/in
-        """ 
-        assert self.options.uselibfile 
-        space = self
-        # nice print helper if the below does not work 
-        # (we dont have prints working at applevel before
-        # inituselibfile is complete)
-        #from pypy.interpreter import gateway 
-        #def printit(space, w_msg): 
-        #    s = space.str_w(w_msg) 
-        #    print "$", s, 
-        #w_p = space.wrap(gateway.interp2app(printit))
-        #self.appexec([w_p], '''(p):
-        self.appexec([], '''():
-            import sys 
-            sys.stdin
-            sys.stdout
-            sys.stderr    # force unlazifying from mixedmodule 
-            from _file import file as libfile 
-            for name, value in libfile.__dict__.items(): 
-                if (name != '__dict__' and name != '__doc__'
-                    and name != '__module__'):
-                    setattr(file, name, value) 
-            sys.stdin._fdopen(0, "r", 1, '<stdin>') 
-            sys.stdout._fdopen(1, "w", 1, '<stdout>') 
-            sys.stderr._fdopen(2, "w", 0, '<stderr>') 
-        ''')
-
     def setup_exceptions(self):
         """NOT_RPYTHON"""
         ## hacking things in
@@ -195,6 +198,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             if not bases:
                 bases = [space.w_object]
             res = W_TypeObject(space, name, bases, dic)
+            res.ready()
             return res
         try:
             # note that we hide the real call method by an instance variable!
@@ -220,8 +224,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def createexecutioncontext(self):
         # add space specific fields to execution context
         ec = ObjSpace.createexecutioncontext(self)
-        ec._py_repr = self.newdict([])
+        ec._py_repr = self.newdict()
         return ec
+
+    def gettypefor(self, cls):
+        return self.gettypeobject(cls.typedef)
 
     def gettypeobject(self, typedef):
         # stdtypedef.TypeCache maps each StdTypeDef instance to its
@@ -244,48 +251,61 @@ class StdObjSpace(ObjSpace, DescrOperation):
             raise TypeError, ("attempt to wrap already wrapped exception: %s"%
                               (x,))
         if isinstance(x, int):
-            if isinstance(bool, type) and isinstance(x, bool):
+            if isinstance(x, bool):
                 return self.newbool(x)
-            return W_IntObject(self, x)
+            else:
+                return self.newint(x)
         if isinstance(x, str):
-            return W_StringObject(self, x)
+            return W_StringObject(x)
         if isinstance(x, unicode):
-            return W_UnicodeObject(self, [unichr(ord(u)) for u in x]) # xxx
+            return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
         if isinstance(x, dict):
             items_w = [(self.wrap(k), self.wrap(v)) for (k, v) in x.iteritems()]
-            return self.newdict(items_w)
+            r = self.newdict()
+            r.initialize_content(items_w)
+            return r
         if isinstance(x, float):
-            return W_FloatObject(self, x)
+            return W_FloatObject(x)
         if isinstance(x, tuple):
             wrappeditems = [self.wrap(item) for item in list(x)]
-            return W_TupleObject(self, wrappeditems)
+            return W_TupleObject(wrappeditems)
         if isinstance(x, list):
             wrappeditems = [self.wrap(item) for item in x]
-            return W_ListObject(self, wrappeditems)
+            return W_ListObject(wrappeditems)
         if isinstance(x, Wrappable):
             w_result = x.__spacebind__(self)
             #print 'wrapping', x, '->', w_result
             return w_result
-        if isinstance(x, r_longlong):
-            from pypy.objspace.std.longobject import args_from_long
-            return W_LongObject(self, *args_from_long(x))
-        if isinstance(x, long):
-            from pypy.objspace.std.longobject import args_from_long
-            return W_LongObject(self, *args_from_long(x))
-        if isinstance(x, slice):
-            return W_SliceObject(self, self.wrap(x.start),
-                                       self.wrap(x.stop),
-                                       self.wrap(x.step))
-        if isinstance(x, complex):
-            # XXX is this right?   YYY no, this is wrong right now  (CT)
-            # ZZZ hum, seems necessary for complex literals in co_consts (AR)
-            c = self.builtin.get('complex') 
-            return self.call_function(c,
-                                      self.wrap(x.real), 
-                                      self.wrap(x.imag))
+        if isinstance(x, base_int):
+            return W_LongObject.fromrarith_int(x)
 
-        if self.options.nofaking:
-            # annotation should actually not get here 
+        # _____ below here is where the annotator should not get _____
+        
+        if isinstance(x, long):
+            return W_LongObject.fromlong(x)
+        if isinstance(x, slice):
+            return W_SliceObject(self.wrap(x.start),
+                                 self.wrap(x.stop),
+                                 self.wrap(x.step))
+        if isinstance(x, complex):
+            return W_ComplexObject(x.real, x.imag)
+
+        if isinstance(x, set):
+            wrappeditems = [self.wrap(item) for item in x]
+            return W_SetObject(self, wrappeditems)
+
+        if isinstance(x, frozenset):
+            wrappeditems = [self.wrap(item) for item in x]
+            return W_FrozensetObject(self, wrappeditems)
+
+        if x is __builtin__.Ellipsis:
+            # '__builtin__.Ellipsis' avoids confusion with special.Ellipsis
+            return self.w_Ellipsis
+
+        if self.config.objspace.nofaking:
+            # annotation should actually not get here.  If it does, you get
+            # an error during rtyping because '%r' is not supported.  It tells
+            # you that there was a space.wrap() on a strange object.
             raise OperationError(self.w_RuntimeError,
                                  self.wrap("nofaking enabled: refusing "
                                            "to wrap cpython value %r" %(x,)))
@@ -311,33 +331,43 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if isinstance(w_obj, Wrappable):
             return w_obj
         if isinstance(w_obj, W_Object):
-            return w_obj.unwrap()
+            return w_obj.unwrap(self)
         raise UnwrapError, "cannot unwrap: %r" % w_obj
-        
 
     def newint(self, intval):
-        return W_IntObject(self, intval)
+        # this time-critical and circular-imports-funny method was stored
+        # on 'self' by initialize()
+        # not sure how bad this is:
+        from pypy.objspace.std.inttype import wrapint
+        return wrapint(self, intval)
 
     def newfloat(self, floatval):
-        return W_FloatObject(self, floatval)
+        return W_FloatObject(floatval)
+
+    def newcomplex(self, realval, imagval):
+        return W_ComplexObject(realval, imagval)
+
+    def newset(self, rdict_w):
+        return W_SetObject(self, rdict_w)
+
+    def newfrozenset(self, rdict_w):
+        return W_FrozensetObject(self, rdict_w)
 
     def newlong(self, val): # val is an int
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
-        return W_TupleObject(self, list_w)
+        return W_TupleObject(list_w)
 
     def newlist(self, list_w):
-        return W_ListObject(self, list_w)
+        return W_ListObject(list_w)
 
-    def newdict(self, list_pairs_w):
-        w_result = W_DictObject(self)
-        w_result.initialize_content(list_pairs_w)
-        return w_result
+    def newdict(self):
+        return self.DictObjectCls(self)
 
     def newslice(self, w_start, w_end, w_step):
-        return W_SliceObject(self, w_start, w_end, w_step)
+        return W_SliceObject(w_start, w_end, w_step)
 
     def newstring(self, chars_w):
         try:
@@ -345,7 +375,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         except ValueError:  # chr(out-of-range)
             raise OperationError(self.w_ValueError,
                                  self.wrap("character code not in range(256)"))
-        return W_StringObject(self, ''.join(chars))
+        return W_StringObject(''.join(chars))
 
     def newunicode(self, chars):
         try:
@@ -353,10 +383,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
         except ValueError, e:  # unichr(out-of-range)
             msg = "character code not in range(%s)" % hex(sys.maxunicode+1)
             raise OperationError(self.w_ValueError, self.wrap(msg))
-        return W_UnicodeObject(self, chars)
+        return W_UnicodeObject(chars)
 
     def newseqiter(self, w_obj):
-        return W_SeqIterObject(self, w_obj)
+        return W_SeqIterObject(w_obj)
 
     def type(self, w_obj):
         return w_obj.getclass(self)
@@ -376,14 +406,20 @@ class StdObjSpace(ObjSpace, DescrOperation):
         w_type = self.gettypeobject(cls.typedef)
         if self.is_w(w_type, w_subtype):
             instance =  instantiate(cls)
-        else:
+        elif cls.typedef.acceptable_as_base_class:
+            # the purpose of the above check is to avoid the code below
+            # to be annotated at all for 'cls' if it is not necessary
             w_subtype = w_type.check_user_subclass(w_subtype)
-            subcls = get_unique_interplevel_subclass(cls, w_subtype.hasdict, w_subtype.nslots != 0, w_subtype.needsdel)
+            subcls = get_unique_interplevel_subclass(cls, w_subtype.hasdict, w_subtype.nslots != 0, w_subtype.needsdel, w_subtype.weakrefable)
             instance = instantiate(subcls)
-            instance.user_setup(self, w_subtype, w_subtype.nslots)
+            instance.user_setup(self, w_subtype)
+        else:
+            raise OperationError(self.w_TypeError,
+                self.wrap("%s.__new__(%s): only for the type %s" % (
+                    w_type.name, w_subtype.getname(self, '?'), w_type.name)))
         assert isinstance(instance, cls)
         return instance
-    allocate_instance._annspecialcase_ = "specialize:arg1"
+    allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
     def unpacktuple(self, w_tuple, expected_length=-1):
         assert isinstance(w_tuple, W_TupleObject)
@@ -404,18 +440,23 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return w_one is w_two
 
     def is_true(self, w_obj):
-        # XXX don't look!
-        if type(w_obj) is W_DictObject:
-            return len(w_obj.content) != 0
+        if type(w_obj) is self.DictObjectCls:
+            return w_obj.len() != 0
         else:
             return DescrOperation.is_true(self, w_obj)
 
     def finditem(self, w_obj, w_key):
         # performance shortcut to avoid creating the OperationError(KeyError)
-        if type(w_obj) is W_DictObject:
-            return w_obj.content.get(w_key, None)
+        if type(w_obj) is self.DictObjectCls:
+            return w_obj.get(w_key, None)
+        return ObjSpace.finditem(self, w_obj, w_key)
+
+    def set_str_keyed_item(self, w_obj, w_key, w_value):
+        # performance shortcut to avoid creating the OperationError(KeyError)
+        if type(w_obj) is self.DictObjectCls:
+            w_obj.set_str_keyed_item(w_key, w_value)
         else:
-            return ObjSpace.finditem(self, w_obj, w_key)
+            self.setitem(w_obj, w_key, w_value)
 
     # support for the deprecated __getslice__, __setslice__, __delslice__
 

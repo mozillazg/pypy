@@ -2,6 +2,7 @@ from pypy.interpreter import gateway, baseobjspace, argument
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.interpreter.typedef import descr_get_dict, descr_set_dict
+from pypy.interpreter.typedef import no_hash_descr
 from pypy.interpreter.baseobjspace import SpaceCache
 from pypy.objspace.std.model import StdObjSpaceMultiMethod
 from pypy.objspace.std.multimethod import FailedToImplement
@@ -9,7 +10,9 @@ from pypy.tool.sourcetools import compile2
 
 __all__ = ['StdTypeDef', 'newmethod', 'gateway',
            'GetSetProperty', 'Member',
-           'StdObjSpaceMultiMethod', 'descr_get_dict']
+           'SMM', 'descr_get_dict', 'no_hash_descr']
+
+SMM = StdObjSpaceMultiMethod
 
 
 class StdTypeDef(TypeDef):
@@ -17,6 +20,7 @@ class StdTypeDef(TypeDef):
     def __init__(self, __name, __base=None, **rawdict):
         "NOT_RPYTHON: initialization-time only."
         TypeDef.__init__(self, __name, __base, **rawdict)
+        self.any = type("W_Any"+__name.title(), (baseobjspace.W_Root,), {'typedef': self})
         self.local_multimethods = []
 
     def registermethods(self, namespace):
@@ -34,7 +38,7 @@ def issubtypedef(a, b):
     return True
 
 def descr_del_dict(space, w_obj): # blame CPython for the existence of this one
-    w_obj.setdict(space, space.newdict([]))
+    w_obj.setdict(space, space.newdict())
 
 std_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict)
 std_dict_descr.name = '__dict__'
@@ -90,11 +94,19 @@ class TypeCache(SpaceCache):
         w_type.lazyloaders = lazyloaders
         return w_type
 
+    def ready(self, w_type):
+        w_type.ready()
+
 def hack_out_multimethods(ns):
     "NOT_RPYTHON: initialization-time only."
     result = []
+    seen = {}
     for value in ns.itervalues():
         if isinstance(value, StdObjSpaceMultiMethod):
+            if value.name in seen:
+                raise Exception("duplicate multimethod name %r" %
+                                (value.name,))
+            seen[value.name] = True
             result.append(value)
     return result
 
@@ -255,6 +267,8 @@ def wrap_trampoline_in_gateway(func, methname, multimethod):
         unwrap_spec.append('w_args')        
     if multimethod.extras.get('general__args__', False):
         unwrap_spec.append(argument.Arguments)
+    if 'doc' in multimethod.extras:
+        func.__doc__ = multimethod.extras['doc']
     return gateway.interp2app(func, app_name=methname, unwrap_spec=unwrap_spec)
 
 def slicemultimethod(space, multimethod, typedef, result, local=False):
@@ -273,7 +287,8 @@ def slicemultimethod(space, multimethod, typedef, result, local=False):
             prefix, list_of_typeorders = sliced_typeorders(
                 space.model.typeorder, multimethod, typedef, i, local=local)
             exprargs, expr, miniglobals, fallback = multimethod.install(prefix, list_of_typeorders,
-                                                                        baked_perform_call=False)
+                                                                        baked_perform_call=False,
+                                                                        base_typeorder=space.model.typeorder)
             if fallback:
                 return None   # skip empty multimethods
             trampoline = make_perform_trampoline(prefix, exprargs, expr, miniglobals,
@@ -295,3 +310,16 @@ def slicemultimethods(space, typedef):
     for multimethod in typedef.local_multimethods:
         slicemultimethod(space, multimethod, typedef, result, local=True)
     return result
+
+def multimethods_defined_on(cls):
+    """NOT_RPYTHON: enumerate the (multimethod, local_flag) for all the
+    multimethods that have an implementation whose first typed argument
+    is 'cls'.
+    """
+    from pypy.objspace.std.objspace import StdObjSpace   # XXX for now
+    typedef = cls.typedef
+    for multimethod in hack_out_multimethods(StdObjSpace.MM.__dict__):
+        if cls in multimethod.dispatch_tree:
+            yield multimethod, False
+    for multimethod in typedef.local_multimethods:
+        yield multimethod, True

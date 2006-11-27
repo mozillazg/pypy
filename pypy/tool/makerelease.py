@@ -5,11 +5,11 @@ import py
 log = py.log.Producer("log")
 logexec = py.log.Producer("exec")
 
-BASEURL = "file:///svn/pypy/release/0.8.x"
+BASEURL = "file:///svn/pypy/release/0.9.x"
 DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
 
 def usage():
-    print "usage: %s versionbasename" %(py.std.argv[0])
+    print "usage: %s versionbasename" %(py.std.sys.argv[0])
     raise SystemExit, 1
 
 def cexec(cmd): 
@@ -59,7 +59,7 @@ def copydownload(fn):
     log("copying to download location")
     #fn.copy(dtarget) 
     ddir = DDIR
-    out = cexec("rsync %(fn)s code2.codespeak.net:%(ddir)s" 
+    out = cexec("cp %(fn)s %(ddir)s" 
                 % locals())
 
 def forced_export(BASEURL, target, lineend="LF"): 
@@ -72,7 +72,7 @@ def forced_export(BASEURL, target, lineend="LF"):
 
 if __name__ == '__main__':
     argc = len(py.std.sys.argv)
-    if argc < 1:
+    if argc <= 1:
         usage()
     ver = py.std.sys.argv[1] 
     tmpdir = py.path.local("/tmp/pypy-release")

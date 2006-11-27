@@ -8,9 +8,23 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 import pypy.interpreter.pycode
 import pypy.interpreter.special
 
+option_to_typename = {
+    "withsmallint"   : ["smallintobject.W_SmallIntObject"],
+    "withstrslice"   : ["strsliceobject.W_StringSliceObject"],
+    "withstrjoin"    : ["strjoinobject.W_StringJoinObject"],
+    "withstrdict"    : ["dictstrobject.W_DictStrObject",
+                        "dictstrobject.W_DictStrIterObject"],
+    "withmultidict"  : ["dictmultiobject.W_DictMultiObject",
+                        "dictmultiobject.W_DictMultiIterObject"],
+    "withrangelist"  : ["rangeobject.W_RangeListObject",
+                        "rangeobject.W_RangeIterObject"],
+    "withtproxy" : ["proxyobject.W_TransparentList",
+                    "proxyobject.W_TransparentDict"],
+}
+
 class StdTypeModel:
 
-    def __init__(self):
+    def __init__(self, config):
         """NOT_RPYTHON: inititialization only"""
         # All the Python types that we want to provide in this StdObjSpace
         class result:
@@ -18,6 +32,9 @@ class StdTypeModel:
             from pypy.objspace.std.booltype   import bool_typedef
             from pypy.objspace.std.inttype    import int_typedef
             from pypy.objspace.std.floattype  import float_typedef
+            from pypy.objspace.std.complextype  import complex_typedef
+            from pypy.objspace.std.settype import set_typedef
+            from pypy.objspace.std.frozensettype import frozenset_typedef
             from pypy.objspace.std.tupletype  import tuple_typedef
             from pypy.objspace.std.listtype   import list_typedef
             from pypy.objspace.std.dicttype   import dict_typedef
@@ -40,10 +57,17 @@ class StdTypeModel:
         from pypy.objspace.std import boolobject
         from pypy.objspace.std import intobject
         from pypy.objspace.std import floatobject
+        from pypy.objspace.std import complexobject
+        from pypy.objspace.std import setobject
+        from pypy.objspace.std import smallintobject
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictobject
+        from pypy.objspace.std import dictstrobject
+        from pypy.objspace.std import dictmultiobject
         from pypy.objspace.std import stringobject
+        from pypy.objspace.std import strsliceobject
+        from pypy.objspace.std import strjoinobject
         from pypy.objspace.std import typeobject
         from pypy.objspace.std import sliceobject
         from pypy.objspace.std import longobject
@@ -51,6 +75,8 @@ class StdTypeModel:
         from pypy.objspace.std import iterobject
         from pypy.objspace.std import unicodeobject
         from pypy.objspace.std import dictproxyobject
+        from pypy.objspace.std import rangeobject
+        from pypy.objspace.std import proxyobject
         from pypy.objspace.std import fake
         import pypy.objspace.std.default # register a few catch-all multimethods
 
@@ -78,52 +104,130 @@ class StdTypeModel:
             pypy.interpreter.pycode.PyCode: [],
             pypy.interpreter.special.Ellipsis: [],
             }
-        for type in self.typeorder:
-            self.typeorder[type].append((type, None))
+        self.typeorder[complexobject.W_ComplexObject] = []
+        self.typeorder[setobject.W_SetObject] = []
+        self.typeorder[setobject.W_FrozensetObject] = []
+        self.typeorder[setobject.W_SetIterObject] = []
 
-        # check if we missed implementations
+        imported_but_not_registered = {
+            dictobject.W_DictObject: True,
+            dictobject.W_DictIterObject: True,
+        }
+        for option, value in config.objspace.std:
+            if option.startswith("with") and option in option_to_typename:
+                for classname in option_to_typename[option]:
+                    implcls = eval(classname)
+                    if value:
+                        self.typeorder[implcls] = []
+                    else:
+                        imported_but_not_registered[implcls] = True
+
+        if config.objspace.std.withstrdict:
+            del self.typeorder[dictobject.W_DictObject]
+            del self.typeorder[dictobject.W_DictIterObject]
+
+        #check if we missed implementations
         from pypy.objspace.std.objspace import _registered_implementations
         for implcls in _registered_implementations:
-            assert implcls in self.typeorder, (
+            assert (implcls in self.typeorder or
+                    implcls in imported_but_not_registered), (
                 "please add %r in StdTypeModel.typeorder" % (implcls,))
+
+
+        for type in self.typeorder:
+            self.typeorder[type].append((type, None))
 
         # register the order in which types are converted into each others
         # when trying to dispatch multimethods.
         # XXX build these lists a bit more automatically later
+        
+        if config.objspace.std.withsmallint:
+            self.typeorder[boolobject.W_BoolObject] += [
+                (smallintobject.W_SmallIntObject, boolobject.delegate_Bool2SmallInt),
+                ]
+            self.typeorder[smallintobject.W_SmallIntObject] += [
+                (intobject.W_IntObject, smallintobject.delegate_SmallInt2Int),
+                (longobject.W_LongObject, smallintobject.delegate_SmallInt2Long),
+                (floatobject.W_FloatObject, smallintobject.delegate_SmallInt2Float),
+                (complexobject.W_ComplexObject, smallintobject.delegate_SmallInt2Complex),
+                ]
+
         self.typeorder[boolobject.W_BoolObject] += [
-            (intobject.W_IntObject,     boolobject.delegate_Bool2Int),
+            (intobject.W_IntObject,     boolobject.delegate_Bool2IntObject),
             (longobject.W_LongObject,   longobject.delegate_Bool2Long),
             (floatobject.W_FloatObject, floatobject.delegate_Bool2Float),
+            (complexobject.W_ComplexObject, complexobject.delegate_Bool2Complex),
             ]
         self.typeorder[intobject.W_IntObject] += [
             (longobject.W_LongObject,   longobject.delegate_Int2Long),
             (floatobject.W_FloatObject, floatobject.delegate_Int2Float),
+            (complexobject.W_ComplexObject, complexobject.delegate_Int2Complex),
             ]
         self.typeorder[longobject.W_LongObject] += [
             (floatobject.W_FloatObject, floatobject.delegate_Long2Float),
+            (complexobject.W_ComplexObject, 
+                    complexobject.delegate_Long2Complex),
+            ]
+        self.typeorder[floatobject.W_FloatObject] += [
+            (complexobject.W_ComplexObject, 
+                    complexobject.delegate_Float2Complex),
             ]
         self.typeorder[stringobject.W_StringObject] += [
          (unicodeobject.W_UnicodeObject, unicodeobject.delegate_String2Unicode),
             ]
 
+        if config.objspace.std.withstrslice:
+            self.typeorder[strsliceobject.W_StringSliceObject] += [
+                (stringobject.W_StringObject,
+                                       strsliceobject.delegate_slice2str),
+                (unicodeobject.W_UnicodeObject,
+                                       strsliceobject.delegate_slice2unicode),
+                ]
+        if config.objspace.std.withstrjoin:
+            self.typeorder[strjoinobject.W_StringJoinObject] += [
+                (stringobject.W_StringObject,
+                                       strjoinobject.delegate_join2str),
+                (unicodeobject.W_UnicodeObject,
+                                       strjoinobject.delegate_join2unicode)
+                ]
+        if config.objspace.std.withrangelist:
+            self.typeorder[rangeobject.W_RangeListObject] += [
+                (listobject.W_ListObject,
+                                       rangeobject.delegate_range2list),
+                ]
+
         # put W_Root everywhere
         self.typeorder[W_Root] = []
         for type in self.typeorder:
+            from pypy.objspace.std import stdtypedef
+            if type is not W_Root and isinstance(type.typedef, stdtypedef.StdTypeDef):
+                self.typeorder[type].append((type.typedef.any, None))
             self.typeorder[type].append((W_Root, None))
+
+        # ____________________________________________________________
+        # Prebuilt common integer values
+
+        if config.objspace.std.withprebuiltint:
+            intobject.W_IntObject.PREBUILT = []
+            for i in range(config.objspace.std.prebuiltintfrom,
+                           config.objspace.std.prebuiltintto):
+                intobject.W_IntObject.PREBUILT.append(intobject.W_IntObject(i))
+            del i
+        else:
+            intobject.W_IntObject.PREBUILT = None
+
+        # ____________________________________________________________
 
 
 # ____________________________________________________________
 
 W_ANY = W_Root
 
-class W_Object(W_Root, object):
-    "Parent base class for wrapped objects."
-
-    def __init__(w_self, space):
-        w_self.space = space    # XXX not sure this is ever used any more
-        # Note that it is wrong to depend on a .space attribute for a random
-        # wrapped object anyway, because not all wrapped objects inherit from
-        # W_Object.  (They inherit from W_Root.)
+class W_Object(W_Root):
+    "Parent base class for wrapped objects provided by the StdObjSpace."
+    # Note that not all wrapped objects in the interpreter inherit from
+    # W_Object.  (They inherit from W_Root.)
+    __slots__ = ()
 
     def __repr__(self):
         s = '%s(%s)' % (
@@ -136,7 +240,7 @@ class W_Object(W_Root, object):
             s += ' instance of %s' % self.w__class__
         return '<%s>' % s
 
-    def unwrap(w_self):
+    def unwrap(w_self, space):
         raise UnwrapError, 'cannot unwrap %r' % (w_self,)
 
 class UnwrapError(Exception):

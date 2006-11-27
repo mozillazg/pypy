@@ -1,17 +1,25 @@
 
 import autopath
 from pypy.interpreter import gateway
+from pypy.interpreter import argument
 import py
 import sys
 
+class FakeFunc(object):
+
+    def __init__(self, space, name):
+        self.space = space
+        self.name = name
+        self.defs_w = []
+
 class TestBuiltinCode: 
     def test_signature(self):
-        def c(space, w_x, w_y, *hello_w):
+        def c(space, w_x, w_y, hello_w):
             pass
         code = gateway.BuiltinCode(c, unwrap_spec=[gateway.ObjSpace,
                                                    gateway.W_Root,
                                                    gateway.W_Root,
-                                                   'starargs'])
+                                                   'args_w'])
         assert code.signature() == (['x', 'y'], 'hello', None)
         def d(self, w_boo):
             pass
@@ -27,7 +35,7 @@ class TestBuiltinCode:
         assert code.signature() == (['x', 'y'], 'args', 'keywords')
 
     def test_call(self):
-        def c(space, w_x, w_y, *hello_w):
+        def c(space, w_x, w_y, hello_w):
             u = space.unwrap
             w = space.wrap
             assert len(hello_w) == 2
@@ -37,14 +45,10 @@ class TestBuiltinCode:
         code = gateway.BuiltinCode(c, unwrap_spec=[gateway.ObjSpace,
                                                    gateway.W_Root,
                                                    gateway.W_Root,
-                                                   'starargs'])
+                                                   'args_w'])
         w = self.space.wrap
-        w_dict = self.space.newdict([
-            (w('x'), w(123)),
-            (w('y'), w(23)),
-            (w('hello'), self.space.newtuple([w(0), w(True)])),
-            ])
-        w_result = code.exec_code(self.space, w_dict, w_dict)
+        args = argument.Arguments(self.space, [w(123), w(23), w(0), w(True)])
+        w_result = code.funcrun(FakeFunc(self.space, "c"), args)
         assert self.space.eq_w(w_result, w(102))
 
     def test_call_args(self):
@@ -59,13 +63,10 @@ class TestBuiltinCode:
                                                    gateway.W_Root,
                                                    gateway.Arguments])
         w = self.space.wrap
-        w_dict = self.space.newdict([
-            (w('x'), w(123)),
-            (w('y'), w(23)),
-            (w('args'), self.space.newtuple([w(0), w(True)])),
-            (w('keywords'), self.space.newdict([(w('boo'), w(10))])),
-            ])
-        w_result = code.exec_code(self.space, w_dict, w_dict)
+        args = argument.Arguments(self.space, [w(123), w(23)], {},
+                                  w_stararg = w((0, True)),
+                                  w_starstararg = w({'boo': 10}))
+        w_result = code.funcrun(FakeFunc(self.space, "c"), args)
         assert self.space.eq_w(w_result, w(1020))
 
 class TestGateway: 
@@ -91,7 +92,20 @@ class TestGateway:
             return a+b
         g3 = gateway.app2interp_temp(noapp_g3, gateway.applevelinterp_temp)
         assert self.space.eq_w(g3(self.space, w('foo'), w('bar')), w('foobar'))
-        
+
+    def test_app2interp_general_args(self):
+        w = self.space.wrap
+        def app_general(x, *args, **kwds):
+            assert type(args) is tuple
+            assert type(kwds) is dict
+            return x + 10 * len(args) + 100 * len(kwds)
+        gg = gateway.app2interp_temp(app_general)
+        args = gateway.Arguments(self.space, [w(6), w(7)])
+        assert self.space.int_w(gg(self.space, w(3), args)) == 23
+        args = gateway.Arguments(self.space, [w(6)], {'hello': w(7),
+                                                      'world': w(8)})
+        assert self.space.int_w(gg(self.space, w(3), args)) == 213
+
     def test_interp2app(self):
         space = self.space
         w = space.wrap
@@ -102,7 +116,7 @@ class TestGateway:
         assert self.space.eq_w(
             space.call(w_app_g3, 
                        space.newtuple([w('foo'), w('bar')]),
-                       space.newdict([])),
+                       space.newdict()),
             w('foobar'))
         assert self.space.eq_w(
             space.call_function(w_app_g3, w('foo'), w('bar')),
@@ -121,7 +135,7 @@ class TestGateway:
         assert self.space.eq_w(
             space.call(w_app_g3, 
                        space.newtuple([w('foo'), w('bar')]),
-                       space.newdict([])),
+                       space.newdict()),
             w('foobar'))
         assert self.space.eq_w(
             space.call_function(w_app_g3, w('foo'), w('bar')),
@@ -139,7 +153,7 @@ class TestGateway:
         assert self.space.eq_w(
             space.call(w_app_g3_args_w, 
                        space.newtuple([w('foo'), w('bar')]),
-                       space.newdict([])),
+                       space.newdict()),
             w('foobar'))
         assert self.space.eq_w(
             space.call_function(w_app_g3_args_w, w('foo'), w('bar')),
@@ -157,7 +171,7 @@ class TestGateway:
         assert self.space.eq_w(
             space.call(w_app_g3_ss, 
                        space.newtuple([w('foo'), w('bar')]),
-                       space.newdict([])),
+                       space.newdict()),
             w('foobar'))
         assert self.space.eq_w(
             space.call_function(w_app_g3_ss, w('foo'), w('bar')),
@@ -175,7 +189,7 @@ class TestGateway:
         assert self.space.eq_w(
             space.call(w_app_g3_if, 
                        space.newtuple([w(1), w(1.0)]),
-                       space.newdict([])),
+                       space.newdict()),
             w(2.0))
         assert self.space.eq_w(
             space.call_function(w_app_g3_if, w(1), w(1.0)),
@@ -233,9 +247,3 @@ class TestGateway:
         assert space.eq_w(space.call_function(w_app_g_id,w("foo")),w("foo"))
         assert len(l) == 1
         assert space.eq_w(l[0], w("foo"))
-
-        
-
-
-def app_g3(b):
-    return 'foo'+b

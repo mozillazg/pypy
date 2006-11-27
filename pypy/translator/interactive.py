@@ -1,38 +1,28 @@
-import optparse
+from py.compat import optparse
 
 import autopath
 from pypy.translator.translator import TranslationContext
 from pypy.translator import driver
+from pypy.config.config import Config
+from pypy.config.pypyoption import pypy_optiondescription
 
-DEFAULT_OPTIONS = {
-  'gc': 'ref',
-
-  'thread': False, # influences GC policy
-
-  'stackless': False,
-  'debug': True,
-  'insist': False,
-   
-   'backend': None,
-   'lowmem': False,
-
-   'fork_before': None,
-
-   'merge_if_blocks': True
+DEFAULTS = {
+  'translation.backend': None,
+  'translation.type_system': None,
 }
 
 class Translation(object):
 
     def __init__(self, entry_point, argtypes=None, **kwds):
+        self.driver = driver.TranslationDriver(overrides=DEFAULTS)
+        self.config = self.driver.config
+
         self.entry_point = entry_point
-        self.context = TranslationContext()
+        self.context = TranslationContext(config=self.config)
         # for t.view() to work just after construction
         graph = self.context.buildflowgraph(entry_point)
         self.context._prebuilt_graphs[entry_point] = graph
 
-        self.driver = driver.TranslationDriver(
-            optparse.Values(defaults=DEFAULT_OPTIONS))
-         
         # hook into driver events
         driver_own_event = self.driver._event
         def _event(kind, goal, func):
@@ -41,20 +31,7 @@ class Translation(object):
         self.driver._event = _event
         self.driver_setup = False
 
-        self.frozen_options = {}
-
         self.update_options(argtypes, kwds)
-
-    GOAL_USES_OPTS = {
-        'annotate': ['debug'],
-        'rtype': ['insist'],
-        'backendopt': ['merge_if_blocks'],
-        'database_c': ['gc', 'stackless'],
-        'source_llvm': ['gc', 'stackless'],
-        'source_c': [],
-        'compile_c': [],
-        'compile_llvm': [],
-    }
 
     def view(self):
         self.context.view()
@@ -67,43 +44,59 @@ class Translation(object):
              #print goal
              self.ensure_setup()
         elif kind == 'post':
-            used_opts = dict.fromkeys(self.GOAL_USES_OPTS[goal], True)
-            self.frozen_options.update(used_opts)
-
-    def ensure_setup(self, argtypes=None, policy=None):
+            pass
+            
+    def ensure_setup(self, argtypes=None, policy=None, standalone=False):
         if not self.driver_setup:
-            if argtypes is None:
-                 argtypes = []
-            self.driver.setup(self.entry_point, argtypes, policy)
+            if standalone:
+                assert argtypes is None
+            else:
+                if argtypes is None:
+                    argtypes = []
+            self.driver.setup(self.entry_point, argtypes, policy,
+                              empty_translator=self.context)
             self.ann_argtypes = argtypes
             self.ann_policy = policy
             self.driver_setup = True
         else:
             # check consistency
-            if argtypes is not None and argtypes != self.ann_argtypes:
-                raise Exception("incosistent argtype supplied")
+            if standalone:
+                assert argtypes is None
+                assert self.ann_argtypes is None
+            elif argtypes is not None and argtypes != self.ann_argtypes:
+                raise Exception("inconsistent argtype supplied")
             if policy is not None and policy != self.ann_policy:
-                raise Exception("incosistent annotation polish supplied")
+                raise Exception("inconsistent annotation polish supplied")
 
     def update_options(self, argtypes, kwds):
-        if argtypes or kwds.get('policy'):
-            self.ensure_setup(argtypes, kwds.get('policy'))
-        for optname, value in kwds.iteritems():
-            if optname in self.frozen_options:
-                if getattr(self.driver.options, optname) != value:
-                     raise Exception("incosistent option supplied: %s" % optname)
-            else:
-                setattr(self.driver.options, optname, value)
-                self.frozen_options[optname] = True
+        if argtypes or kwds.get('policy') or kwds.get('standalone'):
+            self.ensure_setup(argtypes, kwds.get('policy'),
+                                        kwds.get('standalone'))
+        kwds.pop('policy', None)
+        kwds.pop('standalone', None)
+        self.config.translation.set(**kwds)
 
+    def ensure_opt(self, name, value=None, fallback=None):
+        if value is not None:
+            self.update_options(None, {name: value})
+            return value
+        val = getattr(self.config.translation, name, None)
+        if fallback is not None and val is None:
+            self.update_options(None, {name: fallback})
+            return fallback
+        if val is not None:
+            return val
+        raise Exception(
+                    "the %r option should have been specified at this point" %name)
+
+    def ensure_type_system(self, type_system=None):
+        if self.config.translation.backend is not None:
+            return self.ensure_opt('type_system')
+        return self.ensure_opt('type_system', type_system, 'lltype')
+        
     def ensure_backend(self, backend=None):
-        if backend is not None:
-            self.update_options(None, {'backend': backend})
-        if self.driver.options.backend is None:
-            raise Exception("a backend should have been specified at this point")
-        backend = self.driver.options.backend
-        if backend == 'llvm':
-            self.update_options(None, {'gc': 'boehm'})
+        backend = self.ensure_opt('backend', backend)
+        self.ensure_type_system()
         return backend
 
     # disable some goals (steps)
@@ -116,22 +109,20 @@ class Translation(object):
         self.update_options(argtypes, kwds)
         return self.driver.annotate()
 
+    # type system dependent
+
     def rtype(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
-        return self.driver.rtype()
-
-    # backend depedent
+        ts = self.ensure_type_system()
+        return getattr(self.driver, 'rtype_'+ts)()        
 
     def backendopt(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
-        self.ensure_backend()
-        self.driver.backendopt()
-
-    def backendopt_c(self, argtypes=None, **kwds):
-        self.update_options(argtypes, kwds)
-        self.ensure_backend('c')
-        self.driver.backendopt()
+        ts = self.ensure_type_system('lltype')
+        return getattr(self.driver, 'backendopt_'+ts)()                
             
+    # backend depedent
+
     def source(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
         backend = self.ensure_backend()
@@ -146,6 +137,17 @@ class Translation(object):
         self.update_options(argtypes, kwds)
         self.ensure_backend('llvm')
         self.driver.source_llvm()
+
+    def source_js(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        self.ensure_backend('js')
+        self.driver.source_js()
+        return open(str(self.driver.gen.filename)).read()
+
+    def source_cl(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        self.ensure_backend('cl')
+        self.driver.source_cl()
 
     def compile(self, argtypes=None, **kwds):
         self.update_options(argtypes, kwds)
@@ -165,3 +167,13 @@ class Translation(object):
         self.driver.compile_llvm()
         return self.driver.c_entryp
   
+    def compile_cli(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        self.ensure_backend('cli')
+        self.driver.compile_cli()
+        return self.driver.c_entryp
+
+    def source_cli(self, argtypes=None, **kwds):
+        self.update_options(argtypes, kwds)
+        self.ensure_backend('cli')
+        self.driver.source_cli()

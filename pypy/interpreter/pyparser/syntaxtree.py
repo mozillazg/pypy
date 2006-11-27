@@ -5,7 +5,11 @@
 # except ImportError:
 # #    from pysymbol import sym_values
 #     from pytoken import tok_values
-    
+
+from pypy.tool.uid import uid
+
+from pypy.tool.uid import uid
+
 class AbstractSyntaxVisitor(object):
     def visit_syntaxnode( self, node ):
         pass
@@ -45,7 +49,7 @@ class SyntaxNode(object):
         return "".join(treenodes)
 
     def __repr__(self):
-        return "<node [%s] at 0x%x>" % (self.name, id(self))
+        return "<node [%s] at 0x%x>" % (self.name, uid(self))
 
     def __str__(self):
         return "(%s)" % self.name

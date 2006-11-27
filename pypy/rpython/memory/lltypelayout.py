@@ -1,14 +1,14 @@
-from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.memory import lladdress
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 import struct
 
 primitive_to_fmt = {lltype.Signed:          "l",
                     lltype.Unsigned:        "L",
                     lltype.Char:            "c",
+                    lltype.UniChar:         "H",     # maybe
                     lltype.Bool:            "B",
                     lltype.Float:           "d",
-                    lladdress.Address:      "P",
+                    llmemory.Address:       "P",
                     }
 
 
@@ -76,6 +76,8 @@ def get_variable_size(TYPE):
         return 0
     elif isinstance(TYPE, lltype.PyObjectType):
         return 0
+    elif isinstance(TYPE, lltype.Ptr):
+        return 0
     else:
         assert 0, "not yet implemented"
 
@@ -88,7 +90,25 @@ def sizeof(TYPE, i=None):
     else:
         return fixedsize + i * varsize
 
-
+def convert_offset_to_int(offset):
+    if isinstance(offset, llmemory.FieldOffset):
+        layout = get_layout(offset.TYPE)
+        return layout[offset.fldname]
+    elif isinstance(offset, llmemory.CompositeOffset):
+        return sum([convert_offset_to_int(item) for item in offset.offsets])
+    elif type(offset) == llmemory.AddressOffset:
+        return 0
+    elif isinstance(offset, llmemory.ItemOffset):
+        return sizeof(offset.TYPE) * offset.repeat
+    elif isinstance(offset, llmemory.ArrayItemsOffset):
+        return get_fixed_size(lltype.Signed)
+    elif isinstance(offset, llmemory.GCHeaderOffset):
+        return sizeof(offset.gcheaderbuilder.HDR)
+    elif isinstance(offset, llmemory.ArrayLengthOffset):
+        return 0
+    else:
+        raise Exception("unknown offset type %r"%offset)
+        
 # _____________________________________________________________________________
 # the following functions are used to find contained pointers
 
@@ -96,15 +116,13 @@ def sizeof(TYPE, i=None):
 def offsets_to_gc_pointers(TYPE):
     if isinstance(TYPE, lltype.Struct):
         offsets = []
-        layout = get_layout(TYPE)
         for name in TYPE._names:
             FIELD = getattr(TYPE, name)
-            if (isinstance(FIELD, lltype.Ptr) and FIELD._needsgc() and
-                FIELD.TO is not lltype.PyObject):
-                offsets.append(layout[name])
+            if isinstance(FIELD, lltype.Ptr) and FIELD.TO._gckind == 'gc':
+                offsets.append(llmemory.offsetof(TYPE, name))
             elif isinstance(FIELD, lltype.Struct):
                 suboffsets = offsets_to_gc_pointers(FIELD)
-                offsets += [s + layout[name] for s in suboffsets]
+                offsets += [s + llmemory.offsetof(TYPE, name) for s in suboffsets]
         return offsets
     return []
 
@@ -123,5 +141,6 @@ def varsize_offsets_to_gcpointers_in_var_part(TYPE):
             return offsets_to_gc_pointers(TYPE.OF)
         return []
     elif isinstance(TYPE, lltype.Struct):
-        return offsets_to_gc_pointers(getattr(TYPE, TYPE._arrayfld)) 
+        return varsize_offsets_to_gcpointers_in_var_part(getattr(TYPE,
+                                                                 TYPE._arrayfld)) 
     

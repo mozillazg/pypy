@@ -4,8 +4,10 @@
 # the below object/attribute model evolved from
 # a discussion in Berlin, 4th of october 2003
 from __future__ import generators
+import py
 from pypy.tool.uid import uid, Hashable
 from pypy.tool.sourcetools import PY_IDENTIFIER, nice_repr_for_func
+from pypy.tool.picklesupport import getstate_with_slots, setstate_with_slots
 
 """
     memory size before and after introduction of __slots__
@@ -40,6 +42,7 @@ class roproperty(object):
 
 
 class FunctionGraph(object):
+    __slots__ = ['startblock', 'returnblock', 'exceptblock', '__dict__']
     
     def __init__(self, name, startblock, return_var=None):
         self.name        = name    # function name (possibly mangled already)
@@ -54,6 +57,7 @@ class FunctionGraph(object):
                                   Variable('evalue')])  # exception value
         self.exceptblock.operations = ()
         self.exceptblock.exits      = ()
+        self.tag = None
 
     def getargs(self):
         return self.startblock.inputargs
@@ -63,39 +67,58 @@ class FunctionGraph(object):
 
     def getsource(self):
         from pypy.tool.sourcetools import getsource
-        return getsource(self.func)
+        func = self.func    # can raise AttributeError
+        src = getsource(self.func)
+        if src is None:
+            raise AttributeError('source not found')
+        return src
     source = roproperty(getsource)
+    
+    def getstartline(self):
+        return self.func.func_code.co_firstlineno
+    startline = roproperty(getstartline)
+    
+    def getfilename(self):
+        return self.func.func_code.co_filename
+    filename = roproperty(getfilename)
+    
+    def __str__(self):
+        if hasattr(self, 'func'):
+            return nice_repr_for_func(self.func, self.name)
+        else:
+            return self.name
 
     def __repr__(self):
-        if hasattr(self, 'func'):
-            fnrepr = nice_repr_for_func(self.func, self.name)
-        else:
-            fnrepr = self.name
-        return '<FunctionGraph of %s at 0x%x>' % (fnrepr, uid(self))
+        return '<FunctionGraph of %s at 0x%x>' % (self, uid(self))
 
     def iterblocks(self):
         block = self.startblock
         yield block
-        seen = {id(block): True}
+        seen = {block: True}
         stack = list(block.exits[::-1])
         while stack:
             block = stack.pop().target
-            if id(block) not in seen:
+            if block not in seen:
                 yield block
-                seen[id(block)] = True
+                seen[block] = True
                 stack += block.exits[::-1]
 
     def iterlinks(self):
         block = self.startblock
-        seen = {id(block): True}
+        seen = {block: True}
         stack = list(block.exits[::-1])
         while stack:
             link = stack.pop()
             yield link
             block = link.target
-            if id(block) not in seen:
-                seen[id(block)] = True
+            if block not in seen:
+                seen[block] = True
                 stack += block.exits[::-1]
+
+    def iterblockops(self):
+        for block in self.iterblocks():
+            for op in block.operations:
+                yield block, op
 
     def show(self):
         from pypy.translator.tool.graphpage import SingleGraphPage
@@ -151,10 +174,17 @@ class Link(object):
     def __repr__(self):
         return "link from %s to %s" % (str(self.prevblock), str(self.target))
 
+    __getstate__ = getstate_with_slots
+    __setstate__ = setstate_with_slots
+
+    def show(self):
+        from pypy.translator.tool.graphpage import try_show
+        try_show(self)
+
 
 class Block(object):
     __slots__ = """isstartblock inputargs operations exitswitch
-                exits exc_handler""".split()
+                exits blockcolor""".split()
     
     def __init__(self, inputargs):
         self.isstartblock = False
@@ -164,10 +194,8 @@ class Block(object):
                                           #  Constant(last_exception), see below
         self.exits      = []              # list of Link(s)
 
-        self.exc_handler = False          # block at the start of exception handling code
-
     def at(self):
-        if self.operations:
+        if self.operations and self.operations[0].offset >= 0:
             return "@%d" % self.operations[0].offset
         else:
             return ""
@@ -177,8 +205,6 @@ class Block(object):
             txt = "block@%d" % self.operations[0].offset
         else:
             txt = "codeless block"
-        if self.exc_handler:
-            txt = txt +" EH"
         return txt
     
     def __repr__(self):
@@ -187,10 +213,16 @@ class Block(object):
             txt = "%s(%s)" % (txt, self.exitswitch)
         return txt
 
+    def reallyalloperations(self):
+        """Iterate over all operations, including cleanup sub-operations.
+        XXX remove!"""
+        for op in self.operations:
+            yield op
+
     def getvariables(self):
         "Return all variables mentioned in this Block."
         result = self.inputargs[:]
-        for op in self.operations:
+        for op in self.reallyalloperations():
             result += op.args
             result.append(op.result)
         return uniqueitems([w for w in result if isinstance(w, Variable)])
@@ -198,7 +230,7 @@ class Block(object):
     def getconstants(self):
         "Return all constants mentioned in this Block."
         result = self.inputargs[:]
-        for op in self.operations:
+        for op in self.reallyalloperations():
             result += op.args
         return uniqueitems([w for w in result if isinstance(w, Constant)])
 
@@ -206,7 +238,7 @@ class Block(object):
         for a in mapping:
             assert isinstance(a, Variable), a
         self.inputargs = [mapping.get(a, a) for a in self.inputargs]
-        for op in self.operations:
+        for op in self.reallyalloperations():
             op.args = [mapping.get(a, a) for a in op.args]
             op.result = mapping.get(op.result, op.result)
         self.exitswitch = mapping.get(self.exitswitch, self.exitswitch)
@@ -222,9 +254,23 @@ class Block(object):
             exit.prevblock = self
         self.exits = exits
 
+    __getstate__ = getstate_with_slots
+    __setstate__ = setstate_with_slots
+
+    def show(self):
+        from pypy.translator.tool.graphpage import try_show
+        try_show(self)
+
 
 class Variable(object):
     __slots__ = ["_name", "_nr", "concretetype"]
+
+##    def getter(x): return x._ct
+##    def setter(x, ct):
+##        if repr(ct) == '<* PyObject>':
+##            import pdb; pdb.set_trace()
+##        x._ct = ct
+##    concretetype = property(getter, setter)
 
     dummyname = 'v'
     namesdict = {dummyname : (dummyname, 0)}
@@ -338,7 +384,8 @@ class SpaceOperation(object):
         return hash((self.opname,tuple(self.args),self.result))
 
     def __repr__(self):
-        return "%r = %s(%s)" % (self.result, self.opname, ", ".join(map(repr, self.args)))
+        return "%r = %s(%s)" % (self.result, self.opname,
+                                ", ".join(map(repr, self.args)))
 
     def __reduce_ex__(self, *args):
         # avoid lots of useless list entities
@@ -460,6 +507,70 @@ def mkentrymap(funcgraph):
         lst.append(link)
     return result
 
+def copygraph(graph, shallow=False):
+    "Make a copy of a flow graph."
+    blockmap = {}
+    varmap = {}
+
+    def copyvar(v):
+        if shallow:
+            return v
+        if isinstance(v, Variable):
+            try:
+                return varmap[v]
+            except KeyError:
+                v2 = varmap[v] = Variable(v)
+                if hasattr(v, 'concretetype'):
+                    v2.concretetype = v.concretetype
+                return v2
+        else:
+            return v
+
+    def copyblock(block):
+        newblock = Block([copyvar(v) for v in block.inputargs])
+        if block.operations == ():
+            newblock.operations = ()
+        else:
+            def copyoplist(oplist):
+                if shallow:
+                    return oplist[:]
+                result = []
+                for op in oplist:
+                    copyop = SpaceOperation(op.opname,
+                                            [copyvar(v) for v in op.args],
+                                            copyvar(op.result), op.offset)
+                    #copyop.offset = op.offset
+                    result.append(copyop)
+                return result
+            newblock.operations = copyoplist(block.operations)
+        newblock.exitswitch = copyvar(block.exitswitch)
+        return newblock
+
+    for block in graph.iterblocks():
+        blockmap[block] = copyblock(block)
+
+    if graph.returnblock not in blockmap:
+        blockmap[graph.returnblock] = copyblock(graph.returnblock)
+    if graph.exceptblock not in blockmap:
+        blockmap[graph.exceptblock] = copyblock(graph.exceptblock)
+
+    for block, newblock in blockmap.items():
+        newlinks = []
+        for link in block.exits:
+            newlink = link.copy(copyvar)
+            newlink.target = blockmap[link.target]
+            newlinks.append(newlink)
+        newblock.closeblock(*newlinks)
+
+    newstartblock = blockmap[graph.startblock]
+    newstartblock.isstartblock = True
+    newgraph = FunctionGraph(graph.name, newstartblock)
+    newgraph.returnblock = blockmap[graph.returnblock]
+    newgraph.exceptblock = blockmap[graph.exceptblock]
+    for key, value in graph.__dict__.items():
+        newgraph.__dict__.setdefault(key, value)
+    return newgraph
+
 def checkgraph(graph):
     "Check the consistency of a flow graph."
     if not __debug__:
@@ -505,6 +616,8 @@ def checkgraph(graph):
                     else:
                         assert v.value is not last_exception
                         #assert v.value != last_exc_value
+                if op.opname == 'direct_call':
+                    assert isinstance(op.args[0], Constant)
                 definevar(op.result)
 
             exc_links = {}
@@ -522,12 +635,33 @@ def checkgraph(graph):
                 assert len(block.exits) >= 2
                 assert block.exits[0].exitcase is None
                 for link in block.exits[1:]:
-                    assert issubclass(link.exitcase, Exception)
+                    assert issubclass(link.exitcase, py.builtin.BaseException)
                     exc_links[link] = True
             else:
                 assert isinstance(block.exitswitch, Variable)
                 assert block.exitswitch in vars
-                assert len(block.exits) > 1
+                if (len(block.exits) == 2 and block.exits[0].exitcase is False
+                                          and block.exits[1].exitcase is True):
+                    # a boolean switch
+                    pass
+                else:
+                    # a multiple-cases switch (or else the False and True
+                    # branches are in the wrong order)
+                    assert len(block.exits) >= 1
+                    cases = [link.exitcase for link in block.exits]
+                    has_default = cases[-1] == 'default'
+                    for n in cases[:len(cases)-has_default]:
+                        if isinstance(n, (int, long)):
+                            continue
+                        if isinstance(n, (str, unicode)) and len(n) == 1:
+                            continue
+                        assert n != 'default', (
+                            "'default' branch of a switch is not the last exit"
+                            )
+                        assert n is not None, (
+                            "exitswitch Variable followed by a None exitcase")
+                        raise AssertionError(
+                            "switch on a non-primitive value %r" % (n,))
 
             allexitcases = {}
             for link in block.exits:
@@ -562,3 +696,40 @@ def checkgraph(graph):
         if block and not hasattr(e, '__annotator_block'):
             setattr(e, '__annotator_block', block)
         raise
+
+def summary(graph):
+    # return a summary of the instructions found in a graph
+    insns = {}
+    for block in graph.iterblocks():
+        for op in block.operations:
+            if op.opname != 'same_as':
+                insns[op.opname] = insns.get(op.opname, 0) + 1
+    return insns
+
+def safe_iterblocks(graph):
+    # for debugging or displaying broken graphs.
+    # You still have to check that the yielded blocks are really Blocks.
+    block = getattr(graph, 'startblock', None)
+    yield block
+    seen = {block: True}
+    stack = list(getattr(block, 'exits', [])[::-1])
+    while stack:
+        block = stack.pop().target
+        if block not in seen:
+            yield block
+            seen[block] = True
+            stack += getattr(block, 'exits', [])[::-1]
+
+def safe_iterlinks(graph):
+    # for debugging or displaying broken graphs.
+    # You still have to check that the yielded links are really Links.
+    block = getattr(graph, 'startblock', None)
+    seen = {block: True}
+    stack = list(getattr(block, 'exits', [])[::-1])
+    while stack:
+        link = stack.pop()
+        yield link
+        block = getattr(link, 'target', None)
+        if block not in seen:
+            seen[block] = True
+            stack += getattr(block, 'exits', [])[::-1]

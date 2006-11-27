@@ -206,6 +206,15 @@ class AppTestMethod:
         assert (c.m != c2.m) is True
         assert (c.m != c.m) is False
 
+    def test_method_hash(self):
+        class C(object):
+            def m(): pass
+        class D(C):
+            pass
+        c = C()
+        assert hash(C.m) == hash(D.m)
+        assert hash(c.m) == hash(c.m)
+
     def test_method_repr(self): 
         class A(object): 
             def f(self): 
@@ -213,18 +222,45 @@ class AppTestMethod:
         assert repr(A.f) == "<unbound method A.f>"
         assert repr(A().f).startswith("<bound method A.f of <") 
         class B:
-            __metaclass__ = _classobj
+            try:
+                __metaclass__ = _classobj
+            except NameError: # non-pypy, assuming oldstyle implicitely
+                pass
             def f(self):
                 pass
         assert repr(B.f) == "<unbound method B.f>"
-        assert repr(B().f).startswith("<bound method B.f of <") 
+        assert repr(B().f).startswith("<bound method B.f of <")
+
+
+    def test_method_call(self):
+        class C:
+            def __init__(self, **kw):
+                pass
+        c = C(type='test')
+
+    def test_method_w_callable(self):
+        class A:
+            def __call__(self, x):
+                return x
+        import new
+        im = new.instancemethod(A(), 3)
+        assert im() == 3
+
+    def test_method_w_callable_call_function(self):
+        class A:
+            def __call__(self, x, y):
+                return x+y
+        import new
+        im = new.instancemethod(A(), 3)
+        assert map(im, [4]) == [7]
+
 
 class TestMethod: 
     def setup_method(self, method):
         def c(self, bar):
             return bar
-        code = PyCode(self.space)._from_code(c.func_code)
-        self.fn = Function(self.space, code, self.space.newdict([]))
+        code = PyCode._from_code(self.space, c.func_code)
+        self.fn = Function(self.space, code, self.space.newdict())
         
     def test_get(self):
         space = self.space
@@ -250,8 +286,8 @@ class TestMethod:
         space = self.space
         # Create some function for this test only
         def m(self): return self
-        func = Function(space, PyCode(self.space)._from_code(m.func_code),
-                        space.newdict([]))
+        func = Function(space, PyCode._from_code(self.space, m.func_code),
+                        space.newdict())
         # Some shorthands
         obj1 = space.wrap(23)
         obj2 = space.wrap(42)

@@ -42,12 +42,12 @@ the Virtual's machine bytecode instructions::
 
     >>> import dis
     >>> def f(x):
-            return x + 1
+    ...     return x + 1
     >>> dis.dis(f)
-    4       0 LOAD_FAST                0 (x)
-            3 LOAD_CONST               1 (1)
-            6 BINARY_ADD          
-            7 RETURN_VALUE 
+    2         0 LOAD_FAST                0 (x)
+              3 LOAD_CONST               1 (1)
+              6 BINARY_ADD          
+              7 RETURN_VALUE        
 
 CPython as well as PyPy are stack-based virtual machines, i.e.
 they don't have registers but put object to and pull objects
@@ -285,6 +285,8 @@ for crossing the barrier in both directions is somewhat
 involved, mostly due to the fact that the type-infering
 annotator needs to keep track of the types of objects flowing
 across those barriers. 
+
+.. _typedefs:
 
 Making interpreter-level functions available at application-level
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

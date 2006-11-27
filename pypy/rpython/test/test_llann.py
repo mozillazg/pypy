@@ -1,6 +1,14 @@
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.lltypesystem.rclass import OBJECTPTR, fishllattr
+from pypy.translator.translator import TranslationContext
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper
+from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+from pypy.rpython.annlowlevel import PseudoHighLevelCallable
+from pypy.rpython.annlowlevel import llhelper, cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import base_ptr_lltype
+from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.test.test_llinterp import interpret
 from pypy.objspace.flow import FlowObjSpace 
 
 # helpers
@@ -49,6 +57,16 @@ class TestLowLevelAnnotateTestCase:
         A = GcArray(('v', Signed))
         def llf():
             a = malloc(A, 1)
+            return a[0].v
+        s = self.annotate(llf, [])
+        assert s.knowntype == int
+
+    def test_array_longlong(self):
+        from pypy.rlib.rarithmetic import r_longlong
+        A = GcArray(('v', Signed))
+        one = r_longlong(1)
+        def llf():
+            a = malloc(A, one)
             return a[0].v
         s = self.annotate(llf, [])
         assert s.knowntype == int
@@ -287,3 +305,88 @@ class TestLowLevelAnnotateTestCase:
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == Ptr(RuntimeTypeInfo)
         
+    def test_cast_primitive(self):
+        def llf(u):
+            return cast_primitive(Signed, u)
+        s = self.annotate(llf, [annmodel.SomeInteger(unsigned=True)])
+        assert s.knowntype == int
+        def llf(s):
+            return cast_primitive(Unsigned, s)
+        s = self.annotate(llf, [annmodel.SomeInteger()])
+        assert s.unsigned == True
+
+ 
+def test_pseudohighlevelcallable():
+    t = TranslationContext()
+    t.buildannotator()
+    rtyper = t.buildrtyper()
+    rtyper.specialize()
+    a = MixLevelHelperAnnotator(rtyper)
+
+    class A:
+        value = 5
+        def double(self):
+            return self.value * 2
+
+    def fn1(a):
+        a2 = A()
+        a2.value = a.double()
+        return a2
+
+    s_A, r_A = a.s_r_instanceof(A)
+    fn1ptr = a.delayedfunction(fn1, [s_A], s_A)
+    pseudo = PseudoHighLevelCallable(fn1ptr, [s_A], s_A)
+
+    def fn2(n):
+        a = A()
+        a.value = n
+        a2 = pseudo(a)
+        return a2.value
+
+    graph = a.getgraph(fn2, [annmodel.SomeInteger()], annmodel.SomeInteger())
+    a.finish()
+
+    llinterp = LLInterpreter(rtyper)
+    res = llinterp.eval_graph(graph, [21])
+    assert res == 42
+
+
+def test_llhelper():
+    S = GcStruct('S', ('x', Signed), ('y', Signed))
+    def f(s,z):
+        return s.x*s.y+z
+
+    def g(s):
+        return s.x+s.y
+
+    F = Ptr(FuncType([Ptr(S), Signed], Signed))
+    G = Ptr(FuncType([Ptr(S)], Signed))
+        
+    def h(x, y, z):
+        s = malloc(S)
+        s.x = x
+        s.y = y
+        fptr = llhelper(F, f)
+        gptr = llhelper(G, g)
+        assert typeOf(fptr) == F
+        return fptr(s, z)+fptr(s, z*2)+gptr(s)
+
+    res = interpret(h, [8, 5, 2])
+    assert res == 99
+
+
+def test_cast_instance_to_base_ptr():
+    class A:
+        def __init__(self, x, y):
+            self.x = x
+            self.y = y
+
+    def f(x, y):
+        a = A(x, y)
+        a1 = cast_instance_to_base_ptr(a)
+        return a1
+
+    res = interpret(f, [5, 10])
+    assert typeOf(res) == base_ptr_lltype()
+    assert fishllattr(res, 'x') == 5
+    assert fishllattr(res, 'y') == 10

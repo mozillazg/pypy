@@ -1,9 +1,8 @@
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
 from pypy.objspace.std.noneobject import W_NoneObject
-from pypy.objspace.std.longobject import W_LongObject, _AsDouble, _FromDouble
-from pypy.objspace.std.longobject import isinf
-from pypy.rpython.rarithmetic import ovfcheck_float_to_int, intmask
+from pypy.objspace.std.longobject import W_LongObject
+from pypy.rlib.rarithmetic import ovfcheck_float_to_int, intmask, isinf
 
 ##############################################################
 # for the time being, all calls that are made to some external
@@ -20,11 +19,10 @@ class W_FloatObject(W_Object):
        an argument"""
     from pypy.objspace.std.floattype import float_typedef as typedef
     
-    def __init__(w_self, space, floatval):
-        W_Object.__init__(w_self, space)
+    def __init__(w_self, floatval):
         w_self.floatval = floatval
 
-    def unwrap(w_self):
+    def unwrap(w_self, space):
         return w_self.floatval
 
     def __repr__(self):
@@ -33,20 +31,20 @@ class W_FloatObject(W_Object):
 registerimplementation(W_FloatObject)
 
 # bool-to-float delegation
-def delegate_Bool2Float(w_bool):
-    return W_FloatObject(w_bool.space, float(w_bool.boolval))
+def delegate_Bool2Float(space, w_bool):
+    return W_FloatObject(float(w_bool.boolval))
 
 # int-to-float delegation
-def delegate_Int2Float(w_intobj):
-    return W_FloatObject(w_intobj.space, float(w_intobj.intval))
+def delegate_Int2Float(space, w_intobj):
+    return W_FloatObject(float(w_intobj.intval))
 
 # long-to-float delegation
-def delegate_Long2Float(w_longobj):
+def delegate_Long2Float(space, w_longobj):
     try:
-        return W_FloatObject(w_longobj.space, _AsDouble(w_longobj))
+        return W_FloatObject(w_longobj.tofloat())
     except OverflowError:
-        raise OperationError(w_longobj.space.w_OverflowError,
-                             w_longobj.space.wrap("long int too large to convert to float"))
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("long int too large to convert to float"))
 
 
 # float__Float is supposed to do nothing, unless it has
@@ -56,7 +54,7 @@ def float__Float(space, w_float1):
     if space.is_w(space.type(w_float1), space.w_float):
         return w_float1
     a = w_float1.floatval
-    return W_FloatObject(space, a)
+    return W_FloatObject(a)
 
 def int__Float(space, w_value):
     try:
@@ -68,7 +66,7 @@ def int__Float(space, w_value):
 
 def long__Float(space, w_floatobj):
     try:
-        return _FromDouble(space, w_floatobj.floatval)
+        return W_LongObject.fromfloat(w_floatobj.floatval)
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("cannot convert float infinity to long"))
@@ -135,7 +133,7 @@ def eq__Float_Long(space, w_float1, w_long2):
     if isinf(x) or math.floor(x) != x:
         return space.w_False
     try:
-        w_long1 = _FromDouble(space, x)
+        w_long1 = W_LongObject.fromfloat(x)
     except OverflowError:
         return space.w_False
     return space.eq(w_long1, w_long2)
@@ -156,7 +154,7 @@ def lt__Float_Long(space, w_float1, w_long2):
         return space.newbool(x < 0.0)
     x_floor = math.floor(x)
     try:
-        w_long1 = _FromDouble(space, x_floor)
+        w_long1 = W_LongObject.fromfloat(x_floor)
     except OverflowError:
         return space.newbool(x < 0.0)
     return space.lt(w_long1, w_long2)
@@ -191,7 +189,7 @@ def hash__Float(space, w_value):
     return space.wrap(_hash_float(space, w_value.floatval))
 
 def _hash_float(space, v):
-    from pypy.objspace.std.longobject import _FromDouble, _hash as _hashlong
+    from pypy.objspace.std.longobject import hash__Long
 
     # This is designed so that Python numbers of different types
     # that compare equal hash to the same value; otherwise comparisons
@@ -207,14 +205,14 @@ def _hash_float(space, v):
         except OverflowError:
             # Convert to long and use its hash.
             try:
-                w_lval = _FromDouble(space, v)
+                w_lval = W_LongObject.fromfloat(v)
             except OverflowError:
                 # can't convert to long int -- arbitrary
                 if v < 0:
                     return -271828
                 else:
                     return 314159
-            return _hashlong(w_lval)
+            return space.int_w(hash__Long(space, w_lval))
 
     # The fractional part is non-zero, so we don't have to worry about
     # making this match the hash of some other type.
@@ -248,7 +246,7 @@ def add__Float_Float(space, w_float1, w_float2):
         z = x + y
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float addition"))
-    return W_FloatObject(space, z)
+    return W_FloatObject(z)
 
 def sub__Float_Float(space, w_float1, w_float2):
     x = w_float1.floatval
@@ -257,7 +255,7 @@ def sub__Float_Float(space, w_float1, w_float2):
         z = x - y
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float substraction"))
-    return W_FloatObject(space, z)
+    return W_FloatObject(z)
 
 def mul__Float_Float(space, w_float1, w_float2):
     x = w_float1.floatval
@@ -266,7 +264,7 @@ def mul__Float_Float(space, w_float1, w_float2):
         z = x * y
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float multiplication"))
-    return W_FloatObject(space, z)
+    return W_FloatObject(z)
 
 def div__Float_Float(space, w_float1, w_float2):
     x = w_float1.floatval
@@ -278,7 +276,7 @@ def div__Float_Float(space, w_float1, w_float2):
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float division"))
     # no overflow
-    return W_FloatObject(space, z)
+    return W_FloatObject(z)
 
 truediv__Float_Float = div__Float_Float
 
@@ -303,7 +301,7 @@ def mod__Float_Float(space, w_float1, w_float2):
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float division"))
 
-    return W_FloatObject(space, mod)
+    return W_FloatObject(mod)
 
 def _divmod_w(space, w_float1, w_float2):
     x = w_float1.floatval
@@ -343,7 +341,7 @@ def _divmod_w(space, w_float1, w_float2):
     except FloatingPointError:
         raise FailedToImplement(space.w_FloatingPointError, space.wrap("float division"))
 
-    return [W_FloatObject(space, floordiv), W_FloatObject(space, mod)]
+    return [W_FloatObject(floordiv), W_FloatObject(mod)]
 
 def divmod__Float_Float(space, w_float1, w_float2):
     return space.newtuple(_divmod_w(space, w_float1, w_float2))
@@ -384,17 +382,17 @@ def pow__Float_Float_ANY(space, w_float1, w_float2, thirdArg):
         except ValueError:
             raise FailedToImplement(space.w_ValueError, space.wrap("float power")) # xxx
 
-    return W_FloatObject(space, z)
+    return W_FloatObject(z)
 
 
 def neg__Float(space, w_float1):
-    return W_FloatObject(space, -w_float1.floatval)
+    return W_FloatObject(-w_float1.floatval)
 
 def pos__Float(space, w_float):
     return float__Float(space, w_float)
 
 def abs__Float(space, w_float):
-    return W_FloatObject(space, abs(w_float.floatval))
+    return W_FloatObject(abs(w_float.floatval))
 
 def nonzero__Float(space, w_float):
     return space.newbool(w_float.floatval != 0.0)
@@ -405,13 +403,13 @@ def float_coerce(space, w_float):
     if w_float.__class__ == W_FloatObject:
         return w_float
     else:
-        return W_FloatObject(space, w_float.floatval)
+        return W_FloatObject(w_float.floatval)
 
 StdObjSpace.coerce.register(float_coerce, W_FloatObject)
 """
 
 def getnewargs__Float(space, w_float):
-    return space.newtuple([W_FloatObject(space, w_float.floatval)])
+    return space.newtuple([W_FloatObject(w_float.floatval)])
 
 def log__Float(space, w_float, base):
     # base is supposed to be positive or 0.0, which means we use e
@@ -430,15 +428,15 @@ register_all(vars())
 
 # pow delegation for negative 2nd arg
 def pow_neg__Long_Long_None(space, w_int1, w_int2, thirdarg):
-    w_float1 = delegate_Long2Float(w_int1)
-    w_float2 = delegate_Long2Float(w_int2)
+    w_float1 = delegate_Long2Float(space, w_int1)
+    w_float2 = delegate_Long2Float(space, w_int2)
     return pow__Float_Float_ANY(space, w_float1, w_float2, thirdarg)
 
 StdObjSpace.MM.pow.register(pow_neg__Long_Long_None, W_LongObject, W_LongObject, W_NoneObject, order=1)
 
 def pow_neg__Int_Int_None(space, w_int1, w_int2, thirdarg):
-    w_float1 = delegate_Int2Float(w_int1)
-    w_float2 = delegate_Int2Float(w_int2)
+    w_float1 = delegate_Int2Float(space, w_int1)
+    w_float2 = delegate_Int2Float(space, w_int2)
     return pow__Float_Float_ANY(space, w_float1, w_float2, thirdarg)
 
 StdObjSpace.MM.pow.register(pow_neg__Int_Int_None, W_IntObject, W_IntObject, W_NoneObject, order=2)

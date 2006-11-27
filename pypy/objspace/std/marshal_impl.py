@@ -10,7 +10,8 @@ a callback and a state variable.
 
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.register_all import register_all
-from pypy.rpython.rarithmetic import LONG_BIT
+from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.floatobject import repr__Float as repr_float
 from pypy.objspace.std.longobject import SHIFT as long_bits
 from pypy.objspace.std.objspace import StdObjSpace
@@ -24,6 +25,7 @@ from pypy.objspace.std.floatobject   import W_FloatObject
 from pypy.objspace.std.tupleobject   import W_TupleObject
 from pypy.objspace.std.listobject    import W_ListObject
 from pypy.objspace.std.dictobject    import W_DictObject
+from pypy.objspace.std.dictstrobject    import W_DictStrObject
 from pypy.objspace.std.stringobject  import W_StringObject
 from pypy.objspace.std.typeobject    import W_TypeObject
 from pypy.objspace.std.longobject    import W_LongObject
@@ -141,14 +143,14 @@ def marshal_w__Int(space, w_int, m):
             m.atom_int(TYPE_INT, w_int.intval)
 
 def unmarshal_Int(space, u, tc):
-    return W_IntObject(space, u.get_int())
+    return wrapint(space, u.get_int())
 register(TYPE_INT, unmarshal_Int)
 
 def unmarshal_Int64(space, u, tc):
     if LONG_BIT >= 64:
         lo = u.get_int() & (2**32-1)
         hi = u.get_int()
-        return W_IntObject(space, (hi << 32) | lo)
+        return wrapint(space, (hi << 32) | lo)
     else:
         # fall back to a long
         # XXX at some point, we need to extend longobject
@@ -198,7 +200,7 @@ def marshal_w__Float(space, w_float, m):
 def unmarshal_Float(space, u, tc):
     if tc == TYPE_BINARY_FLOAT:
         w_ret = str_to_float(space, space.wrap(u.get(8)))
-        return W_FloatObject(space, space.float_w(w_ret))
+        return W_FloatObject(space.float_w(w_ret))
     else:
         return space.call_function(space.builtin.get('float'),
                                  space.wrap(u.get_pascal()))
@@ -241,15 +243,17 @@ def marshal_w__Long(space, w_long, m):
     typecode and have our own magic number for pickling"""
 
     m.start(TYPE_LONG)
-    lng = len(w_long.digits)
-    if w_long.sign < 0:
+    # XXX access internals
+    lng = len(w_long.num.digits)
+    if w_long.num.sign < 0:
         m.put_int(-lng)
     else:
         m.put_int(lng)
-    for digit in w_long.digits:
+    for digit in w_long.num.digits:
         m.put_short(digit)
 
 def unmarshal_Long(space, u, tc):
+    from pypy.rlib import rlong
     lng = u.get_int()
     if lng < 0:
         sign = -1
@@ -266,8 +270,9 @@ def unmarshal_Long(space, u, tc):
             raise_exception(space, 'bad marshal data')
         digits[i] = digit
         i += 1
-    w_long = W_LongObject(space, digits, sign)
-    w_long._normalize()
+    # XXX poking at internals
+    w_long = W_LongObject(rlong.rlong(digits, sign))
+    w_long.num._normalize()
     return w_long
 register(TYPE_LONG, unmarshal_Long)
 
@@ -283,7 +288,7 @@ def marshal_w__String(space, w_str, m):
     # using the fastest possible access method here
     # that does not touch the internal representation,
     # which might change (array of bytes?)
-    s = w_str.unwrap()
+    s = w_str.unwrap(space)
     if m.version >= 1 and PySTRING_CHECK_INTERNED(w_str):
         # we use a native rtyper stringdict for speed
         idx = m.stringtable.get(s, -1)
@@ -297,11 +302,11 @@ def marshal_w__String(space, w_str, m):
         m.atom_str(TYPE_STRING, s)
 
 def unmarshal_String(space, u, tc):
-    return W_StringObject(space, u.get_str())
+    return W_StringObject(u.get_str())
 register(TYPE_STRING, unmarshal_String)
 
 def unmarshal_interned(space, u, tc):
-    w_ret = W_StringObject(space, u.get_str())
+    w_ret = W_StringObject(u.get_str())
     u.stringtable_w.append(w_ret)
     w_intern = space.builtin.get('intern')
     space.call_function(w_intern, w_ret)
@@ -323,7 +328,7 @@ def marshal_w__Tuple(space, w_tuple, m):
 
 def unmarshal_Tuple(space, u, tc):
     items_w = u.get_list_w()
-    return W_TupleObject(space, items_w)
+    return W_TupleObject(items_w)
 register(TYPE_TUPLE, unmarshal_Tuple)
 
 def marshal_w__List(space, w_list, m):
@@ -333,10 +338,10 @@ def marshal_w__List(space, w_list, m):
 
 def unmarshal_List(space, u, tc):
     items_w = u.get_list_w()
-    return W_ListObject(space, items_w)
+    return W_ListObject(items_w)
 
 def finish_List(space, items_w, typecode):
-    return W_ListObject(space, items_w)
+    return W_ListObject(items_w)
 register(TYPE_LIST, unmarshal_List)
 
 def marshal_w__Dict(space, w_dict, m):
@@ -346,18 +351,29 @@ def marshal_w__Dict(space, w_dict, m):
         m.put_w_obj(w_value)
     m.atom(TYPE_NULL)
 
+def marshal_w__DictStr(space, w_dict, m):
+    m.start(TYPE_DICT)
+    if w_dict.content is not None:
+        for w_key, w_value in w_dict.content.iteritems():
+            m.put_w_obj(w_key)
+            m.put_w_obj(w_value)
+    else:
+        for key, w_value in w_dict.content_str.iteritems():
+            m.put_w_obj(space.wrap(key))
+            m.put_w_obj(w_value)
+    m.atom(TYPE_NULL)
+
 def unmarshal_Dict(space, u, tc):
     # since primitive lists are not optimized and we don't know
     # the dict size in advance, use the dict's setitem instead
     # of building a list of tuples.
-    w_dic = W_DictObject(space)
-    setter = dictobject.setitem__Dict_ANY_ANY
+    w_dic = space.newdict()
     while 1:
         w_key = u.get_w_obj(True)
         if w_key is None:
             break
         w_value = u.get_w_obj(False)
-        setter(space, w_dic, w_key, w_value)
+        space.setitem(w_dic, w_key, w_value)
     return w_dic
 register(TYPE_DICT, unmarshal_Dict)
 
@@ -377,7 +393,7 @@ def marshal_w_pycode(space, w_pycode, m):
     m.atom_str(TYPE_STRING, x.co_code)
     m.start(TYPE_TUPLE)
     m.put_list_w(x.co_consts_w, len(x.co_consts_w))
-    m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_names)
+    m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, [space.str_w(w_name) for w_name in x.co_names_w])
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_varnames)
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_freevars)
     m.atom_strlist(TYPE_TUPLE, TYPE_INTERNED, x.co_cellvars)
@@ -410,22 +426,24 @@ def unmarshal_strlist(u, tc):
     return res
 
 def unmarshal_pycode(space, u, tc):
-    code = PyCode(space)
-    code.co_argcount    = u.get_int()
-    code.co_nlocals     = u.get_int()
-    code.co_stacksize   = u.get_int()
-    code.co_flags       = u.get_int()
-    code.co_code        = unmarshal_str(u)
+    argcount    = u.get_int()
+    nlocals     = u.get_int()
+    stacksize   = u.get_int()
+    flags       = u.get_int()
+    code        = unmarshal_str(u)
     u.start(TYPE_TUPLE)
-    code.co_consts_w    = u.get_list_w()
-    code.co_names       = unmarshal_strlist(u, TYPE_TUPLE)
-    code.co_varnames    = unmarshal_strlist(u, TYPE_TUPLE)
-    code.co_freevars    = unmarshal_strlist(u, TYPE_TUPLE)
-    code.co_cellvars    = unmarshal_strlist(u, TYPE_TUPLE)
-    code.co_filename    = unmarshal_str(u)
-    code.co_name        = unmarshal_str(u)
-    code.co_firstlineno = u.get_int()
-    code.co_lnotab      = unmarshal_str(u)
+    consts_w    = u.get_list_w()
+    names       = unmarshal_strlist(u, TYPE_TUPLE)
+    varnames    = unmarshal_strlist(u, TYPE_TUPLE)
+    freevars    = unmarshal_strlist(u, TYPE_TUPLE)
+    cellvars    = unmarshal_strlist(u, TYPE_TUPLE)
+    filename    = unmarshal_str(u)
+    name        = unmarshal_str(u)
+    firstlineno = u.get_int()
+    lnotab      = unmarshal_str(u)
+    code = PyCode._code_new_w(space, argcount, nlocals, stacksize, flags,
+                              code, consts_w, names, varnames, filename,
+                              name, firstlineno, lnotab, freevars, cellvars)
     return space.wrap(code)
 register(TYPE_CODE, unmarshal_pycode)
 
@@ -465,7 +483,7 @@ app = gateway.applevel(r'''
 string_to_buffer = app.interphook('string_to_buffer')
 
 def unmarshal_buffer(space, u, tc):
-    w_s = W_StringObject(space, u.get_str())
+    w_s = W_StringObject(u.get_str())
     return string_to_buffer(space, w_s)
 register(TYPE_UNKNOWN, unmarshal_buffer)
 
@@ -508,7 +526,7 @@ def unmarshal_set_frozenset(space, u, tc):
         w_frozen = space.w_False
     else:
         w_frozen = space.w_True
-    w_lis = W_ListObject(space, items_w)
+    w_lis = W_ListObject(items_w)
     return list_to_set(space, w_lis, w_frozen)
 register(TYPE_SET + TYPE_FROZENSET, unmarshal_set_frozenset)
 

@@ -69,16 +69,19 @@ class NameToken(Token):
         else:
             # error unknown or negative integer
         """
+        
         ctx = source.context()
         tk = source.next()
         if tk.codename == self.codename:
+            # XXX (adim): this is trunk's keyword management
+            # if tk.value not in builder.keywords:
             if tk.value not in self.keywords:
                 ret = builder.token( tk.codename, tk.value, source )
                 return ret
         source.restore( ctx )
         return 0
 
-    def match_token(self, other):
+    def match_token(self, builder, other):
         """special case of match token for tokens which are really keywords
         """
         if not isinstance(other, Token):
@@ -87,6 +90,8 @@ class NameToken(Token):
             return False
         if other.codename != self.codename:
             return False
+        # XXX (adim): this is trunk's keyword management
+        # if other.value in builder.keywords:
         if other.value in self.keywords:
             return False
         return True

@@ -5,7 +5,7 @@ built-in functions (or type constructors) implementing them.
 from pypy.interpreter.baseobjspace import ObjSpace
 import operator, types, __future__
 from pypy.tool.sourcetools import compile2
-from pypy.rpython.rarithmetic import ovfcheck, ovfcheck_lshift
+from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift
 
 FunctionByName = {}   # dict {"operation_name": <built-in function>}
 OperationName  = {}   # dict {<built-in function>: "operation_name"}
@@ -125,8 +125,8 @@ def div_ovf(x, y):
 def mod_ovf(x, y):
     return ovfcheck(x % y)
 
-def pow_ovf(*two_or_three_args):
-    return ovfcheck(pow(*two_or_three_args))
+##def pow_ovf(*two_or_three_args):
+##    return ovfcheck(pow(*two_or_three_args))
 
 def lshift_ovf(x, y):
     return ovfcheck_lshift(x, y)
@@ -194,7 +194,6 @@ Table = [
     ('floordiv_ovf',    floordiv_ovf),
     ('div_ovf',         div_ovf),
     ('mod_ovf',         mod_ovf),
-    ('pow_ovf',         pow_ovf),
     ('lshift_ovf',      lshift_ovf),
     ]
 

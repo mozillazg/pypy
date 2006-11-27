@@ -2,72 +2,39 @@ import sys
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Ptr, PyObject, ContainerType, GcArray, GcStruct, \
-     RuntimeTypeInfo, getRuntimeTypeInfo
+     typeOf, Ptr, ContainerType, RttiStruct, \
+     RuntimeTypeInfo, getRuntimeTypeInfo, top_container
+from pypy.rpython.memory.gctransform import \
+     refcounting, boehm, framework, stacklessframework
+from pypy.rpython.lltypesystem import lltype, llmemory
 
-PyObjPtr = Ptr(PyObject)
-
-class BasicGcPolicy:
+class BasicGcPolicy(object):
+    requires_stackless = False
     
     def __init__(self, db, thread_enabled=False):
         self.db = db
         self.thread_enabled = thread_enabled
 
-    def pyobj_incref(self, expr, T):
-        return 'Py_XINCREF(%s);' % expr
-
-    def pyobj_decref(self, expr, T):
-        return 'Py_XDECREF(%s);' % expr
-
-    def push_alive(self, expr, T):
-        if isinstance(T, Ptr) and T._needsgc():
-            if expr == 'NULL':    # hum
-                return ''
-            if T.TO == PyObject:
-                return self.pyobj_incref(expr, T)
-            else:
-                return self.push_alive_nopyobj(expr, T)
-        return ''
-
-    def pop_alive(self, expr, T):
-        if isinstance(T, Ptr) and T._needsgc():
-            if T.TO == PyObject:
-                return self.pyobj_decref(expr, T)
-            else:
-                return self.pop_alive_nopyobj(expr, T)
-        return ''
-
-    def push_alive_nopyobj(self, expr, T):
-        return ''
-
-    def pop_alive_nopyobj(self, expr, T):
-        return ''
-
-    def push_alive_op_result(self, opname, expr, T):
-        return ''
-
-    def gcheader_field_name(self, defnode):
-        return None
-
     def common_gcheader_definition(self, defnode):
-        return ''
-
-    def common_after_definition(self, defnode):
         return []
 
-    def common_gcheader_initializationexpr(self, defnode):
-        return ''
+    def common_gcheader_initdata(self, defnode):
+        return []
 
-    struct_gcheader_definition = common_gcheader_definition
-    struct_after_definition = common_after_definition
-    struct_gcheader_initializationexpr = common_gcheader_initializationexpr
+    def struct_gcheader_definition(self, defnode):
+        return self.common_gcheader_definition(defnode)
 
-    def prepare_nested_gcstruct(self, structdefnode, INNER):
-        pass
+    def struct_gcheader_initdata(self, defnode):
+        return self.common_gcheader_initdata(defnode)
 
-    array_gcheader_definition = common_gcheader_definition
-    array_after_definition = common_after_definition
-    array_gcheader_initializationexpr = common_gcheader_initializationexpr
+    def array_gcheader_definition(self, defnode):
+        return self.common_gcheader_definition(defnode)
+
+    def array_gcheader_initdata(self, defnode):
+        return self.common_gcheader_initdata(defnode)
+
+    def struct_after_definition(self, defnode):
+        return []
 
     def gc_libraries(self):
         return []
@@ -76,196 +43,60 @@ class BasicGcPolicy:
         return []
 
     def pre_gc_code(self):
-        return []
+        return ['typedef void *GC_hidden_pointer;']
 
     def gc_startup_code(self):
         return []
 
+    def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
+        expr = funcgen.expr(op.args[0])
+        if expr == 'NULL':
+            return ''
+        return 'Py_XINCREF(%s);' % expr
+
+    def OP_GC_POP_ALIVE_PYOBJ(self, funcgen, op):
+        expr = funcgen.expr(op.args[0])
+        return 'Py_XDECREF(%s);' % expr
+
+
 class RefcountingInfo:
-    deallocator = None
     static_deallocator = None
-    destructor = None
+
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 class RefcountingGcPolicy(BasicGcPolicy):
-
-    def push_alive_nopyobj(self, expr, T):
-        defnode = self.db.gettypedefnode(T.TO)
-        if defnode.gcheader is not None:
-            return 'pypy_IncRf_%s(%s);' % (defnode.barename, expr)
-
-    def pop_alive_nopyobj(self, expr, T):
-        defnode = self.db.gettypedefnode(T.TO)
-        if defnode.gcheader is not None:
-            return 'pypy_DecRf_%s(%s);' % (defnode.barename, expr)
-
-    def push_alive_op_result(self, opname, expr, T):
-        if opname not in ('direct_call', 'indirect_call') and T != PyObjPtr:
-            return self.push_alive(expr, T)
-        return ''
-
-    def write_barrier(self, result, newvalue, T, targetexpr):  
-        decrefstmt = self.pop_alive('prev', T)
-        increfstmt = self.push_alive(newvalue, T)
-        if increfstmt:
-            result.append(increfstmt)
-        if decrefstmt:
-            result.insert(0, '%s = %s;' % (
-                cdecl(self.db.gettype(T), 'prev'),
-                targetexpr))
-            result.append(decrefstmt)
-            result[:] = ['\t%s' % line for line in result]
-            result[0] = '{' + result[0]
-            result.append('}')
-
-    def generic_dealloc(self, expr, T):
-        db = self.db
-        if isinstance(T, Ptr) and T._needsgc():
-            line = self.pop_alive(expr, T)
-            if line:
-                yield line
-        elif isinstance(T, ContainerType):
-            defnode = db.gettypedefnode(T)
-            from pypy.translator.c.node import ExtTypeOpaqueDefNode
-            if isinstance(defnode, ExtTypeOpaqueDefNode):
-                yield 'RPyOpaqueDealloc_%s(&(%s));' % (defnode.T.tag, expr)
-            else:
-                for line in defnode.visitor_lines(expr, self.generic_dealloc):
-                    yield line
-
-    def gcheader_field_name(self, defnode):
-        return 'refcount'
+    transformerclass = refcounting.RefcountingGCTransformer
 
     def common_gcheader_definition(self, defnode):
-        return 'long refcount;'
+        if defnode.db.gctransformer is not None:
+            HDR = defnode.db.gctransformer.HDR
+            return [(name, HDR._flds[name]) for name in HDR._names]
+        else:
+            return []
 
-    def common_after_definition(self, defnode):
-        if defnode.gcinfo:
-            gcinfo = defnode.gcinfo
-            if gcinfo.deallocator:
-                yield 'void %s(struct %s *);' % (gcinfo.deallocator, defnode.name)
-        if defnode.gcheader is not None:
-            dealloc = 'OP_FREE'
-            if defnode.gcinfo:
-                dealloc = defnode.gcinfo.deallocator or dealloc
-            yield '#define pypy_IncRf_%s(x) if (x) (x)->%s++' % (
-                defnode.barename, defnode.gcheader,)
-            yield '#define pypy_DecRf_%s(x) if ((x) && !--(x)->%s) %s(x)' % (
-                defnode.barename, defnode.gcheader, dealloc)
-
-    def common_gcheader_initializationexpr(self, defnode):
-        return 'REFCOUNT_IMMORTAL,'
-
-    def deallocator_lines(self, defnode, prefix):
-        return defnode.visitor_lines(prefix, self.generic_dealloc)
+    def common_gcheader_initdata(self, defnode):
+        if defnode.db.gctransformer is not None:
+            gct = defnode.db.gctransformer
+            hdr = gct.gcheaderbuilder.header_of_object(top_container(defnode.obj))
+            HDR = gct.HDR
+            return [getattr(hdr, fldname) for fldname in HDR._names]
+        else:
+            return []
 
     # for structs
 
-    def prepare_nested_gcstruct(self, structdefnode, INNER):
-        # check here that there is enough run-time type information to
-        # handle this case
-        getRuntimeTypeInfo(structdefnode.STRUCT)
-        getRuntimeTypeInfo(INNER)
-
     def struct_setup(self, structdefnode, rtti):
-        if structdefnode.gcheader:
-            db = self.db
-            gcinfo = structdefnode.gcinfo = RefcountingInfo()
-
-            gcinfo.deallocator = db.namespace.uniquename('dealloc_'+structdefnode.barename)
-
-            # are two deallocators needed (a dynamic one for DECREF, which checks
-            # the real type of the structure and calls the static deallocator) ?
-            if rtti is not None:
-                gcinfo.static_deallocator = db.namespace.uniquename(
-                    'staticdealloc_'+structdefnode.barename)
-                fnptr = rtti._obj.query_funcptr
-                if fnptr is None:
-                    raise NotImplementedError(
-                        "attachRuntimeTypeInfo(): please provide a function")
-                gcinfo.rtti_query_funcptr = db.get(fnptr)
-                T = typeOf(fnptr).TO.ARGS[0]
-                gcinfo.rtti_query_funcptr_argtype = db.gettype(T)
-                if hasattr(rtti._obj, 'destructor_funcptr'):
-                    destrptr = rtti._obj.destructor_funcptr
-                    gcinfo.destructor = db.get(destrptr)
-                    T = typeOf(destrptr).TO.ARGS[0]
-                    gcinfo.destructor_argtype = db.gettype(T)
-            else:
-                # is a deallocator really needed, or would it be empty?
-                if list(self.deallocator_lines(structdefnode, '')):
-                    gcinfo.static_deallocator = gcinfo.deallocator
-                else:
-                    gcinfo.deallocator = None
-
-    struct_gcheader_definition = common_gcheader_definition
-
-    struct_after_definition = common_after_definition
-
-    def struct_implementationcode(self, structdefnode):
-        if structdefnode.gcinfo:
-            gcinfo = structdefnode.gcinfo
-            has_dynamic_deallocator = gcinfo.deallocator and gcinfo.deallocator != gcinfo.static_deallocator
-            if gcinfo.static_deallocator and not has_dynamic_deallocator:
-                yield 'void %s(struct %s *p) {' % (gcinfo.static_deallocator,
-                                               structdefnode.name)
-                # insert decrefs to objects we have a reference to
-                for line in self.deallocator_lines(structdefnode, '(*p)'):
-                    yield '\t' + line
-                yield '\tOP_FREE(p);'
-                yield '}'
-            elif has_dynamic_deallocator:
-                # write static deallocator
-                yield 'void %s(struct %s *p) {' % (gcinfo.static_deallocator,
-                                               structdefnode.name)
-                # insert call to __del__ if necessary
-                if gcinfo.destructor:
-                    yield "\t%s((%s) p);" % (gcinfo.destructor,
-                                             cdecl(gcinfo.destructor_argtype, ''))
-                # insert decrefs to objects we have a reference to
-                yield '\tif (!--p->%s) {' % (structdefnode.gcheader,)
-                for line in self.deallocator_lines(structdefnode, '(*p)'):
-                    yield '\t\t' + line
-                yield '\t\tOP_FREE(p);'
-                yield '\t}'
-                yield '}'
-
-                # write dynamic deallocator
-                yield 'void %s(struct %s *p) {' % (gcinfo.deallocator, structdefnode.name)
-                yield '\tvoid (*staticdealloc) (void *);'
-                # the refcount should be 0; temporarily bump it to 1
-                yield '\tp->%s = 1;' % (structdefnode.gcheader,)
-                # cast 'p' to the type expected by the rtti_query function
-                yield '\tstaticdealloc = %s((%s) p);' % (
-                    gcinfo.rtti_query_funcptr,
-                    cdecl(gcinfo.rtti_query_funcptr_argtype, ''))
-                yield '\tstaticdealloc(p);'
-                yield '}'
-
-
-    struct_gcheader_initializationexpr = common_gcheader_initializationexpr
+        if rtti is not None:
+            transformer = structdefnode.db.gctransformer
+            fptr = transformer.static_deallocation_funcptr_for_type(
+                structdefnode.STRUCT)
+            structdefnode.gcinfo = RefcountingInfo()
+            structdefnode.gcinfo.static_deallocator = structdefnode.db.get(fptr)
 
     # for arrays
 
     def array_setup(self, arraydefnode):
-        if arraydefnode.gcheader and list(self.deallocator_lines(arraydefnode, '')):
-            gcinfo = arraydefnode.gcinfo = RefcountingInfo()
-            gcinfo.deallocator = self.db.namespace.uniquename('dealloc_'+arraydefnode.barename)
-
-    array_gcheader_definition = common_gcheader_definition
-
-    array_after_definition = common_after_definition
-
-    def array_implementationcode(self, arraydefnode):
-        if arraydefnode.gcinfo:
-            gcinfo = arraydefnode.gcinfo
-            if gcinfo.deallocator:
-                yield 'void %s(struct %s *a) {' % (gcinfo.deallocator, arraydefnode.name)
-                for line in self.deallocator_lines(arraydefnode, '(*a)'):
-                    yield '\t' + line
-                yield '\tOP_FREE(a);'
-                yield '}'
-
-    array_gcheader_initializationexpr = common_gcheader_initializationexpr
+        pass
 
     # for rtti node
 
@@ -277,27 +108,49 @@ class RefcountingGcPolicy(BasicGcPolicy):
 
     # zero malloc impl
 
-    def zero_malloc(self, TYPE, esize, eresult, err):
-        assert TYPE._gcstatus()   # we don't really support this
-        return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize,
-                                                eresult,
-                                                err)
+    def zero_malloc(self, TYPE, esize, eresult):
+        assert TYPE._gckind == 'gc'   # we don't really support this
+        typename = self.db.gettype(TYPE)
+        erestype = cdecl(typename, '*')
+        return 'OP_ZERO_MALLOC(%s, %s, %s);' % (esize, eresult, erestype)
+
+    malloc = zero_malloc
+
+    def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op):
+        args = [funcgen.expr(v) for v in op.args]
+        line = '%s(%s);' % (args[0], ', '.join(args[1:]))
+        return line     
+    
+    def OP_GC_FREE(self, funcgen, op):
+        args = [funcgen.expr(v) for v in op.args]
+        return 'OP_FREE(%s);' % (args[0], )    
+
+    def OP_GC_FETCH_EXCEPTION(self, funcgen, op):
+        result = funcgen.expr(op.result)
+        return ('%s = RPyFetchExceptionValue();\n'
+                'RPyClearException();') % (result, )
+
+    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op):
+        argh = funcgen.expr(op.args[0])
+        return 'if (%s != NULL) RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(%s), %s);' % (argh, argh, argh)
+
+    def OP_GC__COLLECT(self, funcgen, op):
+        return ''
+
 
 class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
     nodekind = 'refcnt rtti'
     globalcontainer = True
-    includes = ()
     typename = 'void (@)(void *)'
 
     def __init__(self, db, T, obj):
         assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, GcStruct)
+        assert isinstance(obj.about, RttiStruct)
         self.db = db
         self.T = T
         self.obj = obj
         defnode = db.gettypedefnode(obj.about)
-        self.implementationtypename = 'void (@)(struct %s *)' % (
-            defnode.name,)
+        self.implementationtypename = 'void (@)(void *)'
         self.name = defnode.gcinfo.static_deallocator
         self.ptrname = '((void (*)(void *)) %s)' % (self.name,)
 
@@ -312,71 +165,24 @@ class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
 class BoehmInfo:
     finalizer = None
 
+    # for MoreExactBoehmGcPolicy
+    malloc_exact = False
+
 class BoehmGcPolicy(BasicGcPolicy):
+    transformerclass = boehm.BoehmGCTransformer
 
-    write_barrier = RefcountingGcPolicy.write_barrier.im_func
-
-    generic_dealloc = RefcountingGcPolicy.generic_dealloc.im_func
-
-    deallocator_lines = RefcountingGcPolicy.deallocator_lines.im_func
-
-    def common_after_definition(self, defnode):
-        if defnode.gcinfo:
-            gcinfo = defnode.gcinfo
-            if gcinfo.finalizer:
-                yield 'void %s(GC_PTR obj, GC_PTR ignore);' % (gcinfo.finalizer,)
-
-    # for arrays
+    def setup_gcinfo(self, defnode):
+        transformer = defnode.db.gctransformer
+        fptr = transformer.finalizer_funcptr_for_type(defnode.LLTYPE)
+        if fptr:
+            defnode.gcinfo = BoehmInfo()
+            defnode.gcinfo.finalizer = defnode.db.get(fptr)
 
     def array_setup(self, arraydefnode):
-        if isinstance(arraydefnode.LLTYPE, GcArray) and list(self.deallocator_lines(arraydefnode, '')):
-            gcinfo = arraydefnode.gcinfo = BoehmInfo()
-            gcinfo.finalizer = self.db.namespace.uniquename('finalize_'+arraydefnode.barename)
+        self.setup_gcinfo(arraydefnode)
 
-    def array_implementationcode(self, arraydefnode):
-        if arraydefnode.gcinfo:
-            gcinfo = arraydefnode.gcinfo
-            if gcinfo.finalizer:
-                yield 'void %s(GC_PTR obj, GC_PTR ignore) {' % (gcinfo.finalizer)
-                yield '\tstruct %s *a = (struct %s *)obj;' % (arraydefnode.name, arraydefnode.name)
-                for line in self.deallocator_lines(arraydefnode, '(*a)'):
-                    yield '\t' + line
-                yield '}'
-
-    array_after_definition = common_after_definition
-
-    # for structs
     def struct_setup(self, structdefnode, rtti):
-        if isinstance(structdefnode.LLTYPE, GcStruct):
-	    has_del = rtti is not None and hasattr(rtti._obj, 'destructor_funcptr')
-            needs_deallocator = bool(list(self.deallocator_lines(structdefnode, '')))
-            gcinfo = structdefnode.gcinfo = BoehmInfo()
-            if needs_deallocator and has_del:
-                raise Exception("you cannot use __del__ with PyObjects and Boehm")
-            if needs_deallocator or has_del:
-                name = 'finalize_'+structdefnode.barename 
-                gcinfo.finalizer = self.db.namespace.uniquename(name)
-                if has_del:	
-                    destrptr = rtti._obj.destructor_funcptr
-                    gcinfo.destructor = self.db.get(destrptr)
-                    T = typeOf(destrptr).TO.ARGS[0]
-                    gcinfo.destructor_argtype = self.db.gettype(T)
-    struct_after_definition = common_after_definition
-
-    def struct_implementationcode(self, structdefnode):
-        if structdefnode.gcinfo:
-            gcinfo = structdefnode.gcinfo
-            if gcinfo.finalizer:
-                yield 'void %s(GC_PTR obj, GC_PTR ignore) {' % gcinfo.finalizer
-                yield '\tstruct %s *p = (struct %s *)obj;' % (structdefnode.name, structdefnode.name)
-		if hasattr(gcinfo, 'destructor'):
-                    yield '\t%s((%s) p);' % (
-                        gcinfo.destructor, cdecl(gcinfo.destructor_argtype, ''))
-                for line in self.deallocator_lines(structdefnode, '(*p)'):
-                    yield '\t' + line
-                yield '}'
-
-    # for rtti node
+        self.setup_gcinfo(structdefnode)
 
     def rtti_type(self):
         return BoehmGcRuntimeTypeInfo_OpaqueNode.typename
@@ -384,22 +190,24 @@ class BoehmGcPolicy(BasicGcPolicy):
     def rtti_node_factory(self):
         return BoehmGcRuntimeTypeInfo_OpaqueNode
 
-    # zero malloc impl
-
-    def zero_malloc(self, TYPE, esize, eresult, err):
+    def zero_malloc(self, TYPE, esize, eresult):
         gcinfo = self.db.gettypedefnode(TYPE).gcinfo
-        assert TYPE._gcstatus()   # _is_atomic() depends on this!
+        assert TYPE._gckind == 'gc'   # _is_atomic() depends on this!
         is_atomic = TYPE._is_atomic()
         is_varsize = TYPE._is_varsize()
-        result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %d, %d, %s);' % (esize,
-                                                                eresult,
-                                                                is_atomic,
-                                                                is_varsize,
-                                                                err)
+        typename = self.db.gettype(TYPE)
+        erestype = cdecl(typename, '*')
+        result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %s, %d, %d);' % (esize,
+                                                            eresult,
+                                                            erestype,
+                                                            is_atomic,
+                                                            is_varsize)
         if gcinfo and gcinfo.finalizer:
-            result += ('\nGC_REGISTER_FINALIZER(%s, %s, NULL, NULL, NULL);'
+            result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
                        % (eresult, gcinfo.finalizer))
         return result
+
+    malloc = zero_malloc
 
     def gc_libraries(self):
         if sys.platform == 'win32':
@@ -408,32 +216,53 @@ class BoehmGcPolicy(BasicGcPolicy):
 
     def pre_pre_gc_code(self):
         if sys.platform == "linux2":
-            yield "#define _REENTRANT 1"
-            yield "#define GC_LINUX_THREADS 1"
-            yield "#define GC_REDIRECT_TO_LOCAL 1"
-            yield '#include <gc/gc_local_alloc.h>'
-            yield '#define USING_BOEHM_GC'
+            if self.thread_enabled or True:
+                yield "#define _REENTRANT 1"
+                yield "#define GC_LINUX_THREADS 1"
+                yield "#define GC_REDIRECT_TO_LOCAL 1"
+                yield "#define GC_I_HIDE_POINTERS 1"
+                yield '#include <gc/gc_local_alloc.h>'
+                yield '#define USING_BOEHM_GC'
+            else:
+                yield "#define GC_I_HIDE_POINTERS 1"
+                yield '#include <gc/gc.h>'
+                yield '#define USING_BOEHM_GC'
         else:
+            yield "#define GC_I_HIDE_POINTERS 1"
             yield '#include <gc/gc.h>'
             yield '#define USING_BOEHM_GC'
 
+    def pre_gc_code(self):
+        return []
+
     def gc_startup_code(self):
         if sys.platform == 'win32':
-            yield 'assert(GC_all_interior_pointers == 0);'
+            pass # yield 'assert(GC_all_interior_pointers == 0);'
         else:
             yield 'GC_all_interior_pointers = 0;'
         yield 'GC_init();'
 
 
+    def OP_GC_FETCH_EXCEPTION(self, funcgen, op):
+        result = funcgen.expr(op.result)
+        return ('%s = RPyFetchExceptionValue();\n'
+                'RPyClearException();') % (result, )
+
+    def OP_GC_RESTORE_EXCEPTION(self, funcgen, op):
+        argh = funcgen.expr(op.args[0])
+        return 'if (%s != NULL) RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(%s), %s);' % (argh, argh, argh)
+
+    def OP_GC__COLLECT(self, funcgen, op):
+        return 'GC_gcollect(); GC_invoke_finalizers();'
+
 class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
     nodekind = 'boehm rtti'
     globalcontainer = True
-    includes = ()
     typename = 'char @'
 
     def __init__(self, db, T, obj):
         assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, GcStruct)
+        assert isinstance(obj.about, RttiStruct)
         self.db = db
         self.T = T
         self.obj = obj
@@ -448,18 +277,165 @@ class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
     def implementation(self):
         yield 'char %s  /* uninitialized */;' % self.name
 
+class FrameworkGcRuntimeTypeInfo_OpaqueNode(BoehmGcRuntimeTypeInfo_OpaqueNode):
+    nodekind = 'framework rtti'
+
+
+class MoreExactBoehmGcPolicy(BoehmGcPolicy):
+    """ policy to experiment with giving some layout information to boehm. Use
+    new class to prevent breakage. """
+
+    def __init__(self, db, thread_enabled=False):
+        super(MoreExactBoehmGcPolicy, self).__init__(db, thread_enabled)
+        self.exactly_typed_structs = {}
+
+    def get_descr_name(self, defnode):
+        # XXX somewhat illegal way of introducing a name
+        return '%s__gc_descr__' % (defnode.name, )
+
+    def pre_pre_gc_code(self):
+        for line in super(MoreExactBoehmGcPolicy, self).pre_pre_gc_code():
+            yield line
+        yield "#include <gc/gc_typed.h>"
+
+    def struct_setup(self, structdefnode, rtti):
+        self.setup_gcinfo(structdefnode)
+        T = structdefnode.STRUCT
+        if T._is_atomic():
+            malloc_exact = False
+        else:
+            if T._is_varsize():
+                malloc_exact = T._flds[T._arrayfld]._is_atomic()
+            else:
+                malloc_exact = True
+        if malloc_exact:
+            if structdefnode.gcinfo is None:
+                structdefnode.gcinfo = BoehmInfo()
+            structdefnode.gcinfo.malloc_exact = True
+            self.exactly_typed_structs[structdefnode.STRUCT] = structdefnode
+
+    def struct_after_definition(self, defnode):
+        if defnode.gcinfo and defnode.gcinfo.malloc_exact:
+            yield 'GC_descr %s;' % (self.get_descr_name(defnode), )
+
+    def gc_startup_code(self):
+        for line in super(MoreExactBoehmGcPolicy, self).gc_startup_code():
+            yield line
+        for TYPE, defnode in self.exactly_typed_structs.iteritems():
+            T = defnode.gettype().replace("@", "")
+            yield "{"
+            yield "GC_word T_bitmap[GC_BITMAP_SIZE(%s)] = {0};" % (T, )
+            for field in TYPE._flds:
+                if getattr(TYPE, field) == lltype.Void:
+                    continue
+                yield "GC_set_bit(T_bitmap, GC_WORD_OFFSET(%s, %s));" % (
+                    T, defnode.c_struct_field_name(field))
+            yield "%s = GC_make_descriptor(T_bitmap, GC_WORD_LEN(%s));" % (
+                self.get_descr_name(defnode), T)
+            yield "}"
+
+    def zero_malloc(self, TYPE, esize, eresult):
+        defnode = self.db.gettypedefnode(TYPE)
+        gcinfo = defnode.gcinfo
+        if gcinfo:
+            if not gcinfo.malloc_exact:
+                assert TYPE._gckind == 'gc'   # _is_atomic() depends on this!
+                is_atomic = TYPE._is_atomic()
+                is_varsize = TYPE._is_varsize()
+                typename = self.db.gettype(TYPE)
+                erestype = cdecl(typename, '*')
+                result = 'OP_BOEHM_ZERO_MALLOC(%s, %s, %s, %d, %d);' % (
+                    esize, eresult, erestype, is_atomic, is_varsize)
+            else:
+                result = '%s = GC_MALLOC_EXPLICITLY_TYPED(%s, %s);' % (
+                    eresult, esize, self.get_descr_name(defnode))
+            if gcinfo.finalizer:
+                result += ('\nGC_REGISTER_FINALIZER(%s, (GC_finalization_proc)%s, NULL, NULL, NULL);'
+                       % (eresult, gcinfo.finalizer))
+        else:
+            return super(MoreExactBoehmGcPolicy, self).zero_malloc(
+                TYPE, esize, eresult)
+        return result
+
+    malloc = zero_malloc
+
 # to get an idea how it looks like with no refcount/gc at all
 
 class NoneGcPolicy(BoehmGcPolicy):
 
     zero_malloc = RefcountingGcPolicy.zero_malloc.im_func
+    malloc = RefcountingGcPolicy.malloc.im_func
     gc_libraries = RefcountingGcPolicy.gc_libraries.im_func
     gc_startup_code = RefcountingGcPolicy.gc_startup_code.im_func
-    rtti_type = RefcountingGcPolicy.rtti_type.im_func
 
     def pre_pre_gc_code(self):
         yield '#define USING_NO_GC'
 
-    def struct_implementationcode(self, structdefnode):
-        return []
-    array_implementationcode = struct_implementationcode
+
+class FrameworkGcPolicy(BasicGcPolicy):
+    transformerclass = framework.FrameworkGCTransformer
+
+    def struct_setup(self, structdefnode, rtti):
+        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
+            destrptr = rtti._obj.destructor_funcptr
+            # make sure this is seen by the database early, i.e. before
+            # finish_helpers() on the gctransformer
+            self.db.get(destrptr)
+            # the following, on the other hand, will only discover ll_finalizer
+            # helpers.  The get() sees and records a delayed pointer.  It is
+            # still important to see it so that it can be followed as soon as
+            # the mixlevelannotator resolves it.
+            gctransf = self.db.gctransformer
+            fptr = gctransf.finalizer_funcptr_for_type(structdefnode.STRUCT)
+            self.db.get(fptr)
+
+    def array_setup(self, arraydefnode):
+        pass
+
+    def rtti_type(self):
+        return FrameworkGcRuntimeTypeInfo_OpaqueNode.typename
+
+    def rtti_node_factory(self):
+        return FrameworkGcRuntimeTypeInfo_OpaqueNode
+
+    def pre_pre_gc_code(self):
+        yield '#define USING_FRAMEWORK_GC'
+
+    def gc_startup_code(self):
+        fnptr = self.db.gctransformer.frameworkgc_setup_ptr.value
+        yield '%s();' % (self.db.get(fnptr),)
+
+    def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
+        args = [funcgen.expr(v) for v in op.args]
+        # XXX this more or less assumes mark-and-sweep gc
+        return ''
+        # proper return value for moving GCs:
+        # %s = %s; /* for moving GCs */' % (args[1], args[0])
+
+    def common_gcheader_definition(self, defnode):
+        return defnode.db.gctransformer.gc_fields()
+
+    def common_gcheader_initdata(self, defnode):
+        o = top_container(defnode.obj)
+        return defnode.db.gctransformer.gc_field_values_for(o)
+
+    def zero_malloc(self, TYPE, esize, eresult):
+        assert False, "a malloc operation in a framework build??"
+
+    malloc = zero_malloc
+
+class StacklessFrameworkGcPolicy(FrameworkGcPolicy):
+    transformerclass = stacklessframework.StacklessFrameworkGCTransformer
+    requires_stackless = True
+
+
+name_to_gcpolicy = {
+    'boehm': BoehmGcPolicy,
+    'exact_boehm': MoreExactBoehmGcPolicy,
+    'ref': RefcountingGcPolicy,
+    'none': NoneGcPolicy,
+    'framework': FrameworkGcPolicy,
+    'stacklessgc': StacklessFrameworkGcPolicy,
+}
+
+

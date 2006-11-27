@@ -26,6 +26,13 @@ def cdecl(ctype, cname):
     # the function name, we don't need the very confusing parenthesis
     return ctype.replace('(@)', '@').replace('@', cname).strip()
 
+def forward_cdecl(ctype, cname, standalone):
+    cdecl_str = cdecl(ctype, cname)
+    if standalone:
+        return 'extern ' + cdecl_str
+    else:
+        return cdecl_str
+    
 def somelettersfrom(s):
     upcase = [c for c in s if c.isupper()]
     if not upcase:
@@ -67,73 +74,118 @@ class CNameManager(NameManager):
            else      register  union
            ''')
 
+def _char_repr(c):
+    if c in '\\"': return '\\' + c
+    if ' ' <= c < '\x7F': return c
+    return '\\%03o' % ord(c)
+
+def _line_repr(s):
+    return ''.join([_char_repr(c) for c in s])
+
 
 def c_string_constant(s):
-    '''Returns EITHER a " "-delimited string literal for C
-               OR a { }-delimited array of chars.
+    '''Returns a " "-delimited string literal for C.'''
+    lines = []
+    for i in range(0, len(s), 64):
+        lines.append('"%s"' % _line_repr(s[i:i+64]))
+    return '\n'.join(lines)
+
+
+def c_char_array_constant(s):
+    '''Returns an initializer for a constant char[N] array,
+    where N is exactly len(s).  This is either a " "-delimited
+    string or a { }-delimited array of small integers.
     '''
-    def char_repr(c):
-        if c in '\\"': return '\\' + c
-        if ' ' <= c < '\x7F': return c
-        return '\\%03o' % ord(c)
-    def line_repr(s):
-        return ''.join([char_repr(c) for c in s])
-
-    if len(s) < 64:
-        return '"%s"' % line_repr(s)
-
-    elif len(s) < 1024:
-        lines = ['"']
-        for i in range(0, len(s), 32):
-            lines.append(line_repr(s[i:i+32]))
-        lines[-1] += '"'
-        return '\\\n'.join(lines)
-
+    if s.endswith('\x00') and len(s) < 1024:
+        # C++ is stricted than C: we can only use a " " literal
+        # if the last character is NULL, because such a literal
+        # always has an extra implicit NULL terminator.
+        return c_string_constant(s[:-1])
     else:
         lines = []
         for i in range(0, len(s), 20):
             lines.append(','.join([str(ord(c)) for c in s[i:i+20]]))
-        return '{\n%s}' % ',\n'.join(lines)
+        if len(lines) > 1:
+            return '{\n%s}' % ',\n'.join(lines)
+        else:
+            return '{%s}' % ', '.join(lines)
 
+
+##def gen_assignments(assignments):
+##    # Generate a sequence of assignments that is possibly reordered
+##    # to avoid clashes -- i.e. do the equivalent of a tuple assignment,
+##    # reading all sources first, writing all targets next, but optimized
+
+##    allsources = []
+##    src2dest = {}
+##    types = {}
+##    for typename, dest, src in assignments:
+##        if src != dest:   # ignore 'v=v;'
+##            allsources.append(src)
+##            src2dest.setdefault(src, []).append(dest)
+##            types[dest] = typename
+
+##    for starting in allsources:
+##        # starting from some starting variable, follow a chain of assignments
+##        #     'vn=vn-1; ...; v3=v2; v2=v1; v1=starting;'
+##        v = starting
+##        srcchain = []
+##        while src2dest.get(v):
+##            srcchain.append(v)
+##            v = src2dest[v].pop(0)
+##            if v == starting:
+##                break    # loop
+##        if not srcchain:
+##            continue   # already done in a previous chain
+##        srcchain.reverse()   # ['vn-1', ..., 'v2', 'v1', 'starting']
+##        code = []
+##        for pair in zip([v] + srcchain[:-1], srcchain):
+##            code.append('%s = %s;' % pair)
+##        if v == starting:
+##            # assignment loop 'starting=vn-1; ...; v2=v1; v1=starting;'
+##            typename = types[starting]
+##            tmpdecl = cdecl(typename, 'tmp')
+##            code.insert(0, '{ %s = %s;' % (tmpdecl, starting))
+##            code[-1] = '%s = tmp; }' % (srcchain[-2],)
+##        yield ' '.join(code)
 
 def gen_assignments(assignments):
     # Generate a sequence of assignments that is possibly reordered
     # to avoid clashes -- i.e. do the equivalent of a tuple assignment,
     # reading all sources first, writing all targets next, but optimized
 
-    allsources = []
-    src2dest = {}
-    types = {}
-    assignments = list(assignments)
+    srccount = {}
+    dest2src = {}
     for typename, dest, src in assignments:
         if src != dest:   # ignore 'v=v;'
-            allsources.append(src)
-            src2dest.setdefault(src, []).append(dest)
-            types[dest] = typename
+            srccount[src] = srccount.get(src, 0) + 1
+            dest2src[dest] = src, typename
 
-    for starting in allsources:
-        # starting from some starting variable, follow a chain of assignments
-        #     'vn=vn-1; ...; v3=v2; v2=v1; v1=starting;'
-        v = starting
-        srcchain = []
-        while src2dest.get(v):
-            srcchain.append(v)
-            v = src2dest[v].pop(0)
-            if v == starting:
-                break    # loop
-        if not srcchain:
-            continue   # already done in a previous chain
-        srcchain.reverse()   # ['vn-1', ..., 'v2', 'v1', 'starting']
-        code = []
-        for pair in zip([v] + srcchain[:-1], srcchain):
-            code.append('%s = %s;' % pair)
-        if v == starting:
-            # assignment loop 'starting=vn-1; ...; v2=v1; v1=starting;'
-            typename = types[starting]
-            tmpdecl = cdecl(typename, 'tmp')
-            code.insert(0, '{ %s = %s;' % (tmpdecl, starting))
-            code[-1] = '%s = tmp; }' % (srcchain[-2],)
-        yield ' '.join(code)
+    while dest2src:
+        progress = False
+        for dst in dest2src.keys():
+            if dst not in srccount:
+                src, typename = dest2src.pop(dst)
+                yield '%s = %s;' % (dst, src)
+                srccount[src] -= 1
+                if not srccount[src]:
+                    del srccount[src]
+                progress = True
+        if not progress:
+            # we are left with only pure disjoint cycles; break them
+            while dest2src:
+                dst, (src, typename) = dest2src.popitem()
+                assert srccount[dst] == 1
+                startingpoint = dst
+                tmpdecl = cdecl(typename, 'tmp')
+                code = ['{ %s = %s;' % (tmpdecl, dst)]
+                while src is not startingpoint:
+                    code.append('%s = %s;' % (dst, src))
+                    dst = src
+                    src, typename = dest2src.pop(dst)
+                    assert srccount[dst] == 1
+                code.append('%s = tmp; }' % (dst,))
+                yield ' '.join(code)
 
 # logging
 

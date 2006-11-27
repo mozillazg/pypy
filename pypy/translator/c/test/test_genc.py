@@ -4,6 +4,7 @@ from pypy.annotation import model as annmodel
 from pypy.translator.translator import TranslationContext
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.genc import gen_source
+from pypy.translator.c.gc import NoneGcPolicy
 from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.objspace.flow.model import Block, Link, FunctionGraph
 from pypy.tool.udir import udir
@@ -11,12 +12,13 @@ from pypy.translator.tool.cbuild import make_module_from_c
 from pypy.translator.tool.cbuild import enable_fast_compilation
 from pypy.translator.gensupp import uniquemodulename
 from pypy.translator.backendopt.all import backend_optimizations
+from pypy.translator.interactive import Translation
+from pypy import conftest
 
 # XXX this tries to make compiling faster for full-scale testing
 # XXX tcc leaves some errors undetected! Bad!
 #from pypy.translator.tool import cbuild
 #cbuild.enable_fast_compilation()
-
 
 def compile_db(db):
     enable_fast_compilation()  # for testing
@@ -24,45 +26,32 @@ def compile_db(db):
     targetdir = udir.join(modulename).ensure(dir=1)
     gen_source(db, modulename, str(targetdir), defines={'COUNT_OP_MALLOCS': 1})
     m = make_module_from_c(targetdir.join(modulename+'.c'),
-                           include_dirs = [os.path.dirname(autopath.this_dir)])
+                           include_dirs = [os.path.dirname(autopath.this_dir)],
+                           libraries = db.gcpolicy.gc_libraries())
     return m
 
-def compile(fn, argtypes, view=False):
-    t = TranslationContext()
-    a = t.buildannotator()
-    a.build_types(fn, argtypes)
-    t.buildrtyper().specialize()
-    if view:
-        t.view()
-    backend_optimizations(t)
-    db = LowLevelDatabase(t)
-    entrypoint = db.get(pyobjectptr(fn))
-    db.complete()
-    module = compile_db(db)
-    compiled_fn = getattr(module, entrypoint)
+def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
+            annotatorpolicy=None):
+    t = Translation(fn, argtypes, gc=gcpolicy, backend="c",
+                    policy=annotatorpolicy)
+    if not backendopt:
+        t.disable(["backendopt_lltype"])
+    t.annotate()
+    # XXX fish
+    t.driver.config.translation.countmallocs = True
+    compiled_fn = t.compile_c()
+    # XXX fish fish fish some more
+    module = t.driver.cbuilder.c_ext_module
     def checking_fn(*args, **kwds):
+        if 'expected_extra_mallocs' in kwds:
+            expected_extra_mallocs = kwds.pop('expected_extra_mallocs')
+        else:
+            expected_extra_mallocs = 0
         res = compiled_fn(*args, **kwds)
         mallocs, frees = module.malloc_counters()
-        assert mallocs == frees
+        assert mallocs - frees == expected_extra_mallocs
         return res
     return checking_fn
-
-
-def test_untyped_func():
-    def f(x):
-        return x+1
-    graph = TranslationContext().buildflowgraph(f)
-
-    F = FuncType([Ptr(PyObject)], Ptr(PyObject))
-    S = GcStruct('testing', ('fptr', Ptr(F)))
-    f = functionptr(F, "f", graph=graph)
-    s = malloc(S)
-    s.fptr = f
-    db = LowLevelDatabase()
-    db.get(s)
-    db.complete()
-    compile_db(db)
-
 
 def test_func_as_pyobject():
     def f(x):
@@ -151,8 +140,7 @@ def test_runtime_type_info():
         return sys
     t = TranslationContext()
     t.buildannotator().build_types(does_stuff, [])
-    from pypy.rpython.rtyper import RPythonTyper
-    rtyper = RPythonTyper(t.annotator)
+    rtyper = t.buildrtyper()
     rtyper.attachRuntimeTypeInfoFunc(S,  rtti_S)
     rtyper.attachRuntimeTypeInfoFunc(S1, rtti_S1)
     rtyper.specialize()
@@ -287,7 +275,7 @@ def test_long_strings():
 
 
 def test_keepalive():
-    from pypy.rpython import objectmodel
+    from pypy.rlib import objectmodel
     def f():
         x = [1]
         y = ['b']
@@ -296,3 +284,89 @@ def test_keepalive():
 
     f1 = compile(f, [])
     assert f1() == 1
+
+# this test shows if we have a problem with refcounting PyObject
+if conftest.option.gcpolicy == 'boehm':
+    def test_refcount_pyobj():
+        from pypy.rpython.lltypesystem.lloperation import llop
+        def prob_with_pyobj(b):
+            return 3, b
+        def collect():
+            llop.gc__collect(Void)
+        f = compile(prob_with_pyobj, [object])
+        c = compile(collect, [])
+        from sys import getrefcount as g
+        obj = None
+        before = g(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        f(obj)
+        c()
+        c()
+        c()
+        c()
+        c()
+        after = g(obj)
+        assert abs(before - after) < 5
+else:
+    def test_refcount_pyobj():
+        def prob_with_pyobj(b):
+            return 3, b
+
+        f = compile(prob_with_pyobj, [object])
+        from sys import getrefcount as g
+        obj = None
+        before = g(obj)
+        f(obj)
+        after = g(obj)
+        assert before == after
+
+def test_refcount_pyobj_setfield():
+    import weakref, gc
+    class S(object):
+        def __init__(self):
+            self.p = None
+    def foo(wref, objfact):
+        s = S()
+        b = objfact()
+        s.p = b
+        wr = wref(b)
+        s.p = None
+        return wr
+    f = compile(foo, [object, object], backendopt=False)
+    class C(object):
+        pass
+    wref = f(weakref.ref, C)
+    gc.collect()
+    assert not wref()
+
+def test_refcount_pyobj_setfield_increfs():
+    class S(object):
+        def __init__(self):
+            self.p = None
+    def goo(objfact):
+        s = S()
+        b = objfact()
+        s.p = b
+        return s
+    def foo(objfact):
+        s = goo(objfact)
+        return s.p
+    f = compile(foo, [object], backendopt=False)
+    class C(object):
+        pass
+    print f(C)
+
+def test_oswrite():
+    py.test.skip("Example of single character string degenerating to SomeObject")
+    def f():
+        import os
+        os.write(1,"o")
+
+    t = TranslationContext()
+    s = t.buildannotator().build_types(f, [])
+    rtyper = t.buildrtyper(type_system="lltype")
+    rtyper.specialize()
+

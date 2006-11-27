@@ -1,14 +1,15 @@
-
 import py
 from pypy.rpython.lltypesystem.lltype import typeOf, pyobjectptr, Ptr, PyObject, Void
-from pypy.rpython.llinterp import LLInterpreter, LLException,log
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.llinterp import LLInterpreter, LLException, log
 from pypy.rpython.rmodel import inputconst
-from pypy.translator.translator import TranslationContext
-from pypy.rpython.rlist import *
+from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.rint import signed_repr
-from pypy.rpython import rstr
+from pypy.rpython.lltypesystem import rstr, lltype
+from pypy.annotation import model as annmodel
 from pypy.annotation.model import lltype_to_annotation
-from pypy.rpython.rarithmetic import r_uint, ovfcheck
+from pypy.rlib.rarithmetic import r_uint, ovfcheck
+from pypy import conftest
 
 # switch on logging of interp to show more info on failing tests
 
@@ -19,19 +20,6 @@ def setup_module(mod):
 def teardown_module(mod):
     py.log._setstate(mod.logstate)
 
-def find_exception(exc, interp):
-    assert isinstance(exc, LLException)
-    import exceptions
-    klass, inst = exc.args
-    # indirect way to invoke fn_pyexcclass2exc, for memory/test/test_llinterpsim
-    f = typer.getexceptiondata().fn_pyexcclass2exc
-    obj = typer.type_system.deref(f)
-    ll_pyexcclass2exc_graph = obj.graph
-    for cls in exceptions.__dict__.values():
-        if type(cls) is type(Exception):
-            if interp.eval_graph(ll_pyexcclass2exc_graph, [pyobjectptr(cls)]).typeptr == klass:
-                return cls
-    raise ValueError, "couldn't match exception"
 
 
 def timelog(prefix, call, *args, **kwds): 
@@ -43,11 +31,13 @@ def timelog(prefix, call, *args, **kwds):
     #print "%.2f secs" %(elapsed,)
     return res 
 
-def gengraph(func, argtypes=[], viewbefore=False, policy=None,
-             type_system="lltype"):
+def gengraph(func, argtypes=[], viewbefore='auto', policy=None,
+             type_system="lltype", backendopt=False):
     t = TranslationContext()
     a = t.buildannotator(policy=policy)
     timelog("annotating", a.build_types, func, argtypes)
+    if viewbefore == 'auto':
+        viewbefore = conftest.option.view
     if viewbefore:
         a.simplify()
         t.view()
@@ -56,15 +46,24 @@ def gengraph(func, argtypes=[], viewbefore=False, policy=None,
     timelog("rtyper-specializing", typer.specialize) 
     #t.view()
     timelog("checking graphs", t.checkgraphs) 
+    if backendopt:
+        from pypy.translator.backendopt.all import backend_optimizations
+        backend_optimizations(t)
+        timelog("checking graphs", t.checkgraphs)
     desc = t.annotator.bookkeeper.getdesc(func)
     graph = desc.specialize(argtypes)
     return t, typer, graph
 
 _lastinterpreted = []
 _tcache = {}
-def get_interpreter(func, values, view=False, viewbefore=False, policy=None,
-                    someobjects=False, type_system="lltype"):
-    key = (func,) + tuple([typeOf(x) for x in values])+ (someobjects,)
+def clear_tcache():
+    del _lastinterpreted[:]
+    _tcache.clear()
+
+def get_interpreter(func, values, view='auto', viewbefore='auto', policy=None,
+                    someobjects=False, type_system="lltype", backendopt=False):
+    key = (func,) + tuple([typeOf(x) for x in values])+ (someobjects,
+                                                         backendopt)
     try: 
         (t, interp, graph) = _tcache[key]
     except KeyError:
@@ -78,29 +77,35 @@ def get_interpreter(func, values, view=False, viewbefore=False, policy=None,
                 return lltype_to_annotation(T)
 
         t, typer, graph = gengraph(func, [annotation(x) for x in values],
-                                   viewbefore, policy, type_system=type_system)
+                                   viewbefore, policy, type_system=type_system,
+                                   backendopt=backendopt)
         interp = LLInterpreter(typer)
         _tcache[key] = (t, interp, graph)
         # keep the cache small 
         _lastinterpreted.append(key) 
         if len(_lastinterpreted) >= 4: 
             del _tcache[_lastinterpreted.pop(0)]
+    if view == 'auto':
+        view = conftest.option.view
     if view:
         t.view()
     return interp, graph
 
-def interpret(func, values, view=False, viewbefore=False, policy=None,
-              someobjects=False, type_system="lltype"):
+def interpret(func, values, view='auto', viewbefore='auto', policy=None,
+              someobjects=False, type_system="lltype", backendopt=False):
     interp, graph = get_interpreter(func, values, view, viewbefore, policy,
-                                    someobjects, type_system=type_system)
+                                    someobjects, type_system=type_system,
+                                    backendopt=backendopt)
     return interp.eval_graph(graph, values)
 
-def interpret_raises(exc, func, values, view=False, viewbefore=False,
-                     policy=None, someobjects=False, type_system="lltype"):
+def interpret_raises(exc, func, values, view='auto', viewbefore='auto',
+                     policy=None, someobjects=False, type_system="lltype",
+                     backendopt=False):
     interp, graph  = get_interpreter(func, values, view, viewbefore, policy,
-                             someobjects, type_system=type_system)
+                                     someobjects, type_system=type_system,
+                                     backendopt=backendopt)
     info = py.test.raises(LLException, "interp.eval_graph(graph, values)")
-    assert find_exception(info.value, interp) is exc, "wrong exception type"
+    assert interp.find_exception(info.value) is exc, "wrong exception type"
 
 #__________________________________________________________________
 # tests
@@ -131,6 +136,8 @@ def test_raise():
     assert res == 41
     interpret_raises(IndexError, raise_exception, [42])
     interpret_raises(ValueError, raise_exception, [43])
+    interpret_raises(IndexError, raise_exception, [42], type_system="ootype")
+    interpret_raises(ValueError, raise_exception, [43], type_system="ootype")
 
 def test_call_raise():
     res = interpret(call_raise, [41])
@@ -148,7 +155,7 @@ def test_call_raise_twice():
     interpret_raises(ValueError, call_raise_twice, [43, 7])
 
 def test_call_raise_intercept():
-    res = interpret(call_raise_intercept, [41], view=False)
+    res = interpret(call_raise_intercept, [41])
     assert res == 41
     res = interpret(call_raise_intercept, [42])
     assert res == 42
@@ -293,7 +300,7 @@ def test_ovf():
     res = interpret(g, [-15])
     assert res == 15
 
-def test_div_ovf_zer():
+def test_floordiv_ovf_zer():
     import sys
     def f(x):
         try:
@@ -418,6 +425,7 @@ def test_invalid_stack_access():
     fgraph.startblock.operations[0].opname = "flavored_malloc"
     fgraph.startblock.operations[0].args.insert(0, inputconst(Void, "stack"))
     py.test.raises(AttributeError, "interp.eval_graph(graph, [])")
+
 #__________________________________________________________________
 # example functions for testing the LLInterpreter
 _snap = globals().copy()
@@ -478,3 +486,71 @@ def call_raise_intercept(i):
     except ValueError:
         raise TypeError
 
+def test_llinterp_fail():
+    def aa(i):
+        if i:
+            raise TypeError()
+    
+    def bb(i):
+        try:
+            aa(i)
+        except TypeError:
+            pass
+    
+    t = TranslationContext()
+    annotator = t.buildannotator()
+    annotator.build_types(bb, [int])
+    t.buildrtyper(type_system="ootype").specialize()
+    graph = graphof(t, bb)
+    interp = LLInterpreter(t.rtyper)
+    res = interp.eval_graph(graph, [1])
+
+def test_half_exceptiontransformed_graphs():
+    from pypy.translator.c import exceptiontransform
+    def f1(x):
+        if x < 0:
+            raise ValueError
+        return 754
+    def g1(x):
+        try:
+            return f1(x)
+        except ValueError:
+            return 5
+    def f2(x):
+        if x < 0:
+            raise ValueError
+        return 21
+    def g2(x):
+        try:
+            return f2(x)
+        except ValueError:
+            return 6
+    f3 = lltype.functionptr(lltype.FuncType([lltype.Signed], lltype.Signed),
+                            'f3', _callable = f1)
+    def g3(x):
+        try:
+            return f3(x)
+        except ValueError:
+            return 7
+    def f(flag, x):
+        if flag == 1:
+            return g1(x)
+        elif flag == 2:
+            return g2(x)
+        else:
+            return g3(x)
+    t = TranslationContext()
+    t.buildannotator().build_types(f, [int, int])
+    t.buildrtyper().specialize()
+    etrafo = exceptiontransform.ExceptionTransformer(t)
+    etrafo.create_exception_handling(graphof(t, f1))
+    etrafo.create_exception_handling(graphof(t, g2))
+    etrafo.create_exception_handling(graphof(t, g3))
+    graph = graphof(t, f)
+    interp = LLInterpreter(t.rtyper)
+    res = interp.eval_graph(graph, [1, -64])
+    assert res == 5
+    res = interp.eval_graph(graph, [2, -897])
+    assert res == 6
+    res = interp.eval_graph(graph, [3, -9831])
+    assert res == 7

@@ -14,7 +14,7 @@ class TestGenLLVM(object):
 
     def test_simple2(self):
         f = compile_function(llvmsnippet.simple2, [])
-        assert f() == 0
+        assert f() == False
 
     def test_simple4(self):
         f = compile_function(llvmsnippet.simple4, [])
@@ -26,6 +26,7 @@ class TestGenLLVM(object):
         assert f(0) == 13
 
     def test_ackermann(self):
+        py.test.skip("Too much recursion")
         f = compile_function(llvmsnippet.ackermann, [int, int])
         for i in range(4):  # (otherwise too much recursion) max 4 in Safari, max 7 in Firefox, IE allows more recursion
             assert f(0, i) == i + 1
@@ -38,11 +39,12 @@ class TestGenLLVM(object):
         assert f(10) == 1
 
     def test_call_default_arguments(self):
+        #py.test.skip("Method mapping not implemented")
         f = compile_function(llvmsnippet.call_default_arguments, [int, int])
         for i in range(3):
             assert f(i + 3, i) == llvmsnippet.call_default_arguments(i + 3, i)
 
-    def DONTtest_call_list_default_argument(self):  #issue unknown
+    def DONTtest_call_list_default_argument(self):  #issue we restart every test with a fresh set of globals
         f = compile_function(llvmsnippet.call_list_default_argument, [int])
         for i in range(20):
             assert f(i) == llvmsnippet.call_list_default_argument(i)
@@ -64,20 +66,25 @@ class TestFloat(object):
 
 
 class TestString(object):
-    def DONTtest_f2(self):  #issue with empty Object mallocs
+    def test_f2(self):
+        #py.test.skip("Method mapping not implemented")
         f = compile_function(llvmsnippet.string_f2, [int, int])
-        assert chr(f(1, 0)) == "a"
+        assert f(1, 0) == "a"
 
 
 class TestPBC(object):
+    #py.test.skip("pbc not implemented")
     def test_pbc_function1(self):
+        #py.test.skip("Method mapping not implemented")
         f = compile_function(llvmsnippet.pbc_function1, [int])
         assert f(0) == 2
         assert f(1) == 4
         assert f(2) == 6
         assert f(3) == 8
 
-    def DONTtest_pbc_function2(self):   #issue with empty Object mallocs
+    def test_pbc_function2(self):
+        #py.test.skip("issue 'null' for Ptr's? or recurse into Ptr.TO?) see: opwriter.py")
+        #py.test.skip("Method mapping not implemented")
         f = compile_function(llvmsnippet.pbc_function2, [int])
         assert f(0) == 13
         assert f(1) == 15

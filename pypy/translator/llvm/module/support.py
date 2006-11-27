@@ -41,16 +41,16 @@ internal fastcc %RPyString* %RPyString_FromString(sbyte* %s) {
     ret %RPyString* %rpy
 }
 
-internal fastcc int %pypyop_int_abs(int %x) {
+internal fastcc WORD %pypyop_int_abs(WORD %x) {
 block0:
-    %cond1 = setge int %x, 0
+    %cond1 = setge WORD %x, 0
     br bool %cond1, label %return_block, label %block1
 block1:
-    %x2 = sub int 0, %x
+    %x2 = sub WORD 0, %x
     br label %return_block
 return_block:
-    %result = phi int [%x, %block0], [%x2, %block1]
-    ret int %result
+    %result = phi WORD [%x, %block0], [%x2, %block1]
+    ret WORD %result
 }
 
 internal fastcc long %pypyop_llong_abs(long %x) {
@@ -81,11 +81,29 @@ return_block:
 
 from sys import maxint
 if maxint != 2**31-1:
-    extfunctions = """
+    extfunctions += """
 internal fastcc void %pypy_ll_raise_OSError__Signed(int %errno_0) {
     %tmp = cast int %errno_0 to long
-    call void %pypy_ll_raise_OSError__Signed(long %tmp)
+    call fastcc void %pypy_ll_raise_OSError__Signed(long %tmp)
     ret void
+}
+
+internal fastcc void %pypy__RPyListOfString_SetItem__listPtr_Signed_rpy_stringPtr(%RPyListOfString* %l_1, int %index_0, %RPyString* %newstring_0) {
+    %index_0_long = cast int %index_0 to long
+    call fastcc void %pypy__RPyListOfString_SetItem__listPtr_Signed_rpy_stringPtr(%RPyListOfString* %l_1, long %index_0_long, %RPyString* %newstring_0)
+    ret void
+}
+
+"""
+
+extfunctions_standalone = """
+"""
+if maxint != 2**31-1:
+    extfunctions_standalone += """
+internal fastcc int %pypy_entry_point(%RPyListOfString* %argv) {
+    %result = call fastcc long %pypy_entry_point(%RPyListOfString* %argv)
+    %tmp = cast long %result to int
+    ret int %tmp
 }
 
 """

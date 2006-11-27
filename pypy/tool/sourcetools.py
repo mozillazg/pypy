@@ -105,7 +105,12 @@ def getsource(object):
     if hasattr(name, '__source__'):
         src = str(name.__source__)
     else:
-        src = inspect.getsource(object)
+        try:
+            src = inspect.getsource(object)
+        except IOError:
+            return None
+        except IndentationError:
+            return None
     if hasattr(name, "__sourceargs__"):
         return src % name.__sourceargs__
     return src
@@ -251,16 +256,13 @@ def has_varkeywords(func):
 
 def nice_repr_for_func(fn, name=None):
     mod = getattr(fn, '__module__', None)
-    if mod is None:
-        mod = '?'
     if name is None:
         name = getattr(fn, '__name__', None)
-    if name is not None:
+        cls = getattr(fn, 'class_', None)
+        if name is not None and cls is not None:
+            name = "%s.%s" % (cls.__name__, name)
+    try:
         firstlineno = fn.func_code.co_firstlineno
-    else:
-        name = 'UNKNOWN'
+    except AttributeError:
         firstlineno = -1
-    cls = getattr(fn, 'class_', None)
-    if cls is not None:
-        name = "%s.%s" % (cls.__name__, name)
-    return "(%s:%d)%s" % (mod, firstlineno, name)
+    return "(%s:%d)%s" % (mod or '?', firstlineno, name or 'UNKNOWN')

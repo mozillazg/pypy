@@ -5,7 +5,7 @@ from pypy.translator.translator import TranslationContext, graphof as tgraphof
 from pypy.objspace.flow.model import flatten, Block
 from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.rarithmetic import r_uint, r_ulonglong, r_longlong
+from pypy.rlib.rarithmetic import r_uint, r_ulonglong, r_longlong
 from pypy.annotation.model import SomeChar, SomeUnicodeCodePoint
 
 def do_test_merge(fn, testvalues):
@@ -154,9 +154,32 @@ def test_two_constants():
     a.build_types(fn, [])
     rtyper = t.buildrtyper()
     rtyper.specialize()
-    backend_optimizations(t, merge_if_blocks_to_switch=True)
+    backend_optimizations(t, merge_if_blocks=True)
     graph = tgraphof(t, fn)
     blocknum = len(list(graph.iterblocks()))
     merge_if_blocks(graph)
     assert blocknum == len(list(graph.iterblocks()))
+
+def test_same_cases():
+    def fn(x):
+        if x == 42:
+            r = 1
+        elif x == 42:
+            r = 2
+        else:
+            r = 3
+        return r
+    t = TranslationContext()
+    a = t.buildannotator()
+    a.build_types(fn, [int])
+    rtyper = t.buildrtyper()
+    rtyper.specialize()
+    backend_optimizations(t, merge_if_blocks=True)
+    graph = tgraphof(t, fn)
+    assert len(graph.startblock.exits) == 2
+    interp = LLInterpreter(rtyper)
+    for i in [42, 43]:
+        expected = fn(i)
+        actual = interp.eval_graph(graph, [i])
+        assert actual == expected
 

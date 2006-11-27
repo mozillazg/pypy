@@ -7,6 +7,9 @@ def test_simple_annotate():
         return x+y
 
     t = Translation(f, [int, int])
+    assert t.context is t.driver.translator
+    assert t.config is t.driver.config is t.context.config
+    
     s = t.annotate([int, int])
     assert s.knowntype == int
 
@@ -31,13 +34,13 @@ def test_simple_rtype():
     s = t.annotate()
     t.rtype()
 
+    assert 'rtype_lltype' in t.driver.done    
+
     t = Translation(f)
     s = t.annotate([int, int])
     t.rtype()
 
-    t = Translation(f, [int, int])
-    t.annotate()
-    py.test.raises(Exception, "t.rtype([int, int],debug=False)")
+    assert 'rtype_lltype' in t.driver.done        
 
 def test_simple_backendopt():
     def f(x, y):
@@ -45,12 +48,13 @@ def test_simple_backendopt():
 
     t = Translation(f, [int, int], backend='c')
     t.backendopt()
+    
+    assert 'backendopt_lltype' in t.driver.done
 
     t = Translation(f, [int, int])
-    t.backendopt_c()
+    t.backendopt()
 
-    t = Translation(f, [int, int])
-    py.test.raises(Exception, "t.backendopt()")
+    assert 'backendopt_lltype' in t.driver.done
 
 def test_simple_source():
     def f(x, y):
@@ -94,19 +98,6 @@ def test_disable_logic():
 
     assert 'backendopt' not in t.driver.done
 
-    t = Translation(f, [int, int])
-    t.disable(['annotate'])
-    t.source_c()
-
-    assert 'annotate' not in t.driver.done and 'rtype' not in t.driver.done
-
-    t = Translation(f, [int, int])
-    t.disable(['rtype'])
-    t.source_c()
-
-    assert 'annotate' in t.driver.done
-    assert 'rtype' not in t.driver.done and 'backendopt' not in t.driver.done
-
 def test_simple_compile_c():
     def f(x,y):
         return x+y
@@ -123,3 +114,44 @@ def test_simple_compile_c():
 
     res = t_f(2,3)
     assert res == 5
+
+def test_simple_rtype_with_type_system():
+
+    def f(x,y):
+        return x+y
+
+    t = Translation(f, [int, int])
+    s = t.annotate()
+    t.rtype(type_system='lltype')
+
+    assert 'rtype_lltype' in t.driver.done    
+
+    t = Translation(f, [int, int])
+    s = t.annotate()
+    t.rtype(type_system='ootype')
+    assert 'rtype_ootype' in t.driver.done        
+
+    t = Translation(f, type_system='ootype')
+    s = t.annotate([int, int])
+    t.rtype()
+    assert 'rtype_ootype' in t.driver.done    
+
+    t = Translation(f)
+    s = t.annotate([int, int])
+    t.rtype(backend='squeak')
+    assert 'rtype_ootype' in t.driver.done
+
+
+    t = Translation(f, backend='squeak', type_system='ootype')
+    s = t.annotate([int, int])
+    t.rtype()
+    assert 'rtype_ootype' in t.driver.done        
+
+    t = Translation(f, type_system='lltype')
+    s = t.annotate([int, int])
+    py.test.raises(Exception, "t.rtype(backend='squeak')")
+
+    t = Translation(f, backend='squeak')
+    s = t.annotate([int, int])
+    py.test.raises(Exception, "t.rtype(type_system='lltype')")
+

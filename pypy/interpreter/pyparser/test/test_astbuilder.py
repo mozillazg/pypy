@@ -1,6 +1,6 @@
 import os
 
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
+from pypy.interpreter.pyparser import pythonparse
 from pypy.interpreter.pyparser.astbuilder import AstBuilder
 from pypy.interpreter.pyparser.pythonutil import ast_from_input
 from pypy.interpreter.stablecompiler.transformer import Transformer
@@ -28,13 +28,31 @@ def arglist_equal(left,right):
             print "Type mismatch", repr(l), repr(r)
             print "l is str", repr(l), type(l)==str
             print "r is AssName", repr(r), isinstance(r,ast_ast.AssName)
-	    print "left is", repr(left)
-	    print "right is", repr(right)
+            print "left is", repr(left)
+            print "right is", repr(right)
             return False
     return True
 
 
 def nodes_equal(left, right, check_lineno=False):
+    if isinstance(left, ast_ast.Node) and isinstance(right, ast_ast.Node):
+        # direct comparison
+        if left.__class__ is not right.__class__:
+            print "Node type mismatch:", left, right
+            return False
+        if check_lineno and left.lineno != right.lineno:
+            print "lineno mismatch in (%s) left: %s, right: %s" % (left, left.lineno, right.lineno)
+            return False
+        left_nodes = list(left.getChildren())
+        right_nodes = list(right.getChildren())
+        if len(left_nodes) != len(right_nodes):
+            print "Number of children mismatch:", left, right 
+            return False
+        for left_node, right_node in zip(left_nodes, right_nodes):
+            if not nodes_equal(left_node, right_node, check_lineno):
+                return False
+        return True
+
     if not isinstance(left,test_ast.Node) or not isinstance(right,ast_ast.Node):
         return left==right
     if left.__class__.__name__ != right.__class__.__name__:
@@ -63,9 +81,8 @@ def nodes_equal(left, right, check_lineno=False):
         right_nodes.extend(flatten(right.defaults))
         right_nodes.append(right.flags)
         right_nodes.append(right.code)
-
-	print "left", repr(left_nodes)
-	print "right", repr(right_nodes)
+        print "left", repr(left_nodes)
+        print "right", repr(right_nodes)
         left_args = left_nodes[0]
         del left_nodes[0]
         right_args = right_nodes[0]
@@ -99,6 +116,14 @@ def nodes_equal(left, right, check_lineno=False):
             right_nodes = (ast_ast.Const(None),)
         else:
             right_nodes = right.getChildren()    
+    elif isinstance(left,test_ast.Subscript):
+        # test_ast.Subscript is not expressive enough to tell the difference
+        # between a[x] and a[x,]  :-(
+        left_nodes = list(left.getChildren())
+        if len(left.subs) > 1:
+            left_nodes[-len(left.subs):] = [test_ast.Tuple(left_nodes[-len(left.subs):],
+                                                           left.lineno)]
+        right_nodes = right.getChildren()
     else:
         left_nodes = left.getChildren()
         right_nodes = right.getChildren()
@@ -116,6 +141,8 @@ def nodes_equal(left, right, check_lineno=False):
             print "(1) (%s) left: %s, right: %s" % (left, left.lineno, right.lineno)
             return False
     return True
+
+EXPECTED = {}
 
 constants = [
     "0",
@@ -153,6 +180,7 @@ expressions = [
     "del foo[bar]",
     "del foo.bar",
     "l[0]",
+    "k[v,]",
     "m[a,b]",
     "a.b.c[d]",
     "file('some.txt').read()",
@@ -178,6 +206,22 @@ expressions = [
     "[a, (b,c), d] = e",
     "a, (b, c), d = e",
     ]
+
+# We do not export the following tests because we would have to implement 2.5
+# features in the stable compiler (other than just building the AST).
+expressions_inbetweenversions = expressions + [
+    "1 if True else 2",
+    "1 if False else 2",
+    ]
+
+EXPECTED["k[v,]"] = ("Module(None, Stmt([Discard(Subscript(Name('k'), 2, "
+                     "Tuple([Name('v')])))]))")
+EXPECTED["m[a,b]"] = ("Module(None, Stmt([Discard(Subscript(Name('m'), 2, "
+                      "Tuple([Name('a'), Name('b')])))]))")
+EXPECTED["1 if True else 2"] = ("Module(None, Stmt([Discard(CondExpr("
+                                "Name('True'), Const(1), Const(2)))]))")
+EXPECTED["1 if False else 2"] = ("Module(None, Stmt([Discard(CondExpr("
+                                 "Name('False'), Const(1), Const(2)))]))")
 
 funccalls = [
     "l = func()",
@@ -287,21 +331,39 @@ slices = [
     "a.b.l[0:1:2]",
     "a[1:2:3, 100]",
     "a[:2:3, 100]",
-    "a[1::3, 100]",
+    "a[1::3, 100,]",
     "a[1:2:, 100]",
     "a[1:2, 100]",
-    "a[1:, 100]",
+    "a[1:, 100,]",
     "a[:2, 100]",
     "a[:, 100]",
-    "a[100, 1:2:3]",
+    "a[100, 1:2:3,]",
     "a[100, :2:3]",
     "a[100, 1::3]",
-    "a[100, 1:2:]",
+    "a[100, 1:2:,]",
     "a[100, 1:2]",
     "a[100, 1:]",
-    "a[100, :2]",
+    "a[100, :2,]",
     "a[100, :]",
     ]
+EXPECTED.update({
+    "a[1:2:3, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(1), Const(2), Const(3)]), Const(100)])))]))",
+    "a[:2:3, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(None), Const(2), Const(3)]), Const(100)])))]))",
+    "a[1::3, 100,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(1), Const(None), Const(3)]), Const(100)])))]))",
+    "a[1:2:, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(1), Const(2), Const(None)]), Const(100)])))]))",
+    "a[1:2, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(1), Const(2)]), Const(100)])))]))",
+    "a[1:, 100,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(1), Const(None)]), Const(100)])))]))",
+    "a[:2, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(None), Const(2)]), Const(100)])))]))",
+    "a[:, 100]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Sliceobj([Const(None), Const(None)]), Const(100)])))]))",
+    "a[100, 1:2:3,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(2), Const(3)])])))]))",
+    "a[100, :2:3]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(None), Const(2), Const(3)])])))]))",
+    "a[100, 1::3]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(None), Const(3)])])))]))",
+    "a[100, 1:2:,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(2), Const(None)])])))]))",
+    "a[100, 1:2]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(2)])])))]))",
+    "a[100, 1:]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(None)])])))]))",
+    "a[100, :2,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(None), Const(2)])])))]))",
+    "a[100, :]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(None), Const(None)])])))]))",
+    })
 
 imports = [
     'import os',
@@ -415,14 +477,15 @@ except NameError, err:
 except ValueError, err:
     pass
 """,
-    """try:
-    a
-except NameError, err:
-    a = 1
-    b = 2
-except ValueError, err:
-    a = 2
-    return a
+    """def f():
+    try:
+        a
+    except NameError, err:
+        a = 1
+        b = 2
+    except ValueError, err:
+        a = 2
+        return a
 """
     """try:
     a
@@ -438,11 +501,12 @@ else:
 finally:
     b
 """,
-    """try:
-    return a
-finally:
-    a = 3
-    return 1
+    """def f():
+    try:
+        return a
+    finally:
+        a = 3
+        return 1
 """,
 
     ]
@@ -461,6 +525,7 @@ one_stmt_funcdefs = [
     "def f(a, b, (c, d), e): pass",
     "def f(a, b, (c, (d, e), f, (g, h))): pass",
     "def f(a, b, (c, (d, e), f, (g, h)), i): pass",
+    "def f((a)): pass",
     ]
 
 one_stmt_classdefs = [
@@ -494,7 +559,7 @@ returns = [
     'def f(): return a.b',
     'def f(): return a',
     'def f(): return a,b,c,d',
-    'return (a,b,c,d)',
+    #'return (a,b,c,d)',      --- this one makes no sense, as far as I can tell
     ]
 
 augassigns = [
@@ -553,7 +618,7 @@ augassigns = [
 
 TESTS = [
     constants,
-    expressions,
+    expressions_inbetweenversions,
     augassigns,
     comparisons,
     funccalls,
@@ -642,22 +707,36 @@ class FakeSpace:
 def ast_parse_expr(expr, target='single'):
     target = TARGET_DICT[target]
     builder = AstBuilder(space=FakeSpace())
-    PYTHON_PARSER.parse_source(expr, target, builder)
+    pythonparse.PYTHON_PARSER.parse_source(expr, target, builder)
     return builder
+
+# Create parser from Grammar_stable, not current grammar.
+stable_grammar, _ = pythonparse.get_grammar_file("stable")
+stable_parser = pythonparse.python_grammar(stable_grammar)
 
 def tuple_parse_expr(expr, target='single'):
     t = Transformer("dummyfile")
-    return ast_from_input(expr, target, t)
+    return ast_from_input(expr, target, t, stable_parser)
 
 def check_expression(expr, target='single'):
     r1 = ast_parse_expr(expr, target)
-    ast = tuple_parse_expr(expr, target)
+    try:
+        ast = EXPECTED[expr]
+    except KeyError:
+        # trust the stablecompiler's Transformer when no explicit result has
+        # been provided (although trusting it is a foolish thing to do)
+        ast = tuple_parse_expr(expr, target)
+        check_lineno = True
+    else:
+        if isinstance(ast, str):
+            ast = eval(ast, ast_ast.__dict__)
+        check_lineno = False
     print "-" * 30
     print "ORIG :", ast
     print 
     print "BUILT:", r1.rule_stack[-1]
     print "-" * 30
-    assert nodes_equal(ast, r1.rule_stack[-1], check_lineno=True), 'failed on %r' % (expr)
+    assert nodes_equal(ast, r1.rule_stack[-1], check_lineno), 'failed on %r' % (expr)
 
 def test_basic_astgen():
     for family in TESTS:
@@ -668,6 +747,11 @@ def test_exec_inputs():
     for family in EXEC_INPUTS:
         for expr in family:
             yield check_expression, expr, 'exec'
+
+NEW_GRAMMAR_SNIPPETS = [    
+    'snippet_with_1.py',
+    'snippet_with_2.py',
+    ]
 
 SNIPPETS = [    
     'snippet_1.py',
@@ -706,14 +790,18 @@ SNIPPETS = [
     ]
 
 LIBSTUFF = [
-    '_file.py',
-    '_sio.py'
+      '_marshal.py',
     ]
 
 def test_snippets():
-    for snippet_name in SNIPPETS:
+    for snippet_name in SNIPPETS + NEW_GRAMMAR_SNIPPETS:
         filepath = os.path.join(os.path.dirname(__file__), 'samples', snippet_name)
         source = file(filepath).read()
+        # To avoid using the stable compiler we pull an explicit AST out of the snippet
+        if source.startswith('# EXPECT:'):
+            firstline,_ = source.split('\n', 1)
+            firstline = firstline[len('# EXPECT:'):].strip()
+            EXPECTED[source] = firstline
         yield check_expression, source, 'exec'
 
 def test_libstuff():

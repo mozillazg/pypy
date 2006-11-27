@@ -14,7 +14,7 @@ Candidates      implemented
 
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, applevel
-from pypy.rpython.rarithmetic import r_uint, intmask
+from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.module.__builtin__.app_functional import range as app_range
 from inspect import getsource, getfile
 
@@ -64,10 +64,13 @@ def get_len_of_range(lo, hi, step):
     return n
 
 def range(space, w_x, w_y=None, w_step=1):
-    """ returns a list of integers in arithmetic position from start (defaults
-        to zero) to stop - 1 by step (defaults to 1).  Use a negative step to
-        get a list in decending order."""
+    """Return a list of integers in arithmetic position from start (defaults
+to zero) to stop - 1 by step (defaults to 1).  Use a negative step to
+get a list in decending order."""
 
+    if (space.config.objspace.name == "std" and
+        space.config.objspace.std.withrangelist):
+        return range_withrangelist(space, w_x, w_y, w_step)
     try:
         # save duplication by redirecting every error to applevel
         x = space.int_w(w_x)
@@ -92,3 +95,20 @@ del range # don't hide the builtin one
 
 range_fallback = applevel(getsource(app_range), getfile(app_range)
                           ).interphook('range')
+
+def range_withrangelist(space, w_x, w_y, w_step):
+    # XXX object space dependant
+    from pypy.objspace.std.rangeobject import W_RangeListObject
+    try:
+        # save duplication by redirecting every error to applevel
+        x = space.int_w(w_x)
+        if space.is_w(w_y, space.w_None):
+            start, stop = 0, x
+        else:
+            start, stop = x, space.int_w(w_y)
+        step = space.int_w(w_step)
+        howmany = get_len_of_range(start, stop, step)
+    except (OperationError, ValueError, OverflowError):
+        return range_fallback(space, w_x, w_y, w_step)
+    return W_RangeListObject(start, step, howmany)
+

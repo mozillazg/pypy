@@ -2,23 +2,27 @@ from pypy.objspace.flow.objspace import UnwrapException
 from pypy.objspace.flow.model import Constant
 from pypy.objspace.flow.operation import OperationName, Arity
 from pypy.interpreter.gateway import ApplevelClass
+from pypy.interpreter.error import OperationError
 from pypy.tool.cache import Cache
 
 def sc_import(space, fn, args):
     w_name, w_glob, w_loc, w_frm = args.fixedunpack(4)
-    try:
+    if not isinstance(w_loc, Constant):
+        # import * in a function gives us the locals as Variable
+        # we always forbid it as a SyntaxError
+        raise SyntaxError, "RPython: import * is not allowed in functions"
+    if space.config.translation.do_imports_immediately:
         name, glob, loc, frm = (space.unwrap(w_name), space.unwrap(w_glob),
                                 space.unwrap(w_loc), space.unwrap(w_frm))
-    except UnwrapException:
-        # import * in a function gives us the locals as Variable
-        # we forbid it as a SyntaxError
-        raise SyntaxError, "RPython: import * is not allowed in functions"
-    if space.do_imports_immediately:
-        return space.wrap(__import__(name, glob, loc, frm))
+        try:
+            mod = __import__(name, glob, loc, frm)
+        except ImportError, e:
+            raise OperationError(space.w_ImportError, space.wrap(str(e)))
+        return space.wrap(mod)
     # redirect it, but avoid exposing the globals
     w_glob = Constant({})
     return space.do_operation('simple_call', Constant(__import__),
-                              w_name, w_glob, w_loc, w_frm)
+                               w_name, w_glob, w_loc, w_frm)
 
 def sc_operator(space, fn, args):
     args_w, kwds_w = args.unpack()
@@ -32,7 +36,7 @@ def sc_operator(space, fn, args):
         else:
             raise Exception, "should call %r with exactly %d arguments" % (
                 fn, Arity[opname])
-    if space.builtins_can_raise_exceptions:
+    if space.config.translation.builtins_can_raise_exceptions:
         # in this mode, avoid constant folding and raise an implicit Exception
         w_result = space.do_operation(opname, *args_w)
         space.handle_implicit_exceptions([Exception])
@@ -62,6 +66,28 @@ class FunctionCache(Cache):
         return dic
     _build = staticmethod(_build)
 
+# _________________________________________________________________________
+# a simplified version of the basic printing routines, for RPython programs
+class StdOutBuffer:
+    linebuf = []
+stdoutbuffer = StdOutBuffer()
+def rpython_print_item(s):
+    buf = stdoutbuffer.linebuf
+    for c in s:
+        buf.append(c)
+    buf.append(' ')
+def rpython_print_newline():
+    buf = stdoutbuffer.linebuf
+    if buf:
+        buf[-1] = '\n'
+        s = ''.join(buf)
+        del buf[:]
+    else:
+        s = '\n'
+    import os
+    os.write(1, s)
+# _________________________________________________________________________
+
 compiled_funcs = FunctionCache()
 
 def sc_applevel(space, app, name, args_w):
@@ -69,6 +95,18 @@ def sc_applevel(space, app, name, args_w):
     if not dic:
         return None # signal that this is not RPython
     func = dic[name]
+    if getattr(func, '_annspecialcase_', '').startswith('flowspace:'):
+        # a hack to replace specific app-level helpers with simplified
+        # RPython versions
+        name = func._annspecialcase_[len('flowspace:'):]
+        if name == 'print_item':    # more special cases...
+            w_s = space.do_operation('str', *args_w)
+            args_w = (w_s,)
+        func = globals()['rpython_' + name]
+    else:
+        # otherwise, just call the app-level helper and hope that it
+        # is RPython enough
+        pass
     return space.do_operation('simple_call', Constant(func), *args_w)
 
 def setup(space):

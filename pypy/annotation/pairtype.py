@@ -1,5 +1,30 @@
 """
-XXX A docstring should go here.
+Two magic tricks for classes:
+
+    class X:
+        __metaclass__ = extendabletype
+        ...
+
+    # in some other file...
+    class __extend__(X):
+        ...      # and here you can add new methods and class attributes to X
+
+Mostly useful together with the second trick, which lets you build
+methods whose 'self' is a pair of objects instead of just one:
+
+    class __extend__(pairtype(X, Y)):
+        attribute = 42
+        def method((x, y), other, arguments):
+            ...
+
+    pair(x, y).attribute
+    pair(x, y).method(other, arguments)
+
+This finds methods and class attributes based on the actual
+class of both objects that go into the pair(), with the usual
+rules of method/attribute overriding in (pairs of) subclasses.
+
+For more information, see test_pairtype.
 """
 
 class extendabletype(type):
@@ -7,12 +32,12 @@ class extendabletype(type):
     the definition of 't' instead of creating a new subclass."""
     def __new__(cls, name, bases, dict):
         if name == '__extend__':
-            cls = bases[0]   # override data into the existing base
-            for key, value in dict.items():
-                if key == '__module__':
-                    continue
+            for cls in bases:
+                for key, value in dict.items():
+                    if key == '__module__':
+                        continue
                     # XXX do we need to provide something more for pickling?
-                setattr(cls, key, value)
+                    setattr(cls, key, value)
             return None
         else:
             return super(extendabletype, cls).__new__(cls, name, bases, dict)

@@ -11,18 +11,20 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeInteger, SomeExternalObject, SomeOOInstance, TLS, SomeAddress, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, s_ImpossibleValue, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
-     SomeList, SomeObject
+     SomeList, SomeObject, SomeWeakGcAddress
 from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
 from pypy.interpreter.argument import Arguments, ArgErr
-from pypy.rpython.rarithmetic import r_int, r_uint, r_ulonglong, r_longlong
-from pypy.rpython.objectmodel import r_dict, Symbolic
+from pypy.rlib.rarithmetic import r_int, r_uint, r_ulonglong, r_longlong
+from pypy.rlib.rarithmetic import base_int
+from pypy.rlib.objectmodel import r_dict, Symbolic
 from pypy.tool.algo.unionfind import UnionFind
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.memory import lladdress
+from pypy.rpython import extregistry
 
 class Stats:
 
@@ -139,7 +141,6 @@ class Stats:
 
     def consider_dict_delitem(self, dic):
         return dic
-            
 
 class Bookkeeper:
     """The log of choices that have been made while analysing the operations.
@@ -155,6 +156,7 @@ class Bookkeeper:
 
     def __init__(self, annotator):
         self.annotator = annotator
+        self.policy = annotator.policy
         self.descs = {}          # map Python objects to their XxxDesc wrappers
         self.methoddescs = {}    # map (funcdesc, classdef) to the MethodDesc
         self.classdefs = []      # list of all ClassDefs
@@ -164,12 +166,14 @@ class Bookkeeper:
         self.dictdefs = {}       # map position_keys to DictDefs
         self.immutable_cache = {}
 
-        self.pbc_maximal_access_sets = UnionFind(description.AttrFamily)
+        self.classpbc_attr_families = {} # {'attr': UnionFind(ClassAttrFamily)}
+        self.frozenpbc_attr_families = UnionFind(description.FrozenAttrFamily)
         self.pbc_maximal_call_families = UnionFind(description.CallFamily)
 
         self.emulated_pbc_calls = {}
         self.all_specializations = {}       # {FuncDesc: specialization-info}
         self.pending_specializations = []   # list of callbacks
+        self.external_class_cache = {}      # cache of ExternalType classes
 
         self.needs_hash_support = {}
         self.needs_generic_instantiate = {}
@@ -184,6 +188,7 @@ class Bookkeeper:
     def enter(self, position_key):
         """Start of an operation.
         The operation is uniquely identified by the given key."""
+        assert not hasattr(self, 'position_key'), "don't call enter() nestedly"
         self.position_key = position_key
         TLS.bookkeeper = self
 
@@ -207,7 +212,7 @@ class Bookkeeper:
                         if op.opname in ('simple_call', 'call_args'):
                             yield op
                         # some blocks are partially annotated
-                        if binding(op.result, extquery=True) is None:
+                        if binding(op.result, None) is None:
                             break   # ignore the unannotated part
 
             for call_op in call_sites():
@@ -235,15 +240,15 @@ class Bookkeeper:
             s_callable = self.immutablevalue(adtmeth.func)
             args_s = [SomePtr(adtmeth.ll_ptrtype)] + args_s
         if isinstance(s_callable, SomePBC):
-            s_result = binding(call_op.result, extquery=True)
-            if s_result is None:
-                s_result = s_ImpossibleValue
+            s_result = binding(call_op.result, s_ImpossibleValue)
             self.consider_call_site_for_pbc(s_callable,
                                             call_op.opname,
                                             args_s, s_result)
 
     def consider_call_site_for_pbc(self, s_callable, opname, args_s, s_result):
         descs = s_callable.descriptions.keys()
+        if not descs:
+            return
         family = descs[0].getcallfamily()
         args = self.build_args(opname, args_s)
         s_callable.getKind().consider_call_site(self, family, descs, args,
@@ -275,27 +280,27 @@ class Bookkeeper:
             listdef.generalize(s_value)
         return SomeList(listdef)
 
-    def getdictdef(self):
+    def getdictdef(self, is_r_dict=False):
         """Get the DictDef associated with the current position."""
         try:
             dictdef = self.dictdefs[self.position_key]
         except KeyError:
-            dictdef = self.dictdefs[self.position_key] = DictDef(self)
+            dictdef = DictDef(self, is_r_dict=is_r_dict)
+            self.dictdefs[self.position_key] = dictdef
         return dictdef
 
-    def newdict(self, *items_s):
-        """Make a SomeDict associated with the current position, general
-        enough to contain the given (s_key, s_value) as items."""
-        dictdef = self.getdictdef()
-        for s_key, s_value in items_s:
-            dictdef.generalize_key(s_key)
-            dictdef.generalize_value(s_value)
-        return SomeDict(dictdef)
+    def newdict(self):
+        """Make a so-far empty SomeDict associated with the current
+        position."""
+        return SomeDict(self.getdictdef())
 
-    def immutablevalue(self, x):
+    def immutableconstant(self, const):
+        return self.immutablevalue(const.value)
+
+    def immutablevalue(self, x, need_const=True):
         """The most precise SomeValue instance that contains the
         immutable value x."""
-         # convert unbound methods to the underlying function
+        # convert unbound methods to the underlying function
         if hasattr(x, 'im_self') and x.im_self is None:
             x = x.im_func
             assert not hasattr(x, 'im_self')
@@ -303,17 +308,13 @@ class Bookkeeper:
             return SomeObject()
         tp = type(x)
         if issubclass(tp, Symbolic): # symbolic constants support
-            return x.annotation()
+            result = x.annotation()
+            result.const_box = Constant(x)
+            return result
         if tp is bool:
             result = SomeBool()
-        elif tp is int or tp is r_int:
+        elif tp is int:
             result = SomeInteger(nonneg = x>=0)
-        elif tp is r_uint:
-            result = SomeInteger(nonneg = True, unsigned = True)
-        elif tp is r_ulonglong:
-            result = SomeInteger(nonneg = True, unsigned = True, size = 2)
-        elif tp is r_longlong:
-            result = SomeInteger(nonneg = x>0, size = 2)
         elif issubclass(tp, str): # py.lib uses annotated str subclasses
             if len(x) == 1:
                 result = SomeChar()
@@ -322,79 +323,240 @@ class Bookkeeper:
         elif tp is unicode and len(x) == 1:
             result = SomeUnicodeCodePoint()
         elif tp is tuple:
-            result = SomeTuple(items = [self.immutablevalue(e) for e in x])
+            result = SomeTuple(items = [self.immutablevalue(e, need_const) for e in x])
         elif tp is float:
             result = SomeFloat()
         elif tp is list:
-            key = Constant(x)
-            try:
-                return self.immutable_cache[key]
-            except KeyError:
-                result = SomeList(ListDef(self, SomeImpossibleValue()))
-                self.immutable_cache[key] = result
+            if need_const:
+                key = Constant(x)
+                try:
+                    return self.immutable_cache[key]
+                except KeyError:
+                    result = SomeList(ListDef(self, s_ImpossibleValue))
+                    self.immutable_cache[key] = result
+                    for e in x:
+                        result.listdef.generalize(self.immutablevalue(e))
+                    result.const_box = key
+                    return result
+            else:
+                listdef = ListDef(self, s_ImpossibleValue)
                 for e in x:
-                    result.listdef.generalize(self.immutablevalue(e))
+                    listdef.generalize(self.annotation_from_example(e))
+                result = SomeList(listdef)    
         elif tp is dict or tp is r_dict:
-            key = Constant(x)
-            try:
-                return self.immutable_cache[key]
-            except KeyError:
-                result = SomeDict(DictDef(self, 
-                                          SomeImpossibleValue(),
-                                          SomeImpossibleValue()))
-                self.immutable_cache[key] = result
+            if need_const:
+                key = Constant(x)
+                try:
+                    return self.immutable_cache[key]
+                except KeyError:
+                    result = SomeDict(DictDef(self, 
+                                              s_ImpossibleValue,
+                                              s_ImpossibleValue,
+                                              is_r_dict = tp is r_dict))
+                    self.immutable_cache[key] = result
+                    if tp is r_dict:
+                        s_eqfn = self.immutablevalue(x.key_eq)
+                        s_hashfn = self.immutablevalue(x.key_hash)
+                        result.dictdef.dictkey.update_rdict_annotations(s_eqfn,
+                                                                        s_hashfn)
+                    done = False
+                    while not done:
+                        try:
+                            for ek, ev in x.iteritems():
+                                result.dictdef.generalize_key(self.immutablevalue(ek))
+                                result.dictdef.generalize_value(self.immutablevalue(ev))
+                        except RuntimeError, r:
+                            pass
+                        else:
+                            done = True
+                    result.const_box = key
+                    return result
+            else:
+                dictdef = DictDef(self, 
+                s_ImpossibleValue,
+                s_ImpossibleValue,
+                is_r_dict = tp is r_dict)
                 if tp is r_dict:
                     s_eqfn = self.immutablevalue(x.key_eq)
                     s_hashfn = self.immutablevalue(x.key_hash)
-                    result.dictdef.dictkey.update_rdict_annotations(s_eqfn,
-                                                                    s_hashfn)
+                    dictdef.dictkey.update_rdict_annotations(s_eqfn,
+                        s_hashfn)
                 for ek, ev in x.iteritems():
-                    result.dictdef.generalize_key(self.immutablevalue(ek))
-                    result.dictdef.generalize_value(self.immutablevalue(ev))
+                    dictdef.generalize_key(self.annotation_from_example(ek))
+                    dictdef.generalize_value(self.annotation_from_example(ev))
+                result = SomeDict(dictdef)
         elif ishashable(x) and x in BUILTIN_ANALYZERS:
-	    _module = getattr(x,"__module__","unknown")
+            _module = getattr(x,"__module__","unknown")
             result = SomeBuiltin(BUILTIN_ANALYZERS[x], methodname="%s.%s" % (_module, x.__name__))
+        elif extregistry.is_registered(x, self.policy):
+            entry = extregistry.lookup(x, self.policy)
+            result = entry.compute_annotation_bk(self)
+##        elif hasattr(x, "compute_result_annotation"):
+##            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
+##        elif hasattr(tp, "compute_annotation"):
+##            result = tp.compute_annotation()
         elif tp in EXTERNAL_TYPE_ANALYZERS:
             result = SomeExternalObject(tp)
         elif isinstance(x, lltype._ptr):
             result = SomePtr(lltype.typeOf(x))
-        elif isinstance(x, lladdress.address):
-            assert x is lladdress.NULL
-            result= SomeAddress(is_null=True)
+        elif isinstance(x, llmemory.fakeaddress):
+            result = SomeAddress(is_null=not x)
+        elif isinstance(x, llmemory.fakeweakaddress):
+            result = SomeWeakGcAddress()
         elif isinstance(x, ootype._static_meth):
             result = SomeOOStaticMeth(ootype.typeOf(x))
         elif isinstance(x, ootype._class):
             result = SomeOOClass(x._INSTANCE)   # NB. can be None
-        elif isinstance(x, ootype._instance):
+        elif isinstance(x, ootype.instance_impl): # XXX
             result = SomeOOInstance(ootype.typeOf(x))
         elif callable(x):
             if hasattr(x, '__self__') and x.__self__ is not None:
                 # for cases like 'l.append' where 'l' is a global constant list
-                s_self = self.immutablevalue(x.__self__)
+                s_self = self.immutablevalue(x.__self__, need_const)
                 result = s_self.find_method(x.__name__)
                 if result is None:
                     result = SomeObject()
+            elif hasattr(x, 'im_self') and hasattr(x, 'im_func'):
+                # on top of PyPy, for cases like 'l.append' where 'l' is a
+                # global constant list, the find_method() returns non-None
+                s_self = self.immutablevalue(x.im_self, need_const)
+                result = s_self.find_method(x.im_func.__name__)
             else:
-                result = SomePBC([self.getdesc(x)])
-        elif hasattr(x, '__class__') \
-                 and x.__class__.__module__ != '__builtin__':
+                result = None
+            if result is None:
+                if (self.annotator.policy.allow_someobjects
+                    and getattr(x, '__module__', None) == '__builtin__'
+                    # XXX note that the print support functions are __builtin__
+                    and tp not in (types.FunctionType, types.MethodType)):
+                    result = SomeObject()
+                    result.knowntype = tp # at least for types this needs to be correct
+                else:
+                    result = SomePBC([self.getdesc(x)])
+        elif hasattr(x, '_freeze_') and x._freeze_():
             # user-defined classes can define a method _freeze_(), which
             # is called when a prebuilt instance is found.  If the method
             # returns True, the instance is considered immutable and becomes
             # a SomePBC().  Otherwise it's just SomeInstance().
-            frozen = hasattr(x, '_freeze_') and x._freeze_()
-            if frozen:
-                result = SomePBC([self.getdesc(x)])
-            else:
-                self.see_mutable(x)
-                result = SomeInstance(self.getuniqueclassdef(x.__class__))
+            result = SomePBC([self.getdesc(x)])
+        elif hasattr(x, '__class__') \
+                 and x.__class__.__module__ != '__builtin__':
+            self.see_mutable(x)
+            result = SomeInstance(self.getuniqueclassdef(x.__class__))
         elif x is None:
             return s_None
         else:
             result = SomeObject()
-        result.const = x
+        if need_const:
+            result.const = x
         return result
+    
+    def annotation_from_example(self, x):
+        # XXX to kill at some point
+        return self.immutablevalue(x, False)
 
+##    def annotation_from_example(self, x):
+##        """The most precise SomeValue instance that contains the
+##        mutable value x."""
+##         # convert unbound methods to the underlying function
+##        if hasattr(x, 'im_self') and x.im_self is None:
+##            x = x.im_func
+##            assert not hasattr(x, 'im_self')
+##        if x is sys: # special case constant sys to someobject
+##            return SomeObject()
+##        tp = type(x)
+##        if issubclass(tp, Symbolic): # symbolic constants support
+##            result = x.annotation()
+##            return result
+##        if tp is bool:
+##            result = SomeBool()
+##        elif tp is int:
+##            result = SomeInteger(nonneg = x>=0)
+##        elif issubclass(tp, str): # py.lib uses annotated str subclasses
+##            if len(x) == 1:
+##                result = SomeChar()
+##            else:
+##                result = SomeString()
+##        elif tp is unicode and len(x) == 1:
+##            result = SomeUnicodeCodePoint()
+##        elif tp is tuple:
+##            result = SomeTuple(items = [self.annotation_from_example(e) for e in x])
+##        elif tp is float:
+##            result = SomeFloat()
+##        elif tp is list:
+##            listdef = ListDef(self, s_ImpossibleValue)
+##            for e in x:
+##                listdef.generalize(self.annotation_from_example(e))
+##            result = SomeList(listdef)
+##        elif tp is dict or tp is r_dict:
+##            dictdef = DictDef(self, 
+##                s_ImpossibleValue,
+##                s_ImpossibleValue,
+##                is_r_dict = tp is r_dict)
+##            if tp is r_dict:
+##                s_eqfn = self.immutablevalue(x.key_eq)
+##                s_hashfn = self.immutablevalue(x.key_hash)
+##                dictdef.dictkey.update_rdict_annotations(s_eqfn,
+##                    s_hashfn)
+##            for ek, ev in x.iteritems():
+##                dictdef.generalize_key(self.annotation_from_example(ek))
+##                dictdef.generalize_value(self.annotation_from_example(ev))
+##            result = SomeDict(dictdef)
+##        elif ishashable(x) and x in BUILTIN_ANALYZERS:
+##            _module = getattr(x,"__module__","unknown")
+##            result = SomeBuiltin(BUILTIN_ANALYZERS[x], methodname="%s.%s" % (_module, x.__name__))
+##        elif extregistry.is_registered(x, self.policy):
+##            entry = extregistry.lookup(x, self.policy)
+##            result = entry.compute_annotation_bk(self)
+####        elif hasattr(x, "compute_result_annotation"):
+####            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
+####        elif hasattr(tp, "compute_annotation"):
+####            result = tp.compute_annotation()
+##        elif tp in EXTERNAL_TYPE_ANALYZERS:
+##            result = SomeExternalObject(tp)
+##        elif isinstance(x, lltype._ptr):
+##            result = SomePtr(lltype.typeOf(x))
+##        elif isinstance(x, llmemory.fakeaddress):
+##            result = SomeAddress(is_null=not x)
+##        elif isinstance(x, llmemory.fakeweakaddress):
+##            result = SomeWeakGcAddress()
+##        elif isinstance(x, ootype._static_meth):
+##            result = SomeOOStaticMeth(ootype.typeOf(x))
+##        elif isinstance(x, ootype._class):
+##            result = SomeOOClass(x._INSTANCE)   # NB. can be None
+##        elif isinstance(x, ootype.instance_impl): # XXX
+##            result = SomeOOInstance(ootype.typeOf(x))
+##        elif callable(x):
+##            if hasattr(x, '__self__') and x.__self__ is not None:
+##                # for cases like 'l.append' where 'l' is a global constant list
+##                s_self = self.annotation_from_example(x.__self__)
+##                result = s_self.find_method(x.__name__)
+##                if result is None:
+##                    result = SomeObject()
+##            else:
+##                if (self.annotator.policy.allow_someobjects
+##                    and getattr(x, '__module__', None) == '__builtin__'
+##                    # XXX note that the print support functions are __builtin__
+##                    and tp not in (types.FunctionType, types.MethodType)):
+##                    result = SomeObject()
+##                    result.knowntype = tp # at least for types this needs to be correct
+##                else:
+##                    result = SomePBC([self.getdesc(x)])
+##        elif hasattr(x, '_freeze_') and x._freeze_():
+##            # user-defined classes can define a method _freeze_(), which
+##            # is called when a prebuilt instance is found.  If the method
+##            # returns True, the instance is considered immutable and becomes
+##            # a SomePBC().  Otherwise it's just SomeInstance().
+##            result = SomePBC([self.getdesc(x)])
+##        elif hasattr(x, '__class__') \
+##                 and x.__class__.__module__ != '__builtin__':
+##            self.see_mutable(x)
+##            result = SomeInstance(self.getuniqueclassdef(x.__class__))
+##        elif x is None:
+##            return s_None
+##        else:
+##            result = SomeObject()
+##        return result
+    
     def getdesc(self, pyobj):
         # get the XxxDesc wrapper for the given Python object, which must be
         # one of:
@@ -438,11 +600,24 @@ class Bookkeeper:
                         name)
             else:
                 # must be a frozen pre-built constant, but let's check
-                assert pyobj._freeze_()
+                try:
+                    assert pyobj._freeze_()
+                except AttributeError:
+                    raise Exception("unexpected prebuilt constant: %r" % (
+                        pyobj,))
                 result = self.getfrozen(pyobj)
             self.descs[pyobj] = result
             return result
 
+    def have_seen(self, x):
+        # this might need to expand some more.
+        if x in self.descs:
+            return True
+        elif x in self.seen_mutable:
+            return True
+        else:
+            return False
+        
     def getfrozen(self, pyobj):
         result = description.FrozenDesc(self, pyobj)
         cls = result.knowntype
@@ -467,7 +642,7 @@ class Bookkeeper:
         self.seen_mutable[x] = True
         self.event('mutable', x)
         source = InstanceSource(self, x)
-        for attr in x.__dict__:
+        for attr in source.all_instance_attributes():
             clsdef.add_source_for_attribute(attr, source) # can trigger reflowing
 
     def valueoftype(self, t):
@@ -476,14 +651,8 @@ class Bookkeeper:
         assert isinstance(t, (type, types.ClassType))
         if t is bool:
             return SomeBool()
-        elif t is int or t is r_int:
+        elif t is int:
             return SomeInteger()
-        elif t is r_uint:
-            return SomeInteger(nonneg = True, unsigned = True)
-        elif t is r_ulonglong:
-            return SomeInteger(nonneg = True, unsigned = True, size = 2)
-        elif t is r_longlong:
-            return SomeInteger(size = 2)
         elif issubclass(t, str): # py.lib uses annotated str subclasses
             return SomeString()
         elif t is float:
@@ -497,6 +666,11 @@ class Bookkeeper:
             return s_None
         elif t in EXTERNAL_TYPE_ANALYZERS:
             return SomeExternalObject(t)
+##        elif hasattr(t, "compute_annotation"):
+##            return t.compute_annotation()
+        elif extregistry.is_registered_type(t, self.policy):
+            entry = extregistry.lookup_type(t, self.policy)
+            return entry.compute_annotation_bk(self)
         elif t.__module__ != '__builtin__' and t not in self.pbctypes:
             classdef = self.getuniqueclassdef(t)
             return SomeInstance(classdef)
@@ -506,16 +680,36 @@ class Bookkeeper:
                 o.knowntype = t
             return o
 
+    def get_classpbc_attr_families(self, attrname):
+        """Return the UnionFind for the ClassAttrFamilies corresponding to
+        attributes of the given name.
+        """
+        map = self.classpbc_attr_families
+        try:
+            access_sets = map[attrname]
+        except KeyError:
+            access_sets = map[attrname] = UnionFind(description.ClassAttrFamily)
+        return access_sets
+    
+    def getexternaldesc(self, class_):
+        try:
+            return self.external_class_cache[class_]
+        except KeyError:
+            from pypy.rpython.ootypesystem.bltregistry import ExternalType
+            next = ExternalType(class_)
+            self.external_class_cache[class_] = next
+            return next
+
     def pbc_getattr(self, pbc, s_attr):
         assert s_attr.is_constant()
         attr = s_attr.const
 
         descs = pbc.descriptions.keys()
         if not descs:
-            return SomeImpossibleValue()
+            return s_ImpossibleValue
         first = descs[0]
-        change = first.mergeattrfamilies(*descs[1:])
-        attrfamily = first.getattrfamily()
+        change = first.mergeattrfamilies(descs[1:], attr)
+        attrfamily = first.getattrfamily(attr)
 
         position = self.position_key
         attrfamily.read_locations[position] = True
@@ -525,8 +719,8 @@ class Bookkeeper:
             actuals.append(desc.s_read_attribute(attr))
         s_result = unionof(*actuals)
 
-        attrfamily.attrs[attr] = unionof(s_result,
-            attrfamily.attrs.get(attr, s_ImpossibleValue))
+        s_oldvalue = attrfamily.get_s_value(attr)
+        attrfamily.set_s_value(attr, unionof(s_result, s_oldvalue))
 
         if change:
             for position in attrfamily.read_locations:
@@ -540,7 +734,7 @@ class Bookkeeper:
         """
         descs = pbc.descriptions.keys()
         if not descs:
-            return SomeImpossibleValue()
+            return s_ImpossibleValue
         first = descs[0]
         first.mergecallfamilies(*descs[1:])
 
@@ -551,9 +745,7 @@ class Bookkeeper:
             fn, block, i = self.position_key
             op = block.operations[i]
             s_previous_result = self.annotator.binding(op.result,
-                                                       extquery=True)
-            if s_previous_result is None:
-                s_previous_result = s_ImpossibleValue
+                                                       s_ImpossibleValue)
         else:
             if emulated is True:
                 whence = None
@@ -571,21 +763,27 @@ class Bookkeeper:
         return s_result
 
     def emulate_pbc_call(self, unique_key, pbc, args_s, replace=[], callback=None):
+        emulate_enter = not hasattr(self, 'position_key')
+        if emulate_enter:
+            self.enter(None)
+        try:
+            emulated_pbc_calls = self.emulated_pbc_calls
+            prev = [unique_key]
+            prev.extend(replace)
+            for other_key in prev:
+                if other_key in emulated_pbc_calls:
+                    del emulated_pbc_calls[other_key]
+            emulated_pbc_calls[unique_key] = pbc, args_s
 
-        emulated_pbc_calls = self.emulated_pbc_calls
-        prev = [unique_key]
-        prev.extend(replace)
-        for other_key in prev:
-            if other_key in emulated_pbc_calls:
-                del emulated_pbc_calls[other_key]
-        emulated_pbc_calls[unique_key] = pbc, args_s
-
-        args = self.build_args("simple_call", args_s)
-        if callback is None:
-            emulated = True
-        else:
-            emulated = callback
-        return self.pbc_call(pbc, args, emulated=emulated)
+            args = self.build_args("simple_call", args_s)
+            if callback is None:
+                emulated = True
+            else:
+                emulated = callback
+            return self.pbc_call(pbc, args, emulated=emulated)
+        finally:
+            if emulate_enter:
+                self.leave()
 
     def build_args(self, op, args_s):
         space = RPythonCallsSpace()
@@ -634,10 +832,16 @@ class RPythonCallsSpace:
     For the Arguments class: if it really needs other operations, it means
     that the call pattern is too complex for R-Python.
     """
+    w_tuple = SomeTuple
     def newtuple(self, items_s):
-        return SomeTuple(items_s)
+        if items_s == [Ellipsis]:
+            res = SomeObject()   # hack to get a SomeObject as the *arg
+            res.from_ellipsis = True
+            return res
+        else:
+            return SomeTuple(items_s)
 
-    def newdict(self, stuff):
+    def newdict(self):
         raise CallPatternTooComplex, "'**' argument"
 
     def unpackiterable(self, s_obj, expected_length=None):
@@ -646,7 +850,20 @@ class RPythonCallsSpace:
                 expected_length != len(s_obj.items)):
                 raise ValueError
             return s_obj.items
+        if (s_obj.__class__ is SomeObject and
+            getattr(s_obj, 'from_ellipsis', False)):    # see newtuple()
+            return [Ellipsis]
         raise CallPatternTooComplex, "'*' argument must be SomeTuple"
+
+    def is_w(self, one, other):
+        return one is other
+
+    def type(self, item):
+        return type(item)
+
+    def is_true(self, s_tup):
+        assert isinstance(s_tup, SomeTuple)
+        return bool(s_tup.items)
 
 class CallPatternTooComplex(Exception):
     pass

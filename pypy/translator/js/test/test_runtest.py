@@ -10,7 +10,7 @@ def test_bool_return():
     f_false = compile_function(bool_return_False, [])
     assert f_false() == bool_return_False()
     f_true  = compile_function(bool_return_True , [])
-    assert f_true()  == bool_return_True()
+    assert f_true()  == bool_return_True()    
 
 def test_int_return():
     def int_return():
@@ -28,7 +28,7 @@ def test_float_return():
 def test_bool_param():
     def bool_param(b):
         return b
-    f = compile_function(bool_param, [str])
+    f = compile_function(bool_param, [bool])
     assert f(False) == bool_param(False)
     assert f(True ) == bool_param(True )
 
@@ -50,3 +50,15 @@ def test_combined_params():
     f = compile_function(combined_params, [bool,int,float])
     assert f(False, 13, 12.5) == combined_params(False, 13, 12.5)
     assert f(True , 13, 12.5) == combined_params(True , 13, 12.5)
+
+##def test_multiple_function():
+##    def one():
+##        return 1
+##    
+##    def two(x):
+##        return x
+##    
+##    f = compile_function([one, two], [[], [int]])
+##    assert f.call(one) == 1
+##    assert f.call(two, 3) == 3
+##

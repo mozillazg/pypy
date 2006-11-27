@@ -1,21 +1,20 @@
 from __future__ import division
 
-import sys
 import os
+import sys
+
 import py
-
 from pypy.tool.udir import udir
-from pypy.translator.llvm.test.runtest import compile_function
-from pypy.rpython.rarithmetic import r_uint
-from pypy.rpython import ros
+from pypy.rlib.rarithmetic import r_uint
+from pypy.rlib import ros
 
-if sys.maxint != 2**31-1:
-    py.test.skip("WIP") 
+from pypy.translator.llvm.test.runtest import *
 
 def test_external_function_ll_os_dup():
     def fn():
         return os.dup(0)
-    f = compile_function(fn, [])
+    f = compile_function(fn, [], isolate=False)
+    fn()
     assert os.path.sameopenfile(f(), fn())
 
 def test_external_function_ll_time_time():
@@ -29,7 +28,7 @@ def test_external_function_ll_time_clock():
     import time
     def fn():
         return time.clock()
-    f = compile_function(fn, [])
+    f = compile_function(fn, [], isolate=False)
     assert abs(f()-fn()) < 10.0
 
 def test_external_function_ll_time_sleep():
@@ -60,6 +59,8 @@ def test_os_file_ops_open_close():
     assert os.path.exists(path)
 
 def test_os_file_ops_open_write_close(): 
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     def openwriteclose(): 
         fd = os.open(path, os.O_CREAT|os.O_RDWR, 0777) 
         byteswritten = os.write(fd, path)
@@ -74,6 +75,8 @@ def test_os_file_ops_open_write_close():
     assert open(path).read() == path
 
 def test_os_file_ops_open_write_read_close(): 
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     def openwriteclose_openreadclose():
         fd = os.open(path, os.O_CREAT|os.O_RDWR, 0777) 
         byteswritten = os.write(fd, path+path+path)
@@ -97,6 +100,8 @@ def test_os_file_ops_open_write_read_close():
 # following from translator/c/test/test_extfunc.py Revision: 15320 (jul 29th 2005)
 
 def test_os_stat():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     filename = str(py.magic.autopath())
     def call_stat0():
         st = os.stat(filename)
@@ -116,6 +121,8 @@ def test_os_stat():
     assert f2() == st[2]
 
 def test_os_fstat():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     filename = str(py.magic.autopath())
     def call_fstat0():
         fd = os.open(filename, os.O_RDONLY, 0777)
@@ -148,6 +155,8 @@ def test_os_getcwd():
     assert f1()
 
 def test_math_frexp():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     from math import frexp
     def fn(x):
         res = frexp(x)
@@ -186,6 +195,8 @@ def test_simple_math_functions():
         yield math_function_test, funcname
 
 def test_os_path_exists():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     tmpfile = str(udir.join('test_os_path_exists.TMP'))
     def fn():
         return os.path.exists(tmpfile)
@@ -196,6 +207,8 @@ def test_os_path_exists():
     assert f() == False
 
 def test_dynamic_string_null_termination():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     # forces malloc / versus pbc for NUL testing of C string
     tmpfile = str(udir.join('test_os_path_exists.TMP'))
     def fn(l):
@@ -208,6 +221,8 @@ def test_dynamic_string_null_termination():
     assert f(lfile-2) == False
 
 def test_os_path_isdir():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     directory = "./."
     def fn():
         return os.path.isdir(directory)
@@ -222,13 +237,15 @@ def test_os_path_isdir():
 def test_os_isatty():
     def call_isatty(fd):
         return os.isatty(fd)
-    f = compile_function(call_isatty, [int])
+    f = compile_function(call_isatty, [int], isolate=False)
     assert f(0) == os.isatty(0)
     assert f(1) == os.isatty(1)
     assert f(2) == os.isatty(2)
     
 def test_rarith_parts_to_float():
-    from pypy.rpython.rarithmetic import parts_to_float
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
+    from pypy.rlib.rarithmetic import parts_to_float
     parts = [
      ["" ,"1","" ,""],
      ["-","1","" ,""],
@@ -246,7 +263,9 @@ def test_rarith_parts_to_float():
         assert f(i) == v
 
 def test_rarith_formatd():
-    from pypy.rpython.rarithmetic import formatd
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
+    from pypy.rlib.rarithmetic import formatd
     as_float  = [ 0.0  ,  1.5  ,  2.0  ]
     as_string = ["0.00", "1.50", "2.00"]
     def fn(i):
@@ -327,7 +346,7 @@ def test_putenv():
     def put():
         ros.putenv(s)
         return 0
-    func = compile_function(put, [])
+    func = compile_function(put, [], isolate=False)
     func()
     assert _real_getenv('abcdefgh') == '12345678'
 
@@ -337,7 +356,7 @@ if hasattr(posix, "unsetenv"):
         def unsetenv():
             os.unsetenv("ABCDEF")
             return 0
-        f = compile_function(unsetenv, [])
+        f = compile_function(unsetenv, [], isolate=False)
         os.putenv("ABCDEF", "a")
         assert _real_getenv('ABCDEF') == 'a'
         f()
@@ -374,6 +393,7 @@ def test_opendir_readdir():
     assert result == compared_with
 
 def test_lock():
+    py.test.skip("XXX does not work with exception transform (why not?)")
     import thread
     import pypy.module.thread.rpython.exttable   # for declare()/declaretype()
     def fn():
@@ -421,6 +441,8 @@ def test_simple_start_new_thread():
     assert res == 42
 
 def test_start_new_thread():
+    if sys.maxint != 2**31-1:
+        py.test.skip("WIP on 64 bit architectures") 
     import thread
     import pypy.module.thread.rpython.exttable   # for declare()/declaretype()
     class Arg:
@@ -460,4 +482,113 @@ def test_prebuilt_lock():
     res = f(1)
     assert res == False
 
-# end of tests taken from c backend
+def test_pipe_dup_dup2():
+    def does_stuff():
+        a, b = os.pipe()
+        c = os.dup(a)
+        d = os.dup(b)
+        assert a != b
+        assert a != c
+        assert a != d
+        assert b != c
+        assert b != d
+        assert c != d
+        os.close(c)
+        os.dup2(d, c)
+        e, f = os.pipe()
+        assert e != a
+        assert e != b
+        assert e != c
+        assert e != d
+        assert f != a
+        assert f != b
+        assert f != c
+        assert f != d
+        assert f != e
+        os.close(a)
+        os.close(b)
+        os.close(c)
+        os.close(d)
+        os.close(e)
+        os.close(f)
+        return 42
+    f1 = compile_function(does_stuff, [])
+    res = f1()
+    assert res == 42
+
+def test_os_chmod():
+    tmpfile = str(udir.join('test_os_chmod.txt'))
+    f = open(tmpfile, 'w')
+    f.close()
+    def does_stuff(mode):
+        os.chmod(tmpfile, mode)
+        return 0
+    f1 = compile_function(does_stuff, [int])
+    f1(0000)
+    assert os.stat(tmpfile).st_mode & 0777 == 0000
+    f1(0644)
+    assert os.stat(tmpfile).st_mode & 0777 == 0644
+
+def test_os_rename():
+    tmpfile1 = str(udir.join('test_os_rename_1.txt'))
+    tmpfile2 = str(udir.join('test_os_rename_2.txt'))
+    f = open(tmpfile1, 'w')
+    f.close()
+    def does_stuff():
+        os.rename(tmpfile1, tmpfile2)
+        return 0
+    f1 = compile_function(does_stuff, [])
+    f1()
+    assert os.path.exists(tmpfile2)
+    assert not os.path.exists(tmpfile1)
+
+if hasattr(os, 'getpid'):
+    def test_os_getpid():
+        def does_stuff():
+            return os.getpid()
+        f1 = compile_function(does_stuff, [], isolate=False)
+        res = f1()
+        assert res == os.getpid()
+
+if hasattr(os, 'link'):
+    def test_links():
+        import stat
+        tmpfile1 = str(udir.join('test_links_1.txt'))
+        tmpfile2 = str(udir.join('test_links_2.txt'))
+        tmpfile3 = str(udir.join('test_links_3.txt'))
+        f = open(tmpfile1, 'w')
+        f.close()
+        def does_stuff():
+            os.symlink(tmpfile1, tmpfile2)
+            os.link(tmpfile1, tmpfile3)
+            assert os.readlink(tmpfile2) == tmpfile1
+            flag= 0
+            st = os.lstat(tmpfile1)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            st = os.lstat(tmpfile2)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            st = os.lstat(tmpfile3)
+            flag = flag*10 + stat.S_ISREG(st[0])
+            flag = flag*10 + stat.S_ISLNK(st[0])
+            return flag
+        f1 = compile_function(does_stuff, [])
+        res = f1()
+        assert res == 100110
+        assert os.path.islink(tmpfile2)
+        assert not os.path.islink(tmpfile3)
+if hasattr(os, 'fork'):
+    def test_fork():
+        def does_stuff():
+            pid = os.fork()
+            if pid == 0:   # child
+                os._exit(4)
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            return status1
+        f1 = compile_function(does_stuff, [])
+        status1 = f1()
+        assert os.WIFEXITED(status1)
+        assert os.WEXITSTATUS(status1) == 4
+

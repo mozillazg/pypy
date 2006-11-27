@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError
 from pypy.objspace.descroperation import Object
 from pypy.interpreter import gateway
+from pypy.interpreter.typedef import default_identity_hash
 from pypy.objspace.std.stdtypedef import *
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.objspace import StdObjSpace
@@ -27,7 +28,7 @@ def descr_set___class__(space, w_obj, w_newcls):
         raise OperationError(space.w_TypeError,
                              space.wrap("__class__ assignment: only for heap types"))
     w_oldcls = space.type(w_obj)
-    if w_oldcls.get_layout() == w_newcls.get_layout() and w_oldcls.hasdict == w_newcls.hasdict:
+    if w_oldcls.get_full_instance_layout() == w_newcls.get_full_instance_layout():
         w_obj.setclass(space, w_newcls)
     else:
         raise OperationError(space.w_TypeError,
@@ -50,11 +51,8 @@ def descr__new__(space, w_type, __args__):
                                  space.wrap("default __new__ takes "
                                             "no parameters"))
     w_obj = space.allocate_instance(W_ObjectObject, w_type)
-    W_ObjectObject.__init__(w_obj, space)
+    #W_ObjectObject.__init__(w_obj)
     return w_obj
-
-def descr__hash__(space, w_obj):
-    return w_obj.identity_hash(space)
 
 def descr__init__(space, w_obj, __args__):
     pass
@@ -162,7 +160,7 @@ object_typedef = StdTypeDef("object",
     __doc__ = '''The most base type''',
     __new__ = newmethod(descr__new__,
                         unwrap_spec = [gateway.ObjSpace,gateway.W_Root,gateway.Arguments]),
-    __hash__ = gateway.interp2app(descr__hash__),
+    __hash__ = gateway.interp2app(default_identity_hash),
     __reduce_ex__ = gateway.interp2app(descr__reduce_ex__,
                                   unwrap_spec=[gateway.ObjSpace,gateway.W_Root,int]),
     __reduce__ = gateway.interp2app(descr__reduce_ex__,
@@ -170,3 +168,5 @@ object_typedef = StdTypeDef("object",
     __init__ = gateway.interp2app(descr__init__,
                                   unwrap_spec=[gateway.ObjSpace,gateway.W_Root,gateway.Arguments]),
     )
+
+object_typedef.custom_hash = False    # object.__hash__ is not a custom hash

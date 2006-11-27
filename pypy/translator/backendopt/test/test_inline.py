@@ -3,14 +3,17 @@ import py
 import os
 from pypy.objspace.flow.model import traverse, Block, Link, Variable, Constant
 from pypy.objspace.flow.model import last_exception, checkgraph
-from pypy.translator.backendopt.inline import inline_function, CannotInline
-from pypy.translator.backendopt.inline import auto_inlining
+from pypy.translator.backendopt import canraise
+from pypy.translator.backendopt.inline import simple_inline_function, CannotInline
+from pypy.translator.backendopt.inline import auto_inlining, Inliner
 from pypy.translator.backendopt.inline import collect_called_graphs
 from pypy.translator.backendopt.inline import measure_median_execution_cost
+from pypy.translator.backendopt.inline import instrument_inline_candidates
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.translator.test.snippet import is_perfect_number
+from pypy.conftest import option
 
 def no_missing_concretetype(node):
     if isinstance(node, Block):
@@ -42,28 +45,50 @@ def translate(func, argtypes):
     t.buildrtyper().specialize()
     return t
 
-def check_inline(func, in_func, sig, entry=None):
+def check_inline(func, in_func, sig, entry=None, inline_guarded_calls=False):
     if entry is None:
         entry = in_func
     t = translate(entry, sig)
     # inline!
     sanity_check(t)    # also check before inlining (so we don't blame it)
-    inline_function(t, func, graphof(t, in_func))
+    if option.view:
+        t.view()
+    raise_analyzer = canraise.RaiseAnalyzer(t)
+    inliner = Inliner(t, graphof(t, in_func), func,
+                      t.rtyper.lltype_to_classdef_mapping(),
+                      inline_guarded_calls,
+                      raise_analyzer=raise_analyzer)
+    inliner.inline_all()
+    if option.view:
+        t.view()
     sanity_check(t)
     interp = LLInterpreter(t.rtyper)
     def eval_func(args):
         return interp.eval_graph(graphof(t, entry), args)
     return eval_func
 
-def check_auto_inlining(func, sig, threshold=None):
+def check_auto_inlining(func, sig, multiplier=None, call_count_check=False):
     t = translate(func, sig)
+    if option.view:
+        t.view()
     # inline!
     sanity_check(t)    # also check before inlining (so we don't blame it)
-    if threshold is None:
-        auto_inlining(t)
+
+    if multiplier is not None:
+        multiplier = {'multiplier': multiplier}
     else:
-        auto_inlining(t, threshold=threshold)
+        multiplier = {}
+
+    call_count_pred = None
+    if call_count_check:
+        call_count_pred = lambda lbl: True
+        instrument_inline_candidates(t.graphs, **multiplier)
+
+    auto_inlining(t, call_count_pred=call_count_pred, **multiplier)
+    
     sanity_check(t)
+    if option.view:
+        t.view()
     interp = LLInterpreter(t.rtyper)
     def eval_func(args):
         return interp.eval_graph(graphof(t, func), args)
@@ -84,6 +109,14 @@ def test_inline_simple():
     result = eval_func([2, 12])
     assert result == f(2, 12)
 
+def test_nothing_to_inline():
+    def f():
+        return 1
+    def g():
+        return 2
+    eval_func = check_inline(g, f, [])
+    assert eval_func([]) == 1
+
 def test_inline_big():
     def f(x):
         result = []
@@ -95,21 +128,29 @@ def test_inline_big():
     result = eval_func([10])
     assert result.length == len(f(10))
 
+class CustomError1(Exception):
+    def __init__(self):
+        self.data = 123
+
+class CustomError2(Exception):
+    def __init__(self):
+        self.data2 = 456
+
 def test_inline_raising():
     def f(x):
         if x == 1:
-            raise ValueError
+            raise CustomError1
         return x
     def g(x):
         a = f(x)
         if x == 2:
-            raise KeyError
+            raise CustomError2
     def h(x):
         try:
             g(x)
-        except ValueError:
+        except CustomError1:
             return 1
-        except KeyError:
+        except CustomError2:
             return 2
         return x
     eval_func = check_inline(f,g, [int], entry=h)
@@ -138,9 +179,33 @@ def test_inline_several_times():
 def test_inline_exceptions():
     def f(x):
         if x == 0:
-            raise ValueError
+            raise CustomError1
         if x == 1:
-            raise KeyError
+            raise CustomError2
+    def g(x):
+        try:
+            f(x)
+        except CustomError1:
+            return 2
+        except CustomError2:
+            return x+2
+        return 1
+    eval_func = check_inline(f, g, [int])
+    result = eval_func([0])
+    assert result == 2
+    result = eval_func([1])
+    assert result == 3
+    result = eval_func([42])
+    assert result == 1
+
+def test_inline_const_exceptions():
+    valueError = ValueError()
+    keyError = KeyError()
+    def f(x):
+        if x == 0:
+            raise valueError
+        if x == 1:
+            raise keyError
     def g(x):
         try:
             f(x)
@@ -157,11 +222,36 @@ def test_inline_exceptions():
     result = eval_func([42])
     assert result == 1
 
+def test_inline_exception_guarded():
+    def h(x):
+        if x == 1:
+            raise CustomError1()
+        elif x == 2:
+            raise CustomError2()
+        return 1
+    def f(x):
+        try:
+            return h(x)
+        except:
+            return 87
+    def g(x):
+        try:
+            return f(x)
+        except CustomError1:
+            return 2
+    eval_func = check_inline(f, g, [int], inline_guarded_calls=True)
+    result = eval_func([0])
+    assert result == 1
+    result = eval_func([1])
+    assert result == 87
+    result = eval_func([2])
+    assert result == 87
+
 def test_inline_var_exception():
     def f(x):
         e = None
         if x == 0:
-            e = ValueError()
+            e = CustomError1()
         elif x == 1:
             e = KeyError()
         if x == 0 or x == 1:
@@ -169,13 +259,13 @@ def test_inline_var_exception():
     def g(x):
         try:
             f(x)
-        except ValueError:
+        except CustomError1:
             return 2
         except KeyError:
             return 3
         return 1
 
-    eval_func, _ = check_auto_inlining(g, [int], threshold=10)
+    eval_func, _ = check_auto_inlining(g, [int], multiplier=10)
     result = eval_func([0])
     assert result == 2
     result = eval_func([1])
@@ -229,7 +319,7 @@ def test_for_loop():
             break
     else:
         assert 0, "cannot find ll_rangenext_*() function"
-    inline_function(t, graph, graphof(t, f))
+    simple_inline_function(t, graph, graphof(t, f))
     sanity_check(t)
     interp = LLInterpreter(t.rtyper)
     result = interp.eval_graph(graphof(t, f), [10])
@@ -275,7 +365,34 @@ def test_auto_inlining_small_call_big():
             return g(n)
         except OverflowError:
             return -1
-    eval_func, t = check_auto_inlining(f, [int], threshold=10)
+    eval_func, t = check_auto_inlining(f, [int], multiplier=10)
+    f_graph = graphof(t, f)
+    assert len(collect_called_graphs(f_graph, t)) == 0
+
+    result = eval_func([10])
+    assert result == 45
+    result = eval_func([15])
+    assert result == -1
+
+def test_auto_inlining_small_call_big_call_count():
+    def leaf(n):
+        total = 0
+        i = 0
+        while i < n:
+            total += i
+            if total > 100:
+                raise OverflowError
+            i += 1
+        return total
+    def g(n):
+        return leaf(n)
+    def f(n):
+        try:
+            return g(n)
+        except OverflowError:
+            return -1
+    eval_func, t = check_auto_inlining(f, [int], multiplier=10,
+                                       call_count_check=True)
     f_graph = graphof(t, f)
     assert len(collect_called_graphs(f_graph, t)) == 0
 
@@ -286,11 +403,11 @@ def test_auto_inlining_small_call_big():
 
 def test_inline_exception_catching():
     def f3():
-        raise KeyError
+        raise CustomError1
     def f2():
         try:
             f3()
-        except KeyError:
+        except CustomError1:
             return True
         else:
             return False
@@ -326,11 +443,11 @@ def test_auto_inline_os_path_isdir():
 
 def test_inline_raiseonly():
     def f2(x):
-        raise KeyError
+        raise CustomError1
     def f(x):
         try:
             return f2(x)
-        except KeyError:
+        except CustomError1:
             return 42
     eval_func = check_inline(f2, f, [int])
     result = eval_func([98371])
@@ -356,13 +473,13 @@ def test_measure_median_execution_cost():
     t = TranslationContext()
     graph = t.buildflowgraph(f)
     res = measure_median_execution_cost(graph)
-    assert res == 19
+    assert round(res, 5) == round(32.333333333, 5)
 
 def test_indirect_call_with_exception():
-    class MyExc(Exception):
+    class Dummy:
         pass
     def x1():
-        return 1
+        return Dummy()   # can raise MemoryError
     def x2():
         return 2
     def x3(x):
@@ -375,9 +492,45 @@ def test_indirect_call_with_exception():
         try:
             x3(0)
             x3(1)
-        except MyExc:
+        except CustomError2:
             return 0
         return 1
     assert x4() == 1
     py.test.raises(CannotInline, check_inline, x3, x4, [])
+
+def test_keepalive_hard_case():
+    from pypy.rpython.lltypesystem import lltype
+    Y = lltype.Struct('y', ('n', lltype.Signed))
+    X = lltype.GcStruct('x', ('y', Y))
+    def g(x):
+        if x:
+            return 3
+        else:
+            return 4
+    def f():
+        x = lltype.malloc(X)
+        x.y.n = 2
+        y = x.y
+        z1 = g(y.n)
+        z = y.n
+        return z+z1
+    eval_func = check_inline(g, f, [])
+    res = eval_func([])
+    assert res == 5
+
+def test_correct_keepalive_placement():
+    def h(x):
+        if not x:
+            raise ValueError
+        return 1
+    def f(x):
+        s = "a %s" % (x, )
+        try:
+            h(len(s))
+        except ValueError:
+            pass
+        return -42
+    eval_func, t = check_auto_inlining(f, [int])
+    res = eval_func([42])
+    assert res == -42
 

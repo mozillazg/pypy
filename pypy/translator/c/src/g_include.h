@@ -30,6 +30,13 @@
 #include "src/float.h"
 #include "src/address.h"
 
+#include "src/instrument.h"
+
+/* optional assembler bits */
+#if defined(__GNUC__) && defined(__i386__)
+#  include "src/asm_gcc_x86.h"
+#endif
+
 /*** modules ***/
 #ifdef HAVE_RTYPER      /* only if we have an RTyper */
 #  include "src/rtyper.h"
@@ -37,9 +44,9 @@
 #  include "src/ll_time.h"
 #  include "src/ll_math.h"
 #  include "src/ll_strtod.h"
-#  include "src/ll_thread.h"
-#  include "src/ll_stackless.h"
-#  include "src/ll__socket.h"
+#  ifdef RPyExc_thread_error
+#    include "src/ll_thread.h"
+#  endif
 #endif
 
 #include "src/stack.h"

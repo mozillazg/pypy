@@ -116,17 +116,12 @@ Circumventing proxies
 ----------------------------
 
 Some proxies don't let extended HTTP commands through.  If you have an
-error complaining about a bad request, you can ask subversion to use the
-alternate port 8080 to connect to codespeak.net by adding the following
-lines in a file ``~/.subversion/servers`` (on Unix) or
-``%APPDATA%\Subversion\servers`` (on Windows)::
+error complaining about a bad request, you should use https: instead of
+http: in the subversion URL. This will make use of SSL encryption, which
+cannot be intercepted by proxies.
 
-    [groups]
-    codespeak = codespeak.net
-
-    [codespeak]
-    http-proxy-host = codespeak.net
-    http-proxy-port = 8080
+Alternatively, if you want to change your proxy configuration, see the
+subversion FAQ: http://subversion.tigris.org/faq.html#proxy
 
 How to Avoid Line-ending Hell
 -----------------------------
@@ -141,6 +136,7 @@ stored exactly as is. This has to be set on every client. Here is how:
 
 In your home directory edit .subversion/config and comment in ::
 
+   [miscellany]
    enable-auto-props = yes
 
    [auto-props]
@@ -150,7 +146,7 @@ In your home directory edit .subversion/config and comment in ::
 
 .. _website: http://support.microsoft.com/default.aspx?scid=kb%3Ben-us%3B259403
 .. _GUI: http://tortoisesvn.tigris.org/servlets/ProjectDocumentList?folderID=616
-.. _MacOS: http://codespeak.net/~jum/svn-1.2.3-darwin-ppc.tar.gz
+.. _MacOS: http://codespeak.net/~jum/svn-1.4.0-darwin-ppc.tar.gz
 .. _versions: http://subversion.tigris.org/project_packages.html
 .. _Win: http://www.microsoft.com/downloads/details.aspx?displaylang=en&FamilyID=4B6140F9-2D36-4977-8FA1-6F8A0F5DCA8F
 .. _guide: http://svnbook.red-bean.com/book.html#svn-ch-1

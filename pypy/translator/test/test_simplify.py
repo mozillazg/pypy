@@ -1,7 +1,9 @@
+import py
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.backendopt.all import backend_optimizations
-from pypy.translator.simplify import get_graph
-from pypy.objspace.flow.model import traverse, Block
+from pypy.translator.simplify import get_graph, transform_dead_op_vars
+from pypy.objspace.flow.model import traverse, Block, summary
+from pypy import conftest
 
 def translate(func, argtypes, backend_optimize=True):
     t = TranslationContext()
@@ -37,7 +39,24 @@ def test_remove_recursive_call():
         a = rec(x)
         return x + 12
     graph, _ = translate(f, [int])
-    assert len(graph.startblock.operations)
+    assert len(graph.startblock.operations) == 1
+
+def test_remove_call_with_indirect_call():
+    def f1(x):
+        return x + 1
+    def f2(x):
+        return x + 2
+    def g(x):
+        if x == 32:
+            f = f1
+        else:
+            f = f2
+        return f(x)
+    def h(x):
+        a = g(x)
+        return x + 42
+    graph, t = translate(h, [int])
+    assert len(graph.startblock.operations) == 1
 
 def test_dont_remove_if_exception_guarded():
     def f(x):
@@ -57,7 +76,7 @@ def test_dont_remove_if_exception_guarded():
 
 
 def test_remove_pointless_keepalive():
-    from pypy.rpython import objectmodel
+    from pypy.rlib import objectmodel
     class C:
         y = None
         z1 = None
@@ -127,3 +146,143 @@ def test_get_graph():
                 graph = get_graph(op.args[0], t)
                 assert graph is None
 
+def addone(x):
+    return x + 1
+
+def test_huge_func():
+    g = None
+    gstring = "def g(x):\n%s%s" % ("    x = x + 1\n" * 1000, "    return x\n")
+    exec gstring 
+    assert g(1) == 1001
+    # does not crash: previously join_blocks would barf on this
+    graph, t = translate(g, [int])
+
+def test_join_blocks_cleans_links():
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.objspace.flow.model import Constant
+    from pypy.translator.backendopt.removenoops import remove_same_as
+    def f(x):
+        return bool(x + 2)
+    def g(x):
+        if f(x):
+            return 1
+        else:
+            return 2
+    graph, t = translate(g, [int], backend_optimize=False)
+    fgraph = graphof(t, f)
+    fgraph.startblock.exits[0].args = [Constant(True, lltype.Bool)]
+    # does not crash: previously join_blocks would barf on this
+    remove_same_as(graph)
+    backend_optimizations(t)
+
+def test_transform_dead_op_vars_bug():
+    from pypy.rpython.llinterp import LLInterpreter, LLException
+    exc = ValueError()
+    def f1():
+        raise exc     # this function used to be considered side-effects-free
+    def f2():
+        f1()          # <- so this call was removed
+
+    graph, t = translate(f2, [], backend_optimize=False)
+    transform_dead_op_vars(graph, t)
+    interp = LLInterpreter(t.rtyper)
+    e = py.test.raises(LLException, 'interp.eval_graph(graph, [])')
+    assert 'ValueError' in str(e)
+
+def test_detect_list_comprehension():
+    def f1(l):
+        return [x*17 for x in l]
+
+    t = TranslationContext(list_comprehension_operations=True)
+    graph = t.buildflowgraph(f1)
+    if conftest.option.view:
+        graph.show()
+    assert summary(graph) == {
+        'newlist': 1,
+        'iter': 1,
+        'next': 1,
+        'mul':  1,
+        'getattr': 1,
+        'simple_call': 1,
+        'hint': 2,
+        }
+
+class TestLLSpecializeListComprehension:
+    typesystem = 'lltype'
+
+    def specialize(self, func, argtypes):
+        from pypy.rpython.llinterp import LLInterpreter
+        t = TranslationContext(list_comprehension_operations=True)
+        t.buildannotator().build_types(func, argtypes)
+        if conftest.option.view:
+            t.view()
+        t.buildrtyper(self.typesystem).specialize()
+        if self.typesystem == 'lltype':
+            backend_optimizations(t)
+        if conftest.option.view:
+            t.view()
+        graph = graphof(t, func)
+        interp = LLInterpreter(t.rtyper)
+        return interp, graph
+
+    def test_simple(self):
+        def main(n):
+            lst = [x*17 for x in range(n)]
+            return lst[5]
+        interp, graph = self.specialize(main, [int])
+        res = interp.eval_graph(graph, [10])
+        assert res == 5 * 17
+
+    def test_mutated_after_listcomp(self):
+        def main(n):
+            lst = [x*17 for x in range(n)]
+            lst.append(-42)
+            return lst[5]
+        interp, graph = self.specialize(main, [int])
+        res = interp.eval_graph(graph, [10])
+        assert res == 5 * 17
+        res = interp.eval_graph(graph, [5])
+        assert res == -42
+
+    def test_two_loops(self):
+        def main(n, m):
+            lst1 = []
+            lst2 = []
+            for i in range(n):
+                lst1.append(i)
+            for i in range(m):
+                lst2.append(i)
+            sum = 0
+            for i in lst1:
+                sum += i
+            for i in lst2:
+                sum -= i
+            return sum
+        interp, graph = self.specialize(main, [int, int])
+        res = interp.eval_graph(graph, [8, 3])
+        assert res == 28 - 3
+
+    def test_list_iterator(self):
+        # for now, this is not optimized as a list comp
+        def main(n):
+            r = range(n)
+            lst = [i*17 for i in iter(r)]
+            return lst[5]
+        interp, graph = self.specialize(main, [int])
+        res = interp.eval_graph(graph, [8])
+        assert res == 5 * 17
+
+    def test_dict_iterator(self):
+        # for now, this is not optimized as a list comp
+        def main(n, m):
+            d = {n: m, m: n}
+            lst = [i*17 for i in d.iterkeys()]
+            return len(lst) + lst[0] + lst[-1]
+        interp, graph = self.specialize(main, [int, int])
+        res = interp.eval_graph(graph, [8, 5])
+        assert res == 2 + 8 * 17 + 5 * 17
+        res = interp.eval_graph(graph, [4, 4])
+        assert res == 1 + 4 * 17 + 4 * 17
+
+class TestOOSpecializeListComprehension(TestLLSpecializeListComprehension):
+    typesystem = 'ootype'

@@ -24,6 +24,7 @@
 	PyModule_AddStringConstant(m, "__sourcefile__", __FILE__); \
 	this_module_globals = PyModule_GetDict(m); \
 	PyGenCFunction_Type.tp_base = &PyCFunction_Type;	\
+	PyGenCFunction_Type.tp_getset = PyCFunction_Type.tp_getset; \
 	PyType_Ready(&PyGenCFunction_Type);	\
 	RPythonError = PyErr_NewException(#modname ".RPythonError", \
 					  NULL, NULL); \
@@ -37,9 +38,11 @@
 	} \
 	if (setup_globalfunctions(globalfunctiondefs, #modname) < 0) \
 		return;	\
+	if (setup_exportglobalobjects(cpyobjheaddefs) < 0)	\
+		return;	\
 	if (setup_initcode(frozen_initcode, FROZEN_INITCODE_SIZE) < 0) \
 		return;	\
-	if (setup_globalobjects(globalobjectdefs) < 0) \
+	if (setup_globalobjects(globalobjectdefs, cpyobjheaddefs) < 0) \
 		return;
 
 /*** table of global objects ***/
@@ -52,21 +55,61 @@ typedef struct {
 } globalobjectdef_t;
 
 typedef struct {
+	char* name;
+	PyObject* cpyobj;
+	void (*setupfn)(PyObject *);
+} cpyobjheaddef_t;
+
+typedef struct {
 	PyObject** p;
 	char* gfunc_name;
 	PyMethodDef ml;
 } globalfunctiondef_t;
 
+/* helper-hook for post-setup */
+static globalfunctiondef_t *globalfunctiondefsptr;
+static PyObject *postsetup_get_typedict(PyObject *tp);
+static PyObject *postsetup_get_methodname(int funcidx);
+static PyObject *postsetup_build_method(int funcidx, PyObject *type);
+int call_postsetup(PyObject *m);
 
 /* implementations */
 
 #ifndef PYPY_NOT_MAIN_FILE
 
-static int setup_globalobjects(globalobjectdef_t* def)
+static int setup_exportglobalobjects(cpyobjheaddef_t* cpyheadtable)
 {
 	PyObject* obj;
-	
-	for (; def->p != NULL; def++) {
+	cpyobjheaddef_t* cpydef;
+
+	/* Store the object given by their heads into the module's dict.
+	   Warning: these object heads might still be invalid, e.g.
+	   typically their ob_type needs patching!
+	   But PyDict_SetItemString() doesn't inspect them...
+	*/
+	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
+		obj = cpydef->cpyobj;
+		if (obj->ob_type == NULL)
+			obj->ob_type = &PyType_Type;
+		if (PyDict_SetItemString(this_module_globals,
+					 cpydef->name, obj) < 0)
+			return -1;
+	}
+	return 0;
+}
+
+static int setup_globalobjects(globalobjectdef_t* globtable,
+			       cpyobjheaddef_t* cpyheadtable)
+{
+	PyObject* obj;
+	globalobjectdef_t* def;
+	cpyobjheaddef_t* cpydef;
+
+	/* Patch all locations that need to contain a specific PyObject*.
+	   This must go after the previous loop, otherwise
+	   PyDict_GetItemString() might not find some of them.
+	 */
+	for (def = globtable; def->p != NULL; def++) {
 		obj = PyDict_GetItemString(this_module_globals, def->name);
 		if (obj == NULL) {
 			PyErr_Format(PyExc_AttributeError,
@@ -76,6 +119,30 @@ static int setup_globalobjects(globalobjectdef_t* def)
 		}
 		Py_INCREF(obj);
 		*def->p = obj;   /* store the object ref in the global var */
+	}
+	/* All objects should be valid at this point.  Loop again and
+	   make sure all types are ready.
+	*/
+	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
+		obj = cpydef->cpyobj;
+		if (PyType_Check(obj)) {
+			/* XXX hmmm */
+			obj->ob_type = NULL;
+			if (PyType_Ready((PyTypeObject*) obj) < 0)
+				return -1;
+		}
+        }
+        /* call the user-defined setups *after* all types are ready
+         * in case of dependencies */
+	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
+		obj = cpydef->cpyobj;
+		if (cpydef->setupfn) {
+			cpydef->setupfn(obj);
+			if (RPyExceptionOccurred()) {
+				RPyConvertExceptionToCPython();
+				return -1;
+			}
+		}
 	}
 	return 0;
 }
@@ -138,6 +205,51 @@ static int setup_initcode(char* frozendata[], int len)
 		return -1;
 	Py_DECREF(res);
 	return 0;
+}
+
+static PyObject *postsetup_get_typedict(PyObject *tp)
+{
+    PyTypeObject *type = (PyTypeObject *)tp;
+    PyObject *ret;
+
+    ret = type->tp_dict;
+    Py_INCREF(ret);
+    return ret;
+}
+
+static PyObject *postsetup_get_methodname(int funcidx)
+{   
+    globalfunctiondef_t *gfuncdef = &globalfunctiondefsptr[funcidx];
+
+    if (gfuncdef->p)
+	return PyString_FromString(gfuncdef->gfunc_name);
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+static PyObject *postsetup_build_method(int funcidx, PyObject *type)
+{   
+    globalfunctiondef_t *gfuncdef = &globalfunctiondefsptr[funcidx];
+
+    if (gfuncdef->p)
+	return PyDescr_NewMethod((PyTypeObject *)type, &gfuncdef->ml);
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+int call_postsetup(PyObject *m)
+{
+    PyObject *init, *ret;
+    
+    init = PyDict_GetItemString(this_module_globals, "__init__");
+    if (init == NULL) {
+	PyErr_Clear();
+	return 0;
+    }
+    ret = PyObject_CallFunction(init, "O", m);
+    if (ret == NULL)
+	return -1;
+    return 0;
 }
 
 #endif /* PYPY_NOT_MAIN_FILE */

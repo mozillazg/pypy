@@ -10,13 +10,13 @@ Short-term plans:
    bytecode language, as an example and for testing.  The goal is to turn
    that interpreter into a JIT.
 
-2. MOSTLY DONE (jit/llabstractinterp.py): Write code that takes LL
+2. DONE (jit/llabstractinterp.py): Write code that takes LL
    graphs and "specializes" them, by making a variable constant and
    propagating it.
 
 3. DONE (jit/test/test_jit_tl.py): Think more about how to plug 1 into 2 :-)
 
-4. Refactor 2 to use `Functions/operations to generate code`_
+4. DONE Refactor 2 to use `Functions/operations to generate code`_
 
 5. Think about `how to do at run-time what llabstractinterp does statically`_
 
@@ -89,6 +89,34 @@ To define these operations, we plan to go over jit/llabstractinterp.py
 and invent the operations while refactoring it.  The goal would be to
 replace all the explicit building of Graph, Block, Link, Operation and
 Variable with calls to such operations.
+
+Functions:
+
+* newblock() -> (opaque block object)
+
+* geninputarg(block, consTYPE(CONCRETE_TYPE)) -> (input var)
+
+* genop(block, opname, [list-of-vars], constTYPE(RESULT_CONCRETE_TYPE)) -> (result var)
+
+* genconst(llvalue) -> (result var) # not for Void consts
+
+* constFieldName(name) # Void constant for a name, likely not runtime
+
+* constTYPE(LLTYPE)    # Void constant for a lltype, likely not runtime
+
+* placeholder(dummy)   # likely ignored Void constant, likely not runtime
+
+* gencallableconst(block, name, target-block, constTYPE(FUNCTYPE)) -> (result var)
+
+* closeblock1(block) -> link
+
+* closeblock2(block, exitswitch-var) -> (false_link, true_link)
+
+* closelink(link, [link-vars], targetblock)
+
+* closereturnlink(link, return-var)
+
+* runblock(block, [list-of-llvalues])
 
 
 L3 interpreter

@@ -3,7 +3,6 @@ from pypy.rpython.memory.convertlltype import LLTypeConverter
 
 def test_convert_primitives():
     cvter = LLTypeConverter(lladdress.NULL)
-    addr = lladdress.raw_malloc(10)
     c1 = cvter.convert(1)
     c = cvter.convert("c")
     assert c1 == 1
@@ -18,7 +17,9 @@ def test_convert_array_of_primitives():
     a = cvter.convert(lls)
     assert a[0] == 1
     assert a[1] == 2
-
+    b = cvter.convert(lls)
+    assert a == b
+    
 def test_convert_array_of_structs():
     cvter = LLTypeConverter(lladdress.raw_malloc(1000))
     S = lltype.Struct("test", ("v1", lltype.Signed), ("v2", lltype.Signed))
@@ -121,7 +122,7 @@ def test_convertsubstructure():
     lls2 = lltype.malloc(S2)
     lls1 = lltype.cast_pointer(lltype.Ptr(S1), lls2)
     s1 = cvter.convert(lls1)
-    s2 = cast_pointer(lltype.Ptr(S2), s1)
+    s2 = lltype.cast_pointer(lltype.Ptr(S2), s1)
     assert s2.v2 == 0
 
 def test_convertsubstructure_of_array():

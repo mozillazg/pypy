@@ -7,11 +7,12 @@ from pypy.annotation.model import \
      SomeDict, SomeUnicodeCodePoint, SomeTuple, SomeImpossibleValue, \
      SomeInstance, SomeBuiltin, SomeFloat, SomeIterator, SomePBC, \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
-     unionof, set, missing_operation, add_knowntypedata
+     SomeCTypesObject, s_ImpossibleValue, s_Bool, \
+     unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
-
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
+from pypy.rpython import extregistry
 
 # convenience only!
 def immutablevalue(x):
@@ -22,7 +23,7 @@ UNARY_OPERATIONS = set(['len', 'is_true', 'getattr', 'setattr', 'delattr', 'hash
                         'iter', 'next', 'invert', 'type', 'issubtype',
                         'pos', 'neg', 'nonzero', 'abs', 'hex', 'oct',
                         'ord', 'int', 'float', 'long', 'id',
-                        'neg_ovf', 'abs_ovf'])
+                        'neg_ovf', 'abs_ovf', 'hint'])
 
 for opname in UNARY_OPERATIONS:
     missing_operation(SomeObject, opname)
@@ -59,24 +60,22 @@ class __extend__(SomeObject):
                                               s_cls, vars)
         if obj.is_constant() and s_cls.is_constant():
             return immutablevalue(issubclass(obj.const, s_cls.const))
-        return SomeBool()
+        return s_Bool
 
     def len(obj):
         return SomeInteger(nonneg=True)
 
-    def is_true_behavior(obj):
+    def is_true_behavior(obj, s):
         if obj.is_immutable_constant():
-            return immutablevalue(bool(obj.const))
+            s.const = bool(obj.const)
         else:
             s_len = obj.len()
-            if s_len.is_constant():
-                return immutablevalue(s_len.const > 0)
-            else:
-                return SomeBool()
+            if s_len.is_immutable_constant():
+                s.const = s_len.const > 0
 
     def is_true(s_obj):
-        r = s_obj.is_true_behavior()
-        assert isinstance(r, SomeBool)
+        r = SomeBool()
+        s_obj.is_true_behavior(r)
 
         bk = getbookkeeper()
         knowntypedata = r.knowntypedata = {}
@@ -173,7 +172,10 @@ class __extend__(SomeObject):
         return SomeObject()
 
     def op_contains(obj, s_element):
-        return SomeBool()
+        return s_Bool
+
+    def hint(self, *args_s):
+        return self
 
 class __extend__(SomeFloat):
 
@@ -186,9 +188,9 @@ class __extend__(SomeFloat):
     abs = neg
 
     def is_true(self):
-        if self.is_constant():
+        if self.is_immutable_constant():
             return getbookkeeper().immutablevalue(bool(self.const))
-        return SomeBool()
+        return s_Bool
 
     def hash(flt):
         return SomeInteger()
@@ -196,14 +198,12 @@ class __extend__(SomeFloat):
 class __extend__(SomeInteger):
 
     def invert(self):
-        if self.unsigned:
-            return SomeInteger(unsigned=True, size=self.size)
-        return SomeInteger(size=self.size)
+        return SomeInteger(knowntype=self.knowntype)
 
     invert.can_only_throw = []
 
     def pos(self):
-        return self
+        return SomeInteger(knowntype=self.knowntype)
 
     pos.can_only_throw = []
     int = pos
@@ -211,17 +211,13 @@ class __extend__(SomeInteger):
     # these are the only ones which can overflow:
 
     def neg(self):
-        if self.unsigned:
-            return SomeInteger(unsigned=True, size=self.size)
-        return SomeInteger(size=self.size)
+        return SomeInteger(knowntype=self.knowntype)
 
     neg.can_only_throw = []
     neg_ovf = _clone(neg, [OverflowError])
 
     def abs(self):
-        if self.unsigned:
-            return self
-        return SomeInteger(nonneg=True, size=self.size)
+        return SomeInteger(nonneg=True, knowntype=self.knowntype)
 
     abs.can_only_throw = []
     abs_ovf = _clone(abs, [OverflowError])
@@ -230,6 +226,28 @@ class __extend__(SomeBool):
     def is_true(self):
         return self
 
+    def invert(self):
+        return SomeInteger()
+
+    invert.can_only_throw = []
+
+    def neg(self):
+        return SomeInteger()
+
+    neg.can_only_throw = []
+    neg_ovf = _clone(neg, [OverflowError])
+
+    def abs(self):
+        return SomeInteger(nonneg=True)
+
+    abs.can_only_throw = []
+    abs_ovf = _clone(abs, [OverflowError])
+
+    def pos(self):
+        return SomeInteger(nonneg=True)
+
+    pos.can_only_throw = []
+    int = pos
 
 class __extend__(SomeTuple):
 
@@ -243,6 +261,11 @@ class __extend__(SomeTuple):
 
     def getanyitem(tup):
         return unionof(*tup.items)
+
+    def hash(tup):
+        for s_item in tup.items:
+            s_item.hash()    # record that we need the hash of each item
+        return SomeInteger()
 
 
 class __extend__(SomeList):
@@ -264,6 +287,10 @@ class __extend__(SomeList):
 
     def method_insert(lst, s_index, s_value):
         lst.method_append(s_value)
+
+    def method_remove(lst, s_value):
+        lst.listdef.resize()
+        lst.listdef.generalize(s_value)
 
     def method_pop(lst, s_index=None):
         lst.listdef.resize()
@@ -289,7 +316,21 @@ class __extend__(SomeList):
 
     def op_contains(lst, s_element):
         lst.listdef.generalize(s_element)
-        return SomeBool()
+        return s_Bool
+
+    def hint(lst, *args_s):
+        hints = args_s[-1].const
+        if 'maxlength' in hints:
+            # only for iteration over lists or dicts at the moment,
+            # not over an iterator object (because it has no known length)
+            s_iterable = args_s[0]
+            if isinstance(s_iterable, (SomeList, SomeDict)):
+                lst.listdef.resize()
+                lst.listdef.listitem.hint_maxlength = True
+        elif 'fence' in hints:
+            lst = lst.listdef.offspring()
+        return lst
+
 
 class __extend__(SomeDict):
 
@@ -310,8 +351,13 @@ class __extend__(SomeDict):
         elif variant == 'values':
             return dct.dictdef.read_value()
         elif variant == 'items':
-            return SomeTuple((dct.dictdef.read_key(),
-                              dct.dictdef.read_value()))
+            s_key   = dct.dictdef.read_key()
+            s_value = dct.dictdef.read_value()
+            if (isinstance(s_key, SomeImpossibleValue) or
+                isinstance(s_value, SomeImpossibleValue)):
+                return s_ImpossibleValue
+            else:
+                return SomeTuple((s_key, s_value))
         else:
             raise ValueError
 
@@ -319,6 +365,8 @@ class __extend__(SomeDict):
         dct.dictdef.generalize_key(key)
         dct.dictdef.generalize_value(dfl)
         return dct.dictdef.read_value()
+
+    method_setdefault = method_get
 
     def method_copy(dct):
         return SomeDict(dct.dictdef)
@@ -333,8 +381,7 @@ class __extend__(SomeDict):
         return getbookkeeper().newlist(dct.dictdef.read_value())
 
     def method_items(dct):
-        return getbookkeeper().newlist(SomeTuple((dct.dictdef.read_key(),
-                                                  dct.dictdef.read_value())))
+        return getbookkeeper().newlist(dct.getanyitem('items'))
 
     def method_iterkeys(dct):
         return SomeIterator(dct, 'keys')
@@ -350,22 +397,25 @@ class __extend__(SomeDict):
 
     def op_contains(dct, s_element):
         dct.dictdef.generalize_key(s_element)
-        return SomeBool()
+        return s_Bool
 
 
 class __extend__(SomeString):
 
     def method_startswith(str, frag):
-        return SomeBool()
+        return s_Bool
 
     def method_endswith(str, frag):
-        return SomeBool()
+        return s_Bool
 
     def method_find(str, frag, start=None, end=None):
         return SomeInteger()
 
     def method_rfind(str, frag, start=None, end=None):
         return SomeInteger()
+
+    def method_count(str, frag, start=None, end=None):
+        return SomeInteger(nonneg=True)
 
     def method_strip(str, chr):
         return SomeString()
@@ -379,7 +429,7 @@ class __extend__(SomeString):
     def method_join(str, s_list):
         getbookkeeper().count("str_join", str)
         s_item = s_list.listdef.read_item()
-        if s_item == SomeImpossibleValue():
+        if isinstance(s_item, SomeImpossibleValue):
             return immutablevalue("")
         return SomeString()
 
@@ -416,22 +466,22 @@ class __extend__(SomeChar):
         return immutablevalue(1)
 
     def method_isspace(chr):
-        return SomeBool()
+        return s_Bool
 
     def method_isdigit(chr):
-        return SomeBool()
+        return s_Bool
 
     def method_isalpha(chr):
-        return SomeBool()
+        return s_Bool
 
     def method_isalnum(chr):
-        return SomeBool()
+        return s_Bool
 
     def method_islower(chr):
-        return SomeBool()
+        return s_Bool
 
     def method_isupper(chr):
-        return SomeBool()
+        return s_Bool
 
 class __extend__(SomeUnicodeCodePoint):
 
@@ -445,8 +495,15 @@ class __extend__(SomeIterator):
         return itr
     iter.can_only_throw = []
 
+    def _can_only_throw(itr):
+        can_throw = [StopIteration]
+        if isinstance(itr.s_container, SomeDict):
+            can_throw.append(RuntimeError)
+        return can_throw
+
     def next(itr):
         return itr.s_container.getanyitem(*itr.variant)
+    next.can_only_throw = _can_only_throw
 
 
 class __extend__(SomeInstance):
@@ -454,6 +511,8 @@ class __extend__(SomeInstance):
     def getattr(ins, s_attr):
         if s_attr.is_constant() and isinstance(s_attr.const, str):
             attr = s_attr.const
+            if attr == '__class__':
+                return ins.classdef.read_attr__class__()
             attrdef = ins.classdef.find_attribute(attr)
             position = getbookkeeper().position_key
             attrdef.read_locations[position] = True
@@ -465,6 +524,9 @@ class __extend__(SomeInstance):
                 s_result = ins.classdef.lookup_filter(s_result, attr)
             elif isinstance(s_result, SomeImpossibleValue):
                 ins.classdef.check_missing_attribute_update(attr)
+                if ins.classdef.classdesc.allslots is not None:
+                    if attr in ins.classdef.classdesc.allslots:
+                        raise HarmlesslyBlocked("getattr on a slot")
             return s_result
         return SomeObject()
     getattr.can_only_throw = []
@@ -475,7 +537,7 @@ class __extend__(SomeInstance):
             # find the (possibly parent) class where this attr is defined
             clsdef = ins.classdef.locate_attribute(attr)
             attrdef = clsdef.attrs[attr]
-            attrdef.readonly = False
+            attrdef.modified(clsdef)
 
             # if the attrdef is new, this must fail
             if attrdef.getvalue().contains(s_value):
@@ -487,11 +549,9 @@ class __extend__(SomeInstance):
         getbookkeeper().needs_hash_support[ins.classdef] = True
         return SomeInteger()
 
-    def is_true_behavior(ins):
-        if ins.can_be_None:
-            return SomeBool()
-        else:
-            return immutablevalue(True)
+    def is_true_behavior(ins, s):
+        if not ins.can_be_None:
+            s.const = True
 
 
 class __extend__(SomeBuiltin):
@@ -499,7 +559,8 @@ class __extend__(SomeBuiltin):
         if bltn.s_self is not None:
             return bltn.analyser(bltn.s_self, *args)
         else:
-            getbookkeeper().count(bltn.methodname.replace('.', '_'), *args)
+            if bltn.methodname:
+                getbookkeeper().count(bltn.methodname.replace('.', '_'), *args)
             return bltn.analyser(*args)
 
     def call(bltn, args, implicit_init=False):
@@ -532,13 +593,11 @@ class __extend__(SomePBC):
         d = [desc.bind_under(classdef, name) for desc in pbc.descriptions]
         return SomePBC(d, can_be_None=pbc.can_be_None)
 
-    def is_true_behavior(pbc):
+    def is_true_behavior(pbc, s):
         if pbc.isNone():
-            return immutablevalue(False)
-        elif pbc.can_be_None:
-            return SomeBool()
-        else:
-            return immutablevalue(True)
+            s.const = False
+        elif not pbc.can_be_None:
+            s.const = True
 
 
 class __extend__(SomeExternalObject):
@@ -552,9 +611,9 @@ class __extend__(SomeExternalObject):
 
 
 # annotation of low-level types
-from pypy.annotation.model import SomePtr, SomeLLADTMeth 
+from pypy.annotation.model import SomePtr, SomeLLADTMeth, SomeExternalBuiltin
 from pypy.annotation.model import SomeOOInstance, SomeOOBoundMeth, SomeOOStaticMeth
-from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
+from pypy.annotation.model import ll_to_annotation, lltype_to_annotation, annotation_to_lltype
 
 class __extend__(SomePtr):
 
@@ -562,24 +621,63 @@ class __extend__(SomePtr):
         assert s_attr.is_constant(), "getattr on ptr %r with non-constant field-name" % p.ll_ptrtype
         v = getattr(p.ll_ptrtype._example(), s_attr.const)
         return ll_to_annotation(v)
+    getattr.can_only_throw = []
 
     def len(p):
-        len(p.ll_ptrtype._example())   # just doing checking
-        return SomeObject.len(p)
+        length = p.ll_ptrtype._example()._fixedlength()
+        if length is None:
+            return SomeObject.len(p)
+        else:
+            return immutablevalue(length)
 
     def setattr(p, s_attr, s_value): # just doing checking
-        assert s_attr.is_constant(), "getattr on ptr %r with non-constant field-name" % p.ll_ptrtype
-        v_lltype = annotation_to_lltype(s_value)
-        setattr(p.ll_ptrtype._example(), s_attr.const,
-                v_lltype._defl())
+        assert s_attr.is_constant(), "setattr on ptr %r with non-constant field-name" % p.ll_ptrtype
+        example = p.ll_ptrtype._example()
+        if getattr(example, s_attr.const) is not None:  # ignore Void s_value
+            v_lltype = annotation_to_lltype(s_value)
+            setattr(example, s_attr.const, v_lltype._defl())
 
-    def simple_call(p, *args_s):
-        llargs = [annotation_to_lltype(arg_s)._defl() for arg_s in args_s]
+    def call(p, args):
+        args_s, kwds_s = args.unpack()
+        if kwds_s:
+            raise Exception("keyword arguments to call to a low-level fn ptr")
+        llargs = [annotation_to_lltype(s_arg)._defl() for s_arg in args_s]
         v = p.ll_ptrtype._example()(*llargs)
         return ll_to_annotation(v)
 
     def is_true(p):
-        return SomeBool()
+        return s_Bool
+
+class __extend__(SomeExternalBuiltin):
+    def getattr(p, s_attr):
+        if s_attr.is_constant() and isinstance(s_attr.const, str):
+            attr = s_attr.const
+            entry = extregistry.lookup_type(p.knowntype._class_)
+            s_value = entry.get_field_annotation(p.knowntype, attr)
+            return s_value
+        else:
+            return SomeObject()
+    getattr.can_only_throw = []
+    
+    def setattr(p, s_attr, s_value):
+        assert s_attr.is_constant()
+        attr = s_attr.const
+        entry = extregistry.lookup_type(p.knowntype._class_)
+        # we need to flow it, if it's something which can be called
+        if isinstance(s_value, SomePBC):
+            # we have to have such a declaration to know what we're flowing it with
+            bookkeeper = getbookkeeper()
+            args_ann = entry.get_arg_annotation(p.knowntype, attr)
+            bookkeeper.pbc_call(s_value, bookkeeper.build_args("simple_call", args_ann))
+        p.knowntype.check_update()
+        if not p.knowntype._fields.has_key(attr):
+            entry.set_field_annotation(p.knowntype, attr, s_value)
+    
+    def find_method(obj, name):
+        return obj.knowntype.get_field(name)
+    
+    def is_true(p):
+        return s_Bool
 
 class __extend__(SomeLLADTMeth):
 
@@ -600,18 +698,22 @@ class __extend__(SomeOOInstance):
     def setattr(r, s_attr, s_value): 
         assert s_attr.is_constant(), "setattr on ref %r with non-constant field-name" % r.ootype
         v = annotation_to_lltype(s_value)
-        setattr(r.ootype._example(), s_attr.const,
-                v._example())
+        example = r.ootype._example()
+        if example is not None:
+            setattr(r.ootype._example(), s_attr.const, v._example())
 
     def is_true(p):
-        return SomeBool()
+        return s_Bool
 
 class __extend__(SomeOOBoundMeth):
     def simple_call(m, *args_s):
-        llargs = [annotation_to_lltype(arg_s)._example() for arg_s in args_s]
         inst = m.ootype._example()
-        v = getattr(inst, m.name)(*llargs)
-        return ll_to_annotation(v)
+        _, meth = m.ootype._lookup(m.name)
+        if isinstance(meth, ootype._overloaded_meth):
+            return meth._resolver.annotate(args_s)
+        else:
+            METH = ootype.typeOf(meth)
+            return lltype_to_annotation(METH.RESULT)
 
 class __extend__(SomeOOStaticMeth):
     def simple_call(m, *args_s):
@@ -619,6 +721,27 @@ class __extend__(SomeOOStaticMeth):
         smeth = m.method._example()
         v = smeth(*llargs)
         return ll_to_annotation(v)
+
+class __extend__(SomeCTypesObject):
+    def setattr(cto, s_attr, s_value):
+        pass
+
+    def getattr(cto, s_attr):
+        if s_attr.is_constant() and isinstance(s_attr.const, str):
+            attr = s_attr.const
+            entry = extregistry.lookup_type(cto.knowntype)
+            s_value = entry.get_field_annotation(cto, attr)
+            return s_value
+        else:
+            return SomeObject()
+
+    def is_true(cto):
+        return s_Bool
+
+    def simple_call(cto, *args_s):
+        # for variables containing ctypes function pointers
+        entry = extregistry.lookup_type(cto.knowntype)
+        return entry.compute_result_annotation(*args_s)
 
 #_________________________________________
 # memory addresses
@@ -632,4 +755,7 @@ class __extend__(SomeAddress):
         assert s_attr.const in lladdress.supported_access_types
         return SomeTypedAddressAccess(
             lladdress.supported_access_types[s_attr.const])
+    getattr.can_only_throw = []
 
+    def is_true(s_addr):
+        return s_Bool

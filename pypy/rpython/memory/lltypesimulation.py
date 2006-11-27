@@ -4,7 +4,7 @@ from pypy.rpython.memory.lltypelayout import get_layout, get_fixed_size
 from pypy.rpython.memory.lltypelayout import get_variable_size, sizeof
 from pypy.rpython.memory.lltypelayout import primitive_to_fmt
 from pypy.rpython.memory import lladdress
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 log = py.log.Producer("lltypesim")
 
@@ -15,7 +15,7 @@ def _expose(T, address):
         return simulatorptr(lltype.Ptr(T), address)
     elif T == lltype.Bool:
         return bool(address._load(primitive_to_fmt[T])[0])
-    elif T == lladdress.Address:
+    elif T == llmemory.Address:
         return (self._address + offset).address[0]
     elif isinstance(T, lltype.Primitive):
         return address._load(primitive_to_fmt[T])[0]
@@ -63,7 +63,7 @@ class simulatorptr(object):
                 if isinstance(T, lltype.Primitive):
                     if T == lltype.Void:
                         return None
-                    elif T == lladdress.Address:
+                    elif T == llmemory.Address:
                         return (self._address + offset).address[0]
                     res = (self._address + offset)._load(primitive_to_fmt[T])[0]
                     if T == lltype.Bool:
@@ -92,7 +92,7 @@ class simulatorptr(object):
                 if isinstance(T, lltype.Primitive):
                     if T == lltype.Void:
                         return
-                    if T == lladdress.Address:
+                    if T == llmemory.Address:
                         (self._address + offset).address[0] = value
                     else:
                         (self._address + offset)._store(primitive_to_fmt[T],
@@ -108,6 +108,8 @@ class simulatorptr(object):
                                                                 field_name))
 
     def __getitem__(self, i):
+        if isinstance(self._T, lltype.FixedSizeArray):
+            return self.__getattr__('item%d' % i)
         if isinstance(self._T, lltype.Array):
             if not (0 <= i < self._address.signed[0]):
                 raise IndexError, "array index out of bounds"
@@ -116,6 +118,8 @@ class simulatorptr(object):
         raise TypeError("%r instance is not an array" % (self._T,))
 
     def __setitem__(self, i, value):
+        if isinstance(self._T, lltype.FixedSizeArray):
+            return self.__setattr__('item%d' % i, value)
         if isinstance(self._T, lltype.Array):
             T1 = self._T.OF
             if isinstance(T1, lltype.ContainerType):
@@ -176,18 +180,18 @@ class simulatorptr(object):
     def __repr__(self):
         return '<simulatorptr %s to %s>' % (self._TYPE.TO, self._address)
 
+    def _cast_to(self, PTRTYPE):
+        CURTYPE = self._TYPE
+        down_or_up = lltype.castable(PTRTYPE, CURTYPE)
+        if down_or_up == 0:
+            return self
+        return simulatorptr(PTRTYPE, self._address)
+    
+    def _cast_to_int(self):
+        return self._address.intaddress
 
-def cast_pointer(PTRTYPE, ptr):
-    if not isinstance(ptr, simulatorptr) or not isinstance(PTRTYPE, lltype.Ptr):
-        raise TypeError, "can only cast pointers to other pointers"
-    CURTYPE = ptr._TYPE
-    down_or_up = lltype.castable(PTRTYPE, CURTYPE)
-    if down_or_up == 0:
-        return ptr
-    # XXX the lltype.cast_pointer does a lot of checks here:
-    # I can't think of a way to do that with simulatorptr.
-    # I'm not sure whether this is the right way to go...
-    return simulatorptr(PTRTYPE, ptr._address)
+    def _cast_to_adr(self):
+        return self._address
 
 # for now use the simulators raw_malloc
 def malloc(T, n=None, immortal=False, flavor='gc'):
@@ -232,5 +236,3 @@ def pyobjectptr(obj):
     addr = lladdress.get_address_of_object(lltype._pyobject(obj))
     return simulatorptr(lltype.Ptr(lltype.PyObject), addr)
 
-def cast_ptr_to_int(ptr):
-    return ptr._address.intaddress

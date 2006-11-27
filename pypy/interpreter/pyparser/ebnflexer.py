@@ -28,7 +28,7 @@ class GrammarSource(TokenSource):
     EOF: end of file
     SYMDEF: a symbol definition e.g. "file_input:"
     STRING: a simple string "'xxx'"
-    SYMBOL: a rule symbol usually appeary right of a SYMDEF
+    SYMBOL: a rule symbol usually appearing right of a SYMDEF
     tokens: '[', ']', '(' ,')', '*', '+', '|'
     """
     def __init__(self, parser, inpstring):
@@ -146,8 +146,8 @@ class GrammarSource(TokenSource):
             if npos==end and inp[end-1]!="'":
                 self.RaiseError("Unterminated string")
             self.pos = npos
-	    _endpos = npos - 1
-	    assert _endpos>=0
+            _endpos = npos - 1
+            assert _endpos>=0
             return _p.Token( _p.TOK_STRING, inp[pos+1:_endpos])
         else:
             npos = match_symbol( inp, pos, end)

@@ -1,5 +1,5 @@
 import py
-import types
+import types, sys
 import inspect
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import checkgraph, FunctionGraph, SpaceOperation
@@ -8,12 +8,13 @@ from pypy.annotation import description
 from pypy.tool.sourcetools import has_varargs, valid_identifier
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.error import TyperError
-from pypy.rpython.rmodel import needsgc
-from pypy.rpython.objectmodel import instantiate
+from pypy.rpython.rmodel import getgcflavor
+from pypy.rlib.objectmodel import instantiate, ComputedIntSymbolic
 
 def normalize_call_familes(annotator):
     for callfamily in annotator.bookkeeper.pbc_maximal_call_families.infos():
         normalize_calltable(annotator, callfamily)
+        callfamily.normalized = True
 
 def normalize_calltable(annotator, callfamily):
     """Try to normalize all rows of a table."""
@@ -32,14 +33,17 @@ def normalize_calltable(annotator, callfamily):
             did_something = normalize_calltable_row_signature(annotator, shape,
                                                               row)
             if did_something:
+                assert not callfamily.normalized, "change in call family normalisation"
                 assert nshapes == 1, "XXX call table too complex"
     while True: 
         progress = False
         for shape, table in callfamily.calltables.items():
             for row in table:
-                progress |= normalize_calltable_row_annotation(annotator, row)
+                progress |= normalize_calltable_row_annotation(annotator,
+                                                               row.values())
         if not progress:
             return   # done
+        assert not callfamily.normalized, "change in call family normalisation"
 
 def normalize_calltable_row_signature(annotator, shape, row):
     graphs = row.values()
@@ -123,10 +127,9 @@ def normalize_calltable_row_signature(annotator, shape, row):
             did_something = True
     return did_something
 
-def normalize_calltable_row_annotation(annotator, row):
-    if len(row) <= 1:
+def normalize_calltable_row_annotation(annotator, graphs):
+    if len(graphs) <= 1:
         return False   # nothing to do
-    graphs = row.values()
     graph_bindings = {}
     for graph in graphs:
         graph_bindings[graph] = [annotator.binding(v)
@@ -183,25 +186,30 @@ def merge_classpbc_getattr_into_classdef(rtyper):
     # PBC access set of the family of classes of 'some_class'.  If the classes
     # have corresponding ClassDefs, they are not updated by the annotator.
     # We have to do it now.
-    access_sets = rtyper.annotator.bookkeeper.pbc_maximal_access_sets
-    for access_set in access_sets.infos():
-        descs = access_set.descs
-        if len(descs) <= 1:
-            continue
-        if not isinstance(descs.iterkeys().next(), description.ClassDesc):
-            continue
-        classdefs = [desc.getuniqueclassdef() for desc in descs]
-        commonbase = classdefs[0]
-        for cdef in classdefs[1:]:
-            commonbase = commonbase.commonbase(cdef)
-            if commonbase is None:
-                raise TyperError("reading attributes %r: no common base class "
-                                 "for %r" % (
-                    access_set.attrs.keys(), descs.keys()))
-        access_set.commonbase = commonbase
-        extra_access_sets = rtyper.class_pbc_attributes.setdefault(commonbase,
-                                                                   {})
-        extra_access_sets[access_set] = len(extra_access_sets)
+    all_families = rtyper.annotator.bookkeeper.classpbc_attr_families
+    for attrname, access_sets in all_families.items():
+        for access_set in access_sets.infos():
+            descs = access_set.descs
+            if len(descs) <= 1:
+                continue
+            if not isinstance(descs.iterkeys().next(), description.ClassDesc):
+                continue
+            classdefs = [desc.getuniqueclassdef() for desc in descs]
+            commonbase = classdefs[0]
+            for cdef in classdefs[1:]:
+                commonbase = commonbase.commonbase(cdef)
+                if commonbase is None:
+                    raise TyperError("reading attribute %r: no common base "
+                                     "class for %r" % (attrname, descs.keys()))
+            extra_access_sets = rtyper.class_pbc_attributes.setdefault(
+                commonbase, {})
+            if commonbase in rtyper.class_reprs:
+                assert access_set in extra_access_sets # minimal sanity check
+                continue
+            access_set.commonbase = commonbase
+            if access_set not in extra_access_sets:
+                counter = len(extra_access_sets)
+                extra_access_sets[access_set] = attrname, counter
 
 # ____________________________________________________________
 
@@ -215,16 +223,17 @@ def create_class_constructors(annotator):
         descs = family.descs.keys()
         if not isinstance(descs[0], description.ClassDesc):
             continue
-        # Note that a callfamily of classes must really be in the same
-        # attrfamily as well; This property is relied upon on various
-        # places in the rtyper
-        descs[0].mergeattrfamilies(*descs[1:])
-        attrfamily = descs[0].getattrfamily()
+        # Note that if classes are in the same callfamily, their __init__
+        # attribute must be in the same attrfamily as well.
+        change = descs[0].mergeattrfamilies(descs[1:], '__init__')
+        if hasattr(descs[0].getuniqueclassdef(), 'my_instantiate_graph'):
+            assert not change, "after the fact change to a family of classes" # minimal sanity check
+            return
         # Put __init__ into the attr family, for ClassesPBCRepr.call()
-        s_value = attrfamily.attrs.get('__init__', annmodel.s_ImpossibleValue)
+        attrfamily = descs[0].getattrfamily('__init__')
         inits_s = [desc.s_read_attribute('__init__') for desc in descs]
-        s_value = annmodel.unionof(s_value, *inits_s)
-        attrfamily.attrs['__init__'] = s_value
+        s_value = annmodel.unionof(attrfamily.s_value, *inits_s)
+        attrfamily.s_value = s_value
         # ClassesPBCRepr.call() will also need instantiate() support
         for desc in descs:
             bk.needs_generic_instantiate[desc.getuniqueclassdef()] = True
@@ -237,7 +246,7 @@ def create_instantiate_functions(annotator):
     needs_generic_instantiate = annotator.bookkeeper.needs_generic_instantiate
     
     for classdef in needs_generic_instantiate:
-        assert needsgc(classdef) # only gc-case
+        assert getgcflavor(classdef) == 'gc'   # only gc-case
         create_instantiate_function(annotator, classdef)
 
 def create_instantiate_function(annotator, classdef):
@@ -246,6 +255,8 @@ def create_instantiate_function(annotator, classdef):
     # def my_instantiate():
     #     return instantiate(cls)
     #
+    if hasattr(classdef, 'my_instantiate_graph'):
+        return
     v = Variable()
     block = Block([])
     block.operations.append(SpaceOperation('instantiate1', [], v))
@@ -258,21 +269,57 @@ def create_instantiate_function(annotator, classdef):
     generalizedresult = annmodel.SomeInstance(classdef=None)
     annotator.setbinding(graph.getreturnvar(), generalizedresult)
     classdef.my_instantiate_graph = graph
+    annotator.translator.graphs.append(graph)
 
 # ____________________________________________________________
 
+class Max(object):
+    def __cmp__(self, other):
+        if self is other:
+            return 0
+        else:
+            return 1
+
+MAX = Max()    # a maximum object
+
+
+class TotalOrderSymbolic(ComputedIntSymbolic):
+
+    def __init__(self, orderwitness, peers):
+        self.orderwitness = orderwitness
+        self.peers = peers
+        self.value = None
+        peers.append(self)
+
+    def __cmp__(self, other):
+        if not isinstance(other, TotalOrderSymbolic):
+            return NotImplemented
+        else:
+            return cmp(self.orderwitness, other.orderwitness)
+
+    def compute_fn(self):
+        if self.value is None:
+            self.peers.sort()
+            for i, peer in enumerate(self.peers):
+                assert peer.value is None
+                peer.value = i
+            assert self.value is not None
+        return self.value
+
 def assign_inheritance_ids(annotator):
-    def assign_id(classdef, nextid):
-        classdef.minid = nextid
-        nextid += 1
-        for subclass in classdef.subdefs:
-            nextid = assign_id(subclass, nextid)
-        classdef.maxid = nextid
-        return classdef.maxid
-    id_ = 0
+    # we sort the classes by lexicographic order of reversed(mro),
+    # which gives a nice depth-first order.
+    bk = annotator.bookkeeper
+    try:
+        lst = bk._inheritance_id_symbolics
+    except AttributeError:
+        lst = bk._inheritance_id_symbolics = []
     for classdef in annotator.bookkeeper.classdefs:
-        if classdef.basedef is None:
-            id_ = assign_id(classdef, id_)
+        if not hasattr(classdef, 'minid'):
+            witness = list(classdef.getmro())
+            witness.reverse()
+            classdef.minid = TotalOrderSymbolic(witness, lst)
+            classdef.maxid = TotalOrderSymbolic(witness + [MAX], lst)
 
 # ____________________________________________________________
 

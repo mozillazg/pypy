@@ -16,6 +16,22 @@ class AppTestThread(GenericTestThread):
         self.waitfor(lambda: feedback)
         assert feedback == [42]
 
+    def test_start_new_thread_args(self):
+        import thread
+        def f():
+            pass
+        test_args = [
+            (f, [], {}),
+            (f, (), []),
+            ("", (), {}),
+        ]
+        for args in test_args:
+            try:
+                thread.start_new_thread(*args)
+                assert False
+            except TypeError:
+                pass
+
     def test_get_ident(self):
         import thread
         ident = thread.get_ident()
@@ -123,6 +139,6 @@ class AppTestThread(GenericTestThread):
             thread.start_new_thread(f, (i, done))
             done_marker.append(done)
         for done in done_marker:
-            self.waitfor(lambda: done, timeout=30.0)
+            self.waitfor(lambda: done) #, timeout=30.0)
             assert done    # see stderr for failures in threads
         assert sorted(lst) == range(120)

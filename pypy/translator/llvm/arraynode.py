@@ -46,16 +46,9 @@ class ArrayTypeNode(LLVMNode):
                             self.db.get_machine_word(),
                             self.db.repr_type(self.arraytype))
 
-    def writedecl(self, codewriter): 
-        # declaration for constructor
-        codewriter.declare(self.constructor_decl)
-
-    def writeimpl(self, codewriter):
-        log.writeimpl(self.ref)
-        gp = self.db.gcpolicy
-        gp.write_constructor(codewriter, self.ref, self.constructor_decl,
-                             self.array, atomic=self.array._is_atomic())
-
+    def var_malloc_info(self):
+        return self.array, ()
+    
 class VoidArrayTypeNode(LLVMNode):
     __slots__ = "db array ref".split()
 
@@ -93,7 +86,6 @@ class ArrayNode(ConstantLLVMNode):
             self.db.prepare_constant(self.arraytype, item)
 
         p, c = lltype.parentlink(self.value)
-        p, c = lltype.parentlink(self.value)
         if p is not None:
             self.db.prepare_constant(lltype.typeOf(p), p)
 
@@ -116,18 +108,21 @@ class ArrayNode(ConstantLLVMNode):
 
     def get_ref(self):
         typeval = self.db.repr_type(lltype.typeOf(self.value))
-        ref = "cast(%s* %s to %s*)" % (self.get_typerepr(),
-                                       self.ref,
-                                       typeval)
-
         p, c = lltype.parentlink(self.value)
-        assert p is None, "child arrays are NOT needed by rtyper"
+        if p is None:
+            ref = self.ref
+        else:
+            ref = self.db.get_childref(p, c)
+
+        ref = "cast(%s* %s to %s*)" % (self.get_typerepr(),
+                                       ref,
+                                       typeval)
         return ref
 
     def get_pbcref(self, toptr):
         ref = self.ref
         p, c = lltype.parentlink(self.value)
-        assert p is None, "child arrays are NOT needed by rtyper"
+        assert p is None, "child PBC arrays are NOT needed by rtyper"
 
         fromptr = "%s*" % self.get_typerepr()
         ref = "cast(%s %s to %s)" % (fromptr, ref, toptr)

@@ -143,15 +143,17 @@ class AppTestUserObject:
         assert not hasattr(a, 'x')
 
     def test_del(self):
+        import gc
         lst = []
         class A(object):
             def __del__(self):
                 lst.append(42)
         A()
+        gc.collect()
         assert lst == [42]
 
     def test_del_exception(self):
-        import sys, StringIO
+        import sys, StringIO, gc
         class A(object):
             def __del__(self):
                 yaddadlaouti
@@ -159,8 +161,10 @@ class AppTestUserObject:
         try:
             sys.stderr = StringIO.StringIO()
             A()
+            gc.collect()
             res = sys.stderr.getvalue()
             A()
+            gc.collect()
             res2 = sys.stderr.getvalue()
         finally:
             sys.stderr = prev
@@ -175,3 +179,13 @@ class AppTestUserObject:
         assert 'NameError' in line2
         assert 'yaddadlaouti' in line2
         assert 'ignored' in line2
+
+    def test_instance_overrides_meth(self):
+        class C(object):
+            def m(self):
+                return "class"
+        assert C().m() == 'class'
+        c = C()
+        c.m = lambda: "instance"
+        res = c.m()
+        assert res == "instance"

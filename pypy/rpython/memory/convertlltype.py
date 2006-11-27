@@ -1,10 +1,10 @@
-from pypy.rpython.memory import lladdress
+from pypy.rpython.memory import lladdress, lltypelayout
 from pypy.rpython.memory.lltypesimulation import simulatorptr, sizeof
 from pypy.rpython.memory.lltypesimulation import nullptr, malloc
 from pypy.rpython.memory.lltypesimulation import init_object_on_address
 from pypy.objspace.flow.model import traverse, Link, Constant, Block
 from pypy.objspace.flow.model import Constant
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 from pypy.rpython.rmodel import IntegerRepr
 
@@ -12,6 +12,16 @@ import types
 
 FUNCTIONTYPES = (types.FunctionType, types.UnboundMethodType,
                  types.BuiltinFunctionType)
+
+
+def get_real_value(val_or_ptr):
+    if isinstance(val_or_ptr, llmemory.AddressOffset):
+        return lltypelayout.convert_offset_to_int(val_or_ptr)
+    return val_or_ptr
+
+def size_gc_header(gc, typeid):
+    return get_real_value(gc.size_gc_header(typeid))
+
 
 class LLTypeConverter(object):
     def __init__(self, address, gc=None, qt=None):
@@ -27,7 +37,7 @@ class LLTypeConverter(object):
         TYPE = lltype.typeOf(val_or_ptr)
         if isinstance(TYPE, lltype.Primitive):
             assert inline_to_ptr is None
-            return val_or_ptr
+            return get_real_value(val_or_ptr)
         elif isinstance(TYPE, lltype.Array):
             return self.convert_array(val_or_ptr, inline_to_ptr)
         elif isinstance(TYPE, lltype.Struct):
@@ -59,8 +69,8 @@ class LLTypeConverter(object):
             if self.gc is not None:
                 typeid = self.query_types.get_typeid(TYPE)
                 self.gc.init_gc_object_immortal(startaddr, typeid)
-                startaddr += self.gc.size_gc_header(typeid)
-                self.curraddress += self.gc.size_gc_header(typeid)
+                startaddr += size_gc_header(self.gc, typeid)
+                self.curraddress += size_gc_header(self.gc, typeid)
             ptr = init_object_on_address(startaddr, TYPE, arraylength)
             self.constantroots.append(ptr)
         self.converted[_array] = ptr
@@ -69,7 +79,8 @@ class LLTypeConverter(object):
                 self.convert(item, ptr[i])
         else:
             for i, item in enumerate(_array.items):
-                ptr[i] = self.convert(item)
+                if not isinstance(item, lltype._uninitialized):
+                    ptr[i] = self.convert(item)
         return ptr
 
     def convert_struct(self, _struct, inline_to_ptr):
@@ -99,8 +110,8 @@ class LLTypeConverter(object):
             if self.gc is not None:
                 typeid = self.query_types.get_typeid(TYPE)
                 self.gc.init_gc_object_immortal(startaddr, typeid)
-                startaddr += self.gc.size_gc_header(typeid)
-                self.curraddress += self.gc.size_gc_header(typeid)
+                startaddr += size_gc_header(self.gc, typeid)
+                self.curraddress += size_gc_header(self.gc, typeid)
             ptr = init_object_on_address(startaddr, TYPE, inlinedarraylength)
             self.constantroots.append(ptr)
         self.converted[_struct] = ptr
@@ -109,7 +120,9 @@ class LLTypeConverter(object):
             if isinstance(FIELD, (lltype.Struct, lltype.Array)):
                 self.convert(getattr(_struct, name), getattr(ptr, name))
             else:
-                setattr(ptr, name, self.convert(getattr(_struct, name)))
+                v = _struct._getattr(name, uninitialized_ok=True)
+                if not isinstance(v, lltype._uninitialized):
+                    setattr(ptr, name, self.convert(v))
         return ptr
 
     def convert_pointer(self, _ptr, inline_to_ptr):
@@ -124,6 +137,30 @@ class LLTypeConverter(object):
         assert inline_to_ptr is None, "can't inline function or pyobject"
         return simulatorptr(lltype.Ptr(lltype.typeOf(_obj)),
                             lladdress.get_address_of_object(_obj))
+def collect_constants_and_types(graphs):
+    constants = {}
+    types = {}
+    def collect_args(args):
+        for arg in args:
+            if (isinstance(arg, Constant) and
+                arg.concretetype is not lltype.Void):
+                constants[arg] = None
+                types[arg.concretetype] = True
+    for graph in graphs:
+        for block in graph.iterblocks():
+            collect_args(block.inputargs)
+            for op in block.operations:
+                collect_args(op.args)
+                if op.opname in ("malloc", "malloc_varsize"):
+                    types[op.args[0].value] = True
+        for link in graph.iterlinks():
+            collect_args(link.args)
+            if hasattr(link, "llexitcase"):
+                if isinstance(link.llexitcase, IntegerRepr):
+                    assert 0
+                constants[Constant(link.llexitcase)] = None
+    return constants, types
+          
 
 class FlowGraphConstantConverter(object):
     def __init__(self, graphs, gc=None, qt=None):
@@ -135,30 +172,7 @@ class FlowGraphConstantConverter(object):
         self.query_types = qt
 
     def collect_constants_and_types(self):
-        constants = {}
-        types = {}
-        def collect_args(args):
-            for arg in args:
-                if (isinstance(arg, Constant) and
-                    arg.concretetype is not lltype.Void):
-                    constants[arg] = None
-                    types[arg.concretetype] = True
-        def visit(obj):
-            if isinstance(obj, Link):
-                collect_args(obj.args)
-                if hasattr(obj, "llexitcase"):
-                    if isinstance(obj.llexitcase, IntegerRepr):
-                        assert 0
-                    constants[Constant(obj.llexitcase)] = None
-            elif isinstance(obj, Block):
-                for op in obj.operations:
-                    collect_args(op.args)
-                    if op.opname in ("malloc", "malloc_varsize"):
-                        types[op.args[0].value] = True
-        for graph in self.graphs:
-            traverse(visit, graph)
-        self.constants = constants
-        self.types = types
+        self.constants, self.types = collect_constants_and_types(self.graphs)
 
     def calculate_size(self):
         total_size = 0
@@ -186,7 +200,7 @@ class FlowGraphConstantConverter(object):
                 total_size += sizeof(cand._TYPE, length)
                 if self.gc is not None:
                     typeid = self.query_types.get_typeid(cand._TYPE)
-                    total_size += self.gc.size_gc_header(typeid)
+                    total_size += size_gc_header(self.gc, typeid)
                 for item in cand.items:
                     candidates.append(item)
             elif isinstance(cand, lltype._struct):
@@ -206,7 +220,7 @@ class FlowGraphConstantConverter(object):
                         total_size += sizeof(TYPE)
                     if self.gc is not None:
                         typeid = self.query_types.get_typeid(TYPE)
-                        total_size += self.gc.size_gc_header(typeid)
+                        total_size += size_gc_header(self.gc, typeid)
                 for name in TYPE._flds:
                     candidates.append(getattr(cand, name))
             elif isinstance(cand, lltype._opaque):

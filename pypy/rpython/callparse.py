@@ -8,28 +8,6 @@ class CallPatternTooComplex(TyperError):
     pass
 
 
-# for parsing call arguments
-class RPythonCallsSpace:
-    """Pseudo Object Space providing almost no real operation.
-    For the Arguments class: if it really needs other operations, it means
-    that the call pattern is too complex for R-Python.
-    """
-    def newtuple(self, items):
-        return NewTupleHolder(items)
-
-    def newdict(self, stuff):
-        raise CallPatternTooComplex, "'**' argument"
-
-    def unpackiterable(self, it, expected_length=None):
-        if it.is_tuple():
-            items = it.items()
-            if (expected_length is not None and
-                expected_length != len(items)):
-                raise ValueError
-            return items
-        raise CallPatternTooComplex, "'*' argument must be a tuple"
-
-
 def getrinputs(rtyper, graph):
     """Return the list of reprs of the input arguments to the 'graph'."""
     return [rtyper.bindingrepr(v) for v in graph.getargs()]
@@ -48,18 +26,25 @@ def getsig(rtyper, graph):
             getrinputs(rtyper, graph),
             getrresult(rtyper, graph))
 
-def callparse(rtyper, graph, hop, opname):
+def callparse(rtyper, graph, hop, opname, r_self=None):
     """Parse the arguments of 'hop' when calling the given 'graph'.
     """
     rinputs = getrinputs(rtyper, graph)
     space = RPythonCallsSpace()
     def args_h(start):
-        return [VarHolder(i, hop.args_s[i]) for i in range(start, hop.nb_args)]
+        return [VarHolder(i, hop.args_s[i])
+                        for i in range(start, hop.nb_args)]
+    if r_self is None:
+        start = 1
+    else:
+        start = 0
+        rinputs[0] = r_self
     if opname == "simple_call":
-        arguments =  Arguments(space, args_h(1))
+        arguments =  Arguments(space, args_h(start))
     elif opname == "call_args":
-        arguments = Arguments.fromshape(space, hop.args_s[1].const, # shape
-                                        args_h(2))
+        arguments = Arguments.fromshape(space,
+                hop.args_s[start].const, # shape
+                args_h(start+1))
     # parse the arguments according to the function we are calling
     signature = graph.signature
     defs_h = []
@@ -69,7 +54,7 @@ def callparse(rtyper, graph, hop, opname):
     try:
         holders = arguments.match_signature(signature, defs_h)
     except ArgErr, e:
-        raise TyperError, "signature mismatch: %s" % e.getmsg(arguments, graph.name)
+        raise TyperError, "signature mismatch: %s" % e.getmsg(graph.name)
 
     assert len(holders) == len(rinputs), "argument parsing mismatch"
     vlist = []
@@ -140,7 +125,7 @@ class NewTupleHolder(Holder):
                 break
         else:
             if 0 < len(holders) == len(holders[0].holder.items()):
-                return h[0].holder
+                return holders[0].holder
         inst = Holder.__new__(cls)
         inst.holders = tuple(holders)
         return inst
@@ -152,12 +137,12 @@ class NewTupleHolder(Holder):
         return self.holders
 
     def _emit(self, repr, hop):
-        assert isinstance(repr, rtuple.TupleRepr)
+        assert isinstance(repr, rtuple.AbstractTupleRepr)
         tupleitems_v = []
         for h in self.holders:
             v = h.emit(repr.items_r[len(tupleitems_v)], hop)
             tupleitems_v.append(v)
-        vtuple = rtuple.newtuple(hop.llops, repr, tupleitems_v)
+        vtuple = repr.newtuple(hop.llops, repr, tupleitems_v)
         return vtuple
 
 
@@ -169,5 +154,34 @@ class ItemHolder(Holder):
     def _emit(self, repr, hop):
         index = self.index
         r_tup, v_tuple = self.holder.access(hop)
-        v = r_tup.getitem(hop, v_tuple, index)
+        v = r_tup.getitem_internal(hop, v_tuple, index)
         return hop.llops.convertvar(v, r_tup.items_r[index], repr)
+
+# for parsing call arguments
+class RPythonCallsSpace:
+    """Pseudo Object Space providing almost no real operation.
+    For the Arguments class: if it really needs other operations, it means
+    that the call pattern is too complex for R-Python.
+    """
+    w_tuple = NewTupleHolder
+    def newtuple(self, items):
+        return NewTupleHolder(items)
+
+    def newdict(self):
+        raise CallPatternTooComplex, "'**' argument"
+
+    def unpackiterable(self, it, expected_length=None):
+        if it.is_tuple():
+            items = it.items()
+            if (expected_length is not None and
+                expected_length != len(items)):
+                raise ValueError
+            return items
+        raise CallPatternTooComplex, "'*' argument must be a tuple"
+
+    def is_w(self, one, other):
+        return one is other
+
+    def type(self, item):
+        return type(item)
+    

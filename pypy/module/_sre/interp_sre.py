@@ -3,7 +3,7 @@ from pypy.interpreter.typedef import GetSetProperty, TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
-from pypy.rpython.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask
 import sys
 
 #### Constants and exposed functions
@@ -154,18 +154,18 @@ W_State.typedef = TypeDef("W_State",
     create_regs = interp2app(W_State.w_create_regs),
 )
 
-class MatchContext:
+class MatchContext(object):
 
     UNDECIDED = 0
     MATCHED = 1
     NOT_MATCHED = 2
 
-    def __init__(self, space, state, pattern_codes):
+    def __init__(self, space, state, pattern_codes, offset=0):
         self.space = space
         self.state = state
         self.pattern_codes = pattern_codes
         self.string_position = state.string_position
-        self.code_position = 0
+        self.code_position = offset
         self.has_matched = self.UNDECIDED
         self.backup = []
         self.resume_at_opcode = -1
@@ -176,8 +176,7 @@ class MatchContext:
         start interpreting from."""
         offset = self.code_position + pattern_offset
         assert offset >= 0
-        pattern_codes = self.pattern_codes[offset:]
-        child_context = MatchContext(self.space, self.state, pattern_codes)
+        child_context = MatchContext(self.space, self.state, self.pattern_codes, offset)
         self.state.context_stack.append(child_context)
         self.child_context = child_context
         return child_context
@@ -213,8 +212,8 @@ class MatchContext:
     def skip_code(self, skip_count):
         self.code_position = self.code_position + skip_count
 
-    def remaining_codes(self):
-        return len(self.pattern_codes) - self.code_position
+    def has_remaining_codes(self):
+        return len(self.pattern_codes) != self.code_position
 
     def at_beginning(self):
         return self.string_position == 0
@@ -241,12 +240,11 @@ class RepeatContext(MatchContext):
         offset = context.code_position
         assert offset >= 0
         MatchContext.__init__(self, space, context.state,
-                                context.pattern_codes[offset:])
+                                context.pattern_codes, offset)
         self.count = -1
         self.previous = context.state.repeat
         self.last_position = -1
         self.repeat_stack = []
-
 
 #### Main opcode dispatch loop
 
@@ -266,7 +264,7 @@ def search(space, state, pattern_codes):
         flags = pattern_codes[2]
         offset = pattern_codes[1] + 1
         assert offset >= 0
-        pattern_codes = pattern_codes[offset:]
+        #pattern_codes = pattern_codes[offset:]
 
     string_position = state.start
     while string_position <= state.end:
@@ -351,7 +349,7 @@ def dispatch_loop(space, context):
     """Returns MATCHED if the current context matches, NOT_MATCHED if it doesn't
     and UNDECIDED if matching is not finished, ie must be resumed after child
     contexts have been matched."""
-    while context.remaining_codes() > 0 and context.has_matched == context.UNDECIDED:
+    while context.has_remaining_codes() and context.has_matched == context.UNDECIDED:
         if context.is_resumed():
             opcode = context.resume_at_opcode
         else:

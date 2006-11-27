@@ -106,10 +106,7 @@ class Op:
             return "%s = []" % self.resultname
 
     def op_newdict(self):
-        pairs = []
-        for i in range(0, len(self.argnames), 2):
-            pairs.append("%s: %s, " % (self.argnames[i], self.argnames[i+1]))
-        return "%s = {%s}" % (self.resultname, "".join(pairs))
+        return "%s = {}" % (self.resultname,)
 
     def op_newslice(self):
         a = self.argnames
@@ -451,7 +448,7 @@ class GenPyrex:
                 list_methods=delay_methods.get(cls,[])
                 for methdesc in list_methods:
                     # XXX!
-                    graph = methdesc.funcdesc.cachedgraph(None)
+                    graph = methdesc.funcdesc.getuniquegraph()
                     hackedargs = ', '.join([var.name for var in graph.getargs()])
                     name = graph.name.split('.')[-1]
                     self.putline("def %s(%s):" % (name, hackedargs))

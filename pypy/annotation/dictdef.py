@@ -1,5 +1,5 @@
-from pypy.annotation.model import SomeObject, SomeImpossibleValue
-from pypy.annotation.model import SomeInteger, SomeBool, unionof
+from pypy.annotation.model import SomeObject, s_ImpossibleValue
+from pypy.annotation.model import SomeInteger, s_Bool, unionof
 from pypy.annotation.model import SomeInstance
 from pypy.annotation.listdef import ListItem
 
@@ -7,8 +7,9 @@ from pypy.annotation.listdef import ListItem
 class DictKey(ListItem):
     custom_eq_hash = False
 
-    def __init__(self, bookkeeper, s_value):
+    def __init__(self, bookkeeper, s_value, is_r_dict=False):
         ListItem.__init__(self, bookkeeper, s_value)
+        self.is_r_dict = is_r_dict
         self.enable_hashing()
 
     def patch(self):
@@ -26,7 +27,8 @@ class DictKey(ListItem):
                                               other=other)
 
     def enable_hashing(self):
-        if isinstance(self.s_value, SomeInstance):
+        # r_dicts don't need the RPython hash of their keys
+        if isinstance(self.s_value, SomeInstance) and not self.is_r_dict:
             self.bookkeeper.needs_hash_support[self.s_value.classdef] = True
 
     def generalize(self, s_other_value):
@@ -60,7 +62,7 @@ class DictKey(ListItem):
 
         def check_eqfn(annotator, graph):
             s = annotator.binding(graph.getreturnvar())
-            assert SomeBool().contains(s), (
+            assert s_Bool.contains(s), (
                 "the custom eq function of an r_dict must return a boolean"
                 " (got %r)" % (s,))
         self.bookkeeper.emulate_pbc_call(myeq, self.s_rdict_eqfn, [s_key, s_key],
@@ -89,9 +91,10 @@ class DictDef:
     and the union of two dicts merges the DictKeys and DictValues that each
     DictDef stores."""
 
-    def __init__(self, bookkeeper, s_key = SomeImpossibleValue(),
-                                 s_value = SomeImpossibleValue()):
-        self.dictkey = DictKey(bookkeeper, s_key)
+    def __init__(self, bookkeeper, s_key = s_ImpossibleValue,
+                                 s_value = s_ImpossibleValue,
+                               is_r_dict = False):
+        self.dictkey = DictKey(bookkeeper, s_key, is_r_dict)
         self.dictkey.itemof[self] = True
         self.dictvalue = DictValue(bookkeeper, s_value)
         self.dictvalue.itemof[self] = True
