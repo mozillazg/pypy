@@ -1,15 +1,20 @@
 import py
 from pypy.translator.backendopt.all import backend_optimizations
+from pypy.translator.backendopt.support import md5digest
 from pypy.translator.backendopt.test.test_malloc import check_malloc_removed
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.objspace.flow.model import Constant
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rlib.rarithmetic import intmask
+from pypy import conftest
 
 def translateopt(func, sig, **optflags):
     t = TranslationContext()
     t.buildannotator().build_types(func, sig)
     t.buildrtyper().specialize()
+    if conftest.option.view:
+        t.view()
     backend_optimizations(t, **optflags)
     return t
 
@@ -56,7 +61,6 @@ def test_big():
     assert res == 83
 
 
-
 def test_for_loop():
     def f(n):
         total = 0
@@ -89,12 +93,12 @@ def test_list_comp():
     res = interp.eval_graph(f_graph, [11, 22])
     assert res == 33
 
+
 def test_premature_death():
     import os
-    from pypy.annotation import listdef
+    from pypy.annotation.listdef import s_list_of_strings
 
-    ldef = listdef.ListDef(None, annmodel.SomeString())
-    inputtypes = [annmodel.SomeList(ldef)]
+    inputtypes = [s_list_of_strings]
 
     def debug(msg): 
         os.write(2, "debug: " + msg + '\n')
@@ -113,14 +117,91 @@ def test_premature_death():
 
     entry_point_graph = graphof(t, entry_point)
 
-    from pypy.rpython.module.support import to_rstr
-
     argv = t.rtyper.getrepr(inputtypes[0]).convert_const(['./pypy-c'])
 
     interp = LLInterpreter(t.rtyper)
     interp.eval_graph(entry_point_graph, [argv])
 
+
+def test_idempotent():
+    def s(x):
+        res = 0
+        i = 1
+        while i <= x:
+            res += i
+            i += 1
+        return res
+
+    def g(x):
+        return s(100) + s(1) + x 
+
+    def idempotent(n1, n2):
+        c = [i for i in range(n2)]
+        return 33 + big() + g(10)
+
+    t  = translateopt(idempotent, [int, int], raisingop2direct_call=True,
+                      constfold=False)
+    digest1 = md5digest(t)
+
+    digest2 = md5digest(t)
+    assert digest1 == digest2
+
+    #XXX Inlining and constfold are currently non-idempotent.
+    #    Maybe they just renames variables but the graph changes in some way.
+    backend_optimizations(t, raisingop2direct_call=True,
+                          inline_threshold=0, constfold=False)
+    digest3 = md5digest(t)
+    assert digest1 == digest3
+
+
+def test_bug_inlined_if():
+    def f(x, flag):
+        if flag:
+            y = x
+        else:
+            y = x+1
+        return y*5
+    def myfunc(x):
+        return f(x, False) - f(x, True)
+
+    assert myfunc(10) == 5
+
+    t = translateopt(myfunc, [int], inline_threshold=100)
+    interp = LLInterpreter(t.rtyper)
+    res = interp.eval_graph(graphof(t, myfunc), [10])
+    assert res == 5
+
+def test_range_iter():
+    def fn(start, stop, step):
+        res = 0
+        if step == 0:
+            if stop >= start:
+                r = range(start, stop, 1)
+            else:
+                r = range(start, stop, -1)
+        else:
+            r = range(start, stop, step)
+        for i in r:
+            res = res * 51 + i
+        return res
+    t = translateopt(fn, [int, int, int], merge_if_blocks=True)
+    interp = LLInterpreter(t.rtyper)
+    for args in [2, 7, 0], [7, 2, 0], [10, 50, 7], [50, -10, -3]:
+        assert interp.eval_graph(graphof(t, fn), args) == intmask(fn(*args))
+
+def test_constant_diffuse():
+    def g(x,y):
+        if x < 0:
+            return 0
+        return x + y
+
+    def f(x):
+        return g(x,7)+g(x,11)
     
+    t = translateopt(f, [int])
+    fgraph = graphof(t, f)
 
-
- 
+    for link in fgraph.iterlinks():
+        assert Constant(7) not in link.args
+        assert Constant(11) not in link.args
+    

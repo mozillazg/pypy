@@ -6,12 +6,13 @@ from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.translator.translator import graphof
 from pypy.objspace.flow import FlowObjSpace
 from pypy.rpython.rtyper import RPythonTyper
-from pypy.rpython.memory.lladdress import address, NULL
+from pypy.rpython.memory.lladdress import _address, NULL
 from pypy.rpython.memory.lladdress import raw_malloc, raw_free, raw_memcopy
 from pypy.rpython.memory.lladdress import get_py_object, get_address_of_object
-from pypy.rpython.memory.lladdress import Address
+from pypy.rpython.lltypesystem.llmemory import Address, NullAddressError, WEAKNULL
 from pypy.rpython.memory.simulator import MemorySimulatorError
 from pypy.rpython.memory.test.test_llinterpsim import interpret
+from pypy.rpython.lltypesystem import lltype
 
 class TestAddressAnnotation(object):
     def test_null(self):
@@ -100,34 +101,58 @@ class TestAddressAnnotation(object):
         assert isinstance(s, annmodel.SomeChar)
         assert f(0, "c") == "c"
         assert f(123, "c") == "c"
-        
 
-    def test_address_comparison(self):
-        def f(offset):
-            return NULL < NULL + offset
-        a = RPythonAnnotator()
-        s = a.build_types(f, [annmodel.SomeInteger()])
-        assert isinstance(s, annmodel.SomeBool)
-        assert f(1)
-        assert not f(0)
-        assert not f(-1)
+##    -- no longer valid since NULL is not a regular _address any more
+##    def test_address_comparison(self):
+##        def f(offset):
+##            return NULL < NULL + offset
+##        a = RPythonAnnotator()
+##        s = a.build_types(f, [annmodel.SomeInteger()])
+##        assert isinstance(s, annmodel.SomeBool)
+##        assert f(1)
+##        assert not f(0)
+##        assert not f(-1)
 
     def test_simple_offsetof(self):
         from pypy.rpython.lltypesystem import lltype
-        from pypy.rpython.memory.lladdress import offsetof
+        from pypy.rpython.lltypesystem.llmemory import offsetof
         S = lltype.GcStruct('S', ('x', lltype.Bool), ('y', lltype.Signed))
         def f():
-            return offsetof(S, 'x') + offsetof(S, 'y')
+            return offsetof(S, 'x')
+        f()
         a = RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == int
+        assert isinstance(s, annmodel.SomeInteger)
+
         coff = offsetof(S, 'y')
         def f():
             return coff
+        f()
         a = RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == int
+        assert isinstance(s, annmodel.SomeInteger)
 
+    def test_offset_addition(self):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rpython.lltypesystem.llmemory import offsetof
+        S = lltype.Struct('S', ('x', lltype.Bool), ('y', lltype.Signed))
+        T = lltype.GcStruct('T', ('r', lltype.Float), ('s1', S), ('s2', S))
+        def f():
+            return offsetof(T, 's1') + offsetof(S, 'x')
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeInteger)
+
+        coff = offsetof(T, 's2') + offsetof(S, 'y')
+        def f():
+            return coff
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeInteger)
+        
+       
 class TestAddressRTyping(object):
     def test_null(self):
         def f():
@@ -217,6 +242,51 @@ class TestAddressRTyping(object):
         graph = graphof(a.translator, f)
         assert graph.startblock.operations[0].result.concretetype == Address
 
+
+    def test_simple_offsetof(self):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rpython.lltypesystem.llmemory import offsetof
+        S = lltype.GcStruct('S', ('x', lltype.Bool), ('y', lltype.Signed))
+        def f():
+            return offsetof(S, 'x')
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        rtyper = RPythonTyper(a)
+        rtyper.specialize() #does not raise
+
+        coff = offsetof(S, 'y')
+        def f():
+            return coff
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        rtyper = RPythonTyper(a)
+        rtyper.specialize() #does not raise
+
+    def test_offset_addition(self):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rpython.lltypesystem.llmemory import offsetof
+        S = lltype.Struct('S', ('x', lltype.Bool), ('y', lltype.Signed))
+        T = lltype.GcStruct('T', ('r', lltype.Float), ('s1', S), ('s2', S))
+        def f():
+            return offsetof(T, 's1') + offsetof(S, 'x')
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        rtyper = RPythonTyper(a)
+        rtyper.specialize() #does not raise
+
+        coff = offsetof(T, 's2') + offsetof(S, 'y')
+        def f():
+            return coff
+        f()
+        a = RPythonAnnotator()
+        s = a.build_types(f, [])
+        rtyper = RPythonTyper(a)
+        rtyper.specialize() #does not raise
+
+
 class TestAddressInLLInterp(object):
     def test_null(self):
         def f():
@@ -228,7 +298,7 @@ class TestAddressInLLInterp(object):
             return bool(addr)
         res = interpret(f, [NULL])
         assert isinstance(res, bool) and not res
-        res = interpret(f, [address(1)])
+        res = interpret(f, [_address(1)])
         assert isinstance(res, bool) and res
 
     def test_memory_access(self):
@@ -267,13 +337,14 @@ class TestAddressInLLInterp(object):
         assert res == "x"
 
     def test_address_comparison(self):
-        def f(offset):
-            return NULL < NULL + offset or NULL == NULL + offset
-        res = interpret(f, [10])
+        def f(addr, offset):
+            return addr < addr + offset or addr == addr + offset
+        addr = _address(129820)
+        res = interpret(f, [addr, 10])
         assert res
-        res = interpret(f, [-10])
+        res = interpret(f, [addr, -10])
         assert not res
-        res = interpret(f, [0])
+        res = interpret(f, [addr, 0])
         assert res
 
     def test_raw_memcopy(self):
@@ -293,15 +364,15 @@ class TestAddressInLLInterp(object):
 
 class TestAddressSimulation(object):
     def test_null_is_singleton(self):
-        assert address() is NULL
-        assert address() is address(0)
+        assert _address() is NULL
+        assert _address() is _address(0)
 
     def test_convert_to_bool(self):
-        assert not address()
+        assert not _address()
         assert not NULL
-        assert address(1)
-        assert address(2)
-        assert bool(address(3))
+        assert _address(1)
+        assert _address(2)
+        assert bool(_address(3))
 
     def test_memory_access(self):
         addr = raw_malloc(1000)
@@ -309,7 +380,7 @@ class TestAddressSimulation(object):
         assert addr.unsigned[0] == sys.maxint * 2 + 1
         addr.address[0] = addr
         assert addr.address[0] == addr
-        py.test.raises(MemorySimulatorError, "NULL.signed[0]")
+        py.test.raises(NullAddressError, "NULL.signed[0]")
 
     def test_pointer_arithmetic(self):
         addr = raw_malloc(100)
@@ -342,3 +413,13 @@ class TestAddressSimulation(object):
         assert get_py_object(addr1.address[0])(0) == 1
         assert (addr1 + 10).signed[0] == 42
         assert (addr1 + 20).char[0] == "a"
+
+    def test_add_offsetofs(self):
+        from pypy.rpython.lltypesystem.llmemory import offsetof
+        S = lltype.GcStruct("struct", ('a', lltype.Signed), ('b', lltype.Signed))
+        addr = raw_malloc(100)
+        (addr + offsetof(S, 'b')).signed[0] = 42
+        assert (addr + offsetof(S, 'b')).signed[0] == 42
+        addr.signed[5] = offsetof(S, 'b')
+        offset = addr.signed[5]
+        assert (addr + offset).signed[0] == 42

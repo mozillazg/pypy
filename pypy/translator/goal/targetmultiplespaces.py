@@ -1,13 +1,15 @@
 import os, sys
+
+from pypy.tool.option import make_config
+
 from pypy.objspace.std.objspace import StdObjSpace
 # XXX from pypy.annotation.model import *
 # since we are execfile()'ed this would pull some
 # weird objects into the globals, which we would try to pickle.
-from pypy.annotation.model import SomeList, SomeString
-from pypy.annotation.listdef import ListDef
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
+from pypy.translator.goal.targetpypystandalone import PyPyTarget, debug
 
 # WARNING: this requires the annotator.
 # There is no easy way to build all caches manually,
@@ -49,84 +51,43 @@ def entry_point(argv):
         return 1
     return space.int_w(w_exitcode)
 
-# _____ Define and setup target ___
 
-# for now this will do for option handling
-
-take_options = True
-
-def opt_parser():
-    import py
-    defl = {'thread': False}
-    parser = py.compat.optparse.OptionParser(usage="target PyPy standalone", add_help_option=False)
-    parser.set_defaults(**defl)
-    parser.add_option("--thread", action="store_true", dest="thread", help="enable threading")
-    return parser
-
-def print_help():
-    opt_parser().print_help()
-
-
-def target(driver, args):
-    options = driver.options
-
-    tgt_options, _ = opt_parser().parse_args(args)
-
-    translate_pypy.log_options(tgt_options, "target PyPy options in effect")
-
-    options.thread = tgt_options.thread
-
-    global space1, space2, w_entry_point_1, w_entry_point_2
-
-    geninterp = not getattr(options, 'lowmem', False)
+class MultipleSpaceTarget(PyPyTarget):
     
-    # obscure hack to stuff the translation options into the translated PyPy
-    import pypy.module.sys
-    wrapstr = 'space.wrap(%r)' % (options.__dict__)
-    pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
+    usage = "target multiple spaces standalone"
 
-    # disable translation of the whole of classobjinterp.py
-    StdObjSpace.setup_old_style_classes = lambda self: None
+    def handle_config(self, config):
+        config.set(**{"translation.thread": False})
 
-    usemodules = []
-    if options.thread:
-        print "threads unsupported right now: need thread-safe stack_too_big"
-        raise SystemExit        
-        usemodules.append('thread')
-        
-    space1 = StdObjSpace(nofaking=True,
-                         compiler="ast", # interpreter/astcompiler
-                         translating=True,
-                         usemodules=usemodules,
-                         geninterp=geninterp)
-    space2 = StdObjSpace(nofaking=True,
-                         compiler="ast", # interpreter/astcompiler
-                         translating=True,
-                         usemodules=usemodules,
-                         geninterp=geninterp)
+    def get_entry_point(self, config):
+        global space1, space2, w_entry_point_1, w_entry_point_2
+        space1 = StdObjSpace(config)
+        space2 = StdObjSpace(config)
 
-    space1.setattr(space1.getbuiltinmodule('sys'),
-                   space1.wrap('pypy_space'),
-                   space1.wrap(1))
-    space2.setattr(space2.getbuiltinmodule('sys'),
-                   space2.wrap('pypy_space'),
-                   space2.wrap(2))
+        space1.setattr(space1.getbuiltinmodule('sys'),
+                       space1.wrap('pypy_space'),
+                       space1.wrap(1))
+        space2.setattr(space2.getbuiltinmodule('sys'),
+                       space2.wrap('pypy_space'),
+                       space2.wrap(2))
 
-    # manually imports app_main.py
-    filename = os.path.join(this_dir, 'app_main.py')
-    w_dict = space1.newdict([])
-    space1.exec_(open(filename).read(), w_dict, w_dict)
-    w_entry_point_1 = space1.getitem(w_dict, space1.wrap('entry_point'))
+        # manually imports app_main.py
+        filename = os.path.join(this_dir, 'app_main.py')
+        w_dict = space1.newdict()
+        space1.exec_(open(filename).read(), w_dict, w_dict)
+        w_entry_point_1 = space1.getitem(w_dict, space1.wrap('entry_point'))
 
-    w_dict = space2.newdict([])
-    space2.exec_(open(filename).read(), w_dict, w_dict)
-    w_entry_point_2 = space2.getitem(w_dict, space2.wrap('entry_point'))
+        w_dict = space2.newdict()
+        space2.exec_(open(filename).read(), w_dict, w_dict)
+        w_entry_point_2 = space2.getitem(w_dict, space2.wrap('entry_point'))
 
-    # sanity-check: call the entry point
-    res = entry_point(["pypy", "app_basic_example.py"])
-    assert res == 0
-    res = entry_point(["pypy", "--space2", "app_basic_example.py"])
-    assert res == 0
+        # sanity-check: call the entry point
+        res = entry_point(["pypy", "app_basic_example.py"])
+        assert res == 0
+        res = entry_point(["pypy", "--space2", "app_basic_example.py"])
+        assert res == 0
 
-    return entry_point, None, PyPyAnnotatorPolicy()
+        return entry_point, None, PyPyAnnotatorPolicy()
 
+
+MultipleSpaceTarget().interface(globals())

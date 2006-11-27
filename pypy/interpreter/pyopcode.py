@@ -9,10 +9,14 @@ from pypy.interpreter.baseobjspace import UnpackValueError
 from pypy.interpreter import gateway, function, eval
 from pypy.interpreter import pyframe, pytraceback
 from pypy.interpreter.miscutils import InitializedClass
-from pypy.interpreter.argument import Arguments
+from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.opcodeorder import opcodeorder
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rpython.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.rarithmetic import intmask
+from pypy.tool import stdlib_opcode as pythonopcode
+from pypy.rlib import rstack # for resume points
 
 def unaryoperation(operationname):
     """NOT_RPYTHON"""
@@ -48,21 +52,30 @@ class PyInterpFrame(pyframe.PyFrame):
     # Currently, they are always setup in pyopcode.py
     # but it could be a custom table.
 
-    def dispatch(self):
-        if we_are_translated():
-            self.dispatch_translated()
-        else:
-            self.dispatch_not_translated()
-
-    def dispatch_not_translated(self):
-        opcode = self.nextop()
-        if self.opcode_has_arg[opcode]:
-            fn = self.dispatch_table_w_arg[opcode]
-            oparg = self.nextarg()
-            fn(self, oparg)
-        else:
-            fn = self.dispatch_table_no_arg[opcode] 
-            fn(self)
+    def dispatch(self, ec):
+        while True:
+            self.last_instr = intmask(self.next_instr)
+            ec.bytecode_trace(self)
+            self.next_instr = self.last_instr
+            opcode = self.nextop()
+            if self.space.config.objspace.logbytecodes:
+                self.space.bytecodecounts[opcode] = self.space.bytecodecounts.get(opcode, 0) + 1
+            if opcode >= pythonopcode.HAVE_ARGUMENT:
+                oparg = self.nextarg()
+                while True:
+                    if opcode == pythonopcode.EXTENDED_ARG:
+                        opcode = self.nextop()
+                        oparg = oparg<<16 | self.nextarg()
+                        if opcode < pythonopcode.HAVE_ARGUMENT:
+                            raise pyframe.BytecodeCorruption
+                        continue
+                    else:
+                        fn = self.dispatch_table_w_arg[opcode]
+                        fn(self, oparg)                    
+                    break
+            else:
+                fn = self.dispatch_table_no_arg[opcode] 
+                fn(self)
 
     def nextop(self):
         c = self.pycode.co_code[self.next_instr]
@@ -83,10 +96,10 @@ class PyInterpFrame(pyframe.PyFrame):
         return self.pycode.co_consts_w[index]
 
     def getname_u(self, index):
-        return self.pycode.co_names[index]
+        return self.space.str_w(self.pycode.co_names_w[index])
 
     def getname_w(self, index):
-        return self.space.wrap(self.pycode.co_names[index])
+        return self.pycode.co_names_w[index]
 
 
     ################################################################
@@ -292,22 +305,22 @@ class PyInterpFrame(pyframe.PyFrame):
     def PRINT_ITEM_TO(f):
         w_stream = f.valuestack.pop()
         w_item = f.valuestack.pop()
-        if w_stream == f.space.w_None:
+        if f.space.is_w(w_stream, f.space.w_None):
             w_stream = sys_stdout(f.space)   # grumble grumble special cases
         print_item_to(f.space, w_item, w_stream)
 
     def PRINT_ITEM(f):
         w_item = f.valuestack.pop()
-        print_item_to(f.space, w_item, sys_stdout(f.space))
+        print_item(f.space, w_item)
 
     def PRINT_NEWLINE_TO(f):
         w_stream = f.valuestack.pop()
-        if w_stream == f.space.w_None:
+        if f.space.is_w(w_stream, f.space.w_None):
             w_stream = sys_stdout(f.space)   # grumble grumble special cases
         print_newline_to(f.space, w_stream)
 
     def PRINT_NEWLINE(f):
-        print_newline_to(f.space, sys_stdout(f.space))
+        print_newline(f.space)
 
     def BREAK_LOOP(f):
         raise pyframe.SBreakLoop
@@ -338,7 +351,8 @@ class PyInterpFrame(pyframe.PyFrame):
             raise operror
         else:
             tb = space.interpclass_w(w_traceback)
-            if not isinstance(tb, pytraceback.PyTraceback):
+            if tb is None or not space.is_true(space.isinstance(tb, 
+                space.gettypeobject(pytraceback.PyTraceback.typedef))):
                 raise OperationError(space.w_TypeError,
                       space.wrap("raise: arg 3 must be a traceback or None"))
             operror.application_traceback = tb
@@ -404,7 +418,7 @@ class PyInterpFrame(pyframe.PyFrame):
     def STORE_NAME(f, varindex):
         w_varname = f.getname_w(varindex)
         w_newvalue = f.valuestack.pop()
-        f.space.setitem(f.w_locals, w_varname, w_newvalue)
+        f.space.set_str_keyed_item(f.w_locals, w_varname, w_newvalue)
 
     def DELETE_NAME(f, varindex):
         w_varname = f.getname_w(varindex)
@@ -443,7 +457,7 @@ class PyInterpFrame(pyframe.PyFrame):
     def STORE_GLOBAL(f, nameindex):
         w_varname = f.getname_w(nameindex)
         w_newvalue = f.valuestack.pop()
-        f.space.setitem(f.w_globals, w_varname, w_newvalue)
+        f.space.set_str_keyed_item(f.w_globals, w_varname, w_newvalue)
 
     def DELETE_GLOBAL(f, nameindex):
         w_varname = f.getname_w(nameindex)
@@ -452,28 +466,20 @@ class PyInterpFrame(pyframe.PyFrame):
     def LOAD_NAME(f, nameindex):
         if f.w_locals is not f.w_globals:
             w_varname = f.getname_w(nameindex)
-            try:
-                w_value = f.space.getitem(f.w_locals, w_varname)
-            except OperationError, e:
-                if not e.match(f.space, f.space.w_KeyError):
-                    raise
-            else:
+            w_value = f.space.finditem(f.w_locals, w_varname)
+            if w_value is not None:
                 f.valuestack.push(w_value)
                 return
         f.LOAD_GLOBAL(nameindex)    # fall-back
 
     def LOAD_GLOBAL(f, nameindex):
         w_varname = f.getname_w(nameindex)
-        try:
-            w_value = f.space.getitem(f.w_globals, w_varname)
-        except OperationError, e:
-            # catch KeyErrors
-            if not e.match(f.space, f.space.w_KeyError):
-                raise
-            # we got a KeyError, now look in the built-ins
-            varname = f.getname_u(nameindex)
-            w_value = f.builtin.getdictvalue(f.space, varname)
+        w_value = f.space.finditem(f.w_globals, w_varname)
+        if w_value is None:
+            # not in the globals, now look in the built-ins
+            w_value = f.builtin.getdictvalue(f.space, w_varname)
             if w_value is None:
+                varname = f.getname_u(nameindex)
                 message = "global name '%s' is not defined" % varname
                 raise OperationError(f.space.w_NameError,
                                      f.space.wrap(message))
@@ -502,7 +508,7 @@ class PyInterpFrame(pyframe.PyFrame):
     def BUILD_MAP(f, zero):
         if zero != 0:
             raise pyframe.BytecodeCorruption
-        w_dict = f.space.newdict([])
+        w_dict = f.space.newdict()
         f.valuestack.push(w_dict)
 
     def LOAD_ATTR(f, nameindex):
@@ -530,25 +536,25 @@ class PyInterpFrame(pyframe.PyFrame):
     def cmp_exc_match(f, w_1, w_2):
         return f.space.newbool(f.space.exception_match(w_1, w_2))
 
-    compare_dispatch_table = {
-        0: cmp_lt,   # "<"
-        1: cmp_le,   # "<="
-        2: cmp_eq,   # "=="
-        3: cmp_ne,   # "!="
-        4: cmp_gt,   # ">"
-        5: cmp_ge,   # ">="
-        6: cmp_in,
-        7: cmp_not_in,
-        8: cmp_is,
-        9: cmp_is_not,
-        10: cmp_exc_match,
-        }
+    compare_dispatch_table = [
+        cmp_lt,   # "<"
+        cmp_le,   # "<="
+        cmp_eq,   # "=="
+        cmp_ne,   # "!="
+        cmp_gt,   # ">"
+        cmp_ge,   # ">="
+        cmp_in,
+        cmp_not_in,
+        cmp_is,
+        cmp_is_not,
+        cmp_exc_match,
+        ]
     def COMPARE_OP(f, testnum):
         w_2 = f.valuestack.pop()
         w_1 = f.valuestack.pop()
         try:
             testfn = f.compare_dispatch_table[testnum]
-        except KeyError:
+        except IndexError:
             raise pyframe.BytecodeCorruption, "bad COMPARE_OP oparg"
         w_result = testfn(f, w_1, w_2)
         f.valuestack.push(w_result)
@@ -558,7 +564,7 @@ class PyInterpFrame(pyframe.PyFrame):
         w_modulename = f.getname_w(nameindex)
         modulename = f.space.str_w(w_modulename)
         w_fromlist = f.valuestack.pop()
-        w_import = f.builtin.getdictvalue(f.space, '__import__')
+        w_import = f.builtin.getdictvalue_w(f.space, '__import__')
         if w_import is None:
             raise OperationError(space.w_ImportError,
                                  space.wrap("__import__ not found"))
@@ -636,6 +642,27 @@ class PyInterpFrame(pyframe.PyFrame):
         block = pyframe.FinallyBlock(f, f.next_instr + offsettoend)
         f.blockstack.push(block)
 
+    def WITH_CLEANUP(f):
+        # see comment in END_FINALLY for stack state
+        w_exitfunc = f.valuestack.pop()
+        w_unroller = f.valuestack.top(2)
+        unroller = f.space.interpclass_w(w_unroller)
+        if (isinstance(unroller, pyframe.SuspendedUnroller)
+            and isinstance(unroller.flowexc, pyframe.SApplicationException)):
+            operr = unroller.flowexc.operr
+            w_result = f.space.call_function(w_exitfunc,
+                                             operr.w_type,
+                                             operr.w_value,
+                                             operr.application_traceback)
+            if f.space.is_true(w_result):
+                # __exit__() returned True -> Swallow the exception.
+                f.valuestack.set_top(f.space.w_None, 2)
+        else:
+            f.space.call_function(w_exitfunc,
+                                  f.space.w_None,
+                                  f.space.w_None,
+                                  f.space.w_None)
+                      
     def call_function(f, oparg, w_star=None, w_starstar=None):
         n_arguments = oparg & 0xff
         n_keywords = (oparg>>8) & 0xff
@@ -647,36 +674,26 @@ class PyInterpFrame(pyframe.PyFrame):
                 w_key   = f.valuestack.pop()
                 key = f.space.str_w(w_key)
                 keywords[key] = w_value
-        arguments = [f.valuestack.pop() for i in range(n_arguments)]
-        arguments.reverse()
+        arguments = [None] * n_arguments
+        for i in range(n_arguments - 1, -1, -1):
+            arguments[i] = f.valuestack.pop()
         args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
         w_function  = f.valuestack.pop()
         w_result = f.space.call_args(w_function, args)
+        rstack.resume_point("call_function", f, returns=w_result)
         f.valuestack.push(w_result)
-
+        
     def CALL_FUNCTION(f, oparg):
         # XXX start of hack for performance
-        if oparg == 0:      # 0 arg, 0 keyword arg
-            w_function = f.valuestack.pop()
-            w_result = f.space.call_function(w_function)
-            f.valuestack.push(w_result)
-        elif oparg == 1:    # 1 arg, 0 keyword arg
-            w_arg = f.valuestack.pop()
-            w_function = f.valuestack.pop()
-            w_result = f.space.call_function(w_function, w_arg)
-            f.valuestack.push(w_result)
-        elif oparg == 2:    # 2 args, 0 keyword arg
-            w_arg2 = f.valuestack.pop()
-            w_arg1 = f.valuestack.pop()
-            w_function = f.valuestack.pop()
-            w_result = f.space.call_function(w_function, w_arg1, w_arg2)
-            f.valuestack.push(w_result)
-        elif oparg == 3:    # 3 args, 0 keyword arg
-            w_arg3 = f.valuestack.pop()
-            w_arg2 = f.valuestack.pop()
-            w_arg1 = f.valuestack.pop()
-            w_function = f.valuestack.pop()
-            w_result = f.space.call_function(w_function, w_arg1, w_arg2, w_arg3)
+        if (oparg >> 8) & 0xff == 0:
+            # Only positional arguments
+            nargs = oparg & 0xff
+            w_function = f.valuestack.top(nargs)
+            try:
+                w_result = f.space.call_valuestack(w_function, nargs, f.valuestack)
+                rstack.resume_point("CALL_FUNCTION", f, nargs, returns=w_result)
+            finally:
+                f.valuestack.drop(nargs + 1)
             f.valuestack.push(w_result)
         # XXX end of hack for performance
         else:
@@ -724,13 +741,13 @@ class PyInterpFrame(pyframe.PyFrame):
     def SET_LINENO(f, lineno):
         pass
 
-    def EXTENDED_ARG(f, oparg):
-        opcode = f.nextop()
-        oparg = oparg<<16 | f.nextarg()
-        fn = f.dispatch_table_w_arg[opcode]
-        if fn is None:
-            raise pyframe.BytecodeCorruption
-        fn(f, oparg)
+##     def EXTENDED_ARG(f, oparg):
+##         opcode = f.nextop()
+##         oparg = oparg<<16 | f.nextarg()
+##         fn = f.dispatch_table_w_arg[opcode]
+##         if fn is None:
+##             raise pyframe.BytecodeCorruption
+##         fn(f, oparg)
 
     def MISSING_OPCODE(f):
         ofs = f.next_instr - 1
@@ -746,6 +763,8 @@ class PyInterpFrame(pyframe.PyFrame):
         raise pyframe.BytecodeCorruption("unknown opcode, ofs=%d, code=%d, name=%s" %
                                            (ofs, ord(c), name) )
 
+    STOP_CODE = MISSING_OPCODE
+
     ### dispatch_table ###
 
     # 'opcode_has_arg' is a class attribute: list of True/False whether opcode takes arg
@@ -756,17 +775,16 @@ class PyInterpFrame(pyframe.PyFrame):
     def __initclass__(cls):
         "NOT_RPYTHON"
         # create the 'cls.dispatch_table' attribute
-        import dis
         opcode_has_arg = []
         dispatch_table_no_arg = []
         dispatch_table_w_arg = []
         missing_opcode = cls.MISSING_OPCODE.im_func
         missing_opcode_w_arg = cls.MISSING_OPCODE_W_ARG.im_func
         for i in range(256):
-            opname = dis.opname[i].replace('+', '_')
+            opname = pythonopcode.opname[i].replace('+', '_')
             fn = getattr(cls, opname, None)
             fn = getattr(fn, 'im_func',fn)
-            has_arg = i >= dis.HAVE_ARGUMENT
+            has_arg = i >= pythonopcode.HAVE_ARGUMENT
             #if fn is missing_opcode and not opname.startswith('<') and i>0:
             #    import warnings
             #    warnings.warn("* Warning, missing opcode %s" % opname)
@@ -787,24 +805,70 @@ class PyInterpFrame(pyframe.PyFrame):
         #XXX performance hack!
         ### Create dispatch with a lot of if,elifs ###
         ### (this gets optimized for translated pypy by the merge_if_blocks transformation) ###
+        if cls.__name__ != 'PyInterpFrame':
+            return
         import py
-        dispatch_code  = 'def dispatch_translated(self):\n'
-        dispatch_code += '    opcode = self.nextop()\n'
-        n_outputed = 0
-        for i in range(256):
-            opname         = dis.opname[i].replace('+', '_')
-            if not hasattr(cls, opname):
+        
+        dispatch_code  = '''
+def dispatch_translated(self, ec):
+    code = self.pycode.co_code
+    while True:
+        self.last_instr = intmask(self.next_instr)
+        ec.bytecode_trace(self)
+        self.next_instr = self.last_instr
+        opcode = ord(code[self.next_instr])
+        if self.space.config.objspace.logbytecodes:
+            self.space.bytecodecounts[opcode] = self.space.bytecodecounts.get(opcode, 0) + 1
+        self.next_instr += 1
+        if opcode >= %s:
+            oparg = ord(code[self.next_instr]) | ord(code[self.next_instr + 1]) << 8
+            self.next_instr += 2
+            while True:
+                if opcode == %s:
+                    opcode = ord(code[self.next_instr])
+                    oparg = oparg << 16 | ord(code[self.next_instr + 1]) | ord(code[self.next_instr + 2]) << 8
+                    self.next_instr += 3
+                    if opcode < %s:
+                        raise pyframe.BytecodeCorruption
+                    continue
+''' % (pythonopcode.HAVE_ARGUMENT,
+        pythonopcode.EXTENDED_ARG,
+        pythonopcode.HAVE_ARGUMENT)
+
+        def sortkey(opcode, opcodeorder=opcodeorder, ValueError=ValueError):
+            try:
+                index = opcodeorder.index(opcode)
+            except ValueError:
+                index = 1000000
+            return index, opcode
+        opcases = [(sortkey(i), i, opname)
+                   for opname, i in pythonopcode.opmap.iteritems()]
+        opcases.sort()    # for predictable results
+
+        for _, i, opname in opcases:
+            if i == pythonopcode.EXTENDED_ARG or i < pythonopcode.HAVE_ARGUMENT:
                 continue
-            dispatch_code += '    %s opcode == %d:\n' % (('if', 'elif')[n_outputed > 0], i)
-            opcode_has_arg = cls.opcode_has_arg[i]
-            dispatch_code += '        self.%s(%s)\n'  % (opname, ('', 'self.nextarg()')[opcode_has_arg])
-            n_outputed += 1
-        dispatch_code += '    else:\n'
-        dispatch_code += '        self.MISSING_OPCODE()\n'
+            opname         = opname.replace('+', '_')
+            dispatch_code += '                elif opcode == %d:\n' % i
+            dispatch_code += '                    self.%s(oparg)\n'  % opname
+            if opname == 'CALL_FUNCTION':
+                dispatch_code += '                    rstack.resume_point("dispatch_call", self, code, ec)\n'
+        dispatch_code +=     '                else:\n'
+        dispatch_code +=     '                    self.MISSING_OPCODE_W_ARG(oparg)\n'
+        dispatch_code +=     '                break\n'
+
+        for _, i, opname in opcases:
+            if i >= pythonopcode.HAVE_ARGUMENT:
+                continue
+            opname         = opname.replace('+', '_')
+            dispatch_code += '        elif opcode == %d:\n' % i
+            dispatch_code += '            self.%s()\n'  % opname
+        dispatch_code +=     '        else:\n'
+        dispatch_code +=     '            self.MISSING_OPCODE()\n'
         exec py.code.Source(dispatch_code).compile()
-        cls.dispatch_translated = dispatch_translated
-        del dispatch_code, i, opcode_has_arg, opname
- 
+
+        cls.dispatch_translated = dispatch_translated        
+    
 
 ### helpers written at the application-level ###
 # Some of these functions are expected to be generally useful if other
@@ -843,11 +907,19 @@ app = gateway.applevel(r'''
             return 
         # XXX add unicode handling
         file_softspace(stream, True)
-    print_item_to._annspecialcase_ = "specialize:argtype0"
+    print_item_to._annspecialcase_ = "specialize:argtype(0)"
+
+    def print_item(x):
+        print_item_to(x, sys_stdout())
+    print_item._annspecialcase_ = "flowspace:print_item"
 
     def print_newline_to(stream):
         stream.write("\n")
         file_softspace(stream, False)
+
+    def print_newline():
+        print_newline_to(sys_stdout())
+    print_newline._annspecialcase_ = "flowspace:print_newline"
 
     def file_softspace(file, newflag):
         try:
@@ -863,7 +935,9 @@ app = gateway.applevel(r'''
 
 sys_stdout      = app.interphook('sys_stdout')
 print_expr      = app.interphook('print_expr')
+print_item      = app.interphook('print_item')
 print_item_to   = app.interphook('print_item_to')
+print_newline   = app.interphook('print_newline')
 print_newline_to= app.interphook('print_newline_to')
 file_softspace  = app.interphook('file_softspace')
 

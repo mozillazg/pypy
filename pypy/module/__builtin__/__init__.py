@@ -4,6 +4,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
     """Built-in functions, exceptions, and other objects."""
+    expose__file__attribute = False
 
     appleveldefs = {
         'quit'          : 'app_help.exit',
@@ -27,15 +28,20 @@ class Module(MixedModule):
         # is still needed and should stay where it is.
         'min'           : 'app_functional.min',
         'max'           : 'app_functional.max',
+        'all'           : 'app_functional.all',
+        'any'           : 'app_functional.any',
         'enumerate'     : 'app_functional.enumerate',
         'xrange'        : 'app_functional.xrange',
+        '_install_pickle_support_for_xrange_iterator':
+        'app_functional._install_pickle_support_for_xrange_iterator',
         'sorted'        : 'app_functional.sorted',
         'reversed'      : 'app_functional.reversed',
+        '_install_pickle_support_for_reversed_iterator':
+        'app_functional._install_pickle_support_for_reversed_iterator',
 
         'issubclass'    : 'app_inspect.issubclass',
         'isinstance'    : 'app_inspect.isinstance',
         'hasattr'       : 'app_inspect.hasattr',
-        'callable'      : 'app_inspect.callable',
         'globals'       : 'app_inspect.globals',
         'locals'        : 'app_inspect.locals',
         'vars'          : 'app_inspect.vars',
@@ -48,7 +54,6 @@ class Module(MixedModule):
 
         'complex'       : 'app_complex.complex',
 
-        'intern'        : 'app_misc.intern',
         'buffer'        : 'app_buffer.buffer',
         'reload'        : 'app_misc.reload',
 
@@ -60,8 +65,6 @@ class Module(MixedModule):
 
     interpleveldefs = {
         # constants
-        '__name__'      : '(space.wrap("__builtin__"))', 
-        '__doc__'       : '(space.wrap("PyPy builtin module"))', 
         'None'          : '(space.w_None)',
         'False'         : '(space.w_False)',
         'True'          : '(space.w_True)',
@@ -70,15 +73,14 @@ class Module(MixedModule):
         'object'        : '(space.w_object)',
         'unicode'       : '(space.w_unicode)',
 
-        'file'          : 'state.get(space).w_file', 
-        'open'          : 'state.get(space).w_file', 
+        'file'          : 'state.get(space).w_file',
+        'open'          : 'state.get(space).w_file',
 
         # old-style classes dummy support
         '_classobj'     : 'space.w_classobj',
         '_instance'     : 'space.w_instance',
         # default __metaclass__
         '__metaclass__' : '(space.w_type)',
-        '_isfake'       : 'special._isfake',
 
         # interp-level function definitions
         'abs'           : 'operation.abs',
@@ -100,9 +102,10 @@ class Module(MixedModule):
         'setattr'       : 'operation.setattr',
         'delattr'       : 'operation.delattr',
         'iter'          : 'operation.iter',
-        'hash'          : 'operation.hash',
         'id'            : 'operation.id',
         '_seqiter'      : 'operation._seqiter',
+        'intern'        : 'operation.intern',
+        'callable'      : 'operation.callable',
 
         'compile'       : 'compiling.compile',
         'eval'          : 'compiling.eval',
@@ -110,7 +113,6 @@ class Module(MixedModule):
         '__import__'    : 'importing.importhook',
 
         'range'         : 'functional.range_int',
-
         # float->string helper
         '_formatd'      : 'special._formatd'
     }
@@ -135,3 +137,15 @@ class Module(MixedModule):
        builtin = module.Module(space, None)
        space.setitem(builtin.w_dict, space.wrap('None'), space.w_None)
        return builtin
+
+    def setup_after_space_initialization(self):
+        """NOT_RPYTHON"""
+        space = self.space
+        # call installations for pickle support
+        for name in self.loaders.keys():
+            if name.startswith('_install_pickle_support_for_'):
+                w_install = self.get(name)
+                space.call_function(w_install)
+                # xxx hide the installer
+                space.delitem(self.w_dict, space.wrap(name))
+                del self.loaders[name]

@@ -45,6 +45,7 @@ pieces in pypy svn.
 
 from __future__ import generators
 import autopath, os, sys, types
+import inspect
 import cPickle as pickle, __builtin__
 from copy_reg import _HEAPTYPE
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
@@ -64,13 +65,6 @@ from pypy.translator.gensupp import ordered_blocks, UniqueList, builtin_base, \
      uniquemodulename, C_IDENTIFIER, NameManager
 
 
-# list of simplifcation passes needed by geninterp
-from pypy.translator.simplify import transform_ovfcheck, all_passes as needed_passes
-
-needed_passes = needed_passes[:]
-needed_passes.remove(transform_ovfcheck)
-
-
 import pypy # __path__
 import py.path
 from pypy.tool.ansi_print import ansi_log
@@ -78,7 +72,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.1.16'  # bump this for substantial changes
+GI_VERSION = '1.1.19'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -101,7 +95,7 @@ def eval_helper(self, typename, expr):
     unique = self.uniquenameofprebuilt("eval_helper", eval_helper)
     self.initcode.append1(
         'def %s(expr):\n'
-        '    dic = space.newdict([])\n'
+        '    dic = space.newdict()\n'
         '    if "types." in expr:\n'
         '        space.exec_("import types", dic, dic)\n'
         '    else:\n'
@@ -114,7 +108,7 @@ def unpickle_helper(self, name, value):
     unique = self.uniquenameofprebuilt("unpickle_helper", unpickle_helper)
     self.initcode.append1(
         'def %s(value):\n'
-        '    dic = space.newdict([])\n'
+        '    dic = space.newdict()\n'
         '    space.exec_("import cPickle as pickle", dic, dic)\n'
         '    return space.eval("pickle.loads(%%r)" %% value, dic, dic)' % unique)
     self.initcode.append1('%s = %s(%r)' % (
@@ -125,18 +119,18 @@ def long_helper(self, name, value):
     unique = self.uniquenameofprebuilt("long_helper", long_helper)
     self.initcode.append1(
         'def %s(value):\n'
-        '    dic = space.newdict([])\n'
+        '    dic = space.newdict()\n'
         '    space.exec_("", dic, dic) # init __builtins__\n'
-        '    return space.eval("long(%%r, 16)" %% value, dic, dic)' % unique)
+        '    return space.eval(value, dic, dic)' % unique)
     self.initcode.append1('%s = %s(%r)' % (
-        name, unique, hex(value)[2:-1] ) )
+        name, unique, repr(value) ) )
 
 def bltinmod_helper(self, mod):    
     name = self.uniquename("mod_%s" % mod.__name__)
     unique = self.uniquenameofprebuilt("bltinmod_helper", bltinmod_helper)
     self.initcode.append1(
         'def %s(name):\n'
-        '    dic = space.newdict([])\n'
+        '    dic = space.newdict()\n'
         '    space.exec_("import %%s" %% name, dic, dic)\n'
         '    return space.eval("%%s" %% name, dic, dic)' % (unique, ))
     self.initcode.append1('%s = %s(%r)' % (name, unique, mod.__name__))
@@ -164,6 +158,7 @@ class GenRpy:
                          Constant(False).key: 'space.w_False',
                          Constant(True).key:  'space.w_True',
                          Constant(Ellipsis).key: 'space.w_Ellipsis',
+                         Constant(NotImplemented).key: 'space.w_NotImplemented',
                          Constant(OperationError).key: late_OperationError,
                          Constant(Arguments).key: late_Arguments,
                        }
@@ -182,7 +177,7 @@ class GenRpy:
 
         # special constructors:
         self.has_listarg = {}
-        for name in "newtuple newlist newdict newstring".split():
+        for name in "newtuple newlist newstring".split():
             self.has_listarg[name] = name
 
         # catching all builtins in advance, to avoid problems
@@ -203,7 +198,7 @@ class GenRpy:
         self.builtin_ids = dict( [
             (id(value), bltinstub(key))
             for key, value in __builtin__.__dict__.items()
-            if callable(value) and type(value) not in [type(Exception), type] ] )
+            if callable(value) and type(value) not in [types.ClassType, type] ] )
         
         self.space = FlowObjSpace() # for introspection
 
@@ -281,6 +276,9 @@ class GenRpy:
                           "shape": repr(shape),
                           "data_w": self.arglist(op.args[2:], localscope),
                           'Arg': self.nameof(Arguments) }
+        if op.opname == "hint":
+            return "%s = %s" % (self.expr(op.result, localscope),
+                                self.expr(op.args[0], localscope))
         if op.opname in self.has_listarg:
             fmt = "%s = %s([%s])"
         else:
@@ -446,10 +444,6 @@ else:
             self.rpynames[key] = txt = self.uniquename(basename)
         return txt
             
-
-    def nameof_NotImplementedType(self, value):
-        return "space.w_NotImplemented"
-
     def nameof_object(self, value):
         if type(value) is not object:
             # try to just wrap it?
@@ -462,12 +456,21 @@ else:
                                 % name)
         return name
 
+    def is_module_builtin(self, mod):
+        if not hasattr(mod, "__file__"):
+            return True
+        if not (mod.__file__.endswith('.pyc') or
+                mod.__file__.endswith('.py') or
+                mod.__file__.endswith('.pyo')):
+            return True
+        if mod.__file__.endswith('*.py'):  # on top of PyPy, a mixed module
+            return True
+        return False
+
     def nameof_module(self, value):
-        if value is os or not hasattr(value, "__file__") or \
-               not (value.__file__.endswith('.pyc') or
-                    value.__file__.endswith('.py') or
-                    value.__file__.endswith('.pyo')) :
+        if value is os or self.is_module_builtin(value):
             return bltinmod_helper(self, value)
+
         # we might have createda reference to a module
         # that is non-standard.
 
@@ -560,9 +563,9 @@ else:
             namestr = "_emptystr_"
         name = self.uniquename('gs_' + namestr[:32])
         if len(value) < 30 and "\n" not in value:
-            txt = '%s = space.wrap(%r)' % (name, value)
+            txt = '%s = space.new_interned_str(%r)' % (name, value)
         else:
-            txt = render_docstr(value, '%s = space.wrap(\n' % name, ')')
+            txt = render_docstr(value, '%s = space.new_interned_str(\n' % name, ')')
             txt = txt,  # not splitted
         self.initcode.append(txt)
         return name
@@ -589,6 +592,9 @@ else:
     def nameof_function(self, func, namehint=''):
         if hasattr(func, 'geninterplevel_name'):
             return func.geninterplevel_name(self)
+        if func.func_globals is None:
+            # built-in functions on top of PyPy
+            return self.nameof_builtin_function(func)
 
         printable_name = '(%s:%d) %s' % (
             self.trans_funcname(func.func_globals.get('__name__', '?')),
@@ -600,9 +606,18 @@ else:
             return self.skipped_function(func)
         name = self.uniquename('gfunc_' + self.trans_funcname(
             namehint + func.__name__))
-        f_name = 'f_' + name[6:]
+
+        positional, varargs, varkwds, defs = inspect.getargspec(func)
+        if varargs is varkwds is defs is None:
+            unwrap = ', '.join(['gateway.W_Root']*len(positional))
+            interp_name = 'fastf_' + name[6:]            
+        else:
+            unwrap = 'gateway.Arguments'
+            interp_name = 'f_' + name[6:]
+        
         self.initcode.append1('from pypy.interpreter import gateway')
-        self.initcode.append1('%s = space.wrap(gateway.interp2app(%s, unwrap_spec=[gateway.ObjSpace, gateway.Arguments]))' % (name, f_name))
+        self.initcode.append1('%s = space.wrap(gateway.interp2app(%s, unwrap_spec=[gateway.ObjSpace, %s]))' %
+                              (name, interp_name, unwrap))
         self.pendingfunctions.append(func)
         return name
 
@@ -615,6 +630,9 @@ else:
         return name
 
     def nameof_instancemethod(self, meth):
+        if meth.im_func.func_globals is None:
+            # built-in methods (bound or not) on top of PyPy
+            return self.nameof_builtin_method(meth)
         if meth.im_self is None:
             # no error checking here
             return self.nameof(meth.im_func, namehint="%s_" % meth.im_class.__name__)
@@ -631,17 +649,11 @@ else:
     nameof_method = nameof_instancemethod   # when run on top of PyPy
 
     def should_translate_attr(self, pbc, attr):
-        ann = self.translator.annotator
-        if ann is None:
-            ignore = getattr(pbc.__class__, 'NOT_RPYTHON_ATTRIBUTES', [])
-            if attr in ignore:
-                return False
-            else:
-                return "probably"   # True
-        classdef = ann.getuserclasses().get(pbc.__class__)
-        if classdef and classdef.about_attribute(attr) is not None:
-            return True
-        return False
+        ignore = getattr(pbc.__class__, 'NOT_RPYTHON_ATTRIBUTES', [])
+        if attr in ignore:
+            return False
+        else:
+            return "probably"   # True
 
     def later(self, gen):
         self.latercode.append1((gen, self.debugstack))
@@ -697,36 +709,48 @@ else:
         
     def nameof_builtin_function_or_method(self, func):
         if func.__self__ is None:
-            # builtin function
-            if id(func) in self.builtin_ids:
-                func = self.builtin_ids[id(func)]
-                return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
-            # where does it come from? Python2.2 doesn't have func.__module__
-            for modname, module in sys.modules.items():
-                if hasattr(module, '__file__'):
-                    if (module.__file__.endswith('.py') or
-                        module.__file__.endswith('.pyc') or
-                        module.__file__.endswith('.pyo')):
-                        continue    # skip non-builtin modules
-                if func is getattr(module, func.__name__, None):
-                    break
-            else:
-                raise Exception, '%r not found in any built-in module' % (func,)
-            #if modname == '__builtin__':
-            #    # be lazy
-            #    return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
-            if modname == 'sys':
-                # be lazy
-                return "(space.sys.get(space.str_w(%s)))" % self.nameof(func.__name__)                
-            else:
-                name = self.uniquename('gbltin_' + func.__name__)
-                self.initcode.append1('%s = space.getattr(%s, %s)' % (
-                    name, self.nameof(module), self.nameof(func.__name__)))
+            return self.nameof_builtin_function(func)
+        else:
+            return self.nameof_builtin_method(func)
+
+    def nameof_builtin_function(self, func):
+        # builtin function
+        if id(func) in self.builtin_ids:
+            func = self.builtin_ids[id(func)]
+            return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
+        # where does it come from? Python2.2 doesn't have func.__module__
+        for modname, module in sys.modules.items():
+            if not self.is_module_builtin(module):
+                continue    # skip non-builtin modules
+            if func is getattr(module, func.__name__, None):
+                break
+        else:
+            raise Exception, '%r not found in any built-in module' % (func,)
+        #if modname == '__builtin__':
+        #    # be lazy
+        #    return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
+        if modname == 'sys':
+            # be lazy
+            return "(space.sys.get(space.str_w(%s)))" % self.nameof(func.__name__)                
+        else:
+            name = self.uniquename('gbltin_' + func.__name__)
+            self.initcode.append1('%s = space.getattr(%s, %s)' % (
+                name, self.nameof(module), self.nameof(func.__name__)))
+        return name
+
+    def nameof_builtin_method(self, meth):
+        try:
+            im_self = meth.__self__
+        except AttributeError:
+            im_self = meth.im_self    # on top of PyPy
+        if im_self is None:
+            # builtin unbound method (only on top of PyPy)
+            name = self.nameof_wrapper_descriptor(meth)
         else:
             # builtin (bound) method
-            name = self.uniquename('gbltinmethod_' + func.__name__)
+            name = self.uniquename('gbltinmethod_' + meth.__name__)
             self.initcode.append1('%s = space.getattr(%s, %s)' % (
-                name, self.nameof(func.__self__), self.nameof(func.__name__)))
+                name, self.nameof(im_self), self.nameof(meth.__name__)))
         return name
 
     def nameof_classobj(self, cls):
@@ -740,7 +764,7 @@ else:
         metaclass = "space.w_type"
         name = self.uniquename('gcls_' + cls.__name__)
 
-        if issubclass(cls, Exception):
+        if issubclass(cls, py.builtin.BaseException):
             # if cls.__module__ == 'exceptions':
             # don't rely on this, py.magic redefines AssertionError
             if getattr(__builtin__,cls.__name__,None) is cls:
@@ -748,7 +772,7 @@ else:
                 return 'space.w_%s' % cls.__name__
 
         if not isinstance(cls, type):
-            assert type(cls) is type(Exception)
+            assert type(cls) is types.ClassType
             # do *not* change metaclass, but leave the
             # decision to what PyPy thinks is correct.
             # metaclass = 'space.w_classobj'
@@ -761,7 +785,8 @@ else:
             for key, value in content:
                 if key.startswith('__'):
                     if key in ['__module__', '__doc__', '__dict__',
-                               '__weakref__', '__metaclass__', '__slots__','__new__']:
+                               '__weakref__', '__metaclass__', '__slots__',
+                               '__new__', '__del__']:
                         continue
 
                 # redirect value through class interface, in order to
@@ -779,10 +804,11 @@ else:
                     name, self.nameof(key), self.nameof(value))
 
         baseargs = ", ".join(basenames)
-        initcode.append('_dic = space.newdict([])')
+        initcode.append('_dic = space.newdict()')
         for key, value in cls.__dict__.items():
             if key.startswith('__'):
-                if key in ['__module__', '__metaclass__', '__slots__','__new__']:
+                if key in ['__module__', '__metaclass__', '__slots__',
+                           '__new__', '__del__']:
                     keyname = self.nameof(key)
                     valname = self.nameof(value)
                     initcode.append("space.setitem(_dic, %s, %s)" % (
@@ -824,7 +850,7 @@ else:
         str:    'space.w_str',
         float:  'space.w_float',
         slice:  'space.w_slice',
-        type(Exception()): (eval_helper, 'InstanceType', 'types.InstanceType'),
+        types.InstanceType: (eval_helper, 'InstanceType', 'types.InstanceType'),
         type:   'space.w_type',
         complex: (eval_helper, 'complex', 'types.ComplexType'),
         unicode:'space.w_unicode',
@@ -873,6 +899,12 @@ else:
             if type(ret) is tuple:
                 ret = ret[0](self, ret[1], ret[2])
             return ret
+        if issubclass(cls, py.builtin.BaseException):   # Python 2.5 only
+            # if cls.__module__ == 'exceptions':
+            # don't rely on this, py.magic redefines AssertionError
+            if getattr(__builtin__,cls.__name__,None) is cls:
+                # exception are defined on the space
+                return 'space.w_%s' % cls.__name__
         assert cls.__module__ != '__builtin__' or cls.__flags__&_HEAPTYPE, (
             "built-in class %r not found in typename_mapping "
             "while compiling %s" % (cls, self.currentfunc and
@@ -908,7 +940,7 @@ else:
         assert dic is not __builtins__
         name = self.uniquename('g%ddict' % len(dic))
         self.register_early(dic, name)
-        self.initcode.append('%s = space.newdict([])' % (name,))
+        self.initcode.append('%s = space.newdict()' % (name,))
         for k in dic:
             if k == '__builtins__':
                 continue
@@ -919,10 +951,13 @@ else:
     # strange prebuilt instances below, don't look too closely
     # XXX oh well.
     def nameof_member_descriptor(self, md):
+        try:
+            im_class = md.__objclass__
+        except AttributeError:
+            im_class = md.im_class    # on top of PyPy
         name = self.uniquename('gdescriptor_%s_%s' % (
-            md.__objclass__.__name__, md.__name__))
-        cls = self.nameof(md.__objclass__)
-        # do I need to take the dict and then getitem???
+            im_class.__name__, md.__name__))
+        cls = self.nameof(im_class)
         self.initcode.append1('%s = space.getattr(%s, %s)' %
                                 (name, cls, self.nameof(md.__name__)))
         return name
@@ -939,11 +974,11 @@ else:
         # property is lazy loaded app-level as well, trigger it*s creation
         self.initcode.append1('space.builtin.get("property") # pull it in')
         globname = self.nameof(self.moddict)
-        self.initcode.append('space.setitem(%s, space.wrap("__builtins__"), '
+        self.initcode.append('space.setitem(%s, space.new_interned_str("__builtins__"), '
                              'space.builtin.w_dict)' % globname)
         self.initcode.append('%s = space.eval("property(%s)", %s, %s)' %(
             name, origin, globname, globname) )
-        self.initcode.append('space.delitem(%s, space.wrap("__builtins__"))'
+        self.initcode.append('space.delitem(%s, space.new_interned_str("__builtins__"))'
                              % globname)
         return name
 
@@ -1039,7 +1074,7 @@ else:
             # make sure it is not rendered again
             key = Constant(doc).key
             self.rpynames[key] = "w__doc__"
-            self.initcode.append("w__doc__ = space.wrap(__doc__)")
+            self.initcode.append("w__doc__ = space.new_interned_str(__doc__)")
 
         # info.entrypoint must be done *after* __doc__ is handled,
         # because nameof(entrypoint) might touch __doc__ early.
@@ -1178,6 +1213,8 @@ else:
 
         fast_set = dict(zip(fast_args, fast_args))
 
+        simple = (varargname is varkwname is None) and not name_of_defaults
+
         # create function declaration
         name = self.trans_funcname(func.__name__) # for <lambda>
         argstr = ", ".join(['space'] + fast_args)
@@ -1194,10 +1231,6 @@ else:
             #else:
             #    self.initcode.append1('del m.%s' % (name,))
 
-        print >> f, '  def %s(space, __args__):' % (name,)
-        if docstr is not None:
-            print >> f, docstr
-            print >> f
         def tupstr(seq):
             if len(seq) == 1:
                 fmt = '%s,'
@@ -1210,23 +1243,29 @@ else:
             else:
                 return tupstr(seq) + " = "
 
-        print >> f, '    funcname = "%s"' % func.__name__
+        if not simple:
+            print >> f, '  def %s(space, __args__):' % (name,)
+            if docstr is not None:
+                print >> f, docstr
+                print >> f
 
-        kwlist = list(func.func_code.co_varnames[:func.func_code.co_argcount])
-        signature = '    signature = %r' % kwlist
-        signature = ", ".join([signature, repr(varargname), repr(varkwname)])
-        print >> f, signature
+            print >> f, '    funcname = "%s"' % func.__name__
+            kwlist = list(func.func_code.co_varnames[:func.func_code.co_argcount])
+            signature = '    signature = %r' % kwlist
+            signature = ", ".join([signature, repr(varargname), repr(varkwname)])
+            print >> f, signature
 
-        print >> f, '    defaults_w = [%s]' % ", ".join(name_of_defaults)
+            print >> f, '    defaults_w = [%s]' % ", ".join(name_of_defaults)
 
-        print >> f, '    %s__args__.parse(funcname, signature, defaults_w)' % (
-            tupassstr(fast_args),)
-        print >> f, '    return %s(%s)' % (fast_name, ', '.join(["space"]+fast_args))
+            print >> f, '    %s__args__.parse(funcname, signature, defaults_w)' % (
+                tupassstr(fast_args),)
+            print >> f, '    return %s(%s)' % (fast_name, ', '.join(["space"]+fast_args))
 
-        for line in install_func(f_name, name):
-            print >> f, line
+            for line in install_func(f_name, name):
+                print >> f, line
 
-        print >> f
+            print >> f
+        
         print >> f, fast_function_header
         if docstr is not None:
             print >> f, docstr
@@ -1307,7 +1346,7 @@ else:
                 yield "    e.normalize_exception(space)"
                 q = "if"
                 for link in block.exits[1:]:
-                    assert issubclass(link.exitcase, Exception)
+                    assert issubclass(link.exitcase, py.builtin.BaseException)
                     # Exeption classes come unwrapped in link.exitcase
                     yield "    %s space.is_true(space.issubtype(e.w_type, %s)):" % (q,
                                             self.nameof(link.exitcase))
@@ -1455,9 +1494,10 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
                 sys.path.remove(libdir)
 
         entrypoint = dic
-        t = TranslationContext(verbose=False, simplifying=needed_passes,
+        t = TranslationContext(verbose=False, simplifying=True,
                                do_imports_immediately=do_imports_immediately,
-                               builtins_can_raise_exceptions=True)
+                               builtins_can_raise_exceptions=True,
+                               list_comprehension_operations=False)
         gen = GenRpy(t, entrypoint, modname, dic)
 
     finally:

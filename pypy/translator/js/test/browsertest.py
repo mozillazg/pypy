@@ -1,13 +1,15 @@
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from BaseHTTPServer import HTTPServer as BaseHTTPServer, BaseHTTPRequestHandler
 import py
 from os   import system
 from cgi  import parse_qs
 from sys  import platform
 from time import sleep
-from webbrowser import open as webbrowser_open
+import webbrowser
 from pypy.translator.js.log import log
 log = log.browsertest
 
+class HTTPServer(BaseHTTPServer):
+    allow_reuse_address = True
 
 class config:
     http_port = 10001
@@ -24,9 +26,9 @@ function runTest() {
         result = %(jstestcase)s;
     } catch (e) {
         try {
-            result = "raise Exception('" + e.toSource() + "')";
+            result = "throw '" + e.toSource() + "'";
         } catch (dummy) {
-            result = "raise Exception('unknown')";
+            result = "throw 'unknown javascript exception'";
         }
     }
 
@@ -37,6 +39,9 @@ function runTest() {
 
 function handle_result(result) {
     var resultform = document.forms['resultform'];
+    if (typeof(result) == typeof({})) {
+        result = result.chars;  //assume it's a rpystring
+    }
     resultform.result.value = result;
     resultform.submit();
 };
@@ -78,12 +83,25 @@ class TestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         global do_status
         if self.path != "/test.html":
-            self.send_error(404, "File not found")
+            self.send_error(404, "File /test.html not found")
             return
         jsfilename = jstest.jsfilename
         jstestcase = jstest.jstestcase
         jscode     = jstest.jscode
-        html_page  = config.html_page % locals()
+        if self.server.html_page:
+            if self.server.is_interactive:
+                isinteractive = ''
+            else:
+                isinteractive = 'resultform.submit();'
+            try:
+                html_page  = open(self.server.html_page).read() % locals()
+            except IOError:
+                log("HTML FILE WAS NOT FOUND!!!!")
+                self.send_error(404, "File %s not found" % self.server.html_page)
+                return
+        else:
+            html_page = config.html_page % locals()
+        
         open("html_page.html", "w").write(html_page)
         self.serve_data('text/html', html_page)
         do_status = 'do_GET'
@@ -91,11 +109,18 @@ class TestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         global do_status
         if self.path != "/test.html":
-            self.send_error(404, "File not found")
+            self.send_error(404, "File /test.html not found")
             return
         form = parse_qs(self.rfile.read(int(self.headers['content-length'])))
-        jstest.result = form['result'][0]
-
+        if self.server.is_interactive:
+            if not form.has_key('ok'):
+                jstest.result = 'Not clicked OK'
+            else:
+                jstest.result = 'OK'
+                #assert False, "Clicked not ok"
+        else:
+            jstest.result = form['result'][0]
+        
         #we force a page refresh here because of two reason:
         # 1. we don't have the next testcase ready yet
         # 2. browser should ask again when we do have a test
@@ -117,9 +142,11 @@ class TestHandler(BaseHTTPRequestHandler):
 class BrowserTest(object):
     """The browser driver"""
 
-    def start_server(self, port):
+    def start_server(self, port, html_page, is_interactive):
         server_address = ('', port)
         self.httpd = HTTPServer(server_address, TestHandler)
+        self.httpd.is_interactive = is_interactive
+        self.httpd.html_page = html_page
 
     def get_result(self):
         global do_status
@@ -131,16 +158,20 @@ class BrowserTest(object):
         return jstest.result
 
 
-def jstest(jsfilename, jstestcase):
+def jstest(jsfilename, jstestcase, browser_to_use, html_page = None, is_interactive = False):
     global driver, jstest
     jstest = TestCase(str(jsfilename), str(jstestcase))
 
     try:
-        driver
+        driver.httpd.html_page = html_page
+        driver.httpd.is_interactive = is_interactive
     except:
         driver = BrowserTest()
-        driver.start_server(config.http_port)
-        webbrowser_open('http://localhost:%d/test.html' % config.http_port)
+        driver.start_server(config.http_port, html_page, is_interactive)
+        if browser_to_use == 'default':
+            browser_to_use = None
+        if browser_to_use != 'none':
+            webbrowser.get(browser_to_use).open('http://localhost:%d/test.html' % config.http_port)
 
     result = driver.get_result()
     return result

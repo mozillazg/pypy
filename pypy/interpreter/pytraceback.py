@@ -18,6 +18,31 @@ class PyTraceback(baseobjspace.Wrappable):
         self.lineno = lineno
         self.next = next
 
+    def descr__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('traceback_new')
+        w        = space.wrap
+
+        tup_base = []
+        tup_state = [
+            w(self.frame),
+            w(self.lasti),
+            w(self.lineno),
+            w(self.next),
+            ]
+        nt = space.newtuple
+        return nt([new_inst, nt(tup_base), nt(tup_state)])
+
+    def descr__setstate__(self, space, w_args):
+        from pypy.interpreter.pyframe import PyFrame
+        args_w = space.unpackiterable(w_args)
+        w_frame, w_lasti, w_lineno, w_next = args_w
+        self.frame = space.interp_w(PyFrame, w_frame)
+        self.lasti = space.int_w(w_lasti)
+        self.lineno = space.int_w(w_lineno)
+        self.next = space.interp_w(PyTraceback, w_next, can_be_None=True)
 
 def record_application_traceback(space, operror, frame, last_instruction):
     if frame.pycode.hidden_applevel:

@@ -1,6 +1,9 @@
 import sys
-from pypy.interpreter.miscutils import Stack
+from pypy.interpreter.miscutils import Stack, Action
 from pypy.interpreter.error import OperationError
+
+def new_framestack():
+    return Stack()
 
 class ExecutionContext:
     """An ExecutionContext holds the state of an execution thread
@@ -8,11 +11,12 @@ class ExecutionContext:
 
     def __init__(self, space):
         self.space = space
-        self.framestack = Stack()
+        self.framestack = new_framestack()
         self.w_tracefunc = None
         self.w_profilefunc = None
         self.is_tracing = 0
         self.ticker = 0
+        self.pending_actions = []
         self.compiler = space.createcompiler()
 
     def enter(self, frame):
@@ -34,6 +38,42 @@ class ExecutionContext:
         if not frame.hide():
             self.framestack.pop()
 
+
+    class Subcontext(object):
+        # coroutine: subcontext support
+
+        def __init__(self):
+            self.framestack = new_framestack()
+            self.w_tracefunc = None
+            self.w_profilefunc = None
+            self.is_tracing = 0
+
+        def enter(self, ec):
+            ec.framestack = self.framestack
+            ec.w_tracefunc = self.w_tracefunc
+            ec.w_profilefunc = self.w_profilefunc
+            ec.is_tracing = self.is_tracing
+
+        def leave(self, ec):
+            self.framestack = ec.framestack
+            self.w_tracefunc = ec.w_tracefunc
+            self.w_profilefunc = ec.w_profilefunc
+            self.is_tracing = ec.is_tracing
+
+        # the following interface is for pickling and unpickling
+        def getstate(self, space):
+            # we just save the framestack
+            items = [space.wrap(item) for item in self.framestack.items]
+            return space.newtuple(items)
+
+        def setstate(self, space, w_state):
+            from pypy.interpreter.pyframe import PyFrame
+            items = [space.interp_w(PyFrame, w_item)
+                     for w_item in space.unpackiterable(w_state)]
+            self.framestack.items = items
+        # coroutine: I think this is all, folks!
+
+
     def get_builtin(self):
         try:
             return self.framestack.top().builtin
@@ -45,7 +85,8 @@ class ExecutionContext:
         "Create a new empty 'globals' dictionary."
         w_key = self.space.wrap("__builtins__")
         w_value = self.space.wrap(self.get_builtin())
-        w_globals = self.space.newdict([(w_key, w_value)])
+        w_globals = self.space.newdict()
+        space.setitem(w_globals, w_key, w_value)
         return w_globals
 
     def call_trace(self, frame):
@@ -58,18 +99,20 @@ class ExecutionContext:
 
     def bytecode_trace(self, frame):
         "Trace function called before each bytecode."
-
         # First, call yield_thread() before each Nth bytecode,
         #     as selected by sys.setcheckinterval()
         ticker = self.ticker
         if ticker <= 0:
-            self.space.threadlocals.yield_thread()
+            Action.perform_actions(self.space.pending_actions)
+            Action.perform_actions(self.pending_actions)
             ticker = self.space.sys.checkinterval
         self.ticker = ticker - 1
-
-        # Tracing logic
-        if self.is_tracing or frame.w_f_trace is None:
+        if frame.w_f_trace is None or self.is_tracing:
             return
+        self._do_bytecode_trace(frame)
+
+
+    def _do_bytecode_trace(self, frame):
         code = getattr(frame, 'pycode')
         if frame.instr_lb <= frame.last_instr < frame.instr_ub:
             if frame.last_instr <= frame.instr_prev:
@@ -167,6 +210,7 @@ class ExecutionContext:
                 w_arg =  space.newtuple([operr.w_type, operr.w_value,
                                      space.wrap(operr.application_traceback)])
 
+            frame.fast2locals()
             self.is_tracing += 1
             try:
                 try:
@@ -181,6 +225,7 @@ class ExecutionContext:
                     raise
             finally:
                 self.is_tracing -= 1
+                frame.locals2fast()
 
         # Profile cases
         if self.w_profilefunc is not None:
@@ -207,3 +252,6 @@ class ExecutionContext:
                 frame.last_exception = last_exception
                 self.is_tracing -= 1
 
+    def add_pending_action(self, action):
+        self.pending_actions.append(action)
+        self.ticker = 0

@@ -24,7 +24,7 @@ class AppTestCodeIntrospection:
             ]
 
         import sys
-        if sys.pypy_objspaceclass != 'TrivialObjSpace':
+        if hasattr(sys, 'pypy_objspaceclass'): 
             testcases += [
                 (abs.func_code, {'co_name': 'abs',
                                  'co_varnames': ('val',),
@@ -54,8 +54,6 @@ class AppTestCodeIntrospection:
             import new
         except ImportError: 
             skip("could not import new module")
-        if sys.pypy_objspaceclass == 'TrivialObjSpace':
-            return   # skip
         codestr = "global c\na = 1\nb = 2\nc = a + b\n"
         ccode = compile(codestr, '<string>', 'exec')
         co = new.code(ccode.co_argcount,
@@ -120,3 +118,11 @@ class AppTestCodeIntrospection:
               ccode.co_name,
               ccode.co_firstlineno,
               ccode.co_lnotab)
+
+    def test_hash(self):
+        d1 = {}
+        exec "def f(): pass" in d1
+        d2 = {}
+        exec "def f(): pass" in d2
+        assert d1['f'].func_code == d2['f'].func_code
+        assert hash(d1['f'].func_code) == hash(d2['f'].func_code)

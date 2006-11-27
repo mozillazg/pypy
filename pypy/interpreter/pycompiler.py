@@ -78,11 +78,11 @@ class AbstractCompiler:
 # faked compiler
 
 import warnings
-import __future__
+from pypy.tool import stdlib___future__
 compiler_flags = 0
 compiler_features = {}
-for fname in __future__.all_feature_names:
-    flag = getattr(__future__, fname).compiler_flag
+for fname in stdlib___future__.all_feature_names:
+    flag = getattr(stdlib___future__, fname).compiler_flag
     compiler_flags |= flag
     compiler_features[fname] = flag
 allowed_flags = compiler_flags | PyCF_DONT_IMPLY_DEDENT
@@ -113,7 +113,7 @@ class CPythonCompiler(PyCodeCompiler):
     """Faked implementation of a compiler, using the underlying compile()."""
 
     def compile(self, source, filename, mode, flags):
-        flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
+        flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             old = self.setup_warn_explicit(warnings)
@@ -142,7 +142,7 @@ class CPythonCompiler(PyCodeCompiler):
         except TypeError, e:
             raise OperationError(space.w_TypeError, space.wrap(str(e)))
         from pypy.interpreter.pycode import PyCode
-        return PyCode(space)._from_code(c)
+        return PyCode._from_code(space, c)
     compile._annspecialcase_ = "override:cpy_compile"
 
     def _warn_explicit(self, message, category, filename, lineno,
@@ -156,7 +156,7 @@ class CPythonCompiler(PyCodeCompiler):
                 w_dict = w_mod.getdict() 
                 w_reg = space.call_method(w_dict, 'setdefault', 
                                           space.wrap("__warningregistry__"),     
-                                          space.newdict([]))
+                                          space.newdict())
                 try: 
                     space.call_method(w_mod, 'warn_explicit', 
                                       space.wrap(message), 
@@ -208,7 +208,7 @@ class PythonAstCompiler(PyCodeCompiler):
         from pyparser.pythonutil import AstBuilder, PYTHON_PARSER, TARGET_DICT
         from pypy.interpreter.pycode import PyCode
 
-        flags |= __future__.generators.compiler_flag   # always on (2.2 compat)
+        flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             builder = AstBuilder(space=space)
@@ -221,10 +221,14 @@ class PythonAstCompiler(PyCodeCompiler):
                                  e.wrap_info(space, filename))
 
         if not space.is_w(self.w_compile_hook, space.w_None):
-            w_ast_tree = space.call_function(self.w_compile_hook,
-                                             space.wrap(ast_tree),
-                                             space.wrap(encoding))
-            ast_tree = space.interp_w(Node, w_ast_tree)
+            try:
+                w_ast_tree = space.call_function(self.w_compile_hook,
+                                                 space.wrap(ast_tree),
+                                                 space.wrap(encoding))
+                ast_tree = space.interp_w(Node, w_ast_tree)
+            except OperationError:
+                self.w_compile_hook = space.w_None
+                raise
         try:
             astcompiler.misc.set_filename(filename, ast_tree)
             flag_names = get_flag_names(space, flags)
@@ -238,16 +242,13 @@ class PythonAstCompiler(PyCodeCompiler):
         except SyntaxError, e:
             raise OperationError(space.w_SyntaxError,
                                  e.wrap_info(space, filename))
-        except ValueError,e:
-            raise OperationError(space.w_ValueError,space.wrap(str(e)))
-        except TypeError,e:
-            raise
-            raise OperationError(space.w_TypeError,space.wrap(str(e)))
+        except (ValueError, TypeError), e:
+            raise OperationError(space.w_SystemError, space.wrap(str(e)))
         assert isinstance(c,PyCode)
         return c
 
 
 def install_compiler_hook(space, w_callable):
 #       if not space.get( w_callable ):
-#	    raise OperationError( space.w_TypeError( space.wrap( "must have a callable" ) )
+#           raise OperationError( space.w_TypeError( space.wrap( "must have a callable" ) )
         space.default_compiler.w_compile_hook = w_callable

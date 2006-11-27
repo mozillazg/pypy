@@ -46,7 +46,9 @@ class NodeInfo:
         self.nargs = len(self.argnames)
         self.init = []
         self.applevel_new = []
+        self.applevel_mutate = []
         self.flatten_nodes = {}
+        self.mutate_nodes = {}
         self.additional_methods = {}
         self.parent = parent
 
@@ -138,6 +140,8 @@ class NodeInfo:
         self._gen_repr(buf)
         print >> buf
         self._gen_visit(buf)
+        print >> buf
+        self._gen_mutate(buf)
         print >> buf
         self._gen_attrs(buf)
         print >> buf
@@ -293,6 +297,27 @@ class NodeInfo:
         print >> buf, "    def accept(self, visitor):"
         print >> buf, "        return visitor.visit%s(self)" % self.name
 
+    def _gen_mutate(self, buf):
+        print >> buf, "    def mutate(self, visitor):"
+        if len(self.argnames) != 0:
+            for argname in self.argnames:
+                if argname in self.mutate_nodes:
+                    for line in self.mutate_nodes[argname]:
+                        if line.strip():
+                            print >> buf, '    ' + line
+                elif self.argprops[argname] == P_NODE:
+                    print >> buf, "        self.%s = self.%s.mutate(visitor)" % (argname,argname)
+                elif self.argprops[argname] == P_NONE:
+                    print >> buf, "        if self.%s is not None:" % (argname,)
+                    print >> buf, "            self.%s = self.%s.mutate(visitor)" % (argname,argname)
+                elif self.argprops[argname] == P_NESTED:
+                    print >> buf, "        newlist = []"
+                    print >> buf, "        for n in self.%s:"%(argname)
+                    print >> buf, "            item = n.mutate(visitor)"
+                    print >> buf, "            if item is not None:"
+                    print >> buf, "                newlist.append(item)"
+                    print >> buf, "        self.%s[:] = newlist"%(argname)
+        print >> buf, "        return visitor.visit%s(self)" % self.name
 
     def _gen_insertnodes_func(self, buf):
         print >> buf, "    def descr_insert_after(space, self, node, w_added_nodes):"
@@ -305,6 +330,28 @@ class NodeInfo:
         print >> buf, "        index = self.nodes.index(node)"
         print >> buf, "        self.nodes[index:index] = added_nodes"
 
+
+    def _gen_mutate(self, buf):
+        print >> buf, "    def mutate(self, visitor):"
+        if len(self.argnames) != 0:
+            for argname in self.argnames:
+                if argname in self.mutate_nodes:
+                    for line in self.mutate_nodes[argname]:
+                        if line.strip():
+                            print >> buf, '    ' + line
+                elif self.argprops[argname] == P_NODE:
+                    print >> buf, "        self.%s = self.%s.mutate(visitor)" % (argname,argname)
+                elif self.argprops[argname] == P_NONE:
+                    print >> buf, "        if self.%s is not None:" % (argname,)
+                    print >> buf, "            self.%s = self.%s.mutate(visitor)" % (argname,argname)
+                elif self.argprops[argname] == P_NESTED:
+                    print >> buf, "        newlist = []"
+                    print >> buf, "        for n in self.%s:"%(argname)
+                    print >> buf, "            item = n.mutate(visitor)"
+                    print >> buf, "            if item is not None:"
+                    print >> buf, "                newlist.append(item)"
+                    print >> buf, "        self.%s[:] = newlist"%(argname)
+        print >> buf, "        return visitor.visit%s(self)" % self.name
 
     def _gen_fget_func(self, buf, attr, prop ):
         # FGET
@@ -360,6 +407,49 @@ class NodeInfo:
             if prop[attr] == P_NESTED and attr == 'nodes':
                 self._gen_insertnodes_func(buf)
 
+    def _gen_descr_mutate(self, buf):
+        if self.applevel_mutate:
+            print >> buf, ''.join(self.applevel_mutate)
+            return
+        print >> buf, "def descr_%s_mutate(space, w_self, w_visitor): " % self.name
+        for argname in self.argnames:
+            if self.argprops[argname] in [P_NODE, P_NONE]:
+                print >> buf, '    w_%s = space.getattr(w_self, space.wrap("%s"))' % (argname,argname)
+                if self.argprops[argname] == P_NONE:
+                    indent = '    '
+                    print >> buf, '    if not space.is_w(w_%s, space.w_None):' % (argname,)
+                else:
+                    indent = ''
+                print >> buf, indent+'    w_mutate_%s = space.getattr(w_%s, space.wrap("mutate"))' % ( argname,
+                                                                                          argname)
+                print >> buf, indent+"    w_mutate_%s_args = Arguments(space, [ w_visitor ])"% ( argname )
+                print >> buf, indent+"    w_new_%s = space.call_args(w_mutate_%s, w_mutate_%s_args)"% ( argname,
+                                                                                            argname,
+                                                                                            argname)
+                print >> buf, indent+'    space.setattr(w_self, space.wrap("%s"), w_new_%s)' % ( argname,
+                                                                                   argname)
+                print >> buf, ""
+            elif self.argprops[argname] == P_NESTED:
+                print >> buf, '    w_list = space.getattr(w_self, space.wrap("%s"))' % (argname,)
+                print >> buf, '    list_w = space.unpackiterable(w_list)'
+                print >> buf, '    newlist_w = []'
+                print >> buf, '    for w_item in list_w:'
+                print >> buf, '        w_item_mutate = space.getattr(w_item, space.wrap("mutate"))'
+                print >> buf, '        w_item_mutate_args = Arguments(space, [ w_visitor ])'
+                print >> buf, '        w_newitem = space.call_args(w_item_mutate, w_item_mutate_args)'
+                print >> buf, '        if not space.is_w(w_newitem, space.w_None):'
+                print >> buf, '            newlist_w.append(w_newitem)'
+                print >> buf, '    w_newlist = space.newlist(newlist_w)'
+                print >> buf, '    space.setattr(w_self, space.wrap("%s"), w_newlist)'%(argname)
+                
+    
+        print >> buf, '    w_visit%s = space.getattr(w_visitor, space.wrap("visit%s"))' % (self.name,
+                                                                                    self.name)
+        print >> buf, "    w_visit%s_args = Arguments(space, [ w_self ])" % self.name
+        print >> buf, "    return space.call_args(w_visit%s, w_visit%s_args)" % (self.name,
+                                                                             self.name )
+        
+
     def _gen_typedef(self, buf):
         initargs = [strip_default(arg.strip())
                     for arg in self.get_initargs().split(',') if arg]
@@ -372,16 +462,23 @@ class NodeInfo:
         print >> buf, "    w_callable = space.getattr(w_visitor, space.wrap('visit%s'))" % self.name
         print >> buf, "    args = Arguments(space, [ w_self ])"
         print >> buf, "    return space.call_args(w_callable, args)"
+
+        print >> buf, ""
+        # mutate stuff
+        self._gen_descr_mutate(buf)
+        
         print >> buf, ""
         print >> buf, "%s.typedef = TypeDef('%s', %s, " % (self.name, self.name, parent_type)
         print >> buf, "                     __new__ = interp2app(descr_%s_new, unwrap_spec=[%s])," % (self.name, ', '.join(new_unwrap_spec))
         print >> buf, "                     accept=interp2app(descr_%s_accept, unwrap_spec=[ObjSpace, W_Root, W_Root] )," % self.name
+        print >> buf, "                     mutate=interp2app(descr_%s_mutate, unwrap_spec=[ObjSpace, W_Root, W_Root] )," % self.name
         for attr in self.argnames:
             print >> buf, "                    %s=GetSetProperty(%s.fget_%s, %s.fset_%s )," % (attr,self.name,attr,self.name,attr)
             if self.argprops[attr] == P_NESTED and attr == "nodes":
                 print >> buf, "                     insert_after=interp2app(%s.descr_insert_after.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
                 print >> buf, "                     insert_before=interp2app(%s.descr_insert_before.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
         print >> buf, "                    )"
+        print >> buf, "%s.typedef.acceptable_as_base_class = False" % self.name
 
 
     def _gen_additional_methods(self, buf):
@@ -419,6 +516,8 @@ rx_init = re.compile('init\((.*)\):')
 rx_flatten_nodes = re.compile('flatten_nodes\((.*)\.(.*)\):')
 rx_additional_methods = re.compile('(\\w+)\.(\w+)\((.*?)\):')
 rx_descr_news_methods = re.compile('def\s+descr_(\\w+)_new\((.*?)\):')
+rx_descr_mutate_methods = re.compile('def\s+descr_(\\w+)_mutate\((.*?)\):')
+rx_mutate = re.compile('mutate\((.*)\.(.*)\):')
 def parse_spec(file):
     classes = {}
     cur = None
@@ -465,6 +564,17 @@ def parse_spec(file):
             flatten_expect_comment = True
             continue
 
+        mo = rx_mutate.match(line)
+        if mo:
+            kind = 'mutate'
+            # special case for getChildNodes flattening
+            name = mo.group(1)
+            attr = mo.group(2)
+            cur = classes[name]
+            _cur_ = attr
+            cur.mutate_nodes[attr] = []
+            continue
+
         mo = rx_additional_methods.match(line)
         if mo:
             kind = 'additional_method'
@@ -484,6 +594,14 @@ def parse_spec(file):
             cur.applevel_new = [mo.group(0) + '\n']
             continue
 
+        mo = rx_descr_mutate_methods.match(line)
+        if mo:
+            kind = 'applevel_mutate'
+            name = mo.group(1)
+            cur = classes[name]
+            cur.applevel_mutate = [mo.group(0) + '\n']
+            continue
+
         if kind == 'init':
             # some code for the __init__ method
             cur.init.append(line)
@@ -492,10 +610,14 @@ def parse_spec(file):
                 assert line.strip().startswith("#")
                 flatten_expect_comment=False
             cur.flatten_nodes[_cur_].append(line)
+        elif kind == 'mutate':
+            cur.mutate_nodes[_cur_].append(line)
         elif kind == 'additional_method':
             cur.additional_methods[_cur_].append(' '*4 + line)
         elif kind == 'applevel_new':
             cur.applevel_new.append(line)
+        elif kind == 'applevel_mutate':
+            cur.applevel_mutate.append(line)
             
     for node in classes.values():
         node.setup_parent(classes)
@@ -560,7 +682,7 @@ def main():
 prologue = '''
 """Python abstract syntax node definitions
 
-This file is automatically generated by Tools/compiler/astgen.py
+This file is automatically generated by astgen.py
 """
 from consts import CO_VARARGS, CO_VARKEYWORDS, OP_ASSIGN
 from pypy.interpreter.baseobjspace import Wrappable
@@ -604,6 +726,8 @@ class Node(Wrappable):
         return [] # implemented by subclasses
     def accept(self, visitor):
         raise NotImplementedError
+    def mutate(self, visitor):
+        return visitor.visitNode(self)
     def flatten(self):
         res = []
         nodes = self.getChildNodes()
@@ -635,6 +759,11 @@ def descr_node_accept( space, w_self, w_visitor ):
     args = Arguments(space, [ w_self ])
     return space.call_args( w_callable, args )
 
+def descr_node_mutate(space, w_self, w_visitor): 
+    w_visitNode = space.getattr(w_visitor, space.wrap("visitNode"))
+    w_visitNode_args = Arguments(space, [ w_self ])
+    return space.call_args(w_visitNode, w_visitNode_args)
+
 def descr_Node_new(space, w_subtype, lineno=-1):
     node = space.allocate_instance(Node, w_subtype)
     node.lineno = lineno
@@ -645,11 +774,15 @@ Node.typedef = TypeDef('ASTNode',
                        #__repr__ = interp2app(descr_node_repr, unwrap_spec=['self', ObjSpace] ),
                        getChildNodes = interp2app(Node.descr_getChildNodes, unwrap_spec=[ 'self', ObjSpace ] ),
                        accept = interp2app(descr_node_accept, unwrap_spec=[ ObjSpace, W_Root, W_Root ] ),
+                       mutate = interp2app(descr_node_mutate, unwrap_spec=[ ObjSpace, W_Root, W_Root ] ),
                        lineno = interp_attrproperty('lineno', cls=Node),
                        filename = interp_attrproperty('filename', cls=Node),
                        parent=GetSetProperty(Node.fget_parent, Node.fset_parent),
                        )
 
+Node.typedef.acceptable_as_base_class = False
+        
+Node.typedef.acceptable_as_base_class = False
         
 class EmptyNode(Node):
     def accept(self, visitor):
@@ -673,7 +806,46 @@ class Expression(Node):
 
     def accept(self, visitor):
         return visitor.visitExpression(self)
+    def mutate(self, visitor):
+        self.node = self.node.mutate(visitor)
+        return visitor.visitExpression(self)
 
+    def fget_node(space, self):
+        return space.wrap(self.node)
+    def fset_node(space, self, w_arg):
+        self.node = space.interp_w(Node, w_arg, can_be_None=False)
+
+def descr_expression_new(space, w_subtype, w_node, lineno=-1):
+    self = space.allocate_instance(Expression, w_subtype)
+    node = space.interp_w(Node, w_node, can_be_None=False)
+    self.node = node
+    self.lineno = lineno
+    return space.wrap(self)
+
+def descr_expression_accept(space, w_self, w_visitor):
+    w_callable = space.getattr(w_visitor, space.wrap("visitExpression"))
+    args = Arguments(space, [ w_self ])
+    return space.call_args(w_callable, args)
+
+def descr_expression_mutate(space, w_self, w_visitor):
+    w_node = space.getattr(w_self, space.wrap("node"))
+    w_mutate_node = space.getattr(w_node, space.wrap("mutate"))
+    w_mutate_node_args = Arguments(space, [ w_visitor ])
+    w_new_node = space.call_args(w_mutate_node, w_mutate_node_args)
+    space.setattr(w_self, space.wrap("node"), w_new_node)
+
+    w_visitExpression = space.getattr(w_visitor, space.wrap("visitExpression"))
+    w_visitExpression_args = Arguments(space, [ w_self ])
+    return space.call_args(w_visitExpression, w_visitExpression_args)
+
+Expression.typedef = TypeDef('Expression', Node.typedef,
+                     __new__ = interp2app(descr_expression_new, unwrap_spec=[ObjSpace, W_Root, W_Root, int]),
+                     accept=interp2app(descr_expression_accept, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
+                     mutate=interp2app(descr_expression_mutate, unwrap_spec=[ObjSpace, W_Root, W_Root] ),
+                     node=GetSetProperty(Expression.fget_node, Expression.fset_node ),
+                    )
+
+Expression.typedef.acceptable_as_base_class = False
 '''
 
 epilogue = '''

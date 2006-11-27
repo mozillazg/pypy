@@ -19,7 +19,7 @@ DS = Form("rA", "rS", "UIMM")
 
 X = Form("XO1")
 XS = Form("rA", "rS", "rB", "XO1", "Rc")
-XS0 = Form("rS", "rA", "rB", "XO1")
+XSO = Form("rS", "rA", "rB", "XO1")
 XD = Form("rD", "rA", "rB", "XO1")
 XO = Form("rD", "rA", "rB", "OE", "XO2", "Rc")
 XO0 = Form("rD", "rA", "OE", "XO2", "Rc")
@@ -387,8 +387,8 @@ class BasicPPCAssembler(Assembler):
     rlwimi  = MI(20, Rc=0)
     rlwimix = MI(20, Rc=1)
 
-    rlwinm  = MI(20, Rc=0)
-    rlwinmx = MI(20, Rc=1)
+    rlwinm  = MI(21, Rc=0)
+    rlwinmx = MI(21, Rc=1)
 
     rlwnm   = MB(23, Rc=0)
     rlwnmx  = MB(23, Rc=1)
@@ -405,22 +405,22 @@ class BasicPPCAssembler(Assembler):
     srw     = XS(31, XO1=536, Rc=0)
     srwx    = XS(31, XO1=536, Rc=1)
 
-    stbux   = XS0(31, XO1=247)
-    stbx    = XS0(31, XO1=215)
-    stfdux  = XS0(31, XO1=759)
-    stfdx   = XS0(31, XO1=727)
-    stfiwx  = XS0(31, XO1=983)
-    stfsux  = XS0(31, XO1=695)
-    stfsx   = XS0(31, XO1=663)
-    sthbrx  = XS0(31, XO1=918)
-    sthux   = XS0(31, XO1=439)
-    sthx    = XS0(31, XO1=407)
+    stbux   = XSO(31, XO1=247)
+    stbx    = XSO(31, XO1=215)
+    stfdux  = XSO(31, XO1=759)
+    stfdx   = XSO(31, XO1=727)
+    stfiwx  = XSO(31, XO1=983)
+    stfsux  = XSO(31, XO1=695)
+    stfsx   = XSO(31, XO1=663)
+    sthbrx  = XSO(31, XO1=918)
+    sthux   = XSO(31, XO1=439)
+    sthx    = XSO(31, XO1=407)
     stswi   = Form("rS", "rA", "NB", "XO1")(31, XO1=725)
-    stswx   = XS0(31, XO1=661)
-    stwbrx  = XS0(31, XO1=662)
+    stswx   = XSO(31, XO1=661)
+    stwbrx  = XSO(31, XO1=662)
     stwcxx  = Form("rS", "rA", "rB", "XO1", "Rc")(31, XO1=150, Rc=1)
-    stwux   = XS0(31, XO1=183)
-    stwx    = XS0(31, XO1=151)
+    stwux   = XSO(31, XO1=183)
+    stwx    = XSO(31, XO1=151)
 
     subf    = XO(31, XO2=40, OE=0, Rc=0)
     subfx   = XO(31, XO2=40, OE=0, Rc=1)
@@ -464,7 +464,7 @@ class PPCAssembler(BasicPPCAssembler):
     # awkward mnemonics:
     # mftb
     # most of the branch mnemonics...
-    
+
     # F.2 Simplified Mnemonics for Subtract Instructions
 
     def subi(self, rD, rA, value):
@@ -500,9 +500,28 @@ class PPCAssembler(BasicPPCAssembler):
     cmpw   = BA.cmp(L=0)
     cmplw  = BA.cmpl(L=0)
 
-    # what's the point?
-
     # F.4 Simplified Mnemonics for Rotate and Shift Instructions
+
+    def extlwi(self, rA, rS, n, b):
+        self.rlwinm(rA, rS, b, 0, n-1)
+
+    def extrwi(self, rA, rS, n, b):
+        self.rlwinm(rA, rS, b+n, 32-n, 31)
+
+    def inslwi(self, rA, rS, n, b):
+        self.rwlimi(rA, rS, 32-b, b, b + n -1)
+
+    def insrwi(self, rA, rS, n, b):
+        self.rwlimi(rA, rS, 32-(b+n), b, b + n -1)
+
+    def rotlwi(self, rA, rS, n):
+        self.rlwinm(rA, rS, n, 0, 31)
+
+    def rotrwi(self, rA, rS, n):
+        self.rlwinm(rA, rS, 32-n, 0, 31)
+
+    def rotlw(self, rA, rS, rB):
+        self.rlwnm(rA, rS, rB, 0, 31)
 
     def slwi(self, rA, rS, n):
         self.rlwinm(rA, rS, n, 0, 31-n)
@@ -510,8 +529,6 @@ class PPCAssembler(BasicPPCAssembler):
     def srwi(self, rA, rS, n):
         self.rlwinm(rA, rS, 32-n, n, 31)
 
-    def inslwi(self, rA, rS, n, b):
-        self.rwlimi(rA, rS, 32-b, b, b + n -1)
 
     # F.5 Simplified Mnemonics for Branch Instructions
 
@@ -699,7 +716,34 @@ class PPCAssembler(BasicPPCAssembler):
 
     # F.7 Simplified Mnemonics for Trap Instructions
 
-    # these can wait!
+    trap = BA.tw(TO=31, rA=0, rB=0)
+    twlt = BA.tw(TO=16)
+    twle = BA.tw(TO=20)
+    tweq = BA.tw(TO=4)
+    twge = BA.tw(TO=12)
+    twgt = BA.tw(TO=8)
+    twnl = BA.tw(TO=12)
+    twng = BA.tw(TO=24)
+    twllt = BA.tw(TO=2)
+    twlle = BA.tw(TO=6)
+    twlge = BA.tw(TO=5)
+    twlgt = BA.tw(TO=1)
+    twlnl = BA.tw(TO=5)
+    twlng = BA.tw(TO=6)
+
+    twlti = BA.twi(TO=16)
+    twlei = BA.twi(TO=20)
+    tweqi = BA.twi(TO=4)
+    twgei = BA.twi(TO=12)
+    twgti = BA.twi(TO=8)
+    twnli = BA.twi(TO=12)
+    twngi = BA.twi(TO=24)
+    twllti = BA.twi(TO=2)
+    twllei = BA.twi(TO=6)
+    twlgei = BA.twi(TO=5)
+    twlgti = BA.twi(TO=1)
+    twlnli = BA.twi(TO=5)
+    twlngi = BA.twi(TO=6)
 
     # F.8 Simplified Mnemonics for Special-Purpose
     #     Registers
@@ -714,8 +758,8 @@ class PPCAssembler(BasicPPCAssembler):
     mtlr  = BA.mtspr(spr=8)
     mtxer = BA.mtspr(spr=1)
 
-
     # F.9 Recommended Simplified Mnemonics
+
     nop = BA.ori(rS=0, rA=0, UIMM=0)
 
     li = BA.addi(rA=0)
@@ -734,20 +778,26 @@ def hi(w):
 
 def ha(w):
     if (w >> 15) & 1:
-        return w >> 16 + 1
+        return (w >> 16) + 1
     else:
         return w >> 16
 
 def lo(w):
     return w & 0x0000FFFF
 
+def la(w):
+    v = w & 0x0000FFFF
+    if v & 0x8000:
+        return -((v ^ 0xFFFF) + 1) # "sign extend" to 32 bits
+    return v
+
 class MyPPCAssembler(PPCAssembler):
     def load_word(self, rD, word):
-        self.addis(rD, r0, hi(word))
+        self.addis(rD, 0, hi(word))
         self.ori(rD, rD, lo(word))
     def load_from(self, rD, addr):
-        self.addis(rD, r0, ha(addr))
-        self.lwz(rD, rD, lo(addr))
+        self.addis(rD, 0, ha(addr))
+        self.lwz(rD, rD, la(addr))
 
 def b(n):
     r = []
@@ -760,7 +810,7 @@ def b(n):
 from pypy.translator.asm.ppcgen.regname import *
 
 def main():
-    
+
     a = MyPPCAssembler()
 
     a.lwz(r5, r4, 12)

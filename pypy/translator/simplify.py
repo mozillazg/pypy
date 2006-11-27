@@ -5,10 +5,12 @@
 simplify_graph() applies all simplifications defined in this file.
 """
 
+import py
 from pypy.objspace.flow.model import SpaceOperation
 from pypy.objspace.flow.model import Variable, Constant, Block, Link
 from pypy.objspace.flow.model import c_last_exception
 from pypy.objspace.flow.model import checkgraph, traverse, mkentrymap
+from pypy.rpython.lltypesystem import lloperation
 
 def get_graph(arg, translator):
     from pypy.translator.translator import graphof
@@ -36,6 +38,19 @@ def get_graph(arg, translator):
         return None
 
 
+def replace_exitswitch_by_constant(block, const):
+    assert isinstance(const, Constant)
+    assert const != c_last_exception
+    newexits = [link for link in block.exits
+                     if link.exitcase == const.value]
+    assert len(newexits) == 1
+    newexits[0].exitcase = None
+    if hasattr(newexits[0], 'llexitcase'):
+        newexits[0].llexitcase = None
+    block.exitswitch = None
+    block.recloseblock(*newexits)
+    return newexits
+
 # ____________________________________________________________
 
 def eliminate_empty_blocks(graph):
@@ -45,13 +60,14 @@ def eliminate_empty_blocks(graph):
     def visit(link):
         if isinstance(link, Link):
             while not link.target.operations:
-                if (len(link.target.exits) != 1 and
-                    link.target.exitswitch != c_last_exception):
-                    break
-                assert link.target is not link.prevblock, (
-                    "the graph contains an empty infinite loop")
                 block1 = link.target
+                if block1.exitswitch is not None:
+                    break
+                if not block1.exits:
+                    break
                 exit = block1.exits[0]
+                assert block1 is not exit.target, (
+                    "the graph contains an empty infinite loop")
                 outputargs = []
                 for v in exit.args:
                     if isinstance(v, Variable):
@@ -94,7 +110,7 @@ def transform_ovfcheck(graph):
     # this is the case if no exception handling was provided.
     # Otherwise, we have a block ending in the operation,
     # followed by a block with a single ovfcheck call.
-    from pypy.rpython.rarithmetic import ovfcheck, ovfcheck_lshift
+    from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift
     from pypy.objspace.flow.objspace import op_appendices
     from pypy.objspace.flow.objspace import implicit_exceptions
     covf = Constant(ovfcheck)
@@ -201,15 +217,17 @@ def simplify_exceptions(graph):
 
     def visit(block):
         if not (isinstance(block, Block)
-                and block.exitswitch == clastexc and len(block.exits) == 2
-                and block.exits[1].exitcase is Exception):
+                and block.exitswitch == clastexc
+                and block.exits[-1].exitcase is Exception):
             return
+        covered = [link.exitcase for link in block.exits[1:-1]]
         seen = []
-        norm, exc = block.exits
+        preserve = list(block.exits[:-1])
+        exc = block.exits[-1]
         last_exception = exc.last_exception
         last_exc_value = exc.last_exc_value
         query = exc.target
-        switches = [ (None, norm) ]
+        switches = []
         # collect the targets
         while len(query.exits) == 2:
             newrenaming = {}
@@ -221,11 +239,17 @@ def simplify_exceptions(graph):
                 break
             renaming.update(newrenaming)
             case = query.operations[0].args[-1].value
-            assert issubclass(case, Exception)
+            assert issubclass(case, py.builtin.BaseException)
             lno, lyes = query.exits
             assert lno.exitcase == False and lyes.exitcase == True
             if case not in seen:
-                switches.append( (case, lyes) )
+                is_covered = False
+                for cov in covered:
+                    if issubclass(case, cov):
+                        is_covered = True
+                        break
+                if not is_covered:
+                    switches.append( (case, lyes) )
                 seen.append(case)
             exc = lno
             query = exc.target
@@ -235,20 +259,20 @@ def simplify_exceptions(graph):
         exits = []
         for case, oldlink in switches:
             link = oldlink.copy(rename)
-            if case is not None:
-                link.last_exception = last_exception
-                link.last_exc_value = last_exc_value
-                # make the above two variables unique
-                renaming2 = {}
-                def rename2(v):
-                    return renaming2.get(v, v)
-                for v in link.getextravars():
-                    renaming2[v] = Variable(v)
-                link = link.copy(rename2)
+            assert case is not None
+            link.last_exception = last_exception
+            link.last_exc_value = last_exc_value
+            # make the above two variables unique
+            renaming2 = {}
+            def rename2(v):
+                return renaming2.get(v, v)
+            for v in link.getextravars():
+                renaming2[v] = Variable(v)
+            link = link.copy(rename2)
             link.exitcase = case
             link.prevblock = block
             exits.append(link)
-        block.exits = tuple(exits)
+        block.exits = tuple(preserve + exits)
 
     traverse(visit, graph)
 
@@ -293,31 +317,42 @@ def join_blocks(graph):
     block (but renaming variables with the appropriate arguments.)
     """
     entrymap = mkentrymap(graph)
-    
-    def visit(link):
-        if isinstance(link, Link):
-            if (len(link.prevblock.exits) == 1 and
-                len(entrymap[link.target]) == 1 and
-                link.target.exits):  # stop at the returnblock
-                renaming = {}
-                for vprev, vtarg in zip(link.args, link.target.inputargs):
-                    renaming[vtarg] = vprev
-                def rename(v):
-                    return renaming.get(v, v)
-                for op in link.target.operations:
-                    args = [rename(a) for a in op.args]
-                    op = SpaceOperation(op.opname, args, rename(op.result))
-                    link.prevblock.operations.append(op)
-                exits = []
-                for exit in link.target.exits:
-                    newexit = exit.copy(rename)
-                    exits.append(newexit)
-                link.prevblock.exitswitch = rename(link.target.exitswitch)
-                link.prevblock.recloseblock(*exits)
-                # simplify recursively the new links
-                for exit in exits:
-                    visit(exit)
-    traverse(visit, graph)
+    block = graph.startblock
+    seen = {block: True}
+    stack = list(block.exits)
+    while stack:
+        link = stack.pop()
+        if (link.prevblock.exitswitch is None and
+            len(entrymap[link.target]) == 1 and
+            link.target.exits):  # stop at the returnblock
+            assert len(link.prevblock.exits) == 1
+            renaming = {}
+            for vprev, vtarg in zip(link.args, link.target.inputargs):
+                renaming[vtarg] = vprev
+            def rename(v):
+                return renaming.get(v, v)
+            def rename_op(op):
+                args = [rename(a) for a in op.args]
+                op = SpaceOperation(op.opname, args, rename(op.result), op.offset)
+                #op = SpaceOperation(op.opname, args, rename(op.result))
+                return op
+            for op in link.target.operations:
+                link.prevblock.operations.append(rename_op(op))
+            exits = []
+            for exit in link.target.exits:
+                newexit = exit.copy(rename)
+                exits.append(newexit)
+            newexitswitch = rename(link.target.exitswitch)
+            link.prevblock.exitswitch = newexitswitch
+            link.prevblock.recloseblock(*exits)
+            if isinstance(newexitswitch, Constant) and newexitswitch != c_last_exception:
+                exits = replace_exitswitch_by_constant(link.prevblock,
+                                                       newexitswitch)
+            stack.extend(exits)
+        else:
+            if link.target not in seen:
+                stack.extend(link.target.exits)
+                seen[link.target] = True
 
 def remove_assertion_errors(graph):
     """Remove branches that go directly to raising an AssertionError,
@@ -351,16 +386,9 @@ def remove_assertion_errors(graph):
 
 # _____________________________________________________________________
 # decide whether a function has side effects
-lloperations_with_side_effects = {"setfield": True,
-                                  "setarrayitem": True,
-                                  }
 
-class HasSideEffects(Exception):
-    pass
-
-# XXX: this could even be improved:
-# if setfield and setarrayitem only occur on things that are malloced
-# in this function then the function still does not have side effects
+def op_has_side_effects(op):
+    return lloperation.LL_OPERATIONS[op.opname].sideeffects
 
 def has_no_side_effects(translator, graph, seen=None):
     #is the graph specialized? if no we can't say anything
@@ -371,29 +399,35 @@ def has_no_side_effects(translator, graph, seen=None):
         if graph.startblock not in translator.rtyper.already_seen:
             return False
     if seen is None:
-        seen = []
+        seen = {}
     elif graph in seen:
         return True
-    try:
-        def visit(block):
-            if not isinstance(block, Block):
-                return
-            for op in block.operations:
-                if op.opname in lloperations_with_side_effects:
-                    raise HasSideEffects
-                if op.opname == "direct_call":
-                    g = get_graph(op.args[0], translator)
-                    if g is None:
-                        raise HasSideEffects
-                    if not has_no_side_effects(translator, g, seen + [graph]):
-                        raise HasSideEffects
-                elif op.opname == "indirect_call":
-                    raise HasSideEffects
-        traverse(visit, graph)
-    except HasSideEffects:
-        return False
+    newseen = seen.copy()
+    newseen[graph] = True
+    for block in graph.iterblocks():
+        if block is graph.exceptblock:
+            return False     # graphs explicitly raising have side-effects
+        for op in block.operations:
+            if rec_op_has_side_effects(translator, op, newseen):
+                return False
+    return True
+
+def rec_op_has_side_effects(translator, op, seen=None):
+    if op.opname == "direct_call":
+        g = get_graph(op.args[0], translator)
+        if g is None:
+            return True
+        if not has_no_side_effects(translator, g, seen):
+            return True
+    elif op.opname == "indirect_call":
+        graphs = op.args[-1].value
+        if graphs is None:
+            return True
+        for g in graphs:
+            if not has_no_side_effects(translator, g, seen):
+                return True
     else:
-        return True
+        return op_has_side_effects(op)
 
 # ___________________________________________________________________________
 # remove operations if their result is not used and they have no side effects
@@ -417,7 +451,10 @@ for _op in '''
         pos neg nonzero abs hex oct ord invert add sub mul
         truediv floordiv div mod divmod pow lshift rshift and_ or_
         xor int float long lt le eq ne gt ge cmp coerce contains
-        iter get same_as cast_pointer getfield getarrayitem getsubstruct'''.split():
+        iter get'''.split():
+    CanRemove[_op] = True
+from pypy.rpython.lltypesystem.lloperation import enum_ops_without_sideeffects
+for _op in enum_ops_without_sideeffects():
     CanRemove[_op] = True
 del _op
 CanRemoveBuiltins = {
@@ -431,10 +468,6 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
     read_vars = {}  # set of variables really used
     variable_flow = {}  # map {Var: list-of-Vars-it-depends-on}
 
-    transport_flow = {} # map {Var: list-of-Vars-depending-on-it-through-links-or-indentity-ops}
-
-    keepalive_vars = {} # set of variables in keepalives 
-
     def canremove(op, block):
         if op.opname not in CanRemove:
             return False
@@ -447,9 +480,7 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
     for block in blocks:
         # figure out which variables are ever read
         for op in block.operations:
-            if op.opname == 'keepalive':
-                keepalive_vars[op.args[0]] = True
-            elif not canremove(op, block):   # mark the inputs as really needed
+            if not canremove(op, block):   # mark the inputs as really needed
                 for arg in op.args:
                     read_vars[arg] = True
             else:
@@ -457,8 +488,6 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
                 # on the input variables
                 deps = variable_flow.setdefault(op.result, [])
                 deps.extend(op.args)
-                if op.opname in ('cast_pointer', 'same_as'):
-                    transport_flow.setdefault(op.args[0], []).append(op.result)
 
         if isinstance(block.exitswitch, Variable):
             read_vars[block.exitswitch] = True
@@ -473,7 +502,6 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
                     for arg, targetarg in zip(link.args, link.target.inputargs):
                         deps = variable_flow.setdefault(targetarg, [])
                         deps.append(arg)
-                        transport_flow.setdefault(arg, []).append(targetarg)                        
         else:
             # return and except blocks implicitely use their input variable(s)
             for arg in block.inputargs:
@@ -496,31 +524,6 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
 
     flow_read_var_backward(read_vars)
     
-    # compute vars depending on a read-var through the transport-flow
-    read_var_aliases = {}
-    pending = []
-    for var in transport_flow:
-        if var in read_vars:
-            pending.append(var)
-            read_var_aliases[var] = True
-    for var in pending:
-        for nextvar in transport_flow.get(var, []):
-            if nextvar not in read_var_aliases:
-                read_var_aliases[nextvar] = True
-                pending.append(nextvar)
-        
-    # a keepalive var is read-var if it's an alias reached from some read-var
-    # through the transport flow
-    new_read_vars = {}
-    for var in keepalive_vars:
-        if var in read_var_aliases:
-            read_vars[var] = True
-            new_read_vars[var] = True
-
-    # flow backward the new read-vars
-    flow_read_var_backward(new_read_vars)
-    
-
     for block in blocks:
 
         # look for removable operations whose result is never used
@@ -529,9 +532,6 @@ def transform_dead_op_vars_in_blocks(blocks, translator=None):
             if op.result not in read_vars: 
                 if canremove(op, block):
                     del block.operations[i]
-                elif op.opname == 'keepalive':
-                    if op.args[0] not in read_vars:
-                        del block.operations[i]                        
                 elif op.opname == 'simple_call': 
                     # XXX we want to have a more effective and safe 
                     # way to check if this operation has side effects
@@ -675,7 +675,347 @@ def coalesce_is_true(graph):
         newtgts = has_is_true_exitpath(cand)
         if newtgts:
             candidates.append((cand, newtgts))
-            
+
+# ____________________________________________________________
+
+def detect_list_comprehension(graph):
+    """Look for the pattern:            Replace it with marker operations:
+
+                                         v0 = newlist()
+        v2 = newlist()                   v1 = hint(v0, iterable, {'maxlength'})
+        loop start                       loop start
+        ...                              ...
+        exactly one append per loop      v1.append(..)
+        and nothing else done with v2
+        ...                              ...
+        loop end                         v2 = hint(v1, {'fence'})
+    """
+    # NB. this assumes RPythonicity: we can only iterate over something
+    # that has a len(), and this len() cannot change as long as we are
+    # using the iterator.
+    from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
+    builder = DataFlowFamilyBuilder(graph)
+    variable_families = builder.get_variable_families()
+    c_append = Constant('append')
+    newlist_v = {}
+    iter_v = {}
+    append_v = []
+    loopnextblocks = []
+
+    # collect relevant operations based on the family of their result
+    for block in graph.iterblocks():
+        if (len(block.operations) == 1 and
+            block.operations[0].opname == 'next' and
+            block.exitswitch == c_last_exception and
+            len(block.exits) == 2 and
+            block.exits[1].exitcase is StopIteration and
+            block.exits[0].exitcase is None):
+            # it's a straightforward loop start block
+            loopnextblocks.append((block, block.operations[0].args[0]))
+            continue
+        for op in block.operations:
+            if op.opname == 'newlist' and not op.args:
+                vlist = variable_families.find_rep(op.result)
+                newlist_v[vlist] = block
+            if op.opname == 'iter':
+                viter = variable_families.find_rep(op.result)
+                iter_v[viter] = block
+    loops = []
+    for block, viter in loopnextblocks:
+        viterfamily = variable_families.find_rep(viter)
+        if viterfamily in iter_v:
+            # we have a next(viter) operation where viter comes from a
+            # single known iter() operation.  Check that the iter()
+            # operation is in the block just before.
+            iterblock = iter_v[viterfamily]
+            if (len(iterblock.exits) == 1 and iterblock.exitswitch is None
+                and iterblock.exits[0].target is block):
+                # yes - simple case.
+                loops.append((block, iterblock, viterfamily))
+    if not newlist_v or not loops:
+        return
+
+    # XXX works with Python 2.4 only: find calls to append encoded as
+    # getattr/simple_call pairs
+    for block in graph.iterblocks():
+        for i in range(len(block.operations)-1):
+            op = block.operations[i]
+            if op.opname == 'getattr' and op.args[1] == c_append:
+                vlist = variable_families.find_rep(op.args[0])
+                if vlist in newlist_v:
+                    op2 = block.operations[i+1]
+                    if (op2.opname == 'simple_call' and len(op2.args) == 2
+                        and op2.args[0] is op.result):
+                        append_v.append((op.args[0], op.result, block))
+    if not append_v:
+        return
+    detector = ListComprehensionDetector(graph, loops, newlist_v,
+                                         variable_families)
+    graphmutated = False
+    for location in append_v:
+        if graphmutated:
+            # new variables introduced, must restart the whole process
+            return detect_list_comprehension(graph)
+        try:
+            detector.run(*location)
+        except DetectorFailed:
+            pass
+        else:
+            graphmutated = True
+
+class DetectorFailed(Exception):
+    pass
+
+class ListComprehensionDetector(object):
+
+    def __init__(self, graph, loops, newlist_v, variable_families):
+        self.graph = graph
+        self.loops = loops
+        self.newlist_v = newlist_v
+        self.variable_families = variable_families
+        self.reachable_cache = {}
+
+    def enum_blocks_from(self, fromblock, avoid):
+        found = {avoid: True}
+        pending = [fromblock]
+        while pending:
+            block = pending.pop()
+            if block in found:
+                continue
+            yield block
+            found[block] = True
+            for exit in block.exits:
+                pending.append(exit.target)
+
+    def enum_reachable_blocks(self, fromblock, stop_at, stay_within=None):
+        if fromblock is stop_at:
+            return
+        found = {stop_at: True}
+        pending = [fromblock]
+        while pending:
+            block = pending.pop()
+            if block in found:
+                continue
+            found[block] = True
+            for exit in block.exits:
+                if stay_within is None or exit.target in stay_within:
+                    yield exit.target
+                    pending.append(exit.target)
+
+    def reachable_within(self, fromblock, toblock, avoid, stay_within):
+        if toblock is avoid:
+            return False
+        for block in self.enum_reachable_blocks(fromblock, avoid, stay_within):
+            if block is toblock:
+                return True
+        return False
+
+    def reachable(self, fromblock, toblock, avoid):
+        if toblock is avoid:
+            return False
+        try:
+            return self.reachable_cache[fromblock, toblock, avoid]
+        except KeyError:
+            pass
+        future = [fromblock]
+        for block in self.enum_reachable_blocks(fromblock, avoid):
+            self.reachable_cache[fromblock, block, avoid] = True
+            if block is toblock:
+                return True
+            future.append(block)
+        # 'toblock' is unreachable from 'fromblock', so it is also
+        # unreachable from any of the 'future' blocks
+        for block in future:
+            self.reachable_cache[block, toblock, avoid] = False
+        return False
+
+    def vlist_alive(self, block):
+        # check if 'block' is in the "cone" of blocks where
+        # the vlistfamily lives
+        try:
+            return self.vlistcone[block]
+        except KeyError:
+            result = bool(self.contains_vlist(block.inputargs))
+            self.vlistcone[block] = result
+            return result
+
+    def vlist_escapes(self, block):
+        # check if the vlist "escapes" to uncontrolled places in that block
+        try:
+            return self.escapes[block]
+        except KeyError:
+            for op in block.operations:
+                if op.result is self.vmeth:
+                    continue       # the single getattr(vlist, 'append') is ok
+                if op.opname == 'getitem':
+                    continue       # why not allow getitem(vlist, index) too
+                if self.contains_vlist(op.args):
+                    result = True
+                    break
+            else:
+                result = False
+            self.escapes[block] = result
+            return result
+
+    def contains_vlist(self, args):
+        for arg in args:
+            if self.variable_families.find_rep(arg) is self.vlistfamily:
+                return arg
+        else:
+            return None
+
+    def remove_vlist(self, args):
+        removed = 0
+        for i in range(len(args)-1, -1, -1):
+            arg = self.variable_families.find_rep(args[i])
+            if arg is self.vlistfamily:
+                del args[i]
+                removed += 1
+        assert removed == 1
+
+    def run(self, vlist, vmeth, appendblock):
+        # first check that the 'append' method object doesn't escape
+        for op in appendblock.operations:
+            if op.opname == 'simple_call' and op.args[0] is vmeth:
+                pass
+            elif vmeth in op.args:
+                raise DetectorFailed      # used in another operation
+        for link in appendblock.exits:
+            if vmeth in link.args:
+                raise DetectorFailed      # escapes to a next block
+
+        self.vmeth = vmeth
+        self.vlistfamily = self.variable_families.find_rep(vlist)
+        newlistblock = self.newlist_v[self.vlistfamily]
+        self.vlistcone = {newlistblock: True}
+        self.escapes = {self.graph.returnblock: True,
+                        self.graph.exceptblock: True}
+
+        # in which loop are we?
+        for loopnextblock, iterblock, viterfamily in self.loops:
+            # check that the vlist is alive across the loop head block,
+            # which ensures that we have a whole loop where the vlist
+            # doesn't change
+            if not self.vlist_alive(loopnextblock):
+                continue      # no - unrelated loop
+
+            # check that we cannot go from 'newlist' to 'append' without
+            # going through the 'iter' of our loop (and the following 'next').
+            # This ensures that the lifetime of vlist is cleanly divided in
+            # "before" and "after" the loop...
+            if self.reachable(newlistblock, appendblock, avoid=iterblock):
+                continue
+
+            # ... with the possible exception of links from the loop
+            # body jumping back to the loop prologue, between 'newlist' and
+            # 'iter', which we must forbid too:
+            if self.reachable(loopnextblock, iterblock, avoid=newlistblock):
+                continue
+
+            # there must not be a larger number of calls to 'append' than
+            # the number of elements that 'next' returns, so we must ensure
+            # that we cannot go from 'append' to 'append' again without
+            # passing 'next'...
+            if self.reachable(appendblock, appendblock, avoid=loopnextblock):
+                continue
+
+            # ... and when the iterator is exhausted, we should no longer
+            # reach 'append' at all.
+            assert loopnextblock.exits[1].exitcase is StopIteration
+            stopblock = loopnextblock.exits[1].target
+            if self.reachable(stopblock, appendblock, avoid=newlistblock):
+                continue
+
+            # now explicitly find the "loop body" blocks: they are the ones
+            # from which we can reach 'append' without going through 'iter'.
+            # (XXX inefficient)
+            loopbody = {}
+            for block in self.graph.iterblocks():
+                if (self.vlist_alive(block) and
+                    self.reachable(block, appendblock, iterblock)):
+                    loopbody[block] = True
+
+            # if the 'append' is actually after a 'break' or on a path that
+            # can only end up in a 'break', then it won't be recorded as part
+            # of the loop body at all.  This is a strange case where we have
+            # basically proved that the list will be of length 1...  too
+            # uncommon to worry about, I suspect
+            if appendblock not in loopbody:
+                continue
+
+            # This candidate loop is acceptable if the list is not escaping
+            # too early, i.e. in the loop header or in the loop body.
+            loopheader = list(self.enum_blocks_from(newlistblock,
+                                                    avoid=loopnextblock))
+            escapes = False
+            for block in loopheader + loopbody.keys():
+                assert self.vlist_alive(block)
+                if self.vlist_escapes(block):
+                    escapes = True
+                    break
+
+            if not escapes:
+                break      # accept this loop!
+
+        else:
+            raise DetectorFailed      # no suitable loop
+
+        # Found a suitable loop, let's patch the graph:
+        assert iterblock not in loopbody
+        assert loopnextblock in loopbody
+        assert stopblock not in loopbody
+
+        # at StopIteration, the new list is exactly of the same length as
+        # the one we iterate over if it's not possible to skip the appendblock
+        # in the body:
+        exactlength = not self.reachable_within(loopnextblock, loopnextblock,
+                                                avoid = appendblock,
+                                                stay_within = loopbody)
+
+        # - add a hint(vlist, iterable, {'maxlength'}) in the iterblock,
+        #   where we can compute the known maximum length
+        link = iterblock.exits[0]
+        vlist = self.contains_vlist(link.args)
+        assert vlist
+        for op in iterblock.operations:
+            res = self.variable_families.find_rep(op.result)
+            if res is viterfamily:
+                break
+        else:
+            raise AssertionError("lost 'iter' operation")
+        vlength = Variable('maxlength')
+        vlist2 = Variable(vlist)
+        chint = Constant({'maxlength': True})
+        iterblock.operations += [
+            SpaceOperation('hint', [vlist, op.args[0], chint], vlist2)]
+        link.args = list(link.args)
+        for i in range(len(link.args)):
+            if link.args[i] is vlist:
+                link.args[i] = vlist2
+
+        # - wherever the list exits the loop body, add a 'hint({fence})'
+        from pypy.translator.unsimplify import insert_empty_block
+        for block in loopbody:
+            for link in block.exits:
+                if link.target not in loopbody:
+                    vlist = self.contains_vlist(link.args)
+                    if vlist is None:
+                        continue  # list not passed along this link anyway
+                    hints = {'fence': True}
+                    if (exactlength and block is loopnextblock and
+                        link.target is stopblock):
+                        hints['exactlength'] = True
+                    chints = Constant(hints)
+                    newblock = insert_empty_block(None, link)
+                    index = link.args.index(vlist)
+                    vlist2 = newblock.inputargs[index]
+                    vlist3 = Variable(vlist2)
+                    newblock.inputargs[index] = vlist3
+                    newblock.operations.append(
+                        SpaceOperation('hint', [vlist3, chints], vlist2))
+        # done!
+
+
 # ____ all passes & simplify_graph
 
 all_passes = [
@@ -699,3 +1039,10 @@ def simplify_graph(graph, passes=True): # can take a list of passes to apply, Tr
         pass_(graph)
     checkgraph(graph)
 
+def cleanup_graph(graph):
+    checkgraph(graph)
+    eliminate_empty_blocks(graph)
+    join_blocks(graph)
+    remove_identical_vars(graph)
+    checkgraph(graph)    
+    

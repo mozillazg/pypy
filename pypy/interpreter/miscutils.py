@@ -4,7 +4,7 @@ Miscellaneous utilities.
 
 import types
 
-from pypy.rpython.rarithmetic import r_uint
+from pypy.rlib.rarithmetic import r_uint
 
 class RootStack:
     pass
@@ -33,6 +33,10 @@ class Stack(RootStack):
     def pop(self):
         return self.items.pop()
 
+    def drop(self, n):
+        if n > 0:
+            del self.items[-n:]
+
     def top(self, position=0):
         """'position' is 0 for the top of the stack, 1 for the item below,
         and so on.  It must not be negative."""
@@ -41,6 +45,15 @@ class Stack(RootStack):
         if position >= len(self.items):
             raise IndexError, 'not enough entries in stack'
         return self.items[~position]
+
+    def set_top(self, value, position=0):
+        """'position' is 0 for the top of the stack, 1 for the item below,
+        and so on.  It must not be negative."""
+        if position < 0:
+            raise ValueError, 'negative stack position'
+        if position >= len(self.items):
+            raise IndexError, 'not enough entries in stack'
+        self.items[~position] = value
 
     def depth(self):
         return len(self.items)
@@ -84,9 +97,19 @@ class FixedStack(RootStack):
         self.ptr = ptr
         return ret
 
+    def drop(self, n):
+        while n > 0:
+            n -= 1
+            self.ptr -= 1
+            self.items[self.ptr] = None
+
     def top(self, position=0):
         # for a fixed stack, we assume correct indices
         return self.items[self.ptr + ~position]
+
+    def set_top(self, value, position=0):
+        # for a fixed stack, we assume correct indices
+        self.items[self.ptr + ~position] = value
 
     def depth(self):
         return self.ptr
@@ -142,9 +165,31 @@ class ThreadLocals:
     def setvalue(self, value):
         self._value = value
 
-    def yield_thread(self):
-        """Called from time to time between the interpretation of bytecodes.
-        Hook for threading models that require it."""
+    def getmainthreadvalue(self):
+        return self._value
 
     def getGIL(self):
         return None    # XXX temporary hack!
+
+
+class Action(object):
+    """Abstract base class for actions that must be performed regularly,
+    every Nth bytecode (as selected by sys.setcheckinterval())."""
+
+    # set repeat to True for actions that must be kept around and
+    # re-performed regularly
+    repeat = False
+
+    def perform(self):
+        """To be overridden."""
+
+    def perform_actions(actionlist):
+        i = 0
+        while i < len(actionlist):
+            a = actionlist[i]
+            if a.repeat:
+                i += 1     # keep action
+            else:
+                del actionlist[i]
+            a.perform()
+    perform_actions = staticmethod(perform_actions)

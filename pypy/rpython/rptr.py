@@ -2,7 +2,7 @@ from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem.lltype import \
-     Ptr, ContainerType, Void, Signed, Bool, FuncType, typeOf
+     Ptr, ContainerType, Void, Signed, Bool, FuncType, typeOf, FixedSizeArray
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr
 
@@ -47,9 +47,13 @@ class PtrRepr(Repr):
         hop.genop('setfield', vlist)
 
     def rtype_len(self, hop):
-        vlist = hop.inputargs(self)
-        return hop.genop('getarraysize', vlist,
-                         resulttype = hop.r_result.lowleveltype)
+        ARRAY = hop.args_r[0].lowleveltype.TO
+        if isinstance(ARRAY, FixedSizeArray):
+            return hop.inputconst(Signed, ARRAY.length)
+        else:
+            vlist = hop.inputargs(self)
+            return hop.genop('getarraysize', vlist,
+                             resulttype = hop.r_result.lowleveltype)
 
     def rtype_is_true(self, hop):
         vlist = hop.inputargs(self)
@@ -59,6 +63,11 @@ class PtrRepr(Repr):
         if not isinstance(self.lowleveltype.TO, FuncType):
             raise TyperError("calling a non-function %r", self.lowleveltype.TO)
         vlist = hop.inputargs(*hop.args_r)
+        nexpected = len(self.lowleveltype.TO.ARGS)
+        nactual = len(vlist)-1
+        if nactual != nexpected: 
+            raise TyperError("argcount mismatch:  expected %d got %d" %
+                            (nexpected, nactual))
         if isinstance(vlist[0], flowmodel.Constant):
             if hasattr(vlist[0].value, 'graph'):
                 hop.llops.record_extra_call(vlist[0].value.graph)
@@ -70,6 +79,13 @@ class PtrRepr(Repr):
         return hop.genop(opname, vlist,
                          resulttype = self.lowleveltype.TO.RESULT)
 
+    def rtype_call_args(self, hop):
+        from pypy.rpython.rbuiltin import call_args_expand
+        hop, _ = call_args_expand(hop, takes_kwds=False)
+        hop.swap_fst_snd_args()
+        hop.r_s_popfirstarg()
+        return self.rtype_simple_call(hop)
+        
 
 class __extend__(pairtype(PtrRepr, IntegerRepr)):
 
@@ -145,16 +161,16 @@ class __extend__(annmodel.SomeLLADTMeth):
 class LLADTMethRepr(Repr):
 
     def __init__(self, adtmeth):
-        self.adtmeth = adtmeth
+        self.func = adtmeth.func
         self.lowleveltype = adtmeth.ll_ptrtype
 
     def rtype_simple_call(self, hop):
         hop2 = hop.copy()
-        func = self.adtmeth.func
+        func = self.func
         s_func = hop.rtyper.annotator.bookkeeper.immutablevalue(func)
         v_ptr = hop2.args_v[0]
         hop2.r_s_popfirstarg()
-        hop2.v_s_insertfirstarg(v_ptr, annmodel.SomePtr(self.adtmeth.ll_ptrtype))
+        hop2.v_s_insertfirstarg(v_ptr, annmodel.SomePtr(self.lowleveltype))
         hop2.v_s_insertfirstarg(flowmodel.Constant(func), s_func)
         return hop2.dispatch()
 

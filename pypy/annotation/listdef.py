@@ -1,11 +1,16 @@
-from pypy.annotation.model import SomeObject, SomeImpossibleValue
+from pypy.annotation.model import SomeObject, s_ImpossibleValue
+from pypy.annotation.model import SomeList, SomeString
 from pypy.annotation.model import unionof, TLS, UnionError, isdegenerated
 
+
+class TooLateForChange(Exception):
+    pass
 
 class ListItem:
     mutated = False    # True for lists mutated after creation
     resized = False    # True for lists resized after creation
     range_step = None  # the step -- only for lists only created by a range()
+    dont_change_any_more = False   # set to True when too late for changes
 
     # what to do if range_step is different in merge.
     # - if one is a list (range_step is None), unify to a list.
@@ -21,16 +26,47 @@ class ListItem:
         self.bookkeeper = bookkeeper
         self.itemof = {}  # set of all ListDefs using this ListItem
         self.read_locations = {}
+        if bookkeeper is None:
+            self.dont_change_any_more = True
+
+    def mutate(self):
+        if not self.mutated:
+            if self.dont_change_any_more:
+                raise TooLateForChange
+            self.mutated = True
+
+    def resize(self):
+        if not self.resized:
+            if self.dont_change_any_more:
+                raise TooLateForChange
+            self.resized = True
+
+    def setrangestep(self, step):
+        if step != self.range_step:
+            if self.dont_change_any_more:
+                raise TooLateForChange
+            self.range_step = step
 
     def merge(self, other):
         if self is not other:
             if getattr(TLS, 'no_side_effects_in_union', 0):
                 raise UnionError("merging list/dict items")
-            self.mutated |= other.mutated
-            self.resized |= other.resized
+
+            if other.dont_change_any_more:
+                if self.dont_change_any_more:
+                    raise TooLateForChange
+                else:
+                    # lists using 'other' don't expect it to change any more,
+                    # so we try merging into 'other', which will give
+                    # TooLateForChange if it actually tries to make
+                    # things more general
+                    self, other = other, self
+
+            if other.mutated: self.mutate()
+            if other.resized: self.resize()
             if other.range_step != self.range_step:
-                self.range_step = self._step_map[type(self.range_step),
-                                                 type(other.range_step)]
+                self.setrangestep(self._step_map[type(self.range_step),
+                                                 type(other.range_step)])
             self.itemof.update(other.itemof)
             read_locations = self.read_locations.copy()
             other_read_locations = other.read_locations.copy()
@@ -39,9 +75,14 @@ class ListItem:
             s_value = self.s_value
             s_other_value = other.s_value
             s_new_value = unionof(s_value, s_other_value)
-            if isdegenerated(s_new_value) and self.bookkeeper:
-                self.bookkeeper.ondegenerated(self, s_new_value)
+            if isdegenerated(s_new_value):
+                if self.bookkeeper:
+                    self.bookkeeper.ondegenerated(self, s_new_value)
+                elif other.bookkeeper:
+                    other.bookkeeper.ondegenerated(other, s_new_value)
             if s_new_value != s_value:
+                if self.dont_change_any_more:
+                    raise TooLateForChange
                 self.s_value = s_new_value
                 # reflow from reading points
                 for position_key in read_locations:
@@ -49,7 +90,7 @@ class ListItem:
             if s_new_value != s_other_value:
                 # reflow from reading points
                 for position_key in other_read_locations:
-                    self.bookkeeper.annotator.reflowfromposition(position_key) 
+                    other.bookkeeper.annotator.reflowfromposition(position_key)
 
     def patch(self):
         for listdef in self.itemof:
@@ -61,6 +102,8 @@ class ListItem:
             self.bookkeeper.ondegenerated(self, s_new_value)        
         updated = s_new_value != self.s_value
         if updated:
+            if self.dont_change_any_more:
+                raise TooLateForChange
             self.s_value = s_new_value
             # reflow from all reading points
             for position_key in self.read_locations:
@@ -73,8 +116,11 @@ class ListDef:
     list have to be.  Every list creation makes a new ListDef, and the union
     of two lists merges the ListItems that each ListDef stores."""
 
-    def __init__(self, bookkeeper, s_item=SomeImpossibleValue()):
+    def __init__(self, bookkeeper, s_item=s_ImpossibleValue,
+                 mutated=False, resized=False):
         self.listitem = ListItem(bookkeeper, s_item)
+        self.listitem.mutated = mutated | resized
+        self.listitem.resized = resized
         self.listitem.itemof[self] = True
         self.bookkeeper = bookkeeper
 
@@ -124,14 +170,18 @@ class ListDef:
         self.listitem.generalize(s_value)
 
     def __repr__(self):
-        return '<[%r]>' % (self.listitem.s_value,)
+        return '<[%r]%s%s>' % (self.listitem.s_value,
+                               self.listitem.mutated and 'm' or '',
+                               self.listitem.resized and 'r' or '')
 
     def mutate(self):
-        self.listitem.mutated = True
+        self.listitem.mutate()
 
     def resize(self):
-        self.listitem.mutated = True
-        self.listitem.resized = True
+        self.listitem.mutate()
+        self.listitem.resize()
 
 
 MOST_GENERAL_LISTDEF = ListDef(None, SomeObject())
+
+s_list_of_strings = SomeList(ListDef(None, SomeString(), resized = True))

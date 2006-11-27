@@ -1,13 +1,12 @@
 from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.lltype import \
-     Signed, Unsigned, Bool, Float, Void
+     Signed, Unsigned, Bool, Float, Void, pyobjectptr
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import FloatRepr
-from pypy.rpython.rmodel import IntegerRepr, BoolRepr, StringRepr
+from pypy.rpython.rmodel import IntegerRepr, BoolRepr
+from pypy.rpython.rstr import AbstractStringRepr
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
-from pypy.rpython.rstr import string_repr
-from pypy.rpython import rstr
 from pypy.rpython.rmodel import log
 
 import math
@@ -41,13 +40,16 @@ class __extend__(pairtype(FloatRepr, FloatRepr)):
 
     rtype_inplace_mul = rtype_mul
 
-    def rtype_div(_, hop):
-        # turn 'div' on floats into 'truediv'
+    def rtype_truediv(_, hop):
         return _rtype_template(hop, 'truediv')
 
-    rtype_inplace_div     = rtype_div
-    rtype_truediv         = rtype_div
-    rtype_inplace_truediv = rtype_div
+    rtype_inplace_truediv = rtype_truediv
+
+    # turn 'div' on floats into 'truediv'
+    rtype_div         = rtype_truediv
+    rtype_inplace_div = rtype_inplace_truediv
+
+    # 'floordiv' on floats not supported in RPython
 
     def rtype_pow(_, hop):
         s_float3 = hop.args_s[2]
@@ -82,8 +84,9 @@ class __extend__(pairtype(FloatRepr, FloatRepr)):
     def rtype_ge(_, hop):
         return _rtype_compare_template(hop, 'ge')
 
-class __extend__(pairtype(StringRepr, FloatRepr)):
+class __extend__(pairtype(AbstractStringRepr, FloatRepr)):
     def rtype_mod(_, hop):
+        rstr = hop.rtyper.type_system.rstr
         return rstr.do_stringformat(hop, [(hop.args_v[1], hop.args_r[1])])
 
 #Helpers FloatRepr,FloatRepr
@@ -133,15 +136,12 @@ class __extend__(FloatRepr):
 
     rtype_float = rtype_pos
 
+    # version picked by specialisation based on which
+    # type system rtyping is using, from <type_system>.ll_str module
     def ll_str(self, f):
-        from pypy.rpython.module.ll_strtod import ll_strtod_formatd
-        return ll_strtod_formatd(percent_f, f)
+        pass
+    ll_str._annspecialcase_ = "specialize:ts('ll_str.ll_float_str')"
 
-    def rtype_hash(_, hop):
-        v_flt, = hop.inputargs(float_repr)
-        return hop.gendirectcall(ll_hash_float, v_flt)
-
-percent_f = string_repr.convert_const("%f")
 
 TAKE_NEXT = float(2**31)
 
@@ -199,12 +199,14 @@ class __extend__(pairtype(PyObjRepr, FloatRepr)):
     def convert_from_to((r_from, r_to), v, llops):
         if r_to.lowleveltype == Float:
             return llops.gencapicall('PyFloat_AsDouble', [v],
-                                     resulttype=Float)
+                                     resulttype=Float,
+                                   _callable=lambda pyo: float(pyo._obj.value))
         return NotImplemented
 
 class __extend__(pairtype(FloatRepr, PyObjRepr)):
     def convert_from_to((r_from, r_to), v, llops):
         if r_from.lowleveltype == Float:
             return llops.gencapicall('PyFloat_FromDouble', [v],
-                                     resulttype=pyobj_repr)
+                                     resulttype=pyobj_repr,
+                                     _callable=lambda x: pyobjectptr(x))
         return NotImplemented

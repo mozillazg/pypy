@@ -2,8 +2,21 @@
 
 MAXUNICODE = 0x10FFFF     # the value of sys.maxunicode of wide Python builds
 
+class Fraction:
+    def __init__(self, numerator, denominator):
+        self.numerator = numerator
+        self.denominator = denominator
+
+    def __repr__(self):
+        return '%r / %r' % (self.numerator, self.denominator)
+
+    def __str__(self):
+        return repr(self)
+
 class Unicodechar:
-    def __init__(self, data):
+    def __init__(self, data=None):
+        if data is None:
+            return
         if not data[1] or data[1][0] == '<' and data[1][-1] == '>':
             self.name = None
         else:
@@ -39,7 +52,7 @@ class Unicodechar:
         if data[8]:
             try:
                 numerator, denomenator = data[8].split('/')
-                self.numeric = float(numerator) / float(denomenator)
+                self.numeric = Fraction(float(numerator), float(denomenator))
             except ValueError:
                 self.numeric = float(data[8])
         self.mirrored = (data[9] == 'Y')
@@ -53,7 +66,11 @@ class Unicodechar:
         if data[14]:
             self.title = int(data[14], 16)
         
-
+    def copy(self):
+        uc = Unicodechar()
+        uc.__dict__.update(self.__dict__)
+        return uc
+        
 def get_compat_decomposition(table, code):
     if not table[code].decomposition:
         return [code]
@@ -74,7 +91,8 @@ def get_canonical_decomposition(table, code):
         table[code].canonical_decomp = result
     return table[code].canonical_decomp
 
-def read_unicodedata(unicodedata_file, exclusions_file, east_asian_width_file):
+def read_unicodedata(unicodedata_file, exclusions_file, east_asian_width_file,
+                     unihan_file=None):
     rangeFirst = {}
     rangeLast = {}
     table = [None] * (MAXUNICODE + 1)
@@ -140,12 +158,38 @@ def read_unicodedata(unicodedata_file, exclusions_file, east_asian_width_file):
         if table[code] is None:
             table[code] = defaultChar
             
+    extra_numeric = read_unihan(unihan_file)
+    for code, value in extra_numeric.iteritems():
+        uc = table[code].copy()
+        uc.numeric = value
+        table[code] = uc
+        
     # Compute full decompositions.
     for code in range(len(table)):
         get_canonical_decomposition(table, code)
         get_compat_decomposition(table, code)
 
     return table
+
+def read_unihan(unihan_file):
+    if unihan_file is None:
+        return {}
+    extra_numeric = {}
+    for line in unihan_file:
+        if not line.startswith('U+'):
+            continue
+        code, tag, value = line.split(None, 3)[:3]
+        if tag not in ('kAccountingNumeric', 'kPrimaryNumeric', 'kOtherNumeric'):
+            continue
+        value = value.strip().replace(',', '')
+        if '/' in value:
+            numerator, denomenator = value.split('/')
+            numeric = Fraction(float(numerator), float(denomenator))
+        else:
+            numeric = float(value)
+        code = int(code[2:], 16)
+        extra_numeric[code] = numeric
+    return extra_numeric
 
 def writeDict(outfile, name, dictionary):
     print >> outfile, '%s = {' % name
@@ -479,13 +523,17 @@ if __name__ == '__main__':
         if opt in ('-v', '--version'):
             unidata_version = val
 
-    if len(args) != 3:
-        raise RuntimeError('Usage: %s [-o outfile] [-v version] UnicodeDataFile CompositionExclutionsFile EastAsianWidthFile')
+    if len(args) < 3 or len(args) > 4:
+        raise RuntimeError('Usage: %s [-o outfile] [-v version] UnicodeDataFile CompositionExclutionsFile EastAsianWidthFile [UnihanFile]')
     
     infilename = args[0]
     infile = open(infilename, 'r')
     exclusions = open(args[1])
     east_asian_width = file(args[2])
+    if len(args) > 3:
+        unihan = file(args[3])
+    else:
+        unihan = None
     if unidata_version is None:
         m = re.search(r'-([0-9]+\.)+', infilename)
         if m:
@@ -494,7 +542,7 @@ if __name__ == '__main__':
     if unidata_version is None:
         raise ValueError('No version specified')
 
-    table = read_unicodedata(infile, exclusions, east_asian_width)
+    table = read_unicodedata(infile, exclusions, east_asian_width, unihan)
     print >> outfile, '# UNICODE CHARACTER DATABASE'
     print >> outfile, '# This file was generated with the command:'
     print >> outfile, '#    ', ' '.join(sys.argv)

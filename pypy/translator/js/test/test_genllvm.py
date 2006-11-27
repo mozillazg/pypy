@@ -3,19 +3,14 @@ from __future__ import division
 import sys
 import py
 
-from pypy.rpython.rarithmetic import r_uint
+from pypy.rlib.rarithmetic import r_uint
 from pypy.translator.js.test.runtest import compile_function
 
-def test_return1():
-    def simple1():
-        return 1
-    f = compile_function(simple1, [])
-    assert f() == 1
-
 def test_simple_function_pointer(): 
-    def f1(x): 
+    #py.test.skip("ootypesystem problems with lists")
+    def f1(x):
         return x + 1
-    def f2(x): 
+    def f2(x):
         return x + 2
 
     l = [f1, f2]
@@ -27,7 +22,14 @@ def test_simple_function_pointer():
     assert f(0) == pointersimple(0)
     assert f(1) == pointersimple(1)
 
+def test_return1():
+    def simple1():
+        return 1
+    f = compile_function(simple1, [])
+    assert f() == 1
+
 def test_invoke_function_pointer(): 
+    #py.test.skip("ootypesystem problems with lists")
     def f1(x): 
         return x + 1
     def f2(x): 
@@ -66,11 +68,8 @@ def test_int_ops():
         x += i >= i
         x += i > i
         x += x % i
-        x += x ** 0
-        x += x ** 1
-        x += x ** 2
         x += i + 1 * i // i - 1
-        return x
+        return int(x+0.0001)
     f = compile_function(ops, [int])
     assert f(1) == ops(1)
     assert f(2) == ops(2)
@@ -85,11 +84,8 @@ def test_uint_ops():
         x += i >= i
         x += i > i
         x += x % i
-        x += x ** 0
-        x += x ** 1
-        x += x ** 2
         x += i + 1 * i // i - 1
-        return x
+        return int(x+0.0001)
     f = compile_function(ops, [r_uint])
     assert f(1) == ops(1)
     assert f(2) == ops(2)
@@ -103,9 +99,6 @@ def test_float_ops():
         x += flt != flt
         x += flt >= flt
         x += flt > flt
-        x += x ** 0
-        x += x ** 1
-        x += x ** 2
         x += int(flt + 1 * flt / flt - 1)
         return x 
     f = compile_function(ops, [float])
@@ -170,6 +163,7 @@ def test_function_call():
     assert f() == 4
 
 def test_recursive_call():
+    py.test.skip("Recursion support is very limited")
     def call_ackermann(n, m):
         return ackermann(n, m)
     def ackermann(n, m):
@@ -210,6 +204,7 @@ def test_prebuilt_tuples():
     assert f(1) == 2
 
 def test_pbc_fns():
+    #py.test.skip("Indirect call not implemented")
     def f2(x):
          return x+1
     def f3(x):
@@ -225,15 +220,17 @@ def test_pbc_fns():
     assert f(0) == 5
 
 def test_simple_chars():    #XXX test this also without optimize_call(...)
-     def char_constant2(s):
-         s = s + s + s
-         return len(s + '.')
-     def char_constant():
-         return char_constant2("kk")    
-     f = compile_function(char_constant, [])
-     assert f() == 7
+    #py.test.skip("Method mapping not implemented")
+    def char_constant2(s):
+        s = s + s + s
+        return len(s + '.')
+    def char_constant():
+        return char_constant2("kk")    
+    f = compile_function(char_constant, [])
+    assert f() == 7
 
-def test_list_getitem(): 
+def test_list_getitem():
+    #py.test.skip("List suuport")
     def list_getitem(i): 
         l = [1,2,i+1]
         return l[i]
@@ -243,6 +240,7 @@ def test_list_getitem():
     assert f(2) == 3
 
 def test_list_list_getitem():
+    #py.test.skip("List support")
     def list_list_getitem(): 
         l = [[1]]
         return l[0][0]
@@ -250,6 +248,7 @@ def test_list_list_getitem():
     assert f() == 1
 
 def test_list_getitem_pbc():
+    #py.test.skip("pbc support")
     l = [1,2]
     def list_getitem_pbc(i): 
         return l[i]
@@ -257,7 +256,8 @@ def test_list_getitem_pbc():
     assert f(0) == 1
     assert f(1) == 2
     
-def DONTtest_list_list_getitem_pbc(): #issue with incorrect arrayinstance order
+def test_list_list_getitem_pbc():
+    #py.test.skip("pbc support")
     l = [[0, 1], [0, 1]]
     def list_list_getitem_pbc(i): 
         return l[i][i]
@@ -266,6 +266,7 @@ def DONTtest_list_list_getitem_pbc(): #issue with incorrect arrayinstance order
     assert f(1) == 1
 
 def test_list_basic_ops():
+    #py.test.skip("List support")
     def list_basic_ops(i, j): 
         l = [1,2,3]
         l.insert(0, 42)
@@ -283,12 +284,14 @@ def test_list_basic_ops():
             assert f(i,j) == list_basic_ops(i,j)
 
 def test_string_simple():
+    #py.test.skip("ord semantics")
     def string_simple(i): 
         return ord(str(i))
     f = compile_function(string_simple, [int])
-    assert f(0) 
+    assert f(3) == string_simple(3)
     
-def DONTtest_string_simple_ops():   #issue with casts
+def test_string_simple_ops():
+    #py.test.skip("ord semantics")
     def string_simple_ops(i): 
         res = 0
         s = str(i)
@@ -300,28 +303,28 @@ def DONTtest_string_simple_ops():   #issue with casts
         return res
     f = compile_function(string_simple_ops, [int])
     assert f(5) == ord('5') + 2
-        
-def DONTtest_string_getitem1(): #issue with cast sbyte to ubyte
+
+def test_string_getitem1():
     l = "Hello, World"
     def string_getitem1(i): 
-        return ord(l[i])
+        return l[i]
     f = compile_function(string_getitem1, [int])
-    assert f(0) == ord("H")
+    assert f(0) == "H"
 
-def DONTtest_string_getitem2(): #issue with cast sbyte to ubyte
+def test_string_getitem2():
     def string_test(i): 
         l = "Hello, World"
-        return ord(l[i])
+        return l[i]
     f = compile_function(string_test, [int])
-    assert f(0) == ord("H")
+    assert f(0) == "H"
 
-def DONTtest_list_of_string():  #issue with casts
+def test_list_of_string():
     a = ["hello", "world"]
     def string_simple(i, j, k, l):
         s = a[i][j] + a[k][l]
-        return ord(s[0]) + ord(s[1])        
+        return s[0] + s[1]
     f = compile_function(string_simple, [int, int, int, int])
-    assert f(0, 0, 1, 4) == ord("h") + ord("d")
+    assert f(0, 0, 1, 4) == 'hd'
 
 def test_attrs_class():
     class MyBase:
@@ -334,6 +337,7 @@ def test_attrs_class():
     assert f(4) == 16
 
 def test_attrs_class_pbc():
+#    py.test.skip("pbc support")
     class MyBase:
         pass
     obj = MyBase()
@@ -354,6 +358,7 @@ def test_method_call():
     assert f() == 4
 
 def test_dict_creation():
+    #py.test.skip("Dict support not implemented")
     d = {'hello' : 23,
          'world' : 21}
     l = ["hello", "world"]
@@ -363,7 +368,9 @@ def test_dict_creation():
     f = compile_function(createdict, [int, int])
     assert f(0,1) == createdict(0,1)
 
-def DONTtest_closure():     #issue empty malloc?
+def test_closure():
+    #py.test.skip("issue 'null' for Ptr's? or recurse into Ptr.TO?) see: opwriter.py")
+    py.test.skip("closure support")
     class A:
         def set(self, x):
             self.x = x
@@ -404,3 +411,37 @@ def DONTtest_closure():     #issue empty malloc?
     f = compile_function(testf, [int])
     assert f(1) == testf(1)
     assert f(2) == testf(2)
+
+def test_cast_str():
+    def cast_str(x):
+        return str(x)+str(x)+'px'
+    
+    f = compile_function(cast_str, [int])
+    assert f(1) == cast_str(1)
+    assert f(10) == cast_str(10)
+
+class A(object):
+    pass
+
+def some_fun():
+    return 3
+
+def test_me():
+    def some_test():
+        a = A()
+        a.some_fun = some_fun
+        return a.some_fun()
+    
+    fn = compile_function(some_test, [])
+    assert fn() == some_test()
+
+def test_symbolic():
+    from pypy.rlib.objectmodel import malloc_zero_filled
+    
+    def symbolic1():
+        if malloc_zero_filled:
+            return 3
+        return 2
+    
+    fn = compile_function(symbolic1, [])
+    assert fn() == 2

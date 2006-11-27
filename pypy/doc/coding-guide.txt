@@ -8,7 +8,11 @@ PyPy - Coding Guide
 
 This document describes coding requirements and conventions for
 working with the PyPy code base.  Please read it carefully and
-ask back any questions you might have.
+ask back any questions you might have. The document does not talk
+very much about coding style issues. We mostly follow `PEP 8`_ though.
+If in doubt, follow the style that is already present in the code base.
+
+.. _`PEP 8`: http://www.python.org/dev/peps/pep-0008/
 
 .. _`RPython`:
 
@@ -323,7 +327,7 @@ This layout makes the number of types to take care about quite limited.
 Integer Types
 -------------------------
 
-While implementing the integer type, we stumbled over the problem, that
+While implementing the integer type, we stumbled over the problem that
 integers are quite in flux in CPython right now. Starting on Python 2.2,
 integers mutate into longs on overflow.  However, shifting to the left
 truncates up to 2.3 but extends to longs as well in 2.4.  By contrast, we need
@@ -334,7 +338,9 @@ a consistent behavior before and after translation.
 We use normal integers for signed arithmetic.  It means that before
 translation we get longs in case of overflow, and after translation we get a
 silent wrap-around.  Whenever we need more control, we use the following
-helpers:
+helpers (which live the `pypy/rlib/rarithmetic.py`_):
+
+.. _`pypy/rlib/rarithmetic.py`: ../../pypy/rlib/rarithmetic.py
 
 **ovfcheck()**
 
@@ -685,14 +691,14 @@ here are examples for the possible locations::
 
     >>>> import sys
     >>>> sys.__file__
-    '/home/hpk/pypy-dist/pypy/module/sys/__init__.pyc'
+    '/home/hpk/pypy-dist/pypy/module/sys/*.py'
 
     >>>> import operator
     >>>> operator.__file__
     '/home/hpk/pypy-dist/pypy/lib/operator.py'
 
     >>>> import types
-    t>>>> types.__file__
+    >>>> types.__file__
     '/home/hpk/pypy-dist/lib-python/modified-2.4.1/types.py'
 
     >>>> import os

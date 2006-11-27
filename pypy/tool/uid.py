@@ -1,23 +1,35 @@
-import struct
+import struct, sys
 
 # This is temporary hack to run PyPy on PyPy
 # until PyPy's struct module handle P format character.
 try:
-    HUGEVAL = 256 ** struct.calcsize('P')
+    HUGEVAL_FMT   = 'P'
+    HUGEVAL_BYTES = struct.calcsize('P')
 except struct.error:
-    HUGEVAL = 0
+    if sys.maxint <= 2147483647:
+        HUGEVAL_FMT   = 'l'
+        HUGEVAL_BYTES = 4
+    else:
+        HUGEVAL_FMT   = 'q'
+        HUGEVAL_BYTES = 8
+
+HUGEVAL = 256 ** HUGEVAL_BYTES
+
 
 def fixid(result):
     if result < 0:
         result += HUGEVAL
     return result
 
-def uid(obj):
-    """
-    Return the id of an object as an unsigned number so that its hex
-    representation makes sense
-    """
-    return fixid(id(obj))
+if sys.version_info < (2, 5):
+    def uid(obj):
+        """
+        Return the id of an object as an unsigned number so that its hex
+        representation makes sense
+        """
+        return fixid(id(obj))
+else:
+    uid = id    # guaranteed to be positive from CPython 2.5 onwards
 
 
 class Hashable(object):
@@ -57,5 +69,5 @@ class Hashable(object):
             hasattr(self.value, '__name__')):
             r = '%s %s' % (type(self.value).__name__, self.value.__name__)
         elif len(r) > 60 or (len(r) > 30 and type(self.value) is not str):
-            r = r[:20] + '...' + r[-8:]
+            r = r[:22] + '...' + r[-7:]
         return r

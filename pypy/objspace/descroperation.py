@@ -3,6 +3,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import ObjSpace
 from pypy.interpreter.function import Function, Method
 from pypy.interpreter.argument import Arguments
+from pypy.interpreter.typedef import default_identity_hash
 from pypy.tool.sourcetools import compile2, func_with_new_name
 
 def raiseattrerror(space, w_obj, name, w_descr=None):
@@ -20,7 +21,7 @@ class Object:
         if w_descr is not None:
             if space.is_data_descr(w_descr):
                 return space.get(w_descr, w_obj)
-        w_value = w_obj.getdictvalue(space, name)
+        w_value = w_obj.getdictvalue(space, w_name)
         if w_value is not None:
             return w_value
         if w_descr is not None:
@@ -34,12 +35,7 @@ class Object:
             if space.is_data_descr(w_descr):
                 space.set(w_descr, w_obj, w_value)
                 return
-        w_dict = w_obj.getdict()
-        if w_dict is not None:
-            # note: don't use w_name as a key in w_dict directly -- the expected
-            # result of setattr() is that it never stores subclasses of 'str'
-            # in the __dict__
-            space.setitem(w_dict, space.wrap(name), w_value)
+        if w_obj.setdictvalue(space, w_name, w_value):
             return
         raiseattrerror(space, w_obj, name, w_descr)
 
@@ -50,14 +46,8 @@ class Object:
             if space.is_data_descr(w_descr):
                 space.delete(w_descr, w_obj)
                 return
-        w_dict = w_obj.getdict()
-        if w_dict is not None:
-            try:
-                space.delitem(w_dict, w_name)
-                return
-            except OperationError, ex:
-                if not ex.match(space, space.w_KeyError):
-                    raise
+        if w_obj.deldictvalue(space, w_name):
+            return
         raiseattrerror(space, w_obj, name, w_descr)
 
     def descr__init__(space, w_obj, __args__):
@@ -84,26 +74,7 @@ class DescrOperation:
         if type(descr) is Function:
             # the fastcall paths are purely for performance, but the resulting
             # increase of speed is huge
-            if len(args_w) == 0:
-                w_res = descr.code.fastcall_1(space, descr, w_obj)
-                if w_res is not None:
-                    return w_res
-            elif len(args_w) == 1:
-                w_res = descr.code.fastcall_2(space, descr, w_obj, args_w[0])
-                if w_res is not None:
-                    return w_res
-            elif len(args_w) == 2:
-                w_res = descr.code.fastcall_3(space, descr, w_obj, args_w[0],
-                                                            args_w[1])
-                if w_res is not None:
-                    return w_res
-            elif len(args_w) == 3:
-                w_res = descr.code.fastcall_4(space, descr, w_obj, args_w[0],
-                                              args_w[1], args_w[2])
-                if w_res is not None:
-                    return w_res
-            args = Arguments(space, list(args_w))
-            return descr.call_args(args.prepend(w_obj))
+            return descr.funccall(w_obj, *args_w)
         else:
             args = Arguments(space, list(args_w))
             w_impl = space.get(w_descr, w_obj)
@@ -307,7 +278,7 @@ class DescrOperation:
                space.lookup(w_obj, '__cmp__') is not None: 
                 raise OperationError(space.w_TypeError, 
                                      space.wrap("unhashable type"))
-            return w_obj.identity_hash(space) 
+            return default_identity_hash(space, w_obj)
         w_result = space.get_and_call_function(w_hash, w_obj)
         if space.is_true(space.isinstance(w_result, space.w_int)): 
             return w_result 
@@ -425,9 +396,11 @@ def _cmp(space, w_obj1, w_obj2):
     if space.is_w(w_obj2, space.w_None):
         return space.wrap(1)
     if space.is_w(w_typ1, w_typ2):
+        #print "WARNING, comparison by address!"
         w_id1 = space.id(w_obj1)
         w_id2 = space.id(w_obj2)
     else:
+        #print "WARNING, comparison by address!"
         w_id1 = space.id(w_typ1)
         w_id2 = space.id(w_typ2)
     if space.is_true(space.lt(w_id1, w_id2)):
@@ -472,6 +445,9 @@ def _make_comparison_impl(symbol, specialnames):
     left, right = specialnames
     op = getattr(operator, left)
     def comparison_impl(space, w_obj1, w_obj2):
+        #from pypy.objspace.std.tlistobject import W_TransparentList
+        #if isinstance(w_obj1, W_TransparentList):
+        #    import pdb;pdb.set_trace()
         w_typ1 = space.type(w_obj1)
         w_typ2 = space.type(w_obj2)
         w_left_src, w_left_impl = space.lookup_in_type_where(w_typ1, left)
@@ -544,9 +520,9 @@ for targetname, specialname, checkerspec in [
     l = ["space.is_true(space.isinstance(w_result, %s))" % x 
                 for x in checkerspec]
     checker = " or ".join(l) 
-    source = """if 1: 
+    source = """if 1:
         def %(targetname)s(space, w_obj):
-            w_impl = space.lookup(w_obj, %(specialname)r) 
+            w_impl = space.lookup(w_obj, %(specialname)r)
             if w_impl is None:
                 raise OperationError(space.w_TypeError,
                        space.wrap("operand does not support unary %(targetname)s"))

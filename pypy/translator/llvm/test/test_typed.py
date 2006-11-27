@@ -1,10 +1,11 @@
 import sys
+
 import py
 from py.test import raises
 from pypy.translator.test import snippet 
-from pypy.rpython.rarithmetic import r_uint, ovfcheck, ovfcheck_lshift
+from pypy.rlib.rarithmetic import r_uint, ovfcheck, ovfcheck_lshift
 
-from pypy.translator.llvm.test.runtest import compile_function
+from pypy.translator.llvm.test.runtest import *
 
 def test_call_five():
     def wrapper():
@@ -210,7 +211,7 @@ def test_unichr_unichr():
 # floats 
 def test_float_operations(): 
     #llvm rem operation working starting llvm1.6")    
-    #see: http://llvm.cs.uiuc.edu/bugs/show_bug.cgi?id=611
+    #see: http://llvm.org/bugs/show_bug.cgi?id=611
     import math
     def func(x, y): 
         z = x + y / 2.1 * x 

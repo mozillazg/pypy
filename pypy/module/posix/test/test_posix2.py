@@ -1,9 +1,10 @@
 from pypy.objspace.std import StdObjSpace 
 from pypy.tool.udir import udir
+from pypy.conftest import gettestobjspace
 import os
 
 def setup_module(mod): 
-    mod.space = StdObjSpace(usemodules=['posix'])
+    mod.space = gettestobjspace(usemodules=['posix'])
     mod.path = udir.join('posixtestfile.txt') 
     mod.path.write("this is a test")
     pdir = udir.ensure('posixtestdir', dir=True)
@@ -71,15 +72,11 @@ class AppTestPosix:
         ex(self.posix.dup, UNUSEDFD)
 
     def test_fdopen(self):
-        path = self.path 
-        posix = self.posix 
+        path = self.path
+        posix = self.posix
         fd = posix.open(path, posix.O_RDONLY, 0777)
-        try:
-            f = posix.fdopen(fd, "r")
-        except NotImplementedError:
-            pass
-        else:
-            raise "did not raise"
+        f = posix.fdopen(fd, "r")
+        f.close()
 
     def test_listdir(self):
         pdir = self.pdir
@@ -93,6 +90,16 @@ class AppTestPosix:
     def test_strerror(self):
         assert isinstance(self.posix.strerror(0), str)
         assert isinstance(self.posix.strerror(1), str)
+
+    if hasattr(__import__(os.name), "fork"):
+        def test_fork(self):
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:   # child
+                os._exit(4)
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            # XXX check status1
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

@@ -1,6 +1,8 @@
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.llvm.log import log 
+from pypy.translator.llvm.structnode import getindexhelper
+
 log = log.opwriter
 
 class OpRepr(object):
@@ -37,6 +39,16 @@ class OpReprInvoke(OpReprCall):
         else:
             self.functionref = '%pypyop_' + op.opname
 
+def arrayindices(arg):
+    ARRAYTYPE = arg.concretetype.TO
+    if isinstance(ARRAYTYPE, lltype.Array):
+        # skip the length field
+        indices = [("uint", 1)]
+    else:
+        assert isinstance(ARRAYTYPE, lltype.FixedSizeArray)
+        indices = []        
+    return indices
+
 class OpWriter(object):            
     
     binary_operations = {
@@ -49,14 +61,14 @@ class OpWriter(object):
         'ptr_ne'        : 'setne' }
 
     # generic numeric ops
-    for tt in 'int llong uint'.split():
+    for tt in 'int llong ullong uint'.split():
         for oo in 'mul add sub and or xor'.split():
             binary_operations['%s_%s' % (tt, oo)] = oo
         binary_operations['%s_floordiv' % tt] = 'div'
         binary_operations['%s_mod' % tt] = 'rem'
 
     # comparison ops
-    for tt in 'int llong uint unichar float'.split():
+    for tt in 'int llong ullong uint unichar float'.split():
         for oo in 'lt le eq ne ge gt'.split():
             binary_operations['%s_%s' % (tt, oo)] = 'set%s' % oo
 
@@ -98,7 +110,10 @@ class OpWriter(object):
         else:
             opr = OpRepr(op, self.db)
 
-        if op.opname in self.binary_operations:
+        if op.opname.startswith('gc'):
+            meth = getattr(self.db.gcpolicy, 'op' + op.opname[2:])
+            meth(self.codewriter, opr)
+        elif op.opname in self.binary_operations:
             self.binaryop(opr)
         elif op.opname in self.shift_operations:
             self.shiftop(opr)
@@ -114,12 +129,6 @@ class OpWriter(object):
             if not meth:
                 raise Exception, "operation %s not found" % op.opname
             meth(opr)            
-
-    def write_invoke_op(self, op, node, block):
-        opr = OpReprInvoke(op, self.db)
-        ep = self.db.exceptionpolicy
-        ep.invoke(self.codewriter, opr.retref, opr.rettype, opr.functionref,
-                  opr.argrefs, opr.argtypes, node, block)
     
     def _generic_pow(self, opr, onestr): 
 
@@ -152,6 +161,7 @@ class OpWriter(object):
     def _skipped(self, opr):
         self.codewriter.comment('***Skipping operation %s()' % opr.op.opname)
     keepalive = _skipped
+    resume_point = _skipped
 
     def int_abs(self, opr):
         assert len(opr.argrefs) == 1
@@ -161,6 +171,10 @@ class OpWriter(object):
 
     float_abs = int_abs
     llong_abs = int_abs
+
+    def debug_assert(self, opr):
+        # XXX could do something about assertions
+        pass
 
     def int_pow(self, opr):
         self._generic_pow(opr, "1") 
@@ -176,9 +190,7 @@ class OpWriter(object):
     def int_neg(self, opr):
         self._generic_neg(opr, "0")
 
-    # this is really generated, don't know why
-    # XXX rxe: Surely that cant be right?
-    uint_neg = int_neg
+    llong_neg = int_neg
 
     def float_neg(self, opr):
         self._generic_neg(opr, "0.0") 
@@ -192,8 +204,9 @@ class OpWriter(object):
                                  opr.argrefs[0], -1)
 
     def uint_invert(self, opr):
+        from sys import maxint
         self.codewriter.binaryop("xor", opr.retref, opr.argtypes[0],
-                                 opr.argrefs[0], str((1L<<32) - 1))
+                                 opr.argrefs[0], str(maxint*2+1))
 
     def binaryop(self, opr):
         assert len(opr.argrefs) == 2
@@ -264,12 +277,19 @@ class OpWriter(object):
 
     def malloc(self, opr):
         arg_type = opr.op.args[0].value
-        self.db.gcpolicy.malloc(self.codewriter, opr.retref, opr.rettype,
-                                atomic=arg_type._is_atomic())
+
+        # XXX hack better to look at the actual structure
+        name = str(opr.op.args[0])
+        exc = False
+        if 'Exception' in name or 'Error' in name:
+            exc = True
+
+        self.db.gcpolicy.zeromalloc(self.codewriter, opr.retref, opr.rettype,
+                                    atomic=arg_type._is_atomic(), exc_flag=exc)
 
     def malloc_varsize(self, opr):
 
-        # XXX transformation
+        # XXX transformation perhaps?
         arg_type = opr.op.args[0].value
         if isinstance(arg_type, lltype.Array) and arg_type.OF is lltype.Void:
             # This is a backend decision to NOT represent a void array with
@@ -277,9 +297,12 @@ class OpWriter(object):
             self.malloc(opr)
             return
 
-        self.codewriter.call(opr.retref, opr.rettype,
-                             self.db.repr_constructor(arg_type),
-                             opr.argtypes[1:], opr.argrefs[1:])
+        node = self.db.obj2node[arg_type]
+        self.db.gcpolicy.var_zeromalloc(self.codewriter, opr.retref,
+                                        opr.rettype, node, opr.argrefs[1],
+                                        atomic=arg_type._is_atomic())
+
+    zero_malloc_varsize = malloc_varsize
 
     def flavored_malloc(self, opr):
         flavor = opr.op.args[0].value
@@ -300,21 +323,11 @@ class OpWriter(object):
         else:
             raise NotImplementedError
 
-    def _getindexhelper(self, name, struct):
-        assert name in list(struct._names)
-
-        fieldnames = struct._names_without_voids()
-        try:
-            index = fieldnames.index(name)
-        except ValueError:
-            index = -1
-        return index
-
     def getfield(self, opr):
         op = opr.op
         if opr.rettype != "void":
-            index = self._getindexhelper(op.args[1].value,
-                                         op.args[0].concretetype.TO)
+            index = getindexhelper(op.args[1].value,
+                                   op.args[0].concretetype.TO)
             assert index != -1
             tmpvar = self._tmp()
             self.codewriter.getelementptr(tmpvar, opr.argtypes[0],
@@ -324,8 +337,8 @@ class OpWriter(object):
             self._skipped(opr)
  
     def getsubstruct(self, opr): 
-        index = self._getindexhelper(opr.op.args[1].value,
-                                     opr.op.args[0].concretetype.TO)
+        index = getindexhelper(opr.op.args[1].value,
+                               opr.op.args[0].concretetype.TO)
         assert opr.rettype != "void"
         self.codewriter.getelementptr(opr.retref, opr.argtypes[0], 
                                       opr.argrefs[0], [("uint", index)])        
@@ -334,44 +347,53 @@ class OpWriter(object):
         op = opr.op
         if opr.argtypes[2] != "void":
             tmpvar = self._tmp()
-            index = self._getindexhelper(op.args[1].value,
-                                         op.args[0].concretetype.TO)
+            index = getindexhelper(op.args[1].value,
+                                   op.args[0].concretetype.TO)
             self.codewriter.getelementptr(tmpvar, opr.argtypes[0],
                                           opr.argrefs[0], [("uint", index)])
             self.codewriter.store(opr.argtypes[2], opr.argrefs[2], tmpvar)
-
         else:
             self._skipped(opr)
+
+    bare_setfield = setfield
             
     def getarrayitem(self, opr):        
-        if opr.rettype != "void":
-            arraytype, indextype = opr.argtypes
-            array, index = opr.argrefs
-            tmpvar = self._tmp()
-            self.codewriter.getelementptr(tmpvar, arraytype, array,
-                                          [("uint", 1), (indextype, index)])
-            self.codewriter.load(opr.retref, opr.rettype, tmpvar)
-        else:
+        if opr.rettype == "void":
             self._skipped(opr)
+            return
+
+        array, index = opr.argrefs
+        arraytype, indextype = opr.argtypes
+        tmpvar = self._tmp()
+
+        indices = arrayindices(opr.op.args[0]) + [(indextype, index)]
+        self.codewriter.getelementptr(tmpvar, arraytype, array, indices)
+        self.codewriter.load(opr.retref, opr.rettype, tmpvar)
 
     def getarraysubstruct(self, opr):        
-        arraytype, indextype = opr.argtypes
         array, index = opr.argrefs
-        self.codewriter.getelementptr(opr.retref, arraytype, array,
-                                      [("uint", 1), (indextype, index)])
+        arraytype, indextype = opr.argtypes
+
+        indices = arrayindices(opr.op.args[0]) + [(indextype, index)]
+        self.codewriter.getelementptr(opr.retref, arraytype, array, indices)
 
     def setarrayitem(self, opr):
         array, index, valuevar = opr.argrefs
         arraytype, indextype, valuetype = opr.argtypes
-        tmpvar = self._tmp()
-        if valuetype != "void":
-            self.codewriter.getelementptr(tmpvar, arraytype, array,
-                                          [("uint", 1), (indextype, index)])
-            self.codewriter.store(valuetype, valuevar, tmpvar) 
-        else:
-            self._skipped(opr)
+        tmpvar = self._tmp()    
 
+        if valuetype == "void":
+            self._skipped(opr)
+            return
+
+        indices = arrayindices(opr.op.args[0]) + [(indextype, index)]
+        self.codewriter.getelementptr(tmpvar, arraytype, array, indices)            
+        self.codewriter.store(valuetype, valuevar, tmpvar) 
+    bare_setarrayitem = setarrayitem
+            
     def getarraysize(self, opr):
+        ARRAYTYPE = opr.op.args[0].concretetype.TO
+        assert isinstance(ARRAYTYPE, lltype.Array)
         tmpvar = self._tmp()
         self.codewriter.getelementptr(tmpvar, opr.argtypes[0],
                                       opr.argrefs[0], [("uint", 0)])
@@ -426,12 +448,21 @@ class OpWriter(object):
     def raw_malloc(self, opr):
         self.codewriter.call(opr.retref, opr.rettype, "%raw_malloc",
                              opr.argtypes, opr.argrefs)
+
+    def raw_malloc_usage(self, opr):
+        self.codewriter.cast(opr.retref, opr.argtypes[0], opr.argrefs[0],
+                             opr.rettype)
+
     def raw_free(self, opr):
         self.codewriter.call(opr.retref, opr.rettype, "%raw_free",
                              opr.argtypes, opr.argrefs)
 
     def raw_memcopy(self, opr):
         self.codewriter.call(opr.retref, opr.rettype, "%raw_memcopy",
+                             opr.argtypes, opr.argrefs)
+
+    def raw_memclear(self, opr):
+        self.codewriter.call(opr.retref, opr.rettype, "%raw_memclear",
                              opr.argtypes, opr.argrefs)
 
     def raw_store(self, opr):
@@ -451,7 +482,7 @@ class OpWriter(object):
             self.codewriter.getelementptr(incr_addr,
                                           addr_type,
                                           cast_addr,
-                                          [("int", arg_incr)],
+                                          [(self.word, arg_incr)],
                                           getptr=False)
             cast_addr = incr_addr
         self.codewriter.store(argtype_value, arg_value, cast_addr)
@@ -473,28 +504,11 @@ class OpWriter(object):
             self.codewriter.getelementptr(incr_addr,
                                           addr_type,
                                           cast_addr,
-                                          [("int", arg_incr)],
+                                          [(self.word, arg_incr)],
                                           getptr=False)
             cast_addr = incr_addr
 
         self.codewriter.load(opr.retref, opr.rettype, cast_addr) 
-        
-    # ______________________________________________________________________
-    # 
-    # XXX exception specific - move to policy?
 
-    def malloc_exception(self, opr): 
-        tmpvar1, tmpvar2, tmpvar3 = self._tmp(3)
-        cw = self.codewriter
-        cw.getelementptr(tmpvar1, opr.rettype, "null", [("int", 1)], getptr=False)
-        cw.cast(tmpvar2, opr.rettype, tmpvar1, 'uint')
-        cw.call(tmpvar3, 'sbyte*', '%malloc_exception', ['uint'], [tmpvar2])
-        cw.cast(opr.retref, 'sbyte*', tmpvar3, opr.rettype)
-
-    def last_exception_type_ptr(self, opr):
-        op = opr.op
-        e = self.db.translator.rtyper.getexceptiondata()
-        self.codewriter.load('%' + str(op.result),
-                             self.db.repr_type(e.lltype_of_exception_type),
-                             '%last_exception_type')
-
+    def debug_print(self, opr):
+        pass     # XXX

@@ -310,7 +310,10 @@ class AppTestBuiltinApp:
         assert callable(int), (
                     "Builtin function 'callable' misreads int")
         class Call:
-            __metaclass__ = _classobj
+            try:
+                __metaclass__ = _classobj
+            except NameError: # not running on PyPy, assuming oldstyle implicitely 
+                pass
             def __call__(self, a):
                 return a+2
         assert callable(Call())
@@ -330,7 +333,10 @@ class AppTestBuiltinApp:
         assert not callable(a), (
                     "Builtin function 'callable' tricked by instance-__call__")
         class NoCall:
-            __metaclass__ = _classobj
+            try:
+                __metaclass__ = _classobj
+            except NameError: # not running on PyPy, assuming oldstyle implicitely 
+                pass
         assert not callable(NoCall())
 
     def test_hash(self):
@@ -411,6 +417,21 @@ class AppTestBuiltinApp:
         assert Y().f() == ((Y,), {})
         assert Y().f(42, x=43) == ((Y, 42), {'x': 43})
 
+    def test_hasattr(self):
+        class X(object):
+            def broken(): pass   # TypeError
+            abc = property(broken)
+            def broken2(): raise IOError
+            bac = property(broken2)
+        x = X()
+        x.foo = 42
+        assert hasattr(x, '__class__')
+        assert hasattr(x, 'foo')
+        assert not hasattr(x, 'bar')
+        assert not hasattr(x, 'abc')    # CPython compliance
+        assert not hasattr(x, 'bac')    # CPython compliance
+        raises(TypeError, hasattr, x, None)
+        raises(TypeError, hasattr, x, 42)
 
 class TestInternal:
 
@@ -429,7 +450,7 @@ class TestInternal:
 
         w_execfile = self.get_builtin('execfile')
         space = self.space
-        w_dict = space.newdict([])
+        w_dict = space.newdict()
         self.space.call_function(w_execfile,
             space.wrap(fn), w_dict, space.w_None)
         w_value = space.getitem(w_dict, space.wrap('i'))

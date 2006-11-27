@@ -13,14 +13,14 @@ class BaseTestCompiler:
     def eval_string(self, string, kind='eval'):
         space = self.space
         code = self.compiler.compile(string, '<>', kind, 0)
-        return code.exec_code(space, space.newdict([]), space.newdict([]))
+        return code.exec_code(space, space.newdict(), space.newdict())
 
     def test_compile(self):
         code = self.compiler.compile('6*7', '<hello>', 'eval', 0)
         assert isinstance(code, PyCode)
         assert code.co_filename == '<hello>'
         space = self.space
-        w_res = code.exec_code(space, space.newdict([]), space.newdict([]))
+        w_res = code.exec_code(space, space.newdict(), space.newdict())
         assert space.int_w(w_res) == 42
 
     def test_eval_unicode(self):
@@ -71,7 +71,7 @@ class BaseTestCompiler:
         assert isinstance(code, PyCode)
         assert code.co_filename == '<hello>'
         space = self.space
-        w_globals = space.newdict([])
+        w_globals = space.newdict()
         code.exec_code(space, w_globals, w_globals)
         w_a = space.getitem(w_globals, space.wrap('a'))
         assert space.int_w(w_a) == 1
@@ -88,12 +88,16 @@ class BaseTestCompiler:
         assert ex.match(self.space, self.space.w_SyntaxError)
 
     def test_scope_unoptimized_clash1_b(self):
+        # as far as I can tell, this case can be handled correctly
+        # by the interpreter so a SyntaxError is not required, but
+        # let's give one anyway for "compatibility"...
+
         # mostly taken from test_scope.py 
         e = py.test.raises(OperationError, self.compiler.compile, """if 1:
             def unoptimized_clash1(strip):
                 def f():
                     from string import *
-                    return s # ambiguity: free or local
+                    return s # ambiguity: free or local (? no, global or local)
                 return f""", '', 'exec', 0)
         ex = e.value 
         assert ex.match(self.space, self.space.w_SyntaxError)
@@ -141,8 +145,8 @@ class BaseTestCompiler:
     def test_toplevel_docstring(self):
         space = self.space
         code = self.compiler.compile('"spam"; "bar"; x=5', '<hello>', 'exec', 0)
-        w_locals = space.newdict([])
-        code.exec_code(space, space.newdict([]), w_locals)
+        w_locals = space.newdict()
+        code.exec_code(space, space.newdict(), w_locals)
         w_x = space.getitem(w_locals, space.wrap('x'))
         assert space.eq_w(w_x, space.wrap(5))
         w_doc = space.getitem(w_locals, space.wrap('__doc__'))
@@ -150,8 +154,8 @@ class BaseTestCompiler:
         #
         code = self.compiler.compile('"spam"; "bar"; x=5',
                                      '<hello>', 'single', 0)
-        w_locals = space.newdict([])
-        code.exec_code(space, space.newdict([]), w_locals)
+        w_locals = space.newdict()
+        code.exec_code(space, space.newdict(), w_locals)
         w_x = space.getitem(w_locals, space.wrap('x'))
         assert space.eq_w(w_x, space.wrap(5))
         w_doc = space.call_method(w_locals, 'get', space.wrap('__doc__'))
@@ -331,7 +335,7 @@ def wrong3():
         '''))
         code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
         space = self.space
-        w_d = space.newdict([])
+        w_d = space.newdict()
         code.exec_code(space, w_d, w_d)
         w_fline = space.getitem(w_d, space.wrap('fline'))
         w_gline = space.getitem(w_d, space.wrap('gline'))
@@ -365,8 +369,179 @@ def wrong3():
         '''))
         code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
         space = self.space
-        w_d = space.newdict([])
+        w_d = space.newdict()
         space.exec_(code, w_d, w_d)
+
+    def test_ellipsis(self):
+        snippet = str(py.code.Source(r'''
+            d = {}
+            d[...] = 12
+            assert d.keys()[0] is Ellipsis
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+
+    def test_chained_access_augassign(self):
+        snippet = str(py.code.Source(r'''
+            class R:
+               count = 0
+            c = 0
+            for i in [0,1,2]:
+                c += 1
+            r = R()
+            for i in [0,1,2]:
+                r.count += 1
+            c += r.count
+            l = [0]
+            for i in [0,1,2]:
+                l[0] += 1
+            c += l[0]
+            l = [R()]
+            for i in [0]:
+                l[0].count += 1
+            c += l[0].count
+            r.counters = [0]
+            for i in [0,1,2]:
+                r.counters[0] += 1
+            c += r.counters[0]
+            r = R()
+            f = lambda : r
+            for i in [0,1,2]:
+                f().count += 1
+            c += f().count
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        assert space.int_w(space.getitem(w_d, space.wrap('c'))) == 16
+
+    def test_augassign_with_tuple_subscript(self):
+        snippet = str(py.code.Source(r'''
+            class D(object):
+                def __getitem__(self, key):
+                    assert key == self.lastkey
+                    return self.lastvalue
+                def __setitem__(self, key, value):
+                    self.lastkey = key
+                    self.lastvalue = value
+            def one(return_me=[1]):
+                return return_me.pop()
+            d = D()
+            a = 15
+            d[1,2+a,3:7,...,1,] = 6
+            d[one(),17,slice(3,7),...,1] *= 7
+            result = d[1,17,3:7,Ellipsis,1]
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        assert space.int_w(space.getitem(w_d, space.wrap('result'))) == 42
+
+    def test_continue_in_finally(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+def test():
+    for abc in range(10):
+        try: pass
+        finally:
+            continue       # 'continue' inside 'finally'
+
+        '''))
+        space.raises_w(space.w_SyntaxError, self.compiler.compile,
+                       snippet, '<tmp>', 'exec', 0)
+
+    def test_continue_in_nested_finally(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+def test():
+    for abc in range(10):
+        try: pass
+        finally:
+            try:
+                continue       # 'continue' inside 'finally'
+            except:
+                pass
+        '''))
+        space.raises_w(space.w_SyntaxError, self.compiler.compile,
+                       snippet, '<tmp>', 'exec', 0)
+
+    def test_really_nested_stuff(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+            def f(self):
+                def get_nested_class():
+                    self
+                    class Test:
+                        def _STOP_HERE_(self):
+                            return _STOP_HERE_(self)
+                get_nested_class()
+            f(42)
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        # assert did not crash
+
+    def test_free_vars_across_class(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+            def f(x):
+                class Test:
+                    def meth(self):
+                        return x + 1
+                return Test()
+            res = f(42).meth()
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        assert space.int_w(space.getitem(w_d, space.wrap('res'))) == 43
+
+    def test_pick_global_names(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+            def f(x):
+                def g():
+                    global x
+                    def h():
+                        return x
+                    return h()
+                return g()
+            x = "global value"
+            res = f("local value")
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        w_res = space.getitem(w_d, space.wrap('res'))
+        assert space.str_w(w_res) == "global value"
+
+    def test_method_and_var(self):
+        space = self.space
+        snippet = str(py.code.Source(r'''
+            def f():
+                method_and_var = "var"
+                class Test:
+                    def method_and_var(self):
+                        return "method"
+                    def test(self):
+                        return method_and_var
+                return Test().test()
+            res = f()
+        '''))
+        code = self.compiler.compile(snippet, '<tmp>', 'exec', 0)
+        space = self.space
+        w_d = space.newdict()
+        space.exec_(code, w_d, w_d)
+        w_res = space.getitem(w_d, space.wrap('res'))
+        assert space.eq_w(w_res, space.wrap("var"))
 
 class TestECCompiler(BaseTestCompiler):
     def setup_method(self, method):
@@ -382,8 +557,54 @@ class TestPyCCompiler(BaseTestCompiler):
         test_unicodeliterals = skip_on_2_3
         test_none_assignment = skip_on_2_3
         test_import = skip_on_2_3
+    elif sys.version_info < (2, 5):
+        def skip_on_2_4(self):
+            py.test.skip("syntax not supported by the CPython 2.4 compiler")
+        test_continue_in_nested_finally = skip_on_2_4
 
 class TestPythonAstCompiler(BaseTestCompiler):
     def setup_method(self, method):
         self.compiler = PythonAstCompiler(self.space)
 
+
+
+
+class AppTestOptimizer:
+    def test_constant_fold_add(self):
+        import parser
+        class Folder:
+            def defaultvisit(self, node):
+                return node
+            
+            def __getattr__(self, attrname):
+                if attrname.startswith('visit'):
+                    return self.defaultvisit
+                raise AttributeError(attrname)
+
+            def visitAdd(self, node):
+                left = node.left
+                right = node.right
+                if isinstance(left, parser.ASTConst) and \
+                       isinstance(right, parser.ASTConst):
+                    if type(left.value) == type(right.value):
+                        return parser.ASTConst(left.value + right.value)
+                return node
+
+        def hook(ast, enc):
+            return ast.mutate(Folder())
+        
+        parser.install_compiler_hook(hook)
+        code = compile("1+2", "", "eval")
+        parser.install_compiler_hook(None)
+        import dis, sys, StringIO
+        s = StringIO.StringIO()
+        so = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = so
+        output = s.getvalue()
+        assert 'BINARY_ADD' not in output
+        
+        

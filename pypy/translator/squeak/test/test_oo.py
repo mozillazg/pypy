@@ -2,6 +2,7 @@ from pypy.tool.udir import udir
 from pypy.translator.squeak.gensqueak import GenSqueak
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.ootypesystem.ootype import *
+from pypy import conftest
 
 
 def build_sqfunc(func, args=[], view=False):
@@ -10,12 +11,13 @@ def build_sqfunc(func, args=[], view=False):
    t = TranslationContext()
    t.buildannotator().build_types(func, args)
    t.buildrtyper(type_system="ootype").specialize()
-   if view:
+   if view or conftest.option.view:
       t.viewcg()
-   GenSqueak(udir, t)
+   gen = GenSqueak(udir, t)
+   gen.gen()
 
 
-C = Instance("test", None, {'a': (Signed, 3)})
+C = Instance("test", ROOT, {'a': (Signed, 3)})
 M = Meth([Signed], Signed)
 def m_(self, b):
    return self.a+b
@@ -26,12 +28,6 @@ def test_simple_new():
    def f_new():
       return new(C)
    build_sqfunc(f_new)
-
-def test_simple_meth():
-   def f_meth():
-      c = new(C)
-      return c.m(5)
-   build_sqfunc(f_meth)
 
 def test_simple_fields():
    def f_fields():

@@ -1,4 +1,5 @@
 from pypy.rpython.memory.lltypesimulation import *
+from pypy.rpython.lltypesystem.lltype import cast_pointer, cast_ptr_to_int
 
 py.log.setconsumer("lltypesim", None)
 
@@ -331,7 +332,7 @@ def test_pointer_equality():
     assert not s0.a != s0.a
     
 def test_struct_with_address():
-    S = lltype.GcStruct("s", ('a', lladdress.Address))
+    S = lltype.GcStruct("s", ('a', llmemory.Address))
     s = malloc(S)
     s.a = lladdress.NULL
     assert s.a == lladdress.NULL

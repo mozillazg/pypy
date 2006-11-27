@@ -6,34 +6,53 @@
    PyObject *RPythonError;
 #endif 
 
+/* just a renaming, unless DO_LOG_EXC is set */
+#define RPyExceptionOccurred RPyExceptionOccurred1
+#define RPY_DEBUG_RETURN()   /* nothing */
+
+#ifndef PyExceptionClass_Check    /* Python < 2.5 */
+# define PyExceptionClass_Check(x)	PyClass_Check(x)
+# define PyExceptionInstance_Check(x)	PyInstance_Check(x)
+# define PyExceptionInstance_Class(x)	\
+				(PyObject*)((PyInstanceObject*)(x))->in_class
+#endif
+
+
 /******************************************************************/
 #ifdef HAVE_RTYPER               /* RPython version of exceptions */
 /******************************************************************/
 
-#ifdef PYPY_NOT_MAIN_FILE
-extern RPYTHON_EXCEPTION_VTABLE	rpython_exc_type;
-extern RPYTHON_EXCEPTION	rpython_exc_value;
-#else
-RPYTHON_EXCEPTION_VTABLE	rpython_exc_type = NULL;
-RPYTHON_EXCEPTION		rpython_exc_value = NULL;
+#ifdef DO_LOG_EXC
+#undef RPyExceptionOccurred
+#undef RPY_DEBUG_RETURN
+#define RPyExceptionOccurred()  RPyDebugException("  noticing a")
+#define RPY_DEBUG_RETURN()      RPyDebugException("leaving with")
+#define RPyDebugException(msg)  (                                       \
+  RPyExceptionOccurred1()                                               \
+    ? (RPyDebugReturnShowException(msg, __FILE__, __LINE__, __FUNCTION__), 1) \
+    : 0                                                                 \
+  )
+void RPyDebugReturnShowException(const char *msg, const char *filename,
+                                 long lineno, const char *functionname);
+#ifndef PYPY_NOT_MAIN_FILE
+void RPyDebugReturnShowException(const char *msg, const char *filename,
+                                 long lineno, const char *functionname)
+{
+  fprintf(stderr, "%s %s: %s:%ld %s\n", msg,
+          RPyFetchExceptionType()->ov_name->items,
+          filename, lineno, functionname);
+}
 #endif
+#endif  /* DO_LOG_EXC */
 
-#define RPyExceptionOccurred()	(rpython_exc_type != NULL)
+/* Hint: functions and macros not defined here, like RPyRaiseException,
+   come from exctransformer via the table in extfunc.py. */
 
-#define RPyRaiseException(etype, evalue)		\
-		assert(!RPyExceptionOccurred());	\
-		rpython_exc_type = etype;	\
-		rpython_exc_value = evalue
-
-#define RPyFetchException(etypevar, evaluevar, type_of_evaluevar)       \
-		etypevar = rpython_exc_type;				\
-		evaluevar = (type_of_evaluevar) rpython_exc_value;	\
-		rpython_exc_type = NULL;				\
-		rpython_exc_value = NULL
-
-#define RPyMatchException(etype)	RPYTHON_EXCEPTION_MATCH(rpython_exc_type,  \
-					(RPYTHON_EXCEPTION_VTABLE) etype)
-
+#define RPyFetchException(etypevar, evaluevar, type_of_evaluevar) do {  \
+		etypevar = RPyFetchExceptionType();			\
+		evaluevar = (type_of_evaluevar)RPyFetchExceptionValue(); \
+		RPyClearException();					\
+	} while (0)
 
 /* prototypes */
 
@@ -42,14 +61,8 @@ void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc);
 
 #ifndef PYPY_STANDALONE
 void RPyConvertExceptionFromCPython(void);
-void _RPyConvertExceptionToCPython(void);
-#define RPyConvertExceptionToCPython(vanishing)    \
-	_RPyConvertExceptionToCPython();		\
-	vanishing = rpython_exc_value;		\
-	rpython_exc_type = NULL;		\
-	rpython_exc_value = NULL
+void RPyConvertExceptionToCPython(void);
 #endif
-
 
 /* implementations */
 
@@ -57,11 +70,8 @@ void _RPyConvertExceptionToCPython(void);
 
 void _RPyRaiseSimpleException(RPYTHON_EXCEPTION rexc)
 {
-	/* XXX 1. uses officially bad fishing */
-	/* XXX 2. msg is ignored */
-	rpython_exc_type = rexc->o_typeptr;
-	rpython_exc_value = rexc;
-	PUSH_ALIVE(rpython_exc_value);
+	/* XXX msg is ignored */
+	RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(rexc), rexc);
 }
 
 #ifndef PYPY_STANDALONE
@@ -69,31 +79,41 @@ void RPyConvertExceptionFromCPython(void)
 {
 	/* convert the CPython exception to an RPython one */
 	PyObject *exc_type, *exc_value, *exc_tb;
+	RPYTHON_EXCEPTION rexc;
+
 	assert(PyErr_Occurred());
 	assert(!RPyExceptionOccurred());
 	PyErr_Fetch(&exc_type, &exc_value, &exc_tb);
-	/* XXX loosing the error message here */
-	rpython_exc_value = RPYTHON_PYEXCCLASS2EXC(exc_type);
-	rpython_exc_type = RPYTHON_TYPE_OF_EXC_INST(rpython_exc_value);
+
+	/* XXX losing the error message here */	
+	rexc = RPYTHON_PYEXCCLASS2EXC(exc_type);
+	RPyRaiseException(RPYTHON_TYPE_OF_EXC_INST(rexc), rexc);
 }
 
-void _RPyConvertExceptionToCPython(void)
+void RPyConvertExceptionToCPython(void)
 {
 	/* XXX 1. uses officially bad fishing */
 	/* XXX 2. looks for exception classes by name, fragile */
 	char* clsname;
-	PyObject* pycls;
+	PyObject *pycls, *v, *tb;
 	assert(RPyExceptionOccurred());
 	assert(!PyErr_Occurred());
-	clsname = rpython_exc_type->ov_name->items;
+	clsname = RPyFetchExceptionType()->ov_name->items;
 	pycls = PyDict_GetItemString(PyEval_GetBuiltins(), clsname);
-	if (pycls != NULL && PyClass_Check(pycls) &&
-	    PyClass_IsSubclass(pycls, PyExc_Exception)) {
-		PyErr_SetNone(pycls);
+	if (pycls != NULL && PyExceptionClass_Check(pycls) &&
+	    PyObject_IsSubclass(pycls, PyExc_Exception)) {
+		v = NULL;
 	}
 	else {
-		PyErr_SetString(RPythonError, clsname);
+		pycls = RPythonError;
+		v = PyString_FromString(clsname);
 	}
+	Py_INCREF(pycls);
+	tb = NULL;
+	RPyClearException();
+
+	PyErr_NormalizeException(&pycls, &v, &tb);
+	PyErr_Restore(pycls, v, tb);
 }
 #endif   /* !PYPY_STANDALONE */
 
@@ -105,9 +125,9 @@ void _RPyConvertExceptionToCPython(void)
 #else    /* non-RPython version of exceptions, using CPython only */
 /******************************************************************/
 
-#define RPyExceptionOccurred()           PyErr_Occurred()
+#define RPyExceptionOccurred1()          PyErr_Occurred()
 #define RPyRaiseException(etype, evalue) PyErr_Restore(etype, evalue, NULL)
-#define RPyFetchException(etypevar, evaluevar, ignored)   {	\
+#define RPyFetchException(etypevar, evaluevar, ignored)  do {	\
 		PyObject *__tb;					\
 		PyErr_Fetch(&etypevar, &evaluevar, &__tb);	\
 		if (evaluevar == NULL) {			\
@@ -115,8 +135,7 @@ void _RPyConvertExceptionToCPython(void)
 			Py_INCREF(Py_None);			\
 		}						\
 		Py_XDECREF(__tb);				\
-	}
-#define RPyMatchException(etype)         PyErr_ExceptionMatches(etype)
+	} while (0)
 #define RPyConvertExceptionFromCPython() /* nothing */
 #define RPyConvertExceptionToCPython(vanishing) vanishing = NULL  
 

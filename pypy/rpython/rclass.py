@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 #from pypy.annotation.classdef import isclassdef
 from pypy.annotation import description
 from pypy.rpython.error import TyperError
-from pypy.rpython.rmodel import Repr, needsgc
+from pypy.rpython.rmodel import Repr, getgcflavor
 
 def getclassrepr(rtyper, classdef):
     try:
@@ -24,19 +24,18 @@ def getclassrepr(rtyper, classdef):
         rtyper.add_pendingsetup(result)
     return result
 
-def getinstancerepr(rtyper, classdef, nogc=False):
-    does_need_gc = needsgc(classdef, nogc)
+def getinstancerepr(rtyper, classdef, default_flavor='gc'):
+    if classdef is None:
+        flavor = default_flavor
+    else:
+        flavor = getgcflavor(classdef)
     try:
-        result = rtyper.instance_reprs[classdef, does_need_gc]
+        result = rtyper.instance_reprs[classdef, flavor]
     except KeyError:
-        #if classdef and classdef.cls is Exception:
-        #    # see getclassrepr()
-        #    result = getinstancerepr(rtyper, None, nogc=False)
-        #else:
-        result = rtyper.type_system.rclass.InstanceRepr(
-                        rtyper, classdef, does_need_gc=does_need_gc)
+        result = rtyper.type_system.rclass.buildinstancerepr(
+                        rtyper, classdef, gcflavor=flavor)
 
-        rtyper.instance_reprs[classdef, does_need_gc] = result
+        rtyper.instance_reprs[classdef, flavor] = result
         rtyper.add_pendingsetup(result)
     return result
 
@@ -71,7 +70,7 @@ class AbstractClassRepr(Repr):
             if self.classdef.commonbase(subclassdef) != self.classdef:
                 raise TyperError("not a subclass of %r: %r" % (
                     self.classdef.name, desc))
-        #
+        
         return getclassrepr(self.rtyper, subclassdef).getruntime()
 
     def convert_const(self, value):
@@ -132,36 +131,75 @@ class AbstractInstanceRepr(Repr):
     def _setup_repr_final(self):
         pass
 
-    def new_instance(self, llops):
-        pass
+    def new_instance(self, llops, classcallhop=None):
+        raise NotImplementedError
+
+    def convert_const(self, value):
+        if value is None:
+            return self.null_instance()
+        if isinstance(value, types.MethodType):
+            value = value.im_self   # bound method -> instance
+        bk = self.rtyper.annotator.bookkeeper
+        try:
+            classdef = bk.getuniqueclassdef(value.__class__)
+        except KeyError:
+            raise TyperError("no classdef: %r" % (value.__class__,))
+        if classdef != self.classdef:
+            # if the class does not match exactly, check that 'value' is an
+            # instance of a subclass and delegate to that InstanceRepr
+            if classdef.commonbase(self.classdef) != self.classdef:
+                raise TyperError("not an instance of %r: %r" % (
+                    self.classdef.name, value))
+            rinstance = getinstancerepr(self.rtyper, classdef)
+            result = rinstance.convert_const(value)
+            return self.upcast(result)
+        # common case
+        return self.convert_const_exact(value)
+
+    def convert_const_exact(self, value):
+        try:
+            return self.prebuiltinstances[id(value)][1]
+        except KeyError:
+            self.setup()
+            result = self.create_instance()
+            self.prebuiltinstances[id(value)] = value, result
+            self.initialize_prebuilt_instance(value, self.classdef, result)
+            return result
+
+    def get_reusable_prebuilt_instance(self):
+        "Get a dummy prebuilt instance.  Multiple calls reuse the same one."
+        try:
+            return self._reusable_prebuilt_instance
+        except AttributeError:
+            self.setup()
+            result = self.create_instance()
+            self._reusable_prebuilt_instance = result
+            self.initialize_prebuilt_instance(Ellipsis, self.classdef, result)
+            return result
 
     def rtype_type(self, hop):
-        pass
-
-    def rtype_hash(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_getattr(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_setattr(self, hop):
-        pass
+        raise NotImplementedError
 
     def rtype_is_true(self, hop):
-        pass
+        raise NotImplementedError
 
     def ll_str(self, i):
-        pass
+        raise NotImplementedError
+
+    def get_ll_eq_function(self):
+        return None    # defaults to compare by identity ('==' on pointers)
+
+    def can_ll_be_null(self, s_value):
+        return s_value.can_be_none()
 
 # ____________________________________________________________
 
-def rtype_new_instance(rtyper, classdef, llops):
+def rtype_new_instance(rtyper, classdef, llops, classcallhop=None):
     rinstance = getinstancerepr(rtyper, classdef)
-    return rinstance.new_instance(llops)
-
-def instance_annotation_for_cls(rtyper, cls):
-    try:
-        classdef = rtyper.annotator.getuserclasses()[cls]
-    except KeyError:
-        raise TyperError("no classdef: %r" % (cls,))
-    return annmodel.SomeInstance(classdef)
+    return rinstance.new_instance(llops, classcallhop)

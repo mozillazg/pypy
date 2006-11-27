@@ -2,9 +2,11 @@ import py
 
 from pypy.translator.js.test.runtest import compile_function
 from pypy.translator.test.snippet import try_raise_choose
-from pypy.rpython.rarithmetic import r_uint, ovfcheck, ovfcheck_lshift
+from pypy.rlib.rarithmetic import r_uint, ovfcheck, ovfcheck_lshift
 
 import sys
+
+#py.test.skip("Exception work in progress")
 
 class TestException(Exception):
     pass
@@ -95,30 +97,44 @@ def test_pass_exc():
     assert f(10) == fn(10)
 
 def test_reraise1():
-    def fn(n):
+    def fn2(n):
         lst = range(10)
         try:
             getitem(lst,n)
         except:
             raise
         return 4
+    def fn(n):
+        try:
+            return fn2(n)
+        except:
+            return 123
     f = compile_function(fn, [int])
-    py.test.raises(Exception, "f(-1)")
+    assert f(-1) == 123
+    assert f(-1) == fn(-1)
     assert f( 0) == fn( 0)
-    py.test.raises(Exception, "f(10)")
+    assert f(10) == 123
+    assert f(10) == fn(10)
 
 def test_reraise2():
-    def fn(n):
+    def fn2(n):
         lst = range(10)
         try:
             getitem(lst,n)
         except Exception, e:
             raise e
         return 4
+    def fn(n):
+        try:
+            return fn2(n)
+        except:
+            return 123
     f = compile_function(fn, [int])
-    py.test.raises(Exception, "f(-1)")
+    assert f(-1) == 123
+    assert f(-1) == fn(-1)
     assert f( 0) == fn( 0)
-    py.test.raises(Exception, "f(10)")
+    assert f(10) == 123
+    assert f(10) == fn(10)
 
 def test_simple_exception():
     def fn(n):
@@ -164,7 +180,7 @@ def test_catch_base_exception():
     for i in range(10, 20):
         assert f(i) == fn(i)
 
-def DONTtest_catches(): #issue with empty object mallocs
+def test_catches():
     def raises(i):
         if i == 3:
             raise MyException, 12
@@ -253,3 +269,19 @@ def no_magic():
 def restore_magic(saved):
     if saved:
         py.magic.invoke(assertion=True)
+
+def test_always_raise():
+    def function_raise2(i):
+        if i == 3:
+            raise IndexError()
+        else:
+            pass
+    
+    def function_raise1(i):
+        try:
+            function_raise2(i)
+        except Exception, e:
+            return str(e)
+    
+    fn = compile_function(function_raise1, [int])
+    fn(3)

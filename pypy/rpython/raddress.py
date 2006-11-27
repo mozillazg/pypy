@@ -1,13 +1,23 @@
 # rtyping of memory address operations
 from pypy.annotation.pairtype import pairtype
 from pypy.annotation import model as annmodel
-from pypy.rpython.memory.lladdress import NULL, Address
+from pypy.rpython.memory.lladdress import _address
+from pypy.rpython.lltypesystem.llmemory import NULL, Address, \
+     cast_adr_to_int, WeakGcAddress
 from pypy.rpython.rmodel import Repr, IntegerRepr
+from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype
 
 class __extend__(annmodel.SomeAddress):
     def rtyper_makerepr(self, rtyper):
         return address_repr
+    
+    def rtyper_makekey(self):
+        return self.__class__,
+
+class __extend__(annmodel.SomeWeakGcAddress):
+    def rtyper_makerepr(self, rtyper):
+        return WeakGcAddressRepr(rtyper)
     
     def rtyper_makekey(self):
         return self.__class__,
@@ -23,8 +33,8 @@ class AddressRepr(Repr):
     lowleveltype = Address
 
     def convert_const(self, value):
-        assert value is NULL
-        return NULL
+        assert not isinstance(value, _address)
+        return value
 
     def rtype_getattr(self, hop):
         v_access = hop.inputarg(address_repr, 0)
@@ -36,6 +46,16 @@ class AddressRepr(Repr):
         return hop.genop('adr_ne', [v_addr, c_null],
                          resulttype=lltype.Bool)
 
+    def get_ll_eq_function(self):
+        return None
+
+    def get_ll_hash_function(self):
+        return ll_addrhash
+
+    get_ll_fasthash_function = get_ll_hash_function
+
+def ll_addrhash(addr1):
+    return cast_adr_to_int(addr1)
 
 address_repr = AddressRepr()
 
@@ -110,3 +130,34 @@ class __extend__(pairtype(AddressRepr, AddressRepr)):
         v_addr1, v_addr2 = hop.inputargs(Address, Address)
         return hop.genop('adr_ge', [v_addr1, v_addr2], resulttype=lltype.Bool)
 
+# conversions
+
+class __extend__(pairtype(PtrRepr, AddressRepr)):
+
+    def convert_from_to((r_ptr, r_addr), v, llops):
+        return llops.genop('cast_ptr_to_adr', [v], resulttype=Address)
+
+class WeakGcAddressRepr(Repr):
+    lowleveltype = WeakGcAddress
+
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
+
+    def convert_const(self, value):
+        from pypy.rpython.lltypesystem import llmemory
+        from pypy.rlib.objectmodel import cast_object_to_weakgcaddress
+        from pypy.objspace.flow.model import Constant
+        assert isinstance(value, llmemory.fakeweakaddress)
+        if value.ref is None:
+            return value
+        ob = value.ref()
+        assert ob is not None
+        bk = self.rtyper.annotator.bookkeeper
+        # obscure!  if the annotator hasn't seen this object before,
+        # we don't want to look at it now (confusion tends to result).
+        if bk.have_seen(ob):
+            repr = self.rtyper.bindingrepr(Constant(ob))
+            newob = repr.convert_const(ob)
+            return cast_object_to_weakgcaddress(newob)
+        else:
+            return llmemory.fakeweakaddress(None)

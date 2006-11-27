@@ -20,12 +20,12 @@ class Module(MixedModule):
         'prefix'                : 'space.wrap(sys.prefix)', 
         'maxunicode'            : 'space.wrap(sys.maxunicode)',
         'maxint'                : 'space.wrap(sys.maxint)',
-        'stdin'                 : 'state.getio(space).w_stdin', 
-        '__stdin__'             : 'state.getio(space).w_stdin', 
-        'stdout'                : 'state.getio(space).w_stdout', 
-        '__stdout__'            : 'state.getio(space).w_stdout', 
-        'stderr'                : 'state.getio(space).w_stderr', 
-        '__stderr__'            : 'state.getio(space).w_stderr', 
+        'stdin'                 : 'state.getio(space).w_stdin',
+        '__stdin__'             : 'state.getio(space).w_stdin',
+        'stdout'                : 'state.getio(space).w_stdout',
+        '__stdout__'            : 'state.getio(space).w_stdout',
+        'stderr'                : 'state.getio(space).w_stderr',
+        '__stderr__'            : 'state.getio(space).w_stderr',
         'pypy_objspaceclass'    : 'space.wrap(repr(space))',
 
         'path'                  : 'state.get(space).w_path', 
@@ -34,6 +34,7 @@ class Module(MixedModule):
         'warnoptions'           : 'state.get(space).w_warnoptions', 
         'builtin_module_names'  : 'state.w_None',
         'pypy_getudir'          : 'state.pypy_getudir', 
+        'pypy_initial_path'     : 'state.pypy_initial_path',
 
         '_getframe'             : 'vm._getframe', 
         'setrecursionlimit'     : 'vm.setrecursionlimit', 
@@ -69,6 +70,7 @@ class Module(MixedModule):
         'excepthook'            : 'app.excepthook', 
         '__excepthook__'        : 'app.excepthook', 
         'exit'                  : 'app.exit', 
+        'exitfunc'              : 'app.exitfunc',
         'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
         'getdefaultencoding'    : 'app.getdefaultencoding', 
@@ -96,11 +98,12 @@ class Module(MixedModule):
         w_modules = self.get('modules')
         self.space.setitem(w_modules, w_name, w_module)
 
-    def getdictvalue(self, space, attr): 
+    def getdictvalue(self, space, w_attr): 
         """ specialize access to dynamic exc_* attributes. """ 
-        value = MixedModule.getdictvalue(self, space, attr) 
+        value = MixedModule.getdictvalue(self, space, w_attr) 
         if value is not None: 
-            return value 
+            return value
+        attr = space.str_w(w_attr)
         if attr == 'exc_type':
             operror = space.getexecutioncontext().sys_exc_info()
             if operror is None:

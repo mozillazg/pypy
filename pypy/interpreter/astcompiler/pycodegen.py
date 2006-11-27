@@ -10,7 +10,8 @@ from pypy.interpreter.astcompiler import pyassem, misc, future, symbols
 from pypy.interpreter.astcompiler.consts import SC_LOCAL, SC_GLOBAL, \
     SC_FREE, SC_CELL, SC_DEFAULT, OP_APPLY, OP_ASSIGN, OP_DELETE, OP_NONE
 from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
-    CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, CO_FUTURE_DIVISION
+    CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, \
+    CO_FUTURE_DIVISION, CO_FUTURE_WITH_STATEMENT
 from pypy.interpreter.pyparser.error import SyntaxError
 
 # drop VERSION dependency since it the ast transformer for 2.4 doesn't work with 2.3 anyway
@@ -65,8 +66,6 @@ class AbstractCompileMode:
         self.source = source
         self.filename = filename
         self.code = None
-        # XXX: this attribute looks like unused anyway ???
-        self.mode = "" # defined by subclass
 
     def _get_tree(self):
         tree = parse(self.source, self.mode)
@@ -81,19 +80,15 @@ class AbstractCompileMode:
         return self.code
 
 class Expression(AbstractCompileMode):
-    def __init__(self, source, filename):
-        AbstractCompileMode.__init__(self, source, filename )
-        self.mode = "eval"
-        
+    mode = "eval"
+
     def compile(self):
         tree = self._get_tree()
         gen = ExpressionCodeGenerator(tree)
         self.code = gen.getCode()
 
 class Interactive(AbstractCompileMode):
-    def __init__(self, source, filename):
-        AbstractCompileMode.__init__(self, source, filename )
-        self.mode = "single"
+    mode = "single"
 
     def compile(self):
         tree = self._get_tree()
@@ -101,9 +96,7 @@ class Interactive(AbstractCompileMode):
         self.code = gen.getCode()
 
 class Module(AbstractCompileMode):
-    def __init__(self, source, filename):
-        AbstractCompileMode.__init__(self, source, filename )
-        self.mode = "exec"
+    mode = "exec"
 
     def compile(self, display=0):
         tree = self._get_tree()
@@ -144,8 +137,7 @@ class CodeGenerator(ast.ASTVisitor):
     """Defines basic code generator for Python bytecode
     """
 
-    scopeambiguity = False
-    class_name = ""
+    localsfullyknown = False
 
     def __init__(self, space, graph):
         self.space = space
@@ -164,6 +156,8 @@ class CodeGenerator(ast.ASTVisitor):
                 self._div_op = "BINARY_TRUE_DIVIDE"
             elif feature == "generators":
                 self.graph.setFlag(CO_GENERATOR_ALLOWED)
+            elif feature == "with_statement":
+                self.graph.setFlag(CO_FUTURE_WITH_STATEMENT)
 
     def emit(self, inst ):
         return self.graph.emit( inst )
@@ -205,10 +199,7 @@ class CodeGenerator(ast.ASTVisitor):
         return self.graph.getCode()
 
     def mangle(self, name):
-        if self.class_name:
-            return misc.mangle(name, self.class_name)
-        else:
-            return name
+        return self.scope.mangle(name)
 
     def parseSymbols(self, tree):
         s = symbols.SymbolVisitor(self.space)
@@ -224,12 +215,6 @@ class CodeGenerator(ast.ASTVisitor):
         self._nameOp('STORE', name)
 
     def loadName(self, name, lineno):
-        if (self.scope.nested and self.scopeambiguity and
-            name in self.scope.hasbeenfree):
-            raise SyntaxError("cannot reference variable '%s' because "
-                              "of ambiguity between "
-                              "scopes" % name, lineno)
-
         self._nameOp('LOAD', name)
 
     def delName(self, name, lineno):
@@ -237,7 +222,7 @@ class CodeGenerator(ast.ASTVisitor):
             raise SyntaxError('deleting %s is not allowed' % name, lineno)
         scope = self.scope.check_name(self.mangle(name))
         if scope == SC_CELL:
-            raise SyntaxError("can not delete variable '%s' "
+            raise SyntaxError("cannot delete variable '%s' "
                               "referenced in nested scope" % name, lineno)
         self._nameOp('DELETE', name)
 
@@ -259,8 +244,8 @@ class CodeGenerator(ast.ASTVisitor):
             else:
                 self.emitop(prefix + '_NAME', name)
         else:
-            raise RuntimeError, "unsupported scope for var %s: %d" % \
-                  (name, scope)
+            raise RuntimeError, "unsupported scope for var %s in %s: %d" % \
+                  (name, self.scope.name, scope)
 
     def _implicitNameOp(self, prefix, name):
         """Emit name ops for names generated implicitly by for loops
@@ -349,17 +334,14 @@ class CodeGenerator(ast.ASTVisitor):
             ndecorators = 0
 
         gen = FunctionCodeGenerator(self.space, node, isLambda,
-                               self.class_name, self.get_module(),
-                                    self.scopeambiguity)
+                                    self.get_module())
         node.code.accept( gen )
         gen.finish()
         self.set_lineno(node)
         for default in node.defaults:
             default.accept( self )
-        frees = gen.scope.get_free_vars()
+        frees = gen.scope.get_free_vars_in_parent()
         if frees:
-            # We contain a func with free vars.
-            # Any unqualified exec or import * is a SyntaxError
             for name in frees:
                 self.emitop('LOAD_CLOSURE', name)
             self.emitop_code('LOAD_CONST', gen)
@@ -373,8 +355,7 @@ class CodeGenerator(ast.ASTVisitor):
 
     def visitClass(self, node):
         gen = ClassCodeGenerator(self.space, node,
-                                 self.get_module(),
-                                 self.scopeambiguity)
+                                 self.get_module())
         node.code.accept( gen )
         gen.finish()
         self.set_lineno(node)
@@ -382,10 +363,8 @@ class CodeGenerator(ast.ASTVisitor):
         for base in node.bases:
             base.accept( self )
         self.emitop_int('BUILD_TUPLE', len(node.bases))
-        frees = gen.scope.get_free_vars()
+        frees = gen.scope.get_free_vars_in_parent()
         if frees:
-            # We contain a func with free vars.
-            # Any unqualified exec or import * is a SyntaxError
             for name in frees:
                 self.emitop('LOAD_CLOSURE', name)
             self.emitop_code('LOAD_CONST', gen)
@@ -501,6 +480,9 @@ class CodeGenerator(ast.ASTVisitor):
                 kind, loop_block = self.setups[top]
                 if kind == LOOP:
                     break
+                elif kind == END_FINALLY:
+                    msg = "'continue' not supported inside 'finally' clause"
+                    raise SyntaxError( msg, node.lineno )
             if kind != LOOP:
                 raise SyntaxError( "'continue' not properly in loop", node.lineno)
             self.emitop_block('CONTINUE_LOOP', loop_block)
@@ -524,6 +506,72 @@ class CodeGenerator(ast.ASTVisitor):
 
     def visitOr(self, node):
         self._visitTest(node, 'JUMP_IF_TRUE')
+
+    def visitCondExpr(self, node):
+        node.test.accept(self)
+
+        end = self.newBlock()
+        falseblock = self.newBlock()
+
+        self.emitop_block('JUMP_IF_FALSE', falseblock)
+
+        self.emit('POP_TOP')
+        node.true_expr.accept(self)
+        self.emitop_block('JUMP_FORWARD', end)
+
+        self.nextBlock(falseblock)
+        self.emit('POP_TOP')
+        node.false_expr.accept(self)
+
+        self.nextBlock(end)
+
+    __with_count = 0
+
+    def visitWith(self, node):
+        node.expr.accept(self)
+        self.emit('DUP_TOP')
+
+        ## exit = ctx.__exit__
+        self.emitop('LOAD_ATTR', '__exit__')
+        exit = "$exit%d" % self.__with_count
+        var = "$var%d" % self.__with_count
+        self.__with_count = self.__with_count + 1
+        self._implicitNameOp('STORE', exit)
+
+        self.emitop('LOAD_ATTR', '__enter__')
+        self.emitop_int('CALL_FUNCTION', 0)
+        finally_block = self.newBlock()
+        body = self.newBlock()
+
+        self.setups.append((TRY_FINALLY, body))
+
+        if node.var is not None:        # VAR is present
+            self._implicitNameOp('STORE', var)
+            self.emitop_block('SETUP_FINALLY', finally_block)
+            self.nextBlock(body)
+            self._implicitNameOp('LOAD', var)
+            self._implicitNameOp('DELETE', var)
+            node.var.accept(self) 
+        else:
+            self.emit('POP_TOP')
+            self.emitop_block('SETUP_FINALLY', finally_block)
+            self.nextBlock(body)
+
+        node.body.accept(self)
+        
+        self.emit('POP_BLOCK')
+        self.setups.pop()
+        self.emitop_obj('LOAD_CONST', self.space.w_None) # WITH_CLEANUP checks for normal exit
+        self.nextBlock(finally_block)
+        self.setups.append((END_FINALLY, finally_block))
+
+        # find local variable with is context.__exit__
+        self._implicitNameOp('LOAD', exit)
+        self._implicitNameOp('DELETE', exit)
+
+        self.emit('WITH_CLEANUP')
+        self.emit('END_FINALLY')
+        self.setups.pop()
 
     def visitCompare(self, node):
         node.expr.accept( self )
@@ -617,17 +665,14 @@ class CodeGenerator(ast.ASTVisitor):
         self.emit('POP_TOP')
 
     def visitGenExpr(self, node):
-        gen = GenExprCodeGenerator(self.space, node, self.class_name,
-                                   self.get_module(), self.scopeambiguity)
+        gen = GenExprCodeGenerator(self.space, node, self.get_module())
         inner = node.code
         assert isinstance(inner, ast.GenExprInner)
         inner.accept( gen )
         gen.finish()
         self.set_lineno(node)
-        frees = gen.scope.get_free_vars()
+        frees = gen.scope.get_free_vars_in_parent()
         if frees:
-            # We contain a func with free vars.
-            # Any unqualified exec or import * is a SyntaxError
             for name in frees:
                 self.emitop('LOAD_CLOSURE', name)
             self.emitop_code('LOAD_CONST', gen)
@@ -1018,6 +1063,8 @@ class CodeGenerator(ast.ASTVisitor):
         if node.value is None:
             self.emitop_obj('LOAD_CONST', self.space.w_None)
         else:
+            if self.scope.generator:
+                raise SyntaxError("'return' with argument inside generator")
             node.value.accept( self )
         self.emit('RETURN_VALUE')
 
@@ -1067,12 +1114,9 @@ class CodeGenerator(ast.ASTVisitor):
 
     def _visitSubscript(self, node, aug_flag):
         node.expr.accept( self )
-        for sub in node.subs:
-            sub.accept( self )
+        node.sub.accept( self )
         if aug_flag:
             self.emitop_int('DUP_TOPX', 2)
-        if len(node.subs) > 1:
-            self.emitop_int('BUILD_TUPLE', len(node.subs))
         if node.flags == OP_APPLY:
             self.emit('BINARY_SUBSCR')
         elif node.flags == OP_ASSIGN:
@@ -1236,8 +1280,7 @@ class InteractiveCodeGenerator(CodeGenerator):
         self.emit('PRINT_EXPR')
         
 class AbstractFunctionCode(CodeGenerator):
-    def __init__(self, space, func, isLambda, class_name, mod):
-        self.class_name = class_name
+    def __init__(self, space, func, isLambda, mod):
         self.module = mod
         if isLambda:
             name = "<lambda>"
@@ -1261,8 +1304,15 @@ class AbstractFunctionCode(CodeGenerator):
         if 'None' in argnames:
             raise SyntaxError('assignment to None is not allowed', func.lineno)
 
-        graph = pyassem.PyFlowGraph(space, name, func.filename, func.argnames,
-                                    mangler=self,
+        argnames = []
+        for i in range(len(func.argnames)):
+            var = func.argnames[i]
+            if isinstance(var, ast.AssName):
+                argnames.append(self.mangle(var.name))
+            elif isinstance(var, ast.AssTuple):
+                argnames.append('.%d' % (2 * i))
+                # (2 * i) just because CPython does that too
+        graph = pyassem.PyFlowGraph(space, name, func.filename, argnames,
                                     optimized=self.localsfullyknown,
                                     newlocals=1)
         self.isLambda = isLambda
@@ -1314,28 +1364,25 @@ class AbstractFunctionCode(CodeGenerator):
 
 class FunctionCodeGenerator(AbstractFunctionCode):
 
-    def __init__(self, space, func, isLambda, class_name, mod, parentscopeambiguity):
+    def __init__(self, space, func, isLambda, mod):
         assert func.scope is not None
         self.scope = func.scope
-        self.localsfullyknown = self.scope.localsfullyknown
-        self.scopeambiguity = (not self.localsfullyknown or parentscopeambiguity)
-        AbstractFunctionCode.__init__(self, space, func, isLambda, class_name, mod)
+        self.localsfullyknown = self.scope.locals_fully_known()
+        AbstractFunctionCode.__init__(self, space, func, isLambda, mod)
         
-        self.graph.setFreeVars(self.scope.get_free_vars())
+        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
         self.graph.setCellVars(self.scope.get_cell_vars())
         if self.scope.generator:
             self.graph.setFlag(CO_GENERATOR)
 
 class GenExprCodeGenerator(AbstractFunctionCode):
 
-    def __init__(self, space, gexp, class_name, mod, parentscopeambiguity):
+    def __init__(self, space, gexp, mod):
         assert gexp.scope is not None
         self.scope = gexp.scope
-        self.localsfullyknown = self.scope.localsfullyknown
-        self.scopeambiguity = (not self.localsfullyknown or parentscopeambiguity)
-
-        AbstractFunctionCode.__init__(self, space, gexp, 1, class_name, mod)
-        self.graph.setFreeVars(self.scope.get_free_vars())
+        self.localsfullyknown = self.scope.locals_fully_known()
+        AbstractFunctionCode.__init__(self, space, gexp, 1, mod)
+        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
         self.graph.setCellVars(self.scope.get_cell_vars())
         self.graph.setFlag(CO_GENERATOR)
 
@@ -1347,7 +1394,6 @@ class AbstractClassCode(CodeGenerator):
                                            optimized=0, klass=1)
 
         CodeGenerator.__init__(self, space, graph)
-        self.class_name = klass.name
         self.graph.setFlag(CO_NEWLOCALS)
         if not space.is_w(klass.w_doc, space.w_None):
             self.setDocstring(klass.w_doc)
@@ -1362,12 +1408,11 @@ class AbstractClassCode(CodeGenerator):
 
 class ClassCodeGenerator(AbstractClassCode):
 
-    def __init__(self, space, klass, module, parentscopeambiguity):
+    def __init__(self, space, klass, module):
         assert klass.scope is not None
         self.scope = klass.scope
-        self.scopeambiguity = parentscopeambiguity
         AbstractClassCode.__init__(self, space, klass, module)
-        self.graph.setFreeVars(self.scope.get_free_vars())
+        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
         self.graph.setCellVars(self.scope.get_cell_vars())
         self.set_lineno(klass)
         self.emitop("LOAD_GLOBAL", "__name__")
@@ -1414,7 +1459,7 @@ class AugLoadVisitor(ast.ASTVisitor):
         self.main.loadName(node.varname, node.lineno)
 
     def visitGetattr(self, node):
-        node.expr.accept( self )
+        node.expr.accept( self.main )
         self.main.emit('DUP_TOP')
         self.main.emitop('LOAD_ATTR', self.main.mangle(node.attrname))
 
@@ -1422,9 +1467,6 @@ class AugLoadVisitor(ast.ASTVisitor):
         self.main._visitSlice(node, True)
 
     def visitSubscript(self, node):
-        if len(node.subs) > 1:
-            raise SyntaxError( "augmented assignment to tuple is not possible",
-                               node.lineno)
         self.main._visitSubscript(node, True)
 
 
@@ -1457,9 +1499,6 @@ class AugStoreVisitor(ast.ASTVisitor):
         self.main.emit('STORE_SLICE+%d' % slice)
 
     def visitSubscript(self, node):
-        if len(node.subs) > 1:
-            raise SyntaxError("augmented assignment to tuple is not possible",
-                               node.lineno)
         self.main.emit('ROT_THREE')
         self.main.emit('STORE_SUBSCR')
 

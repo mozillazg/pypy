@@ -3,7 +3,7 @@ import py
 from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
-from pypy.rpython.objectmodel import free_non_gc_object
+from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rpython.test.test_llinterp import interpret
 
 def test_free_non_gc_object():
@@ -39,8 +39,8 @@ def test_alloc_flavor():
     assert s.knowntype == Adef
     rtyper = RPythonTyper(a)
     rtyper.specialize()
-    assert (Adef, False) in rtyper.instance_reprs
-    assert (Adef, True) not in rtyper.instance_reprs    
+    assert (Adef, 'raw') in rtyper.instance_reprs
+    assert (Adef, 'gc') not in rtyper.instance_reprs    
     
 def test_alloc_flavor_subclassing():
     class A:
@@ -58,10 +58,10 @@ def test_alloc_flavor_subclassing():
     assert s.knowntype == Bdef
     rtyper = RPythonTyper(a)
     rtyper.specialize()
-    assert (Adef, False) in rtyper.instance_reprs
-    assert (Adef, True) not in rtyper.instance_reprs
-    assert (Bdef, False) in rtyper.instance_reprs
-    assert (Bdef, True) not in rtyper.instance_reprs        
+    assert (Adef, 'raw') in rtyper.instance_reprs
+    assert (Adef, 'gc') not in rtyper.instance_reprs
+    assert (Bdef, 'raw') in rtyper.instance_reprs
+    assert (Bdef, 'gc') not in rtyper.instance_reprs        
 
 def test_unsupported():
     class A:
@@ -186,7 +186,6 @@ def test_is_mixing():
     assert res == 0x0200
 
 def test_rtype_nongc_object():
-    from pypy.rpython.memory.lladdress import address
     class TestClass(object):
         _alloc_flavor_ = "raw"
         def __init__(self, a):
@@ -204,5 +203,6 @@ def test_rtype_nongc_object():
     assert isinstance(s, annmodel.SomeAddress)
     rtyper = RPythonTyper(a)
     rtyper.specialize()
-##     res = interpret(malloc_and_free, [address()])
-##     assert res == address()
+##     from pypy.rpython.memory.lladdress import _address
+##     res = interpret(malloc_and_free, [_address()])
+##     assert res == _address()

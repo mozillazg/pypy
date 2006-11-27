@@ -1,19 +1,21 @@
 import autopath
 from pypy.objspace.std.dictobject import W_DictObject
-
-
+from pypy.conftest import gettestobjspace
 
 class TestW_DictObject:
 
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withstrdict": False})
+
     def test_empty(self):
         space = self.space
-        d = W_DictObject(space)
+        d = self.space.DictObjectCls(space)
         assert not self.space.is_true(d)
 
     def test_nonempty(self):
         space = self.space
         wNone = space.w_None
-        d = W_DictObject(space)
+        d = self.space.DictObjectCls(space)
         d.initialize_content([(wNone, wNone)])
         assert space.is_true(d)
         i = space.getitem(d, wNone)
@@ -24,7 +26,7 @@ class TestW_DictObject:
         space = self.space
         wk1 = space.wrap('key')
         wone = space.wrap(1)
-        d = W_DictObject(space)
+        d = self.space.DictObjectCls(space)
         d.initialize_content([(space.wrap('zero'),space.wrap(0))])
         space.setitem(d,wk1,wone)
         wback = space.getitem(d,wk1)
@@ -33,7 +35,7 @@ class TestW_DictObject:
     def test_delitem(self):
         space = self.space
         wk1 = space.wrap('key')
-        d = W_DictObject(space)
+        d = self.space.DictObjectCls(space)
         d.initialize_content( [(space.wrap('zero'),space.wrap(0)),
                                (space.wrap('one'),space.wrap(1)),
                                (space.wrap('two'),space.wrap(2))])
@@ -44,26 +46,33 @@ class TestW_DictObject:
                             space.getitem,d,space.wrap('one'))
 
     def test_wrap_dict(self):
-        assert isinstance(self.space.wrap({}), W_DictObject)
+        assert isinstance(self.space.wrap({}), self.space.DictObjectCls)
 
 
     def test_dict_compare(self):
         w = self.space.wrap
         w0, w1, w2, w3 = map(w, range(4))
-        wd1 = self.space.newdict([(w0, w1), (w2, w3)])
-        wd2 = self.space.newdict([(w2, w3), (w0, w1)])
+        def wd(items):
+            d = self.space.newdict()
+            d.initialize_content(items)
+            return d
+        wd1 = wd([(w0, w1), (w2, w3)])
+        wd2 = wd([(w2, w3), (w0, w1)])
         assert self.space.eq_w(wd1, wd2)
-        wd3 = self.space.newdict([(w2, w2), (w0, w1)])
+        wd3 = wd([(w2, w2), (w0, w1)])
         assert not self.space.eq_w(wd1, wd3)
-        wd4 = self.space.newdict([(w3, w3), (w0, w1)])
+        wd4 = wd([(w3, w3), (w0, w1)])
         assert not self.space.eq_w(wd1, wd4)
-        wd5 = self.space.newdict([(w3, w3)])
+        wd5 = wd([(w3, w3)])
         assert not self.space.eq_w(wd1, wd4)
 
     def test_dict_call(self):
         space = self.space
         w = space.wrap
-        wd = space.newdict
+        def wd(items):
+            d = space.newdict()
+            d.initialize_content(items)
+            return d
         def mydict(w_args=w(()), w_kwds=w({})):
             return space.call(space.w_dict, w_args, w_kwds)
         def deepwrap(lp):
@@ -83,7 +92,6 @@ class TestW_DictObject:
     def test_dict_pop(self):
         space = self.space
         w = space.wrap
-        wd = space.newdict
         def mydict(w_args=w(()), w_kwds=w({})):
             return space.call(space.w_dict, w_args, w_kwds)
         d = mydict(w_kwds=w({"1":2, "3":4}))
@@ -237,7 +245,17 @@ class AppTest_DictObject:
         d = {}
         d.update()
         assert d == {}
-    
+
+    def test_update_kwargs(self):
+        d = {}
+        d.update(foo='bar', baz=1)
+        assert d == {'foo': 'bar', 'baz': 1}
+
+    def test_update_dict_and_kwargs(self):
+        d = {}
+        d.update({'foo': 'bar'}, baz=1)
+        assert d == {'foo': 'bar', 'baz': 1}
+
     def test_values(self):
         d = {1:2, 3:4}
         vals = d.values()
@@ -354,6 +372,18 @@ class FakeSpace:
     eq_w = eq
     def newlist(self, l):
         return []
+    DictObjectCls = W_DictObject
+    def type(self, w_obj):
+        return type(w_obj)
+    w_str = str
+
+class Config:
+    pass
+
+FakeSpace.config = Config()
+FakeSpace.config.objspace = Config()
+FakeSpace.config.objspace.std = Config()
+FakeSpace.config.objspace.std.withdictmeasurement = False
 
 from pypy.objspace.std.dictobject import getitem__Dict_ANY, setitem__Dict_ANY_ANY
 
@@ -364,7 +394,7 @@ class TestDictImplementation:
 
     def test_stressdict(self):
         from random import randint
-        d = W_DictObject(self.space)
+        d = self.space.DictObjectCls(self.space)
         N = 10000
         pydict = {}
         for i in range(N):

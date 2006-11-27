@@ -4,9 +4,9 @@ from pypy.translator.translator import TranslationContext
 from pypy.translator.tool.taskengine import SimpleTaskEngine
 from pypy.translator.goal import query
 from pypy.annotation import model as annmodel
-from pypy.annotation import listdef
+from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
-import optparse
+from py.compat import optparse
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -14,19 +14,23 @@ log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
 
-DEFAULT_OPTIONS = optparse.Values(defaults={
-  'gc': 'ref',
+DEFAULTS = {
+  'translation.gc': 'ref',
+  'translation.cc': None,
+  'translation.profopt': None,
 
-  'thread': False, # influences GC policy
+  'translation.thread': False, # influences GC policy
 
-  'stackless': False,
-  'debug': True,
-  'insist': False,
-  'backend': 'c',
-  'lowmem': False,
-  'fork_before': None,
-  'merge_if_blocks': True
-})
+  'translation.stackless': False,
+  'translation.debug': True,
+  'translation.insist': False,
+  'translation.backend': 'c',
+  'translation.fork_before': None,
+  'translation.backendopt.raisingop2direct_call' : False,
+  'translation.backendopt.merge_if_blocks': True,
+  'translation.debug_transform' : False,
+}
+
 
 def taskdef(taskfunc, deps, title, new_state=None, expected_states=[], idemp=False):
     taskfunc.task_deps = deps
@@ -39,17 +43,63 @@ def taskdef(taskfunc, deps, title, new_state=None, expected_states=[], idemp=Fal
 # TODO:
 # sanity-checks using states
 
+_BACKEND_TO_TYPESYSTEM = {
+    'c': 'lltype',
+    'llvm': 'lltype'
+}
+
+def backend_to_typesystem(backend):
+    return _BACKEND_TO_TYPESYSTEM.get(backend, 'ootype')
+
+
+class Instrument(Exception):
+    pass
+
+
+class ProfInstrument(object):
+    name = "profinstrument"
+    def __init__(self, datafile, compiler):
+        self.datafile = datafile
+        self.compiler = compiler
+
+    def first(self):
+        self.compiler._build()
+
+    def probe(self, exe, args):
+        from py.compat import subprocess
+        env = os.environ.copy()
+        env['_INSTRUMENT_COUNTERS'] = str(self.datafile)
+        subprocess.call([exe, args], env=env)
+        
+    def after(self):
+        # xxx
+        os._exit(0)
+
+
 class TranslationDriver(SimpleTaskEngine):
 
-    def __init__(self, options=None, default_goal=None, disable=[]): 
+    def __init__(self, setopts=None, default_goal=None, disable=[],
+                 exe_name=None, extmod_name=None,
+                 config=None, overrides=None):
         SimpleTaskEngine.__init__(self)
 
         self.log = log
 
-        if options is None:
-            options = DEFAULT_OPTIONS
-        self.options = options
- 
+        if config is None:
+            from pypy.config.config import Config
+            from pypy.config.pypyoption import pypy_optiondescription
+            config = Config(pypy_optiondescription,
+                            **DEFAULTS)
+        self.config = config
+        if overrides is not None:
+            self.config.override(overrides)
+
+        if setopts is not None:
+            self.config.set(**setopts)
+        
+        self.exe_name = exe_name
+        self.extmod_name = extmod_name
+
         self.done = {}
 
         self.disable(disable)
@@ -61,30 +111,64 @@ class TranslationDriver(SimpleTaskEngine):
         
         self.default_goal = default_goal
 
+        self.exposed = []
+
         # expose tasks
-        def expose_task(task):
-            backend_goal, = self.backend_select_goals([task])
+        def expose_task(task, backend_goal=None):
+            if backend_goal is None:
+                backend_goal = task
             def proc():
                 return self.proceed(backend_goal)
+            self.exposed.append(task)
             setattr(self, task, proc)
 
-        if self.options.backend:
-            for task in ('annotate', 'rtype', 'backendopt', 'source', 'compile', 'run', 'llinterpret'):
-                expose_task(task)
-        else:
-            for task in self.tasks:
-                expose_task(task)
+        backend, ts = self.get_backend_and_type_system()
+        for task in self.tasks:
+            explicit_task = task
+            parts = task.split('_')
+            if len(parts) == 1:
+                if task in ('annotate'):
+                    expose_task(task)
+            else:
+                task, postfix = parts
+                if task in ('rtype', 'backendopt', 'llinterpret'):
+                    if ts:
+                        if ts == postfix:
+                            expose_task(task, explicit_task)
+                    else:
+                        expose_task(explicit_task)
+                elif task in ('source', 'compile', 'run'):
+                    if backend:
+                        if backend == postfix:
+                            expose_task(task, explicit_task)
+                    elif ts:
+                        if ts == backend_to_typesystem(postfix):
+                            expose_task(explicit_task)
+                    else:
+                        expose_task(explicit_task)
+    
+    def get_info(self): # XXX more?
+        d = {'backend': self.config.translation.backend}
+        return d
+
+    def get_backend_and_type_system(self):
+        type_system = self.config.translation.type_system
+        backend = self.config.translation.backend
+        return backend, type_system
 
     def backend_select_goals(self, goals):
-        backend = self.options.backend
+        backend, ts = self.get_backend_and_type_system()
+        postfixes = [''] + ['_'+p for p in (backend, ts) if p]
         l = []
         for goal in goals:
-            if goal in self.tasks:
-                l.append(goal)
-            elif backend:
-                goal = "%s_%s" % (goal, backend)
-                assert goal in self.tasks
-                l.append(goal)
+            for postfix in postfixes:
+                cand = "%s%s" % (goal, postfix)
+                if cand in self.tasks:
+                    new_goal = cand
+                    break
+            else:
+                raise Exception, "cannot infer complete goal from: %r" % goal 
+            l.append(new_goal)
         return l
 
     def disable(self, to_disable):
@@ -103,13 +187,11 @@ class TranslationDriver(SimpleTaskEngine):
         self.standalone = standalone
 
         if standalone:
-            ldef = listdef.ListDef(None, annmodel.SomeString())
-            ldef.resize()
-            inputtypes = [annmodel.SomeList(ldef)]
+            inputtypes = [s_list_of_strings]
         self.inputtypes = inputtypes
 
         if policy is None:
-            policy = annpolicy.AnnotatorPolicy()            
+            policy = annpolicy.AnnotatorPolicy()
         if standalone:
             policy.allow_someobjects = False
         self.policy = policy
@@ -118,14 +200,48 @@ class TranslationDriver(SimpleTaskEngine):
 
         if empty_translator:
             # set verbose flags
-            empty_translator.flags['verbose'] = True
+            empty_translator.config.translation.verbose = True
             translator = empty_translator
         else:
-            translator = TranslationContext(verbose=True)
+            translator = TranslationContext(config=self.config, verbose=True)
 
         self.entry_point = entry_point
         self.translator = translator
 
+        self.translator.driver_instrument_result = self.instrument_result
+
+    def instrument_result(self, args):
+        backend, ts = self.get_backend_and_type_system()
+        if backend != 'c' or sys.platform == 'win32':
+            raise Exception("instrumentation requires the c backend"
+                            " and unix for now")
+        from pypy.tool.udir import udir
+        
+        datafile = udir.join('_instrument_counters')
+        makeProfInstrument = lambda compiler: ProfInstrument(datafile, compiler)
+
+        pid = os.fork()
+        if pid == 0:
+            # child compiling and running with instrumentation
+            self.config.translation.instrument = True
+            self.config.translation.instrumentctl = (makeProfInstrument,
+                                                     args)
+            raise Instrument
+        else:
+            pid, status = os.waitpid(pid, 0)
+            if os.WIFEXITED(status):
+                status = os.WEXITSTATUS(status)
+                if status != 0:
+                    raise Exception, "instrumentation child failed: %d" % status
+            else:
+                raise Exception, "instrumentation child aborted"
+            import array, struct
+            n = datafile.size()//struct.calcsize('L')
+            datafile = datafile.open('rb')
+            counters = array.array('L')
+            counters.fromfile(datafile, n)
+            datafile.close()
+            return counters
 
     def info(self, msg):
         log.info(msg)
@@ -137,21 +253,39 @@ class TranslationDriver(SimpleTaskEngine):
             return
         else:
             self.log.info("%s..." % title)
-        res = func()
+        instrument = False
+        try:
+            res = func()
+        except Instrument:
+            instrument = True
         if not func.task_idempotent:
             self.done[goal] = True
+        if instrument:
+            self.proceed('compile')
+            assert False, 'we should not get here'
         return res
 
-    def task_annotate(self):  
+    def task_annotate(self):
         # includes annotation and annotatation simplifications
         translator = self.translator
         policy = self.policy
         self.log.info('with policy: %s.%s' % (policy.__class__.__module__, policy.__class__.__name__))
 
-        annmodel.DEBUG = self.options.debug
+        annmodel.DEBUG = self.config.translation.debug
         annotator = translator.buildannotator(policy=policy)
+        
         s = annotator.build_types(self.entry_point, self.inputtypes)
+        
+        if self.config.translation.debug_transform:
+            from pypy.translator.transformer.debug import DebugTransformer
+            dt = DebugTransformer(translator)
+            dt.transform_all()
+        
         self.sanity_check_annotation()
+        if self.standalone and s.knowntype != int:
+            raise Exception("stand-alone program entry point must return an "
+                            "int (and not, e.g., None or always raise an "
+                            "exception).")
         annotator.simplify()
         return s
     #
@@ -179,53 +313,82 @@ class TranslationDriver(SimpleTaskEngine):
 
 
 
-    def task_rtype(self):
-        opt = self.options
-        rtyper = self.translator.buildrtyper()
+    def task_rtype_lltype(self):
+        rtyper = self.translator.buildrtyper(type_system='lltype')
+        insist = not self.config.translation.insist
         rtyper.specialize(dont_simplify_again=True,
-                          crash_on_first_typeerror=not opt.insist)
+                          crash_on_first_typeerror=insist)
     #
-    task_rtype = taskdef(task_rtype, ['annotate'], "RTyping")
+    task_rtype_lltype = taskdef(task_rtype_lltype, ['annotate'], "RTyping")
+    RTYPE = 'rtype_lltype'
 
-    def task_backendopt(self):
-        from pypy.translator.backendopt.all import backend_optimizations
-        opt = self.options
-        backend_optimizations(self.translator, ssa_form=opt.backend != 'llvm',
-                              merge_if_blocks_to_switch=opt.merge_if_blocks)
+    def task_rtype_ootype(self):
+        # Maybe type_system should simply be an option used in task_rtype
+        insist = not self.config.translation.insist
+        rtyper = self.translator.buildrtyper(type_system="ootype")
+        rtyper.specialize(dont_simplify_again=True,
+                          crash_on_first_typeerror=insist)
     #
-    task_backendopt = taskdef(task_backendopt, 
-                                        ['rtype'], "Back-end optimisations") 
+    task_rtype_ootype = taskdef(task_rtype_ootype, ['annotate'], "ootyping")
+    OOTYPE = 'rtype_ootype'
+
+    def task_backendopt_lltype(self):
+        from pypy.translator.backendopt.all import backend_optimizations
+        backend_optimizations(self.translator)
+    #
+    task_backendopt_lltype = taskdef(task_backendopt_lltype,
+                                        [RTYPE], "lltype back-end optimisations")
+    BACKENDOPT = 'backendopt_lltype'
+
+    def task_backendopt_ootype(self):
+        from pypy.translator.backendopt.all import backend_optimizations
+        backend_optimizations(self.translator,
+                              raisingop2direct_call=False,
+                              inline_threshold=0,
+                              mallocs=False,
+                              merge_if_blocks=False,
+                              constfold=True,
+                              heap2stack=False,
+                              clever_malloc_removal=False)
+    #
+    task_backendopt_ootype = taskdef(task_backendopt_ootype, 
+                                        [OOTYPE], "ootype back-end optimisations")
+    OOBACKENDOPT = 'backendopt_ootype'
+
+
+    def task_stackcheckinsertion_lltype(self):
+        from pypy.translator.transform import insert_ll_stackcheck
+        insert_ll_stackcheck(self.translator)
+        
+    task_stackcheckinsertion_lltype = taskdef(
+        task_stackcheckinsertion_lltype,
+        ['?'+BACKENDOPT, RTYPE, 'annotate'],
+        "inserting stack checks")
+    STACKCHECKINSERTION = 'stackcheckinsertion_lltype'
 
     def task_database_c(self):
         translator = self.translator
-        opt = self.options
         if translator.annotator is not None:
             translator.frozen = True
 
         standalone = self.standalone
-        gcpolicy = None
-        if opt.gc =='boehm':
-            from pypy.translator.c import gc
-            gcpolicy = gc.BoehmGcPolicy
-        if opt.gc == 'none':
-            from pypy.translator.c import gc
-            gcpolicy = gc.NoneGcPolicy
 
         if standalone:
             from pypy.translator.c.genc import CStandaloneBuilder as CBuilder
         else:
             from pypy.translator.c.genc import CExtModuleBuilder as CBuilder
         cbuilder = CBuilder(self.translator, self.entry_point,
-                            gcpolicy       = gcpolicy,
-                            thread_enabled = getattr(opt, 'thread', False))
-        cbuilder.stackless = opt.stackless
+                            config=self.config)
+        cbuilder.stackless = self.config.translation.stackless
+        if not standalone:     # xxx more messy
+            cbuilder.modulename = self.extmod_name
         database = cbuilder.build_database()
         self.log.info("database for generating C source was created")
         self.cbuilder = cbuilder
         self.database = database
     #
-    task_database_c = taskdef(task_database_c, 
-                            ['?backendopt', '?rtype', '?annotate'], 
+    task_database_c = taskdef(task_database_c,
+                            [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE, '?annotate'], 
                             "Creating database for generating c source")
     
     def task_source_c(self):  # xxx messy
@@ -238,11 +401,16 @@ class TranslationDriver(SimpleTaskEngine):
     task_source_c = taskdef(task_source_c, ['database_c'], "Generating c source")
 
     def create_exe(self):
-        import shutil
-        exename = mkexename(self.c_entryp)
-        newexename = mkexename('./pypy-%s' % self.options.backend)
-        shutil.copy(exename, newexename)
-        self.c_entryp = newexename
+        if self.exe_name is not None:
+            import shutil
+            exename = mkexename(self.c_entryp)
+            info = {'backend': self.config.translation.backend}
+            newexename = self.exe_name % self.get_info()
+            if '/' not in newexename and '\\' not in newexename:
+                newexename = './' + newexename
+            newexename = mkexename(newexename)
+            shutil.copy(exename, newexename)
+            self.c_entryp = newexename
         self.log.info("created: %s" % (self.c_entryp,))
 
     def task_compile_c(self): # xxx messy
@@ -274,50 +442,50 @@ class TranslationDriver(SimpleTaskEngine):
                          "Running compiled c source",
                          idemp=True)
 
-    def task_llinterpret(self):
+    def task_llinterpret_lltype(self):
         from pypy.rpython.llinterp import LLInterpreter
         py.log.setconsumer("llinterp operation", None)
         
         translator = self.translator
         interp = LLInterpreter(translator.rtyper)
         bk = translator.annotator.bookkeeper
-        graph = bk.getdesc(self.entry_point).cachedgraph(None)
+        graph = bk.getdesc(self.entry_point).getuniquegraph()
         v = interp.eval_graph(graph,
                               self.extra.get('get_llinterp_args',
                                              lambda: [])())
 
         log.llinterpret.event("result -> %s" % v)
     #
-    task_llinterpret = taskdef(task_llinterpret, 
-                               ['?backendopt', 'rtype'], 
-                               "LLInterpreting")
+    task_llinterpret_lltype = taskdef(task_llinterpret_lltype, 
+                                      [STACKCHECKINSERTION, '?'+BACKENDOPT, RTYPE], 
+                                      "LLInterpreting")
 
     def task_source_llvm(self):
         translator = self.translator
-        opts = self.options
         if translator.annotator is None:
             raise ValueError, "llvm requires annotation."
 
         from pypy.translator.llvm import genllvm
 
         # XXX Need more options for policies/llvm-backendoptions here?
-        self.llvmgen = genllvm.GenLLVM(translator, self.options.gc,
-                                       None, self.standalone)
+        self.llvmgen = genllvm.GenLLVM(translator, self.config.translation.gc,
+                                       self.standalone)
 
         llvm_filename = self.llvmgen.gen_llvm_source(self.entry_point)
         self.log.info("written: %s" % (llvm_filename,))
     #
     task_source_llvm = taskdef(task_source_llvm, 
-                               ['backendopt', 'rtype'], 
+                               [STACKCHECKINSERTION, BACKENDOPT, RTYPE], 
                                "Generating llvm source")
 
     def task_compile_llvm(self):
         gen = self.llvmgen
         if self.standalone:
-            self.c_entryp = gen.compile_llvm_source(exe_name='pypy-llvm')
+            exe_name = (self.exe_name or 'testing') % self.get_info()
+            self.c_entryp = gen.compile_llvm_source(exe_name=exe_name)
             self.create_exe()
         else:
-            self.c_entryp = gen.compile_llvm_source(return_fn=True)
+            _, self.c_entryp = gen.compile_llvm_source()
     #
     task_compile_llvm = taskdef(task_compile_llvm, 
                                 ['source_llvm'], 
@@ -329,6 +497,94 @@ class TranslationDriver(SimpleTaskEngine):
     task_run_llvm = taskdef(task_run_llvm, ['compile_llvm'], 
                             "Running compiled llvm source",
                             idemp=True)
+
+    def task_source_cl(self):
+        from pypy.translator.cl.gencl import GenCL
+        self.gen = GenCL(self.translator, self.entry_point)
+        filename = self.gen.emitfile()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_cl = taskdef(task_source_cl, [OOTYPE],
+                             'Generating Common Lisp source')
+
+    def task_compile_cl(self):
+        pass
+    task_compile_cl = taskdef(task_compile_cl, ['source_cl'],
+                              'XXX')
+
+    def task_run_cl(self):
+        pass
+    task_run_cl = taskdef(task_run_cl, ['compile_cl'],
+                              'XXX')
+
+    def task_source_squeak(self):
+        from pypy.translator.squeak.gensqueak import GenSqueak
+        self.gen = GenSqueak(dir, self.translator)
+        filename = self.gen.gen()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_squeak = taskdef(task_source_squeak, [OOTYPE],
+                             'Generating Squeak source')
+
+    def task_compile_squeak(self):
+        pass
+    task_compile_squeak = taskdef(task_compile_squeak, ['source_squeak'],
+                              'XXX')
+
+    def task_run_squeak(self):
+        pass
+    task_run_squeak = taskdef(task_run_squeak, ['compile_squeak'],
+                              'XXX')
+
+    def task_source_js(self):
+        from pypy.translator.js.js import JS
+        self.gen = JS(self.translator, functions=[self.entry_point],
+                      stackless=self.config.translation.stackless,
+                      use_debug=self.config.translation.debug_transform)
+        filename = self.gen.write_source()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_js = taskdef(task_source_js, 
+                        [OOTYPE],
+                        'Generating Javascript source')
+
+    def task_compile_js(self):
+        pass
+    task_compile_js = taskdef(task_compile_js, ['source_js'],
+                              'Skipping Javascript compilation')
+
+    def task_run_js(self):
+        pass
+    task_run_js = taskdef(task_run_js, ['compile_js'],
+                              'Please manually run the generated code')
+
+    def task_source_cli(self):
+        from pypy.translator.cli.gencli import GenCli
+        from pypy.translator.cli.entrypoint import get_entrypoint
+        from pypy.tool.udir import udir
+
+        entry_point_graph = self.translator.graphs[0]
+        self.gen = GenCli(udir, self.translator, get_entrypoint(entry_point_graph),
+                          config=self.config)
+        filename = self.gen.generate_source()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_cli = taskdef(task_source_cli, ["?" + OOBACKENDOPT, OOTYPE],
+                             'Generating CLI source')
+
+    def task_compile_cli(self):
+        from pypy.translator.cli.support import unpatch
+        from pypy.translator.cli.test.runtest import CliFunctionWrapper
+        filename = self.gen.build_exe()
+        self.c_entryp = CliFunctionWrapper(filename)
+        # restore original os values
+        unpatch(*self.old_cli_defs)
+        
+        self.log.info("Compiled %s" % filename)
+    task_compile_cli = taskdef(task_compile_cli, ['source_cli'],
+                              'Compiling CLI source')
+
+    def task_run_cli(self):
+        pass
+    task_run_cli = taskdef(task_run_cli, ['compile_cli'],
+                              'XXX')
+
 
     def proceed(self, goals):
         if not goals:
@@ -342,16 +598,22 @@ class TranslationDriver(SimpleTaskEngine):
         goals = self.backend_select_goals(goals)
         return self._execute(goals, task_skip = self._maybe_skip())
 
-    def from_targetspec(targetspec_dic, options=None, args=None, empty_translator=None, 
+    def from_targetspec(targetspec_dic, config=None, args=None,
+                        empty_translator=None,
                         disable=[],
                         default_goal=None):
         if args is None:
             args = []
-        if options is None:
-            options = DEFAULT_OPTIONS
 
-        driver = TranslationDriver(options, default_goal, disable)
-            
+        driver = TranslationDriver(config=config, default_goal=default_goal,
+                                   disable=disable)
+        # patch some attributes of the os module to make sure they
+        # have the same value on every platform.
+        backend, ts = driver.get_backend_and_type_system()
+        if backend == 'cli':
+            from pypy.translator.cli.support import patch
+            driver.old_cli_defs = patch()
+        
         target = targetspec_dic['target']
         spec = target(driver, args)
 
@@ -373,11 +635,13 @@ class TranslationDriver(SimpleTaskEngine):
     def prereq_checkpt_rtype(self):
         assert 'pypy.rpython.rmodel' not in sys.modules, (
             "cannot fork because the rtyper has already been imported")
+    prereq_checkpt_rtype_lltype = prereq_checkpt_rtype
+    prereq_checkpt_rtype_ootype = prereq_checkpt_rtype    
 
     # checkpointing support
     def _event(self, kind, goal, func):
         if kind == 'pre':
-            fork_before = self.options.fork_before
+            fork_before = self.config.translation.fork_before
             if fork_before:
                 fork_before, = self.backend_select_goals([fork_before])
                 if not fork_before in self.done and fork_before == goal:

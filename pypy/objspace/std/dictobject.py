@@ -8,14 +8,13 @@ for order comparisons.
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
 
-from pypy.rpython.objectmodel import r_dict
+from pypy.rlib.objectmodel import r_dict
 
 
 class W_DictObject(W_Object):
     from pypy.objspace.std.dicttype import dict_typedef as typedef
 
     def __init__(w_self, space, w_otherdict=None):
-        W_Object.__init__(w_self, space)
         if w_otherdict is None:
             w_self.content = r_dict(space.eq_w, space.hash_w)
         else:
@@ -29,13 +28,21 @@ class W_DictObject(W_Object):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, w_self.content)
 
-    def unwrap(w_dict):
-        space = w_dict.space
+    def unwrap(w_dict, space):
         result = {}
         for w_key, w_value in w_dict.content.items():
             # generic mixed types unwrap
             result[space.unwrap(w_key)] = space.unwrap(w_value)
         return result
+
+    def len(w_self):
+        return len(w_self.content)
+
+    def get(w_dict, w_lookup, w_default):
+        return w_dict.content.get(w_lookup, w_default)
+
+    def set_str_keyed_item(w_dict, w_key, w_value):
+        w_dict.content[w_key] = w_value
 
 registerimplementation(W_DictObject)
 
@@ -43,8 +50,8 @@ registerimplementation(W_DictObject)
 def init__Dict(space, w_dict, __args__):
     w_src, w_kwds = __args__.parse('dict',
                           (['seq_or_map'], None, 'kwargs'), # signature
-                          [W_DictObject(space)])        # default argument
-    w_dict.content.clear()
+                          [W_DictObject(space)])            # default argument
+    # w_dict.content.clear() - disabled only for CPython compatibility
     try:
         space.getattr(w_src, space.wrap("keys"))
     except OperationError:
@@ -58,11 +65,11 @@ def init__Dict(space, w_dict, __args__):
             w_dict.content[w_k] = w_v
     else:
         if space.is_true(w_src):
-            from pypy.objspace.std.dicttype import dict_update__ANY_ANY
-            dict_update__ANY_ANY(space, w_dict, w_src)
+            from pypy.objspace.std.dicttype import update1
+            update1(space, w_dict, w_src)
     if space.is_true(w_kwds):
-        from pypy.objspace.std.dicttype import dict_update__ANY_ANY
-        dict_update__ANY_ANY(space, w_dict, w_kwds)
+        from pypy.objspace.std.dicttype import update1
+        update1(space, w_dict, w_kwds)
 
 def getitem__Dict_ANY(space, w_dict, w_lookup):
     try:
@@ -147,9 +154,6 @@ def lt__Dict_Dict(space, w_left, w_right):
         w_res = space.lt(w_leftval, w_rightval)
     return w_res
 
-def hash__Dict(space,w_dict):
-    raise OperationError(space.w_TypeError,space.wrap("dict objects are unhashable"))
-
 def dict_copy__Dict(space, w_self):
     return W_DictObject(space, w_self)
 
@@ -219,14 +223,12 @@ class W_DictIterObject(W_Object):
     from pypy.objspace.std.dicttype import dictiter_typedef as typedef
 
     def __init__(w_self, space, w_dictobject):
-        W_Object.__init__(w_self, space)
+        w_self.space = space
         w_self.content = content = w_dictobject.content
         w_self.len = len(content)
         w_self.pos = 0
         w_self.setup_iterator()
 
-    def return_entry(w_self, w_key, w_value):
-        raise NotImplementedError
 
 registerimplementation(W_DictIterObject)
 
@@ -272,7 +274,12 @@ def next__DictIterObject(space, w_dictiter):
             raise OperationError(space.w_RuntimeError,
                      space.wrap("dictionary changed size during iteration"))
         # look for the next entry
-        w_result = w_dictiter.next_entry()
+        try:
+            w_result = w_dictiter.next_entry()
+        except RuntimeError:
+            # it's very likely the underlying dict changed during iteration
+            raise OperationError(space.w_RuntimeError,
+                     space.wrap("dictionary changed during iteration"))
         if w_result is not None:
             w_dictiter.pos += 1
             return w_result

@@ -1,10 +1,15 @@
-import threading, pdb
+import pdb
 import types
+import code
+import sys
 from pypy.objspace.flow.model import FunctionGraph
 
 class _EnableGraphic:
     def __init__(self, port=None):
         self.port = port
+
+class NoTTY(Exception):
+    pass
 
 class PdbPlusShow(pdb.Pdb):
 
@@ -18,6 +23,11 @@ class PdbPlusShow(pdb.Pdb):
         while t.tb_next is not None:
             t = t.tb_next
         self.interaction(t.tb_frame, t)        
+
+    def preloop(self):
+        if not hasattr(sys.stdout, 'isatty') or not sys.stdout.isatty():
+            raise NoTTY("Cannot start the debugger when stdout is captured.")
+        pdb.Pdb.preloop(self)
 
     def expose(self, d):
         self.exposed.update(d)
@@ -397,6 +407,12 @@ start serving graphs on <port>
             return
         raise _EnableGraphic(int(arg))
 
+    def do_interact(self, arg):
+        """invoke a code.py sub prompt"""
+        ns = self.curframe.f_globals.copy()
+        ns.update(self.curframe.f_locals)
+        code.interact("*interactive*", local=ns)
+
     def help_graphs(self):
         print "graph commands are: showg, flowg, callg, classhier, enable_graphic"
 
@@ -429,6 +445,7 @@ start serving graphs on <port>
             finally:
                 if cleanup is not None:
                     cleanup(*cleanup_args)
+        import threading
         return threading.Thread(target=_run_in_thread, args=())
 
     def start(self, tb, server_setup, graphic=False):
@@ -440,9 +457,26 @@ start serving graphs on <port>
                 port = engraph.port
             else:
                 return
-        start, show, stop = server_setup(port)
+        try:
+            start, show, stop = server_setup(port)
+        except Exception, e:
+            print '%s.%s: %s' % (e.__class__.__module__,
+                                 e.__class__.__name__, e)
+            return self.start(tb, server_setup, graphic=False)
         self.install_show(show)
         debugger = self._run_debugger_in_thread(tb, stop)
         debugger.start()
         start()
         debugger.join()
+
+
+def pdbcatch(f):
+    "A decorator that throws you in a pdbplus if the given function raises."
+    def wrapper(*args, **kwds):
+        try:
+            return f(*args, **kwds)
+        except:
+            import sys
+            PdbPlusShow(None).post_mortem(sys.exc_info()[2])
+            raise
+    return wrapper

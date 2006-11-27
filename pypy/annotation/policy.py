@@ -1,14 +1,15 @@
 # base annotation policy for overrides and specialization
 from pypy.annotation.specialize import default_specialize as default
-from pypy.annotation.specialize import argtype, argvalue, arglistitemtype
+from pypy.annotation.specialize import specialize_argvalue, specialize_argtype, specialize_arglistitemtype
 from pypy.annotation.specialize import memo
 # for some reason, model must be imported first,
 # or we create a cycle.
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
+import types
 
 
-class BasicAnnotatorPolicy:
+class BasicAnnotatorPolicy(object):
     allow_someobjects = True
 
     def event(pol, bookkeeper, what, *args):
@@ -26,6 +27,10 @@ class BasicAnnotatorPolicy:
             callback()
         del annotator.bookkeeper.pending_specializations[:]
 
+    def _adjust_space_config(self, space):
+        # allow to override space options.
+        if getattr(self, 'override_do_imports_immediately', None) is not None:
+            space.do_imports_immediately = self.override_do_imports_immediately
 
 class AnnotatorPolicy(BasicAnnotatorPolicy):
     """
@@ -36,44 +41,93 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
         if directive is None:
             return pol.default_specialize
 
-        name = directive.replace(':', '__')
+        # specialize|override:name[(args)]
+        directive_parts = directive.split('(', 1)
+        if len(directive_parts) == 1:
+            [name] = directive_parts
+            parms = ()
+        else:
+            name, parms = directive_parts
+            try:
+                parms = eval("(lambda *parms: parms)(%s" % parms)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                raise Exception, "broken specialize directive parms: %s" % directive
+        name = name.replace(':', '__')
         try:
             specializer = getattr(pol, name)
         except AttributeError:
             raise AttributeError("%r specialize tag not defined in annotation"
-                                 "policy %s" % (directive, pol))
+                                 "policy %s" % (name, pol))
         if directive.startswith('override:'):
             # different signature: override__xyz(*args_s)
+            if parms:
+                raise Exception, "override:* specialisations don't support parameters"
             def specialize_override(funcdesc, args_s):
                 funcdesc.overridden = True
                 return specializer(*args_s)
             return specialize_override
         else:
-            return specializer
+            if not parms:
+                return specializer
+            else:
+                def specialize_with_parms(funcdesc, args_s):
+                    return specializer(funcdesc, args_s, *parms)
+                return specialize_with_parms
         
     # common specializations
 
     default_specialize = staticmethod(default)
     specialize__memo = staticmethod(memo)
-    specialize__arg0 = staticmethod(argvalue(0))
-    specialize__argtype0 = staticmethod(argtype(0))
-    specialize__arglistitemtype0 = staticmethod(arglistitemtype(0))
-    specialize__arg1 = staticmethod(argvalue(1))
-    specialize__argtype1 = staticmethod(argtype(1))
-    specialize__arglistitemtype1 = staticmethod(arglistitemtype(1))
-    specialize__arg2 = staticmethod(argvalue(2))
-    specialize__argtype2 = staticmethod(argtype(2))
-    specialize__arglistitemtype2 = staticmethod(arglistitemtype(2))
-    specialize__arg3 = staticmethod(argvalue(3))
-    specialize__argtype3 = staticmethod(argtype(3))
-    specialize__arglistitemtype3 = staticmethod(arglistitemtype(3))
-    specialize__arg4 = staticmethod(argvalue(4))
-    specialize__argtype4 = staticmethod(argtype(4))
-    specialize__arglistitemtype4 = staticmethod(arglistitemtype(4))
-    specialize__arg5 = staticmethod(argvalue(5))
-    specialize__argtype5 = staticmethod(argtype(5))
-    specialize__arglistitemtype5 = staticmethod(arglistitemtype(5))
+    specialize__arg = staticmethod(specialize_argvalue) # specialize:arg(N)
+    specialize__argtype = staticmethod(specialize_argtype) # specialize:argtype(N)
+    specialize__arglistitemtype = staticmethod(specialize_arglistitemtype)
+
+    def specialize__ll(pol, *args):
+        from pypy.rpython.annlowlevel import LowLevelAnnotatorPolicy
+        return LowLevelAnnotatorPolicy.default_specialize(*args)
 
     def override__ignore(pol, *args):
         bk = getbookkeeper()
         return bk.immutablevalue(None)
+
+# ____________________________________________________________
+
+class Sig(object):
+
+    def __init__(self, *argtypes):
+        self.argtypes = argtypes
+        
+    def __call__(self, funcdesc, inputcells):
+        from pypy.rpython.lltypesystem import lltype
+        args_s = []
+        for i, argtype in enumerate(self.argtypes):
+            if isinstance(argtype, (types.FunctionType, types.MethodType)):
+                argtype = argtype(*inputcells)
+            if isinstance(argtype, annmodel.SomeObject):
+                args_s.append(argtype)
+            elif isinstance(argtype, lltype.LowLevelType):
+                if argtype is lltype.Void:
+                    # XXX the mapping between Void and annotation
+                    # is not quite well defined
+                    s_input = inputcells[i]
+                    assert isinstance(s_input, annmodel.SomePBC)
+                    assert s_input.is_constant()
+                    args_s.append(s_input)
+                else:
+                    args_s.append(annmodel.lltype_to_annotation(argtype))
+            else:
+                args_s.append(funcdesc.bookkeeper.valueoftype(argtype))
+        if len(inputcells) != len(args_s):
+            raise Exception("%r: expected %d args, got %d" % (funcdesc,
+                                                              len(args_s),
+                                                              len(inputcells)))
+        for i, (s_arg, s_input) in enumerate(zip(args_s, inputcells)):
+            if not s_arg.contains(s_input):
+                raise Exception("%r argument %d:\n"
+                                "expected %s,\n"
+                                "     got %s" % (funcdesc, i+1,
+                                             s_arg,
+                                             s_input))
+        inputcells[:] = args_s

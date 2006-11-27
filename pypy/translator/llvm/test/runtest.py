@@ -1,27 +1,36 @@
 import py
+from pypy.tool import isolate
 from pypy.translator.llvm.genllvm import genllvm_compile
-
+from pypy.translator.llvm.buildllvm import llvm_is_on_path, llvm_version
 optimize_tests = False
-MINIMUM_LLVM_VERSION = 1.6
+MINIMUM_LLVM_VERSION = 1.7
 
-def llvm_is_on_path():
-    try:
-        py.path.local.sysfind("llvm-as")
-        py.path.local.sysfind("llvm-gcc")
-    except py.error.ENOENT: 
-        return False 
-    return True
+ext_modules = []
 
-def llvm_version():
-    import os
-    v = os.popen('llvm-as -version 2>&1').readline()
-    v = ''.join([c for c in v if c.isdigit()])
-    v = int(v) / 10.0
-    return v
+# test options
+run_isolated_only = True
+do_not_isolate = False
 
+def _cleanup(leave=0):
+    # no test should ever need more than 5 compiled functions
+    if leave:
+        mods = ext_modules[:-leave]
+    else:        
+        mods = ext_modules
+    for mod in mods:
+        if isinstance(mod, isolate.Isolate):
+            isolate.close_isolate(mod)        
+    if leave:
+        del ext_modules[:-leave]
+    else:
+        del ext_modules[:]
+            
+def teardown_module(mod):
+    _cleanup()
+    
 def llvm_test():
     if not llvm_is_on_path():
-        py.test.skip("llvm not found")
+        py.test.skip("could not find one of llvm-as or llvm-gcc")
         return False
     v = llvm_version()
     if v < MINIMUM_LLVM_VERSION:
@@ -30,21 +39,25 @@ def llvm_test():
         return False
     return True
 
-def compile_test(function, annotation, **kwds):
-    if llvm_test():        
-        return genllvm_compile(function, annotation, optimize=optimize_tests,
-                               logging=False, **kwds)
-
-def compile_optimized_test(function, annotation, **kwds):
-    if llvm_test():        
-        return genllvm_compile(function, annotation, optimize=True,
-                               logging=False, **kwds)
-
-def compile_function(function, annotation, **kwds):
+def compile_test(function, annotation, isolate=True, **kwds):
+    " returns module and compiled function "    
     if llvm_test():
-        return compile_test(function, annotation, return_fn=True, **kwds)
+        if run_isolated_only and not isolate:
+            py.test.skip("skipping not isolated test")
 
-def compile_optimized_function(function, annotation, **kwds):
-    if llvm_test():
-        return compile_optimized_test(function, annotation, return_fn=True, **kwds)
+        # turn off isolation?
+        isolate = isolate and not do_not_isolate
+            
+        # maintain only 3 isolated process (if any)
+        _cleanup(leave=3)
+        optimize = kwds.pop('optimize', optimize_tests)
+        mod, fn = genllvm_compile(function, annotation, optimize=optimize,
+                                  logging=False, isolate=isolate, **kwds)
+        if isolate:
+            ext_modules.append(mod)
+        return mod, fn
+
+def compile_function(function, annotation, isolate=True, **kwds):
+    " returns compiled function "
+    return compile_test(function, annotation, isolate=isolate, **kwds)[1]
 

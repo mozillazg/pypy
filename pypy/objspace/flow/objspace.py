@@ -7,6 +7,7 @@ from pypy.interpreter.error import OperationError
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow import flowcontext
 from pypy.objspace.flow.operation import FunctionByName
+from pypy.rlib.unroll import unrolling_iterable, _unroller
 
 debug = 0
 
@@ -16,8 +17,11 @@ class UnwrapException(Exception):
 class WrapException(Exception):
     """Attempted wrapping of a type that cannot sanely appear in flow graph or during its construction"""
 
-# method-wrappers
-method_wrapper = type(complex.real.__get__)
+# method-wrappers have not enough introspection in CPython
+if hasattr(complex.real.__get__, 'im_self'):
+    type_with_bad_introspection = None     # on top of PyPy
+else:
+    type_with_bad_introspection = type(complex.real.__get__)
 
 
 # ______________________________________________________________________
@@ -29,9 +33,6 @@ class FlowObjSpace(ObjSpace):
     """
     
     full_exceptions = False
-
-    builtins_can_raise_exceptions = False
-    do_imports_immediately = True
 
     def initialize(self):
         import __builtin__
@@ -49,7 +50,8 @@ class FlowObjSpace(ObjSpace):
         self.w_tuple    = Constant(tuple)
         self.concrete_mode = 0
         for exc in [KeyError, ValueError, IndexError, StopIteration,
-                    AssertionError, TypeError]:
+                    AssertionError, TypeError, AttributeError, ImportError,
+                    RuntimeError]:
             clsname = exc.__name__
             setattr(self, 'w_'+clsname, Constant(exc))
         # the following exceptions are the ones that should not show up
@@ -77,16 +79,10 @@ class FlowObjSpace(ObjSpace):
         self.executioncontext.recorder = previous_recorder
         self.concrete_mode -= 1
 
-    def newdict(self, items_w):
+    def newdict(self):
         if self.concrete_mode:
-            content = [(self.unwrap(w_key), self.unwrap(w_value))
-                       for w_key, w_value in items_w]
-            return Constant(dict(content))
-        flatlist_w = []
-        for w_key, w_value in items_w:
-            flatlist_w.append(w_key)
-            flatlist_w.append(w_value)
-        return self.do_operation('newdict', *flatlist_w)
+            return Constant({})
+        return self.do_operation('newdict')
 
     def newtuple(self, args_w):
         try:
@@ -114,7 +110,7 @@ class FlowObjSpace(ObjSpace):
             raise TypeError("already wrapped: " + repr(obj))
         # method-wrapper have ill-defined comparison and introspection
         # to appear in a flow graph
-        if type(obj) is method_wrapper:
+        if type(obj) is type_with_bad_introspection:
             raise WrapException
         return Constant(obj)
 
@@ -125,6 +121,16 @@ class FlowObjSpace(ObjSpace):
                 raise TypeError("expected integer: " + repr(w_obj))
             return val
         return self.unwrap(w_obj)
+
+    def uint_w(self, w_obj):
+        if isinstance(w_obj, Constant):
+            from pypy.rlib.rarithmetic import r_uint
+            val = w_obj.value
+            if type(val) is not r_uint:
+                raise TypeError("expected unsigned: " + repr(w_obj))
+            return val
+        return self.unwrap(w_obj)
+
 
     def str_w(self, w_obj):
         if isinstance(w_obj, Constant):
@@ -155,7 +161,8 @@ class FlowObjSpace(ObjSpace):
         to_check = obj
         if hasattr(to_check, 'im_self'):
             to_check = to_check.im_self
-        if (not isinstance(to_check, (type, types.ClassType)) and # classes/types are assumed immutable
+        if (not isinstance(to_check, (type, types.ClassType, types.ModuleType)) and
+            # classes/types/modules are assumed immutable
             hasattr(to_check, '__class__') and to_check.__class__.__module__ != '__builtin__'):
             frozen = hasattr(to_check, '_freeze_') and to_check._freeze_()
             if not frozen:
@@ -182,7 +189,6 @@ class FlowObjSpace(ObjSpace):
         specialcase.setup(self)
 
     def exception_match(self, w_exc_type, w_check_class):
-        self.executioncontext.recorder.crnt_block.exc_handler = True
         try:
             check_class = self.unwrap(w_check_class)
         except UnwrapException:
@@ -225,7 +231,7 @@ class FlowObjSpace(ObjSpace):
         if func.func_doc and func.func_doc.lstrip().startswith('NOT_RPYTHON'):
             raise Exception, "%r is tagged as NOT_RPYTHON" % (func,)
         code = func.func_code
-        code = PyCode(self)._from_code(code)
+        code = PyCode._from_code(self, code)
         if func.func_closure is None:
             closure = None
         else:
@@ -245,9 +251,16 @@ class FlowObjSpace(ObjSpace):
         # so that it becomes even more interchangeable with the function
         # itself
         graph.signature = cpython_code_signature(code)
-        graph.defaults = func.func_defaults
+        graph.defaults = func.func_defaults or ()
         self.setup_executioncontext(ec)
-        ec.build_flow()
+
+        from pypy.tool.error import FlowingError, format_global_error
+
+        try:
+            ec.build_flow()
+        except FlowingError, a:
+            # attach additional source info to AnnotatorError
+            raise FlowingError(format_global_error(ec.graph, ec.crnt_offset, str(a)))
         checkgraph(graph)
         return graph
 
@@ -328,12 +341,40 @@ class FlowObjSpace(ObjSpace):
         context = self.getexecutioncontext()
         return context.guessbool(w_truthvalue)
 
+    def iter(self, w_iterable):
+        try:
+            iterable = self.unwrap(w_iterable)
+        except UnwrapException:
+            pass
+        else:
+            if isinstance(iterable, unrolling_iterable):
+                return self.wrap(iterable.get_unroller())
+        w_iter = self.do_operation("iter", w_iterable)
+        return w_iter
+
     def next(self, w_iter):
-        w_item = self.do_operation("next", w_iter)
         context = self.getexecutioncontext()
-        outcome, w_exc_cls, w_exc_value = context.guessexception(StopIteration)
+        try:
+            it = self.unwrap(w_iter)
+        except UnwrapException:
+            pass
+        else:
+            if isinstance(it, _unroller):
+                try:
+                    v, next_unroller = it.step()
+                except IndexError:
+                    raise OperationError(self.w_StopIteration, self.w_None)
+                else:
+                    context.replace_in_stack(it, next_unroller)
+                    return self.wrap(v)
+        w_item = self.do_operation("next", w_iter)
+        outcome, w_exc_cls, w_exc_value = context.guessexception(StopIteration,
+                                                                 RuntimeError)
         if outcome is StopIteration:
             raise OperationError(self.w_StopIteration, w_exc_value)
+        elif outcome is RuntimeError:
+            raise flowcontext.ImplicitOperationError(self.w_RuntimeError,
+                                                     w_exc_value)
         else:
             return w_item
 
@@ -384,7 +425,7 @@ class FlowObjSpace(ObjSpace):
         exceptions = [Exception]   # *any* exception by default
         if isinstance(w_callable, Constant):
             c = w_callable.value
-            if not self.builtins_can_raise_exceptions:
+            if not self.config.translation.builtins_can_raise_exceptions:
                 if (isinstance(c, (types.BuiltinFunctionType,
                                    types.BuiltinMethodType,
                                    types.ClassType,
@@ -412,6 +453,15 @@ class FlowObjSpace(ObjSpace):
                     #pass
                  raise flowcontext.ImplicitOperationError(w_exc_cls,
                                                          w_exc_value)
+
+    def w_KeyboardInterrupt(self):
+        # XXX XXX Ha Ha
+        # the reason to do this is: if you interrupt the flowing of a function
+        # with <Ctrl-C> the bytecode interpreter will raise an applevel
+        # KeyboardInterrup and you will get an AttributeError: space does not
+        # have w_KeyboardInterrupt, which is not very helpful
+        raise KeyboardInterrupt
+    w_KeyboardInterrupt = property(w_KeyboardInterrupt)
 
 # the following gives us easy access to declare more for applications:
 NOT_REALLY_CONST = {
@@ -449,6 +499,12 @@ implicit_exceptions = {
     int: [ValueError],      # built-ins that can always raise exceptions
     chr: [ValueError],
     unichr: [ValueError],
+    # specifying IndexError, and KeyError beyond Exception,
+    # allows the annotator to be more precise, see test_reraiseAnything/KeyError in
+    # the annotator tests
+    'getitem': [IndexError, KeyError, Exception],
+    'setitem': [IndexError, KeyError, Exception],
+    'delitem': [IndexError, KeyError, Exception],    
     }
 
 def _add_exceptions(names, exc):
@@ -466,13 +522,13 @@ def _add_except_ovf(names):
         lis.append(OverflowError)
         implicit_exceptions[name+"_ovf"] = lis
 
-for _err in IndexError, KeyError:
-    _add_exceptions("""getitem setitem delitem""", _err)
+#for _err in IndexError, KeyError:
+#    _add_exceptions("""getitem setitem delitem""", _err)
 for _name in 'getattr', 'delattr':
     _add_exceptions(_name, AttributeError)
 for _name in 'iter', 'coerce':
     _add_exceptions(_name, TypeError)
-del _name, _err
+del _name#, _err
 
 _add_exceptions("""div mod divmod truediv floordiv pow
                    inplace_div inplace_mod inplace_divmod inplace_truediv
@@ -498,8 +554,12 @@ def extract_cell_content(c):
     the func_closure of a function object."""
     # yuk! this is all I could come up with that works in Python 2.2 too
     class X(object):
+        def __cmp__(self, other):
+            self.other = other
+            return 0
         def __eq__(self, other):
             self.other = other
+            return True
     x = X()
     x_cell, = (lambda: x).func_closure
     x_cell == c
@@ -577,17 +637,39 @@ def make_op(name, symbol, arity, specialnames):
 for line in ObjSpace.MethodTable:
     make_op(*line)
 
-# override getattr for not really const objects
+"""
+This is just a placeholder for some code I'm checking in elsewhere.
+It is provenly possible to determine constantness of certain expressions
+a little later. I introduced this a bit too early, together with tieing
+this to something being global, which was a bad idea.
+The concept is still valid, and it can  be used to force something to
+be evaluated immediately because it is supposed to be a constant.
+One good possible use of this is loop unrolling.
+This will be found in an 'experimental' folder with some use cases.
+"""
 
 def override():
     def getattr(self, w_obj, w_name):
+        # handling special things like sys
+        # unfortunately this will never vanish with a unique import logic :-(
         if w_obj in self.not_really_const:
             const_w = self.not_really_const[w_obj]
             if w_name not in const_w:
                 return self.do_operation_with_implicit_exceptions('getattr', w_obj, w_name)
         return self.regular_getattr(w_obj, w_name)
+
     FlowObjSpace.regular_getattr = FlowObjSpace.getattr
     FlowObjSpace.getattr = getattr
+
+    # protect us from globals write access
+    def setitem(self, w_obj, w_key, w_val):
+        ec = self.getexecutioncontext()
+        if not (ec and w_obj is ec.w_globals):
+            return self.regular_setitem(w_obj, w_key, w_val)
+        raise SyntaxError, "attempt to modify global attribute %r in %r" % (w_key, ec.graph.func)
+
+    FlowObjSpace.regular_setitem = FlowObjSpace.setitem
+    FlowObjSpace.setitem = setitem
 
 override()
 

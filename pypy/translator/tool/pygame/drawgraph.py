@@ -264,10 +264,17 @@ class GraphRenderer:
         self.visibleedges = []
 
     def wordcolor(self, word):
-        if word == self.highlight_word:
-            return ((255,255,80), (128,0,0))
+        info = self.highlightwords[word]
+        if isinstance(info, tuple) and len(info) >= 2:
+            color = info[1]
         else:
-            return ((128,0,0), None)
+            color = None
+        if color is None:
+            color = (128,0,0)
+        if word == self.highlight_word:
+            return ((255,255,80), color)
+        else:
+            return (color, None)
 
     def setscale(self, scale):
         scale = max(min(scale, self.SCALEMAX), self.SCALEMIN)
@@ -518,11 +525,23 @@ class GraphRenderer:
         self.computevisible()
 
         bbox = self.getboundingbox()
-        self.screen.fill((224, 255, 224), bbox)
-
-        # gray off-bkgnd areas
         ox, oy, width, height = bbox
         dpy_width, dpy_height = self.screen.get_size()
+        # some versions of the SDL misinterpret widely out-of-range values,
+        # so clamp them
+        if ox < 0:
+            width += ox
+            ox = 0
+        if oy < 0:
+            height += oy
+            oy = 0
+        if width > dpy_width:
+            width = dpy_width
+        if height > dpy_height:
+            height = dpy_height
+        self.screen.fill((224, 255, 224), (ox, oy, width, height))
+
+        # gray off-bkgnd areas
         gray = (128, 128, 128)
         if ox > 0:
             self.screen.fill(gray, (0, 0, ox, dpy_height))
@@ -616,9 +635,12 @@ class TextSnippet:
         while i < len(parts):
             part = parts[i]
             word = part[0]
-            antialias = not re_nonword.match(word)  # SDL bug with anti-aliasing
             try:
-                img = font.render(word, antialias, *part[1:])
+                try:
+                    img = font.render(word, False, *part[1:])
+                except pygame.error, e:
+                    # Try *with* anti-aliasing to work around a bug in SDL
+                    img = font.render(word, True, *part[1:])
             except pygame.error:
                 del parts[i]   # Text has zero width
             else:

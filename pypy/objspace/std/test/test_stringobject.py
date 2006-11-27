@@ -135,6 +135,7 @@ class AppTestStringObject:
 
     def test_split(self):
         assert "".split() == []
+        assert "".split('x') == ['']
         assert " ".split() == []
         assert "a".split() == ['a']
         assert "a".split("a", 1) == ['', '']
@@ -252,6 +253,7 @@ class AppTestStringObject:
         assert 'abc'.replace('', '-', 3) == '-a-b-c'
         assert 'abc'.replace('', '-', 0) == 'abc'
         assert ''.replace('', '') == ''
+        assert ''.replace('', 'a') == 'a'
         assert 'abc'.replace('ab', '--', 0) == 'abc'
         assert 'abc'.replace('xy', '--') == 'abc'
         assert '123'.replace('123', '') == ''
@@ -551,8 +553,9 @@ class AppTestStringObject:
         assert 'xyz' == 'xyz'.translate(table)
         assert 'yz' ==  'xyz'.translate(table, 'x')
         
-        #self.assertRaises(ValueError, 'xyz'.translate('too short', 'strip'))
-        #self.assertRaises(ValueError, 'xyz'.translate('too short'))
+        raises(ValueError, 'xyz'.translate, 'too short', 'strip')
+        raises(ValueError, 'xyz'.translate, 'too short')
+        raises(ValueError, 'xyz'.translate, 'too long'*33)
 
     def test_iter(self):
         l=[]

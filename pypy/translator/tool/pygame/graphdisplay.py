@@ -58,7 +58,6 @@ class Display(object):
         self.height = h
         self.screen = pygame.display.set_mode((w, h), HWSURFACE|RESIZABLE, 32)
 
-
 class GraphDisplay(Display):
     STATUSBARFONT = os.path.join(autopath.this_dir, 'VeraMoBd.ttf')
     ANIM_STEP = 0.07
@@ -287,7 +286,7 @@ class GraphDisplay(Display):
                     if e.key == K_ESCAPE:
                         return None
                     elif e.key == K_RETURN:
-                        return text
+                        return text.encode('latin-1')   # XXX do better
                     elif e.key == K_BACKSPACE:
                         text = text[:-1]
                     elif e.unicode and ord(e.unicode) >= ord(' '):
@@ -451,6 +450,8 @@ class GraphDisplay(Display):
         word = self.viewer.at_position(pos)
         if word in self.layout.links:
             info = self.layout.links[word]
+            if isinstance(info, tuple):
+                info = info[0]
             self.setstatusbar(info)
             self.sethighlight(word)
             return
@@ -632,6 +633,14 @@ class GraphDisplay(Display):
         # short-circuit if there are more resize events pending
         if self.peek(VIDEORESIZE):
             return
+        # XXX sometimes some jerk are trying to minimise our window,
+        # discard such event (we see a height of 5 in this case).
+        # XXX very specific MacOS/X workaround: after resizing the window
+        # to a height of 1 and back, we get two bogus VideoResize events,
+        # for height 16 and 32.
+        # XXX summary: let's ignore all resize events with a height <= 32
+        if event.size[1] <= 32:
+            return
         self.resize(event.size)
         self.must_redraw = True
 
@@ -680,7 +689,7 @@ class GraphDisplay(Display):
 
 def shortlabel(label):
     """Shorten a graph node label."""
-    return label.replace('\\l', '').splitlines()[0]
+    return label and label.replace('\\l', '\n').splitlines()[0]
 
 
 def renderline(text, font, fgcolor, width, maxheight=sys.maxint,

@@ -1,26 +1,24 @@
 from pypy.objspace.std.objspace import *
-from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway, baseobjspace
-from pypy.objspace.std.listsort import TimSort
+from pypy.rlib.listsort import TimSort
 
 
 class W_ListObject(W_Object):
     from pypy.objspace.std.listtype import list_typedef as typedef
     
-    def __init__(w_self, space, wrappeditems):
-        W_Object.__init__(w_self, space)
+    def __init__(w_self, wrappeditems):
         w_self.wrappeditems = wrappeditems
 
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%s)" % (w_self.__class__.__name__, w_self.wrappeditems)
 
-    def unwrap(w_list):
-        space = w_list.space
+    def unwrap(w_list, space):
         items = [space.unwrap(w_item) for w_item in w_list.wrappeditems]# XXX generic mixed types unwrap
         return list(items)
 
@@ -28,15 +26,17 @@ class W_ListObject(W_Object):
 registerimplementation(W_ListObject)
 
 
+EMPTY_LIST = W_ListObject([])
+
 def init__List(space, w_list, __args__):
     w_iterable, = __args__.parse('list',
                                (['sequence'], None, None),   # signature
-                               [W_ListObject(space, [])])    # default argument
+                               [EMPTY_LIST])                 # default argument
     w_list.wrappeditems = space.unpackiterable(w_iterable)
 
 def len__List(space, w_list):
     result = len(w_list.wrappeditems)
-    return W_IntObject(space, result)
+    return wrapint(space, result)
 
 def getitem__List_ANY(space, w_list, w_index):
     idx = space.int_w(w_index)
@@ -49,11 +49,11 @@ def getitem__List_ANY(space, w_list, w_index):
 def getitem__List_Slice(space, w_list, w_slice):
     # XXX consider to extend rlist's functionality?
     length = len(w_list.wrappeditems)
-    start, stop, step, slicelength = w_slice.indices4(length)
+    start, stop, step, slicelength = w_slice.indices4(space, length)
     assert slicelength >= 0
     if step == 1 and 0 <= start <= stop:
-        return W_ListObject(space, w_list.wrappeditems[start:stop])
-    w_res = W_ListObject(space, [None] * slicelength)
+        return W_ListObject(w_list.wrappeditems[start:stop])
+    w_res = W_ListObject([None] * slicelength)
     items_w = w_list.wrappeditems
     subitems_w = w_res.wrappeditems
     for i in range(slicelength):
@@ -73,10 +73,20 @@ def contains__List_ANY(space, w_list, w_obj):
 
 def iter__List(space, w_list):
     from pypy.objspace.std import iterobject
-    return iterobject.W_SeqIterObject(space, w_list)
+    return iterobject.W_SeqIterObject(w_list)
 
 def add__List_List(space, w_list1, w_list2):
-    return W_ListObject(space, w_list1.wrappeditems + w_list2.wrappeditems)
+    return W_ListObject(w_list1.wrappeditems + w_list2.wrappeditems)
+
+#def radd__List_List(space, w_list1, w_list2):
+#    return W_ListObject(w_list2.wrappeditems + w_list1.wrappeditems)
+
+##def add__List_ANY(space, w_list, w_any):
+##    if space.is_true(space.isinstance(w_any, space.w_list)):
+##        items1_w = w_list.wrappeditems
+##        items2_w = space.unpackiterable(w_any)
+##        return W_ListObject(items1_w + items2_w)
+##    raise FailedToImplement
 
 def inplace_add__List_ANY(space, w_list1, w_iterable2):
     list_extend__List_ANY(space, w_list1, w_iterable2)
@@ -89,7 +99,7 @@ def mul_list_times(space, w_list, w_times):
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
-    return W_ListObject(space, w_list.wrappeditems * times)
+    return W_ListObject(w_list.wrappeditems * times)
 
 def mul__List_ANY(space, w_list, w_times):
     return mul_list_times(space, w_list, w_times)
@@ -109,26 +119,37 @@ def inplace_mul__List_ANY(space, w_list, w_times):
 
 def eq__List_List(space, w_list1, w_list2):
     # needs to be safe against eq_w() mutating the w_lists behind our back
-    if len(w_list1.wrappeditems) != len(w_list2.wrappeditems):
+    items1_w = w_list1.wrappeditems
+    items2_w = w_list2.wrappeditems
+    return equal_wrappeditems(space, items1_w, items2_w)
+
+def equal_wrappeditems(space, items1_w, items2_w):
+    if len(items1_w) != len(items2_w):
         return space.w_False
     i = 0
-    while i < len(w_list1.wrappeditems) and i < len(w_list2.wrappeditems):
-        if not space.eq_w(w_list1.wrappeditems[i], w_list2.wrappeditems[i]):
+    while i < len(items1_w) and i < len(items2_w):
+        if not space.eq_w(items1_w[i], items2_w[i]):
             return space.w_False
         i += 1
-    return space.newbool(len(w_list1.wrappeditems) == len(w_list2.wrappeditems))
+    return space.w_True
+    #return space.newbool(len(w_list1.wrappeditems) == len(w_list2.wrappeditems))
+
+##def eq__List_ANY(space, w_list1, w_any):
+##    if space.is_true(space.isinstance(w_any, space.w_list)):
+##        items1_w = w_list1.wrappeditems
+##        items2_w = space.unpackiterable(w_any)
+##        return equal_wrappeditems(space, items1_w, items2_w)
+##    raise FailedToImplement
 
 def _min(a, b):
     if a < b:
         return a
     return b
 
-def lt__List_List(space, w_list1, w_list2):
+def lessthan_unwrappeditems(space, items1_w, items2_w):
     # needs to be safe against eq_w() mutating the w_lists behind our back
     # Search for the first index where items are different
     i = 0
-    items1_w = w_list1.wrappeditems
-    items2_w = w_list2.wrappeditems
     while i < len(items1_w) and i < len(items2_w):
         w_item1 = items1_w[i]
         w_item2 = items2_w[i]
@@ -138,13 +159,11 @@ def lt__List_List(space, w_list1, w_list2):
     # No more items to compare -- compare sizes
     return space.newbool(len(items1_w) < len(items2_w))
 
-def gt__List_List(space, w_list1, w_list2):
+def greaterthan_unwrappeditems(space, items1_w, items2_w):
     # needs to be safe against eq_w() mutating the w_lists behind our back
     # Search for the first index where items are different
     i = 0
-    items1_w = w_list1.wrappeditems
-    items2_w = w_list2.wrappeditems
-    while i < len(w_list1.wrappeditems) and i < len(w_list2.wrappeditems):
+    while i < len(items1_w) and i < len(items2_w):
         w_item1 = items1_w[i]
         w_item2 = items2_w[i]
         if not space.eq_w(w_item1, w_item2):
@@ -153,6 +172,29 @@ def gt__List_List(space, w_list1, w_list2):
     # No more items to compare -- compare sizes
     return space.newbool(len(items1_w) > len(items2_w))
 
+def lt__List_List(space, w_list1, w_list2):
+    return lessthan_unwrappeditems(space, w_list1.wrappeditems,
+        w_list2.wrappeditems)
+
+##def lt__List_ANY(space, w_list1, w_any):
+##    # XXX: Implement it not unpacking all the elements
+##    if space.is_true(space.isinstance(w_any, space.w_list)):
+##        items1_w = w_list1.wrappeditems
+##        items2_w = space.unpackiterable(w_any)
+##        return lessthan_unwrappeditems(space, items1_w, items2_w)
+##    raise FailedToImplement
+
+def gt__List_List(space, w_list1, w_list2):
+    return greaterthan_unwrappeditems(space, w_list1.wrappeditems,
+        w_list2.wrappeditems)
+
+##def gt__List_ANY(space, w_list1, w_any):
+##    # XXX: Implement it not unpacking all the elements
+##    if space.is_true(space.isinstance(w_any, space.w_list)):
+##        items1_w = w_list1.wrappeditems
+##        items2_w = space.unpackiterable(w_any)
+##        return greaterthan_unwrappeditems(space, items1_w, items2_w)
+##    raise FailedToImplement
 
 def delitem__List_ANY(space, w_list, w_idx):
     idx = space.int_w(w_idx)
@@ -164,7 +206,8 @@ def delitem__List_ANY(space, w_list, w_idx):
     return space.w_None
 
 def delitem__List_Slice(space, w_list, w_slice):
-    start, stop, step, slicelength = w_slice.indices4(len(w_list.wrappeditems))
+    start, stop, step, slicelength = w_slice.indices4(space,
+                                                      len(w_list.wrappeditems))
 
     if slicelength==0:
         return
@@ -232,7 +275,7 @@ def setitem__List_Slice_ANY(space, w_list, w_slice, w_iterable):
 
 def _setitem_slice_helper(space, w_list, w_slice, sequence2, len2):
     oldsize = len(w_list.wrappeditems)
-    start, stop, step, slicelength = w_slice.indices4(oldsize)
+    start, stop, step, slicelength = w_slice.indices4(space, oldsize)
     assert slicelength >= 0
     items = w_list.wrappeditems
 
@@ -298,9 +341,6 @@ def repr__List(space, w_list):
         return space.wrap('[]')
     w_currently_in_repr = space.getexecutioncontext()._py_repr
     return listrepr(space, w_currently_in_repr, w_list)
-
-def hash__List(space,w_list):
-    raise OperationError(space.w_TypeError,space.wrap("list objects are unhashable"))
 
 def list_insert__List_ANY_ANY(space, w_list, w_where, w_any):
     where = space.int_w(w_where)

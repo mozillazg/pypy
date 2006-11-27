@@ -1,11 +1,6 @@
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
-from pypy.rpython import rarithmetic
-
-def _isfake(space, w_obj): 
-    return space.wrap(bool(w_obj.typedef.fakedcpytype))
-    #return space.wrap(bool(getattr(w_obj.typedef, 'fakedcpytype', None)))
-
+from pypy.rlib import rarithmetic
 
 def _formatd(space, alt, prec, kind, x):
     formatd_max_length = rarithmetic.formatd_max_length
@@ -22,3 +17,5 @@ def _formatd(space, alt, prec, kind, x):
     
     return space.wrap(rarithmetic.formatd(fmt, x))
 _formatd.unwrap_spec = [gateway.ObjSpace, int, int, str, float]
+
+

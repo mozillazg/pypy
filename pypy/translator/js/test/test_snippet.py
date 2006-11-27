@@ -3,6 +3,8 @@ from __future__ import division
 from pypy.translator.js.test.runtest import compile_function
 from pypy.translator.test import snippet as test
 
+import py
+
 class TestSnippet(object):
     def test_if_then_else(self):
         f = compile_function(test.if_then_else, [int, int, int])
@@ -31,8 +33,14 @@ class TestSnippet(object):
         assert f() == 4
 
     def test_sieve_of_eratosthenes(self):
+        #py.test.skip("Loop error in loop detection software")
         f = compile_function(test.sieve_of_eratosthenes, [])
         assert f() == 1028
+    
+    def test_nested_whiles(self):
+        #py.test.skip("Loop error in loop detection software")
+        f = compile_function(test.nested_whiles, [int, int])
+        assert test.nested_whiles(3,2) == f(3,2)
 
     def test_simple_func(self):
         f = compile_function(test.simple_func, [int])
@@ -43,6 +51,7 @@ class TestSnippet(object):
         assert while_func(10) == 55
 
     def test_time_waster(self):
+        #py.test.skip("Loop error in loop detection software")
         f = compile_function(test.time_waster, [int])
         assert f(1) == 1
         assert f(2) == 2
@@ -54,10 +63,12 @@ class TestSnippet(object):
         assert f(1027) == 1027
 
     def test_factorial2(self):
+        #py.test.skip("unknown error")
         factorial2 = compile_function(test.factorial2, [int])
         assert factorial2(5) == 120
 
     def test_factorial(self):
+        #py.test.skip("unknown error")
         factorial = compile_function(test.factorial, [int])
         assert factorial(5) == 120
 

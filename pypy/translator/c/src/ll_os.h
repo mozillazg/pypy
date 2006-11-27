@@ -9,10 +9,19 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #ifndef PATH_MAX
   /* assume windows */
 #  define PATH_MAX 254
 #endif
+
+#ifndef MAXPATHLEN
+#if defined(PATH_MAX) && PATH_MAX > 1024
+#define MAXPATHLEN PATH_MAX
+#else
+#define MAXPATHLEN 1024
+#endif
+#endif /* MAXPATHLEN */
 
 /* The functions below are mapped to functions from pypy.rpython.module.*
    by the pypy.translator.c.extfunc.EXTERNALS dictionary.
@@ -29,10 +38,14 @@
 #       define STAT _stati64
 #       define FSTAT _fstati64
 #       define STRUCT_STAT struct _stati64
+#       define LSTAT STAT
 #else
 #       define STAT stat
 #       define FSTAT fstat
 #       define STRUCT_STAT struct stat
+/* plus some approximate guesses */
+#       define LSTAT lstat
+#       define HAVE_FILESYSTEM_WITH_LINKS
 #endif
 
 
@@ -43,9 +56,12 @@ long LL_read_into(int fd, RPyString *buffer);
 long LL_os_write(int fd, RPyString *buffer);
 void LL_os_close(int fd);
 int LL_os_dup(int fd);
+void LL_os_dup2(int old_fd, int new_fd);
 RPySTAT_RESULT* _stat_construct_result_helper(STRUCT_STAT st);
 RPySTAT_RESULT* LL_os_stat(RPyString * fname);
+RPySTAT_RESULT* LL_os_lstat(RPyString * fname);
 RPySTAT_RESULT* LL_os_fstat(long fd);
+RPyPIPE_RESULT* LL_os_pipe(void);
 long LL_os_lseek(long fd, long pos, long how);
 int LL_os_isatty(long fd);
 RPyString *LL_os_strerror(int errnum);
@@ -55,12 +71,31 @@ RPyString *LL_os_getcwd(void);
 void LL_os_chdir(RPyString * path);
 void LL_os_mkdir(RPyString * path, int mode);
 void LL_os_rmdir(RPyString * path);
+void LL_os_chmod(RPyString * path, int mode);
+void LL_os_rename(RPyString * path1, RPyString * path2);
+long LL_os_getpid(void);
+void LL_os_kill(int pid, int sig);
+void LL_os_link(RPyString * path1, RPyString * path2);
+void LL_os_symlink(RPyString * path1, RPyString * path2);
+long LL_readlink_into(RPyString *path, RPyString *buffer);
+long LL_os_fork(void);
+#ifdef HAVE_RPY_LIST_OF_STRING     /* argh */
+long LL_os_spawnv(int mode, RPyString *path, RPyListOfString *args);
+#endif
+RPyWAITPID_RESULT* LL_os_waitpid(long pid, long options);
+void LL_os__exit(long status);
 void LL_os_putenv(RPyString * name_eq_value);
 void LL_os_unsetenv(RPyString * name);
 RPyString* LL_os_environ(int idx);
 struct RPyOpaque_DIR *LL_os_opendir(RPyString *dirname);
 RPyString *LL_os_readdir(struct RPyOpaque_DIR *dir);
 void LL_os_closedir(struct RPyOpaque_DIR *dir);
+
+static int geterrno(void)
+{
+    return errno;
+}
+
 
 /* implementations */
 
@@ -107,6 +142,15 @@ int LL_os_dup(int fd)
 	return fd;
 }
 
+void LL_os_dup2(int old_fd, int new_fd)
+{
+	new_fd = dup2(old_fd, new_fd);
+	if (new_fd < 0)
+		RPYTHON_RAISE_OSERROR(errno);
+}
+
+#ifdef LL_NEED_OS_STAT
+
 RPySTAT_RESULT* _stat_construct_result_helper(STRUCT_STAT st) {
   long res0, res1, res2, res3, res4, res5, res6, res7, res8, res9;
   res0 = (long)st.st_mode;
@@ -136,6 +180,16 @@ RPySTAT_RESULT* LL_os_stat(RPyString * fname) {
   return _stat_construct_result_helper(st);
 }
 
+RPySTAT_RESULT* LL_os_lstat(RPyString * fname) {
+  STRUCT_STAT st;
+  int error = LSTAT(RPyString_AsString(fname), &st);
+  if (error != 0) {
+    RPYTHON_RAISE_OSERROR(errno);
+    return NULL;
+  }
+  return _stat_construct_result_helper(st);
+}
+
 RPySTAT_RESULT* LL_os_fstat(long fd) {
   STRUCT_STAT st;
   int error = FSTAT(fd, &st);
@@ -145,6 +199,35 @@ RPySTAT_RESULT* LL_os_fstat(long fd) {
   }
   return _stat_construct_result_helper(st);
 }
+
+#endif
+
+#ifdef LL_NEED_OS_PIPE
+
+RPyPIPE_RESULT* LL_os_pipe(void) {
+#if !defined(MS_WINDOWS)
+	int filedes[2];
+	int error = pipe(filedes);
+	if (error != 0) {
+		RPYTHON_RAISE_OSERROR(errno);
+		return NULL;
+	}
+	return ll_pipe_result(filedes[0], filedes[1]);
+#else
+	HANDLE read, write;
+	int read_fd, write_fd;
+	BOOL ok = CreatePipe(&read, &write, NULL, 0);
+	if (!ok) {
+		RPYTHON_RAISE_OSERROR(errno);
+		return NULL;
+	}
+	read_fd = _open_osfhandle((long)read, 0);
+	write_fd = _open_osfhandle((long)write, 1);
+	return ll_pipe_result(read_fd, write_fd);
+#endif
+}
+
+#endif
 
 long LL_os_lseek(long fd, long pos, long how) {
 #if defined(MS_WIN64) || defined(MS_WINDOWS)
@@ -241,6 +324,130 @@ void LL_os_rmdir(RPyString * path) {
     if (error != 0) {
 	RPYTHON_RAISE_OSERROR(errno);
     }
+}
+
+void LL_os_chmod(RPyString * path, int mode) {
+    int error = chmod(RPyString_AsString(path), mode);
+    if (error != 0) {
+	RPYTHON_RAISE_OSERROR(errno);
+    }
+}
+
+void LL_os_rename(RPyString * path1, RPyString * path2) {
+    int error = rename(RPyString_AsString(path1), RPyString_AsString(path2));
+    if (error != 0) {
+	RPYTHON_RAISE_OSERROR(errno);
+    }
+}
+
+long LL_os_getpid(void) {
+	return getpid();
+}
+
+#ifdef HAVE_KILL
+void LL_os_kill(int pid, int sig) {
+    int error = kill(pid, sig);
+    if (error != 0) {
+	RPYTHON_RAISE_OSERROR(errno);
+    }
+}
+#endif
+
+#ifdef HAVE_FILESYSTEM_WITH_LINKS
+
+void LL_os_link(RPyString * path1, RPyString * path2) {
+    int error = link(RPyString_AsString(path1), RPyString_AsString(path2));
+    if (error != 0) {
+	RPYTHON_RAISE_OSERROR(errno);
+    }
+}
+
+void LL_os_symlink(RPyString * path1, RPyString * path2) {
+    int error = symlink(RPyString_AsString(path1), RPyString_AsString(path2));
+    if (error != 0) {
+	RPYTHON_RAISE_OSERROR(errno);
+    }
+}
+
+long LL_readlink_into(RPyString *path, RPyString *buffer)
+{
+	long n = readlink(RPyString_AsString(path),
+			  RPyString_AsString(buffer), RPyString_Size(buffer));
+	if (n < 0)
+		RPYTHON_RAISE_OSERROR(errno);
+	return n;
+}
+
+#endif
+
+#ifdef HAVE_FORK
+long LL_os_fork(void) {
+	int pid = fork();
+	if (pid == -1)
+		RPYTHON_RAISE_OSERROR(errno);
+	return pid;
+}
+#endif
+
+/*
+  The following code is only generated if spawnv exists and
+  if RPyListOfString exists. The latter is a bit tricky:
+  The RPyListOfString is necessary to correctly declare this function.
+  For this to work, the test code must be properly written in a way
+  that RPyListOfString is really annotated as such.
+  Please see the test in test_extfunc.py - creating the correct
+  argument string type is not obvious and error prone.
+ */
+#if defined(HAVE_SPAWNV) && defined(HAVE_RPY_LIST_OF_STRING)
+long LL_os_spawnv(int mode, RPyString *path, RPyListOfString *args) {
+	int pid, i, nargs = args->l_length;
+	char **slist = malloc((nargs+1) * sizeof(char*));
+	pid = -1;
+	if (slist) {
+		for (i=0; i<nargs; i++)
+			slist[i] = RPyString_AsString(args->l_items->items[i]);
+		slist[nargs] = NULL;
+		pid = spawnv(mode, RPyString_AsString(path), slist);
+		free(slist);
+	}
+	if (pid == -1)
+		RPYTHON_RAISE_OSERROR(errno);
+	return pid;
+}
+#endif
+
+#ifdef LL_NEED_OS_WAITPID
+/* note: LL_NEED_ is computed in extfunc.py, can't grep */
+
+#ifdef HAVE_WAITPID
+RPyWAITPID_RESULT* LL_os_waitpid(long pid, long options) {
+	int status;
+	pid = waitpid(pid, &status, options);
+	if (pid == -1) {
+		RPYTHON_RAISE_OSERROR(errno);
+		return NULL;
+	}
+	return ll_waitpid_result(pid, status);
+}
+
+#elif defined(HAVE_CWAIT)
+
+RPyWAITPID_RESULT* LL_os_waitpid(long pid, long options) {
+	int status;
+	pid = _cwait(&status, pid, options);
+	if (pid == -1) {
+		RPYTHON_RAISE_OSERROR(errno);
+		return NULL;
+	}
+		/* shift the status left a byte so this is more like the
+		   POSIX waitpid */
+	return ll_waitpid_result(pid, status << 8);
+}
+#endif /* HAVE_WAITPID || HAVE_CWAIT */
+#endif
+
+void LL_os__exit(long status) {
+	_exit((int)status);
 }
 
 #ifdef HAVE_PUTENV

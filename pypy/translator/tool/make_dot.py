@@ -14,7 +14,7 @@ from pypy.interpreter.pytraceback import offset2lineno
 class DotGen:
 
     def __init__(self, graphname, rankdir=None):
-        self.graphname = graphname + '_'
+        self.graphname = safename(graphname)
         self.lines = []
         self.source = None
         self.emit("digraph %s {" % self.graphname)
@@ -44,7 +44,7 @@ class DotGen:
         self.lines.append(line)
 
     def enter_subgraph(self, name):
-        self.emit("subgraph %s {" % (name,))
+        self.emit("subgraph %s {" % (safename(name),))
 
     def leave_subgraph(self):
         self.emit("}")
@@ -59,7 +59,7 @@ class DotGen:
         attrs = [('%s="%s"' % (x, d[x].replace('"', '\\"').replace('\n', '\\n')))
                  for x in ['label', 'style', 'color', 'dir', 'weight']]
         self.emit('edge [%s];' % ", ".join(attrs))
-        self.emit('%s -> %s' % (name1, name2))
+        self.emit('%s -> %s' % (safename(name1), safename(name2)))
 
     def emit_node(self, name, 
                   shape="diamond", 
@@ -71,22 +71,33 @@ class DotGen:
         d = locals()
         attrs = [('%s="%s"' % (x, d[x].replace('"', '\\"').replace('\n', '\\n')))
                  for x in ['shape', 'label', 'color', 'fillcolor', 'style']]
-        self.emit('%s [%s];' % (name, ", ".join(attrs)))
+        self.emit('%s [%s];' % (safename(name), ", ".join(attrs)))
 
+
+TAG_TO_COLORS = {
+    "timeshifted":  "#cfa5f0",
+    "portal_entry": "#f084c2"
+}
+DEFAULT_TAG_COLOR = "#a5e6f0"
+RETURN_COLOR = "green"
+EXCEPT_COLOR = "#ffa000"
 
 class FlowGraphDotGen(DotGen):
+    VERBOSE = False
 
     def __init__(self, graphname, rankdir=None):
         DotGen.__init__(self, graphname.replace('.', '_'), rankdir)
 
     def emit_subgraph(self, name, node):
         name = name.replace('.', '_') + '_'
-        self.blocks = {}
+        self.blocks = {id(None): '(None)'}
         self.func = None
         self.prefix = name
         self.enter_subgraph(name)
-        self.visit_FunctionGraph(node)
-        traverse(self.visit, node)
+        tagcolor = TAG_TO_COLORS.get(node.tag, DEFAULT_TAG_COLOR)
+        self.visit_FunctionGraph(node, tagcolor)
+        for block in safe_iterblocks(node):
+            self.visit_Block(block, tagcolor)
         self.leave_subgraph()
 
     def blockname(self, block):
@@ -97,39 +108,45 @@ class FlowGraphDotGen(DotGen):
             self.blocks[i] = name = "%s_%d" % (self.prefix, len(self.blocks))
             return name
 
-    def visit(self, obj):
-        if isinstance(obj, Block):
-            self.visit_Block(obj)
-
-    def visit_FunctionGraph(self, funcgraph):
+    def visit_FunctionGraph(self, funcgraph, tagcolor):
         name = self.prefix # +'_'+funcgraph.name
         data = funcgraph.name
-        if hasattr(funcgraph, 'source'):
+        if getattr(funcgraph, 'source', None) is not None:
             source = funcgraph.source
-            data += "\\n" + "\\l".join(source.split('\n'))
+            if self.VERBOSE:
+                data += "\\n"
+            else:
+                data = ""
+            data += "\\l".join(source.split('\n'))
         if hasattr(funcgraph, 'func'):
             self.func = funcgraph.func
+        self.emit_node(name, label=data, shape="box", fillcolor=tagcolor, style="filled")
+        if hasattr(funcgraph, 'startblock'):
+            self.emit_edge(name, self.blockname(funcgraph.startblock), 'startblock')
 
-        self.emit_node(name, label=data, shape="box", fillcolor="green", style="filled")
-        #('%(name)s [fillcolor="green", shape=box, label="%(data)s"];' % locals())
-        self.emit_edge(name, self.blockname(funcgraph.startblock), 'startblock')
-        #self.emit_edge(name, self.blockname(funcgraph.returnblock), 'returnblock', style="dashed")
-
-    def visit_Block(self, block):
+    def visit_Block(self, block, tagcolor):
         # do the block itself
         name = self.blockname(block)
-        lines = map(repr, block.operations)
+        if not isinstance(block, Block):
+            data = "BROKEN BLOCK\\n%r" % (block,)
+            self.emit_node(name, label=data)
+            return
+            
+        lines = []
+        for op in block.operations:
+            lines.extend(repr(op).split('\n'))
         lines.append("")
         numblocks = len(block.exits)
         color = "black"
-        fillcolor = getattr(block, "fillcolor", "white")
+        fillcolor = getattr(block, "blockcolor", "white")
         if not numblocks:
            shape = "box"
-           fillcolor="green"
            if len(block.inputargs) == 1:
                lines[-1] += 'return %s' % tuple(block.inputargs)
+               fillcolor= RETURN_COLOR
            elif len(block.inputargs) == 2:
                lines[-1] += 'raise %s, %s' % tuple(block.inputargs)
+               fillcolor= EXCEPT_COLOR
         elif numblocks == 1:
             shape = "box"
         else:
@@ -140,12 +157,16 @@ class FlowGraphDotGen(DotGen):
             lines.append("exitswitch: %s" % block.exitswitch)
 
         iargs = " ".join(map(repr, block.inputargs))
-        if block.exc_handler:
-            eh = 'EH'
+        if self.VERBOSE:
+            if block.exc_handler:
+                eh = ' (EH)'
+            else:
+                eh = ''
+            data = "%s%s%s\\n" % (name, block.at(), eh)
         else:
-            eh = ''
-        data = "%s%s(%s %s)\\ninputargs: %s\\n\\n" % (name, block.at(), block.__class__.__name__, eh, iargs)
-        if block.operations and self.func:
+            data = "%s\\n" % (name,)
+        data += "inputargs: %s\\n\\n" % (iargs,)
+        if self.VERBOSE and block.operations and self.func:
             maxoffs = max([op.offset for op in block.operations])
             if maxoffs >= 0:
                 minoffs = min([op.offset for op in block.operations
@@ -196,6 +217,24 @@ def make_dot_graphs(basefilename, graphs, storedir=None, target='ps'):
         names[graphname] = True
         dotgen.emit_subgraph(graphname, graph)
     return dotgen.generate(storedir, target)
+
+def _makecharmap():
+    result = {}
+    for i in range(256):
+        result[chr(i)] = '_%02X' % i
+    for c in 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789':
+        result[c] = c
+    result['_'] = '__'
+    return result
+CHAR_MAP = _makecharmap()
+del _makecharmap
+
+def safename(name):
+    # turn a random string into something that is a valid dot identifier,
+    # avoiding invalid characters and prepending '_' to make sure it is
+    # not a keyword
+    name = ''.join([CHAR_MAP[c] for c in name])
+    return '_' + name
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 import inspect, types
-from pypy.objspace.flow.model import traverse, Block, Link, FunctionGraph
+from pypy.objspace.flow.model import Block, Link, FunctionGraph
+from pypy.objspace.flow.model import safe_iterblocks, safe_iterlinks
 from pypy.translator.tool.make_dot import DotGen, make_dot, make_dot_graphs
 from pypy.annotation.model import SomePBC
 from pypy.annotation.description import MethodDesc
@@ -34,13 +35,6 @@ class GraphPage:
         "Display a graph page locally."
         from pypy.translator.tool.pygame.graphclient import display_layout
         display_layout(self)
-
-
-class SingleGraphPage(GraphPage):
-    """ A GraphPage showing a single precomputed FlowGraph."""
-
-    def compute(self, graph):
-        self.source = make_dot(graph.name, graph, target=None)
 
 
 class VariableHistoryGraphPage(GraphPage):
@@ -115,7 +109,7 @@ class FlowGraphPage(GraphPage):
     """
     def compute(self, translator, functions=None, func_names=None):
         self.translator = translator
-        self.annotator = translator.annotator
+        self.annotator = getattr(translator, 'annotator', None)
         self.func_names = func_names or {}
         if functions:
             graphs = []
@@ -130,7 +124,7 @@ class FlowGraphPage(GraphPage):
         if self.annotator and self.annotator.blocked_graphs:
             for block, was_annotated in self.annotator.annotated.items():
                 if not was_annotated:
-                    block.fillcolor = "red"
+                    block.blockcolor = "red"
         if graphs:
             name = graphs[0].name+"_graph"
         else:
@@ -143,7 +137,8 @@ class FlowGraphPage(GraphPage):
         if self.annotator:
             for var, s_value in self.annotator.bindings.items():
                 info = '%s: %s' % (var.name, s_value)
-                self.links[var.name] = info
+                annotationcolor = getattr(s_value, 'annotationcolor', None)
+                self.links[var.name] = info, annotationcolor
                 self.current_value[var.name] = s_value
                 self.caused_by[var.name] = (
                     self.annotator.binding_caused_by.get(var))
@@ -151,22 +146,29 @@ class FlowGraphPage(GraphPage):
                 cause_history = (
                     self.annotator.binding_cause_history.get(var, []))
                 self.binding_history[var.name] = zip(history, cause_history)
+                    
+        from pypy.jit.hintannotator.annotator import HintAnnotator
+        if isinstance(self.annotator, HintAnnotator):
+            return
 
-        def visit(node):
-            if isinstance(node, Block):
-                vars = node.getvariables()
-            elif isinstance(node, Link):
-                vars = node.getextravars()
-            else:
-                return
-            for var in vars:
-                if hasattr(var, 'concretetype'):
-                    #info = self.links.get(var.name, var.name)
-                    #info = '(%s) %s' % (var.concretetype, info)
-                    info = str(var.concretetype)
-                    self.links[var.name] = info
+        vars = {}
         for graph in graphs:
-            traverse(visit, graph)
+            for block in safe_iterblocks(graph):
+                if isinstance(block, Block):
+                    for v in block.getvariables():
+                        vars[v] = True
+            for link in safe_iterlinks(graph):
+                if isinstance(link, Link):
+                    for v in link.getextravars():
+                        vars[v] = True
+        for var in vars:
+            if hasattr(var, 'concretetype'):
+                #info = self.links.get(var.name, var.name)
+                #info = '(%s) %s' % (var.concretetype, info)
+                info = str(var.concretetype)
+                if info == 'Void':     # gray out Void variables
+                    info = info, (160,160,160)
+                self.links[var.name] = info
 
     def followlink(self, varname):
         # clicking on a variable name shows its binding history
@@ -176,6 +178,13 @@ class FlowGraphPage(GraphPage):
         history.reverse()
         return VariableHistoryGraphPage(self.translator, varname, cur_value,
                                           caused_by, history, self.func_names)
+
+
+class SingleGraphPage(FlowGraphPage):
+    """ A GraphPage showing a single precomputed FlowGraph."""
+
+    def compute(self, graph):
+        return FlowGraphPage.compute(self, None, [graph])
 
 
 def nottoowide(text, width=72):
@@ -430,3 +439,40 @@ def nameof(obj, cache={}):
         result = '%s__0x%x' % (getattr(obj, '__name__', ''), uid(obj))
         cache[obj] = result
         return result
+
+# ____________________________________________________________
+#
+# Helpers to try to show a graph when we only have a Block or a Link
+
+def try_show(obj):
+    if isinstance(obj, FunctionGraph):
+        obj.show()
+    elif isinstance(obj, Link):
+        try_show(obj.prevblock)
+    elif isinstance(obj, Block):
+        import gc
+        pending = [obj]   # pending blocks
+        seen = {obj: True, None: True}
+        for x in pending:
+            for y in gc.get_referrers(x):
+                if isinstance(y, FunctionGraph):
+                    y.show()
+                    return
+                elif isinstance(y, Link):
+                    block = y.prevblock
+                    if block not in seen:
+                        pending.append(block)
+                        seen[block] = True
+        graph = IncompleteGraph(pending)
+        SingleGraphPage(graph).display()
+    else:
+        raise TypeError("try_show(%r object)" % (type(obj).__name__,))
+
+class IncompleteGraph:
+    name = '(incomplete graph)'
+
+    def __init__(self, bunch_of_blocks):
+        self.bunch_of_blocks = bunch_of_blocks
+
+    def iterblocks(self):
+        return iter(self.bunch_of_blocks)

@@ -41,7 +41,7 @@ def my_contains(seq=seqtype, elem=anytype):
     return elem in seq
 
 def is_one_or_two(n=int):
-    return n in (1, 2)
+    return n in [1, 2]
 
 def two_plus_two():
     """Array test"""
@@ -623,6 +623,9 @@ def t_isinstance(x, y):
 def t_issubclass(x, y):
     return issubclass(type(x), (int, long)) and issubclass(type(y), int)
 
+def t_neg_long():
+    return -132L
+
 
 # --------------------(Currently) Non runnable Functions ---------------------
 
@@ -709,6 +712,22 @@ def preserve_pbc_attr_on_instance(cond):
         x = APBC()
     else: 
         x = apbc 
+    return x.answer 
+
+
+class APBCS(object):
+    __slots__ = ['answer']
+    def __init__(self): 
+        self.answer = 42
+
+apbcs = APBCS()
+apbcs.answer = 7
+
+def preserve_pbc_attr_on_instance_with_slots(cond):
+    if cond: 
+        x = APBCS()
+    else: 
+        x = apbcs
     return x.answer 
 
 
@@ -1128,7 +1147,7 @@ def class_spec():
     return istk.top(), sstk.top()
 
 
-from pypy.rpython.rarithmetic import ovfcheck, ovfcheck_lshift
+from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift
 
 def add_func(i=numtype):
     try:
@@ -1142,6 +1161,12 @@ def div_func(i=numtype):
     try:
         return ovfcheck((-maxint-1) // i)
     except (OverflowError, ZeroDivisionError):
+        raise
+    
+def mul_func(x=numtype, y=numtype):
+    try:
+        return ovfcheck(x * y)
+    except OverflowError:
         raise
     
 def mod_func(i=numtype):

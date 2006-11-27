@@ -3,7 +3,7 @@ Type inference for user-defined classes.
 """
 
 from __future__ import generators
-from pypy.annotation.model import SomeImpossibleValue, SomePBC, unionof
+from pypy.annotation.model import SomePBC, s_ImpossibleValue, unionof
 from pypy.annotation.model import SomeInteger, isdegenerated
 from pypy.annotation import description
 
@@ -67,17 +67,19 @@ class Attribute:
     #      instances that have the attribute set will turn off readonly-ness.
 
     def __init__(self, name, bookkeeper):
+        assert name != '__class__'
         self.name = name
         self.bookkeeper = bookkeeper
-        self.s_value = SomeImpossibleValue()
+        self.s_value = s_ImpossibleValue
         self.readonly = True
+        self.slot_allowed = True
         self.read_locations = {}
 
     def add_constant_source(self, classdef, source):
         s_value = source.s_get_value(classdef, self.name)
         if source.instance_level:
             # a prebuilt instance source forces readonly=False, see above
-            self.readonly = False
+            self.modified(classdef)
         s_new_value = unionof(self.s_value, s_value)       
         if isdegenerated(s_new_value):            
             self.bookkeeper.ondegenerated("source %r attr %s" % (source, self.name),
@@ -89,18 +91,16 @@ class Attribute:
         # Same as 'self.s_value' for historical reasons.
         return self.s_value
 
-    def merge(self, other, classdef=None):
+    def merge(self, other, classdef='?'):
         assert self.name == other.name
         s_new_value = unionof(self.s_value, other.s_value)
         if isdegenerated(s_new_value):
-            if classdef is None:
-                what = "? attr %s" % self.name
-            else:
-                what = "%r attr %s" % (classdef, self.name)
+            what = "%s attr %s" % (classdef, self.name)
             self.bookkeeper.ondegenerated(what, s_new_value)
 
-        self.s_value = s_new_value        
-        self.readonly = self.readonly and other.readonly
+        self.s_value = s_new_value
+        if not other.readonly:
+            self.modified(classdef)
         self.read_locations.update(other.read_locations)
 
     def mutated(self, homedef): # reflow from attr read positions
@@ -115,9 +115,23 @@ class Attribute:
             if not s_newvalue.isNone() and s_newvalue.getKind() == description.MethodDesc:
                 if homedef.classdesc.read_attribute(attr, None) is None: # is method
                     if not homedef.check_missing_attribute_update(attr):
-                        self.bookkeeper.warning("demoting method %s to base class %s" % 
-                                                (self.name, homedef))
+                        for desc in s_newvalue.descriptions:
+                            if desc.selfclassdef is None:
+                                self.bookkeeper.warning("demoting method %s to base class %s" % 
+                                                        (self.name, homedef))
+                                break
 
+        # check for attributes forbidden by slots
+        if homedef.classdesc.allslots is not None:
+            if self.name not in homedef.classdesc.allslots:
+                self.slot_allowed = False
+                if not self.readonly:
+                    raise NoSuchSlotError(homedef, self.name)
+
+    def modified(self, classdef='?'):
+        self.readonly = False
+        if not self.slot_allowed:
+            raise NoSuchSlotError(classdef, self.name)
 
 
 class ClassDef:
@@ -131,10 +145,12 @@ class ClassDef:
         self.shortname = self.name.split('.')[-1]        
         self.subdefs = []
         self.attr_sources = {}   # {name: list-of-sources}
+        self.read_locations_of__class__ = {}
 
         if classdesc.basedesc:
             self.basedef = classdesc.basedesc.getuniqueclassdef()
             self.basedef.subdefs.append(self)
+            self.basedef.see_new_subclass(self)
         else:
             self.basedef = None
 
@@ -194,6 +210,12 @@ class ClassDef:
     
     def __repr__(self):
         return "<ClassDef '%s'>" % (self.name,)
+
+    def has_no_attrs(self):
+        for clsdef in self.getmro():
+            if clsdef.attrs:
+                return False
+        return True
 
     def commonbase(self, other):
         other1 = other
@@ -277,6 +299,12 @@ class ClassDef:
     def generalize_attr(self, attr, s_value=None):
         # if the attribute exists in a superclass, generalize there,
         # as imposed by invariant (I)
+        #start debug
+        #if self.name.endswith('W_Root') and attr == 'setdata':
+        #    print 'NAME:',self.name
+        #    import pdb
+        #    pdb.set_trace()
+        #stop debug
         for clsdef in self.getmro():
             if attr in clsdef.attrs:
                 clsdef._generalize_attr(attr, s_value)
@@ -290,7 +318,7 @@ class ClassDef:
         for cdef in self.getmro():
             if name in cdef.attrs:
                 s_result = cdef.attrs[name].s_value
-                if s_result != SomeImpossibleValue():
+                if s_result != s_ImpossibleValue:
                     return s_result
                 else:
                     return None
@@ -336,7 +364,7 @@ class ClassDef:
         if d or pbc.can_be_None:
             return SomePBC(d, can_be_None=pbc.can_be_None)
         else:
-            return SomeImpossibleValue()
+            return s_ImpossibleValue
 
     def check_missing_attribute_update(self, name):
         # haaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaack
@@ -364,6 +392,17 @@ class ClassDef:
         else:
             return False
 
+    def see_new_subclass(self, classdef):
+        for position in self.read_locations_of__class__:
+            self.bookkeeper.annotator.reflowfromposition(position)
+        if self.basedef is not None:
+            self.basedef.see_new_subclass(classdef)
+
+    def read_attr__class__(self):
+        position = self.bookkeeper.position_key
+        self.read_locations_of__class__[position] = True
+        return SomePBC([subdef.classdesc for subdef in self.getallsubdefs()])
+
     def _freeze_(self):
         raise Exception, "ClassDefs are used as knowntype for instances but cannot be used as immutablevalue arguments directly"
 
@@ -377,9 +416,24 @@ class InstanceSource:
         self.obj = obj
  
     def s_get_value(self, classdef, name):
-        s_value = self.bookkeeper.immutablevalue(
-            self.obj.__dict__[name])
+        s_value = self.bookkeeper.immutablevalue(getattr(self.obj, name))
         return s_value
+
+    def all_instance_attributes(self):
+        result = getattr(self.obj, '__dict__', {}).keys()
+        tp = self.obj.__class__
+        if isinstance(tp, type):
+            for basetype in tp.__mro__:
+                slots = basetype.__dict__.get('__slots__')
+                if slots:
+                    if isinstance(slots, str):
+                        result.append(slots)
+                    else:
+                        result.extend(slots)
+        return result
+
+class NoSuchSlotError(Exception):
+    "Raised when an attribute is found on a class where __slots__ forbits it."
 
 # ____________________________________________________________
 

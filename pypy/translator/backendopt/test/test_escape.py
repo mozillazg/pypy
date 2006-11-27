@@ -1,8 +1,8 @@
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.backendopt.escape import AbstractDataFlowInterpreter, malloc_to_stack
-from pypy.translator.backendopt.escape import find_backedges, find_loop_blocks
+from pypy.translator.backendopt.support import find_backedges, find_loop_blocks
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.objectmodel import instantiate
+from pypy.rlib.objectmodel import instantiate
 
 def build_adi(function, types):
     t = TranslationContext()
@@ -185,7 +185,7 @@ def test_dependencies():
     appendgraph = graph.startblock.operations[3].args[0].value._obj.graph
     appendarg0 = appendgraph.startblock.inputargs[0]
     appendstate = adi.getstate(appendarg0)
-    resizegraph = appendgraph.startblock.operations[2].args[0].value._obj.graph
+    resizegraph = [op for op in appendgraph.startblock.operations if op.opname != "same_as"][2].args[0].value._obj.graph
     resizearg0 = resizegraph.startblock.inputargs[0]
     resizestate = adi.getstate(resizearg0)
     reallygraph = resizegraph.startblock.exits[0].target.operations[0].args[0].value._obj.graph
@@ -404,32 +404,6 @@ def test_extfunc_resultonheap():
     assert not state.does_escape()
 
 
-#__________________________________________________________
-# test loop detection
-
-def test_find_backedges():
-    def f(k):
-        result = 0
-        for i in range(k):
-            result += 1
-        for j in range(k):
-            result += 1
-        return result
-    t, adi, graph = build_adi(f, [int])
-    backedges = find_backedges(graph)
-    assert len(backedges) == 2
-
-def test_find_loop_blocks():
-    def f(k):
-        result = 0
-        for i in range(k):
-            result += 1
-        for j in range(k):
-            result += 1
-        return result
-    t, adi, graph = build_adi(f, [int])
-    loop_blocks = find_loop_blocks(graph)
-    assert len(loop_blocks) == 4
 
 #__________________________________________________________
 # malloc removal tests

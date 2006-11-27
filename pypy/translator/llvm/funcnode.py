@@ -4,8 +4,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.translator.llvm.node import LLVMNode, ConstantLLVMNode
 from pypy.translator.llvm.opwriter import OpWriter
 from pypy.translator.llvm.log import log 
-from pypy.translator.llvm.backendopt.removeexcmallocs import remove_exception_mallocs
-from pypy.translator.unsimplify import remove_double_links
+from pypy.translator.unsimplify import remove_double_links, no_links_to_startblack
 log = log.funcnode
 
 class FuncTypeNode(LLVMNode):
@@ -31,6 +30,7 @@ class FuncTypeNode(LLVMNode):
 
 class BranchException(Exception):
     pass
+
 
 class FuncNode(ConstantLLVMNode):
     __slots__ = "db value ref graph block_to_name".split()
@@ -58,11 +58,7 @@ class FuncNode(ConstantLLVMNode):
                 for op in block.operations:
                     map(self.db.prepare_arg, op.args)
                     self.db.prepare_arg(op.result)
-                    if block.exitswitch != c_last_exception:
-                        continue
-                    for link in block.exits[1:]:
-                        type_ = lltype.typeOf(link.llexitcase)
-                        self.db.prepare_constant(type_, link.llexitcase)
+                    assert block.exitswitch != c_last_exception
                                             
         assert self.graph, "cannot traverse"
         traverse(visit, self.graph)
@@ -71,12 +67,9 @@ class FuncNode(ConstantLLVMNode):
     # main entry points from genllvm 
 
     def post_setup_transform(self):
-        self.db.exceptionpolicy.transform(self.db.translator, self.graph)
-	import sys
-	if sys.maxint == 2**31-1:	#XXX not yet 64bit compatible
-        	remove_exception_mallocs(self.db.translator, self.graph, self.ref)
-        remove_double_links(self.db.translator, self.graph)
-    
+        remove_double_links(self.db.translator.annotator, self.graph)
+        no_links_to_startblack(self.graph)
+
     def writedecl(self, codewriter): 
         codewriter.declare(self.getdecl())
 
@@ -91,7 +84,7 @@ class FuncNode(ConstantLLVMNode):
             self.block_to_name[block] = "block%s" % i
         for block in graph.iterblocks():
             codewriter.label(self.block_to_name[block])
-            for name in 'startblock returnblock exceptblock'.split():
+            for name in 'startblock returnblock'.split():
                 if block is getattr(graph, name):
                     getattr(self, 'write_' + name)(codewriter, block)
                     break
@@ -104,6 +97,7 @@ class FuncNode(ConstantLLVMNode):
     
     # ______________________________________________________________________
     # writing helpers for entry points
+
     def getdecl_parts(self):
         startblock = self.graph.startblock
         returnblock = self.graph.returnblock
@@ -124,7 +118,6 @@ class FuncNode(ConstantLLVMNode):
     # helpers for block writers
     
     def get_phi_data(self, block):
-        exceptionpolicy = self.db.exceptionpolicy
         data = []
         
         entrylinks = mkentrymap(self.graph)[block]
@@ -145,9 +138,6 @@ class FuncNode(ConstantLLVMNode):
                           for link in entrylinks]
 
             assert len(names) == len(blocknames)
-
-            # some exception policies will add new blocks...
-            exceptionpolicy.update_phi_data(self, entrylinks, block, blocknames)
             data.append((arg, type_, names, blocknames))
 
         return data
@@ -157,11 +147,9 @@ class FuncNode(ConstantLLVMNode):
             if type_ != "void":
                 codewriter.phi(arg, type_, names, blocknames)
 
-    def write_block_branches(self, codewriter, block):
-        if block.exitswitch == c_last_exception:
-            # special case - handled by exception policy
-            return
-        
+    def write_block_branches(self, codewriter, block):        
+        assert block.exitswitch != c_last_exception
+
         if len(block.exits) == 1:
             codewriter.br_uncond(self.block_to_name[block.exits[0].target])
             return
@@ -179,7 +167,7 @@ class FuncNode(ConstantLLVMNode):
             defaultlink = None
             value_labels = []
             for link in block.exits:
-                if link.exitcase is 'default':
+                if link.exitcase == 'default':
                     defaultlink = link
                     continue
 
@@ -200,27 +188,23 @@ class FuncNode(ConstantLLVMNode):
         # XXX We dont need multiple of these
         opwriter = OpWriter(self.db, codewriter)
 
-        invoke_op = None
-        block_ops = block.operations        
-        if block.exitswitch == c_last_exception:
-            invoke_op = block.operations[-1]
-            block_ops = block.operations[:-1]
+        assert block.exitswitch != c_last_exception
 
         # emit operations
-        for op in block_ops:
+        for op in block.operations:
             opwriter.write_operation(op)
-
-        if invoke_op:
-            # could raise an exception and should therefore have a function
-            # implementation that can be invoked by the llvm-code.
-            opwriter.write_invoke_op(invoke_op, self, block)
 
     # ______________________________________________________________________
     # actual block writers
     
     def write_startblock(self, codewriter, block):
         self.write_block_operations(codewriter, block)
-        self.write_block_branches(codewriter, block)
+        # a start block may return also
+        if block.exitswitch is None and len(block.exits) == 0:
+            inputarg, inputargtype = self.db.repr_argwithtype(block.inputargs[0])
+            codewriter.ret(inputargtype, inputarg)
+        else:
+            self.write_block_branches(codewriter, block)
 
     def write_block(self, codewriter, block):
         self.write_block_phi_nodes(codewriter, block)
@@ -228,12 +212,8 @@ class FuncNode(ConstantLLVMNode):
         self.write_block_branches(codewriter, block)
 
     def write_returnblock(self, codewriter, block):
+        block.exitswitch is None and len(block.exits) == 0
         assert len(block.inputargs) == 1
         self.write_block_phi_nodes(codewriter, block)
         inputarg, inputargtype = self.db.repr_argwithtype(block.inputargs[0])
         codewriter.ret(inputargtype, inputarg)
-
-    def write_exceptblock(self, codewriter, block):
-        self.db.exceptionpolicy.write_exceptblock(self,
-                                                  codewriter,
-                                                  block)

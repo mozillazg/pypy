@@ -11,10 +11,7 @@ def dump_on_stdout(database):
     print '/*********************************/'
     structdeflist = database.getstructdeflist()
     for node in structdeflist:
-        for line in node.definition(phase=1):
-            print line
-    for node in structdeflist:
-        for line in node.definition(phase=2):
+        for line in node.definition():
             print line
     print
     for node in database.globalcontainers():
@@ -179,7 +176,7 @@ def makegraph(func, argtypes):
     t.buildannotator().build_types(func, [int])
     t.buildrtyper().specialize()
     bk = t.annotator.bookkeeper
-    graph = bk.getdesc(func).cachedgraph(None)
+    graph = bk.getdesc(func).getuniquegraph()
     return t, graph
 
 def test_function_call():

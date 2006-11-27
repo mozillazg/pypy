@@ -9,15 +9,14 @@
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #endif /* MIN */
 
-#define FAIL_EXCEPTION(err, exc, msg) \
+#define FAIL_EXCEPTION(exc, msg) \
 	{ \
 		RPyRaiseSimpleException(exc, msg); \
-		FAIL(err); \
 	}
-#define FAIL_OVF(err, msg) FAIL_EXCEPTION(err, PyExc_OverflowError, msg)
-#define FAIL_VAL(err, msg) FAIL_EXCEPTION(err, PyExc_ValueError, msg)
-#define FAIL_ZER(err, msg) FAIL_EXCEPTION(err, PyExc_ZeroDivisionError, msg)
-#define CFAIL(err)         { RPyConvertExceptionFromCPython(); FAIL(err); }
+#define FAIL_OVF(msg) FAIL_EXCEPTION(PyExc_OverflowError, msg)
+#define FAIL_VAL(msg) FAIL_EXCEPTION(PyExc_ValueError, msg)
+#define FAIL_ZER(msg) FAIL_EXCEPTION(PyExc_ZeroDivisionError, msg)
+#define CFAIL()       RPyConvertExceptionFromCPython()
 
 #define PyString_FromLLCharArrayAndSize(itemsarray, size) \
 		PyString_FromStringAndSize(itemsarray->items, size)
@@ -26,6 +25,30 @@
 		memcpy(itemsarray->items, PyString_AS_STRING(s),        \
                        itemsarray->length)
 
+#ifdef RPY_ASSERT
+#  define RPyAssert(x, msg)                                             \
+     if (!(x)) RPyAssertFailed(__FILE__, __LINE__, __FUNCTION__, msg)
+
+void RPyAssertFailed(const char* filename, long lineno,
+                     const char* function, const char *msg);
+#  ifndef PYPY_NOT_MAIN_FILE
+void RPyAssertFailed(const char* filename, long lineno,
+                     const char* function, const char *msg) {
+  fprintf(stderr,
+          "PyPy assertion failed at %s:%d:\n"
+          "in %s: %s\n",
+          filename, lineno, function, msg);
+  abort();
+}
+#  endif
+#else
+#  define RPyAssert(x, msg)   /* nothing */
+#endif
+
+#ifdef __RPyListOfString_New     /*  :-(  */
+#  define HAVE_RPY_LIST_OF_STRING
+#endif
+
 #ifndef PYPY_STANDALONE
 
 /* prototypes */
@@ -33,7 +56,9 @@
 PyObject * gencfunc_descr_get(PyObject *func, PyObject *obj, PyObject *type);
 PyObject* PyList_Pack(int n, ...);
 PyObject* PyDict_Pack(int n, ...);
+#if PY_VERSION_HEX < 0x02040000   /* 2.4 */
 PyObject* PyTuple_Pack(int n, ...);
+#endif
 #if PY_VERSION_HEX >= 0x02030000   /* 2.3 */
 # define PyObject_GetItem1  PyObject_GetItem
 # define PyObject_SetItem1  PyObject_SetItem
@@ -45,9 +70,10 @@ PyObject* CallWithShape(PyObject* callable, PyObject* shape, ...);
 PyObject* decode_arg(PyObject* fname, int position, PyObject* name,
 			    PyObject* vargs, PyObject* vkwds, PyObject* def);
 int check_no_more_arg(PyObject* fname, int n, PyObject* vargs);
+int check_self_nonzero(PyObject* fname, PyObject* self);
 PyObject *PyTuple_GetItem_WithIncref(PyObject *tuple, int index);
 int PyTuple_SetItem_WithIncref(PyObject *tuple, int index, PyObject *o);
-
+int PySequence_Contains_with_exc(PyObject *seq, PyObject *ob);
 
 /* implementations */
 
@@ -386,6 +412,17 @@ int check_no_more_arg(PyObject* fname, int n, PyObject* vargs)
 	return 0;
 }
 
+int check_self_nonzero(PyObject* fname, PyObject* self)
+{
+	if (!self) {
+		    PyErr_Format(PyExc_TypeError,
+				"%s() expects instance first arg",
+				PyString_AS_STRING(fname));
+		    return -1;
+	}
+	return 0;
+}
+		
 /************************************************************/
 
 PyObject *PyTuple_GetItem_WithIncref(PyObject *tuple, int index)
@@ -399,6 +436,15 @@ int PyTuple_SetItem_WithIncref(PyObject *tuple, int index, PyObject *o)
 {
 	Py_INCREF(o);
 	return PyTuple_SetItem(tuple, index, o);
+}
+
+int PySequence_Contains_with_exc(PyObject *seq, PyObject *ob)
+{
+	int ret = PySequence_Contains(seq, ob);
+	
+	if (ret < 0) 
+		CFAIL();
+	return ret;
 }
 
 #endif /* PYPY_STANDALONE */

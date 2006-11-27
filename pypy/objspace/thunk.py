@@ -1,6 +1,7 @@
 """Example usage:
 
     $ py.py -o thunk
+    >>> from pypymagic import thunk, become
     >>> def f():
     ...     print 'computing...'
     ...     return 6*7
@@ -25,6 +26,11 @@ from pypy.interpreter.error import OperationError
 
 # 'w_obj.w_thunkalias' points to another object that 'w_obj' has turned into
 baseobjspace.W_Root.w_thunkalias = None
+
+# adding a name in __slots__ after class creation doesn't "work" in Python,
+# but in this case it has the effect of telling the annotator that this
+# attribute is allowed to be moved up to this class.
+baseobjspace.W_Root.__slots__ += ('w_thunkalias',)
 
 class W_Thunk(baseobjspace.W_Root, object):
     def __init__(w_self, w_callable, args):
@@ -61,15 +67,19 @@ def force(space, w_self):
     return w_self
 
 def thunk(w_callable, __args__):
+    """thunk(f, *args, **kwds) -> an object that behaves like the
+    result of the call f(*args, **kwds).  The call is performed lazily."""
     return W_Thunk(w_callable, __args__)
 app_thunk = gateway.interp2app(thunk, unwrap_spec=[baseobjspace.W_Root,
                                                    argument.Arguments])
 
 def is_thunk(space, w_obj):
+    """Check if an object is a thunk that has not been computed yet."""
     return space.newbool(w_obj.w_thunkalias is w_NOT_COMPUTED_THUNK)
 app_is_thunk = gateway.interp2app(is_thunk)
 
 def become(space, w_target, w_source):
+    """Globally replace the target object with the source one."""
     w_target = force(space, w_target)
     w_target.w_thunkalias = w_source
     return space.w_None
@@ -143,10 +153,11 @@ def Space(*args, **kwds):
     from pypy.objspace import std
     space = std.Space(*args, **kwds)
     patch_space_in_place(space, 'thunk', proxymaker)
-    space.setitem(space.builtin.w_dict, space.wrap('thunk'),
+    w_pypymagic = space.getbuiltinmodule("pypymagic")
+    space.setattr(w_pypymagic, space.wrap('thunk'),
                   space.wrap(app_thunk))
-    space.setitem(space.builtin.w_dict, space.wrap('is_thunk'),
+    space.setattr(w_pypymagic, space.wrap('is_thunk'),
                   space.wrap(app_is_thunk))
-    space.setitem(space.builtin.w_dict, space.wrap('become'),
+    space.setattr(w_pypymagic, space.wrap('become'),
                  space.wrap(app_become))
     return space

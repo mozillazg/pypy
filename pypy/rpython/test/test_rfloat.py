@@ -1,7 +1,6 @@
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.test import snippet
-from pypy.rpython.test.test_llinterp import interpret
-
+from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 
 class TestSnippet(object):
 
@@ -33,25 +32,41 @@ class TestSnippet(object):
         for opname in annmodel.BINARY_OPERATIONS:
             print 'BINARY_OPERATIONS:', opname
 
-def test_int_conversion():
-    def fn(f):
-        return int(f)
+class BaseTestRfloat(BaseRtypingTest):
+    
+    def test_float2str(self):
+        def fn(f):
+            return str(f)
 
-    res = interpret(fn, [1.0])
-    assert res == 1
-    assert type(res) is int 
-    res = interpret(fn, [2.34])
-    assert res == fn(2.34) 
+        res = self.interpret(fn, [1.5])
+        assert float(self.ll_to_string(res)) == 1.5
 
-def test_float2str():
-    def fn(f):
-        return str(f)
+    def test_string_mod_float(self):
+        def fn(f):
+            return '%f' % f
 
-    res = interpret(fn, [1.5])
-    assert float(''.join(res.chars)) == 1.5
+        res = self.interpret(fn, [1.5])
+        assert float(self.ll_to_string(res)) == 1.5
 
-def test_hash():
-    def fn(f):
-        return hash(f)
-    res = interpret(fn, [1.5])
-    assert res == hash(1.5)
+    def test_int_conversion(self):
+        def fn(f):
+            return int(f)
+
+        res = self.interpret(fn, [1.0])
+        assert res == 1
+        assert type(res) is int 
+        res = self.interpret(fn, [2.34])
+        assert res == fn(2.34) 
+
+
+class TestLLtype(BaseTestRfloat, LLRtypeMixin):
+
+    def test_hash(self):
+        def fn(f):
+            return hash(f)
+        res = self.interpret(fn, [1.5])
+        assert res == hash(1.5)
+
+
+class TestOOtype(BaseTestRfloat, OORtypeMixin):
+    pass

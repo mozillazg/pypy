@@ -4,6 +4,7 @@ Code and Frame.
 """
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
+from pypy.rlib import rstack # for resume points
 
 
 class Code(Wrappable):
@@ -50,6 +51,15 @@ class Code(Wrappable):
     def getdocstring(self):
         return None
 
+    def funcrun(self, func, args):
+        frame = self.create_frame(func.space, func.w_func_globals,
+                                  func.closure)
+        sig = self.signature()
+        scope_w = args.parse(func.name, sig, func.defs_w)
+        frame.setfastscope(scope_w)
+        return frame.run()
+
+        
     # a performance hack (see gateway.BuiltinCode1/2/3 and pycode.PyCode)
     def fastcall_0(self, space, func):
         return None
@@ -109,7 +119,7 @@ class Frame(Wrappable):
     def fast2locals(self):
         # Copy values from self.fastlocals_w to self.w_locals
         if self.w_locals is None:
-            self.w_locals = self.space.newdict([])
+            self.w_locals = self.space.newdict()
         varnames = self.getcode().getvarnames()
         fastscope_w = self.getfastscope()
         for i in range(min(len(varnames), len(fastscope_w))):
@@ -147,6 +157,7 @@ class EvalFrame(Frame):
         executioncontext.enter(self)
         try:
             result = self.eval(executioncontext)
+            rstack.resume_point("evalframe", self, executioncontext, returns=result)
         finally:
             executioncontext.leave(self)
         return result

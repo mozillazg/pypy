@@ -12,8 +12,9 @@ from pypy.interpreter.pyframe import ControlFlowException, ExitFrame
 # that return iterators).
 #
 
-class GeneratorFrame(EvalFrame):
+class GeneratorFrameMixin(object):
     "A frame attached to a generator."
+    _mixin_ = True
 
     def run(self):
         "Build a generator-iterator."
@@ -43,6 +44,21 @@ class GeneratorIterator(Wrappable):
         self.running = False
         self.exhausted = False
 
+    def descr__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('generator_new')
+        w        = space.wrap
+
+        tup = [
+            w(self.frame),
+            w(self.running),
+            w(self.exhausted),
+            ]
+
+        return space.newtuple([new_inst, space.newtuple(tup)])
+
     def descr__iter__(self):
         """x.__iter__() <==> iter(x)"""
         return self.space.wrap(self)
@@ -63,6 +79,7 @@ class GeneratorIterator(Wrappable):
                 self.exhausted = True
                 raise
         finally:
+            self.frame.f_back = None
             self.running = False
 
 #

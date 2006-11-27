@@ -24,8 +24,8 @@ support_functions = [
     "%LLVM_RPython_StartupCode",
     ]
 
-def get_genexterns_path():
-    return os.path.join(get_llvm_cpath(), "genexterns.c")
+def get_module_file(name):
+    return os.path.join(get_llvm_cpath(), name)
 
 def get_ll(ccode, function_names):
     function_names += support_functions
@@ -101,15 +101,16 @@ def get_ll(ccode, function_names):
         raise "Can't compile external function code (llcode.c): ERROR:", llcode
     return decl, impl
 
-def setup_externs(db):
+
+def setup_externs(c_db, db):
     rtyper = db.translator.rtyper
     from pypy.translator.c.extfunc import predeclare_all
 
     # hacks to make predeclare_all work
     # XXX Rationalise this
     db.standalone = True
-    db.externalfuncs = {}
-    decls = list(predeclare_all(db, rtyper))
+    
+    decls = list(predeclare_all(c_db, rtyper))
 
     for c_name, obj in decls:
         if isinstance(obj, lltype.LowLevelType):
@@ -120,8 +121,18 @@ def setup_externs(db):
             db.prepare_arg_value(c)
         elif isinstance(lltype.typeOf(obj), lltype.Ptr):
             db.prepare_constant(lltype.typeOf(obj), obj)
+        elif type(c_name) is str and type(obj) is int:
+            pass    #define c_name obj
         else:
             assert False, "unhandled predeclare %s %s %s" % (c_name, type(obj), obj)
+
+    def annotatehelper(func, *argtypes):
+        graph = db.translator.rtyper.annotate_helper(func, argtypes)
+        fptr = rtyper.getcallable(graph)
+        c = inputconst(lltype.typeOf(fptr), fptr)
+        db.prepare_arg_value(c)
+        decls.append(("ll_" + func.func_name, graph))
+        return graph.name
 
     return decls
 
@@ -175,9 +186,14 @@ def generate_llfile(db, extern_decls, entrynode, standalone):
                 ccode.append("void raise%s(char *);\n" % c_name)
             else:
                 predeclarefn(c_name, db.obj2node[obj._obj].ref)                
+        elif type(c_name) is str and type(obj) is int:
+            ccode.append("#define\t%s\t%d\n" % (c_name, obj))
         else:
             assert False, "unhandled extern_decls %s %s %s" % (c_name, type(obj), obj)
 
+
+    # append protos
+    ccode.append(open(get_module_file('protos.h')).read())
 
     # include this early to get constants and macros for any further includes
     ccode.append('#include <Python.h>\n')
@@ -186,7 +202,6 @@ def generate_llfile(db, extern_decls, entrynode, standalone):
     ccode.append('%s\n' % db.gcpolicy.genextern_code())
     
     # append our source file
-    ccode = "".join(ccode)
-    ccode += open(get_genexterns_path()).read()
-    
-    return get_ll(ccode, function_names)
+    ccode.append(open(get_module_file('genexterns.c')).read())
+
+    return get_ll("".join(ccode), function_names)

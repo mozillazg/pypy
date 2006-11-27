@@ -1,18 +1,18 @@
 import autopath
+import py
 from pypy.objspace.flow.model import Constant, Block, Link, Variable, traverse
 from pypy.objspace.flow.model import flatten
 from pypy.interpreter.argument import Arguments
 from pypy.translator.simplify import simplify_graph
 from pypy.objspace.flow import FlowObjSpace 
+from pypy.objspace.flow import objspace
+from pypy import conftest
 
 import os
 import operator
 is_operator = getattr(operator, 'is_', operator.eq) # it's not there 2.2
 
-class TestFlowObjSpace:
-    def setup_class(cls): 
-        cls.space = FlowObjSpace() 
-
+class Base:
     def codetest(self, func):
         import inspect
         try:
@@ -22,17 +22,15 @@ class TestFlowObjSpace:
         #name = func.func_name
         graph = self.space.build_flow(func)
         graph.source = inspect.getsource(func)
+        self.show(graph)
         return graph
 
-    def reallyshow(self, x):
-        x.show()
-        #import os
-        #from pypy.translator.tool.make_dot import make_dot
-        #dest = make_dot(x.name, x)
-        #os.system('gv %s' % str(dest))
+    def show(self, graph):
+        if conftest.option.view:
+            graph.show()
 
-    def show(self, x):
-        pass   # or   self.reallyshow(x)
+    def setup_class(cls): 
+        cls.space = FlowObjSpace() 
 
     def all_operations(self, graph):
         result = {}
@@ -44,7 +42,9 @@ class TestFlowObjSpace:
         traverse(visit, graph)
         return result
 
-    #__________________________________________________________
+
+class TestFlowObjSpace(Base):
+
     def nothing():
         pass
 
@@ -53,7 +53,6 @@ class TestFlowObjSpace:
         assert len(x.startblock.exits) == 1
         link, = x.startblock.exits
         assert link.target == x.returnblock
-        self.show(x)
 
     #__________________________________________________________
     def simplefunc(x):
@@ -71,7 +70,6 @@ class TestFlowObjSpace:
 
     def test_simplebranch(self):
         x = self.codetest(self.simplebranch)
-        self.show(x)
 
     #__________________________________________________________
     def ifthenelse(i, j):
@@ -81,7 +79,6 @@ class TestFlowObjSpace:
     
     def test_ifthenelse(self):
         x = self.codetest(self.simplebranch)
-        self.show(x)
 
     #__________________________________________________________
     def loop(x):
@@ -101,7 +98,6 @@ class TestFlowObjSpace:
     
     def test_print(self):
         x = self.codetest(self.print_)
-        self.show(x)
 
     #__________________________________________________________
     def while_(i):
@@ -110,7 +106,6 @@ class TestFlowObjSpace:
 
     def test_while(self):
         x = self.codetest(self.while_)
-        self.show(x)
 
     #__________________________________________________________
     def union_easy(i):
@@ -122,7 +117,6 @@ class TestFlowObjSpace:
 
     def test_union_easy(self):
         x = self.codetest(self.union_easy)
-        self.show(x)
 
     #__________________________________________________________
     def union_hard(i):
@@ -132,7 +126,6 @@ class TestFlowObjSpace:
     
     def test_union_hard(self):
         x = self.codetest(self.union_hard)
-        self.show(x)
 
     #__________________________________________________________
     def while_union(i):
@@ -144,7 +137,6 @@ class TestFlowObjSpace:
     
     def test_while_union(self):
         x = self.codetest(self.while_union)
-        self.show(x)
 
     #__________________________________________________________
     def simple_for(lst):
@@ -155,7 +147,6 @@ class TestFlowObjSpace:
     
     def test_simple_for(self):
         x = self.codetest(self.simple_for)
-        self.show(x)
 
     #__________________________________________________________
     def nested_whiles(i, j):
@@ -172,7 +163,6 @@ class TestFlowObjSpace:
 
     def test_nested_whiles(self):
         x = self.codetest(self.nested_whiles)
-        self.show(x)
 
     #__________________________________________________________
     def break_continue(x):
@@ -192,7 +182,6 @@ class TestFlowObjSpace:
 
     def test_break_continue(self):
         x = self.codetest(self.break_continue)
-        self.show(x)
 
     #__________________________________________________________
     def unpack_tuple(lst):
@@ -200,7 +189,6 @@ class TestFlowObjSpace:
 
     def test_unpack_tuple(self):
         x = self.codetest(self.unpack_tuple)
-        self.show(x)
 
     #__________________________________________________________
     def reverse_3(lst):
@@ -213,7 +201,6 @@ class TestFlowObjSpace:
 
     def test_reverse_3(self):
         x = self.codetest(self.reverse_3)
-        self.show(x)
 
     #__________________________________________________________
     def finallys(lst):
@@ -236,7 +223,6 @@ class TestFlowObjSpace:
 
     def test_finallys(self):
         x = self.codetest(self.finallys)
-        self.show(x)
 
     #__________________________________________________________
     def const_pow():
@@ -244,18 +230,34 @@ class TestFlowObjSpace:
 
     def test_const_pow(self):
         x = self.codetest(self.const_pow)
-        self.show(x)
 
     #__________________________________________________________
-    def implicitIndexError(lst):
+    def implicitException(lst):
         try:
             x = lst[5]
-        except IndexError:
+        except Exception:
             return 'catch'
         return lst[3]   # not caught
 
-    def test_implicitIndexError(self):
-        x = self.codetest(self.implicitIndexError)
+    def test_implicitException(self):
+        x = self.codetest(self.implicitException)
+        simplify_graph(x)
+        self.show(x)
+        def cannot_reach_exceptblock(link):
+            if isinstance(link, Link):
+                assert link.target is not x.exceptblock
+        traverse(cannot_reach_exceptblock, x)
+
+    
+    def implicitAttributeError(x):
+        try:
+            x = getattr(x, "y")
+        except AttributeError:
+            return 'catch'
+        return getattr(x, "z")   # not caught
+
+    def test_implicitAttributeError(self):
+        x = self.codetest(self.implicitAttributeError)
         simplify_graph(x)
         self.show(x)
         def cannot_reach_exceptblock(link):
@@ -295,29 +297,69 @@ class TestFlowObjSpace:
         assert d == {None: True, OSError: True, Exception: True}
 
     #__________________________________________________________
-    def reraiseKeyError(dic):
+    def reraiseAttributeError(v):
         try:
-            x = dic[5]
-        except KeyError:
+            x = getattr(v, "y")
+        except AttributeError:
             raise
 
-    def test_reraiseKeyError(self):
-        x = self.codetest(self.reraiseKeyError)
+    def test_reraiseAttributeError(self):
+        x = self.codetest(self.reraiseAttributeError)
         simplify_graph(x)
         self.show(x)
-        found_KeyError = []
-        def only_raise_KeyError(link):
+        found_AttributeError = []
+        def only_raise_AttributeError(link):
             if isinstance(link, Link):
                 if link.target is x.exceptblock:
-                    assert link.args[0] == Constant(KeyError)
-                    found_KeyError.append(link)
-        traverse(only_raise_KeyError, x)
-        assert found_KeyError
+                    assert link.args[0] == Constant(AttributeError)
+                    found_AttributeError.append(link)
+        traverse(only_raise_AttributeError, x)
+        assert found_AttributeError
+
+    def reraiseTypeError(dic):
+        try:
+            x = dic[5]
+        except TypeError:
+            raise
+
+    def test_reraiseTypeError(self):
+        x = self.codetest(self.reraiseTypeError)
+        simplify_graph(x)
+        self.show(x)
+        found = []
+        def can_reach_exceptblock(link):
+            if isinstance(link, Link):
+                if link.target is x.exceptblock:
+                    found.append(link)                
+        traverse(can_reach_exceptblock, x)
+        assert found
+
 
     #__________________________________________________________
-    def reraiseAnything(dic):
+    def reraiseAnythingDicCase(dic):
         try:
             dic[5]
+        except:
+            raise
+
+    def test_reraiseAnythingDicCase(self):
+        x = self.codetest(self.reraiseAnythingDicCase)
+        simplify_graph(x)
+        self.show(x)
+        found = {}
+        def find_exceptions(link):
+            if isinstance(link, Link):
+                if link.target is x.exceptblock:
+                    if isinstance(link.args[0], Constant):
+                        found[link.args[0].value] = True
+                    else:
+                        found[link.exitcase] = None
+        traverse(find_exceptions, x)
+        assert found == {IndexError: True, KeyError: True, Exception: None}
+    
+    def reraiseAnything(x):
+        try:
+            pow(x, 5)
         except:
             raise
 
@@ -332,7 +374,7 @@ class TestFlowObjSpace:
                     assert isinstance(link.args[0], Constant)
                     found[link.args[0].value] = True
         traverse(find_exceptions, x)
-        assert found == {KeyError: True, IndexError: True}
+        assert found == {ValueError: True, ZeroDivisionError: True, OverflowError: True}
 
     #__________________________________________________________
     def freevar(self, x):
@@ -342,7 +384,6 @@ class TestFlowObjSpace:
 
     def test_freevar(self):
         x = self.codetest(self.freevar(3))
-        self.show(x)
 
     #__________________________________________________________
     def raise1(msg):
@@ -350,8 +391,8 @@ class TestFlowObjSpace:
     
     def test_raise1(self):
         x = self.codetest(self.raise1)
-        self.show(x)
         simplify_graph(x)
+        self.show(x)
         ops = x.startblock.operations
         assert len(ops) == 2
         assert ops[0].opname == 'simple_call'
@@ -367,7 +408,6 @@ class TestFlowObjSpace:
     
     def test_raise2(self):
         x = self.codetest(self.raise2)
-        self.show(x)
         # XXX can't check the shape of the graph, too complicated...
 
     #__________________________________________________________
@@ -376,7 +416,6 @@ class TestFlowObjSpace:
     
     def test_raise3(self):
         x = self.codetest(self.raise3)
-        self.show(x)
         # XXX can't check the shape of the graph, too complicated...
 
     #__________________________________________________________
@@ -385,7 +424,6 @@ class TestFlowObjSpace:
     
     def test_raise4(self):
         x = self.codetest(self.raise4)
-        self.show(x)
 
     #__________________________________________________________
     def raisez(z, tb):
@@ -393,7 +431,6 @@ class TestFlowObjSpace:
 
     def test_raisez(self):
         x = self.codetest(self.raisez)
-        self.show(x)
 
     #__________________________________________________________
     def raise_and_catch_1(exception_instance):
@@ -405,7 +442,6 @@ class TestFlowObjSpace:
     
     def test_raise_and_catch_1(self):
         x = self.codetest(self.raise_and_catch_1)
-        self.show(x)
 
     #__________________________________________________________
     def catch_simple_call():
@@ -417,7 +453,6 @@ class TestFlowObjSpace:
     
     def test_catch_simple_call(self):
         x = self.codetest(self.catch_simple_call)
-        self.show(x)
 
     #__________________________________________________________
     def dellocal():
@@ -428,7 +463,6 @@ class TestFlowObjSpace:
     
     def test_dellocal(self):
         x = self.codetest(self.dellocal)
-        self.show(x)
 
     #__________________________________________________________
     def globalconstdict(name):
@@ -438,7 +472,6 @@ class TestFlowObjSpace:
     
     def test_globalconstdict(self):
         x = self.codetest(self.globalconstdict)
-        self.show(x)
 
     #__________________________________________________________
     
@@ -481,7 +514,6 @@ class TestFlowObjSpace:
 
     def test_jump_target_specialization(self):
         x = self.codetest(self.jump_target_specialization)
-        self.show(x)
         def visitor(node):
             if isinstance(node, Block):
                 for op in node.operations:
@@ -534,7 +566,6 @@ class TestFlowObjSpace:
 
     def test_highly_branching_example(self):
         x = self.codetest(self.highly_branching_example)
-        self.show(x)
         assert len(flatten(x)) < 60   # roughly 20 blocks + 30 links
 
     #__________________________________________________________
@@ -633,7 +664,63 @@ class TestFlowObjSpace:
                         call_args.append(op)
         traverse(visit, graph)
         assert not call_args
-        
+
+    def test_catch_importerror_1(self):
+        def f():
+            try:
+                import pypy.this_does_not_exist
+            except ImportError:
+                return 1
+        graph = self.codetest(f)
+        simplify_graph(graph)
+        self.show(graph)
+        assert not graph.startblock.operations
+        assert len(graph.startblock.exits) == 1
+        assert graph.startblock.exits[0].target is graph.returnblock
+
+    def test_catch_importerror_2(self):
+        def f():
+            try:
+                from pypy import this_does_not_exist
+            except ImportError:
+                return 1
+        graph = self.codetest(f)
+        simplify_graph(graph)
+        self.show(graph)
+        assert not graph.startblock.operations
+        assert len(graph.startblock.exits) == 1
+        assert graph.startblock.exits[0].target is graph.returnblock
+
+    def test_importerror_1(self):
+        def f():
+            import pypy.this_does_not_exist
+        py.test.raises(ImportError, 'self.codetest(f)')
+
+    def test_importerror_2(self):
+        def f():
+            from pypy import this_does_not_exist
+        py.test.raises(ImportError, 'self.codetest(f)')
+
+    def test_mergeable(self):
+        def myfunc(x):
+            if x:
+                from pypy.interpreter.error import OperationError
+                s = 12
+            else:
+                s = x.abc
+            return x[s]
+        graph = self.codetest(myfunc)
+
+
+class TestFlowObjSpaceDelay(Base):
+    def setup_class(cls):
+        cls.space = FlowObjSpace()
+        cls.space.config.translation.do_imports_immediately = False
+
+    def test_import_something(self):
+        def f():
+            from some.unknown.module import stuff
+        g = self.codetest(f)
 
 
 DATA = {'x': 5,
@@ -641,3 +728,14 @@ DATA = {'x': 5,
 
 def user_defined_function():
     pass
+
+
+def test_extract_cell_content():
+    class Strange(object):
+        def __cmp__(self, other):
+            assert False, "should not be called"
+    strange = Strange()
+    def f():
+        return strange
+    res = objspace.extract_cell_content(f.func_closure[0])
+    assert res is strange

@@ -5,7 +5,13 @@ from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.error import OperationError
 
 # indices multimehtod
-slice_indices = StdObjSpaceMultiMethod('indices', 2)
+slice_indices = SMM('indices', 2,
+                    doc='S.indices(len) -> (start, stop, stride)\n\nAssuming a'
+                        ' sequence of length len, calculate the start and'
+                        ' stop\nindices, and the stride length of the extended'
+                        ' slice described by\nS. Out of bounds indices are'
+                        ' clipped in a manner consistent with the\nhandling of'
+                        ' normal slices.')
 
 # utility functions
 def _Eval_SliceIndex(space, w_int):
@@ -56,7 +62,7 @@ def descr__new__(space, w_slicetype, args_w):
         raise OperationError(space.w_TypeError,
                              space.wrap("slice() takes at least 1 argument"))
     w_obj = space.allocate_instance(W_SliceObject, w_slicetype)
-    W_SliceObject.__init__(w_obj, space, w_start, w_stop, w_step)
+    W_SliceObject.__init__(w_obj, w_start, w_stop, w_step)
     return w_obj
 #
 descr__new__.unwrap_spec = [baseobjspace.ObjSpace, baseobjspace.W_Root,
@@ -79,6 +85,7 @@ slice_typedef = StdTypeDef("slice",
 
 Create a slice object.  This is used for extended slicing (e.g. a[0:10:2]).''',
     __new__ = newmethod(descr__new__),
+    __hash__ = no_hash_descr,
     start = slicewprop('w_start'),
     stop  = slicewprop('w_stop'),
     step  = slicewprop('w_step'),

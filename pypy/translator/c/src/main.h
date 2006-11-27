@@ -20,6 +20,9 @@ int main(int argc, char *argv[])
     char *errmsg;
     int i, exitcode;
     RPyListOfString *list;
+
+    instrument_setup();
+
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 
@@ -35,7 +38,7 @@ int main(int argc, char *argv[])
     if (RPyExceptionOccurred()) {
         /* fish for the exception type, at least */
         fprintf(stderr, "Fatal PyPy error: %s\n",
-                rpython_exc_type->ov_name->items);
+                RPyFetchExceptionType()->ov_name->items);
         exitcode = 1;
     }
     return exitcode;

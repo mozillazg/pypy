@@ -9,6 +9,8 @@ attribute.
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
+from pypy.interpreter.pyframe import PyFrame
+from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
 
 class Function(Wrappable):
     """A function is a code object captured with some environment:
@@ -23,7 +25,7 @@ class Function(Wrappable):
         self.w_func_globals = w_globals  # the globals dictionary
         self.closure   = closure    # normally, list of Cell instances or None
         self.defs_w    = defs_w     # list of w_default's
-        self.w_func_dict = space.newdict([])
+        self.w_func_dict = None # filled out below if needed
         self.w_module = None
 
     def __repr__(self):
@@ -32,13 +34,94 @@ class Function(Wrappable):
         return "<Function %s>" % self.name
 
     def call_args(self, args):
-        scope_w = args.parse(self.name, self.code.signature(), self.defs_w)
-        frame = self.code.create_frame(self.space, self.w_func_globals,
-                                            self.closure)
-        frame.setfastscope(scope_w)
-        return frame.run()
+        return self.code.funcrun(self, args) # delegate activation to code
+    
+    def funccall(self, *args_w): # speed hack
+        if len(args_w) == 0:
+            w_res = self.code.fastcall_0(self.space, self)
+            if w_res is not None:
+                return w_res
+        elif len(args_w) == 1:
+            w_res = self.code.fastcall_1(self.space, self, args_w[0])
+            if w_res is not None:
+                return w_res
+        elif len(args_w) == 2:
+            w_res = self.code.fastcall_2(self.space, self, args_w[0],
+                                           args_w[1])
+            if w_res is not None:
+                return w_res
+        elif len(args_w) == 3:
+            w_res = self.code.fastcall_3(self.space, self, args_w[0],
+                                           args_w[1], args_w[2])
+            if w_res is not None:
+                return w_res
+        elif len(args_w) == 4:
+            w_res = self.code.fastcall_4(self.space, self, args_w[0],
+                                           args_w[1], args_w[2], args_w[3])
+            if w_res is not None:
+                return w_res
+        return self.call_args(Arguments(self.space, list(args_w)))
+
+    def funccall_valuestack(self, nargs, valuestack): # speed hack
+        if nargs == 0:
+            w_res = self.code.fastcall_0(self.space, self)
+            if w_res is not None:
+                return w_res
+        elif nargs == 1:
+            w_res = self.code.fastcall_1(self.space, self, valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        elif nargs == 2:
+            w_res = self.code.fastcall_2(self.space, self, valuestack.top(1),
+                                         valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        elif nargs == 3:
+            w_res = self.code.fastcall_3(self.space, self, valuestack.top(2),
+                                         valuestack.top(1), valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        elif nargs == 4:
+            w_res = self.code.fastcall_4(self.space, self, valuestack.top(3),
+                                         valuestack.top(2), valuestack.top(1),
+                                         valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        args = ArgumentsFromValuestack(self.space, valuestack, nargs)
+        try:
+            return self.call_args(args)
+        finally:
+            args.valuestack = None
+
+    def funccall_obj_valuestack(self, w_obj, nargs, valuestack): # speed hack
+        if nargs == 0:
+            w_res = self.code.fastcall_1(self.space, self, w_obj)
+            if w_res is not None:
+                return w_res
+        elif nargs == 1:
+            w_res = self.code.fastcall_2(self.space, self, w_obj, valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        elif nargs == 2:
+            w_res = self.code.fastcall_3(self.space, self, w_obj, valuestack.top(1),
+                                         valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        elif nargs == 3:
+            w_res = self.code.fastcall_4(self.space, self, w_obj, valuestack.top(2),
+                                         valuestack.top(1), valuestack.top(0))
+            if w_res is not None:
+                return w_res
+        stkargs = ArgumentsFromValuestack(self.space, valuestack, nargs)
+        args = stkargs.prepend(w_obj)
+        try:
+            return self.call_args(args)
+        finally:
+            stkargs.valuestack = None
 
     def getdict(self):
+        if self.w_func_dict is None:
+            self.w_func_dict = self.space.newdict()
         return self.w_func_dict
 
     def setdict(self, space, w_dict):
@@ -87,6 +170,52 @@ class Function(Wrappable):
 
     def descr_function_repr(self):
         return self.getrepr(self.space, 'function %s' % (self.name,))
+
+    def descr_function__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('func_new')
+        w        = space.wrap
+        if self.closure is None:
+            w_closure = space.w_None
+        else:
+            w_closure = space.newtuple([w(cell) for cell in self.closure])
+
+        nt = space.newtuple
+        tup_base = []
+        tup_state = [
+            w(self.name),
+            self.w_doc,
+            w(self.code),
+            self.w_func_globals,
+            w_closure,
+            nt(self.defs_w),
+            self.w_func_dict,
+            self.w_module,
+        ]
+        return nt([new_inst, nt(tup_base), nt(tup_state)])
+
+    def descr_function__setstate__(self, space, w_args):
+        from pypy.interpreter.pycode import PyCode
+        args_w = space.unpackiterable(w_args)
+        (w_name, w_doc, w_code, w_func_globals, w_closure, w_defs_w,
+         w_func_dict, w_module) = args_w
+
+        self.space = space
+        self.name = space.str_w(w_name)
+        self.w_doc = w_doc
+        self.code = space.interp_w(PyCode, w_code)
+        self.w_func_globals = w_func_globals
+        if w_closure is not space.w_None:
+            from pypy.interpreter.nestedscope import Cell
+            closure_w = space.unpackiterable(w_closure)
+            self.closure = [space.interp_w(Cell, w_cell) for w_cell in closure_w]
+        else:
+            self.closure = None
+        self.defs_w    = space.unpackiterable(w_defs_w)
+        self.w_func_dict = w_func_dict
+        self.w_module = w_module
 
     def fget_func_defaults(space, self):
         values_w = self.defs_w
@@ -174,14 +303,6 @@ def descr_function_get(space, w_function, w_obj, w_cls=None):
         return space.wrap(Method(space, w_function, None, w_cls))
 
 
-def _getclass(space, w_obj):
-    try:
-        return space.abstract_getclass(w_obj)
-    except OperationError, e:
-        if e.match(space, space.w_AttributeError):
-            return space.type(w_obj)
-        raise
-
 class Method(Wrappable):
     """A method is a function bound to a specific instance or class."""
 
@@ -224,7 +345,7 @@ class Method(Wrappable):
                 if w_firstarg is None:
                     instdescr = "nothing"
                 else:
-                    instname = _getclass(space, w_firstarg).getname(space,"")
+                    instname = space.abstract_getclass(w_firstarg).getname(space,"")
                     if instname:
                         instname += " "
                     instdescr = "%sinstance" %instname
@@ -285,10 +406,44 @@ class Method(Wrappable):
         other = space.interpclass_w(w_other)
         if not isinstance(other, Method):
             return space.w_False
-        if not space.is_w(self.w_instance, other.w_instance):
-            return space.w_False
+        if self.w_instance is None:
+            if other.w_instance is not None:
+                return space.w_False
+        else:
+            if other.w_instance is None:
+                return space.w_False
+            if not space.is_w(self.w_instance, other.w_instance):
+                return space.w_False
         return space.eq(self.w_function, other.w_function)
 
+    def descr_method_hash(self):
+        space = self.space
+        w_result = space.hash(self.w_function)
+        if self.w_instance is not None:
+            w_result = space.xor(w_result, space.hash(self.w_instance))
+        return w_result
+
+    def descr_method__reduce__(self, space):
+        from pypy.interpreter.mixedmodule import MixedModule
+        from pypy.interpreter.gateway import BuiltinCode
+        w_mod    = space.getbuiltinmodule('_pickle_support')
+        mod      = space.interp_w(MixedModule, w_mod)
+        new_inst = mod.get('method_new')
+        w        = space.wrap
+        w_instance = self.w_instance or space.w_None
+        function = space.interpclass_w(self.w_function)
+        if isinstance(function, Function) and isinstance(function.code, BuiltinCode):
+            new_inst = mod.get('builtin_method_new')
+            if space.is_w(w_instance, space.w_None):
+                tup = [self.w_class, space.wrap(function.name)]
+            else:
+                tup = [w_instance, space.wrap(function.name)]
+        elif space.is_w( self.w_class, space.w_None ):
+            tup = [self.w_function, w_instance]
+        else:
+            tup = [self.w_function, w_instance, self.w_class]
+        return space.newtuple([new_inst, space.newtuple(tup)])
+        
 class StaticMethod(Wrappable):
     """A static method.  Note that there is one class staticmethod at
     app-level too currently; this is only used for __new__ methods."""

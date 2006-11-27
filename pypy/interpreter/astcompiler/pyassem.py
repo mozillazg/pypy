@@ -1,6 +1,5 @@
 """A flow graph representation for Python bytecode"""
 
-import dis
 import sys
 
 from pypy.interpreter.astcompiler import misc, ast
@@ -8,8 +7,7 @@ from pypy.interpreter.astcompiler.consts \
      import CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.baseobjspace import W_Root
-
-
+from pypy.tool import stdlib_opcode as pythonopcode
 
 class BlockSet:
     """A Set implementation specific to Blocks
@@ -433,15 +431,15 @@ DONE = "DONE"
 
 class PyFlowGraph(FlowGraph):
 
-    def __init__(self, space, name, filename, args=None, mangler=None,
+    def __init__(self, space, name, filename, argnames=None,
                  optimized=0, klass=0, newlocals=0):
         FlowGraph.__init__(self, space)
-        if args is None:
-            args = []
+        if argnames is None:
+            argnames = []
         self.name = name
         self.filename = filename
         self.docstring = space.w_None
-        self.argcount = len(args)
+        self.argcount = len(argnames)
         self.klass = klass
         self.flags = 0
         if optimized:
@@ -460,13 +458,7 @@ class PyFlowGraph(FlowGraph):
         # The offsets used by LOAD_CLOSURE/LOAD_DEREF refer to both
         # kinds of variables.
         self.closure = []
-        self.varnames = []
-        for i in range(len(args)):
-            var = args[i]
-            if isinstance(var, ast.AssName):
-                self.varnames.append(mangler.mangle(var.name))
-            elif isinstance(var, ast.AssTuple):
-                self.varnames.append('.%d' % (2 * i))
+        self.varnames = list(argnames)
         self.stage = RAW
         self.orderedblocks = []
 
@@ -633,11 +625,11 @@ class PyFlowGraph(FlowGraph):
         self.stage = FLAT
 
     hasjrel = {}
-    for i in dis.hasjrel:
-        hasjrel[dis.opname[i]] = True
+    for i in pythonopcode.hasjrel:
+        hasjrel[pythonopcode.opname[i]] = True
     hasjabs = {}
-    for i in dis.hasjabs:
-        hasjabs[dis.opname[i]] = True
+    for i in pythonopcode.hasjabs:
+        hasjabs[pythonopcode.opname[i]] = True
 
     def convertArgs(self):
         """Convert arguments from symbolic to concrete form"""
@@ -772,7 +764,7 @@ class PyFlowGraph(FlowGraph):
         index = self._lookupName(arg, self.closure)
         return InstrInt(inst.op, index)
     
-    _cmp = list(dis.cmp_op)
+    _cmp = list(pythonopcode.cmp_op)
     def _convert_COMPARE_OP(self, inst):
         assert isinstance(inst, InstrName)
         arg = inst.name                        
@@ -817,8 +809,9 @@ class PyFlowGraph(FlowGraph):
         self.stage = DONE
 
     opnum = {}
-    for num in range(len(dis.opname)):
-        opnum[dis.opname[num]] = num
+    for num in range(len(pythonopcode.opname)):
+        opnum[pythonopcode.opname[num]] = num
+        # This seems to duplicate dis.opmap from opcode.opmap
     del num
 
     def newCodeObject(self):
@@ -832,19 +825,18 @@ class PyFlowGraph(FlowGraph):
             argcount = argcount - 1
         # was return new.code, now we just return the parameters and let
         # the caller create the code object
-        # XXX _code_new_w itself is not really annotable
-        return PyCode(self.space)._code_new_w( argcount, nlocals,
-                                               self.stacksize, self.flags,
-                                               self.lnotab.getCode(),
-                                               self.getConsts(),
-                                               self.names,
-                                               self.varnames,
-                                               self.filename, self.name,
-                                               self.firstline,
-                                               self.lnotab.getTable(),
-                                               self.freevars,
-                                               self.cellvars
-                                               )
+        return PyCode( self.space, argcount, nlocals,
+                       self.stacksize, self.flags,
+                       self.lnotab.getCode(),
+                       self.getConsts(),
+                       self.names,
+                       self.varnames,
+                       self.filename, self.name,
+                       self.firstline,
+                       self.lnotab.getTable(),
+                       self.freevars,
+                       self.cellvars
+                       )
 
     def getConsts(self):
         """Return a tuple for the const slot of the code object
@@ -1049,6 +1041,7 @@ class StackDepthTracker:
         'SETUP_EXCEPT': 3,
         'SETUP_FINALLY': 3,
         'FOR_ITER': 1,
+        'WITH_CLEANUP': 3,
         }
     # use pattern match
     patterns = [

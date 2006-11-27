@@ -1,4 +1,6 @@
 import autopath
+from pypy.objspace.std.objspace import *
+from pypy.objspace.std.stdtypedef import *
 
 ##class TestSpecialMultimethodCode(testit.TestCase):
 
@@ -53,6 +55,29 @@ import autopath
 ##                               w(-1.5))
 
 
+class TestTypeObject:
+
+    def test_not_acceptable_as_base_class(self):
+        space = self.space
+        class W_Stuff(W_Object):
+            pass
+        def descr__new__(space, w_subtype):
+            return space.allocate_instance(W_Stuff, w_subtype)
+        W_Stuff.typedef = StdTypeDef("stuff",
+                                     __new__ = newmethod(descr__new__))
+        W_Stuff.typedef.acceptable_as_base_class = False
+        w_stufftype = space.gettypeobject(W_Stuff.typedef)
+        space.appexec([w_stufftype], """(stufftype):
+            x = stufftype.__new__(stufftype)
+            assert type(x) is stufftype
+            raises(TypeError, stufftype.__new__)
+            raises(TypeError, stufftype.__new__, int)
+            raises(TypeError, stufftype.__new__, 42)
+            raises(TypeError, stufftype.__new__, stufftype, 511)
+            raises(TypeError, type, 'sub', (stufftype,), {})
+        """)
+
+
 class AppTestTypeObject:
     def test_bases(self):
         assert int.__bases__ == (object,)
@@ -63,7 +88,205 @@ class AppTestTypeObject:
         assert Y.__bases__ ==  (X,)
         class Z(Y,X): pass
         assert Z.__bases__ ==  (Y, X)
-        
+
+        Z.__bases__ = (X,)
+        #print Z.__bases__
+        assert Z.__bases__ == (X,)
+
+    def test_mutable_bases(self):
+        # from CPython's test_descr
+        class C(object):
+            pass
+        class C2(object):
+            def __getattribute__(self, attr):
+                if attr == 'a':
+                    return 2
+                else:
+                    return super(C2, self).__getattribute__(attr)
+            def meth(self):
+                return 1
+        class D(C):
+            pass
+        class E(D):
+            pass
+        d = D()
+        e = E()
+        D.__bases__ = (C,)
+        D.__bases__ = (C2,)
+        #import pdb; pdb.set_trace()
+        assert d.meth() == 1
+        assert e.meth() == 1
+        assert d.a == 2
+        assert e.a == 2
+        assert C2.__subclasses__() == [D]
+
+        # stuff that shouldn't:
+        class L(list):
+            pass
+
+        try:
+            L.__bases__ = (dict,)
+        except TypeError:
+            pass
+        else:
+            assert 0, "shouldn't turn list subclass into dict subclass"
+
+        try:
+            list.__bases__ = (dict,)
+        except TypeError:
+            pass
+        else:
+            assert 0, "shouldn't be able to assign to list.__bases__"
+
+        try:
+            D.__bases__ = (C2, list)
+        except TypeError:
+            pass
+        else:
+            assert 0, "best_base calculation found wanting"
+
+        try:
+            del D.__bases__
+        except (TypeError, AttributeError):
+            pass
+        else:
+            assert 0, "shouldn't be able to delete .__bases__"
+
+        try:
+            D.__bases__ = ()
+        except TypeError, msg:
+            if str(msg) == "a new-style class can't have only classic bases":
+                assert 0, "wrong error message for .__bases__ = ()"
+        else:
+            assert 0, "shouldn't be able to set .__bases__ to ()"
+
+        try:
+            D.__bases__ = (D,)
+        except TypeError:
+            pass
+        else:
+            # actually, we'll have crashed by here...
+            assert 0, "shouldn't be able to create inheritance cycles"
+
+        try:
+            D.__bases__ = (C, C)
+        except TypeError:
+            pass
+        else:
+            assert 0, "didn't detect repeated base classes"
+
+        try:
+            D.__bases__ = (E,)
+        except TypeError:
+            pass
+        else:
+            assert 0, "shouldn't be able to create inheritance cycles"
+
+        # let's throw a classic class into the mix:
+        try:
+            class Classic:
+                __metaclass__ = _classobj
+                def meth2(self):
+                    return 3
+        except NameError:
+            class Classic:
+                def meth2(self):
+                    return 3
+
+        D.__bases__ = (C, Classic)
+
+        assert d.meth2() == 3
+        assert e.meth2() == 3
+        try:
+            d.a
+        except AttributeError:
+            pass
+        else:
+            assert 0, "attribute should have vanished"
+
+        try:
+            D.__bases__ = (Classic,)
+        except TypeError:
+            pass
+        else:
+            assert 0, "new-style class must have a new-style base"
+
+    def test_mutable_bases_with_failing_mro(self):
+        class WorkOnce(type):
+            def __new__(self, name, bases, ns):
+                self.flag = 0
+                return super(WorkOnce, self).__new__(WorkOnce, name, bases, ns)
+            def mro(instance):
+                if instance.flag > 0:
+                    raise RuntimeError, "bozo"
+                else:
+                    instance.flag += 1
+                    return type.mro(instance)
+
+        class WorkAlways(type):
+            def mro(self):
+                # this is here to make sure that .mro()s aren't called
+                # with an exception set (which was possible at one point).
+                # An error message will be printed in a debug build.
+                # What's a good way to test for this?
+                return type.mro(self)
+
+        class C(object):
+            pass
+
+        class C2(object):
+            pass
+
+        class D(C):
+            pass
+
+        class E(D):
+            pass
+
+        class F(D):
+            __metaclass__ = WorkOnce
+
+        class G(D):
+            __metaclass__ = WorkAlways
+
+        # Immediate subclasses have their mro's adjusted in alphabetical
+        # order, so E's will get adjusted before adjusting F's fails.  We
+        # check here that E's gets restored.
+
+        E_mro_before = E.__mro__
+        D_mro_before = D.__mro__
+
+        try:
+            D.__bases__ = (C2,)
+        except RuntimeError:
+            assert D.__mro__ == D_mro_before
+            assert E.__mro__ == E_mro_before
+        else:
+            assert 0, "exception not propagated"
+
+    def test_mutable_bases_catch_mro_conflict(self):
+        class A(object):
+            pass
+
+        class B(object):
+            pass
+
+        class C(A, B):
+            pass
+
+        class D(A, B):
+            pass
+
+        class E(C, D):
+            pass
+
+        try:
+            C.__bases__ = (B, A)
+        except TypeError:
+            pass
+        else:
+            raise TestFailed, "didn't catch MRO conflict"
+
     def test_builtin_add(self):
         x = 5
         assert x.__add__(6) == 11
@@ -321,7 +544,7 @@ class AppTestTypeObject:
         class C:
             __metaclass__ = T
         assert d
-        assert sorted(d[0].keys()) == ['__dict__','__doc__','__metaclass__','__module__']
+        assert sorted(d[0].keys()) == ['__dict__','__doc__','__metaclass__','__module__', '__weakref__']
         d = []
         class T(type):
             def mro(cls):
@@ -379,7 +602,7 @@ class AppTestTypeObject:
         class Z1(A):
             pass
         class Z2(A):
-            __slots__ = ['__dict__']
+            __slots__ = ['__dict__', '__weakref__']
         z1 = Z1()
         z1.__class__ = Z2
         assert z1.__class__ == Z2
@@ -483,3 +706,12 @@ class AppTestTypeObject:
         b = B("b")
         b.x = 3
         assert b.x == 3
+
+    def test_module(self):
+        assert object.__module__ == '__builtin__'
+        assert int.__module__ == '__builtin__'
+        assert type.__module__ == '__builtin__'
+        d = {'__name__': 'yay'}
+        exec """class A(object):\n  pass\n""" in d
+        A = d['A']
+        assert A.__module__ == 'yay'

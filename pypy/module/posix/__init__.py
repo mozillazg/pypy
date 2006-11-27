@@ -1,6 +1,9 @@
 # Package initialisation
 from pypy.interpreter.mixedmodule import MixedModule
 
+#Turned off for now. posix must support targets without ctypes.
+#from pypy.module.posix import ctypes_posix
+
 import os
 exec 'import %s as posix' % os.name
 
@@ -27,7 +30,9 @@ corresponding Unix manual entries for more information on calls."""
     'close'     : 'interp_posix.close',
     'fstat'     : 'interp_posix.fstat',
     'stat'      : 'interp_posix.stat',
+    'lstat'     : 'interp_posix.lstat',
     'dup'       : 'interp_posix.dup',
+    'dup2'      : 'interp_posix.dup2',
     'system'    : 'interp_posix.system',
     'unlink'    : 'interp_posix.unlink',
     'remove'    : 'interp_posix.remove',
@@ -38,6 +43,12 @@ corresponding Unix manual entries for more information on calls."""
     'environ'   : 'interp_posix.get(space).w_environ',
     'listdir'   : 'interp_posix.listdir',
     'strerror'  : 'interp_posix.strerror',
+    'pipe'      : 'interp_posix.pipe',
+    'chmod'     : 'interp_posix.chmod',
+    'rename'    : 'interp_posix.rename',
+    '_exit'     : 'interp_posix._exit',
+    #'getuid'    : 'interp_posix.getuid',
+    #'geteuid'   : 'interp_posix.geteuid',
     }
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
@@ -45,6 +56,22 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['putenv'] = 'interp_posix.putenv'
     if hasattr(posix, 'unsetenv'): # note: emulated in os
         interpleveldefs['unsetenv'] = 'interp_posix.unsetenv'
+    if hasattr(os, 'kill'):
+        interpleveldefs['kill'] = 'interp_posix.kill'
+    if hasattr(os, 'getpid'):
+        interpleveldefs['getpid'] = 'interp_posix.getpid'
+    if hasattr(os, 'link'):
+        interpleveldefs['link'] = 'interp_posix.link'
+    if hasattr(os, 'symlink'):
+        interpleveldefs['symlink'] = 'interp_posix.symlink'
+    if hasattr(os, 'readlink'):
+        interpleveldefs['readlink'] = 'interp_posix.readlink'
+    if hasattr(os, 'fork'):
+        interpleveldefs['fork'] = 'interp_posix.fork'
+    if hasattr(os, 'waitpid'):
+        interpleveldefs['waitpid'] = 'interp_posix.waitpid'
+    #if hasattr(ctypes_posix, 'uname'):
+    #    interpleveldefs['uname'] = 'interp_posix.uname'
 
 
 for constant in dir(os):
