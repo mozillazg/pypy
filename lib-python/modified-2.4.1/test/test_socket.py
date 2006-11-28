@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# Modified for pypy: removed weakrefs
 
 import unittest
 from test import test_support
@@ -9,7 +8,8 @@ import select
 import time
 import thread, threading
 import Queue
-import sys
+import sys, gc
+from weakref import proxy
 
 PORT = 50007
 HOST = 'localhost'
@@ -26,7 +26,7 @@ class SocketTCPTest(unittest.TestCase):
     def tearDown(self):
         self.serv.close()
         self.serv = None
-
+        
 class SocketUDPTest(unittest.TestCase):
 
     def setUp(self):
@@ -214,12 +214,14 @@ class SocketPairTest(unittest.TestCase, ThreadableTest):
 
 class GeneralModuleTests(unittest.TestCase):
 
-    def Skip_test_weakref(self):
+    def test_weakref(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         p = proxy(s)
         self.assertEqual(p.fileno(), s.fileno())
         s.close()
         s = None
+        gc.collect()
+        gc.collect()
         try:
             p.fileno()
         except ReferenceError:
