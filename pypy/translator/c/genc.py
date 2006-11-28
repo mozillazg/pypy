@@ -248,7 +248,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.compilerflags:
             compiler.compile_extra.append(self.config.translation.compilerflags)
         if self.config.translation.linkerflags:
-            compiler.link_extra.append(self.config.translation.compilerflags)
+            compiler.link_extra.append(self.config.translation.linkerflags)
         compiler.build()
         self.executable_name = str(compiler.outputfilename)
         self._compiled = True
@@ -272,7 +272,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.compilerflags:
             compiler.compile_extra.append(self.config.translation.compilerflags)
         if self.config.translation.linkerflags:
-            compiler.link_extra.append(self.config.translation.compilerflags)
+            compiler.link_extra.append(self.config.translation.linkerflags)
         cfiles = []
         ofiles = []
         for fn in compiler.cfilenames:
@@ -283,8 +283,6 @@ class CStandaloneBuilder(CBuilder):
 
         if self.config.translation.cc:
             cc = self.config.translation.cc
-#            if cc == 'avr-gcc':
-#                compiler.compile_extra.append('-DAVR')
         else:
             cc = 'gcc'
         if self.config.translation.profopt:
