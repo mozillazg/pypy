@@ -286,17 +286,16 @@ class AppTestCaseMethod(py.test.Item):
 class RegrTest: 
     """ Regression Test Declaration.""" 
     def __init__(self, basename, enabled=False, dumbtest=False,
-                                 oldstyle=False, core=False, uselibfile=False,
+                                 oldstyle=False, core=False,
                                  compiler=None, 
                                  usemodules = ''): 
         self.basename = basename 
         self.enabled = enabled 
         self.dumbtest = dumbtest 
-        # we have to determine oldstyle and uselibfile values
+        # we have to determine the value of oldstyle
         # lazily because at RegrTest() call time the command
         # line options haven't been parsed!
         self._oldstyle = oldstyle 
-        self._uselibfile = uselibfile
         self._usemodules = usemodules.split()
         self._compiler = compiler 
         self.core = core
@@ -304,10 +303,6 @@ class RegrTest:
     def oldstyle(self): 
         return self._oldstyle or pypy_option.oldstyle 
     oldstyle = property(oldstyle)
-
-    def uselibfile(self): 
-        return self._uselibfile or pypy_option.uselibfile 
-    uselibfile = property(uselibfile)
 
     def usemodules(self):
         return self._usemodules + pypy_option.usemodules
@@ -319,7 +314,7 @@ class RegrTest:
 
     def getoptions(self): 
         l = []
-        for name in 'oldstyle', 'core', 'uselibfile': 
+        for name in 'oldstyle', 'core': 
             if getattr(self, name): 
                 l.append(name)
         for name in self.usemodules: 
@@ -361,13 +356,6 @@ class RegrTest:
         assert fspath.check()
         if self.oldstyle: 
             space.enable_old_style_classes_as_default_metaclass() 
-        if self.uselibfile: 
-            w_original_faked_file = space.appexec([], '''():
-                from _file import file
-                prev = __builtins__.file
-                __builtins__.file = __builtins__.open = file
-                return prev
-            ''')
         try: 
             modname = fspath.purebasename 
             space.appexec([], '''():
@@ -378,10 +366,6 @@ class RegrTest:
             ''' % locals())
         finally: 
             space.enable_new_style_classes_as_default_metaclass() 
-            if self.uselibfile: 
-                space.appexec([w_original_faked_file], '''(prev):
-                    __builtins__.file = __builtins__.open = prev
-                ''')
 
 testmap = [
     RegrTest('test___all__.py', enabled=True, core=True),
@@ -458,7 +442,7 @@ testmap = [
     RegrTest('test_copy.py', enabled=True, core=True),
     RegrTest('test_copy_reg.py', enabled=True, core=True),
     RegrTest('test_cpickle.py', enabled=True, core=True),
-    RegrTest('test_crypt.py', enabled=False, dumbtest=1),
+    RegrTest('test_crypt.py', usemodules='crypt', enabled=False, dumbtest=1),
     RegrTest('test_csv.py', enabled=False),
         #rev 10840: ImportError: _csv
 
@@ -468,7 +452,7 @@ testmap = [
     RegrTest('test_decimal.py', enabled=True),
     RegrTest('test_decorators.py', enabled=True, core=True),
     RegrTest('test_deque.py', enabled=True, core=True),
-    RegrTest('test_descr.py', enabled=True, core=True, oldstyle=True),
+    RegrTest('test_descr.py', enabled=True, core=True, oldstyle=True, usemodules='_weakref'),
     RegrTest('test_descrtut.py', enabled=True, core=True, oldstyle=True),
     RegrTest('test_dict.py', enabled=True, core=True),
 
@@ -493,7 +477,7 @@ testmap = [
     RegrTest('test_exceptions.py', enabled=True, core=True),
     RegrTest('test_extcall.py', enabled=True, core=True),
     RegrTest('test_fcntl.py', enabled=False, dumbtest=1),
-    RegrTest('test_file.py', enabled=True, dumbtest=1, usemodules="posix", core=True, uselibfile=True),
+    RegrTest('test_file.py', enabled=True, dumbtest=1, usemodules="posix", core=True),
     RegrTest('test_filecmp.py', enabled=True, core=True),
     RegrTest('test_fileinput.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_fnmatch.py', enabled=True, core=True),
@@ -506,11 +490,11 @@ testmap = [
     RegrTest('test_future1.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_future2.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_future3.py', enabled=True, core=True),
-    RegrTest('test_gc.py', enabled=True, dumbtest=1),
+    RegrTest('test_gc.py', enabled=True, dumbtest=1, usemodules='_weakref'),
     RegrTest('test_gdbm.py', enabled=False, dumbtest=1),
-    RegrTest('test_generators.py', enabled=True, core=True),
+    RegrTest('test_generators.py', enabled=True, core=True, usemodules='thread _weakref'),
         #rev 10840: 30 of 152 tests fail
-    RegrTest('test_genexps.py', enabled=True, core=True),
+    RegrTest('test_genexps.py', enabled=True, core=True, usemodules='_weakref'),
     RegrTest('test_getargs.py', enabled=False, dumbtest=1),
     RegrTest('test_getargs2.py', enabled=False),
         #rev 10840: ImportError: _testcapi
@@ -540,13 +524,13 @@ testmap = [
     RegrTest('test_imageop.py', enabled=False, dumbtest=1),
     RegrTest('test_imaplib.py', enabled=True, dumbtest=1),
     RegrTest('test_imgfile.py', enabled=False, dumbtest=1),
-    RegrTest('test_imp.py', enabled=True, core=True),
+    RegrTest('test_imp.py', enabled=True, core=True, usemodules='thread'),
     RegrTest('test_import.py', enabled=True, dumbtest=1, core=True),
     RegrTest('test_importhooks.py', enabled=True, core=True),
     RegrTest('test_inspect.py', enabled=True, dumbtest=1),
     RegrTest('test_ioctl.py', enabled=False),
     RegrTest('test_isinstance.py', enabled=True, core=True),
-    RegrTest('test_iter.py', enabled=True, core=True, uselibfile=True),
+    RegrTest('test_iter.py', enabled=True, core=True),
         #rev 10840: Uncaught interp-level exception: Same place as test_cfgparser
     RegrTest('test_iterlen.py', enabled=True, core=True),
     RegrTest('test_itertools.py', enabled=True, core=True),
@@ -664,7 +648,7 @@ testmap = [
     RegrTest('test_site.py', enabled=False, core=False), # considered cpython impl-detail 
         # Needs non-faked codecs.
     RegrTest('test_slice.py', enabled=True, dumbtest=1, core=True),
-    RegrTest('test_socket.py', enabled=False, usemodules='thread'),
+    RegrTest('test_socket.py', enabled=False, usemodules='thread _weakref'),
 
     RegrTest('test_socket_ssl.py', enabled=False),
     RegrTest('test_socketserver.py', enabled=False, usemodules='thread'),
@@ -752,8 +736,7 @@ testmap = [
 
     RegrTest('test_warnings.py', enabled=True, core=True),
     RegrTest('test_wave.py', enabled=False, dumbtest=1),
-    RegrTest('test_weakref.py', enabled=True, core=True),
-        #rev 10840: ImportError: _weakref
+    RegrTest('test_weakref.py', enabled=True, core=True, usemodules='_weakref'),
 
     RegrTest('test_whichdb.py', enabled=True),
     RegrTest('test_winreg.py', enabled=False),
@@ -890,13 +873,13 @@ class ReallyRunFileExternal(py.test.Item):
                                    'run-script', 'regrverbose.py')
         pypy_options = []
         if regrtest.oldstyle: 
+            if option.use_compiled:
+                py.test.skip("old-style classes not available in pypy-c")
             pypy_options.append('--oldstyle') 
-        if regrtest.uselibfile: 
-            pypy_options.append('--uselibfile')
         if regrtest.compiler:
             pypy_options.append('--compiler=%s' % regrtest.compiler)
         pypy_options.extend(
-            ['--usemodules=%s' % mod for mod in regrtest.usemodules])
+            ['--withmod-%s' % mod for mod in regrtest.usemodules])
         sopt = " ".join(pypy_options) 
         # experimental: always use regrverbose script 
         # previously we only did it if regrtest.outputpath() was True
