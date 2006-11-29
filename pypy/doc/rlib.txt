@@ -238,8 +238,10 @@ to specify a tokenizer/grammar is to write it down using regular expressions and
 simple EBNF format. 
 
 The regular expressions are implemented using finite automatons. The parsing
-engine uses packrat parsing, which has O(n) parsing time but is more powerful
-than LL(n) and LR(n) grammars.
+engine uses `packrat parsing`_, which has O(n) parsing time but is more
+powerful than LL(n) and LR(n) grammars.
+
+.. _`packrat parsing`: http://pdos.csail.mit.edu/~baford/packrat/
 
 Regular Expressions
 -------------------
@@ -283,7 +285,7 @@ function ``make_runner(s)`` in the ``pypy.rlib.parsing.parseregex`` module.  It
 returns a object with a ``recognize(input)`` method that returns True or False
 depending on whether ``input`` matches the string or not.
 
-.. _`re`: http://docs.python.org/XXX
+.. _`re`: http://docs.python.org/lib/module-re.html
 
 EBNF
 ----
