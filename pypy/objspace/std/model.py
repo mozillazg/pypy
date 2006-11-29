@@ -112,7 +112,9 @@ class StdTypeModel:
 
         # XXX add to option_to_typename somehow
         if config.objspace.withfastbuiltins:
-            self.typeorder[warydictobject.W_WaryDictObject] = []
+            self.typeorder[warydictobject.W_WaryDictObject] = [
+                (warydictobject.W_WaryDictObject, None),
+                (dictobject.W_DictObject, None)]
 
         imported_but_not_registered = {
             dictobject.W_DictObject: True,
