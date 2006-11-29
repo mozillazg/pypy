@@ -5,8 +5,6 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli.dotnet import CLR, box, unbox, NativeException, native_exc, new_array, init_array
 
-# TODO: this code is not translatable
-
 Type = CLR.System.Type
 Object = CLR.System.Object
 TargetInvocationException = NativeException(CLR.System.Reflection.TargetInvocationException)
@@ -14,30 +12,30 @@ TargetInvocationException = NativeException(CLR.System.Reflection.TargetInvocati
 import sys
 
 class W_CliObject(Wrappable):
-    def __init__(self, space, obj):
+    def __init__(self, space, b_obj):
         self.space = space
-        self.obj = obj
+        self.b_obj = b_obj
 
     def call_method(self, name, w_args):
-        t = self.obj.GetType()
-        meth = t.GetMethod(name) # TODO: overloading!
-        args = self.rewrap_args(w_args)
+        b_type = self.b_obj.GetType()
+        b_meth = b_type.GetMethod(name) # TODO: overloading!
+        b_args = self.rewrap_args(w_args)
         try:
-            res = meth.Invoke(self.obj, args)
+            b_res = b_meth.Invoke(self.b_obj, b_args)
         except TargetInvocationException, e:
-            inner = native_exc(e).get_InnerException()
-            message = str(inner.get_Message())
+            b_inner = native_exc(e).get_InnerException()
+            message = str(b_inner.get_Message())
             # TODO: use the appropriate exception, not StandardError
             raise OperationError(self.space.w_StandardError, self.space.wrap(message))
-        return self.cli2py(res)
+        return self.cli2py(b_res)
     call_method.unwrap_spec = ['self', str, W_Root]
 
     def rewrap_args(self, w_args):
-        py_args = self.space.unpackiterable(w_args)
-        res = new_array(Object, len(py_args))
-        for i in range(len(py_args)):
-            res[i] = self.py2cli(py_args[i])
-        return res
+        args = self.space.unpackiterable(w_args)
+        b_res = new_array(Object, len(args))
+        for i in range(len(args)):
+            b_res[i] = self.py2cli(args[i])
+        return b_res
 
     def py2cli(self, w_obj):
         space = self.space
@@ -46,16 +44,16 @@ class W_CliObject(Wrappable):
         else:
             assert False
 
-    def cli2py(self, obj):
-        intval = unbox(obj, ootype.Signed) # TODO: support other types
+    def cli2py(self, b_obj):
+        intval = unbox(b_obj, ootype.Signed) # TODO: support other types
         return self.space.wrap(intval)
 
 
 def cli_object_new(space, w_subtype, typename):
-    t = Type.GetType(typename)
-    ctor = t.GetConstructor(init_array(Type))
-    obj = ctor.Invoke(init_array(Object))
-    return space.wrap(W_CliObject(space, obj))
+    b_type = Type.GetType(typename)
+    b_ctor = b_type.GetConstructor(init_array(Type))
+    b_obj = b_ctor.Invoke(init_array(Object))
+    return space.wrap(W_CliObject(space, b_obj))
 cli_object_new.unwrap_spec = [ObjSpace, W_Root, str]
 
 
