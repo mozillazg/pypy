@@ -362,11 +362,10 @@ Visitors
 ++++++++
 
 To write tree visitors for the parse trees that are RPython, there is a special
-metaclass ``CreateDispatchDictionaryMetaclass`` in ``pypy.rlib.parsing.tree``_
-to use. If your class uses this, it will grow a ``dispatch(node)`` method, that
-calls an appropriate ``visit_<symbol>`` method, depending on the ``node``
-argument. Here the <symbol> is replaced by the ``symbol`` attribute of the
-visited node.
+baseclass ``RPythonVisitor`` in ``pypy.rlib.parsing.tree``_ to use. If your
+class uses this, it will grow a ``dispatch(node)`` method, that calls an
+appropriate ``visit_<symbol>`` method, depending on the ``node`` argument. Here
+the <symbol> is replaced by the ``symbol`` attribute of the visited node.
 
 For the visitor to be RPython, the return values of all the visit methods need
 to be of the same type.
