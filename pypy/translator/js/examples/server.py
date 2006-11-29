@@ -57,6 +57,8 @@ class TestHandler(BaseHTTPRequestHandler):
         else:
             getargs = ""
         name_path = path.replace(".", "_")
+        if name_path == "":
+            name_path = "index"
         method_to_call = getattr(self, name_path, None)
         if method_to_call is None or not getattr(method_to_call, 'exposed', None):
             exec_meth = getattr(self.exported_methods, name_path, None)
@@ -65,7 +67,13 @@ class TestHandler(BaseHTTPRequestHandler):
             else:
                 self.serve_data('text/json', json.write(exec_meth(**self.parse_args(getargs))))
         else:
-            method_to_call()
+            outp = method_to_call()
+            if isinstance(outp, str):
+                self.serve_data('text/html', outp)
+            elif isinstance(outp, tuple):
+                self.serve_data(*outp)
+            else:
+                raise ValueError("Don't know how to serve %s" % (outp,))
     
     def parse_args(self, getargs):
         # parse get argument list
