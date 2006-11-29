@@ -296,6 +296,9 @@ class Window(EventTarget):
     
     location = property(_getLocation, _setLocation)
 
+def some_fun():
+    pass
+    
 def setTimeout(func, delay):
     # scheduler call, but we don't want to mess with threads right now
     if one():
