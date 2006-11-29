@@ -32,13 +32,12 @@
 using namespace llvm;
 
 
-Module*             gp_module           = new Module("llvmjit");
-ExecutionEngine*    gp_execution_engine = ExecutionEngine::create(
-                        new ExistingModuleProvider(gp_module), false);
+Module*             gp_module; //           = new Module("llvmjit");
+ExecutionEngine*    gp_execution_engine; // = ExecutionEngine::create(new ExistingModuleProvider(gp_module), false);
 
 //all optimization/transform passes
-static cl::list<const PassInfo*, bool, PassNameParser>
-    PassList(cl::desc("Optimizations available:"));
+//static cl::list<const PassInfo*, bool, PassNameParser>
+//    PassList(cl::desc("Optimizations available:"));
 
 //some global data for the tests to play with
 int g_data;
