@@ -271,17 +271,42 @@ class CliNamespace(object):
 
 CLR = CliNamespace(None)
 
-
 BOXABLE_TYPES = [ootype.Signed, ootype.Unsigned, ootype.SignedLongLong,
                  ootype.UnsignedLongLong, ootype.Bool, ootype.Float,
                  ootype.Char, ootype.String]
 
 def box(x):
-    return x
+    t = type(x)
+    if t is int:
+        return CLR.System.Int32(x)
+    elif t is r_uint:
+        return CLR.System.UInt32(x)
+    elif t is r_longlong:
+        return CLR.System.Int64(x)
+    elif t is r_ulonglong:
+        return CLR.System.UInt64(x)
+    elif t is bool:
+        return CLR.System.Boolean(x)
+    elif t is float:
+        return CLR.System.Double(x)
+    elif t is str:
+        if len(x) == 1:
+            return CLR.System.Char(x)
+        else:
+            return CLR.System.String(x)
+    else:
+        assert False
 
 def unbox(x, TYPE):
     # TODO: check that x is really of type TYPE
-    return x
+    
+    # this is a workaround against a pythonnet limitation: you can't
+    # directly get the, e.g., python int from the System.Int32 object:
+    # a simple way to do this is to put it into an ArrayList and
+    # retrieve the value.
+    tmp = PythonNet.System.Collections.ArrayList()
+    tmp.Add(x)
+    return tmp[0]
 
 
 class Entry(ExtRegistryEntry):
@@ -317,7 +342,6 @@ class Entry(ExtRegistryEntry):
             return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
         else:
             return hop.genop('cliunbox', [v_obj, v_type], hop.r_result.lowleveltype)
-
 
 
 native_exc_cache = {}

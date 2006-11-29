@@ -168,6 +168,14 @@ class TestDotnetRtyping(CliTest):
             return unbox(x.get_Item(0), ootype.String)
         assert self.interpret(fn, []) == 'foo'
 
+    def test_box_method(self):
+        def fn():
+            x = box(42)
+            t = x.GetType()
+            return t.get_Name()
+        res = self.interpret(fn, [])
+        assert res == 'Int32'
+
     def test_exception(self):
         py.test.skip("It doesn't work so far")
         def fn():
@@ -198,7 +206,7 @@ class TestDotnetRtyping(CliTest):
 
     def test_init_array(self):
         def fn():
-            x = init_array([box(42), box(43)])
+            x = init_array(System.Object, box(42), box(43))
             return unbox(x[0], ootype.Signed) + unbox(x[1], ootype.Signed)
         assert self.interpret(fn, []) == 42+43
 
