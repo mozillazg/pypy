@@ -3,6 +3,7 @@ import types
 from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInstance, SomeOOInstance, SomeInteger, s_None,\
      s_ImpossibleValue, lltype_to_annotation, annotation_to_lltype, SomeChar, SomeString
+from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rpython.error import TyperError
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rmodel import Repr
@@ -433,3 +434,4 @@ class Entry(ExtRegistryEntry):
             c_index = hop.inputconst(ootype.Signed, i)
             hop.genop('cli_setelem', [v_array, c_index, v_elem], ootype.Void)
         return v_array
+
