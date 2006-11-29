@@ -465,6 +465,10 @@ class AppTestBuiltinOptimized(object):
         exec s in ns
         ns["test"]()
 
+    def test_delete_from_builtins(self):
+        s = """ """
+        # XXX write this test!
+
 class TestInternal:
 
     def setup_method(self,method):
