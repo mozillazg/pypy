@@ -42,7 +42,9 @@ class W_CliObject(Wrappable):
         if space.is_true(space.isinstance(w_obj, self.space.w_int)):
             return box(space.int_w(w_obj))
         else:
-            assert False
+            typename = space.type(w_obj).getname(space, '?')
+            msg = "Can't convert type %s to .NET" % typename
+            raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
 
     def cli2py(self, b_obj):
         intval = unbox(b_obj, ootype.Signed) # TODO: support other types
