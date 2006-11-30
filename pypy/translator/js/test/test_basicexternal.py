@@ -6,6 +6,7 @@ import py
 
 from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal, described
 from pypy.translator.js.test.runtest import compile_function, check_source_contains
+from pypy.translator.js.tester import schedule_callbacks
 
 class A(BasicExternal):
     @described(retval=3)
@@ -94,7 +95,6 @@ def test_basicextenal_dict():
     fun1 = compile_function(return_dict, [])
 
 def test_method_call():
-    py.test.skip("Fails")
     class Meth(BasicExternal):
         @described(retval=3)
         def meth(self):
@@ -107,4 +107,5 @@ def test_method_call():
     
     meth = Meth()
     meth.meth(callback)
+    schedule_callbacks(meth)
     assert l[0] == 8
