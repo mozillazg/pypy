@@ -150,9 +150,10 @@ def parse_options_and_load_target():
     if 'handle_config' in targetspec_dic:
         targetspec_dic['handle_config'](config)
 
-    if translateconfig.help: 
+    if translateconfig.help:
         opt_parser.print_help()
         if 'print_help' in targetspec_dic:
+            print "\n\nTarget specific help:\n\n"
             targetspec_dic['print_help'](config)
         sys.exit(0)
     
