@@ -7,7 +7,7 @@ from pypy.rpython.ootypesystem.ootype import meth, Meth, Char, Signed, Float, St
 from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
-     native_exc, new_array, init_array
+     native_exc, new_array, init_array, typeof
 
 System = CLR.System
 Math = CLR.System.Math
@@ -111,7 +111,8 @@ class TestDotnetAnnotation(object):
         a = RPythonAnnotator()
         s = a.build_types(fn, [])
         assert isinstance(s, annmodel.SomeOOInstance)
-        assert s.ootype._name == '[mscorlib]System.Object'            
+        assert s.ootype._name == '[mscorlib]System.Object'
+
 
 class TestDotnetRtyping(CliTest):
     def _skip_pythonnet(self, msg):
@@ -273,6 +274,13 @@ class TestDotnetRtyping(CliTest):
                 return message
         res = self.ll_to_string(self.interpret(fn, []))
         assert res.startswith("Index is less than 0")
+
+    def test_typeof(self):
+        def fn():
+            x = box(42)
+            return x.GetType() == typeof(System.Int32)
+        res = self.interpret(fn, [])
+        assert res is True
 
 class TestPythonnet(TestDotnetRtyping):
     # don't interpreter functions but execute them directly through pythonnet

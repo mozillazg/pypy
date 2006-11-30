@@ -435,3 +435,21 @@ class Entry(ExtRegistryEntry):
             hop.genop('cli_setelem', [v_array, c_index, v_elem], ootype.Void)
         return v_array
 
+
+def typeof(cliClass):
+    TYPE = cliClass._INSTANCE
+    name = '%s.%s' % (TYPE._namespace, TYPE._classname)
+    return PythonNet.System.Type.GetType(name)
+
+class Entry(ExtRegistryEntry):
+    _about_ = typeof
+
+    def compute_result_annotation(self, cliClass_s):
+        from query import load_class_maybe
+        assert cliClass_s.is_constant()
+        cliType = load_class_maybe('System.Type')
+        return SomeOOInstance(cliType._INSTANCE)
+
+    def specialize_call(self, hop):
+        v_type, = hop.inputargs(*hop.args_r)
+        return hop.genop('cli_typeof', [v_type], hop.r_result.lowleveltype)
