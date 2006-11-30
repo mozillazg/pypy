@@ -14,7 +14,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
 from pypy.config.pypyoption import pypy_optiondescription
-from pypy.config.config import Config, to_optparse, make_dict
+from pypy.config.config import Config, to_optparse, make_dict, SUPPRESS_USAGE
 from pypy.tool.option import make_objspace
 
 thisdir = py.magic.autopath().dirpath()
@@ -79,7 +79,7 @@ def call_startup(space):
 
 class PyPyTarget(object):
 
-    usage = "target PyPy standalone"
+    usage = SUPPRESS_USAGE
 
     take_options = True
 
