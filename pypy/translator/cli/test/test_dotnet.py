@@ -177,6 +177,12 @@ class TestDotnetRtyping(CliTest):
         res = self.interpret(fn, [])
         assert res == 'Int32'
 
+    def test_box_object(self):
+        def fn():
+            return box(System.Object()).ToString()
+        res = self.interpret(fn, [])
+        assert res == 'System.Object'
+
     def test_exception(self):
         py.test.skip("It doesn't work so far")
         def fn():
