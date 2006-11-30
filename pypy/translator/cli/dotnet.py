@@ -295,6 +295,8 @@ def box(x):
             return CLR.System.Char(x)
         else:
             return CLR.System.String(x)
+    elif isinstance(x, PythonNet.System.Object):
+        return x
     else:
         assert False
 
@@ -318,13 +320,15 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         v_obj, = hop.inputargs(*hop.args_r)
-        if v_obj.concretetype not in BOXABLE_TYPES:
-            raise TyperError, "Can't box values of type %s" % v_obj.concretetype
-        
-        if (v_obj.concretetype is ootype.String):
+
+        TYPE = v_obj.concretetype
+        if (TYPE is ootype.String or isinstance(TYPE, NativeInstance)):
             return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
         else:
+            if TYPE not in BOXABLE_TYPES:
+                raise TyperError, "Can't box values of type %s" % v_obj.concretetype
             return hop.genop('clibox', [v_obj], hop.r_result.lowleveltype)
+
 
 class Entry(ExtRegistryEntry):
     _about_ = unbox
