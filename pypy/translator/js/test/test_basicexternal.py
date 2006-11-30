@@ -92,3 +92,19 @@ def test_basicextenal_dict():
         return d.a
 
     fun1 = compile_function(return_dict, [])
+
+def test_method_call():
+    py.test.skip("Fails")
+    class Meth(BasicExternal):
+        @described(retval=3)
+        def meth(self):
+            return 8
+            
+    l = []
+    
+    def callback(i):
+        l.append(i)
+    
+    meth = Meth()
+    meth.meth(callback)
+    assert l[0] == 8
