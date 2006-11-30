@@ -156,7 +156,7 @@ class ParserBuilder(object):
         if node.children[1].additional_info == "*":
             name = "_star_symbol%s" % (len(self.maybe_rules), )
             maybe_rule = True
-            expansions = [expansions + [name], expansions]
+            expansions = [expansions + [name]]
             changes = [changes + ">", changes]
         elif node.children[1].additional_info == "+":
             name = "_plus_symbol%s" % (self.num_plus_symbols, )
