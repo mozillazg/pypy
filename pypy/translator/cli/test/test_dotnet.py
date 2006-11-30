@@ -183,18 +183,6 @@ class TestDotnetRtyping(CliTest):
         res = self.interpret(fn, [])
         assert res == 'System.Object'
 
-    def test_exception(self):
-        py.test.skip("It doesn't work so far")
-        def fn():
-            x = ArrayList()
-            try:
-                x.get_Item(0)
-            except System.ArgumentOutOfRangeException:
-                return 42
-            else:
-                return 43
-        assert self.interpret(fn, []) == 42
-
     def test_array(self):
         def fn():
             x = ArrayList()
