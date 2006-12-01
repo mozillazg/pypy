@@ -86,11 +86,7 @@ int     parse(const char* llsource) {
 }
 
 
-void*   find_function(const char* name) {
-    return gp_execution_engine->FindFunctionNamed(name); //note: can be NULL
-}
-
-
+//Function methods
 int     freeMachineCodeForFunction(const void* function) {
     if (!function) {
         std::cerr << "No function supplied to libllvmjit.freeMachineCodeForFunction(...)\n" << std::flush;
@@ -127,6 +123,7 @@ int     execute(const void* function, int param) { //XXX allow different functio
 }
 
 
+//code for testcases
 int     get_global_data() {
     return g_data;
 }
@@ -137,14 +134,37 @@ void    set_global_data(int n) {
 }
 
 
-int*    get_pointer_to_global_data() {
+int*   get_pointer_to_global_data() {
     return &g_data;
 }
 
 
-void    add_global_mapping(const char* name, void* address) {
-    //note: using getNamedGlobal implies that we can not have globals of different type
-    //      but with identical names! This is probably easy to do.
-    gp_execution_engine->addGlobalMapping(gp_module->getNamedGlobal(name), address);
+int     global_function(int a, int b, int c) {
+    return a + b + c;
+}
+
+
+void*   get_pointer_to_global_function() {
+    return (void*)global_function; //note: we don't care about the actual signature here
+}
+
+
+// Module methods
+void*   getNamedFunction(const char* name) {
+    return gp_module->getNamedFunction(name); //note: can be NULL
+}
+
+
+void*   getNamedGlobal(const char* name) {
+    return gp_module->getNamedGlobal(name); //note: can be NULL
+}
+
+
+void    addGlobalMapping(const void* p, void* address) {
+    if (!p) {
+        std::cerr << "No global variable or function supplied to addGlobalMapping\n" << std::flush;
+        return;
+    }
+    gp_execution_engine->addGlobalMapping((const GlobalValue*)p, address);
 }
 

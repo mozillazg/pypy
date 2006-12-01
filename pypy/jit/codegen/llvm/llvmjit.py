@@ -55,9 +55,13 @@ parse = llvmjit.parse
 parse.restype  = c_int
 parse.argtypes = [c_char_p]
 
-find_function = llvmjit.find_function
-find_function.restype  = c_void_p
-find_function.argtypes = [c_char_p]
+getNamedFunction = llvmjit.getNamedFunction
+getNamedFunction.restype  = c_void_p
+getNamedFunction.argtypes = [c_char_p]
+
+getNamedGlobal = llvmjit.getNamedGlobal
+getNamedGlobal.restype  = c_void_p
+getNamedGlobal.argtypes = [c_char_p]
 
 freeMachineCodeForFunction = llvmjit.freeMachineCodeForFunction
 freeMachineCodeForFunction.restype  = c_int
@@ -71,17 +75,21 @@ execute = llvmjit.execute
 execute.restype  = c_int
 execute.argtypes = [c_void_p, c_int]
 
-get_global_data= llvmjit.get_global_data
+get_global_data = llvmjit.get_global_data
 get_global_data.restype = c_int
 get_global_data.argtypes = []
 
-set_global_data= llvmjit.set_global_data
+set_global_data = llvmjit.set_global_data
 set_global_data.argtypes = [c_int]
 
-get_pointer_to_global_data= llvmjit.get_pointer_to_global_data
+get_pointer_to_global_data = llvmjit.get_pointer_to_global_data
 get_pointer_to_global_data.restype = POINTER(c_int)
 get_pointer_to_global_data.argtypes = []
 
-add_global_mapping = llvmjit.add_global_mapping
-add_global_mapping.argtypes = [c_char_p, c_void_p]
+get_pointer_to_global_function = llvmjit.get_pointer_to_global_function
+get_pointer_to_global_function.restype = c_void_p
+get_pointer_to_global_function.argtypes = []
+
+addGlobalMapping = llvmjit.addGlobalMapping
+addGlobalMapping.argtypes = [c_void_p, c_void_p]
 
