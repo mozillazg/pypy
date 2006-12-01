@@ -80,6 +80,7 @@ void LL_os_symlink(RPyString * path1, RPyString * path2);
 long LL_readlink_into(RPyString *path, RPyString *buffer);
 long LL_os_fork(void);
 #ifdef HAVE_RPY_LIST_OF_STRING     /* argh */
+void LL_os_execv(RPyString *cmd, RPyListOfString *args);
 long LL_os_spawnv(int mode, RPyString *path, RPyListOfString *args);
 #endif
 RPyWAITPID_RESULT* LL_os_waitpid(long pid, long options);
@@ -386,6 +387,20 @@ long LL_os_fork(void) {
 	if (pid == -1)
 		RPYTHON_RAISE_OSERROR(errno);
 	return pid;
+}
+#endif
+
+#if defined(HAVE_EXECV) && defined(HAVE_RPY_LIST_OF_STRING)
+void LL_os_execv(RPyString *cmd, RPyListOfString *args) {
+	int i, nargs = args->l_length;
+  char **slist = malloc((nargs+1) * sizeof(char*));
+	if (slist) {
+		for (i=0; i<nargs; i++)
+			slist[i] = RPyString_AsString(args->l_items->items[i]);
+		slist[nargs] = NULL;
+    execv(RPyString_AsString(cmd), slist);
+  } /* should never return */
+  RPYTHON_RAISE_OSERROR(errno);
 }
 #endif
 

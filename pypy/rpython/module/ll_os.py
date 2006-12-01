@@ -96,6 +96,10 @@ class BaseOS:
         return os.system(cls.from_rstr(cmd))
     ll_os_system.suggested_primitive = True
 
+    def ll_os_execv(cls, cmd, args):
+        os.execv(cmd, args)
+    ll_os_execv.suggested_primitive = True
+
     def ll_os_unlink(cls, path):
         os.unlink(cls.from_rstr(path))
     ll_os_unlink.suggested_primitive = True

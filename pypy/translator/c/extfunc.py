@@ -60,6 +60,7 @@ EXTERNALS = {
     impl.ll_os_spawnv.im_func:  'LL_os_spawnv',
     impl.ll_os_waitpid.im_func: 'LL_os_waitpid',
     impl.ll_os__exit.im_func:   'LL_os__exit',
+    impl.ll_os_execv.im_func:   'LL_os_execv',
     ll_time.ll_time_clock: 'LL_time_clock',
     ll_time.ll_time_sleep: 'LL_time_sleep',
     ll_time.ll_time_time:  'LL_time_time',
