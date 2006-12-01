@@ -5,6 +5,7 @@ from pypy.tool.udir import udir
 from pypy.translator.c.test.test_genc import compile
 from pypy.translator.c.extfunc import EXTERNALS
 from pypy.rlib import ros
+from pypy.translator.stackless.test.test_transform import one
 
 def test_all_suggested_primitives():
     for modulename in ['ll_math', 'll_os', 'll_os_path', 'll_time']:
@@ -683,4 +684,21 @@ def test_opendir_readdir():
     compared_with = os.listdir(str(udir))
     compared_with.sort()
     assert result == compared_with
+
+if hasattr(posix, 'execv'):
+    def test_execv():
+        filename = str(udir.join('test_execv.txt'))
+        def does_stuff():
+            progname = str(sys.executable)
+            l = []
+            l.append(progname)
+            l += ["-c", 'open("%s","w").write("1")' % filename]
+            pid = os.fork()
+            if pid == 0:
+                os.execv(progname, l)
+            else:
+                os.waitpid(pid, 0)
+        func = compile(does_stuff, [])
+        func()
+        assert open(filename).read() == "1"
 
