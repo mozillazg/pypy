@@ -1,4 +1,4 @@
-from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import ros
 from pypy.interpreter.error import OperationError
@@ -397,6 +397,10 @@ getuid.unwrap_spec = [ObjSpace]
 def geteuid(space):
     return space.wrap(intmask(_c.geteuid()))
 geteuid.unwrap_spec = [ObjSpace]
+
+def execv(space, command, w_args):
+    os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
+execv.unwrap_spec = [ObjSpace, str, W_Root]
 
 def uname(space):
     try:
