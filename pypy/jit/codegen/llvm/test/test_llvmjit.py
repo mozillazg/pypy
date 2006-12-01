@@ -90,10 +90,20 @@ int %globalmul4(int %a) {
     ret int %v2
 }'''
 
+#
+llcall_global_function = '''declare int %my_global_function(int, int, int)
+
+implementation
+
+int %call_global_function(int %n) {
+    %v = call int %my_global_function(int 3, int %n, int 7) ;note: maybe tail call?
+    ret int %v
+}'''
+
 #helpers
 def execute(llsource, function_name, param):
     assert llvmjit.parse(llsource)
-    function = llvmjit.find_function(function_name)
+    function = llvmjit.getNamedFunction(function_name)
     assert function
     return llvmjit.execute(function, param)
 
@@ -101,18 +111,18 @@ def execute(llsource, function_name, param):
 def test_restart():
     for i in range(3):
         llvmjit.restart()
-        assert not llvmjit.find_function('square')
+        assert not llvmjit.getNamedFunction('square')
         assert llvmjit.parse(llsquare)
-        assert llvmjit.find_function('square')
+        assert llvmjit.getNamedFunction('square')
 
-def test_find_function():
+def test_getNamedFunction():
     for i in range(3):
         llvmjit.restart()
-        assert not llvmjit.find_function('square')
-        assert not llvmjit.find_function('square')
+        assert not llvmjit.getNamedFunction('square')
+        assert not llvmjit.getNamedFunction('square')
         assert llvmjit.parse(llsquare)
-        assert llvmjit.find_function('square')
-        assert llvmjit.find_function('square')
+        assert llvmjit.getNamedFunction('square')
+        assert llvmjit.getNamedFunction('square')
 
 def test_parse():
     llvmjit.restart()
@@ -130,8 +140,8 @@ def test_execute_multiple():
     llvmjit.restart()
     llvmjit.parse(llsquare)
     llvmjit.parse(llmul2)
-    square = llvmjit.find_function('square')
-    mul2   = llvmjit.find_function('mul2')
+    square = llvmjit.getNamedFunction('square')
+    mul2   = llvmjit.getNamedFunction('mul2')
     for i in range(5):
         assert llvmjit.execute(square, i) == i * i
         assert llvmjit.execute(mul2  , i) == i * 2
@@ -152,8 +162,8 @@ def test_execute_across_module():
     llvmjit.restart()
     llvmjit.parse(llacross1)
     llvmjit.parse(llacross2)
-    across1to2 = llvmjit.find_function('across1to2')
-    across2to1 = llvmjit.find_function('across2to1')
+    across1to2 = llvmjit.getNamedFunction('across1to2')
+    across2to1 = llvmjit.getNamedFunction('across2to1')
     for i in range(5):
         assert llvmjit.execute(across1to2, i) == my_across1to2(i)
         assert llvmjit.execute(across2to1, i) == my_across2to1(i)
@@ -168,13 +178,13 @@ def test_recompile():
         return n * n
     llvmjit.restart()
     llvmjit.parse(llfuncA)
-    _llfuncA = llvmjit.find_function('func')
+    _llfuncA = llvmjit.getNamedFunction('func')
     print '_llfuncA', _llfuncA
     for i in range(5):
         assert llvmjit.execute(_llfuncA, i) == funcA(i)
     llvmjit.freeMachineCodeForFunction(_llfuncA)
     llvmjit.parse(llfuncB)
-    _llfuncB = llvmjit.find_function('func')
+    _llfuncB = llvmjit.getNamedFunction('func')
     print '_llfuncB', _llfuncB
     llvmjit.recompile(_llfuncB) #note: because %func has changed because of the 2nd parse
     for i in range(5):
@@ -183,7 +193,7 @@ def test_recompile():
 def test_transform(): #XXX This uses Module transforms, think about Function transforms too.
     llvmjit.restart()
     llvmjit.parse(lldeadcode)
-    deadcode = llvmjit.find_function('deadcode')
+    deadcode = llvmjit.getNamedFunction('deadcode')
     assert llvmjit.execute(deadcode, 10) == 10 * 2
 
     #XXX enable this part of the test asap
@@ -199,16 +209,26 @@ def test_modify_global_data():
     assert llvmjit.get_global_data() == 10
     gp_data = llvmjit.get_pointer_to_global_data()
     llvmjit.parse(llglobalmul4)
-    llvmjit.add_global_mapping('my_global_data', gp_data) #note: should be prior to execute()
-    globalmul4 = llvmjit.find_function('globalmul4')
+    p = llvmjit.getNamedGlobal('my_global_data...')
+    assert not p
+    p = llvmjit.getNamedGlobal('my_global_data')
+    assert p
+    llvmjit.addGlobalMapping(p, gp_data) #note: should be prior to execute()
+    globalmul4 = llvmjit.getNamedFunction('globalmul4')
     assert llvmjit.execute(globalmul4, 5) == 10 * 4 + 5
     assert llvmjit.get_global_data() == 10 * 4 + 5
 
-def DONTtest_call_back_to_parent(): #call JIT-compiler again for it to add case(s) to flexswitch
-    pass
-
-def DONTtest_delete_function():
-    pass
+def test_call_global_function(): #used by PyPy JIT for adding case(s) to a flexswitch
+    llvmjit.restart()
+    gp_function = llvmjit.get_pointer_to_global_function()
+    llvmjit.parse(llcall_global_function)
+    p = llvmjit.getNamedFunction('my_global_function...')
+    assert not p
+    p = llvmjit.getNamedFunction('my_global_function')
+    assert p
+    llvmjit.addGlobalMapping(p, gp_function) #prior to execute()!
+    call_global_function = llvmjit.getNamedFunction('call_global_function')
+    assert llvmjit.execute(call_global_function, 5) == 3 + 5 + 7
 
 def DONTtest_functions_with_different_signatures():
     pass
