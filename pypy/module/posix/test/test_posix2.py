@@ -101,6 +101,16 @@ class AppTestPosix:
             assert pid1 == pid
             # XXX check status1
 
+    if hasattr(__import__(os.name), "execv"): # and fork
+        def test_execv(self):
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:
+                os.execv("/usr/bin/env", ["env", "python", "-c", "open('onefile', 'w').write('1')"])
+            os.waitpid(pid, 0)
+            assert open("onefile").read() == "1"
+            os.unlink("onefile")
+
 class AppTestEnvironment(object):
     def setup_class(cls): 
         cls.space = space 

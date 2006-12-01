@@ -70,6 +70,8 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['fork'] = 'interp_posix.fork'
     if hasattr(os, 'waitpid'):
         interpleveldefs['waitpid'] = 'interp_posix.waitpid'
+    if hasattr(os, 'execv'):
+        interpleveldefs['execv'] = 'interp_posix.execv'
     #if hasattr(ctypes_posix, 'uname'):
     #    interpleveldefs['uname'] = 'interp_posix.uname'
 
