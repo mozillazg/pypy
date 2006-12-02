@@ -60,7 +60,9 @@ pypy_optiondescription = OptionDescription("pypy", "All PyPy Options", [
                    default=False),
 
         BoolOption("withfastbuiltins", "speed up calls to builtin functions",
-                   default=False, requires=[("objspace.usepycfiles", False)]),
+                   default=False, requires=[
+                       ("objspace.usepycfiles", False),
+                       ("objspace.std.withmultidict", True)]),
 
         BoolOption("usepycfiles", "Write and read pyc files when importing",
                    default=True),

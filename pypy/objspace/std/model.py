@@ -65,7 +65,6 @@ class StdTypeModel:
         from pypy.objspace.std import dictobject
         from pypy.objspace.std import dictstrobject
         from pypy.objspace.std import dictmultiobject
-        from pypy.objspace.std import warydictobject
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import strsliceobject
         from pypy.objspace.std import strjoinobject
@@ -110,15 +109,8 @@ class StdTypeModel:
         self.typeorder[setobject.W_FrozensetObject] = []
         self.typeorder[setobject.W_SetIterObject] = []
 
-        # XXX add to option_to_typename somehow
-        if config.objspace.withfastbuiltins:
-            self.typeorder[warydictobject.W_WaryDictObject] = [
-                (warydictobject.W_WaryDictObject, None),
-                (dictobject.W_DictObject, None)]
-
         imported_but_not_registered = {
             dictobject.W_DictObject: True,
-            warydictobject.W_WaryDictObject: True,
             dictobject.W_DictIterObject: True,
         }
         for option, value in config.objspace.std:
