@@ -5,7 +5,6 @@ from pypy.tool.udir import udir
 from pypy.translator.c.test.test_genc import compile
 from pypy.translator.c.extfunc import EXTERNALS
 from pypy.rlib import ros
-from pypy.translator.stackless.test.test_transform import one
 
 def test_all_suggested_primitives():
     for modulename in ['ll_math', 'll_os', 'll_os_path', 'll_time']:
@@ -702,4 +701,34 @@ if hasattr(posix, 'execv'):
         func = compile(does_stuff, [])
         func()
         assert open(filename).read() == "1"
+
+    def test_execv_raising():
+        def does_stuff():
+            l = []
+            l.append("asddsadw32eewdfwqdqwdqwd")
+            os.execv(l[0], l)
+
+        func = compile(does_stuff, [])
+        py.test.raises(OSError, "func()")
+
+    def test_execve():
+        filename = str(udir.join('test_execve.txt'))
+        def does_stuff():
+            progname = str(sys.executable)
+            l = []
+            l.append(progname)
+            l.append("-c")
+            l.append('import os; open("%s", "w").write(os.environ["STH"])' % filename)
+            env = {}
+            env["STH"] = "42"
+            env["sthelse"] = "a"
+            pid = os.fork()
+            if pid == 0:
+                os.execve(progname, l, env)
+            else:
+                os.waitpid(pid, 0)
+
+        func = compile(does_stuff, [])
+        func()
+        assert open(filename).read() == "42"
 
