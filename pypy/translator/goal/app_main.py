@@ -171,6 +171,7 @@ def entry_point(executable, argv):
         break
 
     go_interactive = False
+    run_command = False
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -182,6 +183,7 @@ def entry_point(executable, argv):
             if i >= len(argv):
                 print_error('Argument expected for the -c option')
                 return 2
+            run_command = True
             break
         elif arg == '-u':
             set_unbuffered_io()
@@ -226,7 +228,7 @@ def entry_point(executable, argv):
 
     try:
         if sys.argv:
-            if sys.argv[0] == '-c':
+            if run_command:
                 cmd = sys.argv.pop(1)
                 def run_it():
                     exec cmd in mainmodule.__dict__
