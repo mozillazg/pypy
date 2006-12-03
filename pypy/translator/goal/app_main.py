@@ -176,7 +176,6 @@ def entry_point(executable, argv):
         arg = argv[i]
         if not arg.startswith('-'):
             break
-        i += 1
         if arg == '-i':
             go_interactive = True
         elif arg == '-c':
@@ -198,10 +197,12 @@ def entry_point(executable, argv):
             print_help()
             return 0
         elif arg == '--':
+            i += 1
             break     # terminates option list
         else:
             print_error('unrecognized option %r' % (arg,))
             return 2
+        i += 1
     sys.argv = argv[i:]
 
     # with PyPy in top of CPython we can only have around 100 
