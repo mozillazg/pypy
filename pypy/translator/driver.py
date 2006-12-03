@@ -305,7 +305,12 @@ class TranslationDriver(SimpleTaskEngine):
         so = query.qoutput(query.polluted_qgen(translator))
         tot = len(translator.graphs)
         percent = int(tot and (100.0*so / tot) or 0)
-        if percent == 0:
+        # if there are a few SomeObjects even if the policy doesn't allow
+        # them, it means that they were put there in a controlled way
+        # and then it's not a warning.
+        if not translator.annotator.policy.allow_someobjects:
+            pr = self.log.info
+        elif percent == 0:
             pr = self.log.info
         else:
             pr = log.WARNING
