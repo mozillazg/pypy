@@ -110,6 +110,26 @@ class AppTestPosix:
             os.waitpid(pid, 0)
             assert open("onefile").read() == "1"
             os.unlink("onefile")
+        
+        def test_execv_raising(self):
+            os = self.posix
+            raises(OSError, 'os.execv("saddsadsadsadsa", ["saddsadsasaddsa"])')
+
+        def test_execve(self):
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:
+                os.execve("/usr/bin/env", ["env", "python", "-c", "import os; open('onefile', 'w').write(os.environ['ddd'])"], {'ddd':'xxx'})
+            os.waitpid(pid, 0)
+            assert open("onefile").read() == "xxx"
+            os.unlink("onefile")
+
+    if hasattr(__import__(os.name), 'popen'):
+        def test_popen(self):
+            skip("Not implemented")
+            os = self.posix
+            stream = os.popen('echo 1')
+            assert stream.read() == '1\n'
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

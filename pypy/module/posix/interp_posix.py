@@ -399,8 +399,26 @@ def geteuid(space):
 geteuid.unwrap_spec = [ObjSpace]
 
 def execv(space, command, w_args):
-    os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
+    try:
+        os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
 execv.unwrap_spec = [ObjSpace, str, W_Root]
+
+def execve(space, command, w_args, w_env):
+    try:
+        args = [space.str_w(i) for i in space.unpackiterable(w_args)]
+        env = {}
+        keys = space.call_function(space.getattr(w_env, space.wrap('keys')))
+        for key in space.unpackiterable(keys):
+            value = space.getitem(w_env, key)
+            env[space.str_w(key)] = space.str_w(value)
+        os.execve(command, args, env)
+    except ValueError, e:
+        raise OperationError(space.w_ValueError, space.wrap(str(e)))
+    except OSError, e:
+        raise wrap_oserror(space, e)
+execve.unwrap_spec = [ObjSpace, str, W_Root, W_Root]
 
 def uname(space):
     try:
