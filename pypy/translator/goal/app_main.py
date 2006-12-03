@@ -180,7 +180,7 @@ def entry_point(executable, argv):
         if arg == '-i':
             go_interactive = True
         elif arg == '-c':
-            if i >= len(argv)-1:
+            if i >= len(argv):
                 print_error('Argument expected for the -c option')
                 return 2
             break
