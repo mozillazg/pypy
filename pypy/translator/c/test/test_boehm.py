@@ -3,8 +3,6 @@ from pypy.translator.translator import TranslationContext
 from pypy.translator.tool.cbuild import check_boehm_presence
 from pypy.translator.c.genc import CExtModuleBuilder
 from pypy import conftest
-from pypy.config.config import Config
-from pypy.config.pypyoption import pypy_optiondescription
 
 def setup_module(mod):
     if not check_boehm_presence():
@@ -23,7 +21,8 @@ class AbstractGCTestClass:
 
     def getcompiled(self, func, argstypelist = [],
                     annotatorpolicy=None):
-        config = Config(pypy_optiondescription)
+        from pypy.config.pypyoption import get_pypy_config
+        config = get_pypy_config(translating=True)
         config.translation.gc = self.gcpolicy
         config.translation.simplifying = True
         t = TranslationContext(config=config)

@@ -87,10 +87,8 @@ class TranslationDriver(SimpleTaskEngine):
         self.log = log
 
         if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription,
-                            **DEFAULTS)
+            from pypy.config.pypyoption import get_pypy_config
+            config = get_pypy_config(DEFAULTS, translating=True)
         self.config = config
         if overrides is not None:
             self.config.override(overrides)

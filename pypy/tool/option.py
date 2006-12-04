@@ -2,7 +2,7 @@
 # XXX needs clean-up and reorganization.
 
 import os
-from pypy.config.pypyoption import pypy_optiondescription
+from pypy.config.pypyoption import get_pypy_config
 from pypy.config.config import Config, OptionDescription, to_optparse
 from py.compat import optparse
 make_option = optparse.make_option
@@ -24,7 +24,7 @@ def run_tb_server(option, opt, value, parser):
 
  
 def get_standard_options():
-    config = Config(pypy_optiondescription)
+    config = get_pypy_config()
     parser = to_optparse(config, useoptions=["objspace.*"])
     parser.add_option(
         '-H', action="callback",
@@ -54,9 +54,7 @@ def make_config(cmdlineopt, **kwds):
     # XXX this whole file should sooner or later go away and the cmd line
     # options be generated from the option description. it's especially messy
     # since we have to check whether the default was actually overwritten
-    from pypy.config.pypyoption import pypy_optiondescription
-    from pypy.config.config import Config
-    conf = Config(pypy_optiondescription)
+    conf = get_pypy_config()
     if kwds.get("objspace", None) is not None:
         conf.objspace.name = kwds["objspace"]
     if getattr(cmdlineopt, "objspace", None) is not None:
