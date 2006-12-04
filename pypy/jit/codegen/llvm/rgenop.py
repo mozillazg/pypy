@@ -1,6 +1,12 @@
 from pypy.rlib.objectmodel import specialize
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
+
+
+def log(s):
+    print str(s)
+    pass
 
 
 class Var(GenVar):
@@ -14,7 +20,7 @@ class Var(GenVar):
 class IntConst(GenConst):
 
     def __init__(self, value):
-            self.value = value
+        self.value = value
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -60,16 +66,19 @@ class FlexSwitch(CodeGenSwitch):
     #<comment>
 
     def __init__(self, rgenop):
+        log('FlexSwitch.__init__')
         self.rgenop = rgenop
         self.default_case_addr = 0
 
     def initialize(self, builder, gv_exitswitch):
+        log('FlexSwitch.initialize')
         mc = builder.mc
         mc.MOV(eax, gv_exitswitch.operand(builder))
         self.saved_state = builder._save_state()
         self._reserve(mc)
 
     def _reserve(self, mc):
+        log('FlexSwitch._reserve')
         RESERVED = 11*4+5      # XXX quite a lot for now :-/
         pos = mc.tell()
         mc.UD2()
@@ -78,6 +87,7 @@ class FlexSwitch(CodeGenSwitch):
         self.endfreepos = pos + RESERVED
 
     def _reserve_more(self):
+        log('FlexSwitch._reserve_more')
         start = self.nextfreepos
         end   = self.endfreepos
         newmc = self.rgenop.open_mc()
@@ -88,6 +98,7 @@ class FlexSwitch(CodeGenSwitch):
         fullmc.done()
 
     def add_case(self, gv_case):
+        log('FlexSwitch.add_case')
         rgenop = self.rgenop
         targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
         target_addr = targetbuilder.mc.tell()
@@ -99,6 +110,7 @@ class FlexSwitch(CodeGenSwitch):
         return targetbuilder
 
     def _add_case(self, gv_case, target_addr):
+        log('FlexSwitch._add_case')
         start = self.nextfreepos
         end   = self.endfreepos
         mc = InMemoryCodeBuilder(start, end)
@@ -118,6 +130,7 @@ class FlexSwitch(CodeGenSwitch):
         self.nextfreepos = pos
 
     def add_default(self):
+        log('FlexSwitch.add_default')
         rgenop = self.rgenop
         targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
         self.default_case_addr = targetbuilder.mc.tell()
@@ -131,30 +144,100 @@ class FlexSwitch(CodeGenSwitch):
     #</comment>
 
 
-class Builder(GenBuilder):
+class Builder(object):  #changed baseclass from (GenBuilder) for better error messages
 
     def __init__(self, rgenop):
+        log('Builder.__init__')
         self.rgenop = rgenop
+        self.asm = [] #list of llvm assembly source code lines
 
     # ----------------------------------------------------------------
     # The public Builder interface
 
     def end(self):
+        log('Builder.end')
         pass
+
+    def _write_prologue(self, sigtoken):
+        log('Builder._write_prologue')
+        numargs = sigtoken     # for now
+        #self.mc.BREAKPOINT()
+        return [Var() for i in range(numargs)]
+
+    def _close(self):
+        log('Builder._close')
+        return
+        self.mc.done()
+        self.rgenop.close_mc(self.mc)
+        self.mc = None
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
+        log('Builder.genop1')
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
+        log('Builder.genop2')
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg1, gv_arg2)
 
+    def op_int_add(self, gv_x, gv_y):
+        log('Builder.op_int_add')
+        gv_result = Var()
+        return gv_result
+        self.mc.MOV(eax, gv_x.operand(self))
+        self.mc.ADD(eax, gv_y.operand(self))
+        return self.returnvar(eax) 
+
+    def enter_next_block(self, kinds, args_gv):
+        log('Builder.enter_next_block')
+        return
+        arg_positions = []
+        seen = {}
+        for i in range(len(args_gv)):
+            gv = args_gv[i]
+            # turn constants into variables; also make copies of vars that
+            # are duplicate in args_gv
+            if not isinstance(gv, Var) or gv.stackpos in seen:
+                gv = args_gv[i] = self.returnvar(gv.operand(self))
+            # remember the var's position in the stack
+            arg_positions.append(gv.stackpos)
+            seen[gv.stackpos] = None
+        return Label(self.mc.tell(), arg_positions, self.stackdepth)
+
+    def finish_and_return(self, sigtoken, gv_returnvar):
+        log('Builder.finish_and_return')
+        return
+        numargs = sigtoken      # for now
+        initialstackdepth = numargs + 1
+        self.mc.MOV(eax, gv_returnvar.operand(self))
+        self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
+        self.mc.RET()
+        self._close()
+
+    def finish_and_goto(self, outputargs_gv, target):
+        log('Builder.finish_and_goto')
+        return
+        remap_stack_layout(self, outputargs_gv, target)
+        self.mc.JMP(rel32(target.startaddr))
+        self._close()
+
+    def flexswitch(self, gv_exitswitch):
+        log('Builder.flexswitch')
+        return
+        result = FlexSwitch(self.rgenop)
+        result.initialize(self, gv_exitswitch)
+        self._close()
+        return result
+
+    def show_incremental_progress(self):
+        log('Builder.show_incremental_progress')
+        pass
 
 
-class RLLVMGenOp(AbstractRGenOp):
+class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better error messages
 
     def __init__(self):
         #self.mcs = []   # machine code blocks where no-one is currently writing
@@ -165,12 +248,15 @@ class RLLVMGenOp(AbstractRGenOp):
     # the public RGenOp interface
 
     def openbuilder(self):
+        log('RLLVMGenOp.openbuilder')
         return Builder(self)
 
     def newgraph(self, sigtoken, name):
+        log('RLLVMGenOp.newgraph')
         numargs = sigtoken          # for now
         builder = self.openbuilder()
-        entrypoint = builder.asm.mc.tell()
+        #entrypoint = builder.asm.mc.tell()
+        entrypoint = 0 #XXX
         inputargs_gv = builder._write_prologue(sigtoken)
         return builder, IntConst(entrypoint), inputargs_gv
 
@@ -248,3 +334,4 @@ class RLLVMGenOp(AbstractRGenOp):
 
 global_rgenop = RLLVMGenOp()
 RLLVMGenOp.constPrebuiltGlobal = global_rgenop.genconst
+
