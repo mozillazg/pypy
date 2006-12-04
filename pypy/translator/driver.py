@@ -7,6 +7,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
 from py.compat import optparse
+from pypy.tool.udir import udir
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -563,7 +564,6 @@ class TranslationDriver(SimpleTaskEngine):
     def task_source_cli(self):
         from pypy.translator.cli.gencli import GenCli
         from pypy.translator.cli.entrypoint import get_entrypoint
-        from pypy.tool.udir import udir
 
         entry_point_graph = self.translator.graphs[0]
         self.gen = GenCli(udir, self.translator, get_entrypoint(entry_point_graph),
@@ -579,7 +579,8 @@ class TranslationDriver(SimpleTaskEngine):
         filename = self.gen.build_exe()
         self.c_entryp = CliFunctionWrapper(filename)
         # restore original os values
-        unpatch(*self.old_cli_defs)
+        if hasattr(self, 'old_cli_defs'):
+            unpatch(*self.old_cli_defs)
         
         self.log.info("Compiled %s" % filename)
     task_compile_cli = taskdef(task_compile_cli, ['source_cli'],
