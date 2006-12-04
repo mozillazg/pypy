@@ -887,6 +887,7 @@ class AppTest_CompSpace(object):
             assert Solution in (False, ('beige', 'mauve', 'coral'))
 
     def test_queens(self):
+        skip("success depends on dict order")
         from constraint.examples import queens1, queens2
 
         def solve(spc, commitment, Sol):
