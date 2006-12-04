@@ -127,9 +127,8 @@ def rpython2javascript(mod, function_names, opts=Options, use_pdb=True):
     # XXX: Really do that
     #options = optparse.Values(defaults=DEFAULT_OPTIONS)
     #options.debug_transform = opts.debug_transform
-    from pypy.config.config import Config
-    from pypy.config.pypyoption import pypy_optiondescription
-    config = Config(pypy_optiondescription)
+    from pypy.config.pypyoption import get_pypy_config
+    config = get_pypy_config(translating=True)
     config.translation.debug_transform = opts.debug_transform
     driver = TranslationDriver(config=config)
     try:
