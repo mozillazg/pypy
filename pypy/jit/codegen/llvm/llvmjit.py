@@ -44,6 +44,9 @@ class _FuncPtr(_CFuncPtr):
     libraries = (os.path.join(os.path.dirname(path), 'llvmjit'),)
 llvmjit._FuncPtr = _FuncPtr
 
+#ensure stable state
+llvmjit.restart()
+
 #exposed functions...
 restart = llvmjit.restart
 
@@ -62,6 +65,10 @@ getNamedFunction.argtypes = [c_char_p]
 getNamedGlobal = llvmjit.getNamedGlobal
 getNamedGlobal.restype  = c_void_p
 getNamedGlobal.argtypes = [c_char_p]
+
+getPointerToFunction = llvmjit.getPointerToFunction
+getPointerToFunction.restype = c_void_p
+getPointerToFunction.argtypes = [c_void_p]
 
 freeMachineCodeForFunction = llvmjit.freeMachineCodeForFunction
 freeMachineCodeForFunction.restype  = c_int

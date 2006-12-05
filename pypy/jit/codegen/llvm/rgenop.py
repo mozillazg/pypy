@@ -2,6 +2,7 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
+from pypy.jit.codegen.llvm import llvmjit
 
 
 def log(s):
@@ -9,10 +10,20 @@ def log(s):
     pass
 
 
+n_vars = 0
+
 class Var(GenVar):
 
     def __init__(self):
-        pass
+        global n_vars
+        self.name = '%v' + str(n_vars) 
+        n_vars += 1
+
+    def operand(self):
+        return 'int ' + self.name
+
+    def operand2(self):
+        return self.name
 
     #repr?
 
@@ -21,6 +32,12 @@ class IntConst(GenConst):
 
     def __init__(self, value):
         self.value = value
+
+    def operand(self):
+        return 'int ' + str(self.value)
+
+    def operand2(self):
+        return str(self.value)
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -38,6 +55,12 @@ class AddrConst(GenConst):
 
     def __init__(self, addr):
         self.addr = addr
+
+    def operand(self):
+        return 'int* ' + str(llmemory.cast_adr_to_int(self.addr))
+
+    def operand2(self):
+        return str(llmemory.cast_adr_to_int(self.addr))
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -63,85 +86,81 @@ class Label(GenLabel):
 
 class FlexSwitch(CodeGenSwitch):
 
-    #<comment>
-
     def __init__(self, rgenop):
         log('FlexSwitch.__init__')
         self.rgenop = rgenop
-        self.default_case_addr = 0
+        #self.default_case_addr = 0
 
     def initialize(self, builder, gv_exitswitch):
-        log('FlexSwitch.initialize')
-        mc = builder.mc
-        mc.MOV(eax, gv_exitswitch.operand(builder))
-        self.saved_state = builder._save_state()
-        self._reserve(mc)
+        log('FlexSwitch.initialize TODO')
+        #mc = builder.mc
+        #mc.MOV(eax, gv_exitswitch.operand(builder))
+        #self.saved_state = builder._save_state()
+        #self._reserve(mc)
 
     def _reserve(self, mc):
-        log('FlexSwitch._reserve')
-        RESERVED = 11*4+5      # XXX quite a lot for now :-/
-        pos = mc.tell()
-        mc.UD2()
-        mc.write('\x00' * (RESERVED-1))
-        self.nextfreepos = pos
-        self.endfreepos = pos + RESERVED
+        log('FlexSwitch._reserve TODO')
+        #RESERVED = 11*4+5      # XXX quite a lot for now :-/
+        #pos = mc.tell()
+        #mc.UD2()
+        #mc.write('\x00' * (RESERVED-1))
+        #self.nextfreepos = pos
+        #self.endfreepos = pos + RESERVED
 
     def _reserve_more(self):
-        log('FlexSwitch._reserve_more')
-        start = self.nextfreepos
-        end   = self.endfreepos
-        newmc = self.rgenop.open_mc()
-        self._reserve(newmc)
-        self.rgenop.close_mc(newmc)
-        fullmc = InMemoryCodeBuilder(start, end)
-        fullmc.JMP(rel32(self.nextfreepos))
-        fullmc.done()
+        log('FlexSwitch._reserve_more TODO')
+        #start = self.nextfreepos
+        #end   = self.endfreepos
+        #newmc = self.rgenop.open_mc()
+        #self._reserve(newmc)
+        #self.rgenop.close_mc(newmc)
+        #fullmc = InMemoryCodeBuilder(start, end)
+        #fullmc.JMP(rel32(self.nextfreepos))
+        #fullmc.done()
 
     def add_case(self, gv_case):
-        log('FlexSwitch.add_case')
-        rgenop = self.rgenop
-        targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
-        target_addr = targetbuilder.mc.tell()
-        try:
-            self._add_case(gv_case, target_addr)
-        except CodeBlockOverflow:
-            self._reserve_more()
-            self._add_case(gv_case, target_addr)
-        return targetbuilder
+        log('FlexSwitch.add_case TODO')
+        #rgenop = self.rgenop
+        #targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
+        #target_addr = targetbuilder.mc.tell()
+        #try:
+        #    self._add_case(gv_case, target_addr)
+        #except CodeBlockOverflow:
+        #    self._reserve_more()
+        #    self._add_case(gv_case, target_addr)
+        #return targetbuilder
 
     def _add_case(self, gv_case, target_addr):
-        log('FlexSwitch._add_case')
-        start = self.nextfreepos
-        end   = self.endfreepos
-        mc = InMemoryCodeBuilder(start, end)
-        mc.CMP(eax, gv_case.operand(None))
-        mc.JE(rel32(target_addr))
-        pos = mc.tell()
-        if self.default_case_addr:
-            mc.JMP(rel32(self.default_case_addr))
-        else:
-            illegal_start = mc.tell()
-            mc.JMP(rel32(0))
-            ud2_addr = mc.tell()
-            mc.UD2()
-            illegal_mc = InMemoryCodeBuilder(illegal_start, end)
-            illegal_mc.JMP(rel32(ud2_addr))
-        mc.done()
-        self.nextfreepos = pos
+        log('FlexSwitch._add_case TODO')
+        #start = self.nextfreepos
+        #end   = self.endfreepos
+        #mc = InMemoryCodeBuilder(start, end)
+        #mc.CMP(eax, gv_case.operand(None))
+        #mc.JE(rel32(target_addr))
+        #pos = mc.tell()
+        #if self.default_case_addr:
+        #    mc.JMP(rel32(self.default_case_addr))
+        #else:
+        #    illegal_start = mc.tell()
+        #    mc.JMP(rel32(0))
+        #    ud2_addr = mc.tell()
+        #    mc.UD2()
+        #    illegal_mc = InMemoryCodeBuilder(illegal_start, end)
+        #    illegal_mc.JMP(rel32(ud2_addr))
+        #mc.done()
+        #self.nextfreepos = pos
 
     def add_default(self):
-        log('FlexSwitch.add_default')
-        rgenop = self.rgenop
-        targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
-        self.default_case_addr = targetbuilder.mc.tell()
-        start = self.nextfreepos
-        end   = self.endfreepos
-        mc = InMemoryCodeBuilder(start, end)
-        mc.JMP(rel32(self.default_case_addr))
-        mc.done()
-        return targetbuilder
-
-    #</comment>
+        log('FlexSwitch.add_default TODO')
+        #rgenop = self.rgenop
+        #targetbuilder = Builder._new_from_state(rgenop, self.saved_state)
+        #self.default_case_addr = targetbuilder.mc.tell()
+        #start = self.nextfreepos
+        #end   = self.endfreepos
+        #mc = InMemoryCodeBuilder(start, end)
+        #mc.JMP(rel32(self.default_case_addr))
+        #mc.done()
+        #return targetbuilder
 
 
 class Builder(object):  #changed baseclass from (GenBuilder) for better error messages
@@ -156,20 +175,29 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
 
     def end(self):
         log('Builder.end')
-        pass
+        self.asm.append('}')
+        asm_string = '\n'.join(self.asm)
+        log(asm_string)
+        llvmjit.parse(asm_string)
+        function   = llvmjit.getNamedFunction(self.rgenop.name)
+        entrypoint = llvmjit.getPointerToFunction(function)
+        self.rgenop.gv_entrypoint.value = entrypoint
+        #print self.rgenop.name, 'entrypoint', entrypoint
+        #print self.rgenop.gv_entrypoint, self.rgenop.gv_entrypoint.value
 
     def _write_prologue(self, sigtoken):
         log('Builder._write_prologue')
         numargs = sigtoken     # for now
-        #self.mc.BREAKPOINT()
-        return [Var() for i in range(numargs)]
+        inputargs_gv = [Var() for i in range(numargs)]
+        self.asm.append('int %%%s(%s){' % (
+            self.rgenop.name, ','.join([v.operand() for v in inputargs_gv])))
+        return inputargs_gv
 
     def _close(self):
         log('Builder._close')
-        return
-        self.mc.done()
-        self.rgenop.close_mc(self.mc)
-        self.mc = None
+        #self.mc.done()
+        #self.rgenop.close_mc(self.mc)
+        #self.mc = None
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
@@ -186,47 +214,45 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
     def op_int_add(self, gv_x, gv_y):
         log('Builder.op_int_add')
         gv_result = Var()
+        self.asm.append(" %s=add %s,%s" % (gv_result.name, gv_x.operand(), gv_y.operand2()))
         return gv_result
-        self.mc.MOV(eax, gv_x.operand(self))
-        self.mc.ADD(eax, gv_y.operand(self))
-        return self.returnvar(eax) 
+        #self.mc.MOV(eax, gv_x.operand(self))
+        #self.mc.ADD(eax, gv_y.operand(self))
+        #return self.returnvar(eax) 
 
     def enter_next_block(self, kinds, args_gv):
-        log('Builder.enter_next_block')
-        return
-        arg_positions = []
-        seen = {}
-        for i in range(len(args_gv)):
-            gv = args_gv[i]
-            # turn constants into variables; also make copies of vars that
-            # are duplicate in args_gv
-            if not isinstance(gv, Var) or gv.stackpos in seen:
-                gv = args_gv[i] = self.returnvar(gv.operand(self))
-            # remember the var's position in the stack
-            arg_positions.append(gv.stackpos)
-            seen[gv.stackpos] = None
-        return Label(self.mc.tell(), arg_positions, self.stackdepth)
+        log('Builder.enter_next_block TODO')
+        #arg_positions = []
+        #seen = {}
+        #for i in range(len(args_gv)):
+        #    gv = args_gv[i]
+        #    # turn constants into variables; also make copies of vars that
+        #    # are duplicate in args_gv
+        #    if not isinstance(gv, Var) or gv.stackpos in seen:
+        #        gv = args_gv[i] = self.returnvar(gv.operand(self))
+        #    # remember the var's position in the stack
+        #    arg_positions.append(gv.stackpos)
+        #    seen[gv.stackpos] = None
+        #return Label(self.mc.tell(), arg_positions, self.stackdepth)
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         log('Builder.finish_and_return')
-        return
-        numargs = sigtoken      # for now
-        initialstackdepth = numargs + 1
-        self.mc.MOV(eax, gv_returnvar.operand(self))
-        self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
-        self.mc.RET()
+        self.asm.append(' ret ' + gv_returnvar.operand())
+        #numargs = sigtoken      # for now
+        #initialstackdepth = numargs + 1
+        #self.mc.MOV(eax, gv_returnvar.operand(self))
+        #self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
+        #self.mc.RET()
         self._close()
 
     def finish_and_goto(self, outputargs_gv, target):
-        log('Builder.finish_and_goto')
-        return
-        remap_stack_layout(self, outputargs_gv, target)
-        self.mc.JMP(rel32(target.startaddr))
+        log('Builder.finish_and_goto TODO')
+        #remap_stack_layout(self, outputargs_gv, target)
+        #self.mc.JMP(rel32(target.startaddr))
         self._close()
 
     def flexswitch(self, gv_exitswitch):
-        log('Builder.flexswitch')
-        return
+        log('Builder.flexswitch TODO')
         result = FlexSwitch(self.rgenop)
         result.initialize(self, gv_exitswitch)
         self._close()
@@ -254,11 +280,12 @@ class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better 
     def newgraph(self, sigtoken, name):
         log('RLLVMGenOp.newgraph')
         numargs = sigtoken          # for now
+        self.name = name
         builder = self.openbuilder()
         #entrypoint = builder.asm.mc.tell()
-        entrypoint = 0 #XXX
+        self.gv_entrypoint = IntConst(0)
         inputargs_gv = builder._write_prologue(sigtoken)
-        return builder, IntConst(entrypoint), inputargs_gv
+        return builder, self.gv_entrypoint, inputargs_gv
 
     @specialize.genconst(1)
     def genconst(self, llvalue):    #i386 version (ppc version is slightly different)
