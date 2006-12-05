@@ -16,8 +16,8 @@ class CallLikelyBuiltinMixin(object):
                 w_builtin_dict = w_builtins.w_dict
                 assert isinstance(w_builtin_dict, W_DictMultiObject)
                 w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
-                if w_value is not None:
-                    print "CALL_LIKELY_BUILTIN fast"
+##                 if w_value is not None:
+##                     print "CALL_LIKELY_BUILTIN fast"
         else:
             w_varname = f.space.wrap(OPTIMIZED_BUILTINS[num])
             w_value = f.space.finditem(f.w_globals, w_varname)
