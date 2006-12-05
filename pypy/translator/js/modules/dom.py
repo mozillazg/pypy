@@ -167,6 +167,9 @@ class Element(Node):
 
     innerHTML = property(_get_innerHTML, _set_innerHTML)
 
+    def scrollIntoView(self):
+        pass
+
 class Attribute(Node):
     nodeType = 2
 
