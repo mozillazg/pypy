@@ -3,10 +3,10 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.dotnet import CLR, box, unbox, NativeException, native_exc, new_array, init_array
+from pypy.translator.cli.dotnet import CLR, box, unbox, NativeException, native_exc,\
+     new_array, init_array, typeof
 
-Type = CLR.System.Type
-Object = CLR.System.Object
+System = CLR.System
 TargetInvocationException = NativeException(CLR.System.Reflection.TargetInvocationException)
 
 import sys
@@ -21,7 +21,8 @@ class W_CliObject(Wrappable):
         b_meth = b_type.GetMethod(name) # TODO: overloading!
         b_args = self.rewrap_args(w_args)
         try:
-            b_res = b_meth.Invoke(self.b_obj, b_args)
+            # for an explanation of the box() call, see the log message for revision 35167
+            b_res = box(b_meth.Invoke(self.b_obj, b_args))
         except TargetInvocationException, e:
             b_inner = native_exc(e).get_InnerException()
             message = str(b_inner.get_Message())
@@ -32,7 +33,7 @@ class W_CliObject(Wrappable):
 
     def rewrap_args(self, w_args):
         args = self.space.unpackiterable(w_args)
-        b_res = new_array(Object, len(args))
+        b_res = new_array(System.Object, len(args))
         for i in range(len(args)):
             b_res[i] = self.py2cli(args[i])
         return b_res
@@ -41,20 +42,31 @@ class W_CliObject(Wrappable):
         space = self.space
         if space.is_true(space.isinstance(w_obj, self.space.w_int)):
             return box(space.int_w(w_obj))
+        if space.is_true(space.isinstance(w_obj, self.space.w_float)):
+            return box(space.float_w(w_obj))
         else:
             typename = space.type(w_obj).getname(space, '?')
             msg = "Can't convert type %s to .NET" % typename
             raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
 
     def cli2py(self, b_obj):
-        intval = unbox(b_obj, ootype.Signed) # TODO: support other types
-        return self.space.wrap(intval)
+        b_type = b_obj.GetType()
+        # TODO: support other types
+        if b_type == typeof(System.Int32):
+            intval = unbox(b_obj, ootype.Signed)
+            return self.space.wrap(intval)
+        elif b_type == typeof(System.Double):
+            floatval = unbox(b_obj, ootype.Float)
+            return self.space.wrap(floatval)
+        else:
+            msg = "Can't convert object %s to Python" % str(b_obj.ToString())
+            raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
 
 
 def cli_object_new(space, w_subtype, typename):
-    b_type = Type.GetType(typename)
-    b_ctor = b_type.GetConstructor(init_array(Type))
-    b_obj = b_ctor.Invoke(init_array(Object))
+    b_type = System.Type.GetType(typename)
+    b_ctor = b_type.GetConstructor(init_array(System.Type))
+    b_obj = b_ctor.Invoke(init_array(System.Object))
     return space.wrap(W_CliObject(space, b_obj))
 cli_object_new.unwrap_spec = [ObjSpace, W_Root, str]
 
