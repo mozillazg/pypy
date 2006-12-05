@@ -29,10 +29,10 @@ from pypy.translator.js import json
 
 from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal,\
     described
-from pypy.translator.js.main import rpython2javascript, Options
+from pypy.translator.js.main import rpython2javascript, js_optiondescr
 from pypy.translator.js import commproxy
 
-Options.debug_transform = False
+js_optiondescr.debug_transform = False
 commproxy.USE_MOCHIKIT = True
 
 class ExportedMethods(BasicExternal):
@@ -66,7 +66,7 @@ class TestHandler(BaseHTTPRequestHandler):
             else:
                 self.serve_data('text/json', json.write(exec_meth(**self.parse_args(getargs))))
         else:
-            outp = method_to_call(self, **self.parse_args(getargs))
+            outp = method_to_call(**self.parse_args(getargs))
             if isinstance(outp, (str, unicode)):
                 self.serve_data('text/html', outp)
             elif isinstance(outp, tuple):
