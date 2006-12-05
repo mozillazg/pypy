@@ -66,8 +66,8 @@ class TestHandler(BaseHTTPRequestHandler):
             else:
                 self.serve_data('text/json', json.write(exec_meth(**self.parse_args(getargs))))
         else:
-            outp = method_to_call()
-            if isinstance(outp, str):
+            outp = method_to_call(self, **self.parse_args(getargs))
+            if isinstance(outp, (str, unicode)):
                 self.serve_data('text/html', outp)
             elif isinstance(outp, tuple):
                 self.serve_data(*outp)
