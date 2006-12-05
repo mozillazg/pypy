@@ -413,6 +413,7 @@ class WaryDictImplementation(StrDictImplementation):
             i = BUILTIN_TO_INDEX.get(key, -1)
             if i != -1:
                 self.shadowed[i] = None
+            return self
         elif self._is_sane_hash(w_key_type):
             raise KeyError
         else:
@@ -630,7 +631,7 @@ class W_DictMultiObject(W_Object):
     def __init__(w_self, space, wary=False):
         if space.config.objspace.withfastbuiltins and wary:
             w_self.implementation = WaryDictImplementation(space)
-        if space.config.objspace.std.withdictmeasurement:
+        elif space.config.objspace.std.withdictmeasurement:
             w_self.implementation = MeasuringDictImplementation(space)
         else:
             w_self.implementation = space.emptydictimpl
