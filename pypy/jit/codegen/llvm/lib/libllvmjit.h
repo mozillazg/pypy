@@ -9,7 +9,8 @@ int     transform(const char* passnames);
 int     parse(const char* llsource);
 
 //Function code
-int     freeMachineCodeForFunction(const void* function);
+void*   getPointerToFunction(const void* p_function);
+int     freeMachineCodeForFunction(const void* p_function);
 int     recompile(const void* function);
 int     execute(const void* function, int param);
 

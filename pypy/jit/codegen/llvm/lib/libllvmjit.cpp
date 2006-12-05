@@ -87,13 +87,19 @@ int     parse(const char* llsource) {
 
 
 //Function methods
-int     freeMachineCodeForFunction(const void* function) {
-    if (!function) {
+void*   getPointerToFunction(const void* p_function) {
+    //note: this forces JIT compilation
+    return gp_execution_engine->getPointerToFunction((Function*)p_function);
+}
+
+
+int     freeMachineCodeForFunction(const void* p_function) {
+    if (!p_function) {
         std::cerr << "No function supplied to libllvmjit.freeMachineCodeForFunction(...)\n" << std::flush;
         return 0;
     }
 
-    gp_execution_engine->freeMachineCodeForFunction((Function*)function);
+    gp_execution_engine->freeMachineCodeForFunction((Function*)p_function);
     return 1;
 }
 
