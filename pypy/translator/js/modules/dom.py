@@ -87,6 +87,7 @@ class Node(EventTarget):
 
     def __setattr__(self, name, value):
         """set an attribute on the wrapped node"""
+        print dir(self)
         if name in dir(self):
             return super(Node, self).__setattr__(name, value)
         if name not in self._fields:
@@ -127,9 +128,6 @@ class Node(EventTarget):
 class Element(Node):
     nodeType = 1
     style = None
-
-    def __init__(self, node=None):
-        super(Element, self).__init__(node)
 
     def _style(self):
         style = getattr(self._original, '_style', None)
@@ -181,10 +179,6 @@ class Comment(Node):
 class Document(Node):
     nodeType = 9
     
-    def __init__(self, docnode=None):
-        super(Document, self).__init__(docnode)
-        self._original = docnode
-
     def createEvent(self, group=''):
         """create an event
 
