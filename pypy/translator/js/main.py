@@ -114,7 +114,7 @@ def get_source_ssf(mod, module_name, function_names, use_debug=True):
 
 def rpython2javascript(mod, function_names, jsconfig=None, use_pdb=True):
     if jsconfig is None:
-        jsconfig = Config(js_optiondescr )
+        jsconfig = Config(js_optiondescr)
     if use_pdb:
         jsconfig.use_pdb = True
     module_name = mod.__name__
