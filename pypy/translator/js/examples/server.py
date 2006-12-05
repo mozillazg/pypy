@@ -17,7 +17,6 @@ pass them to caller
 
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
-import thread, threading
 import re
 import time
 import random
@@ -104,6 +103,7 @@ def start_server(server_address = ('', 8000), handler=TestHandler, start_new=Tru
     httpd = HTTPServer(server_address, handler)
 
     if start_new:
+        import thread
         thread.start_new_thread(httpd.serve_forever, ())
         print "Server started, listening on %s" % (server_address,)
     else:
