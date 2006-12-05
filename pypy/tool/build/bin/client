@@ -50,7 +50,7 @@ try:
             # XXX we should compile here, using data dict for info
             print 'compilation requested for info %r, now faking that' % (
                     data,)
-            config = Config(pypyoption.pypy_optiondescription)
+            config = pypyoption.get_pypy_config()
             config.override(compileinfo)
 
             # XXX compile here...
@@ -62,7 +62,7 @@ try:
             channelwrapper = ChannelWrapper(channel)
             zip = ZipFile(channelwrapper, 'w')
             for fpath in udir.visit():
-                zip.writestr(fpath.relto(outdir), fpath.read())
+                zip.writestr(fpath.relto(udir), fpath.read())
             zip.close()
 
             print 'done with compilation, waiting for next'
