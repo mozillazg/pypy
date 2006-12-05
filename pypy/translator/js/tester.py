@@ -14,6 +14,9 @@ def __getattr__(self, attr):
     # otherwise....
     def wrapper(*args, **kwargs):
         args = list(args)
+        # do this only if last arg is callable
+        if not (len(args) > 0 and callable(args[-1])):
+            return val(*args, **kwargs)
         callback = args.pop()
         res = val(*args, **kwargs)
         if not hasattr(self, '__callbacks'):
