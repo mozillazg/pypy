@@ -171,7 +171,7 @@ class ObjSpace(object):
         # sets all the internal descriptors
         if config is None:
             from pypy.config.pypyoption import get_pypy_config
-            config = get_pypy_config(translating=True)
+            config = get_pypy_config(translating=False)
         self.config = config
         self.interned_strings = {}
         self.pending_actions = []
