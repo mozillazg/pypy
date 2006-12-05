@@ -29,10 +29,9 @@ from pypy.translator.js import json
 
 from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal,\
     described
-from pypy.translator.js.main import rpython2javascript, js_optiondescr
+from pypy.translator.js.main import rpython2javascript
 from pypy.translator.js import commproxy
 
-js_optiondescr.debug_transform = False
 commproxy.USE_MOCHIKIT = True
 
 class ExportedMethods(BasicExternal):
