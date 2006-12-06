@@ -82,7 +82,7 @@ corresponding Unix manual entries for more information on calls."""
         space = self.space
         config = space.config
         # XXX execve does not work under ootypesystem yet :-(
-        if config.translating and config.typesystem != "lltype":
+        if config.translating and config.translation.type_system != "lltype":
             space.delattr(self, space.wrap("execve"))
 
 for constant in dir(os):
