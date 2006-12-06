@@ -87,7 +87,6 @@ class Node(EventTarget):
 
     def __setattr__(self, name, value):
         """set an attribute on the wrapped node"""
-        print dir(self)
         if name in dir(self):
             return super(Node, self).__setattr__(name, value)
         if name not in self._fields:
@@ -435,7 +434,7 @@ Element._methods.update({
     'blur' : MethodDesc([]),
     'click' : MethodDesc([]),
     'focus' : MethodDesc([]),
-    'scrollIntoView' : MethodDesc([12]),
+    'scrollIntoView' : MethodDesc([]),
     'supports' : MethodDesc(["aa", 1.0]),
 })
 
