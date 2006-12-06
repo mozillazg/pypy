@@ -68,8 +68,6 @@ translation_optiondescription = OptionDescription(
 
     # Flags of the TranslationContext:
     BoolOption("simplifying", "Simplify flow graphs", default=True),
-    BoolOption("do_imports_immediately", "XXX", default=True,
-               cmdline=None),
     BoolOption("builtins_can_raise_exceptions", "XXX", default=False,
                cmdline=None),
     BoolOption("list_comprehension_operations", "XXX", default=False,
