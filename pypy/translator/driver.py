@@ -581,8 +581,31 @@ class TranslationDriver(SimpleTaskEngine):
             unpatch(*self.old_cli_defs)
         
         self.log.info("Compiled %s" % filename)
+        if self.standalone:
+            self.copy_cli_exe()
     task_compile_cli = taskdef(task_compile_cli, ['source_cli'],
                               'Compiling CLI source')
+
+    def copy_cli_exe(self):
+        # XXX messy
+        import os.path
+        import shutil
+        main_exe = self.c_entryp._exe
+        usession_path, main_exe_name = os.path.split(main_exe)
+        pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
+
+        shutil.copy(main_exe, '.')
+        shutil.copy(pypylib_dll, '.')
+        newexename = self.exe_name % self.get_info()
+        if '/' not in newexename and '\\' not in newexename:
+            newexename = './' + newexename
+        f = file(newexename, 'w')
+        f.write("""#!/bin/bash
+cd `dirname $0` # XXX doesn't work if it's placed in PATH
+mono "%s" "$@"
+""" % main_exe_name)
+        f.close()
+        os.chmod(newexename, 0755)
 
     def task_run_cli(self):
         pass
