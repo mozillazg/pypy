@@ -175,6 +175,7 @@ class __extend__(pairtype(SmallFunctionSetPBCRepr, FunctionsPBCRepr)):
             wrapper = HalfConcreteWrapper(r_ptr.get_unique_llfn)
             return inputconst(Void, wrapper)
         else:
+            assert v.concretetype is Char
             v_int = llops.genop('cast_char_to_int', [v],
                                 resulttype=Signed)
             return llops.genop('getarrayitem', [r_set.c_pointer_table, v_int],
@@ -245,6 +246,16 @@ class MethodsPBCRepr(AbstractMethodsPBCRepr):
             opname = 'call_args'
 
         hop2.v_s_insertfirstarg(v_func, s_func)   # insert 'function'
+
+        if type(hop2.args_r[0]) != type(r_func): # XXX argh...
+            if type(hop2.args_r[0]) is SmallFunctionSetPBCRepr:
+                assert type(r_func) is FunctionsPBCRepr
+                hop2.args_r[0] = FunctionsPBCRepr(self.rtyper, s_func)
+            else:
+                assert type(r_func) is SmallFunctionSetPBCRepr
+                assert type(hop2.args_r[0]) is FunctionsPBCRepr
+                # this is actually ok, i think...
+
         # now hop2 looks like simple_call(function, self, args...)
         return hop2.dispatch(opname=opname)
 
