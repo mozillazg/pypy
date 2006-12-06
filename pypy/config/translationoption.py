@@ -26,7 +26,7 @@ translation_optiondescription = OptionDescription(
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "framework", "none", "stacklessgc",
                   "exact_boehm"],
-                  "boehm", requires={
+                  "ref", requires={
                      "stacklessgc": [("translation.stackless", True)]},
                   cmdline="--gc"),
     BoolOption("thread", "enable use of threading primitives",
