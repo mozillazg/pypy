@@ -4,15 +4,15 @@ from pypy.annotation.pairtype import pairtype, pair
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Void, ForwardReference, Struct, Bool, \
-     Ptr, malloc, nullptr
+     typeOf, Void, ForwardReference, Struct, Bool, Char, \
+     Ptr, malloc, nullptr, Array, Signed
 from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc
 from pypy.rpython.rpbc import samesig,\
      commonbase, allattributenames, adjust_shape, \
      AbstractClassesPBCRepr, AbstractMethodsPBCRepr, OverriddenFunctionPBCRepr, \
      AbstractMultipleFrozenPBCRepr, MethodOfFrozenPBCRepr, \
      AbstractFunctionsPBCRepr, AbstractMultipleUnrelatedFrozenPBCRepr, \
-     SingleFrozenPBCRepr, none_frozen_pbc_repr
+     SingleFrozenPBCRepr, none_frozen_pbc_repr, get_concrete_calltable
 from pypy.rpython.lltypesystem import rclass, llmemory
 from pypy.tool.sourcetools import has_varargs
 
@@ -112,7 +112,108 @@ class FunctionsPBCRepr(AbstractFunctionsPBCRepr):
 
     def get_specfunc_row(self, llop, v, c_rowname, resulttype):
         return llop.genop('getfield', [v, c_rowname], resulttype=resulttype)
-        
+
+class SmallFunctionSetPBCRepr(Repr):
+    def __init__(self, rtyper, s_pbc):
+        self.rtyper = rtyper
+        self.s_pbc = s_pbc
+        self.callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
+        concretetable, uniquerows = get_concrete_calltable(self.rtyper,
+                                                           self.callfamily)
+        assert len(uniquerows) == 1
+        self.lowleveltype = Char
+        self.pointer_repr = FunctionsPBCRepr(rtyper, s_pbc)
+        self.descriptions = list(s_pbc.descriptions)
+        if self.s_pbc.can_be_None:
+            self.descriptions.insert(0, None)
+
+    def _setup_repr(self):
+        POINTER_TABLE = Array(self.pointer_repr.lowleveltype)
+        pointer_table = malloc(POINTER_TABLE, len(self.descriptions),
+                               immortal=True)
+        for i, desc in enumerate(self.descriptions):
+            pointer_table[i] = self.pointer_repr.convert_desc(desc)
+        self.c_pointer_table = inputconst(Ptr(POINTER_TABLE), pointer_table)
+
+    def get_s_callable(self):
+        return self.s_pbc
+
+    def get_r_implfunc(self):
+        return self, 0
+
+    def get_s_signatures(self, shape):
+        funcdesc = self.s_pbc.descriptions.iterkeys().next()
+        return funcdesc.get_s_signatures(shape)
+
+    def convert_desc(self, funcdesc):
+        return chr(self.descriptions.index(funcdesc))
+
+    def convert_const(self, value):
+        if isinstance(value, types.MethodType) and value.im_self is None:
+            value = value.im_func   # unbound method -> bare function
+        if value is None:
+            return chr(0)
+        funcdesc = self.rtyper.annotator.bookkeeper.getdesc(value)
+        return self.convert_desc(funcdesc)
+
+##     def convert_to_concrete_llfn(self, v, shape, index, llop):
+##         return v
+
+    def rtype_simple_call(self, hop):
+        v_index = hop.inputarg(self, arg=0)
+        v_ptr = hop.llops.convertvar(v_index, self, self.pointer_repr)
+        hop2 = hop.copy()
+        hop2.args_r[0] = self.pointer_repr
+        hop2.args_v[0] = v_ptr
+        return hop2.dispatch()
+
+    rtype_call_args = rtype_simple_call
+
+class __extend__(pairtype(SmallFunctionSetPBCRepr, FunctionsPBCRepr)):
+    def convert_from_to((r_set, r_ptr), v, llops):
+        if r_ptr.lowleveltype is Void:
+            wrapper = HalfConcreteWrapper(r_ptr.get_unique_llfn)
+            return inputconst(Void, wrapper)
+        else:
+            v_int = llops.genop('cast_char_to_int', [v],
+                                resulttype=Signed)
+            return llops.genop('getarrayitem', [r_set.c_pointer_table, v_int],
+                               resulttype=r_ptr.lowleveltype)
+
+class __extend__(pairtype(FunctionsPBCRepr, SmallFunctionSetPBCRepr)):
+    def convert_from_to((r_ptr, r_set), v, llops):
+        assert r_ptr.lowleveltype is Void
+        desc, = r_ptr.s_pbc.descriptions
+        return inputconst(Char, r_set.convert_desc(desc))
+
+_conversion_tables = {}
+def conversion_table(r_from, r_to):
+    key = r_from, r_to
+    if key in _conversion_tables:
+        return _conversion_tables[key]
+    else:
+        t = malloc(Array(Char), len(r_from.descriptions), immortal=True)
+        l = []
+        for i, d in enumerate(r_from.descriptions):
+            j = r_to.descriptions.index(d)
+            l.append(j)
+            t[i] = chr(j)
+        if l == range(len(r_from.descriptions)):
+            r = None
+        else:
+            r = inputconst(Ptr(Array(Char)), t)
+        _conversion_tables[key] = r
+        return r
+
+class __extend__(pairtype(SmallFunctionSetPBCRepr, SmallFunctionSetPBCRepr)):
+    def convert_from_to((r_from, r_to), v, llops):
+        c_table = conversion_table(r_from, r_to)
+        if c_table:
+            return llops.genop('getarrayitem', [c_table, v],
+                               resulttype=lltype.Char)
+        else:
+            return v
+
 class MethodsPBCRepr(AbstractMethodsPBCRepr):
     """Representation selected for a PBC of the form {func: classdef...}.
     It assumes that all the methods come from the same name in a base
@@ -128,7 +229,8 @@ class MethodsPBCRepr(AbstractMethodsPBCRepr):
         r_class = self.r_im_self.rclass
         mangled_name, r_func = r_class.clsfields[self.methodname]
         assert isinstance(r_func, (FunctionsPBCRepr,
-                                   OverriddenFunctionPBCRepr))
+                                   OverriddenFunctionPBCRepr,
+                                   SmallFunctionSetPBCRepr))
         # s_func = r_func.s_pbc -- not precise enough, see
         # test_precise_method_call_1.  Build a more precise one...
         funcdescs = [desc.funcdesc for desc in hop.args_s[0].descriptions]
