@@ -252,4 +252,12 @@ class TestInterp(object):
         self.assert_prints(parse_d("""
         var x;x=3; print(x)"""), ["3"])
         
+    def test_fun_decl(self):
+        py.test.skip("still not ready")
+        self.assert_prints(parse_d("""
+        function x () { print('i work')}
+        x()
+        """), ["i work"])
+    
+        
 
