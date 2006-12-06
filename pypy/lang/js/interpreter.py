@@ -114,7 +114,6 @@ class __extend__(If):
             return self.elsePart.call(context)
 
 class __extend__(Group):
-    """The __extend__ class."""
     def call(self, context = None):
         return self.expr.call(context)
 
@@ -123,6 +122,7 @@ def ARC(x, y):
     Implements the Abstract Relational Comparison x < y
     Still not 100% to the spec
     """
+    # TODO complete the funcion with strings comparison
     s1 = x.ToPrimitive('Number')
     s2 = y.ToPrimitive('Number')
     if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
