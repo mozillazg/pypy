@@ -10,14 +10,14 @@ def log(s):
     pass
 
 
-n_vars = 0
+n_vars = [0]
 
 class Var(GenVar):
 
     def __init__(self):
         global n_vars
-        self.name = '%v' + str(n_vars) 
-        n_vars += 1
+        self.name = '%v' + str(n_vars[0])
+        n_vars[0] += 1
 
     def operand(self):
         return 'int ' + self.name
@@ -165,8 +165,14 @@ class FlexSwitch(CodeGenSwitch):
 
 class Builder(object):  #changed baseclass from (GenBuilder) for better error messages
 
+    _genop2_generics = {
+        'int_add' : 'add'  , 'int_sub' : 'sub'  , 'int_mul' : 'mul'  , 'int_floordiv' : 'div'  ,
+        'int_mod' : 'rem'  , 'int_and' : 'and'  , 'int_or'  : 'or'   , 'int_xor'      : 'xor'  ,
+        'int_lt'  : 'setlt', 'int_le'  : 'setle', 'int_eq'  : 'seteq', 'int_ne'       : 'setne',
+        'int_gt'  : 'setgt', 'int_ge'  : 'setge'
+    }
+
     def __init__(self, rgenop):
-        log('Builder.__init__')
         self.rgenop = rgenop
         self.asm = [] #list of llvm assembly source code lines
 
@@ -180,45 +186,45 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         log(asm_string)
         llvmjit.parse(asm_string)
         function   = llvmjit.getNamedFunction(self.rgenop.name)
-        entrypoint = llvmjit.getPointerToFunction(function)
+        entrypoint = llvmjit.getPointerToFunctionAsInt(function) #how to cast a ctypes ptr to int?
         self.rgenop.gv_entrypoint.value = entrypoint
-        #print self.rgenop.name, 'entrypoint', entrypoint
-        #print self.rgenop.gv_entrypoint, self.rgenop.gv_entrypoint.value
 
     def _write_prologue(self, sigtoken):
-        log('Builder._write_prologue')
         numargs = sigtoken     # for now
         inputargs_gv = [Var() for i in range(numargs)]
         self.asm.append('int %%%s(%s){' % (
             self.rgenop.name, ','.join([v.operand() for v in inputargs_gv])))
         return inputargs_gv
 
-    def _close(self):
-        log('Builder._close')
-        #self.mc.done()
-        #self.rgenop.close_mc(self.mc)
-        #self.mc = None
-
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
-        log('Builder.genop1')
+        #log('Builder.genop1')
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
-        log('Builder.genop2')
-        genmethod = getattr(self, 'op_' + opname)
-        return genmethod(gv_arg1, gv_arg2)
+        #log('Builder.genop2')
+        if opname in self._genop2_generics:
+            return self._rgenop2_generic(self._genop2_generics[opname], gv_arg1, gv_arg2)
+        else:
+            genmethod = getattr(self, 'op_' + opname)
+            return genmethod(gv_arg1, gv_arg2)
 
-    def op_int_add(self, gv_x, gv_y):
-        log('Builder.op_int_add')
+    def _rgenop2_generic(self, llvm_opcode, gv_arg1, gv_arg2):
+        log('Builder._rgenop2_generic: ' + llvm_opcode)
         gv_result = Var()
-        self.asm.append(" %s=add %s,%s" % (gv_result.name, gv_x.operand(), gv_y.operand2()))
+        self.asm.append(" %s=%s %s,%s" % (
+            gv_result.name, llvm_opcode, gv_arg1.operand(), gv_arg2.operand2()))
         return gv_result
-        #self.mc.MOV(eax, gv_x.operand(self))
-        #self.mc.ADD(eax, gv_y.operand(self))
-        #return self.returnvar(eax) 
+
+    #def op_int_neg(self, gv_x):
+    #def op_int_abs(self, gv_x):
+    #def op_int_invert(self, gv_x):
+    #def op_int_lshift(self, gv_x, gv_y):
+    #def op_int_rshift(self, gv_x, gv_y):
+    #def op_bool_not(self, gv_x):
+    #def op_cast_bool_to_int(self, gv_x):
 
     def enter_next_block(self, kinds, args_gv):
         log('Builder.enter_next_block TODO')
@@ -243,19 +249,19 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         #self.mc.MOV(eax, gv_returnvar.operand(self))
         #self.mc.ADD(esp, imm(WORD * (self.stackdepth - initialstackdepth)))
         #self.mc.RET()
-        self._close()
+        #self._close()
 
     def finish_and_goto(self, outputargs_gv, target):
         log('Builder.finish_and_goto TODO')
         #remap_stack_layout(self, outputargs_gv, target)
         #self.mc.JMP(rel32(target.startaddr))
-        self._close()
+        #self._close()
 
     def flexswitch(self, gv_exitswitch):
         log('Builder.flexswitch TODO')
         result = FlexSwitch(self.rgenop)
         result.initialize(self, gv_exitswitch)
-        self._close()
+        #self._close()
         return result
 
     def show_incremental_progress(self):
@@ -274,7 +280,7 @@ class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better 
     # the public RGenOp interface
 
     def openbuilder(self):
-        log('RLLVMGenOp.openbuilder')
+        #log('RLLVMGenOp.openbuilder')
         return Builder(self)
 
     def newgraph(self, sigtoken, name):
@@ -282,9 +288,8 @@ class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better 
         numargs = sigtoken          # for now
         self.name = name
         builder = self.openbuilder()
-        #entrypoint = builder.asm.mc.tell()
-        self.gv_entrypoint = IntConst(0)
         inputargs_gv = builder._write_prologue(sigtoken)
+        self.gv_entrypoint = IntConst(0)    #note: updated by Builder.end() (i.e after compilation)
         return builder, self.gv_entrypoint, inputargs_gv
 
     @specialize.genconst(1)

@@ -67,8 +67,12 @@ getNamedGlobal.restype  = c_void_p
 getNamedGlobal.argtypes = [c_char_p]
 
 getPointerToFunction = llvmjit.getPointerToFunction
-getPointerToFunction.restype = c_void_p
+getPointerToFunction.restype = c_void_p 
 getPointerToFunction.argtypes = [c_void_p]
+
+getPointerToFunctionAsInt = llvmjit.getPointerToFunction
+getPointerToFunctionAsInt.restype = c_int
+getPointerToFunctionAsInt.argtypes = [c_void_p]
 
 freeMachineCodeForFunction = llvmjit.freeMachineCodeForFunction
 freeMachineCodeForFunction.restype  = c_int
