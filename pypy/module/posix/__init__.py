@@ -77,6 +77,13 @@ corresponding Unix manual entries for more information on calls."""
     #if hasattr(ctypes_posix, 'uname'):
     #    interpleveldefs['uname'] = 'interp_posix.uname'
 
+    def setup_after_space_initialization(self):
+        """NOT_RPYTHON"""
+        space = self.space
+        config = space.config
+        # XXX execve does not work under ootypesystem yet :-(
+        if config.translating and config.typesystem != "lltype":
+            space.delattr(self, space.wrap("execve"))
 
 for constant in dir(os):
     value = getattr(os, constant)
