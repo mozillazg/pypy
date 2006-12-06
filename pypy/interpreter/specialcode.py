@@ -8,22 +8,16 @@ class CallLikelyBuiltinMixin(object):
         from pypy.objspace.std.dictmultiobject import W_DictMultiObject
         w_globals = f.w_globals
         num = oparg >> 8
-        if isinstance(w_globals, W_DictMultiObject):
-            w_value = w_globals.implementation.get_builtin_indexed(num)
-            if w_value is None:
-                w_builtins = f.builtin
-                assert isinstance(w_builtins, Module)
-                w_builtin_dict = w_builtins.w_dict
-                assert isinstance(w_builtin_dict, W_DictMultiObject)
-                w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
+        assert isinstance(w_globals, W_DictMultiObject)
+        w_value = w_globals.implementation.get_builtin_indexed(num)
+        if w_value is None:
+            w_builtins = f.builtin
+            assert isinstance(w_builtins, Module)
+            w_builtin_dict = w_builtins.w_dict
+            assert isinstance(w_builtin_dict, W_DictMultiObject)
+            w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
 ##                 if w_value is not None:
 ##                     print "CALL_LIKELY_BUILTIN fast"
-        else:
-            w_varname = f.space.wrap(OPTIMIZED_BUILTINS[num])
-            w_value = f.space.finditem(f.w_globals, w_varname)
-            if w_value is None:
-                # not in the globals, now look in the built-ins
-                w_value = f.builtin.getdictvalue(f.space, w_varname)
         if w_value is None:
             varname = OPTIMIZED_BUILTINS[num]
             message = "global name '%s' is not defined" % varname
