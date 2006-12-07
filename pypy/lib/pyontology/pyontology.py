@@ -425,8 +425,10 @@ class Literal(ClassDomain):
 def Types(typ):
     class Type(Literal):
         def __contains__(self, item):
-            #assert isinstance(item, rdflib_literal)
-            return item.datatype is None or item.datatype == self.Type
+            if isinstance(item, rdflib_literal):
+                return item.datatype is None or item.datatype == self.Type
+            else:
+                return XMLTypes[self.Type.split("#")[-1]] == type(item)
 
     datatype = Type
     datatype.Type = typ
@@ -455,9 +457,9 @@ builtin_voc = {
                getUriref('rdf', 'Literal') : Literal,
 #               getUriref('rdf', 'type') : Property,
               }
-XMLTypes = ['string', 'float', 'integer', 'date']
-#XMLTypes = {'string': str, 'float': float, 'integer': int, 
-#            'date': lambda x: datetime.date(*[int(v) for v in x.split('-')])}
+#XMLTypes = ['string', 'float', 'integer', 'date']
+XMLTypes = {'string': str, 'float': float, 'integer': int, 
+            'date': lambda x: datetime.date(*[int(v) for v in x.split('-')])}
 
 for typ in XMLTypes:
     uri = getUriref('xmlschema', typ)
@@ -546,7 +548,11 @@ class Ontology:
             trip_ = [trip.Subject[0], trip.Verb[0], trip.Object[0]]
             for item in trip_:
                 if isinstance(item[0], rdflib_literal):
-                    newtrip.append(item[0])
+                    o = item[0]
+                    if o.datatype in builtin_voc:
+                        o = XMLTypes[o.datatype.split('#')[-1]](o)
+                    self.variables['owl_Literal'].addValue(o)
+                    newtrip.append(o)
                 elif item[0].NCNAME_PREFIX:
                     uri = prefixes[item[0].NCNAME_PREFIX[0]] + item[0].NCNAME[0]
                     newtrip.append(URIRef(uri))
@@ -706,9 +712,9 @@ class Ontology:
                    val = v.uri
                else:
                    val = v 
-               d[k] = unicode(val)
+               d[k] = (val)
                if k in query_vars:
-                   res_dict[query_vars[k]] = unicode(val)
+                   res_dict[query_vars[k]] = (val)
            res.append(res_dict)
         return res
     
@@ -743,10 +749,9 @@ class Ontology:
             else:
                 val = Individual(obj, o)
         elif type(o) == rdflib_literal:
-            print "Literal type", repr(o.datatype)
+#            self.variables.setdefault('owl_Literal', ClassDomain('owl_Literal',u''))
             if o.datatype in builtin_voc:
-                print "XML datatype"
-                o = XMLTypes[o.datatype.split('#')[-1]](o)
+               o = XMLTypes[o.datatype.split('#')[-1]](o)
             self.variables['owl_Literal'].addValue(o)
             val = o
         else:

@@ -35,7 +35,6 @@ def test_equivalentProperty_inconst():
     raises(ConsistencyFailure, O.consistency)
 
 def test_XMLSchema_string():
-    py.test.skip("WIP")
     O = Ontology()
     a = URIRef(u'A')
     p = URIRef(u'P')
@@ -47,7 +46,7 @@ def test_XMLSchema_string():
     O.consistency()
 
 def test_XMLSchema_string_fail():
-    py.test.skip("WIP")
+#    py.test.skip("WIP")
     O = Ontology()
     a = URIRef(u'A')
     p = URIRef(u'P')
