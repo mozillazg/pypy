@@ -36,8 +36,9 @@ translation_optiondescription = OptionDescription(
                cmdline="-d --debug", default=False),
     BoolOption("insist", "Try hard to go on RTyping", default=False,
                cmdline="--insist"),
-    BoolOption("withsmallfuncsets", "Represent small groups of functions as small integers",
-               default=False),
+    IntOption("withsmallfuncsets",
+              "Represent groups of less funtions than this as indices into an array",
+               default=0),
     BoolOption("countmallocs", "Count mallocs and frees", default=False,
                cmdline=None),
 
