@@ -133,6 +133,7 @@ class SmallFunctionSetPBCRepr(Repr):
         self.descriptions = list(s_pbc.descriptions)
         if self.s_pbc.can_be_None:
             self.descriptions.insert(0, None)
+        self._conversion_tables = {}
 
     def _setup_repr(self):
         POINTER_TABLE = Array(self.pointer_repr.lowleveltype)
@@ -205,11 +206,9 @@ class __extend__(pairtype(FunctionsPBCRepr, SmallFunctionSetPBCRepr)):
         desc, = r_ptr.s_pbc.descriptions
         return inputconst(Char, r_set.convert_desc(desc))
 
-_conversion_tables = {}
 def conversion_table(r_from, r_to):
-    key = r_from, r_to
-    if key in _conversion_tables:
-        return _conversion_tables[key]
+    if r_to in r_from._conversion_tables:
+        return r_from._conversion_tables[r_to]
     else:
         t = malloc(Array(Char), len(r_from.descriptions), immortal=True)
         l = []
@@ -224,7 +223,7 @@ def conversion_table(r_from, r_to):
             r = None
         else:
             r = inputconst(Ptr(Array(Char)), t)
-        _conversion_tables[key] = r
+        r_from._conversion_tables[r_to] = r
         return r
 
 class __extend__(pairtype(SmallFunctionSetPBCRepr, SmallFunctionSetPBCRepr)):
