@@ -93,6 +93,7 @@ def zip_result(res_dir, channel):
     #    channelwrapper = ChannelWrapper(channel)
     buf = StringIO()
     zip = ZipFile(buf, 'w')
+    zip.writestr('pypy-c', open('pypy-c').read())
     for fpath in res_dir.visit():
         try:
             zip.writestr(fpath.relto(res_dir), fpath.read())
