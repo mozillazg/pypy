@@ -25,7 +25,7 @@ class Var(GenVar):
     def operand2(self):
         return self.name
 
-    #repr?
+    __repr__ = operand
 
 
 class IntConst(GenConst):
@@ -48,7 +48,7 @@ class IntConst(GenConst):
         else:
             return lltype.cast_primitive(T, self.value)
 
-    #repr?
+    __repr__ = operand
 
 
 class AddrConst(GenConst):
@@ -73,7 +73,7 @@ class AddrConst(GenConst):
         else:
             assert 0, "XXX not implemented"
 
-    #repr?
+    __repr__ = operand
 
 
 n_labels = [0]
@@ -89,6 +89,8 @@ class Label(GenLabel):
 
     def operand2(self):
         return 'L%d:' % self.label
+
+    __repr__ = operand
 
 
 class FlexSwitch(CodeGenSwitch):
@@ -203,7 +205,7 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         numargs = sigtoken     # for now
         inputargs_gv = [Var() for i in range(numargs)]
         self.asm.append('int %%%s(%s){' % (
-            self.rgenop.name, ','.join([v.operand() for v in inputargs_gv])))
+            self.rgenop.name, ','.join([str(v) for v in inputargs_gv])))
         return inputargs_gv
 
     @specialize.arg(1)
@@ -225,7 +227,7 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         log('Builder._rgenop2_generic: ' + llvm_opcode)
         gv_result = Var()
         self.asm.append(' %s=%s %s,%s' % (
-            gv_result.operand2(), llvm_opcode, gv_arg1.operand(), gv_arg2.operand2()))
+            gv_result.operand2(), llvm_opcode, gv_arg1, gv_arg2.operand2()))
         return gv_result
 
     #def op_int_neg(self, gv_x):
@@ -240,9 +242,9 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         self.label = Label()
         log('Builder.enter_next_block %s' % self.label.operand2())
         if not self._prev_block_closed: #there are not always explicit branches to blocks
-            self.asm.append(' br ' + self.label.operand())
+            self.asm.append(' br ' + str(self.label))
         self.asm.append(self.label.operand2())
-        self.asm.append(' ;phi %s,%s' % (kinds, [a.operand() for a in args_gv]))
+        self.asm.append(' ;phi %s,%s' % (kinds, args_gv))
         self._prev_block_closed = False #easiest, but might be a problem with empty blocks
         return self.label
         #arg_positions = []
@@ -264,7 +266,7 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         #XXX will need to keep type (bool/int/float/...) of Vars
         no_branch = Label()
         self.asm.append(' br bool %s,%s,%s' % (
-            gv_condition.operand2(), targetbuilder.label.operand(), no_branch.operand()))
+            gv_condition.operand2(), targetbuilder.label, no_branch))
         self.asm.append(no_branch.operand2())
         #self.mc.CMP(gv_condition.operand(self), imm8(0))
         #self.mc.JNE(rel32(targetbuilder.mc.tell()))
@@ -272,20 +274,19 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         return targetbuilder
 
     def op_int_is_true(self, gv_x):
-        log('Build.op_int_is_true ' + gv_x.operand())
-        self.asm.append( ' ;op_int_is_true ' + gv_x.operand())
+        log('Build.op_int_is_true ' + str(gv_x))
+        self.asm.append( ' ;op_int_is_true ' + str(gv_x))
         return gv_x
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         log('Builder.genop_call')
         gv_returnvar = Var()
-        self.asm.append(' ;genop_call %s,%s,%s' % (
-            sigtoken, gv_fnptr, [a.operand() for a in args_gv]))
+        self.asm.append(' ;genop_call %s,%s,%s' % (sigtoken, gv_fnptr, args_gv))
         return gv_returnvar
     
     def finish_and_return(self, sigtoken, gv_returnvar):
-        log('Builder.finish_and_return %s,%s' % (sigtoken, gv_returnvar.operand()))
-        self.asm.append(' ret ' + gv_returnvar.operand())
+        log('Builder.finish_and_return %s,%s' % (sigtoken, gv_returnvar))
+        self.asm.append(' ret ' + str(gv_returnvar))
         #numargs = sigtoken      # for now
         #initialstackdepth = numargs + 1
         #self.mc.MOV(eax, gv_returnvar.operand(self))
@@ -295,16 +296,16 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         self._prev_block_closed = True
 
     def finish_and_goto(self, outputargs_gv, target):
-        log('Builder.finish_and_goto %s,%s' % ([a.operand() for a in outputargs_gv], target))
-        self.asm.append(' ;finish_and_goto %s,%s' % ([a.operand() for a in outputargs_gv], target))
+        log('Builder.finish_and_goto %s,%s' % (outputargs_gv, target))
+        self.asm.append(' ;finish_and_goto %s,%s' % (outputargs_gv, target))
         #remap_stack_layout(self, outputargs_gv, target)
         #self.mc.JMP(rel32(target.startaddr))
         #self._close()
         self._prev_block_closed = True
 
     def flexswitch(self, gv_exitswitch):
-        log('Builder.flexswitch ' + gv_exitswitch.operand())
-        self.asm.append(' ;flexswitch ' + gv_exitswitch.operand())
+        log('Builder.flexswitch ' + str(gv_exitswitch))
+        self.asm.append(' ;flexswitch ' + str(gv_exitswitch))
         result = FlexSwitch(self.rgenop)
         result.initialize(self, gv_exitswitch)
         #self._close()
