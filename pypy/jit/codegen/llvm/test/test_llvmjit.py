@@ -1,13 +1,7 @@
 import py
 from sys import platform
 from os.path import dirname, join
-
-try:
-    from pypy.translator.c.test.test_genc import compile
-    import_error = False #XXX temporary HACK until problem solves itself.
-except AttributeError:   #AttributeError: Values instance has no attribute 'gcpolicy'
-    import_error = True  #pypy/translator/c/test/test_genc.py:289
-
+from pypy.translator.c.test.test_genc import compile
 from pypy.jit.codegen.llvm import llvmjit
 
 try:
@@ -206,13 +200,8 @@ def test_transform(): #XXX This uses Module transforms, think about Function tra
     llvmjit.parse(lldeadcode)
     deadcode = llvmjit.getNamedFunction('deadcode')
     assert llvmjit.execute(deadcode, 10) == 10 * 2
-
-    #XXX enable this part of the test asap
-    #assert not llvmjit.transform("instcombine printm verify")
+    assert llvmjit.transform(3) #optlevel = [0123]
     assert llvmjit.execute(deadcode, 20) == 20 * 2
-
-    assert llvmjit.transform("instcombine simplifycfg printm verify")
-    assert llvmjit.execute(deadcode, 30) == 30 * 2
 
 def test_modify_global_data():
     llvmjit.restart()
@@ -248,8 +237,6 @@ def DONTtest_layers_of_codegenerators():    #e.g. i386 code until function stabi
     pass
     
 def test_execute_translation(): #put this one last because it takes the most time
-    if import_error:
-        py.test.skip("import error")
     if platform == 'darwin':
         py.test.skip('dynamic vs. static library issue on Darwin. see: http://www.cocoadev.com/index.pl?ApplicationLinkingIssues for more information (FIXME)')
 

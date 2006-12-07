@@ -5,7 +5,7 @@ extern "C" {
 #endif
 
 void    restart();
-int     transform(const char* passnames);
+int     transform(int optlevel);
 int     parse(const char* llsource);
 
 //Function code
