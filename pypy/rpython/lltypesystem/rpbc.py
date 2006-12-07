@@ -2,10 +2,11 @@ import types
 import sys
 from pypy.annotation.pairtype import pairtype, pair
 from pypy.annotation import model as annmodel
+from pypy.annotation import description
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, Char, \
-     Ptr, malloc, nullptr, Array, Signed
+     Ptr, malloc, nullptr, Array, Signed, FuncType
 from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc, HalfConcreteWrapper
 from pypy.rpython.rpbc import samesig,\
      commonbase, allattributenames, adjust_shape, \
@@ -134,6 +135,7 @@ class SmallFunctionSetPBCRepr(Repr):
         if self.s_pbc.can_be_None:
             self.descriptions.insert(0, None)
         self._conversion_tables = {}
+        self._dispatch_cache = {}
 
     def _setup_repr(self):
         POINTER_TABLE = Array(self.pointer_repr.lowleveltype)
@@ -145,6 +147,7 @@ class SmallFunctionSetPBCRepr(Repr):
             else:
                 pointer_table[i] = self.pointer_repr.convert_const(None)
         self.c_pointer_table = inputconst(Ptr(POINTER_TABLE), pointer_table)
+        from pypy.objspace.flow import model
 
     def get_s_callable(self):
         return self.s_pbc
@@ -170,6 +173,62 @@ class SmallFunctionSetPBCRepr(Repr):
 ##     def convert_to_concrete_llfn(self, v, shape, index, llop):
 ##         return v
 
+    def rtype_simple_call(self, hop):
+        return self.call('simple_call', hop)
+
+    def rtype_call_args(self, hop):
+        return self.call('call_args', hop)
+
+    def dispatcher(self, shape, index, argtypes, resulttype):
+        key = shape, index, tuple(argtypes), resulttype
+        if key in self._dispatch_cache:
+            return self._dispatch_cache[key]
+        from pypy.translator.unsimplify import varoftype
+        from pypy.objspace.flow.model import FunctionGraph, Link, Block, SpaceOperation
+        inputargs = [varoftype(t) for t in [Char] + argtypes]
+        startblock = Block(inputargs)
+        startblock.exitswitch = inputargs[0]
+        #startblock.operations.append(SpaceOperation('debug_pdb', [], varoftype(Void)))
+        graph = FunctionGraph("dispatcher", startblock, varoftype(resulttype))
+        row_of_graphs = self.callfamily.calltables[shape][index]
+        links = []
+        for i, desc in enumerate(self.descriptions):
+            if desc is None:
+                continue
+            args_v = [varoftype(t) for t in argtypes]
+            b = Block(args_v)
+            llfn = self.rtyper.getcallable(row_of_graphs[desc])
+            v_fn = inputconst(typeOf(llfn), llfn)
+            v_result = varoftype(resulttype)
+            b.operations.append(
+                SpaceOperation("direct_call", [v_fn] + args_v, v_result))
+            b.closeblock(Link([v_result], graph.returnblock))
+            links.append(Link(inputargs[1:], b, chr(i)))
+            links[-1].llexitcase = chr(i)
+        startblock.closeblock(*links)
+        self.rtyper.annotator.translator.graphs.append(graph)
+        ll_ret = self.rtyper.type_system.getcallable(graph)
+        #FTYPE = FuncType
+        c_ret = self._dispatch_cache[key] = inputconst(typeOf(ll_ret), ll_ret)
+        return c_ret
+
+    def call(self, opname, hop):
+        bk = self.rtyper.annotator.bookkeeper
+        args = bk.build_args(opname, hop.args_s[1:])
+        s_pbc = hop.args_s[0]   # possibly more precise than self.s_pbc
+        descs = s_pbc.descriptions.keys()
+        shape, index = description.FunctionDesc.variant_for_call_site(bk, self.callfamily, descs, args)
+        row_of_graphs = self.callfamily.calltables[shape][index]
+        anygraph = row_of_graphs.itervalues().next()  # pick any witness
+        vlist = [hop.inputarg(self, arg=0)]
+        vlist += callparse.callparse(self.rtyper, anygraph, hop, opname)
+        rresult = callparse.getrresult(self.rtyper, anygraph)
+        hop.exception_is_here()
+        v_dispatcher = self.dispatcher(shape, index, [v.concretetype for v in vlist[1:]], rresult.lowleveltype)
+        v_result = hop.genop('direct_call', [v_dispatcher] + vlist,
+                             resulttype=rresult)
+        return hop.llops.convertvar(v_result, rresult, hop.r_result)
+
     def rtype_is_true(self, hop):
         if not self.s_pbc.can_be_None:
             return inputconst(Bool, True)
@@ -178,15 +237,15 @@ class SmallFunctionSetPBCRepr(Repr):
             return hop.genop('char_ne', [v1, inputconst(Char, '\000')],
                          resulttype=Bool)
 
-    def rtype_simple_call(self, hop):
-        v_index = hop.inputarg(self, arg=0)
-        v_ptr = hop.llops.convertvar(v_index, self, self.pointer_repr)
-        hop2 = hop.copy()
-        hop2.args_r[0] = self.pointer_repr
-        hop2.args_v[0] = v_ptr
-        return hop2.dispatch()
+##     def rtype_simple_call(self, hop):
+##         v_index = hop.inputarg(self, arg=0)
+##         v_ptr = hop.llops.convertvar(v_index, self, self.pointer_repr)
+##         hop2 = hop.copy()
+##         hop2.args_r[0] = self.pointer_repr
+##         hop2.args_v[0] = v_ptr
+##         return hop2.dispatch()
 
-    rtype_call_args = rtype_simple_call
+##     rtype_call_args = rtype_simple_call
 
 class __extend__(pairtype(SmallFunctionSetPBCRepr, FunctionsPBCRepr)):
     def convert_from_to((r_set, r_ptr), v, llops):
