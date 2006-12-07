@@ -81,14 +81,14 @@ n_labels = [0]
 class Label(GenLabel):
 
     def __init__(self):
-        self.label = n_labels[0]
+        self.label = 'L' + str(n_labels[0])
         n_labels[0] += 1
 
     def operand(self):
-        return 'label %%L%d' % self.label
+        return 'label %' + self.label
 
     def operand2(self):
-        return 'L%d:' % self.label
+        return self.label + ':'
 
     __repr__ = operand
 
@@ -181,24 +181,30 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         'int_gt'  : 'setgt', 'int_ge'  : 'setge'
     }
 
-    def __init__(self, rgenop):
-        self.rgenop = rgenop
-        self.asm = [] #list of llvm assembly source code lines
+    def __init__(self, rgenop, asm, prev_block_closed=False):
         self.label = Label()
-        self._prev_block_closed = False #XXX might be a problem with empty blocks
+        log('%s Builder.__init__' % self.label.operand2())
+        self.rgenop = rgenop
+        self.asm = asm  #list of llvm assembly source code lines
+        self.prev_block_closed = prev_block_closed #XXX might be a problem with empty blocks
 
     # ----------------------------------------------------------------
     # The public Builder interface
 
     def end(self):
-        log('Builder.end ' + self.label.operand2())
-        self.asm.append('}')
-        asm_string = '\n'.join(self.asm)
-        #log(asm_string)
+        log('%s Builder.end' % self.label.operand2())
+        self.rgenop.asms.append(['}'])
+        #log(self.rgenop.asms)
+        asm_string = ''
+        for asm in self.rgenop.asms:
+            asm_string += '\n'.join(asm) + '\n\n'
+        self.rgenop.asms = None
+        log(asm_string)
         llvmjit.parse(asm_string)
         llvmjit.transform(3) #optimize module (should be on functions actually)
         function   = llvmjit.getNamedFunction(self.rgenop.name)
         entrypoint = llvmjit.getPointerToFunctionAsInt(function) #how to cast a ctypes ptr to int?
+        self.rgenop.funcname[entrypoint] = self.rgenop.funcname[self.rgenop.gv_entrypoint.value]
         self.rgenop.gv_entrypoint.value = entrypoint
 
     def _write_prologue(self, sigtoken):
@@ -206,30 +212,34 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         inputargs_gv = [Var() for i in range(numargs)]
         self.asm.append('int %%%s(%s){' % (
             self.rgenop.name, ','.join([str(v) for v in inputargs_gv])))
-        self.asm.append(Label().operand2())
+        self.asm.append(self.label.operand2())
         return inputargs_gv
 
     def _close(self):
-        #XXX should builder take the 'asm' list as a parameter (same function as 'mc' in ri386)?
-        log('Builder._close')
-        self._prev_block_closed = True
+        log('%s Builder._close' % self.label.operand2())
+        #self.rgenop.close_asm(self.asm)
+        self.asm = None
+        self.prev_block_closed = True
         #self.mc.done()
         #self.rgenop.close_mc(self.mc)
         #self.mc = None
 
     def _fork(self):
-        log('Builder._fork')
-        return self.rgenop.openbuilder()
+        log('%s Builder._fork' % self.label.operand2())
+        self.prev_block_closed = True
+        targetbuilder = self.rgenop.openbuilder(False)
+        targetbuilder.asm.append(targetbuilder.label.operand2()) #another HACK
+        return targetbuilder
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
-        #log('Builder.genop1 ' + self.label.operand2())
+        #log('%s Builder.genop1' % self.label.operand2())
         genmethod = getattr(self, 'op_' + opname)
         return genmethod(gv_arg)
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
-        #log('Builder.genop2 ' + self.label.operand2())
+        #log('%s Builder.genop2' % self.label.operand2())
         if opname in self._genop2_generics:
             return self._rgenop2_generic(self._genop2_generics[opname], gv_arg1, gv_arg2)
         else:
@@ -237,7 +247,8 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
             return genmethod(gv_arg1, gv_arg2)
 
     def _rgenop2_generic(self, llvm_opcode, gv_arg1, gv_arg2):
-        log('Builder._rgenop2_generic %s,%s' % (self.label.operand2(), llvm_opcode))
+        log('%s Builder._rgenop2_generic %s %s,%s' % (
+            self.label.operand2(), llvm_opcode, gv_arg1, gv_arg2.operand2()))
         gv_result = Var()
         self.asm.append(' %s=%s %s,%s' % (
             gv_result.operand2(), llvm_opcode, gv_arg1, gv_arg2.operand2()))
@@ -252,13 +263,17 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
     #def op_cast_bool_to_int(self, gv_x):
 
     def enter_next_block(self, kinds, args_gv):
-        self.label = Label()
-        log('Builder.enter_next_block %s' % self.label.operand2())
-        if not self._prev_block_closed: #there are not always explicit branches to blocks
-            self.asm.append(' br ' + str(self.label))
+        label = Label()
+        log('%s Builder.enter_next_block (was %s), prev_block_closed=%s' % (
+            label.operand2(), self.label.operand2(), str(self.prev_block_closed)))
+        self.label = label
+        if not self.prev_block_closed: #there are not always explicit branches to blocks
+            self.asm.append(' br ' + str(self.label) + ' ;fixup')
         self.asm.append(self.label.operand2())
-        self.asm.append(' ;phi %s,%s' % (kinds, args_gv))
-        self._prev_block_closed = False #easiest, but might be a problem with empty blocks
+        #XXX These phi nodes seems to get really messy especially with the 'fixup' branches.
+        #XXX Perhaps using alloca's and omitting the phi nodes does make some sense.
+        self.asm.append(' ;phi %s' % args_gv)
+        self.prev_block_closed = False #easiest, but might be a problem with empty blocks
         return self.label
         #arg_positions = []
         #seen = {}
@@ -274,44 +289,63 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         #return Label(self.mc.tell(), arg_positions, self.stackdepth)
 
     def jump_if_false(self, gv_condition):
-        log('Builder.jump_if_false%s,%s' % (self.label.operand2(), gv_condition))
+        log('%s Builder.jump_if_false %s' % (self.label.operand2(), gv_condition))
         targetbuilder = self._fork()
-        no_branch = Label()
+        
+        #XXX the next couple of lines are incorrect! Should we make this a two-pass algorithm?
+        no_branch = Label() #XXX should be this Builder's next 'enter_next_block' label
+        global n_labels
+        n_labels[0] -= 1 #HACK HACK HACK
         #XXX will need to keep type of Vars to get rid of the hardcoded 'bool' in the next line
+        targetlabel = targetbuilder.label
+
         self.asm.append(' br bool %s,%s,%s' % (
-            gv_condition.operand2(), no_branch, targetbuilder.label))
-        self.asm.append(no_branch.operand2())
+            gv_condition.operand2(), no_branch, targetlabel))
+        #XXX self.asm.append(no_branch.operand2())
         #self.mc.CMP(gv_condition.operand(self), imm8(0))
         #self.mc.JNE(rel32(targetbuilder.mc.tell()))
         return targetbuilder
 
     def jump_if_true(self, gv_condition):
-        log('Builder.jump_if_true %s,%s' % (self.label.operand2(), gv_condition))
+        log('%s Builder.jump_if_true %s' % (self.label.operand2(), gv_condition))
         targetbuilder = self._fork()
-        no_branch = Label()
+
+        #XXX the next couple of lines are incorrect! Should we make this a two-pass algorithm?
+        no_branch = Label() #XXX should be this Builder's next 'enter_next_block' label
+        global n_labels
+        n_labels[0] -= 1 #HACK HACK HACK
         #XXX will need to keep type (bool/int/float/...) of Vars
+        targetlabel = targetbuilder.label
+
         self.asm.append(' br bool %s,%s,%s' % (
-            gv_condition.operand2(), targetbuilder.label, no_branch))
-        self.asm.append(no_branch.operand2())
+            gv_condition.operand2(), targetlabel, no_branch))
+        #XXX self.asm.append(no_branch.operand2())
         #self.mc.CMP(gv_condition.operand(self), imm8(0))
         #self.mc.JNE(rel32(targetbuilder.mc.tell()))
         return targetbuilder
 
     def op_int_is_true(self, gv_x):
-        log('Build.op_int_is_true ' + str(gv_x))
-        self.asm.append( ' ;op_int_is_true ' + str(gv_x))
+        log('%s Build.op_int_is_true %s' % (self.label.operand2(), gv_x))
         gv_result = Var() #XXX need to mark it a 'bool' somehow
         self.asm.append(' %s=trunc %s to bool' % (gv_result.operand2(), gv_x))
         return gv_result
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
-        log('Builder.genop_call ' + self.label.operand2())
+        log('%s Builder.genop_call %s,%s,%s' % (
+            self.label.operand2(), sigtoken, gv_fnptr, args_gv))
+        #log(str(type(gv_fnptr)))
+        numargs = sigtoken #for now
         gv_returnvar = Var()
-        self.asm.append(' ;genop_call %s,%s,%s' % (sigtoken, gv_fnptr, args_gv))
+        #XXX we probably need to call an address directly if we can't resolve the funcname
+        self.asm.append(' %s=call %s(%s)' % (
+                        gv_returnvar.operand2(),
+                        self.rgenop.funcname[gv_fnptr.value],
+                        ','.join([str(v) for v in args_gv])))
         return gv_returnvar
     
     def finish_and_return(self, sigtoken, gv_returnvar):
-        log('Builder.finish_and_return %s,%s,%s' % (self.label.operand2(), sigtoken, gv_returnvar))
+        log('%s Builder.finish_and_return %s,%s' % (
+            self.label.operand2(), sigtoken, gv_returnvar))
         self.asm.append(' ret ' + str(gv_returnvar))
         #numargs = sigtoken      # for now
         #initialstackdepth = numargs + 1
@@ -321,14 +355,15 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         self._close()
 
     def finish_and_goto(self, outputargs_gv, target):
-        log('Builder.finish_and_goto %s,%s,%s' % (self.label.operand2(), outputargs_gv, target))
-        self.asm.append(' ;finish_and_goto %s,%s' % (outputargs_gv, target))
+        log('%s Builder.finish_and_goto %s,%s' % (
+            self.label.operand2(), outputargs_gv, target))
+        self.asm.append(' br %s ;%s' % (target, outputargs_gv))
         #remap_stack_layout(self, outputargs_gv, target)
         #self.mc.JMP(rel32(target.startaddr))
         self._close()
 
     def flexswitch(self, gv_exitswitch):
-        log('Builder.flexswitch %s,%s' % (self.label.operand2(), gv_exitswitch))
+        log('%s Builder.flexswitch %s' % (self.label.operand2(), gv_exitswitch))
         self.asm.append(' ;flexswitch ' + str(gv_exitswitch))
         result = FlexSwitch(self.rgenop)
         result.initialize(self, gv_exitswitch)
@@ -336,31 +371,41 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         return result
 
     def show_incremental_progress(self):
-        log('Builder.show_incremental_progress %s' % self.label)
+        log('%s Builder.show_incremental_progress' % self.label)
         pass
 
 
 class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better error messages
 
+    funcname = {} #HACK for looking up function names given a pre/post compilation function pointer
+
     def __init__(self):
-        #self.mcs = []   # machine code blocks where no-one is currently writing
-        #self.keepalive_gc_refs = []
-        pass
+        self.asms = []
+
+    def open_asm(self):
+        asm = []
+        self.asms.append(asm)
+        return asm
+
+    #def close_asm(self, asm):
+    #    self.asms.append(asm)
 
     # ----------------------------------------------------------------
     # the public RGenOp interface
 
-    def openbuilder(self):
-        #log('RLLVMGenOp.openbuilder')
-        return Builder(self)
+    def openbuilder(self, prev_block_closed):
+        #log('RLLVMGenOp.openbuilder %s' % (str(prev_block_closed))
+        return Builder(self, self.open_asm(), prev_block_closed)
 
     def newgraph(self, sigtoken, name):
-        log('RLLVMGenOp.newgraph')
+        log('RLLVMGenOp.newgraph %s,%s' % (sigtoken, name))
         numargs = sigtoken          # for now
         self.name = name
-        builder = self.openbuilder()
+        builder = self.openbuilder(False) #enables initial label
         inputargs_gv = builder._write_prologue(sigtoken)
-        self.gv_entrypoint = IntConst(0)    #note: updated by Builder.end() (i.e after compilation)
+        n = len(self.funcname) * 2 + 1     #+1 so we recognize these pre compilation 'pointers'
+        self.funcname[n] = 'int %' + name    #XXX 'int' hardcoded currently as in write_prologue()
+        self.gv_entrypoint = IntConst(n)    #note: updated by Builder.end() (i.e after compilation)
         return builder, self.gv_entrypoint, inputargs_gv
 
     @specialize.genconst(1)
