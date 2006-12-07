@@ -581,7 +581,7 @@ class TranslationDriver(SimpleTaskEngine):
             unpatch(*self.old_cli_defs)
         
         self.log.info("Compiled %s" % filename)
-        if self.standalone:
+        if self.standalone and self.exe_name:
             self.copy_cli_exe()
     task_compile_cli = taskdef(task_compile_cli, ['source_cli'],
                               'Compiling CLI source')
