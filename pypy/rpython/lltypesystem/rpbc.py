@@ -6,7 +6,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Void, ForwardReference, Struct, Bool, Char, \
      Ptr, malloc, nullptr, Array, Signed
-from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc
+from pypy.rpython.rmodel import Repr, TyperError, inputconst, inputdesc, HalfConcreteWrapper
 from pypy.rpython.rpbc import samesig,\
      commonbase, allattributenames, adjust_shape, \
      AbstractClassesPBCRepr, AbstractMethodsPBCRepr, OverriddenFunctionPBCRepr, \
@@ -196,9 +196,12 @@ def conversion_table(r_from, r_to):
         t = malloc(Array(Char), len(r_from.descriptions), immortal=True)
         l = []
         for i, d in enumerate(r_from.descriptions):
-            j = r_to.descriptions.index(d)
-            l.append(j)
-            t[i] = chr(j)
+            if d in r_to.descriptions:
+                j = r_to.descriptions.index(d)
+                l.append(j)
+                t[i] = chr(j)
+            else:
+                l.append(None)
         if l == range(len(r_from.descriptions)):
             r = None
         else:
@@ -211,7 +214,7 @@ class __extend__(pairtype(SmallFunctionSetPBCRepr, SmallFunctionSetPBCRepr)):
         c_table = conversion_table(r_from, r_to)
         if c_table:
             return llops.genop('getarrayitem', [c_table, v],
-                               resulttype=lltype.Char)
+                               resulttype=Char)
         else:
             return v
 
@@ -247,14 +250,10 @@ class MethodsPBCRepr(AbstractMethodsPBCRepr):
 
         hop2.v_s_insertfirstarg(v_func, s_func)   # insert 'function'
 
-        if type(hop2.args_r[0]) != type(r_func): # XXX argh...
-            if type(hop2.args_r[0]) is SmallFunctionSetPBCRepr:
-                assert type(r_func) is FunctionsPBCRepr
-                hop2.args_r[0] = FunctionsPBCRepr(self.rtyper, s_func)
-            else:
-                assert type(r_func) is SmallFunctionSetPBCRepr
-                assert type(hop2.args_r[0]) is FunctionsPBCRepr
-                # this is actually ok, i think...
+        if type(hop2.args_r[0]) is SmallFunctionSetPBCRepr and type(r_func) is FunctionsPBCRepr:
+            hop2.args_r[0] = FunctionsPBCRepr(self.rtyper, s_func)
+        else:
+            hop2.args_v[0] = hop2.llops.convertvar(hop2.args_v[0], r_func, hop2.args_r[0])
 
         # now hop2 looks like simple_call(function, self, args...)
         return hop2.dispatch(opname=opname)
