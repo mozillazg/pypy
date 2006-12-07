@@ -1750,12 +1750,12 @@ class TestLLtype(BaseTestRPBC, LLRtypeMixin):
 class TestOOtype(BaseTestRPBC, OORtypeMixin):
     pass
 
-def test_smallfuncsets_simple():
+def test_smallfuncsets_basic():
     from pypy.translator.translator import TranslationContext, graphof
     from pypy.config.pypyoption import get_pypy_config
     from pypy.rpython.llinterp import LLInterpreter
     config = get_pypy_config(translating=True)
-    config.translation.withsmallfuncsets = True
+    config.translation.withsmallfuncsets = 10
 
     def g(x):
         return x + 1

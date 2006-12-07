@@ -27,8 +27,7 @@ class __extend__(annmodel.SomePBC):
                     getRepr = OverriddenFunctionPBCRepr
                 else:
                     getRepr = rtyper.type_system.rpbc.FunctionsPBCRepr
-                    if rtyper.getconfig().translation.withsmallfuncsets and \
-                           1 < len(self.descriptions) < 120 and \
+                    if 1 < len(self.descriptions) < rtyper.getconfig().translation.withsmallfuncsets and \
                            hasattr(rtyper.type_system.rpbc, 'SmallFunctionSetPBCRepr'):
                         callfamily = self.descriptions.iterkeys().next().getcallfamily()
                         concretetable, uniquerows = get_concrete_calltable(rtyper, callfamily)
