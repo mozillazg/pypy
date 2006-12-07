@@ -29,9 +29,12 @@ def rtype_is_None(robj1, rnone2, hop, pos=0):
     elif robj1 == none_frozen_pbc_repr:
         return hop.inputconst(Bool, True)
     elif isinstance(robj1, SmallFunctionSetPBCRepr):
-        v1 = hop.inputarg(robj1, pos)
-        return hop.genop('char_eq', [v1, inputconst(Char, '\000')],
-                         resulttype=Bool)
+        if robj1.s_pbc.can_be_None:
+            v1 = hop.inputarg(robj1, pos)
+            return hop.genop('char_eq', [v1, inputconst(Char, '\000')],
+                             resulttype=Bool)
+        else:
+            return inputconst(Bool, False)
     else:
         raise TyperError('rtype_is_None of %r' % (robj1))
 
@@ -171,7 +174,7 @@ class SmallFunctionSetPBCRepr(Repr):
             return inputconst(Bool, True)
         else:
             v1, = hop.inputargs(self)
-            return hop.genop('char_eq', [v1, inputconst(Char, '\000')],
+            return hop.genop('char_ne', [v1, inputconst(Char, '\000')],
                          resulttype=Bool)
 
     def rtype_simple_call(self, hop):
