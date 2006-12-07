@@ -7,11 +7,9 @@ from sys import platform
 class TestRLLVMGenop(AbstractRGenOpTests):
     RGenOp = RLLVMGenOp
 
-    def compile(self, runner, argtypes):
-        if platform == 'darwin':
+    if platform == 'darwin':
+        def compile(self, runner, argtypes):
             py.test.skip('Compilation for Darwin not fully support yet (static/dyn lib issue')
-
-        return super(TestRLLVMGenop, self).compile(runner, argtypes)
 
     def test_branching_direct(self):
         py.test.skip('WIP')
