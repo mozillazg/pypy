@@ -5,6 +5,39 @@ Documentation of pyontology.py
 .. contents::
 .. sectnum::
 
+Prerequisites
+==============
+
+The Ontology reasoner uses the following python packages:
+
+    Logilab constraint solver: logilab.org
+    The RDFlib package: rdflib.net
+    The PyParsing package: 
+
+Usage
+======
+
+To read an ontology into the reasoner, the Ontology class has to be instantiated. When instantiated the ontology cna be read by supplying the ontology file to the "add_file" method. To convert the ontology into a constraint satisfaction problem, the "attach_fd" method should be called. 
+
+    O = Ontology()
+    O.add_file(<filename>)
+    O.attach_fd()
+
+Now consistency can be checked by calling the "consistency" method.
+
+A SPARQL query can be answered by calling the "sparql" method with a query string. If the query string is not valid, a ParserException will be raised. If the query leads to an inconsinstent problem a ConsistencyFailure exceptionis raised.
+
+    O.consistency()
+    query = """
+        PREFIX ns: <http://example.org/ns#>
+        SELECT ?x
+        WHERE {
+                ?x ns:p 123 . 
+              }"""
+    res = O.sparql(query)
+
+The return value of the sparql methhod is a list of dictionaries, one dictionary for each solution to the query. The dictionary maps query variables to values. 
+
 Introduction
 =============
 
@@ -23,8 +56,10 @@ Classes are defined in the following ways:
     5. the union of two or more class descriptions (unionOf predicate)
     6. the complement of a class description (complementOf predicate)
     
+In case 2 the class is final, ie there can be no more or no less members than the enumeration gives.
+
 Properties
-----------
+-----------
 
 Properties can be of the types owl:ObjectProperty, owl:DatatypeProperty, owl:FunctionalProperty, 
 owl: InverseFunctionalProperty, owl:SymmetricProperty.
@@ -55,6 +90,26 @@ The result of considering all the triples is a constraint problem. A constraint 
 The domains of properties contain tuples of individual and value, so the triple (Peter, hasParent, Mary) will put the tuple (Peter, Mary) into the domain of the property hasParent.
 
 Some special variables and domains are created to enable to infer facts on Ontologies that have no individuals. 
+
+Class hierarchy
+-----------------
+
+The class hierarchy for OWL DL ontologies is:
+
+Classes that contains individuals
+
+                        ClassDomain
+                        /         \
+                    ThingDomain    PropertyDomain
+                
+There some special instances of these classes. Owl_Thing contains all indivuals, "owl_Class" contains all classes, "rdf_Property" contains all Properties,"owl_Restriction" contains all restriction classes.
+
+Type
+------
+
+A "rdf:type" triple links a Urirefence to either
+There can be more than one triple, for a subject, containing the predicate "rdf:Type".
+These type declarations need to checked and possibly merged. If a class is final (ie. defined be enumerationg its instances) we cannot add more instances the the class. If we meet a typedeclaration foran individual we shall check if it is part off the existing definition. If we meet a typedeclaration for a class, we need to merge the class extension of the new definition with the old definition.
 
 Restrictions
 ------------
@@ -97,7 +152,12 @@ equivalentClass
 
 The equivalentClass states that the subject class and object class contain the same elements.
 
-If the two classes has a different number of elements it must mean that all elements must be the same.
+The implementation of these semantics has to consider different situations.
+
+	1. The two classes are final. In this case the classes cannot be narrowed by the semantics of equivalentClass. We have to prove that the two classes have the same members. So we check the number of members in the two classes. 
+		If the number of elements differ the only way that the two classes can be equivalent is if all members are the same. 
+		If the numbers of elements are equal we try to prove equality between the individuals of the classes
+ 
 
 
 The Ontology class
@@ -105,6 +165,7 @@ The Ontology class
 
 ClassDomain.finish()
 +++++++++++++++++++++
+
     1. Evaluate the uninitialised constraints of the class.
         sadsda
         
