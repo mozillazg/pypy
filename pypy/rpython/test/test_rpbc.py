@@ -1750,5 +1750,32 @@ class TestLLtype(BaseTestRPBC, LLRtypeMixin):
 class TestOOtype(BaseTestRPBC, OORtypeMixin):
     pass
 
+def test_smallfuncsets_simple():
+    from pypy.translator.translator import TranslationContext, graphof
+    from pypy.config.pypyoption import get_pypy_config
+    from pypy.rpython.llinterp import LLInterpreter
+    config = get_pypy_config(translating=True)
+    config.translation.withsmallfuncsets = True
 
+    def g(x):
+        return x + 1
+    def h(x):
+        return x - 1
+    def f(x, y):
+        if y > 0:
+            func = g
+        else:
+            func = h
+        return func(x)
+    t = TranslationContext(config=config)
+    a = t.buildannotator()
+    a.build_types(f, [int, int])
+    rtyper = t.buildrtyper()
+    rtyper.specialize()
+    graph = graphof(t, f)
+    interp = LLInterpreter(rtyper)
+    res = interp.eval_graph(graph, [0, 0])
+    assert res == -1
+    res = interp.eval_graph(graph, [0, 1])
+    assert res == 1
 
