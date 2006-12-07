@@ -146,7 +146,7 @@ int     parse(const char* llsource) {
     if (!module) {
         int line, col;
         parse_error.getErrorLocation(line, col);
-        std::cerr << "Parse error:\n" << llsource << "\n" << "Error: " << parse_error.getRawMessage() << ":" << line << "," << col << "\n" << std::flush;
+        std::cerr << "\n" << llsource << "\n" << "Error: " << parse_error.getRawMessage() << ":" << line << "," << col << "\n" << std::flush;
         return false;
     }
 

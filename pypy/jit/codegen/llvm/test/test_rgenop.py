@@ -11,7 +11,7 @@ class TestRLLVMGenop(AbstractRGenOpTests):
         if platform == 'darwin':
             py.test.skip('Compilation for Darwin not fully support yet (static/dyn lib issue')
 
-        super(TestRLLVMGenop, self).compile(runner.argtypes)
+        return super(TestRLLVMGenop, self).compile(runner, argtypes)
 
     def test_branching_direct(self):
         py.test.skip('WIP')
