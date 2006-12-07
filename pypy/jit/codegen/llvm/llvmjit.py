@@ -52,7 +52,7 @@ restart = llvmjit.restart
 
 transform = llvmjit.transform
 transform.restype  = c_int
-transform.argtypes = [c_char_p]
+transform.argtypes = [c_int]
 
 parse = llvmjit.parse
 parse.restype  = c_int

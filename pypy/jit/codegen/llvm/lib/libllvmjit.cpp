@@ -21,8 +21,9 @@
 #include "llvm/Support/PassNameParser.h"
 #include "llvm/Assembly/PrintModulePass.h"  //for PrintModulePass
 #include "llvm/Analysis/Verifier.h"         //for createVerifierPass
+#include "llvm/Analysis/LoadValueNumbering.h" //for createLoadValueNumberingPass
 #include "llvm/Transforms/Scalar.h"         //for createInstructionCombiningPass...
-
+#include "llvm/Transforms/IPO.h"            //for createGlobalDCEPass,createIPConstantPropagationPass,createFunctionInliningPass,createConstantMergePass
 #include "llvm/Target/TargetOptions.h"      //for PrintMachineCode
 
 #include <fstream>
@@ -32,12 +33,8 @@
 using namespace llvm;
 
 
-Module*             gp_module; //           = new Module("llvmjit");
-ExecutionEngine*    gp_execution_engine; // = ExecutionEngine::create(new ExistingModuleProvider(gp_module), false);
-
-//all optimization/transform passes
-//static cl::list<const PassInfo*, bool, PassNameParser>
-//    PassList(cl::desc("Optimizations available:"));
+Module*             gp_module;
+ExecutionEngine*    gp_execution_engine;
 
 //some global data for the tests to play with
 int g_data;
@@ -56,29 +53,100 @@ void    restart() {
 }
 
 
-int     transform(const char* passnames) {
+int     transform(int optLevel) { //optlevel [0123]
     if (!gp_module) {
         return -1;
     }
 
-    PassManager passes; //XXX: note: if passnames is the same as last time we can reuse passes
-    passes.add(new TargetData(gp_module));
+    //XXX we should also provide transforms on function level
 
-    //XXX next couple of passes should be dependent on passnames!
-    passes.add(new PrintModulePass());
-    passes.add(createInstructionCombiningPass());
+    //note: see llvm/projects/Stacker/lib/compiler/StackerCompiler.cpp for a good pass-list
+
+    PassManager passes;
+    passes.add(new TargetData(gp_module));           // some passes need this as a first pass
+    passes.add(createVerifierPass());                // Make sure we start with a good graph
+    //passes.add(new PrintModulePass());               // Visual feedback
+
+    if (optLevel >= 1) {
+        // Clean up disgusting code
+        passes.add(createCFGSimplificationPass());
+        // Remove unused globals
+        passes.add(createGlobalDCEPass());
+        // IP Constant Propagation
+        passes.add(createIPConstantPropagationPass());
+        // Clean up after IPCP
+        passes.add(createInstructionCombiningPass());
+        // Clean up after IPCP
+        passes.add(createCFGSimplificationPass());
+        // Inline small definitions (functions)
+        passes.add(createFunctionInliningPass());
+        // Simplify cfg by copying code
+        passes.add(createTailDuplicationPass());
+        if (optLevel >= 2) {
+            // Merge & remove BBs
+            passes.add(createCFGSimplificationPass());
+            // Compile silly sequences
+            passes.add(createInstructionCombiningPass());
+            // Reassociate expressions
+            passes.add(createReassociatePass());
+            // Combine silly seq's
+            passes.add(createInstructionCombiningPass());
+            // Eliminate tail calls
+            passes.add(createTailCallEliminationPass());
+            // Merge & remove BBs
+            passes.add(createCFGSimplificationPass());
+            // Hoist loop invariants
+            passes.add(createLICMPass());
+            // Clean up after the unroller
+            passes.add(createInstructionCombiningPass());
+            // Canonicalize indvars
+            passes.add(createIndVarSimplifyPass());
+            // Unroll small loops
+            passes.add(createLoopUnrollPass());
+            // Clean up after the unroller
+            passes.add(createInstructionCombiningPass());
+            // GVN for load instructions
+            passes.add(createLoadValueNumberingPass());
+            // Remove common subexprs
+            passes.add(createGCSEPass());
+            // Constant prop with SCCP
+            passes.add(createSCCPPass());
+        }
+        if (optLevel >= 3) {
+            // Run instcombine again after redundancy elimination
+            passes.add(createInstructionCombiningPass());
+            // Delete dead stores
+            passes.add(createDeadStoreEliminationPass());
+            // SSA based 'Aggressive DCE'
+            passes.add(createAggressiveDCEPass());
+            // Merge & remove BBs
+            passes.add(createCFGSimplificationPass());
+            // Merge dup global constants
+            passes.add(createConstantMergePass());
+        }
+    }
+
+    // Merge & remove BBs
     passes.add(createCFGSimplificationPass());
-    passes.add(new PrintModulePass());
+    // Memory To Register
+    passes.add(createPromoteMemoryToRegisterPass());
+    // Compile silly sequences
+    passes.add(createInstructionCombiningPass());
+    // Make sure everything is still good.
     passes.add(createVerifierPass());
+    //passes.add(new PrintModulePass());               // Visual feedback
 
     return passes.run(*gp_module);
 }
 
 
 int     parse(const char* llsource) {
-    Module*     module = ParseAssemblyString(llsource, gp_module);
+    ParseError  parse_error;
+    Module*     module = ParseAssemblyString(llsource, gp_module, &parse_error);
     if (!module) {
-        std::cerr << "Can not parse:\n" << llsource << "\n" << std::flush;
+        int line, col;
+        parse_error.getErrorLocation(line, col);
+        std::cerr << "Parse error:\n" << llsource << "\n" << "Error: " << parse_error.getRawMessage() << ":" << line << "," << col << "\n" << std::flush;
         return false;
     }
 
