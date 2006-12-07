@@ -192,7 +192,7 @@ class FlowGraphDotGen(DotGen):
             name2 = self.blockname(link.target)
             label = " ".join(map(repr, link.args))
             if link.exitcase is not None:
-                label = "%s: %s" %(link.exitcase, label)
+                label = "%r: %s" %(link.exitcase, label)
                 self.emit_edge(name, name2, label, style="dotted", color="red")
             else:
                 self.emit_edge(name, name2, label, style="solid")
