@@ -28,6 +28,10 @@ def rtype_is_None(robj1, rnone2, hop, pos=0):
         return hop.genop('adr_eq', [v1, cnull], resulttype=Bool)
     elif robj1 == none_frozen_pbc_repr:
         return hop.inputconst(Bool, True)
+    elif isinstance(robj1, SmallFunctionSetPBCRepr):
+        v1 = hop.inputarg(robj1, pos)
+        return hop.genop('char_eq', [v1, inputconst(Char, '\000')],
+                         resulttype=Bool)
     else:
         raise TyperError('rtype_is_None of %r' % (robj1))
 
@@ -132,7 +136,10 @@ class SmallFunctionSetPBCRepr(Repr):
         pointer_table = malloc(POINTER_TABLE, len(self.descriptions),
                                immortal=True)
         for i, desc in enumerate(self.descriptions):
-            pointer_table[i] = self.pointer_repr.convert_desc(desc)
+            if desc is not None:
+                pointer_table[i] = self.pointer_repr.convert_desc(desc)
+            else:
+                pointer_table[i] = self.pointer_repr.convert_const(None)
         self.c_pointer_table = inputconst(Ptr(POINTER_TABLE), pointer_table)
 
     def get_s_callable(self):
@@ -158,6 +165,14 @@ class SmallFunctionSetPBCRepr(Repr):
 
 ##     def convert_to_concrete_llfn(self, v, shape, index, llop):
 ##         return v
+
+    def rtype_is_true(self, hop):
+        if not self.s_pbc.can_be_None:
+            return inputconst(Bool, True)
+        else:
+            v1, = hop.inputargs(self)
+            return hop.genop('char_eq', [v1, inputconst(Char, '\000')],
+                         resulttype=Bool)
 
     def rtype_simple_call(self, hop):
         v_index = hop.inputarg(self, arg=0)
