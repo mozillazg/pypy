@@ -1750,6 +1750,16 @@ class TestLLtype(BaseTestRPBC, LLRtypeMixin):
 class TestOOtype(BaseTestRPBC, OORtypeMixin):
     pass
 
+class TestLLtypeSmallFuncSets(TestLLtype):
+    def setup_class(cls):
+        from pypy.config.pypyoption import get_pypy_config
+        cls.config = get_pypy_config(translating=True)
+        cls.config.translation.withsmallfuncsets = 10
+
+    def interpret(self, fn, args, **kwds):
+        kwds['config'] = self.config
+        return TestLLtype.interpret(self, fn, args, **kwds)
+
 def test_smallfuncsets_basic():
     from pypy.translator.translator import TranslationContext, graphof
     from pypy.config.pypyoption import get_pypy_config
