@@ -28,4 +28,3 @@ class TestRLLVMGenop(AbstractRGenOpTests):
 
     test_fact_direct  = skip
     test_fact_compile = skip
-    

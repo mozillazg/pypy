@@ -36,8 +36,9 @@ class Var(GenVar):
 
 class VarAddr(Var):
 
-    def __init__(self, var):
-        self.name = var.name + '_' 
+    def __init__(self, v, asm):
+        self.name = '%p' + v.name[2:]
+        asm.append(' %s=alloca %s' % (self.operand2(), v.type())) #note: sideeffect!
 
     def type(self):
         return 'int*'
@@ -212,7 +213,7 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         #log(self.rgenop.asms)
         asm_string = ''
         for asm in self.rgenop.asms:
-            asm_string += '\n'.join(asm) + '\n\n'
+            asm_string += '\n'.join(asm) + '\n'
         self.rgenop.asms = None #XXX or [] ?
         log(asm_string)
         llvmjit.parse(asm_string)
@@ -230,15 +231,14 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
 
         inputargs_gv_ = []
         for v in inputargs_gv:
-            v_ = VarAddr(v)
-            inputargs_gv_.append(v_)
-            self.asm.append(' %s=alloca %s' % (v_.operand2(), v.type()))
+            v_ = VarAddr(v, self.asm)
             self.asm.append(' store %s,%s %s' % (v.operand(), v_.type(), v_.operand2()))
+            inputargs_gv_.append(v_)
 
         #self.asm.append(self.label.operand2())
         #note: alloca's should be appended to self.rgenop.asms[0]
         self.asm = self.rgenop.open_asm() #note: previous self.asm already appended to self.asms
-        return inputargs_gv #XXX make this inputargs_gv_
+        return inputargs_gv_ #XXX make this inputargs_gv_
 
     def _close(self):
         log('%s Builder._close' % self.label.operand2())
@@ -271,10 +271,42 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
     def _rgenop2_generic(self, llvm_opcode, gv_arg1, gv_arg2):
         log('%s Builder._rgenop2_generic %s %s,%s' % (
             self.label.operand2(), llvm_opcode, gv_arg1.operand(), gv_arg2.operand2()))
+
+        #XXX can't this be shorter?
+        if gv_arg1.is_const or isinstance(gv_arg1, VarAddr):
+            gv_arg1_ = gv_arg1
+        else:
+            gv_arg1_ = VarAddr(gv_arg1, self.rgenop.asms[0])
+        if isinstance(gv_arg1_, VarAddr):
+            gv_arg1_tmp = Var()
+            self.asm.append(' %s=load %s' % (gv_arg1_tmp.operand2(), gv_arg1_.operand()))
+        else:
+            gv_arg1_tmp = gv_arg1_
+
+        if gv_arg2.is_const or isinstance(gv_arg2, VarAddr):
+            gv_arg2_ = gv_arg2
+        else:
+            gv_arg2_ = VarAddr(gv_arg2, self.rgenop.asms[0])
+        if isinstance(gv_arg2_, VarAddr):
+            gv_arg2_tmp = Var()
+            self.asm.append(' %s=load %s' % (gv_arg2_tmp.operand2(), gv_arg2_.operand()))
+        else:
+            gv_arg2_tmp = gv_arg2_
+
         gv_result = Var()
         self.asm.append(' %s=%s %s,%s' % (
-            gv_result.operand2(), llvm_opcode, gv_arg1.operand(), gv_arg2.operand2()))
-        return gv_result
+            gv_result.operand2(), llvm_opcode, gv_arg1_tmp.operand(), gv_arg2_tmp.operand2()))
+
+        if llvm_opcode[:3] == 'set': #HACK
+            #XXX We assume there will always be a jump_if_true/false right after an op_int_eq/etc.
+            #    Because we don't yet keep track of non-ints it will be difficult to do the
+            #    right thing in jump_if_true/false. So this is a hack we want to fix later!
+            return gv_result
+
+        gv_result_ = VarAddr(gv_result, self.rgenop.asms[0])
+        self.asm.append(' store %s,%s' % (gv_result.operand(), gv_result_.operand()))
+
+        return gv_result_
 
     def op_int_add(self, gv_x, gv_y):       return self._rgenop2_generic('add'  , gv_x, gv_y)
     def op_int_sub(self, gv_x, gv_y):       return self._rgenop2_generic('sub'  , gv_x, gv_y)
@@ -301,8 +333,9 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
 
     def enter_next_block(self, kinds, args_gv):
         label = Label()
-        log('%s Builder.enter_next_block (was %s), prev_block_closed=%s' % (
-            label.operand2(), self.label.operand2(), str(self.prev_block_closed)))
+        log('%s Builder.enter_next_block (was %s), prev_block_closed=%s, %s' % (
+            label.operand2(), self.label.operand2(), str(self.prev_block_closed),
+            [v.operand() for v in args_gv]))
         self.label = label
         if not self.prev_block_closed: #there are not always explicit branches to blocks
             self.asm.append(' br ' + self.label.operand() + ' ;fixup')
@@ -359,8 +392,13 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         #self.mc.JNE(rel32(targetbuilder.mc.tell()))
         return targetbuilder
 
-    def op_int_is_true(self, gv_x):
-        log('%s Build.op_int_is_true %s' % (self.label.operand2(), gv_x.operand()))
+    def op_int_is_true(self, gv_x_):
+        log('%s Build.op_int_is_true %s' % (self.label.operand2(), gv_x_.operand()))
+        if isinstance(gv_x_, VarAddr):
+            gv_x = Var()
+            self.asm.append(' %s=load %s' % (gv_x.operand2(), gv_x_.operand()))
+        else:
+            gv_x = gv_x_
         gv_result = Var() #XXX need to mark it a 'bool' somehow
         self.asm.append(' %s=trunc %s to bool' % (gv_result.operand2(), gv_x.operand()))
         return gv_result
@@ -377,9 +415,15 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
                         ','.join([v.operand() for v in args_gv])))
         return gv_returnvar
     
-    def finish_and_return(self, sigtoken, gv_returnvar):
+    def finish_and_return(self, sigtoken, gv_returnvar_):
         log('%s Builder.finish_and_return %s,%s' % (
-            self.label.operand2(), sigtoken, gv_returnvar.operand()))
+            self.label.operand2(), sigtoken, gv_returnvar_.operand()))
+
+        if isinstance(gv_returnvar_, VarAddr):
+            gv_returnvar = Var()
+            self.asm.append(' %s=load %s' % (gv_returnvar.operand2(), gv_returnvar_.operand()))
+        else:
+            gv_returnvar = gv_returnvar_
         self.asm.append(' ret ' + gv_returnvar.operand())
         #numargs = sigtoken      # for now
         #initialstackdepth = numargs + 1
