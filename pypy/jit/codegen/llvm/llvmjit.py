@@ -44,7 +44,7 @@ class _FuncPtr(_CFuncPtr):
     libraries = (os.path.join(os.path.dirname(path), 'llvmjit'),)
 llvmjit._FuncPtr = _FuncPtr
 
-#ensure stable state
+#ensure stable state (XXX this doesn't seem to get called when translated! We do it in parse!)
 llvmjit.restart()
 
 #exposed functions...

@@ -11,11 +11,21 @@ class TestRLLVMGenop(AbstractRGenOpTests):
         def compile(self, runner, argtypes):
             py.test.skip('Compilation for Darwin not fully support yet (static/dyn lib issue')
 
-    def test_branching_direct(self):
+    def skip(self):
         py.test.skip('WIP')
 
-    test_goto_direct = test_branching_direct
-    test_if_direct = test_branching_direct
-    test_switch_direct = test_branching_direct
-    test_large_switch_direct = test_branching_direct
-    test_fact_direct = test_branching_direct
+    test_goto_direct  = skip
+    test_goto_compile = skip
+
+    test_if_direct  = skip 
+    test_if_compile = skip 
+
+    test_switch_direct  = skip
+    test_switch_compile = skip
+
+    test_large_switch_direct  = skip
+    test_large_switch_compile = skip
+
+    test_fact_direct  = skip
+    test_fact_compile = skip
+    
