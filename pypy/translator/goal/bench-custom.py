@@ -134,7 +134,10 @@ def main():
             res = benchmark_result.get_best_result(n)
             if name not in refs:
                 refs[name] = res
-            print "%6d%s (%6.1fx)"%(res, units, res/refs[name]),
+            factor = res/refs[name]
+            if ascgood:
+                factor = 1/factor
+            print "%6d%s (%6.1fx)"%(res, units, factor),
             sys.stdout.flush()
         print
 
