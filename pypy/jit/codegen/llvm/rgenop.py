@@ -3,11 +3,12 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.jit.codegen.llvm import llvmjit
+from pypy.rlib.objectmodel import we_are_translated
 
 
 def log(s):
-    #print str(s)
-    pass
+    if not we_are_translated():
+        print str(s)
 
 
 class Count(object):
@@ -24,10 +25,22 @@ class Var(GenVar):
         count.n_vars += 1
 
     def operand(self):
-        return 'int ' + self.name
+        return self.type() + ' ' + self.name
 
     def operand2(self):
         return self.name
+
+    def type(self):
+        return 'int'
+
+
+class VarAddr(Var):
+
+    def __init__(self, var):
+        self.name = var.name + '_' 
+
+    def type(self):
+        return super(VarAddr, self).type() + '*'
 
 
 class IntConst(GenConst):
@@ -36,10 +49,13 @@ class IntConst(GenConst):
         self.value = value
 
     def operand(self):
-        return 'int ' + str(self.value)
+        return self.type() + ' ' + str(self.value)
 
     def operand2(self):
         return str(self.value)
+
+    def type(self):
+        return 'int'
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -57,10 +73,13 @@ class AddrConst(GenConst):
         self.addr = addr
 
     def operand(self):
-        return 'int* ' + str(llmemory.cast_adr_to_int(self.addr))
+        return self.type() + ' ' + str(llmemory.cast_adr_to_int(self.addr))
 
     def operand2(self):
         return str(llmemory.cast_adr_to_int(self.addr))
+
+    def type(self):
+        return 'int*'
 
     @specialize.arg(1)
     def revealconst(self, T):
@@ -81,10 +100,19 @@ class Label(GenLabel):
         count.n_labels += 1
 
     def operand(self):
-        return 'label %' + self.label
+        return self.type() + ' %' + self.label
 
     def operand2(self):
         return self.label + ':'
+
+    def type(self):
+        return 'label'
+
+
+class EntryLabel(Label):
+
+    def __init(self):
+        self.label = 'L_' #Block-label for alloca's. The label is never put in the source!
 
 
 class FlexSwitch(CodeGenSwitch):
@@ -169,7 +197,7 @@ class FlexSwitch(CodeGenSwitch):
 class Builder(object):  #changed baseclass from (GenBuilder) for better error messages
 
     def __init__(self, rgenop, asm, prev_block_closed=False):
-        self.label = Label()
+        self.label = EntryLabel()
         log('%s Builder.__init__' % self.label.operand2())
         self.rgenop = rgenop
         self.asm = asm  #list of llvm assembly source code lines
@@ -185,7 +213,7 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         asm_string = ''
         for asm in self.rgenop.asms:
             asm_string += '\n'.join(asm) + '\n\n'
-        self.rgenop.asms = None
+        self.rgenop.asms = None #XXX or [] ?
         log(asm_string)
         llvmjit.parse(asm_string)
         llvmjit.transform(3) #optimize module (should be on functions actually)
@@ -199,8 +227,18 @@ class Builder(object):  #changed baseclass from (GenBuilder) for better error me
         inputargs_gv = [Var() for i in range(numargs)]
         self.asm.append('int %%%s(%s){' % (
             self.rgenop.name, ','.join([v.operand() for v in inputargs_gv])))
-        self.asm.append(self.label.operand2())
-        return inputargs_gv
+
+        inputargs_gv_ = []
+        for v in inputargs_gv:
+            v_ = VarAddr(v)
+            inputargs_gv_.append(v_)
+            self.asm.append(' %s=alloca %s' % (v_.operand2(), v.type()))
+            self.asm.append(' store %s,%s %s' % (v.operand(), v_.type(), v_.operand2()))
+
+        #self.asm.append(self.label.operand2())
+        #note: alloca's should be appended to self.rgenop.asms[0]
+        self.asm = self.rgenop.open_asm() #note: previous self.asm already appended to self.asms
+        return inputargs_gv #XXX make this inputargs_gv_
 
     def _close(self):
         log('%s Builder._close' % self.label.operand2())
@@ -377,9 +415,6 @@ class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better 
     funcname = {} #HACK for looking up function names given a pre/post compilation function pointer
     funcused = {} #we rename functions when encountered multiple times (for test_branching_compile)
 
-    def __init__(self):
-        self.asms = []
-
     def open_asm(self):
         asm = []
         self.asms.append(asm)
@@ -403,6 +438,7 @@ class RLLVMGenOp(object):   #changed baseclass from (AbstractRGenOp) for better 
             self.funcused[name] = 0
 
         log('RLLVMGenOp.newgraph %s,%s' % (sigtoken, name))
+        self.asms = []
         numargs = sigtoken          # for now
         self.name = name
         builder = self.openbuilder(False) #enables initial label
