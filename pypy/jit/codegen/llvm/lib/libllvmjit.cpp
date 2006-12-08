@@ -47,7 +47,16 @@ void    restart() {
     delete gp_execution_engine; //XXX test if this correctly cleans up including generated code
 
     gp_module           = new Module("llvmjit");
+    if (!gp_module) {
+        std::cerr << "restart() can't allocate the module\n" << std::flush;
+        return;
+    }
+
     gp_execution_engine = ExecutionEngine::create(new ExistingModuleProvider(gp_module), false);
+    if (!gp_execution_engine) {
+        std::cerr << "restart() can't allocate the execution engine\n" << std::flush;
+        return;
+    }
 
     //PrintMachineCode = 1;
 }
@@ -55,6 +64,7 @@ void    restart() {
 
 int     transform(int optLevel) { //optlevel [0123]
     if (!gp_module) {
+        std::cerr << "no module available for transform\n" << std::flush;
         return -1;
     }
 
@@ -141,6 +151,14 @@ int     transform(int optLevel) { //optlevel [0123]
 
 
 int     parse(const char* llsource) {
+    if (!gp_module) {
+        restart();
+    }
+    if (!gp_module) {
+        std::cerr << "no module available for parse\n" << std::flush;
+        return false;
+    }
+
     ParseError  parse_error;
     Module*     module = ParseAssemblyString(llsource, gp_module, &parse_error);
     if (!module) {
@@ -225,6 +243,11 @@ void*   get_pointer_to_global_function() {
 
 // Module methods
 void*   getNamedFunction(const char* name) {
+    if (!gp_module) {
+        std::cerr << "no module available for getNamedFunction\n" << std::flush;
+        return NULL;
+    }
+
     return gp_module->getNamedFunction(name); //note: can be NULL
 }
 
