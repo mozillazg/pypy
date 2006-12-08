@@ -40,7 +40,7 @@ class VarAddr(Var):
         self.name = var.name + '_' 
 
     def type(self):
-        return super(VarAddr, self).type() + '*'
+        return 'int*'
 
 
 class IntConst(GenConst):
