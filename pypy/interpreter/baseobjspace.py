@@ -173,6 +173,10 @@ class ObjSpace(object):
             from pypy.config.pypyoption import get_pypy_config
             config = get_pypy_config(translating=False)
         self.config = config
+
+        # import extra modules for side-effects, possibly based on config
+        import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
+
         self.interned_strings = {}
         self.pending_actions = []
         self.setoptions(**kw)
