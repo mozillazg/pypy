@@ -90,6 +90,9 @@ class PyPyTarget(object):
     def handle_config(self, config):
         pass
 
+    def handle_translate_config(self, translateconfig):
+        pass
+
     def print_help(self, config):
         self.opt_parser(config).print_help()
 
@@ -154,6 +157,7 @@ class PyPyTarget(object):
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
+                     'handle_translate_config',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 
