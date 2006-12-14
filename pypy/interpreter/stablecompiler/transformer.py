@@ -26,9 +26,7 @@ parseFile(path) -> AST
 # and replace OWNER, ORGANIZATION, and YEAR as appropriate.
 
 # make sure we import the parser with the correct grammar
-from pypy.interpreter.pyparser import pythonparse
-
-import pypy.interpreter.pyparser.pythonparse as pythonparse
+from pypy.interpreter.pyparser.pythonparse import get_pyparser_for_version
 
 from pypy.interpreter.stablecompiler.ast import *
 import parser
@@ -36,15 +34,16 @@ import pypy.interpreter.pyparser.pytoken as token
 import sys
 
 # Create parser from Grammar_stable, not current grammar.
-stable_grammar, _ = pythonparse.get_grammar_file("stable")
-stable_parser = pythonparse.python_grammar(stable_grammar)
+# stable_grammar, _ = pythonparse.get_grammar_file("stable")
+# stable_parser = pythonparse.python_grammar(stable_grammar)
 
-sym_name = stable_parser.symbols.sym_name
+stable_parser = get_pyparser_for_version('stable')
 
 class symbol:
     pass
-
-for value, name in sym_name.iteritems():
+sym_name = {}
+for name, value in stable_parser.symbols.items():
+    sym_name[value] = name
     setattr(symbol, name, value)
 
 # transforming is requiring a lot of recursion depth so make sure we have enough
@@ -58,6 +57,7 @@ class WalkerError(StandardError):
 from consts import CO_VARARGS, CO_VARKEYWORDS
 from consts import OP_ASSIGN, OP_DELETE, OP_APPLY
 
+   
 def parseFile(path):
     f = open(path, "U")
     # XXX The parser API tolerates files without a trailing newline,
@@ -130,6 +130,7 @@ class Transformer:
         for value, name in sym_name.items():
             if hasattr(self, name):
                 self._dispatch[value] = getattr(self, name)
+            
         self._dispatch[token.NEWLINE] = self.com_NEWLINE
         self._atom_dispatch = {token.LPAR: self.atom_lpar,
                                token.LSQB: self.atom_lsqb,
@@ -223,7 +224,6 @@ class Transformer:
             assert isinstance(stmts[0], Discard)
             assert isinstance(stmts[0].expr, Const)
             del stmts[0]
-
         return Module(doc, Stmt(stmts))
 
     def eval_input(self, nodelist):
@@ -608,6 +608,7 @@ class Transformer:
             return self.com_generator_expression(test, nodelist[1])
         return self.testlist(nodelist)
 
+    
     def test(self, nodelist):
         # test: or_test ['if' or_test 'else' test] | lambdef
         if len(nodelist) == 1:
@@ -618,8 +619,10 @@ class Transformer:
                 return self.com_node(nodelist[0])
         else:
             # Here we implement conditional expressions
-            return ast.CondExpr(nodelist[2], nodelist[0], nodelist[4],
-                                nodelist[1].lineno)
+            # XXX: CPython's nodename is IfExp, not CondExpr
+            return CondExpr(delist[2], nodelist[0], nodelist[4],
+                            nodelist[1].lineno)
+
 
     def and_test(self, nodelist):
         # not_test ('and' not_test)*
@@ -632,6 +635,9 @@ class Transformer:
         assert len(nodelist) == 1
         return self.com_node(nodelist[0])
 
+    # XXX
+    # test = old_test
+    
     def or_test(self, nodelist):
         # or_test: and_test ('or' and_test)*
         return self.com_binary(Or, nodelist)
@@ -920,7 +926,7 @@ class Transformer:
         # String together the dotted names and return the string
         name = ""
         for n in node:
-            if type(n) == type(()) and n[0] == 1:
+            if type(n) == type(()) and n[0] == stable_parser.tokens['NAME']:
                 name = name + n[1] + '.'
         return name[:-1]
 

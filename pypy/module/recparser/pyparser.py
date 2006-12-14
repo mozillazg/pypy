@@ -8,7 +8,7 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, GetSetProperty
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyparser.syntaxtree import TokenNode, SyntaxNode, AbstractSyntaxVisitor
-from pypy.interpreter.pyparser.pythonutil import PYTHON_PARSER
+from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser import grammar, symbol, pytoken
 from pypy.interpreter.argument import Arguments

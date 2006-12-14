@@ -10,10 +10,6 @@ import pypy.interpreter.pyparser.pytoken as tok
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.parsestring import parsestr
 
-sym      = pythonparse.PYTHON_PARSER.symbols
-
-DEBUG_MODE = 0
-
 # XXX : use builder.parser instead
 sym = pythonparse.PYTHON_PARSER.symbols
 rsym = pythonparse.PYTHON_PARSER.symbol_repr
@@ -1698,8 +1694,9 @@ class AstBuilder(BaseGrammarBuilder):
         if self.with_enabled:
             return
         self.with_enabled = True
-        self.keywords.update({'with':None, 'as': None})
-
+        # XXX
+        # self.keywords.update({'with':None, 'as': None})
+        
     def context(self):
         return AstBuilderContext(self.rule_stack)
 
