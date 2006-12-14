@@ -1,45 +1,9 @@
 # This module contains the grammar parser
 # and the symbol mappings
 
-from grammar import BaseGrammarBuilder, Alternative, Sequence, Token, \
-     KleeneStar, GrammarElement, Parser
+from grammar import Alternative, Sequence, Token, KleeneStar, \
+     GrammarElement, Parser
 
-
-## sym_map = {}
-## sym_rmap = {}
-## _count = 0
-
-## def g_add_symbol( name ):
-##     global _count
-##     if name in sym_rmap:
-##         return sym_rmap[name]
-##     val = _count
-##     _count += 1
-##     sym_map[val] = name
-##     sym_rmap[name] = val
-##     globals()[name] = val
-##     return val
-
-
-## tok_map = {}
-## tok_rmap = {}
-
-## def g_add_token(sym, name):
-##     global _count
-##     if name in tok_rmap:
-##         return tok_rmap[name]
-##     val = _count
-##     _count += 1
-##     tok_map[val] = name
-##     tok_rmap[name] = val
-##     sym_map[val] = sym
-##     sym_rmap[sym] = val
-##     globals()[sym] = val
-##     return val
-
-
-
-## g_add_token('EOF', 'EOF')
 class GrammarParser(Parser):
     pass
 
@@ -62,7 +26,6 @@ def grammar_grammar():
       option: '[' alternative ']'
       group: '(' alternative ')' star?
     """
-    global sym_map
     p = GRAMMAR_GRAMMAR
     p.add_token('EOF','EOF')
 
@@ -111,9 +74,4 @@ for _sym, _value in GRAMMAR_GRAMMAR.tokens.items():
     assert not hasattr( GRAMMAR_GRAMMAR, _sym )
     setattr(GRAMMAR_GRAMMAR, _sym, _value )
 
-# cleanup
-## del _sym
-## del _value
 del grammar_grammar
-## del g_add_symbol
-# del g_add_token
