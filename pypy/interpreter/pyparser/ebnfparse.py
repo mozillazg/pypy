@@ -5,7 +5,6 @@ from grammar import AbstractBuilder, AbstractContext, Parser
 from ebnflexer import GrammarSource
 import ebnfgrammar
 from ebnfgrammar import GRAMMAR_GRAMMAR
-from syntaxtree import AbstractSyntaxVisitor
 
 
 ORDA = ord("A")
@@ -21,14 +20,14 @@ def is_py_name( name ):
         return False
     v = ord(name[0])
     if not (ORDA <= v <= ORDZ or
-            ORDa <= v <= ORDz or v == ORD_ ):
+            ORDa <= v <= ORDz or v == ORD_):
         return False
     for c in name:
         v = ord(c)
         if not (ORDA <= v <= ORDZ or
                 ORDa <= v <= ORDz or
                 ORD0 <= v <= ORD9 or
-                v == ORD_ ):
+                v == ORD_):
             return False
     return True
 
@@ -41,21 +40,16 @@ punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '%', '<<', '//', '\\', '', '\n\\)', '\\(', ';', ':',
        '@', '\\[', '\\]', '`', '\\{', '\\}']
 
-
-
-
 TERMINALS = [
     'NAME', 'NUMBER', 'STRING', 'NEWLINE', 'ENDMARKER',
     'INDENT', 'DEDENT' ]
 
 
-## Grammar Visitors ##################################################
 # FIXME: parsertools.py ? parser/__init__.py ?
-
 class NameToken(Token):
     """A token that is not a keyword"""
-    def __init__(self, parser, keywords=None ):
-        Token.__init__(self, parser, parser.tokens['NAME'] )
+    def __init__(self, parser, keywords=None):
+        Token.__init__(self, parser, parser.tokens['NAME'])
         self.keywords = keywords
 
     def match(self, source, builder, level=0):
@@ -69,7 +63,6 @@ class NameToken(Token):
         else:
             # error unknown or negative integer
         """
-        
         ctx = source.context()
         tk = source.next()
         if tk.codename == self.codename:
@@ -80,6 +73,7 @@ class NameToken(Token):
                 return ret
         source.restore( ctx )
         return 0
+
 
     def match_token(self, builder, other):
         """special case of match token for tokens which are really keywords
@@ -97,11 +91,17 @@ class NameToken(Token):
         return True
 
 
+class EBNFBuilderContext(AbstractContext):
+    def __init__(self, stackpos, seqcounts, altcounts):
+        self.stackpos = stackpos
+        self.seqcounts = seqcounts
+        self.altcounts = altcounts
+
 
 class EBNFBuilder(AbstractBuilder):
     """Build a grammar tree"""
-    def __init__(self, gram_parser, dest_parser ):
-        AbstractBuilder.__init__(self, dest_parser )
+    def __init__(self, gram_parser, dest_parser):
+        AbstractBuilder.__init__(self, dest_parser)
         self.gram = gram_parser
         self.rule_stack = []
         self.seqcounts = [] # number of items in the current sequence
@@ -114,7 +114,16 @@ class EBNFBuilder(AbstractBuilder):
         self.tokens = {}
         self.keywords = []
         NAME = dest_parser.add_token('NAME')
+        # NAME = dest_parser.tokens['NAME']
         self.tokens[NAME] = NameToken(dest_parser, keywords=self.keywords)
+
+    def context(self):
+        return EBNFBuilderContext(len(self.rule_stack), self.seqcounts, self.altcounts)
+
+    def restore(self, ctx):
+        del self.rule_stack[ctx.stackpos:]
+        self.seqcounts = ctx.seqcounts
+        self.altcounts = ctx.altcounts
 
     def new_symbol(self):
         """Allocate and return a new (anonymous) grammar symbol whose
@@ -169,14 +178,6 @@ class EBNFBuilder(AbstractBuilder):
         self.parser.root_rules[codename] = proxy
         return proxy
 
-    def context(self):
-        """Return an opaque context object"""
-        return None
-
-    def restore(self, ctx):
-        """Accept an opaque context object"""
-        assert False, "Not supported"
-
     def alternative(self, rule, source):
         return True
 
@@ -190,7 +191,6 @@ class EBNFBuilder(AbstractBuilder):
     def sequence(self, rule, source, elts_number):
         _rule = rule.codename
         if _rule == self.gram.sequence:
-#            print "  -sequence", self.curaltcount, self.curseqcount
             if self.curseqcount==1:
                 self.curseqcount = 0
                 self.curaltcount += 1
@@ -201,7 +201,6 @@ class EBNFBuilder(AbstractBuilder):
             self.curseqcount = 0
             self.curaltcount += 1
         elif _rule == self.gram.alternative:
-#            print "  -alternative", self.curaltcount, self.curseqcount
             if self.curaltcount == 1:
                 self.curaltcount = 0
                 return True
@@ -210,17 +209,14 @@ class EBNFBuilder(AbstractBuilder):
             self.rule_stack.append( new_rule )
             self.curaltcount = 0
         elif _rule == self.gram.group:
-#            print "  -group", self.curaltcount, self.curseqcount
             self.curseqcount += 1
         elif _rule == self.gram.option:
-#            print "  -option", self.curaltcount, self.curseqcount
             # pops the last alternative
             rules = self.pop_rules( 1 )
             new_rule = self.parser.KleeneStar( self.new_symbol(), _min=0, _max=1, rule=rules[0] )
             self.rule_stack.append( new_rule )
             self.curseqcount += 1
         elif _rule == self.gram.rule:
-#            print "  -rule", self.curaltcount, self.curseqcount
             assert len(self.rule_stack)==1
             old_rule = self.rule_stack[0]
             del self.rule_stack[0]
@@ -235,7 +231,6 @@ class EBNFBuilder(AbstractBuilder):
         return True
 
     def token(self, name, value, source):
-#        print "token", name, value
         if name == self.gram.TOK_STRING:
             self.handle_TOK_STRING( name, value )
             self.curseqcount += 1
@@ -292,35 +287,16 @@ class EBNFBuilder(AbstractBuilder):
         self.rule_stack.append(tok)
 
 
-def parse_grammar_text( parser, txt):
-    """parses a grammar input
 
-    stream : file-like object representing the grammar to parse
-    """
-    source = GrammarSource( GRAMMAR_GRAMMAR, txt)
-    builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser )
-    result = GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
-    builder.resolve_rules()
-    parser.build_first_sets()
-    return parser
+## # XXX: parser method ?
+## def parse_grammar_text(parser, txt):
+##     """parses a grammar input
 
-def target_parse_grammar_text(txt):
-    vis = parse_grammar_text(txt)
-    # do nothing
-    return None
-
-def main_build():
-    from pprint import pprint
-    grambuild = parse_grammar(file('data/Grammar2.3'))
-    for i,r in enumerate(grambuild.items):
-        print "%  3d : %s" % (i, r)
-    pprint(grambuild.terminals.keys())
-    pprint(grambuild.tokens)
-    print "|".join(grambuild.tokens.keys() )
-
-def main_build():
-    import sys
-    return parse_grammar_text( file(sys.argv[-1]).read() )
-
-if __name__ == "__main__":
-    result = main_build()
+##     txt : the grammar definition
+##     """
+##     source = GrammarSource(GRAMMAR_GRAMMAR, txt)
+##     builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
+##     result = GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
+##     builder.resolve_rules()
+##     parser.build_first_sets()
+##     return parser

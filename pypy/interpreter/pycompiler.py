@@ -205,15 +205,15 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.astcompiler.pycodegen import InteractiveCodeGenerator
         from pypy.interpreter.astcompiler.pycodegen import ExpressionCodeGenerator
         from pypy.interpreter.astcompiler.ast import Node
-        from pyparser.pythonutil import AstBuilder, PYTHON_PARSER, TARGET_DICT
+        from pyparser.astbuilder import AstBuilder
+        from pyparser.pythonparse import PYTHON_PARSER
         from pypy.interpreter.pycode import PyCode
 
         flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             builder = AstBuilder(space=space)
-            target_rule = TARGET_DICT[mode]
-            PYTHON_PARSER.parse_source(source, target_rule, builder, flags)
+            PYTHON_PARSER.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
             encoding = builder.source_encoding
         except SyntaxError, e:
