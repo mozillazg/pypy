@@ -407,7 +407,7 @@ class WaryDictImplementation(StrDictImplementation):
             if i != -1:
                 self.shadowed[i] = None
             return self
-        elif self._is_sane_hash(w_key_type):
+        elif _is_sane_hash(space, w_key_type):
             raise KeyError
         else:
             return self._as_rdict().delitem(w_key)
