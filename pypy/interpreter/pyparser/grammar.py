@@ -362,7 +362,6 @@ class GrammarElement(Wrappable):
         pass
 
 
-
 class GrammarProxy(GrammarElement):
     def __init__(self, parser, rule_name, codename=-1 ):
         GrammarElement.__init__(self, parser, codename )
@@ -395,7 +394,7 @@ class Alternative(GrammarElement):
         returns the object built from the first rules that matches
         """
         if DEBUG > 1:
-            print "try alt:", self.display(level, builder.symbols )
+            print "try alt:", self.display(level)
         tok = source.peek()
         # Here we stop at the first match we should
         # try instead to get the longest alternative
@@ -487,10 +486,11 @@ class Sequence(GrammarElement):
         for i in self.args:
             assert isinstance( i, GrammarElement )
 
+
     def _match(self, source, builder, level=0):
         """matches all of the symbols in order"""
         if DEBUG > 1:
-            print "try seq:", self.display(0, builder.symbols )
+            print "try seq:", self.display(0)
         ctx = source.context()
         bctx = builder.context()
         for rule in self.args:
@@ -574,7 +574,7 @@ class KleeneStar(GrammarElement):
         represent infinity
         """
         if DEBUG > 1:
-            print "try kle:", self.display(0,builder.symbols)
+            print "try kle:", self.display(0)
         ctx = None
         bctx = None
         if self.min:
@@ -829,7 +829,7 @@ class Parser(object):
 
     def Alternative( self, name_id, args ):
         assert isinstance( name_id, int )
-        alt = Alternative( self, name_id, args )
+        alt = Alternative( self, name_id, args )        
         self.all_rules.append( alt )
         return alt
     

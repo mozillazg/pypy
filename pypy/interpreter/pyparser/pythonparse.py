@@ -16,8 +16,10 @@ from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
 import pypy.interpreter.pyparser.ebnfparse as ebnfparse
+from pypy.interpreter.pyparser.ebnflexer import GrammarSource
+from pypy.interpreter.pyparser.ebnfgrammar import GRAMMAR_GRAMMAR
 import pypy.interpreter.pyparser.grammar as grammar
-from pypy.interpreter.pyparser.pythonutil import build_parser_for_version
+from pypy.interpreter.pyparser.pythonutil import build_parser_for_version, build_parser
 
 # try:
 from pypy.interpreter.pyparser import symbol
@@ -98,6 +100,7 @@ class PythonParser(grammar.Parser):
         pytoken.setup_tokens(self)
         if predefined_symbols:
             self.load_symbols(predefined_symbols)
+        self.keywords = []
         
         # XXX (adim): this is trunk's keyword management
         # self.with_grammar = None
@@ -134,7 +137,6 @@ class PythonParser(grammar.Parser):
         goalnumber = self.symbols[goal]
         target = self.root_rules[goalnumber]
         src = Source(self, lines, flags)
-
         if not target.match(src, builder):
             line, lineno = src.debug()
             # XXX needs better error messages
@@ -142,24 +144,43 @@ class PythonParser(grammar.Parser):
             # return None
         return builder
 
+    def update_rules_references(self):
+        """update references to old rules"""
+        # brute force algorithm
+        for rule in self.all_rules:
+            for i, arg in enumerate(rule.args):
+                if arg.codename in self.root_rules:
+                    real_rule = self.root_rules[arg.codename]
+                    # This rule has been updated
+                    if real_rule is not rule.args[i]:
+                        rule.args[i] = real_rule
 
-##     def eval(self, source, builder=None):
-##         if builder is None:
-##             builder = self.builder
-##         rule = self.root_rules['eval_input']
-##         rule.match(source, builder)
+    
+    def insert_rule(self, ruledef):
+        """parses <ruledef> and inserts corresponding rules in the parser"""
+        # parse the ruledef(s)
+        source = GrammarSource(GRAMMAR_GRAMMAR, ruledef)
+        builder = ebnfparse.EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=self)
+        GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
+        # remove proxy objects if any
+        builder.resolve_rules()
+        # update keywords
+        self.keywords.extend(builder.keywords)
+        # update old references in case an existing rule was modified
+        self.update_rules_references()
+        # recompute first sets
+        self.build_first_sets()
+
 
 
 def get_pyparser_for_version(version):
     parser = PythonParser(predefined_symbols=symbol.sym_name)
     return build_parser_for_version(version, parser=parser)
-    
 
 # unfortunately the command line options are not parsed yet
 debug_print( "Loading grammar %s" % Options.version )
-# PYTHON_PARSER = get_pyparser_for_version(Options.version)
-PYTHON_PARSER = get_pyparser_for_version( Options.version )
-
+# XXX: remove PYTHON_PARSER
+PYTHON_PARSER = get_pyparser_for_version(Options.version)
 
 ## XXX BROKEN
 ## def grammar_rules( space ):
