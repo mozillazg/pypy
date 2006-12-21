@@ -39,7 +39,7 @@ def compile_with_astcompiler(expr, mode='exec', space=FakeSpace()):
     return rcode
 
 # Create parser from Grammar_stable, not current grammar.
-stable_parser = pythonparse.get_pyparser_for_version('stable')
+stable_parser = pythonparse.make_pyparser('stable')
 
 def compile_with_testcompiler(expr, mode='exec', space=FakeSpace()):
     mode2 = 'exec' # xxx exec: single not really tested
