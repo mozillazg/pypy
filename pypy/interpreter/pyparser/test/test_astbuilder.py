@@ -218,7 +218,7 @@ def tuple_parse_expr(expr, target='single'):
     return ast_from_input(expr, target, t, stable_parser)
 
 def source2ast(source, mode, space=FakeSpace()):
-    builder = AstBuilder(space=space)
+    builder = AstBuilder(space=space, parser=python_parser)
     python_parser.parse_source(source, mode, builder)
     return builder.rule_stack[-1]
 

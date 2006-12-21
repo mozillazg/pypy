@@ -39,6 +39,7 @@ def build_parser(gramfile, parser=None):
     GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
     builder.resolve_rules()
     parser.build_first_sets()
+    parser.keywords = builder.keywords
     return parser
 
 
