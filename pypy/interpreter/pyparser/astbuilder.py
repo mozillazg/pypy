@@ -1062,6 +1062,7 @@ class AstBuilder(Wrappable, BaseGrammarBuilder):
     """A builder that directly produce the AST"""
 
     def __init__(self, parser=None, debug=0, space=None):
+        # XXX: parser must become mandatory
         if parser is None:
             from pythonparse import PYTHON_PARSER
             parser = pythonparse.PYTHON_PARSER

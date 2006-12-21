@@ -1,7 +1,9 @@
 from pypy.interpreter.pyparser.pythonlexer import Source, TokenError, \
      match_encoding_declaration
 from pypy.interpreter.pyparser.grammar import Token, GrammarElement
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER as P
+from pypy.interpreter.pyparser.pythonparse import make_pyparser
+
+P = make_pyparser()
 
 EQUAL = P.EQUAL
 ENDMARKER = P.ENDMARKER

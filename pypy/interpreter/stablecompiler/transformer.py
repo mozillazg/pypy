@@ -26,7 +26,7 @@ parseFile(path) -> AST
 # and replace OWNER, ORGANIZATION, and YEAR as appropriate.
 
 # make sure we import the parser with the correct grammar
-from pypy.interpreter.pyparser.pythonparse import get_pyparser_for_version
+from pypy.interpreter.pyparser.pythonparse import make_pyparser
 
 from pypy.interpreter.stablecompiler.ast import *
 import parser
@@ -37,7 +37,7 @@ import sys
 # stable_grammar, _ = pythonparse.get_grammar_file("stable")
 # stable_parser = pythonparse.python_grammar(stable_grammar)
 
-stable_parser = get_pyparser_for_version('stable')
+stable_parser = make_pyparser('stable')
 
 class symbol:
     pass

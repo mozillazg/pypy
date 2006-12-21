@@ -1,5 +1,4 @@
 import os
-from pypy.tool.option import Options
 
 from pypy.interpreter.pyparser import pythonparse
 from pypy.interpreter.pyparser.astbuilder import AstBuilder
@@ -210,8 +209,8 @@ class FakeSpace:
     builtin = dict(int=int, long=long, float=float, complex=complex)
 
 # Create parser from Grammar_stable, not current grammar.
-stable_parser = pythonparse.get_pyparser_for_version('stable')
-python_parser = pythonparse.get_pyparser_for_version(Options.version) # 'native') # 2.5a')
+stable_parser = pythonparse.make_pyparser('stable')
+python_parser = pythonparse.make_pyparser() # 'native') # 2.5a')
 
 def tuple_parse_expr(expr, target='single'):
     t = Transformer("dummyfile")

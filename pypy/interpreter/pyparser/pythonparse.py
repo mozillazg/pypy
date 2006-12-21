@@ -173,14 +173,14 @@ class PythonParser(grammar.Parser):
 
 
 
-def get_pyparser_for_version(version):
+def make_pyparser(version=Options.version):
     parser = PythonParser(predefined_symbols=symbol.sym_name)
     return build_parser_for_version(version, parser=parser)
 
 # unfortunately the command line options are not parsed yet
-debug_print( "Loading grammar %s" % Options.version )
+# debug_print( "Loading grammar %s" % Options.version )
 # XXX: remove PYTHON_PARSER
-PYTHON_PARSER = get_pyparser_for_version(Options.version)
+PYTHON_PARSER = make_pyparser()
 
 ## XXX BROKEN
 ## def grammar_rules( space ):

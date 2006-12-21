@@ -69,19 +69,19 @@ def ast_from_input(input, mode, transformer, parser):
 
 
 def pypy_parse(source, mode='exec', lineno=False):
-    from pypy.interpreter.pyparser.pythonparse import PythonParser, get_pyparser_for_version
+    from pypy.interpreter.pyparser.pythonparse import PythonParser, make_pyparser
     from pypy.interpreter.pyparser.astbuilder import AstBuilder
     # parser = build_parser_for_version("2.4", PythonParser())
-    parser = get_pyparser_for_version('2.4')
+    parser = make_pyparser('2.4')
     builder = TupleBuilder(parser)
     parser.parse_source(source, mode, builder)
     return builder.stack[-1].as_tuple(lineno)
 
 
 def source2ast(source, mode='exec', version='2.4', space=None):
-    from pypy.interpreter.pyparser.pythonparse import PythonParser, get_pyparser_for_version
+    from pypy.interpreter.pyparser.pythonparse import PythonParser, make_pyparser
     from pypy.interpreter.pyparser.astbuilder import AstBuilder
-    parser = get_pyparser_for_version(version)
+    parser = make_pyparser(version)
     builder = AstBuilder(parser, space=space)
     parser.parse_source(source, mode, builder)
     return builder
