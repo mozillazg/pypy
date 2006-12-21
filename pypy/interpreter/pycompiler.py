@@ -189,6 +189,7 @@ class CPythonCompiler(PyCodeCompiler):
         warnings.warn_explicit = old_warn_explicit
 
 
+
 ########
 class PythonAstCompiler(PyCodeCompiler):
     """Uses the stdlib's python implementation of compiler
@@ -198,6 +199,15 @@ class PythonAstCompiler(PyCodeCompiler):
          of incomplete inputs (e.g. we shouldn't re-compile from sracth
          the whole source after having only added a new '\n')
     """
+    def __init__(self, space):
+        from pyparser.pythonparse import get_pyparser_for_version
+        from pypy.tool.option import Options
+        PyCodeCompiler.__init__(self, space)
+        self.parser = get_pyparser_for_version(Options.version)
+        self.additional_rules = {}
+
+    
+
     def compile(self, source, filename, mode, flags):
         from pyparser.error import SyntaxError
         from pypy.interpreter import astcompiler
@@ -206,14 +216,15 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.astcompiler.pycodegen import ExpressionCodeGenerator
         from pypy.interpreter.astcompiler.ast import Node
         from pyparser.astbuilder import AstBuilder
-        from pyparser.pythonparse import PYTHON_PARSER
         from pypy.interpreter.pycode import PyCode
 
         flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
-            builder = AstBuilder(space=space)
-            PYTHON_PARSER.parse_source(source, mode, builder, flags)
+            builder = AstBuilder(self.parser, space=space)
+            for rulename, buildfunc in self.additional_rules.iteritems():
+                builder.build_rules[rulename] = buildfunc
+            self.parser.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
             encoding = builder.source_encoding
         except SyntaxError, e:
@@ -252,3 +263,14 @@ def install_compiler_hook(space, w_callable):
 #       if not space.get( w_callable ):
 #           raise OperationError( space.w_TypeError( space.wrap( "must have a callable" ) )
         space.default_compiler.w_compile_hook = w_callable
+
+def insert_grammar_rule(space, w_rule, w_buildfuncs):
+    """inserts new grammar rules to the default compiler"""
+    rule = space.str_w(w_rule)
+    buildfuncs_w = w_buildfuncs.content
+    buildfuncs = {}
+    for w_name, w_func in buildfuncs_w.iteritems():
+        buildfuncs[space.str_w(w_name)] = space.unwrap(w_func)
+    space.default_compiler.additional_rules = buildfuncs
+    space.default_compiler.parser.insert_rule(rule)
+
