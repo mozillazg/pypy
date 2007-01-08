@@ -55,22 +55,22 @@ class LLFlexSwitch(CodeGenSwitch):
     def add_case(self, gv_case):
         self.cases_gv.append(gv_case)  # not used so far, but keeps ptrs alive
         l_case = llimpl.add_case(self.b, gv_case.v)
-        builder = LLBuilder(self.gv_f)
-        builder.lnk = l_case
-        return builder
+        b = llimpl.closelinktofreshblockwithsameargsasotherlink(l_case,
+                                                                self.l_default)
+        return LLBuilder(self.gv_f, b)
 
-    def add_default(self):
+    def _add_default(self, args_gv):
         l_default = llimpl.add_default(self.b)
-        builder = LLBuilder(self.gv_f)
-        builder.lnk = l_default
-        return builder
+        self.l_default = l_default
+        b = llimpl.closelinktofreshblock(l_default, args_gv)
+        return LLBuilder(self.gv_f, b)
 
 class LLBuilder(GenBuilder):
-    lnk = llimpl.nulllink
 
-    def __init__(self, g):
+    def __init__(self, g, block):
         self.rgenop = rgenop
         self.gv_f = g
+        self.b = block
 
     def end(self):
         llimpl.end(self.gv_f)
@@ -156,8 +156,7 @@ class LLBuilder(GenBuilder):
         return [LLVar(llimpl.geninputarg(newb, kind.v)) for kind in kinds]
 
     def enter_next_block(self, kinds, args_gv):
-        lnk = self.lnk or llimpl.closeblock1(self.b)
-        self.lnk = llimpl.nulllink
+        lnk = llimpl.closeblock1(self.b)
         newb_args_gv = self._newblock(kinds) 
         llimpl.closelink(lnk, args_gv, self.b)
         for i in range(len(args_gv)):
@@ -165,38 +164,35 @@ class LLBuilder(GenBuilder):
         return LLLabel(self.b, self.gv_f)
 
     def finish_and_goto(self, args_gv, target):
-        lnk = self.lnk or llimpl.closeblock1(self.b)
-        self.lnk = llimpl.nulllink
+        lnk = llimpl.closeblock1(self.b)
+        self.b = llimpl.nullblock
         llimpl.closelink(lnk, args_gv, target.b)
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         gv_returnvar = gv_returnvar or gv_dummy_placeholder
-        lnk = self.lnk or llimpl.closeblock1(self.b)
-        self.lnk = llimpl.nulllink
+        lnk = llimpl.closeblock1(self.b)
+        self.b = llimpl.nullblock
         llimpl.closereturnlink(lnk, gv_returnvar.v, self.gv_f)
 
-    def jump_if_true(self, gv_cond):
+    def jump_if_true(self, gv_cond, args_for_jump_gv):
         l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
-        self.b = llimpl.nullblock
-        later_builder = LLBuilder(self.gv_f)
-        later_builder.lnk = l_true
-        self.lnk = l_false
+        self.b = llimpl.closelinktofreshblock(l_false, None)
+        b2 = llimpl.closelinktofreshblock(l_true, args_for_jump_gv)
+        later_builder = LLBuilder(self.gv_f, b2)
         return later_builder
 
-    def jump_if_false(self, gv_cond):
+    def jump_if_false(self, gv_cond, args_for_jump_gv):
         l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
-        self.b = llimpl.nullblock
-        later_builder = LLBuilder(self.gv_f)
-        later_builder.lnk = l_false
-        self.lnk = l_true
+        self.b = llimpl.closelinktofreshblock(l_true, None)
+        b2 = llimpl.closelinktofreshblock(l_false, args_for_jump_gv)
+        later_builder = LLBuilder(self.gv_f, b2)
         return later_builder
 
-    def flexswitch(self, gv_switchvar):
+    def flexswitch(self, gv_switchvar, args_gv):
         llimpl.closeblockswitch(self.b, gv_switchvar.v)
         flexswitch = LLFlexSwitch(self.b, self.gv_f)
         self.b = llimpl.nullblock
-        self.lnk = llimpl.nulllink
-        return flexswitch
+        return (flexswitch, flexswitch._add_default(args_gv))
 
     def show_incremental_progress(self):
         llimpl.show_incremental_progress(self.gv_f)
@@ -208,8 +204,7 @@ class RGenOp(AbstractRGenOp):
 
     def newgraph(self, (ARGS_gv, gv_RESULT, gv_FUNCTYPE), name):
         gv_func = llimpl.newgraph(gv_FUNCTYPE.v, name)
-        builder = LLBuilder(gv_func)
-        builder.b = llimpl.getstartblock(gv_func)
+        builder = LLBuilder(gv_func, llimpl.getstartblock(gv_func))
         inputargs_gv = [LLVar(llimpl.getinputarg(builder.b, i))
                         for i in range(len(ARGS_gv))]
         return builder, LLConst(gv_func), inputargs_gv

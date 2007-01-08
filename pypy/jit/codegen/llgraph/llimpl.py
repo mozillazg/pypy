@@ -350,6 +350,31 @@ def closereturnlink(link, returnvar, gv_func):
     graph = _getgraph(gv_func)
     _closelink(link, [returnvar], graph.prereturnblock)
 
+def closelinktofreshblock(link, inputargs=None):
+    link = from_opaque_object(link)
+    vars = link.prevblock.getvariables()
+    if inputargs is not None:
+        existing_vars = dict.fromkeys(vars)
+        vars = _inputvars(inputargs)
+        for v in vars:
+            assert v in existing_vars
+    nextblock = flowmodel.Block(list(vars))
+    link.args = vars
+    link.target = nextblock
+    return to_opaque_object(nextblock)
+
+def closelinktofreshblockwithsameargsasotherlink(link, otherlink):
+    link = from_opaque_object(link)
+    otherlink = from_opaque_object(otherlink)
+    existing_vars = dict.fromkeys(link.prevblock.getvariables())
+    vars = list(otherlink.args)
+    for v in vars:
+        assert v in existing_vars
+    nextblock = flowmodel.Block(list(vars))
+    link.args = vars
+    link.target = nextblock
+    return to_opaque_object(nextblock)
+
 def casting_link(source, sourcevars, target):
     assert len(sourcevars) == len(target.inputargs)
     linkargs = []
@@ -372,7 +397,27 @@ class PseudoRTyper(object):
         from pypy.rpython.typesystem import LowLevelTypeSystem
         self.type_system = LowLevelTypeSystem.instance
 
+def fixduplicatevars(graph):
+    incomingvars = {}   # {block: {var_from_link_args: True}}
+    for link in graph.iterlinks():
+        vars = incomingvars.setdefault(link.target, {})
+        for v in link.args:
+            if isinstance(v, flowmodel.Variable):
+                vars[v] = True
+    for block, vars in incomingvars.items():
+        for v in block.inputargs:
+            if v in vars:
+                # this block needs renaming of all its input variables
+                mapping = {}
+                for a in block.inputargs:
+                    mapping[a] = a1 = flowmodel.Variable(a)
+                    a1.concretetype = a.concretetype
+                block.renamevariables(mapping)
+                break
+
 def _buildgraph(graph):
+    # rgenop makes graphs that use the same variable in several blocks,
+    fixduplicatevars(graph)                             # fix this now
     flowmodel.checkgraph(graph)
     eliminate_empty_blocks(graph)
     join_blocks(graph)
@@ -486,6 +531,8 @@ setannotation(add_case, s_Link)
 setannotation(add_default, s_Link)
 setannotation(closelink, None)
 setannotation(closereturnlink, None)
+setannotation(closelinktofreshblock, s_Block)
+setannotation(closelinktofreshblockwithsameargsasotherlink, s_Block)
 
 setannotation(isptrtype, annmodel.SomeBool())
 
