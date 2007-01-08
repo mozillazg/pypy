@@ -290,19 +290,19 @@ class HintGraphTransformer(object):
                             resulttype = lltype.Bool)
 
         block.exitswitch = v_flag
-        true_block = Block([])
-        true_link  = Link([], true_block)
-        true_link.exitcase   = True
-        true_link.llexitcase = True
-        block.recloseblock(link_f, true_link)
+##        true_block = Block([])
+##        true_link  = Link([], true_block)
+##        true_link.exitcase   = True
+##        true_link.llexitcase = True
+##        block.recloseblock(link_f, true_link)
 
-        reds, greens = self.sort_by_color(link_t.args)
-        self.genop(true_block, 'save_locals', reds)
-        self.genop(true_block, 'enter_block', [])
-        true_block.closeblock(Link(link_t.args, link_t.target))
+##        reds, greens = self.sort_by_color(link_t.args)
+##        self.genop(true_block, 'save_locals', reds)
+##        self.genop(true_block, 'enter_block', [])
+##        true_block.closeblock(Link(link_t.args, link_t.target))
 
-        SSA_to_SSI({block     : True,    # reachable from outside
-                    true_block: False}, self.hannotator)
+##        SSA_to_SSI({block     : True,    # reachable from outside
+##                    true_block: False}, self.hannotator)
 
     def get_resume_point_link(self, block):
         try:
