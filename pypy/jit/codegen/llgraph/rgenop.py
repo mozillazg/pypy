@@ -211,8 +211,10 @@ class LLBuilder(GenBuilder):
     def pause_writing(self, args_gv):
         lnk = llimpl.closeblock1(self.b)
         b2 = llimpl.closelinktofreshblock(lnk, args_gv)
-        self.later_block = b2
         self._close()
+        later_builder = LLBuilder(self.gv_f, llimpl.nullblock)
+        later_builder.later_block = b2
+        return later_builder
 
     def show_incremental_progress(self):
         llimpl.show_incremental_progress(self.gv_f)
