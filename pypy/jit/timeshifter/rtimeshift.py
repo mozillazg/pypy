@@ -330,7 +330,8 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
             node = resuming.path.pop()
             assert isinstance(node, PromotionPathSplit)
             return node.answer
-        later_builder = jitstate.curbuilder.jump_if_false(exitgvar)
+        locals_gv = jitstate.get_locals_gv()
+        later_builder = jitstate.curbuilder.jump_if_false(exitgvar, locals_gv)
         jitstate2 = jitstate.split(later_builder, resumepoint, list(greens_gv))
         if resuming is None:
             node = jitstate.promotion_path
@@ -863,6 +864,15 @@ class JITState(object):
         self.frame.replace(memo)
         self.exc_type_box  = self.exc_type_box .replace(memo)
         self.exc_value_box = self.exc_value_box.replace(memo)
+
+    def get_locals_gv(self):
+        # get all the genvars that are "alive", i.e. stored in the JITState
+        # or the VirtualFrames
+        incoming = []
+        memo = rvalue.enter_block_memo()
+        self.enter_block(incoming, memo)
+        locals_gv = [redbox.genvar for redbox in incoming]
+        return locals_gv
 
 
     def residual_ll_exception(self, ll_evalue):
