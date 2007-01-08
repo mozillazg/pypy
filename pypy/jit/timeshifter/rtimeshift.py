@@ -628,14 +628,12 @@ def ll_promote(jitstate, promotebox, promotiondesc):
         jitstate.enter_block(incoming, memo)
         switchblock = enter_next_block(jitstate, incoming)
         gv_switchvar = promotebox.genvar
-        flexswitch = builder.flexswitch(gv_switchvar)
-        
+        incoming_gv = [box.genvar for box in incoming]
+        flexswitch, default_builder = builder.flexswitch(gv_switchvar,
+                                                         incoming_gv)
         if jitstate.resuming is None:
-            incoming_gv = [box.genvar for box in incoming]
-            default_builder = flexswitch.add_default()
             jitstate.curbuilder = default_builder
             # default case of the switch:
-            enter_block(jitstate)
             pm = PromotionPoint(flexswitch, incoming_gv,
                                 jitstate.promotion_path)
             #debug_print(lltype.Void, "PROMOTE")
@@ -683,8 +681,6 @@ def ll_promote(jitstate, promotebox, promotiondesc):
                 
             newbuilder = flexswitch.add_case(promotenode.gv_value)
             jitstate.curbuilder = newbuilder
-
-            enter_block(jitstate)
             return False
 
 # ____________________________________________________________

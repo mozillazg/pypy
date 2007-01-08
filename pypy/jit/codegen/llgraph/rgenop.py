@@ -47,22 +47,22 @@ class LLLabel(GenLabel):
 
 class LLFlexSwitch(CodeGenSwitch):
     
-    def __init__(self, b, g):
+    def __init__(self, b, g, args_gv):
         self.b = b
         self.gv_f = g
         self.cases_gv = []
+        self.args_gv = args_gv
 
     def add_case(self, gv_case):
         self.cases_gv.append(gv_case)  # not used so far, but keeps ptrs alive
         l_case = llimpl.add_case(self.b, gv_case.v)
-        b = llimpl.closelinktofreshblockwithsameargsasotherlink(l_case,
-                                                                self.l_default)
+        b = llimpl.closelinktofreshblock(l_case, self.args_gv, self.l_default)
         return LLBuilder(self.gv_f, b)
 
-    def _add_default(self, args_gv):
+    def _add_default(self):
         l_default = llimpl.add_default(self.b)
         self.l_default = l_default
-        b = llimpl.closelinktofreshblock(l_default, args_gv)
+        b = llimpl.closelinktofreshblock(l_default, self.args_gv, None)
         return LLBuilder(self.gv_f, b)
 
 class LLBuilder(GenBuilder):
@@ -176,8 +176,8 @@ class LLBuilder(GenBuilder):
         self._close()
 
     def _jump(self, l_jump, l_no_jump, args_for_jump_gv):
-        self.b = llimpl.closelinktofreshblock(l_no_jump, None)
-        b2 = llimpl.closelinktofreshblock(l_jump, args_for_jump_gv)
+        self.b = llimpl.closelinktofreshblock(l_no_jump, None, None)
+        b2 = llimpl.closelinktofreshblock(l_jump, args_for_jump_gv, None)
         later_builder = LLBuilder(self.gv_f, llimpl.nullblock)
         later_builder.later_block = b2
         later_builder.jumped_from = self
@@ -193,9 +193,9 @@ class LLBuilder(GenBuilder):
 
     def flexswitch(self, gv_switchvar, args_gv):
         llimpl.closeblockswitch(self.b, gv_switchvar.v)
-        flexswitch = LLFlexSwitch(self.b, self.gv_f)
+        flexswitch = LLFlexSwitch(self.b, self.gv_f, args_gv)
         self._close()
-        return (flexswitch, flexswitch._add_default(args_gv))
+        return (flexswitch, flexswitch._add_default())
 
     def _close(self):
         self.b = llimpl.nullblock
@@ -210,7 +210,7 @@ class LLBuilder(GenBuilder):
 
     def pause_writing(self, args_gv):
         lnk = llimpl.closeblock1(self.b)
-        b2 = llimpl.closelinktofreshblock(lnk, args_gv)
+        b2 = llimpl.closelinktofreshblock(lnk, args_gv, None)
         self._close()
         later_builder = LLBuilder(self.gv_f, llimpl.nullblock)
         later_builder.later_block = b2
@@ -282,7 +282,7 @@ class RGenOp(AbstractRGenOp):
     constPrebuiltGlobal = genconst
 
     def replay(self, label, kinds):
-        builder = LLBuilder(label.g)
+        builder = LLBuilder(label.g, llimpl.nullblock)
         args_gv = builder._newblock(kinds)
         return builder, args_gv
 
