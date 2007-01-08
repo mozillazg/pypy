@@ -69,6 +69,7 @@ def build_if():
     gv1 = builder.genop2('int_lt', gv0, const0)
     false_builder = builder.jump_if_false(gv1, [gv0])
     builder.finish_and_return(f1_token, const0)
+    false_builder.start_writing()
     false_builder.finish_and_return(f1_token, gv0)
     builder.end()
     if_ptr = gv_if.revealconst(lltype.Ptr(F1))
@@ -112,6 +113,7 @@ def build_loop():
     gv2 = builder.genop2('int_le', gv_i1, gv1)
     loop_builder = builder.jump_if_true(gv2, [gv_result1, gv_i1, gv1])
     builder.finish_and_return(f1_token, gv_result1)
+    loop_builder.start_writing()
     loop_builder.finish_and_goto([gv_result1, gv_i1, gv1], loopblock)
 
     builder.end()

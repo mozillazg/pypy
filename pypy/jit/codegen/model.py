@@ -102,9 +102,10 @@ class GenBuilder(object):
         that is taken if gv_condition is false and return the new
         builder.
 
-        The current builder stays open, and it must be closed before
-        the fresh builder is used at all, to make the backend\'s life
-        easier.'''
+        The current builder stays open.  To make the backend\'s life
+        easier it must be closed before the fresh builder is used at
+        all, and the first thing to call on the latter is
+        start_writing().'''
 
     def jump_if_true(self, gv_condition, args_for_jump_gv):
         '''See above, with the obvious difference :)'''
@@ -153,14 +154,15 @@ class GenBuilder(object):
         '''Optional method: prints or logs the position of the generated code
         along with the given msg.
         '''
-    def pause(self):
+    def pause_writing(self, args_gv):
         '''Optional method: Called when the builder will not be used for a
         while. This allows the builder to free temporary resources needed
         during code generation. The next call to the builder will have to be
-        to enter_next_block, finish_and_got, finish_and_return or resume.
+        to start_writing().
         '''
-    def resume(self):
-        'Resumes a paused builder.'
+    def start_writing(self):
+        '''Start a builder returned by jump_if_xxx(), or resumes a paused
+        builder.'''
         
 class GenLabel(object):
     '''A "smart" label.  Represents an address of the start of a basic

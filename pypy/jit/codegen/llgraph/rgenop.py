@@ -66,12 +66,12 @@ class LLFlexSwitch(CodeGenSwitch):
         return LLBuilder(self.gv_f, b)
 
 class LLBuilder(GenBuilder):
+    jumped_from = None
 
     def __init__(self, g, block):
         self.rgenop = rgenop
         self.gv_f = g
         self.b = block
-        self.jumped_to_builders = []
 
     def end(self):
         llimpl.end(self.gv_f)
@@ -175,23 +175,21 @@ class LLBuilder(GenBuilder):
         llimpl.closereturnlink(lnk, gv_returnvar.v, self.gv_f)
         self._close()
 
-    def jump_if_true(self, gv_cond, args_for_jump_gv):
-        l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
-        self.b = llimpl.closelinktofreshblock(l_false, None)
-        b2 = llimpl.closelinktofreshblock(l_true, args_for_jump_gv)
+    def _jump(self, l_jump, l_no_jump, args_for_jump_gv):
+        self.b = llimpl.closelinktofreshblock(l_no_jump, None)
+        b2 = llimpl.closelinktofreshblock(l_jump, args_for_jump_gv)
         later_builder = LLBuilder(self.gv_f, llimpl.nullblock)
         later_builder.later_block = b2
-        self.jumped_to_builders.append(later_builder)
+        later_builder.jumped_from = self
         return later_builder
+
+    def jump_if_true(self, gv_cond, args_for_jump_gv):
+        l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
+        return self._jump(l_true, l_false, args_for_jump_gv)
 
     def jump_if_false(self, gv_cond, args_for_jump_gv):
         l_false, l_true = llimpl.closeblock2(self.b, gv_cond.v)
-        self.b = llimpl.closelinktofreshblock(l_true, None)
-        b2 = llimpl.closelinktofreshblock(l_false, args_for_jump_gv)
-        later_builder = LLBuilder(self.gv_f, llimpl.nullblock)
-        later_builder.later_block = b2
-        self.jumped_to_builders.append(later_builder)
-        return later_builder
+        return self._jump(l_false, l_true, args_for_jump_gv)
 
     def flexswitch(self, gv_switchvar, args_gv):
         llimpl.closeblockswitch(self.b, gv_switchvar.v)
@@ -201,9 +199,20 @@ class LLBuilder(GenBuilder):
 
     def _close(self):
         self.b = llimpl.nullblock
-        for builder in self.jumped_to_builders:
-            builder.b = builder.later_block
-            builder.later_block = llimpl.nullblock
+
+    def start_writing(self):
+        assert self.b == llimpl.nullblock
+        if self.jumped_from:
+            assert self.jumped_from.b == llimpl.nullblock
+        assert self.later_block != llimpl.nullblock
+        self.b = self.later_block
+        self.later_block = llimpl.nullblock
+
+    def pause_writing(self, args_gv):
+        lnk = llimpl.closeblock1(self.b)
+        b2 = llimpl.closelinktofreshblock(lnk, args_gv)
+        self.later_block = b2
+        self._close()
 
     def show_incremental_progress(self):
         llimpl.show_incremental_progress(self.gv_f)
