@@ -86,22 +86,27 @@ class GenBuilder(object):
         zip(kinds, args_gv) gives the kindtoken and GenVarOrConst for
         each inputarg of the block.
 
-        The Obscure Bit: args_gv must be mutated in place to replace
-        GenConsts with GenVars and optionally GenVars can be replaced
-        with new GenVars, for example if the same value might live in
-        different locations (registers, places on the stack) in
-        different basic blocks.
+        The Obscure Bit: args_gv must be mutated in place until it is a
+        list of unique GenVars.  So GenConsts must be replaced with
+        GenVars, and duplicate GenVars must be made unique.  Optionally,
+        *all* GenVars can be replaced with new GenVars, for example if
+        the same value might live in different locations (registers,
+        places on the stack) in different basic blocks.
 
         Returns an instance of GenLabel that can later be jumped to.
         '''
 
-    def jump_if_false(self, gv_condition):
+    def jump_if_false(self, gv_condition, args_for_jump_gv):
         '''Make a fresh builder, insert in the current block a
         check of gv_condition and a conditional jump to the new block
         that is taken if gv_condition is false and return the new
-        builder.'''
+        builder.
 
-    def jump_if_true(self, gv_condition):
+        The current builder stays open, and it must be closed before
+        the fresh builder is used at all, to make the backend\'s life
+        easier.'''
+
+    def jump_if_true(self, gv_condition, args_for_jump_gv):
         '''See above, with the obvious difference :)'''
 
     def finish_and_return(self, sigtoken, gv_returnvar):
@@ -120,14 +125,20 @@ class GenBuilder(object):
         This "closes" the current builder.
         '''
 
-    def flexswitch(self, gv_exitswitch):
+    def flexswitch(self, gv_exitswitch, args_gv):
         '''The Fun Stuff.
 
         Generates a switch on the value of gv_exitswitch that can have
         cases added to it later, i.e. even after it\'s been executed a
         few times.
 
-        Returns an instance of CodeGenSwitch, see below.
+        args_gv is the list of live variables.  It\'s the list of
+        variables that can be used in each switch case.
+
+        Returns a tuple:
+        - an instance of CodeGenSwitch (see below)
+        - a new builder for the default case, that will be jumped to
+          when the switched-on GenVar does not take the value of any case.
 
         This "closes" the current builder.
         '''
@@ -258,8 +269,3 @@ class CodeGenSwitch(object):
     def add_case(self, gv_case):
         '''Make a new builder that will be jumped to when the
         switched-on GenVar takes the value of the GenConst gv_case.'''
-
-    def add_default(self):
-        '''Make a new builder that will be jumped to when the
-        switched-on GenVar does not take the value of any case.'''
-
