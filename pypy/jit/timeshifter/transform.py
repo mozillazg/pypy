@@ -433,6 +433,7 @@ class HintGraphTransformer(object):
         if self.graphcolor == 'gray':
             self.genop(block, 'save_locals', [])
         elif self.graphcolor == 'yellow':
+            self.genop(block, 'save_locals', [])
             self.genop(block, 'save_greens', [v_retbox])
         elif self.graphcolor == 'red':
             self.genop(block, 'save_locals', [v_retbox])

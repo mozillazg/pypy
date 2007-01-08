@@ -156,10 +156,12 @@ class GenBuilder(object):
         '''
     def pause_writing(self, args_gv):
         '''Optional method: Called when the builder will not be used for a
-        while. This allows the builder to free temporary resources needed
-        during code generation. The next call to the builder will have to be
-        to start_writing().
+        while. This allows the builder to be freed. The pause_writing()
+        method returns the next builder, on which you will have to call
+        start_writing() before you continue.
         '''
+        return self
+
     def start_writing(self):
         '''Start a builder returned by jump_if_xxx(), or resumes a paused
         builder.'''
