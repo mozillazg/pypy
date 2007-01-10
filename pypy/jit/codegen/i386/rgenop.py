@@ -2,8 +2,8 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
-from pypy.jit.codegen.i386 import ri386
-from pypy.jit.codegen.i386.ri386 import I386CodeBuilder
+from pypy.jit.codegen.i386.ri386 import *
+from pypy.jit.codegen.i386 import conftest
 
 
 WORD = 4    # bytes
@@ -49,15 +49,70 @@ class OpIntSub(Op2):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
 
-
-class InputVar(GenVar):
-    def __init__(self, operand):
-        self.operand = operand
+# ____________________________________________________________
 
 class IntConst(GenConst):
+
     def __init__(self, value):
         self.value = value
 
+    def operand(self, builder):
+        return imm(self.value)
+
+    def nonimmoperand(self, builder, tmpregister):
+        builder.mc.MOV(tmpregister, self.operand(builder))
+        return tmpregister
+
+    @specialize.arg(1)
+    def revealconst(self, T):
+        if isinstance(T, lltype.Ptr):
+            return lltype.cast_int_to_ptr(T, self.value)
+        elif T is llmemory.Address:
+            return llmemory.cast_int_to_adr(self.value)
+        else:
+            return lltype.cast_primitive(T, self.value)
+
+    def __repr__(self):
+        "NOT_RPYTHON"
+        try:
+            return "const=%s" % (imm(self.value).assembler(),)
+        except TypeError:   # from Symbolics
+            return "const=%r" % (self.value,)
+
+    def repr(self):
+        return "const=$%s" % (self.value,)
+
+class AddrConst(GenConst):
+
+    def __init__(self, addr):
+        self.addr = addr
+
+    def operand(self, builder):
+        return imm(llmemory.cast_adr_to_int(self.addr))
+
+    def nonimmoperand(self, builder, tmpregister):
+        builder.mc.MOV(tmpregister, self.operand(builder))
+        return tmpregister
+
+    @specialize.arg(1)
+    def revealconst(self, T):
+        if T is llmemory.Address:
+            return self.addr
+        elif isinstance(T, lltype.Ptr):
+            return llmemory.cast_adr_to_ptr(self.addr, T)
+        elif T is lltype.Signed:
+            return llmemory.cast_adr_to_int(self.addr)
+        else:
+            assert 0, "XXX not implemented"
+
+    def __repr__(self):
+        "NOT_RPYTHON"
+        return "const=%r" % (self.addr,)
+
+    def repr(self):
+        return "const=<0x%x>" % (llmemory.cast_adr_to_int(self.addr),)
+
+# ____________________________________________________________
 
 def setup_opclasses(base):
     d = {}
@@ -73,38 +128,39 @@ del setup_opclasses
 
 
 class RegAllocator(object):
-    AVAILABLE_REGS = [ri386.eax, ri386.ecx, ri386.edx,
-                      ri386.ebx, ri386.esi, ri386.edi]
-    AVAILABLE_REGS.reverse()
+    AVAILABLE_REGS = [eax, ecx, edx, ebx, esi, edi]
+    AVAILABLE_REGS_REV = AVAILABLE_REGS[:]
+    AVAILABLE_REGS_REV.reverse()
 
-    def __init__(self, operations):
+    def __init__(self, operations, input_var2loc):
         self.operations = operations
+        self.input_var2loc = input_var2loc
         self.var2loc = {}
 
-    def set_final(self, final_vars, final_locs):
+    def set_final(self, final_vars_gv, final_locs):
         used = {}
-        for i in range(len(final_vars)):
-            v = final_vars[i]
+        for i in range(len(final_vars_gv)):
+            v = final_vars_gv[i]
             loc = final_locs[i]
             if v.is_const or v in self.var2loc or (
-                isinstance(v, InputVar) and v.operand != loc):
+                self.input_var2loc.get(v, loc) != loc):
                 v = OpSameAs(v)
                 self.operations.append(v)
             self.var2loc[v] = loc
             used[loc] = True
-        self.available_regs = [reg for reg in self.AVAILABLE_REGS
+        self.available_regs = [reg for reg in self.AVAILABLE_REGS_REV
                                    if reg not in used]
 
     def creating(self, v):
         loc = self.var2loc.get(v, None)
-        if isinstance(loc, ri386.REG):
+        if isinstance(loc, REG):
             self.available_regs.append(loc)
 
     def using(self, v):
         if not v.is_const and v not in self.var2loc:
-            if isinstance(v, InputVar):
-                loc = v.operand
-            else:
+            try:
+                loc = self.input_var2loc[v]
+            except KeyError:
                 try:
                     loc = self.available_regs.pop()
                 except IndexError:
@@ -114,7 +170,7 @@ class RegAllocator(object):
 
     def get_location(self, gv_source):
         if isinstance(gv_source, IntConst):
-            return ri386.imm(gv_source.value)
+            return imm(gv_source.value)
         else:
             return self.var2loc[gv_source]
 
@@ -125,39 +181,106 @@ class RegAllocator(object):
 
 
 class Builder(GenBuilder):
+    coming_from = 0
 
-    def __init__(self, rgenop, inputargs_gv):
+    def __init__(self, rgenop, input_vars_gv, input_var2loc):
         self.rgenop = rgenop
-        self.inputargs_gv = inputargs_gv
+        self.input_vars_gv = input_vars_gv
+        self.input_var2loc = input_var2loc
 
     def start_writing(self):
         self.operations = []
 
-    def generate_block_code(self, final_vars, final_locs):
-        allocator = RegAllocator(self.operations)
-        allocator.set_final(final_vars, final_locs)
+    def generate_block_code(self, final_vars_gv, final_locs):
+        operations = self.operations
+        allocator = RegAllocator(operations, self.input_var2loc)
+        allocator.set_final(final_vars_gv, final_locs)
         for i in range(len(operations)-1, -1, -1):
             v = operations[i]
             allocator.creating(v)
             v.allocate_registers(allocator)
-        allocator.mc = self.rgenop.open_mc()
+        mc = self.start_mc()
+        allocator.mc = mc
         for op in operations:
             op.generate(allocator)
+        self.operations = None
+        return mc
+
+    def enter_next_block(self, kinds, args_gv):
+        locs = {}
+        seen_regs = 0
+        for v in args_gv:
+            loc = self.input_var2loc.get(v, None)
+            locs[v] = loc
+            if isinstance(loc, REG):
+                i = loc.op
+                seen_regs |= 1 << i
+        i = 0
+        final_locs = []
+        final_var2loc = {}
+        for v in args_gv:
+            loc = locs[v]
+            if loc is None:
+                while seen_regs & (1 << i):
+                    i += 1
+                assert i < len(RegAllocator.AVAILABLE_REGS)   # XXX
+                loc = RegAllocator.AVAILABLE_REGS[i]
+                i += 1
+            final_locs.append(loc)
+            final_var2loc[v] = loc
+        mc = self.generate_block_code(args_gv, final_locs)
+        self.set_coming_from(mc)
+        self.rgenop.close_mc(mc)
+        self.input_args_gv = args_gv
+        self.input_var2loc = final_var2loc
+        self.start_writing()
+
+    def set_coming_from(self, mc, insn=I386CodeBuilder.JMP):
+        self.coming_from_insn = insn
+        self.coming_from = mc.tell()
+        insn(mc, rel32(0))
+
+    def start_mc(self):
+        mc = self.rgenop.open_mc()
+        # update the coming_from instruction
+        start = self.coming_from
+        if start:
+            targetaddr = mc.tell()
+            end = start + 6    # XXX hard-coded, enough for JMP and Jcond
+            oldmc = self.rgenop.InMemoryCodeBuilder(start, end)
+            insn = self.coming_from_insn
+            insn(oldmc, rel32(targetaddr))
+            oldmc.done()
+            self.coming_from = 0
+        return mc
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        mc = self.generate_block_code([gv_returnvar], [ri386.eax])
+        mc = self.generate_block_code([gv_returnvar], [eax])
+        # --- epilogue ---
+        mc.POP(edi)
+        mc.POP(esi)
+        mc.POP(ebx)
+        mc.POP(ebp)
         mc.RET()
-        self.close_mc(mc)
+        # ----------------
+        self.rgenop.close_mc(mc)
+
+    def end(self):
+        pass
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         cls = OPCLASSES1[opname]
-        return cls(gv_arg)
+        op = cls(gv_arg)
+        self.operations.append(op)
+        return op
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         cls = OPCLASSES2[opname]
-        return cls(gv_arg1, gv_arg2)
+        op = cls(gv_arg1, gv_arg2)
+        self.operations.append(op)
+        return op
 
 
 class RI386GenOp(AbstractRGenOp):
@@ -190,19 +313,33 @@ class RI386GenOp(AbstractRGenOp):
         assert len(self.mcs) == self.total_code_blocks
 
     def newgraph(self, sigtoken, name):
+        # --- prologue ---
+        mc = self.open_mc()
+        entrypoint = mc.tell()
+        if conftest.option.trap:
+            mc.BREAKPOINT()
+        mc.PUSH(ebp)
+        mc.MOV(ebp, esp)
+        mc.PUSH(ebx)
+        mc.PUSH(esi)
+        mc.PUSH(edi)
+        self.close_mc(mc)
+        # NB. a bit of a hack: the first generated block of the function
+        # will immediately follow, by construction
+        # ----------------
         numargs = sigtoken     # for now
-        inputargs_gv = [InputVar(ri386.mem(ri386.EBP, WORD * (2+i)))
-                        for i in range(numargs)]
-        builder = Builder(self, inputargs_gv)
+        inputargs_gv = []
+        input_var2loc = {}
+        for i in range(numargs):
+            v = GenVar()
+            inputargs_gv.append(v)
+            input_var2loc[v] = mem(ebp, WORD * (2+i))
+        builder = Builder(self, inputargs_gv, input_var2loc)
         builder.start_writing()
-        builder.operations.append(prologue)
-        builder.generate_block_code(
-        ...
-        entrypoint = builder.mc.tell()
         return builder, IntConst(entrypoint), inputargs_gv
 
-    def replay(self, label, kinds):
-        return ReplayBuilder(self), [dummy_var] * len(kinds)
+##    def replay(self, label, kinds):
+##        return ReplayBuilder(self), [dummy_var] * len(kinds)
 
     @specialize.genconst(1)
     def genconst(self, llvalue):

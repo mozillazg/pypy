@@ -6,11 +6,15 @@ class OPERAND(object):
 
 class REG(OPERAND):
     width = 4
+    def __repr__(self):
+        return '<%s>' % self.__class__.__name__.lower()
     def assembler(self):
         return '%' + self.__class__.__name__.lower()
 
 class REG8(OPERAND):
     width = 1
+    def __repr__(self):
+        return '<%s>' % self.__class__.__name__.lower()
     def assembler(self):
         return '%' + self.__class__.__name__.lower()
 
