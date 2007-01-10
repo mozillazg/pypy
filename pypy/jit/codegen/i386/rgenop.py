@@ -21,9 +21,12 @@ class Op1(Operation):
     def allocate_registers(self, allocator):
         allocator.using(self.x)
     def generate(self, allocator):
-        operand = allocator.var2loc[self]
-        allocator.load_operand(operand, self.x)
-        self.emit(allocator.mc, operand)
+        try:
+            loc = allocator.var2loc[self]
+        except KeyError:
+            return    # simple operation whose result is not used anyway
+        op = allocator.load_location_with(loc, self.x)
+        self.emit(allocator.mc, op)
 
 class OpSameAs(Op1):
     emit = staticmethod(lambda mc, x: None)
@@ -36,10 +39,13 @@ class Op2(Operation):
         allocator.using(self.x)
         allocator.using(self.y)
     def generate(self, allocator):
-        operand1 = allocator.var2loc[self]
-        allocator.load_operand(operand1, self.x)
-        operand2 = allocator.get_location(self.y)
-        self.emit(allocator.mc, operand1, operand2)
+        try:
+            loc = allocator.var2loc[self]
+        except KeyError:
+            return    # simple operation whose result is not used anyway
+        op1 = allocator.load_location_with(loc, self.x)
+        op2 = allocator.get_operand(self.y)
+        self.emit(allocator.mc, op1, op2)
 
 class OpIntAdd(Op2):
     opname = 'int_add'
@@ -126,113 +132,189 @@ OPCLASSES1 = setup_opclasses(Op1)
 OPCLASSES2 = setup_opclasses(Op2)
 del setup_opclasses
 
+OPCLASSES1['int_is_true'] = None
+
+
+class OutOfRegisters(Exception):
+    pass
+
 
 class RegAllocator(object):
     AVAILABLE_REGS = [eax, ecx, edx, ebx, esi, edi]
-    AVAILABLE_REGS_REV = AVAILABLE_REGS[:]
-    AVAILABLE_REGS_REV.reverse()
 
-    def __init__(self, operations, input_var2loc):
-        self.operations = operations
-        self.input_var2loc = input_var2loc
+    # 'gv' -- GenVars, used as arguments and results of operations
+    #
+    # 'loc' -- location, a small integer that represents an abstract
+    #          register number
+    #
+    # 'operand' -- a concrete machine code operand, which can be a
+    #              register (ri386.eax, etc.) or a stack memory operand
+
+    def __init__(self):
+        self.nextloc = 0
         self.var2loc = {}
+        self.available_locs = []
+        self.force_loc2operand = {}
+        self.force_operand2loc = {}
+        self.initial_moves = []
 
-    def set_final(self, final_vars_gv, final_locs):
-        used = {}
-        for i in range(len(final_vars_gv)):
-            v = final_vars_gv[i]
-            loc = final_locs[i]
-            if v.is_const or v in self.var2loc or (
-                self.input_var2loc.get(v, loc) != loc):
-                v = OpSameAs(v)
-                self.operations.append(v)
-            self.var2loc[v] = loc
-            used[loc] = True
-        self.available_regs = [reg for reg in self.AVAILABLE_REGS_REV
-                                   if reg not in used]
+    def set_final(self, final_vars_gv):
+        for v in final_vars_gv:
+            if not v.is_const and v not in self.var2loc:
+                self.var2loc[v] = self.nextloc
+                self.nextloc += 1
 
     def creating(self, v):
-        loc = self.var2loc.get(v, None)
-        if isinstance(loc, REG):
-            self.available_regs.append(loc)
+        try:
+            loc = self.var2loc[v]
+        except KeyError:
+            pass
+        else:
+            self.available_locs.append(loc)   # now available again for reuse
 
     def using(self, v):
         if not v.is_const and v not in self.var2loc:
             try:
-                loc = self.input_var2loc[v]
-            except KeyError:
-                try:
-                    loc = self.available_regs.pop()
-                except IndexError:
-                    #loc = ...
-                    raise NotImplementedError
+                loc = self.available_locs.pop()
+            except IndexError:
+                loc = self.nextloc
+                self.nextloc += 1
             self.var2loc[v] = loc
 
-    def get_location(self, gv_source):
+    def allocate_locations(self, operations):
+        # assign locations to gvars
+        self.operations = operations
+        for i in range(len(operations)-1, -1, -1):
+            v = operations[i]
+            self.creating(v)
+            v.allocate_registers(self)
+
+    def force_var_operands(self, force_vars, force_operands, at_start):
+        force_loc2operand = self.force_loc2operand
+        force_operand2loc = self.force_operand2loc
+        for i in range(len(force_vars)):
+            v = force_vars[i]
+            try:
+                loc = self.var2loc[v]
+            except KeyError:
+                pass
+            else:
+                operand = force_operands[i]
+                if loc in force_loc2operand or operand in force_operand2loc:
+                    if not at_start: raise NotImplementedError
+                    self.initial_moves.append((loc, operand))
+                else:
+                    force_loc2operand[loc] = operand
+                    force_operand2loc[operand] = loc
+
+    def allocate_registers(self):
+        # assign registers to locations that don't have one already
+        force_loc2operand = self.force_loc2operand
+        operands = []
+        seen_regs = 0
+        for op in force_loc2operand.values():
+            if isinstance(op, REG):
+                seen_regs |= 1 << op.op
+        i = 0
+        for loc in range(self.nextloc):
+            try:
+                operand = force_loc2operand[loc]
+            except KeyError:
+                # grab the next free register
+                while seen_regs & (1 << i):
+                    i += 1
+                try:
+                    operand = RegAllocator.AVAILABLE_REGS[i]
+                    i += 1
+                except IndexError:
+                    raise OutOfRegisters
+            operands.append(operand)
+        self.operands = operands
+
+    def get_operand(self, gv_source):
         if isinstance(gv_source, IntConst):
             return imm(gv_source.value)
         else:
-            return self.var2loc[gv_source]
+            loc = self.var2loc[gv_source]
+            return self.operands[loc]
 
-    def load_operand(self, operand, gv_source):
-        srcloc = self.get_location(gv_source)
-        if srcloc != operand:
-            self.mc.MOV(operand, srcloc)
+    def load_location_with(self, loc, gv_source):
+        dstop = self.operands[loc]
+        srcop = self.get_operand(gv_source)
+        if srcop != dstop:
+            self.mc.MOV(dstop, srcop)
+        return dstop
+
+    def generate_initial_moves(self):
+        # XXX naive algo for now
+        initial_moves = self.initial_moves
+        for loc, srcoperand in initial_moves:
+            self.mc.PUSH(srcoperand)
+        initial_moves.reverse()
+        for loc, srcoperand in initial_moves:
+            self.mc.POP(self.operands[loc])
 
 
 class Builder(GenBuilder):
     coming_from = 0
 
-    def __init__(self, rgenop, input_vars_gv, input_var2loc):
+    def __init__(self, rgenop, inputargs_gv, inputoperands):
         self.rgenop = rgenop
-        self.input_vars_gv = input_vars_gv
-        self.input_var2loc = input_var2loc
+        self.inputargs_gv = inputargs_gv
+        self.inputoperands = inputoperands
 
     def start_writing(self):
         self.operations = []
 
-    def generate_block_code(self, final_vars_gv, final_locs):
-        operations = self.operations
-        allocator = RegAllocator(operations, self.input_var2loc)
-        allocator.set_final(final_vars_gv, final_locs)
-        for i in range(len(operations)-1, -1, -1):
-            v = operations[i]
-            allocator.creating(v)
-            v.allocate_registers(allocator)
+    def generate_block_code(self, final_vars_gv, force_vars=[],
+                                                 force_operands=[]):
+        allocator = RegAllocator()
+        allocator.set_final(final_vars_gv)
+        allocator.allocate_locations(self.operations)
+        allocator.force_var_operands(force_vars, force_operands,
+                                     at_start=False)
+        #import pdb; pdb.set_trace()
+        allocator.force_var_operands(self.inputargs_gv, self.inputoperands,
+                                     at_start=True)
+        allocator.allocate_registers()
         mc = self.start_mc()
         allocator.mc = mc
-        for op in operations:
+        allocator.generate_initial_moves()
+        for op in self.operations:
             op.generate(allocator)
         self.operations = None
+        self.inputargs_gv = [GenVar() for v in final_vars_gv]
+        self.inputoperands = [allocator.operands[allocator.var2loc[v]]
+                              for v in final_vars_gv]
         return mc
 
     def enter_next_block(self, kinds, args_gv):
-        locs = {}
-        seen_regs = 0
-        for v in args_gv:
-            loc = self.input_var2loc.get(v, None)
-            locs[v] = loc
-            if isinstance(loc, REG):
-                i = loc.op
-                seen_regs |= 1 << i
-        i = 0
-        final_locs = []
-        final_var2loc = {}
-        for v in args_gv:
-            loc = locs[v]
-            if loc is None:
-                while seen_regs & (1 << i):
-                    i += 1
-                assert i < len(RegAllocator.AVAILABLE_REGS)   # XXX
-                loc = RegAllocator.AVAILABLE_REGS[i]
-                i += 1
-            final_locs.append(loc)
-            final_var2loc[v] = loc
-        mc = self.generate_block_code(args_gv, final_locs)
+##        locs = {}
+##        seen_regs = 0
+##        for v in args_gv:
+##            loc = self.input_var2loc.get(v, None)
+##            locs[v] = loc
+##            if isinstance(loc, REG):
+##                i = loc.op
+##                seen_regs |= 1 << i
+##        i = 0
+##        final_locs = []
+##        final_var2loc = {}
+##        for v in args_gv:
+##            loc = locs[v]
+##            if loc is None:
+##                while seen_regs & (1 << i):
+##                    i += 1
+##                assert i < len(RegAllocator.AVAILABLE_REGS)   # XXX
+##                loc = RegAllocator.AVAILABLE_REGS[i]
+##                i += 1
+##            final_locs.append(loc)
+##            final_var2loc[v] = loc
+
+        mc = self.generate_block_code(args_gv)
+        args_gv[:] = self.inputargs_gv
         self.set_coming_from(mc)
         self.rgenop.close_mc(mc)
-        self.input_args_gv = args_gv
-        self.input_var2loc = final_var2loc
         self.start_writing()
 
     def set_coming_from(self, mc, insn=I386CodeBuilder.JMP):
@@ -255,7 +337,7 @@ class Builder(GenBuilder):
         return mc
 
     def finish_and_return(self, sigtoken, gv_returnvar):
-        mc = self.generate_block_code([gv_returnvar], [eax])
+        mc = self.generate_block_code([gv_returnvar], [gv_returnvar], [eax])
         # --- epilogue ---
         mc.POP(edi)
         mc.POP(esi)
@@ -271,6 +353,8 @@ class Builder(GenBuilder):
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
         cls = OPCLASSES1[opname]
+        if cls is None:     # identity
+            return gv_arg
         op = cls(gv_arg)
         self.operations.append(op)
         return op
@@ -329,13 +413,15 @@ class RI386GenOp(AbstractRGenOp):
         # ----------------
         numargs = sigtoken     # for now
         inputargs_gv = []
-        input_var2loc = {}
+        inputoperands = []
         for i in range(numargs):
-            v = GenVar()
-            inputargs_gv.append(v)
-            input_var2loc[v] = mem(ebp, WORD * (2+i))
-        builder = Builder(self, inputargs_gv, input_var2loc)
+            inputargs_gv.append(GenVar())
+            inputoperands.append(mem(ebp, WORD * (2+i)))
+        builder = Builder(self, inputargs_gv, inputoperands)
         builder.start_writing()
+        #ops = [OpSameAs(v) for v in inputargs_gv]
+        #builder.operations.extend(ops)
+        #inputargs_gv = ops
         return builder, IntConst(entrypoint), inputargs_gv
 
 ##    def replay(self, label, kinds):
