@@ -2,15 +2,25 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.jit.codegen.i386.ri386 import *
+from pypy.jit.codegen.i386.ri386setup import Conditions
 from pypy.jit.codegen.i386 import conftest
 
 
 WORD = 4    # bytes
 
+RK_NO_RESULT = 0
+RK_WORD      = 1
+RK_CC        = 2
+
 
 class Operation(GenVar):
-    def allocate_registers(self, allocator):
+    clobbers_cc = True
+    result_kind = RK_WORD
+    cc_result   = -1
+
+    def allocate(self, allocator):
         pass
     def generate(self, allocator):
         raise NotImplementedError
@@ -18,7 +28,7 @@ class Operation(GenVar):
 class Op1(Operation):
     def __init__(self, x):
         self.x = x
-    def allocate_registers(self, allocator):
+    def allocate(self, allocator):
         allocator.using(self.x)
     def generate(self, allocator):
         try:
@@ -30,13 +40,46 @@ class Op1(Operation):
         allocator.store_back_location(loc, op)
 
 class OpSameAs(Op1):
-    emit = staticmethod(lambda mc, x: None)
+    clobbers_cc = False
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # result not used
+        srcop = self.get_operand(self.x)
+        if srcop != dstop:
+            try:
+                self.mc.MOV(dstop, srcop)
+            except FailedToImplement:
+                self.mc.MOV(ecx, srcop)
+                self.mc.MOV(dstop, ecx)
+        return dstop
+
+class OpCompare1(Op1):
+    result_kind = RK_CC
+    def generate(self, allocator):
+        srcop = allocator.get_operand(self.x)
+        dstop = allocator.get_operand(self.y)
+        mc = allocator.mc
+        # XXX optimize the case CMP(immed, reg-or-modrm)
+        try:
+            mc.CMP(srcop, dstop)
+        except FailedToImplement:
+            mc.MOV(ecx, srcop)
+            mc.CMP(ecx, dstop)
+
+class OpIntIsTrue(OpCompare1):
+    opname = 'int_is_true'
+    cc_result = I386CodeBuilder.JNE
+    @staticmethod
+    def emit(mc, x):
+        mc.CMP(x, imm8(0))
 
 class Op2(Operation):
     def __init__(self, x, y):
         self.x = x
         self.y = y
-    def allocate_registers(self, allocator):
+    def allocate(self, allocator):
         allocator.using(self.x)
         allocator.using(self.y)
     def generate(self, allocator):
@@ -57,26 +100,37 @@ class OpIntSub(Op2):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
 
-class OpIntGt(Op2):
+class OpCompare2(Op2):
+    result_kind = RK_CC
+    def generate(self, allocator):
+        srcop = allocator.get_operand(self.x)
+        dstop = allocator.get_operand(self.y)
+        mc = allocator.mc
+        # XXX optimize the case CMP(immed, reg-or-modrm)
+        try:
+            mc.CMP(srcop, dstop)
+        except FailedToImplement:
+            mc.MOV(ecx, srcop)
+            mc.CMP(ecx, dstop)
+
+class OpIntGt(OpCompare2):
     opname = 'int_gt'
-    @staticmethod
-    def emit(mc, x, y):
-        mc.CMP(x, y)
-        mc.SETG(cl)
-        mc.MOVZX(x, cl)
+    cc_result = Conditions['G']
 
 class JumpIfFalse(Operation):
+    clobbers_cc = False
+    result_kind = RK_NO_RESULT
     def __init__(self, gv_condition, targetbuilder):
+        assert 0 <= gv_condition.cc_result < INSN_JMP
         self.gv_condition = gv_condition
         self.targetbuilder = targetbuilder
-    def allocate_registers(self, allocator):
-        allocator.using(self.gv_condition)
+    def allocate(self, allocator):
+        allocator.using_cc(self.gv_condition)
     def generate(self, allocator):
-        op = allocator.get_operand(self.gv_condition)
+        cc = cond_negate(self.gv_condition.cc_result)
         mc = allocator.mc
-        mc.CMP(op, imm8(0))
         targetbuilder = self.targetbuilder
-        targetbuilder.set_coming_from(mc, insn=I386CodeBuilder.JE)
+        targetbuilder.set_coming_from(mc, insncond=cc)
         targetbuilder.inputoperands = [allocator.get_operand(gv)
                                        for gv in targetbuilder.inputargs_gv]
 
@@ -157,7 +211,19 @@ OPCLASSES1 = setup_opclasses(Op1)
 OPCLASSES2 = setup_opclasses(Op2)
 del setup_opclasses
 
-OPCLASSES1['int_is_true'] = None
+def setup_conditions():
+    result = [None] * 16
+    for key, value in Conditions.items():
+        result[value] = getattr(I386CodeBuilder, 'J'+key)
+    return result
+EMIT_CONDITION = setup_conditions()
+INSN_JMP = len(EMIT_CONDITION)
+EMIT_CONDITION.append(I386CodeBuilder.JMP)
+del setup_conditions
+
+def cond_negate(cond):
+    assert 0 <= cond < INSN_JMP
+    return cond ^ 1
 
 
 class StackOpCache:
@@ -221,13 +287,44 @@ class RegAllocator(object):
                 self.nextloc += 1
             self.var2loc[v] = loc
 
+    def creating_cc(self, v):
+        if self.need_var_in_cc is v:
+            # common case: v is a compare operation whose result is precisely
+            # what we need to be in the CC
+            self.need_var_in_cc = None
+
+    def save_cc(self):
+        # we need a value to be in the CC, but we see a clobbering
+        # operation, so we copy the original CC-creating operation down
+        # past the clobbering operation
+        v = self.need_var_in_cc
+        self.operations.insert(self.operationindex, v)
+        self.need_var_in_cc = None
+
+    def using_cc(self, v):
+        assert not v.is_const
+        if self.need_var_in_cc is not None:
+            self.save_cc()
+        self.need_var_in_cc = v
+
     def allocate_locations(self, operations):
         # assign locations to gvars
         self.operations = operations
+        self.need_var_in_cc = None
+        self.operationindex = len(operations)
         for i in range(len(operations)-1, -1, -1):
             v = operations[i]
-            self.creating(v)
-            v.allocate_registers(self)
+            kind = v.result_kind
+            if kind == RK_WORD:
+                self.creating(v)
+            elif kind == RK_CC:
+                self.creating_cc(v)
+            if self.need_var_in_cc is not None and v.clobbers_cc:
+                self.save_cc()
+            v.allocate(self)
+            self.operationindex = i
+        if self.need_var_in_cc is not None:
+            self.save_cc()
 
     def force_var_operands(self, force_vars, force_operands, at_start):
         force_loc2operand = self.force_loc2operand
@@ -358,10 +455,11 @@ class Builder(GenBuilder):
         self.rgenop.close_mc(mc)
         self.start_writing()
 
-    def set_coming_from(self, mc, insn=I386CodeBuilder.JMP):
-        self.coming_from_insn = insn
+    def set_coming_from(self, mc, insncond=INSN_JMP):
+        self.coming_from_cond = insncond
         self.coming_from = mc.tell()
-        insn(mc, rel32(0))
+        insnemit = EMIT_CONDITION[insncond]
+        insnemit(mc, rel32(0))
 
     def start_mc(self):
         mc = self.rgenop.open_mc()
@@ -371,7 +469,7 @@ class Builder(GenBuilder):
             targetaddr = mc.tell()
             end = start + 6    # XXX hard-coded, enough for JMP and Jcond
             oldmc = self.rgenop.InMemoryCodeBuilder(start, end)
-            insn = self.coming_from_insn
+            insn = EMIT_CONDITION[self.coming_from_cond]
             insn(oldmc, rel32(targetaddr))
             oldmc.done()
             self.coming_from = 0
@@ -379,6 +477,9 @@ class Builder(GenBuilder):
 
     def jump_if_false(self, gv_condition, args_for_jump_gv):
         newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
+        if gv_condition.cc_result < 0:
+            gv_condition = OpIntIsTrue(gv_condition)
+            self.operations.append(gv_condition)
         self.operations.append(JumpIfFalse(gv_condition, newbuilder))
         return newbuilder
 
