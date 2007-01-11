@@ -105,6 +105,23 @@ class MODRM(OPERAND):
         mod = self.byte & 0xC0
         return mod == 0xC0
 
+    def ofs_relative_to_ebp(self):
+        # very custom: if self is a mem(ebp, ofs) then return ofs
+        # otherwise raise ValueError
+        mod = self.byte & 0xC0
+        rm  = self.byte & 0x07
+        if mod == 0xC0:
+            raise ValueError     # self is just a register
+        if self.byte == 0x05:
+            raise ValueError     # self is just an [immediate]
+        if rm != 5:
+            raise ValueError     # not a simple [ebp+ofs]
+        offset = self.extradata
+        if not offset:
+            return 0
+        else:
+            return unpack(offset)
+
 
 class MODRM8(MODRM):
     width = 1
