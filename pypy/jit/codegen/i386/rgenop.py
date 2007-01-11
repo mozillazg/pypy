@@ -27,6 +27,7 @@ class Op1(Operation):
             return    # simple operation whose result is not used anyway
         op = allocator.load_location_with(loc, self.x)
         self.emit(allocator.mc, op)
+        allocator.store_back_location(loc, op)
 
 class OpSameAs(Op1):
     emit = staticmethod(lambda mc, x: None)
@@ -46,6 +47,7 @@ class Op2(Operation):
         op1 = allocator.load_location_with(loc, self.x)
         op2 = allocator.get_operand(self.y)
         self.emit(allocator.mc, op1, op2)
+        allocator.store_back_location(loc, op1)
 
 class OpIntAdd(Op2):
     opname = 'int_add'
@@ -54,6 +56,29 @@ class OpIntAdd(Op2):
 class OpIntSub(Op2):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
+
+class OpIntGt(Op2):
+    opname = 'int_gt'
+    @staticmethod
+    def emit(mc, x, y):
+        mc.CMP(x, y)
+        mc.SETG(cl)
+        mc.MOVZX(x, cl)
+
+class JumpIfFalse(Operation):
+    def __init__(self, gv_condition, targetbuilder):
+        self.gv_condition = gv_condition
+        self.targetbuilder = targetbuilder
+    def allocate_registers(self, allocator):
+        allocator.using(self.gv_condition)
+    def generate(self, allocator):
+        op = allocator.get_operand(self.gv_condition)
+        mc = allocator.mc
+        mc.CMP(op, imm8(0))
+        targetbuilder = self.targetbuilder
+        targetbuilder.set_coming_from(mc, insn=I386CodeBuilder.JE)
+        targetbuilder.inputoperands = [allocator.get_operand(gv)
+                                       for gv in targetbuilder.inputargs_gv]
 
 # ____________________________________________________________
 
@@ -135,12 +160,27 @@ del setup_opclasses
 OPCLASSES1['int_is_true'] = None
 
 
-class OutOfRegisters(Exception):
-    pass
+class StackOpCache:
+    INITIAL_STACK_EBP_OFS = -4
+stack_op_cache = StackOpCache()
+stack_op_cache.lst = []
+
+def stack_op(n):
+    "Return the mem operand that designates the nth stack-spilled location"
+    assert n >= 0
+    lst = stack_op_cache.lst
+    while len(lst) <= n:
+        ofs = WORD * (StackOpCache.INITIAL_STACK_EBP_OFS - len(lst))
+        lst.append(mem(ebp, ofs))
+    return lst[n]
+
+def stack_n_from_op(op):
+    ofs = op.ofs_relative_to_ebp()
+    return StackOpCache.INITIAL_STACK_EBP_OFS - ofs / WORD
 
 
 class RegAllocator(object):
-    AVAILABLE_REGS = [eax, ecx, edx, ebx, esi, edi]
+    AVAILABLE_REGS = [eax, edx, ebx, esi, edi]   # XXX ecx reserved for stuff
 
     # 'gv' -- GenVars, used as arguments and results of operations
     #
@@ -212,24 +252,33 @@ class RegAllocator(object):
         force_loc2operand = self.force_loc2operand
         operands = []
         seen_regs = 0
+        seen_stackn = {}
         for op in force_loc2operand.values():
             if isinstance(op, REG):
                 seen_regs |= 1 << op.op
+            elif isinstance(op, MODRM):
+                seen_stackn[stack_n_from_op(op)] = None
         i = 0
+        stackn = 0
         for loc in range(self.nextloc):
             try:
                 operand = force_loc2operand[loc]
             except KeyError:
                 # grab the next free register
-                while seen_regs & (1 << i):
-                    i += 1
                 try:
-                    operand = RegAllocator.AVAILABLE_REGS[i]
-                    i += 1
+                    while True:
+                        operand = RegAllocator.AVAILABLE_REGS[i]
+                        i += 1
+                        if not (seen_regs & (1 << operand.op)):
+                            break
                 except IndexError:
-                    raise OutOfRegisters
+                    while stackn in seen_stackn:
+                        stackn += 1
+                    operand = stack_op(stackn)
+                    stackn += 1
             operands.append(operand)
         self.operands = operands
+        self.required_frame_depth = stackn
 
     def get_operand(self, gv_source):
         if isinstance(gv_source, IntConst):
@@ -240,14 +289,30 @@ class RegAllocator(object):
 
     def load_location_with(self, loc, gv_source):
         dstop = self.operands[loc]
+        if not isinstance(dstop, REG):
+            dstop = ecx
         srcop = self.get_operand(gv_source)
         if srcop != dstop:
             self.mc.MOV(dstop, srcop)
         return dstop
 
+    def store_back_location(self, loc, operand):
+        dstop = self.operands[loc]
+        if operand != dstop:
+            self.mc.MOV(dstop, operand)
+
     def generate_initial_moves(self):
-        # XXX naive algo for now
         initial_moves = self.initial_moves
+        # first make sure that the reserved stack frame is big enough
+        last_n = self.required_frame_depth - 1
+        for loc, srcoperand in initial_moves:
+            if isinstance(srcoperand, MODRM):
+                n = stack_n_from_op(srcoperand)
+                if last_n < n:
+                    last_n = n
+        if last_n >= 0:
+            self.mc.LEA(esp, stack_op(last_n))
+        # XXX naive algo for now
         for loc, srcoperand in initial_moves:
             self.mc.PUSH(srcoperand)
         initial_moves.reverse()
@@ -273,7 +338,6 @@ class Builder(GenBuilder):
         allocator.allocate_locations(self.operations)
         allocator.force_var_operands(force_vars, force_operands,
                                      at_start=False)
-        #import pdb; pdb.set_trace()
         allocator.force_var_operands(self.inputargs_gv, self.inputoperands,
                                      at_start=True)
         allocator.allocate_registers()
@@ -284,33 +348,10 @@ class Builder(GenBuilder):
             op.generate(allocator)
         self.operations = None
         self.inputargs_gv = [GenVar() for v in final_vars_gv]
-        self.inputoperands = [allocator.operands[allocator.var2loc[v]]
-                              for v in final_vars_gv]
+        self.inputoperands = [allocator.get_operand(v) for v in final_vars_gv]
         return mc
 
     def enter_next_block(self, kinds, args_gv):
-##        locs = {}
-##        seen_regs = 0
-##        for v in args_gv:
-##            loc = self.input_var2loc.get(v, None)
-##            locs[v] = loc
-##            if isinstance(loc, REG):
-##                i = loc.op
-##                seen_regs |= 1 << i
-##        i = 0
-##        final_locs = []
-##        final_var2loc = {}
-##        for v in args_gv:
-##            loc = locs[v]
-##            if loc is None:
-##                while seen_regs & (1 << i):
-##                    i += 1
-##                assert i < len(RegAllocator.AVAILABLE_REGS)   # XXX
-##                loc = RegAllocator.AVAILABLE_REGS[i]
-##                i += 1
-##            final_locs.append(loc)
-##            final_var2loc[v] = loc
-
         mc = self.generate_block_code(args_gv)
         args_gv[:] = self.inputargs_gv
         self.set_coming_from(mc)
@@ -336,9 +377,15 @@ class Builder(GenBuilder):
             self.coming_from = 0
         return mc
 
+    def jump_if_false(self, gv_condition, args_for_jump_gv):
+        newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
+        self.operations.append(JumpIfFalse(gv_condition, newbuilder))
+        return newbuilder
+
     def finish_and_return(self, sigtoken, gv_returnvar):
         mc = self.generate_block_code([gv_returnvar], [gv_returnvar], [eax])
         # --- epilogue ---
+        mc.LEA(esp, mem(ebp, -12))
         mc.POP(edi)
         mc.POP(esi)
         mc.POP(ebx)
@@ -422,7 +469,7 @@ class RI386GenOp(AbstractRGenOp):
         #ops = [OpSameAs(v) for v in inputargs_gv]
         #builder.operations.extend(ops)
         #inputargs_gv = ops
-        return builder, IntConst(entrypoint), inputargs_gv
+        return builder, IntConst(entrypoint), inputargs_gv[:]
 
 ##    def replay(self, label, kinds):
 ##        return ReplayBuilder(self), [dummy_var] * len(kinds)
