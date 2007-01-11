@@ -1,10 +1,5 @@
-#!/usr/bin/env python
-from grammar import BaseGrammarBuilder, Alternative, Sequence, Token
-from grammar import GrammarProxy, KleeneStar, GrammarElement, build_first_sets
-from grammar import AbstractBuilder, AbstractContext, Parser
-from ebnflexer import GrammarSource
-import ebnfgrammar
-from ebnfgrammar import GRAMMAR_GRAMMAR
+from grammar import Token, GrammarProxy
+from grammar import AbstractBuilder, AbstractContext
 
 
 ORDA = ord("A")
@@ -32,7 +27,6 @@ def is_py_name( name ):
     return True
 
 
-
 punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '//=', '%=', '^=', '<<=', '\\*\\*=', '\\', '=',
        '\\+=', '>>=', '=', '&=', '/=', '-=', '\n,', '^',
@@ -40,12 +34,10 @@ punct=['>=', '<>', '!=', '<', '>', '<=', '==', '\\*=',
        '%', '<<', '//', '\\', '', '\n\\)', '\\(', ';', ':',
        '@', '\\[', '\\]', '`', '\\{', '\\}']
 
-TERMINALS = [
-    'NAME', 'NUMBER', 'STRING', 'NEWLINE', 'ENDMARKER',
-    'INDENT', 'DEDENT' ]
+TERMINALS = ['NAME', 'NUMBER', 'STRING', 'NEWLINE', 'ENDMARKER',
+             'INDENT', 'DEDENT' ]
 
 
-# FIXME: parsertools.py ? parser/__init__.py ?
 class NameToken(Token):
     """A token that is not a keyword"""
     def __init__(self, parser, keywords=None):
@@ -142,7 +134,9 @@ class EBNFBuilder(AbstractBuilder):
         """Remove GrammarProxy objects"""
         to_be_deleted = {}
         for rule in self.parser.all_rules:
-            for i, arg in enumerate(rule.args):
+            # for i, arg in enumerate(rule.args):
+            for i in range(len(rule.args)):
+                arg = rule.args[i]
                 if isinstance(arg, GrammarProxy):
                     real_rule = self.parser.root_rules[arg.codename]
                     if isinstance(real_rule, GrammarProxy):
@@ -161,10 +155,10 @@ class EBNFBuilder(AbstractBuilder):
         """Returns a new or existing Token"""
         if codename in self.tokens:
             return self.tokens[codename]
-        token = self.tokens[codename] = self.parser.Token(codename)
+        token = self.tokens[codename] = self.parser.build_token(codename)
         return token
 
-    def get_symbolcode(self, name ):
+    def get_symbolcode(self, name):
         return self.parser.add_symbol( name )
 
     def get_rule( self, name ):
@@ -196,7 +190,7 @@ class EBNFBuilder(AbstractBuilder):
                 self.curaltcount += 1
                 return True
             rules = self.pop_rules(self.curseqcount)
-            new_rule = self.parser.Sequence( self.new_symbol(), rules )
+            new_rule = self.parser.build_sequence( self.new_symbol(), rules )
             self.rule_stack.append( new_rule )
             self.curseqcount = 0
             self.curaltcount += 1
@@ -205,7 +199,7 @@ class EBNFBuilder(AbstractBuilder):
                 self.curaltcount = 0
                 return True
             rules = self.pop_rules(self.curaltcount)
-            new_rule = self.parser.Alternative( self.new_symbol(), rules )
+            new_rule = self.parser.build_alternative( self.new_symbol(), rules )
             self.rule_stack.append( new_rule )
             self.curaltcount = 0
         elif _rule == self.gram.group:
@@ -213,7 +207,7 @@ class EBNFBuilder(AbstractBuilder):
         elif _rule == self.gram.option:
             # pops the last alternative
             rules = self.pop_rules( 1 )
-            new_rule = self.parser.KleeneStar( self.new_symbol(), _min=0, _max=1, rule=rules[0] )
+            new_rule = self.parser.build_kleenestar( self.new_symbol(), _min=0, _max=1, rule=rules[0] )
             self.rule_stack.append( new_rule )
             self.curseqcount += 1
         elif _rule == self.gram.rule:
@@ -222,7 +216,7 @@ class EBNFBuilder(AbstractBuilder):
             del self.rule_stack[0]
             if isinstance(old_rule,Token):
                 # Wrap a token into an alternative
-                old_rule = self.parser.Alternative( self.current_rule, [old_rule] )
+                old_rule = self.parser.build_alternative( self.current_rule, [old_rule] )
             else:
                 # Make sure we use the codename from the named rule
                 old_rule.codename = self.current_rule
@@ -243,11 +237,11 @@ class EBNFBuilder(AbstractBuilder):
             self.curseqcount += 1
         elif name == self.gram.TOK_STAR:
             top = self.rule_stack[-1]
-            rule = self.parser.KleeneStar( self.new_symbol(), _min=0, rule=top)
+            rule = self.parser.build_kleenestar( self.new_symbol(), _min=0, rule=top)
             self.rule_stack[-1] = rule
         elif name == self.gram.TOK_ADD:
             top = self.rule_stack[-1]
-            rule = self.parser.KleeneStar( self.new_symbol(), _min=1, rule=top)
+            rule = self.parser.build_kleenestar( self.new_symbol(), _min=1, rule=top)
             self.rule_stack[-1] = rule
         elif name == self.gram.TOK_BAR:
             assert self.curseqcount == 0
@@ -276,12 +270,12 @@ class EBNFBuilder(AbstractBuilder):
         if value in self.parser.tok_values:
             # punctuation
             tokencode = self.parser.tok_values[value]
-            tok = self.parser.Token( tokencode, None )
+            tok = self.parser.build_token( tokencode, None )
         else:
             if not is_py_name(value):
                 raise RuntimeError("Unknown STRING value ('%s')" % value)
             # assume a keyword
-            tok = self.parser.Token( self.parser.NAME, value)
+            tok = self.parser.build_token( self.parser.tokens['NAME'], value)
             if value not in self.keywords:
                 self.keywords.append(value)
         self.rule_stack.append(tok)
@@ -294,6 +288,8 @@ class EBNFBuilder(AbstractBuilder):
 
 ##     txt : the grammar definition
 ##     """
+##     from ebnflexer import GrammarSource
+##     from ebnfgrammar import GRAMMAR_GRAMMAR
 ##     source = GrammarSource(GRAMMAR_GRAMMAR, txt)
 ##     builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
 ##     result = GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)

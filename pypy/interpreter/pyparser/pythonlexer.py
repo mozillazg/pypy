@@ -121,7 +121,7 @@ def generate_tokens( parser, lines, flags):
             endmatch = endDFA.recognize(line)
             if endmatch >= 0:
                 pos = end = endmatch
-                tok = parser.Token(parser.STRING, contstr + line[:end])
+                tok = parser.build_token(parser.tokens['STRING'], contstr + line[:end])
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((STRING, contstr + line[:end],
@@ -130,7 +130,7 @@ def generate_tokens( parser, lines, flags):
                 contline = None
             elif (needcont and not line.endswith('\\\n') and
                                not line.endswith('\\\r\n')):
-                tok = parser.Token(parser.ERRORTOKEN, contstr + line)
+                tok = parser.build_token(parser.tokens['ERRORTOKEN'], contstr + line)
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 # token_list.append((ERRORTOKEN, contstr + line,
@@ -156,10 +156,10 @@ def generate_tokens( parser, lines, flags):
 
             if line[pos] in '#\r\n':           # skip comments or blank lines
                 if line[pos] == '#':
-                    tok = parser.Token(parser.COMMENT, line[pos:])
+                    tok = parser.build_token(parser.tokens['COMMENT'], line[pos:])
                     last_comment = line[pos:]
                 else:
-                    tok = parser.Token(parser.NL, line[pos:])
+                    tok = parser.build_token(parser.tokens['NL'], line[pos:])
                     last_comment = ''
                 # XXX Skip NL and COMMENT Tokens
                 # token_list.append((tok, line, lnum, pos))
@@ -167,12 +167,12 @@ def generate_tokens( parser, lines, flags):
 
             if column > indents[-1]:           # count indents or dedents
                 indents.append(column)
-                tok = parser.Token(parser.INDENT, line[:pos])
+                tok = parser.build_token(parser.tokens['INDENT'], line[:pos])
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
             while column < indents[-1]:
                 indents = indents[:-1]
-                tok = parser.Token(parser.DEDENT, '')
+                tok = parser.build_token(parser.tokens['DEDENT'], '')
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
         else:                                  # continued statement
@@ -199,22 +199,22 @@ def generate_tokens( parser, lines, flags):
                 token, initial = line[start:end], line[start]
                 if initial in numchars or \
                    (initial == '.' and token != '.'):      # ordinary number
-                    tok = parser.Token(parser.NUMBER, token)
+                    tok = parser.build_token(parser.tokens['NUMBER'], token)
                     token_list.append((tok, line, lnum, pos))
                     last_comment = ''
                 elif initial in '\r\n':
                     if parenlev > 0:
-                        tok = parser.Token(parser.NL, token)
+                        tok = parser.build_token(parser.tokens['NL'], token)
                         last_comment = ''
                         # XXX Skip NL
                     else:
-                        tok = parser.Token(parser.NEWLINE, token)
+                        tok = parser.build_token(parser.tokens['NEWLINE'], token)
                         # XXX YUCK !
                         tok.value = last_comment
                         token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                 elif initial == '#':
-                    tok = parser.Token(parser.COMMENT, token)
+                    tok = parser.build_token(parser.tokens['COMMENT'], token)
                     last_comment = token
                     # XXX Skip # token_list.append((tok, line, lnum, pos))
                     # token_list.append((COMMENT, token, spos, epos, line))
@@ -224,7 +224,7 @@ def generate_tokens( parser, lines, flags):
                     if endmatch >= 0:                     # all on one line
                         pos = endmatch
                         token = line[start:pos]
-                        tok = parser.Token(parser.STRING, token)
+                        tok = parser.build_token(parser.tokens['STRING'], token)
                         token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                     else:
@@ -241,11 +241,11 @@ def generate_tokens( parser, lines, flags):
                         contline = line
                         break
                     else:                                  # ordinary string
-                        tok = parser.Token(parser.STRING, token)
+                        tok = parser.build_token(parser.tokens['STRING'], token)
                         token_list.append((tok, line, lnum, pos))
                         last_comment = ''
                 elif initial in namechars:                 # ordinary name
-                    tok = parser.Token(parser.NAME, token)
+                    tok = parser.build_token(parser.tokens['NAME'], token)
                     token_list.append((tok, line, lnum, pos))
                     last_comment = ''
                 elif initial == '\\':                      # continued stmt
@@ -261,9 +261,9 @@ def generate_tokens( parser, lines, flags):
                                              (lnum-1, 0), token_list)
                     if token in parser.tok_values:
                         punct = parser.tok_values[token]
-                        tok = parser.Token(punct)
+                        tok = parser.build_token(punct)
                     else:
-                        tok = parser.Token(parser.OP, token)
+                        tok = parser.build_token(parser.tokens['OP'], token)
                     token_list.append((tok, line, lnum, pos)) 
                     last_comment = ''
             else:
@@ -273,22 +273,22 @@ def generate_tokens( parser, lines, flags):
                 if start<max and line[start] in single_quoted:
                     raise TokenError("EOL while scanning single-quoted string", line,
                              (lnum, start), token_list)
-                tok = parser.Token(parser.ERRORTOKEN, line[pos])
+                tok = parser.build_token(parser.tokens['ERRORTOKEN'], line[pos])
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
                 pos = pos + 1
 
     lnum -= 1
     if not (flags & PyCF_DONT_IMPLY_DEDENT):
-        if token_list and token_list[-1][0].codename != pytoken.NEWLINE:
-            token_list.append((parser.Token(parser.NEWLINE, ''), '\n', lnum, 0))
+        if token_list and token_list[-1][0].codename != parser.tokens['NEWLINE']:
+            token_list.append((parser.build_token(parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
         for indent in indents[1:]:                 # pop remaining indent levels
-            tok = parser.Token(parser.DEDENT, '')
+            tok = parser.build_token(parser.tokens['DEDENT'], '')
             token_list.append((tok, line, lnum, pos))
     #if token_list and token_list[-1][0].codename != pytoken.NEWLINE:
-    token_list.append((parser.Token(parser.NEWLINE, ''), '\n', lnum, 0))
+    token_list.append((parser.build_token(parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
 
-    tok = parser.Token(parser.ENDMARKER, '',)
+    tok = parser.build_token(parser.tokens['ENDMARKER'], '',)
     token_list.append((tok, line, lnum, pos))
     #for t in token_list:
     #    print '%20s  %-25s %d' % (pytoken.tok_name.get(t[0].codename, '?'), t[0], t[-2])
