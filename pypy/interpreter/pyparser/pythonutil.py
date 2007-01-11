@@ -25,6 +25,8 @@ def get_grammar_file(version):
         _ver = "_stablecompiler"
     elif version in ("2.3","2.4","2.5a"):
         _ver = version
+    else:
+        raise ValueError('no such grammar version: %s' % version)
     return os.path.join( os.path.dirname(__file__), "data", "Grammar" + _ver ), _ver
 
 
@@ -34,7 +36,9 @@ def build_parser(gramfile, parser=None):
         parser = Parser()
     setup_tokens(parser)
     # XXX: clean up object dependencies
-    source = GrammarSource(GRAMMAR_GRAMMAR, file(gramfile).read())
+    grammardef = file(gramfile).read()
+    assert isinstance(grammardef, str)
+    source = GrammarSource(GRAMMAR_GRAMMAR, grammardef)
     builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
     GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
     builder.resolve_rules()

@@ -461,7 +461,11 @@ class Alternative(GrammarElement):
             print "Warning: alternative %s has more than one rule " \
                 "matching Empty" % self
             self._reordered = True
-        self.args[:] = not_empty_set
+        # self.args[:] = not_empty_set
+        for elt in self.args[:]:
+            self.args.remove(elt)
+        for elt in not_empty_set:
+            self.args.append(elt)
         self.args.extend( empty_set )
 
     def validate( self, syntax_node ):
@@ -758,7 +762,7 @@ class Parser(object):
         return "%d" % codename
 
     def add_symbol( self, sym ):
-        assert isinstance( sym, str )
+        # assert isinstance( sym, str )
         if not sym in self.symbols:
             val = self._sym_count
             self._sym_count += 1
@@ -768,7 +772,7 @@ class Parser(object):
         return self.symbols[ sym ]
 
     def add_anon_symbol( self, sym ):
-        assert isinstance( sym, str )
+        # assert isinstance( sym, str )
         if not sym in self.symbols:
             val = self._ann_sym_count
             self._ann_sym_count -= 1
@@ -778,7 +782,7 @@ class Parser(object):
         return self.symbols[ sym ]
 
     def add_token( self, tok, value = None ):
-        assert isinstance( tok, str )
+        # assert isinstance( tok, str )
         if not tok in self.tokens:
             val = self._sym_count
             self._sym_count += 1
@@ -827,48 +831,49 @@ class Parser(object):
             r.reorder_rule()
 
 
-    def Alternative( self, name_id, args ):
-        assert isinstance( name_id, int )
+    def build_alternative( self, name_id, args ):
+        # assert isinstance( name_id, int )
+        assert isinstance(args, list)
         alt = Alternative( self, name_id, args )        
         self.all_rules.append( alt )
         return alt
     
     def Alternative_n(self, name, args ):
-        assert isinstance(name, str)
+        # assert isinstance(name, str)
         name_id = self.add_symbol( name )
-        return self.Alternative( name_id, args )
+        return self.build_alternative( name_id, args )
 
-    def Sequence( self, name_id, args ):
-        assert isinstance( name_id, int )
+    def build_sequence( self, name_id, args ):
+        # assert isinstance( name_id, int )
         alt = Sequence( self, name_id, args )
         self.all_rules.append( alt )
         return alt
     
     def Sequence_n(self, name, args ):
-        assert isinstance(name, str)
+        # assert isinstance(name, str)
         name_id = self.add_symbol( name )
-        return self.Sequence( name_id, args )
+        return self.build_sequence( name_id, args )
 
-    def KleeneStar( self, name_id, _min = 0, _max = -1, rule = None ):
-        assert isinstance( name_id, int )
+    def build_kleenestar( self, name_id, _min = 0, _max = -1, rule = None ):
+        # assert isinstance( name_id, int )
         alt = KleeneStar( self, name_id, _min, _max, rule )
         self.all_rules.append( alt )
         return alt
     
     def KleeneStar_n(self, name, _min = 0, _max = -1, rule = None ):
-        assert isinstance(name, str)
+        # assert isinstance(name, str)
         name_id = self.add_symbol( name )
-        return self.KleeneStar( name_id, _min, _max, rule )
+        return self.build_kleenestar( name_id, _min, _max, rule )
 
     def Token_n(self, name, value = None ):
-        assert isinstance( name, str)
-        assert value is None or isinstance( value, str)
+        # assert isinstance( name, str)
+        # assert value is None or isinstance( value, str)
         name_id = self.add_token( name, value )
-        return self.Token( name_id, value )
+        return self.build_token( name_id, value )
 
-    def Token(self, name_id, value = None ):
-        assert isinstance( name_id, int )
-        assert value is None or isinstance( value, str)
+    def build_token(self, name_id, value = None ):
+        # assert isinstance( name_id, int )
+        # assert value is None or isinstance( value, str)
         tok = Token( self, name_id, value )
         return tok
 

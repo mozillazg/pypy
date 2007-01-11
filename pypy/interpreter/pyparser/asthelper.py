@@ -43,7 +43,7 @@ def parse_dotted_names(tokens, builder):
     for index in range(1, l, 2):
         token = tokens[index]
         assert isinstance(token, TokenObject)
-        if token.name != builder.parser.DOT:
+        if token.name != builder.parser.tokens['DOT']:
             break
         token = tokens[index+1]
         assert isinstance(token, TokenObject)
@@ -75,16 +75,16 @@ def parse_argument(tokens, builder):
                 building_kw = False
                 kw_built = True
             continue
-        elif cur_token.name == builder.parser.COMMA:
+        elif cur_token.name == builder.parser.tokens['COMMA']:
             index += 1
             continue
-        elif cur_token.name == builder.parser.EQUAL:
+        elif cur_token.name == builder.parser.tokens['EQUAL']:
             index += 1
             building_kw = True
             continue
-        elif cur_token.name == builder.parser.STAR or cur_token.name == builder.parser.DOUBLESTAR:
+        elif cur_token.name == builder.parser.tokens['STAR'] or cur_token.name == builder.parser.tokens['DOUBLESTAR']:
             index += 1
-            if cur_token.name == builder.parser.STAR:
+            if cur_token.name == builder.parser.tokens['STAR']:
                 stararg_token = tokens[index]
                 index += 1
                 if index >= l:
@@ -119,9 +119,9 @@ def parse_fpdef(tokens, index, builder):
         token = tokens[index]
         index += 1
         assert isinstance(token, TokenObject)
-        if token.name == builder.parser.LPAR:       # nested item
+        if token.name == builder.parser.tokens['LPAR']:       # nested item
             index, node = parse_fpdef(tokens, index, builder)
-        elif token.name == builder.parser.RPAR:     # end of current nesting
+        elif token.name == builder.parser.tokens['RPAR']:     # end of current nesting
             break
         else:                            # name
             val = token.get_value()
@@ -131,10 +131,10 @@ def parse_fpdef(tokens, index, builder):
         token = tokens[index]
         index += 1
         assert isinstance(token, TokenObject)
-        if token.name == builder.parser.COMMA:
+        if token.name == builder.parser.tokens['COMMA']:
             comma = True
         else:
-            assert token.name == builder.parser.RPAR
+            assert token.name == builder.parser.tokens['RPAR']
             break
     if len(nodes) == 1 and not comma:
         node = nodes[0]
@@ -158,19 +158,19 @@ def parse_arglist(tokens, builder):
             defaults.append(cur_token)
             if first_with_default == -1:
                 first_with_default = len(names) - 1
-        elif cur_token.name == builder.parser.COMMA:
+        elif cur_token.name == builder.parser.tokens['COMMA']:
             # We could skip test COMMA by incrementing index cleverly
             # but we might do some experiment on the grammar at some point
             continue
-        elif cur_token.name == builder.parser.LPAR:
+        elif cur_token.name == builder.parser.tokens['LPAR']:
             index, node = parse_fpdef(tokens, index, builder)
             names.append(node)
-        elif cur_token.name == builder.parser.STAR or cur_token.name == builder.parser.DOUBLESTAR:
-            if cur_token.name == builder.parser.STAR:
+        elif cur_token.name == builder.parser.tokens['STAR'] or cur_token.name == builder.parser.tokens['DOUBLESTAR']:
+            if cur_token.name == builder.parser.tokens['STAR']:
                 cur_token = tokens[index]
                 assert isinstance(cur_token, TokenObject)
                 index += 1
-                if cur_token.name == builder.parser.NAME:
+                if cur_token.name == builder.parser.tokens['NAME']:
                     val = cur_token.get_value()
                     names.append( ast.AssName( val, consts.OP_ASSIGN ) )
                     flags |= consts.CO_VARARGS
@@ -185,13 +185,13 @@ def parse_arglist(tokens, builder):
                     raise SyntaxError("incomplete varags", cur_token.lineno,
                                       cur_token.col)
             assert isinstance(cur_token, TokenObject)
-            if cur_token.name != builder.parser.DOUBLESTAR:
+            if cur_token.name != builder.parser.tokens['DOUBLESTAR']:
                 raise SyntaxError("Unexpected token", cur_token.lineno,
                                   cur_token.col)
             cur_token = tokens[index]
             index += 1
             assert isinstance(cur_token, TokenObject)
-            if cur_token.name == builder.parser.NAME:
+            if cur_token.name == builder.parser.tokens['NAME']:
                 val = cur_token.get_value()
                 names.append( ast.AssName( val, consts.OP_ASSIGN ) )
                 flags |= consts.CO_VARKEYWORDS
@@ -203,7 +203,7 @@ def parse_arglist(tokens, builder):
                 token = tokens[index]
                 raise SyntaxError("unexpected token" , token.lineno,
                                   token.col)
-        elif cur_token.name == builder.parser.NAME:
+        elif cur_token.name == builder.parser.tokens['NAME']:
             val = cur_token.get_value()
             names.append( ast.AssName( val, consts.OP_ASSIGN ) )
 
@@ -244,7 +244,7 @@ def parse_listcomp(tokens, builder):
                 tok2 = tokens[index]
                 if not isinstance(tok2, TokenObject):
                     break
-                if tok2.name != builder.parser.COMMA:
+                if tok2.name != builder.parser.tokens['COMMA']:
                     break
                 iterables.append(tokens[index+1])
                 index += 2
@@ -485,7 +485,7 @@ def parse_attraccess(tokens, builder):
     index = 1
     while index < len(tokens):
         token = tokens[index]
-        if isinstance(token, TokenObject) and token.name == builder.parser.DOT:
+        if isinstance(token, TokenObject) and token.name == builder.parser.tokens['DOT']:
             index += 1
             token = tokens[index]
             assert isinstance(token, TokenObject)

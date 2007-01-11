@@ -67,7 +67,7 @@ def grammar_grammar():
 
 grammar_grammar()
 for _sym, _value in GRAMMAR_GRAMMAR.symbols.items():
-    assert not hasattr( GRAMMAR_GRAMMAR, _sym )
+    assert not hasattr( GRAMMAR_GRAMMAR, _sym ), _sym
     setattr(GRAMMAR_GRAMMAR, _sym, _value )
 
 for _sym, _value in GRAMMAR_GRAMMAR.tokens.items():

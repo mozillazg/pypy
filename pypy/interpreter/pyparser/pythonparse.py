@@ -95,11 +95,11 @@ class PythonParser(grammar.Parser):
         'exec' : "file_input",
         }
     
-    def __init__(self, predefined_symbols=None):
+    def __init__(self): # , predefined_symbols=None):
         grammar.Parser.__init__(self)
         pytoken.setup_tokens(self)
-        if predefined_symbols:
-            self.load_symbols(predefined_symbols)
+        # if predefined_symbols:
+        #     self.load_symbols(predefined_symbols)
         self.keywords = []
         
         # XXX (adim): this is trunk's keyword management
@@ -148,7 +148,8 @@ class PythonParser(grammar.Parser):
         """update references to old rules"""
         # brute force algorithm
         for rule in self.all_rules:
-            for i, arg in enumerate(rule.args):
+            for i in range(len(rule.args)):
+                arg = rule.args[i]
                 if arg.codename in self.root_rules:
                     real_rule = self.root_rules[arg.codename]
                     # This rule has been updated
@@ -174,13 +175,25 @@ class PythonParser(grammar.Parser):
 
 
 def make_pyparser(version=Options.version):
-    parser = PythonParser(predefined_symbols=symbol.sym_name)
+    parser = PythonParser() # predefined_symbols=symbol.sym_name)
     return build_parser_for_version(version, parser=parser)
+
+def translation_target(grammardef):
+    parser = PythonParser() # predefined_symbols=symbol.sym_name)
+    source = GrammarSource(GRAMMAR_GRAMMAR, grammardef)
+    builder = ebnfparse.EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
+    GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
+    builder.resolve_rules()
+    parser.build_first_sets()
+    parser.keywords = builder.keywords
+    return parser
+
+
 
 # unfortunately the command line options are not parsed yet
 # debug_print( "Loading grammar %s" % Options.version )
 # XXX: remove PYTHON_PARSER
-PYTHON_PARSER = make_pyparser()
+# PYTHON_PARSER = make_pyparser()
 
 ## XXX BROKEN
 ## def grammar_rules( space ):

@@ -46,31 +46,31 @@ def build_atom(builder, nb):
     top = atoms[0]
     if isinstance(top, TokenObject):
         # assert isinstance(top, TokenObject) # rtyper
-        if top.name == builder.parser.LPAR:
+        if top.name == builder.parser.tokens['LPAR']:
             if len(atoms) == 2:
                 builder.push(ast.Tuple([], top.lineno))
             else:
                 builder.push( atoms[1] )
-        elif top.name == builder.parser.LSQB:
+        elif top.name == builder.parser.tokens['LSQB']:
             if len(atoms) == 2:
                 builder.push(ast.List([], top.lineno))
             else:
                 list_node = atoms[1]
                 list_node.lineno = top.lineno
                 builder.push(list_node)
-        elif top.name == builder.parser.LBRACE:
+        elif top.name == builder.parser.tokens['LBRACE']:
             items = []
             for index in range(1, len(atoms)-1, 4):
                 # a   :   b   ,   c : d
                 # ^  +1  +2  +3  +4
                 items.append((atoms[index], atoms[index+2]))
             builder.push(ast.Dict(items, top.lineno))
-        elif top.name == builder.parser.NAME:
+        elif top.name == builder.parser.tokens['NAME']:
             val = top.get_value()
             builder.push( ast.Name(val, top.lineno) )
-        elif top.name == builder.parser.NUMBER:
+        elif top.name == builder.parser.tokens['NUMBER']:
             builder.push(ast.Const(builder.eval_number(top.get_value()), top.lineno))
-        elif top.name == builder.parser.STRING:
+        elif top.name == builder.parser.tokens['STRING']:
             # need to concatenate strings in atoms
             s = ''
             if len(atoms) == 1:
@@ -86,7 +86,7 @@ def build_atom(builder, nb):
                     accum.append(parsestr(builder.space, builder.source_encoding, token.get_value()))
                 w_s = space.call_method(empty, 'join', space.newlist(accum))
                 builder.push(ast.Const(w_s, top.lineno))
-        elif top.name == builder.parser.BACKQUOTE:
+        elif top.name == builder.parser.tokens['BACKQUOTE']:
             builder.push(ast.Backquote(atoms[1], atoms[1].lineno))
         else:
             raise SyntaxError("unexpected tokens", top.lineno, top.col)
@@ -107,7 +107,7 @@ def build_power(builder, nb):
     else:
         lineno = atoms[0].lineno
         token = atoms[-2]
-        if isinstance(token, TokenObject) and token.name == builder.parser.DOUBLESTAR:
+        if isinstance(token, TokenObject) and token.name == builder.parser.tokens['DOUBLESTAR']:
             obj = parse_attraccess(slicecut(atoms, 0, -2), builder)
             builder.push(ast.Power( obj, atoms[-1], lineno))
         else:
@@ -122,11 +122,11 @@ def build_factor(builder, nb):
         token = atoms[0]
         lineno = token.lineno
         if isinstance(token, TokenObject):
-            if token.name == builder.parser.PLUS:
+            if token.name == builder.parser.tokens['PLUS']:
                 builder.push( ast.UnaryAdd( atoms[1], lineno) )
-            if token.name == builder.parser.MINUS:
+            if token.name == builder.parser.tokens['MINUS']:
                 builder.push( ast.UnarySub( atoms[1], lineno) )
-            if token.name == builder.parser.TILDE:
+            if token.name == builder.parser.tokens['TILDE']:
                 builder.push( ast.Invert( atoms[1], lineno) )
 
 def build_term(builder, nb):
@@ -137,13 +137,13 @@ def build_term(builder, nb):
         right = atoms[i]
         op_node = atoms[i-1]
         assert isinstance(op_node, TokenObject)
-        if op_node.name == builder.parser.STAR:
+        if op_node.name == builder.parser.tokens['STAR']:
             left = ast.Mul( left, right, left.lineno )
-        elif op_node.name == builder.parser.SLASH:
+        elif op_node.name == builder.parser.tokens['SLASH']:
             left = ast.Div( left, right, left.lineno )
-        elif op_node.name == builder.parser.PERCENT:
+        elif op_node.name == builder.parser.tokens['PERCENT']:
             left = ast.Mod( left, right, left.lineno )
-        elif op_node.name == builder.parser.DOUBLESLASH:
+        elif op_node.name == builder.parser.tokens['DOUBLESLASH']:
             left = ast.FloorDiv( left, right, left.lineno )
         else:
             token = atoms[i-1]
@@ -158,9 +158,9 @@ def build_arith_expr(builder, nb):
         right = atoms[i]
         op_node = atoms[i-1]
         assert isinstance(op_node, TokenObject)
-        if op_node.name == builder.parser.PLUS:
+        if op_node.name == builder.parser.tokens['PLUS']:
             left = ast.Add( left, right, left.lineno)
-        elif op_node.name == builder.parser.MINUS:
+        elif op_node.name == builder.parser.tokens['MINUS']:
             left = ast.Sub( left, right, left.lineno)
         else:
             token = atoms[i-1]
@@ -176,9 +176,9 @@ def build_shift_expr(builder, nb):
         right = atoms[i]
         op_node = atoms[i-1]
         assert isinstance(op_node, TokenObject)
-        if op_node.name == builder.parser.LEFTSHIFT:
+        if op_node.name == builder.parser.tokens['LEFTSHIFT']:
             left = ast.LeftShift( left, right, lineno )
-        elif op_node.name == builder.parser.RIGHTSHIFT:
+        elif op_node.name == builder.parser.tokens['RIGHTSHIFT']:
             left = ast.RightShift( left, right, lineno )
         else:
             token = atoms[i-1]
@@ -255,9 +255,9 @@ def build_comp_op(builder, nb):
         lineno = token.lineno
         assert isinstance(token, TokenObject)
         if token.get_value() == 'not':
-            builder.push(TokenObject(builder.parser.NAME, 'not in', lineno, builder.parser))
+            builder.push(TokenObject(builder.parser.tokens['NAME'], 'not in', lineno, builder.parser))
         else:
-            builder.push(TokenObject(builder.parser.NAME, 'is not', lineno, builder.parser))
+            builder.push(TokenObject(builder.parser.tokens['NAME'], 'is not', lineno, builder.parser))
     else:
         assert False, "TODO" # uh ?
 
@@ -309,7 +309,7 @@ def build_expr_stmt(builder, nb):
         return
     op = atoms[1]
     assert isinstance(op, TokenObject)
-    if op.name == builder.parser.EQUAL:
+    if op.name == builder.parser.tokens['EQUAL']:
         nodes = []
         for i in range(0,l-2,2):
             lvalue = to_lvalue(atoms[i], consts.OP_ASSIGN)
@@ -343,7 +343,7 @@ def build_simple_stmt(builder, nb):
         lineno = -1
     for n in range(0,l,2):
         node = atoms[n]
-        if isinstance(node, TokenObject) and node.name == builder.parser.NEWLINE:
+        if isinstance(node, TokenObject) and node.name == builder.parser.tokens['NEWLINE']:
             nodes.append(ast.Discard(ast.Const(builder.wrap_none()), node.lineno))
         else:
             nodes.append(node)
@@ -369,10 +369,10 @@ def build_file_input(builder, nb):
     for node in atoms:
         if isinstance(node, ast.Stmt):
             stmts.extend(node.nodes)
-        elif isinstance(node, TokenObject) and node.name == builder.parser.ENDMARKER:
+        elif isinstance(node, TokenObject) and node.name == builder.parser.tokens['ENDMARKER']:
             # XXX Can't we just remove the last element of the list ?
             break
-        elif isinstance(node, TokenObject) and node.name == builder.parser.NEWLINE:
+        elif isinstance(node, TokenObject) and node.name == builder.parser.tokens['NEWLINE']:
             continue
         else:
             stmts.append(node)
@@ -392,7 +392,7 @@ def build_single_input(builder, nb):
     l = len(atoms)
     if l == 1 or l==2:
         atom0 = atoms[0]
-        if isinstance(atom0, TokenObject) and atom0.name == builder.parser.NEWLINE:
+        if isinstance(atom0, TokenObject) and atom0.name == builder.parser.tokens['NEWLINE']:
             atom0 = ast.Pass(atom0.lineno)
         elif not isinstance(atom0, ast.Stmt):
             atom0 = ast.Stmt([atom0], atom0.lineno)
@@ -412,7 +412,7 @@ def build_testlist_gexp(builder, nb):
         return
     items = []
     token = atoms[1]
-    if isinstance(token, TokenObject) and token.name == builder.parser.COMMA:
+    if isinstance(token, TokenObject) and token.name == builder.parser.tokens['COMMA']:
         for i in range(0, l, 2): # this is atoms not 1
             items.append(atoms[i])
     else:
@@ -452,13 +452,13 @@ def build_trailer(builder, nb):
     atoms = get_atoms(builder, nb)
     first_token = atoms[0]
     # Case 1 : '(' ...
-    if isinstance(first_token, TokenObject) and first_token.name == builder.parser.LPAR:
-        if len(atoms) == 2: # and atoms[1].token == builder.parser.RPAR:
+    if isinstance(first_token, TokenObject) and first_token.name == builder.parser.tokens['LPAR']:
+        if len(atoms) == 2: # and atoms[1].token == builder.parser.tokens['RPAR']:
             builder.push(ArglistObject([], None, None, first_token.lineno))
         elif len(atoms) == 3: # '(' Arglist ')'
             # push arglist on the stack
             builder.push(atoms[1])
-    elif isinstance(first_token, TokenObject) and first_token.name == builder.parser.LSQB:
+    elif isinstance(first_token, TokenObject) and first_token.name == builder.parser.tokens['LSQB']:
         if len(atoms) == 3 and isinstance(atoms[1], SlicelistObject):
             builder.push(atoms[1])
         else:
@@ -516,11 +516,11 @@ def build_subscript(builder, nb):
     atoms = get_atoms(builder, nb)
     token = atoms[0]
     lineno = token.lineno
-    if isinstance(token, TokenObject) and token.name == builder.parser.DOT:
+    if isinstance(token, TokenObject) and token.name == builder.parser.tokens['DOT']:
         # Ellipsis:
         builder.push(ast.Ellipsis(lineno))
     elif len(atoms) == 1:
-        if isinstance(token, TokenObject) and token.name == builder.parser.COLON:
+        if isinstance(token, TokenObject) and token.name == builder.parser.tokens['COLON']:
             sliceinfos = [None, None, None]
             builder.push(SlicelistObject('slice', sliceinfos, lineno))
         else:
@@ -530,7 +530,7 @@ def build_subscript(builder, nb):
         sliceinfos = [None, None, None]
         infosindex = 0
         for token in atoms:
-            if isinstance(token, TokenObject) and token.name == builder.parser.COLON:
+            if isinstance(token, TokenObject) and token.name == builder.parser.tokens['COLON']:
                 infosindex += 1
             else:
                 sliceinfos[infosindex] = token
@@ -578,7 +578,7 @@ def build_decorator(builder, nb):
     # remove '@', '(' and ')' from atoms and use parse_attraccess
     for token in atoms[1:]:
         if isinstance(token, TokenObject) and \
-               token.name in (builder.parser.LPAR, builder.parser.RPAR, builder.parser.NEWLINE):
+               token.name in (builder.parser.tokens['LPAR'], builder.parser.tokens['RPAR'], builder.parser.tokens['NEWLINE']):
             # skip those ones
             continue
         else:
@@ -810,11 +810,11 @@ def build_import_name(builder, nb):
         while index<l:
             atom = atoms[index]
 #        for atom in atoms[index:]:
-            if isinstance(atom, TokenObject) and atom.name == builder.parser.COMMA:
+            if isinstance(atom, TokenObject) and atom.name == builder.parser.tokens['COMMA']:
                 break
             index += 1
 ##         while index < l and isinstance(atoms[index], TokenObject) and \
-##                 atoms[index].name != builder.parser.COMMA:
+##                 atoms[index].name != builder.parser.tokens['COMMA']:
 ##             index += 1
         index += 1
     builder.push(ast.Import(names, atoms[0].lineno))
@@ -833,10 +833,10 @@ def build_import_from(builder, nb):
     index += (incr + 1) # skip 'import'
     token = atoms[index]
     assert isinstance(token, TokenObject) # XXX
-    if token.name == builder.parser.STAR:
+    if token.name == builder.parser.tokens['STAR']:
         names = [('*', None)]
     else:
-        if token.name == builder.parser.LPAR:
+        if token.name == builder.parser.tokens['LPAR']:
             # mutli-line imports
             tokens = slicecut( atoms, index+1, -1 )
         else:
@@ -917,14 +917,14 @@ def build_print_stmt(builder, nb):
     start = 1
     if l > 1:
         token = atoms[1]
-        if isinstance(token, TokenObject) and token.name == builder.parser.RIGHTSHIFT:
+        if isinstance(token, TokenObject) and token.name == builder.parser.tokens['RIGHTSHIFT']:
             dest = atoms[2]
             # skip following comma
             start = 4
     for index in range(start, l, 2):
         items.append(atoms[index])
     last_token = atoms[-1]
-    if isinstance(last_token, TokenObject) and last_token.name == builder.parser.COMMA:
+    if isinstance(last_token, TokenObject) and last_token.name == builder.parser.tokens['COMMA']:
         builder.push(ast.Print(items, dest, atoms[0].lineno))
     else:
         builder.push(ast.Printnl(items, dest, atoms[0].lineno))
@@ -1061,11 +1061,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 class AstBuilder(Wrappable, BaseGrammarBuilder):
     """A builder that directly produce the AST"""
 
-    def __init__(self, parser=None, debug=0, space=None):
-        # XXX: parser must become mandatory
-        if parser is None:
-            from pythonparse import PYTHON_PARSER
-            parser = pythonparse.PYTHON_PARSER
+    def __init__(self, parser, debug=0, space=None):
         BaseGrammarBuilder.__init__(self, parser, debug)
         self.rule_stack = []
         self.space = space

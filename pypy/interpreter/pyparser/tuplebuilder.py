@@ -62,8 +62,8 @@ class TupleBuilder(AbstractBuilder):
         self.source_encoding = None
         self.lineno = lineno
         self.stack = []
-        self.space_token = ( self.parser.NEWLINE, self.parser.INDENT,
-                             self.parser.DEDENT, self.parser.ENDMARKER )
+        self.space_token = ( self.parser.tokens['NEWLINE'], self.parser.tokens['INDENT'],
+                             self.parser.tokens['DEDENT'], self.parser.tokens['ENDMARKER'] )
 
     def context(self):
         """Returns the state of the builder to be restored later"""

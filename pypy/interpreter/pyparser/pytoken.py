@@ -11,10 +11,10 @@ NULLTOKEN = -1
 tok_name = {-1 : 'NULLTOKEN'}
 tok_values = {'NULLTOKEN' : -1}
 
-tok_rpunct = {}
+# tok_rpunct = {}
 
 def setup_tokens( parser ):
-    global tok_rpunct
+    # global tok_rpunct
 # For compatibility, this produces the same constant values as Python 2.4.
     parser.add_token( 'ENDMARKER' )
     parser.add_token( 'NAME' )
@@ -75,7 +75,7 @@ def setup_tokens( parser ):
     parser.add_token( "COMMENT" )
     parser.add_token( "NL" )
 
-    tok_rpunct = parser.tok_values.copy()
-    for _name, _value in parser.tokens.items():
-        globals()[_name] = _value
-        setattr(parser, _name, _value)
+    # tok_rpunct = parser.tok_values.copy()
+    # for _name, _value in parser.tokens.items():
+    # globals()[_name] = _value
+    # setattr(parser, _name, _value)
