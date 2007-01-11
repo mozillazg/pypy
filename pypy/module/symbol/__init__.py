@@ -20,10 +20,11 @@ class Module(MixedModule):
 # Export the values from our custom symbol module.
 # Skip negative values (the corresponding symbols are not visible in
 # pure Python).
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
+from pypy.interpreter.pyparser.pythonparse import make_pyparser
+parser = make_pyparser()
 
 sym_name = {}
-for name, val in PYTHON_PARSER.symbols.items():
+for name, val in parser.symbols.items():
     if val >= 0:
         Module.interpleveldefs[name] = 'space.wrap(%d)' % val
         sym_name[val] = name

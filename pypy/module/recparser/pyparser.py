@@ -8,11 +8,13 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, GetSetProperty
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyparser.syntaxtree import TokenNode, SyntaxNode, AbstractSyntaxVisitor
-from pypy.interpreter.pyparser.pythonparse import PYTHON_PARSER
+from pypy.interpreter.pyparser.pythonparse import make_pyparser
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser import grammar, symbol, pytoken
 from pypy.interpreter.argument import Arguments
 
+# backward compat (temp)
+PYTHON_PARSER = make_pyparser()
 
 __all__ = [ "ASTType", "STType", "suite", "expr" ]
 
@@ -43,14 +45,15 @@ class SyntaxToTupleVisitor(AbstractSyntaxVisitor):
 
     def visit_tokennode( self, node ):
         space = self.space
+        tokens = space.parser.tokens
         num = node.name
         lineno = node.lineno
         if node.value is not None:
             val = node.value
         else:
-            if num not in ( pytoken.NEWLINE, pytoken.INDENT,
-                            pytoken.DEDENT, pytoken.ENDMARKER ):
-                val = pytoken.tok_rpunct[num]
+            if num not in ( tokens['NEWLINE'], tokens['INDENT'],
+                            tokens['DEDENT'], tokens['ENDMARKER'] ):
+                val = space.parser.tok_values[num]
             else:
                 val = node.value or ''
         if self.line_info:
@@ -180,7 +183,7 @@ def unwrap_syntax_tree( space, w_sequence ):
     items = space.unpackiterable( w_sequence )
     nodetype = space.int_w( items[0] )
     is_syntax = True
-    if nodetype>=0 and nodetype<pytoken.N_TOKENS:
+    if nodetype>=0 and nodetype < pytoken.N_TOKENS:
         is_syntax = False
     if is_syntax:
         nodes = []
@@ -202,7 +205,7 @@ def sequence2st(space, w_sequence):
 
 def source2ast(space, source):
     from pypy.interpreter.pyparser.pythonutil import AstBuilder, PYTHON_PARSER
-    builder = AstBuilder(space=space)
+    builder = AstBuilder(parser=PYTHON_PARSER, space=space)
     PYTHON_PARSER.parse_source(source, 'file_input', builder)
     ast_tree = builder.rule_stack[-1]
     return space.wrap(ast_tree)
