@@ -4,13 +4,9 @@ from pypy.lang.js.jsobj import *
 from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
 
 class Node(object):
-    def init_common(self, type='', value='', lineno=0, start=0, end=0):
-        self.type = type
-        self.value = value
-        self.lineno = lineno
-        self.start = start
-        self.end = end
-        
+    # TODO Add line info for debug
+#    def __init__(self, lineno = 1):
+#        self.lineno = lineno
     def eval(self, ctx):
         raise NotImplementedError
 
@@ -49,6 +45,7 @@ class BinaryComparisonOp(BinaryOp):
     def decision(self, ctx, op1, op2):
         raise NotImplementedError
 
+
 class BinaryLogicOp(BinaryOp):
     """super class for binary operators"""
     pass
@@ -84,8 +81,8 @@ class Interpreter(object):
 
 class PropertyInit(Node):
     def __init__(self, name, value):
-        self.nameinit = name
-        self.valueinit = value
+        self.namein = name
+        self.value = value
     
     def __repr__(self):
         return "<%s : %s>"%(str(self.namein), str(self.value))
@@ -102,7 +99,6 @@ class Array(Expression):
             d[i] = self.items[i]
         return W_Array(d)
 
-
 class Assign(Expression):
     def __init__(self, LHSExp, AssignmentExp):
         self.LHSExp = LHSExp
@@ -116,7 +112,6 @@ class Assign(Expression):
         v1.PutValue(v3, ctx)
         return v3
 
-
 class Block(Statement):
     def __init__(self, nodes):
         self.nodes = nodes
@@ -129,7 +124,6 @@ class Block(Statement):
             return last
         except ExecutionReturned, e:
             return e.value
-
 
 class Call(Expression):
     def __init__(self, identifier, arglist):
@@ -147,12 +141,10 @@ class Call(Expression):
             retval = w_obj.Call(ctx=ctx, args=[i for i in self.arglist.get_args(ctx)])
             return retval
 
-
 class Comma(BinaryOp):
     def eval(self, ctx):
         self.left.eval(ctx)
         return self.right.eval(ctx)
-
 
 class Conditional(Expression):
     def __init__(self, logicalexpr, trueop, falseop):
@@ -201,14 +193,13 @@ class Identifier(Expression):
     def get_literal(self):
         return self.name
 
-
 class If(Statement):
     def __init__(self, condition, thenPart=None, elsePart=None):
         self.condition = condition
         self.thenPart = thenPart
         self.elsePart = elsePart
 
-    def execute(self, ctx):
+    def execute(self, ctx=None):
         temp = self.condition.eval(ctx)
         #print "if condition = ", temp 
         if temp.ToBoolean():
@@ -382,9 +373,11 @@ class ObjectInit(Expression):
 
     def eval(self, ctx):
         w_obj = W_Object()
+        ##print "properties = ", self.properties
         for property in self.properties:
-            name = property.nameinit.get_literal()
-            w_expr = property.valueinit.eval(ctx).GetValue()
+            name = property.namein.get_literal()
+            #print "prop name = ", name
+            w_expr = property.value.eval(ctx).GetValue()
             w_obj.Put(name, w_expr)
         return w_obj
 
@@ -420,6 +413,12 @@ class Script(Statement):
             return last
         except ExecutionReturned, e:
             return e.value
+
+    def append_script(self, newscript):
+        """copy everything from the newscript to this one"""
+        self.var_decl.extend(newscript.var_decl)
+        self.nodes.extend(newscript.nodes)
+        self.func_decl.extend(newscript.func_decl)
 
 class Semicolon(Statement):
     def __init__(self, expr = None):
@@ -549,39 +548,38 @@ def gettreeitem(t, name):
             return x.children[1]
     return None
 
-
 def from_tree(t):
     if t is None:
         return None
     tp = gettreeitem(t, 'type').additional_info
     if tp == 'ARRAY_INIT':
-        node = Array(getlist(t))
+        return Array(getlist(t))
     elif tp == 'ASSIGN':
-        node = Assign(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Assign(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'BLOCK':
-        node = Block(getlist(t))
+        return Block(getlist(t))
     elif tp == 'CALL':
-        node = Call(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Call(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'COMMA':
-        node = Comma(from_tree(gettreeitem(t, '0')),from_tree(gettreeitem(t, '1')))
+        return Comma(from_tree(gettreeitem(t, '0')),from_tree(gettreeitem(t, '1')))
     elif tp == 'CONDITIONAL':
-        node = Conditional(from_tree(gettreeitem(t, '0')),
+        return Conditional(from_tree(gettreeitem(t, '0')),
                         from_tree(gettreeitem(t, '1')),
                         from_tree(gettreeitem(t, '2')))
     elif tp == 'DOT':
-        node = Dot(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Dot(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'EQ':
-        node = Eq(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Eq(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'OR':
-        node = Or(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Or(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'AND':
-        node = And(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return And(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'FOR':
         setup = from_tree(gettreeitem(t, 'setup'))
         condition = from_tree(gettreeitem(t, 'condition'))
         update = from_tree(gettreeitem(t, 'update'))
         body = from_tree(gettreeitem(t, 'body'))
-        node = For(setup, condition, update, body)
+        return For(setup, condition, update, body)
     elif tp == 'FUNCTION':        
         namesimb = gettreeitem(t, 'name')
         name = None
@@ -593,15 +591,15 @@ def from_tree(t):
         else:
             params = gettreeitem(t, 'params').additional_info.split(',')
         f = Function(name, params, body)
-        node = f
+        return f
     elif tp == 'GROUP':
-        node = Group(from_tree(gettreeitem(t, '0')))
+        return Group(from_tree(gettreeitem(t, '0')))
     elif tp == 'GE':
-        node = Ge(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Ge(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'GT':
-        node = Gt(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Gt(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'IDENTIFIER':
-        node = Identifier(gettreeitem(t, 'value').additional_info, from_tree(gettreeitem(t, 'initializer')))
+        return Identifier(gettreeitem(t, 'value').additional_info, from_tree(gettreeitem(t, 'initializer')))
     elif tp == 'IF':
         condition = from_tree(gettreeitem(t, 'condition'))
         thenPart = gettreeitem(t, 'thenPart')
@@ -615,35 +613,35 @@ def from_tree(t):
             elsePart = from_tree(elsePart)
         else:
             elsePart = Undefined()
-        node = If(condition,thenPart,elsePart)
+        return If(condition,thenPart,elsePart)
     elif tp == 'IN':
-        node = In(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return In(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'INCREMENT':
-        node = Increment(from_tree(gettreeitem(t, '0')))
+        return Increment(from_tree(gettreeitem(t, '0')))
     elif tp == 'INDEX':
-        node = Index(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Index(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'LIST':
-        node = List(getlist(t))
+        return List(getlist(t))
     elif tp == 'LE':
-        node = Le(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Le(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'LT':
-        node = Lt(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Lt(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'MINUS':
-        node = Minus(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Minus(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'NE':
-        node = Ne(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Ne(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'NEW':
-        node = New(gettreeitem(gettreeitem(t, '0'),'value').additional_info)
+        return New(gettreeitem(gettreeitem(t, '0'),'value').additional_info)
     elif tp == 'NUMBER':
-        node = Number(float(gettreeitem(t, 'value').additional_info))
+        return Number(float(gettreeitem(t, 'value').additional_info))
     elif tp == 'OBJECT_INIT':
-        node = ObjectInit(getlist(t))
+        return ObjectInit(getlist(t))
     elif tp == 'PLUS':
-        node = Plus(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return Plus(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'PROPERTY_INIT':
-        node = PropertyInit(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
+        return PropertyInit(from_tree(gettreeitem(t, '0')), from_tree(gettreeitem(t, '1')))
     elif tp == 'RETURN':
-        node = Return(from_tree(gettreeitem(t, 'value')))
+        return Return(from_tree(gettreeitem(t, 'value')))
     elif tp == 'SCRIPT':
         f = gettreeitem(t, 'funDecls')
         # print f.symbol
@@ -663,18 +661,18 @@ def from_tree(t):
         else:
             var_decl = []
 
-        node = Script(getlist(t), var_decl, func_decl)
+        return Script(getlist(t), var_decl, func_decl)
     elif tp == 'SEMICOLON':
         expr = gettreeitem(t, 'expression')
         if isinstance(expr, Symbol):
-            node = Semicolon()
-        node = Semicolon(from_tree(expr))
+            return Semicolon()
+        return Semicolon(from_tree(expr))
     elif tp == 'STRING':
-        node = String(gettreeitem(t, 'value').additional_info)
+        return String(gettreeitem(t, 'value').additional_info)
     elif tp == 'THIS':
-        node = Identifier(gettreeitem(t, 'value').additional_info)
+        return Identifier(gettreeitem(t, 'value').additional_info)
     elif tp == 'THROW':
-        node = Throw(from_tree(gettreeitem(t, 'exception')))
+        return Throw(from_tree(gettreeitem(t, 'exception')))
     elif tp == 'TRY':
         finallyblock = None
         catchblock = None
@@ -687,38 +685,18 @@ def from_tree(t):
             #multiple catch clauses is a spidermonkey extension
             catchblock = from_tree(gettreeitem(catch, 'block'))
             catchparam = gettreeitem(catch, 'varName').additional_info
-        node = Try(from_tree(gettreeitem(t, 'tryBlock')), catchblock, finallyblock, catchparam)
+        return Try(from_tree(gettreeitem(t, 'tryBlock')), catchblock, finallyblock, catchparam)
     elif tp == 'VAR':
-        node = Vars(getlist(t))
+        return Vars(getlist(t))
     elif tp == 'WHILE':
         body = from_tree(gettreeitem(t, 'body'))
         condition = from_tree(gettreeitem(t, 'condition'))
-        node = While(condition, body)
+        return While(condition, body)
     elif tp == 'TRUE':
-        node = Boolean(True)
+        return Boolean(True)
     elif tp == 'FALSE':
-        node = Boolean(False)
+        return Boolean(False)
     elif tp == 'NOT':
-        node = Not(from_tree(gettreeitem(t, '0')))
+        return Not(from_tree(gettreeitem(t, '0')))
     else:
         raise NotImplementedError("Dont know how to handler %s" % tp)
-    
-    if tp == 'SCRIPT':
-        start = 0
-        end = 0
-    else:
-        start = int(gettreeitem(t, 'start').additional_info)
-        end = int(gettreeitem(t, 'end').additional_info)
-    
-    if tp == 'SCRIPT' or tp == 'RETURN':
-        value = gettreeitem(t, 'type')
-    else:
-        value = gettreeitem(t, 'value').additional_info
-
-        
-    print tp
-    node.init_common(gettreeitem(t, 'type').additional_info, value,
-    int(gettreeitem(t, 'lineno').additional_info), start, end)
-    return node
-
-    

@@ -82,9 +82,7 @@ class EntryPoint(Node):
         lltype.UnsignedLongLong:jvmgen.PYPYSTRTOULONG,
         ootype.Bool:jvmgen.PYPYSTRTOBOOL,
         ootype.Float:jvmgen.PYPYSTRTODOUBLE,
-        ootype.Char:jvmgen.PYPYSTRTOCHAR,
-        ootype.UniChar:jvmgen.PYPYSTRTOCHAR,
-        ootype.String:None
+        ootype.Char:jvmgen.PYPYSTRTOCHAR
         }
 
     def render(self, gen):
@@ -104,8 +102,7 @@ class EntryPoint(Node):
                 gen.load_jvm_var(jStringArray, 0)
                 gen.emit(jvmgen.ICONST, i)
                 gen.load_from_array(jString)
-                conv = self._type_conversion_methods[arg.concretetype]
-                if conv: gen.emit(conv)
+                gen.emit(self._type_conversion_methods[arg.concretetype])
         else:
             # Convert the array of strings to a List<String> as the
             # python method expects
