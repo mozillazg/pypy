@@ -68,7 +68,6 @@ from pypy import conftest
 
 def test_tagged_boehm():
     runtest.llvm_test()
-    runtest.gcc3_test()
     t = Translation(entry_point, standalone=True, gc='boehm')
     try:
         exename = t.compile_llvm()
