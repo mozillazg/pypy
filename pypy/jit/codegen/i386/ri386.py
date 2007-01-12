@@ -251,6 +251,7 @@ def unpack(s):
     assert len(s) in (1, 2, 4)
     result = 0
     shift = 0
+    char = '\x00'      # flow space workaround
     for char in s:
         result |= ord(char) << shift
         shift += 8

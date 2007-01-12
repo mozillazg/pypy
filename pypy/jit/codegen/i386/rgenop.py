@@ -14,6 +14,8 @@ RK_NO_RESULT = 0
 RK_WORD      = 1
 RK_CC        = 2
 
+DEBUG_TRAP = conftest.option.trap
+
 
 class Operation(GenVar):
     clobbers_cc = True
@@ -46,14 +48,14 @@ class OpSameAs(Op1):
             dstop = allocator.get_operand(self)
         except KeyError:
             return    # result not used
-        srcop = self.get_operand(self.x)
+        srcop = allocator.get_operand(self.x)
         if srcop != dstop:
+            mc = allocator.mc
             try:
-                self.mc.MOV(dstop, srcop)
+                mc.MOV(dstop, srcop)
             except FailedToImplement:
-                self.mc.MOV(ecx, srcop)
-                self.mc.MOV(dstop, ecx)
-        return dstop
+                mc.MOV(ecx, srcop)
+                mc.MOV(dstop, ecx)
 
 class OpCompare1(Op1):
     result_kind = RK_CC
@@ -117,22 +119,43 @@ class OpIntGt(OpCompare2):
     opname = 'int_gt'
     cc_result = Conditions['G']
 
-class JumpIfFalse(Operation):
+class JumpIf(Operation):
     clobbers_cc = False
     result_kind = RK_NO_RESULT
-    def __init__(self, gv_condition, targetbuilder):
+    def __init__(self, gv_condition, targetbuilder, negate):
         assert 0 <= gv_condition.cc_result < INSN_JMP
         self.gv_condition = gv_condition
         self.targetbuilder = targetbuilder
+        self.negate = negate
     def allocate(self, allocator):
         allocator.using_cc(self.gv_condition)
     def generate(self, allocator):
-        cc = cond_negate(self.gv_condition.cc_result)
+        cc = self.gv_condition.cc_result
+        if self.negate:
+            cc = cond_negate(cc)
         mc = allocator.mc
         targetbuilder = self.targetbuilder
         targetbuilder.set_coming_from(mc, insncond=cc)
         targetbuilder.inputoperands = [allocator.get_operand(gv)
                                        for gv in targetbuilder.inputargs_gv]
+
+class OpLabel(Operation):
+    clobbers_cc = False
+    result_kind = RK_NO_RESULT
+    def __init__(self, lbl, args_gv):
+        self.lbl = lbl
+        self.args_gv = args_gv
+    def allocate(self, allocator):
+        for v in self.args_gv:
+            allocator.using(v)
+    def generate(self, allocator):
+        lbl = self.lbl
+        lbl.targetaddr = allocator.mc.tell()
+        lbl.inputoperands = [allocator.get_operand(v) for v in self.args_gv]
+
+class Label(GenLabel):
+    targetaddr = 0
+    inputoperands = None
 
 # ____________________________________________________________
 
@@ -449,11 +472,20 @@ class Builder(GenBuilder):
         return mc
 
     def enter_next_block(self, kinds, args_gv):
-        mc = self.generate_block_code(args_gv)
-        args_gv[:] = self.inputargs_gv
-        self.set_coming_from(mc)
-        self.rgenop.close_mc(mc)
-        self.start_writing()
+##        mc = self.generate_block_code(args_gv)
+##        assert len(self.inputargs_gv) == len(args_gv)
+##        args_gv[:len(args_gv)] = self.inputargs_gv
+##        self.set_coming_from(mc)
+##        self.rgenop.close_mc(mc)
+##        self.start_writing()
+        for i in range(len(args_gv)):
+            op = OpSameAs(args_gv[i])
+            args_gv[i] = op
+            self.operations.append(op)
+        lbl = Label()
+        lblop = OpLabel(lbl, args_gv)
+        self.operations.append(lblop)
+        return lbl
 
     def set_coming_from(self, mc, insncond=INSN_JMP):
         self.coming_from_cond = insncond
@@ -480,7 +512,15 @@ class Builder(GenBuilder):
         if gv_condition.cc_result < 0:
             gv_condition = OpIntIsTrue(gv_condition)
             self.operations.append(gv_condition)
-        self.operations.append(JumpIfFalse(gv_condition, newbuilder))
+        self.operations.append(JumpIf(gv_condition, newbuilder, negate=True))
+        return newbuilder
+
+    def jump_if_true(self, gv_condition, args_for_jump_gv):
+        newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
+        if gv_condition.cc_result < 0:
+            gv_condition = OpIntIsTrue(gv_condition)
+            self.operations.append(gv_condition)
+        self.operations.append(JumpIf(gv_condition, newbuilder, negate=False))
         return newbuilder
 
     def finish_and_return(self, sigtoken, gv_returnvar):
@@ -548,7 +588,7 @@ class RI386GenOp(AbstractRGenOp):
         # --- prologue ---
         mc = self.open_mc()
         entrypoint = mc.tell()
-        if conftest.option.trap:
+        if DEBUG_TRAP:
             mc.BREAKPOINT()
         mc.PUSH(ebp)
         mc.MOV(ebp, esp)
