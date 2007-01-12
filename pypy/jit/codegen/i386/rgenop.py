@@ -39,7 +39,6 @@ class Op1(Operation):
             return    # simple operation whose result is not used anyway
         op = allocator.load_location_with(loc, self.x)
         self.emit(allocator.mc, op)
-        allocator.store_back_location(loc, op)
 
 class OpSameAs(Op1):
     clobbers_cc = False
@@ -78,6 +77,7 @@ class OpIntIsTrue(OpCompare1):
         mc.CMP(x, imm8(0))
 
 class Op2(Operation):
+    commutative = False
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -86,21 +86,65 @@ class Op2(Operation):
         allocator.using(self.y)
     def generate(self, allocator):
         try:
-            loc = allocator.var2loc[self]
+            dstop = allocator.get_operand(self)
         except KeyError:
             return    # simple operation whose result is not used anyway
-        op1 = allocator.load_location_with(loc, self.x)
+        op1 = allocator.get_operand(self.x)
         op2 = allocator.get_operand(self.y)
-        self.emit(allocator.mc, op1, op2)
-        allocator.store_back_location(loc, op1)
+        # now all of dstop, op1 and op2 may alias each other and be in
+        # a register or in the stack... finding a correct and encodable
+        # combination of instructions is loads of fun
+        mc = allocator.mc
+        if dstop == op1:
+            case = 1       # optimize for this common case
+        elif self.commutative and dstop == op2:
+            op1, op2 = op2, op1
+            case = 1
+        elif isinstance(dstop, REG):
+            if dstop != op2:
+                # REG = OPERATION(op1, op2)   with op2 != REG
+                case = 2
+            else:
+                # REG = OPERATION(op1, REG)
+                case = 3
+        elif isinstance(op1, REG) and isinstance(op2, REG):
+            # STACK = OPERATION(REG, REG)
+            case = 2
+        else:
+            case = 3
+        # this is a separator line but a blank line doesn't look nice here
+        if case == 1:
+            # dstop == op1
+            try:
+                self.emit(mc, op1, op2)
+            except FailedToImplement:    # emit(STACK, STACK) combination
+                mc.MOV(ecx, op2)
+                self.emit(mc, op1, ecx)
+        elif case == 2:
+            # this case works for:
+            #   * REG = OPERATION(op1, op2)   with op2 != REG
+            #   * STACK = OPERATION(REG, REG)
+            mc.MOV(dstop, op1)
+            self.emit(mc, dstop, op2)
+        else:
+            # most general case
+            mc.MOV(ecx, op1)
+            self.emit(mc, ecx, op2)
+            mc.MOV(dstop, ecx)
 
 class OpIntAdd(Op2):
     opname = 'int_add'
     emit = staticmethod(I386CodeBuilder.ADD)
+    commutative = True
 
 class OpIntSub(Op2):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
+
+class OpIntMul(Op2):
+    opname = 'int_mul'
+    emit = staticmethod(I386CodeBuilder.IMUL)
+    commutative = True
 
 class OpCompare2(Op2):
     result_kind = RK_CC
@@ -409,17 +453,10 @@ class RegAllocator(object):
 
     def load_location_with(self, loc, gv_source):
         dstop = self.operands[loc]
-        if not isinstance(dstop, REG):
-            dstop = ecx
         srcop = self.get_operand(gv_source)
         if srcop != dstop:
             self.mc.MOV(dstop, srcop)
         return dstop
-
-    def store_back_location(self, loc, operand):
-        dstop = self.operands[loc]
-        if operand != dstop:
-            self.mc.MOV(dstop, operand)
 
     def generate_initial_moves(self):
         initial_moves = self.initial_moves
@@ -433,6 +470,7 @@ class RegAllocator(object):
         if last_n >= 0:
             self.mc.LEA(esp, stack_op(last_n))
         # XXX naive algo for now
+        # XXX at least remove moves that don't move anything!
         for loc, srcoperand in initial_moves:
             self.mc.PUSH(srcoperand)
         initial_moves.reverse()
@@ -522,6 +560,14 @@ class Builder(GenBuilder):
             self.operations.append(gv_condition)
         self.operations.append(JumpIf(gv_condition, newbuilder, negate=False))
         return newbuilder
+
+    def finish_and_goto(self, outputargs_gv, targetlbl):
+        operands = targetlbl.inputoperands
+        if operands is None:
+            raise NotImplementedError
+        mc = self.generate_block_code(outputargs_gv, outputargs_gv, operands)
+        mc.JMP(rel32(targetlbl.targetaddr))
+        self.rgenop.close_mc(mc)
 
     def finish_and_return(self, sigtoken, gv_returnvar):
         mc = self.generate_block_code([gv_returnvar], [gv_returnvar], [eax])
