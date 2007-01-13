@@ -689,7 +689,12 @@ class Builder(GenBuilder):
     def finish_and_goto(self, outputargs_gv, targetlbl):
         operands = targetlbl.inputoperands
         if operands is None:
-            raise NotImplementedError
+            # this occurs when jumping back to the same currently-open block;
+            # close the block and re-open it
+            self.pause_writing(outputargs_gv)
+            self.start_writing()
+            operands = targetlbl.inputoperands
+            assert operands is not None
         mc = self.generate_block_code(outputargs_gv, outputargs_gv, operands)
         mc.JMP(rel32(targetlbl.targetaddr))
         self.rgenop.close_mc(mc)
