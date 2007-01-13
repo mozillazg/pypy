@@ -1,3 +1,4 @@
+import sys
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
@@ -9,6 +10,12 @@ from pypy.jit.codegen.i386 import conftest
 
 
 WORD = 4    # bytes
+if sys.platform == 'darwin':
+    CALL_ALIGN = 4
+else:
+    CALL_ALIGN = 1
+
+PROLOGUE_FIXED_WORDS = 5
 
 RK_NO_RESULT = 0
 RK_WORD      = 1
@@ -280,6 +287,53 @@ class Label(GenLabel):
     targetaddr = 0
     inputoperands = None
 
+class OpCall(Operation):
+    def __init__(self, sigtoken, gv_fnptr, args_gv):
+        self.sigtoken = sigtoken
+        self.gv_fnptr = gv_fnptr
+        self.args_gv = args_gv
+    def allocate(self, allocator):
+        # XXX try to use eax for the result
+        allocator.using(self.gv_fnptr)
+        for v in self.args_gv:
+            allocator.using(v)
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            dstop = None
+        mc = allocator.mc
+        stack_align_words = PROLOGUE_FIXED_WORDS
+        if dstop != eax:
+            mc.PUSH(eax)
+            if CALL_ALIGN > 1: stack_align_words += 1
+        if dstop != edx:
+            mc.PUSH(edx)
+            if CALL_ALIGN > 1: stack_align_words += 1
+        args_gv = self.args_gv
+        num_placeholders = 0
+        if CALL_ALIGN > 1:
+            stack_align_words += len(args_gv)
+            stack_align_words &= CALL_ALIGN-1
+            if stack_align_words > 0:
+                num_placeholders = CALL_ALIGN - stack_align_words
+                mc.SUB(esp, imm(WORD * num_placeholders))
+        for i in range(len(args_gv)-1, -1, -1):
+            srcop = allocator.get_operand(args_gv[i])
+            mc.PUSH(srcop)
+        fnop = allocator.get_operand(self.gv_fnptr)
+        if isinstance(fnop, IMM32):
+            mc.CALL(rel32(fnop.value))
+        else:
+            mc.CALL(fnop)
+        mc.ADD(esp, imm(WORD * (len(args_gv) + num_placeholders)))
+        if dstop != edx:
+            mc.POP(edx)
+        if dstop != eax:
+            if dstop is not None:
+                mc.MOV(dstop, eax)
+            mc.POP(eax)
+
 # ____________________________________________________________
 
 class IntConst(GenConst):
@@ -394,7 +448,8 @@ def stack_n_from_op(op):
 
 
 class RegAllocator(object):
-    AVAILABLE_REGS = [eax, edx, ebx, esi, edi]   # XXX ecx reserved for stuff
+    #AVAILABLE_REGS = [eax, edx, ebx, esi, edi]   # XXX ecx reserved for stuff
+    AVAILABLE_REGS = [eax]
 
     # 'gv' -- GenVars, used as arguments and results of operations
     #
@@ -566,6 +621,8 @@ class RegAllocator(object):
                 if last_n < n:
                     last_n = n
         if last_n >= 0:
+            if CALL_ALIGN > 1:
+                last_n = (last_n & ~(CALL_ALIGN-1)) + (CALL_ALIGN-1)
             self.mc.LEA(esp, stack_op(last_n))
         # XXX naive algo for now
         for loc, srcoperand in initial_moves:
@@ -736,6 +793,11 @@ class Builder(GenBuilder):
         self.operations.append(op)
         return op
 
+    def genop_call(self, sigtoken, gv_fnptr, args_gv):
+        op = OpCall(sigtoken, gv_fnptr, list(args_gv))
+        self.operations.append(op)
+        return op
+
 
 class RI386GenOp(AbstractRGenOp):
     from pypy.jit.codegen.i386.codebuf import MachineCodeBlock
@@ -777,6 +839,7 @@ class RI386GenOp(AbstractRGenOp):
         mc.PUSH(ebx)
         mc.PUSH(esi)
         mc.PUSH(edi)
+        # ^^^ pushed 5 words including the retval ( == PROLOGUE_FIXED_WORDS)
         self.close_mc(mc)
         # NB. a bit of a hack: the first generated block of the function
         # will immediately follow, by construction
