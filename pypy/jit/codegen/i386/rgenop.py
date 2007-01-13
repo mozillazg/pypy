@@ -448,8 +448,7 @@ def stack_n_from_op(op):
 
 
 class RegAllocator(object):
-    #AVAILABLE_REGS = [eax, edx, ebx, esi, edi]   # XXX ecx reserved for stuff
-    AVAILABLE_REGS = [eax]
+    AVAILABLE_REGS = [eax, edx, ebx, esi, edi]   # XXX ecx reserved for stuff
 
     # 'gv' -- GenVars, used as arguments and results of operations
     #
