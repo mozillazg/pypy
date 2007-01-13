@@ -488,7 +488,7 @@ class RegAllocator(object):
                 loc = self.var2loc[v]
             except KeyError:
                 if at_start:
-                    raise NotImplementedError
+                    pass    # input variable not used anyway
                 else:
                     self.add_final_move(v, operand)
             else:
@@ -596,6 +596,7 @@ class RegAllocator(object):
 
 class Builder(GenBuilder):
     coming_from = 0
+    operations = None
 
     def __init__(self, rgenop, inputargs_gv, inputoperands):
         self.rgenop = rgenop
@@ -603,12 +604,16 @@ class Builder(GenBuilder):
         self.inputoperands = inputoperands
 
     def start_writing(self):
+        assert self.operations is None
         self.operations = []
 
     def generate_block_code(self, final_vars_gv, force_vars=[],
-                                                 force_operands=[]):
+                                                 force_operands=[],
+                                                 renaming=True):
         allocator = RegAllocator()
         allocator.set_final(final_vars_gv)
+        if not renaming:
+            final_vars_gv = allocator.var2loc.keys()  # unique final vars
         allocator.allocate_locations(self.operations)
         allocator.force_var_operands(force_vars, force_operands,
                                      at_start=False)
@@ -620,7 +625,11 @@ class Builder(GenBuilder):
         allocator.generate_initial_moves()
         allocator.generate_operations()
         self.operations = None
-        self.inputargs_gv = [GenVar() for v in final_vars_gv]
+        if renaming:
+            self.inputargs_gv = [GenVar() for v in final_vars_gv]
+        else:
+            # just keep one copy of each Variable that is alive
+            self.inputargs_gv = final_vars_gv
         self.inputoperands = [allocator.get_operand(v) for v in final_vars_gv]
         return mc
 
@@ -696,6 +705,12 @@ class Builder(GenBuilder):
         mc.RET()
         # ----------------
         self.rgenop.close_mc(mc)
+
+    def pause_writing(self, alive_gv):
+        mc = self.generate_block_code(alive_gv, renaming=False)
+        self.set_coming_from(mc)
+        self.rgenop.close_mc(mc)
+        return self
 
     def end(self):
         pass
