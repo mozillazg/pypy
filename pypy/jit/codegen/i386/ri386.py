@@ -38,6 +38,7 @@ class BH(REG8): op=7
 
 class IMM32(OPERAND):
     width = 4
+    value = 0      # annotator hack
 
     def __init__(self, value):
         self.value = value

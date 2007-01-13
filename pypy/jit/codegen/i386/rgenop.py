@@ -32,13 +32,13 @@ class Op1(Operation):
         self.x = x
     def allocate(self, allocator):
         allocator.using(self.x)
-    def generate(self, allocator):
-        try:
-            loc = allocator.var2loc[self]
-        except KeyError:
-            return    # simple operation whose result is not used anyway
-        op = allocator.load_location_with(loc, self.x)
-        self.emit(allocator.mc, op)
+##    def generate(self, allocator):
+##        try:
+##            loc = allocator.var2loc[self]
+##        except KeyError:
+##            return    # simple operation whose result is not used anyway
+##        op = allocator.load_location_with(loc, self.x)
+##        self.emit(allocator.mc, op)
 
 class OpSameAs(Op1):
     clobbers_cc = False
@@ -60,14 +60,8 @@ class OpCompare1(Op1):
     result_kind = RK_CC
     def generate(self, allocator):
         srcop = allocator.get_operand(self.x)
-        dstop = allocator.get_operand(self.y)
         mc = allocator.mc
-        # XXX optimize the case CMP(immed, reg-or-modrm)
-        try:
-            mc.CMP(srcop, dstop)
-        except FailedToImplement:
-            mc.MOV(ecx, srcop)
-            mc.CMP(ecx, dstop)
+        self.emit(mc, srcop)
 
 class OpIntIsTrue(OpCompare1):
     opname = 'int_is_true'
@@ -92,8 +86,8 @@ class Op2(Operation):
         op1 = allocator.get_operand(self.x)
         op2 = allocator.get_operand(self.y)
         # now all of dstop, op1 and op2 may alias each other and be in
-        # a register or in the stack... finding a correct and encodable
-        # combination of instructions is loads of fun
+        # a register, in the stack or an immediate... finding a correct
+        # and encodable combination of instructions is loads of fun
         mc = allocator.mc
         if dstop == op1:
             case = 1       # optimize for this common case
@@ -112,7 +106,7 @@ class Op2(Operation):
             case = 2
         else:
             case = 3
-        # this is a separator line but a blank line doesn't look nice here
+        # generate instructions according to the 'case' determined above
         if case == 1:
             # dstop == op1
             try:
@@ -145,6 +139,40 @@ class OpIntMul(Op2):
     opname = 'int_mul'
     emit = staticmethod(I386CodeBuilder.IMUL)
     commutative = True
+
+class OpIntFloorDiv(Op2):
+    opname = 'int_floordiv'
+    divmod_result_register = eax
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # simple operation whose result is not used anyway
+        op1 = allocator.get_operand(self.x)
+        op2 = allocator.get_operand(self.y)
+        # not very efficient but not a very common operation either
+        mc = allocator.mc
+        if dstop != eax:
+            mc.PUSH(eax)
+        if dstop != edx:
+            mc.PUSH(edx)
+        if op1 != eax:
+            mc.MOV(eax, op1)
+        mc.CDQ()
+        try:
+            mc.IDIV(op2)
+        except FailedToImplement:
+            mc.MOV(ecx, op2)
+            mc.IDIV(ecx)
+        mc.MOV(dstop, self.divmod_result_register)
+        if dstop != edx:
+            mc.POP(edx)
+        if dstop != eax:
+            mc.POP(eax)
+
+class OpIntMod(OpIntFloorDiv):
+    opname = 'int_mod'
+    divmod_result_register = edx
 
 class OpCompare2(Op2):
     result_kind = RK_CC
@@ -405,8 +433,15 @@ class RegAllocator(object):
             else:
                 operand = force_operands[i]
                 if loc in force_loc2operand or operand in force_operand2loc:
-                    if not at_start: raise NotImplementedError
-                    self.initial_moves.append((loc, operand))
+                    if at_start:
+                        self.initial_moves.append((loc, operand))
+                    else:
+                        v2 = OpSameAs(v)
+                        self.operations.append(v2)
+                        loc = self.nextloc
+                        self.nextloc += 1
+                        self.var2loc[v2] = loc
+                        force_loc2operand[loc] = operand
                 else:
                     force_loc2operand[loc] = operand
                     force_operand2loc[operand] = loc
@@ -470,12 +505,13 @@ class RegAllocator(object):
         if last_n >= 0:
             self.mc.LEA(esp, stack_op(last_n))
         # XXX naive algo for now
-        # XXX at least remove moves that don't move anything!
         for loc, srcoperand in initial_moves:
-            self.mc.PUSH(srcoperand)
+            if self.operands[loc] != srcoperand:
+                self.mc.PUSH(srcoperand)
         initial_moves.reverse()
         for loc, srcoperand in initial_moves:
-            self.mc.POP(self.operands[loc])
+            if self.operands[loc] != srcoperand:
+                self.mc.POP(self.operands[loc])
 
 
 class Builder(GenBuilder):
