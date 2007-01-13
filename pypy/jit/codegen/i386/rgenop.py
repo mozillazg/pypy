@@ -1,4 +1,4 @@
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
@@ -32,13 +32,19 @@ class Op1(Operation):
         self.x = x
     def allocate(self, allocator):
         allocator.using(self.x)
-##    def generate(self, allocator):
-##        try:
-##            loc = allocator.var2loc[self]
-##        except KeyError:
-##            return    # simple operation whose result is not used anyway
-##        op = allocator.load_location_with(loc, self.x)
-##        self.emit(allocator.mc, op)
+
+class UnaryOp(Op1):
+    def generate(self, allocator):
+        try:
+            loc = allocator.var2loc[self]
+        except KeyError:
+            return    # simple operation whose result is not used anyway
+        op = allocator.load_location_with(loc, self.x)
+        self.emit(allocator.mc, op)
+
+class OpIntNeg(UnaryOp):
+    opname = 'int_neg'
+    emit = staticmethod(I386CodeBuilder.NEG)
 
 class OpSameAs(Op1):
     clobbers_cc = False
@@ -65,19 +71,21 @@ class OpCompare1(Op1):
 
 class OpIntIsTrue(OpCompare1):
     opname = 'int_is_true'
-    cc_result = I386CodeBuilder.JNE
+    cc_result = Conditions['NE']
     @staticmethod
     def emit(mc, x):
         mc.CMP(x, imm8(0))
 
 class Op2(Operation):
-    commutative = False
     def __init__(self, x, y):
         self.x = x
         self.y = y
     def allocate(self, allocator):
         allocator.using(self.x)
         allocator.using(self.y)
+
+class BinaryOp(Op2):
+    commutative = False
     def generate(self, allocator):
         try:
             dstop = allocator.get_operand(self)
@@ -126,19 +134,41 @@ class Op2(Operation):
             self.emit(mc, ecx, op2)
             mc.MOV(dstop, ecx)
 
-class OpIntAdd(Op2):
+class OpIntAdd(BinaryOp):
     opname = 'int_add'
     emit = staticmethod(I386CodeBuilder.ADD)
     commutative = True
 
-class OpIntSub(Op2):
+class OpIntSub(BinaryOp):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
 
 class OpIntMul(Op2):
     opname = 'int_mul'
-    emit = staticmethod(I386CodeBuilder.IMUL)
-    commutative = True
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # simple operation whose result is not used anyway
+        op1 = allocator.get_operand(self.x)
+        op2 = allocator.get_operand(self.y)
+        mc = allocator.mc
+        if isinstance(dstop, REG):
+            tmpop = dstop
+        else:
+            tmpop = ecx
+        if tmpop == op1:
+            mc.IMUL(tmpop, op2)
+        elif isinstance(op2, IMM32):
+            mc.IMUL(tmpop, op1, op2)
+        elif isinstance(op1, IMM32):
+            mc.IMUL(tmpop, op2, op1)
+        else:
+            if tmpop != op2:
+                mc.MOV(tmpop, op2)
+            mc.IMUL(tmpop, op1)
+        if dstop != tmpop:
+            mc.MOV(dstop, tmpop)
 
 class OpIntFloorDiv(Op2):
     opname = 'int_floordiv'
@@ -187,20 +217,41 @@ class OpCompare2(Op2):
             mc.MOV(ecx, srcop)
             mc.CMP(ecx, dstop)
 
+class OpIntLt(OpCompare2):
+    opname = 'int_lt'
+    cc_result = Conditions['L']
+
+class OpIntLe(OpCompare2):
+    opname = 'int_le'
+    cc_result = Conditions['LE']
+
+class OpIntEq(OpCompare2):
+    opname = 'int_eq'
+    cc_result = Conditions['E']
+
+class OpIntNe(OpCompare2):
+    opname = 'int_ne'
+    cc_result = Conditions['NE']
+
 class OpIntGt(OpCompare2):
     opname = 'int_gt'
     cc_result = Conditions['G']
+
+class OpIntGe(OpCompare2):
+    opname = 'int_ge'
+    cc_result = Conditions['GE']
 
 class JumpIf(Operation):
     clobbers_cc = False
     result_kind = RK_NO_RESULT
     def __init__(self, gv_condition, targetbuilder, negate):
-        assert 0 <= gv_condition.cc_result < INSN_JMP
         self.gv_condition = gv_condition
         self.targetbuilder = targetbuilder
         self.negate = negate
     def allocate(self, allocator):
         allocator.using_cc(self.gv_condition)
+        for gv in self.targetbuilder.inputargs_gv:
+            allocator.using(gv)
     def generate(self, allocator):
         cc = self.gv_condition.cc_result
         if self.negate:
@@ -307,13 +358,15 @@ OPCLASSES2 = setup_opclasses(Op2)
 del setup_opclasses
 
 def setup_conditions():
-    result = [None] * 16
+    result1 = [None] * 16
+    result2 = [None] * 16
     for key, value in Conditions.items():
-        result[value] = getattr(I386CodeBuilder, 'J'+key)
-    return result
-EMIT_CONDITION = setup_conditions()
-INSN_JMP = len(EMIT_CONDITION)
-EMIT_CONDITION.append(I386CodeBuilder.JMP)
+        result1[value] = getattr(I386CodeBuilder, 'J'+key)
+        result2[value] = getattr(I386CodeBuilder, 'SET'+key)
+    return result1, result2
+EMIT_JCOND, EMIT_SETCOND = setup_conditions()
+INSN_JMP = len(EMIT_JCOND)
+EMIT_JCOND.append(I386CodeBuilder.JMP)    # not really a conditional jump
 del setup_conditions
 
 def cond_negate(cond):
@@ -387,17 +440,21 @@ class RegAllocator(object):
             # common case: v is a compare operation whose result is precisely
             # what we need to be in the CC
             self.need_var_in_cc = None
+        self.creating(v)
 
     def save_cc(self):
         # we need a value to be in the CC, but we see a clobbering
         # operation, so we copy the original CC-creating operation down
         # past the clobbering operation
         v = self.need_var_in_cc
+        if not we_are_translated():
+            assert v in self.operations[:self.operationindex]
         self.operations.insert(self.operationindex, v)
         self.need_var_in_cc = None
 
     def using_cc(self, v):
-        assert not v.is_const
+        assert isinstance(v, Operation)
+        assert 0 <= v.cc_result < INSN_JMP
         if self.need_var_in_cc is not None:
             self.save_cc()
         self.need_var_in_cc = v
@@ -426,25 +483,31 @@ class RegAllocator(object):
         force_operand2loc = self.force_operand2loc
         for i in range(len(force_vars)):
             v = force_vars[i]
+            operand = force_operands[i]
             try:
                 loc = self.var2loc[v]
             except KeyError:
-                pass
+                if at_start:
+                    raise NotImplementedError
+                else:
+                    self.add_final_move(v, operand)
             else:
-                operand = force_operands[i]
                 if loc in force_loc2operand or operand in force_operand2loc:
                     if at_start:
                         self.initial_moves.append((loc, operand))
                     else:
-                        v2 = OpSameAs(v)
-                        self.operations.append(v2)
-                        loc = self.nextloc
-                        self.nextloc += 1
-                        self.var2loc[v2] = loc
-                        force_loc2operand[loc] = operand
+                        self.add_final_move(v, operand)
                 else:
                     force_loc2operand[loc] = operand
                     force_operand2loc[operand] = loc
+
+    def add_final_move(self, v, targetoperand):
+        v2 = OpSameAs(v)
+        self.operations.append(v2)
+        loc = self.nextloc
+        self.nextloc += 1
+        self.var2loc[v2] = loc
+        self.force_loc2operand[loc] = targetoperand
 
     def allocate_registers(self):
         # assign registers to locations that don't have one already
@@ -513,6 +576,23 @@ class RegAllocator(object):
             if self.operands[loc] != srcoperand:
                 self.mc.POP(self.operands[loc])
 
+    def generate_operations(self):
+        for v in self.operations:
+            v.generate(self)
+            cc = v.cc_result
+            if cc >= 0 and v in self.var2loc:
+                # force a comparison instruction's result into a
+                # regular location
+                dstop = self.get_operand(v)
+                mc = self.mc
+                insn = EMIT_SETCOND[cc]
+                insn(mc, cl)
+                try:
+                    mc.MOVZX(dstop, cl)
+                except FailedToImplement:
+                    mc.MOVZX(ecx, cl)
+                    mc.MOV(dstop, ecx)
+
 
 class Builder(GenBuilder):
     coming_from = 0
@@ -538,8 +618,7 @@ class Builder(GenBuilder):
         mc = self.start_mc()
         allocator.mc = mc
         allocator.generate_initial_moves()
-        for op in self.operations:
-            op.generate(allocator)
+        allocator.generate_operations()
         self.operations = None
         self.inputargs_gv = [GenVar() for v in final_vars_gv]
         self.inputoperands = [allocator.get_operand(v) for v in final_vars_gv]
@@ -564,7 +643,7 @@ class Builder(GenBuilder):
     def set_coming_from(self, mc, insncond=INSN_JMP):
         self.coming_from_cond = insncond
         self.coming_from = mc.tell()
-        insnemit = EMIT_CONDITION[insncond]
+        insnemit = EMIT_JCOND[insncond]
         insnemit(mc, rel32(0))
 
     def start_mc(self):
@@ -575,27 +654,28 @@ class Builder(GenBuilder):
             targetaddr = mc.tell()
             end = start + 6    # XXX hard-coded, enough for JMP and Jcond
             oldmc = self.rgenop.InMemoryCodeBuilder(start, end)
-            insn = EMIT_CONDITION[self.coming_from_cond]
+            insn = EMIT_JCOND[self.coming_from_cond]
             insn(oldmc, rel32(targetaddr))
             oldmc.done()
             self.coming_from = 0
         return mc
 
-    def jump_if_false(self, gv_condition, args_for_jump_gv):
+    def _jump_if(self, gv_condition, args_for_jump_gv, negate):
         newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
-        if gv_condition.cc_result < 0:
+        # if the condition does not come from an obvious comparison operation,
+        # e.g. a getfield of a Bool or an input argument to the current block,
+        # then insert an OpIntIsTrue
+        if gv_condition.cc_result < 0 or gv_condition not in self.operations:
             gv_condition = OpIntIsTrue(gv_condition)
             self.operations.append(gv_condition)
-        self.operations.append(JumpIf(gv_condition, newbuilder, negate=True))
+        self.operations.append(JumpIf(gv_condition, newbuilder, negate=negate))
         return newbuilder
 
+    def jump_if_false(self, gv_condition, args_for_jump_gv):
+        return self._jump_if(gv_condition, args_for_jump_gv, True)
+
     def jump_if_true(self, gv_condition, args_for_jump_gv):
-        newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
-        if gv_condition.cc_result < 0:
-            gv_condition = OpIntIsTrue(gv_condition)
-            self.operations.append(gv_condition)
-        self.operations.append(JumpIf(gv_condition, newbuilder, negate=False))
-        return newbuilder
+        return self._jump_if(gv_condition, args_for_jump_gv, False)
 
     def finish_and_goto(self, outputargs_gv, targetlbl):
         operands = targetlbl.inputoperands
