@@ -183,9 +183,9 @@ def loop_body(rgenop, loopblock, bodybuilder, signed_kind, gv_x, gv_y, gv_z):
 def make_goto(rgenop):
     # z = 1
     # while x > 0:
-    #     y += x
-    #     z *= x
-    #     x -= 1
+    #     z = x * z
+    #     y = x + y
+    #     x = x - 1
     # y += z
     # return y
     signed_kind = rgenop.kindToken(lltype.Signed)
@@ -475,7 +475,7 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         assert res == expected
 
     def test_largedummy_compile(self):
-        fn = self.compile(get_largedummy_runner(self.RGenOp), [int, int])
+        fn = self.compile(get_largedummy_runner(self.RGenOp), [int] * 100)
         args, expected = largedummy_example()
         res = fn(*args)
         assert res == expected
