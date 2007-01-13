@@ -282,10 +282,12 @@ class OpLabel(Operation):
     def generate(self, allocator):
         lbl = self.lbl
         lbl.targetaddr = allocator.mc.tell()
+        lbl.targetstackdepth = allocator.required_frame_depth
         lbl.inputoperands = [allocator.get_operand(v) for v in self.args_gv]
 
 class Label(GenLabel):
     targetaddr = 0
+    targetstackdepth = 0
     inputoperands = None
 
 class OpCall(Operation):
@@ -687,6 +689,7 @@ class RegAllocator(object):
         if last_n >= 0:
             if CALL_ALIGN > 1:
                 last_n = (last_n & ~(CALL_ALIGN-1)) + (CALL_ALIGN-1)
+            self.required_frame_depth = last_n + 1
             self.mc.LEA(esp, stack_op(last_n))
         # XXX naive algo for now
         for loc, srcoperand in initial_moves:
@@ -731,7 +734,8 @@ class Builder(GenBuilder):
 
     def generate_block_code(self, final_vars_gv, force_vars=[],
                                                  force_operands=[],
-                                                 renaming=True):
+                                                 renaming=True,
+                                                 minimal_stack_depth=0):
         allocator = RegAllocator()
         allocator.set_final(final_vars_gv)
         if not renaming:
@@ -742,6 +746,8 @@ class Builder(GenBuilder):
         allocator.force_var_operands(self.inputargs_gv, self.inputoperands,
                                      at_start=True)
         allocator.allocate_registers()
+        if allocator.required_frame_depth < minimal_stack_depth:
+            allocator.required_frame_depth = minimal_stack_depth
         mc = self.start_mc()
         allocator.mc = mc
         allocator.generate_initial_moves()
@@ -819,7 +825,8 @@ class Builder(GenBuilder):
             self.start_writing()
             operands = targetlbl.inputoperands
             assert operands is not None
-        mc = self.generate_block_code(outputargs_gv, outputargs_gv, operands)
+        mc = self.generate_block_code(outputargs_gv, outputargs_gv, operands,
+                              minimal_stack_depth = targetlbl.targetstackdepth)
         mc.JMP(rel32(targetlbl.targetaddr))
         self.rgenop.close_mc(mc)
 
