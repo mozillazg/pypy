@@ -6,6 +6,7 @@ from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.jit.codegen.i386.ri386 import *
 from pypy.jit.codegen.i386.ri386setup import Conditions
+from pypy.jit.codegen.i386.codebuf import CodeBlockOverflow
 from pypy.jit.codegen.i386 import conftest
 
 
@@ -399,6 +400,69 @@ class AddrConst(GenConst):
 
 # ____________________________________________________________
 
+class FlexSwitch(CodeGenSwitch):
+    REG = eax
+
+    def __init__(self, rgenop, inputargs_gv, inputoperands):
+        self.rgenop = rgenop
+        self.inputargs_gv = inputargs_gv
+        self.inputoperands = inputoperands
+        self.defaultcaseaddr = 0
+
+    def initialize(self, mc):
+        self._reserve(mc)
+        default_builder = Builder(self.rgenop, self.inputargs_gv,
+                                  self.inputoperands)
+        default_builder.set_coming_from(mc)
+        default_builder.update_defaultcaseaddr_of = self
+        default_builder.start_writing()
+        return default_builder
+
+    def _reserve(self, mc):
+        RESERVED = 11*4+5      # XXX quite a lot for now :-/
+        pos = mc.tell()
+        mc.UD2()
+        mc.write('\x00' * (RESERVED-1))
+        self.nextfreepos = pos
+        self.endfreepos = pos + RESERVED
+
+    def _reserve_more(self):
+        start = self.nextfreepos
+        end   = self.endfreepos
+        newmc = self.rgenop.open_mc()
+        self._reserve(newmc)
+        self.rgenop.close_mc(newmc)
+        fullmc = self.rgenop.InMemoryCodeBuilder(start, end)
+        fullmc.JMP(rel32(self.nextfreepos))
+        fullmc.done()
+        
+    def add_case(self, gv_case):
+        rgenop = self.rgenop
+        targetbuilder = Builder(self.rgenop, self.inputargs_gv,
+                                self.inputoperands)
+        try:
+            self._add_case(gv_case, targetbuilder)
+        except CodeBlockOverflow:
+            self._reserve_more()
+            self._add_case(gv_case, targetbuilder)
+        targetbuilder.start_writing()
+        return targetbuilder
+    
+    def _add_case(self, gv_case, targetbuilder):
+        start = self.nextfreepos
+        end   = self.endfreepos
+        mc = self.rgenop.InMemoryCodeBuilder(start, end)
+        value = gv_case.revealconst(lltype.Signed)
+        mc.CMP(FlexSwitch.REG, imm(value))
+        targetbuilder.set_coming_from(mc, Conditions['E'])
+        pos = mc.tell()
+        assert self.defaultcaseaddr != 0
+        mc.JMP(rel32(self.defaultcaseaddr))
+        mc.done()
+        self.nextfreepos = pos
+
+# ____________________________________________________________
+
 def setup_opclasses(base):
     d = {}
     for name, value in globals().items():
@@ -544,23 +608,24 @@ class RegAllocator(object):
                 if at_start:
                     pass    # input variable not used anyway
                 else:
-                    self.add_final_move(v, operand)
+                    self.add_final_move(v, operand, make_copy=v.is_const)
             else:
                 if loc in force_loc2operand or operand in force_operand2loc:
                     if at_start:
                         self.initial_moves.append((loc, operand))
                     else:
-                        self.add_final_move(v, operand)
+                        self.add_final_move(v, operand, make_copy=True)
                 else:
                     force_loc2operand[loc] = operand
                     force_operand2loc[operand] = loc
 
-    def add_final_move(self, v, targetoperand):
-        v2 = OpSameAs(v)
-        self.operations.append(v2)
+    def add_final_move(self, v, targetoperand, make_copy):
+        if make_copy:
+            v = OpSameAs(v)
+            self.operations.append(v)
         loc = self.nextloc
         self.nextloc += 1
-        self.var2loc[v2] = loc
+        self.var2loc[v] = loc
         self.force_loc2operand[loc] = targetoperand
 
     def allocate_registers(self):
@@ -653,6 +718,7 @@ class RegAllocator(object):
 class Builder(GenBuilder):
     coming_from = 0
     operations = None
+    update_defaultcaseaddr_of = None
 
     def __init__(self, rgenop, inputargs_gv, inputoperands):
         self.rgenop = rgenop
@@ -717,6 +783,8 @@ class Builder(GenBuilder):
         start = self.coming_from
         if start:
             targetaddr = mc.tell()
+            if self.update_defaultcaseaddr_of:   # hack for FlexSwitch
+                self.update_defaultcaseaddr_of.defaultcaseaddr = targetaddr
             end = start + 6    # XXX hard-coded, enough for JMP and Jcond
             oldmc = self.rgenop.InMemoryCodeBuilder(start, end)
             insn = EMIT_JCOND[self.coming_from_cond]
@@ -796,6 +864,21 @@ class Builder(GenBuilder):
         op = OpCall(sigtoken, gv_fnptr, list(args_gv))
         self.operations.append(op)
         return op
+
+    def flexswitch(self, gv_exitswitch, args_gv):
+        reg = FlexSwitch.REG
+        mc = self.generate_block_code(args_gv, [gv_exitswitch], [reg],
+                                      renaming=False)
+        result = FlexSwitch(self.rgenop, self.inputargs_gv, self.inputoperands)
+        default_builder = result.initialize(mc)
+        self.rgenop.close_mc(mc)
+        return result, default_builder
+
+    def show_incremental_progress(self):
+        pass
+
+    def log(self, msg):
+        self.mc.log(msg)
 
 
 class RI386GenOp(AbstractRGenOp):
