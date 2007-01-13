@@ -389,6 +389,101 @@ def get_fact_runner(RGenOp):
         return res
     return fact_runner
 
+def make_func_calling_pause(rgenop):
+    # def f(x):
+    #     if x > 0:
+    #          return x
+    #     else:
+    #          return -x
+    signed_kind = rgenop.kindToken(lltype.Signed)
+    sigtoken = rgenop.sigToken(FUNC)
+    builder, gv_f, [gv_x] = rgenop.newgraph(sigtoken, "abs")
+
+    gv_cond = builder.genop2("int_gt", gv_x, rgenop.genconst(0))
+
+    targetbuilder = builder.jump_if_false(gv_cond, [gv_x])
+
+    builder = builder.pause_writing([gv_x])
+
+    targetbuilder.start_writing()
+    gv_negated = targetbuilder.genop1("int_neg", gv_x)
+    targetbuilder.finish_and_return(sigtoken, gv_negated)
+
+    builder.start_writing()
+    builder.finish_and_return(sigtoken, gv_x)
+
+    return gv_f
+
+def get_func_calling_pause_runner(RGenOp):
+    def runner(x):
+        rgenop = RGenOp()
+        gv_abs = make_func_calling_pause(rgenop)
+        myabs = gv_abs.revealconst(lltype.Ptr(FUNC))
+        res = myabs(x)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return runner
+
+def make_longwinded_and(rgenop):
+    # def f(y): return 2 <= y <= 4
+    # but more like this:
+    # def f(y)
+    #     x = 2 <= y
+    #     if x:
+    #         x = y <= 4
+    #     if x:
+    #        return 1
+    #     else:
+    #        return 0
+
+    signed_kind = rgenop.kindToken(lltype.Signed)
+    sigtoken = rgenop.sigToken(FUNC)
+    builder, gv_f, [gv_y] = rgenop.newgraph(sigtoken, "abs")
+
+    gv_x = builder.genop2("int_le", rgenop.genconst(2), gv_y)
+
+    false_builder = builder.jump_if_false(gv_x, [gv_x])
+
+    gv_x2 = builder.genop2("int_le", gv_y, rgenop.genconst(4))
+
+    args_gv = [gv_x2]
+    label = builder.enter_next_block([signed_kind], args_gv)
+    [gv_x2] = args_gv
+
+    return_false_builder = builder.jump_if_false(gv_x2, [])
+
+    builder.finish_and_return(sigtoken, rgenop.genconst(1))
+
+    false_builder.start_writing()
+    false_builder.finish_and_goto([gv_x], label)
+
+    return_false_builder.start_writing()
+    return_false_builder.finish_and_return(sigtoken, rgenop.genconst(0))
+
+    return gv_f
+
+def make_condition_result_cross_link(rgenop):
+
+    signed_kind = rgenop.kindToken(lltype.Signed)
+    sigtoken = rgenop.sigToken(FUNC)
+    builder, gv_f, [gv_y] = rgenop.newgraph(sigtoken, "foo")
+
+    gv_result = builder.genop2("int_eq", gv_y, rgenop.genconst(0))
+    target1 = builder.jump_if_false(gv_result, [gv_result])
+
+    builder.finish_and_return(sigtoken, rgenop.genconst(1))
+
+    target1.start_writing()
+    target2 = target1.jump_if_false(gv_result, [])
+
+    # this return should be unreachable:
+    target1.finish_and_return(sigtoken, rgenop.genconst(2))
+
+    target2.start_writing()
+    target2.finish_and_return(sigtoken, rgenop.genconst(3))
+
+    return gv_f
+
 class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
     RGenOp = None
 
@@ -586,3 +681,54 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         res = fn(11)
         assert res == 39916800
 
+    def test_calling_pause_direct(self):
+        rgenop = self.RGenOp()
+        gv_abs = make_func_calling_pause(rgenop)
+        fnptr = self.cast(gv_abs, 1)
+        res = fnptr(2)
+        assert res == 2
+        res = fnptr(-42)
+        assert res == 42
+
+    def test_calling_pause_compile(self):
+        fn = self.compile(get_func_calling_pause_runner(self.RGenOp), [int])
+        res = fn(2)
+        assert res == 2
+        res = fn(-72)
+        assert res == 72
+
+    def test_longwinded_and_direct(self):
+        rgenop = self.RGenOp()
+        gv_fn = make_longwinded_and(rgenop)
+        fnptr = self.cast(gv_fn, 1)
+
+        print map(fnptr, range(6))
+
+        res = fnptr(1)
+        assert res == 0
+
+        res = fnptr(2)
+        assert res == 1
+
+        res = fnptr(3)
+        assert res == 1
+
+        res = fnptr(4)
+        assert res == 1
+
+        res = fnptr(5)
+        assert res == 0
+
+    def test_condition_result_cross_link_direct(self):
+        rgenop = self.RGenOp()
+        gv_fn = make_condition_result_cross_link(rgenop)
+        fnptr = self.cast(gv_fn, 1)
+
+        res = fnptr(-1)
+        assert res == 3
+
+        res = fnptr(0)
+        assert res == 1
+
+        res = fnptr(1)
+        assert res == 3

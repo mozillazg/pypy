@@ -33,13 +33,11 @@ class RegisterAllocation:
         # go through the initial mapping and initialize the data structures
         for var, loc in initial_mapping.iteritems():
             self.set(var, loc)
-            if loc.is_register and loc in self.freeregs[loc.regclass]:
-                self.freeregs[loc.regclass].remove(loc)
+            if loc.is_register and loc.alloc in self.freeregs[loc.regclass]:
+                self.freeregs[loc.regclass].remove(loc.alloc)
                 self.lru.append(var)
 
-        # crfinfo is a bit of a hack used to transmit which bit a compare
-        # instruction set to the branch instruction
-        self.crfinfo = [(0, 0)] * 8
+        self.builders_to_tell_spill_offset_to = []
 
     def set(self, var, loc):
         assert var not in self.var2loc
@@ -77,7 +75,7 @@ class RegisterAllocation:
         freeregs = self.freeregs[regclass]
 
         if freeregs:
-            reg = freeregs.pop()
+            reg = freeregs.pop().make_loc()
             self.set(newarg, reg)
             if DEBUG_PRINT:
                 print "allocate_reg: Putting %r into fresh register %r" % (newarg, reg)
@@ -103,7 +101,7 @@ class RegisterAllocation:
             print "allocate_reg: Spilled %r to %r." % (argtospill, self.loc_of(argtospill))
 
         # update data structures to put newarg into the register
-        self.set(newarg, reg)
+        self.set(newarg, reg.alloc.make_loc())
         if DEBUG_PRINT:
             print "allocate_reg: Put %r in stolen reg %r." % (newarg, reg)
         return reg
@@ -172,7 +170,7 @@ class RegisterAllocation:
                     # it's in the wrong kind of register
                     # (this code is excessively confusing)
                     self.forget(arg, argloc)
-                    self.freeregs[argloc.regclass].append(argloc)
+                    self.freeregs[argloc.regclass].append(argloc.alloc)
                     if argloc.regclass != GP_REGISTER:
                         if argcls == GP_REGISTER:
                             gpr = self._allocate_reg(GP_REGISTER, arg).number
@@ -197,8 +195,6 @@ class RegisterAllocation:
                 if DEBUG_PRINT:
                     print "Allocating register for result %r..." % (insn.result,)
                 resultreg = self._allocate_reg(insn.result_regclass, insn.result)
-                if isinstance(insn, CMPInsn):
-                    self.crfinfo[resultreg.number] = insn.info
             insn.allocate(self)
             self.insns.append(insn)
         return self.insns

@@ -193,7 +193,11 @@ def revealconst(T, gv_value):
     elif T == llmemory.Address:
         return llmemory.cast_ptr_to_adr(c.value)
     else:
-        return lltype.cast_primitive(T, c.value)
+        if lltype.typeOf(c.value) == llmemory.Address:
+            value = llmemory.cast_adr_to_int(c.value)
+        else:
+            value = c.value
+        return lltype.cast_primitive(T, value)
 
 def isconst(gv_value):
     c = from_opaque_object(gv_value)
@@ -543,3 +547,35 @@ setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
 #setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)
 
 setannotation(show_incremental_progress, None)
+
+# read frame var support
+
+def read_frame_var(T, base, info, index):
+    vars = info._obj.vars
+    v = vars[index]
+    if isinstance(v, flowmodel.Constant):
+        val = v.value
+    else:
+        llframe = base.ptr
+        val = llframe.bindings[v]
+    assert lltype.typeOf(val) == T
+    return val
+        
+
+class ReadFrameVarEntry(ExtRegistryEntry):
+        "Annotation and specialization for calls to 'func'."
+        _about_ = read_frame_var
+
+        def compute_result_annotation(self, *args_s):
+            T = args_s[0].const
+            return annmodel.lltype_to_annotation(T)
+
+        # specialize as direct_call
+        def specialize_call(self, hop):
+            FUNCTYPE = lltype.FuncType([r.lowleveltype for r in hop.args_r],
+                                       hop.r_result.lowleveltype)
+            args_v = hop.inputargs(*hop.args_r)
+            funcptr = lltype.functionptr(FUNCTYPE, 'read_frame_var',
+                                         _callable=read_frame_var)
+            cfunc = hop.inputconst(lltype.Ptr(FUNCTYPE), funcptr)
+            return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
