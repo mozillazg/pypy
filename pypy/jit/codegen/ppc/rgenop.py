@@ -1,6 +1,7 @@
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
 from pypy.jit.codegen.model import GenVar, GenConst, CodeGenSwitch
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lloperation
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.jit.codegen.ppc.conftest import option
 from ctypes import POINTER, cast, c_void_p, c_int
@@ -20,12 +21,15 @@ class RPPCAssembler(make_rassembler(MyPPCAssembler)):
     def emit(self, value):
         self.mc.write(value)
 
+_PPC = RPPCAssembler
+
 NSAVEDREGISTERS = 19
 
 DEBUG_TRAP = option.trap
 
 _var_index = [0]
 class Var(GenVar):
+    conditional = False
     def __init__(self):
         self.__magic_index = _var_index[0]
         _var_index[0] += 1
@@ -34,11 +38,16 @@ class Var(GenVar):
     def fits_in_immediate(self):
         return False
 
+class ConditionVar(Var):
+    """ Used for vars that originated as the result of a conditional
+    operation, like a == b """
+    conditional = True
+
 class IntConst(GenConst):
 
     def __init__(self, value):
         self.value = value
-
+        
     @specialize.arg(1)
     def revealconst(self, T):
         if isinstance(T, lltype.Ptr):
@@ -50,7 +59,7 @@ class IntConst(GenConst):
 
     def load(self, insns, var):
         insns.append(
-            insn.Insn_GPR__IMM(RPPCAssembler.load_word,
+            insn.Insn_GPR__IMM(_PPC.load_word,
                                var, [self]))
 
     def load_now(self, asm, loc):
@@ -101,28 +110,39 @@ class AddrConst(GenConst):
 
 class JumpPatchupGenerator(object):
 
-    def __init__(self, asm, min_offset):
-        self.asm = asm
+    def __init__(self, insns, min_offset, allocator):
+        self.insns = insns
         self.min_offset = min_offset
+        self.allocator = allocator
 
     def emit_move(self, tarloc, srcloc):
         if tarloc == srcloc: return
+        emit = self.insns.append
         if tarloc.is_register and srcloc.is_register:
-            self.asm.mr(tarloc.number, srcloc.number)
+            assert isinstance(tarloc, insn.GPR)
+            if isinstance(srcloc, insn.GPR):
+                emit(insn.Move(tarloc, srcloc))
+            else:
+                assert isinstance(srcloc, insn.CRF)
+                emit(srcloc.move_to_gpr(self.allocator, tarloc.number))
         elif tarloc.is_register and not srcloc.is_register:
-            self.asm.lwz(tarloc.number, rFP, srcloc.offset)
+            emit(insn.Unspill(None, tarloc, srcloc))
+            #self.asm.lwz(tarloc.number, rFP, srcloc.offset)
         elif not tarloc.is_register and srcloc.is_register:
-            self.asm.stw(srcloc.number, rFP, tarloc.offset)
+            emit(insn.Spill(None, srcloc, tarloc))
+            #self.asm.stw(srcloc.number, rFP, tarloc.offset)
         elif not tarloc.is_register and not srcloc.is_register:
-            self.asm.lwz(rSCRATCH, rFP, srcloc.offset)
-            self.asm.stw(rSCRATCH, rFP, tarloc.offset)
+            emit(insn.Unspill(None, insn.gprs[0], srcloc))
+            emit(insn.Spill(None, insn.gprs[0], tarloc))
+            #self.asm.lwz(rSCRATCH, rFP, srcloc.offset)
+            #self.asm.stw(rSCRATCH, rFP, tarloc.offset)
 
     def create_fresh_location(self):
         r = self.min_offset
         self.min_offset -= 4
         return insn.stack_slot(r)
 
-def prepare_for_jump(asm, min_offset, sourcevars, src2loc, target):
+def prepare_for_jump(insns, min_offset, sourcevars, src2loc, target, allocator):
 
     tar2src = {}     # tar var -> src var
     tar2loc = {}
@@ -137,9 +157,9 @@ def prepare_for_jump(asm, min_offset, sourcevars, src2loc, target):
             tar2loc[tloc] = tloc
             tar2src[tloc] = src
         else:
-            src.load_now(asm, tloc)
+            insns.append(insn.Load(tloc, src))
 
-    gen = JumpPatchupGenerator(asm, min_offset)
+    gen = JumpPatchupGenerator(insns, min_offset, allocator)
     emit_moves(gen, tar2src, tar2loc, src2loc)
     return gen.min_offset
 
@@ -205,13 +225,19 @@ class Builder(GenBuilder):
 
     @specialize.arg(1)
     def genop1(self, opname, gv_arg):
+        #print opname, 'on', id(self)
         genmethod = getattr(self, 'op_' + opname)
-        return genmethod(gv_arg)
+        r = genmethod(gv_arg)
+        #print '->', id(r)
+        return r
 
     @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
+        #print opname, 'on', id(self)
         genmethod = getattr(self, 'op_' + opname)
-        return genmethod(gv_arg1, gv_arg2)
+        r = genmethod(gv_arg1, gv_arg2)
+        #print '->', id(r)
+        return r
 
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         self.insns.append(insn.SpillCalleeSaves())
@@ -225,14 +251,14 @@ class Builder(GenBuilder):
     def genop_getfield(self, fieldtoken, gv_ptr):
         gv_result = Var()
         self.insns.append(
-            insn.Insn_GPR__GPR_IMM(RPPCAssembler.lwz,
+            insn.Insn_GPR__GPR_IMM(_PPC.lwz,
                                    gv_result, [gv_ptr, IntConst(fieldtoken)]))
         return gv_result
 
     def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
         gv_result = Var()
         self.insns.append(
-            insn.Insn_None__GPR_GPR_IMM(RPPCAssembler.stw,
+            insn.Insn_None__GPR_GPR_IMM(_PPC.stw,
                                         [gv_value, gv_ptr, IntConst(fieldtoken)]))
         return gv_result
 
@@ -322,8 +348,34 @@ class Builder(GenBuilder):
 ##     def genop_debug_pdb(self):    # may take an args_gv later
 
     def enter_next_block(self, kinds, args_gv):
+        #print 'enter_next_block of', id(self)
         vars_gv = [v for v in args_gv if isinstance(v, Var)]
-        var2loc = self.allocate_and_emit(vars_gv).var2loc
+        #print 'initial_var2loc.keys():', [id(v) for v in self.initial_var2loc.keys()]
+        #print 'initial_var2loc.values():', [id(v) for v in self.initial_var2loc.values()]
+        allocator = self.allocate_and_emit(vars_gv)
+        var2loc = allocator.var2loc
+
+        #print '!!!!', args_gv, var2loc
+
+        self.insns = []
+
+        reallocate = False
+        for i in range(len(args_gv)):
+            v = args_gv[i]
+            if isinstance(v, Var) and isinstance(var2loc[v], insn.CRF):
+                reallocate = True
+                nv = Var()
+                self.insns.append(insn.MoveCRB2GPR(nv, v))
+                args_gv[i] = nv
+        self.initial_var2loc = var2loc
+        if reallocate:
+            allocator = self.allocate_and_emit([v for v in args_gv if isinstance(v, Var)])
+            var2loc = allocator.var2loc
+            self.insns = []
+
+        #print 'var2loc.keys():', [id(v) for v in var2loc.keys()]
+        #print 'var2loc.values():', [id(v) for v in var2loc.values()]
+        #print 'args_gv', [id(v) for v in args_gv]
 
         #print "enter_next_block:", args_gv, var2loc
 
@@ -333,6 +385,11 @@ class Builder(GenBuilder):
         for gv in args_gv:
             if isinstance(gv, Var):
                 assert gv in var2loc
+##                 if gv not in var2loc:
+##                     lloperation.llop.debug_print(lltype.Void, gv)
+##                     lloperation.llop.debug_print(lltype.Void, var2loc)
+##                     lloperation.llop.debug_print(lltype.Void, args_gv)
+##                     lloperation.llop.debug_pdb(lltype.Void)
                 loc = var2loc[gv]
                 livevar2loc[gv] = loc
                 if not loc.is_register:
@@ -360,15 +417,19 @@ class Builder(GenBuilder):
 
         #print livevar2loc
 
-        self.insns = []
         self.initial_var2loc = livevar2loc
+        #print 'final initial_var2loc.keys():', [id(v) for v in self.initial_var2loc.keys()]
+        #print 'final initial_var2loc.values():', [id(v) for v in self.initial_var2loc.values()]
         self.initial_spill_offset = min_stack_offset
         target_addr = self.asm.mc.tell()
-        self.emit_stack_adjustment()
         return Label(target_addr, arg_locations, min_stack_offset)
 
     def jump_if_false(self, gv_condition, args_gv):
-        return self._jump(gv_condition, False, args_gv)
+        #print 'jump_if_false', [id(v) for v in args_gv]
+        #print id(self)
+        t = self._jump(gv_condition, False, args_gv)
+        #print '->', id(t)
+        return t
 
     def jump_if_true(self, gv_condition, args_gv):
         return self._jump(gv_condition, True, args_gv)
@@ -394,11 +455,11 @@ class Builder(GenBuilder):
         self._close()
 
     def finish_and_goto(self, outputargs_gv, target):
-        allocator = self.allocate_and_emit(outputargs_gv)
+        allocator = self.allocate(outputargs_gv)
         min_offset = min(allocator.spill_offset, target.min_stack_offset)
-        min_offset = prepare_for_jump(
-            self.asm, min_offset, outputargs_gv, allocator.var2loc, target)
-        self.patch_stack_adjustment(self._stack_size(min_offset))
+        allocator.spill_offset = prepare_for_jump(
+            self.insns, min_offset, outputargs_gv, allocator.var2loc, target, allocator)
+        self.emit(allocator)
         self.asm.load_word(rSCRATCH, target.startaddr)
         self.asm.mtctr(rSCRATCH)
         self.asm.bctr()
@@ -424,15 +485,17 @@ class Builder(GenBuilder):
         if self.final_jump_addr != 0:
             mc = self.rgenop.open_mc()
             target = mc.tell()
-            self.asm.mc = self.rgenop.ExistingCodeBlock(self.final_jump_addr, self.final_jump_addr+8)
+            self.asm.mc = self.rgenop.ExistingCodeBlock(
+                self.final_jump_addr, self.final_jump_addr+8)
             self.asm.load_word(rSCRATCH, target)
             self.asm.mc = mc
-            self.emit_stack_adjustment()
+            self.final_jump_addr = 0
+            self.closed = False
             return self
         else:
             self._open()
+            self.closed = False
             self.maybe_patch_start_here()
-            self.emit_stack_adjustment()
             return self
 
     def maybe_patch_start_here(self):
@@ -444,14 +507,16 @@ class Builder(GenBuilder):
             self.patch_start_here = 0
 
     def pause_writing(self, args_gv):
-        self.allocate_and_emit(args_gv)
+        self.initial_var2loc = self.allocate_and_emit(args_gv).var2loc
+        self.insns = []
         self.final_jump_addr = self.asm.mc.tell()
+        self.closed = True
         self.asm.nop()
         self.asm.nop()
         self.asm.mtctr(rSCRATCH)
         self.asm.bctr()
         self._close()
-        return self 
+        return self
 
     # ----------------------------------------------------------------
     # ppc-specific interface:
@@ -506,8 +571,6 @@ class Builder(GenBuilder):
         # save stack pointer into linkage area and set stack pointer for us.
         self.asm.stwu(rSP, rSP, -minspace)
 
-        self.emit_stack_adjustment()
-
         return inputargs
 
     def _var_offset(self, v):
@@ -535,17 +598,28 @@ class Builder(GenBuilder):
         self.asm.mc = None
 
     def allocate_and_emit(self, live_vars_gv):
+        allocator = self.allocate(live_vars_gv)
+        return self.emit(allocator)
+
+    def allocate(self, live_vars_gv):
         assert self.initial_var2loc is not None
         allocator = RegisterAllocation(
-            self.rgenop.freeregs, self.initial_var2loc, self.initial_spill_offset)
+            self.rgenop.freeregs,
+            self.initial_var2loc,
+            self.initial_spill_offset)
         self.insns = allocator.allocate_for_insns(self.insns)
-        #if self.insns:
-        self.patch_stack_adjustment(self._stack_size(allocator.spill_offset))
-        for insn in self.insns:
-            insn.emit(self.asm)
         return allocator
 
-    def emit_stack_adjustment(self):
+    def emit(self, allocator):
+        if allocator.spill_offset < self.initial_spill_offset:
+            self.emit_stack_adjustment(self._stack_size(allocator.spill_offset))
+        for insn in self.insns:
+            insn.emit(self.asm)
+        for builder in allocator.builders_to_tell_spill_offset_to:
+            builder.initial_spill_offset = allocator.spill_offset
+        return allocator
+
+    def emit_stack_adjustment(self, newsize):
         # the ABI requires that at all times that r1 is valid, in the
         # sense that it must point to the bottom of the stack and that
         # executing SP <- *(SP) repeatedly walks the stack.
@@ -560,7 +634,7 @@ class Builder(GenBuilder):
         # crf0 (a very small chance of being a problem)
         self.stack_adj_addr = self.asm.mc.tell()
         #print "emit_stack_adjustment at: ", self.stack_adj_addr
-        self.asm.addi(rSCRATCH, rFP, 0) # this is the immediate that later gets patched
+        self.asm.addi(rSCRATCH, rFP, -newsize)
         self.asm.subx(rSCRATCH, rSCRATCH, rSP) # rSCRATCH should now be <= 0
         self.asm.beq(3) # if rSCRATCH == 0, there is no actual adjustment, so
                         # don't end up with the situation where *(rSP) == rSP
@@ -568,52 +642,53 @@ class Builder(GenBuilder):
         self.asm.stw(rFP, rSP, 0)
         # branch to "here"
 
-    def patch_stack_adjustment(self, newsize):
-        if self.stack_adj_addr == 0:
-            return
-        #print "patch_stack_adjustment at:", self.stack_adj_addr, newsize
-        # we build an addi instruction by hand here
-        mc = self.asm.mc
-        self.asm.mc = self.rgenop.ExistingCodeBlock(self.stack_adj_addr, self.stack_adj_addr+4)
-        self.asm.addi(rSCRATCH, rFP, -newsize)
-        self.asm.mc = mc
+##     def patch_stack_adjustment(self, newsize):
+##         if self.stack_adj_addr == 0:
+##             return
+##         #print "patch_stack_adjustment at:", self.stack_adj_addr, newsize
+##         # we build an addi instruction by hand here
+##         mc = self.asm.mc
+##         self.asm.mc = self.rgenop.ExistingCodeBlock(self.stack_adj_addr, self.stack_adj_addr+4)
+##         self.asm.addi(rSCRATCH, rFP, -newsize)
+##         self.asm.mc = mc
 
-    def op_int_mul(self, gv_x, gv_y):
+    def _arg_op(self, gv_arg, opcode):
         gv_result = Var()
-        self.insns.append(
-            insn.Insn_GPR__GPR_GPR(RPPCAssembler.mullw,
-                                   gv_result, [gv_x, gv_y]))
+        self.insns.append(insn.Insn_GPR__GPR(opcode, gv_result, gv_arg))
         return gv_result
 
-    def op_int_add(self, gv_x, gv_y):
+    def _arg_arg_op_with_imm(self, gv_x, gv_y, commutative, opcode, opcodei):
         gv_result = Var()
         if gv_y.fits_in_immediate():
             self.insns.append(
-                insn.Insn_GPR__GPR_IMM(RPPCAssembler.addi,
+                insn.Insn_GPR__GPR_IMM(opcodei,
                                        gv_result, [gv_x, gv_y]))
-        elif gv_x.fits_in_immediate():
+        elif gv_x.fits_in_immediate() and commutative:
             self.insns.append(
-                insn.Insn_GPR__GPR_IMM(RPPCAssembler.addi,
+                insn.Insn_GPR__GPR_IMM(opcodei,
                                        gv_result, [gv_y, gv_x]))
         else:
             self.insns.append(
-                insn.Insn_GPR__GPR_GPR(RPPCAssembler.add,
+                insn.Insn_GPR__GPR_GPR(opcode,
                                        gv_result, [gv_x, gv_y]))
         return gv_result
 
-    def op_int_sub(self, gv_x, gv_y):
+    def _arg_arg_op(self, gv_x, gv_y, opcode):
         gv_result = Var()
         self.insns.append(
-            insn.Insn_GPR__GPR_GPR(RPPCAssembler.sub,
+            insn.Insn_GPR__GPR_GPR(opcode,
                                    gv_result, [gv_x, gv_y]))
         return gv_result
 
-    def op_int_floordiv(self, gv_x, gv_y):
+    def _arg_imm_op(self, gv_x, gv_imm, opcode):
         gv_result = Var()
         self.insns.append(
-            insn.Insn_GPR__GPR_GPR(RPPCAssembler.divw,
-                                   gv_result, [gv_x, gv_y]))
+            insn.Insn_GPR__GPR_IMM(opcode,
+                                   gv_result, [gv_x, gv_imm]))
         return gv_result
+
+    def _identity(self, gv_arg):
+        return gv_arg
 
     cmp2info = {
         #      bit-in-crf  negated
@@ -624,18 +699,20 @@ class Builder(GenBuilder):
         'eq': (    2,         0   ),
         'ne': (    2,         1   ),
         }
+
     cmp2info_flipped = {
         #      bit-in-crf  negated
-        'gt': (    1,         1   ),
-        'lt': (    0,         1   ),
-        'le': (    1,         0   ),
-        'ge': (    0,         0   ),
+        'gt': (    0,         0   ),
+        'lt': (    1,         0   ),
+        'le': (    0,         1   ),
+        'ge': (    1,         1   ),
         'eq': (    2,         0   ),
         'ne': (    2,         1   ),
         }
 
     def _compare(self, op, gv_x, gv_y):
-        gv_result = Var()
+        #print "op", op
+        gv_result = ConditionVar()
         if gv_y.fits_in_immediate():
             self.insns.append(
                 insn.CMPWI(self.cmp2info[op], gv_result, [gv_x, gv_y]))
@@ -647,14 +724,66 @@ class Builder(GenBuilder):
                 insn.CMPW(self.cmp2info[op], gv_result, [gv_x, gv_y]))
         return gv_result
 
-    def op_int_gt(self, gv_x, gv_y):
-        return self._compare('gt', gv_x, gv_y)
+    def _compare_u(self, op, gv_x, gv_y):
+        gv_result = ConditionVar()
+        if gv_y.fits_in_immediate():
+            self.insns.append(
+                insn.CMPWLI(self.cmp2info[op], gv_result, [gv_x, gv_y]))
+        elif gv_x.fits_in_immediate():
+            self.insns.append(
+                insn.CMPWLI(self.cmp2info_flipped[op], gv_result, [gv_y, gv_x]))
+        else:
+            self.insns.append(
+                insn.CMPWL(self.cmp2info[op], gv_result, [gv_x, gv_y]))
+        return gv_result
+
+    def _jump(self, gv_condition, if_true, args_gv):
+        targetbuilder = self.rgenop.newbuilder()
+
+        self.insns.append(
+            insn.Jump(gv_condition, targetbuilder, if_true, args_gv))
+
+        return targetbuilder
+
+    def op_bool_not(self, gv_arg):
+        gv_result = Var()
+        self.insns.append(
+            insn.Insn_GPR__GPR_IMM(RPPCAssembler.subfi,
+                                   gv_result, [gv_arg, rgenop.genconst(1)]))
+        return gv_result
+
+    def op_int_is_true(self, gv_arg):
+        return self._compare('ne', gv_arg, self.rgenop.genconst(0))
+
+    def op_int_neg(self, gv_arg):
+        return self._arg_op(gv_arg, _PPC.neg)
+
+    ## op_int_neg_ovf(self, gv_arg) XXX
+
+    ## op_int_abs(self, gv_arg):
+    ## op_int_abs_ovf(self, gv_arg):
+
+    def op_int_invert(self, gv_arg):
+        return self._arg_op(gv_arg, _PPC.not_)
+
+    def op_int_add(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, True, _PPC.add, _PPC.addi)
+
+    def op_int_sub(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, False, _PPC.sub, _PPC.subi)
+
+    def op_int_mul(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, True, _PPC.mullw, _PPC.mulli)
+
+    def op_int_floordiv(self, gv_x, gv_y):
+        return self._arg_arg_op(gv_x, gv_y, _PPC.divw)
+
+    ## def op_int_floordiv_zer(self, gv_x, gv_y):
+    ## def op_int_mod(self, gv_x, gv_y):
+    ## def op_int_mod_zer(self, gv_x, gv_y):
 
     def op_int_lt(self, gv_x, gv_y):
         return self._compare('lt', gv_x, gv_y)
-
-    def op_int_ge(self, gv_x, gv_y):
-        return self._compare('ge', gv_x, gv_y)
 
     def op_int_le(self, gv_x, gv_y):
         return self._compare('le', gv_x, gv_y)
@@ -665,34 +794,115 @@ class Builder(GenBuilder):
     def op_int_ne(self, gv_x, gv_y):
         return self._compare('ne', gv_x, gv_y)
 
-    def _jump(self, gv_condition, if_true, args_gv):
-        targetbuilder = self.rgenop.newbuilder()
+    def op_int_gt(self, gv_x, gv_y):
+        return self._compare('gt', gv_x, gv_y)
 
-        self.insns.append(
-            insn.Jump(gv_condition, targetbuilder, if_true, args_gv))
+    def op_int_ge(self, gv_x, gv_y):
+        return self._compare('ge', gv_x, gv_y)
 
-        return targetbuilder
+    def op_int_and(self, gv_x, gv_y):
+        return self._arg_arg_op(gv_x, gv_y, _PPC.and_)
 
-    def op_int_is_true(self, gv_arg):
-        gv_result = Var()
-        self.insns.append(
-            insn.CMPWI(self.cmp2info['ne'], gv_result, [gv_arg, self.rgenop.genconst(0)]))
-        return gv_result
+    def op_int_or(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, True, _PPC.or_, _PPC.ori)
 
-    def op_bool_not(self, gv_arg):
-        gv_result = Var()
-        self.insns.append(
-            insn.CMPWI(self.cmp2info['eq'], gv_result, [gv_arg, self.rgenop.genconst(0)]))
-        return gv_result
+    def op_int_lshift(self, gv_x, gv_y):
+        # could be messy if shift is not in 0 <= ... < 32
+        return self._arg_arg_op_with_imm(gv_x, gv_y, False, _PPC.slw, _PPC.slwi)
+    ## def op_int_lshift_val(self, gv_x, gv_y):
+    def op_int_rshift(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, False, _PPC.sraw, _PPC.srawi)
+    ## def op_int_rshift_val(self, gv_x, gv_y):
 
-    def op_int_neg(self, gv_arg):
-        gv_result = Var()
-        self.insns.append(
-            insn.Insn_GPR__GPR(RPPCAssembler.neg, gv_result, gv_arg))
-        return gv_result
+    def op_int_xor(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, True, _PPC.xor, _PPC.xori)
+
+    ## various int_*_ovfs
+
+    op_uint_is_true = op_int_is_true
+    op_uint_invert = op_int_invert
+
+    op_uint_add = op_int_add
+    op_uint_sub = op_int_sub
+    op_uint_mul = op_int_mul
+
+    def op_uint_floordiv(self, gv_x, gv_y):
+        return self._two_arg_op(gv_x, gv_y, _PPC.divwu)
+
+    ## def op_uint_floordiv_zer(self, gv_x, gv_y):
+    ## def op_uint_mod(self, gv_x, gv_y):
+    ## def op_uint_mod_zer(self, gv_x, gv_y):
+
+    def op_uint_lt(self, gv_x, gv_y):
+        return self._compare_u('lt', gv_x, gv_y)
+
+    def op_uint_le(self, gv_x, gv_y):
+        return self._compare_u('le', gv_x, gv_y)
+
+    def op_uint_eq(self, gv_x, gv_y):
+        return self._compare_u('eq', gv_x, gv_y)
+
+    def op_uint_ne(self, gv_x, gv_y):
+        return self._compare_u('ne', gv_x, gv_y)
+
+    def op_uint_gt(self, gv_x, gv_y):
+        return self._compare_u('gt', gv_x, gv_y)
+
+    def op_uint_ge(self, gv_x, gv_y):
+        return self._compare_u('ge', gv_x, gv_y)
+
+    op_uint_and = op_int_add
+    op_uint_or = op_int_or
+
+    op_uint_lshift = op_int_lshift
+    def op_uint_rshift(self, gv_x, gv_y):
+        return self._arg_arg_op_with_imm(gv_x, gv_y, False, _PPC.srw, _PPC.srwi)
+
+    ## def op_uint_lshift_val(self, gv_x, gv_y):
+    ## def op_uint_rshift(self, gv_x, gv_y):
+    ## def op_uint_rshift_val(self, gv_x, gv_y):
+
+    op_uint_xor = op_int_xor
+
+    # ... floats ...
+
+    # ... llongs, ullongs ...
+
+    # here we assume that booleans are always 1 or 0 and chars are
+    # always zero-padded.
+
+    op_cast_bool_to_int = _identity
+    op_cast_bool_to_uint = _identity
+    ## def op_cast_bool_to_float(self, gv_arg):
+    op_cast_char_to_int = _identity
+    op_cast_unichar_to_int = _identity
+    ## def op_cast_int_to_char(self, gv_arg):
+    ## def op_cast_int_to_unichar(self, gv_arg):
+    op_cast_int_to_uint = _identity
+    ## def op_cast_int_to_float(self, gv_arg):
+    ## def op_cast_int_to_longlong(self, gv_arg):
+    op_cast_uint_to_int = _identity
+    ## def op_cast_uint_to_float(self, gv_arg):
+    ## def op_cast_float_to_int(self, gv_arg):
+    ## def op_cast_float_to_uint(self, gv_arg):
+    ## def op_truncate_longlong_to_int(self, gv_arg):
+
+    # many pointer operations are genop_* special cases above
+
+    op_ptr_eq = op_int_eq
+    op_ptr_ne = op_int_ne
 
     op_ptr_nonzero = op_int_is_true
-    op_ptr_iszero  = op_bool_not        # for now
+    op_ptr_ne      = op_int_ne
+    op_ptr_eq      = op_int_eq
+
+    def op_ptr_iszero(self, gv_arg):
+        return self._compare('eq', gv_arg, self.rgenop.genconst(0))
+
+    op_cast_ptr_to_int     = _identity
+    op_cast_int_to_ptr     = _identity
+
+    # ... address operations ...
 
 
 class RPPCGenOp(AbstractRGenOp):
