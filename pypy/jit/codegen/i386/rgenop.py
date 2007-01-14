@@ -40,6 +40,15 @@ class Op1(Operation):
         self.x = x
     def allocate(self, allocator):
         allocator.using(self.x)
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # result not used
+        srcop = allocator.get_operand(self.x)
+        return self.generate2(allocator.mc, dstop, srcop)
+    def generate2(self, mc, dstop, srcop):
+        raise NotImplementedError
 
 class UnaryOp(Op1):
     def generate(self, allocator):
@@ -54,16 +63,30 @@ class OpIntNeg(UnaryOp):
     opname = 'int_neg'
     emit = staticmethod(I386CodeBuilder.NEG)
 
+class OpIntInvert(UnaryOp):
+    opname = 'int_invert'
+    emit = staticmethod(I386CodeBuilder.NOT)
+
+class OpIntAbs(Op1):
+    opname = 'int_abs'
+    def generate2(self, mc, dstop, srcop):
+        # ABS-computing code from Psyco, found by exhaustive search
+        # on *all* short sequences of operations :-)
+        inplace = (dstop == srcop)
+        if inplace or not (isinstance(srcop, REG) or isinstance(dstop, REG)):
+            mc.MOV(ecx, srcop)
+            srcop = ecx
+        if not inplace:
+            mc.MOV(dstop, srcop)
+        mc.SHL(dstop, imm8(1))
+        mc.SBB(dstop, srcop)
+        mc.SBB(ecx, ecx)
+        mc.XOR(dstop, ecx)
+
 class OpSameAs(Op1):
     clobbers_cc = False
-    def generate(self, allocator):
-        try:
-            dstop = allocator.get_operand(self)
-        except KeyError:
-            return    # result not used
-        srcop = allocator.get_operand(self.x)
+    def generate2(self, mc, dstop, srcop):
         if srcop != dstop:
-            mc = allocator.mc
             try:
                 mc.MOV(dstop, srcop)
             except FailedToImplement:
@@ -91,9 +114,6 @@ class Op2(Operation):
     def allocate(self, allocator):
         allocator.using(self.x)
         allocator.using(self.y)
-
-class BinaryOp(Op2):
-    commutative = False
     def generate(self, allocator):
         try:
             dstop = allocator.get_operand(self)
@@ -101,10 +121,16 @@ class BinaryOp(Op2):
             return    # simple operation whose result is not used anyway
         op1 = allocator.get_operand(self.x)
         op2 = allocator.get_operand(self.y)
+        self.generate3(allocator.mc, dstop, op1, op2)
+    def generate3(self, mc, dstop, op1, op2):
+        raise NotImplementedError
+
+class BinaryOp(Op2):
+    commutative = False
+    def generate3(self, mc, dstop, op1, op2):
         # now all of dstop, op1 and op2 may alias each other and be in
         # a register, in the stack or an immediate... finding a correct
         # and encodable combination of instructions is loads of fun
-        mc = allocator.mc
         if dstop == op1:
             case = 1       # optimize for this common case
         elif self.commutative and dstop == op2:
@@ -151,16 +177,21 @@ class OpIntSub(BinaryOp):
     opname = 'int_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
 
+class OpIntAnd(BinaryOp):
+    opname = 'int_and'
+    emit = staticmethod(I386CodeBuilder.AND)
+
+class OpIntOr(BinaryOp):
+    opname = 'int_or'
+    emit = staticmethod(I386CodeBuilder.OR)
+
+class OpIntXor(BinaryOp):
+    opname = 'int_xor'
+    emit = staticmethod(I386CodeBuilder.XOR)
+
 class OpIntMul(Op2):
     opname = 'int_mul'
-    def generate(self, allocator):
-        try:
-            dstop = allocator.get_operand(self)
-        except KeyError:
-            return    # simple operation whose result is not used anyway
-        op1 = allocator.get_operand(self.x)
-        op2 = allocator.get_operand(self.y)
-        mc = allocator.mc
+    def generate3(self, mc, dstop, op1, op2):
         if isinstance(dstop, REG):
             tmpop = dstop
         else:
@@ -181,15 +212,8 @@ class OpIntMul(Op2):
 class OpIntFloorDiv(Op2):
     opname = 'int_floordiv'
     divmod_result_register = eax
-    def generate(self, allocator):
-        try:
-            dstop = allocator.get_operand(self)
-        except KeyError:
-            return    # simple operation whose result is not used anyway
-        op1 = allocator.get_operand(self.x)
-        op2 = allocator.get_operand(self.y)
+    def generate3(self, mc, dstop, op1, op2):
         # not very efficient but not a very common operation either
-        mc = allocator.mc
         if dstop != eax:
             mc.PUSH(eax)
         if dstop != edx:
@@ -211,6 +235,37 @@ class OpIntFloorDiv(Op2):
 class OpIntMod(OpIntFloorDiv):
     opname = 'int_mod'
     divmod_result_register = edx
+
+class OpIntLShift(Op2):
+    opname = 'int_lshift'
+    def generate3(self, mc, dstop, op1, op2):
+        # XXX not optimized
+        mc.MOV(ecx, op2)
+        if dstop != op1:
+            try:
+                mc.MOV(dstop, op1)
+            except FailedToImplement:
+                mc.PUSH(op1)
+                mc.POP(dstop)
+        mc.SHL(dstop, cl)
+        mc.CMP(ecx, imm8(32))
+        mc.SBB(ecx, ecx)
+        mc.AND(dstop, ecx)
+
+class OpIntRShift(Op2):
+    opname = 'int_rshift'
+    def generate3(self, mc, dstop, op1, op2):
+        # XXX not optimized
+        mc.MOV(ecx, imm(31))
+        mc.CMP(op2, ecx)
+        mc.CMOVBE(ecx, op2)
+        if dstop != op1:
+            try:
+                mc.MOV(dstop, op1)
+            except FailedToImplement:
+                mc.PUSH(op1)
+                mc.POP(dstop)
+        mc.SAR(dstop, cl)
 
 class OpCompare2(Op2):
     result_kind = RK_CC
@@ -336,6 +391,220 @@ class OpCall(Operation):
             if dstop is not None:
                 mc.MOV(dstop, eax)
             mc.POP(eax)
+
+def array_item_operand(mc, base, arraytoken, opindex):
+    # may use ecx
+    _, startoffset, itemoffset = arraytoken
+
+    if isinstance(opindex, IMM32):
+        startoffset += itemoffset * opindex.value
+        opindex = None
+        indexshift = 0
+    elif itemoffset in SIZE2SHIFT:
+        if not isinstance(opindex, REG):
+            mc.MOV(ecx, opindex)
+            opindex = ecx
+        indexshift = SIZE2SHIFT[itemoffset]
+    else:
+        mc.IMUL(ecx, opindex, imm(itemoffset))
+        opindex = ecx
+        indexshift = 0
+
+    assert base is not ecx
+    if isinstance(base, MODRM):
+        if opindex != ecx:
+            mc.MOV(ecx, base)
+        else:   # waaaa
+            opindex = None
+            if indexshift > 0:
+                mc.SHL(ecx, imm8(indexshift))
+            mc.ADD(ecx, base)
+        base = ecx
+    elif isinstance(base, IMM32):
+        startoffset += base.value
+        base = None
+
+    if itemoffset == 1:
+        return memSIB8(base, opindex, indexshift, startoffset)
+    else:
+        return memSIB (base, opindex, indexshift, startoffset)
+
+class OpComputeSize(Operation):
+    def __init__(self, varsizealloctoken, gv_length):
+        self.varsizealloctoken = varsizealloctoken
+        self.gv_length = gv_length
+    def allocate(self, allocator):
+        self.using(self.gv_length)
+    def generate(self, allocator):
+        dstop = allocator.get_operand(self)
+        srcop = allocator.get_operand(self.gv_length)
+        mc = allocator.mc
+        op_size = array_item_operand(mc, None, self.varsizealloctoken, srcop)
+        try:
+            mc.LEA(dstop, op_size)
+        except FailedToImplement:
+            mc.LEA(ecx, op_size)
+            mc.MOV(dstop, ecx)
+
+def hard_store(mc, opmemtarget, opvalue, itemsize=WORD):
+    # For the possibly hard cases of stores
+    # Generates a store to 'opmemtarget' of size 'itemsize' == 1, 2 or 4.
+    # If it is 1, opmemtarget must be a MODRM8; otherwise, it must be a MODRM.
+    if itemsize == WORD:
+        try:
+            mc.MOV(opmemtarget, opvalue)
+        except FailedToImplement:
+            if opmemtarget.involves_ecx():
+                mc.PUSH(opvalue)
+                mc.POP(opmemtarget)
+            else:
+                mc.MOV(ecx, opvalue)
+                mc.MOV(opmemtarget, ecx)
+    else:
+        must_pop_eax = False
+        if itemsize == 1:
+            if isinstance(opvalue, REG) and opvalue.lowest8bits:
+                # a register whose lower 8 bits are directly readable
+                opvalue = opvalue.lowest8bits
+            elif isinstance(opvalue, IMM8):
+                pass
+            else:
+                if opmemtarget.involves_ecx():    # grumble!
+                    mc.PUSH(eax)
+                    must_pop_eax = True
+                    scratch = eax
+                else:
+                    scratch = ecx
+                if opvalue.width == 1:
+                    mc.MOV(scratch.lowest8bits, opvalue)
+                else:
+                    mc.MOV(scratch, opvalue)
+                opvalue = scratch.lowest8bits
+        else:
+            assert itemsize == 2
+            if isinstance(opvalue, MODRM) or type(opvalue) is IMM32:
+                # no support for now to encode 16-bit immediates,
+                # so we use a scratch register for this case too
+                if opmemtarget.involves_ecx():    # grumble!
+                    mc.PUSH(eax)
+                    must_pop_eax = True
+                    scratch = eax
+                else:
+                    scratch = ecx
+                mc.MOV(scratch, opvalue)
+                opvalue = scratch
+            mc.o16()    # prefix for the MOV below
+        # and eventually, the real store:
+        mc.MOV(opmemtarget, opvalue)
+        if must_pop_eax:
+            mc.POP(eax)
+
+def hard_load(mc, opdst, opmemsource, itemsize=WORD):
+    # For the possibly hard cases of stores
+    # Generates a load from 'opmemsource' of size 'itemsize' == 1, 2 or 4.
+    # If it is 1, opmemtarget must be a MODRM8; otherwise, it must be a MODRM.
+    if itemsize == WORD:
+        try:
+            mc.MOV(opdst, opmemsource)
+        except FailedToImplement:               # opdst is a MODRM
+            if opmemtarget.involves_ecx():
+                mc.PUSH(opmemsource)
+                mc.POP(opdst)
+            else:
+                mc.MOV(ecx, opmemsource)
+                mc.MOV(opdst, ecx)
+    else:
+        try:
+            mc.MOVZX(opdst, opmemsource)
+        except FailedToImplement:               # opdst is a MODRM
+            if opmemtarget.involves_ecx():
+                mc.PUSH(eax)
+                mc.MOVZX(eax, opmemsource)
+                mc.MOV(opdst, eax)
+                mc.POP(eax)
+            else:
+                mc.MOVZX(ecx, opmemsource)
+                mc.MOV(opdst, ecx)
+
+class OpGetField(Operation):
+    def __init__(self, fieldtoken, gv_ptr, gv_value):
+        self.fieldtoken = fieldtoken
+        self.gv_ptr   = gv_ptr
+    def allocate(self, allocator):
+        self.using(self.gv_ptr)
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # result not used
+        opptr = allocator.get_operand(self.gv_ptr)
+        mc = allocator.mc
+        if not isinstance(opptr, REG):
+            mc.MOV(ecx, opptr)
+            opptr = ecx
+        offset, fieldsize = self.fieldtoken
+        opsource = mem(opptr, offset)
+        hard_load(mc, dstop, opsource, fieldsize)
+
+class OpSetField(Operation):
+    result_kind = RK_NO_RESULT
+    def __init__(self, fieldtoken, gv_ptr, gv_value):
+        self.fieldtoken = fieldtoken
+        self.gv_ptr   = gv_ptr
+        self.gv_value = gv_value
+    def allocate(self, allocator):
+        self.using(self.gv_ptr)
+        self.using(self.gv_value)
+    def generate(self, allocator):
+        opptr   = allocator.get_operand(self.gv_ptr)
+        opvalue = allocator.get_operand(self.gv_value)
+        mc = allocator.mc
+        if not isinstance(opptr, REG):
+            mc.MOV(ecx, opptr)
+            opptr = ecx
+        offset, fieldsize = self.fieldtoken
+        optarget = mem(opptr, offset)
+        hard_store(mc, optarget, opvalue, fieldsize)
+
+class OpGetArrayItem(Operation):
+    def __init__(self, arraytoken, gv_array, gv_index):
+        self.arraytoken = arraytoken
+        self.gv_array = gv_array
+        self.gv_index = gv_index
+    def allocate(self, allocator):
+        self.using(self.gv_array)
+        self.using(self.gv_index)
+    def generate(self, allocator):
+        try:
+            dstop = allocator.get_operand(self)
+        except KeyError:
+            return    # result not used
+        oparray = allocator.get_operand(self.gv_array)
+        opindex = allocator.get_operand(self.gv_index)
+        mc = allocator.mc
+        opsource = array_item_operand(mc, oparray, self.arraytoken, opindex)
+        _, _, itemsize = arraytoken
+        hard_load(mc, dstop, opsource, itemsize)
+
+class OpSetArrayItem(Operation):
+    result_kind = RK_NO_RESULT
+    def __init__(self, arraytoken, gv_array, gv_index, gv_value):
+        self.arraytoken = arraytoken
+        self.gv_array = gv_array
+        self.gv_index = gv_index
+        self.gv_value = gv_value
+    def allocate(self, allocator):
+        self.using(self.gv_array)
+        self.using(self.gv_index)
+        self.using(self.gv_value)
+    def generate(self, allocator):
+        oparray = allocator.get_operand(self.gv_array)
+        opindex = allocator.get_operand(self.gv_index)
+        opvalue = allocator.get_operand(self.gv_value)
+        mc = allocator.mc
+        optarget = array_item_operand(mc, oparray, self.arraytoken, opindex)
+        _, _, itemsize = arraytoken
+        hard_store(mc, optarget, opvalue, itemsize)
 
 # ____________________________________________________________
 
@@ -477,6 +746,19 @@ OPCLASSES1 = setup_opclasses(Op1)
 OPCLASSES2 = setup_opclasses(Op2)
 del setup_opclasses
 
+# identity operations
+OPCLASSES1['cast_bool_to_int'] = None
+OPCLASSES1['cast_int_to_char'] = None
+OPCLASSES1['cast_int_to_unichar'] = None
+
+# synonyms
+OPCLASSES2['char_lt'] =                            OPCLASSES2['int_lt']
+OPCLASSES2['char_le'] =                            OPCLASSES2['int_le']
+OPCLASSES2['char_eq'] = OPCLASSES2['unichar_eq'] = OPCLASSES2['int_eq']
+OPCLASSES2['char_ne'] = OPCLASSES2['unichar_ne'] = OPCLASSES2['int_ne']
+OPCLASSES2['char_gt'] =                            OPCLASSES2['int_gt']
+OPCLASSES2['char_ge'] =                            OPCLASSES2['int_ge']
+
 def setup_conditions():
     result1 = [None] * 16
     result2 = [None] * 16
@@ -493,6 +775,45 @@ def cond_negate(cond):
     assert 0 <= cond < INSN_JMP
     return cond ^ 1
 
+SIZE2SHIFT = {1: 0,
+              2: 1,
+              4: 2,
+              8: 3}
+
+# ____________________________________________________________
+
+GC_MALLOC = lltype.Ptr(lltype.FuncType([lltype.Signed], llmemory.Address))
+
+def gc_malloc(size):
+    from pypy.rpython.lltypesystem.lloperation import llop
+    return llop.call_boehm_gc_alloc(llmemory.Address, size)
+
+def gc_malloc_fnaddr():
+    """Returns the address of the Boehm 'malloc' function."""
+    if we_are_translated():
+        gc_malloc_ptr = llhelper(GC_MALLOC, gc_malloc)
+        return lltype.cast_ptr_to_int(gc_malloc_ptr)
+    else:
+        # <pedronis> don't do this at home
+        import threading
+        if not isinstance(threading.currentThread(), threading._MainThread):
+            import py
+            py.test.skip("must run in the main thread")
+        try:
+            from ctypes import cast, c_void_p
+            from pypy.rpython.rctypes.tool import util
+            path = util.find_library('gc')
+            if path is None:
+                raise ImportError("Boehm (libgc) not found")
+            boehmlib = util.load_library(path)
+        except ImportError, e:
+            import py
+            py.test.skip(str(e))
+        else:
+            GC_malloc = boehmlib.GC_malloc
+            return cast(GC_malloc, c_void_p).value
+
+# ____________________________________________________________
 
 class StackOpCache:
     INITIAL_STACK_EBP_OFS = -4
@@ -867,10 +1188,56 @@ class Builder(GenBuilder):
         self.operations.append(op)
         return op
 
+    def genop_same_as(self, kind, gv_x):
+        if gv_x.is_const:    # must always return a var
+            op = OpSameAs(gv_x)
+            self.operations.append(op)
+            return op
+        else:
+            return gv_x
+
     def genop_call(self, sigtoken, gv_fnptr, args_gv):
         op = OpCall(sigtoken, gv_fnptr, list(args_gv))
         self.operations.append(op)
         return op
+
+    def genop_malloc_fixedsize(self, size):
+        # XXX boehm only, no atomic/non atomic distinction for now
+        op = OpCall(MALLOC_SIGTOKEN,
+                    IntConst(gc_malloc_fnaddr()),
+                    [IntConst(size)])
+        self.operations.append(op)
+        return op
+
+    def genop_malloc_varsize(self, varsizealloctoken, gv_size):
+        # XXX boehm only, no atomic/non atomic distinction for now
+        # XXX no overflow checking for now
+        opsz = OpComputeSize(varsizealloctoken, gv_size)
+        self.operations.append(opsz)
+        opmalloc = OpCall(MALLOC_SIGTOKEN,
+                          IntConst(gc_malloc_fnaddr()),
+                          [opsz])
+        self.operations.append(opmalloc)
+        lengthtoken, _, _ = varsizealloctoken
+        self.operations.append(OpSetField(lengthtoken, opmalloc, opsz))
+        return opmalloc
+
+    def genop_getfield(self, fieldtoken, gv_ptr):
+        op = OpGetField(fieldtoken, gv_ptr)
+        self.operations.append(op)
+        return op
+
+    def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
+        self.operations.append(OpSetField(fieldtoken, gv_ptr, gv_value))
+
+    def genop_getarrayitem(self, arraytoken, gv_array, gv_index):
+        op = OpGetArrayItem(arraytoken, gv_array, gv_index)
+        self.operations.append(op)
+        return op
+
+    def genop_setarrayitem(self, arraytoken, gv_array, gv_index, gv_value):
+        self.operations.append(OpSetArrayItem(arraytoken, gv_array,
+                                              gv_index, gv_value))
 
     def flexswitch(self, gv_exitswitch, args_gv):
         reg = FlexSwitch.REG
@@ -991,16 +1358,16 @@ class RI386GenOp(AbstractRGenOp):
             arrayfield = T._arrayfld
             ARRAYFIELD = getattr(T, arrayfield)
             arraytoken = RI386GenOp.arrayToken(ARRAYFIELD)
-            length_offset, items_offset, item_size = arraytoken
+            (lengthoffset, lengthsize), itemsoffset, itemsize = arraytoken
             arrayfield_offset = llmemory.offsetof(T, arrayfield)
-            return (arrayfield_offset+length_offset,
-                    arrayfield_offset+items_offset,
-                    item_size)
+            return ((arrayfield_offset+lengthoffset, lengthsize),
+                    arrayfield_offset+itemsoffset,
+                    itemsize)
 
     @staticmethod
     @specialize.memo()    
     def arrayToken(A):
-        return (llmemory.ArrayLengthOffset(A),
+        return ((llmemory.ArrayLengthOffset(A), WORD),
                 llmemory.ArrayItemsOffset(A),
                 llmemory.ItemOffset(A.OF))
 
@@ -1033,3 +1400,5 @@ class RI386GenOp(AbstractRGenOp):
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
+
+MALLOC_SIGTOKEN = RI386GenOp.sigToken(GC_MALLOC.TO)
