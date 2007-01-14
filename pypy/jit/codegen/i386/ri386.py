@@ -6,6 +6,7 @@ class OPERAND(object):
 
 class REG(OPERAND):
     width = 4
+    lowest8bits = None
     def __repr__(self):
         return '<%s>' % self.__class__.__name__.lower()
     def assembler(self):
@@ -123,6 +124,18 @@ class MODRM(OPERAND):
         else:
             return unpack(offset)
 
+    def involves_ecx(self):
+        # very custom: is ecx present in this mod/rm?
+        mod = self.byte & 0xC0
+        rm  = self.byte & 0x07
+        if mod != 0xC0 and rm == 4:
+            SIB = ord(self.extradata[0])
+            index = (SIB & 0x38) >> 3
+            base  = (SIB & 0x07)
+            return base == ECX.op or index == ECX.op
+        else:
+            return rm == ECX.op
+
 
 class MODRM8(MODRM):
     width = 1
@@ -163,6 +176,11 @@ ah = AH()
 ch = CH()
 dh = DH()
 bh = BH()
+
+eax.lowest8bits = al
+ecx.lowest8bits = cl
+edx.lowest8bits = dl
+ebx.lowest8bits = bl
 
 registers = [eax, ecx, edx, ebx, esp, ebp, esi, edi]
 registers8 = [al, cl, dl, bl, ah, ch, dh, bh]
