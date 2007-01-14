@@ -1,4 +1,4 @@
-import sys
+import sys, py
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.codegen.model import AbstractRGenOp, GenLabel, GenBuilder
@@ -64,7 +64,7 @@ class OpIntNeg(UnaryOp):
     emit = staticmethod(I386CodeBuilder.NEG)
 
 class OpIntInvert(UnaryOp):
-    opname = 'int_invert'
+    opname = 'int_invert', 'uint_invert'
     emit = staticmethod(I386CodeBuilder.NOT)
 
 class OpIntAbs(Op1):
@@ -169,24 +169,24 @@ class BinaryOp(Op2):
             mc.MOV(dstop, ecx)
 
 class OpIntAdd(BinaryOp):
-    opname = 'int_add'
+    opname = 'int_add', 'uint_add'
     emit = staticmethod(I386CodeBuilder.ADD)
     commutative = True
 
 class OpIntSub(BinaryOp):
-    opname = 'int_sub'
+    opname = 'int_sub', 'uint_sub'
     emit = staticmethod(I386CodeBuilder.SUB)
 
 class OpIntAnd(BinaryOp):
-    opname = 'int_and'
+    opname = 'int_and', 'uint_and'
     emit = staticmethod(I386CodeBuilder.AND)
 
 class OpIntOr(BinaryOp):
-    opname = 'int_or'
+    opname = 'int_or', 'uint_or'
     emit = staticmethod(I386CodeBuilder.OR)
 
 class OpIntXor(BinaryOp):
-    opname = 'int_xor'
+    opname = 'int_xor', 'uint_xor'
     emit = staticmethod(I386CodeBuilder.XOR)
 
 class OpIntMul(Op2):
@@ -209,35 +209,61 @@ class OpIntMul(Op2):
         if dstop != tmpop:
             mc.MOV(dstop, tmpop)
 
-class OpIntFloorDiv(Op2):
-    opname = 'int_floordiv'
-    divmod_result_register = eax
+class MulOrDivOp(Op2):
     def generate3(self, mc, dstop, op1, op2):
-        # not very efficient but not a very common operation either
+        # not very efficient but not very common operations either
         if dstop != eax:
             mc.PUSH(eax)
         if dstop != edx:
             mc.PUSH(edx)
         if op1 != eax:
             mc.MOV(eax, op1)
-        mc.CDQ()
+        if self.input_is_64bits:
+            mc.CDQ()
         try:
-            mc.IDIV(op2)
+            self.emit(mc, op2)
         except FailedToImplement:
             mc.MOV(ecx, op2)
-            mc.IDIV(ecx)
-        mc.MOV(dstop, self.divmod_result_register)
+            self.emit(mc, ecx)
+        if dstop != self.reg_containing_result:
+            mc.MOV(dstop, self.reg_containing_result)
         if dstop != edx:
             mc.POP(edx)
         if dstop != eax:
             mc.POP(eax)
 
-class OpIntMod(OpIntFloorDiv):
+class OpIntFloorDiv(MulOrDivOp):
+    opname = 'int_floordiv'
+    input_is_64bits = True
+    reg_containing_result = eax
+    emit = staticmethod(I386CodeBuilder.IDIV)
+
+class OpIntMod(MulOrDivOp):
     opname = 'int_mod'
-    divmod_result_register = edx
+    input_is_64bits = True
+    reg_containing_result = edx
+    emit = staticmethod(I386CodeBuilder.IDIV)
+
+class OpUIntMul(MulOrDivOp):
+    opname = 'uint_mul'
+    input_is_64bits = False
+    reg_containing_result = eax
+    emit = staticmethod(I386CodeBuilder.MUL)
+
+class OpUIntFloorDiv(MulOrDivOp):
+    opname = 'uint_floordiv'
+    input_is_64bits = True
+    reg_containing_result = eax
+    emit = staticmethod(I386CodeBuilder.DIV)
+
+class OpUIntMod(MulOrDivOp):
+    opname = 'uint_mod'
+    input_is_64bits = True
+    reg_containing_result = edx
+    emit = staticmethod(I386CodeBuilder.DIV)
 
 class OpIntLShift(Op2):
-    opname = 'int_lshift'
+    opname = 'int_lshift', 'uint_lshift'
     def generate3(self, mc, dstop, op1, op2):
         # XXX not optimized
         mc.MOV(ecx, op2)
@@ -267,6 +293,22 @@ class OpIntRShift(Op2):
                 mc.POP(dstop)
         mc.SAR(dstop, cl)
 
+class OpUIntRShift(Op2):
+    opname = 'uint_rshift'
+    def generate3(self, mc, dstop, op1, op2):
+        # XXX not optimized
+        mc.MOV(ecx, op2)
+        if dstop != op1:
+            try:
+                mc.MOV(dstop, op1)
+            except FailedToImplement:
+                mc.PUSH(op1)
+                mc.POP(dstop)
+        mc.SHR(dstop, cl)
+        mc.CMP(ecx, imm8(32))
+        mc.SBB(ecx, ecx)
+        mc.AND(dstop, ecx)
+
 class OpCompare2(Op2):
     result_kind = RK_CC
     def generate(self, allocator):
@@ -281,27 +323,27 @@ class OpCompare2(Op2):
             mc.CMP(ecx, dstop)
 
 class OpIntLt(OpCompare2):
-    opname = 'int_lt'
+    opname = 'int_lt', 'char_lt'
     cc_result = Conditions['L']
 
 class OpIntLe(OpCompare2):
-    opname = 'int_le'
+    opname = 'int_le', 'char_le'
     cc_result = Conditions['LE']
 
 class OpIntEq(OpCompare2):
-    opname = 'int_eq'
+    opname = 'int_eq', 'char_eq', 'unichar_eq'
     cc_result = Conditions['E']
 
 class OpIntNe(OpCompare2):
-    opname = 'int_ne'
+    opname = 'int_ne', 'char_ne', 'unichar_ne'
     cc_result = Conditions['NE']
 
 class OpIntGt(OpCompare2):
-    opname = 'int_gt'
+    opname = 'int_gt', 'char_gt'
     cc_result = Conditions['G']
 
 class OpIntGe(OpCompare2):
-    opname = 'int_ge'
+    opname = 'int_ge', 'char_ge'
     cc_result = Conditions['GE']
 
 class JumpIf(Operation):
@@ -392,6 +434,22 @@ class OpCall(Operation):
                 mc.MOV(dstop, eax)
             mc.POP(eax)
 
+def field_operand(mc, base, fieldtoken):
+    # may use ecx
+    fieldoffset, fieldsize = fieldtoken
+
+    if isinstance(base, MODRM):
+        mc.MOV(ecx, base)
+        base = ecx
+    elif isinstance(base, IMM32):
+        fieldoffset += base.value
+        base = None
+
+    if fieldsize == 1:
+        return mem8(base, fieldoffset)
+    else:
+        return mem (base, fieldoffset)
+
 def array_item_operand(mc, base, arraytoken, opindex):
     # may use ecx
     _, startoffset, itemoffset = arraytoken
@@ -434,7 +492,7 @@ class OpComputeSize(Operation):
         self.varsizealloctoken = varsizealloctoken
         self.gv_length = gv_length
     def allocate(self, allocator):
-        self.using(self.gv_length)
+        allocator.using(self.gv_length)
     def generate(self, allocator):
         dstop = allocator.get_operand(self)
         srcop = allocator.get_operand(self.gv_length)
@@ -446,7 +504,7 @@ class OpComputeSize(Operation):
             mc.LEA(ecx, op_size)
             mc.MOV(dstop, ecx)
 
-def hard_store(mc, opmemtarget, opvalue, itemsize=WORD):
+def hard_store(mc, opmemtarget, opvalue, itemsize):
     # For the possibly hard cases of stores
     # Generates a store to 'opmemtarget' of size 'itemsize' == 1, 2 or 4.
     # If it is 1, opmemtarget must be a MODRM8; otherwise, it must be a MODRM.
@@ -499,7 +557,7 @@ def hard_store(mc, opmemtarget, opvalue, itemsize=WORD):
         if must_pop_eax:
             mc.POP(eax)
 
-def hard_load(mc, opdst, opmemsource, itemsize=WORD):
+def hard_load(mc, opdst, opmemsource, itemsize):
     # For the possibly hard cases of stores
     # Generates a load from 'opmemsource' of size 'itemsize' == 1, 2 or 4.
     # If it is 1, opmemtarget must be a MODRM8; otherwise, it must be a MODRM.
@@ -527,11 +585,11 @@ def hard_load(mc, opdst, opmemsource, itemsize=WORD):
                 mc.MOV(opdst, ecx)
 
 class OpGetField(Operation):
-    def __init__(self, fieldtoken, gv_ptr, gv_value):
+    def __init__(self, fieldtoken, gv_ptr):
         self.fieldtoken = fieldtoken
-        self.gv_ptr   = gv_ptr
+        self.gv_ptr = gv_ptr
     def allocate(self, allocator):
-        self.using(self.gv_ptr)
+        allocator.using(self.gv_ptr)
     def generate(self, allocator):
         try:
             dstop = allocator.get_operand(self)
@@ -539,11 +597,8 @@ class OpGetField(Operation):
             return    # result not used
         opptr = allocator.get_operand(self.gv_ptr)
         mc = allocator.mc
-        if not isinstance(opptr, REG):
-            mc.MOV(ecx, opptr)
-            opptr = ecx
-        offset, fieldsize = self.fieldtoken
-        opsource = mem(opptr, offset)
+        opsource = field_operand(mc, opptr, self.fieldtoken)
+        _, fieldsize = self.fieldtoken
         hard_load(mc, dstop, opsource, fieldsize)
 
 class OpSetField(Operation):
@@ -553,17 +608,14 @@ class OpSetField(Operation):
         self.gv_ptr   = gv_ptr
         self.gv_value = gv_value
     def allocate(self, allocator):
-        self.using(self.gv_ptr)
-        self.using(self.gv_value)
+        allocator.using(self.gv_ptr)
+        allocator.using(self.gv_value)
     def generate(self, allocator):
         opptr   = allocator.get_operand(self.gv_ptr)
         opvalue = allocator.get_operand(self.gv_value)
         mc = allocator.mc
-        if not isinstance(opptr, REG):
-            mc.MOV(ecx, opptr)
-            opptr = ecx
-        offset, fieldsize = self.fieldtoken
-        optarget = mem(opptr, offset)
+        optarget = field_operand(mc, opptr, self.fieldtoken)
+        _, fieldsize = self.fieldtoken
         hard_store(mc, optarget, opvalue, fieldsize)
 
 class OpGetArrayItem(Operation):
@@ -572,8 +624,8 @@ class OpGetArrayItem(Operation):
         self.gv_array = gv_array
         self.gv_index = gv_index
     def allocate(self, allocator):
-        self.using(self.gv_array)
-        self.using(self.gv_index)
+        allocator.using(self.gv_array)
+        allocator.using(self.gv_index)
     def generate(self, allocator):
         try:
             dstop = allocator.get_operand(self)
@@ -583,7 +635,7 @@ class OpGetArrayItem(Operation):
         opindex = allocator.get_operand(self.gv_index)
         mc = allocator.mc
         opsource = array_item_operand(mc, oparray, self.arraytoken, opindex)
-        _, _, itemsize = arraytoken
+        _, _, itemsize = self.arraytoken
         hard_load(mc, dstop, opsource, itemsize)
 
 class OpSetArrayItem(Operation):
@@ -594,16 +646,16 @@ class OpSetArrayItem(Operation):
         self.gv_index = gv_index
         self.gv_value = gv_value
     def allocate(self, allocator):
-        self.using(self.gv_array)
-        self.using(self.gv_index)
-        self.using(self.gv_value)
+        allocator.using(self.gv_array)
+        allocator.using(self.gv_index)
+        allocator.using(self.gv_value)
     def generate(self, allocator):
         oparray = allocator.get_operand(self.gv_array)
         opindex = allocator.get_operand(self.gv_index)
         opvalue = allocator.get_operand(self.gv_value)
         mc = allocator.mc
         optarget = array_item_operand(mc, oparray, self.arraytoken, opindex)
-        _, _, itemsize = arraytoken
+        _, _, itemsize = self.arraytoken
         hard_store(mc, optarget, opvalue, itemsize)
 
 # ____________________________________________________________
@@ -738,9 +790,12 @@ def setup_opclasses(base):
     d = {}
     for name, value in globals().items():
         if type(value) is type(base) and issubclass(value, base):
-            if hasattr(value, 'opname'):
-                assert value.opname not in d
-                d[value.opname] = value
+            opnames = getattr(value, 'opname', ())
+            if isinstance(opnames, str):
+                opnames = (opnames,)
+            for opname in opnames:
+                assert opname not in d
+                d[opname] = value
     return d
 OPCLASSES1 = setup_opclasses(Op1)
 OPCLASSES2 = setup_opclasses(Op2)
@@ -748,16 +803,10 @@ del setup_opclasses
 
 # identity operations
 OPCLASSES1['cast_bool_to_int'] = None
+OPCLASSES1['cast_char_to_int'] = None
+OPCLASSES1['cast_unichar_to_int'] = None
 OPCLASSES1['cast_int_to_char'] = None
 OPCLASSES1['cast_int_to_unichar'] = None
-
-# synonyms
-OPCLASSES2['char_lt'] =                            OPCLASSES2['int_lt']
-OPCLASSES2['char_le'] =                            OPCLASSES2['int_le']
-OPCLASSES2['char_eq'] = OPCLASSES2['unichar_eq'] = OPCLASSES2['int_eq']
-OPCLASSES2['char_ne'] = OPCLASSES2['unichar_ne'] = OPCLASSES2['int_ne']
-OPCLASSES2['char_gt'] =                            OPCLASSES2['int_gt']
-OPCLASSES2['char_ge'] =                            OPCLASSES2['int_ge']
 
 def setup_conditions():
     result1 = [None] * 16
