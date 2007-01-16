@@ -3,8 +3,7 @@ from pypy.tool import isolate
 from pypy.translator.llvm.genllvm import genllvm_compile
 from pypy.translator.llvm.buildllvm import llvm_is_on_path, exe_version, exe_version2
 optimize_tests = False
-MINIMUM_LLVM_VERSION = 1.7
-MAXIMUM_LLVM_VERSION = 2.0
+MINIMUM_LLVM_VERSION = 1.9
 
 ext_modules = []
 
@@ -37,10 +36,6 @@ def llvm_test():
     if v < MINIMUM_LLVM_VERSION:
         py.test.skip("llvm version not up-to-date (found "
                      "%.1f, should be >= %.1f)" % (v, MINIMUM_LLVM_VERSION))
-        return False
-    elif v >= MAXIMUM_LLVM_VERSION:
-        py.test.skip("llvm version %.1f and higher are not yet supported (found %.1f)" % (
-            MAXIMUM_LLVM_VERSION, v))
         return False
     return True
 
