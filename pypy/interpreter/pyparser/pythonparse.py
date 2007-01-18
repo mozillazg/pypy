@@ -186,7 +186,7 @@ def translation_target(grammardef):
     builder.resolve_rules()
     parser.build_first_sets()
     parser.keywords = builder.keywords
-    return parser
+    return 0
 
 
 
