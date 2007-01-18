@@ -103,7 +103,10 @@ class AbstractContext(object):
     restore states"""
     pass
 
-class AbstractBuilder(object):
+from pypy.interpreter.baseobjspace import Wrappable
+
+
+class AbstractBuilder(Wrappable):
     """Abstract base class for builder objects"""
     def __init__(self, parser, debug=0 ):
         # This attribute is here for convenience
