@@ -216,13 +216,15 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.astcompiler.ast import Node
         from pyparser.astbuilder import AstBuilder
         from pypy.interpreter.pycode import PyCode
+        from pypy.interpreter.function import Function
 
         flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             builder = AstBuilder(self.parser, space=space)
             for rulename, buildfunc in self.additional_rules.iteritems():
-                builder.build_rules[rulename] = buildfunc
+                assert isinstance(buildfunc, Function)
+                builder.user_build_rules[rulename] = buildfunc
             self.parser.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
             encoding = builder.source_encoding
@@ -261,15 +263,29 @@ class PythonAstCompiler(PyCodeCompiler):
 def install_compiler_hook(space, w_callable):
 #       if not space.get( w_callable ):
 #           raise OperationError( space.w_TypeError( space.wrap( "must have a callable" ) )
-        space.default_compiler.w_compile_hook = w_callable
+    space.default_compiler.w_compile_hook = w_callable
 
 def insert_grammar_rule(space, w_rule, w_buildfuncs):
     """inserts new grammar rules to the default compiler"""
+    from pypy.interpreter import function
     rule = space.str_w(w_rule)
-    buildfuncs_w = w_buildfuncs.content
+    #buildfuncs_w = w_buildfuncs.content
     buildfuncs = {}
-    for w_name, w_func in buildfuncs_w.iteritems():
-        buildfuncs[space.str_w(w_name)] = space.unwrap(w_func)
+    #for w_name, w_func in buildfuncs_w.iteritems():
+    #    buildfuncs[space.str_w(w_name)] = space.unwrap(w_func)
+    w_iter = space.iter(w_buildfuncs)
+    while 1:
+        try:
+            w_key = space.next(w_iter)
+            w_func = space.getitem(w_buildfuncs, w_key)
+            buildfuncs[space.str_w(w_key)] = space.interp_w(function.Function, w_func)
+        except OperationError, e:
+            if not e.match(space, space.w_StopIteration):
+                raise
+            break
     space.default_compiler.additional_rules = buildfuncs
     space.default_compiler.parser.insert_rule(rule)
-
+    
+# XXX cyclic import
+#from pypy.interpreter.baseobjspace import ObjSpace
+#insert_grammar_rule.unwrap_spec = [ObjSpace, str, dict]

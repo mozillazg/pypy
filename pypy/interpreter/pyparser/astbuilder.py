@@ -11,7 +11,7 @@ from pypy.interpreter.astcompiler import ast, consts
 #import pypy.interpreter.pyparser.pytoken as tok
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.parsestring import parsestr
-
+from pypy.interpreter.gateway import interp2app
 from asthelper import *
 
 ## building functions helpers
@@ -393,10 +393,12 @@ def build_single_input(builder, nb):
     if l == 1 or l==2:
         atom0 = atoms[0]
         if isinstance(atom0, TokenObject) and atom0.name == builder.parser.tokens['NEWLINE']:
-            atom0 = ast.Pass(atom0.lineno)
+            #atom0 = ast.Pass(atom0.lineno) # break test_astcompiler
+            atom0 = ast.Stmt([], atom0.lineno) # break test_astbuilder
         elif not isinstance(atom0, ast.Stmt):
             atom0 = ast.Stmt([atom0], atom0.lineno)
-        builder.push(ast.Module(builder.wrap_none(), atom0, atom0.lineno))
+        doc = get_docstring(builder, atom0) # XXX consider docstring here ?
+        builder.push(ast.Module(doc, atom0, atom0.lineno))
     else:
         assert False, "Forbidden path"
 
@@ -1044,7 +1046,7 @@ ASTRULES_Template = {
     'eval_input' : build_eval_input,
     'with_stmt' : build_with_stmt,
     }
-
+    
 # Build two almost identical ASTRULES dictionaries
 #ASTRULES      = dict([(sym[key], value) for (key, value) in
 #                      ASTRULES_Template.iteritems()])
@@ -1057,8 +1059,7 @@ class AstBuilderContext(AbstractContext):
         #self.rule_stack = list(rule_stack)
         self.d = len(rule_stack)
 
-from pypy.interpreter.baseobjspace import Wrappable
-class AstBuilder(Wrappable, BaseGrammarBuilder):
+class AstBuilder(BaseGrammarBuilder):
     """A builder that directly produce the AST"""
 
     def __init__(self, parser, debug=0, space=None):
@@ -1067,8 +1068,8 @@ class AstBuilder(Wrappable, BaseGrammarBuilder):
         self.space = space
         self.source_encoding = None
         self.with_enabled = False
-        self.build_rules = dict(ASTRULES_Template)
-        
+        self.build_rules = ASTRULES_Template
+        self.user_build_rules = {}
 
     def enable_with(self):
         if self.with_enabled:
@@ -1108,17 +1109,19 @@ class AstBuilder(Wrappable, BaseGrammarBuilder):
         if rule.is_root():
             rulename = self.parser.sym_name[rule.codename]
             # builder_func = ASTRULES.get(rule.codename, None)
-            builder_func = self.build_rules.get(rulename, None)
+            w_func = self.user_build_rules.get(rulename, None)
             # user defined (applevel) function
-            if isinstance(builder_func, Function):
+            if w_func:
                 w_items = self.space.newlist( [self.space.wrap( it ) for it in get_atoms(self, 1)] )
-                w_astnode = self.space.call_function(builder_func, w_items)
+                w_astnode = self.space.call_function(w_func, w_items)
                 astnode = self.space.interp_w(ast.Node, w_astnode, can_be_None=False)
                 self.push(astnode)
-            elif builder_func:
-                builder_func(self, 1)
             else:
-                self.push_rule(rule.codename, 1, source)
+                builder_func = self.build_rules.get(rulename, None)
+                if builder_func:
+                    builder_func(self, 1)
+                else:
+                    self.push_rule(rule.codename, 1, source)
         else:
             self.push_rule(rule.codename, 1, source)
         return True
@@ -1129,16 +1132,19 @@ class AstBuilder(Wrappable, BaseGrammarBuilder):
         if rule.is_root():
             rulename = self.parser.sym_name[rule.codename]
             # builder_func = ASTRULES.get(rule.codename, None)
-            builder_func = self.build_rules.get(rulename, None)
-            if isinstance(builder_func, Function):
+            w_func = self.user_build_rules.get(rulename, None)
+            # user defined (applevel) function
+            if w_func:
                 w_items = self.space.newlist( [self.space.wrap( it ) for it in get_atoms(self, elts_number)] )
-                w_astnode = self.space.call_function(builder_func, w_items)
+                w_astnode = self.space.call_function(w_func, w_items)
                 astnode = self.space.interp_w(ast.Node, w_astnode, can_be_None=False)
                 self.push(astnode)
-            elif builder_func:
-                builder_func(self, elts_number)
             else:
-                self.push_rule(rule.codename, elts_number, source)
+                builder_func = self.build_rules.get(rulename, None)
+                if builder_func:
+                    builder_func(self, elts_number)
+                else:
+                    self.push_rule(rule.codename, elts_number, source)
         else:
             self.push_rule(rule.codename, elts_number, source)
         return True
@@ -1173,6 +1179,7 @@ class AstBuilder(Wrappable, BaseGrammarBuilder):
     def is_string_const(self, expr):
         if not isinstance(expr,ast.Const):
             return False
+        print 'IS STRING CONST', repr(expr.value)
         space = self.space
         return space.is_true(space.isinstance(expr.value,space.w_str))
 
