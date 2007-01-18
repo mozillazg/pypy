@@ -45,7 +45,7 @@ class SyntaxToTupleVisitor(AbstractSyntaxVisitor):
 
     def visit_tokennode( self, node ):
         space = self.space
-        tokens = space.parser.tokens
+        tokens = space.default_compiler.parser.tokens
         num = node.name
         lineno = node.lineno
         if node.value is not None:
@@ -53,7 +53,7 @@ class SyntaxToTupleVisitor(AbstractSyntaxVisitor):
         else:
             if num not in ( tokens['NEWLINE'], tokens['INDENT'],
                             tokens['DEDENT'], tokens['ENDMARKER'] ):
-                val = space.parser.tok_values[num]
+                val = space.default_compiler.parser.tok_rvalues[num]
             else:
                 val = node.value or ''
         if self.line_info:
@@ -148,11 +148,11 @@ STType.typedef = TypeDef("parser.st",
     totuple = interp2app(STType.descr_totuple),
 )
 
-def parse_python_source(space, source, goal):
-    builder = grammar.BaseGrammarBuilder(debug=False, rules=PYTHON_PARSER.rules)
+def parse_python_source(space, source, mode):
+    builder = grammar.BaseGrammarBuilder(debug=False, parser=PYTHON_PARSER)
     builder.space = space
     try:
-        PYTHON_PARSER.parse_source(source, goal, builder )
+        PYTHON_PARSER.parse_source(source, mode, builder )
         return builder.stack[-1]
     except SyntaxError, e:
         raise OperationError(space.w_SyntaxError,
@@ -160,14 +160,14 @@ def parse_python_source(space, source, goal):
 
 def suite( space, source ):
     # make the annotator life easier (don't use str.splitlines())
-    syntaxtree = parse_python_source( space, source, "file_input" )
+    syntaxtree = parse_python_source( space, source, "exec" )
     return space.wrap( STType(space, syntaxtree) )
 
 suite.unwrap_spec = [ObjSpace, str]
 
 def expr( space, source ):
     # make the annotator life easier (don't use str.splitlines())
-    syntaxtree = parse_python_source( space, source, "eval_input" )
+    syntaxtree = parse_python_source( space, source, "eval" )
     return space.wrap( STType(space, syntaxtree) )
 
 expr.unwrap_spec = [ObjSpace, str]
@@ -204,11 +204,8 @@ def sequence2st(space, w_sequence):
 
 
 def source2ast(space, source):
-    from pypy.interpreter.pyparser.pythonutil import AstBuilder, PYTHON_PARSER
-    builder = AstBuilder(parser=PYTHON_PARSER, space=space)
-    PYTHON_PARSER.parse_source(source, 'file_input', builder)
-    ast_tree = builder.rule_stack[-1]
-    return space.wrap(ast_tree)
+    from pypy.interpreter.pyparser.pythonutil import source2ast
+    return space.wrap(source2ast(source, 'exec', space=space))    
 source2ast.unwrap_spec = [ObjSpace, str]
 
 
