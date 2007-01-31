@@ -1256,3 +1256,30 @@ class TestVirtualizableImplicit(PortalTest):
         res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
         assert res == 20
 
+    def test_string_in_virtualizable(self):
+        class S(object):
+            def __init__(self, s):
+                self.s = s
+
+        class XY(object):
+            _virtualizable_ = True
+            
+            def __init__(self, x, s):
+                self.x = x
+                self.s = s
+        def g(xy):
+            xy.x = 19 + len(xy.s.s)
+   
+        def f(x, n):
+            hint(None, global_merge_point=True)
+            s = S('2'*n)
+            xy = XY(x, s)
+            g(xy)
+            return xy.s
+
+        def main(x, y):
+            return int(f(x, y).s)
+
+        res = self.timeshift_from_portal(main, f, [20, 3],
+                                         policy=StopAtXPolicy(g))
+        assert res == 222
