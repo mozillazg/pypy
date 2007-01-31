@@ -65,7 +65,7 @@ class __extend__(pyframe.PyFrame):
                 self.blockstack = []
             depth = stuff & sys.maxint
 
-            pycode = hint(pycode, deepfrozen=True)
+            pycode = hint(pycode, deepfreeze=True)
             self.pycode = pycode
             self.valuestackdepth = depth
 
@@ -255,7 +255,7 @@ class __extend__(pyframe.PyFrame):
     ### accessor functions ###
 
     def getcode(self):
-        return hint(self.pycode, deepfrozen=True)
+        return hint(hint(self.pycode, promote=True), deepfreeze=True)
 
     def getlocalvarname(self, index):
         return self.getcode().co_varnames[index]
