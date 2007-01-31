@@ -122,3 +122,19 @@ class TestException(TimeshiftingTests):
 
         self.timeshift_raises(ValueError,
                               ll_function, [-3], [0], policy=P_OOPSPEC)
+
+    def test_raise_or_return_virtual(self):
+        class A:
+            def __init__(self, n):
+                self.n = n
+        def g(x):
+            if x < 3:
+                raise ValueError
+            return A(x)
+        def ll_function(n):
+            a = g(n)
+            return a.n
+
+        res = self.timeshift(ll_function, [5], [], policy=P_NOVIRTUAL)
+        assert res == 5
+        self.check_insns(malloc=0)
