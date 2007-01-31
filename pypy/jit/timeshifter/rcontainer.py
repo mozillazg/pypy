@@ -358,7 +358,9 @@ class FieldDesc(object):
         elif isinstance(RESTYPE, lltype.Ptr):
             T = RESTYPE.TO
             if hasattr(T, '_hints'):
-                self.virtualizable = T._hints.get('virtualizable', False)
+                # xxx hack for simple recursive cases
+                if not PTRTYPE.TO._hints.get('virtualizable', False):
+                    self.virtualizable = T._hints.get('virtualizable', False)
             self.gcref = T._gckind == 'gc'
             if isinstance(T, lltype.ContainerType):
                 if not T._is_varsize() or hasattr(T, 'll_newlist'):
@@ -372,9 +374,9 @@ class FieldDesc(object):
             self.gv_default = RGenOp.constPrebuiltGlobal(self.RESTYPE._defl())
         if RESTYPE is lltype.Void and self.allow_void:
             pass   # no redboxcls at all
-        elif self.virtualizable:
-            self.structdesc = StructTypeDesc(hrtyper, T)
         else:
+            if self.virtualizable:
+                self.structdesc = StructTypeDesc(hrtyper, T)
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
             
         self.immutable = PTRTYPE.TO._hints.get('immutable', False)
@@ -383,8 +385,6 @@ class FieldDesc(object):
         return True
 
     def makedefaultbox(self):
-        if self.virtualizable:
-            return self.structdesc.factory()
         return self.redboxcls(self.kind, self.gv_default)
     
     def makebox(self, jitstate, gvar):

@@ -1615,7 +1615,7 @@ class RedVirtualizableStructRepr(RedStructRepr):
         typedesc = self.gettypedesc()
         for fielddesc, _ in typedesc.redirected_fielddescs:
             FIELDTYPE = fielddesc.RESTYPE
-            argtypes += getredrepr(FIELDTYPE).residual_argtypes()
+            argtypes.append(FIELDTYPE)
         return argtypes
 
     def residual_args_collector(self):
