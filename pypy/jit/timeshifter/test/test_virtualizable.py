@@ -1208,3 +1208,51 @@ class TestVirtualizableImplicit(PortalTest):
         assert res == 42
         self.check_oops(newlist=0)
 
+
+    def test_recursive(self):
+
+        class XY(object):
+            _virtualizable_ = True
+            
+            def __init__(self, x, back):
+                self.x = x
+                self.back = back
+   
+        def f(xy):
+            return xy.x
+
+        def main(x, y):
+            xyy = XY(y, None)
+            xy = XY(x, xyy)
+            return f(xy)
+
+        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
+        assert res == 20
+        self.check_insns(getfield=0)
+
+
+    def test_recursive_load_from(self):
+
+        class W(object):
+            def __init__(self, xy):
+                self.xy = xy
+
+        class XY(object):
+            _virtualizable_ = True
+            
+            def __init__(self, x, back):
+                self.x = x
+                self.back = back
+   
+        def f(w):
+            xy = w.xy
+            return xy.x
+
+        def main(x, y):
+            xyy = XY(y, None)
+            xy = XY(x, xyy)
+            return f(W(xy))
+
+        res = self.timeshift_from_portal(main, f, [20, 22], policy=P_OOPSPEC)
+        assert res == 20
+
