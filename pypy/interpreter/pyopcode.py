@@ -4,6 +4,7 @@ The rest, dealing with variables in optimized ways, is in
 pyfastscope.py and pynestedscope.py.
 """
 
+import sys
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import UnpackValueError, Wrappable
 from pypy.interpreter import gateway, function, eval
@@ -40,7 +41,7 @@ def binaryoperation(operationname):
     return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
 
 
-BYTECODE_TRACE_ENABLED = True   # see also pypy.module.pypyjit
+JITTING = False   # see also pypy.module.pypyjit
 
 
 class __extend__(pyframe.PyFrame):
@@ -49,12 +50,49 @@ class __extend__(pyframe.PyFrame):
     
     ### opcode dispatch ###
 
-    def dispatch(self, co_code, next_instr, ec):
+    def dispatch(self, pycode, next_instr, ec):
+        if JITTING:
+            hint(None, global_merge_point=True)
+
+            # *loads* of nonsense for now
+            stuff = self.valuestackdepth
+            if len(self.blockstack):
+                stuff |= (-sys.maxint-1)
+
+            stuff = hint(stuff, promote=True)
+            if stuff >= 0:
+                # blockdepth == 0, common case
+                self.blockstack = []
+            depth = stuff & sys.maxint
+
+            pycode = hint(pycode, deepfrozen=True)
+            self.pycode = pycode
+            self.valuestackdepth = depth
+
+            virtualstack_w = [None] * pycode.co_stacksize
+            while depth > 0:
+                depth -= 1
+                hint(depth, concrete=True)
+                virtualstack_w[depth] = self.valuestack_w[depth]
+            self.valuestack_w = virtualstack_w
+
+        # For the sequel, force 'next_instr' to be unsigned for performance
+        next_instr = r_uint(next_instr)
+        co_code = pycode.co_code
+
         while True:
+            hint(None, global_merge_point=True)
             try:
-                w_result = self.dispatch_bytecode(co_code, next_instr, ec)
-                rstack.resume_point("dispatch", self, co_code, ec,
-                                    returns=w_result)
+                self.last_instr = intmask(next_instr)
+                if not JITTING:
+                    ec.bytecode_trace(self)
+                    next_instr = r_uint(self.last_instr)
+                next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
+                #XXX
+                #rstack.resume_point("dispatch", self, co_code, ec,
+                #                    returns=w_result)
+            except Return:
+                w_result = self.popvalue()
                 return w_result
             except OperationError, operr:
                 next_instr = self.handle_operation_error(ec, operr)
@@ -78,6 +116,7 @@ class __extend__(pyframe.PyFrame):
                 next_instr = self.handle_asynchronous_error(ec,
                     self.space.w_RuntimeError,
                     self.space.wrap(msg))
+            next_instr = hint(next_instr, promote=True)
 
     def handle_asynchronous_error(self, ec, w_type, w_value=None):
         # catch asynchronous exceptions and turn them
@@ -92,8 +131,7 @@ class __extend__(pyframe.PyFrame):
         if attach_tb:
             pytraceback.record_application_traceback(
                 self.space, operr, self, self.last_instr)
-            if BYTECODE_TRACE_ENABLED:
-                ec.exception_trace(self, operr)
+            ec.exception_trace(self, operr)
 
         block = self.unrollstack(SApplicationException.kind)
         if block is None:
@@ -111,100 +149,93 @@ class __extend__(pyframe.PyFrame):
             return next_instr
 
     def dispatch_bytecode(self, co_code, next_instr, ec):
-        hint(None, global_merge_point=True)
-        next_instr = hint(r_uint(next_instr), promote=True)
         space = self.space
-        while True:
-            hint(None, global_merge_point=True)
-            self.last_instr = intmask(next_instr)
-            if BYTECODE_TRACE_ENABLED:
-                ec.bytecode_trace(self)
-                # For the sequel, force 'next_instr' to be unsigned for performance
-                next_instr = r_uint(self.last_instr)
-            opcode = ord(co_code[next_instr])
-            next_instr += 1
-            if space.config.objspace.logbytecodes:
-                space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
+        opcode = ord(co_code[next_instr])
+        next_instr += 1
+        if space.config.objspace.logbytecodes:
+            space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
 
-            if opcode >= HAVE_ARGUMENT:
-                lo = ord(co_code[next_instr])
-                hi = ord(co_code[next_instr+1])
-                next_instr += 2
-                oparg = (hi << 8) | lo
-            else:
-                oparg = 0
+        if opcode >= HAVE_ARGUMENT:
+            lo = ord(co_code[next_instr])
+            hi = ord(co_code[next_instr+1])
+            next_instr += 2
+            oparg = (hi << 8) | lo
+        else:
+            oparg = 0
+        hint(opcode, concrete=True)
+        hint(oparg, concrete=True)
+
+        while opcode == opcodedesc.EXTENDED_ARG.index:
+            opcode = ord(co_code[next_instr])
+            if opcode < HAVE_ARGUMENT:
+                raise BytecodeCorruption
+            lo = ord(co_code[next_instr+1])
+            hi = ord(co_code[next_instr+2])
+            next_instr += 3
+            oparg = (oparg << 16) | (hi << 8) | lo
             hint(opcode, concrete=True)
             hint(oparg, concrete=True)
 
-            while opcode == opcodedesc.EXTENDED_ARG.index:
-                opcode = ord(co_code[next_instr])
-                if opcode < HAVE_ARGUMENT:
-                    raise BytecodeCorruption
-                lo = ord(co_code[next_instr+1])
-                hi = ord(co_code[next_instr+2])
-                next_instr += 3
-                oparg = (oparg << 16) | (hi << 8) | lo
-                hint(opcode, concrete=True)
-                hint(oparg, concrete=True)
+        if opcode == opcodedesc.RETURN_VALUE.index:
+            w_returnvalue = self.popvalue()
+            block = self.unrollstack(SReturnValue.kind)
+            if block is None:
+                self.pushvalue(w_returnvalue)   # XXX ping pong
+                raise Return
+            else:
+                unroller = SReturnValue(w_returnvalue)
+                next_instr = block.handle(self, unroller)
+                #next_instr = hint(next_instr, promote=True)
+                return next_instr    # now inside a 'finally' block
 
-            if opcode == opcodedesc.RETURN_VALUE.index:
-                w_returnvalue = self.popvalue()
-                block = self.unrollstack(SReturnValue.kind)
+        if opcode == opcodedesc.YIELD_VALUE.index:
+            #self.last_instr = intmask(next_instr - 1) XXX clean up!
+            raise Return
+
+        if opcode == opcodedesc.END_FINALLY.index:
+            unroller = self.end_finally()
+            if isinstance(unroller, SuspendedUnroller):
+                # go on unrolling the stack
+                block = self.unrollstack(unroller.kind)
                 if block is None:
-                    return w_returnvalue
+                    w_result = unroller.nomoreblocks()
+                    self.pushvalue(w_result)
+                    raise Return
                 else:
-                    unroller = SReturnValue(w_returnvalue)
                     next_instr = block.handle(self, unroller)
-                    next_instr = hint(next_instr, promote=True)
-                    continue    # now inside a 'finally' block
+                    #next_instr = hint(next_instr, promote=True)
+            return next_instr
 
-            if opcode == opcodedesc.YIELD_VALUE.index:
-                #self.last_instr = intmask(next_instr - 1) XXX clean up!
-                w_yieldvalue = self.popvalue()
-                return w_yieldvalue
+        if we_are_translated():
+            for opdesc in unrolling_opcode_descs:
+                # static checks to skip this whole case if necessary
+                if not opdesc.is_enabled(space):
+                    continue
+                if not hasattr(pyframe.PyFrame, opdesc.methodname):
+                    continue   # e.g. for JUMP_FORWARD, implemented above
 
-            if opcode == opcodedesc.END_FINALLY.index:
-                unroller = self.end_finally()
-                if isinstance(unroller, SuspendedUnroller):
-                    # go on unrolling the stack
-                    block = self.unrollstack(unroller.kind)
-                    if block is None:
-                        return unroller.nomoreblocks()
-                    else:
-                        next_instr = block.handle(self, unroller)
-                        next_instr = hint(next_instr, promote=True)
-                continue
+                if opcode == opdesc.index:
+                    # dispatch to the opcode method
+                    meth = getattr(self, opdesc.methodname)
+                    res = meth(oparg, next_instr)
+                    if opdesc.index == opcodedesc.CALL_FUNCTION.index:
+                        rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
+                    # !! warning, for the annotator the next line is not
+                    # comparing an int and None - you can't do that.
+                    # Instead, it's constant-folded to either True or False
+                    if res is not None:
+                        next_instr = res
+                        #next_instr = hint(next_instr, promote=True)
+                    break
+            else:
+                self.MISSING_OPCODE(oparg, next_instr)
 
-            if we_are_translated():
-                for opdesc in unrolling_opcode_descs:
-                    # static checks to skip this whole case if necessary
-                    if not opdesc.is_enabled(space):
-                        continue
-                    if not hasattr(pyframe.PyFrame, opdesc.methodname):
-                        continue   # e.g. for JUMP_FORWARD, implemented above
-
-                    if opcode == opdesc.index:
-                        # dispatch to the opcode method
-                        meth = getattr(self, opdesc.methodname)
-                        res = meth(oparg, next_instr)
-                        if opdesc.index == opcodedesc.CALL_FUNCTION.index:
-                            rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
-                        # !! warning, for the annotator the next line is not
-                        # comparing an int and None - you can't do that.
-                        # Instead, it's constant-folded to either True or False
-                        if res is not None:
-                            next_instr = res
-                            next_instr = hint(next_instr, promote=True)
-                        break
-                else:
-                    self.MISSING_OPCODE(oparg, next_instr)
-
-            else:  # when we are not translated, a list lookup is much faster
-                methodname = opcode_method_names[opcode]
-                res = getattr(self, methodname)(oparg, next_instr)
-                if res is not None:
-                    next_instr = res
-                    next_instr = hint(next_instr, promote=True)
+        else:  # when we are not translated, a list lookup is much faster
+            methodname = opcode_method_names[opcode]
+            res = getattr(self, methodname)(oparg, next_instr)
+            if res is not None:
+                next_instr = res
+        return next_instr
 
     def unrollstack(self, unroller_kind):
         while len(self.blockstack) > 0:
@@ -223,17 +254,20 @@ class __extend__(pyframe.PyFrame):
 
     ### accessor functions ###
 
+    def getcode(self):
+        return hint(self.pycode, deepfrozen=True)
+
     def getlocalvarname(self, index):
-        return self.pycode.co_varnames[index]
+        return self.getcode().co_varnames[index]
 
     def getconstant_w(self, index):
-        return self.pycode.co_consts_w[index]
+        return self.getcode().co_consts_w[index]
 
     def getname_u(self, index):
-        return self.space.str_w(self.pycode.co_names_w[index])
+        return self.space.str_w(self.getcode().co_names_w[index])
 
     def getname_w(self, index):
-        return self.pycode.co_names_w[index]
+        return self.getcode().co_names_w[index]
 
 
     ################################################################
@@ -912,6 +946,9 @@ class __extend__(pyframe.PyFrame):
 class Reraise(Exception):
     """Signal an application-level OperationError that should not grow
     a new traceback entry nor trigger the trace hook."""
+
+class Return(Exception):
+    """Obscure."""
 
 class BytecodeCorruption(Exception):
     """Detected bytecode corruption.  Never caught; it's an error."""

@@ -73,6 +73,8 @@ class Frame(Wrappable):
     """A frame is an environment supporting the execution of a code object.
     Abstract base class."""
 
+    _virtualizable_ = True
+
     def __init__(self, space, w_globals=None, numlocals=-1):
         self.space      = space
         self.w_globals  = w_globals  # wrapped dict of globals

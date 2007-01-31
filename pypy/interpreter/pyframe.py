@@ -88,12 +88,12 @@ class PyFrame(eval.Frame):
         executioncontext.enter(self)
         try:
             executioncontext.call_trace(self)
-            code = self.pycode.co_code
             # Execution starts just after the last_instr.  Initially,
             # last_instr is -1.  After a generator suspends it points to
             # the YIELD_VALUE instruction.
             next_instr = self.last_instr + 1
-            w_exitvalue = self.dispatch(code, next_instr, executioncontext)
+            w_exitvalue = self.dispatch(self.pycode, next_instr,
+                                        executioncontext)
             rstack.resume_point("execute_frame", self, executioncontext, returns=w_exitvalue)
             executioncontext.return_trace(self, w_exitvalue)
             # on exit, we try to release self.last_exception -- breaks an
