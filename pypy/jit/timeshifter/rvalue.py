@@ -309,6 +309,9 @@ class FrozenValue(object):
     def is_constant_equal(self, box):
         return False
 
+    def is_constant_nullptr(self):
+        return False
+
 
 class FrozenConst(FrozenValue):
 
@@ -403,6 +406,9 @@ class FrozenPtrConst(FrozenConst):
                 self.gv_const.revealconst(llmemory.Address) ==
                 box.genvar.revealconst(llmemory.Address))
 
+    def is_constant_nullptr(self):
+        return not self.gv_const.revealconst(llmemory.Address)
+
     def exactmatch(self, box, outgoingvarboxes, memo):
         assert isinstance(box, PtrRedBox)
         memo.partialdatamatch[box] = None     # could do better
@@ -410,7 +416,7 @@ class FrozenPtrConst(FrozenConst):
         if not memo.force_merge and not match:
             from pypy.jit.timeshifter.rcontainer import VirtualContainer
             if isinstance(box.content, VirtualContainer):
-                raise DontMerge
+                raise DontMerge   # XXX recursive data structures?
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
@@ -426,7 +432,7 @@ class FrozenPtrVar(FrozenVar):
         if not memo.force_merge and not match:
             from pypy.jit.timeshifter.rcontainer import VirtualContainer
             if isinstance(box.content, VirtualContainer):
-                raise DontMerge
+                raise DontMerge   # XXX recursive data structures?
         return match
 
     def unfreeze(self, incomingvarboxes, memo):
@@ -454,7 +460,7 @@ class FrozenPtrVarWithPartialData(FrozenPtrVar):
         if not memo.force_merge and not match:
             from pypy.jit.timeshifter.rcontainer import VirtualContainer
             if isinstance(box.content, VirtualContainer):
-                raise DontMerge
+                raise DontMerge   # XXX recursive data structures?
         return match
 
 

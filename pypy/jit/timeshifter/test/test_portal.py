@@ -2,7 +2,7 @@ from pypy import conftest
 from pypy.translator.translator import graphof
 from pypy.jit.timeshifter.test.test_timeshift import hannotate, getargtypes
 from pypy.jit.timeshifter.hrtyper import HintRTyper
-from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL
+from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL, StopAtXPolicy
 from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.objspace.flow.model import checkgraph, summary
@@ -338,11 +338,13 @@ class TestPortal(PortalTest):
             hint(o.__class__, promote=True)
             return o.double().get()
 
-        res = self.timeshift_from_portal(ll_function, ll_function, [5], policy=P_NOVIRTUAL)
+        res = self.timeshift_from_portal(ll_function, ll_function, [5],
+                                         policy=StopAtXPolicy(ll_make))
         assert res == 10
         self.check_insns(indirect_call=0, malloc=0)
 
-        res = self.timeshift_from_portal(ll_function, ll_function, [0], policy=P_NOVIRTUAL)
+        res = self.timeshift_from_portal(ll_function, ll_function, [0],
+                                         policy=StopAtXPolicy(ll_make))
         assert res == ord('2')
         self.check_insns(indirect_call=0, malloc=0)
 

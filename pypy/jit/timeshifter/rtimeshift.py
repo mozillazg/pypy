@@ -761,6 +761,14 @@ class FrozenJITState(object):
     #fz_virtualizables = ...  set by freeze()
 
     def exactmatch(self, jitstate, outgoingvarboxes, memo):
+        if not memo.force_merge:
+            null1 = self.fz_exc_type_box.is_constant_nullptr()
+            box = jitstate.exc_type_box
+            null2 = (box.is_constant() and
+                     not rvalue.ll_getvalue(box, llmemory.Address))
+            if null1 != null2:
+                raise rvalue.DontMerge # a jit-with-exc. and a jit-without-exc.
+
         fullmatch = True
         if not self.fz_frame.exactmatch(jitstate.frame,
                                         outgoingvarboxes,

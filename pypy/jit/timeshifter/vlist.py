@@ -3,6 +3,9 @@ from pypy.jit.timeshifter.rcontainer import VirtualContainer, FrozenContainer
 from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, rvirtualizable
 
+from pypy.rpython.lltypesystem import lloperation
+debug_print = lloperation.llop.debug_print
+
 
 class ItemDesc(object):
     __metaclass__ = cachedtype
@@ -160,6 +163,7 @@ class VirtualList(VirtualContainer):
         boxes = self.item_boxes
         self.item_boxes = None
 
+        debug_print(lltype.Void, "FORCE LIST (%d items)" % (len(boxes),))
         args_gv = [builder.rgenop.genconst(len(boxes))]
         gv_list = builder.genop_call(typedesc.tok_ll_newlist,
                                      typedesc.gv_ll_newlist,
