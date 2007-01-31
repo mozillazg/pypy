@@ -81,16 +81,22 @@ class StructTypeDesc(object):
         self.immutable = TYPE._hints.get('immutable', False)
         self.noidentity = TYPE._hints.get('noidentity', False)
 
-        if not TYPE._is_varsize():
-            self.alloctoken = RGenOp.allocToken(TYPE)
+        fixsize = not TYPE._is_varsize()
 
+        if fixsize:
+            self.alloctoken = RGenOp.allocToken(TYPE)
+            
         self.null = self.PTRTYPE._defl()
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
 
         self._compute_fielddescs(hrtyper)
-        self._define_devirtualize()
+
         if self.immutable and self.noidentity:
             self._define_materialize()
+
+        if fixsize:
+            self._define_devirtualize()
+
         
     def _compute_fielddescs(self, hrtyper):
         RGenOp = hrtyper.RGenOp
