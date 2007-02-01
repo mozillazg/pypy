@@ -275,3 +275,27 @@ class TestPromotion(TimeshiftingTests):
         assert res == 6
         self.check_oops(**{'newlist': 1, 'list.len': 1})
             
+    def test_promote_bug_1(self):
+        def ll_function(x, y, z):
+            a = 17
+            while True:
+                hint(None, global_merge_point=True)
+                y += 1
+
+                if a != 17:
+                    z = -z
+                
+                if z > 0:
+                    b = 1 - z
+                else:
+                    b = 2
+                y = -y
+                if b == 2:
+                    hint(z, promote=True)
+                    return y + z + a
+                a += z
+
+        assert ll_function(1, 5, 8) == 22
+        res = self.timeshift(ll_function, [1, 5, 8], [],
+                             policy=P_NOVIRTUAL)
+        assert res == 22

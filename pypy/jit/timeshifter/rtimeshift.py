@@ -226,13 +226,16 @@ def start_new_block(states_dic, jitstate, key, global_resumer, index=-1):
         states_dic[key][index] = (frozen, newblock)
         
     if global_resumer is not None and global_resumer is not return_marker:
+        assert jitstate.resuming is None
         jitstate.curbuilder.log('start_new_block %s' % (key,))
         greens_gv = jitstate.greens
         rgenop = jitstate.curbuilder.rgenop
         node = PromotionPathRoot(greens_gv, rgenop,
                                  frozen, newblock,
                                  global_resumer)
-        jitstate.frame.dispatchqueue.mergecounter = 0
+        dispatchqueue = jitstate.frame.dispatchqueue
+        assert dispatchqueue.split_chain is None
+        dispatchqueue.clearlocalcaches()
         jitstate.promotion_path = PromotionPathMergesToSee(node, 0)
         #debug_print(lltype.Void, "PROMOTION ROOT")
 start_new_block._annspecialcase_ = "specialize:arglltype(2)"
@@ -701,6 +704,9 @@ class BaseDispatchQueue(object):
         self.split_chain = None
         self.global_merge_chain = None
         self.return_chain = None
+        self.clearlocalcaches()
+
+    def clearlocalcaches(self):
         self.mergecounter = 0
 
     def clear(self):
@@ -711,8 +717,8 @@ def build_dispatch_subclass(attrnames):
         return BaseDispatchQueue
     attrnames = unrolling_iterable(attrnames)
     class DispatchQueue(BaseDispatchQueue):
-        def __init__(self):
-            BaseDispatchQueue.__init__(self)
+        def clearlocalcaches(self):
+            BaseDispatchQueue.clearlocalcaches(self)
             for name in attrnames:
                 setattr(self, name, {})     # the new dicts have various types!
     return DispatchQueue
