@@ -178,7 +178,7 @@ class StructTypeDesc(object):
         vstruct = self.VirtualStructCls(self)
         vstruct.content_boxes = [desc.makedefaultbox()
                                  for desc in self.fielddescs]
-        box = rvalue.PtrRedBox(self.innermostdesc.ptrkind)
+        box = rvalue.PtrRedBox(self.innermostdesc.ptrkind, known_nonzero=True)
         box.content = vstruct
         vstruct.ownbox = box
         return box
@@ -191,7 +191,8 @@ def create_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
     alloctoken = contdesc.varsizealloctoken
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
-    return rvalue.PtrRedBox(contdesc.ptrkind, genvar)
+    # XXX MemoryError checking
+    return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
 
 
 class VirtualizableStructTypeDesc(StructTypeDesc):
@@ -353,6 +354,7 @@ class FieldDesc(object):
     gv_default = None
     canbevirtual = False
     gcref = False
+    fieldnonnull = False
 
     def __init__(self, hrtyper, PTRTYPE, RESTYPE):
         RGenOp = hrtyper.RGenOp
@@ -361,6 +363,7 @@ class FieldDesc(object):
         if isinstance(RESTYPE, lltype.ContainerType):
             T = RESTYPE
             RESTYPE = lltype.Ptr(RESTYPE)
+            self.fieldnonnull = True
         elif isinstance(RESTYPE, lltype.Ptr):
             T = RESTYPE.TO
             if hasattr(T, '_hints'):
@@ -373,6 +376,7 @@ class FieldDesc(object):
                     self.canbevirtual = True
             else:
                 T = None
+            self.fieldnonnull = PTRTYPE.TO._hints.get('shouldntbenull', False)
         self.RESTYPE = RESTYPE
         self.ptrkind = RGenOp.kindToken(PTRTYPE)
         self.kind = RGenOp.kindToken(RESTYPE)
@@ -400,7 +404,11 @@ class FieldDesc(object):
             assert isinstance(content, VirtualizableStruct)
             content.load_from(jitstate, gvar)
             return structbox
-        return self.redboxcls(self.kind, gvar)
+        box = self.redboxcls(self.kind, gvar)
+        if self.fieldnonnull:
+            assert isinstance(box, rvalue.PtrRedBox)
+            box.known_nonzero = True
+        return box
 
     
 class NamedFieldDesc(FieldDesc):
@@ -518,7 +526,7 @@ class VirtualStruct(VirtualContainer):
 
     def setforced(self, gv_forced):
         self.content_boxes = None
-        self.ownbox.genvar = gv_forced
+        self.ownbox.setgenvar_hint(gv_forced, known_nonzero=True)
         self.ownbox.content = None
         
     def force_runtime_container(self, jitstate):
@@ -532,7 +540,7 @@ class VirtualStruct(VirtualContainer):
                     break
             else:
                 gv = typedesc.materialize(builder.rgenop, boxes)
-                self.ownbox.genvar = gv
+                self.ownbox.setgenvar_hint(gv, known_nonzero=True)
                 self.ownbox.content = None
                 return
         debug_print(lltype.Void, "FORCE CONTAINER: "+ typedesc.TYPE._name)
@@ -657,7 +665,10 @@ class VirtualizableStruct(VirtualStruct):
             assert isinstance(typedesc, VirtualizableStructTypeDesc)
             builder = jitstate.curbuilder
             gv_outside = builder.genop_malloc_fixedsize(typedesc.alloctoken)
-            self.content_boxes[-1].genvar = gv_outside
+            outsidebox = rvalue.PtrRedBox(self.content_boxes[-1].kind,
+                                          gv_outside,
+                                          known_nonzero = True)
+            self.content_boxes[-1] = outsidebox
             jitstate.add_virtualizable(self.ownbox)
             access_token = typedesc.access_desc.fieldtoken            
             gv_access_null = typedesc.access_desc.gv_default
@@ -677,8 +688,11 @@ class VirtualizableStruct(VirtualStruct):
     def load_from(self, jitstate, gv_outside):
         typedesc = self.typedesc
         assert isinstance(typedesc, VirtualizableStructTypeDesc)
+        # XXX missing check for gv_outside being NULL
         boxes = self.content_boxes
-        boxes[-1].genvar = gv_outside
+        boxes[-1] = rvalue.PtrRedBox(boxes[-1].kind,
+                                     gv_outside,
+                                     known_nonzero=True)
         builder = jitstate.curbuilder
         builder.genop_call(typedesc.access_is_null_token,
                            typedesc.gv_access_is_null_ptr,

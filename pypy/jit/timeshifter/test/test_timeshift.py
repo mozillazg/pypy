@@ -785,14 +785,14 @@ class TestTimeshift(TimeshiftingTests):
          res = self.timeshift(ll_function, [21, -21, 0], [],
                               policy=P_NOVIRTUAL)
          assert res == 42
-         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+         self.check_insns({'malloc_varsize': 1,
                            'setarrayitem': 2, 'getarrayitem': 1,
                            'getarraysize': 1, 'int_mul': 1})
 
          res = self.timeshift(ll_function, [21, -21, 1], [],
                               policy=P_NOVIRTUAL)
          assert res == -42
-         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+         self.check_insns({'malloc_varsize': 1,
                            'setarrayitem': 2, 'getarrayitem': 1,
                            'getarraysize': 1, 'int_mul': 1})
 
@@ -808,7 +808,7 @@ class TestTimeshift(TimeshiftingTests):
          res = self.timeshift(ll_function, [21, -21, 0], [],
                               policy=P_NOVIRTUAL)
          assert res == 42
-         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+         self.check_insns({'malloc_varsize': 1,
                            'getarraysubstruct': 3,
                            'setfield': 2, 'getfield': 1,
                            'getarraysize': 1, 'int_mul': 1})
@@ -816,7 +816,7 @@ class TestTimeshift(TimeshiftingTests):
          res = self.timeshift(ll_function, [21, -21, 1], [],
                               policy=P_NOVIRTUAL)
          assert res == -42
-         self.check_insns({'malloc_varsize': 1, 'ptr_iszero': 1,
+         self.check_insns({'malloc_varsize': 1,
                            'getarraysubstruct': 3,
                            'setfield': 2, 'getfield': 1,
                            'getarraysize': 1, 'int_mul': 1})
@@ -1292,3 +1292,59 @@ class TestTimeshift(TimeshiftingTests):
 
         res = self.timeshift(f, [3], [], policy=P_NOVIRTUAL)
         assert res == '2'
+
+    def test_known_nonzero(self):
+        S = lltype.GcStruct('s', ('x', lltype.Signed))
+        global_s = lltype.malloc(S, immortal=True)
+        global_s.x = 100
+
+        def h():
+            s = lltype.malloc(S)
+            s.x = 50
+            return s
+        def g(s, y):
+            if s:
+                return s.x * 5
+            else:
+                return -12 + y
+        def f(x, y):
+            x = hint(x, concrete=True)
+            if x == 1:
+                return g(lltype.nullptr(S), y)
+            elif x == 2:
+                return g(global_s, y)
+            elif x == 3:
+                s = lltype.malloc(S)
+                s.x = y
+                return g(s, y)
+            elif x == 4:
+                s = h()
+                return g(s, y)
+            else:
+                s = h()
+                if s:
+                    return g(s, y)
+                else:
+                    return 0
+
+        P = StopAtXPolicy(h)
+
+        res = self.timeshift(f, [1, 10], [0], policy=P)
+        assert res == -2
+        self.check_insns(int_mul=0, int_add=1)
+
+        res = self.timeshift(f, [2, 10], [0], policy=P)
+        assert res == 500
+        self.check_insns(int_mul=1, int_add=0)
+
+        res = self.timeshift(f, [3, 10], [0], policy=P)
+        assert res == 50
+        self.check_insns(int_mul=1, int_add=0)
+
+        res = self.timeshift(f, [4, 10], [0], policy=P)
+        assert res == 250
+        self.check_insns(int_mul=1, int_add=1)
+
+        res = self.timeshift(f, [5, 10], [0], policy=P)
+        assert res == 250
+        self.check_insns(int_mul=1, int_add=0)

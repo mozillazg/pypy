@@ -302,7 +302,6 @@ class TestPromotion(TimeshiftingTests):
         assert res == 22
 
     def test_raise_result_mixup(self):
-        py.test.skip("WIP")
         def w(x):
             pass
         class E(Exception):
