@@ -75,7 +75,7 @@ class ListTypeDesc(object):
 
     def factory(self, length, itembox):
         vlist = VirtualList(self, length, itembox)
-        box = rvalue.PtrRedBox(self.ptrkind)
+        box = rvalue.PtrRedBox(self.ptrkind, known_nonzero=True)
         box.content = vlist
         vlist.ownbox = box
         return box
@@ -154,7 +154,7 @@ class VirtualList(VirtualContainer):
 
     def setforced(self, gv_forced):
         self.item_boxes = None
-        self.ownbox.genvar = gv_forced
+        self.ownbox.setgenvar_hint(gv_forced, known_nonzero=True)
         self.ownbox.content = None        
 
     def force_runtime_container(self, jitstate):

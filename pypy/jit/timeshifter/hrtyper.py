@@ -1049,25 +1049,51 @@ class HintRTyper(RPythonTyper):
                                               [v_jitstate,      var  ],
                                               self.s_ConstOrVar)
 
-    def translate_op_split(self, hop):
+    def translate_op_split(self, hop, splitfn=rtimeshift.split,
+                                      reverse=False):
+        if splitfn is rtimeshift.split:
+            nb_fixed_args = 2
+        else:
+            nb_fixed_args = 3
+
         r_switch = self.getredrepr(lltype.Bool)
-        GREENS = [v.concretetype for v in hop.args_v[2:]]
-        greens_r = [self.getgreenrepr(TYPE) for TYPE in GREENS]
-        vlist = hop.inputargs(r_switch, lltype.Signed, *greens_r)
+        GREENS = [v.concretetype for v in hop.args_v[nb_fixed_args:]]
+        extra_r = [self.getgreenrepr(TYPE) for TYPE in GREENS]
+        if splitfn is not rtimeshift.split:
+            TYPE = originalconcretetype(hop.args_s[2])
+            r_ptrbox = self.getredrepr(TYPE)
+            extra_r.insert(0, r_ptrbox)
+        vlist = hop.inputargs(r_switch, lltype.Signed, *extra_r)
 
         v_jitstate = hop.llops.getjitstate()
         v_switch = vlist[0]
         c_resumepoint = vlist[1]
-        greens_v = list(self.wrap_green_vars(hop.llops, vlist[2:]))
+        greens_v = list(self.wrap_green_vars(hop.llops,
+                                             vlist[nb_fixed_args:]))
 
         s_Int = annmodel.SomeInteger(nonneg=True)
         args_s = [self.s_JITState, self.s_RedBox, s_Int]
-        args_s += [self.s_ConstOrVar] * len(greens_v)
         args_v = [v_jitstate, v_switch, c_resumepoint]
+
+        if splitfn is not rtimeshift.split:
+            v_ptrbox = vlist[2]
+            c_reverse = hop.inputconst(lltype.Bool, reverse)
+            args_s += [self.s_PtrRedBox,                 annmodel.s_Bool]
+            args_v += [hop.llops.as_ptrredbox(v_ptrbox), c_reverse      ]
+
+        args_s += [self.s_ConstOrVar] * len(greens_v)
         args_v += greens_v
-        return hop.llops.genmixlevelhelpercall(rtimeshift.split,
+        return hop.llops.genmixlevelhelpercall(splitfn,
                                                args_s, args_v,
                                                annmodel.SomeBool())
+
+    def translate_op_split_ptr_nonzero(self, hop):
+        return self.translate_op_split(hop, rtimeshift.split_ptr_nonzero,
+                                            reverse=False)
+
+    def translate_op_split_ptr_iszero(self, hop):
+        return self.translate_op_split(hop, rtimeshift.split_ptr_nonzero,
+                                            reverse=True)
 
     def translate_op_collect_split(self, hop):
         GREENS = [v.concretetype for v in hop.args_v[1:]]
@@ -1590,8 +1616,7 @@ class RedVirtualizableStructRepr(RedStructRepr):
                                     typedesc.redirected_fielddescs])
         TYPE = self.original_concretetype
         kind = self.hrtyper.RGenOp.kindToken(TYPE)
-        boxcls = rvalue.ll_redboxcls(TYPE)
-        
+
         def make_arg_redbox(jitstate, inputargs_gv, i):
             box = typedesc.factory()
             jitstate.add_virtualizable(box)
@@ -1601,9 +1626,12 @@ class RedVirtualizableStructRepr(RedStructRepr):
             gv_outside = inputargs_gv[i]
             i += 1
             for name, j in names:
-                content_boxes[j].genvar = inputargs_gv[i]
+                content_boxes[j] = rvalue.PtrRedBox(content_boxes[j].kind,
+                                                    inputargs_gv[i])
                 i += 1
-            content_boxes[-1].genvar = gv_outside
+            content_boxes[-1] = rvalue.PtrRedBox(content_boxes[-1].kind,
+                                                 gv_outside,
+                                                 known_nonzero = True)
             return box
         
         self.make_arg_redbox = make_arg_redbox

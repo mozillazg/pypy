@@ -99,7 +99,8 @@ def ll_genmalloc_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
     alloctoken = contdesc.varsizealloctoken
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
-    return rvalue.PtrRedBox(contdesc.ptrkind, genvar)
+    # XXX MemoryError handling
+    return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
 
 def ll_gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
@@ -167,14 +168,14 @@ def ll_genptrnonzero(jitstate, argbox, reverse):
         addr = rvalue.ll_getvalue(argbox, llmemory.Address)
         return rvalue.ll_fromvalue(jitstate, bool(addr) ^ reverse)
     builder = jitstate.curbuilder
-    if argbox.content is None:
+    if argbox.known_nonzero:
+        gv_res = builder.rgenop.genconst(True ^ reverse)
+    else:
         gv_addr = argbox.getgenvar(jitstate)
         if reverse:
             gv_res = builder.genop_ptr_iszero(argbox.kind, gv_addr)
         else:
             gv_res = builder.genop_ptr_nonzero(argbox.kind, gv_addr)
-    else:
-        gv_res = builder.rgenop.genconst(True ^ reverse)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
 
 def ll_genptreq(jitstate, argbox0, argbox1, reverse):
@@ -201,6 +202,7 @@ def enter_next_block(jitstate, incoming):
     linkargs = []
     kinds = []
     for redbox in incoming:
+        assert not redbox.genvar.is_const
         linkargs.append(redbox.genvar)
         kinds.append(redbox.kind)
     newblock = jitstate.curbuilder.enter_next_block(kinds, linkargs)
@@ -270,9 +272,10 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
         # redboxes from outgoingvarboxes, by making them variables.
         # Then we make a new block based on this new state.
         cleanup_partial_data(memo.partialdatamatch)
+        forget_nonzeroness = memo.forget_nonzeroness
         replace_memo = rvalue.copy_memo()
         for box in outgoingvarboxes:
-            box.forcevar(jitstate, replace_memo)
+            box.forcevar(jitstate, replace_memo, box in forget_nonzeroness)
         if replace_memo.boxes:
             jitstate.replace(replace_memo)
         start_new_block(states_dic, jitstate, key, global_resumer, index=i)
@@ -323,6 +326,7 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
     if exitgvar.is_const:
         return exitgvar.revealconst(lltype.Bool)
     else:
+        # XXX call another function with list(greens_gv) instead
         resuming = jitstate.resuming
         if resuming is not None and resuming.mergesleft == 0:
             node = resuming.path.pop()
@@ -330,7 +334,41 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
             return node.answer
         false_gv = jitstate.get_locals_gv() # alive gvs on the false path
         later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
-        jitstate2 = jitstate.split(later_builder, resumepoint, list(greens_gv))
+        memo = rvalue.copy_memo()
+        jitstate2 = jitstate.split(later_builder, resumepoint,
+                                   list(greens_gv), memo)
+        if resuming is None:
+            node = jitstate.promotion_path
+            jitstate2.promotion_path = PromotionPathNo(node)
+            jitstate .promotion_path = PromotionPathYes(node)
+        return True
+
+def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
+                      ptrbox, reverse, *greens_gv):
+    exitgvar = switchredbox.getgenvar(jitstate)
+    if exitgvar.is_const:
+        return exitgvar.revealconst(lltype.Bool)
+    else:
+        # XXX call another function with list(greens_gv) instead
+        resuming = jitstate.resuming
+        if resuming is not None and resuming.mergesleft == 0:
+            node = resuming.path.pop()
+            assert isinstance(node, PromotionPathSplit)
+            ptrbox.learn_nonzeroness(jitstate,
+                                     nonzeroness = node.answer ^ reverse)
+            return node.answer
+        false_gv = jitstate.get_locals_gv() # alive gvs on the false path
+        later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
+        memo = rvalue.copy_memo()
+        jitstate2 = jitstate.split(later_builder, resumepoint,
+                                   list(greens_gv), memo)
+        ptrbox.learn_nonzeroness(jitstate, nonzeroness = True ^ reverse)
+        try:
+            copybox = memo.boxes[ptrbox]
+        except KeyError:
+            pass
+        else:
+            copybox.learn_nonzeroness(jitstate2, nonzeroness = reverse)
         if resuming is None:
             node = jitstate.promotion_path
             jitstate2.promotion_path = PromotionPathNo(node)
@@ -541,6 +579,7 @@ class PromotionPathRoot(AbstractPromotionPath):
         kinds = [box.kind for box in incoming]
         builder, vars_gv = self.rgenop.replay(self.replayableblock, kinds)
         for i in range(len(incoming)):
+            assert incoming[i].genvar is None
             incoming[i].genvar = vars_gv[i]
         jitstate.curbuilder = builder
         jitstate.greens = self.greens_gv
@@ -682,15 +721,16 @@ def ll_promote(jitstate, promotebox, promotiondesc):
             if len(resuming.path) == 0:
                 incoming_gv = pm.incoming_gv
                 for i in range(len(incoming)):
+                    assert not incoming[i].genvar.is_const
                     incoming[i].genvar = incoming_gv[i]
                 flexswitch = pm.flexswitch
-                promotebox.genvar = promotenode.gv_value
+                promotebox.setgenvar(promotenode.gv_value)
                 jitstate.resuming = None
                 node = PromotionPathMergesToSee(promotenode, 0)
                 jitstate.promotion_path = node
             else:
                 resuming.merges_to_see()
-                promotebox.genvar = promotenode.gv_value
+                promotebox.setgenvar(promotenode.gv_value)
                 
             newbuilder = flexswitch.add_case(promotenode.gv_value)
             jitstate.curbuilder = newbuilder
@@ -869,8 +909,7 @@ class JITState(object):
         if virtualizable_box not in self.virtualizables:
             self.virtualizables.append(virtualizable_box)
 
-    def split(self, newbuilder, newresumepoint, newgreens):
-        memo = rvalue.copy_memo()
+    def split(self, newbuilder, newresumepoint, newgreens, memo):
         virtualizables = []
         for virtualizable_box in self.virtualizables:
             new_virtualizable_box = virtualizable_box.copy(memo)
@@ -1112,6 +1151,8 @@ def leave_graph_red(jitstate, dispatchqueue, is_portal):
     resuming = jitstate.resuming
     return_chain = merge_returning_jitstates(jitstate, dispatchqueue,
                                              force_merge=is_portal)
+    if is_portal:
+        assert return_chain is None or return_chain.next is None
     if resuming is not None:
         resuming.leave_call(dispatchqueue)
     jitstate = return_chain

@@ -140,26 +140,14 @@ class TestException(TimeshiftingTests):
         self.check_insns(malloc=0)
 
     def test_not_segregated_malloc_exception_path(self):
-        py.test.skip("WIP")
-        class E(Exception):
-            def __init__(self, msg):
-                self.msg = msg
-                
         def help(l, x):
-            if x < 0:
-                raise E("x negative: %d" %x)
-            l.append(x)
-            return l
+            l.append("x is %s" % chr(x))
 
         def ll_function(x):
             l = []
-            l = help(l, x)
+            help(l, x)
             return len(l)+x
 
         res = self.timeshift(ll_function, [5], [], policy=P_OOPSPEC)
         res == 6
         self.check_oops(newlist=0)
-            
-
-
-        

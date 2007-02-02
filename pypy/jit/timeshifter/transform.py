@@ -53,6 +53,7 @@ class HintGraphTransformer(object):
         return self.raise_analyzer.analyze(op)
 
     def transform(self):
+        self.simplify_operations()
         self.compute_merge_points()
         self.insert_save_return()
         self.insert_splits()
@@ -108,6 +109,23 @@ class HintGraphTransformer(object):
                     self.mergepoint_set[block] = 'local'
         if startblock in global_merge_blocks:
             self.mergepoint_set[startblock] = 'global'
+
+    def simplify_operations(self):
+        # ptr_eq(x, 0) => ptr_iszero
+        # ptr_ne(x, 0) => ptr_nonzero
+        replace = {'ptr_eq': 'ptr_iszero',
+                   'ptr_ne': 'ptr_nonzero'}
+        for block in self.graph.iterblocks():
+            for op in block.operations:
+                if op.opname in replace:
+                    srcargs = op.args
+                    for v1, v2 in [(srcargs[0], srcargs[1]),
+                                   (srcargs[1], srcargs[0])]:
+                        if isinstance(v2, Constant):
+                            if not v2.value:
+                                op.opname = replace[op.opname]
+                                op.args = [v1]
+                                break
 
     def graph_calling_color(self, tsgraph):
         args_hs, hs_res = self.hannotator.bookkeeper.tsgraphsigs[tsgraph]
@@ -244,51 +262,58 @@ class HintGraphTransformer(object):
                 if not hs_switch.is_green():
                     self.insert_split_handling(block)
 
+    def trace_back_exitswitch(self, block):
+        """Return the (opname, arguments) that created the exitswitch of
+        the block.  The opname is None if not found.
+        """
+        v = block.exitswitch
+        inverted = False
+        for i in range(len(block.operations)-1, -1, -1):
+            op = block.operations[i]
+            if op.result is v:
+                if op.opname == 'bool_not':
+                    inverted = not inverted
+                    [v] = op.args
+                elif op.opname == 'same_as':
+                    [v] = op.args
+                else:
+                    opname = op.opname
+                    opargs = op.args
+                    if inverted:
+                        opname = {'ptr_nonzero': 'ptr_iszero',
+                                  'ptr_iszero' : 'ptr_nonzero'}.get(opname)
+                    return opname, opargs    # found
+        # not found, comes from earlier block - give up
+        return None, None
+
     def insert_split_handling(self, block):
-        # lots of clever in-line logic commented out
         v_redswitch = block.exitswitch
+
+        # try to look where the v_redswitch comes from
+        split_variant = ''
+        split_extras = []
+        srcopname, srcargs = self.trace_back_exitswitch(block)
+        if srcopname == 'ptr_nonzero':
+            split_variant = '_ptr_nonzero'
+            split_extras = srcargs
+        elif srcopname == 'ptr_iszero':
+            split_variant = '_ptr_iszero'
+            split_extras = srcargs
+
         link_f, link_t = block.exits
         if link_f.exitcase:
             link_f, link_t = link_t, link_f
         assert link_f.exitcase is False
         assert link_t.exitcase is True
 
-##        constant_block = Block([])
-##        nonconstant_block = Block([])
-
-##        v_flag = self.genop(block, 'is_constant', [v_redswitch],
-##                            resulttype = lltype.Bool)
-##        self.genswitch(block, v_flag, true  = constant_block,
-##                                      false = nonconstant_block)
-
-##        v_greenswitch = self.genop(constant_block, 'revealconst',
-##                                   [v_redswitch],
-##                                   resulttype = lltype.Bool)
-##        constant_block.exitswitch = v_greenswitch
-##        constant_block.closeblock(link_f, link_t)
-
         reds, greens = self.sort_by_color(link_f.args, link_f.target.inputargs)
         self.genop(block, 'save_locals', reds)
         resumepoint = self.get_resume_point(link_f.target)
         c_resumepoint = inputconst(lltype.Signed, resumepoint)
-        v_flag = self.genop(block, 'split',
-                            [v_redswitch, c_resumepoint] + greens,
-                            resulttype = lltype.Bool)
-
+        v_flag = self.genop(block, 'split' + split_variant,
+                        [v_redswitch, c_resumepoint] + split_extras + greens,
+                        resulttype = lltype.Bool)
         block.exitswitch = v_flag
-##        true_block = Block([])
-##        true_link  = Link([], true_block)
-##        true_link.exitcase   = True
-##        true_link.llexitcase = True
-##        block.recloseblock(link_f, true_link)
-
-##        reds, greens = self.sort_by_color(link_t.args)
-##        self.genop(true_block, 'save_locals', reds)
-##        self.genop(true_block, 'enter_block', [])
-##        true_block.closeblock(Link(link_t.args, link_t.target))
-
-##        SSA_to_SSI({block     : True,    # reachable from outside
-##                    true_block: False}, self.hannotator)
 
     def get_resume_point_link(self, block):
         try:
