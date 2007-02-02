@@ -261,6 +261,12 @@ class AbstractRGenOp(object):
     #    This is for immortal prebuilt data."""
     #    raise NotImplementedError
 
+    #@staticmethod
+    #def genzeroconst(kind):
+    #    """Get a GenConst containing the value 0 (or NULL) of the
+    #    correct kind."""
+    #    raise NotImplementedError
+
     def replay(self, label, kinds):
         '''Return a builder that will "generate" exactly the same code
         as was already generated, starting from label.  kinds is a

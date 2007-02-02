@@ -600,8 +600,12 @@ class RI386GenOp(AbstractRGenOp):
             return AddrConst(lladdr)
         else:
             assert 0, "XXX not implemented"
-    
+
     # attached later constPrebuiltGlobal = global_rgenop.genconst
+
+    @staticmethod
+    def genzeroconst(kind):
+        return zero_const
 
     @staticmethod
     @specialize.memo()
@@ -694,5 +698,6 @@ class RI386GenOp(AbstractRGenOp):
 
 global_rgenop = RI386GenOp()
 RI386GenOp.constPrebuiltGlobal = global_rgenop.genconst
+zero_const = AddrConst(llmemory.NULL)
 
 MALLOC_SIGTOKEN = RI386GenOp.sigToken(GC_MALLOC.TO)

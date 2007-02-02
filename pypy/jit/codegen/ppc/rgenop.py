@@ -1060,6 +1060,10 @@ class RPPCGenOp(AbstractRGenOp):
 ##     @specialize.genconst(0)
 ##     def constPrebuiltGlobal(llvalue):
 
+    @staticmethod
+    def genzeroconst(kind):
+        return zero_const
+
     def replay(self, label, kinds):
         return ReplayBuilder(self), [dummy_var] * len(kinds)
 
@@ -1227,3 +1231,4 @@ class FlexSwitch(CodeGenSwitch):
 
 global_rgenop = RPPCGenOp()
 RPPCGenOp.constPrebuiltGlobal = global_rgenop.genconst
+zero_const = AddrConst(llmemory.NULL)

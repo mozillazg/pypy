@@ -1576,3 +1576,11 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
 
         res = fnptr(2, 10, 10, 400, 0)
         assert res == 0
+
+    def test_genzeroconst(self):
+        RGenOp = self.RGenOp
+        gv = RGenOp.genzeroconst(RGenOp.kindToken(lltype.Signed))
+        assert gv.revealconst(lltype.Signed) == 0
+        P = lltype.Ptr(lltype.Struct('S'))
+        gv = RGenOp.genzeroconst(RGenOp.kindToken(P))
+        assert gv.revealconst(llmemory.Address) == llmemory.NULL

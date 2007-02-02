@@ -404,6 +404,10 @@ class RGenOp(AbstractRGenOp):
 
     constPrebuiltGlobal = genconst
 
+    @staticmethod
+    def genzeroconst(gv_TYPE):
+        return LLConst(llimpl.genzeroconst(gv_TYPE.v))
+
     def replay(self, label, kinds):
         builder = LLBuilder(self, label.g, llimpl.nullblock)
         args_gv = builder._newblock(kinds)

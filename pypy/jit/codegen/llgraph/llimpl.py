@@ -198,6 +198,12 @@ def genconst(llvalue):
         assert not isinstance(llvalue, str) and not isinstance(llvalue, lltype.LowLevelType)
     return to_opaque_object(v)
 
+def genzeroconst(gv_TYPE):
+    TYPE = from_opaque_object(gv_TYPE).value
+    c = flowmodel.Constant(TYPE._defl())
+    c.concretetype = TYPE
+    return to_opaque_object(c)
+
 def _generalcast(T, value):
     if isinstance(T, lltype.Ptr):
         return lltype.cast_pointer(T, value)
@@ -550,6 +556,7 @@ setannotation(getinputarg, s_ConstOrVar)
 setannotation(genop, s_ConstOrVar)
 setannotation(end, None)
 setannotation(genconst, s_ConstOrVar)
+setannotation(genzeroconst, s_ConstOrVar)
 setannotation(cast, s_ConstOrVar)
 setannotation(revealconst, lambda s_T, s_gv: annmodel.lltype_to_annotation(
                                                   s_T.const))
