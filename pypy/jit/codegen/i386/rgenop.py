@@ -253,16 +253,24 @@ class Builder(GenBuilder):
         return mc
 
     def enter_next_block(self, kinds, args_gv):
-##        mc = self.generate_block_code(args_gv)
-##        assert len(self.inputargs_gv) == len(args_gv)
-##        args_gv[:len(args_gv)] = self.inputargs_gv
-##        self.set_coming_from(mc)
-##        self.rgenop.close_mc(mc)
-##        self.start_writing()
-        for i in range(len(args_gv)):
-            op = OpSameAs(args_gv[i])
-            args_gv[i] = op
-            self.operations.append(op)
+        if self.force_in_stack is not None:
+            # force_in_stack would keep the variables alive until the end
+            # of the whole mc block, i.e. past the OpSameAs that we are
+            # about to introduce => duplication of the value.
+            mc = self.generate_block_code(args_gv)
+            assert len(self.inputargs_gv) == len(args_gv)
+            args_gv[:len(args_gv)] = self.inputargs_gv
+            self.set_coming_from(mc)
+            mc.done()
+            self.rgenop.close_mc(mc)
+            self.start_writing()
+        else:
+            # otherwise, we get better register allocation if we write a
+            # single larger mc block
+            for i in range(len(args_gv)):
+                op = OpSameAs(args_gv[i])
+                args_gv[i] = op
+                self.operations.append(op)
         lbl = Label()
         lblop = OpLabel(lbl, args_gv)
         self.operations.append(lblop)
