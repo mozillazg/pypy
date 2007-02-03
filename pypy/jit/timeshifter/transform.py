@@ -495,6 +495,8 @@ class HintGraphTransformer(object):
         if spaceop.opname == 'direct_call':
             c_func = spaceop.args[0]
             fnobj = c_func.value._obj
+            if hasattr(fnobj, 'jitcallkind'):
+                return fnobj.jitcallkind
             if (hasattr(fnobj._callable, 'oopspec') and
                 self.hannotator.policy.oopspec):
                 if fnobj._callable.oopspec.startswith('vable.'):
@@ -663,7 +665,13 @@ class HintGraphTransformer(object):
         args = op.args[1:]
         args.insert(1, Constant(name, lltype.Void))
         block.operations[pos] = SpaceOperation(opname, args, op.result)
-        
+
+    def handle_rpyexc_raise_call(self, block, pos):
+        op = block.operations[pos]
+        assert op.opname == 'direct_call'
+        op.opname = 'rpyexc_raise'
+        op.args = op.args[1:]
+
     def handle_green_call(self, block, pos):
         # green-returning call, for now (XXX) we assume it's an
         # all-green function that we can just call

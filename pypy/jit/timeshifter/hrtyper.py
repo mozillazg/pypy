@@ -1233,6 +1233,19 @@ class HintRTyper(RPythonTyper):
                                     [v_jitstate     , v_box        , c_desc],
                                     annmodel.SomeBool())
 
+    def translate_op_rpyexc_raise(self, hop):
+        EXCTYPE  = originalconcretetype(hop.args_s[0])
+        EXCVALUE = originalconcretetype(hop.args_s[1])
+        [v_exctype, v_excvalue] = hop.inputargs(self.getredrepr(EXCTYPE),
+                                                self.getredrepr(EXCVALUE))
+        v_exctype  = hop.llops.as_ptrredbox(v_exctype)
+        v_excvalue = hop.llops.as_ptrredbox(v_excvalue)
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(rtimeshift.setexception,
+                         [self.s_JITState, self.s_PtrRedBox, self.s_PtrRedBox],
+                         [v_jitstate     , v_exctype       , v_excvalue      ],
+                         annmodel.s_None)
+
     # handling of the various kinds of calls
 
     def translate_op_oopspec_call(self, hop):
