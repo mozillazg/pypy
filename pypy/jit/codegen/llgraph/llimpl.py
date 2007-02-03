@@ -200,6 +200,7 @@ def genconst(llvalue):
 
 def genzeroconst(gv_TYPE):
     TYPE = from_opaque_object(gv_TYPE).value
+    TYPE = lltype.erasedType(TYPE)
     c = flowmodel.Constant(TYPE._defl())
     c.concretetype = TYPE
     return to_opaque_object(c)
