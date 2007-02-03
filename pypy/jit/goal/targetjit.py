@@ -45,6 +45,7 @@ class PyPyJITTarget(targetpypystandalone.PyPyTarget):
 
     def handle_config(self, config):
         config.translation.fork_before = 'hintannotate'
+        config.translation.inline_threshold = 20.1
 
     def handle_translate_config(self, translateconfig):
         translateconfig.goals = ['timeshift']
