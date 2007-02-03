@@ -37,7 +37,7 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
     # merge_if_blocks, constfold, heap2stack
     # clever_malloc_removal, remove_asserts
 
-    config = translator.config.translation.backendopt.copy()
+    config = translator.config.translation.backendopt.copy(as_default=True)
     config.set(**kwds)
 
     if graphs is None:
