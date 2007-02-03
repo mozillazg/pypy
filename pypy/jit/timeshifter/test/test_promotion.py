@@ -334,3 +334,39 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, ["oe", 1], [],
                              policy=StopAtXPolicy(w))
         res == 1
+
+    def test_raise_result_mixup_some_more(self):
+        def w(x):
+            if x > 1000:
+                return None
+            else:
+                return E(x)
+        class E(Exception):
+            def __init__(self, x):
+                self.x = x
+        def o(x):
+            if x < 0:
+                e = w(x)
+                raise e                
+            return x
+        def ll_function(c, x):
+            i = 0
+            while True:
+                hint(None, global_merge_point=True)
+                op = c[i]
+                hint(op, concrete=True)
+                if op == 'e':
+                    break
+                elif op == 'o':
+                    x = o(x)
+                    x = hint(x, promote=True)
+                    i = x
+            r = hint(i, variable=True)
+            return r
+        ll_function.convert_arguments = [LLSupport.to_rstr, int]
+        
+        assert ll_function("oe", 1) == 1
+
+        res = self.timeshift(ll_function, ["oe", 1], [],
+                             policy=StopAtXPolicy(w))
+        res == 1

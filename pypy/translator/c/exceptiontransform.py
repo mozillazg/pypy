@@ -138,7 +138,9 @@ class ExceptionTransformer(object):
         self.rpyexc_raise_ptr = Constant(lltype.functionptr(
             RPYEXC_RAISE, "RPyRaiseException",
             graph=rpyexc_raise_graph,
-            exception_policy="exc_helper"),
+            exception_policy="exc_helper",
+            jitcallkind='rpyexc_raise',   # for the JIT
+            ),
             lltype.Ptr(RPYEXC_RAISE))
 
         mixlevelannotator.finish()

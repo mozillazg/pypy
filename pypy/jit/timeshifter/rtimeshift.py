@@ -478,6 +478,12 @@ def setexctypebox(jitstate, box):
 def setexcvaluebox(jitstate, box):
     jitstate.exc_value_box = box
 
+def setexception(jitstate, typebox, valuebox):
+    typebox.known_nonzero = True
+    valuebox.known_nonzero = True
+    jitstate.exc_type_box = typebox
+    jitstate.exc_value_box = valuebox
+
 def save_return(jitstate):
     # add 'jitstate' to the chain of return-jitstates
     jitstate.pause()
