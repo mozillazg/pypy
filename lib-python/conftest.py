@@ -12,6 +12,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.module import Module as PyPyModule 
 from pypy.interpreter.main import run_string, run_file
 from py.__.misc.simplecapture import callcapture
+from py.__.test.outcome import Failed, Skipped
 
 # the following adds command line options as a side effect! 
 from pypy.conftest import gettestobjspace, option as pypy_option 
@@ -68,8 +69,8 @@ def callex(space, func, *args, **kwargs):
         if appexcinfo.traceback: 
             print "appexcinfo.traceback:"
             py.std.pprint.pprint(appexcinfo.traceback)
-            raise py.test.Item.Failed(excinfo=appexcinfo) 
-        raise py.test.Item.Failed(excinfo=ilevelinfo) 
+            raise Failed(excinfo=appexcinfo) 
+        raise Failed(excinfo=ilevelinfo) 
 
 #
 # compliance modules where we invoke test_main() usually call into 
