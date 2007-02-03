@@ -11,7 +11,6 @@ from pypy.interpreter.gateway import ApplevelClass
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.module import Module as PyPyModule 
 from pypy.interpreter.main import run_string, run_file
-from py.__.misc.simplecapture import callcapture
 from py.__.test.outcome import Failed, Skipped
 
 # the following adds command line options as a side effect! 
@@ -170,18 +169,17 @@ class SimpleRunItem(py.test.Item):
     """ 
     def call_capture(self, space, func, *args): 
         regrtest = self.parent.regrtest 
-        oldsysout = sys.stdout 
-        sys.stdout = capturesysout = py.std.cStringIO.StringIO() 
-        try: 
+        cap = py.io.StdCapture(out=True, err=False, in_=False)
+        try:
             try: 
                 res = regrtest.run_file(space) 
-            except: 
-                print capturesysout.getvalue()
-                raise 
-            else: 
-                return res, capturesysout.getvalue()
-        finally: 
-            sys.stdout = oldsysout 
+            finally:
+                out, err = cap.reset()
+        except: 
+            print out 
+            raise 
+        else: 
+            return res, out 
         
     def run(self): 
         # XXX integrate this into InterceptedRunModule
@@ -992,7 +990,8 @@ class ReallyRunFileExternal(py.test.Item):
                 test_stdout = "%s\n%s" % (self.fspath.purebasename, test_stdout)     
                 if test_stdout != expected: 
                     exit_status = 2  
-                    res, out, err = callcapture(reportdiff, expected, test_stdout)
+                    res, out, err = py.io.StdCapture.call(
+                            reportdiff, expected, test_stdout)
                     outcome = 'ERROUT' 
                     result.addnamedtext('reportdiff', out)
             else:
