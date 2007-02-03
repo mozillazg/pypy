@@ -642,6 +642,10 @@ def make_read_frame_var(rgenop, get_reader):
     info = builder.get_frame_info([gv_y])
     gv_reader = rgenop.constPrebuiltGlobal(get_reader(info))
     gv_z = builder.genop_call(readertoken, gv_reader, [gv_base])
+
+    args_gv = [gv_y, gv_z]
+    builder.enter_next_block([signed_kind]*2, args_gv)
+    [gv_y, gv_z] = args_gv
     builder.finish_and_return(sigtoken, gv_z)
     builder.end()
 
