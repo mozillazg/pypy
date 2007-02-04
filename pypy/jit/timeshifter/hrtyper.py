@@ -213,6 +213,12 @@ class HintRTyper(RPythonTyper):
             self.log.event("portal has now %d blocks" % n)
             self.rewire_portal()
 
+        # move the timeshifted graphs into the original translator
+        base_translator = self.annotator.base_translator
+        for graph in self.annotator.translator.graphs:
+            flowmodel.checkgraph(graph)
+            base_translator.graphs.append(graph)
+
     # remember a shared pointer for the portal graph,
     # so that it can be later patched by rewire_portal.
     # this pointer is going to be used by the resuming logic

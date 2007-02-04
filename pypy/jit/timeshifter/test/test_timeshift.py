@@ -13,7 +13,6 @@ from pypy.rpython.annlowlevel import PseudoHighLevelCallable
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
-from pypy.objspace.flow.model import checkgraph
 from pypy.translator.backendopt.inline import auto_inlining
 from pypy import conftest
 from pypy.jit.conftest import Benchmark
@@ -105,13 +104,9 @@ class TimeshiftingTests(object):
         # make the timeshifted graphs
         hrtyper = HintRTyper(ha, rtyper, self.RGenOp)
         hrtyper.specialize(view = conftest.option.view and self.small)
-
         fresh_jitstate = hrtyper.ll_fresh_jitstate
         finish_jitstate = hrtyper.ll_finish_jitstate
         t = rtyper.annotator.translator
-        for graph in ha.translator.graphs:
-            checkgraph(graph)
-            t.graphs.append(graph)
 
         # make an interface to the timeshifted graphs:
         #
