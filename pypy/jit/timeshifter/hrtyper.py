@@ -1624,9 +1624,8 @@ class RedVirtualizableStructRepr(RedStructRepr):
 
     def build_portal_arg_helpers(self):
         typedesc = self.gettypedesc()
-        names = unrolling_iterable([(fielddesc.fieldname, j)
-                                    for (fielddesc, j) in
-                                    typedesc.redirected_fielddescs])
+        redirected_fielddescs = unrolling_iterable(
+                                    typedesc.redirected_fielddescs)
         TYPE = self.original_concretetype
         kind = self.hrtyper.RGenOp.kindToken(TYPE)
 
@@ -1634,13 +1633,12 @@ class RedVirtualizableStructRepr(RedStructRepr):
             box = typedesc.factory()
             jitstate.add_virtualizable(box)
             content = box.content
-            assert isinstance(content, rcontainer.VirtualStruct)
+            assert isinstance(content, rcontainer.VirtualizableStruct)
             content_boxes = content.content_boxes
             gv_outside = inputargs_gv[i]
             i += 1
-            for name, j in names:
-                content_boxes[j] = rvalue.PtrRedBox(content_boxes[j].kind,
-                                                    inputargs_gv[i])
+            for fieldesc, j in redirected_fielddescs:
+                content_boxes[j] = fieldesc.makebox(None, inputargs_gv[i])
                 i += 1
             content_boxes[-1] = rvalue.PtrRedBox(content_boxes[-1].kind,
                                                  gv_outside,

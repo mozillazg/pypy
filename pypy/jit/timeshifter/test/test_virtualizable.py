@@ -1283,3 +1283,47 @@ class TestVirtualizableImplicit(PortalTest):
         res = self.timeshift_from_portal(main, f, [20, 3],
                                          policy=StopAtXPolicy(g))
         assert res == 222
+
+    def test_type_bug(self):
+        class V(object):
+            _virtualizable_ = True
+
+            def __init__(self, v):
+                self.v = v
+
+        def f(x, v):
+            if x:
+                v.v = 0
+            else:
+                pass
+            return x*2, v
+
+        def main(x,y):
+            v = V(y)
+            r, _ = f(x, v)
+            return r
+
+        res = self.timeshift_from_portal(main, f, [20, 3], policy=P_OOPSPEC)
+        assert res == 40
+
+    def test_indirect_call(self):
+        py.test.skip("test in progress")
+        def h1(n):
+            return n * 6   # force some virtualizable stuff here
+        def h2(n):
+            return n * 8
+
+        l = [h2, h1]
+
+        def f(n):
+            h = l[n & 1]
+            n += 10
+            return h(n)      # the result of the call is not in save_locals!!
+
+        P = StopAtXPolicy()
+
+        assert f(-3) == 42
+        res = self.timeshift(f, [-3], [], policy=P)
+        assert res == 42
+        res = self.timeshift(f, [4], [], policy=P)
+        assert res == 112
