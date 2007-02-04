@@ -553,7 +553,8 @@ class HintGraphTransformer(object):
             args_v = op.args[:1] + args_v + [c_targets]
             hs_func = self.hannotator.binding(args_v[0])
             if not hs_func.is_green():
-                # XXX for now, assume that it will be a constant red box
+                # handle_red_call() has checked with is_constant that
+                # the hs_func is actually a constant red box
                 v_greenfunc = self.genop(block, 'revealconst', [args_v[0]],
                                   resulttype = originalconcretetype(hs_func))
                 args_v[0] = v_greenfunc
@@ -574,8 +575,7 @@ class HintGraphTransformer(object):
         linkargs = link.args
         varsalive = list(linkargs)
 
-        if color == 'red':
-            assert not self.hannotator.binding(op.result).is_green()
+        if color != 'gray':
             # the result will be either passed as an extra local 0
             # by the caller, or restored by a restore_local
             try:
@@ -622,10 +622,28 @@ class HintGraphTransformer(object):
         blockset[postconstantblock] = False
         self.make_call(constantblock, op, reds, color)
 
-        resumepoint = self.get_resume_point(nextblock)
+        conversionblock = nextblock
+        if color == 'red':
+            assert not self.hannotator.binding(op.result).is_green()
+        elif color == 'yellow':
+            conversionblock = Block([copyvar(self.hannotator, v)
+                                     for v in nextblock.inputargs])
+            v0 = conversionblock.inputargs[0]
+            already_green = self.hannotator.binding(op.result).is_green()
+            assert already_green == self.hannotator.binding(v0).is_green()
+            if not already_green:
+                RESULT = self.hannotator.binding(v0).concretetype
+                hs = hintmodel.SomeLLAbstractConstant(RESULT, {})
+                self.hannotator.bindings[v0] = hs
+            conversionblock.closeblock(Link(conversionblock.inputargs,
+                                            nextblock))
+            # to merge some of the possibly many return jitstates
+            self.mergepoint_set[nextblock] = 'local'
+
+        resumepoint = self.get_resume_point(conversionblock)
         c_resumepoint = inputconst(lltype.Signed, resumepoint)
         self.genop(postconstantblock, 'collect_split', [c_resumepoint] + greens)
-        resumeblock = self.get_resume_point_link(nextblock).target
+        resumeblock = self.get_resume_point_link(conversionblock).target
         postconstantblock.recloseblock(Link([], resumeblock))
 
         if nonconstantblock is not None:
@@ -633,7 +651,7 @@ class HintGraphTransformer(object):
             v_res, nonconstantblock2 = self.handle_residual_call_details(
                                             nonconstantblock, 0, op,
                                             color, preserve_res =
-                                            (color == 'red'))
+                                            (color != 'gray'))
 
             #if color == 'red':
             #    linkargs[0] = v_res
@@ -683,55 +701,7 @@ class HintGraphTransformer(object):
         op.opname = 'green_call'
 
     def handle_yellow_call(self, block, pos):
-        op = block.operations[pos]
-        #if op.opname == 'direct_call':
-        #    f = open('LOG', 'a')
-        #    print >> f, 'handle_yellow_call', op.args[0].value
-        #    f.close()
-        hs_result = self.hannotator.binding(op.result)
-        if not hs_result.is_green():
-            # yellow calls are supposed to return greens,
-            # add an indirection if it's not the case
-            # XXX a bit strange
-            RESULT = originalconcretetype(hs_result)
-            v_tmp = varoftype(RESULT)
-            hs = hintmodel.SomeLLAbstractConstant(RESULT, {})
-            self.hannotator.setbinding(v_tmp, hs)
-            v_real_result = op.result
-            op.result = v_tmp
-            newop = SpaceOperation('same_as', [v_tmp], v_real_result)
-            block.operations.insert(pos+1, newop)
-
-        link = split_block(self.hannotator, block, pos+1)
-        op1 = block.operations.pop(pos)
-        assert op1 is op
-        assert len(block.operations) == pos
-        nextblock = link.target
-        varsalive = link.args
-        try:
-            index = varsalive.index(op.result)
-        except ValueError:
-            XXX-later
-
-        del varsalive[index]
-        v_result = nextblock.inputargs.pop(index)
-        nextblock.inputargs.insert(0, v_result)
-
-        reds, greens = self.sort_by_color(varsalive)
-        postblock = self.naive_split_block(block, len(block.operations))
-        self.make_call(block, op, reds, 'yellow')
-
-        resumepoint = self.get_resume_point(nextblock)
-        c_resumepoint = inputconst(lltype.Signed, resumepoint)
-        self.genop(postblock, 'collect_split', [c_resumepoint] + greens)
-        link.args = []
-        link.target = self.get_resume_point_link(nextblock).target
-
-        # to merge some of the possibly many return jitstates
-        self.mergepoint_set[nextblock] = 'local'  
-
-        SSA_to_SSI({block: True,
-                    postblock: False}, self.hannotator)
+        self.handle_red_call(block, pos, color='yellow')
 
     def handle_residual_call(self, block, pos, qualifiers=[]):
         op = block.operations[pos]        

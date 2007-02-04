@@ -1,5 +1,6 @@
 from pypy.jit.hintannotator.annotator import HintAnnotatorPolicy
 from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
+from pypy.rlib.objectmodel import hint
 
 P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer=True, oopspec=True)
 
@@ -110,3 +111,21 @@ class TestVList(TimeshiftingTests):
         assert res == 9
         self.check_insns({})
         
+    def test_lists_deepfreeze(self):
+        l1 = [1,2,3,4,5]
+        l2 = [6,7,8,9,10]
+        def getlist(n):
+            if n:
+                return l1
+            else:
+                return l2
+        def ll_function(n, i):
+            l = getlist(n)
+            l = hint(l, deepfreeze=True)
+            res = l[i]
+            res = hint(res, variable=True)
+            return res
+        
+        res = self.timeshift(ll_function, [3, 4], [0, 1], policy=P_OOPSPEC)
+        assert res == 5
+        self.check_insns({})

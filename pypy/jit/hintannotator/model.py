@@ -83,6 +83,11 @@ class CallOpOriginFlags(OriginFlags):
             args = self.spaceop.args[1:]
         elif self.spaceop.opname == 'indirect_call':
             args = self.spaceop.args[1:-1]
+            # indirect_call with a red callable must return a red
+            # (see test_indirect_yellow_call)
+            v_callable = self.spaceop.args[0]
+            retdeps = greenorigindependencies.setdefault(self, [])
+            retdeps.append(v_callable)
         else:
             raise AssertionError(self.spaceop.opname)
 
@@ -182,11 +187,11 @@ class SomeLLAbstractConstant(SomeLLAbstractValue):
         for o in self.origins:
             if not o.fixed:
                 return False
-        return True
+        return self.concretetype is not lltype.Void
 
     def is_green(self):
-        return (self.is_fixed() or self.eager_concrete or
-                self.concretetype is lltype.Void or
+        return (self.concretetype is lltype.Void or
+                self.is_fixed() or self.eager_concrete or
                 (self.myorigin is not None and self.myorigin.greenargs))
 
     def annotationcolor(self):
@@ -349,7 +354,7 @@ class __extend__(SomeLLAbstractValue):
         fixed = myorigin.read_fixed()
         tsgraphs_accum = []
         hs_res = bookkeeper.graph_family_call(graph_list, fixed, args_hs,
-                                              tsgraphs_accum)
+                                              tsgraphs_accum, hs_v1)
         myorigin.any_called_graph = tsgraphs_accum[0]
 
         if isinstance(hs_res, SomeLLAbstractConstant):

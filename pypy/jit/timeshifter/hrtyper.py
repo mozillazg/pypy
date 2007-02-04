@@ -198,6 +198,7 @@ class HintRTyper(RPythonTyper):
             assert self.portal_contains_global_mp, (
                 "No global merge point found.  "
                 "Forgot 'hint(None, global_merge_point=True)'?")
+        #import pdb; pdb.set_trace()
         # only keep the hint-annotated graphs that are really useful
         self.annotator.translator.graphs = [graph
             for graph in self.annotator.translator.graphs
@@ -1414,6 +1415,10 @@ class HintRTyper(RPythonTyper):
         
     def translate_op_residual_gray_noexc_call(self, hop):
         self.translate_op_residual_red_call(hop, color='gray', exc=False)
+
+    translate_op_residual_yellow_call       = translate_op_residual_red_call
+    translate_op_residual_yellow_noexc_call = (
+                                        translate_op_residual_red_noexc_call)
 
     def translate_op_after_residual_call(self, hop):
         v_jitstate = hop.llops.getjitstate()        
