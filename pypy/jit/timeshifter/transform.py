@@ -8,7 +8,6 @@ from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import split_block, split_block_at_start
 from pypy.translator.backendopt.ssa import SSA_to_SSI
-from pypy.translator.unsimplify import split_block
 
 
 class MergePointFamily(object):
@@ -628,15 +627,17 @@ class HintGraphTransformer(object):
         postconstantblock.recloseblock(Link([], resumeblock))
 
         if nonconstantblock is not None:
+            nonconstantblock.recloseblock(Link(linkargs, nextblock))
             v_res, nonconstantblock2 = self.handle_residual_call_details(
                                             nonconstantblock, 0, op,
-                                            color, preserve_res = False)
+                                            color, preserve_res =
+                                            (color == 'red'))
 
-            if color == 'red':
-                linkargs[0] = v_res
+            #if color == 'red':
+            #    linkargs[0] = v_res
 
             blockset[nonconstantblock2] = False            
-            nonconstantblock2.recloseblock(Link(linkargs, nextblock))
+            
 
         blockset[block] = True     # reachable from outside
         blockset[nextblock] = True # reachable from outside
