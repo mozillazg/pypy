@@ -5,7 +5,7 @@ from pypy.jit.timeshifter.hrtyper import HintRTyper
 from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL, StopAtXPolicy
 from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.objspace.flow.model import checkgraph, summary
+from pypy.objspace.flow.model import  summary
 from pypy.rlib.objectmodel import hint
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 
@@ -63,10 +63,6 @@ class PortalTest(object):
         origportalgraph = graphof(t, portal)
         self.hrtyper.specialize(origportalgraph=origportalgraph,
                            view = conftest.option.view and self.small)
-
-        for graph in ha.translator.graphs:
-            checkgraph(graph)
-            t.graphs.append(graph)
 
         if conftest.option.view and self.small:
             t.view()

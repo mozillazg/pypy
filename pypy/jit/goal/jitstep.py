@@ -62,9 +62,6 @@ def timeshift(drv):
     hrtyper = HintRTyper(ha, t.rtyper, RGenOp)
     origportalgraph = graphof(t, PORTAL)
     hrtyper.specialize(origportalgraph=origportalgraph, view=False)
-    for graph in ha.translator.graphs:
-        checkgraph(graph)
-        t.graphs.append(graph)
         
     # XXX temp
     drv.source()
