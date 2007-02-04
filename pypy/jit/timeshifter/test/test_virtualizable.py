@@ -425,30 +425,30 @@ class TestVirtualizableExplicit(PortalTest):
             y = xy_get_y(xy)
             e.w = y
 
-        def f(e):
+        def f(e, z):
             hint(None, global_merge_point=True)
             xy = e.xy
             y = xy_get_y(xy)
             newy = 2*y
             xy_set_y(xy, newy)
             if y:
-                dummy = 0
+                dummy = z*2
             else:
-                dummy = 1
+                dummy = z*3
             g(e)
             return dummy
             
-        def main(x, y):
+        def main(x, y, z):
             xy = lltype.malloc(XY)
             xy.vable_access = lltype.nullptr(XY_ACCESS)
             xy.x = x
             xy.y = y
             e = lltype.malloc(E)
             e.xy = xy
-            f(e)
+            f(e, z)
             return e.w
 
-        res = self.timeshift_from_portal(main, f, [0, 21],
+        res = self.timeshift_from_portal(main, f, [0, 21, 11],
                                          policy=StopAtXPolicy(g))
         assert res == 42
 
