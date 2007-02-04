@@ -1205,11 +1205,12 @@ def leave_graph_yellow(jitstate, mydispatchqueue):
     if resuming is not None:
         resuming.leave_call(mydispatchqueue)
     return_chain = mydispatchqueue.return_chain
-    jitstate = return_chain
-    while jitstate is not None:
-        leave_frame(jitstate)
-        jitstate = jitstate.next
-    # return the jitstate which is the head of the chain,
-    # ready for further writing
-    return_chain.curbuilder.start_writing()
+    if return_chain is not None:
+        jitstate = return_chain
+        while jitstate is not None:
+            leave_frame(jitstate)
+            jitstate = jitstate.next
+        # return the jitstate which is the head of the chain,
+        # ready for further writing
+        return_chain.curbuilder.start_writing()
     return return_chain

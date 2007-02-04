@@ -370,3 +370,17 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, ["oe", 1], [],
                              policy=StopAtXPolicy(w))
         res == 1
+
+    def test_promote_in_yellow_call(self):
+        def ll_two(n):
+            n = hint(n, promote=True)
+            return n + 2
+            
+        def ll_function(n):
+            hint(None, global_merge_point=True)
+            c = ll_two(n)
+            return hint(c, variable=True)
+
+        res = self.timeshift(ll_function, [4], [], policy=P_NOVIRTUAL)
+        assert res == 6
+        self.check_insns(int_add=0)
