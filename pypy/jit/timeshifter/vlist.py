@@ -288,19 +288,23 @@ def oop_list_copy(jitstate, oopspecdesc, selfbox):
     else:
         return oopspecdesc.residual_call(jitstate, [selfbox])
 
-def oop_list_len(jitstate, oopspecdesc, selfbox):
+def oop_list_len(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         return rvalue.ll_fromvalue(jitstate, len(content.item_boxes))
     else:
-        return oopspecdesc.residual_call(jitstate, [selfbox])
+        return oopspecdesc.residual_call(jitstate, [selfbox],
+                                         deepfrozen=deepfrozen)
+oop_list_len.couldfold = True
 
-def oop_list_nonzero(jitstate, oopspecdesc, selfbox):
+def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         return rvalue.ll_fromvalue(jitstate, bool(content.item_boxes))
     else:
-        return oopspecdesc.residual_call(jitstate, [selfbox])
+        return oopspecdesc.residual_call(jitstate, [selfbox],
+                                         deepfrozen=deepfrozen)
+oop_list_nonzero.couldfold = True
 
 def oop_list_append(jitstate, oopspecdesc, selfbox, itembox):
     content = selfbox.content
@@ -360,7 +364,7 @@ def oop_list_reverse(jitstate, oopspecdesc, selfbox):
     else:
         oopspecdesc.residual_call(jitstate, [selfbox])
 
-def oop_list_getitem(jitstate, oopspecdesc, selfbox, indexbox):
+def oop_list_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -369,7 +373,9 @@ def oop_list_getitem(jitstate, oopspecdesc, selfbox, indexbox):
         except IndexError:
             return oopspecdesc.residual_exception(jitstate, IndexError)
     else:
-        return oopspecdesc.residual_call(jitstate, [selfbox, indexbox])
+        return oopspecdesc.residual_call(jitstate, [selfbox, indexbox],
+                                         deepfrozen=deepfrozen)
+oop_list_getitem.couldfold = True
 
 def oop_list_setitem(jitstate, oopspecdesc, selfbox, indexbox, itembox):
     content = selfbox.content

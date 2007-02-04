@@ -317,7 +317,8 @@ class HintBookkeeper(object):
         graph = desc.specialize(args_hs, key=key, alt_name=alt_name)
         return graph
 
-    def graph_call(self, graph, fixed, args_hs, tsgraph_accum=None):
+    def graph_call(self, graph, fixed, args_hs,
+                   tsgraph_accum=None, hs_callable=None):
         input_args_hs = list(args_hs)
         graph = self.get_graph_for_call(graph, fixed, input_args_hs)
         if tsgraph_accum is not None:
@@ -337,27 +338,34 @@ class HintBookkeeper(object):
                                               input_args_hs)
         # look on which input args the hs_res result depends on
         if isinstance(hs_res, hintmodel.SomeLLAbstractConstant):
-            deps_hs = []
-            for hs_inputarg, hs_arg in zip(input_args_hs, args_hs):
-                if isinstance(hs_inputarg, hintmodel.SomeLLAbstractConstant):
-                    assert len(hs_inputarg.origins) == 1
-                    [o] = hs_inputarg.origins.keys()
-                    if o in hs_res.origins:
-                        deps_hs.append(hs_arg)
-            if fixed:
-                deps_hs.append(hs_res)
-            hs_res = hintmodel.reorigin(hs_res, *deps_hs)
+            if (hs_callable is not None and
+                not isinstance(hs_callable, hintmodel.SomeLLAbstractConstant)):
+                hs_res = hintmodel.variableoftype(hs_res.concretetype,
+                                                  hs_res.deepfrozen)
+            else:
+                deps_hs = []
+                for hs_inputarg, hs_arg in zip(input_args_hs, args_hs):
+                    if isinstance(hs_inputarg,
+                                  hintmodel.SomeLLAbstractConstant):
+                        assert len(hs_inputarg.origins) == 1
+                        [o] = hs_inputarg.origins.keys()
+                        if o in hs_res.origins:
+                            deps_hs.append(hs_arg)
+                if fixed:
+                    deps_hs.append(hs_res)
+                hs_res = hintmodel.reorigin(hs_res, hs_callable, *deps_hs)
         return hs_res
 
     def graph_family_call(self, graph_list, fixed, args_hs,
-                          tsgraphs_accum=None):
+                          tsgraphs_accum=None, hs_callable=None):
         if tsgraphs_accum is None:
             tsgraphs = []
         else:
             tsgraphs = tsgraphs_accum
         results_hs = []
         for graph in graph_list:
-            results_hs.append(self.graph_call(graph, fixed, args_hs, tsgraphs))
+            results_hs.append(self.graph_call(graph, fixed, args_hs,
+                                              tsgraphs, hs_callable))
         # put the tsgraphs in the same call family
         call_families = self.tsgraph_maximal_call_families
         _, rep, callfamily = call_families.find(tsgraphs[0])

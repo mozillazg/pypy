@@ -1135,6 +1135,10 @@ class TestTimeshift(TimeshiftingTests):
         assert res == 42
         self.check_insns({})
 
+        res = self.timeshift(f, [0], [], policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns(indirect_call=0)
+
     def test_simple_red_meth(self):
         class Base(object):
             def m(self, n):

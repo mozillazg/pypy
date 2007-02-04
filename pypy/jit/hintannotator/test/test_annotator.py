@@ -728,3 +728,41 @@ def test_cast_pointer_keeps_deepfreeze():
 
     hs = hannotate(ll_function, [int], policy=P_NOVIRTUAL)
     assert hs.deepfrozen
+
+
+def test_concrete_fnptr_for_green_call():
+
+    def h1(n):
+        return n * 10
+
+    def h2(n):
+        return n + 20
+
+    lst = [h1, h2]
+
+    def ll_function(n, m):
+        h = hint(lst, deepfreeze=True)[m]
+        res = h(n)
+        hint(res, concrete=True)   # so 'h' gets green, so 'm' gets green
+        return m
+
+    hs = hannotate(ll_function, [int, int], policy=P_NOVIRTUAL)
+    assert hs.is_green()
+
+
+def test_indirect_yellow_call():
+
+    def h1(n):
+        return 123
+
+    def h2(n):
+        return 456
+
+    lst = [h1, h2]
+
+    def ll_function(n, m):
+        h = hint(lst, deepfreeze=True)[m]
+        return h(n)
+
+    hs = hannotate(ll_function, [int, int], policy=P_NOVIRTUAL)
+    assert not hs.is_green()
