@@ -35,6 +35,8 @@ class MergePointFamily(object):
 class HintGraphTransformer(object):
     c_dummy = inputconst(lltype.Void, None)
 
+    contains_promotion = False
+
     def __init__(self, hannotator, graph, is_portal=False):
         self.hannotator = hannotator
         self.graph = graph
@@ -819,6 +821,7 @@ class HintGraphTransformer(object):
         block.operations[i] = newop
 
     def handle_promote_hint(self, block, i):
+        self.contains_promotion = True
         op = block.operations[i]
         v_promote = op.args[0]
         newop = SpaceOperation('revealconst', [v_promote], op.result)

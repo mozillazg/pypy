@@ -183,6 +183,8 @@ class HintRTyper(RPythonTyper):
             # returns
             leaveportalgraph = entrygraph
             
+        self.contains_promotion = False
+        self.portal_contains_global_mp = False
         pending = [entrygraph]
         seen = {entrygraph: True}
         while pending:
@@ -192,6 +194,10 @@ class HintRTyper(RPythonTyper):
                 if nextgraph not in seen:
                     pending.append(nextgraph)
                     seen[nextgraph] = True
+        if self.contains_promotion:
+            assert self.portal_contains_global_mp, (
+                "No global merge point found.  "
+                "Forgot 'hint(None, global_merge_point=True)'?")
         # only keep the hint-annotated graphs that are really useful
         self.annotator.translator.graphs = [graph
             for graph in self.annotator.translator.graphs
@@ -443,6 +449,10 @@ class HintRTyper(RPythonTyper):
                                            is_portal=is_portal)
         transformer.transform()
         flowmodel.checkgraph(graph)    # for now
+        self.contains_promotion |= transformer.contains_promotion
+        if is_portal:
+            self.portal_contains_global_mp = (
+                transformer.mergepointfamily.has_global_mergepoints())
         return transformer.tsgraphs_seen
 
     def timeshift_graph(self, graph):
