@@ -1,3 +1,4 @@
+from pypy.rlib.rarithmetic import intmask
 
 
 class OPERAND(object):
@@ -276,15 +277,19 @@ def packimm16(i):
 
 def unpack(s):
     assert len(s) in (1, 2, 4)
-    result = 0
-    shift = 0
-    char = '\x00'      # flow space workaround
-    for char in s:
-        result |= ord(char) << shift
-        shift += 8
-    if ord(char) >= 0x80:
-        result -= 1 << shift
-    return result
+    if len(s) == 1:
+        a = ord(s[0])
+        if a > 0x7f:
+            a -= 0x100
+    else:
+        a = ord(s[0]) | (ord(s[1]) << 8)
+        if len(s) == 2:
+            if a > 0x7fff:
+                a -= 0x10000
+        else:
+            a |= (ord(s[2]) << 16) | (ord(s[3]) << 24)
+            a = intmask(a)
+    return a
 
 missing = MISSING()
 
