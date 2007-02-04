@@ -10,7 +10,7 @@ from pypy.interpreter.baseobjspace import UnpackValueError, Wrappable
 from pypy.interpreter import gateway, function, eval
 from pypy.interpreter import pyframe, pytraceback
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import we_are_translated, hint
 from pypy.rlib.rarithmetic import r_uint, intmask
@@ -53,21 +53,51 @@ class __extend__(pyframe.PyFrame):
     def dispatch(self, pycode, next_instr, ec):
         if JITTING:
             hint(None, global_merge_point=True)
-
-            # *loads* of nonsense for now
-            stuff = self.valuestackdepth
-            if len(self.blockstack):
-                stuff |= (-sys.maxint-1)
-
-            stuff = hint(stuff, promote=True)
-            if stuff >= 0:
-                # blockdepth == 0, common case
-                self.blockstack = []
-            depth = stuff & sys.maxint
-
             pycode = hint(pycode, deepfreeze=True)
+            # *loads* of nonsense for now
+
+            fastlocals_w = [None] * pycode.co_nlocals
+
+            if next_instr == 0:
+                # first time we enter this function
+                depth = 0
+                self.blockstack = []
+
+                numargs = pycode.co_argcount
+                if pycode.co_flags & CO_VARARGS:     numargs += 1
+                if pycode.co_flags & CO_VARKEYWORDS: numargs += 1
+                while True:
+                    numargs -= 1
+                    if numargs < 0:
+                        break
+                    hint(numargs, concrete=True)
+                    w_obj = self.fastlocals_w[numargs]
+                    assert w_obj is not None
+                    fastlocals_w[numargs] = w_obj
+
+            else:
+                stuff = self.valuestackdepth
+                if len(self.blockstack):
+                    stuff |= (-sys.maxint-1)
+
+                stuff = hint(stuff, promote=True)
+                if stuff >= 0:
+                    # blockdepth == 0, common case
+                    self.blockstack = []
+                depth = stuff & sys.maxint
+
+                i = pycode.co_nlocals
+                while True:
+                    i -= 1
+                    if i < 0:
+                        break
+                    hint(i, concrete=True)
+                    w_obj = self.fastlocals_w[i]
+                    fastlocals_w[i] = w_obj
+
             self.pycode = pycode
             self.valuestackdepth = depth
+            self.fastlocals_w = fastlocals_w
 
             virtualstack_w = [None] * pycode.co_stacksize
             while depth > 0:
@@ -93,6 +123,12 @@ class __extend__(pyframe.PyFrame):
                 #                    returns=w_result)
             except Return:
                 w_result = self.popvalue()
+                if JITTING:
+                    self.blockstack = None
+                    self.valuestack_w = None
+                return w_result
+            except Yield:
+                w_result = self.popvalue()
                 return w_result
             except OperationError, operr:
                 next_instr = self.handle_operation_error(ec, operr)
@@ -116,7 +152,6 @@ class __extend__(pyframe.PyFrame):
                 next_instr = self.handle_asynchronous_error(ec,
                     self.space.w_RuntimeError,
                     self.space.wrap(msg))
-            next_instr = hint(next_instr, promote=True)
 
     def handle_asynchronous_error(self, ec, w_type, w_value=None):
         # catch asynchronous exceptions and turn them
@@ -185,12 +220,11 @@ class __extend__(pyframe.PyFrame):
             else:
                 unroller = SReturnValue(w_returnvalue)
                 next_instr = block.handle(self, unroller)
-                #next_instr = hint(next_instr, promote=True)
                 return next_instr    # now inside a 'finally' block
 
         if opcode == opcodedesc.YIELD_VALUE.index:
             #self.last_instr = intmask(next_instr - 1) XXX clean up!
-            raise Return
+            raise Yield
 
         if opcode == opcodedesc.END_FINALLY.index:
             unroller = self.end_finally()
@@ -203,7 +237,6 @@ class __extend__(pyframe.PyFrame):
                     raise Return
                 else:
                     next_instr = block.handle(self, unroller)
-                    #next_instr = hint(next_instr, promote=True)
             return next_instr
 
         if we_are_translated():
@@ -225,7 +258,6 @@ class __extend__(pyframe.PyFrame):
                     # Instead, it's constant-folded to either True or False
                     if res is not None:
                         next_instr = res
-                        #next_instr = hint(next_instr, promote=True)
                     break
             else:
                 self.MISSING_OPCODE(oparg, next_instr)
@@ -296,6 +328,7 @@ class __extend__(pyframe.PyFrame):
 
     def STORE_FAST(f, varindex, *ignored):
         w_newvalue = f.popvalue()
+        assert w_newvalue is not None
         f.fastlocals_w[varindex] = w_newvalue
         #except:
         #    print "exception: got index error"
@@ -719,8 +752,9 @@ class __extend__(pyframe.PyFrame):
     def COMPARE_OP(f, testnum, *ignored):
         w_2 = f.popvalue()
         w_1 = f.popvalue()
+        table = hint(f.compare_dispatch_table, deepfreeze=True)
         try:
-            testfn = f.compare_dispatch_table[testnum]
+            testfn = table[testnum]
         except IndexError:
             raise BytecodeCorruption, "bad COMPARE_OP oparg"
         w_result = testfn(f, w_1, w_2)
@@ -949,6 +983,8 @@ class Reraise(Exception):
 
 class Return(Exception):
     """Obscure."""
+class Yield(Exception):
+    """Obscure."""
 
 class BytecodeCorruption(Exception):
     """Detected bytecode corruption.  Never caught; it's an error."""
@@ -1068,13 +1104,17 @@ class FrameBlock:
         return space.newtuple([w(self._opname), w(self.handlerposition),
                                w(self.valuestackdepth)])
 
+    def handle(self, frame, unroller):
+        next_instr = self.really_handle(frame, unroller)   # JIT hack
+        return hint(next_instr, promote=True)
+
 class LoopBlock(FrameBlock):
     """A loop block.  Stores the end-of-loop pointer in case of 'break'."""
 
     _opname = 'SETUP_LOOP'
     handling_mask = SBreakLoop.kind | SContinueLoop.kind
 
-    def handle(self, frame, unroller):
+    def really_handle(self, frame, unroller):
         if isinstance(unroller, SContinueLoop):
             # re-push the loop block without cleaning up the value stack,
             # and jump to the beginning of the loop, stored in the
@@ -1093,7 +1133,7 @@ class ExceptBlock(FrameBlock):
     _opname = 'SETUP_EXCEPT'
     handling_mask = SApplicationException.kind
 
-    def handle(self, frame, unroller):
+    def really_handle(self, frame, unroller):
         # push the exception to the value stack for inspection by the
         # exception handler (the code after the except:)
         self.cleanupstack(frame)
@@ -1127,7 +1167,7 @@ class FinallyBlock(FrameBlock):
         frame.pushvalue(frame.space.w_None)
         frame.pushvalue(frame.space.w_None)
 
-    def handle(self, frame, unroller):
+    def really_handle(self, frame, unroller):
         # any abnormal reason for unrolling a finally: triggers the end of
         # the block unrolling and the entering the finally: handler.
         # see comments in cleanup().

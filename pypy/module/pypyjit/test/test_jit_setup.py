@@ -16,3 +16,13 @@ class AppTestPyPyJIT:
         assert f(6, 7) == 43
         pypyjit.enable(f.func_code)
         assert f(6, 7) == 43
+
+        def gen(x):
+            i = 0
+            while i < x:
+                yield i*i
+                i += 1
+
+        assert list(gen(3)) == [0, 1, 4]
+        pypyjit.enable(gen.func_code)
+        assert list(gen(3)) == [0, 1, 4]

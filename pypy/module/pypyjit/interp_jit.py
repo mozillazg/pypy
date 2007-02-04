@@ -43,6 +43,10 @@ def setup():
             else:
                 return super_dispatch(self, pycode, next_instr, ec)
 
+        def CALL_FUNCTION(f, oparg, *ignored):
+            # XXX disable the call_valuestack hacks which are bad for the JIT
+            return f.call_function(oparg)
+
 setup()
 
 PORTAL = PyFrame.dispatch_jit
