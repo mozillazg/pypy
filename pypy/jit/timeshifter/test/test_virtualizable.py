@@ -1306,24 +1306,35 @@ class TestVirtualizableImplicit(PortalTest):
         res = self.timeshift_from_portal(main, f, [20, 3], policy=P_OOPSPEC)
         assert res == 40
 
-    def test_indirect_call(self):
-        py.test.skip("test in progress")
-        def h1(n):
-            return n * 6   # force some virtualizable stuff here
-        def h2(n):
+    def test_indirect_residual_call(self):
+        class V(object):
+            _virtualizable_ = True
+
+            def __init__(self, v):
+                self.v = v
+
+        def g(v, n):
+            v.v.append(n)      # force the virtualizable arg here
+        def h1(v, n):
+            g(v, n)
+            return n * 6
+        def h2(v, n):
             return n * 8
 
         l = [h2, h1]
 
         def f(n):
+            hint(None, global_merge_point=True)
+            v = V([100])
             h = l[n & 1]
             n += 10
-            return h(n)      # the result of the call is not in save_locals!!
+            res = h(v, n)
+            return res - v.v.pop()
 
-        P = StopAtXPolicy()
+        P = StopAtXPolicy(g)
 
-        assert f(-3) == 42
-        res = self.timeshift(f, [-3], [], policy=P)
-        assert res == 42
-        res = self.timeshift(f, [4], [], policy=P)
-        assert res == 112
+        assert f(-3) == 35
+        res = self.timeshift_from_portal(f, f, [-3], policy=P)
+        assert res == 35
+        res = self.timeshift_from_portal(f, f, [4], policy=P)
+        assert res == 12
