@@ -672,7 +672,10 @@ class HintGraphTransformer(object):
     def handle_oopspec_call(self, block, pos, withexc):
         op = block.operations[pos]
         assert op.opname == 'direct_call'
-        op.opname = 'oopspec_call'
+        if withexc:
+            op.opname = 'oopspec_call'            
+        else:
+            op.opname = 'oopspec_call_noexc'            
         if withexc:
             link = split_block(self.hannotator, block, pos+1)
             nextblock = link.target
@@ -765,19 +768,19 @@ class HintGraphTransformer(object):
                                            oop = False):
         dopts = {'withexc': withexc, 'oop': oop }
         copts = Constant(dopts, lltype.Void)
-        v_shape = self.genop(newops, 'after_residual_call', [copts],
+        v_flags = self.genop(newops, 'after_residual_call', [copts],
                              resulttype=lltype.Signed, red=True)
-        reshape_index = len(newops)
-        self.genop(newops, 'reshape', [v_shape])
-        reshape_pos = pos+reshape_index
+        residual_fetch_index = len(newops)
+        self.genop(newops, 'residual_fetch', [v_flags, copts])
+        residual_fetch_pos = pos+residual_fetch_index
         block.operations[pos:pos+1] = newops
 
-        link = split_block(self.hannotator, block, reshape_pos)
+        link = split_block(self.hannotator, block, residual_fetch_pos)
         nextblock = link.target
 
         reds, greens = self.sort_by_color(link.args)
         self.genop(block, 'save_locals', reds)
-        v_finished_flag = self.genop(block, 'promote', [v_shape],
+        v_finished_flag = self.genop(block, 'promote', [v_flags],
                                      resulttype = lltype.Bool)
         self.go_to_dispatcher_if(block, v_finished_flag)
 

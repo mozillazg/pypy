@@ -22,6 +22,7 @@ from pypy.jit.hintannotator import container as hintcontainer
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, oop
 from pypy.jit.timeshifter.transform import HintGraphTransformer
+from pypy.jit.timeshifter.exception import ExceptionDesc
 from pypy.jit.codegen import model as cgmodel
 
 class HintTypeSystem(LowLevelTypeSystem):
@@ -77,69 +78,13 @@ class HintRTyper(RPythonTyper):
         (self.s_Queue,
          self.r_Queue)       = self.s_r_instanceof(rtimeshift.BaseDispatchQueue)
 
-        self.etrafo = hannotator.exceptiontransformer
-        self.cexcdata = self.etrafo.cexcdata
-        self.exc_data_ptr = self.cexcdata.value
-        gv_excdata = RGenOp.constPrebuiltGlobal(self.exc_data_ptr)
-        LL_EXC_TYPE  = rtyper.exceptiondata.lltype_of_exception_type
-        LL_EXC_VALUE = rtyper.exceptiondata.lltype_of_exception_value
-        null_exc_type_box = rvalue.redbox_from_prebuilt_value(RGenOp,
-                                         lltype.nullptr(LL_EXC_TYPE.TO))
-        null_exc_value_box = rvalue.redbox_from_prebuilt_value(RGenOp,
-                                         lltype.nullptr(LL_EXC_VALUE.TO))
-
-        p = self.etrafo.rpyexc_fetch_type_ptr.value
-        gv_rpyexc_fetch_type = RGenOp.constPrebuiltGlobal(p)
-        tok_fetch_type = RGenOp.sigToken(lltype.typeOf(p).TO)
-        kind_etype = RGenOp.kindToken(LL_EXC_TYPE)
-
-        p = self.etrafo.rpyexc_fetch_value_ptr.value
-        gv_rpyexc_fetch_value = RGenOp.constPrebuiltGlobal(p)
-        tok_fetch_value = RGenOp.sigToken(lltype.typeOf(p).TO)
-        kind_evalue = RGenOp.kindToken(LL_EXC_VALUE)
-
-        p = self.etrafo.rpyexc_clear_ptr.value
-        gv_rpyexc_clear = RGenOp.constPrebuiltGlobal(p)
-        tok_clear = RGenOp.sigToken(lltype.typeOf(p).TO)
-
-        p = self.etrafo.rpyexc_raise_ptr.value
-        gv_rpyexc_raise = RGenOp.constPrebuiltGlobal(p)
-        tok_raise = RGenOp.sigToken(lltype.typeOf(p).TO)
-
-        def fetch_global_excdata(jitstate):
-            builder = jitstate.curbuilder
-            gv_etype = builder.genop_call(tok_fetch_type,
-                                          gv_rpyexc_fetch_type, [])
-            gv_evalue = builder.genop_call(tok_fetch_value,
-                                           gv_rpyexc_fetch_value, [])
-            builder.genop_call(tok_clear, gv_rpyexc_clear, [])
-            etypebox  = rvalue.PtrRedBox(kind_etype,  gv_etype)
-            evaluebox = rvalue.PtrRedBox(kind_evalue, gv_evalue)
-            rtimeshift.setexctypebox (jitstate, etypebox)
-            rtimeshift.setexcvaluebox(jitstate, evaluebox)
-        self.fetch_global_excdata = fetch_global_excdata
-
-        def store_global_excdata(jitstate):
-            builder = jitstate.curbuilder
-            etypebox = jitstate.exc_type_box
-            if etypebox.is_constant():
-                ll_etype = rvalue.ll_getvalue(etypebox, llmemory.Address)
-                if not ll_etype:
-                    return       # we known there is no exception set
-            evaluebox = jitstate.exc_value_box
-            gv_etype  = etypebox .getgenvar(jitstate)
-            gv_evalue = evaluebox.getgenvar(jitstate)
-            builder.genop_call(tok_raise,
-                               gv_rpyexc_raise, [gv_etype, gv_evalue])
-        self.store_global_excdata = store_global_excdata
-
-        def ll_fresh_jitstate(builder):
+        def ll_fresh_jitstate(builder, exceptiondesc):
             return rtimeshift.JITState(builder, None,
-                                       null_exc_type_box,
-                                       null_exc_value_box)
+                                       exceptiondesc.null_exc_type_box,
+                                       exceptiondesc.null_exc_value_box)
         self.ll_fresh_jitstate = ll_fresh_jitstate
 
-        def ll_finish_jitstate(jitstate, graphsigtoken):
+        def ll_finish_jitstate(jitstate, exceptiondesc, graphsigtoken):
             assert jitstate.resuming is None
             returnbox = rtimeshift.getreturnbox(jitstate)
             gv_ret = returnbox.getgenvar(jitstate)
@@ -149,7 +94,7 @@ class HintRTyper(RPythonTyper):
                 content = virtualizable_box.content
                 assert isinstance(content, rcontainer.VirtualizableStruct)
                 content.store_back(jitstate)        
-            store_global_excdata(jitstate)
+            exceptiondesc.store_global_excdata(jitstate)
             jitstate.curbuilder.finish_and_return(graphsigtoken, gv_ret)
         self.ll_finish_jitstate = ll_finish_jitstate
 
@@ -199,6 +144,9 @@ class HintRTyper(RPythonTyper):
                 "No global merge point found.  "
                 "Forgot 'hint(None, global_merge_point=True)'?")
         self.log.event("Timeshifted control flow of %d graphs." % (len(seen),))
+
+        self.exceptiondesc = ExceptionDesc(self,
+                                           self.portal_contains_global_mp)
 
         #import pdb; pdb.set_trace()
         # only keep the hint-annotated graphs that are really useful
@@ -277,6 +225,7 @@ class HintRTyper(RPythonTyper):
         args_specification = unrolling_iterable(args_specification)
         fresh_jitstate = self.ll_fresh_jitstate
         finish_jitstate = self.ll_finish_jitstate
+        exceptiondesc = self.exceptiondesc
         sigtoken = rgenop.sigToken(FUNC)
 
         # debug helper
@@ -323,7 +272,7 @@ class HintRTyper(RPythonTyper):
                 builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken,
                                                              "generated")
                 cache[key] = gv_generated
-                top_jitstate = fresh_jitstate(builder)
+                top_jitstate = fresh_jitstate(builder, exceptiondesc)
                 i = 0
                 for color, _, make_arg_redbox in args_specification:
                     if color == "green":
@@ -350,7 +299,7 @@ class HintRTyper(RPythonTyper):
                 builder.start_writing()
                 top_jitstate = portal_fn(top_jitstate, *portal_ts_args)
                 if top_jitstate is not None:
-                    finish_jitstate(top_jitstate, sigtoken)
+                    finish_jitstate(top_jitstate, exceptiondesc, sigtoken)
                 builder.end()
                 builder.show_incremental_progress()
 
@@ -379,7 +328,7 @@ class HintRTyper(RPythonTyper):
         TYPES = [v.concretetype for v in origportalgraph.getargs()]
         argspecandtypes = unrolling_iterable(zip(args_specification,
                                                   TYPES))
-        fetch_global_excdata = self.fetch_global_excdata
+        fetch_global_excdata = self.exceptiondesc.fetch_global_excdata
 
         def portalreentry(jitstate, *args): # xxx virtualizables?
             i = 0
@@ -419,7 +368,7 @@ class HintRTyper(RPythonTyper):
                         i += 1
                         portal_ts_args += (box,)
 
-                top_jitstate = fresh_jitstate(builder)
+                top_jitstate = fresh_jitstate(builder, exceptiondesc)
                 state.graph_compilation_queue.append((top_jitstate, portal_ts_args))
 
             gv_res = curbuilder.genop_call(sigtoken, gv_generated, args_gv)
@@ -713,12 +662,12 @@ class HintRTyper(RPythonTyper):
         if isinstance(hop.args_r[0], BlueRepr):
             return hop.args_r[0].timeshift_getfield(hop)
         ts = self
-        if hop.args_v[0] == ts.cexcdata:
+        if hop.args_v[0] == ts.exceptiondesc.cexcdata:
             # reading one of the exception boxes (exc_type or exc_value)
             fieldname = hop.args_v[1].value
-            if fieldname.endswith('exc_type'):
+            if fieldname == 'exc_type':
                 reader = rtimeshift.getexctypebox
-            elif fieldname.endswith('exc_value'):
+            elif fieldname == 'exc_value':
                 reader = rtimeshift.getexcvaluebox
             else:
                 raise Exception("getfield(exc_data, %r)" % (fieldname,))
@@ -793,12 +742,12 @@ class HintRTyper(RPythonTyper):
         VALUETYPE = originalconcretetype(hop.args_s[2])
         if VALUETYPE is lltype.Void:
             return
-        if hop.args_v[0] == ts.cexcdata:
+        if hop.args_v[0] == ts.exceptiondesc.cexcdata:
             # reading one of the exception boxes (exc_type or exc_value)
             fieldname = hop.args_v[1].value
-            if fieldname.endswith('exc_type'):
+            if fieldname == 'exc_type':
                 writer = rtimeshift.setexctypebox
-            elif fieldname.endswith('exc_value'):
+            elif fieldname == 'exc_value':
                 writer = rtimeshift.setexcvaluebox
             else:
                 raise Exception("setfield(exc_data, %r)" % (fieldname,))
@@ -1207,6 +1156,7 @@ class HintRTyper(RPythonTyper):
         RESIDUAL_FUNCTYPE = self.get_residual_functype(tsgraph)
         residualSigToken = self.RGenOp.sigToken(RESIDUAL_FUNCTYPE)
         ll_finish_jitstate = self.ll_finish_jitstate
+        exceptiondesc = self.exceptiondesc
 
         args_s = [self.s_JITState] + [annmodel.lltype_to_annotation(ARG)
                                       for ARG in TS_FUNC.TO.ARGS[1:]]
@@ -1220,7 +1170,8 @@ class HintRTyper(RPythonTyper):
             jitstate.resumepoint = N
             finaljitstate = tsfn(jitstate, *dummy_args)
             if finaljitstate is not None:
-                ll_finish_jitstate(finaljitstate, residualSigToken)
+                ll_finish_jitstate(finaljitstate, exceptiondesc,
+                                   residualSigToken)
 
         return self.translate_op_merge_point(hop,
                         global_resumer = call_for_global_resuming)
@@ -1277,15 +1228,19 @@ class HintRTyper(RPythonTyper):
     # handling of the various kinds of calls
 
     def translate_op_oopspec_was_residual(self, hop):
-        return hop.inputconst(lltype.Bool, False)
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(rtimeshift.oopspec_was_residual,
+                                               [self.s_JITState],
+                                               [v_jitstate     ],
+                                               annmodel.s_Bool)
 
-    def translate_op_oopspec_call(self, hop):
+    def translate_op_oopspec_call(self, hop, can_raise=True):
         # special-cased call, for things like list methods
         from pypy.jit.timeshifter.oop import OopSpecDesc, Index
 
         c_func = hop.args_v[0]
         fnobj = c_func.value._obj
-        oopspecdesc = OopSpecDesc(self, fnobj)
+        oopspecdesc = OopSpecDesc(self, fnobj, can_raise)
         hop.r_s_popfirstarg()
 
         args_v = []
@@ -1342,6 +1297,9 @@ class HintRTyper(RPythonTyper):
                                       [ts.s_JITState, s_oopspecdesc] + args_s,
                                       [v_jitstate,    c_oopspecdesc] + args_v,
                                       s_result)
+
+    def translate_op_oopspec_call_noexc(self, hop):
+        return self.translate_op_oopspec_call(hop, False)
 
     def translate_op_green_call(self, hop):
         for r_arg in hop.args_r:
@@ -1427,27 +1385,32 @@ class HintRTyper(RPythonTyper):
         oop = dopts['oop']
         v_jitstate = hop.llops.getjitstate()
         if withexc:
-            hop.llops.genmixlevelhelpercall(self.fetch_global_excdata,
-                                            [self.s_JITState], [v_jitstate],
-                                            annmodel.s_None)
-        if not oop:
-            v_after = hop.llops.genmixlevelhelpercall(
-                            rtimeshift.after_residual_call,
-                            [self.s_JITState],
-                            [v_jitstate],
-                            self.s_RedBox)
-        else: # xxx
-            v_after = hop.inputconst(self.getredrepr(lltype.Signed), 0)
-
+            c_exception_desc = hop.inputconst(lltype.Void, self.exceptiondesc)
+        else:
+            c_exception_desc = hop.inputconst(lltype.Void, None)
+        bk = self.rtyper.annotator.bookkeeper
+        s_exception_desc = bk.immutablevalue(c_exception_desc.value)
+        c_check_forced = hop.inputconst(lltype.Bool, not oop)
+        v_after = hop.llops.genmixlevelhelpercall(
+            rtimeshift.ll_after_residual_call,
+            [self.s_JITState, s_exception_desc, annmodel.s_Bool],
+            [v_jitstate     , c_exception_desc, c_check_forced ],
+            self.s_RedBox)
         return v_after
-        
-    def translate_op_reshape(self, hop):
-        v_jitstate = hop.llops.getjitstate()                
-        v_shape, = hop.inputargs(self.getredrepr(lltype.Signed))
-        return hop.llops.genmixlevelhelpercall(rtimeshift.reshape,
-                                               [self.s_JITState, self.s_RedBox],
-                                               [v_jitstate     , v_shape      ],
-                                               annmodel.s_None)        
+
+    def translate_op_residual_fetch(self, hop):
+        dopts = hop.args_v[1].value
+        oop = dopts['oop']
+        v_jitstate = hop.llops.getjitstate()
+        v_flags = hop.inputarg(self.getredrepr(lltype.Signed), arg=0)
+        bk = self.rtyper.annotator.bookkeeper
+        c_exception_desc = hop.inputconst(lltype.Void, self.exceptiondesc)
+        s_exception_desc = bk.immutablevalue(c_exception_desc.value)
+        c_check_forced = hop.inputconst(lltype.Bool, not oop)
+        return hop.llops.genmixlevelhelpercall(rtimeshift.residual_fetch,
+           [self.s_JITState, s_exception_desc, annmodel.s_Bool, self.s_RedBox],
+           [v_jitstate     , c_exception_desc, c_check_forced , v_flags      ],
+           annmodel.s_None)
 
     def translate_op_reverse_split_queue(self, hop):
         hop.llops.genmixlevelhelpercall(rtimeshift.reverse_split_queue,
