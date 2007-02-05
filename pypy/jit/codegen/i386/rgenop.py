@@ -205,23 +205,27 @@ def poke_word_into(addr, value):
 
 class Builder(GenBuilder):
     coming_from = 0
-    operations = None
     update_defaultcaseaddr_of = None
     force_in_stack = None
+    paused_alive_gv = None
+    order_dependency = None
 
     def __init__(self, rgenop, inputargs_gv, inputoperands):
         self.rgenop = rgenop
         self.inputargs_gv = inputargs_gv
         self.inputoperands = inputoperands
+        self.operations = []
 
     def start_writing(self):
-        assert self.operations is None
-        self.operations = []
+        self.paused_alive_gv = None
 
     def generate_block_code(self, final_vars_gv, force_vars=[],
                                                  force_operands=[],
                                                  renaming=True,
                                                  minimal_stack_depth=0):
+        if self.order_dependency is not None:
+            self.order_dependency.force_generate_code()
+            self.order_dependency = None
         allocator = RegAllocator()
         if self.force_in_stack is not None:
             allocator.force_stack_storage(self.force_in_stack)
@@ -243,7 +247,7 @@ class Builder(GenBuilder):
         if self.force_in_stack is not None:
             allocator.save_storage_places(self.force_in_stack)
             self.force_in_stack = None
-        self.operations = None
+        del self.operations[:]
         if renaming:
             self.inputargs_gv = [GenVar() for v in final_vars_gv]
         else:
@@ -271,7 +275,7 @@ class Builder(GenBuilder):
                 op = OpSameAs(args_gv[i])
                 args_gv[i] = op
                 self.operations.append(op)
-        lbl = Label()
+        lbl = Label(self)
         lblop = OpLabel(lbl, args_gv)
         self.operations.append(lblop)
         return lbl
@@ -311,6 +315,7 @@ class Builder(GenBuilder):
 
     def _jump_if(self, gv_condition, args_for_jump_gv, negate):
         newbuilder = Builder(self.rgenop, list(args_for_jump_gv), None)
+        newbuilder.order_dependency = self
         # if the condition does not come from an obvious comparison operation,
         # e.g. a getfield of a Bool or an input argument to the current block,
         # then insert an OpIntIsTrue
@@ -329,9 +334,11 @@ class Builder(GenBuilder):
     def finish_and_goto(self, outputargs_gv, targetlbl):
         operands = targetlbl.inputoperands
         if operands is None:
-            # this occurs when jumping back to the same currently-open block;
-            # close the block and re-open it
+            # jumping to a label in a builder whose code has not been
+            # generated yet - this builder could be 'self', in the case
+            # of a tight loop
             self.pause_writing(outputargs_gv)
+            targetlbl.targetbuilder.force_generate_code()
             self.start_writing()
             operands = targetlbl.inputoperands
             assert operands is not None
@@ -355,11 +362,17 @@ class Builder(GenBuilder):
         self.rgenop.close_mc(mc)
 
     def pause_writing(self, alive_gv):
-        mc = self.generate_block_code(alive_gv, renaming=False)
-        self.set_coming_from(mc)
-        mc.done()
-        self.rgenop.close_mc(mc)
+        self.paused_alive_gv = alive_gv
         return self
+
+    def force_generate_code(self):
+        alive_gv = self.paused_alive_gv
+        if alive_gv is not None:
+            self.paused_alive_gv = None
+            mc = self.generate_block_code(alive_gv, renaming=False)
+            self.set_coming_from(mc)
+            mc.done()
+            self.rgenop.close_mc(mc)
 
     def end(self):
         pass
@@ -525,6 +538,9 @@ class Label(GenLabel):
     targetaddr = 0
     targetstackdepth = 0
     inputoperands = None
+
+    def __init__(self, targetbuilder):
+        self.targetbuilder = targetbuilder
 
 # ____________________________________________________________
 
