@@ -1361,6 +1361,35 @@ class TestTimeshift(TimeshiftingTests):
         P = StopAtXPolicy()
         res = self.timeshift(f, [7, 3], policy=P)
         assert res == f(7,3)
+        self.check_insns(indirect_call=1, direct_call=1)
+
+    def test_indirect_red_call_with_exc(self):
+        def h1(n):
+            if n < 0:
+                raise ValueError
+            return n*2
+        def h2(n):
+            if n < 0:
+                raise ValueError
+            return n*4
+        l = [h1, h2]
+        def g(n, x):
+            h = l[n&1]
+            return h(n) + x
+
+        def f(n, x):
+            try:
+                return g(n, x)
+            except ValueError:
+                return -1
+
+        P = StopAtXPolicy()
+        res = self.timeshift(f, [7, 3], policy=P)
+        assert res == f(7,3)
+        self.check_insns(indirect_call=1)
+
+        res = self.timeshift(f, [-7, 3], policy=P)
+        assert res == -1
         self.check_insns(indirect_call=1)
 
     def test_indirect_gray_call(self):
