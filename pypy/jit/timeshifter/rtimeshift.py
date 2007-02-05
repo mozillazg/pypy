@@ -889,6 +889,17 @@ class VirtualFrame(object):
 
 
 class JITState(object):
+    _attrs_ = """curbuilder frame
+                 exc_type_box exc_value_box
+                 greens
+                 returnbox
+                 promotion_path
+                 resumepoint resuming
+                 next
+                 virtualizables
+                 shape_place
+              """.split()
+
     returnbox = None
     next      = None   # for linked lists
     promotion_path = None

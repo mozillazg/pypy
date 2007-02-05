@@ -1265,6 +1265,9 @@ class HintRTyper(RPythonTyper):
 
     # handling of the various kinds of calls
 
+    def translate_op_oopspec_was_residual(self, hop):
+        return hop.inputconst(lltype.Bool, False)
+
     def translate_op_oopspec_call(self, hop):
         # special-cased call, for things like list methods
         from pypy.jit.timeshifter.oop import OopSpecDesc, Index
@@ -1410,15 +1413,23 @@ class HintRTyper(RPythonTyper):
     def translate_op_after_residual_call(self, hop):
         dopts = hop.args_v[0].value
         withexc = dopts['withexc']
+        oop = dopts['oop']
         v_jitstate = hop.llops.getjitstate()
         if withexc:
             hop.llops.genmixlevelhelpercall(self.fetch_global_excdata,
                                             [self.s_JITState], [v_jitstate],
                                             annmodel.s_None)
-        return hop.llops.genmixlevelhelpercall(rtimeshift.after_residual_call,
-                                               [self.s_JITState],
-                                               [v_jitstate],
-                                               self.s_RedBox)
+        if not oop:
+            v_after = hop.llops.genmixlevelhelpercall(
+                            rtimeshift.after_residual_call,
+                            [self.s_JITState],
+                            [v_jitstate],
+                            self.s_RedBox)
+        else: # xxx
+            v_after = hop.inputconst(self.getredrepr(lltype.Signed), 0)
+
+        return v_after
+        
     def translate_op_reshape(self, hop):
         v_jitstate = hop.llops.getjitstate()                
         v_shape, = hop.inputargs(self.getredrepr(lltype.Signed))

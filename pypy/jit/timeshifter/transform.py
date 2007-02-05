@@ -502,7 +502,7 @@ class HintGraphTransformer(object):
                 self.hannotator.policy.oopspec):
                 if fnobj._callable.oopspec.startswith('vable.'):
                     return 'vable', None
-                return 'oopspec', None
+                return 'oopspec', self.can_raise(spaceop)
         if self.hannotator.bookkeeper.is_green_call(spaceop):
             return 'green', None
         withexc = self.can_raise(spaceop)
@@ -669,11 +669,32 @@ class HintGraphTransformer(object):
     def handle_gray_call(self, block, pos, withexc):
         self.handle_red_call(block, pos, color='gray', withexc=withexc)
 
-    def handle_oopspec_call(self, block, pos):
+    def handle_oopspec_call(self, block, pos, withexc):
         op = block.operations[pos]
         assert op.opname == 'direct_call'
         op.opname = 'oopspec_call'
+        if withexc:
+            link = split_block(self.hannotator, block, pos+1)
+            nextblock = link.target
+            linkargs = link.args
+            v_residual  =self.genop(block, 'oopspec_was_residual', [],
+                                    resulttype = lltype.Bool)
+            residualblock = Block([])
+            self.genswitch(block, v_residual, true = residualblock,
+                                              false = None)
+            link_f = block.exits[0]
+            link_f.args = linkargs
+            link_f.target = nextblock
+            residualblock.closeblock(Link(linkargs, nextblock))
+            residualblock2 = self.handle_after_residual_call_details(
+                                  residualblock, 0, [], oop=True,
+                                  withexc=True)
 
+            blockset = { block: True, nextblock: False,
+                        residualblock: False,
+                        residualblock2: False }
+            SSA_to_SSI(blockset, self.hannotator)
+        
     def handle_vable_call(self, block, pos):
         op = block.operations[pos]
         assert op.opname == 'direct_call'
@@ -731,8 +752,18 @@ class HintGraphTransformer(object):
         call_index = len(newops)
         v_res = self.genop(newops, 'residual_%s_call' % (color,),
                            [op.args[0]], result_like = op.result)
+        if preserve_res:
+            v_res = newops[call_index].result = op.result
 
-        dopts = {'withexc': withexc}
+        nextblock = self.handle_after_residual_call_details(block, pos,
+                                                            newops, withexc)
+        
+        return v_res, nextblock
+
+
+    def handle_after_residual_call_details(self, block, pos, newops, withexc,
+                                           oop = False):
+        dopts = {'withexc': withexc, 'oop': oop }
         copts = Constant(dopts, lltype.Void)
         v_shape = self.genop(newops, 'after_residual_call', [copts],
                              resulttype=lltype.Signed, red=True)
@@ -740,8 +771,6 @@ class HintGraphTransformer(object):
         self.genop(newops, 'reshape', [v_shape])
         reshape_pos = pos+reshape_index
         block.operations[pos:pos+1] = newops
-        if preserve_res:
-            v_res = newops[call_index].result = op.result
 
         link = split_block(self.hannotator, block, reshape_pos)
         nextblock = link.target
@@ -752,8 +781,7 @@ class HintGraphTransformer(object):
                                      resulttype = lltype.Bool)
         self.go_to_dispatcher_if(block, v_finished_flag)
 
-            
-        return v_res, nextblock
+        return nextblock
 
 
     # __________ hints __________
