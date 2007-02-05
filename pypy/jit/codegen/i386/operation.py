@@ -511,6 +511,7 @@ class OpLabel(Operation):
         lbl.targetaddr = allocator.mc.tell()
         lbl.targetstackdepth = allocator.required_frame_depth
         lbl.inputoperands = [allocator.get_operand(v) for v in self.args_gv]
+        lbl.targetbuilder = None    # done generating
 
 class OpCall(Operation):
     def __init__(self, sigtoken, gv_fnptr, args_gv):
