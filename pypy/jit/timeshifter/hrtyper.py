@@ -189,7 +189,7 @@ class HintRTyper(RPythonTyper):
         seen = {entrygraph: True}
         while pending:
             graph = pending.pop()
-            for nextgraph in self.transform_graph(graph,
+            for nextgraph in self.timeshift_cflow(graph,
                                 is_portal=graph is leaveportalgraph):
                 if nextgraph not in seen:
                     pending.append(nextgraph)
@@ -198,6 +198,8 @@ class HintRTyper(RPythonTyper):
             assert self.portal_contains_global_mp, (
                 "No global merge point found.  "
                 "Forgot 'hint(None, global_merge_point=True)'?")
+        self.log.event("Timeshifted control flow of %d graphs." % (len(seen),))
+
         #import pdb; pdb.set_trace()
         # only keep the hint-annotated graphs that are really useful
         self.annotator.translator.graphs = [graph
@@ -205,10 +207,13 @@ class HintRTyper(RPythonTyper):
             if graph in seen]
         if view:
             self.annotator.translator.view()     # in the middle
+        self.blockcount = 0
+        self.graphcount = 0
+        self.ngraphs = len(seen)
         for graph in seen:
-            self.timeshift_graph(graph)
-        self.log.event("Timeshifted %d graphs." % (len(seen),))
+            self.timeshift_ops(graph)
 
+        self.log.event("Completed timeshifting of %d graphs." % (len(seen),))
         if origportalgraph:
             n = len(list(self.portalgraph.iterblocks()))
             self.log.event("portal has now %d blocks" % n)
@@ -448,7 +453,7 @@ class HintRTyper(RPythonTyper):
         tsportalgraph.name += '_portal_reentry'        
         
 
-    def transform_graph(self, graph, is_portal=False):
+    def timeshift_cflow(self, graph, is_portal=False):
         # prepare the graphs by inserting all bookkeeping/dispatching logic
         # as special operations
         assert graph.startblock in self.annotator.annotated
@@ -462,11 +467,17 @@ class HintRTyper(RPythonTyper):
                 transformer.mergepointfamily.has_global_mergepoints())
         return transformer.tsgraphs_seen
 
-    def timeshift_graph(self, graph):
+    def timeshift_ops(self, graph):
         # specialize all blocks of this graph
         for block in list(graph.iterblocks()):
             self.annotator.annotated[block] = graph
             self.specialize_block(block)
+            self.blockcount += 1
+            if self.blockcount % 100 == 0:
+                self.log.event("Timeshifted ops in %d blocks, %d/%d graphs" %
+                               (self.blockcount, self.graphcount,
+                                self.ngraphs))
+        self.graphcount += 1                
         # "normalize" the graphs by putting an explicit v_jitstate variable
         # everywhere
         self.insert_v_jitstate_everywhere(graph)
