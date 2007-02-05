@@ -7,9 +7,8 @@ from inspect import isclass, getmro
 
 rootdir = py.magic.autopath().dirpath()
 
-dist_rsync_roots = ['../pypy', '../py']
+dist_rsync_roots = ['.', '../py']
 #dist_rsync_roots = ['.', '../lib-python', '../py']
-#dist_rsync_roots = ['.', '../lib-python']
 dist_rsync_ignore = ['_cache']
 
 #
