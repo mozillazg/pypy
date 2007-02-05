@@ -16,10 +16,12 @@ class OopSpecDesc:
 
     do_call = None
 
-    def __init__(self, hrtyper, fnobj):
+    def __init__(self, hrtyper, fnobj, can_raise):
         ll_func = fnobj._callable
         FUNCTYPE = lltype.typeOf(fnobj)
         nb_args = len(FUNCTYPE.ARGS)
+
+        self.can_raise = can_raise
 
         # parse the oopspec and fill in the arguments
         operation_name, args = ll_func.oopspec.split('(', 1)
@@ -79,12 +81,6 @@ class OopSpecDesc:
         self.ll_handler = getattr(vmodule, method)
         self.couldfold = getattr(self.ll_handler, 'couldfold', False)
 
-        # exception handling
-        graph = fnobj.graph
-        etrafo = hrtyper.etrafo
-        self.can_raise = etrafo.raise_analyzer.analyze_direct_call(graph)
-        self.fetch_global_excdata = hrtyper.fetch_global_excdata
-
         if self.couldfold:
             ARGS = FUNCTYPE.ARGS
             residualargsources = self.residualargsources
@@ -129,7 +125,7 @@ class OopSpecDesc:
                 return self.errorbox
         gv_result = builder.genop_call(self.sigtoken, self.gv_fnptr, args_gv)
         if self.can_raise:
-            self.fetch_global_excdata(jitstate)
+            jitstate.generated_oop_residual_can_raise = True
         return self.redboxbuilder(self.result_kind, gv_result)
 
     def residual_exception(self, jitstate, ExcCls):

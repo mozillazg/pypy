@@ -759,7 +759,7 @@ class VirtualizableStruct(VirtualStruct):
         access_token = typedesc.access_desc.fieldtoken
         builder.genop_setfield(access_token, gv_outside, typedesc.gv_access)
 
-    def after_residual_call(self, jitstate):
+    def check_forced_after_residual_call(self, jitstate):
         typedesc = self.typedesc
         builder = jitstate.curbuilder
         gv_outside = self.content_boxes[-1].genvar

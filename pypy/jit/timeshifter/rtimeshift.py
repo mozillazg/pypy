@@ -518,12 +518,38 @@ def ll_gen_residual_call(jitstate, calldesc, funcbox):
     gv_result = builder.genop_call(calldesc.sigtoken, gv_funcbox, args_gv)
     return calldesc.redboxbuilder(calldesc.result_kind, gv_result)
 
-def after_residual_call(jitstate):
-    return jitstate.after_residual_call()
+def ll_after_residual_call(jitstate, exceptiondesc, check_forced):
+    builder = jitstate.curbuilder
+    if check_forced:
+        gv_flags = jitstate.check_forced_after_residual_call()
+    else:
+        gv_flags = None
+    if exceptiondesc:
+        if exceptiondesc.lazy_exception_path:
+            gv_occurred = exceptiondesc.gen_exc_occurred(builder)
+            gv_flag = builder.genop1("cast_bool_to_int", gv_occurred)
+            if gv_flags is None:
+                gv_flags = gv_flag
+            else:
+                gv_flags = builder.genop2("int_or", gv_flags, gv_flag)
+        else:
+            exceptiondesc.fetch_global_excdata(jitstate)
+    if gv_flags is None:
+        gv_flags = builder.rgenop.constPrebuiltGlobal(0)
+    return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Signed), gv_flags)
 
-def reshape(jitstate, shapebox):
-    shapemask = rvalue.ll_getvalue(shapebox, lltype.Signed)
-    jitstate.reshape(shapemask)
+def residual_fetch(jitstate, exceptiondesc, check_forced, flagsbox):
+    flags = rvalue.ll_getvalue(flagsbox, lltype.Signed)
+    if flags & 1:   # an exception occurred
+        exceptiondesc.fetch_global_excdata(jitstate, known_occurred=True)
+    if check_forced:
+        shapemask = flags & ~ 1
+        jitstate.reshape(shapemask)
+
+def oopspec_was_residual(jitstate):
+    res = jitstate.generated_oop_residual_can_raise
+    jitstate.generated_oop_residual_can_raise = False
+    return res
 
 
 class ResumingInfo(object):
@@ -898,11 +924,13 @@ class JITState(object):
                  next
                  virtualizables
                  shape_place
+                 generated_oop_residual_can_raise
               """.split()
 
     returnbox = None
     next      = None   # for linked lists
     promotion_path = None
+    generated_oop_residual_can_raise = False
 
     def __init__(self, builder, frame, exc_type_box, exc_value_box,
                  resumepoint=-1, newgreens=[], resuming=None,
@@ -972,7 +1000,7 @@ class JITState(object):
         if virtualizables:
             builder = self.curbuilder
             memo = rvalue.make_vrti_memo()
-            memo.bitcount = 0
+            memo.bitcount = 1
             memo.frameindex = 0
             memo.framevars_gv = []
             shape_kind = builder.rgenop.kindToken(lltype.Signed)
@@ -998,29 +1026,28 @@ class JITState(object):
                 assert isinstance(content, rcontainer.VirtualizableStruct)
                 content.prepare_for_residual_call(self, gv_base, vable_rti)
                 
-    def after_residual_call(self):
+    def check_forced_after_residual_call(self):
         virtualizables = self.virtualizables
         builder = self.curbuilder
         if virtualizables:
             for virtualizable_box in virtualizables:
                 content = virtualizable_box.content
                 assert isinstance(content, rcontainer.VirtualizableStruct)
-                content.after_residual_call(self)
+                content.check_forced_after_residual_call(self)
             shape_kind = builder.rgenop.kindToken(lltype.Signed)
             gv_shape = builder.genop_absorb_place(shape_kind,
                                                   self.shape_place)
             self.shape_place = None
+            return gv_shape
         else:
-            gv_shape = builder.rgenop.genconst(0)
-        return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Signed),
-                                gv_shape)
+            return None
 
     def reshape(self, shapemask):
         virtualizables = self.virtualizables
         builder = self.curbuilder
         if virtualizables:
             memo = rvalue.make_vrti_memo()
-            memo.bitcount = 0
+            memo.bitcount = 1
             if shapemask:
                 memo.forced = []
             else:

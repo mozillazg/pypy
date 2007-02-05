@@ -64,8 +64,8 @@ class PortalTest(object):
         self.hrtyper.specialize(origportalgraph=origportalgraph,
                            view = conftest.option.view and self.small)
 
-        if conftest.option.view and self.small:
-            t.view()
+        #if conftest.option.view and self.small:
+        #    t.view()
         self.postprocess_timeshifting()
         self.readportalgraph = self.hrtyper.readportalgraph
 
@@ -86,12 +86,14 @@ class PortalTest(object):
                                                 backendoptimize=backendoptimize)
         self.main_args = main_args
         self.main_is_portal = main is portal
-        llinterp = LLInterpreter(self.rtyper)
+        exc_data_ptr = self.hrtyper.exceptiondesc.exc_data_ptr
+        llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
         res = llinterp.eval_graph(self.maingraph, main_args)
         return res
 
     def get_residual_graph(self):
-        llinterp = LLInterpreter(self.rtyper)
+        exc_data_ptr = self.hrtyper.exceptiondesc.exc_data_ptr
+        llinterp = LLInterpreter(self.rtyper, exc_data_ptr=exc_data_ptr)
         if self.main_is_portal:
             residual_graph = llinterp.eval_graph(self.readportalgraph,
                                                  self.main_args)._obj.graph
@@ -469,3 +471,49 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
         assert res == 123
         self.check_insns(indirect_call=1)
+
+    def test_residual_red_call_with_promoted_exc(self):
+        def h(x):
+            if x > 0:
+                return x+1
+            else:
+                raise ValueError
+
+        def g(x):
+            return 2*h(x)
+
+        def f(x):
+            hint(None, global_merge_point=True)
+            try:
+                return g(x)
+            except ValueError:
+                return 7
+
+        stop_at_h = StopAtXPolicy(h)
+        res = self.timeshift_from_portal(f, f, [20], policy=stop_at_h)
+        assert res == 42
+        self.check_insns(int_add=0)
+
+        res = self.timeshift_from_portal(f, f, [-20], policy=stop_at_h)
+        assert res == 7
+        self.check_insns(int_add=0)
+
+    def test_residual_oop_raising(self):
+        def g(x):
+            lst = []
+            if x > 10:
+                lst.append(x)
+            return lst
+        def f(x):
+            hint(None, global_merge_point=True)
+            lst = g(x)
+            try:
+                return lst[0]
+            except IndexError:
+                return -42
+
+        res = self.timeshift_from_portal(f, f, [5], policy=P_OOPSPEC)
+        assert res == -42
+
+        res = self.timeshift_from_portal(f, f, [15], policy=P_OOPSPEC)
+        assert res == 15
