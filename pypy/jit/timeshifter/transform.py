@@ -497,33 +497,35 @@ class HintGraphTransformer(object):
             c_func = spaceop.args[0]
             fnobj = c_func.value._obj
             if hasattr(fnobj, 'jitcallkind'):
-                return fnobj.jitcallkind
+                return fnobj.jitcallkind, None
             if (hasattr(fnobj._callable, 'oopspec') and
                 self.hannotator.policy.oopspec):
                 if fnobj._callable.oopspec.startswith('vable.'):
-                    return 'vable'
-                return 'oopspec'
+                    return 'vable', None
+                return 'oopspec', None
         if self.hannotator.bookkeeper.is_green_call(spaceop):
-            return 'green'
+            return 'green', None
+        withexc = self.can_raise(spaceop)
         colors = {}
         for graph, tsgraph in self.graphs_from(spaceop):
             color = self.graph_calling_color(tsgraph)
             colors[color] = tsgraph
         if not colors: # cannot follow this call
-            if not self.can_raise(spaceop):
-                return 'residual_noexc'
-            return 'residual'   
+            return 'residual', withexc
         assert len(colors) == 1, colors   # buggy normalization?
-        return color
+        return color, withexc
 
     def split_after_calls(self):
         for block in list(self.graph.iterblocks()):
             for i in range(len(block.operations)-1, -1, -1):
                 op = block.operations[i]
                 if op.opname in ('direct_call', 'indirect_call'):
-                    call_kind = self.guess_call_kind(op)
+                    call_kind, withexc = self.guess_call_kind(op)
                     handler = getattr(self, 'handle_%s_call' % (call_kind,))
-                    handler(block, i)
+                    if withexc is None:
+                        handler(block, i)
+                    else:
+                        handler(block, i, withexc)
 
     def make_call(self, block, op, save_locals_vars, color='red'):
         # the 'save_locals' pseudo-operation is used to save all
@@ -563,7 +565,7 @@ class HintGraphTransformer(object):
                                     resulttype = lltype.Bool)
         self.go_to_dispatcher_if(block, v_finished)
 
-    def handle_red_call(self, block, pos, color='red'):
+    def handle_red_call(self, block, pos, withexc, color='red'):
         link = split_block(self.hannotator, block, pos+1)
         op = block.operations.pop(pos)
         #if op.opname == 'direct_call':
@@ -651,7 +653,8 @@ class HintGraphTransformer(object):
             v_res, nonconstantblock2 = self.handle_residual_call_details(
                                             nonconstantblock, 0, op,
                                             color, preserve_res =
-                                            (color != 'gray'))
+                                            (color != 'gray'),
+                                            withexc=withexc)
 
             #if color == 'red':
             #    linkargs[0] = v_res
@@ -663,8 +666,8 @@ class HintGraphTransformer(object):
         blockset[nextblock] = True # reachable from outside
         SSA_to_SSI(blockset, self.hannotator)
 
-    def handle_gray_call(self, block, pos):
-        self.handle_red_call(block, pos, color='gray')
+    def handle_gray_call(self, block, pos, withexc):
+        self.handle_red_call(block, pos, color='gray', withexc=withexc)
 
     def handle_oopspec_call(self, block, pos):
         op = block.operations[pos]
@@ -700,24 +703,21 @@ class HintGraphTransformer(object):
         assert op.opname == 'direct_call'
         op.opname = 'green_call'
 
-    def handle_yellow_call(self, block, pos):
-        self.handle_red_call(block, pos, color='yellow')
+    def handle_yellow_call(self, block, pos, withexc):
+        self.handle_red_call(block, pos, color='yellow', withexc=withexc)
 
-    def handle_residual_call(self, block, pos, qualifiers=[]):
+    def handle_residual_call(self, block, pos, withexc):
         op = block.operations[pos]        
         if op.result.concretetype is lltype.Void:
             color = 'gray'
         else:
             color = 'red'
         v_res, _ = self.handle_residual_call_details(block, pos, op, color,
-                                                     qualifiers=qualifiers)
+                                                     withexc)
         return v_res
-
-    def handle_residual_noexc_call(self, block, pos):
-        return self.handle_residual_call(block, pos, qualifiers=['noexc'])
                     
-    def handle_residual_call_details(self, block, pos, op, color,
-                                     preserve_res=True, qualifiers=[]):
+    def handle_residual_call_details(self, block, pos, op, color, withexc,
+                                     preserve_res=True):
         if op.opname == 'direct_call':
             args_v = op.args[1:]
         elif op.opname == 'indirect_call':
@@ -729,10 +729,13 @@ class HintGraphTransformer(object):
         args_v = [v for v in args_v if v.concretetype is not lltype.Void]
         self.genop(newops, 'save_locals', args_v)
         call_index = len(newops)
-        qualifiers = '_'.join([color] + qualifiers)
-        v_res = self.genop(newops, 'residual_%s_call' % (qualifiers,),
+        v_res = self.genop(newops, 'residual_%s_call' % (color,),
                            [op.args[0]], result_like = op.result)
-        v_shape = self.genop(newops, 'after_residual_call', [], resulttype=lltype.Signed, red=True)
+
+        dopts = {'withexc': withexc}
+        copts = Constant(dopts, lltype.Void)
+        v_shape = self.genop(newops, 'after_residual_call', [copts],
+                             resulttype=lltype.Signed, red=True)
         reshape_index = len(newops)
         self.genop(newops, 'reshape', [v_shape])
         reshape_pos = pos+reshape_index

@@ -1384,7 +1384,7 @@ class HintRTyper(RPythonTyper):
     translate_op_yellow_call          = translate_op_red_call
     translate_op_indirect_yellow_call = translate_op_indirect_red_call
 
-    def translate_op_residual_red_call(self, hop, color='red', exc=True):
+    def translate_op_residual_red_call(self, hop, color='red'):
         FUNC = originalconcretetype(hop.args_s[0])
         [v_funcbox] = hop.inputargs(self.getredrepr(FUNC))
         calldesc = rtimeshift.CallDesc(self.RGenOp, FUNC.TO)
@@ -1400,33 +1400,25 @@ class HintRTyper(RPythonTyper):
                                  [self.s_JITState, s_calldesc, self.s_RedBox],
                                  [v_jitstate,      c_calldesc, v_funcbox    ],
                                  s_result)
-
-        if exc:
-            hop.llops.genmixlevelhelpercall(self.fetch_global_excdata,
-                                            [self.s_JITState], [v_jitstate],
-                                            annmodel.s_None)
         return v_res
 
     def translate_op_residual_gray_call(self, hop):
         self.translate_op_residual_red_call(hop, color='gray')
 
-    def translate_op_residual_red_noexc_call(self, hop):
-        return self.translate_op_residual_red_call(hop, exc=False)
-        
-    def translate_op_residual_gray_noexc_call(self, hop):
-        self.translate_op_residual_red_call(hop, color='gray', exc=False)
-
     translate_op_residual_yellow_call       = translate_op_residual_red_call
-    translate_op_residual_yellow_noexc_call = (
-                                        translate_op_residual_red_noexc_call)
 
     def translate_op_after_residual_call(self, hop):
-        v_jitstate = hop.llops.getjitstate()        
+        dopts = hop.args_v[0].value
+        withexc = dopts['withexc']
+        v_jitstate = hop.llops.getjitstate()
+        if withexc:
+            hop.llops.genmixlevelhelpercall(self.fetch_global_excdata,
+                                            [self.s_JITState], [v_jitstate],
+                                            annmodel.s_None)
         return hop.llops.genmixlevelhelpercall(rtimeshift.after_residual_call,
                                                [self.s_JITState],
                                                [v_jitstate],
                                                self.s_RedBox)
-        
     def translate_op_reshape(self, hop):
         v_jitstate = hop.llops.getjitstate()                
         v_shape, = hop.inputargs(self.getredrepr(lltype.Signed))
