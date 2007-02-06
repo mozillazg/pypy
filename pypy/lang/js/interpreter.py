@@ -69,7 +69,6 @@ class BinaryOp(Expression):
         self.right = get_obj(t, '1')
     
 class BinaryComparisonOp(BinaryOp):
-    """super class for binary operators"""
     def eval(self, ctx):
         s2 = self.left.eval(ctx).GetValue()
         s4 = self.right.eval(ctx).GetValue()
@@ -81,7 +80,6 @@ class BinaryComparisonOp(BinaryOp):
         raise NotImplementedError
 
 class BinaryLogicOp(BinaryOp):
-    """super class for binary operators"""
     pass
 
 def writer(x):
@@ -130,6 +128,11 @@ def booleanjs(ctx, args, this):
         return W_Boolean(args[0].ToBoolean())
     return W_Boolean(False)
 
+def stringjs(ctx, args, this):
+    if len(args) > 0:
+        return W_String(args[0].ToString())
+    return W_String('')
+
 def numberjs(ctx, args, this):
     if len(args) > 0:
         return W_Number(args[0].ToNumber())
@@ -172,6 +175,7 @@ class Interpreter(object):
         w_math.Put('abs', W_Builtin(absjs, Class='function'))
         w_math.Put('floor', W_Builtin(floorjs, Class='function'))
         
+        w_Global.Put('String', W_Builtin(stringjs, Class='String'))
         
         #Global Properties
         w_Global.Put('Object', w_Object)
@@ -179,6 +183,7 @@ class Interpreter(object):
         w_Global.Put('Array', W_Array())
         w_Global.Put('version', W_Builtin(versionjs))
         
+        #Number
         w_Number = W_Builtin(numberjs, Class="Number")
         w_Number.Put('NaN', W_Number(NaN))
         w_Number.Put('POSITIVE_INFINITY', W_Number(Infinity))
@@ -217,7 +222,7 @@ class Array(ListOp):
         #d = dict(enumerate(self.items))
         array = W_Array()
         for i in range(len(self.list)):
-            array.Put(str(i), self.list[i])
+            array.Put(str(i), self.list[i].eval(ctx).GetValue())
         return array
 
 
@@ -611,6 +616,15 @@ class Mult(BinaryNumberOp):
         fright = nright.ToNumber()
         return W_Number(fleft * fright)
 
+class Mod(BinaryNumberOp):
+    opcode = 'MOD'
+    
+    def mathop(self, ctx, nleft, nright):
+        fleft = nleft.ToNumber()
+        fright = nright.ToNumber()
+        return W_Number(fleft % fright)
+
+
 class Div(BinaryNumberOp):
     opcode = 'DIV'
     
@@ -657,6 +671,8 @@ class Script(Statement):
             ctx.variable.Put(var.name, w_Undefined)
         for fun in self.func_decl:
             ctx.variable.Put(fun.name, fun.eval(ctx))
+        
+        node = self
 
         try:
             last = w_Undefined
@@ -843,10 +859,17 @@ class Not(UnaryOp):
         return W_Boolean(not self.expr.eval(ctx).GetValue().ToBoolean())
 
 class UMinus(UnaryOp):
-    opcode = "UNARY_MINUS"
+    opcode = 'UNARY_MINUS'
     
     def eval(self, ctx):
         return W_Number(-self.expr.eval(ctx).GetValue().ToNumber())
+
+class UPlus(UnaryOp):
+    opcode = 'UNARY_PLUS'
+    
+    def eval(self, ctx):
+        return W_Number(+self.expr.eval(ctx).GetValue().ToNumber())
+
 
 astundef = Undefined()
 def get_obj(t, objname):
@@ -859,7 +882,7 @@ def get_obj(t, objname):
 def get_string(t, string):
         simb = get_tree_item(t, string)
         if isinstance(simb, Symbol):
-            return simb.additional_info
+            return str(simb.additional_info)
         else:
             return ''
 
@@ -877,7 +900,7 @@ def get_tree_item(t, name):
             if x.children[0].additional_info == name:
                 return x.children[1]
     return None
-
+    
 opcodedict = {}
 for i in locals().values():
     if isinstance(i, type(Node)) and issubclass(i, Node):

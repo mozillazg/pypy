@@ -28,12 +28,9 @@ def read_js_output(code_string):
     jsdir = py.path.local(__file__).dirpath().join("js")
     jsdefs = jsdir.join("jsdefs.js").read()
     jsparse = jsdir.join("jsparse.js").read()
-    f = open('/tmp/jstobeparsed.js','w')
-    f.write(jsdefs)
-    f.write(jsparse)
-    f.write("print(parse('%s'));\n" % stripped_code)
-    f.close()
-    pipe = os.popen("js -f /tmp/jstobeparsed.js", 'r')
+    f = py.test.ensuretemp("jsinterp").join("tobeparsed.js")
+    f.write(jsdefs+jsparse+"print(parse('%s'));\n" % stripped_code)
+    pipe = os.popen("js -f "+str(f), 'r')
     retval = pipe.read()
     if not retval.startswith("{"):
         raise JsSyntaxError(retval)
@@ -42,8 +39,7 @@ def read_js_output(code_string):
 def unquote(t):
     if isinstance(t, Symbol):
         if t.symbol == "QUOTED_STRING":
-            t.additional_info = t.additional_info.strip("'")
-            t.additional_info = re.sub(r"\\'", r"'", t.additional_info)
+            t.additional_info = t.additional_info.strip("'").replace("\\'", "'")
     else:
         for i in t.children:
             unquote(i)
