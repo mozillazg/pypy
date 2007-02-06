@@ -1,12 +1,13 @@
+import py
 import path
+import sys
+from StringIO import StringIO
+import time
+from zipfile import ZipFile
+
 from pypy.tool.build import buildserver
 from pypy.tool.build import build
-import py
-import time
-import sys
-from zipfile import ZipFile
-from StringIO import StringIO
-from fake import FakeChannel, FakeMetaServer
+from pypy.tool.build.test.fake import FakeChannel, FakeMetaServer
 
 class BuildServerForTests(buildserver.BuildServer):
     def __init__(self, *args, **kwargs):
@@ -24,11 +25,11 @@ def setup_module(mod):
     pypy.tool.build.metaserver_instance = svr
 
     mod.c1c = c1c = FakeChannel()
-    mod.c1 = c1 = BuildServerForTests(c1c, {'foo': 1, 'bar': [1,2]})
+    mod.c1 = c1 = BuildServerForTests(c1c, {'foo': 1, 'bar': [1,2]}, "noname")
     svr.register(c1)
 
     mod.c2c = c2c = FakeChannel()
-    mod.c2 = c2 = BuildServerForTests(c2c, {'foo': 2, 'bar': [2,3]})
+    mod.c2 = c2 = BuildServerForTests(c2c, {'foo': 2, 'bar': [2,3]}, "noname")
     svr.register(c2)
 
 def test_compile():
@@ -93,10 +94,10 @@ def test_zip_dir():
 
     zip.seek(0)
     zf = ZipFile(zip)
-    data = zf.read('foo/bar.txt')
+    data = zf.read('pypy-compiled/foo/bar.txt')
     assert data == 'bar'
 
-    py.test.raises(KeyError, 'zf.read("foo/bar.o")')
+    py.test.raises(KeyError, 'zf.read("pypy-compiled/foo/bar.o")')
 
 def test_tempdir():
     parent = py.test.ensuretemp('tempdir')
