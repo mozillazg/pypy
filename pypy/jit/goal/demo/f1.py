@@ -16,8 +16,12 @@ def f1(n):
     return x
 
 
-import pypyjit
-pypyjit.enable(f1.func_code)
+try:
+    import pypyjit
+except ImportError:
+    print "No jit"
+else:
+    pypyjit.enable(f1.func_code)
 
 res = f1(2117)
 print res
