@@ -96,6 +96,10 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def ll_genmalloc_varsize(jitstate, contdesc, sizebox):
+    # the specialized by contdesc is not useful, unify paths
+    return genmalloc_varsize(jitstate, contdesc, sizebox)
+
+def genmalloc_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
     alloctoken = contdesc.varsizealloctoken
     genvar = jitstate.curbuilder.genop_malloc_varsize(alloctoken, gv_size)
@@ -326,22 +330,8 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
     if exitgvar.is_const:
         return exitgvar.revealconst(lltype.Bool)
     else:
-        # XXX call another function with list(greens_gv) instead
-        resuming = jitstate.get_resuming()
-        if resuming is not None and resuming.mergesleft == 0:
-            node = resuming.path.pop()
-            assert isinstance(node, PromotionPathSplit)
-            return node.answer
-        false_gv = jitstate.get_locals_gv() # alive gvs on the false path
-        later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
-        memo = rvalue.copy_memo()
-        jitstate2 = jitstate.split(later_builder, resumepoint,
-                                   list(greens_gv), memo)
-        if resuming is None:
-            node = jitstate.promotion_path
-            jitstate2.promotion_path = PromotionPathNo(node)
-            jitstate .promotion_path = PromotionPathYes(node)
-        return True
+        return split_nonconstantcase(jitstate, exitgvar, resumepoint,
+                                     None, False, list(greens_gv))
 
 def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
                       ptrbox, reverse, *greens_gv):
@@ -349,19 +339,24 @@ def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
     if exitgvar.is_const:
         return exitgvar.revealconst(lltype.Bool)
     else:
-        # XXX call another function with list(greens_gv) instead
-        resuming = jitstate.get_resuming()
-        if resuming is not None and resuming.mergesleft == 0:
-            node = resuming.path.pop()
-            assert isinstance(node, PromotionPathSplit)
+        return split_nonconstantcase(jitstate, exitgvar, resumepoint,
+                                     ptrbox, reverse, list(greens_gv))
+
+def split_nonconstantcase(jitstate, exitgvar, resumepoint,
+                          ptrbox, reverse, greens_gv):
+    resuming = jitstate.get_resuming()
+    if resuming is not None and resuming.mergesleft == 0:
+        node = resuming.path.pop()
+        assert isinstance(node, PromotionPathSplit)
+        if ptrbox is not None:
             ptrbox.learn_nonzeroness(jitstate,
                                      nonzeroness = node.answer ^ reverse)
-            return node.answer
-        false_gv = jitstate.get_locals_gv() # alive gvs on the false path
-        later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
-        memo = rvalue.copy_memo()
-        jitstate2 = jitstate.split(later_builder, resumepoint,
-                                   list(greens_gv), memo)
+        return node.answer
+    false_gv = jitstate.get_locals_gv() # alive gvs on the false path
+    later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
+    memo = rvalue.copy_memo()
+    jitstate2 = jitstate.split(later_builder, resumepoint, greens_gv, memo)
+    if ptrbox is not None:
         ptrbox.learn_nonzeroness(jitstate, nonzeroness = True ^ reverse)
         try:
             copybox = memo.boxes[ptrbox]
@@ -369,13 +364,14 @@ def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
             pass
         else:
             copybox.learn_nonzeroness(jitstate2, nonzeroness = reverse)
-        if resuming is None:
-            node = jitstate.promotion_path
-            jitstate2.promotion_path = PromotionPathNo(node)
-            jitstate .promotion_path = PromotionPathYes(node)
-        return True
+    if resuming is None:
+        node = jitstate.promotion_path
+        jitstate2.promotion_path = PromotionPathNo(node)
+        jitstate .promotion_path = PromotionPathYes(node)
+    return True
 
 def collect_split(jitstate_chain, resumepoint, *greens_gv):
+    # YYY split to avoid over-specialization
     # assumes that the head of the jitstate_chain is ready for writing,
     # and all the other jitstates in the chain are paused
     greens_gv = list(greens_gv)
@@ -509,6 +505,10 @@ class CallDesc:
         return True
 
 def ll_gen_residual_call(jitstate, calldesc, funcbox):
+    # specialization is not useful here, we can unify the calldescs
+    return gen_residual_call(jitstate, calldesc, funcbox)
+
+def gen_residual_call(jitstate, calldesc, funcbox):
     builder = jitstate.curbuilder
     gv_funcbox = funcbox.getgenvar(jitstate)
     argboxes = jitstate.frame.local_boxes
@@ -668,7 +668,7 @@ MC_CALL_NOT_TAKEN      = -2
 
 
 class PromotionDesc:
-    __metatype__ = cachedtype
+    __metaclass__ = cachedtype
 
     def __init__(self, ERASED, hrtyper):
         state = hrtyper.portalstate
@@ -702,6 +702,10 @@ class PromotionDesc:
         return True
 
 def ll_promote(jitstate, promotebox, promotiondesc):
+    # the specialization by promotiondesc is not useful here, so unify paths
+    return promote(jitstate, promotebox, promotiondesc)
+
+def promote(jitstate, promotebox, promotiondesc):
     builder = jitstate.curbuilder
     gv_switchvar = promotebox.getgenvar(jitstate)
     if gv_switchvar.is_const:
