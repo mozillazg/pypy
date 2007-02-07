@@ -195,10 +195,16 @@ class PtrRedBox(RedBox):
 
     def learn_nonzeroness(self, jitstate, nonzeroness):
         if nonzeroness:
-            self.known_nonzero = True
+            if self.is_constant():
+                assert self.known_nonzero   # already
+            else:
+                self.known_nonzero = True
         else:
-            gv_null = jitstate.curbuilder.rgenop.genzeroconst(self.kind)
-            self.setgenvar_hint(gv_null, known_nonzero=False)
+            if self.is_constant():
+                assert not self.genvar.revealconst(llmemory.Address)
+            else:
+                gv_null = jitstate.curbuilder.rgenop.genzeroconst(self.kind)
+                self.setgenvar_hint(gv_null, known_nonzero=False)
 
     def __repr__(self):
         if not self.genvar and self.content is not None:
@@ -207,7 +213,7 @@ class PtrRedBox(RedBox):
             return RedBox.__repr__(self)
 
     def op_getfield(self, jitstate, fielddesc):
-        self.known_nonzero = True
+        self.learn_nonzeroness(jitstate, True)
         if self.content is not None:
             box = self.content.op_getfield(jitstate, fielddesc)
             if box is not None:
@@ -219,7 +225,7 @@ class PtrRedBox(RedBox):
         return box
 
     def op_setfield(self, jitstate, fielddesc, valuebox):
-        self.known_nonzero = True
+        self.learn_nonzeroness(jitstate, True)
         gv_ptr = self.genvar
         if gv_ptr:
             fielddesc.generate_set(jitstate, gv_ptr,
@@ -229,7 +235,7 @@ class PtrRedBox(RedBox):
             self.content.op_setfield(jitstate, fielddesc, valuebox)
 
     def op_getsubstruct(self, jitstate, fielddesc):
-        self.known_nonzero = True
+        self.learn_nonzeroness(jitstate, True)
         gv_ptr = self.genvar
         if gv_ptr:
             return fielddesc.generate_getsubstruct(jitstate, gv_ptr)

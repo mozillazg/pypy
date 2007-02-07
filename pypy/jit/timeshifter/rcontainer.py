@@ -604,8 +604,7 @@ class VirtualStruct(VirtualContainer):
         memo.containers[self] = vrti
 
         builder = jitstate.curbuilder
-        place = builder.alloc_frame_place(typedesc.ptrkind,
-                                          typedesc.gv_null)
+        place = builder.alloc_frame_place(typedesc.ptrkind)
         gv_forced = builder.genop_absorb_place(typedesc.ptrkind, place)
         vrti.forced_place = place
 

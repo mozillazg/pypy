@@ -127,6 +127,16 @@ class HintGraphTransformer(object):
                                 op.opname = replace[op.opname]
                                 op.args = [v1]
                                 break
+        # debug_assert(ptr_iszero(p)) => debug_assert_ptr_iszero(p)
+        # debug_assert(ptr_nonzero(p)) => debug_assert_ptr_nonzero(p)
+        for block in self.graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'debug_assert':
+                    v = op.args[0]
+                    srcopname, srcargs = self.trace_back_bool_var(block, v)
+                    if srcopname in ('ptr_iszero', 'ptr_nonzero'):
+                        op.opname += '_' + srcopname
+                        op.args[0] = srcargs[0]
 
     def graph_calling_color(self, tsgraph):
         args_hs, hs_res = self.hannotator.bookkeeper.tsgraphsigs[tsgraph]
@@ -263,11 +273,10 @@ class HintGraphTransformer(object):
                 if not hs_switch.is_green():
                     self.insert_split_handling(block)
 
-    def trace_back_exitswitch(self, block):
+    def trace_back_bool_var(self, block, v):
         """Return the (opname, arguments) that created the exitswitch of
         the block.  The opname is None if not found.
         """
-        v = block.exitswitch
         inverted = False
         for i in range(len(block.operations)-1, -1, -1):
             op = block.operations[i]
@@ -293,7 +302,7 @@ class HintGraphTransformer(object):
         # try to look where the v_redswitch comes from
         split_variant = ''
         split_extras = []
-        srcopname, srcargs = self.trace_back_exitswitch(block)
+        srcopname, srcargs = self.trace_back_bool_var(block, block.exitswitch)
         if srcopname == 'ptr_nonzero':
             split_variant = '_ptr_nonzero'
             split_extras = srcargs
@@ -603,17 +612,20 @@ class HintGraphTransformer(object):
                 nextblock.inputargs.insert(0, v_result)                                
         reds, greens = self.sort_by_color(varsalive)
 
+        blockset = {}
+        blockset[block] = True     # reachable from outside
+        blockset[nextblock] = False
+
         v_func = op.args[0]
         hs_func = self.hannotator.binding(v_func)
         if hs_func.is_green():
             constantblock = block
             nonconstantblock = None
-            blockset = {}
         else:
             constantblock = Block([])
             nonconstantblock = Block([])
-            blockset = {constantblock: False,
-                        nonconstantblock: False}
+            blockset[constantblock] = False
+            blockset[nonconstantblock] = False
             v_is_constant = self.genop(block, 'is_constant', [v_func],
                                        resulttype = lltype.Bool)
             self.genswitch(block, v_is_constant, true  = constantblock,
@@ -639,6 +651,7 @@ class HintGraphTransformer(object):
                 self.hannotator.bindings[v0] = hs
             conversionblock.closeblock(Link(conversionblock.inputargs,
                                             nextblock))
+            blockset[conversionblock] = False
             # to merge some of the possibly many return jitstates
             self.mergepoint_set[nextblock] = 'local'
 
@@ -647,23 +660,16 @@ class HintGraphTransformer(object):
         self.genop(postconstantblock, 'collect_split', [c_resumepoint] + greens)
         resumeblock = self.get_resume_point_link(conversionblock).target
         postconstantblock.recloseblock(Link([], resumeblock))
+        blockset[resumeblock] = True    # reachable from outside
 
         if nonconstantblock is not None:
             nonconstantblock.recloseblock(Link(linkargs, nextblock))
-            v_res, nonconstantblock2 = self.handle_residual_call_details(
+            v_res = self.handle_residual_call_details(
                                             nonconstantblock, 0, op,
-                                            color, preserve_res =
+                                            color, blockset, preserve_res =
                                             (color != 'gray'),
                                             withexc=withexc)
 
-            #if color == 'red':
-            #    linkargs[0] = v_res
-
-            blockset[nonconstantblock2] = False            
-            
-
-        blockset[block] = True     # reachable from outside
-        blockset[nextblock] = True # reachable from outside
         SSA_to_SSI(blockset, self.hannotator)
 
     def handle_gray_call(self, block, pos, withexc):
@@ -689,13 +695,13 @@ class HintGraphTransformer(object):
             link_f.args = linkargs
             link_f.target = nextblock
             residualblock.closeblock(Link(linkargs, nextblock))
-            residualblock2 = self.handle_after_residual_call_details(
-                                  residualblock, 0, [], oop=True,
+            blockset = { block: True,
+                         nextblock: False,
+                         residualblock: False }
+            self.handle_after_residual_call_details(
+                                  residualblock, 0, [], blockset, oop=True,
                                   withexc=True)
 
-            blockset = { block: True, nextblock: False,
-                        residualblock: False,
-                        residualblock2: False }
             SSA_to_SSI(blockset, self.hannotator)
         
     def handle_vable_call(self, block, pos):
@@ -736,11 +742,14 @@ class HintGraphTransformer(object):
             color = 'gray'
         else:
             color = 'red'
-        v_res, _ = self.handle_residual_call_details(block, pos, op, color,
-                                                     withexc)
+        blockset = {block: True}
+        v_res = self.handle_residual_call_details(block, pos, op, color,
+                                                  blockset, withexc)
+        SSA_to_SSI(blockset, self.hannotator)
         return v_res
-                    
-    def handle_residual_call_details(self, block, pos, op, color, withexc,
+
+    def handle_residual_call_details(self, block, pos, op, color,
+                                     blockset, withexc,
                                      preserve_res=True):
         if op.opname == 'direct_call':
             args_v = op.args[1:]
@@ -758,14 +767,14 @@ class HintGraphTransformer(object):
         if preserve_res:
             v_res = newops[call_index].result = op.result
 
-        nextblock = self.handle_after_residual_call_details(block, pos,
-                                                            newops, withexc)
-        
-        return v_res, nextblock
+        self.handle_after_residual_call_details(block, pos,
+                                                newops, blockset,
+                                                withexc)
+        return v_res
 
 
-    def handle_after_residual_call_details(self, block, pos, newops, withexc,
-                                           oop = False):
+    def handle_after_residual_call_details(self, block, pos, newops, blockset,
+                                           withexc, oop = False):
         dopts = {'withexc': withexc, 'oop': oop }
         copts = Constant(dopts, lltype.Void)
         v_flags = self.genop(newops, 'after_residual_call', [copts],
@@ -775,16 +784,46 @@ class HintGraphTransformer(object):
         residual_fetch_pos = pos+residual_fetch_index
         block.operations[pos:pos+1] = newops
 
-        link = split_block(self.hannotator, block, residual_fetch_pos)
-        nextblock = link.target
+        link_t = split_block(self.hannotator, block, residual_fetch_pos)
+        nextblock = link_t.target
+        blockset[nextblock] = False
+        i_flags = link_t.args.index(v_flags)
 
-        reds, greens = self.sort_by_color(link.args)
+        reds, greens = self.sort_by_color(link_t.args)
         self.genop(block, 'save_locals', reds)
-        v_finished_flag = self.genop(block, 'promote', [v_flags],
-                                     resulttype = lltype.Bool)
-        self.go_to_dispatcher_if(block, v_finished_flag)
 
-        return nextblock
+        SPLIT_FOR_ZERO = False
+
+        if SPLIT_FOR_ZERO:
+            promoteblock = Block([copyvar(self.hannotator, v)
+                                  for v in link_t.args])
+            link_f = Link(link_t.args, promoteblock)
+            promoteblock.recloseblock(Link(promoteblock.inputargs, nextblock))
+            blockset[promoteblock] = False
+            v_flags2 = promoteblock.inputargs[i_flags]
+        else:
+            promoteblock = block
+            v_flags2 = v_flags
+        v_finished_flag = self.genop(promoteblock, 'promote', [v_flags2],
+                                     resulttype = lltype.Bool)
+        self.go_to_dispatcher_if(promoteblock, v_finished_flag)
+
+        if SPLIT_FOR_ZERO:
+            c_zero = inputconst(lltype.Signed, 0)
+            link_t.args = link_t.args[:]
+            link_t.args[i_flags] = c_zero
+
+            resumepoint = self.get_resume_point(promoteblock)
+            c_resumepoint = inputconst(lltype.Signed, resumepoint)
+            v_is_zero = self.genop(block, 'int_eq', [v_flags, c_zero],
+                                   resulttype=lltype.Bool, red=True)
+            v_is_zero = self.genop(block, 'split',
+                                   [v_is_zero, c_resumepoint] + greens,
+                                   resulttype = lltype.Bool)
+            block.exitswitch = v_is_zero
+            link_t.exitcase = True
+            link_f.exitcase = False
+            block.recloseblock(link_f, link_t)
 
 
     # __________ hints __________
