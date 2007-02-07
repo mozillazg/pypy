@@ -518,10 +518,13 @@ class Builder(GenBuilder):
             result.append(v)
         return result
 
-    def alloc_frame_place(self, kind, gv_initial_value):
+    def alloc_frame_place(self, kind, gv_initial_value=None):
         if self.force_in_stack is None:
             self.force_in_stack = []
-        v = OpSameAs(gv_initial_value)
+        if gv_initial_value is None:
+            v = OpWhatever()
+        else:
+            v = OpSameAs(gv_initial_value)
         self.operations.append(v)
         place = Place()
         place.stackvar = v

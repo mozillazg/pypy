@@ -35,6 +35,11 @@ class Operation(GenVar):
     def generate(self, allocator):
         raise NotImplementedError
 
+class OpWhatever(Operation):
+    clobbers_cc = False
+    def generate(self, allocator):
+        pass
+
 class Op1(Operation):
     def __init__(self, x):
         self.x = x
@@ -46,7 +51,7 @@ class Op1(Operation):
         except KeyError:
             return    # result not used
         srcop = allocator.get_operand(self.x)
-        return self.generate2(allocator.mc, dstop, srcop)
+        self.generate2(allocator.mc, dstop, srcop)
     def generate2(self, mc, dstop, srcop):
         raise NotImplementedError
 

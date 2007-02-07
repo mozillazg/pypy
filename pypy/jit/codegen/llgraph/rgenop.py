@@ -326,9 +326,11 @@ class LLBuilder(GenBuilder):
                      "get_frame_info: bad currently_writing")
         return llimpl.get_frame_info(self.b, vars)
 
-    def alloc_frame_place(self, gv_TYPE, gv_initial_value):
+    def alloc_frame_place(self, gv_TYPE, gv_initial_value=None):
         debug_assert(self.rgenop.currently_writing is self,
                      "alloc_frame_place: bad currently_writing")
+        if gv_initial_value is None:
+            gv_initial_value = self.rgenop.genzeroconst(gv_TYPE)
         gv_initial_value = llimpl.cast(self.b, gv_TYPE.v, gv_initial_value.v)
         v = LLVar(llimpl.genop(self.b, 'same_as', [gv_initial_value],
                                gv_TYPE.v))
