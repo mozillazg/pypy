@@ -605,8 +605,9 @@ class VirtualStruct(VirtualContainer):
 
         builder = jitstate.curbuilder
         place = builder.alloc_frame_place(typedesc.ptrkind)
-        gv_forced = builder.genop_absorb_place(typedesc.ptrkind, place)
         vrti.forced_place = place
+        forced_box = rvalue.PtrRedBox(typedesc.ptrkind)
+        memo.forced_boxes.append((forced_box, place))
 
         vars_gv = memo.framevars_gv
         varindexes = vrti.varindexes
@@ -625,9 +626,8 @@ class VirtualStruct(VirtualContainer):
                 vrtis.append(content.make_rti(jitstate, memo))
                 j -= 1
 
-        self.content_boxes.append(rvalue.PtrRedBox(typedesc.ptrkind,
-                                                   gv_forced))
-                
+
+        self.content_boxes.append(forced_box)
         return vrti
 
     def reshape(self, jitstate, shapemask, memo):

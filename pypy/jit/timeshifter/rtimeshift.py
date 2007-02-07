@@ -933,6 +933,7 @@ class JITState(object):
                  next
                  virtualizables
                  shape_place
+                 forced_boxes
                  generated_oop_residual_can_raise
               """.split()
 
@@ -1009,9 +1010,12 @@ class JITState(object):
             memo.bitcount = 1
             memo.frameindex = 0
             memo.framevars_gv = []
+            memo.forced_boxes = forced_boxes = []
+            
             shape_kind = builder.rgenop.kindToken(lltype.Signed)
             gv_zero = builder.rgenop.genconst(0)
             self.shape_place = builder.alloc_frame_place(shape_kind, gv_zero)
+            self.forced_boxes = forced_boxes
             
             vable_rtis = []
             for virtualizable_box in virtualizables:
@@ -1041,9 +1045,16 @@ class JITState(object):
                 assert isinstance(content, rcontainer.VirtualizableStruct)
                 content.check_forced_after_residual_call(self)
             shape_kind = builder.rgenop.kindToken(lltype.Signed)
+
+            for forced_box, forced_place in self.forced_boxes:
+                gv_forced = builder.genop_absorb_place(forced_box.kind, forced_place)
+                forced_box.setgenvar(gv_forced)
+            self.forced_boxes = None
+
             gv_shape = builder.genop_absorb_place(shape_kind,
                                                   self.shape_place)
             self.shape_place = None
+            
             return gv_shape
         else:
             return None
