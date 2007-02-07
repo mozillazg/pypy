@@ -221,10 +221,10 @@ class VirtualList(VirtualContainer):
         memo.containers[self] = vrti
 
         builder = jitstate.curbuilder
-        place = builder.alloc_frame_place(typedesc.ptrkind,
-                                          typedesc.gv_null)
-        gv_forced = builder.genop_absorb_place(typedesc.ptrkind, place)
+        place = builder.alloc_frame_place(typedesc.ptrkind)
         vrti.forced_place = place
+        forced_box = rvalue.PtrRedBox(typedesc.ptrkind)
+        memo.forced_boxes.append((forced_box, place))
 
         vars_gv = memo.framevars_gv
         varindexes = vrti.varindexes
@@ -243,9 +243,7 @@ class VirtualList(VirtualContainer):
                 vrtis.append(content.make_rti(jitstate, memo))
                 j -= 1
 
-        self.item_boxes.append(rvalue.PtrRedBox(typedesc.ptrkind,
-                                                   gv_forced))
-                
+        self.item_boxes.append(forced_box)
         return vrti
 
     def reshape(self, jitstate, shapemask, memo):
