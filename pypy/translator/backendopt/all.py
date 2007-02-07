@@ -69,6 +69,7 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
         inline_malloc_removal_phase(config, translator, graphs,
                                     config.inline_threshold,
                                     inline_heuristic=heuristic)
+        constfold(config, graphs)
 
     if config.clever_malloc_removal:
         threshold = config.clever_malloc_removal_threshold
@@ -102,6 +103,7 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
                                     threshold,
                                     inline_heuristic=heuristic,
                                     call_count_pred=call_count_pred)
+    constfold(config, graphs)
 
     if config.remove_asserts:
         remove_asserts(translator, graphs)
@@ -152,6 +154,3 @@ def inline_malloc_removal_phase(config, translator, graphs, inline_threshold,
         if config.print_statistics:
             print "after malloc removal:"
             print_statistics(translator.graphs[0], translator)    
-
-    constfold(config, graphs)
-
