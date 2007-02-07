@@ -1139,6 +1139,8 @@ class HintRTyper(RPythonTyper):
 
             greens_v.append(v_green)
             greens_s.append(s_erased_type)
+        # YYY possibly reorder the variables to avoid too many
+        #     specialized versions of retrieve_jitstate_for_merge
 
         v_jitstate = hop.llops.getjitstate()
         return hop.llops.genmixlevelhelpercall(merge_point,
@@ -1369,15 +1371,11 @@ class HintRTyper(RPythonTyper):
         c_calldesc = inputconst(lltype.Void, calldesc)
         s_calldesc = self.rtyper.annotator.bookkeeper.immutablevalue(calldesc)
         v_jitstate = hop.llops.getjitstate()
-        if color == 'red':
-            s_result = self.s_RedBox
-        else:
-            s_result = annmodel.s_None
         v_res = hop.llops.genmixlevelhelpercall(
                                  rtimeshift.ll_gen_residual_call,
                                  [self.s_JITState, s_calldesc, self.s_RedBox],
                                  [v_jitstate,      c_calldesc, v_funcbox    ],
-                                 s_result)
+                                 self.s_RedBox)
         return v_res
 
     def translate_op_residual_gray_call(self, hop):
