@@ -626,7 +626,6 @@ class VirtualStruct(VirtualContainer):
                 vrtis.append(content.make_rti(jitstate, memo))
                 j -= 1
 
-
         self.content_boxes.append(forced_box)
         return vrti
 
