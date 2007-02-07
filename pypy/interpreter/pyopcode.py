@@ -97,6 +97,8 @@ class __extend__(pyframe.PyFrame):
 
             self.pycode = pycode
             self.valuestackdepth = depth
+
+            entry_fastlocals_w = self.fastlocals_w
             self.fastlocals_w = fastlocals_w
 
             virtualstack_w = [None] * pycode.co_stacksize
@@ -110,7 +112,8 @@ class __extend__(pyframe.PyFrame):
         next_instr = r_uint(next_instr)
         co_code = pycode.co_code
 
-        while True:
+        try:
+          while True:
             hint(None, global_merge_point=True)
             try:
                 self.last_instr = intmask(next_instr)
@@ -152,6 +155,18 @@ class __extend__(pyframe.PyFrame):
                 next_instr = self.handle_asynchronous_error(ec,
                     self.space.w_RuntimeError,
                     self.space.wrap(msg))
+        finally:
+            if JITTING:
+                i = pycode.co_nlocals
+                while True:
+                    i -= 1
+                    if i < 0:
+                        break
+                    hint(i, concrete=True)
+                    entry_fastlocals_w[i] = self.fastlocals_w[i]
+
+                self.fastlocals_w = entry_fastlocals_w
+            
 
     def handle_asynchronous_error(self, ec, w_type, w_value=None):
         # catch asynchronous exceptions and turn them
@@ -270,8 +285,12 @@ class __extend__(pyframe.PyFrame):
         return next_instr
 
     def unrollstack(self, unroller_kind):
-        while len(self.blockstack) > 0:
+        n = len(self.blockstack)
+        n = hint(n, promote=True)
+        while n > 0:
             block = self.blockstack.pop()
+            n -= 1
+            hint(n, concrete=True)
             if (block.handling_mask & unroller_kind) != 0:
                 return block
             block.cleanupstack(self)
@@ -373,9 +392,7 @@ class __extend__(pyframe.PyFrame):
 
     def DUP_TOPX(f, itemcount, *ignored):
         assert 1 <= itemcount <= 5, "limitation of the current interpreter"
-        for i in range(itemcount):
-            w_1 = f.peekvalue(itemcount-1)
-            f.pushvalue(w_1)
+        f.dupvalues(itemcount)
 
     UNARY_POSITIVE = unaryoperation("pos")
     UNARY_NEGATIVE = unaryoperation("neg")
@@ -635,9 +652,7 @@ class __extend__(pyframe.PyFrame):
             items = f.space.unpackiterable(w_iterable, itemcount)
         except UnpackValueError, e:
             raise OperationError(f.space.w_ValueError, f.space.wrap(e.msg))
-        items.reverse()
-        for item in items:
-            f.pushvalue(item)
+        f.pushrevvalues(itemcount, items)
 
     def STORE_ATTR(f, nameindex, *ignored):
         "obj.attributename = newvalue"
@@ -694,14 +709,12 @@ class __extend__(pyframe.PyFrame):
         
 
     def BUILD_TUPLE(f, itemcount, *ignored):
-        items = [f.popvalue() for i in range(itemcount)]
-        items.reverse()
+        items = f.popvalues(itemcount)
         w_tuple = f.space.newtuple(items)
         f.pushvalue(w_tuple)
 
     def BUILD_LIST(f, itemcount, *ignored):
-        items = [f.popvalue() for i in range(itemcount)]
-        items.reverse()
+        items = f.popvalues(itemcount)
         w_list = f.space.newlist(items)
         f.pushvalue(w_list)
 
@@ -872,15 +885,8 @@ class __extend__(pyframe.PyFrame):
         n_keywords = (oparg>>8) & 0xff
         keywords = None
         if n_keywords:
-            keywords = {}
-            for i in range(n_keywords):
-                w_value = f.popvalue()
-                w_key   = f.popvalue()
-                key = f.space.str_w(w_key)
-                keywords[key] = w_value
-        arguments = [None] * n_arguments
-        for i in range(n_arguments - 1, -1, -1):
-            arguments[i] = f.popvalue()
+            keywords = f.popstrdictvalues(n_keywords)
+        arguments = f.popvalues(n_arguments)
         args = Arguments(f.space, arguments, keywords, w_star, w_starstar)
         w_function  = f.popvalue()
         w_result = f.space.call_args(w_function, args)
@@ -920,8 +926,7 @@ class __extend__(pyframe.PyFrame):
     def MAKE_FUNCTION(f, numdefaults, *ignored):
         w_codeobj = f.popvalue()
         codeobj = f.space.interp_w(PyCode, w_codeobj)
-        defaultarguments = [f.popvalue() for i in range(numdefaults)]
-        defaultarguments.reverse()
+        defaultarguments = f.popvalues(numdefaults)
         fn = function.Function(f.space, codeobj, f.w_globals, defaultarguments)
         f.pushvalue(f.space.wrap(fn))
 
