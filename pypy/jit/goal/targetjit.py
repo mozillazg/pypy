@@ -12,7 +12,9 @@ class __extend__(TranslationDriver):
         from pypy.translator.backendopt.all import backend_optimizations
         backend_optimizations(self.translator,
                               inline_threshold=0,
-                              merge_if_blocks=False)
+                              merge_if_blocks=False,
+                              constfold=True,
+                              remove_asserts=True)
     #
     task_prehannotatebackendopt = taskdef(task_prehannotatebackendopt,
                                          [TranslationDriver.RTYPE],

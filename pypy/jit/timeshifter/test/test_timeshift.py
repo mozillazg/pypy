@@ -7,7 +7,7 @@ from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.objspace.flow.model import summary, Variable
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
-from pypy.rlib.objectmodel import hint, keepalive_until_here
+from pypy.rlib.objectmodel import hint, keepalive_until_here, debug_assert
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import PseudoHighLevelCallable
 from pypy.rpython.module.support import LLSupport
@@ -1349,6 +1349,29 @@ class TestTimeshift(TimeshiftingTests):
         assert res == 250
         self.check_insns(int_mul=1, int_add=0)
 
+    def test_debug_assert_ptr_nonzero(self):
+        S = lltype.GcStruct('s', ('x', lltype.Signed))
+        def h():
+            s = lltype.malloc(S)
+            s.x = 42
+            return s
+        def g(s):
+            # assumes that s is not null here
+            debug_assert(bool(s), "please don't give me a null")
+            return 5
+        def f(m):
+            s = h()
+            n = g(s)
+            if not s:
+                n *= m
+            return n
+
+        P = StopAtXPolicy(h)
+
+        res = self.timeshift(f, [17], [], policy=P)
+        assert res == 5
+        self.check_insns(int_mul=0)
+
     def test_indirect_red_call(self):
         def h1(n):
             return n*2
@@ -1382,7 +1405,7 @@ class TestTimeshift(TimeshiftingTests):
             try:
                 return g(n, x)
             except ValueError:
-                return -1
+                return -1111
 
         P = StopAtXPolicy()
         res = self.timeshift(f, [7, 3], policy=P)
@@ -1390,7 +1413,7 @@ class TestTimeshift(TimeshiftingTests):
         self.check_insns(indirect_call=1)
 
         res = self.timeshift(f, [-7, 3], policy=P)
-        assert res == -1
+        assert res == -1111
         self.check_insns(indirect_call=1)
 
     def test_indirect_gray_call(self):

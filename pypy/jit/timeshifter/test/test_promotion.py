@@ -384,3 +384,25 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, [4], [], policy=P_NOVIRTUAL)
         assert res == 6
         self.check_insns(int_add=0)
+
+    def test_two_promotions_in_call(self):
+        def ll_two(n, m):
+            if n < 1:
+                return m
+            else:
+                return n
+
+        def ll_one(n, m):
+            n = ll_two(n, m)
+            n = hint(n, promote=True)
+            m = hint(m, promote=True)
+            return hint(n + m, variable=True)
+
+        def ll_function(n, m):
+            hint(None, global_merge_point=True)
+            c = ll_one(n, m)
+            return c
+
+        res = self.timeshift(ll_function, [4, 7], [], policy=P_NOVIRTUAL)
+        assert res == 11
+        self.check_insns(int_add=0)
