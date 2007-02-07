@@ -196,7 +196,7 @@ class GenBuilder(object):
         '''
         raise NotImplementedError
 
-    def alloc_frame_place(self, kind, gv_initial_value):
+    def alloc_frame_place(self, kind, gv_initial_value=None):
         '''Reserve a "place" in the frame stack where called functions
         can write to, with write_frame_place().  The place is not valid
         any more after the current basic block.
@@ -481,7 +481,7 @@ class ReplayBuilder(GenBuilder):
     def get_frame_info(self, vars_gv):
         return None
 
-    def alloc_frame_place(self, kind, gv_initial_value):
+    def alloc_frame_place(self, kind, gv_initial_value=None):
         return None
 
     def genop_absorb_place(self, kind, place):
