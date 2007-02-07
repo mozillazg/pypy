@@ -6,7 +6,7 @@ from pypy.interpreter import eval, baseobjspace, pycode
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import pytraceback
 import opcode
-from pypy.rlib.objectmodel import we_are_translated, instantiate
+from pypy.rlib.objectmodel import we_are_translated, instantiate, hint
 from pypy.rlib import rstack # for resume points
 
 
@@ -118,6 +118,47 @@ class PyFrame(eval.Frame):
         self.valuestackdepth = depth
         return w_object
 
+    def popstrdictvalues(self, n):
+        dic_w = {}
+        while True:
+            n -= 1
+            if n < 0:
+                break
+            hint(n, concrete=True)
+            w_value = self.popvalue()
+            w_key   = self.popvalue()
+            key = self.space.str_w(w_key)
+            dic_w[key] = w_value
+        return dic_w
+
+    def popvalues(self, n):
+        values_w = [None] * n
+        while True:
+            n -= 1
+            if n < 0:
+                break
+            hint(n, concrete=True)
+            values_w[n] = self.popvalue()
+        return values_w
+
+    def pushrevvalues(self, n, values_w): # n should be len(values_w)
+        while True:
+            n -= 1
+            if n < 0:
+                break
+            hint(n, concrete=True)
+            self.pushvalue(values_w[n])
+
+    def dupvalues(self, n):
+        delta = n-1
+        while True:
+            n -= 1
+            if n < 0:
+                break
+            hint(n, concrete=True)
+            w_value = self.peekvalue(delta)
+            self.pushvalue(w_value)
+        
     def peekvalue(self, index_from_top=0):
         index = self.valuestackdepth + ~index_from_top
         assert index >= 0, "peek past the bottom of the stack"
