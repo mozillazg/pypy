@@ -19,7 +19,8 @@ class PyPyHintAnnotatorPolicy(HintAnnotatorPolicy):
         if mod.startswith('pypy.objspace'):
             return False
         if mod.startswith('pypy.module.'):
-            return False
+            if not mod.startswith('pypy.module.pypyjit.'):
+                return False
         if mod in forbidden_modules:
             return False
         return True
@@ -49,6 +50,7 @@ def hintannotate(drv):
     n = len(list(hannotator.translator.graphs[0].iterblocks()))
     drv.log.info("portal has %d blocks" % n)
     drv.hannotator = hannotator
+    #import pdb; pdb.set_trace()
 
 def timeshift(drv):
     from pypy.jit.timeshifter.hrtyper import HintRTyper
