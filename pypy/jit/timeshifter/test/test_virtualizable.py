@@ -419,6 +419,27 @@ class TestVirtualizableExplicit(PortalTest):
         assert res == 42
         self.check_insns(getfield=0, malloc=2)
 
+    def test_residual_doing_nothing(self):
+        def g(xy):
+            pass
+
+        def f(xy):
+            hint(None, global_merge_point=True)
+            g(xy)
+            return xy.x + 1
+            
+        def main(x, y):
+            xy = lltype.malloc(XY)
+            xy.vable_access = lltype.nullptr(XY_ACCESS)
+            xy.x = x
+            xy.y = y
+            v = f(xy)
+            return v
+
+        res = self.timeshift_from_portal(main, f, [2, 20],
+                                         policy=StopAtXPolicy(g))
+        assert res == 3
+
     def test_late_residual_red_call(self):
         def g(e):
             xy = e.xy
