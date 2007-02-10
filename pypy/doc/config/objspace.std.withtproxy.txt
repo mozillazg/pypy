@@ -1,3 +1,0 @@
-Enable `transparent proxies`_.
-
-.. _`transparent proxies`: ../proxy.html
