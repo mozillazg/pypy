@@ -1,0 +1,261 @@
+Independent project ideas relating to PyPy
+==========================================
+
+PyPy allows experimentation in many directions -- indeed facilitating
+experimentation in language implementation was one of the main
+motivations for the project.  This page is meant to collect some ideas
+of experiments that the core developers have not had time to perform
+yet and also do not require too much in depth knowledge to get started
+with.
+
+If you are a student, maybe you will be inspired to make a proposal for our
+`Summer of PyPy`_ campaign: you will have an experienced PyPy developer as a
+mentor and be invited to attend one or two of our sprints, with travel and
+accomodation costs refunded.
+
+Feel free to suggest new ideas and discuss them in #pypy on the freenode IRC
+network or the pypy-dev mailing list (see the contact_ page).
+
+-----------
+
+.. contents::
+
+Experiment with optimizations
+-----------------------------
+
+Although PyPy's Python interpreter is very compatible with CPython, it is not
+yet as fast.  There are several approaches to making it faster, including the
+on-going Just-In-Time compilation efforts and improving the compilation tool
+chain, but probably the most suited to being divided into reasonably sized
+chunks is to play with alternate implementations of key data structures or
+algorithms used by the interpreter.  PyPy's structure is designed to make this
+straightforward, so it is easy to provide a different implementation of, say,
+dictionaries or lists without disturbing any other code.
+
+As examples, we've got working implementations of things like:
+
+* lazy string slices (slicing a string gives an object that references a part
+  of the original string).
+
+* lazily concatenated strings (repeated additions and joins are done
+  incrementally).
+
+* dictionaries specialized for string-only keys.
+
+* dictionaries which use a different strategy when very small.
+
+* in-progress: caching the lookups of builtin names (by special forms of
+  dictionaries that can invalidate the caches when they are written to)
+
+
+
+Things we've thought about but not yet implemented include:
+
+* try out things like lists of integers and lists of strings to save memory.
+  This might be based on (boringly) implementing "multilists" in the same
+  spirit as multidicts. 
+
+* neal norwitz in an old post to pypy-dev: "list slices are
+  often used for iteration.  It would be nice if we didn't need to make
+  a copy of the list.  This becomes difficult since the list could
+  change during iteration.  But we could make a copy in that case at the
+  time it was modified.  I'm not sure if that would be easy or difficult
+  to implement." This would probably be easy to implement in pypy and could be
+  based on multilists (see previous item).
+
+* create multiple representations of Unicode string that store the character
+  data in narrower arrays when they can.
+
+* introduce a "call method" bytecode that is used for calls of the form
+  "a.b(...)".  This should allow us to shortcut argument passing, and most
+  importantly avoid the creation of the bound method object.  To be based
+  on the method shadowing detection optimization already implemented.
+
+* experiment with optimized global/builtin lookups by e.g. using
+  callback-on-modify-dictionaries for Module dicts, might be 
+  done using the multidicts.  Note however that CALL_LIKELY_BUILTIN already 
+  covers the case of calls to common builtins, so this should probably 
+  focus on global lookups.
+
+Experiments of this kind are really experiments in the sense that we do not know
+whether they will work well or not and the only way to find out is to try.  A
+project of this nature should provide benchmark results (both timing and memory
+usage) as much as code.
+
+Some ideas on concrete steps for benchmarking:
+
+* find a set of real-world applications that can be used as benchmarks
+  for pypy (ideas: docutils, http://hachoir.org/, moinmoin, ...?)
+
+* do benchmark runs to see how much speedup the currently written
+  optimizations give
+
+* profile pypy-c and it's variants with these benchmarks, identify slow areas
+
+* try to come up with optimized implementations for these slow areas
+
+
+
+Start or improve a back-end
+---------------------------
+
+PyPy has complete, or nearly so, back-ends for C, LLVM and CLI/.NET and partial
+backends for JavaScript, Common Lisp, Squeak and the JVM.  It would be an
+interesting project to improve either of these partial backends, or start one
+for another platform (Objective C comes to mind as one that should not be too
+terribly hard).
+
+Improve JavaScript backend
+--------------------------
+
+The JavaScript backend is somehow different from other pypy's backends because
+it does not try to support all of PyPy (where it might be run then?), but rather
+to compile RPython programs into code that runs in a browser.  Some documents
+are in `what is PyPy.js`_ file and `using the JavaScript backend`_. Some project
+ideas might be:
+
+* Write some examples to show different possibilities of using the backend.
+
+* Improve the facilities for testing RPython intended to be translated to
+  JavaScript on top of CPython, mostly by improving existing DOM interface.
+
+Improve one of the JIT back-ends
+--------------------------------
+
+PyPy's Just-In-Time compiler relies on two assembler backends for actual code
+generation, one for PowerPC and the other for i386. Those two backends so far
+are mostly working, but only some effort has been made to make them produce
+efficient code. This is an area where significant improvements could be made,
+hopefully without having to understand the full intricacies of the JIT.
+
+Another idea in a similar vein would be to use LLVM to re-compile functions that
+are executed particularly frequently (LLVM cannot be used for *all* code
+generation, since it can only work on function at a time).
+
+Write a new front end
+---------------------
+
+Write an interpreter for **another dynamic language** in the PyPy framework.
+For example, a Scheme interpreter would be suitable (and it would even be
+interesting from a semi-academic point of view to see if ``call/cc`` can be
+implemented on top of the primitives the stackless transform provides).  Ruby
+too (though the latter is probably more than two months of work), or Lua, or ...
+
+We already have a somewhat usable `Prolog interpreter`_ and the beginnings of a
+`JavaScript interpreter`_.
+
+.. _security:
+
+Investigate restricted execution models
+---------------------------------------
+
+Revive **rexec**\ : implement security checks, sandboxing, or some similar
+model within PyPy (which, if I may venture an opinion, makes more sense and is
+more robust than trying to do it in CPython).
+
+There are multiple approaches that can be discussed and tried.  One of them is
+about safely executing limited snippets of untrusted RPython code (see
+http://codespeak.net/pipermail/pypy-dev/2006q2/003131.html).  More general
+approaches, to execute general but untrusted Python code on top of PyPy,
+require more design.  The object space model of PyPy will easily allow
+objects to be tagged and tracked.  The translation of PyPy would also be a
+good place to insert e.g. systematic checks around all system calls.
+
+.. _distribution:
+.. _persistence:
+
+Experiment with distribution and persistence
+--------------------------------------------
+
+One of the advantages of PyPy's implementation is that the Python-level type
+of an object and its implementation are completely independent.  This should
+allow a much more intuitive interface to, for example, objects that are backed
+by a persistent store, or whose implementation lives on a remote server.
+
+The recently added `transparent proxy`_ objects are a key step in this
+direction; now all that remains is to implement the interesting bits :-)
+
+An example project might be to implement functionality akin to the `ZODB's
+Persistent class`_, without the need for the _p_changed hacks, and in pure
+Python code.
+
+Numeric/NumPy/numarray support
+------------------------------
+
+At the EuroPython sprint, some work was done on making RPython's annotator
+recognise Numeric arrays, with the goal of allowing programs using them to be
+efficiently translated.  It would be a reasonably sized project to finish this
+work, i.e. allow RPython programs to use some Numeric facilities.
+Additionally, these facilities could be exposed to applications interpreted by
+the translated PyPy interpreter.
+
+Extension modules
+-----------------
+
+Rewrite one or several CPython extension modules to be based on **ctypes**
+(newly integrated in Python 2.5): this is generally useful for Python
+developers, and it is now the best path to write extension modules that are
+compatible with both CPython and PyPy.  This is done with the `extension
+compiler`_ component of PyPy, which will likely require some attention as
+well.
+
+Modules where some work is already done:
+
+* ``_socket``, ``os``, ``select`` (unfinished yet, feel free to help;
+  see e.g. http://codespeak.net/svn/pypy/dist/pypy/module/_socket/).
+
+* SSL for socket, ``bz2``, ``fcntl``, ``mmap`` and ``time``: part of the
+  Summer of Code project of Lawrence Oluyede
+  (http://codespeak.net/svn/user/rhymes/).
+
+You are free to pick any other CPython module, either standard or third-party
+(if relatively well-known).  Note that some modules exist in a ctypes version
+already, which would be a good start for porting them to PyPy's extension
+compiler.  We'd particularly appreciate ``readline`` :-)
+
+Extend py.execnet to a peer-to-peer model
+-----------------------------------------
+
+* Work on a P2P model of distributed execution (extending `py.execnet`_) 
+  that allows `py.test`_ and other upcoming utilities to make use of a 
+  network of computers executing python tasks (e.g. tests or PyPy build tasks). 
+
+* Make a client tool and according libraries to instantiate a (dynamic) network
+  of computers executing centrally managed tasks (e.g. build or test ones). 
+  (This may make use of a P2P model or not, both is likely feasible). 
+
+Or else...
+----------
+
+* Improve `py.test`_ to contain benchmarking and/or better reporting
+  (e.g. cool html or PDF reports).
+
+* Constraint programming: `efficient propagators for specialized
+  finite domains`_ (like numbers, sets, intervals).
+
+* A `code templating solution`_ for Python code, allowing to extend
+  the language syntax, control flow operators, etc.
+
+...or whatever else interests you!
+
+Feel free to mention your interest and discuss these ideas on the `pypy-dev
+mailing list`_.  You can also have a look around our documentation_.
+
+
+.. _`efficient propagators for specialized finite domains`: http://codespeak.net/svn/pypy/extradoc/soc-2006/constraints.txt
+.. _`py.test`: http://codespeak.net/py/current/doc/test.html
+.. _`py.execnet`: http://codespeak.net/py/current/doc/execnet.html
+.. _`Prolog interpreter`: http://codespeak.net/svn/user/cfbolz/hack/prolog/interpreter
+.. _`JavaScript interpreter`: ../../pypy/lang/js
+.. _`extension compiler`: extcompiler.html
+.. _`object spaces`: objspace.html
+.. _`code templating solution`: http://codespeak.net/svn/pypy/extradoc/soc-2006/code-templating.txt
+
+.. _documentation: index.html
+.. _contact: contact.html
+.. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
+.. _`Summer of PyPy`: summer-of-pypy.html
+.. _`ZODB's Persistent class`: http://www.zope.org/Documentation/Books/ZDG/current/Persistence.stx
+.. _`what is pypy.js`: js/whatis.html
+.. _`using the JavaScript backend`: js/using.html
+.. _`transparent proxy`: objspace-proxies.html#tproxy
