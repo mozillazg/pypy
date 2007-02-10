@@ -240,10 +240,12 @@ def test_jsonparse():
     t = ToAST().transform(t)
     t = parse('{"a": "5", "b": [1, null, 3, true, {"f": "g", "h": 6}]}')
     print "".join(list(t.dot()))
-    t.view()
+    if py.test.config.option.view: 
+        t.view()
     t = ToAST().transform(t)
     print "\n".join(list(t.dot()))
-    t.view()
+    if py.test.config.option.view: 
+        t.view()
 
 def test_starparse():
     regexs, rules, ToAST = parse_ebnf("""
