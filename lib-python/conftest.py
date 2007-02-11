@@ -4,6 +4,8 @@ test configuration(s) for running CPython's regression
 test suite on top of PyPy 
 
 """
+
+dist_rsync_roots = [".", "../pypy", "../py"]
 import py
 import sys
 import pypy
