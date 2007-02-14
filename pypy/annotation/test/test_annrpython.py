@@ -859,6 +859,39 @@ class TestAnnotateTestCase:
         assert len(acc1.descs) == 3
         assert dict.fromkeys(acc1.attrs) == {'v1': None, 'v2': None}
 
+    def test_single_pbc_getattr(self):
+        class C:
+            def __init__(self, v1, v2):
+                self.v1 = v1
+                self.v2 = v2
+            def _freeze_(self):
+                return True
+        c1 = C(11, "hello")
+        c2 = C(22, 623)
+        def f1(l, c):
+            l.append(c.v1)
+        def f2(c):
+            return c.v2
+        def f3(c):
+            return c.v2
+        def g():
+            l = []
+            f1(l, c1)
+            f1(l, c2)
+            return l, f2(c1), f3(c2)
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(g,[])
+        s_l, s_c1v2, s_c2v2 = s.items
+        assert listitem(s_l).knowntype == int
+        assert s_c1v2.const == "hello"
+        assert s_c2v2.const == 623
+
+        acc1 = a.bookkeeper.getdesc(c1).getattrfamily()
+        acc2 = a.bookkeeper.getdesc(c2).getattrfamily()
+        assert acc1 is acc2
+        assert acc1.attrs.keys() == ['v1']
+
     def test_simple_pbc_call(self):
         def f1(x,y=0):
             pass
@@ -1417,7 +1450,14 @@ class TestAnnotateTestCase:
         wg2 = graphof(a, witness2)        
         assert a.binding(wg1.getargs()[0]).knowntype is r_ulonglong
         assert a.binding(wg2.getargs()[0]).knowntype is r_ulonglong
-    
+
+    def test_nonneg_cleverness_in_max(self):
+        def f(x):
+            return max(x, 0) + max(0, x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.nonneg
+
     def test_attr_moving_into_parent(self):
         class A: pass
         class B(A): pass
@@ -2363,6 +2403,18 @@ class TestAnnotateTestCase:
         assert not s.nonneg
         py.test.raises(Exception, a.build_types, fun, [int, int])
 
+    def test_sig_simpler(self):
+        def fun(x, y):
+            return x+y
+        s_nonneg = annmodel.SomeInteger(nonneg=True)
+        fun._annenforceargs_ = (int, s_nonneg)
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(fun, [s_nonneg, s_nonneg])
+        assert isinstance(s, annmodel.SomeInteger)
+        assert not s.nonneg
+        py.test.raises(Exception, a.build_types, fun, [int, int])
+
     def test_sig_lambda(self):
         def fun(x, y):
             return y
@@ -2401,42 +2453,178 @@ class TestAnnotateTestCase:
             if works:
                 a.build_types(fun, [int])
             else:
-                from pypy.annotation.classdef import NoSuchSlotError
-                py.test.raises(NoSuchSlotError, a.build_types, fun, [int])
+                from pypy.annotation.classdef import NoSuchAttrError
+                py.test.raises(NoSuchAttrError, a.build_types, fun, [int])
+
+    def test_slots_enforce_attrs(self):
+        class Superbase(object):
+            __slots__ = 'x'
+        class Base(Superbase):
+            pass
+        class A(Base):
+            pass
+        class B(Base):
+            pass
+        def fun(s):
+            if s is None:   # known not to be None in this test
+                o = B()
+                o.x = 12
+            elif len(s) > 5:
+                o = A()
+            else:
+                o = Base()
+            return o.x
+        a = self.RPythonAnnotator()
+        s = a.build_types(fun, [str])
+        assert s == annmodel.s_ImpossibleValue   # but not blocked blocks
+
+    def test_enforced_attrs_check(self):
+        class Base(object):
+            _attrs_ = 'x'
+        class A(Base):
+            _attrs_ = 'y'
+            def m(self):
+                return 65
+        class C(Base):
+            _attrs_ = 'z'
+            def m(self):
+                return 67
+        for attrname, works in [('x', True),
+                                ('y', False),
+                                ('z', False),
+                                ('t', False)]:
+            def fun(n):
+                if n: o = A()
+                else: o = C()
+                setattr(o, attrname, 12)
+                return o.m()
+            a = self.RPythonAnnotator()
+            if works:
+                a.build_types(fun, [int])
+            else:
+                from pypy.annotation.classdef import NoSuchAttrError
+                py.test.raises(NoSuchAttrError, a.build_types, fun, [int])
+
+    def test_attrs_enforce_attrs(self):
+        class Superbase(object):
+            _attrs_ = 'x'
+        class Base(Superbase):
+            pass
+        class A(Base):
+            pass
+        class B(Base):
+            pass
+        def fun(s):
+            if s is None:   # known not to be None in this test
+                o = B()
+                o.x = 12
+            elif len(s) > 5:
+                o = A()
+            else:
+                o = Base()
+            return o.x
+        a = self.RPythonAnnotator()
+        s = a.build_types(fun, [str])
+        assert s == annmodel.s_ImpossibleValue   # but not blocked blocks
 
 
-    def test_simple_controllerentry(self):
-        from pypy.rpython.controllerentry import Controller, ControllerEntry
+    def test_pbc_enforce_attrs(self):
+        class F(object):
+            _attrs_ = ['foo',]
 
-        class C:
-            "Imagine some magic here to have a foo attribute on instances"
+            def _freeze_(self):
+                return True
 
+        p1 = F()
+        p2 = F()
+
+        def g(): pass
+
+        def f(x):
+            if x:
+                p = p1
+            else:
+                p = p2
+            g()
+            return p.foo
+
+        a = self.RPythonAnnotator()
+        a.build_types(f, [bool])
+
+    def test_float_cmp(self):
+        def fun(x, y):
+            return (x < y,
+                    x <= y,
+                    x == y,
+                    x != y,
+                    x > y,
+                    x >= y)
+
+        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        s = a.build_types(fun, [float, float])
+        assert [s_item.knowntype for s_item in s.items] == [bool] * 6
+
+    def test_empty_range(self):
+        def g(lst):
+            total = 0
+            for i in range(len(lst)):
+                total += lst[i]
+            return total
         def fun():
-            lst = []
-            c = C()
-            c.foo = lst    # side-effect on lst!  well, it's a test
-            return c.foo, lst[0]
-
-        class C_Controller(Controller):
-            knowntype = C
-
-            def new(self):
-                return "4"
-
-            def get_foo(self, obj):
-                return obj + "2"
-
-            def set_foo(self, obj, value):
-                value.append(obj)
-
-        class Entry(ControllerEntry):
-            _about_ = C
-            _controller_ = C_Controller
+            return g([])
 
         a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
         s = a.build_types(fun, [])
-        assert s.const == ("42", "4")
+        assert s.const == 0
 
+    def test_some_generic_function_call(self):
+        def h(x):
+            return int(x)
+
+        def c(x):
+            return int(x)
+        
+        def g(a, x):
+            if x == -1:
+                a = None
+            if x < 0:
+                if x == -1:
+                    a = h
+                else:
+                    a = c
+                x = x + .01
+            return a(x)
+
+        #def fun(x):   
+
+        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        s = a.build_types(g, [annmodel.SomeGenericCallable(
+            args=[annmodel.SomeFloat()], result=annmodel.SomeInteger()),
+                              annmodel.SomeFloat()])
+        assert isinstance(s, annmodel.SomeInteger)
+        assert not hasattr(s, 'const')
+
+    def test_compare_int_bool(self):
+        def fun(x):
+            return 50 < x
+        a = self.RPythonAnnotator(policy=policy.AnnotatorPolicy())
+        s = a.build_types(fun, [bool])
+        assert isinstance(s, annmodel.SomeBool)
+
+    def test_long_as_intermediate_value(self):
+        from sys import maxint
+        from pypy.rlib.rarithmetic import intmask
+        def fun(x):
+            if x > 0:
+                v = maxint
+            else:
+                v = -maxint
+            return intmask(v * 10)
+        P = policy.AnnotatorPolicy()
+        P.allow_someobjects = False
+        a = self.RPythonAnnotator(policy=P)
+        s = a.build_types(fun, [bool])
+        assert isinstance(s, annmodel.SomeInteger)
 
 def g(n):
     return [0,1,2,n]

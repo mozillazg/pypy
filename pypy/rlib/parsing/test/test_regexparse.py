@@ -1,14 +1,4 @@
-def make_runner(regex, view=False):
-    from pypy.rlib.parsing.regexparse import parse_regex
-    r = parse_regex(regex)
-    dfa = r.make_automaton().make_deterministic()
-    if view:
-        dfa.view()
-    dfa.optimize()
-    if view:
-        dfa.view()
-    r = dfa.get_runner()
-    return r
+from pypy.rlib.parsing.regexparse import make_runner
 
 def test_simple():
     r = make_runner("a*")
@@ -135,4 +125,22 @@ def test_singlequote():
     assert r.recognize("'X'")
     assert not r.recognize("''")
 
+def test_unescape():
+    from pypy.rlib.parsing.regexparse import unescape
+    s = "".join(["\\x%s%s" % (a, b) for a in "0123456789abcdefABCDEF"
+                    for b in "0123456789ABCDEFabcdef"])
+    assert unescape(s) == eval("'" + s + "'")
 
+def test_escaped_quote():
+    r = make_runner(r'"[^\\"]*(\\.[^\\"]*)*"')
+    assert r.recognize(r'""')
+    assert r.recognize(r'"a"')
+    assert r.recognize(r'"a\"b"')
+    assert r.recognize(r'"\\\""')
+    assert not r.recognize(r'"\\""')
+
+def test_number():
+    r = make_runner(r"\-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][\+\-]?[0-9]+)?")
+    assert r.recognize("-0.912E+0001")
+    assert not r.recognize("-0.a912E+0001")
+    assert r.recognize("5")

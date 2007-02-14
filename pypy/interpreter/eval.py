@@ -15,13 +15,10 @@ class Code(Wrappable):
     def __init__(self, co_name):
         self.co_name = co_name
 
-    def create_frame(self, space, w_globals, closure=None):
-        "Create an empty frame object suitable for evaluation of this code."
-        raise TypeError, "abstract"
-
     def exec_code(self, space, w_globals, w_locals):
         "Implements the 'exec' statement."
-        frame = self.create_frame(space, w_globals, None)
+        # this should be on PyCode?
+        frame = space.createframe(self, w_globals, None)
         frame.setdictscope(w_locals)
         return frame.run()
 
@@ -48,12 +45,12 @@ class Code(Wrappable):
             argcount += 1
         return argcount
 
-    def getdocstring(self):
-        return None
+    def getdocstring(self, space):
+        return space.w_None
 
     def funcrun(self, func, args):
-        frame = self.create_frame(func.space, func.w_func_globals,
-                                  func.closure)
+        frame = func.space.createframe(self, func.w_func_globals,
+                                        func.closure)
         sig = self.signature()
         scope_w = args.parse(func.name, sig, func.defs_w)
         frame.setfastscope(scope_w)
@@ -147,28 +144,3 @@ class Frame(Wrappable):
                 new_fastlocals_w[i] = w_value
 
         self.setfastscope(new_fastlocals_w)
-
-
-class EvalFrame(Frame):
-
-    def resume(self):
-        "Resume the execution of the frame from its current state."
-        executioncontext = self.space.getexecutioncontext()
-        executioncontext.enter(self)
-        try:
-            result = self.eval(executioncontext)
-            rstack.resume_point("evalframe", self, executioncontext, returns=result)
-        finally:
-            executioncontext.leave(self)
-        return result
-
-    # running a frame is usually the same as resuming it from its
-    # initial state, but not for generator frames
-    run = resume
-
-    def eval(self, executioncontext):
-        "Abstract method to override."
-        raise TypeError, "abstract"
-
-    def hide(self):
-        return False

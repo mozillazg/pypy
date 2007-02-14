@@ -11,14 +11,18 @@ from pypy.tool.error import AnnotatorError, FlowingError, debug
 from pypy.rlib.nonconst import NonConstant
 from pypy.annotation.policy import AnnotatorPolicy
 from py.compat import optparse
+from pypy.config.config import OptionDescription, BoolOption, StrOption
+from pypy.config.config import Config, to_optparse
 import py
-from pypy.tool import option
 
-class Options(option.Options):
-    view = False
-    output = 'output.js'
-    debug_transform = False
-    use_pdb = True
+js_optiondescr = OptionDescription("jscompile", "", [
+    BoolOption("view", "View flow graphs",
+               default=False, cmdline="--view"),
+    BoolOption("use_pdb", "Use debugger",
+               default=False, cmdline="--pdb"),
+    StrOption("output", "File to save results (default output.js)",
+              default="output.js", cmdline="--output")])
+
 
 class FunctionNotFound(Exception):
     pass
@@ -39,7 +43,7 @@ def get_arg_names(func_data):
     return ",".join(func_data.func_code.co_varnames\
         [:func_data.func_code.co_argcount])
 
-def rpython2javascript_main(argv, opts):
+def rpython2javascript_main(argv, jsconfig):
     if len(argv) < 2:
         print "usage: module <function_names>"
         import sys
@@ -49,17 +53,15 @@ def rpython2javascript_main(argv, opts):
         module_name = module_name[:-3]
     function_names = argv[1:]
     mod = __import__(module_name, None, None, ["Module"])
-    source = rpython2javascript(mod, function_names, opts=opts)
-    if opts.output != '':
-        open(opts.output, "w").write(source)
-        print "Written file %s" % opts.output
+    source = rpython2javascript(mod, function_names, jsconfig=jsconfig)
+    open(jsconfig.output, "w").write(source)
+    print "Written file %s" % jsconfig.output
 
 # some strange function source
 source_ssf_base = """
 
 import %(module_name)s
 from pypy.translator.js.helper import __show_traceback
-from pypy.translator.transformer.debug import traceback_handler
 from pypy.rlib.nonconst import NonConstant as NonConst
 
 %(function_defs)s
@@ -85,7 +87,7 @@ def %(fun_name)s(%(arg_names)s):
 function_base = "%(module_name)s.%(fun_name)s(%(args)s)"
 wrapped_function_base = "%(fun_name)s(%(args)s)"
 
-def get_source_ssf(mod, module_name, function_names, use_debug=True):
+def get_source_ssf(mod, module_name, function_names):
     #source_ssf = "\n".join(["import %s" % module_name, "def some_strange_function_which_will_never_be_called():"] + ["  "+\
     #    module_name+"."+fun_name+get_args(mod.__dict__[fun_name]) for fun_name in function_names])
     function_list = []
@@ -93,12 +95,7 @@ def get_source_ssf(mod, module_name, function_names, use_debug=True):
     for fun_name in function_names:
         args = get_args(mod.__dict__[fun_name])
         arg_names = get_arg_names(mod.__dict__[fun_name])
-        if not use_debug:
-            base = function_base
-        else:
-            base = wrapped_function_base
-            function_def_list.append(py.code.Source(wrapped_function_def_base %
-                locals()))
+        base = function_base
         function_list.append(py.code.Source(base % locals()))
     function_defs = "\n\n".join([str(i) for i in function_def_list])
     functions = "\n".join([str(i.indent()) for i in function_list])
@@ -106,7 +103,20 @@ def get_source_ssf(mod, module_name, function_names, use_debug=True):
     print retval
     return retval
 
-def rpython2javascript(mod, function_names, opts=Options, use_pdb=True):
+def rpython2javascript(mod, function_names, jsconfig=None, use_pdb=True):
+    if isinstance(function_names, str):
+        function_names = [function_names]
+        # avoid confusion
+    if mod is None:
+        # this means actual module, which is quite hairy to get in python,
+        # so we cheat
+        import sys
+        mod = sys.modules[sys._getframe(1).f_globals['__name__']]
+    
+    if jsconfig is None:
+        jsconfig = Config(js_optiondescr)
+    if use_pdb:
+        jsconfig.use_pdb = True
     module_name = mod.__name__
     if not function_names and 'main' in mod.__dict__:
         function_names.append('main')
@@ -121,21 +131,18 @@ def rpython2javascript(mod, function_names, opts=Options, use_pdb=True):
         if func_code.func_code.co_argcount > 0 and func_code.func_code. \
                 co_argcount != lgt:
             raise BadSignature("Function %s does not have default arguments" % func_name)
-    source_ssf = get_source_ssf(mod, module_name, function_names, opts.debug_transform)
+    source_ssf = get_source_ssf(mod, module_name, function_names)
     exec(source_ssf) in globals()
     # now we gonna just cut off not needed function
     # XXX: Really do that
     #options = optparse.Values(defaults=DEFAULT_OPTIONS)
-    #options.debug_transform = opts.debug_transform
-    from pypy.config.config import Config
-    from pypy.config.pypyoption import pypy_optiondescription
-    config = Config(pypy_optiondescription)
-    config.translation.debug_transform = opts.debug_transform
+    from pypy.config.pypyoption import get_pypy_config
+    config = get_pypy_config(translating=True)
     driver = TranslationDriver(config=config)
     try:
         driver.setup(some_strange_function_which_will_never_be_called, [], policy = JsPolicy())
         driver.proceed(["compile_js"])
-        if opts.view:
+        if jsconfig.view:
             driver.translator.view()
         return driver.gen.tmpfile.open().read()
         # XXX: Add some possibility to write down selected file

@@ -1,141 +1,194 @@
-import path
-from pypy.tool.build import client, server, execnetconference
-from pypy.tool.build import config
-from pypy.config import config as pypyconfig
+""" some functional tests (although some of the rest aren't strictly
+    unit tests either), to run use --functional as an arg to py.test
+"""
+
 import py
+import time
+import path
+
+from pypy.tool.build import metaserver, buildserver, execnetconference
+from pypy.tool.build import config, build
+from pypy.tool.build.conftest import option
+from pypy.config import config as pypyconfig
+
+from pypy.tool.build.test.repo import create_temp_repo
+from pypy.tool.build.test.fake import Container
+
+# XXX this one is a bit messy, it's a quick functional test for the whole
+# system, but for instance contains time.sleep()s to make sure all threads
+# get the time to perform tasks and such... 
+
+# XXX NOTE: if you encounter failing tests on a slow system, you may want to
+# increase the sleep interval a bit to see if that helps...
+SLEEP_INTERVAL = 1.0 # 1 sec default, seems okay even on slow machines
 
 def _get_sysconfig():
     return pypyconfig.Config(
-        pypyconfig.OptionDescription('foo', [
+        pypyconfig.OptionDescription('foo', '', [
             pypyconfig.ChoiceOption('foo', 'foo', [1,2,3], 1),
         ])
     )
 
-# some functional tests (although some of the rest aren't strictly
-# unit tests either), to run use --functional as an arg to py.test
-def test_functional_1():
-    if not py.test.pypybuilder_option.functional:
+def setup_module(mod):
+    if not option.functional:
         py.test.skip('skipping functional test, use --functional to run it')
-        
-    # XXX this one is a bit messy, it's a quick functional test for the whole
-    # system, but for instance contains time.sleep()s to make sure all threads
-    # get the time to perform tasks and such... 
 
-    sleep_interval = 0.3
+    mod.repo = repo = create_temp_repo('functional')
+    repo.mkdir('foo')
+    mod.foourl = str(repo.join('foo'))
+    config.checkers = []
 
-    # first initialize a server
-    sgw = py.execnet.PopenGateway()
-    temppath = py.test.ensuretemp('pypybuilder-functional')
-    sc = server.init(sgw, port=config.port, path=config.testpath, 
-                        buildpath=str(temppath))
+    mod.temppath = temppath = py.test.ensuretemp('pypybuilder-functional')
 
-    # give the server some time to wake up
-    py.std.time.sleep(sleep_interval)
+    mod.sgw = sgw = py.execnet.PopenGateway()
+    cfg = Container(projectname='pypytest', server='localhost',
+                    port=config.testport,
+                    path=config.testpath, buildpath=temppath,
+                    mailhost=None)
+    
+    mod.sc = sc = metaserver.init(sgw, cfg)
 
-    # then two clients, both with different system info
-    sysconfig1 = _get_sysconfig()
-    cgw1 = py.execnet.PopenGateway()
-    cc1 = client.init(cgw1, sysconfig1, port=config.port, testing=True)
+    def read():
+        while 1:
+            try:
+                print sc.receive()
+            except EOFError:
+                break
+    py.std.thread.start_new_thread(read, ())
 
-    sysconfig2 = _get_sysconfig()
-    sysconfig2.foo = 2
-    cgw2 = py.execnet.PopenGateway()
-    cc2 = client.init(cgw2, sysconfig2, port=config.port, testing=True)
+    # give the metaserver some time to wake up
+    time.sleep(SLEEP_INTERVAL)
 
-    # give the clients some time to register themselves
-    py.std.time.sleep(sleep_interval)
+def teardown_module(mod):
+    mod.sc.close()
+    mod.sgw.exit()
 
-    # now we're going to send some compile jobs
+def create_buildserver_channel(**conf):
+    cgw = py.execnet.PopenGateway()
+    sysconfig = _get_sysconfig()
+    sysconfig.__dict__.update(conf)
+    channel = buildserver.init(cgw, sysconfig, port=config.testport,
+                          testing_sleeptime=SLEEP_INTERVAL * 5)
+    channel.send(True)
+    return cgw, channel
+
+def compile(**sysconfig):
     code = """
         import sys
         sys.path += %r
         
-        from pypy.tool.build import ppbserver
-        channel.send(ppbserver.compile(%r, (%r, {})))
+        from pypy.tool.build import metaserver_instance
+        from pypy.tool.build import build
+        channel.send(metaserver_instance.compile(%r))
         channel.close()
     """
-    compgw = py.execnet.PopenGateway()
-    compconf = execnetconference.conference(compgw, config.port)
+    gw = py.execnet.PopenGateway()
+    conf = execnetconference.conference(gw, config.testport)
 
-    # this one should fail because there's no client found for foo = 3
-    compc = compconf.remote_exec(code % (config.testpath, 'foo1@bar.com', 
-                                            {'foo': 3}))
-    
-    # sorry...
-    py.std.time.sleep(sleep_interval)
+    try:
+        br = build.BuildRequest('foo@bar.com', sysconfig, {}, foourl, 1, 0)
+        channel = conf.remote_exec(code % (config.testpath, br))
+        try:
+            # sorry...
+            time.sleep(SLEEP_INTERVAL)
+            ret = channel.receive()
+        finally:
+            channel.close()
+    finally:
+        gw.exit()
 
-    ret = compc.receive()
-    assert not ret[0]
-    assert ret[1].find('no suitable client found') > -1
+    return ret
 
-    # this one should be handled by client 1
-    compc = compconf.remote_exec(code % (config.testpath, 'foo2@bar.com',
-                                            {'foo': 1}))
-    
-    # and another one
-    py.std.time.sleep(sleep_interval)
-    
-    ret = compc.receive()
-    assert not ret[0]
-    assert ret[1].find('found a suitable client') > -1
-
-    # the messages may take a bit to arrive, too
-    py.std.time.sleep(sleep_interval)
-
-    # client 1 should by now have received the info to build for
-    cc1.receive() # 'welcome'
-    ret = cc1.receive() 
-    assert ret == ({'foo': 1}, {})
-
-    # this should have created a package in the temp dir
-    assert len(temppath.listdir()) == 1
-
-    # now we're going to satisfy the first request by adding a new client
-    sysconfig3 = _get_sysconfig()
-    sysconfig3.foo = 3
-    cgw3 = py.execnet.PopenGateway()
-    cc3 = client.init(cgw3, sysconfig3, port=config.port, testing=True)
-
-    # again a bit of waiting may be desired
-    py.std.time.sleep(sleep_interval)
-
-    # _try_queued() should check whether there are new clients available for 
-    # queued jobs
-    code = """
+def get_info(attr):
+    code = py.code.Source("""
         import sys, time
         sys.path += %r
         
-        from pypy.tool.build import ppbserver
-        ppbserver._try_queued()
-        # give the server some time, the clients 'compile' in threads
-        time.sleep(%s) 
-        channel.send(ppbserver._requeststorage._id_to_emails)
+        from pypy.tool.build import metaserver_instance
+        metaserver_instance._cleanup_builders()
+        metaserver_instance._test_waiting()
+        metaserver_instance._try_queued()
+
+        # take some time to update all the lists
+        time.sleep(%s)
+
+        data = [str(x) for x in metaserver_instance.%s]
+        channel.send(data)
         channel.close()
-    """
-    compgw2 = py.execnet.PopenGateway()
-    compconf2 = execnetconference.conference(compgw2, config.port)
+    """ % (config.testpath, SLEEP_INTERVAL, attr))
+    gw = py.execnet.PopenGateway()
+    try:
+        cf = execnetconference.conference(gw, config.testport)
+        channel = cf.remote_exec(code)
+        try:
+            ret = channel.receive()
+        finally:
+            channel.close()
+    finally:
+        gw.exit()
+    return ret
 
-    compc2 = compconf2.remote_exec(code % (config.testpath, sleep_interval))
+def test_functional():
+    # first we check if the queues are empty
+    queued = get_info('_queued')
+    assert len(queued) == 0
+    waiting = get_info('_waiting')
+    assert len(waiting) == 0
+    buildservers = get_info('_builders')
+    assert len(buildservers) == 0
 
+    # then we request a compilation for sysinfo foo=1, obviously this can not
+    # be fulfilled yet
+    ispath, data = compile(foo=1)
+    assert not ispath
+    assert 'no suitable build server' in data
+    queued = get_info('_queued')
+    assert len(queued) == 1
 
-    # we check whether all emails are now sent, since after adding the third
-    # client, and calling _try_queued(), both jobs should have been processed
-    ret = compc2.receive()
-    assert ret.values() == []
+    # now we register a buildserver with the same sysinfo, note that we don't 
+    # tell the metaserver yet that the buildserver actually accepts to handle 
+    # the request
+    gw, cchannel = create_buildserver_channel(foo=1)
+    try:
+        buildservers = get_info('_builders')
+        assert len(buildservers) == 1
 
-    # this should also have created another package in the temp dir
-    assert len(temppath.listdir()) == 2
+        # XXX quite a bit scary here, the buildserver will take exactly
+        # 4 * SLEEP_INTERVAL seconds to fake the compilation... here we should
+        # (if all is well) still be compiling
+        
+        ispath, data = compile(foo=1)
+        assert not ispath
+        assert 'in progress' in data
 
-    # some cleanup (this should all be in nested try/finallys, blegh)
-    cc1.close()
-    cc2.close()
-    cc3.close()
-    compc.close()
-    compc2.close()
-    sc.close()
+        waiting = get_info('_waiting')
+        assert len(waiting) == 1
 
-    cgw1.exit()
-    cgw2.exit()
-    compgw.exit()
-    compgw2.exit()
-    sgw.exit()
+        # this sleep, along with that in the previous compile call, should be
+        # enough to reach the end of fake compilation
+        time.sleep(SLEEP_INTERVAL * 4)
+
+        # both the jobs should have been done now...
+        queued = get_info('_queued')
+        assert len(queued) == 0
+
+        waiting = get_info('_waiting')
+        assert len(waiting) == 0
+
+        # now a new request for the same build should return in a path being
+        # returned
+        ispath, data = compile(foo=1)
+        assert ispath
+
+        queued = get_info('_queued')
+        assert len(queued) == 0
+        waiting = get_info('_waiting')
+        assert len(waiting) == 0
+
+    finally:
+        cchannel.close()
+        gw.exit()
+
+    buildservers = get_info('_builders')
+    assert len(buildservers) == 0
+

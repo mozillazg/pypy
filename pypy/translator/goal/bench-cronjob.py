@@ -133,6 +133,10 @@ def compile(backend):
         compile_llvm_variants(revision, features)
     elif os.path.exists(basename):                   #copy executable
         run("mv %s %s" % (basename, realname))
+        if backend == 'cli':
+            basename_dir = basename + '-data'
+            realname_dir = realname + '-data'
+            run("mv %s %s" % (basename_dir, realname_dir))
         #pypy = open(basename, 'rb').read()
         #if len(pypy) > 0:
         #    open(realname, 'wb').write(pypy)
@@ -166,14 +170,18 @@ def main(backends=[]):
     if backends == []:  #_ prefix means target specific option, # prefix to outcomment
         backends = [backend.strip() for backend in """
             llvm--_objspace-std-withstrdict
+            llvm--_objspace-opcodes-CALL_LIKELY_BUILTIN
             c
             c--gc=framework
             c--thread--_objspace-std-withstrdict--profopt='-c "from richards import *;main(iterations=1)"'
             c--stackless
+            c--stackless--profopt='-c "from richards import *;main(iterations=1)"'
             c--stackless--_objspace-std-withstrdict--profopt='-c "from richards import *;main(iterations=1)"'
             c--profopt='-c "from richards import *;main(iterations=1)"'
+            c--profopt='-c "from richards import *;main(iterations=1)"'--_objspace-opcodes-CALL_LIKELY_BUILTIN
             c--_objspace-std-withstrdict--profopt='-c "from richards import *;main(iterations=1)"'
             c--gc=framework--_objspace-std-withstrdict--profopt='-c "from richards import *;main(iterations=1)"'
+            cli
             """.split('\n') if backend.strip() and not backend.strip().startswith('#')]
     print time.ctime()
     for backend in backends:

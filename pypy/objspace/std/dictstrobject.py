@@ -53,7 +53,8 @@ class W_DictStrObject(W_Object):
                 w_self.str2object()
                 w_self.content[w_k] = w_v
 
-    set_str_keyed_item = setitem
+    def set_str_keyed_item(w_self, w_k, w_v, shadows_type=True):
+        return w_self.setitem(w_k, w_v)
 
     def str2object(w_self):
         """ Moves all items in the content_str dict to content. """
@@ -108,9 +109,7 @@ def init__DictStr(space, w_dict, __args__):
     #else:                           -
     #    w_dict.content.clear()      -
 
-    try:
-        space.getattr(w_src, space.wrap("keys"))
-    except OperationError:
+    if space.findattr(w_src, space.wrap("keys")) is None:
         list_of_w_pairs = space.unpackiterable(w_src)
         for w_pair in list_of_w_pairs:
             pair = space.unpackiterable(w_pair)

@@ -7,34 +7,50 @@ come from the oosupport directory.
 
 from pypy.translator.oosupport.metavm import \
      PushArg, PushAllArgs, StoreResult, InstructionList, New, DoNothing, Call,\
-     SetField, GetField, CallMethod, DownCast, RuntimeNew, OOString
+     SetField, GetField, DownCast, RuntimeNew, OOString, CastTo
+from pypy.translator.jvm.metavm import \
+     IndirectCall, JvmCallMethod, TranslateException
+
 import pypy.translator.jvm.generator as jvmgen
+import pypy.translator.jvm.typesystem as jvmtype
+
+def _proc(val):
+    """ Function which is used to post-process each entry in the
+    opcodes table; it adds a PushAllArgs and StoreResult by default,
+    unless the entry is a list already. """
+    if not isinstance(val, list):
+        val = InstructionList((PushAllArgs, val, StoreResult))
+    else:
+        val = InstructionList(val)
+    return val
 
 def _check_zer(op):
-    # TODO
-    return op
+    return [TranslateException(
+        jvmtype.jArithmeticException,
+        'throwZeroDivisionError',
+        _proc(op))]
 
 def _check_ovf(op):
     # TODO
     return op
 
 # This table maps the opcodes to micro-ops for processing them.
-# It is post-processed by a function to be found below.
-opcodes = {
+# It is post-processed by _proc.
+_opcodes = {
     # __________ object oriented operations __________
     'new':                      [New, StoreResult],
     'runtimenew':               [RuntimeNew, StoreResult],
     'oosetfield':               [SetField],
     'oogetfield':               [GetField, StoreResult],
-    'oosend':                   [CallMethod, StoreResult],
+    'oosend':                   [JvmCallMethod, StoreResult],
     'ooupcast':                 DoNothing,
     'oodowncast':               [DownCast, StoreResult],
-    'oois':                     'is_null',
+    'oois':                     'ref_is_eq',
     'oononnull':                'is_not_null',
-    #'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
-    #'subclassof':               [PushAllArgs, 'call bool [pypylib]pypy.runtime.Utils::SubclassOf(class [mscorlib]System.Type, class[mscorlib]System.Type)'],
-    #'ooidentityhash':           [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],
-    #'oohash':                   [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],    
+    'instanceof':               [CastTo, StoreResult],
+    'subclassof':               [PushAllArgs, jvmgen.SWAP, jvmgen.CLASSISASSIGNABLEFROM, StoreResult],
+    'ooidentityhash':           [PushAllArgs, jvmgen.OBJHASHCODE, StoreResult], 
+    'oohash':                   [PushAllArgs, jvmgen.OBJHASHCODE, StoreResult], 
     'oostring':                 [OOString, StoreResult],
     #'ooparse_int':              [PushAllArgs, 'call int32 [pypylib]pypy.runtime.Utils::OOParseInt(string, int32)'],
     #'oonewcustomdict':          [NewCustomDict],
@@ -42,12 +58,14 @@ opcodes = {
     'same_as':                  DoNothing,
     #'hint':                     [PushArg(0), StoreResult],
     'direct_call':              [Call, StoreResult],
-    #'indirect_call':            [IndirectCall],
+    'indirect_call':            [PushAllArgs, IndirectCall, StoreResult],
     #
     #'cast_ptr_to_weakadr':      [PushAllArgs, 'newobj instance void class %s::.ctor(object)' % WEAKREF],
     #'cast_weakadr_to_ptr':      [CastWeakAdrToPtr],
     #'gc__collect':              'call void class [mscorlib]System.GC::Collect()',
     #'resume_point':             Ignore,
+
+    'debug_assert':              [], # TODO: implement?
 
     # __________ numeric operations __________
 
@@ -141,15 +159,12 @@ opcodes = {
     'float_sub':                jvmgen.DSUB,
     'float_mul':                jvmgen.DMUL,
     'float_truediv':            jvmgen.DDIV, 
-    'float_mod':                jvmgen.DREM, # use Math.IEEEremainder?
     'float_lt':                 'dbl_less_than',     
     'float_le':                 'dbl_less_equals',   
     'float_eq':                 'dbl_equals',        
     'float_ne':                 'dbl_not_equals',    
     'float_gt':                 'dbl_greater_than',  
     'float_ge':                 'dbl_greater_equals',
-    'float_floor':              jvmgen.MATHFLOOR,
-    'float_fmod':               jvmgen.DREM, # DREM is akin to fmod() in C
 
     'llong_is_true':            [PushAllArgs,
                                  jvmgen.LCONST_0,
@@ -220,10 +235,7 @@ opcodes = {
     
 }
 
-for opc in opcodes:
-    val = opcodes[opc]
-    if not isinstance(val, list):
-        val = InstructionList((PushAllArgs, val, StoreResult))
-    else:
-        val = InstructionList(val)
-    opcodes[opc] = val
+opcodes = {}
+for opc, val in _opcodes.items():
+    opcodes[opc] = _proc(val)
+del _opcodes

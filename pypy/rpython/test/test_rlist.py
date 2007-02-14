@@ -735,6 +735,12 @@ class BaseTestRlist(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == fn()
 
+        def fn():
+            return str([])
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == fn()
+
     def test_list_or_None(self):
         empty_list = []
         nonempty_list = [1, 2]
@@ -1030,6 +1036,109 @@ class BaseTestRlist(BaseRtypingTest):
             return len(l)
         res = self.interpret(dummyfn, [1, 0])
         assert res == 0
+
+
+    def test_getitem_exc(self):
+        def f(x):
+            l = [1]
+            return l[x]
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        py.test.raises(AssertionError, self.interpret, f, [1])
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except IndexError:
+                return -1
+            except Exception:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        res = self.interpret(f, [1])
+        assert res == -1        
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except Exception:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        res = self.interpret(f, [1])
+        assert res == 0
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except ValueError:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        
+    def test_getitem_exc(self):
+        def f(x):
+            l = [1]
+            return l[x]
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        try:
+            self.interpret_raises(IndexError, f, [1])
+        except (AssertionError,), e:
+            pass
+        else:
+            assert False
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except IndexError:
+                return -1
+            except Exception:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        res = self.interpret(f, [1])
+        assert res == -1        
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except Exception:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        res = self.interpret(f, [1])
+        assert res == 0
+
+        def f(x):
+            l = [1]
+            try:
+                return l[x]
+            except ValueError:
+                return 0
+
+        res = self.interpret(f, [0])
+        assert res == 1
+        try:
+            self.interpret_raises(IndexError, f, [1])
+        except (AssertionError,), e:
+            pass
+        else:
+            assert False
+
 
 class TestLLtype(BaseTestRlist, LLRtypeMixin):
     rlist = ll_rlist

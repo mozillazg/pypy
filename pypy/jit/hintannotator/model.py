@@ -7,7 +7,7 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       cast_pointer
                       direct_call
                       indirect_call
-                      int_is_true int_neg
+                      int_is_true int_neg int_invert bool_not
                       uint_is_true
                       cast_int_to_char
                       cast_int_to_uint
@@ -16,10 +16,12 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       cast_bool_to_int
                       ptr_nonzero
                       ptr_iszero
-                      debug_assert""".split()
+                      """.split()
 
-BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift int_floordiv int_xor int_or
-                       uint_add uint_sub uint_mul uint_mod uint_and uint_lshift uint_rshift uint_floordiv
+BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
+                       int_lshift int_floordiv int_xor int_or
+                       uint_add uint_sub uint_mul uint_mod uint_and
+                       uint_lshift uint_rshift uint_floordiv
                        char_gt char_lt char_le char_ge char_eq char_ne
                        int_gt int_lt int_le int_ge int_eq int_ne
                        uint_gt uint_lt uint_le uint_ge uint_eq uint_ne 
@@ -31,22 +33,26 @@ class HintError(Exception):
     pass
 
 class OriginFlags(object):
-
     fixed = False
     read_positions = None
-    greenargs_cached = None
-    is_call_result = False
+    greenargs = False
 
     def __init__(self, bookkeeper=None, spaceop=None):
         self.bookkeeper = bookkeeper
         self.spaceop = spaceop
 
     def __repr__(self):
+        return '<%s %s>' % (getattr(self.spaceop, 'result', '?'),
+                            self.reprstate())
+
+    def reprstate(self):
         if self.fixed:
             s = "fixed "
+        elif self.greenargs:
+            s = "green"
         else:
             s = ""
-        return "<%sorigin>" % (s,)
+        return "%sorigin" % (s,)
 
     def read_fixed(self):
         if self.read_positions is None:
@@ -62,63 +68,69 @@ class OriginFlags(object):
                 for p in self.read_positions:
                     annotator.reflowfromposition(p)
 
-    def greenargs(self, frame=None):
-        annotator = self.bookkeeper.annotator
-        if frame is None:
-            if self.greenargs_cached is not None:
-                return self.greenargs_cached
-            frame = GreenHandlerFrame(annotator)
-        if self.is_call_result:
-            return frame.greencallresult(self.spaceop)
+    def record_dependencies(self, greenorigindependencies,
+                                  callreturndependencies):
+        deps = greenorigindependencies.setdefault(self, [])
+        deps.extend(self.spaceop.args)
+
+
+class CallOpOriginFlags(OriginFlags):
+
+    def record_dependencies(self, greenorigindependencies,
+                                  callreturndependencies):
+        bk = self.bookkeeper
+        if self.spaceop.opname == 'direct_call':
+            args = self.spaceop.args[1:]
+        elif self.spaceop.opname == 'indirect_call':
+            args = self.spaceop.args[1:-1]
         else:
-            for v in self.spaceop.args:
-                if not frame.greenvar(v):
-                    return False
-            return True
+            raise AssertionError(self.spaceop.opname)
+
+        graph = self.any_called_graph
+        call_families = bk.tsgraph_maximal_call_families
+        _, repgraph, callfamily = call_families.find(graph)
+
+        # record the argument and return value dependencies
+        retdeps = callreturndependencies.setdefault(self, [])
+        for graph in callfamily.tsgraphs:
+            retdeps.append(graph)
+            for i, v in enumerate(args):
+                argorigin = bk.myinputargorigin(graph, i)
+                deps = greenorigindependencies.setdefault(argorigin, [])
+                deps.append(v)
 
 
-class GreenHandlerFrame(object):
+class InputArgOriginFlags(OriginFlags):
 
-    def __init__(self, annotator, parentframe=None):
-        self.annotator = annotator
-        self.parentframe = parentframe
-        self.inputarg2actualarg = {}    # {origin: annotation}
+    def __init__(self, bookkeeper, graph, i):
+        OriginFlags.__init__(self, bookkeeper)
+        self.graph = graph
+        self.i = i
 
-    def greenvar(self, v):
-        hs = self.annotator.binding(v)
-        if isinstance(hs, SomeLLAbstractConstant) and len(hs.origins) == 1:
-            [o] = hs.origins.keys()
-            if o in self.inputarg2actualarg:
-                hs_actual = self.inputarg2actualarg[o]
-                return hs_actual.is_green(self.parentframe)
-        return hs.is_green(self)
+    def getarg(self):
+        return self.graph.getargs()[self.i]
 
-    def greencallresult(self, spaceop):
-##        print spaceop
-##        if str(spaceop.result) == 'v58':
-##            import pdb; pdb.set_trace()
-        args_hs = [self.annotator.binding(v) for v in spaceop.args]
-        hs_result = self.annotator.binding(spaceop.result)
-        if not isinstance(hs_result, SomeLLAbstractConstant):
-            return False     # was generalized, e.g. to SomeLLAbstractVariable
-        hs_f1 = args_hs.pop(0)
-        fnobj = hs_f1.const._obj
-        if (getattr(self.annotator.policy, 'oopspec', False) and
-            hasattr(fnobj._callable, 'oopspec')):
-            assert False     # XXX?
+    def __repr__(self):
+        return '<%s %s>' % (self.getarg(), self.reprstate())
 
-        input_args_hs = list(args_hs)
-        bk = self.annotator.bookkeeper
-        graph = bk.get_graph_for_call(fnobj.graph,
-                                      hs_result.is_fixed(),
-                                      input_args_hs)
-        newframe = GreenHandlerFrame(self.annotator, parentframe=self)
-        for hs_inp_arg, hs_arg in zip(input_args_hs, args_hs):
-            if isinstance(hs_arg, SomeLLAbstractConstant):
-                assert len(hs_inp_arg.origins) == 1
-                [o] = hs_inp_arg.origins.keys()
-                newframe.inputarg2actualarg[o] = hs_arg
-        return newframe.greenvar(graph.getreturnvar())
+    def record_dependencies(self, greenorigindependencies,
+                                  callreturndependencies):
+        bk = self.bookkeeper
+        call_families = bk.tsgraph_maximal_call_families
+        _, repgraph, callfamily = call_families.find(self.graph)
+
+        # record the fact that each graph's input args should be as red
+        # as each other's
+        if self.graph is repgraph:
+            deps = greenorigindependencies.setdefault(self, [])
+            v = self.getarg()
+            for othergraph in callfamily.tsgraphs:
+                if othergraph is not repgraph:
+                    deps.append(othergraph.getargs()[self.i])
+                    otherorigin = bk.myinputargorigin(othergraph, self.i)
+                    otherdeps = greenorigindependencies.setdefault(otherorigin,
+                                                                   [])
+                    otherdeps.append(v)
 
 # ____________________________________________________________
 
@@ -130,7 +142,7 @@ class SomeLLAbstractValue(annmodel.SomeObject):
         assert self.__class__ != SomeLLAbstractValue
         self.deepfrozen = deepfrozen
 
-    def is_green(self, frame=None):
+    def is_green(self):
         return False
 
 
@@ -143,12 +155,11 @@ class SomeLLAbstractConstant(SomeLLAbstractValue):
         self.origins = origins
         self.eager_concrete = eager_concrete
         self.myorigin = myorigin
-        assert myorigin is None or myorigin.spaceop is not None
 
     def fmt_origins(self, origins):
         counts = {}
         for o in origins:
-            x = repr(o)
+            x = o.reprstate()
             counts[x] = counts.get(x, 0) + 1
         items = counts.items()
         items.sort()
@@ -165,7 +176,7 @@ class SomeLLAbstractConstant(SomeLLAbstractValue):
         if myorigin is None:
             return None
         else:
-            return str(myorigin.spaceop.result)
+            return repr(myorigin)
 
     def is_fixed(self):
         for o in self.origins:
@@ -173,28 +184,43 @@ class SomeLLAbstractConstant(SomeLLAbstractValue):
                 return False
         return True
 
-    def is_green(self, frame=None):
+    def is_green(self):
         return (self.is_fixed() or self.eager_concrete or
                 self.concretetype is lltype.Void or
-                (self.myorigin is not None and
-                 self.myorigin.greenargs(frame)))
+                (self.myorigin is not None and self.myorigin.greenargs))
 
     def annotationcolor(self):
         """Compute the color of the variables with this annotation
         for the pygame viewer
         """
-        if self.eager_concrete:
-            return (0,100,0)     # green
-        elif self.is_green():
-            return (50,140,0)    # green-dark-cyan
-        else:
-            return None
+        try:
+            if self.concretetype is lltype.Void:
+                return annmodel.s_ImpossibleValue.annotationcolor
+            elif self.eager_concrete:
+                return (0,100,0)     # green
+            elif self.is_green():
+                return (50,140,0)    # green-dark-cyan
+            else:
+                return None
+        except KeyError:     # can occur in is_green() if annotation crashed
+            return (0,200,200)
     annotationcolor = property(annotationcolor)
 
 
 class SomeLLAbstractVariable(SomeLLAbstractValue):
     " color: hopelessly red"
-    pass
+
+    def __init__(self, T, deepfrozen=False):
+        SomeLLAbstractValue.__init__(self, T, deepfrozen)
+        assert T is not lltype.Void   # use bookkeeper.valueoftype()
+
+def variableoftype(TYPE, deepfrozen=False):
+    # the union of all annotations of the given TYPE - that's a
+    # SomeLLAbstractVariable, unless TYPE is Void
+    if TYPE is lltype.Void:
+        return s_void
+    else:
+        return SomeLLAbstractVariable(TYPE, deepfrozen=deepfrozen)
 
 
 class SomeLLAbstractContainer(SomeLLAbstractValue):
@@ -213,6 +239,9 @@ class SomeLLAbstractContainer(SomeLLAbstractValue):
         else:
             return (0,60,160)  # blue
     annotationcolor = property(annotationcolor)
+
+
+s_void = SomeLLAbstractConstant(lltype.Void, {})
 
 
 setunion = annmodel.setunion
@@ -276,7 +305,7 @@ class __extend__(SomeLLAbstractValue):
             return SomeLLAbstractConstant(hs_v1.concretetype, {origin: True})
         if hs_flags.const.get('promote', False):
             hs_concrete = SomeLLAbstractConstant(hs_v1.concretetype, {})
-            hs_concrete.eager_concrete = True
+            #hs_concrete.eager_concrete = True
             return hs_concrete 
         for name in ["reverse_split_queue", "global_merge_point"]:
             if hs_flags.const.get(name, False):
@@ -285,13 +314,10 @@ class __extend__(SomeLLAbstractValue):
         raise HintError("hint %s makes no sense on %r" % (hs_flags.const,
                                                           hs_v1))
 
-    def debug_assert(hs_v1, *args_hs):
-        pass
-
     def getfield(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
         FIELD_TYPE = getattr(S, hs_fieldname.const)
-        return SomeLLAbstractVariable(FIELD_TYPE, hs_v1.deepfrozen)
+        return variableoftype(FIELD_TYPE, hs_v1.deepfrozen)
 
     def setfield(hs_v1, hs_fieldname, hs_value):
         pass
@@ -301,30 +327,33 @@ class __extend__(SomeLLAbstractValue):
         FIELD_TYPE = getattr(S, hs_fieldname.const)
         return SomeLLAbstractVariable(lltype.Ptr(FIELD_TYPE), hs_v1.deepfrozen)
 
-##    def getarrayitem(hs_v1, hs_index):
-##        ARRAY = hs_v1.concretetype.TO
-##        return SomeLLAbstractVariable(ARRAY.OF)
-
-##    def setarrayitem(hs_v1, hs_index, hs_value):
-##        pass
-
-##    def getarraysubstruct(hs_v1, hs_index):
-##        ARRAY = hs_v1.concretetype.TO
-##        return SomeLLAbstractVariable(lltype.Ptr(ARRAY.OF))
+    def cast_pointer(hs_v1):
+        RESTYPE = getbookkeeper().current_op_concretetype()
+        return SomeLLAbstractVariable(RESTYPE, hs_v1.deepfrozen)
 
     def indirect_call(hs_v1, *args_hs):
         hs_graph_list = args_hs[-1]
         args_hs = args_hs[:-1]
         assert hs_graph_list.is_constant()
         graph_list = hs_graph_list.const
-        assert graph_list      # XXX for now
 
         bookkeeper = getbookkeeper()
-        fixed = bookkeeper.myorigin().read_fixed()
-        hs_res = bookkeeper.graph_family_call(graph_list, fixed, args_hs)
+        if not bookkeeper.annotator.policy.look_inside_graphs(graph_list):
+            # cannot follow
+            return cannot_follow_call(bookkeeper, graph_list,
+                                      (hs_v1,) + args_hs,
+                                      hs_v1.concretetype.TO.RESULT)
+
+        myorigin = bookkeeper.myorigin()
+        myorigin.__class__ = CallOpOriginFlags     # thud
+        fixed = myorigin.read_fixed()
+        tsgraphs_accum = []
+        hs_res = bookkeeper.graph_family_call(graph_list, fixed, args_hs,
+                                              tsgraphs_accum)
+        myorigin.any_called_graph = tsgraphs_accum[0]
 
         if isinstance(hs_res, SomeLLAbstractConstant):
-            hs_res.myorigin = bookkeeper.myorigin()
+            hs_res.myorigin = myorigin
 
         # we need to make sure that hs_res does not become temporarily less
         # general as a result of calling another specialized version of the
@@ -355,13 +384,10 @@ class __extend__(SomeLLAbstractConstant):
                                           deepfrozen = True)
         return SomeLLAbstractValue.hint(hs_c1, hs_flags)
 
-    def debug_assert(hs_c1, *args_hs):
-        pass
-
     def direct_call(hs_f1, *args_hs):
         bookkeeper = getbookkeeper()
         fnobj = hs_f1.const._obj
-        if (getattr(bookkeeper.annotator.policy, 'oopspec', False) and
+        if (bookkeeper.annotator.policy.oopspec and
             hasattr(fnobj._callable, 'oopspec')):
             # try to handle the call as a high-level operation
             try:
@@ -371,18 +397,37 @@ class __extend__(SomeLLAbstractConstant):
                 pass
         # don't try to annotate suggested_primitive graphs
         if getattr(getattr(fnobj, '_callable', None), 'suggested_primitive', False):
-            return SomeLLAbstractVariable(lltype.typeOf(fnobj).RESULT)
+            return variableoftype(lltype.typeOf(fnobj).RESULT)
 
         # normal call
         if not hasattr(fnobj, 'graph'):
             raise NotImplementedError("XXX call to externals or primitives")
+        if not bookkeeper.annotator.policy.look_inside_graph(fnobj.graph):
+            return cannot_follow_call(bookkeeper, [fnobj.graph], args_hs,
+                                      lltype.typeOf(fnobj).RESULT)
 
-        fixed = bookkeeper.myorigin().read_fixed()
-        hs_res = bookkeeper.graph_call(fnobj.graph, fixed, args_hs)
+        # recursive call from the entry point to itself: ignore them and
+        # just hope the annotations are correct
+        if (bookkeeper.getdesc(fnobj.graph)._cache.get(None, None) is
+            bookkeeper.annotator.translator.graphs[0]):
+            return variableoftype(lltype.typeOf(fnobj).RESULT)
+
+        myorigin = bookkeeper.myorigin()
+        myorigin.__class__ = CallOpOriginFlags     # thud
+        fixed = myorigin.read_fixed()
+        tsgraphs_accum = []
+        hs_res = bookkeeper.graph_call(fnobj.graph, fixed, args_hs,
+                                       tsgraphs_accum)
+        myorigin.any_called_graph = tsgraphs_accum[0]
 
         if isinstance(hs_res, SomeLLAbstractConstant):
-            hs_res.myorigin = bookkeeper.myorigin()
-            hs_res.myorigin.is_call_result = True
+            hs_res.myorigin = myorigin
+
+##        elif fnobj.graph.name.startswith('ll_stritem'):
+##            if isinstance(hs_res, SomeLLAbstractVariable):
+##                print hs_res
+##                import pdb; pdb.set_trace()
+        
             
         # we need to make sure that hs_res does not become temporarily less
         # general as a result of calling another specialized version of the
@@ -400,7 +445,7 @@ class __extend__(SomeLLAbstractConstant):
                                           myorigin=origin,
                                           deepfrozen=hs_c1.deepfrozen)
         else:
-            return SomeLLAbstractVariable(FIELD_TYPE)
+            return variableoftype(FIELD_TYPE)
 
     def getsubstruct(hs_c1, hs_fieldname):
         S = hs_c1.concretetype.TO
@@ -410,6 +455,16 @@ class __extend__(SomeLLAbstractConstant):
         return SomeLLAbstractConstant(lltype.Ptr(SUB_TYPE), d,
                                       myorigin=origin,
                                       deepfrozen=hs_c1.deepfrozen)    
+
+    def cast_pointer(hs_c1):
+        bk = getbookkeeper()
+        origin = bk.myorigin()
+        d = setadd(hs_c1.origins, origin)
+        RESTYPE = bk.current_op_concretetype()
+        return SomeLLAbstractConstant(RESTYPE, d,
+                                      eager_concrete = hs_c1.eager_concrete,
+                                      myorigin = origin,
+                                      deepfrozen = hs_c1.deepfrozen)
 
 
 class __extend__(SomeLLAbstractContainer):
@@ -447,8 +502,7 @@ class __extend__(SomeLLAbstractContainer):
 class __extend__(pairtype(SomeLLAbstractValue, SomeLLAbstractValue)):
 
     def getarrayitem((hs_v1, hs_v2)):
-        return SomeLLAbstractVariable(hs_v1.concretetype.TO.OF,
-                                      hs_v1.deepfrozen)
+        return variableoftype(hs_v1.concretetype.TO.OF, hs_v1.deepfrozen)
 
     def setarrayitem((hs_v1, hs_v2), hs_v3):
         pass
@@ -479,7 +533,7 @@ class __extend__(pairtype(SomeLLAbstractVariable, SomeLLAbstractConstant),
         if (getattr(hs_v1, 'eager_concrete', False) or
             getattr(hs_v2, 'eager_concrete', False)):
             pair(hs_v1, hs_v2).invalid_union()
-        return SomeLLAbstractVariable(hs_v1.concretetype, hs_v1.deepfrozen)
+        return variableoftype(hs_v1.concretetype, hs_v1.deepfrozen)
 
 
 class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
@@ -509,7 +563,7 @@ class __extend__(pairtype(SomeLLAbstractConstant, SomeLLAbstractConstant)):
                                           myorigin=origin,
                                           deepfrozen=hs_c1.deepfrozen)
         else:
-            return SomeLLAbstractVariable(READ_TYPE)
+            return variableoftype(READ_TYPE)
 
     def getarraysubstruct((hs_c1, hs_index)):
         A = hs_c1.concretetype.TO
@@ -564,13 +618,10 @@ class __extend__(pairtype(SomeLLAbstractContainer, SomeLLAbstractConstant)):
 # ____________________________________________________________
 
 def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
-    if getattr(bookkeeper.annotator.policy, 'novirtualcontainer', False):
+    if bookkeeper.annotator.policy.novirtualcontainer:
         # "blue variables" disabled, we just return a red var all the time.
         RESULT = bookkeeper.current_op_concretetype()
-        if RESULT is lltype.Void:
-            return None
-        else:
-            return SomeLLAbstractVariable(RESULT)
+        return variableoftype(RESULT)
 
     # parse the oopspec and fill in the arguments
     operation_name, args = ll_func.oopspec.split('(', 1)
@@ -609,6 +660,26 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
     hs_result = handler(*args_hs)   # which may raise NotImplementedError
     return hs_result
 
+def cannot_follow_call(bookkeeper, graph_list, args_hs, RESTYPE):
+    # the policy prevents us from following the call
+    if not graph_list:       # no known target, give up
+        return variableoftype(RESTYPE)
+    for graph in graph_list:
+        if not bookkeeper.is_pure_graph(graph):
+            # it's not calling pure graphs either, so the result
+            # is entierely unknown
+            return variableoftype(RESTYPE)
+    # when calling pure graphs, consider the call as an operation.
+    for hs in args_hs:
+        if not isinstance(hs, SomeLLAbstractConstant):
+            return variableoftype(RESTYPE)
+    # if all arguments are SomeLLAbstractConstant, so can the result be.
+    origin = bookkeeper.myorigin()
+    d = newset({origin: True}, *[hs_c.origins for hs_c in args_hs])
+    return SomeLLAbstractConstant(RESTYPE, d,
+                                  eager_concrete = False,   # probably
+                                  myorigin = origin)
+
 # ____________________________________________________________
 #
 # Register automatically simple operations
@@ -630,7 +701,6 @@ def const_unary(hs_c1):
     return SomeLLAbstractConstant(RESTYPE, d,
                                   eager_concrete = hs_c1.eager_concrete,
                                   myorigin = origin)
-                                  #deepfrozen = hs_c1.deepfrozen)
 
 def const_binary((hs_c1, hs_c2)):
     #XXX unsure hacks
@@ -642,7 +712,6 @@ def const_binary((hs_c1, hs_c2)):
                                   eager_concrete = hs_c1.eager_concrete or
                                                    hs_c2.eager_concrete,
                                   myorigin = origin)
-                                  #deepfrozen = hs_c1.deepfrozen and hs_c2.deepfrozen)
 
 def setup(oplist, ValueCls, var_fn, ConstantCls, const_fn):
     for name in oplist:

@@ -9,10 +9,10 @@ def test_simple():
     s.x = 123
     s.y = 456
     a = fakeaddress(s)
-    assert a.get() == s
+    assert a.ref() == s
     b = a + FieldOffset(S, 'x')
-    assert b.get() == 123
-    b.set(234)
+    assert b.signed[0] == 123
+    b.signed[0] = 234
     assert s.x == 234
 
 def test_composite():
@@ -22,10 +22,10 @@ def test_composite():
     s2.s.x = 123
     s2.s.y = 456
     a = fakeaddress(s2)
-    assert a.get() == s2
+    assert a.ref() == s2
     b = a + FieldOffset(S2, 's') + FieldOffset(S1, 'x')
-    assert b.get() == 123
-    b.set(234)
+    assert b.signed[0] == 123
+    b.signed[0] = 234
     assert s2.s.x == 234
     
 def test_array():
@@ -36,8 +36,8 @@ def test_array():
     b = a + ArrayItemsOffset(A)
     b += ItemOffset(lltype.Signed)*2
     b += ItemOffset(lltype.Signed)
-    assert b.get() == 123
-    b.set(14)
+    assert b.signed[0] == 123
+    b.signed[0] = 14
     assert x[3] == 14
     
 def test_dont_mix_offsets_and_ints():
@@ -72,6 +72,36 @@ def test_cast_ptr_to_adr():
     assert res
     res = interpret(f, [0])
     assert not res
+
+def test_confusion_with_fixedarray_item_0():
+    A = lltype.FixedSizeArray(lltype.Signed, 5)
+    B = lltype.FixedSizeArray(A, 3)
+    myoffset = itemoffsetof(A, 4)
+    global_b = lltype.malloc(B, immortal=True)
+    global_b[0][4] = 1000
+    global_b[1][4] = 1010
+    global_b[2][4] = 1200
+    def f(n):
+        a = global_b[n]    # bug: with n=0, this was considered as the
+                           # first inlined substructure, confusing
+                           # normalizeptr(a) into returning global_b
+        adr_a = cast_ptr_to_adr(a)
+        return (adr_a + myoffset).signed[0]
+    assert f(2) == 1200
+    assert f(1) == 1010
+    assert f(0) == 1000
+    res = interpret(f, [0])
+    assert res == 1000
+
+def test_structarray_add():
+    S = lltype.Struct("S", ("x", lltype.Signed))
+    for a in [lltype.malloc(lltype.GcArray(S), 5),
+              lltype.malloc(lltype.FixedSizeArray(S, 5), immortal=True)]:
+        a[3].x = 42
+        adr_s = cast_ptr_to_adr(a[0])
+        adr_s += sizeof(S) * 3
+        s = cast_adr_to_ptr(adr_s, lltype.Ptr(S))
+        assert s.x == 42
 
 def test_cast_adr_to_ptr():
     from pypy.rpython.memory.test.test_llinterpsim import interpret

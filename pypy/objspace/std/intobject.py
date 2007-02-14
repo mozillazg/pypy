@@ -1,6 +1,7 @@
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift, LONG_BIT, r_uint
+from pypy.rlib.rbigint import rbigint
 from pypy.objspace.std.inttype import wrapint
 
 """
@@ -27,14 +28,6 @@ class W_IntObject(W_Object):
 registerimplementation(W_IntObject)
 
 
-"""
-XXX not implemented:
-free list
-FromString
-FromUnicode
-print
-"""
-
 def int_w__Int(space, w_int1):
     return int(w_int1.intval)
 
@@ -45,6 +38,9 @@ def uint_w__Int(space, w_int1):
                              space.wrap("cannot convert negative integer to unsigned"))
     else:
         return r_uint(intval)
+
+def bigint_w__Int(space, w_int1):
+    return rbigint.fromint(w_int1.intval)
 
 def repr__Int(space, w_int1):
     a = w_int1.intval
@@ -171,7 +167,8 @@ def divmod__Int_Int(space, w_int1, w_int2):
                                 space.wrap("integer modulo"))
     # no overflow possible
     m = x % y
-    return space.wrap((z,m))
+    w = space.wrap
+    return space.newtuple([w(z), w(m)])
 
 def div__Int_Int(space, w_int1, w_int2):
     return _floordiv(space, w_int1, w_int2)
@@ -320,19 +317,6 @@ def or__Int_Int(space, w_int1, w_int2):
     res = a | b
     return wrapint(space, res)
 
-# coerce is not wanted
-##
-##static int
-##coerce__Int(PyObject **pv, PyObject **pw)
-##{
-##    if (PyInt_Check(*pw)) {
-##        Py_INCREF(*pv);
-##        Py_INCREF(*pw);
-##        return 0;
-##    }
-##    return 1; /* Can't do it */
-##}
-
 # int__Int is supposed to do nothing, unless it has
 # a derived integer object, where it should return
 # an exact one.
@@ -341,14 +325,6 @@ def int__Int(space, w_int1):
         return w_int1
     a = w_int1.intval
     return wrapint(space, a)
-
-"""
-# Not registered
-def long__Int(space, w_int1):
-    a = w_int1.intval
-    x = long(a)  ## XXX should this really be done so?
-    return space.newlong(x)
-"""
 
 def float__Int(space, w_int1):
     a = w_int1.intval

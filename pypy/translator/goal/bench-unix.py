@@ -82,6 +82,8 @@ def run_richards(executable='/usr/local/bin/python', n=5):
 def get_executables():  #sorted by revision number (highest first)
     exes = []
     for exe in [os.path.join('.', name) for name in os.listdir('.') if name.startswith('pypy-')]:
+        if os.path.isdir(exe):
+            continue
         try:
             exes.append( (exe.split('-')[2], exe) )
         except:
@@ -143,9 +145,18 @@ def main():
             benchmark_result.update(p, run_pystone(exe), PYSTONE_ASCENDING_GOOD)
         stone = benchmark_result.get_best_result(p)
 
-        codesize = os.popen('size "%s" | tail -n1 | cut -f1'%(exename,)).read().strip()
+        if 'pypy-cli' in exename:
+            dirname = exename + '-data'
+            codesize = 'N/A'
+            try:
+                exesize = os.path.getsize(os.path.join(dirname, 'main.exe'))
+            except OSError:
+                exesize = 'XXX'
+        else:
+            codesize = os.popen('size "%s" | tail -n1 | cut -f1'%(exename,)).read().strip()
+            exesize = os.path.getsize(exe)
 
-        print fmt % (ctime, os.path.getsize(exe), codesize, exename, exename, rich, rich / ref_rich, stone, ref_stone / stone)
+        print fmt % (ctime, exesize, codesize, exename, exename, rich, rich / ref_rich, stone, ref_stone / stone)
         sys.stdout.flush()
 
 if __name__ == '__main__':

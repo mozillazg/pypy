@@ -72,7 +72,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.1.19'  # bump this for substantial changes
+GI_VERSION = '1.1.21'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -284,8 +284,11 @@ class GenRpy:
         else:
             fmt = "%s = %s(%s)"
         # special case is_true
-        wrapped = op.opname != "is_true"
-        oper = "space.%s" % op.opname
+        opname = op.opname
+        if opname.startswith('getitem_'):
+            opname = 'getitem'
+        wrapped = opname != "is_true"
+        oper = "space.%s" % opname
         return fmt % (self.expr(op.result, localscope, wrapped), oper,
                       self.arglist(op.args, localscope))
 
@@ -457,7 +460,7 @@ else:
         return name
 
     def is_module_builtin(self, mod):
-        if not hasattr(mod, "__file__"):
+        if not hasattr(mod, "__file__") or mod.__file__ is None:
             return True
         if not (mod.__file__.endswith('.pyc') or
                 mod.__file__.endswith('.py') or
@@ -1348,7 +1351,7 @@ else:
                 for link in block.exits[1:]:
                     assert issubclass(link.exitcase, py.builtin.BaseException)
                     # Exeption classes come unwrapped in link.exitcase
-                    yield "    %s space.is_true(space.issubtype(e.w_type, %s)):" % (q,
+                    yield "    %s e.match(space, %s):" % (q,
                                             self.nameof(link.exitcase))
                     q = "elif"
                     for op in self.gen_link(link, localscope, blocknum, block, {
@@ -1495,9 +1498,9 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
 
         entrypoint = dic
         t = TranslationContext(verbose=False, simplifying=True,
-                               do_imports_immediately=do_imports_immediately,
                                builtins_can_raise_exceptions=True,
                                list_comprehension_operations=False)
+        t.no_annotator_but_do_imports_immediately = do_imports_immediately
         gen = GenRpy(t, entrypoint, modname, dic)
 
     finally:

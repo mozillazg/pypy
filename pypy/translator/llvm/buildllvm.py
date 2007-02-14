@@ -10,18 +10,29 @@ from pypy.translator.tool.cbuild import make_c_from_pyxfile
 import distutils.sysconfig
 
 def llvm_is_on_path():
-    try:
-        py.path.local.sysfind("llvm-as")
-        py.path.local.sysfind("llvm-gcc")
-    except py.error.ENOENT: 
+    if py.path.local.sysfind("llvm-as") is None or \
+       py.path.local.sysfind("llvm-gcc") is None:
         return False 
     return True
 
-def llvm_version():
-    v = os.popen('llvm-as -version 2>&1').read()
+def _exe_version(exe):
+    v = os.popen(exe + ' -version 2>&1').read()
     v = ''.join([c for c in v if c.isdigit()])
     v = int(v) / 10.0
     return v
+
+llvm_version = _exe_version('llvm-as')
+
+def _exe_version2(exe):
+    v = os.popen(exe + ' --version 2>&1').read()
+    i = v.index(')')
+    v = v[i+2:].split()[0].split('.')
+    major, minor = v[0], ''.join([c for c in v[1] if c.isdigit()])
+    v = float(major) + float(minor) / 10.0
+    return v
+
+gcc_version = _exe_version2('gcc')
+llvm_gcc_version = _exe_version2('llvm-gcc')
 
 def optimizations(simple, use_gcc):
 
@@ -61,7 +72,7 @@ def make_module_from_llvm(genllvm, llvmfile,
                           profile=False, cleanup=False, use_gcc=True):
 
     if exe_name:
-        use_gcc = False #XXX trying to get of gcc (at least for standalones)
+        use_gcc = genllvm.config.translation.llvm_via_c
 
     # where we are building
     dirpath = llvmfile.dirpath()
@@ -75,7 +86,10 @@ def make_module_from_llvm(genllvm, llvmfile,
     # run llvm assembler and optimizer
     simple_optimizations = not optimize
     opts = optimizations(simple_optimizations, use_gcc)
-    cmds = ["llvm-as < %s.ll | opt %s -f -o %s.bc" % (b, opts, b)]
+    if llvm_version < 2.0:
+        cmds = ["llvm-as < %s.ll | opt %s -f -o %s.bc" % (b, opts, b)]
+    else: #we generate 1.x .ll files, so upgrade these first
+        cmds = ["llvm-upgrade < %s.ll | llvm-as | opt %s -f -o %s.bc" % (b, opts, b)]
 
     object_files = ["-L%s/lib" % distutils.sysconfig.EXEC_PREFIX]
     library_files = genllvm.db.gcpolicy.gc_libraries()
@@ -104,15 +118,27 @@ def make_module_from_llvm(genllvm, llvmfile,
     else:
         cmds.append("llc %s.bc -march=c -f -o %s.c" % (b, b))
         if exe_name:
-            cmd = "gcc %s.c -c -O3 -pipe" % b
-            if profile:
-                cmd += ' -pg'
+            if genllvm.config.translation.profopt is not None:
+                cmd = "gcc -fprofile-generate %s.c -c -O3 -pipe -o %s.o" % (b, b)
+                cmds.append(cmd)
+                cmd = "gcc -fprofile-generate %s.o %s %s -lm -pipe -o %s_gen" % \
+                      (b, gc_libs_path, gc_libs, exe_name)
+                cmds.append(cmd)
+                cmds.append("./%s_gen %s"%(exe_name, genllvm.config.translation.profopt))
+                cmd = "gcc -fprofile-use %s.c -c -O3 -pipe -o %s.o" % (b, b)
+                cmds.append(cmd)
+                cmd = "gcc -fprofile-use %s.o %s %s -lm -pipe -o %s" % \
+                      (b, gc_libs_path, gc_libs, exe_name)
             else:
-                cmd += ' -fomit-frame-pointer'
-            cmds.append(cmd)
-            cmd = "gcc %s.o %s %s -lm -pipe -o %s" % (b, gc_libs_path, gc_libs, exe_name)
-            if profile:
-                cmd += ' -pg'
+                cmd = "gcc %s.c -c -O3 -pipe" % b
+                if profile:
+                    cmd += ' -pg'
+                else:
+                    cmd += ' -fomit-frame-pointer'
+                cmds.append(cmd)
+                cmd = "gcc %s.o %s %s -lm -pipe -o %s" % (b, gc_libs_path, gc_libs, exe_name)
+                if profile:
+                    cmd += ' -pg'
             cmds.append(cmd)
         source_files.append("%s.c" % b)
 

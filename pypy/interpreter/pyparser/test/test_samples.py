@@ -5,15 +5,13 @@ from pprint import pprint
 
 import py.test
 
-
-from pypy.tool.option import Options
 from pypy.interpreter.pyparser.pythonutil import python_parsefile, \
     pypy_parsefile, pypy_parse, python_parse, get_grammar_file, PYTHON_VERSION
 from pypy.interpreter.pyparser import grammar
 from pypy.interpreter.pyparser.pythonlexer import TokenError
 grammar.DEBUG = False
 
-_, PYPY_VERSION = get_grammar_file( Options.version )
+_, PYPY_VERSION = get_grammar_file("2.4")
 # these samples are skipped if the native version of Python does not match
 # the version of the grammar we use
 GRAMMAR_MISMATCH = PYTHON_VERSION != PYPY_VERSION

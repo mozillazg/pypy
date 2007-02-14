@@ -3,10 +3,13 @@
 
     this provides a mock browser API, both the standard DOM level 2 stuff as
     the browser-specific additions
+    
+    in addition this provides the necessary descriptions that allow rpython
+    code that calls the browser DOM API to be translated
 
     note that the API is not and will not be complete: more exotic features 
     will most probably not behave as expected, or are not implemented at all
-    
+
     http://www.w3.org/DOM/ - main standard
     http://www.w3schools.com/dhtml/dhtml_dom.asp - more informal stuff
     http://developer.mozilla.org/en/docs/Gecko_DOM_Reference - Gecko reference
@@ -18,8 +21,12 @@ import urllib
 from pypy.rpython.ootypesystem.bltregistry import BasicExternal, MethodDesc
 from pypy.rlib.nonconst import NonConstant
 
-from pypy.translator.stackless.test.test_transform import one
+from pypy.rpython.extfunc import _callable, register_external
 from xml.dom import minidom
+
+from pypy.annotation.signature import annotation
+from pypy.annotation import model as annmodel
+from pypy.rpython.extfunc import _callable
 
 # EventTarget is the base class for Nodes and Window
 class EventTarget(BasicExternal):
@@ -87,7 +94,7 @@ class Node(EventTarget):
 
     def __setattr__(self, name, value):
         """set an attribute on the wrapped node"""
-        if name in dir(self):
+        if name in dir(self) or name.startswith('_'):
             return super(Node, self).__setattr__(name, value)
         if name not in self._fields:
             raise NameError, name
@@ -128,9 +135,6 @@ class Element(Node):
     nodeType = 1
     style = None
 
-    def __init__(self, node=None):
-        super(Element, self).__init__(node)
-
     def _style(self):
         style = getattr(self._original, '_style', None)
         if style is not None:
@@ -169,6 +173,9 @@ class Element(Node):
 
     innerHTML = property(_get_innerHTML, _set_innerHTML)
 
+    def scrollIntoView(self):
+        pass
+
 class Attribute(Node):
     nodeType = 2
 
@@ -181,10 +188,6 @@ class Comment(Node):
 class Document(Node):
     nodeType = 9
     
-    def __init__(self, docnode=None):
-        super(Document, self).__init__(docnode)
-        self._original = docnode
-
     def createEvent(self, group=''):
         """create an event
 
@@ -259,6 +262,24 @@ class Style(BasicExternal):
 
 # Window is the main environment, the root node of the JS object tree
 
+class Location(BasicExternal):
+    _fields = {
+        'hostname' : str,
+        'href' : str,
+        'hash' : str,
+        'host' : str,
+        'pathname' : str,
+        'port' : str,
+        'protocol' : str,
+        'search' : str,
+    }
+    _methods = {
+        'assign' : MethodDesc([str]),
+        'reload' : MethodDesc([bool]),
+        'replace' : MethodDesc([str]),
+        'toString' : MethodDesc([], str),
+    }
+
 class Window(EventTarget):
     def __init__(self, html=('<html><head><title>Untitled document</title>'
                              '</head><body></body></html>'), parent=None):
@@ -296,409 +317,406 @@ class Window(EventTarget):
     
     location = property(_getLocation, _setLocation)
 
-def setTimeout(func, delay):
-    # scheduler call, but we don't want to mess with threads right now
-    if one():
-        setTimeout(some_fun, delay)
-    else:
-        func()
-    #pass
+scrollX = 0
+scrollMaxX = 0
+scrollY = 0
+scrollMaxY = 0
 
-def alert(msg):
+def some_fun():
     pass
 
-# some helper functions (XXX imo these can go, but the code seems to use them
-# a lot... isn't it possible to just use dom.window and dom.document instead?)
+def setTimeout(func, delay):
+    pass
+register_external(setTimeout, args=[_callable([]), int], result=None)
 
 window = Window()
-
-def get_document():
-    return window.document
-get_document.suggested_primitive = True
-
-def get_window():
-    return window
-get_window.suggested_primitive = True
+document = window.document
+Window._render_name = 'window'
+Document._render_name = 'document'
 
 # rtyper stuff
 
 EventTarget._fields = {
-    'onabort' : MethodDesc([Event()]),
-    'onblur' : MethodDesc([Event()]),
-    'onchange' : MethodDesc([Event()]),
-    'onclick' : MethodDesc([MouseEvent()]),
-    'onclose' : MethodDesc([MouseEvent()]),
-    'ondblclick' : MethodDesc([MouseEvent()]),
-    'ondragdrop' : MethodDesc([MouseEvent()]),
-    'onerror' : MethodDesc([MouseEvent()]),
-    'onfocus' : MethodDesc([Event()]),
-    'onkeydown' : MethodDesc([KeyEvent()]),
-    'onkeypress' : MethodDesc([KeyEvent()]),
-    'onkeyup' : MethodDesc([KeyEvent()]),
-    'onload' : MethodDesc([KeyEvent()]),
-    'onmousedown' : MethodDesc([MouseEvent()]),
-    'onmousemove' : MethodDesc([MouseEvent()]),
-    'onmouseup' : MethodDesc([MouseEvent()]),
-    'onmouseover' : MethodDesc([MouseEvent()]),
-    'onmouseup' : MethodDesc([MouseEvent()]),
-    'onresize' : MethodDesc([Event()]),
-    'onscroll' : MethodDesc([MouseEvent()]),
-    'onselect' : MethodDesc([MouseEvent()]),
-    'onsubmit' : MethodDesc([MouseEvent()]),
-    'onunload' : MethodDesc([Event()]),
+    'onabort' : _callable([Event]),
+    'onblur' : _callable([Event]),
+    'onchange' : _callable([Event]),
+    'onclick' : _callable([MouseEvent]),
+    'onclose' : _callable([MouseEvent]),
+    'ondblclick' : _callable([MouseEvent]),
+    'ondragdrop' : _callable([MouseEvent]),
+    'onerror' : _callable([MouseEvent]),
+    'onfocus' : _callable([Event]),
+    'onkeydown' : _callable([KeyEvent]),
+    'onkeypress' : _callable([KeyEvent]),
+    'onkeyup' : _callable([KeyEvent]),
+    'onload' : _callable([KeyEvent]),
+    'onmousedown' : _callable([MouseEvent]),
+    'onmousemove' : _callable([MouseEvent]),
+    'onmouseup' : _callable([MouseEvent]),
+    'onmouseover' : _callable([MouseEvent]),
+    'onresize' : _callable([Event]),
+    'onscroll' : _callable([MouseEvent]),
+    'onselect' : _callable([MouseEvent]),
+    'onsubmit' : _callable([MouseEvent]),
+    'onunload' : _callable([Event]),
 }
 
+lambda_returning_true = _callable([Event])
+
 EventTarget._methods = {
-    'addEventListener' : MethodDesc(["aa", lambda : None, True]),
-    'dispatchEvent' : MethodDesc(["aa"], True),
-    'removeEventListener' : MethodDesc(["aa", lambda : None, True]),
+    'addEventListener' : MethodDesc([str, lambda_returning_true, bool]),
+    'dispatchEvent' : MethodDesc([str], bool),
+    'removeEventListener' : MethodDesc([str, lambda_returning_true, bool]),
 }
 
 Node._fields = EventTarget._fields.copy()
 Node._fields.update({
-    'childNodes' : [Element()],
-    'firstChild' : Element(),
-    'lastChild' : Element(),
-    'localName' : "aa",
-    'name' : "aa",
-    'namespaceURI' : "aa",
-    'nextSibling' : Element(),
-    'nodeName' : "aa",
-    'nodeType' : 1,
-    'nodeValue' : "aa",
-    'ownerDocument' : Document(),
-    'parentNode' : Element(),
-    'prefix' : "aa",
-    'previousSibling': Element(),
-    'tagName' : "aa",
-    'textContent' : "aa",
+    'childNodes' : [Element],
+    'firstChild' : Element,
+    'lastChild' : Element,
+    'localName' : str,
+    'name' : str,
+    'namespaceURI' : str,
+    'nextSibling' : Element,
+    'nodeName' : str,
+    'nodeType' : int,
+    'nodeValue' : str,
+    'ownerDocument' : Document,
+    'parentNode' : Element,
+    'prefix' : str,
+    'previousSibling': Element,
+    'tagName' : str,
+    'textContent' : str,
 })
 
 Node._methods = EventTarget._methods.copy()
 Node._methods.update({
-    'appendChild' : MethodDesc([Element()]),
-    'cloneNode' : MethodDesc([12], Element()),
-    'getElementsByTagName' : MethodDesc(["aa"], [Element(),
-                                                 Element()]),
-    'hasChildNodes' : MethodDesc([], True),
-    'insertBefore' : MethodDesc([Element(), Element()], Element()),
+    'appendChild' : MethodDesc([Element]),
+    'cloneNode' : MethodDesc([int], Element),
+    'getElementsByTagName' : MethodDesc([str], [Element]),
+    'hasChildNodes' : MethodDesc([], bool),
+    'insertBefore' : MethodDesc([Element], Element),
     'normalize' : MethodDesc([]),
-    'removeChild' : MethodDesc([Element()], Element()),
-    'replaceChild' : MethodDesc([Element(), Element()], Element()),
+    'removeChild' : MethodDesc([Element]),
+    'replaceChild' : MethodDesc([Element], Element),
 })
 
 Element._fields = Node._fields.copy()
 Element._fields.update({
-    'attributes' : [Attribute()],
-    'className' : "aa",
-    'clientHeight' : 12,
-    'clientWidth' : 12,
-    'clientLeft' : 12,
-    'clientTop' : 12,
-    'dir' : "aa",
-    'innerHTML' : "asd",
-    'id' : "aa",
-    'lang' : "asd",
-    'offsetHeight' : 12,
-    'offsetLeft' : 12,
-    'offsetParent' : 12,
-    'offsetTop' : 12,
-    'offsetWidth' : 12,
-    'scrollHeight' : 12,
-    'scrollLeft' : 12,
-    'scrollTop' : 12,
-    'scrollWidth' : 12,
+    'attributes' : [Attribute],
+    'className' : str,
+    'clientHeight' : int,
+    'clientWidth' : int,
+    'clientLeft' : int,
+    'clientTop' : int,
+    'dir' : str,
+    'innerHTML' : str,
+    'id' : str,
+    'lang' : str,
+    'offsetHeight' : int,
+    'offsetLeft' : int,
+    'offsetParent' : int,
+    'offsetTop' : int,
+    'offsetWidth' : int,
+    'scrollHeight' : int,
+    'scrollLeft' : int,
+    'scrollTop' : int,
+    'scrollWidth' : int,
+    'disabled': bool,
     # HTML specific
-    'style' : Style(),
-    'tabIndex' : 12,
+    'style' : Style,
+    'tabIndex' : int,
     # XXX: From HTMLInputElement to make pythonconsole work.
-    'value': 'aa',
+    'value': str,
+    'checked': bool,
 })
 
 Element._methods = Node._methods.copy()
 Element._methods.update({
-    'getAttribute' : MethodDesc(["aa"], "aa"),
-    'getAttributeNS' : MethodDesc(["aa", "aa"], "aa"),
-    'getAttributeNode' : MethodDesc(["aa"], Element()),
-    'getAttributeNodeNS' : MethodDesc(["aa", "aa"], Element()),
-    'hasAttribute' : MethodDesc(["aa"], True),
-    'hasAttributeNS' : MethodDesc(["aa", "aa"], True),
-    'hasAttributes' : MethodDesc([], True),
-    'removeAttribute' : MethodDesc(['aa']),
-    'removeAttributeNS' : MethodDesc(["aa", "aa"]),
-    'removeAttributeNode' : MethodDesc([Element()], "aa"),
-    'setAttribute' : MethodDesc(["aa", "aa"]),
-    'setAttributeNS' : MethodDesc(["aa", "aa", "aa"]),
-    'setAttributeNode' : MethodDesc([Element()], Element()),
-    'setAttributeNodeNS' : MethodDesc(["ns", Element()], Element()),
+    'getAttribute' : MethodDesc([str], str),
+    'getAttributeNS' : MethodDesc([str], str),
+    'getAttributeNode' : MethodDesc([str], Element),
+    'getAttributeNodeNS' : MethodDesc([str], Element),
+    'hasAttribute' : MethodDesc([str], bool),
+    'hasAttributeNS' : MethodDesc([str], bool),
+    'hasAttributes' : MethodDesc([], bool),
+    'removeAttribute' : MethodDesc([str]),
+    'removeAttributeNS' : MethodDesc([str]),
+    'removeAttributeNode' : MethodDesc([Element], str),
+    'setAttribute' : MethodDesc([str, str]),
+    'setAttributeNS' : MethodDesc([str]),
+    'setAttributeNode' : MethodDesc([Element], Element),
+    'setAttributeNodeNS' : MethodDesc([str, Element], Element),
     # HTML specific
     'blur' : MethodDesc([]),
     'click' : MethodDesc([]),
     'focus' : MethodDesc([]),
-    'scrollIntoView' : MethodDesc([12]),
-    'supports' : MethodDesc(["aa", 1.0]),
+    'scrollIntoView' : MethodDesc([]),
+    'supports' : MethodDesc([str, float]),
 })
 
 Document._fields = Node._fields.copy()
 Document._fields.update({
-    'characterSet' : "aa",
+    'characterSet' : str,
     # 'contentWindow' : Window(), XXX doesn't exist, only on iframe
-    'doctype' : "aa",
-    'documentElement' : Element(),
-    'styleSheets' : [Style(), Style()],
-    'alinkColor' : "aa",
-    'bgColor' : "aa",
-    'body' : Element(),
-    'cookie' : "aa",
-    'defaultView' : Window(),
-    'domain' : "aa",
-    'embeds' : [Element(), Element()],
-    'fgColor' : "aa",
-    'forms' : [Element(), Element()],
-    'height' : 123,
-    'images' : [Element(), Element()],
-    'lastModified' : "aa",
-    'linkColor' : "aa",
-    'links' : [Element(), Element()],
-    'location' : "aa",
-    'referrer' : "aa",
-    'title' : "aa",
-    'URL' : "aa",
-    'vlinkColor' : "aa",
-    'width' : 123,
+    'doctype' : str,
+    'documentElement' : Element,
+    'styleSheets' : [Style],
+    'alinkColor' : str,
+    'bgColor' : str,
+    'body' : Element,
+    'cookie' : str,
+    'defaultView' : Window,
+    'domain' : str,
+    'embeds' : [Element],
+    'fgColor' : str,
+    'forms' : [Element],
+    'height' : int,
+    'images' : [Element],
+    'lastModified' : str,
+    'linkColor' : str,
+    'links' : [Element],
+    'referrer' : str,
+    'title' : str,
+    'URL' : str,
+    'vlinkColor' : str,
+    'width' : int,
 })
 
 Document._methods = Node._methods.copy()
 Document._methods.update({
-    'createAttribute' : MethodDesc(["aa"], Element()),
-    'createDocumentFragment' : MethodDesc([], Element()),
-    'createElement' : MethodDesc(["aa"], Element()),
-    'createElementNS' : MethodDesc(["aa", "aa"], Element()),
-    'createEvent' : MethodDesc(["aa"], Event()),
-    'createTextNode' : MethodDesc(["aa"], Element()),
+    'createAttribute' : MethodDesc([str], Element),
+    'createDocumentFragment' : MethodDesc([], Element),
+    'createElement' : MethodDesc([str], Element),
+    'createElementNS' : MethodDesc([str], Element),
+    'createEvent' : MethodDesc([str], Event),
+    'createTextNode' : MethodDesc([str], Element),
     #'createRange' : MethodDesc(["aa"], Range()) - don't know what to do here
-    'getElementById' : MethodDesc(["aa"], Element()),
-    'getElementsByName' : MethodDesc(["aa"], [Element(), Element()]),
-    'importNode' : MethodDesc([Element(), True], Element()),
+    'getElementById' : MethodDesc([str], Element),
+    'getElementsByName' : MethodDesc([str], [Element]),
+    'importNode' : MethodDesc([Element, bool], Element),
     'clear' : MethodDesc([]),
     'close' : MethodDesc([]),
     'open' : MethodDesc([]),
-    'write' : MethodDesc(["aa"]),
-    'writeln' : MethodDesc(["aa"]),
+    'write' : MethodDesc([str]),
+    'writeln' : MethodDesc([str]),
 })
 
 Window._fields = EventTarget._fields.copy()
 Window._fields.update({
-    'content' : Window(),
-    'closed' : True,
+    'content' : Window,
+    'closed' : bool,
     # 'crypto' : Crypto() - not implemented in Gecko, leave alone
-    'defaultStatus' : "aa",
-    'document' : Document(),
+    'defaultStatus' : str,
+    'document' : Document,
     # 'frameElement' :  - leave alone
-    'frames' : [Window(), Window()],
-    'history' : ["aa", "aa"],
-    'innerHeight' : 123,
-    'innerWidth' : 123,
-    'length' : 12,
-    'location' : "aa",
-    'name' : "aa",
+    'frames' : [Window],
+    'history' : [str],
+    'innerHeight' : int,
+    'innerWidth' : int,
+    'length' : int,
+    'location' : Location,
+    'name' : str,
     # 'preference' : # denied in gecko
-    'opener' : Window(),
-    'outerHeight' : 123,
-    'outerWidth' : 123,
-    'pageXOffset' : 12,
-    'pageYOffset' : 12,
-    'parent' : Window(),
+    'opener' : Window,
+    'outerHeight' : int,
+    'outerWidth' : int,
+    'pageXOffset' : int,
+    'pageYOffset' : int,
+    'parent' : Window,
     # 'personalbar' :  - disallowed
     # 'screen' : Screen() - not part of the standard, allow it if you want
-    'screenX' : 12,
-    'screenY' : 12,
-    'scrollMaxX' : 12,
-    'scrollMaxY' : 12,
-    'scrollX' : 12,
-    'scrollY' : 12,
-    'self' : Window(),
-    'status' : "asd",
-    'top' : Window(),
-    'window' : Window(),
+    'screenX' : int,
+    'screenY' : int,
+    'scrollMaxX' : int,
+    'scrollMaxY' : int,
+    'scrollX' : int,
+    'scrollY' : int,
+    'self' : Window,
+    'status' : str,
+    'top' : Window,
+    'window' : Window,
 })
 
 Window._methods = Node._methods.copy()
 Window._methods.update({
-    'alert' : MethodDesc(["aa"]),
-    'atob' : MethodDesc(["aa"], "aa"),
+    'alert' : MethodDesc([str]),
+    'atob' : MethodDesc([str], str),
     'back' : MethodDesc([]),
     'blur' : MethodDesc([]),
-    'btoa' : MethodDesc(["aa"], "aa"),
+    'btoa' : MethodDesc([str], str),
     'close' : MethodDesc([]),
-    'confirm' : MethodDesc(["aa"], True),
-    'dump' : MethodDesc(["aa"]),
-    'escape' : MethodDesc(["aa"], "aa"),
+    'confirm' : MethodDesc([str], bool),
+    'dump' : MethodDesc([str]),
+    'escape' : MethodDesc([str], str),
     #'find' : MethodDesc(["aa"],  - gecko only
     'focus' : MethodDesc([]),
     'forward' : MethodDesc([]),
-    'getComputedStyle' : MethodDesc([Element(), "aa"], Style()),
+    'getComputedStyle' : MethodDesc([Element, str], Style),
     'home' : MethodDesc([]),
-    'open' : MethodDesc(["aa", "aa"]),
+    'open' : MethodDesc([str]),
 })
 
 Style._fields = {
-    'azimuth' : 'aa',
-    'background' : 'aa',
-    'backgroundAttachment' : 'aa',
-    'backgroundColor' : 'aa',
-    'backgroundImage' : 'aa',
-    'backgroundPosition' : 'aa',
-    'backgroundRepeat' : 'aa',
-    'border' : 'aa',
-    'borderBottom' : 'aa',
-    'borderBottomColor' : 'aa',
-    'borderBottomStyle' : 'aa',
-    'borderBottomWidth' : 'aa',
-    'borderCollapse' : 'aa',
-    'borderColor' : 'aa',
-    'borderLeft' : 'aa',
-    'borderLeftColor' : 'aa',
-    'borderLeftStyle' : 'aa',
-    'borderLeftWidth' : 'aa',
-    'borderRight' : 'aa',
-    'borderRightColor' : 'aa',
-    'borderRightStyle' : 'aa',
-    'borderRightWidth' : 'aa',
-    'borderSpacing' : 'aa',
-    'borderStyle' : 'aa',
-    'borderTop' : 'aa',
-    'borderTopColor' : 'aa',
-    'borderTopStyle' : 'aa',
-    'borderTopWidth' : 'aa',
-    'borderWidth' : 'aa',
-    'bottom' : 'aa',
-    'captionSide' : 'aa',
-    'clear' : 'aa',
-    'clip' : 'aa',
-    'color' : 'aa',
-    'content' : 'aa',
-    'counterIncrement' : 'aa',
-    'counterReset' : 'aa',
-    'cssFloat' : 'aa',
-    'cssText' : 'aa',
-    'cue' : 'aa',
-    'cueAfter' : 'aa',
-    'onBefore' : 'aa',
-    'cursor' : 'aa',
-    'direction' : 'aa',
-    'displays' : 'aa',
-    'elevation' : 'aa',
-    'emptyCells' : 'aa',
-    'font' : 'aa',
-    'fontFamily' : 'aa',
-    'fontSize' : 'aa',
-    'fontSizeAdjust' : 'aa',
-    'fontStretch' : 'aa',
-    'fontStyle' : 'aa',
-    'fontVariant' : 'aa',
-    'fontWeight' : 'aa',
-    'height' : 'aa',
-    'left' : 'aa',
-    'length' : 'aa',
-    'letterSpacing' : 'aa',
-    'lineHeight' : 'aa',
-    'listStyle' : 'aa',
-    'listStyleImage' : 'aa',
-    'listStylePosition' : 'aa',
-    'listStyleType' : 'aa',
-    'margin' : 'aa',
-    'marginBottom' : 'aa',
-    'marginLeft' : 'aa',
-    'marginRight' : 'aa',
-    'marginTop' : 'aa',
-    'markerOffset' : 'aa',
-    'marks' : 'aa',
-    'maxHeight' : 'aa',
-    'maxWidth' : 'aa',
-    'minHeight' : 'aa',
-    'minWidth' : 'aa',
-    'MozBinding' : 'aa',
-    'MozOpacity' : 'aa',
-    'orphans' : 'aa',
-    'outline' : 'aa',
-    'outlineColor' : 'aa',
-    'outlineStyle' : 'aa',
-    'outlineWidth' : 'aa',
-    'overflow' : 'aa',
-    'padding' : 'aa',
-    'paddingBottom' : 'aa',
-    'paddingLeft' : 'aa',
-    'paddingRight' : 'aa',
-    'paddingTop' : 'aa',
-    'page' : 'aa',
-    'pageBreakAfter' : 'aa',
-    'pageBreakBefore' : 'aa',
-    'pageBreakInside' : 'aa',
-    'parentRule' : 'aa',
-    'pause' : 'aa',
-    'pauseAfter' : 'aa',
-    'pauseBefore' : 'aa',
-    'pitch' : 'aa',
-    'pitchRange' : 'aa',
-    'playDuring' : 'aa',
-    'position' : 'aa',
-    'quotes' : 'aa',
-    'richness' : 'aa',
-    'right' : 'aa',
-    'size' : 'aa',
-    'speak' : 'aa',
-    'speakHeader' : 'aa',
-    'speakNumeral' : 'aa',
-    'speakPunctuation' : 'aa',
-    'speechRate' : 'aa',
-    'stress' : 'aa',
-    'tableLayout' : 'aa',
-    'textAlign' : 'aa',
-    'textDecoration' : 'aa',
-    'textIndent' : 'aa',
-    'textShadow' : 'aa',
-    'textTransform' : 'aa',
-    'top' : 'aa',
-    'unicodeBidi' : 'aa',
-    'verticalAlign' : 'aa',
-    'visibility' : 'aa',
-    'voiceFamily' : 'aa',
-    'volume' : 'aa',
-    'whiteSpace' : 'aa',
-    'widows' : 'aa',
-    'width' : 'aa',
-    'wordSpacing' : 'aa',
-    'zIndex' : 'aa',
+    'azimuth' : str,
+    'background' : str,
+    'backgroundAttachment' : str,
+    'backgroundColor' : str,
+    'backgroundImage' : str,
+    'backgroundPosition' : str,
+    'backgroundRepeat' : str,
+    'border' : str,
+    'borderBottom' : str,
+    'borderBottomColor' : str,
+    'borderBottomStyle' : str,
+    'borderBottomWidth' : str,
+    'borderCollapse' : str,
+    'borderColor' : str,
+    'borderLeft' : str,
+    'borderLeftColor' : str,
+    'borderLeftStyle' : str,
+    'borderLeftWidth' : str,
+    'borderRight' : str,
+    'borderRightColor' : str,
+    'borderRightStyle' : str,
+    'borderRightWidth' : str,
+    'borderSpacing' : str,
+    'borderStyle' : str,
+    'borderTop' : str,
+    'borderTopColor' : str,
+    'borderTopStyle' : str,
+    'borderTopWidth' : str,
+    'borderWidth' : str,
+    'bottom' : str,
+    'captionSide' : str,
+    'clear' : str,
+    'clip' : str,
+    'color' : str,
+    'content' : str,
+    'counterIncrement' : str,
+    'counterReset' : str,
+    'cssFloat' : str,
+    'cssText' : str,
+    'cue' : str,
+    'cueAfter' : str,
+    'onBefore' : str,
+    'cursor' : str,
+    'direction' : str,
+    'displays' : str,
+    'elevation' : str,
+    'emptyCells' : str,
+    'font' : str,
+    'fontFamily' : str,
+    'fontSize' : str,
+    'fontSizeAdjust' : str,
+    'fontStretch' : str,
+    'fontStyle' : str,
+    'fontVariant' : str,
+    'fontWeight' : str,
+    'height' : str,
+    'left' : str,
+    'length' : str,
+    'letterSpacing' : str,
+    'lineHeight' : str,
+    'listStyle' : str,
+    'listStyleImage' : str,
+    'listStylePosition' : str,
+    'listStyleType' : str,
+    'margin' : str,
+    'marginBottom' : str,
+    'marginLeft' : str,
+    'marginRight' : str,
+    'marginTop' : str,
+    'markerOffset' : str,
+    'marks' : str,
+    'maxHeight' : str,
+    'maxWidth' : str,
+    'minHeight' : str,
+    'minWidth' : str,
+    'MozBinding' : str,
+    'MozOpacity' : str,
+    'orphans' : str,
+    'outline' : str,
+    'outlineColor' : str,
+    'outlineStyle' : str,
+    'outlineWidth' : str,
+    'overflow' : str,
+    'padding' : str,
+    'paddingBottom' : str,
+    'paddingLeft' : str,
+    'paddingRight' : str,
+    'paddingTop' : str,
+    'page' : str,
+    'pageBreakAfter' : str,
+    'pageBreakBefore' : str,
+    'pageBreakInside' : str,
+    'parentRule' : str,
+    'pause' : str,
+    'pauseAfter' : str,
+    'pauseBefore' : str,
+    'pitch' : str,
+    'pitchRange' : str,
+    'playDuring' : str,
+    'position' : str,
+    'quotes' : str,
+    'richness' : str,
+    'right' : str,
+    'size' : str,
+    'speak' : str,
+    'speakHeader' : str,
+    'speakNumeral' : str,
+    'speakPunctuation' : str,
+    'speechRate' : str,
+    'stress' : str,
+    'tableLayout' : str,
+    'textAlign' : str,
+    'textDecoration' : str,
+    'textIndent' : str,
+    'textShadow' : str,
+    'textTransform' : str,
+    'top' : str,
+    'unicodeBidi' : str,
+    'verticalAlign' : str,
+    'visibility' : str,
+    'voiceFamily' : str,
+    'volume' : str,
+    'whiteSpace' : str,
+    'widows' : str,
+    'width' : str,
+    'wordSpacing' : str,
+    'zIndex' : str,
 }
 
 Event._fields = {
-    'bubbles': True,
-    'cancelBubble': True,
-    'cancelable': True,
-    'currentTarget': Element(),
-    'detail': 1,
-    'relatedTarget': Element(),
-    'target': Element(),
-    'type': 'aa',
+    'bubbles': bool,
+    'cancelBubble': bool,
+    'cancelable': bool,
+    'currentTarget': Element,
+    'detail': int,
+    'relatedTarget': Element,
+    'target': Element,
+    'type': str,
 }
 
 Event._methods = {
-    'initEvent': MethodDesc(["aa", True, True]),
+    'initEvent': MethodDesc([str, bool, bool]),
     'preventDefault': MethodDesc([]),
     'stopPropagation': MethodDesc([]),
 }
 
+KeyEvent._methods = Event._methods.copy()
+
 KeyEvent._fields = Event._fields.copy()
 KeyEvent._fields.update({
-    'keyCode' : 12,
-    'charCode' : 12,
+    'keyCode' : int,
+    'charCode': int,
+    'altKey'  : bool,
+    'ctrlKey' : bool,
+    'shiftKey': bool,
 })
 
-get_window.suggested_primitive = True
-get_document.suggested_primitive = True
+# XXX: Right now this is only way to get it rendered
 setTimeout.suggested_primitive = True
-alert.suggested_primitive = True
 
 # the following code wraps minidom nodes with Node classes, and makes
 # sure all methods on the nodes return wrapped nodes
@@ -778,6 +796,9 @@ def _serialize_html(node):
     else:
         raise ValueError('unsupported node type %s' % (node.nodeType,))
     return ''.join(ret)
+
+def alert(msg):
+    window.alert(msg)
 
 # initialization
 

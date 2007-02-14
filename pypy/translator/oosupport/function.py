@@ -1,8 +1,14 @@
+import py
+from pypy.tool.ansi_print import ansi_log
+log = py.log.Producer("oosupport") 
+py.log.setconsumer("oosupport", ansi_log) 
+
 from pypy.objspace.flow import model as flowmodel
-from pypy.rpython.ootypesystem.ootype import Void
+from pypy.rpython.ootypesystem import ootype
 from pypy.translator.oosupport.metavm import InstructionList
 
 class Function(object):
+
     def __init__(self, db, graph, name = None, is_method = False, is_entrypoint = False):
         self.db = db
         self.cts = db.genoo.TypeSystem(db)
@@ -11,11 +17,21 @@ class Function(object):
         self.is_method = is_method
         self.is_entrypoint = is_entrypoint
         self.generator = None # set in render()
+        self.label_counters = {}
         
         # If you want to enumerate args/locals before processing, then
         # add these functions into your __init__() [they are defined below]
         #   self._set_args()
         #   self._set_locals()
+
+    def current_label(self, prefix='label'):
+        current = self.label_counters.get(prefix, 0)
+        return '__%s_%d' % (prefix, current)
+
+    def next_label(self, prefix='label'):
+        current = self.label_counters.get(prefix, 0)
+        self.label_counters[prefix] = current+1
+        return self.current_label(prefix)
 
     def get_name(self):
         return self.name
@@ -82,15 +98,16 @@ class Function(object):
         graph = self.graph
         self.begin_render()
 
-        return_blocks = []
+        self.return_block = None
+        self.raise_block = None
         for block in graph.iterblocks():
             if self._is_return_block(block):
-                return_blocks.append(block)
+                self.return_block = block
+            elif self._is_raise_block(block):
+                self.raise_block = block
             else:
                 self.set_label(self._get_block_name(block))
-                if self._is_raise_block(block):
-                    self.render_raise_block(block)
-                elif self._is_exc_handling_block(block):
+                if self._is_exc_handling_block(block):
                     self.render_exc_handling_block(block)
                 else:
                     self.render_normal_block(block)
@@ -98,13 +115,22 @@ class Function(object):
         # render return blocks at the end just to please the .NET
         # runtime that seems to need a return statement at the end of
         # the function
-        for block in return_blocks:
-            self.set_label(self._get_block_name(block))
-            self.render_return_block(block)
+
+        self.before_last_blocks()
+
+        if self.raise_block:
+            self.set_label(self._get_block_name(self.raise_block))
+            self.render_raise_block(self.raise_block)
+        if self.return_block:
+            self.set_label(self._get_block_name(self.return_block))
+            self.render_return_block(self.return_block)
 
         self.end_render()
         if not self.is_method:
             self.db.record_function(self.graph, self.name)
+
+    def before_last_blocks(self):
+        pass
 
     def render_exc_handling_block(self, block):
         # renders all ops but the last one
@@ -145,26 +171,56 @@ class Function(object):
         raise NotImplementedError
             
     def render_normal_block(self, block):
-        # renders all ops but the last one
         for op in block.operations:
             self._render_op(op)
 
+        if block.exitswitch is None:
+            assert len(block.exits) == 1
+            link = block.exits[0]
+            target_label = self._get_block_name(link.target)
+            self._setup_link(link)
+            self.generator.branch_unconditionally(target_label)
+        elif block.exitswitch.concretetype is ootype.Bool:
+            self.render_bool_switch(block)
+        elif block.exitswitch.concretetype in (ootype.Signed, ootype.SignedLongLong,
+                                               ootype.Unsigned, ootype.UnsignedLongLong,
+                                               ootype.Char, ootype.UniChar):
+            self.render_numeric_switch(block)
+        else:
+            assert False, 'Unknonw exitswitch type: %s' % block.exitswitch.concretetype
+
+    def render_bool_switch(self, block):
         for link in block.exits:
             self._setup_link(link)
             target_label = self._get_block_name(link.target)
-            if link.exitcase is None or link is block.exits[-1]:
+            if link is block.exits[-1]:
                 self.generator.branch_unconditionally(target_label)
             else:
-                assert type(link.exitcase is bool)
+                assert type(link.exitcase) is bool
                 assert block.exitswitch is not None
                 self.generator.load(block.exitswitch)
                 self.generator.branch_conditionally(link.exitcase, target_label)
+
+    def render_numeric_switch(self, block):
+        log.WARNING("The default version of render_numeric_switch is *slow*: please override it in the backend")
+        self.render_numeric_switch_naive(block)
+
+    def render_numeric_switch_naive(self, block):
+        for link in block.exits:
+            target_label = self._get_block_name(link.target)
+            self._setup_link(link)
+            if link.exitcase == 'default':
+                self.generator.branch_unconditionally(target_label)
+            else:
+                self.generator.push_primitive_constant(block.exitswitch.concretetype, link.exitcase)
+                self.generator.load(block.exitswitch)
+                self.generator.branch_if_equal(target_label)
 
     def _setup_link(self, link):
         self.generator.add_comment("Setup link")
         target = link.target
         for to_load, to_store in zip(link.args, target.inputargs):
-            if to_load.concretetype is not Void:
+            if to_load.concretetype is not ootype.Void:
                 self.generator.add_comment("  to_load=%r to_store=%r" % (
                     to_load, to_store))
                 self.generator.load(to_load)
@@ -226,13 +282,13 @@ class Function(object):
         seen = {}
         for v in mix:
             is_var = isinstance(v, flowmodel.Variable)
-            if id(v) not in seen and is_var and v.name not in args and v.concretetype is not Void:
+            if id(v) not in seen and is_var and v.name not in args and v.concretetype is not ootype.Void:
                 locals.append(self.cts.llvar_to_cts(v))
                 seen[id(v)] = True
 
         self.locals = locals
 
     def _set_args(self):
-        args = [arg for arg in self.graph.getargs() if arg.concretetype is not Void]
+        args = [arg for arg in self.graph.getargs() if arg.concretetype is not ootype.Void]
         self.args = map(self.cts.llvar_to_cts, args)
         self.argset = set([argname for argtype, argname in self.args])

@@ -2,9 +2,6 @@ import os
 from ctypes import POINTER, cast, c_char, c_void_p, CFUNCTYPE, c_int
 from ri386 import I386CodeBuilder
 
-# Set this to enable/disable the CODE_DUMP stdout lines
-CODE_DUMP = False
-
 # ____________________________________________________________
 
 
@@ -44,6 +41,11 @@ class InMemoryCodeBuilder(I386CodeBuilder):
         baseaddr = cast(self._data, c_void_p).value
         return baseaddr + self._pos
 
+    def seekback(self, count):
+        pos = self._pos - count
+        self._pos = pos
+        self._last_dump_start = pos
+
     def execute(self, arg1, arg2):
         # XXX old testing stuff
         fnptr = cast(self._data, binaryfn)
@@ -51,21 +53,69 @@ class InMemoryCodeBuilder(I386CodeBuilder):
 
     def done(self):
         # normally, no special action is needed here
-        if CODE_DUMP:
-            self.dump_range(self._last_dump_start, self._pos)
+        if machine_code_dumper.enabled:
+            machine_code_dumper.dump_range(self, self._last_dump_start,
+                                           self._pos)
             self._last_dump_start = self._pos
 
-    def dump_range(self, start, end):
+    def log(self, msg):
+        if machine_code_dumper.enabled:
+            machine_code_dumper.dump(self, 'LOG', self._pos, msg)
+
+
+class MachineCodeDumper:
+    enabled = True
+    log_fd = -1
+    sys_executable = None
+
+    def _freeze_(self):
+        # reset the machine_code_dumper global instance to its default state
+        if self.log_fd >= 0:
+            os.close(self.log_fd)
+        self.__dict__.clear()
+        return False
+
+    def open(self):
+        if self.log_fd < 0:
+            # check the environment for a file name
+            from pypy.rlib.ros import getenv
+            s = getenv('PYPYJITLOG')
+            if not s:
+                self.enabled = False
+                return False
+            try:
+                flags = os.O_WRONLY|os.O_CREAT|os.O_TRUNC
+                self.log_fd = os.open(s, flags, 0666)
+            except OSError:
+                os.write(2, "could not create log file\n")
+                self.enabled = False
+                return False
+            # log the executable name
+            from pypy.jit.codegen.hlinfo import highleveljitinfo
+            os.write(self.log_fd, 'BACKEND i386\n')
+            if highleveljitinfo.sys_executable:
+                os.write(self.log_fd, 'SYS_EXECUTABLE %s\n' % (
+                    highleveljitinfo.sys_executable,))
+        return True
+
+    def dump(self, cb, tag, pos, msg):
+        if not self.open():
+            return
+        line = '%s @%x +%d  %s\n' % (tag, cb.tell() - cb._pos, pos, msg)
+        os.write(self.log_fd, line)
+
+    def dump_range(self, cb, start, end):
         HEX = '0123456789ABCDEF'
         dump = []
         for p in range(start, end):
-            o = ord(self._data.contents[p])
+            o = ord(cb._data.contents[p])
             dump.append(HEX[o >> 4])
             dump.append(HEX[o & 15])
             if (p & 3) == 3:
                 dump.append(':')
-        os.write(2, 'CODE_DUMP @%x +%d  %s\n' % (self.tell() - self._pos,
-                                                 start, ''.join(dump)))
+        self.dump(cb, 'CODE_DUMP', start, ''.join(dump))
+
+machine_code_dumper = MachineCodeDumper()
 
 
 class MachineCodeBlock(InMemoryCodeBuilder):
@@ -97,21 +147,30 @@ class LLTypeMachineCodeBlock(I386CodeBuilder):
     def __init__(self, map_size):
         self._size = map_size
         self._pos = 0
-        self._data = lltype.malloc(BUF, map_size)
         self._base = LLTypeMachineCodeBlock.state.base
-        LLTypeMachineCodeBlock.state.base += 2 * map_size
+        LLTypeMachineCodeBlock.state.base += map_size
 
     def write(self, data):
         p = self._pos
         if p + len(data) > self._size:
             raise CodeBlockOverflow
-        for c in data:
-            self._data[p] = c
-            p += 1
-        self._pos = p
+        self._pos += len(data)
+        return
 
     def tell(self):
-        return self._base + 2 * self._pos
+        return self._base + self._pos
+
+    def seekback(self, count):
+        self._pos -= count
 
     def done(self):
         pass
+
+class LLTypeInMemoryCodeBuilder(LLTypeMachineCodeBlock):
+    _last_dump_start = 0
+
+    def __init__(self, start, end):
+        self._size = end - start
+        self._pos = 0
+        self._base = start
+

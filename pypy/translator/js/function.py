@@ -7,53 +7,13 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem.lltype import Signed, Unsigned, Void, Bool, Float
 from pypy.rpython.lltypesystem.lltype import SignedLongLong, UnsignedLongLong
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.option import getoption
-from pypy.translator.cli.cts import CTS
-from pypy.translator.cli.opcodes import opcodes
-from pypy.translator.cli.metavm import Generator,InstructionList
+from pypy.translator.oosupport.metavm import Generator,InstructionList
 from pypy.translator.cli.node import Node
-from pypy.translator.cli.class_ import Class
 
 from pypy.translator.js.log import log
 from types import FunctionType
 
 import re
-
-class LoopFinder(object):
-
-    def __init__(self, startblock):
-        self.loops = {}
-        self.parents = {startblock: startblock}
-        self.temps = {}
-        self.seen = set ()
-        self.block_seeing_order = {}
-        self.visit_Block(startblock)
-   
-    def visit_Block(self, block, switches=[]):
-        #self.temps.has_key()
-        self.seen.add(block)
-        self.block_seeing_order[block] = []
-        if block.exitswitch:
-            switches.append(block)
-            self.parents[block] = block
-        for link in block.exits:
-            self.block_seeing_order[block].append(link)
-            self.visit_Link(link, switches) 
-
-    def visit_Link(self, link, switches):
-        if link.target in switches:
-            #if self.loops.has_key(link.target):
-            #    # double loop
-            #    pass
-            block_switch = self.block_seeing_order[link.target]
-            if len(self.block_seeing_order[link.target]) == 1:
-                self.loops[(block_switch[0].exitcase,link.target)] = block_switch[0].exitcase
-            else:
-                self.loops[(block_switch[1].exitcase,link.target)] = block_switch[1].exitcase
-            
-        if not link.target in self.seen:
-            self.parents[link.target] = self.parents[link.prevblock]
-            self.visit_Block(link.target, switches)
 
 class Function(Node, Generator):
     def __init__(self, db, graph, name=None, is_method=False, is_entrypoint=False, _class = None):
@@ -411,6 +371,12 @@ class Function(Node, Generator):
     
     def call_external_method(self, name, arg_len):
         self.ilasm.call_method(None, name, [0]*arg_len)
+        
+    def instantiate(self):
+        self.ilasm.runtimenew()
+    
+    def downcast(self, TYPE):
+        pass
 
     def load(self, v):
         if isinstance(v, flowmodel.Variable):

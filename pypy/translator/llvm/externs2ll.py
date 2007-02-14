@@ -7,8 +7,11 @@ from pypy.objspace.flow.model import FunctionGraph
 from pypy.rpython.rmodel import inputconst
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.llvm.codewriter import DEFAULT_CCONV
+from pypy.translator.llvm.buildllvm import llvm_gcc_version
 
 from pypy.tool.udir import udir
+
+_llvm_gcc_version = None
 
 support_functions = [
     "%raisePyExc_IOError",
@@ -36,9 +39,14 @@ def get_ll(ccode, function_names):
 
     plain = filename[:-2]
     includes = get_incdirs()
-    cmd = "llvm-gcc %s -S %s.c -o %s.ll 2>&1" % (includes,
-                                                 plain,
-                                                 plain)
+
+    if llvm_gcc_version < 4.0:
+        emit_llvm = ''
+    else:
+        emit_llvm = '-emit-llvm -O3'
+    cmd = "llvm-gcc %s %s -S %s.c -o %s.ll 2>&1" % (
+        includes, emit_llvm, plain, plain)
+
     os.system(cmd)
     llcode = open(plain + '.ll').read()
 
@@ -93,6 +101,8 @@ def get_ll(ccode, function_names):
                     break
             line = "declare %s %s" % (cconv, line[len(declaretag):])
         ll_lines2.append(line)
+
+    ll_lines2.append("declare ccc void %abort()")
 
     llcode = '\n'.join(ll_lines2)
     try:

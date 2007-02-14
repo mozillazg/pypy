@@ -11,6 +11,7 @@ from pygame.locals import *
 
 
 FONT = os.path.join(autopath.this_dir, 'cyrvetic.ttf')
+FIXEDFONT = os.path.join(autopath.this_dir, 'VeraMoBd.ttf')
 COLOR = {
     'black': (0,0,0),
     'white': (255,255,255),
@@ -52,6 +53,7 @@ def getcolor(name, default):
 
 
 class GraphLayout:
+    fixedfont = False
 
     def __init__(self, filename):
         # parse the layout file (.plain format)
@@ -61,6 +63,9 @@ class GraphLayout:
                 lines[i] = lines[i][:-2] + lines[i+1]
                 del lines[i+1]
         header = splitline(lines.pop(0))
+        # XXX very simple-minded way to give a somewhat better error message
+        if header[0] == '<body':
+            raise Exception("the dot on codespeak has very likely crashed")
         assert header[0] == 'graph'
         self.scale = float(header[1])
         self.boundingbox = float(header[2]), float(header[3])
@@ -294,7 +299,11 @@ class GraphRenderer:
             self.FONTCACHE[size] = None
             return None
         else:
-            font = self.FONTCACHE[size] = pygame.font.Font(FONT, size)
+            if self.graphlayout.fixedfont:
+                filename = FIXEDFONT
+            else:
+                filename = FONT
+            font = self.FONTCACHE[size] = pygame.font.Font(filename, size)
             return font
     
     def setoffset(self, offsetx, offsety):

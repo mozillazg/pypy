@@ -6,9 +6,12 @@ import autopath
 
 from pypy.translator.js.demo.jsdemo import support
 
-from pypy.translator.js.modules.dom import setTimeout, get_document
+from pypy.translator.js.modules.dom import setTimeout, document
 from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal
 from pypy.translator.js import commproxy
+from pypy.annotation import model as annmodel
+from pypy.annotation.signature import annotation
+from pypy.rpython.extfunc import _callable
 
 commproxy.USE_MOCHIKIT = False
 
@@ -19,7 +22,7 @@ HTML_PAGE = """
 <html>
 <head>
   <title>Example</title>
-  <script type="text/javascript" src="jssource"/>
+  <script type="text/javascript" src="jssource"></script>
 </head>
 <body onload="runjs()">
 This is a test!<br/>
@@ -31,7 +34,7 @@ This is a test!<br/>
 httpd = None
 
 def callback(data):
-    get_document().getElementById("counter").innerHTML = data['counter']
+    document.getElementById("counter").innerHTML = data['counter']
     runjs()
 
 def runjs():
@@ -40,7 +43,7 @@ def runjs():
 class Server(HTTPServer, BasicExternal):
     # Methods and signatures how they are rendered for JS
     _methods = {
-        'some_callback' : MethodDesc([('callback', lambda : None)], {'aa':'aa'})
+        'some_callback' : MethodDesc([('callback', _callable([{str:str}]))], {str:str})
     }
     
     _render_xmlhttp = True

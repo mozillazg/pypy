@@ -142,7 +142,7 @@ TypeDesc = DictTypeDesc
 
 
 class AbstractFrozenVirtualDict(FrozenContainer):
-    __slots__ = ('typedesc',)
+    _attrs_ = ('typedesc',)
 
     def __init__(self, typedesc):
         self.typedesc = typedesc
@@ -183,7 +183,7 @@ class AbstractFrozenVirtualDict(FrozenContainer):
 
 
 class AbstractVirtualDict(VirtualContainer):
-    __slots__ = ('typedesc', 'ownbox')     # and no item_boxes
+    _attrs_ = ('typedesc', 'ownbox')     # and no item_boxes
 
     FrozenVirtualDict = AbstractFrozenVirtualDict    # overridden in subclasses
 
@@ -199,11 +199,12 @@ class AbstractVirtualDict(VirtualContainer):
             for box in self.getboxes():
                 box.enter_block(incoming, memo)
 
-    def force_runtime_container(self, builder):
+    def force_runtime_container(self, jitstate):
         typedesc = self.typedesc
+        builder = jitstate.curbuilder
         items = self.getitems_and_makeempty(builder.rgenop)
 
-        args_gv = [None]
+        args_gv = []
         gv_dict = builder.genop_call(typedesc.tok_ll_newdict,
                                      typedesc.gv_ll_newdict,
                                      args_gv)
@@ -211,7 +212,7 @@ class AbstractVirtualDict(VirtualContainer):
         self.ownbox.content = None
         for gv_key, valuebox, hash in items:
             gv_hash = builder.rgenop.genconst(hash)
-            gv_value = valuebox.getgenvar(builder)
+            gv_value = valuebox.getgenvar(jitstate)
             args_gv = [gv_dict, gv_key, gv_value, gv_hash]
             builder.genop_call(typedesc.tok_ll_insertclean,
                                typedesc.gv_ll_insertclean,

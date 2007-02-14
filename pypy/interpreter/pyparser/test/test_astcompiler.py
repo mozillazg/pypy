@@ -9,7 +9,7 @@ import py.test
 
 def setup_module(mod):
     import pypy.conftest
-    mod.std_space = pypy.conftest.getobjspace('std')
+    mod.std_space = pypy.conftest.gettestobjspace('std')
 
 from pypy.interpreter.astcompiler import ast, misc, pycodegen
 
@@ -108,16 +108,16 @@ def to_code( rcode, space ):
     return code
 
 def check_compile(expr, mode='exec', quiet=False, space=None):
-    if expr == "k[v,]":
-        py.test.skip('bug of the reference "stable compiler"')
     if not quiet:
         print "Compiling:", expr
 
     if space is None:
         space = std_space
 
-    sc_code = compile_with_testcompiler(expr, mode=mode)
     ac_code = compile_with_astcompiler(expr, mode=mode, space=space)
+    if expr == "k[v,]" or expr.startswith('"'):  # module-level docstring
+        py.test.skip('comparison skipped, bug in "reference stable compiler"')
+    sc_code = compile_with_testcompiler(expr, mode=mode)
     compare_code(ac_code, sc_code, space=space)
 
 

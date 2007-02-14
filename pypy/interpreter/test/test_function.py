@@ -169,6 +169,12 @@ class AppTestFunction:
         raises(TypeError, len, s, some_unknown_keyword=s)
         raises(TypeError, len, s, s, some_unknown_keyword=s)
 
+    def test_unicode_docstring(self):
+        def f():
+            u"hi"
+        assert f.__doc__ == u"hi"
+        assert type(f.__doc__) is unicode
+
 class AppTestMethod: 
     def test_get(self):
         def func(self): return self
@@ -253,6 +259,29 @@ class AppTestMethod:
         import new
         im = new.instancemethod(A(), 3)
         assert map(im, [4]) == [7]
+
+    def test_unbound_typecheck(self):
+        class A(object):
+            def foo(self, *args):
+                return args
+        class B(A):
+            pass
+        class C(A):
+            pass
+
+        assert A.foo(A(), 42) == (42,)
+        assert A.foo(B(), 42) == (42,)
+        raises(TypeError, A.foo, 5)
+        raises(TypeError, B.foo, C())
+        try:
+            class Fun:
+                __metaclass__ = A.foo
+            assert 0  # should have raised
+        except TypeError:
+            pass
+        class Fun:
+            __metaclass__ = A().foo
+        assert Fun[:2] == ('Fun', ())
 
 
 class TestMethod: 

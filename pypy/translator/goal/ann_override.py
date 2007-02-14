@@ -1,11 +1,22 @@
 # overrides for annotation specific to PyPy codebase
-from pypy.annotation.policy import AnnotatorPolicy
+from pypy.annotation.policy import AnnotatorPolicy, Sig
 # for some reason, model must be imported first,
 # or we create a cycle.
 from pypy.objspace.flow.model import Constant
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import specialize
+from pypy.interpreter import baseobjspace
+
+def isidentifier(s):
+    if not s: return False
+    s = s.replace('_', 'x')
+    return s[0].isalpha() and s.isalnum()
+
+# patch - mostly for debugging, to enfore some signatures
+baseobjspace.ObjSpace.newbool.im_func._annenforceargs_ = Sig(lambda s1,s2: s1,
+                                                             bool)
+
 
 class PyPyAnnotatorPolicy(AnnotatorPolicy):
     allow_someobjects = False
@@ -38,7 +49,7 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
         def builder(translator, func):
             return translator.buildflowgraph(yield_thread)
         return funcdesc.cachedgraph(None, builder=builder)
-     
+
     def specialize__wrap(pol,  funcdesc, args_s):
         from pypy.interpreter.baseobjspace import Wrappable
         from pypy.annotation.classdef import ClassDef
@@ -49,6 +60,17 @@ class PyPyAnnotatorPolicy(AnnotatorPolicy):
             typ = Wrappable
         else:
             assert not issubclass(typ, Wrappable)
+            if args_s[0].is_constant() and args_s[1].is_constant():
+                if typ in (str, bool, int, float):
+                    space = args_s[0].const
+                    x = args_s[1].const
+                    def fold():
+                        if typ is str and isidentifier(x):
+                            return space.new_interned_str(x)
+                        else:
+                            return space.wrap(x)
+                    builder = specialize.make_constgraphbuilder(2, factory=fold)
+                    return funcdesc.cachedgraph((typ, x), builder=builder)
         return funcdesc.cachedgraph(typ)
     
     def attach_lookup(pol, t, attr):

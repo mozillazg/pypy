@@ -256,15 +256,25 @@ def checkinvalid(space, s):
         raise
 
 
-class AppTestCondExpr:
+class Py25AppTest:
+    def setup_class(self):
+        space = self.space
+        w_not_25 = space.appexec([], """():
+            import sys
+            return sys.version_info < (2,5)
+        """)
+        not_25 = space.is_true(w_not_25)
+        if not_25:
+            py.test.skip('Needs python 2.5 grammar')
 
+class AppTestCondExpr(Py25AppTest):
     def test_condexpr(self):
         for s, expected in [("x = 1 if True else 2", 1),
                             ("x = 1 if False else 2", 2)]:
             exec s
             assert x == expected
 
-class AppTestWith:
+class AppTestWith(Py25AppTest):
     def test_with_simple(self):
 
         s = """from __future__ import with_statement

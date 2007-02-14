@@ -281,13 +281,18 @@ def build_not_test(builder, nb):
 
 def build_test(builder, nb):
     atoms = get_atoms(builder, nb)
-    if len(atoms) == 1:
+    l = len(atoms)
+    if l == 1:
         builder.push(atoms[0])
-    elif len(atoms) == 5:
+    elif l == 5 and atoms[1].get_value() == 'if':
         builder.push(
             ast.CondExpr(atoms[2], atoms[0], atoms[4], atoms[1].lineno))
     else:
-        assert False, "invalid number of atoms for rule 'test'"
+        lineno = atoms[1].lineno
+        items = []
+        for i in range(0,l,2): # this is atoms not 1
+            items.append(atoms[i])
+        builder.push(ast.Or(items, lineno))
 
 # Note: we do not include a build_old_test() because it does not need to do
 # anything.
@@ -393,12 +398,11 @@ def build_single_input(builder, nb):
     if l == 1 or l==2:
         atom0 = atoms[0]
         if isinstance(atom0, TokenObject) and atom0.name == builder.parser.tokens['NEWLINE']:
-            #atom0 = ast.Pass(atom0.lineno) # break test_astcompiler
+            # atom0 = ast.Pass(atom0.lineno) # break test_astcompiler
             atom0 = ast.Stmt([], atom0.lineno) # break test_astbuilder
         elif not isinstance(atom0, ast.Stmt):
             atom0 = ast.Stmt([atom0], atom0.lineno)
-        doc = get_docstring(builder, atom0) # XXX consider docstring here ?
-        builder.push(ast.Module(doc, atom0, atom0.lineno))
+        builder.push(ast.Module(builder.space.w_None, atom0, atom0.lineno))
     else:
         assert False, "Forbidden path"
 
@@ -1049,11 +1053,6 @@ ASTRULES_Template = {
     'with_stmt' : build_with_stmt,
     }
     
-# Build two almost identical ASTRULES dictionaries
-#ASTRULES      = dict([(sym[key], value) for (key, value) in
-#                      ASTRULES_Template.iteritems()])
-#del ASTRULES_Template
-
 
 class AstBuilderContext(AbstractContext):
     """specific context management for AstBuidler"""
@@ -1087,17 +1086,12 @@ class AstBuilder(BaseGrammarBuilder):
         assert isinstance(ctx, AstBuilderContext)
         assert len(self.rule_stack) >= ctx.d
         del self.rule_stack[ctx.d:]
-        #self.rule_stack = ctx.rule_stack
 
     def pop(self):
         return self.rule_stack.pop(-1)
 
     def push(self, obj):
         self.rule_stack.append(obj)
-##         if not isinstance(obj, RuleObject) and not isinstance(obj, TokenObject):
-##             pass
-##         elif isinstance(obj, TempRuleObject):
-##             pass
 
     def push_tok(self, name, value, src ):
         self.push( TokenObject( name, value, src._token_lnum, self.parser ) )
@@ -1107,7 +1101,6 @@ class AstBuilder(BaseGrammarBuilder):
 
     def alternative( self, rule, source ):
         # Do nothing, keep rule on top of the stack
-##        rule_stack = self.rule_stack[:]
         if rule.is_root():
             rulename = self.parser.sym_name[rule.codename]
             # builder_func = ASTRULES.get(rule.codename, None)
@@ -1130,7 +1123,6 @@ class AstBuilder(BaseGrammarBuilder):
 
     def sequence(self, rule, source, elts_number):
         """ """
-##        rule_stack = self.rule_stack[:]
         if rule.is_root():
             rulename = self.parser.sym_name[rule.codename]
             # builder_func = ASTRULES.get(rule.codename, None)
@@ -1178,11 +1170,11 @@ class AstBuilder(BaseGrammarBuilder):
             f = space.builtin.get('float')
             return space.call_function(f, space.wrap(value))
 
-    def is_string_const(self, expr):
-        if not isinstance(expr,ast.Const):
+    def is_basestring_const(self, expr):
+        if not isinstance(expr, ast.Const):
             return False
         space = self.space
-        return space.is_true(space.isinstance(expr.value,space.w_str))
+        return space.is_true(space.isinstance(expr.value,space.w_basestring))
 
     def wrap_string(self, obj):
         if self.space:

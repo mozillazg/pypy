@@ -2,7 +2,7 @@
 """
 
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult,\
-    InstructionList, New, SetField, GetField, MicroInstruction
+    InstructionList, New, SetField, GetField, MicroInstruction, RuntimeNew
      
 from pypy.translator.oosupport.metavm import _GetFieldDispatcher, _SetFieldDispatcher, \
     _CallDispatcher, _MethodDispatcher
@@ -82,7 +82,6 @@ opcodes = {'int_mul': '*',
     'float_add': '+',
     'float_sub': '-',
     'float_truediv': '/',
-    'float_mod': '%',
     'float_lt': '<',
     'float_le': '<=',
     'float_eq': '==',
@@ -111,6 +110,7 @@ opcodes = {'int_mul': '*',
     'indirect_call' : [IndirectCall],
     'same_as' : SameAs,
     'new' : [New],
+    'runtimenew' : [RuntimeNew],
     'instanceof' : [IsInstance],
     
     # objects

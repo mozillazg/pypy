@@ -138,6 +138,15 @@ class Generator(object):
         Stack: cond, ... -> ... """
         raise NotImplementedError
 
+    def branch_if_equal(self, target_label):
+        """
+        Pops two values from the stack and branches to target_label if
+        they are equal.
+
+        Stack: obj1, obj2, ... -> ...
+        """
+        raise NotImplementedError
+
     def call_graph(self, graph):
         """ Invokes the function corresponding to the given graph.  The
         arguments to the graph have already been pushed in order
@@ -146,6 +155,14 @@ class Generator(object):
 
         Stack: argN...arg2, arg1, arg0, ... -> ret, ... """
         raise NotImplementedError
+
+    def prepare_generic_argument(self, ITEMTYPE):
+        """
+        Invoked after a generic argument has been pushed onto the stack.
+        May not need to do anything, but some backends, *cough*Java*cough*,
+        require boxing etc.
+        """
+        return # by default do nothing
 
     def call_method(self, OOCLASS, method_name):
         """ Invokes the given method on the object on the stack.  The
@@ -396,6 +413,12 @@ class _OOString(MicroInstruction):
         generator.load(op.args[1])
         generator.call_oostring(ARGTYPE)
 
+class _CastTo(MicroInstruction):
+    def render(self, generator, op):
+        generator.load(op.args[0])
+        INSTANCE = op.args[1].value
+        class_name = generator.db.pending_class(INSTANCE)
+        generator.isinstance(class_name)
 
 New = _New()
 
@@ -409,3 +432,4 @@ Call = _Call()
 CallMethod = _CallMethod()
 RuntimeNew = _RuntimeNew()
 OOString = _OOString()
+CastTo = _CastTo()

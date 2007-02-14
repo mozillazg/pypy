@@ -1,15 +1,14 @@
 """Regular expression tests specific to _sre.py and accumulated during TDD."""
+import autopath
 from py.test import raises, skip
 from pypy.interpreter.gateway import app2interp_temp
 
 def init_globals_hack(space):
-    space.appexec([], """():
+    space.appexec([space.wrap(autopath.this_dir)], """(this_dir):
     import __builtin__ as b
     import sys, os.path
     # Uh-oh, ugly hack
-    test_path = os.path.join(
-        os.path.dirname(sys.modules["sys"].__file__), "../_sre/test")
-    sys.path.insert(0, test_path)
+    sys.path.insert(0, this_dir)
     import support_test_app_sre
     b.s = support_test_app_sre
     sys.path.pop(0)
@@ -188,6 +187,52 @@ class AppTestSreMatch:
                 ret += chr(ord(char) + 1)
             return ret
         assert ("bbbbb", 3) == re.subn("a", call_me, "ababa")
+
+    def test_match_array(self):
+        import re, array
+        a = array.array('c', 'hello')
+        m = re.match('hel+', a)
+        assert m.end() == 4
+
+    def test_group_bugs(self):
+        import re
+        r = re.compile(r"""
+            \&(?:
+              (?P<escaped>\&) |
+              (?P<named>[_a-z][_a-z0-9]*)      |
+              {(?P<braced>[_a-z][_a-z0-9]*)}   |
+              (?P<invalid>)
+            )
+        """, re.IGNORECASE | re.VERBOSE)
+        matches = list(r.finditer('this &gift is for &{who} &&'))
+        assert len(matches) == 3
+        assert matches[0].groupdict() == {'escaped': None,
+                                          'named': 'gift',
+                                          'braced': None,
+                                          'invalid': None}
+        assert matches[1].groupdict() == {'escaped': None,
+                                          'named': None,
+                                          'braced': 'who',
+                                          'invalid': None}
+        assert matches[2].groupdict() == {'escaped': '&',
+                                          'named': None,
+                                          'braced': None,
+                                          'invalid': None}
+        matches = list(r.finditer('&who likes &{what)'))   # note the ')'
+        assert len(matches) == 2
+        assert matches[0].groupdict() == {'escaped': None,
+                                          'named': 'who',
+                                          'braced': None,
+                                          'invalid': None}
+        assert matches[1].groupdict() == {'escaped': None,
+                                          'named': None,
+                                          'braced': None,
+                                          'invalid': ''}
+
+    def test_sub_typecheck(self):
+        import re
+        KEYCRE = re.compile(r"%\(([^)]*)\)s|.")
+        raises(TypeError, KEYCRE.sub, "hello", {"%(": 1})
 
 
 class AppTestSreScanner:

@@ -284,12 +284,14 @@ class BuiltinTest(unittest.TestCase):
         self.assertEqual(eval('dir()', g, m), list('xyz'))
         self.assertEqual(eval('globals()', g, m), g)
         self.assertEqual(eval('locals()', g, m), m)
-        self.assertRaises(TypeError, eval, 'a', m)
+        # the following line checks a detail of CPython: the globals() of
+        # any frame must be a real dictionary
+        #self.assertRaises(TypeError, eval, 'a', m)
         class A:
             "Non-mapping"
             pass
         m = A()
-        self.assertRaises(TypeError, eval, 'a', g, m)
+        self.assertRaises((TypeError, AttributeError) , eval, 'a', g, m)
 
         # Verify that dict subclasses work as well
         class D(dict):

@@ -29,12 +29,12 @@ from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, inputconst, BrokenReprTyperError
 from pypy.rpython.rmodel import warning, HalfConcreteWrapper
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper, LowLevelAnnotatorPolicy
-from pypy.rpython.rmodel import log
 from pypy.rpython.typesystem import LowLevelTypeSystem,\
                                     ObjectOrientedTypeSystem
 
 
 class RPythonTyper(object):
+    from pypy.rpython.rmodel import log
 
     def __init__(self, annotator, type_system="lltype"):
         self.annotator = annotator
@@ -77,7 +77,7 @@ class RPythonTyper(object):
         try:
             self.seed = int(os.getenv('RTYPERSEED'))
             s = 'Using %d as seed for block shuffling' % self.seed
-            log.info(s)
+            self.log.info(s)
         except:
             self.seed = 0
         self.order = None
@@ -88,7 +88,7 @@ class RPythonTyper(object):
 ##            order_module = RTYPERORDER.split(',')[0]
 ##            self.order = __import__(order_module, {}, {},  ['*']).order
 ##            s = 'Using %s.%s for order' % (self.order.__module__, self.order.__name__)
-##            log.info(s)
+##            self.log.info(s)
         self.crash_on_first_typeerror = True
 
     def getconfig(self):
@@ -187,12 +187,20 @@ class RPythonTyper(object):
         ldef = listdef.ListDef(None, annmodel.SomeString())
         self.list_of_str_repr = self.getrepr(annmodel.SomeList(ldef))
 
+    def getannmixlevel(self):
+        if self.annmixlevel is not None:
+            return self.annmixlevel
+        from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+        self.annmixlevel = MixLevelHelperAnnotator(self)
+        return self.annmixlevel
+
     def specialize_more_blocks(self):
         if self.already_seen:
             newtext = ' more'
         else:
             newtext = ''
         blockcount = 0
+        self.annmixlevel = None
         while True:
             # look for blocks not specialized yet
             pending = [block for block in self.annotator.annotated
@@ -224,15 +232,20 @@ class RPythonTyper(object):
                         error_report = " but %d errors" % self.typererror_count
                     else:
                         error_report = ''
-                    log.event('specializing: %d / %d blocks   (%d%%)%s' % (
-                        n, total, 100 * n // total, error_report))
+                    self.log.event('specializing: %d / %d blocks   (%d%%)%s' %
+                                   (n, total, 100 * n // total, error_report))
             # make sure all reprs so far have had their setup() called
             self.call_all_setups()
 
         if self.typererrors: 
             self.dump_typererrors(to_log=True) 
             raise TyperError("there were %d error" % len(self.typererrors))
-        log.event('-=- specialized %d%s blocks -=-' % (blockcount, newtext))
+        self.log.event('-=- specialized %d%s blocks -=-' % (
+            blockcount, newtext))
+        annmixlevel = self.annmixlevel
+        del self.annmixlevel
+        if annmixlevel is not None:
+            annmixlevel.finish()
 
     def dump_typererrors(self, num=None, minimize=True, to_log=False): 
         c = 0
@@ -243,22 +256,18 @@ class RPythonTyper(object):
                 bc += 1
                 continue
             block, position = err.where
-            func = self.annotator.annotated.get(block, None)
-            if func:
-                func = "(%s:%s)" %(func.__module__ or '?', func.__name__)
-            else:
-                func = "(?:?)"
-            errmsg = ("TyperError-%d: %s" % (c, func) +
+            graph = self.annotator.annotated.get(block, None)
+            errmsg = ("TyperError-%d: %s\n" % (c, graph) +
                       str(err) +
                       "\n")
             if to_log:
-                log.ERROR(errmsg)
+                self.log.ERROR(errmsg)
             else:
                 print errmsg
         if bc:
             minmsg = "(minimized %d errors away for this dump)" % (bc,)
             if to_log:
-                log.ERROR(minmsg)
+                self.log.ERROR(minmsg)
             else:
                 print minmsg
 
@@ -457,22 +466,19 @@ class RPythonTyper(object):
             yield HighLevelOp(self, block.operations[-1], exclinks, llops)
 
     def translate_hl_to_ll(self, hop, varmapping):
-        #log.translating(hop.spaceop.opname, hop.args_s)
+        #self.log.translating(hop.spaceop.opname, hop.args_s)
         resultvar = hop.dispatch()
         if hop.exceptionlinks and hop.llops.llop_raising_exceptions is None:
             raise TyperError("the graph catches %s, but the rtyper did not "
                              "take exceptions into account "
                              "(exception_is_here() not called)" % (
                 [link.exitcase.__name__ for link in hop.exceptionlinks],))
-        op = hop.spaceop
         if resultvar is None:
             # no return value
-            if hop.s_result != annmodel.SomeImpossibleValue():
-                raise TyperError("the annotator doesn't agree that '%s' "
-                                 "has no return value" % op.opname)
-            op.result.concretetype = Void
+            self.translate_no_return_value(hop)
         else:
             assert isinstance(resultvar, (Variable, Constant))
+            op = hop.spaceop
             # for simplicity of the translate_meth, resultvar is usually not
             # op.result here.  We have to replace resultvar with op.result
             # in all generated operations.
@@ -503,6 +509,13 @@ class RPythonTyper(object):
                 # renaming unsafe.  Insert a 'same_as' operation...
                 hop.llops.append(SpaceOperation('same_as', [resultvar],
                                                 op.result))
+
+    def translate_no_return_value(self, hop):
+        op = hop.spaceop
+        if hop.s_result != annmodel.s_ImpossibleValue:
+            raise TyperError("the annotator doesn't agree that '%s' "
+                             "has no return value" % op.opname)
+        op.result.concretetype = Void
 
     def gottypererror(self, e, block, position, llops):
         """Record a TyperError without crashing immediately.
@@ -643,6 +656,7 @@ RPythonTyper._registeroperations(annmodel)
 
 
 class HighLevelOp(object):
+    forced_opname = None
 
     def __init__(self, rtyper, spaceop, exceptionlinks, llops):
         self.rtyper         = rtyper
@@ -668,17 +682,17 @@ class HighLevelOp(object):
             if type(value) is list:     # grunt
                 value = value[:]
             setattr(result, key, value)
+        result.forced_opname = self.forced_opname
         return result
 
-    def dispatch(self, opname=None):
+    def dispatch(self):
         rtyper = self.rtyper
         generic = rtyper.generic_translate_operation
         if generic is not None:
             res = generic(self)
             if res is not None:
                 return res
-        if not opname:
-             opname = self.spaceop.opname
+        opname = self.forced_opname or self.spaceop.opname
         translate_meth = getattr(rtyper, 'translate_op_'+opname,
                                  rtyper.default_translate_operation)
         return translate_meth(self)
@@ -826,6 +840,13 @@ class LowLevelOpList(list):
         return v
 
     def genop(self, opname, args_v, resulttype=None):
+        try:
+            for v in args_v:
+                v.concretetype
+        except AttributeError:
+            raise AssertionError("wrong level!  you must call hop.inputargs()"
+                                 " and pass its result to genop(),"
+                                 " never hop.args_v directly.")
         vresult = Variable()
         self.append(SpaceOperation(opname, args_v, vresult))
         if resulttype is None:
@@ -844,7 +865,7 @@ class LowLevelOpList(list):
         newargs_v = []
         for v in args_v:
             if v.concretetype is Void:
-                s_value = rtyper.binding(v)
+                s_value = rtyper.binding(v, default=annmodel.s_None)
                 if not s_value.is_constant():
                     raise TyperError("non-constant variable of type Void")
                 if not isinstance(s_value, annmodel.SomePBC):
@@ -911,5 +932,6 @@ from pypy.rpython import rstr, rdict, rlist
 from pypy.rpython import rclass, rbuiltin, rpbc, rspecialcase
 from pypy.rpython import rexternalobj
 from pypy.rpython import rptr
+from pypy.rpython import rgeneric
 from pypy.rpython import raddress # memory addresses
 from pypy.rpython.ootypesystem import rootype

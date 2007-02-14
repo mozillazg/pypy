@@ -13,13 +13,16 @@ class _Call(MicroInstruction):
         callee = op.args[0].value
         if isinstance(callee, _static_meth):
             self._render_native_function(generator, callee, op.args)
-        else:
+        elif hasattr(callee, "graph"):
             graph = callee.graph
             method_name = oopspec.get_method_name(graph, op)
             if method_name is None:
                 self._render_function(generator, graph, op.args)
             else:
                 self._render_method(generator, method_name, op.args[1:])
+        else:
+            self._render_primitive_function(generator, callee, op)
+
 
     def _load_arg_or_null(self, generator, arg):
         if arg.concretetype is ootype.Void:
@@ -86,6 +89,13 @@ class _Call(MicroInstruction):
                method_name == 'll_current_value':
                 generator.ilasm.pop()
 
+    def _render_primitive_function(self, generator, callee, op):
+        for func_arg in op.args[1:]: # push parameters
+            self._load_arg_or_null(generator, func_arg)
+        module, name = callee._name.split(".")
+        func_name = '[pypylib]pypy.builtin.%s::%s' % (module, name)
+        generator.call_op(op, func_name)
+
 class _CallMethod(_Call):
     def render(self, generator, op):
         method = op.args[0]
@@ -102,13 +112,6 @@ class _RuntimeNew(MicroInstruction):
         generator.load(op.args[0])
         generator.call_signature('object [pypylib]pypy.runtime.Utils::RuntimeNew(class [mscorlib]System.Type)')
         generator.cast_to(op.result.concretetype)
-
-class _CastTo(MicroInstruction):
-    def render(self, generator, op):
-        generator.load(op.args[0])
-        INSTANCE = op.args[1].value
-        class_name = generator.db.pending_class(INSTANCE)
-        generator.isinstance(class_name)
 
 class _OOString(MicroInstruction):
     def render(self, generator, op):
@@ -154,6 +157,13 @@ class MapException(MicroInstruction):
         self.mapping = mapping
 
     def render(self, generator, op):
+        from pypy.translator.cli.function import LastExceptionHandler
+        if isinstance(generator, LastExceptionHandler):
+            self.render_last(generator, op)
+        else:
+            self.render_native(generator, op)
+
+    def render_native(self, generator, op):
         ilasm = generator.ilasm
         label = '__check_block_%d' % MapException.COUNT
         MapException.COUNT += 1
@@ -167,6 +177,25 @@ class MapException(MicroInstruction):
             ilasm.opcode('throw')
             ilasm.end_catch()
         ilasm.label(label)
+        ilasm.opcode('nop')
+
+    def render_last(self, generator, op):
+        ilasm = generator.ilasm
+        stdflow = '__check_block_%d' % MapException.COUNT
+        MapException.COUNT += 1
+        premature_return = '__check_block_%d' % MapException.COUNT
+        MapException.COUNT += 1
+        ilasm.begin_try()
+        self.instr.render(generator, op)
+        ilasm.leave(stdflow)
+        ilasm.end_try()
+        for cli_exc, py_exc in self.mapping:
+            ilasm.begin_catch(cli_exc)
+            ilasm.new('instance void class %s::.ctor()' % py_exc)
+            ilasm.opcode('stsfld', 'object last_exception')
+            ilasm.leave(stdflow)
+            ilasm.end_catch()
+        ilasm.label(stdflow)
         ilasm.opcode('nop')
 
 class _Box(MicroInstruction): 
@@ -206,16 +235,27 @@ class _SetArrayElem(MicroInstruction):
         v_array, v_index, v_elem = op.args
         generator.load(v_array)
         generator.load(v_index)
-        generator.load(v_elem)
+        if v_elem.concretetype is ootype.Void and v_elem.value is None:
+            generator.ilasm.opcode('ldnull')
+        else:
+            generator.load(v_elem)
         elemtype = generator.cts.lltype_to_cts(v_array.concretetype)
         generator.ilasm.opcode('stelem', elemtype)
+
+class _TypeOf(MicroInstruction):
+    def render(self, generator, op):
+        v_type, = op.args
+        assert v_type.concretetype is ootype.Void
+        cliClass = v_type.value
+        fullname = cliClass._INSTANCE._name
+        generator.ilasm.opcode('ldtoken', fullname)
+        generator.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
 
 
 Call = _Call()
 CallMethod = _CallMethod()
 IndirectCall = _IndirectCall()
 RuntimeNew = _RuntimeNew()
-CastTo = _CastTo()
 OOString = _OOString()
 NewCustomDict = _NewCustomDict()
 CastWeakAdrToPtr = _CastWeakAdrToPtr()
@@ -224,3 +264,4 @@ Unbox = _Unbox()
 NewArray = _NewArray()
 GetArrayElem = _GetArrayElem()
 SetArrayElem = _SetArrayElem()
+TypeOf = _TypeOf()

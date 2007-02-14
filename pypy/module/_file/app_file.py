@@ -1,5 +1,9 @@
 """NOT_RPYTHON"""
 
+import sys
+import _file
+
+
 class file(object):
     """file(name[, mode[, buffering]]) -> file object
 
@@ -22,32 +26,29 @@ Note:  open() is an alias for file().
     _closed = True   # Until the file is successfully opened
 
     def __init__(self, name, mode='r', buffering=-1):
-        import _file
-        self._name = name
-        self.softspace = 0    # Required according to file object docs
-        self.encoding = None  # This is not used internally by file objects
-        self._closed = False
-        self.stream = _file.open_file_as_stream(self._name, mode, buffering)
-        self._mode = mode
-        self.fd = self.stream.try_to_find_file_descriptor()
-        assert self.fd != -1
-        
+        stream = _file.open_file_as_stream(name, mode, buffering)
+        fd = stream.try_to_find_file_descriptor()
+        assert fd != -1
+        self._fdopenstream(fd, mode, buffering, name, stream)
+
     def fdopen(cls, fd, mode='r', buffering=-1):
         f = cls.__new__(cls)
-        f._fdopen(fd, mode, buffering, '<fdopen>')
+        stream = _file.fdopen_as_stream(fd, mode, buffering)
+        f._fdopenstream(fd, mode, buffering, '<fdopen>', stream)
         return f
     fdopen = classmethod(fdopen)
 
-    def _fdopen(self, fd, mode, buffering, name):
-        import _file
+    def _fdopenstream(self, fd, mode, buffering, name, stream):
         self.fd = fd
         self._name = name
         self.softspace = 0    # Required according to file object docs
         self.encoding = None  # This is not used internally by file objects
         self._closed = False
-        self.stream = _file.fdopen_as_stream(fd, mode, buffering)
+        self.stream = stream
         self._mode = mode
-        
+        if stream.flushable():
+            sys.pypy__exithandlers__[stream] = stream.flush
+
     def getnewlines(self):
         "end-of-line convention used in this file"
 
@@ -87,6 +88,8 @@ Notice that when in non-blocking mode, less data than what was requested
 may be returned, even if no size parameter was given."""
         if self._closed:
             raise ValueError('I/O operation on closed file')
+        if not isinstance(n, (int, long)):
+            raise TypeError("an integer is required")
         if n < 0:
             return self.stream.readall()
         else:
@@ -107,6 +110,8 @@ number of bytes to return (an incomplete line may be returned then).
 Return an empty string at EOF."""
         if self._closed:
             raise ValueError('I/O operation on closed file')
+        if not isinstance(size, (int, long)):
+            raise TypeError("an integer is required")
         if size < 0:
             return self.stream.readline()
         else:
@@ -127,6 +132,8 @@ The optional size argument, if given, is an approximate bound on the
 total number of bytes in the lines returned."""
         if self._closed:
             raise ValueError('I/O operation on closed file')
+        if not isinstance(size, (int, long)):
+            raise TypeError("an integer is required")
         if size < 0:
             return list(iter(self.stream.readline, ""))
         else:
@@ -146,8 +153,6 @@ Note that due to buffering, flush() or close() may be needed before
 the file on disk reflects the data written."""
         if self._closed:
             raise ValueError('I/O operation on closed file')
-        if not isinstance(data, str):
-            raise TypeError('write() argument must be a string (for now)')
         return self.stream.write(data)
 
     def writelines(self, sequence_of_strings):
@@ -158,9 +163,6 @@ producing strings. This is equivalent to calling write() for each string."""
         if self._closed:
             raise ValueError('I/O operation on closed file')
         for line in sequence_of_strings:
-            if not isinstance(line, str):
-                raise TypeError('writelines() argument must be a list '
-                                'of strings')
             self.stream.write(line)
 
     def tell(self):
@@ -226,6 +228,7 @@ error.  Some kinds of file objects (for example, opened by popen())
 may return an exit status upon closing."""
         if not self._closed and hasattr(self, 'stream'):
             self._closed = True
+            sys.pypy__exithandlers__.pop(self.stream, None)
             self.stream.close()
 
     __del__ = close

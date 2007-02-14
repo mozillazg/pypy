@@ -2,6 +2,7 @@ import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
 from pypy.jit.timeshifter.test.test_timeshift import P_NOVIRTUAL
+from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 from pypy.rlib.objectmodel import hint
 
 
@@ -215,16 +216,22 @@ class TestPromotion(TimeshiftingTests):
         assert res == ll_function(6, 3, 2, 2)
 
     def test_green_across_global_mp(self):
-        def ll_function(n, total):
-            while n:
+        def ll_function(n1, n2, n3, n4, total):
+            while n2:
                 hint(None, global_merge_point=True)
-                total += n
-                hint(n, concrete=True)
-                n -= 1
+                total += n3
+                hint(n4, concrete=True)
+                hint(n3, concrete=True)
+                hint(n2, concrete=True)
+                hint(n1, concrete=True)
+                n2 -= 1
             return total
+        void = lambda s: None
+        ll_function.convert_arguments = [void, int, int, void, int]
 
-        res = self.timeshift(ll_function, [5, 100], [0], policy=P_NOVIRTUAL)
-        assert res == 115
+        res = self.timeshift(ll_function, [None, 4, 3, None, 100], [0],
+                             policy=P_NOVIRTUAL)
+        assert res == ll_function(None, 4, 3, None, 100)
 
     def test_remembers_across_mp(self):
         def ll_function(x, flag):
@@ -250,3 +257,21 @@ class TestPromotion(TimeshiftingTests):
         res = self.timeshift(ll_function, ["20", 0], [], policy=P_NOVIRTUAL)
         assert res == 42
         self.check_flexswitches(1)
+
+    def test_virtual_list_copy(self):
+        def ll_function(x, y):
+            hint(None, global_merge_point=True)
+            l = [y] * x
+            size = len(l)
+            size = hint(size, promote=True)
+            vl = [0] * size
+            i = 0
+            while i < size:
+                hint(i, concrete=True)
+                vl[i] = l[i]
+                i = i + 1
+            return len(vl)
+        res = self.timeshift(ll_function, [6, 5], [], policy=P_OOPSPEC)
+        assert res == 6
+        self.check_oops(**{'newlist': 1, 'list.len': 1})
+            

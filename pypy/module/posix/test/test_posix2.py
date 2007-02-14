@@ -9,6 +9,7 @@ def setup_module(mod):
     mod.path.write("this is a test")
     pdir = udir.ensure('posixtestdir', dir=True)
     pdir.join('file1').write("test1")
+    os.chmod(str(pdir.join('file1')), 0600)
     pdir.join('file2').write("test2")
     pdir.join('another_longer_file_name').write("test3")
     mod.pdir = pdir
@@ -38,6 +39,16 @@ class AppTestPosix:
         assert stat  # XXX 
         posix.close(fd2)
         posix.close(fd)
+
+    def test_pickle(self):
+        import pickle, os
+        st = self.posix.stat(os.curdir)
+        print type(st).__module__
+        s = pickle.dumps(st)
+        print repr(s)
+        new = pickle.loads(s)
+        assert new == st
+        assert type(new) is type(st)
 
     def test_open_exception(self): 
         posix = self.posix
@@ -87,6 +98,16 @@ class AppTestPosix:
                           'file1',
                           'file2']
 
+
+    def test_access(self):
+        pdir = self.pdir + '/file1'
+        posix = self.posix
+
+        assert posix.access(pdir, posix.R_OK)
+        assert posix.access(pdir, posix.W_OK)
+        assert not posix.access(pdir, posix.X_OK)
+
+
     def test_strerror(self):
         assert isinstance(self.posix.strerror(0), str)
         assert isinstance(self.posix.strerror(1), str)
@@ -100,6 +121,39 @@ class AppTestPosix:
             pid1, status1 = os.waitpid(pid, 0)
             assert pid1 == pid
             # XXX check status1
+        pass # <- please, inspect.getsource(), don't crash
+
+    if hasattr(__import__(os.name), "execv"): # and fork
+        def test_execv(self):
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:
+                os.execv("/usr/bin/env", ["env", "python", "-c", "open('onefile', 'w').write('1')"])
+            os.waitpid(pid, 0)
+            assert open("onefile").read() == "1"
+            os.unlink("onefile")
+        
+        def test_execv_raising(self):
+            os = self.posix
+            raises(OSError, 'os.execv("saddsadsadsadsa", ["saddsadsasaddsa"])')
+
+        def test_execve(self):
+            skip("not implemented")
+            os = self.posix
+            pid = os.fork()
+            if pid == 0:
+                os.execve("/usr/bin/env", ["env", "python", "-c", "import os; open('onefile', 'w').write(os.environ['ddd'])"], {'ddd':'xxx'})
+            os.waitpid(pid, 0)
+            assert open("onefile").read() == "xxx"
+            os.unlink("onefile")
+        pass # <- please, inspect.getsource(), don't crash
+
+    if hasattr(__import__(os.name), 'popen'):
+        def test_popen(self):
+            skip("Not implemented")
+            os = self.posix
+            stream = os.popen('echo 1')
+            assert stream.read() == '1\n'
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

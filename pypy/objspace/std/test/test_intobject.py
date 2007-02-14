@@ -3,6 +3,7 @@ import autopath
 from pypy.objspace.std import intobject as iobj
 from pypy.objspace.std.objspace import FailedToImplement
 from pypy.rlib.rarithmetic import r_uint
+from pypy.rlib.rbigint import rbigint
 
 
 class TestW_IntObject:
@@ -34,6 +35,11 @@ class TestW_IntObject:
         assert space.uint_w(space.wrap(42)) == 42
         assert isinstance(space.uint_w(space.wrap(42)), r_uint)
         space.raises_w(space.w_ValueError, space.uint_w, space.wrap(-1))
+
+    def test_bigint_w(self):
+        space = self.space
+        assert isinstance(space.bigint_w(space.wrap(42)), rbigint)
+        assert space.bigint_w(space.wrap(42)).eq(rbigint.fromint(42))
         
     def test_repr(self):
         x = 1
@@ -347,6 +353,39 @@ class AppTestInt:
         raises(OverflowError,j,sys.maxint+1)
         raises(OverflowError,j,str(sys.maxint+1))
 
+    def test_int_subclass_ops(self):
+        import sys
+        class j(int):
+            def __add__(self, other):
+                return "add."
+            def __iadd__(self, other):
+                return "iadd."
+            def __sub__(self, other):
+                return "sub."
+            def __isub__(self, other):
+                return "isub."
+            def __mul__(self, other):
+                return "mul."
+            def __imul__(self, other):
+                return "imul."
+            def __lshift__(self, other):
+                return "lshift."
+            def __ilshift__(self, other):
+                return "ilshift."
+        assert j(100) +  5   == "add."
+        assert j(100) +  str == "add."
+        assert j(100) -  5   == "sub."
+        assert j(100) -  str == "sub."
+        assert j(100) *  5   == "mul."
+        assert j(100) *  str == "mul."
+        assert j(100) << 5   == "lshift."
+        assert j(100) << str == "lshift."
+        assert (5 +  j(100),  type(5 +  j(100))) == (     105, int)
+        assert (5 -  j(100),  type(5 -  j(100))) == (     -95, int)
+        assert (5 *  j(100),  type(5 *  j(100))) == (     500, int)
+        assert (5 << j(100),  type(5 << j(100))) == (5 << 100, long)
+        assert (j(100) >> 2,  type(j(100) >> 2)) == (      25, int)
+
     def test_special_int(self):
         class a:
             def __int__(self): 
@@ -375,3 +414,8 @@ class AppTestInt:
 
     def test_getnewargs(self):
         assert  0 .__getnewargs__() == (0,)
+
+class AppTestIntOptimizedAdd(AppTestInt):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.std.optimized_int_add": True})

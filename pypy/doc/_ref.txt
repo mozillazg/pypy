@@ -17,11 +17,13 @@
 .. _`pypy/interpreter/argument.py`: ../../pypy/interpreter/argument.py
 .. _`interpreter/astcompiler/`:
 .. _`pypy/interpreter/astcompiler`: ../../pypy/interpreter/astcompiler
+.. _`pypy/interpreter/executioncontext.py`: ../../pypy/interpreter/executioncontext.py
 .. _`pypy/interpreter/function.py`: ../../pypy/interpreter/function.py
 .. _`interpreter/gateway.py`:
 .. _`pypy/interpreter/gateway.py`: ../../pypy/interpreter/gateway.py
 .. _`pypy/interpreter/generator.py`: ../../pypy/interpreter/generator.py
 .. _`pypy/interpreter/mixedmodule.py`: ../../pypy/interpreter/mixedmodule.py
+.. _`pypy/interpreter/module.py`: ../../pypy/interpreter/module.py
 .. _`pypy/interpreter/nestedscope.py`: ../../pypy/interpreter/nestedscope.py
 .. _`pypy/interpreter/pyopcode.py`: ../../pypy/interpreter/pyopcode.py
 .. _`interpreter/pyparser/`:
@@ -32,6 +34,7 @@
 .. _`pypy/jit/codegen/model.py`: ../../pypy/jit/codegen/model.py
 .. _`jit/hintannotator/`: ../../pypy/jit/hintannotator
 .. _`jit/timeshifter/`: ../../pypy/jit/timeshifter
+.. _`pypy/jit/timeshifter/rvalue.py`: ../../pypy/jit/timeshifter/rvalue.py
 .. _`jit/tl/`: ../../pypy/jit/tl
 .. _`lang/`: ../../pypy/lang
 .. _`lang/js/`: ../../pypy/lang/js
@@ -53,22 +56,28 @@
 .. _`pypy/module/readline`: ../../pypy/module/readline
 .. _`objspace/`:
 .. _`pypy/objspace`: ../../pypy/objspace
+.. _`pypy/objspace/cpy`: ../../pypy/objspace/cpy
 .. _`objspace/dump.py`: ../../pypy/objspace/dump.py
 .. _`objspace/flow/`: ../../pypy/objspace/flow
 .. _`objspace/logic.py`: ../../pypy/objspace/logic.py
 .. _`objspace/std/`:
 .. _`pypy/objspace/std`: ../../pypy/objspace/std
-.. _`objspace/thunk.py`: ../../pypy/objspace/thunk.py
+.. _`objspace/taint.py`: ../../pypy/objspace/taint.py
+.. _`objspace/thunk.py`:
+.. _`pypy/objspace/thunk.py`: ../../pypy/objspace/thunk.py
 .. _`objspace/trace.py`:
 .. _`pypy/objspace/trace.py`: ../../pypy/objspace/trace.py
 .. _`pypy/rlib`:
 .. _`rlib/`: ../../pypy/rlib
 .. _`pypy/rlib/objectmodel.py`: ../../pypy/rlib/objectmodel.py
 .. _`pypy/rlib/rarithmetic.py`: ../../pypy/rlib/rarithmetic.py
+.. _`pypy/rlib/rctypes/rctypesobject.py`: ../../pypy/rlib/rctypes/rctypesobject.py
+.. _`pypy/rlib/rctypes/test/test_rctypesobject.py`: ../../pypy/rlib/rctypes/test/test_rctypesobject.py
 .. _`pypy/rlib/test`: ../../pypy/rlib/test
 .. _`pypy/rpython`:
 .. _`pypy/rpython/`:
 .. _`rpython/`: ../../pypy/rpython
+.. _`pypy/rpython/controllerentry.py`: ../../pypy/rpython/controllerentry.py
 .. _`pypy/rpython/extfunctable.py`: ../../pypy/rpython/extfunctable.py
 .. _`rpython/lltypesystem/`: ../../pypy/rpython/lltypesystem
 .. _`pypy/rpython/lltypesystem/lltype.py`:
@@ -102,12 +111,12 @@
 .. _`pypy/translator/c/src/`: ../../pypy/translator/c/src
 .. _`pypy/translator/c/src/ll_os.h`: ../../pypy/translator/c/src/ll_os.h
 .. _`pypy/translator/c/test/test_extfunc.py`: ../../pypy/translator/c/test/test_extfunc.py
-.. _`translator/cl/`: ../../pypy/translator/cl
 .. _`translator/cli/`: ../../pypy/translator/cli
 .. _`translator/goal/`: ../../pypy/translator/goal
 .. _`pypy/translator/goal/targetnopstandalone.py`: ../../pypy/translator/goal/targetnopstandalone.py
 .. _`translator/js/`: ../../pypy/translator/js
 .. _`translator/jvm/`: ../../pypy/translator/jvm
+.. _`translator/lisp/`: ../../pypy/translator/lisp
 .. _`translator/llvm/`: ../../pypy/translator/llvm
 .. _`translator/squeak/`: ../../pypy/translator/squeak
 .. _`translator/stackless/`: ../../pypy/translator/stackless

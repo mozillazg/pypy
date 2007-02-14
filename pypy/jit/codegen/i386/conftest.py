@@ -14,3 +14,11 @@ class Directory(py.test.collect.Directory):
                 py.test.skip('detected a %r CPU' % (processor,))
 
         return super(Directory, self).run()
+
+Option = py.test.config.Option
+
+option = py.test.config.addoptions("i386 options",
+        Option('--interp', action="store_true", default=False,
+               dest="interp",
+               help="run the very slow genc_interp_* tests"),
+        )

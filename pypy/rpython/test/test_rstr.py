@@ -2,9 +2,11 @@ import random
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.rstr import AbstractLLHelpers
 from pypy.rpython.lltypesystem.rstr import LLHelpers, mallocstr
+from pypy.rpython.ootypesystem.ootype import make_string
 from pypy.rpython.rtyper import RPythonTyper, TyperError
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.llinterp import LLException
+from pypy.objspace.flow.model import summary
 
 def test_parse_fmt():
     parse = AbstractLLHelpers.parse_fmt_string
@@ -472,6 +474,32 @@ class BaseTestRstr(BaseRtypingTest):
         res = res.replace('pypy.rpython.test.test_rstr.', '')        
         assert res == 'what a nice <D object>, much nicer than <C object>'
 
+    def test_percentformat_tuple(self):
+        for t, expected in [((),        "<<<()>>>"),
+                            ((5,),      "<<<(5,)>>>"),
+                            ((5, 6),    "<<<(5, 6)>>>"),
+                            ((5, 6, 7), "<<<(5, 6, 7)>>>")]:
+            def getter():
+                return t
+            def dummy():
+                return "<<<%s>>>" % (getter(),)
+
+            res = self.ll_to_string(self.interpret(dummy, []))
+            assert res == expected
+
+    def test_percentformat_list(self):
+        for t, expected in [([],        "<<<[]>>>"),
+                            ([5],       "<<<[5]>>>"),
+                            ([5, 6],    "<<<[5, 6]>>>"),
+                            ([5, 6, 7], "<<<[5, 6, 7]>>>")]:
+            def getter():
+                return t
+            def dummy():
+                return "<<<%s>>>" % (getter(),)
+
+            res = self.ll_to_string(self.interpret(dummy, []))
+            assert res == expected
+
     def test_split(self):
         def fn(i):
             s = ['', '0.1.2.4.8', '.1.2', '1.2.', '.1.2.4.'][i]
@@ -545,6 +573,21 @@ class BaseTestRstr(BaseRtypingTest):
         res = self.interpret(fn, [1])
         assert res == -654
 
+    def test_float(self):
+        f = ['', '    ', '0', '1', '-1.5', '1.5E2', '2.5e-1', ' 0 ', '?']
+        def fn(i):
+            s = f[i]
+            return float(s)
+
+        for i in range(len(f)):
+            try:
+                expected = fn(i)
+            except ValueError:
+                self.interpret_raises(ValueError, fn, [i])
+            else:
+                res = self.interpret(fn, [i])
+                assert res == expected
+
     def test_char_mul_n(self):
         def f(c, n):
             return c*n
@@ -602,6 +645,83 @@ class BaseTestRstr(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 1
 
+    def test_hlstr(self):
+        from pypy.rpython.annlowlevel import hlstr
+        def f(s):
+            return "*"+hlstr(s)+"*" == "*abba*"
+
+        res = self.interpret(f, [self.string_to_ll("abba")])
+        assert res
+       
+    def test_getitem_exc(self):
+        def f(x):
+            s = "z"
+            return s[x]
+
+        res = self.interpret(f, [0])
+        assert res == 'z'
+        try:
+            self.interpret_raises(IndexError, f, [1])
+        except (AssertionError,), e:
+            pass
+        else:
+            assert False
+    
+        def f(x):
+            s = "z"
+            try:
+                return s[x]
+            except IndexError:
+                return 'X'
+            except Exception:
+                return ' '
+
+        res = self.interpret(f, [0])
+        assert res == 'z'
+        res = self.interpret(f, [1])
+        assert res == 'X'        
+
+        def f(x):
+            s = "z"
+            try:
+                return s[x]
+            except Exception:
+                return ' '
+
+        res = self.interpret(f, [0])
+        assert res == 'z'
+        res = self.interpret(f, [1])
+        assert res == ' '
+
+        def f(x):
+            s = "z"
+            try:
+                return s[x]
+            except ValueError:
+                return ' '
+
+        res = self.interpret(f, [0])
+        assert res == 'z'
+        try:
+            self.interpret_raises(IndexError, f, [1])
+        except (AssertionError,), e:
+            pass
+        else:
+            assert False
+
+    def test_fold_concat(self):
+        def g(tail):
+            return "head"+tail
+        def f():
+            return g("tail")
+        from pypy import conftest
+
+        t, typer, fgraph = self.gengraph(f, [], backendopt=True)
+        if conftest.option.view:
+            t.view()
+        assert summary(fgraph) == {}
+        
+
 def FIXME_test_str_to_pystringobj():
     def f(n):
         if n >= 0:
@@ -623,24 +743,21 @@ class TestLLtype(BaseTestRstr, LLRtypeMixin):
 
     EMPTY_STRING_HASH = -1
 
-    def llstr(self, s):
-        p = mallocstr(len(s))
-        for i in range(len(s)):
-            p.chars[i] = s[i]
-        return p
-
     def test_ll_find_rfind(self):
+        llstr = self.string_to_ll
+        
         for i in range(50):
             n1 = random.randint(0, 10)
             s1 = ''.join([random.choice("ab") for i in range(n1)])
             n2 = random.randint(0, 5)
             s2 = ''.join([random.choice("ab") for i in range(n2)])
-            res = LLHelpers.ll_find(self.llstr(s1), self.llstr(s2), 0, n1)
+            res = LLHelpers.ll_find(llstr(s1), llstr(s2), 0, n1)
             assert res == s1.find(s2)
-            res = LLHelpers.ll_rfind(self.llstr(s1), self.llstr(s2), 0, n1)
+            res = LLHelpers.ll_rfind(llstr(s1), llstr(s2), 0, n1)
             assert res == s1.rfind(s2)
 
 
 class TestOOtype(BaseTestRstr, OORtypeMixin):
 
     EMPTY_STRING_HASH = 0
+        

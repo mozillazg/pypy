@@ -5,7 +5,7 @@ Not for direct importing.
 """
 from ri386 import *
 
-from pypy.objspace.std.multimethod import MultiMethodTable
+from pypy.objspace.std.multimethod import MultiMethodTable, InstallerVersion2
 from pypy.tool.sourcetools import compile2
 
 def reg2modrm(builder, reg):
@@ -111,6 +111,14 @@ class relative(operand):
         lines.append('builder.write(packimm32(offset))')
         return False
 
+##class conditioncode(operand):
+##    def __init__(self):
+##        pass
+##    def eval(self, lines, has_orbyte):
+##        assert not has_orbyte, "malformed bytecode"
+##        lines.append('orbyte = arg1.value')
+##        return True
+
 
 def consolidate(code1):
     for i in range(len(code1)-1, 0, -1):
@@ -193,7 +201,11 @@ class Instruction:
                     assert issubclass(cls, OPERAND)
                 encoder1 = generate_function(sig, opcodes)
                 table.register(encoder1, *sig)
-            encoder = table.install('__encode' + name, [type_order] * arity)
+            # always use the InstallerVersion2, including for testing,
+            # because it produces code that is more sensitive to
+            # registration errors
+            encoder = table.install('__encode' + name, [type_order] * arity,
+                                    installercls = InstallerVersion2)
             mmmin = min([len(mm) for mm in self.modes])
             if mmmin < arity:
                 encoder.func_defaults = (missing,) * (arity - mmmin)
@@ -332,6 +344,14 @@ IDIV = Instruction()
 IDIV.mode1(MODRM,  ['\xF7', orbyte(7<<3), modrm(1)])
 IDIV.mode1(MODRM8, ['\xF6', orbyte(7<<3), modrm(1)])
 
+MUL = Instruction()
+MUL.mode1(MODRM,  ['\xF7', orbyte(4<<3), modrm(1)])
+MUL.mode1(MODRM8, ['\xF6', orbyte(4<<3), modrm(1)])
+
+DIV = Instruction()
+DIV.mode1(MODRM,  ['\xF7', orbyte(6<<3), modrm(1)])
+DIV.mode1(MODRM8, ['\xF6', orbyte(6<<3), modrm(1)])
+
 NEG = Instruction()
 NEG.mode1(MODRM,  ['\xF7', orbyte(3<<3), modrm(1)])
 NEG.mode1(MODRM8, ['\xF6', orbyte(3<<3), modrm(1)])
@@ -376,10 +396,10 @@ XCHG.mode2(MODRM8, REG8, ['\x86', register(2,8,'b'), modrm(1,'b')])
 XCHG.mode2(REG8, MODRM8, ['\x86', register(1,8,'b'), modrm(2,'b')])
 
 LEA = Instruction()
-LEA.mode2(REG, MODRM, ['\x8D', register(1,8), modrm(2)])
-#for key in LEA.encodings.keys():
-#    if key[1] != MODRM:
-#        del LEA.encodings[key]
+LEA.mode2(REG, MODRM,  ['\x8D', register(1,8), modrm(2)])
+LEA.mode2(REG, MODRM8, ['\x8D', register(1,8), modrm(2)])
+# some cases produce a MODRM8, but the result is always a 32-bit REG
+# and the encoding is the same
 
 SHL = Instruction()
 SHL.mode2(MODRM,  IMM8,  ['\xC1', orbyte(4<<3), modrm(1), immediate(2,'b')])
@@ -401,6 +421,9 @@ TEST.mode2(MODRM, IMM32, ['\xF7', orbyte(0<<3), modrm(1), immediate(2)])
 
 INT = Instruction()
 INT.mode1(IMM8, ['\xCD', immediate(1, 'b')])
+
+INTO = Instruction()
+INTO.mode0(['\xCE'])
 
 BREAKPOINT = Instruction()    # INT 3
 BREAKPOINT.mode0(['\xCC'])
@@ -447,6 +470,17 @@ define_cond('J',   1, (REL32,),  ['\x0F', None,'\x80', relative(1)])
 define_cond('SET', 0, (MODRM8,), ['\x0F', None,'\x90',orbyte(0<<3),modrm(1,'b')])
 define_cond('CMOV',0,(REG,MODRM),['\x0F', None,'\x40', register(1,8), modrm(2)])
 # note: CMOVxx are Pentium-class instructions, unknown to the 386 and 486
+
+##Jcond = Instruction()
+##Jcond.mode2(  IMM8, REL32,     ['\x0F', conditioncode(),'\x80', relative(2)])
+
+##SETcond = Instruction()
+##SETcond.mode2(IMM8, MODRM8,    ['\x0F', conditioncode(),'\x90', orbyte(0<<3),
+##                                                                modrm(2,'b')])
+
+##CMOVcond = Instruction()
+##CMOVcond.mode3(IMM8,REG,MODRM, ['\x0F', conditioncode(),'\x40', register(2,8),
+##                                                                modrm(3)])
 
 
 all_instructions = {}

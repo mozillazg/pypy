@@ -8,35 +8,64 @@ or
     /tmp/usession-xxx/testing_1/testing_1 -var 4  2>&1  |  ./viewcode.py
 """
 
-import operator, sys, os, re, py
+import autopath
+import operator, sys, os, re, py, new
+from bisect import bisect_left
 
 # don't use pypy.tool.udir here to avoid removing old usessions which
 # might still contain interesting executables
 udir = py.path.local.make_numbered_dir(prefix='viewcode-', keep=2)
 tmpfile = str(udir.join('dump.tmp'))
 
+# hack hack
+import pypy.tool
+mod = new.module('pypy.tool.udir')
+mod.udir = udir
+sys.modules['pypy.tool.udir'] = mod
+pypy.tool.udir = mod
+
 # ____________________________________________________________
 # Some support code from Psyco.  There is more over there,
 # I am porting it in a lazy fashion...  See py-utils/xam.py
 
-# the disassembler to use. 'objdump' writes GNU-style instructions.
-# 'ndisasm' uses Intel syntax.  XXX ndisasm output parsing is missing...
-
-objdump = 'objdump -b binary -m i386 --adjust-vma=%(origin)d -D %(file)s'
-#objdump = 'ndisasm -o %(origin)d -u %(file)s'
 if sys.platform == "win32":
     XXX   # lots more in Psyco
 
 def machine_code_dump(data, originaddr):
+    # the disassembler to use. 'objdump' writes GNU-style instructions.
+    # 'ndisasm' would use Intel syntax, but you need to fix the output parsing.
+    objdump = 'objdump -b binary -m i386 --adjust-vma=%(origin)d -D %(file)s'
+    #
     f = open(tmpfile, 'wb')
     f.write(data)
     f.close()
     g = os.popen(objdump % {'file': tmpfile, 'origin': originaddr}, 'r')
     result = g.readlines()
     g.close()
-    return result
+    return result[6:]   # drop some objdump cruft
 
-re_addr = re.compile(r'[\s,$]0x([0-9a-fA-F]+)')
+def load_symbols(filename):
+    # the program that lists symbols, and the output it gives
+    symbollister = 'nm %s'
+    re_symbolentry = re.compile(r'([0-9a-fA-F]+)\s\w\s(.*)')
+    #
+    print 'loading symbols from %s...' % (filename,)
+    symbols = {}
+    g = os.popen(symbollister % filename, "r")
+    for line in g:
+        match = re_symbolentry.match(line)
+        if match:
+            addr = long(match.group(1), 16)
+            name = match.group(2)
+            if name.startswith('pypy_g_'):
+                name = '\xb7' + name[7:]
+            symbols[addr] = name
+    g.close()
+    print '%d symbols found' % (len(symbols),)
+    return symbols
+
+re_addr = re.compile(r'[\s,$]0x([0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]+)')
+re_lineaddr = re.compile(r'\s*0?x?([0-9a-fA-F]+)')
 
 def lineaddresses(line):
     result = []
@@ -55,19 +84,30 @@ def lineaddresses(line):
 class CodeRange(object):
     fallthrough = False
 
-    def __init__(self, addr, data):
+    def __init__(self, world, addr, data):
+        self.world = world
         self.addr = addr
         self.data = data
 
-    def update(self, other):
+    def __repr__(self):
+        return '<CodeRange %s length %d>' % (hex(self.addr), len(self.data))
+
+    def touches(self, other):
+        return (self .addr < other.addr + len(other.data) and
+                other.addr < self .addr + len(self.data))
+
+    def update_from_old(self, other):
         if other.addr < self.addr:
             delta = self.addr - other.addr
+            assert delta <= len(other.data)
             self.addr -= delta
-            self.offset += delta
-            self.data = '\x00'*delta + self.data
-        ofs1 = other.addr - self.addr
-        ofs2 = ofs1 + len(other.data)
-        self.data = self.data[:ofs1] + other.data + self.data[ofs2:]
+            self.data = other.data[:delta] + self.data
+        self_end  = self .addr + len(self .data)
+        other_end = other.addr + len(other.data)
+        if other_end > self_end:
+            extra = other_end - self_end
+            assert extra <= len(other.data)
+            self.data += other.data[-extra:]
 
     def cmpop(op):
         def _cmp(self, other):
@@ -86,7 +126,23 @@ class CodeRange(object):
     def disassemble(self):
         if not hasattr(self, 'text'):
             lines = machine_code_dump(self.data, self.addr)
-            self.text = ''.join(lines[6:])   # drop some objdump cruft
+            # instead of adding symbol names in the dumps we could
+            # also make the 0xNNNNNNNN addresses be red and show the
+            # symbol name when the mouse is over them
+            logentries = self.world.logentries
+            symbols = self.world.symbols
+            for i, line in enumerate(lines):
+                match = re_lineaddr.match(line)
+                if match:
+                    addr = long(match.group(1), 16)
+                    logentry = logentries.get(addr)
+                    if logentry:
+                        lines[i] = '\n%s\n%s' % (logentry, lines[i])
+                for addr in lineaddresses(line):
+                    sym = symbols.get(addr)
+                    if sym:
+                        lines[i] = '%s\t%s\n' % (lines[i].rstrip(), sym)
+            self.text = ''.join(lines)
         return self.text
 
     def findjumps(self):
@@ -99,9 +155,10 @@ class CodeRange(object):
             if not addrs:
                 continue
             addr = addrs[-1]
-            yield i, addr
+            final = '\tjmp' in line
+            yield i, addr, final
         if self.fallthrough:
-            yield len(lines), self.addr + len(self.data)
+            yield len(lines), self.addr + len(self.data), True
 
 
 class World(object):
@@ -110,6 +167,8 @@ class World(object):
         self.ranges = []
         self.labeltargets = {}
         self.jumps = {}
+        self.symbols = {}
+        self.logentries = {}
 
     def parse(self, f):
         for line in f:
@@ -121,45 +180,102 @@ class World(object):
                 offset = int(pieces[2][1:])
                 addr = baseaddr + offset
                 data = pieces[3].replace(':', '').decode('hex')
-                coderange = CodeRange(addr, data)
-                # XXX sloooooooow!
-                for r in self.ranges:
-                    if addr < r.addr+len(r.data) and r.addr < addr+len(data):
-                        r.update(coderange)
-                        break
-                else:
-                    self.ranges.append(coderange)
+                coderange = CodeRange(self, addr, data)
+                i = bisect_left(self.ranges, coderange)
+                j = i
+                while i>0 and coderange.touches(self.ranges[i-1]):
+                    coderange.update_from_old(self.ranges[i-1])
+                    i -= 1
+                while j<len(self.ranges) and coderange.touches(self.ranges[j]):
+                    coderange.update_from_old(self.ranges[j])
+                    j += 1
+                self.ranges[i:j] = [coderange]
+            elif line.startswith('LOG '):
+                pieces = line.split(None, 3)
+                assert pieces[1].startswith('@')
+                assert pieces[2].startswith('+')
+                baseaddr = long(pieces[1][1:], 16) & 0xFFFFFFFFL
+                offset = int(pieces[2][1:])
+                addr = baseaddr + offset
+                self.logentries[addr] = pieces[3]
+            elif line.startswith('SYS_EXECUTABLE '):
+                filename = line[len('SYS_EXECUTABLE '):].strip()
+                self.symbols.update(load_symbols(filename))
         # find cross-references between blocks
-        for r in self.ranges:
-            for lineno, targetaddr in r.findjumps():
+        fnext = 0.1
+        for i, r in enumerate(self.ranges):
+            for lineno, targetaddr, _ in r.findjumps():
                 self.labeltargets[targetaddr] = True
+            if i % 100 == 99:
+                f = float(i) / len(self.ranges)
+                if f >= fnext:
+                    sys.stderr.write("%d%%" % int(f*100.0))
+                    fnext += 0.1
+                sys.stderr.write(".")
+        sys.stderr.write("100%\n")
         # split blocks at labeltargets
-        # XXX slooooow!
         t = self.labeltargets
-        print t
+        #print t
         for r in self.ranges:
-            print r.addr, r.addr + len(r.data)
+            #print r.addr, r.addr + len(r.data)
             for i in range(r.addr + 1, r.addr + len(r.data)):
                 if i in t:
-                    print i
+                    #print i
                     ofs = i - r.addr
-                    self.ranges.append(CodeRange(i, r.data[ofs:]))
+                    self.ranges.append(CodeRange(self, i, r.data[ofs:]))
                     r.data = r.data[:ofs]
                     r.fallthrough = True
-                    del r.text
+                    try:
+                        del r.text
+                    except AttributeError:
+                        pass
                     break
         # hack hack hacked
 
     def show(self):
         g1 = Graph('codedump')
+        self.ranges.sort()
         for r in self.ranges:
-            text = r.disassemble().replace('\t', '  ')
+            disassembled = r.disassemble()
+            print disassembled
+            text, width = tab2columns(disassembled)
             text = '0x%x\n\n%s' % (r.addr, text)
-            g1.emit_node('N_%x' % r.addr, shape="box", label=text)
-            for lineno, targetaddr in r.findjumps():
-                g1.emit_edge('N_%x' % r.addr, 'N_%x' % targetaddr)
+            g1.emit_node('N_%x' % r.addr, shape="box", label=text,
+                         width=str(width*0.1125))
+            for lineno, targetaddr, final in r.findjumps():
+                if final:
+                    color = "black"
+                else:
+                    color = "red"
+                g1.emit_edge('N_%x' % r.addr, 'N_%x' % targetaddr, color=color)
+        sys.stdout.flush()
         g1.display()
 
+
+def tab2columns(text):
+    lines = text.split('\n')
+    columnwidth = []
+    for line in lines:
+        columns = line.split('\t')[:-1]
+        while len(columnwidth) < len(columns):
+            columnwidth.append(0)
+        for i, s in enumerate(columns):
+            width = len(s.strip())
+            if not s.endswith(':'):
+                width += 2
+            columnwidth[i] = max(columnwidth[i], width)
+    columnwidth.append(1)
+    result = []
+    for line in lines:
+        columns = line.split('\t')
+        text = []
+        for width, s in zip(columnwidth, columns):
+            text.append(s.strip().ljust(width))
+        result.append(' '.join(text))
+    lengths = [len(line) for line in result]
+    lengths.append(1)
+    totalwidth = max(lengths)
+    return '\\l'.join(result), totalwidth
 
 # ____________________________________________________________
 # XXX pasted from
@@ -201,6 +317,8 @@ class _Page:
         return _PageContent(self.graph_builder)
 
 class _PageContent:
+    fixedfont = True
+
     def __init__(self, graph_builder):
         if callable(graph_builder):
             graph = graph_builder()

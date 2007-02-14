@@ -14,6 +14,15 @@ from pypy.rpython import robject
 
 from pypy.rpython import callparse
 
+def small_cand(rtyper, s_pbc):
+    if 1 < len(s_pbc.descriptions) < rtyper.getconfig().translation.withsmallfuncsets and \
+           hasattr(rtyper.type_system.rpbc, 'SmallFunctionSetPBCRepr'):
+        callfamily = s_pbc.descriptions.iterkeys().next().getcallfamily()
+        concretetable, uniquerows = get_concrete_calltable(rtyper, callfamily)
+        if len(uniquerows) == 1 and (not s_pbc.subset_of or small_cand(rtyper, s_pbc.subset_of)):
+            return True
+    return False
+
 class __extend__(annmodel.SomePBC):
     def rtyper_makerepr(self, rtyper):
         if self.isNone():
@@ -27,6 +36,8 @@ class __extend__(annmodel.SomePBC):
                     getRepr = OverriddenFunctionPBCRepr
                 else:
                     getRepr = rtyper.type_system.rpbc.FunctionsPBCRepr
+                    if small_cand(rtyper, self):
+                        getRepr = rtyper.type_system.rpbc.SmallFunctionSetPBCRepr
             else:
                 getRepr = getFrozenPBCRepr
         elif issubclass(kind, description.ClassDesc):
@@ -55,7 +66,11 @@ class __extend__(annmodel.SomePBC):
     def rtyper_makekey(self):
         lst = list(self.descriptions)
         lst.sort()
-        return tuple([self.__class__, self.can_be_None]+lst)
+        if self.subset_of:
+            t = self.subset_of.rtyper_makekey()
+        else:
+            t = ()
+        return tuple([self.__class__, self.can_be_None]+lst)+t
 
 ##builtin_descriptor_type = (
 ##    type(len),                            # type 'builtin_function_or_method'
@@ -386,6 +401,13 @@ class SingleFrozenPBCRepr(Repr):
         assert frozendesc is self.frozendesc
         return object()  # lowleveltype is Void
 
+    def getstr(self):
+        return str(self.frozendesc)
+    getstr._annspecialcase_ = 'specialize:memo'
+
+    def ll_str(self, x):
+        return self.getstr()
+
 
 class AbstractMultipleUnrelatedFrozenPBCRepr(CanBeNull, Repr):
     """For a SomePBC of frozen PBCs that have no common access set.
@@ -417,6 +439,10 @@ class AbstractMultipleUnrelatedFrozenPBCRepr(CanBeNull, Repr):
         frozendesc = self.rtyper.annotator.bookkeeper.getdesc(pbc)
         return self.convert_desc(frozendesc)
 
+    def rtype_getattr(_, hop):
+        if not hop.s_result.is_constant():
+            raise TyperError("getattr on a constant PBC returns a non-constant")
+        return hop.inputconst(hop.r_result, hop.s_result.const)
 
 class AbstractMultipleFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
     """For a SomePBC of frozen PBCs with a common attribute access set."""
@@ -458,6 +484,9 @@ class AbstractMultipleFrozenPBCRepr(AbstractMultipleUnrelatedFrozenPBCRepr):
             return result
 
     def rtype_getattr(self, hop):
+        if hop.s_result.is_constant():
+            return hop.inputconst(hop.r_result, hop.s_result.const)
+
         attr = hop.args_s[1].const
         vpbc, vattr = hop.inputargs(self, Void)
         v_res = self.getfield(vpbc, attr, hop.llops)

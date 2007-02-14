@@ -1,5 +1,5 @@
 from pypy.tool.staticmethods import StaticMethods
-from pypy.annotation.pairtype import pairtype
+from pypy.annotation.pairtype import pairtype, pair
 from pypy.annotation import model as annmodel
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import IntegerRepr, IteratorRepr
@@ -224,6 +224,13 @@ class __extend__(AbstractStringRepr):
         hop.exception_is_here()
         return hop.gendirectcall(self.ll.ll_int, v_str, v_base)
 
+    def rtype_float(self, hop):
+        hop.has_implicit_exception(ValueError)   # record that we know about it
+        string_repr = hop.rtyper.type_system.rstr.string_repr
+        v_str, = hop.inputargs(string_repr)
+        hop.exception_is_here()
+        return hop.gendirectcall(self.ll.ll_float, v_str)
+
     def ll_str(self, s):
         return s
 
@@ -236,10 +243,10 @@ class __extend__(pairtype(AbstractStringRepr, Repr)):
 
 
 class __extend__(pairtype(AbstractStringRepr, IntegerRepr)):
-    def rtype_getitem((r_str, r_int), hop):
+    def rtype_getitem((r_str, r_int), hop, checkidx=False):
         string_repr = hop.rtyper.type_system.rstr.string_repr
         v_str, v_index = hop.inputargs(string_repr, Signed)
-        if hop.has_implicit_exception(IndexError):
+        if checkidx:
             if hop.args_s[1].nonneg:
                 llfn = r_str.ll.ll_stritem_nonneg_checked
             else:
@@ -249,8 +256,18 @@ class __extend__(pairtype(AbstractStringRepr, IntegerRepr)):
                 llfn = r_str.ll.ll_stritem_nonneg
             else:
                 llfn = r_str.ll.ll_stritem
-        hop.exception_is_here()
+        if checkidx:
+            hop.exception_is_here()
+        else:
+            hop.exception_cannot_occur()
         return hop.gendirectcall(llfn, v_str, v_index)
+
+    rtype_getitem_key = rtype_getitem
+
+    def rtype_getitem_idx((r_str, r_int), hop):
+        return pair(r_str, r_int).rtype_getitem(hop, checkidx=True)
+
+    rtype_getitem_idx_key = rtype_getitem_idx
 
 
 class __extend__(pairtype(AbstractStringRepr, AbstractSliceRepr)):
@@ -274,6 +291,8 @@ class __extend__(pairtype(AbstractStringRepr, AbstractSliceRepr)):
 class __extend__(pairtype(AbstractStringRepr, AbstractStringRepr)):
     def rtype_add((r_str1, r_str2), hop):
         string_repr = hop.rtyper.type_system.rstr.string_repr
+        if hop.s_result.is_constant():
+            return hop.inputconst(string_repr, hop.s_result.const)
         v_str1, v_str2 = hop.inputargs(string_repr, string_repr)
         return hop.gendirectcall(r_str1.ll.ll_strconcat, v_str1, v_str2)
     rtype_inplace_add = rtype_add
@@ -598,3 +617,32 @@ class AbstractLLHelpers:
         if curstr:
             r.append(curstr)
         return r
+
+    def ll_float(ll_str):
+        from pypy.rpython.annlowlevel import hlstr
+        from pypy.rlib.rarithmetic import break_up_float, parts_to_float
+        s = hlstr(ll_str)
+        assert s is not None
+
+        n = len(s)
+        beg = 0
+        while beg < n:
+            if s[beg] == ' ':
+                beg += 1
+            else:
+                break
+        if beg == n:
+            raise ValueError
+        end = n-1
+        while end >= 0:
+            if s[end] == ' ':
+                end -= 1
+            else:
+                break
+        assert end >= 0
+        sign, before_point, after_point, exponent = break_up_float(s[beg:end+1])
+    
+        if not before_point and not after_point:
+            raise ValueError
+
+        return parts_to_float(sign, before_point, after_point, exponent)

@@ -1,27 +1,25 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
-from pypy.jit.hintannotator.annotator import HintAnnotator
+from pypy.jit.hintannotator.annotator import HintAnnotator, HintAnnotatorPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.objectmodel import hint
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
-from pypy.annotation.policy import AnnotatorPolicy
 from pypy.translator.backendopt.inline import auto_inlining
 from pypy import conftest
 
-P_OOPSPEC = AnnotatorPolicy()
-P_OOPSPEC.oopspec = True
+P_DEFAULT = HintAnnotatorPolicy(entrypoint_returns_red=False)
+P_OOPSPEC = HintAnnotatorPolicy(oopspec=True,
+                                entrypoint_returns_red=False)
+P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
+                                          novirtualcontainer=True,
+                                          entrypoint_returns_red=False)
+P_NOVIRTUAL = HintAnnotatorPolicy(novirtualcontainer=True,
+                                  entrypoint_returns_red=False)
 
-P_OOPSPEC_NOVIRTUAL = AnnotatorPolicy()
-P_OOPSPEC_NOVIRTUAL.oopspec = True
-P_OOPSPEC_NOVIRTUAL.novirtualcontainer = True
-
-P_NOVIRTUAL = AnnotatorPolicy()
-P_NOVIRTUAL.novirtualcontainer = True
-
-def hannotate(func, argtypes, policy=None, annotator=False, inline=None,
+def hannotate(func, argtypes, policy=P_DEFAULT, annotator=False, inline=None,
               backendoptimize=False):
     # build the normal ll graphs for ll_function
     t = TranslationContext()
@@ -30,7 +28,7 @@ def hannotate(func, argtypes, policy=None, annotator=False, inline=None,
     rtyper = t.buildrtyper()
     rtyper.specialize()
     if inline:
-        auto_inlining(t, inline)
+        auto_inlining(t, threshold=inline)
     if backendoptimize:
         from pypy.translator.backendopt.all import backend_optimizations
         backend_optimizations(t)
@@ -572,7 +570,7 @@ def test_hannotate_plus_minus():
         return acc
     assert ll_plus_minus("+-+", 0, 2) == 2
     hannotate(ll_plus_minus, [str, int, int])
-    hannotate(ll_plus_minus, [str, int, int], inline=999)
+    hannotate(ll_plus_minus, [str, int, int], inline=100000)
 
 def test_invalid_hint_1():
     S = lltype.GcStruct('S', ('x', lltype.Signed))
@@ -690,3 +688,43 @@ def test_simple_meth():
         return o.m()
 
     hs = hannotate(f, [bool], policy=P_OOPSPEC_NOVIRTUAL)
+
+
+def test_green_isinstance():
+    class Base(object):
+        pass
+    class Concrete(Base):
+        pass
+
+    def f(o):
+        hint(o, concrete=True)
+        return isinstance(o, Concrete)
+
+    hs = hannotate(f, [Base], policy=P_OOPSPEC_NOVIRTUAL)
+    assert hs.is_green()
+
+
+def test_cast_pointer_keeps_deepfreeze():
+
+    class A(object):
+        pass
+    class B(A):
+        pass
+    
+    def getinstance(n):
+        if n:
+            return A()
+        else:
+            return B()
+    
+    def ll_function(n):
+        a = getinstance(n)
+        a = hint(a, promote=True)
+        a = hint(a, deepfreeze=True)
+
+        if isinstance(a, B):
+            return a
+        return None
+
+    hs = hannotate(ll_function, [int], policy=P_NOVIRTUAL)
+    assert hs.deepfrozen

@@ -66,7 +66,7 @@ def ovfcheck(r):
     # to be used as ovfcheck(x <op> y)
     # raise OverflowError if the operation did overflow
     assert not isinstance(r, r_uint), "unexpected ovf check on unsigned"
-    if isinstance(r, long):
+    if type(r) is long:
         raise OverflowError, "signed integer expression did overflow"
     return r
 
@@ -313,6 +313,7 @@ def build_int(name, sign, bits):
 
         def specialize_call(self, hop):
             v_result, = hop.inputargs(hop.r_result.lowleveltype)
+            hop.exception_cannot_occur()
             return v_result
             
     return int_type
@@ -335,6 +336,60 @@ r_uint = build_int('r_uint', False, LONG_BIT)
 
 r_longlong = build_int('r_longlong', True, 64)
 r_ulonglong = build_int('r_ulonglong', False, 64)
+
+
+# float as string  -> sign, beforept, afterpt, exponent
+
+def break_up_float(s):
+    i = 0
+
+    sign = ''
+    before_point = ''
+    after_point = ''
+    exponent = ''
+
+    if s[i] in '+-':
+        sign = s[i]
+        i += 1
+
+    while i < len(s) and s[i] in '0123456789':
+        before_point += s[i]
+        i += 1
+
+    if i == len(s):
+        return sign, before_point, after_point, exponent
+
+    if s[i] == '.':
+        i += 1
+        while i < len(s) and s[i] in '0123456789':
+            after_point += s[i]
+            i += 1
+            
+        if i == len(s):
+            return sign, before_point, after_point, exponent
+
+    if s[i] not in  'eE':
+        raise ValueError
+
+    i += 1
+    if i == len(s):
+        raise ValueError
+
+    if s[i] in '-+':
+        exponent += s[i]
+        i += 1
+
+    if i == len(s):
+        raise ValueError
+    
+    while i < len(s) and s[i] in '0123456789':
+        exponent += s[i]
+        i += 1
+
+    if i != len(s):
+        raise ValueError
+
+    return sign, before_point, after_point, exponent
 
 # string -> float helper
 

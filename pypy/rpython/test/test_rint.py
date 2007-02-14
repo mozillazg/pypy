@@ -1,8 +1,9 @@
-import sys
+import sys, operator
 from pypy.translator.translator import TranslationContext
 from pypy.annotation import model as annmodel
 from pypy.rpython.test import snippet
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 
 class TestSnippet(object):
@@ -77,6 +78,10 @@ class BaseTestRint(BaseRtypingTest):
         res = self.interpret(dummy, [-123])
         assert self.ll_to_string(res) == '-0x7b'
 
+        res = self.interpret(dummy, [-sys.maxint-1])
+        res = self.ll_to_string(res)
+        assert res == '-0x8' + '0' * (len(res)-4)
+
     def test_oct_of_int(self):
         def dummy(i):
             return oct(i)
@@ -89,6 +94,10 @@ class BaseTestRint(BaseRtypingTest):
 
         res = self.interpret(dummy, [-123])
         assert self.ll_to_string(res) == '-0173'
+
+        res = self.interpret(dummy, [-sys.maxint-1])
+        res = self.ll_to_string(res)
+        assert res == '-' + oct(sys.maxint+1).replace('L', '').replace('l', '')
 
     def test_unsigned(self):
         def dummy(i):
@@ -173,6 +182,24 @@ class BaseTestRint(BaseRtypingTest):
             res = self.interpret(f, [inttype(0)])
             assert res == f(inttype(0))
             assert type(res) == inttype
+
+    def test_neg_abs_ovf(self):
+        for op in (operator.neg, abs):
+            def f(x):
+                try:
+                    return ovfcheck(op(x))
+                except OverflowError:
+                    return 0
+            res = self.interpret(f, [-1])
+            assert res == 1
+            res = self.interpret(f, [int(-1<<(r_int.BITS-1))])
+            assert res == 0
+
+            res = self.interpret(f, [r_longlong(-1)])
+            assert res == 1
+            res = self.interpret(f, [r_longlong(-1)<<(r_longlong.BITS-1)])
+            assert res == 0
+            
 
 class TestLLtype(BaseTestRint, LLRtypeMixin):
     pass

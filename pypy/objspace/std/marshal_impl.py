@@ -25,7 +25,8 @@ from pypy.objspace.std.floatobject   import W_FloatObject
 from pypy.objspace.std.tupleobject   import W_TupleObject
 from pypy.objspace.std.listobject    import W_ListObject
 from pypy.objspace.std.dictobject    import W_DictObject
-from pypy.objspace.std.dictstrobject    import W_DictStrObject
+from pypy.objspace.std.dictmultiobject    import W_DictMultiObject
+from pypy.objspace.std.dictstrobject import W_DictStrObject
 from pypy.objspace.std.stringobject  import W_StringObject
 from pypy.objspace.std.typeobject    import W_TypeObject
 from pypy.objspace.std.longobject    import W_LongObject
@@ -253,7 +254,7 @@ def marshal_w__Long(space, w_long, m):
         m.put_short(digit)
 
 def unmarshal_Long(space, u, tc):
-    from pypy.rlib import rlong
+    from pypy.rlib import rbigint
     lng = u.get_int()
     if lng < 0:
         sign = -1
@@ -271,7 +272,7 @@ def unmarshal_Long(space, u, tc):
         digits[i] = digit
         i += 1
     # XXX poking at internals
-    w_long = W_LongObject(rlong.rlong(digits, sign))
+    w_long = W_LongObject(rbigint.rbigint(digits, sign))
     w_long.num._normalize()
     return w_long
 register(TYPE_LONG, unmarshal_Long)
@@ -328,7 +329,7 @@ def marshal_w__Tuple(space, w_tuple, m):
 
 def unmarshal_Tuple(space, u, tc):
     items_w = u.get_list_w()
-    return W_TupleObject(items_w)
+    return space.newtuple(items_w)
 register(TYPE_TUPLE, unmarshal_Tuple)
 
 def marshal_w__List(space, w_list, m):
@@ -338,15 +339,23 @@ def marshal_w__List(space, w_list, m):
 
 def unmarshal_List(space, u, tc):
     items_w = u.get_list_w()
-    return W_ListObject(items_w)
+    return space.newlist(items_w)
 
 def finish_List(space, items_w, typecode):
-    return W_ListObject(items_w)
+    return space.newlist(items_w)
 register(TYPE_LIST, unmarshal_List)
 
 def marshal_w__Dict(space, w_dict, m):
     m.start(TYPE_DICT)
     for w_key, w_value in w_dict.content.iteritems():
+        m.put_w_obj(w_key)
+        m.put_w_obj(w_value)
+    m.atom(TYPE_NULL)
+
+def marshal_w__DictMulti(space, w_dict, m):
+    m.start(TYPE_DICT)
+    for w_tuple in w_dict.implementation.items():
+        w_key, w_value = space.unpacktuple(w_tuple, 2)
         m.put_w_obj(w_key)
         m.put_w_obj(w_value)
     m.atom(TYPE_NULL)
@@ -412,8 +421,11 @@ def unmarshal_str(u):
     w_obj = u.get_w_obj(False)
     try:
         return u.space.str_w(w_obj)
-    except OperationError:
-        u.raise_exc('invalid marshal data for code object')
+    except OperationError, e:
+        if e.match(u.space, u.space.w_TypeError):
+            u.raise_exc('invalid marshal data for code object')
+        else:
+            raise
 
 def unmarshal_strlist(u, tc):
     lng = u.atom_lng(tc)
@@ -526,7 +538,7 @@ def unmarshal_set_frozenset(space, u, tc):
         w_frozen = space.w_False
     else:
         w_frozen = space.w_True
-    w_lis = W_ListObject(items_w)
+    w_lis = space.newlist(items_w)
     return list_to_set(space, w_lis, w_frozen)
 register(TYPE_SET + TYPE_FROZENSET, unmarshal_set_frozenset)
 

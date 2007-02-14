@@ -1,6 +1,22 @@
 from pypy.interpreter.error import OperationError
 from pypy.interpreter import module
-from pypy.interpreter.mixedmodule import MixedModule 
+from pypy.interpreter.mixedmodule import MixedModule
+
+# put builtins here that should be optimized somehow
+
+OPTIMIZED_BUILTINS = ["len", "range", "xrange", "min", "max", "enumerate",
+        "isinstance", "type", "zip", "file", "open", "abs", "chr", "unichr",
+        "ord", "pow", "repr", "hash", "oct", "hex", "round", "cmp", "getattr",
+        "setattr", "delattr", "callable", "int", "str", "float"]
+
+assert len(OPTIMIZED_BUILTINS) <= 256
+
+BUILTIN_TO_INDEX = {}
+
+for i, name in enumerate(OPTIMIZED_BUILTINS):
+    BUILTIN_TO_INDEX[name] = i
+
+assert len(OPTIMIZED_BUILTINS) == len(BUILTIN_TO_INDEX)
 
 class Module(MixedModule):
     """Built-in functions, exceptions, and other objects."""
@@ -39,9 +55,6 @@ class Module(MixedModule):
         '_install_pickle_support_for_reversed_iterator':
         'app_functional._install_pickle_support_for_reversed_iterator',
 
-        'issubclass'    : 'app_inspect.issubclass',
-        'isinstance'    : 'app_inspect.isinstance',
-        'hasattr'       : 'app_inspect.hasattr',
         'globals'       : 'app_inspect.globals',
         'locals'        : 'app_inspect.locals',
         'vars'          : 'app_inspect.vars',
@@ -98,9 +111,12 @@ class Module(MixedModule):
         'coerce'        : 'operation.coerce',
         'divmod'        : 'operation.divmod',
         '_issubtype'    : 'operation._issubtype',
+        'issubclass'    : 'operation.issubclass',
+        'isinstance'    : 'operation.isinstance',
         'getattr'       : 'operation.getattr',
         'setattr'       : 'operation.setattr',
         'delattr'       : 'operation.delattr',
+        'hasattr'       : 'operation.hasattr',
         'iter'          : 'operation.iter',
         'id'            : 'operation.id',
         '_seqiter'      : 'operation._seqiter',
@@ -141,6 +157,9 @@ class Module(MixedModule):
     def setup_after_space_initialization(self):
         """NOT_RPYTHON"""
         space = self.space
+        self.builtins_by_index = [None] * len(OPTIMIZED_BUILTINS)
+        for i, name in enumerate(OPTIMIZED_BUILTINS):
+            self.builtins_by_index[i] = space.getattr(self, space.wrap(name))
         # call installations for pickle support
         for name in self.loaders.keys():
             if name.startswith('_install_pickle_support_for_'):

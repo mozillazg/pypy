@@ -11,6 +11,8 @@ from pypy.translator import simplify
 from pypy.objspace.flow import FlowObjSpace
 from pypy.tool.ansi_print import ansi_log
 from pypy.tool.sourcetools import nice_repr_for_func
+from pypy.config.pypyoption import pypy_optiondescription
+from pypy.config.translationoption import get_combined_translation_config
 import py
 log = py.log.Producer("flowgraph")
 py.log.setconsumer("flowgraph", ansi_log)
@@ -19,23 +21,22 @@ class TranslationContext(object):
     FLOWING_FLAGS = {
         'verbose': False,
         'simplifying': True,
-        'do_imports_immediately': True,
         'builtins_can_raise_exceptions': False,
         'list_comprehension_operations': False,   # True, - not super-tested
         }
 
     def __init__(self, config=None, **flowing_flags):
         if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription)
+            from pypy.config.pypyoption import get_pypy_config
+            config = get_pypy_config(translating=True)
         # ZZZ should go away in the end
-        for attr in ['verbose', 'simplifying', 'do_imports_immediately',
+        for attr in ['verbose', 'simplifying',
                      'builtins_can_raise_exceptions',
                      'list_comprehension_operations']:
             if attr in flowing_flags:
                 setattr(config.translation, attr, flowing_flags[attr])
         self.config = config
+        self.create_flowspace_config()
         self.annotator = None
         self.rtyper = None
         self.exceptiontransformer = None
@@ -44,6 +45,17 @@ class TranslationContext(object):
         self._prebuilt_graphs = {}   # only used by the pygame viewer
 
         self._implicitly_called_by_externals = []
+
+    def create_flowspace_config(self):
+        # XXX this is a hack: we create a new config, which is only used
+        # for the flow object space. The problem is that the flow obj space
+        # needs an objspace config, but the thing we are translating might not
+        # have one (or worse we are translating pypy and the flow space picks
+        # up strange options of the pypy we are translating). Therefore we need
+        # to construct this new config
+        self.flowconfig = get_combined_translation_config(
+                pypy_optiondescription, self.config, translating=True)
+        self.flowconfig.objspace.name = "flow"
 
     def buildflowgraph(self, func):
         """Get the flow graph for a function."""
@@ -55,10 +67,13 @@ class TranslationContext(object):
         else:
             if self.config.translation.verbose:
                 log.start(nice_repr_for_func(func))
-            space = FlowObjSpace(self.config)
+            space = FlowObjSpace(self.flowconfig)
             if self.annotator:
                 # ZZZ
                 self.annotator.policy._adjust_space_config(space)
+            elif hasattr(self, 'no_annotator_but_do_imports_immediately'):
+                space.do_imports_immediately = (
+                    self.no_annotator_but_do_imports_immediately)
             graph = space.build_flow(func)
             if self.config.translation.simplifying:
                 simplify.simplify_graph(graph)
@@ -153,3 +168,5 @@ def graphof(translator, func):
             result.append(graph)
     assert len(result) == 1
     return result[0]
+
+TranslationContext._graphof = graphof

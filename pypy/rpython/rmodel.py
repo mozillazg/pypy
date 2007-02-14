@@ -1,4 +1,4 @@
-from pypy.annotation.pairtype import pairtype, extendabletype
+from pypy.annotation.pairtype import pairtype, extendabletype, pair
 from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
@@ -171,7 +171,8 @@ class Repr:
         if (isinstance(T, lltype.Ptr) and
             isinstance(T.TO, (lltype.Struct,
                               lltype.Array,
-                              lltype.ForwardReference))):
+                              lltype.ForwardReference)) and
+            T.TO._gckind != 'cpy'):
             return DummyValueBuilder(rtyper, T.TO)
         else:
             return None
@@ -296,6 +297,14 @@ class __extend__(pairtype(Repr, Repr)):
             return inputconst(Bool, hop.s_result.const)
         return hop.rtyper.type_system.generic_is(robj1, robj2, hop)
 
+    # default implementation for checked getitems
+    
+    def rtype_getitem_idx_key((r_c1, r_o1), hop):
+        return pair(r_c1, r_o1).rtype_getitem(hop)
+
+    rtype_getitem_idx = rtype_getitem_idx_key
+    rtype_getitem_key = rtype_getitem_idx_key
+
 # ____________________________________________________________
 
 
@@ -353,6 +362,7 @@ class VoidRepr(Repr):
     def get_ll_eq_function(self): return None
     def get_ll_hash_function(self): return ll_hash_void
     get_ll_fasthash_function = get_ll_hash_function
+    def ll_str(self, nothing): raise AssertionError("unreachable code")
 impossible_repr = VoidRepr()
 
 class SimplePointerRepr(Repr):
@@ -441,7 +451,8 @@ def getgcflavor(classdef):
 
 def externalvsinternal(rtyper, item_repr): # -> external_item_repr, (internal_)item_repr
     from pypy.rpython import rclass
-    if isinstance(item_repr, rclass.AbstractInstanceRepr):
+    if (isinstance(item_repr, rclass.AbstractInstanceRepr) and
+        getattr(item_repr, 'gcflavor', 'gc') == 'gc'):
         return item_repr, rclass.getinstancerepr(rtyper, None)
     else:
         return item_repr, item_repr

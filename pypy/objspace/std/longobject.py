@@ -2,17 +2,17 @@ import sys
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.noneobject import W_NoneObject
-from pypy.rlib.rlong import rlong, SHIFT
+from pypy.rlib.rbigint import rbigint, SHIFT
 
 class W_LongObject(W_Object):
-    """This is a wrapper of rlong."""
+    """This is a wrapper of rbigint."""
     from pypy.objspace.std.longtype import long_typedef as typedef
     
     def __init__(w_self, l):
-        w_self.num = l # instance of rlong
+        w_self.num = l # instance of rbigint
 
     def fromint(space, intval):
-        return W_LongObject(rlong.fromint(intval))
+        return W_LongObject(rbigint.fromint(intval))
     fromint = staticmethod(fromint)
 
     def longval(self):
@@ -28,20 +28,20 @@ class W_LongObject(W_Object):
         return self.num.toint()
 
     def fromfloat(f):
-        return W_LongObject(rlong.fromfloat(f))
+        return W_LongObject(rbigint.fromfloat(f))
     fromfloat = staticmethod(fromfloat)
 
     def fromlong(l):
-        return W_LongObject(rlong.fromlong(l))
+        return W_LongObject(rbigint.fromlong(l))
     fromlong = staticmethod(fromlong)
 
     def fromrarith_int(i):
-        return W_LongObject(rlong.fromrarith_int(i))
+        return W_LongObject(rbigint.fromrarith_int(i))
     fromrarith_int._annspecialcase_ = "specialize:argtype(0)"
     fromrarith_int = staticmethod(fromrarith_int)
 
     def fromdecimalstr(s):
-        return W_LongObject(rlong.fromdecimalstr(s))
+        return W_LongObject(rbigint.fromdecimalstr(s))
     fromdecimalstr = staticmethod(fromdecimalstr)
 
     def _count_bits(self):
@@ -54,7 +54,7 @@ registerimplementation(W_LongObject)
 
 # bool-to-long
 def delegate_Bool2Long(space, w_bool):
-    return W_LongObject(rlong.frombool(space.is_true(w_bool)))
+    return W_LongObject(rbigint.frombool(space.is_true(w_bool)))
 
 # int-to-long delegation
 def delegate_Int2Long(space, w_intobj):
@@ -103,6 +103,9 @@ def uint_w__Long(space, w_value):
     except OverflowError:
         raise OperationError(space.w_OverflowError, space.wrap(
             "long int too large to convert to unsigned int"))
+
+def bigint_w__Long(space, w_value):
+    return w_value.num
 
 def repr__Long(space, w_long):
     return space.wrap(w_long.num.repr())
@@ -170,7 +173,7 @@ def divmod__Long_Long(space, w_long1, w_long2):
 
 def pow__Long_Long_Long(space, w_long1, w_long2, w_long3):
     # XXX need to replicate some of the logic, to get the errors right
-    if w_long2.num.lt(rlong.fromint(0)):
+    if w_long2.num.lt(rbigint.fromint(0)):
         raise OperationError(
             space.w_TypeError,
             space.wrap(
@@ -184,7 +187,7 @@ def pow__Long_Long_Long(space, w_long1, w_long2, w_long3):
 
 def pow__Long_Long_None(space, w_long1, w_long2, w_long3):
     # XXX need to replicate some of the logic, to get the errors right
-    if w_long2.num.lt(rlong.fromint(0)):
+    if w_long2.num.lt(rbigint.fromint(0)):
         raise FailedToImplement(
             space.w_ValueError,
             space.wrap("long pow() too negative"))
@@ -202,12 +205,12 @@ def abs__Long(space, w_long):
 def nonzero__Long(space, w_long):
     return space.newbool(w_long.num.tobool())
 
-def invert__Long(space, w_long): #Implement ~x as -(x + 1)
+def invert__Long(space, w_long):
     return W_LongObject(w_long.num.invert())
 
 def lshift__Long_Long(space, w_long1, w_long2):
     # XXX need to replicate some of the logic, to get the errors right
-    if w_long2.num.lt(rlong.fromint(0)):
+    if w_long2.num.lt(rbigint.fromint(0)):
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
     try:
@@ -218,7 +221,7 @@ def lshift__Long_Long(space, w_long1, w_long2):
 
 def rshift__Long_Long(space, w_long1, w_long2):
     # XXX need to replicate some of the logic, to get the errors right
-    if w_long2.num.lt(rlong.fromint(0)):
+    if w_long2.num.lt(rbigint.fromint(0)):
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
     try:

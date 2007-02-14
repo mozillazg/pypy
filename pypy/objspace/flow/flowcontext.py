@@ -1,5 +1,6 @@
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
+from pypy.interpreter import pyframe
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow.framestate import FrameState
 
@@ -95,7 +96,7 @@ class BlockRecorder(Recorder):
 
     def bytecode_trace(self, ec, frame):
         assert frame is ec.crnt_frame, "seeing an unexpected frame!"
-        ec.crnt_offset = frame.next_instr      # save offset for opcode
+        ec.crnt_offset = frame.last_instr      # save offset for opcode
         if self.enterspamblock:
             # If we have a SpamBlock, the first call to bytecode_trace()
             # occurs as soon as frame.resume() starts, before interpretation
@@ -218,8 +219,10 @@ class FlowExecutionContext(ExecutionContext):
         # create an empty frame suitable for the code object
         # while ignoring any operation like the creation of the locals dict
         self.recorder = []
-        return self.code.create_frame(self.space, self.w_globals,
-                                      self.closure)
+        frame = pyframe.PyFrame(self.space, self.code,
+                                self.w_globals, self.closure)
+        frame.last_instr = 0
+        return frame
 
     def bytecode_trace(self, frame):
         self.recorder.bytecode_trace(self, frame)
@@ -256,11 +259,15 @@ class FlowExecutionContext(ExecutionContext):
             except StopFlowing:
                 continue   # restarting a dead SpamBlock
             try:
+                self.framestack.push(frame)
                 self.crnt_frame = frame
                 try:
-                    w_result = frame.resume()
+                    w_result = frame.dispatch(frame.pycode.co_code,
+                                              frame.last_instr,
+                                              self)
                 finally:
                     self.crnt_frame = None
+                    self.framestack.pop()
 
             except OperationThatShouldNotBePropagatedError, e:
                 raise Exception(
@@ -281,7 +288,7 @@ class FlowExecutionContext(ExecutionContext):
 
             except OperationError, e:
                 #print "OE", e.w_type, e.w_value
-                if (self.space.config.translation.do_imports_immediately and
+                if (self.space.do_imports_immediately and
                     e.w_type is self.space.w_ImportError):
                     raise ImportError('import statement always raises %s' % (
                         e,))
@@ -378,8 +385,8 @@ class FlowExecutionContext(ExecutionContext):
     # hack for unrolling iterables, don't use this
     def replace_in_stack(self, oldvalue, newvalue):
         w_new = Constant(newvalue)
-        stack_items_w = self.crnt_frame.valuestack.items
-        for i in range(len(stack_items_w)):
+        stack_items_w = self.crnt_frame.valuestack_w
+        for i in range(self.crnt_frame.valuestackdepth):
             w_v = stack_items_w[i]
             if isinstance(w_v, Constant):
                 if w_v.value is oldvalue:

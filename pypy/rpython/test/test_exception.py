@@ -1,6 +1,8 @@
+import py
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
+from pypy.rpython.llinterp import LLException
 
 class MyException(Exception):
     pass
@@ -67,7 +69,6 @@ class BaseTestException(BaseRtypingTest):
         assert res == 42
 
     def test_catch_incompatible_class(self):
-        import py; py.test.skip("in-progress")
         class MyError(Exception):
             pass
         def h(x):
@@ -79,6 +80,38 @@ class BaseTestException(BaseRtypingTest):
                 h(operr)
         res = self.interpret(f, [7])
         assert res is None
+
+    def test_raise_and_catch_other(self):
+        class BytecodeCorruption(Exception):
+            pass
+        class OperationError(Exception):
+            def __init__(self, a):
+                self.a = a
+        def f(next_instr):
+            if next_instr < 7:
+                raise OperationError(next_instr)
+            try:
+                raise BytecodeCorruption()
+            except OperationError, operr:
+                next_instr -= operr.a
+        py.test.raises(LLException, self.interpret, f, [10])
+
+    def test_raise_prebuilt_and_catch_other(self):
+        class BytecodeCorruption(Exception):
+            pass
+        class OperationError(Exception):
+            def __init__(self, a):
+                self.a = a
+        bcerr = BytecodeCorruption()
+        def f(next_instr):
+            if next_instr < 7:
+                raise OperationError(next_instr)
+            try:
+                raise bcerr
+            except OperationError, operr:
+                next_instr -= operr.a
+        py.test.raises(LLException, self.interpret, f, [10])
+
 
 class TestLLtype(BaseTestException, LLRtypeMixin):
     pass

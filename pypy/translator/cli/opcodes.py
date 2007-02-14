@@ -1,8 +1,9 @@
 from pypy.translator.cli.metavm import  Call, CallMethod, \
-     IndirectCall, GetField, SetField, CastTo, OOString, DownCast, NewCustomDict,\
-     CastWeakAdrToPtr, MapException, Box, Unbox, NewArray, GetArrayElem, SetArrayElem
+     IndirectCall, GetField, SetField, OOString, DownCast, NewCustomDict,\
+     CastWeakAdrToPtr, MapException, Box, Unbox, NewArray, GetArrayElem, SetArrayElem,\
+     TypeOf
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
-    New, RuntimeNew
+    New, RuntimeNew, CastTo
 from pypy.translator.cli.cts import WEAKREF
 
 # some useful instruction patterns
@@ -14,7 +15,7 @@ def _not(op):
     return [PushAllArgs, op]+Not
 
 def _abs(type_):
-    return [PushAllArgs, 'call %s class [mscorlib]System.Math::Abs(%s)' % (type_, type_)]
+    return [PushAllArgs, 'call %s class [mscorlib]System.Math::Abs(%s)' % (type_, type_), StoreResult]
 
 def _check_ovf(op):
     mapping = [('[mscorlib]System.OverflowException', 'exceptions.OverflowError')]
@@ -39,6 +40,8 @@ opcodes = {
     'cli_newarray':             [NewArray],
     'cli_getelem':              [GetArrayElem],
     'cli_setelem':              [SetArrayElem],
+    'cli_typeof':               [TypeOf],
+    'cli_arraylength':          'ldlen',
     'oois':                     'ceq',
     'oononnull':                [PushAllArgs, 'ldnull', 'ceq']+Not,
     'instanceof':               [CastTo, 'ldnull', 'cgt.un'],
@@ -47,6 +50,7 @@ opcodes = {
     'oohash':                   [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],    
     'oostring':                 [OOString],
     'ooparse_int':              [PushAllArgs, 'call int32 [pypylib]pypy.runtime.Utils::OOParseInt(string, int32)'],
+    'ooparse_float':            [PushAllArgs, 'call float64 [pypylib]pypy.runtime.Utils::OOParseFloat(string)'],
     'oonewcustomdict':          [NewCustomDict],
     
     'same_as':                  DoNothing,
@@ -152,20 +156,18 @@ opcodes = {
     'float_sub':                'sub',
     'float_mul':                'mul',
     'float_truediv':            'div', 
-    'float_mod':                'rem',
     'float_lt':                 'clt',
     'float_le':                 _not('cgt'),
     'float_eq':                 'ceq',
     'float_ne':                 _not('ceq'),
     'float_gt':                 'cgt',
     'float_ge':                 _not('clt'),
-    'float_floor':              None, # TODO
-    'float_fmod':               None, # TODO
 
     'llong_is_true':            [PushAllArgs, 'ldc.i8 0', 'cgt.un'],
     'llong_neg':                'neg',
     'llong_neg_ovf':            _check_ovf(['ldc.i8 0', PushAllArgs, 'sub.ovf', StoreResult]),
     'llong_abs':                _abs('int64'),
+    'llong_abs_ovf':            _check_ovf(_abs('int64')),
     'llong_invert':             'not',
 
     'llong_add':                'add',

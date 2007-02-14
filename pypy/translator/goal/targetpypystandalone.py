@@ -2,19 +2,11 @@ import py
 
 import os, sys
 
-# as of revision 27081, multimethod.py uses the InstallerVersion1 by default
-# because it is much faster both to initialize and run on top of CPython.
-# The InstallerVersion2 is optimized for making a translator-friendly
-# structure.  So we patch here...
-from pypy.objspace.std import multimethod
-multimethod.Installer = multimethod.InstallerVersion2
-
 from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
-from pypy.config.pypyoption import pypy_optiondescription
-from pypy.config.config import Config, to_optparse, make_dict
+from pypy.config.config import Config, to_optparse, make_dict, SUPPRESS_USAGE
 from pypy.tool.option import make_objspace
 
 thisdir = py.magic.autopath().dirpath()
@@ -79,7 +71,7 @@ def call_startup(space):
 
 class PyPyTarget(object):
 
-    usage = "target PyPy standalone"
+    usage = SUPPRESS_USAGE
 
     take_options = True
 
@@ -89,10 +81,31 @@ class PyPyTarget(object):
         return parser
 
     def handle_config(self, config):
+        # as of revision 27081, multimethod.py uses the InstallerVersion1 by default
+        # because it is much faster both to initialize and run on top of CPython.
+        # The InstallerVersion2 is optimized for making a translator-friendly
+        # structure for low level backends. However, InstallerVersion1 is still
+        # preferable for high level backends, so we patch here.
+        from pypy.objspace.std import multimethod
+        if config.translation.type_system == 'lltype':
+            assert multimethod.InstallerVersion1.instance_counter == 0,\
+                   'The wrong Installer version has already been instatiated'
+            multimethod.Installer = multimethod.InstallerVersion2
+        else:
+            # don't rely on the default, set again here
+            assert multimethod.InstallerVersion2.instance_counter == 0,\
+                   'The wrong Installer version has already been instatiated'
+            multimethod.Installer = multimethod.InstallerVersion1
+
+    def handle_translate_config(self, translateconfig):
         pass
 
     def print_help(self, config):
         self.opt_parser(config).print_help()
+
+    def get_additional_config_options(self):
+        from pypy.config.pypyoption import pypy_optiondescription
+        return pypy_optiondescription
 
     def target(self, driver, args):
         driver.exe_name = 'pypy-%(backend)s'
@@ -104,12 +117,6 @@ class PyPyTarget(object):
 
         # expose the following variables to ease debugging
         global space, entry_point
-
-        # obscure hack to stuff the translation options into the translated PyPy
-        import pypy.module.sys
-        options = make_dict(config)
-        wrapstr = 'space.wrap(%r)' % (options)
-        pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
 
         if config.translation.thread:
             config.objspace.usemodules.thread = True
@@ -128,14 +135,20 @@ class PyPyTarget(object):
         import translate
         translate.log_config(config.objspace, "PyPy config object")
  
+        # obscure hack to stuff the translation options into the translated PyPy
+        import pypy.module.sys
+        options = make_dict(config)
+        wrapstr = 'space.wrap(%r)' % (options)
+        pypy.module.sys.Module.interpleveldefs['pypy_translation_info'] = wrapstr
+
         return self.get_entry_point(config)
 
     def get_entry_point(self, config):
         space = make_objspace(config)
 
-        # disable translation of the whole of classobjinterp.py
-        StdObjSpace.setup_old_style_classes = lambda self: None
-
+        if not config.objspace.std.oldstyle:
+            # disable translation of the whole of classobjinterp.py
+            StdObjSpace.setup_old_style_classes = lambda self: None
 
         # manually imports app_main.py
         filename = os.path.join(this_dir, 'app_main.py')
@@ -150,7 +163,9 @@ class PyPyTarget(object):
         return entry_point, None, PyPyAnnotatorPolicy(single_space = space)
 
     def interface(self, ns):
-        for name in ['take_options', 'handle_config', 'print_help', 'target']:
+        for name in ['take_options', 'handle_config', 'print_help', 'target',
+                     'handle_translate_config',
+                     'get_additional_config_options']:
             ns[name] = getattr(self, name)
 
 

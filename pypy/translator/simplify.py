@@ -12,27 +12,39 @@ from pypy.objspace.flow.model import c_last_exception
 from pypy.objspace.flow.model import checkgraph, traverse, mkentrymap
 from pypy.rpython.lltypesystem import lloperation
 
+def get_funcobj(func):
+    """
+    Return an object which is supposed to have attributes such as graph and _callable
+    """
+    if hasattr(func, '_obj'): 
+        return func._obj # lltypesystem
+    else:
+        return func # ootypesystem
+
+
 def get_graph(arg, translator):
     from pypy.translator.translator import graphof
     if isinstance(arg, Variable):
         return None
     f = arg.value
     from pypy.rpython.lltypesystem import lltype
-    if not isinstance(f, lltype._ptr):
+    from pypy.rpython.ootypesystem import ootype
+    if not isinstance(f, lltype._ptr) and not isinstance(f, ootype._callable):
         return None
+    funcobj = get_funcobj(f)
     try:
-        callable = f._obj._callable
+        callable = funcobj._callable
         # external function calls don't have a real graph
         if getattr(callable, "suggested_primitive", False):
             return None
     except (AttributeError, KeyError, AssertionError):
         return None
     try:
-        return f._obj.graph
+        return funcobj.graph
     except AttributeError:
         return None
     try:
-        callable = f._obj._callable
+        callable = funcobj._callable
         return graphof(translator, callable)
     except (AttributeError, KeyError, AssertionError):
         return None
@@ -191,7 +203,7 @@ def transform_ovfcheck(graph):
             link = block.exits[0]
             ovfblock = link.target
             check_syntax(ovfblock, block)
-            block.exits = [link]
+            block.recloseblock(link)
             block.exitswitch = None
             # remove the ovfcheck call from the None target
             remove_last_op(ovfblock)
@@ -272,9 +284,25 @@ def simplify_exceptions(graph):
             link.exitcase = case
             link.prevblock = block
             exits.append(link)
-        block.exits = tuple(preserve + exits)
+        block.recloseblock(*(preserve + exits))
 
     traverse(visit, graph)
+
+def transform_xxxitem(graph):
+    # xxx setitem too
+    for block in graph.iterblocks():
+        if block.operations and block.exitswitch == c_last_exception:
+            last_op = block.operations[-1]
+            if last_op.opname == 'getitem':
+                postfx = []
+                for exit in block.exits:
+                    if exit.exitcase is IndexError:
+                        postfx.append('idx')
+                    elif exit.exitcase is KeyError:
+                        postfx.append('key')
+                if postfx:
+                    last_op.opname = last_op.opname + '_' + '_'.join(postfx)
+
 
 def remove_dead_exceptions(graph):
     """Exceptions can be removed if they are unreachable"""
@@ -306,7 +334,7 @@ def remove_dead_exceptions(graph):
                 exits.pop()
             exits.append(link)
             seen.append(case)
-        block.exits = tuple(exits)
+        block.recloseblock(*exits)
 
     traverse(visit, graph)
 
@@ -380,7 +408,7 @@ def remove_assertion_errors(graph):
                 # remove this exit
                 lst = list(block.exits)
                 del lst[i]
-                block.exits = tuple(lst)
+                block.recloseblock(*lst)
     traverse(visit, graph)
 
 
@@ -1027,6 +1055,7 @@ all_passes = [
     remove_identical_vars,
     transform_ovfcheck,
     simplify_exceptions,
+    transform_xxxitem,
     remove_dead_exceptions,
     ]
 

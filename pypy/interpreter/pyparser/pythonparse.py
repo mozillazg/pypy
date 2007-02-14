@@ -10,7 +10,6 @@ import os
 from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
-from pypy.tool.option import Options
 from pypy.interpreter.pyparser.pythonlexer import Source, match_encoding_declaration
 from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 import pypy.interpreter.pyparser.pysymbol as pysymbol
@@ -84,9 +83,6 @@ def _check_line_for_encoding(line):
 
 
 ## Python Source Parser ###################################################
-class AlternateGrammarException(Exception):
-    pass
-
 class PythonParser(grammar.Parser):
     """Wrapper class for python grammar"""
     targets = {
@@ -174,8 +170,8 @@ class PythonParser(grammar.Parser):
 
 
 
-def make_pyparser(version=Options.version):
-    parser = PythonParser() # predefined_symbols=symbol.sym_name)
+def make_pyparser(version="2.4"):
+    parser = PythonParser()
     return build_parser_for_version(version, parser=parser)
 
 def translation_target(grammardef):
@@ -189,11 +185,6 @@ def translation_target(grammardef):
     return 0
 
 
-
-# unfortunately the command line options are not parsed yet
-# debug_print( "Loading grammar %s" % Options.version )
-# XXX: remove PYTHON_PARSER
-# PYTHON_PARSER = make_pyparser()
 
 ## XXX BROKEN
 ## def parse_grammar(space, w_src):

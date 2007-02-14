@@ -255,10 +255,13 @@ def test_getpaths():
     assert config.getpaths() == ['gc.name', 'gc.dummy', 'gc.float', 'bool',
                                  'objspace', 'wantref', 'str', 'wantframework',
                                  'int']
+    assert config.getpaths() == descr.getpaths()
     assert config.gc.getpaths() == ['name', 'dummy', 'float']
+    assert config.gc.getpaths() == descr.gc.getpaths()
     assert config.getpaths(include_groups=True) == [
         'gc', 'gc.name', 'gc.dummy', 'gc.float',
         'bool', 'objspace', 'wantref', 'str', 'wantframework', 'int']
+    assert config.getpaths(True) == descr.getpaths(True)
 
 def test_underscore_in_option_name():
     descr = OptionDescription("opt", "", [
@@ -443,4 +446,28 @@ def test_copy():
     c2.s1.a = True
     assert c2.s1.a
     c2.int = 44 # does not crash
+
+def test_suggests():
+    descr = OptionDescription("test", '', [
+        BoolOption("toplevel", "", default=False),
+        BoolOption("opt", "", default=False,
+                   suggests=[("toplevel", True)])
+    ])
+    c = Config(descr)
+    assert not c.toplevel
+    assert not c.opt
+    c.opt = True
+    assert c.opt
+    assert c.toplevel
+    # does not crash
+    c.toplevel = False
+    assert not c.toplevel
+
+    c = Config(descr)
+    c.toplevel = False
+    assert not c.toplevel
+    # does not crash
+    c.opt = True
+    assert c.opt
+    assert not c.toplevel
 

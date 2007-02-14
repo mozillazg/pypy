@@ -27,10 +27,13 @@ class W_Root(object):
             return space.finditem(w_dict, w_attr)
         return None
 
-    def setdictvalue(self, space, w_attr, w_value):
+    def getdictvalue_attr_is_in_class(self, space, w_attr):
+        return self.getdictvalue(space, w_attr)
+
+    def setdictvalue(self, space, w_attr, w_value, shadows_type=True):
         w_dict = self.getdict()
         if w_dict is not None:
-            space.set_str_keyed_item(w_dict, w_attr, w_value)
+            space.set_str_keyed_item(w_dict, w_attr, w_value, shadows_type)
             return True
         return False
     
@@ -170,16 +173,19 @@ class ObjSpace(object):
         # set recursion limit
         # sets all the internal descriptors
         if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription)
+            from pypy.config.pypyoption import get_pypy_config
+            config = get_pypy_config(translating=False)
         self.config = config
+
+        # import extra modules for side-effects, possibly based on config
+        import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
+
         self.interned_strings = {}
         self.pending_actions = []
         self.setoptions(**kw)
 
-        if self.config.objspace.logbytecodes:            
-            self.bytecodecounts = {}
+#        if self.config.objspace.logbytecodes:            
+#            self.bytecodecounts = {}
 
         self.initialize()
 
@@ -195,6 +201,12 @@ class ObjSpace(object):
         w_exitfunc = self.sys.getdictvalue_w(self, 'exitfunc')
         if w_exitfunc is not None:
             self.call_function(w_exitfunc)
+        w_exithandlers = self.sys.getdictvalue_w(self, 'pypy__exithandlers__')
+        if w_exithandlers is not None:
+            while self.is_true(w_exithandlers):
+                w_key_value = self.call_method(w_exithandlers, 'popitem')
+                w_key, w_value = self.unpacktuple(w_key_value, 2)
+                self.call_function(w_value)
         if self.config.objspace.std.withdictmeasurement:
             from pypy.objspace.std.dictmultiobject import report
             report()
@@ -401,6 +413,11 @@ class ObjSpace(object):
             self.default_compiler = compiler
             return compiler
 
+    def createframe(self, code, w_globals, closure=None):
+        "Create an empty PyFrame suitable for this code object."
+        from pypy.interpreter import pyframe
+        return pyframe.PyFrame(self, code, w_globals, closure)
+
     # Following is a friendly interface to common object space operations
     # that can be defined in term of more primitive ones.  Subclasses
     # may also override specific functions for performance.
@@ -426,7 +443,7 @@ class ObjSpace(object):
         """shortcut for space.int_w(space.hash(w_obj))"""
         return self.int_w(self.hash(w_obj))
 
-    def set_str_keyed_item(self, w_obj, w_key, w_value):
+    def set_str_keyed_item(self, w_obj, w_key, w_value, shadows_type=True):
         return self.setitem(w_obj, w_key, w_value)
     
     def finditem(self, w_obj, w_key):
@@ -436,6 +453,15 @@ class ObjSpace(object):
             if e.match(self, self.w_KeyError):
                 return None
             raise
+
+    def findattr(self, w_object, w_name):
+        try:
+            return self.getattr(w_object, w_name)
+        except OperationError, e:
+            # a PyPy extension: let SystemExit and KeyboardInterrupt go through
+            if e.async(self):
+                raise
+            return None
 
     def newbool(self, b):
         if b:
@@ -542,26 +568,16 @@ class ObjSpace(object):
 
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
-        check_list = [w_check_class]
-        while check_list:
-            w_item = check_list.pop()
-            # Match identical items.
-            if self.is_w(w_exc_type, w_item):
-                return True
-            try:
-                # Match subclasses.
-                if self.is_true(self.abstract_issubclass(w_exc_type, w_item, failhard=True)):
+        if self.is_w(w_exc_type, w_check_class):
+            return True
+        if self.is_true(self.abstract_issubclass(w_exc_type, w_check_class)):
+            return True
+
+        if self.is_true(self.isinstance(w_check_class, self.w_tuple)):
+            exclst_w = self.unpacktuple(w_check_class)
+            for w_e in exclst_w:
+                if self.exception_match(w_exc_type, w_e):
                     return True
-            except OperationError:
-                # Assume that this is a TypeError: w_item not a type,
-                # and assume that w_item is then actually a tuple.
-                try:
-                    exclst = self.unpackiterable(w_item)
-                except OperationError:
-                    # hum, maybe it is not a tuple after all, and w_exc_type
-                    # was not a type at all (string exceptions).  Give up.
-                    continue
-                check_list.extend(exclst)
         return False
 
     def call(self, w_callable, w_args, w_kwds=None):
@@ -577,7 +593,8 @@ class ObjSpace(object):
                 func = w_func.w_function
                 if isinstance(func, Function):
                     return func.funccall(w_inst, *args_w)
-            else:
+            elif args_w and self.is_true(
+                    self.abstract_isinstance(args_w[0], w_func.w_class)):
                 w_func = w_func.w_function
 
         if isinstance(w_func, Function):
@@ -587,7 +604,7 @@ class ObjSpace(object):
         args = Arguments(self, list(args_w))
         return self.call_args(w_func, args)
 
-    def call_valuestack(self, w_func, nargs, valuestack):
+    def call_valuestack(self, w_func, nargs, frame):
         # XXX start of hack for performance
         from pypy.interpreter.function import Function, Method
         if isinstance(w_func, Method):
@@ -595,20 +612,21 @@ class ObjSpace(object):
             if w_inst is not None:
                 func = w_func.w_function
                 if isinstance(func, Function):
-                    return func.funccall_obj_valuestack(w_inst,
-                                                        nargs, valuestack)
-            else:
+                    return func.funccall_obj_valuestack(w_inst, nargs, frame)
+            elif nargs > 0 and self.is_true(
+                self.abstract_isinstance(frame.peekvalue(nargs-1),   #    :-(
+                                         w_func.w_class)):
                 w_func = w_func.w_function
 
         if isinstance(w_func, Function):
-            return w_func.funccall_valuestack(nargs, valuestack)
+            return w_func.funccall_valuestack(nargs, frame)
         # XXX end of hack for performance
 
-        args = ArgumentsFromValuestack(self, valuestack, nargs)
+        args = ArgumentsFromValuestack(self, frame, nargs)
         try:
             return self.call_args(w_func, args)
         finally:
-            args.valuestack = None
+            args.frame = None
 
     def call_method(self, w_obj, methname, *arg_w):
         w_meth = self.getattr(w_obj, self.wrap(methname))
@@ -646,12 +664,15 @@ class ObjSpace(object):
     def abstract_issubclass(self, w_obj, w_cls, failhard=False):
         try:
             return self.issubtype(w_obj, w_cls)
-        except OperationError:
+        except OperationError, e:
+            if not e.match(self, self.w_TypeError):
+                raise
             try:
                 self.getattr(w_cls, self.wrap('__bases__')) # type sanity check
                 return self.recursive_issubclass(w_obj, w_cls)
-            except OperationError:
-                if failhard:
+            except OperationError, e:
+                if failhard or not (e.match(self, self.w_TypeError) or
+                                    e.match(self, self.w_AttributeError)):
                     raise
                 else:
                     return self.w_False
@@ -668,22 +689,25 @@ class ObjSpace(object):
     def abstract_isinstance(self, w_obj, w_cls):
         try:
             return self.isinstance(w_obj, w_cls)
-        except OperationError:
+        except OperationError, e:
+            if not e.match(self, self.w_TypeError):
+                raise
             try:
                 w_objcls = self.getattr(w_obj, self.wrap('__class__'))
                 return self.abstract_issubclass(w_objcls, w_cls)
-            except OperationError:
+            except OperationError, e:
+                if not (e.match(self, self.w_TypeError) or
+                        e.match(self, self.w_AttributeError)):
+                    raise
                 return self.w_False
 
     def abstract_isclass(self, w_obj):
         if self.is_true(self.isinstance(w_obj, self.w_type)):
             return self.w_True
-        try:
-            self.getattr(w_obj, self.wrap('__bases__'))
-        except OperationError:
-            return self.w_False
-        else:
+        if self.findattr(w_obj, self.wrap('__bases__')) is not None:
             return self.w_True
+        else:
+            return self.w_False
 
     def abstract_getclass(self, w_obj):
         try:
@@ -903,6 +927,7 @@ ObjSpace.ExceptionTable = [
 #              int_w(w_ival or w_long_ival) -> ival
 #                       float_w(w_floatval) -> floatval
 #             uint_w(w_ival or w_long_ival) -> r_uint_val (unsigned int value)
+#             bigint_w(w_ival or w_long_ival) -> rbigint
 #interpclass_w(w_interpclass_inst or w_obj) -> interpclass_inst|w_obj
 #                               unwrap(w_x) -> x
 #                              is_true(w_x) -> True or False
@@ -920,6 +945,8 @@ ObjSpace.IrregularOpTable = [
     'int_w',
     'float_w',
     'uint_w',
+    'bigint_w',
+    'unichars_w',
     'interpclass_w',
     'unwrap',
     'is_true',

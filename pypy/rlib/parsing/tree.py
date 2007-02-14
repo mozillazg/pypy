@@ -22,13 +22,14 @@ class Symbol(Node):
 
     def dot(self):
         addinfo = str(self.additional_info).replace('"', "'") or "_"
-        yield ('"%s" [label="%r%r"];' % (
-            id(self), self.symbol, addinfo)).replace("\\", "\\\\")
+        yield ('"%s" [shape=box,label="%s\\n%s"];' % (
+            id(self), self.symbol.replace("\\", "\\\\"),
+            repr(addinfo).replace('"', '').replace("\\", "\\\\")))
 
     def visit(self, visitor):
         "NOT_RPYTHON"
         if isinstance(visitor, RPythonVisitor):
-            visitor.dispatch(self)
+            return visitor.dispatch(self)
         method = getattr(visitor, "visit_" + self.symbol, None)
         if method is None:
             return self
@@ -43,7 +44,7 @@ class Nonterminal(Node):
         return "%s(%s)" % (self.symbol, ", ".join([str(c) for c in self.children]))
 
     def __repr__(self):
-        return "Nonterminal(%r, %r)" % (self.children, self.symbol)
+        return "Nonterminal(%r, %r)" % (self.symbol, self.children)
 
     def dot(self):
         yield '"%s" [label="%s"];' % (id(self), self.symbol)
@@ -65,9 +66,6 @@ class Nonterminal(Node):
                 return general(self)
             else:
                 return specific(self)
-
-class Epsilon(Node):
-    pass
 
 class VisitError(Exception):
     def __init__(self, node):

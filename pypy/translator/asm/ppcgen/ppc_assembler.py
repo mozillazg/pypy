@@ -34,8 +34,8 @@ XL2 = Form("crbD", "XO1", "Rc")
 XFL = Form("FM", "frB", "XO1", "Rc")
 XFX = Form("CRM", "rS", "XO1")
 
-MI = Form("rS", "rA", "SH", "MB", "ME", "Rc")
-MB = Form("rS", "rA", "rB", "MB", "ME", "Rc")
+MI = Form("rA", "rS", "SH", "MB", "ME", "Rc")
+MB = Form("rA", "rS", "rB", "MB", "ME", "Rc")
 
 
 class BasicPPCAssembler(Assembler):
@@ -737,7 +737,8 @@ class PPCAssembler(BasicPPCAssembler):
     twgei = BA.twi(TO=12)
     twgti = BA.twi(TO=8)
     twnli = BA.twi(TO=12)
-    twngi = BA.twi(TO=24)
+    twnei = BA.twi(TO=24)
+    twngi = BA.twi(TO=20)
     twllti = BA.twi(TO=2)
     twllei = BA.twi(TO=6)
     twlgei = BA.twi(TO=5)

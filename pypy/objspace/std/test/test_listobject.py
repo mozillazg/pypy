@@ -1,4 +1,3 @@
-#from __future__ import nested_scopes
 import autopath, random
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.interpreter.error import OperationError
@@ -370,6 +369,12 @@ class AppTestW_ListObject:
         assert l is l0
         assert l == [1,2]
 
+    def test_extend_iterable(self):
+        l = l0 = [1]
+        l.extend(iter([1, 2, 3, 4]))
+        assert l is l0
+        assert l == [1, 1, 2, 3, 4]
+
     def test_sort(self):
         l = l0 = [1, 5, 3, 0]
         l.sort()
@@ -424,7 +429,26 @@ class AppTestW_ListObject:
         l = ['a', 'C', 'b']
         l.sort(reverse = True, key = lower)
         assert l == ['C', 'b', 'a']
-        
+    
+    def test_getitem(self):
+        l = [1, 2, 3, 4, 5, 6, 9]
+        assert l[0] == 1
+        assert l[-1] == 9
+        assert l[-2] == 6
+        raises(IndexError, "l[len(l)]")
+        raises(IndexError, "l[-len(l)-1]")
+
+    def test_delitem(self):
+        l = [1, 2, 3, 4, 5, 6, 9]
+        del l[0]
+        assert l == [2, 3, 4, 5, 6, 9]
+        del l[-1]
+        assert l == [2, 3, 4, 5, 6]
+        del l[-2]
+        assert l == [2, 3, 4, 6]
+        raises(IndexError, "del l[len(l)]")
+        raises(IndexError, "del l[-len(l)-1]")
+
     def test_extended_slice(self):
         l = range(10)
         del l[::2]
@@ -445,6 +469,12 @@ class AppTestW_ListObject:
     def test_iadd(self):
         l = l0 = [1,2,3]
         l += [4,5]
+        assert l is l0
+        assert l == [1,2,3,4,5]
+
+    def test_iadd_iterable(self):
+        l = l0 = [1,2,3]
+        l += iter([4,5])
         assert l is l0
         assert l == [1,2,3,4,5]
 
@@ -483,6 +513,9 @@ class AppTestW_ListObject:
         assert l == [0, 'a', 'b', 'c', 3, 4, 5]
         l = []
         l[:-3] = []
+        assert l == []
+        l = range(6)
+        l[:] = []
         assert l == []
 
     def test_recursive_repr(self):
@@ -541,3 +574,27 @@ class AppTestW_ListObject:
     def test_reversed(self):
         assert list(list('hello').__reversed__()) == ['o', 'l', 'l', 'e', 'h']
         assert list(reversed(list('hello'))) == ['o', 'l', 'l', 'e', 'h']
+
+    def test_mutate_while_remove(self):
+        class Mean(object):
+            def __init__(self, i):
+                self.i = i
+            def __eq__(self, other):
+                if self.i == 9:
+                    del l[i - 1]
+                    return True
+                else:
+                    return False
+        l = [Mean(i) for i in range(10)]
+        # does not crash
+        l.remove(None)
+        class Mean2(object):
+            def __init__(self, i):
+                self.i = i
+            def __eq__(self, other):
+                l.append(self.i)
+                return False
+        l = [Mean2(i) for i in range(10)]
+        # does not crash
+        l.remove(5)
+        assert l[10:] == [0, 1, 2, 3, 4, 6, 7, 8, 9]

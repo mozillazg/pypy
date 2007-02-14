@@ -591,11 +591,11 @@ class RPythonAnnotator(object):
                 arg1 = self.binding(op.args[0])
                 arg2 = self.binding(op.args[1])
                 binop = getattr(pair(arg1, arg2), op.opname, None)
-                can_only_throw = read_can_only_throw(binop, arg1, arg2)
+                can_only_throw = annmodel.read_can_only_throw(binop, arg1, arg2)
             elif op.opname in annmodel.UNARY_OPERATIONS:
                 arg1 = self.binding(op.args[0])
                 unop = getattr(arg1, op.opname, None)
-                can_only_throw = read_can_only_throw(unop, arg1)
+                can_only_throw = annmodel.read_can_only_throw(unop, arg1)
             else:
                 can_only_throw = None
 
@@ -614,7 +614,6 @@ class RPythonAnnotator(object):
                         candidates = [c for c in candidates if c not in covered]
 
         for link in exits:
-            self.links_followed[link] = True
             import types
             in_except_block = False
 
@@ -646,6 +645,7 @@ class RPythonAnnotator(object):
                 last_exc_value_vars = []
                 in_except_block = True
 
+            ignore_link = False
             cells = []
             renaming = {}
             for a,v in zip(link.args,link.target.inputargs):
@@ -663,6 +663,9 @@ class RPythonAnnotator(object):
                     if (link.exitcase, a) in knowntypedata:
                         knownvarvalue = knowntypedata[(link.exitcase, a)]
                         cell = pair(cell, knownvarvalue).improve()
+                        # ignore links that try to pass impossible values
+                        if cell == annmodel.s_ImpossibleValue:
+                            ignore_link = True
 
                     if hasattr(cell,'is_type_of'):
                         renamed_is_type_of = []
@@ -692,10 +695,15 @@ class RPythonAnnotator(object):
 
                     cells.append(cell)
 
+            if ignore_link:
+                continue
+
             if in_except_block:
                 last_exception_object.is_type_of = last_exc_value_vars
 
+            self.links_followed[link] = True
             self.addpendingblock(graph, link.target, cells)
+
         if block in self.notify:
             # reflow from certain positions when this block is done
             for callback in self.notify[block]:
@@ -729,12 +737,15 @@ class RPythonAnnotator(object):
             graph = self.bookkeeper.position_key[0]
             raise_nicer_exception(op, str(graph))
         if resultcell is None:
-            resultcell = annmodel.s_ImpossibleValue  # no return value
+            resultcell = self.noreturnvalue(op)
         elif resultcell == annmodel.s_ImpossibleValue:
             raise BlockedInference(self, op) # the operation cannot succeed
         assert isinstance(resultcell, annmodel.SomeObject)
         assert isinstance(op.result, Variable)
         self.setbinding(op.result, resultcell)  # bind resultcell to op.result
+
+    def noreturnvalue(self, op):
+        return annmodel.s_ImpossibleValue  # no return value (hook method)
 
     # XXX "contains" clash with SomeObject method
     def consider_op_contains(self, seq, elem):
@@ -803,9 +814,3 @@ class BlockedInference(Exception):
         return "<BlockedInference break_at %s [%s]>" %(break_at, self.op)
 
     __str__ = __repr__
-
-def read_can_only_throw(opimpl, *args):
-    can_only_throw = getattr(opimpl, "can_only_throw", None)
-    if can_only_throw is None or isinstance(can_only_throw, list):
-        return can_only_throw
-    return can_only_throw(*args)

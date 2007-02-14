@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import FunctionGraph, Constant, Variable, c_last_exception
-from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong
+from pypy.rlib.rarithmetic import r_ulonglong, ovfcheck_lshift
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
@@ -223,8 +224,7 @@ class LLFrame(object):
         ophandler = getattr(self, 'op_' + opname, None)
         if ophandler is None:
             # try to import the operation from opimpl.py
-            from pypy.rpython.lltypesystem.opimpl import get_op_impl
-            ophandler = get_op_impl(opname)
+            ophandler = lloperation.LL_OPERATIONS[opname].fold
             setattr(self.__class__, 'op_' + opname, staticmethod(ophandler))
         return ophandler
     # _______________________________________________________
@@ -356,24 +356,27 @@ class LLFrame(object):
             assert isinstance(operation.args[0], Constant)
         elif operation.opname == 'indirect_call':
             assert isinstance(operation.args[0], Variable)
-        vals = [self.getval(x) for x in operation.args]
-        if getattr(ophandler, 'need_result_type', False):
-            vals.insert(0, operation.result.concretetype)
-        try:
-            retval = ophandler(*vals)
-        except LLException, e:
-            # safety check check that the operation is allowed to raise that
-            # exception
-            if operation.opname in lloperation.LL_OPERATIONS:
-                canraise = lloperation.LL_OPERATIONS[operation.opname].canraise
-                if Exception not in canraise:
-                    exc = self.llinterpreter.find_exception(e)
-                    for canraiseexc in canraise:
-                        if issubclass(exc, canraiseexc):
-                            break
-                    else:
-                        raise TypeError("the operation %s is not expected to raise %s" % (operation, exc))
-            raise
+        if getattr(ophandler, 'specialform', False):
+            retval = ophandler(*operation.args)
+        else:
+            vals = [self.getval(x) for x in operation.args]
+            if getattr(ophandler, 'need_result_type', False):
+                vals.insert(0, operation.result.concretetype)
+            try:
+                retval = ophandler(*vals)
+            except LLException, e:
+                # safety check check that the operation is allowed to raise that
+                # exception
+                if operation.opname in lloperation.LL_OPERATIONS:
+                    canraise = lloperation.LL_OPERATIONS[operation.opname].canraise
+                    if Exception not in canraise:
+                        exc = self.llinterpreter.find_exception(e)
+                        for canraiseexc in canraise:
+                            if issubclass(exc, canraiseexc):
+                                break
+                        else:
+                            raise TypeError("the operation %s is not expected to raise %s" % (operation, exc))
+                raise
         self.setvar(operation.result, retval)
         if tracer:
             if retval is None:
@@ -407,6 +410,10 @@ class LLFrame(object):
         except LLException, e:
             raise
         except Exception:
+            if getattr(obj, '_debugexc', False):
+                import sys
+                from pypy.translator.tool.pdbplus import PdbPlusShow
+                PdbPlusShow(None).post_mortem(sys.exc_info()[2])
             self.make_llexception()
 
     def find_roots(self, roots):
@@ -569,21 +576,20 @@ class LLFrame(object):
             log.warn("op_indirect_call with graphs=None:", f)
         return self.op_direct_call(f, *args)
 
-    def op_unsafe_call(self, TGT, f):
+    def op_adr_call(self, TGT, f, *inargs):
         checkadr(f)
-        assert f.offset is None
-        obj = self.llinterpreter.typer.type_system.deref(f.ob)
+        obj = self.llinterpreter.typer.type_system.deref(f.ref())
         assert hasattr(obj, 'graph') # don't want to think about that
         graph = obj.graph
         args = []
-        for arg in obj.graph.startblock.inputargs:
-            args.append(arg.concretetype._defl())
+        for inarg, arg in zip(inargs, obj.graph.startblock.inputargs):
+            args.append(lltype._cast_whatever(arg.concretetype, inarg))
         frame = self.__class__(graph, args, self.llinterpreter, self)
         result = frame.eval()
         from pypy.translator.stackless.frame import storage_type
         assert storage_type(lltype.typeOf(result)) == TGT
         return lltype._cast_whatever(TGT, result)
-    op_unsafe_call.need_result_type = True
+    op_adr_call.need_result_type = True
 
     def op_malloc(self, obj):
         if self.llinterpreter.gc is not None:
@@ -647,6 +653,10 @@ class LLFrame(object):
         checkptr(ptr1)
         return lltype.cast_ptr_to_int(ptr1)
 
+    def op_cast_opaque_ptr(self, RESTYPE, obj):
+        checkptr(obj)
+        return lltype.cast_opaque_ptr(RESTYPE, obj)
+    op_cast_opaque_ptr.need_result_type = True
 
     def op_gc__collect(self):
         import gc
@@ -666,8 +676,8 @@ class LLFrame(object):
     def op_gc_call_rtti_destructor(self, rtti, addr):
         if hasattr(rtti._obj, 'destructor_funcptr'):
             d = rtti._obj.destructor_funcptr
-            ob = addr.get()
-            return self.op_direct_call(d, ob)
+            obptr = addr.ref()
+            return self.op_direct_call(d, obptr)
 
     def op_gc_deallocate(self, TYPE, addr):
         raise NotImplementedError("gc_deallocate")
@@ -769,6 +779,36 @@ class LLFrame(object):
         except OverflowError:
             self.make_llexception()
 
+    def op_llong_neg_ovf(self, x):
+        assert type(x) is r_longlong
+        try:
+            return ovfcheck(-x)
+        except OverflowError:
+            self.make_llexception()
+
+    def op_llong_abs_ovf(self, x):
+        assert type(x) is r_longlong
+        try:
+            return ovfcheck(abs(x))
+        except OverflowError:
+            self.make_llexception()
+
+    def op_int_lshift_ovf(self, x, y):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        try:
+            return ovfcheck_lshift(x, y)
+        except OverflowError:
+            self.make_llexception()
+
+    def op_int_lshift_ovf_val(self, x, y):
+        assert isinstance(x, int)
+        assert isinstance(y, int)
+        try:
+            return ovfcheck_lshift(x, y)
+        except (OverflowError, ValueError):
+            self.make_llexception()
+
     def _makefunc2(fn, operator, xtype, ytype=None):
         import sys
         d = sys._getframe(1).f_locals
@@ -799,9 +839,7 @@ class LLFrame(object):
     _makefunc2('op_int_mod_ovf',          '%',  'int')
     _makefunc2('op_int_mod_zer',          '%',  'int')
     _makefunc2('op_int_mod_ovf_zer',      '%',  'int')
-    _makefunc2('op_int_lshift_ovf',       '<<', 'int')
     _makefunc2('op_int_lshift_val',       '<<', 'int')
-    _makefunc2('op_int_lshift_ovf_val',   '<<', 'int')
     _makefunc2('op_int_rshift_val',       '>>', 'int')
 
     _makefunc2('op_uint_floordiv_zer',    '//', 'r_uint')
@@ -826,6 +864,15 @@ class LLFrame(object):
         except OverflowError:
             self.make_llexception()
 
+    # read frame var support
+
+    def op_get_frame_base(self):
+        return llmemory.fakeaddress(self)
+
+    def op_frame_info(self, *vars):
+        pass
+    op_frame_info.specialform = True
+ 
     #Operation of ootype
 
     def op_new(self, INST):
@@ -873,37 +920,6 @@ class LLFrame(object):
             raise RuntimeError("calling abstract method %r" % (m,))
         return self.perform_call(m, (lltype.typeOf(inst),)+lltype.typeOf(m).ARGS, [inst]+args)
 
-    def op_ooupcast(self, INST, inst):
-        return ootype.ooupcast(INST, inst)
-    op_ooupcast.need_result_type = True
-    
-    def op_oodowncast(self, INST, inst):
-        return ootype.oodowncast(INST, inst)
-    op_oodowncast.need_result_type = True
-
-    def op_oononnull(self, inst):
-        checkinst(inst)
-        return bool(inst)
-
-    def op_oois(self, obj1, obj2):
-        if is_inst(obj1):
-            checkinst(obj2)
-            return obj1 == obj2   # NB. differently-typed NULLs must be equal
-        elif isinstance(obj1, ootype._class):
-            assert isinstance(obj2, ootype._class)
-            return obj1 is obj2
-        else:
-            assert False, "oois on something silly"
-            
-    def op_instanceof(self, inst, INST):
-        return ootype.instanceof(inst, INST)
-
-    def op_classof(self, inst):
-        return ootype.classof(inst)
-
-    def op_subclassof(self, class1, class2):
-        return ootype.subclassof(class1, class2)
-
     def op_ooidentityhash(self, inst):
         return ootype.ooidentityhash(inst)
 
@@ -913,6 +929,12 @@ class LLFrame(object):
     def op_ooparse_int(self, s, base):
         try:
             return ootype.ooparse_int(s, base)
+        except ValueError:
+            self.make_llexception()
+
+    def op_ooparse_float(self, s):
+        try:
+            return ootype.ooparse_float(s)
         except ValueError:
             self.make_llexception()
 

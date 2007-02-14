@@ -1,7 +1,5 @@
 """ basic oogenerator
 """
-from pypy.config.config import Config
-from pypy.config.pypyoption import pypy_optiondescription
 from pypy.translator.oosupport import constant as ooconst
 
 class GenOO(object):
@@ -15,6 +13,7 @@ class GenOO(object):
     # _create_complex_const:
     
     ConstantGenerator = None
+    NullConst = ooconst.NullConst
     InstanceConst = ooconst.InstanceConst
     RecordConst = ooconst.RecordConst
     ClassConst = ooconst.ClassConst
@@ -30,7 +29,8 @@ class GenOO(object):
         self.entrypoint = entrypoint
         self.db = self.Database(self)
         if config is None:
-            config = Config(pypy_optiondescription)
+            from pypy.config.pypyoption import get_pypy_config
+            config = get_pypy_config(translating=True)
         self.config = config
 
     def generate_source(self):

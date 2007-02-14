@@ -2,6 +2,7 @@ from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
+from pypy.annotation import policy, specialize
 
 class MyBase:
     def m(self, x):
@@ -1051,10 +1052,11 @@ class BaseTestRPBC(BaseRtypingTest):
             return x.value, y.value
         for i in [0, 5, 10]:
             res = self.interpret(f, [i])
-            assert type(res.item0) is int   # precise
-            assert type(res.item1) is float
-            assert res.item0 == f(i)[0]
-            assert res.item1 == f(i)[1]
+            item0, item1 = self.ll_unpack_tuple(res, 2)
+            assert type(item0) is int   # precise
+            assert type(item1) in (float, int)  # we get int on JS
+            assert item0 == f(i)[0]
+            assert item1 == f(i)[1]
 
     def test_pbc_getattr_conversion_with_classes(self):
         class base: pass
@@ -1080,10 +1082,11 @@ class BaseTestRPBC(BaseRtypingTest):
             return x.value, y.value
         for i in [0, 5, 10]:
             res = self.interpret(f, [i])
-            assert type(res.item0) is int   # precise
-            assert type(res.item1) is float
-            assert res.item0 == f(i)[0]
-            assert res.item1 == f(i)[1]
+            item0, item1 = self.ll_unpack_tuple(res, 2)
+            assert type(item0) is int   # precise
+            assert type(item1) in (float, int)  # we get int on JS
+            assert item0 == f(i)[0]
+            assert item1 == f(i)[1]
 
     def test_pbc_imprecise_attrfamily(self):
         fr1 = Freezing(); fr1.x = 5; fr1.y = [8]
@@ -1444,7 +1447,6 @@ class BaseTestRPBC(BaseRtypingTest):
         assert res == 42
 
     def test_specialize_functionarg(self):
-        self._skip_oo("crashes in funny ways")
         def f(x, y):
             return x + y
         def g(x, y, z):
@@ -1477,7 +1479,139 @@ class BaseTestRPBC(BaseRtypingTest):
         res = self.interpret(f, [5])
         assert res == 123
 
+    def test_is_among_functions(self):
+        def g1(): pass
+        def g2(): pass
+        def g3(): pass
+        def f(n):
+            if n > 5:
+                g = g2
+            else:
+                g = g1
+            g()
+            g3()
+            return g is g3
+        res = self.interpret(f, [2])
+        assert res == False
 
+    def test_shrink_pbc_set(self):
+        def g1():
+            return 10
+        def g2():
+            return 20
+        def g3():
+            return 30
+        def h1(g):          # g in {g1, g2}
+            return 1 + g()
+        def h2(g):          # g in {g1, g2, g3}
+            return 2 + g()
+        def f(n):
+            if n > 5: g = g1
+            else:     g = g2
+            if n % 2: h = h1
+            else:     h = h2
+            res = h(g)
+            if n > 7: g = g3
+            h2(g)
+            return res
+        res = self.interpret(f, [7])
+        assert res == 11
+
+    def test_single_pbc_getattr(self):
+        class C:
+            def __init__(self, v1, v2):
+                self.v1 = v1
+                self.v2 = v2
+            def _freeze_(self):
+                return True
+        c1 = C(11, lambda: "hello")
+        c2 = C(22, lambda: 623)
+        def f1(l, c):
+            l.append(c.v1)
+        def f2(c):
+            return c.v2
+        def f3(c):
+            return c.v2
+        def g():
+            l = []
+            f1(l, c1)
+            f1(l, c2)
+            return f2(c1)(), f3(c2)()
+
+        res = self.interpret(g, [])
+        item0, item1 = self.ll_unpack_tuple(res, 2)
+        assert self.ll_to_string(item0) == "hello"
+        assert item1 == 623
+
+class TestLLtype(BaseTestRPBC, LLRtypeMixin):
+    pass
+
+class TestOOtype(BaseTestRPBC, OORtypeMixin):
+    pass
+
+# ____________________________________________________________
+
+class BaseTestRPBCExtra(BaseRtypingTest):
+    
+    def test_folding_specialize_support(self):
+
+        class S(object):
+            
+            def w(s, x):
+                if isinstance(x, int):
+                    return x
+                if isinstance(x, str):
+                    return len(x)
+                return -1
+            w._annspecialcase_ = "specialize:w"
+
+            def _freeze_(self):
+                return True
+
+        s = S()
+
+        def f(i, n):
+            w = s.w
+            if i == 0:
+                return w(0)
+            elif i == 1:
+                return w("abc")
+            elif i == 2:
+                return w(3*n)
+            elif i == 3:
+                return w(str(n))
+            return -1
+
+        class P(policy.AnnotatorPolicy):
+            allow_someobjects = False
+
+            def specialize__w(pol, funcdesc, args_s):
+                typ = args_s[1].knowntype
+                if args_s[0].is_constant() and args_s[1].is_constant():
+                    x = args_s[1].const
+                    v = s.w(x)
+                    builder = specialize.make_constgraphbuilder(2, v)
+                    return funcdesc.cachedgraph(x, builder=builder)
+                return funcdesc.cachedgraph(typ)
+
+        p = P()
+        
+        res = self.interpret(f, [0, 66], policy=p)
+        assert res == 0
+        res = self.interpret(f, [1, 66], policy=p)
+        assert res == 3
+        res = self.interpret(f, [2, 4], policy=p)
+        assert res == 12
+        res = self.interpret(f, [3, 5555], policy=p)
+        assert res == 4
+            
+class TestExtraLLtype(BaseTestRPBCExtra, LLRtypeMixin):
+    pass
+
+class TestExtraOOtype(BaseTestRPBCExtra, OORtypeMixin):
+    pass
+
+# ____________________________________________________________
 # We don't care about the following test_hlinvoke tests working on
 # ootype. Maybe later. This kind of thing is only used in rdict
 # anyway, that will probably have a different kind of implementation
@@ -1730,11 +1864,48 @@ def test_hlinvoke_pbc_method_hltype():
     res = interp.eval_graph(ll_h_graph, [None, c_f, c_a])
     assert typeOf(res) == A_repr.lowleveltype
 
-class TestLLtype(BaseTestRPBC, LLRtypeMixin):
-    pass
+# ____________________________________________________________
 
-class TestOOtype(BaseTestRPBC, OORtypeMixin):
-    pass
+class TestLLtypeSmallFuncSets(TestLLtype):
+    def setup_class(cls):
+        from pypy.config.pypyoption import get_pypy_config
+        cls.config = get_pypy_config(translating=True)
+        cls.config.translation.withsmallfuncsets = 3
 
+    def interpret(self, fn, args, **kwds):
+        kwds['config'] = self.config
+        return TestLLtype.interpret(self, fn, args, **kwds)
 
+    def test_shrink_pbc_set(self):
+        # fails with config.translation.withsmallfuncsets == 3
+        py.test.skip("XXX not implemented")
+
+def test_smallfuncsets_basic():
+    from pypy.translator.translator import TranslationContext, graphof
+    from pypy.config.pypyoption import get_pypy_config
+    from pypy.rpython.llinterp import LLInterpreter
+    config = get_pypy_config(translating=True)
+    config.translation.withsmallfuncsets = 10
+
+    def g(x):
+        return x + 1
+    def h(x):
+        return x - 1
+    def f(x, y):
+        if y > 0:
+            func = g
+        else:
+            func = h
+        return func(x)
+    t = TranslationContext(config=config)
+    a = t.buildannotator()
+    a.build_types(f, [int, int])
+    rtyper = t.buildrtyper()
+    rtyper.specialize()
+    graph = graphof(t, f)
+    interp = LLInterpreter(rtyper)
+    res = interp.eval_graph(graph, [0, 0])
+    assert res == -1
+    res = interp.eval_graph(graph, [0, 1])
+    assert res == 1
 

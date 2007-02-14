@@ -27,7 +27,7 @@ class TestTranslateLexer(object):
                 tokens = l2.tokenize(s)
             else:
                 tokens = l1.tokenize(s)
-            return "-%-".join([t[0] for t in tokens])
+            return "-%-".join([t.name for t in tokens])
         res = lex("if A a 12341 0 else").split("-%-")
         assert res == ("KEYWORD WHITE VAR WHITE ATOM WHITE INT WHITE "
                        "INT WHITE KEYWORD").split()
@@ -50,8 +50,10 @@ def test_translate_parser():
     r3 = Rule("primary", [["(", "additive", ")"], ["decimal"]])
     r4 = Rule("decimal", [[symb] for symb in "0123456789"])
     p = PackratParser([r0, r1, r2, r3, r4], "expression")
-    tree = p.parse([(c, i) for i, c in enumerate(list("2*(3+4)") + ["EOF"])])
-    data = [(c, i) for i, c in enumerate(list("2*(3+4)") + ["EOF"])]
+    tree = p.parse([Token(c, i, SourcePos(i, 0, i))
+                        for i, c in enumerate(list("2*(3+4)") + ["EOF"])])
+    data = [Token(c, i, SourcePos(i, 0, i))
+                for i, c in enumerate(list("2*(3+4)") + ["EOF"])]
     print tree
     def parse(choose):
         tree = p.parse(data, lazy=False)
@@ -76,8 +78,10 @@ def test_translate_compiled_parser():
     compiler = ParserCompiler(p)
     kls = compiler.compile()
     p = kls()
-    tree = p.parse([(c, i) for i, c in enumerate(list("2*(3+4)") + ["EOF"])])
-    data = [(c, i) for i, c in enumerate(list("2*(3+4)") + ["EOF"])]
+    tree = p.parse([Token(c, i, SourcePos(i, 0, i))
+                        for i, c in enumerate(list("2*(3+4)") + ["EOF"])])
+    data = [Token(c, i, SourcePos(i, 0, i))
+               for i, c in enumerate(list("2*(3+4)") + ["EOF"])]
     print tree
     p = kls()
     def parse(choose):
@@ -92,14 +96,9 @@ def test_translate_compiled_parser():
     res2 = func(True)
     assert res1 == res2
 
-def make_transformer(transformer):
-    from pypy.rlib.parsing.tree import RPythonVisitor
-    exec py.code.Source(transformer).compile()
-    return ToAST
-
 def test_translate_ast_visitor():
     from pypy.rlib.parsing.ebnfparse import parse_ebnf, make_parse_function
-    regexs, rules, transformer = parse_ebnf("""
+    regexs, rules, ToAST = parse_ebnf("""
 DECIMAL: "0|[1-9][0-9]*";
 IGNORE: " ";
 additive: multitive ["+!"] additive | <multitive>;
@@ -107,19 +106,17 @@ multitive: primary ["*!"] multitive | <primary>; #nonsense!
 primary: "(" <additive> ")" | <DECIMAL>;
 """)
     parse = make_parse_function(regexs, rules)
-    print transformer
-    ToAST = make_transformer(transformer)
     def f():
         tree = parse("(0 +! 10) *! (999 +! 10) +! 1")
-        tree = ToAST().dispatch(tree)
+        tree = ToAST().visit_additive(tree)
+        assert len(tree) == 1
+        tree = tree[0]
         return tree.symbol + " " + "-&-".join([c.symbol for c in tree.children])
+    res1 = f()
     t = Translation(f)
     t.annotate()
-    t.backendopt()
     t.rtype()
+    t.backendopt()
     func = t.compile_c()
-    res1 = f()
     res2 = func()
     assert res1 == res2
-
-    

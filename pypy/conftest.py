@@ -1,55 +1,33 @@
 import py, sys
-from pypy.interpreter.gateway import app2interp_temp 
+from py.__.test.outcome import Failed
+from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.error import OperationError
-from pypy.tool.pytest import appsupport 
-from pypy.tool.option import make_config
+from pypy.tool.pytest import appsupport
+from pypy.tool.option import make_config, make_objspace
 from inspect import isclass, getmro
 
 rootdir = py.magic.autopath().dirpath()
+
+dist_rsync_roots = ['.', '../lib-python', '../py', '../demo']
+dist_rsync_ignore = ['_cache']
 
 #
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
 #
-Option = py.test.Config.Option
+Option = py.test.config.Option
 
-#class Options: 
-#    group = "pypy options" 
-#    optionlist = 
 
-def usemodules_callback(option, opt, value, parser):
-    parser.values.usemodules.append(value)
-
-# XXX these options should go away
-
-option = py.test.Config.addoptions("pypy options", 
-        Option('-O', '--objspace', action="store", default=None, 
-               type="string", dest="objspace", 
-               help="object space to run tests on."),
-        Option('--oldstyle', action="store_true",dest="oldstyle", default=False,
-               help="enable oldstyle classes as default metaclass"),
-        Option('--nofaking', action="store_true", 
-               dest="nofaking", default=False,
-               help="avoid faking of modules and objects completely."),
-        Option('--usemodules', action="callback", type="string", metavar="NAME",
-               callback=usemodules_callback, default=[],
-               help="(mixed) modules to use."),
-        Option('--compiler', action="store", type="string", dest="compiler",
-               metavar="[ast|cpython]", default='ast',
-               help="""select compiling approach. see pypy/doc/README.compiling"""),
+option = py.test.config.addoptions("pypy options",
         Option('--view', action="store_true", dest="view", default=False,
                help="view translation tests' flow graphs with Pygame"),
-        Option('--gc', action="store", default=None, 
-               type="choice", dest="gcpolicy",
-               choices=['ref', 'boehm', 'none', 'framework', 'exact_boehm'],
-               help="GcPolicy class to use for genc tests"),
-        Option('-A', '--runappdirect', action="store_true", 
+        Option('-A', '--runappdirect', action="store_true",
                default=False, dest="runappdirect",
-               help="run applevel tests directly on python interpreter (not through PyPy)"), 
+               help="run applevel tests directly on python interpreter (not through PyPy)"),
     )
 
 _SPACECACHE={}
-def getobjspace(name=None, **kwds): 
+def gettestobjspace(name=None, **kwds):
     """ helper for instantiating and caching space's for testing. 
     """ 
     config = make_config(option, objspace=name, **kwds)
@@ -58,51 +36,58 @@ def getobjspace(name=None, **kwds):
         return _SPACECACHE[key]
     except KeyError:
         if option.runappdirect:
+            if name not in (None, 'std'):
+                myname = getattr(sys, 'pypy_objspaceclass', '')
+                if not myname.lower().startswith(name):
+                    py.test.skip("cannot runappdirect test: "
+                                 "%s objspace required" % (name,))
             return TinyObjSpace(**kwds)
-        mod = __import__('pypy.objspace.%s' % config.objspace.name,
-                         None, None, ['Space'])
-        Space = mod.Space
-        try: 
-            space = Space(config)
+        try:
+            space = make_objspace(config)
         except OperationError, e:
             check_keyboard_interrupt(e)
-            if option.verbose:  
-                import traceback 
-                traceback.print_exc() 
-            py.test.fail("fatal: cannot initialize objspace:  %r" %(Space,))
+            if option.verbose:
+                import traceback
+                traceback.print_exc()
+            py.test.fail("fatal: cannot initialize objspace: %r" %
+                             (config.objspace.name,))
         _SPACECACHE[key] = space
-        space.setitem(space.builtin.w_dict, space.wrap('AssertionError'), 
+        space.setitem(space.builtin.w_dict, space.wrap('AssertionError'),
                       appsupport.build_pytest_assertion(space))
         space.setitem(space.builtin.w_dict, space.wrap('raises'),
                       space.wrap(appsupport.app_raises))
         space.setitem(space.builtin.w_dict, space.wrap('skip'),
                       space.wrap(appsupport.app_skip))
         space.raises_w = appsupport.raises_w.__get__(space)
-        space.eq_w = appsupport.eq_w.__get__(space) 
+        space.eq_w = appsupport.eq_w.__get__(space)
         return space
 
 class TinyObjSpace(object):
     def __init__(self, **kwds):
         import sys
+        info = getattr(sys, 'pypy_translation_info', None)
         for key, value in kwds.iteritems():
             if key == 'usemodules':
-                for modname in value:
-                    try:
-                        __import__(modname)
-                    except ImportError:
-                        py.test.skip("cannot runappdirect test: "
-                                     "module %r required" % (modname,))
+                if info is not None:
+                    for modname in value:
+                        ok = info.get('objspace.usemodules.%s' % modname,
+                                      False)
+                        if not ok:
+                            py.test.skip("cannot runappdirect test: "
+                                         "module %r required" % (modname,))
                 continue
-            if not hasattr(sys, 'pypy_translation_info'):
+            if info is None:
                 py.test.skip("cannot runappdirect this test on top of CPython")
-            has = sys.pypy_translation_info.get(key, None)
+            has = info.get(key, None)
             if has != value:
-                print sys.pypy_translation_info
+                #print sys.pypy_translation_info
                 py.test.skip("cannot runappdirect test: space needs %s = %s, "\
                     "while pypy-c was built with %s" % (key, value, has))
 
     def appexec(self, args, body):
-        src = py.code.Source("def anonymous" + body.lstrip())
+        body = body.lstrip()
+        assert body.startswith('(')
+        src = py.code.Source("def anonymous" + body)
         d = {}
         exec src.compile() in d
         return d['anonymous'](*args)
@@ -115,6 +100,13 @@ class TinyObjSpace(object):
 
     def is_true(self, obj):
         return bool(obj)
+
+    def newdict(self):
+        return {}
+
+def translation_test_so_skip_if_appdirect():
+    if option.runappdirect:
+        py.test.skip("translation test, skipped for appdirect")
 
 
 class OpErrKeyboardInterrupt(KeyboardInterrupt):
@@ -150,16 +142,28 @@ class Module(py.test.collect.Module):
         and at interp-level (because we need to stick a space 
         at the class) ourselves. 
     """
-    def funcnamefilter(self, name): 
+    def __init__(self, *args, **kwargs):
+        if hasattr(sys, 'pypy_objspaceclass'):
+            option.conf_iocapture = "sys" # pypy cannot do FD-based
+        super(Module, self).__init__(*args, **kwargs)
+
+    def accept_regular_test(self):
+        if option.runappdirect:
+            # only collect regular tests if we are in an 'app_test' directory
+            return self.fspath.dirpath().basename == 'app_test'
+        else:
+            return True
+
+    def funcnamefilter(self, name):
         if name.startswith('test_'):
-            return not option.runappdirect
+            return self.accept_regular_test()
         if name.startswith('app_test_'):
             return True
         return False
 
     def classnamefilter(self, name): 
         if name.startswith('Test'):
-            return not option.runappdirect
+            return self.accept_regular_test()
         if name.startswith('AppTest'):
             return True
         return False
@@ -188,9 +192,6 @@ class Module(py.test.collect.Module):
             else: 
                 return IntTestFunction(name, parent=self) 
 
-def gettestobjspace(name=None, **kwds):
-    space = getobjspace(name, **kwds)
-    return space
 
 def skip_on_missing_buildoption(**ropts): 
     __tracebackhide__ = True
@@ -226,7 +227,7 @@ class LazyObjSpaceGetter(object):
         return space
 
 
-class PyPyTestFunction(py.test.Function):
+class PyPyTestFunction(py.test.collect.Function):
     # All PyPy test items catch and display OperationErrors specially.
     #
     def execute_appex(self, space, target, *args):
@@ -238,16 +239,16 @@ class PyPyTestFunction(py.test.Function):
                 raise OpErrKeyboardInterrupt, OpErrKeyboardInterrupt(), tb
             appexcinfo = appsupport.AppExceptionInfo(space, e) 
             if appexcinfo.traceback: 
-                raise self.Failed(excinfo=appsupport.AppExceptionInfo(space, e))
+                raise Failed(excinfo=appsupport.AppExceptionInfo(space, e))
             raise 
 
 _pygame_imported = False
 
 class IntTestFunction(PyPyTestFunction):
-    def haskeyword(self, keyword):
+    def _haskeyword(self, keyword):
         if keyword == 'interplevel':
             return True 
-        return super(IntTestFunction, self).haskeyword(keyword)
+        return super(IntTestFunction, self)._haskeyword(keyword)
 
     def execute(self, target, *args):
         co = target.func_code
@@ -277,8 +278,8 @@ class IntTestFunction(PyPyTestFunction):
                                      "if conftest.option.view is False")
 
 class AppTestFunction(PyPyTestFunction): 
-    def haskeyword(self, keyword):
-        return keyword == 'applevel' or super(AppTestFunction, self).haskeyword(keyword)
+    def _haskeyword(self, keyword):
+        return keyword == 'applevel' or super(AppTestFunction, self)._haskeyword(keyword)
 
     def execute(self, target, *args):
         assert not args 
@@ -325,9 +326,9 @@ class PyPyClassCollector(py.test.collect.Class):
 class IntClassCollector(PyPyClassCollector): 
     Function = IntTestFunction 
 
-    def haskeyword(self, keyword):
+    def _haskeyword(self, keyword):
         return keyword == 'interplevel' or \
-               super(IntClassCollector, self).haskeyword(keyword)
+               super(IntClassCollector, self)._haskeyword(keyword)
 
 class AppClassInstance(py.test.collect.Instance): 
     Function = AppTestMethod 
@@ -345,12 +346,12 @@ class AppClassInstance(py.test.collect.Instance):
 class AppClassCollector(PyPyClassCollector): 
     Instance = AppClassInstance 
 
-    def haskeyword(self, keyword):
+    def _haskeyword(self, keyword):
         return keyword == 'applevel' or \
-               super(AppClassCollector, self).haskeyword(keyword)
+               super(AppClassCollector, self)._haskeyword(keyword)
 
     def setup(self): 
-        super(AppClassCollector, self).setup()         
+        super(AppClassCollector, self).setup()        
         cls = self.obj 
         space = cls.space 
         clsname = cls.__name__ 

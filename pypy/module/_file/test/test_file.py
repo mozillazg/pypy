@@ -16,11 +16,45 @@ class AppTestFile(object):
         finally:
             f.close()
         f = _file.file(self.temppath, "r")
+        raises(TypeError, f.read, None)
         try:
             s = f.read()
             assert s == "foo"
         finally:
             f.close()
+
+    def test_readline(self):
+        import _file
+        f = _file.file(self.temppath, "w")
+        try:
+            f.write("foo\nbar\n")
+        finally:
+            f.close()
+        f = _file.file(self.temppath, "r")
+        raises(TypeError, f.readline, None)
+        try:
+            s = f.readline()
+            assert s == "foo\n"
+            s = f.readline()
+            assert s == "bar\n"
+        finally:
+            f.close()
+
+    def test_readlines(self):
+        import _file
+        f = _file.file(self.temppath, "w")
+        try:
+            f.write("foo\nbar\n")
+        finally:
+            f.close()
+        f = _file.file(self.temppath, "r")
+        raises(TypeError, f.readlines, None)
+        try:
+            s = f.readlines()
+            assert s == ["foo\n", "bar\n"]
+        finally:
+            f.close()
+
 
     def test_fdopen(self):
         import _file, os
@@ -71,3 +105,32 @@ class AppTestFile(object):
         res = f.read()
         assert res == "\n"
         assert f.newlines == "\r\n"
+
+    def test_unicode(self):
+        import _file, os
+        f = _file.file(self.temppath, "w")
+        f.write(u"hello\n")
+        f.close()
+        f = _file.file(self.temppath, "r")
+        res = f.read()
+        assert res == "hello\n"
+        assert type(res) is str
+        f.close()
+
+
+def test_flush_at_exit():
+    from pypy import conftest
+    from pypy.tool.option import make_config, make_objspace
+    from pypy.tool.udir import udir
+
+    tmpfile = udir.join('test_flush_at_exit')
+    config = make_config(conftest.option)
+    space = make_objspace(config)
+    space.appexec([space.wrap(str(tmpfile))], """(tmpfile):
+        f = open(tmpfile, 'w')
+        f.write('42')
+        # no flush() and no close()
+        import sys; sys._keepalivesomewhereobscure = f
+    """)
+    space.finish()
+    assert tmpfile.read() == '42'

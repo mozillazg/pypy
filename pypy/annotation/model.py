@@ -35,7 +35,7 @@ from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong, base_int
 import inspect
 from sys import maxint
-
+from pypy.annotation.description import FunctionDesc
 
 DEBUG = True    # set to False to disable recording of debugging information
 TLS = tlsobject()
@@ -322,11 +322,12 @@ class SomePBC(SomeObject):
     or a set of such instances."""
     immutable = True
 
-    def __init__(self, descriptions, can_be_None=False):
+    def __init__(self, descriptions, can_be_None=False, subset_of=None):
         # descriptions is a set of Desc instances.
         descriptions = dict.fromkeys(descriptions)
         self.descriptions = descriptions
         self.can_be_None = can_be_None
+        self.subset_of = subset_of
         self.simplify()
         if self.isNone():
             self.knowntype = type(None)
@@ -392,6 +393,16 @@ class SomePBC(SomeObject):
         else:
             return kt.__name__
 
+class SomeGenericCallable(SomeObject):
+    """ Stands for external callable with known signature
+    """
+    def __init__(self, args, result):
+        self.args_s = args
+        self.s_result = result
+        self.descriptions = {}
+
+    def can_be_None(self):
+        return True
 
 class SomeBuiltin(SomeObject):
     "Stands for a built-in function or method with special-cased analysis."
@@ -530,8 +541,9 @@ class SomeOOClass(SomeObject):
         self.ootype = ootype
 
 class SomeOOInstance(SomeObject):
-    def __init__(self, ootype):
+    def __init__(self, ootype, can_be_None=False):
         self.ootype = ootype
+        self.can_be_None = can_be_None
 
 class SomeOOBoundMeth(SomeObject):
     immutable = True
@@ -606,8 +618,7 @@ def ll_to_annotation(v):
     if v is None:
         # i think we can only get here in the case of void-returning
         # functions
-        from pypy.annotation.bookkeeper import getbookkeeper
-        return getbookkeeper().immutablevalue(None)
+        return s_None
     if isinstance(v, MethodType):
         ll_ptrtype = lltype.typeOf(v.im_self)
         assert isinstance(ll_ptrtype, lltype.Ptr)
@@ -717,6 +728,13 @@ class HarmlesslyBlocked(Exception):
     """Raised by the unaryop/binaryop to signal a harmless kind of
     BlockedInference: the current block is blocked, but not in a way
     that gives 'Blocked block' errors at the end of annotation."""
+
+
+def read_can_only_throw(opimpl, *args):
+    can_only_throw = getattr(opimpl, "can_only_throw", None)
+    if can_only_throw is None or isinstance(can_only_throw, list):
+        return can_only_throw
+    return can_only_throw(*args)
 
 #
 # safety check that no-one is trying to make annotation and translation

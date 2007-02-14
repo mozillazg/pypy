@@ -2,11 +2,10 @@ import sys
 from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
 from pypy.rlib.objectmodel import CDefinedIntSymbolic
 from pypy.rpython.lltypesystem.lltype import *
-from pypy.rpython.lltypesystem.llmemory import Address, fakeaddress, \
+from pypy.rpython.lltypesystem.llmemory import Address, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
      CompositeOffset, ArrayLengthOffset, WeakGcAddress, fakeweakaddress, \
      GCHeaderOffset
-from pypy.rpython.memory.lladdress import NULL
 from pypy.translator.c.support import cdecl
 
 # ____________________________________________________________
@@ -72,12 +71,20 @@ def name_signedlonglong(value, db):
 def isinf(x):
     return x != 0.0 and x / 2 == x
 
+# To get isnan, working x-platform and both on 2.3 and 2.4, is a
+# horror.  I think this works (for reasons I don't really want to talk
+# about), and probably when implemented on top of pypy, too.
+def isnan(v):
+    return v != v*1.0 or (v == 1.0 and v == 2.0)
+
 def name_float(value, db):
     if isinf(value):
         if value > 0:
             return '(Py_HUGE_VAL)'
         else:
             return '(-Py_HUGE_VAL)'
+    elif isnan(value):
+        return '(Py_HUGE_VAL/Py_HUGE_VAL)'
     else:
         return repr(value)
 
@@ -99,24 +106,10 @@ def name_unichar(value, db):
     return '%d' % ord(value)
 
 def name_address(value, db):
-    if value is NULL:
-        return 'NULL'
-    assert isinstance(value, fakeaddress)
-    if value.offset is None:
-        if value.ob is None:
-            return 'NULL'
-        else:
-            if isinstance(typeOf(value.ob), ContainerType):
-                return db.getcontainernode(value.ob).ptrname
-            else:
-                return db.get(value.ob)
+    if value:
+        return db.get(value.ref())
     else:
-        if isinstance(typeOf(value.ob), ContainerType):
-            base = db.getcontainernode(value.ob).ptrname
-        else:
-            base = db.get(value.ob)
-        
-        return '(void*)(((char*)(%s)) + (%s))'%(base, db.get(value.offset))
+        return 'NULL'
 
 def name_weakgcaddress(value, db):
     assert isinstance(value, fakeweakaddress)
@@ -151,7 +144,7 @@ PrimitiveType = {
     Float:    'double @',
     Char:     'char @',
     UniChar:  'unsigned int @',
-    Bool:     'char @',
+    Bool:     'bool_t @',
     Void:     'void @',
     Address:  'void* @',
     WeakGcAddress:  'GC_hidden_pointer @',
@@ -165,7 +158,7 @@ PrimitiveErrorValue = {
     Float:    '-1.0',
     Char:     '((char) -1)',
     UniChar:  '((unsigned) -1)',
-    Bool:     '((char) -1)',
+    Bool:     '0 /* error */',
     Void:     '/* error */',
     Address:  'NULL',
     WeakGcAddress:  'HIDE_POINTER(NULL)',

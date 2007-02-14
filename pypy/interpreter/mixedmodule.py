@@ -174,17 +174,20 @@ def getappfileloader(pkgroot, spec):
     # hum, it's a bit more involved, because we usually 
     # want the import at applevel
     modname, attrname = spec.split('.')
-    impbase = pkgroot + '.' + modname 
-    mod = __import__(impbase, None, None, ['attrname'])
+    impbase = pkgroot + '.' + modname
     try:
-        app = applevelcache[mod]
+        app = applevelcache[impbase]
     except KeyError:
-        source = inspect.getsource(mod) 
-        fn = mod.__file__
+        import imp
+        pkg = __import__(pkgroot, None, None, ['__doc__'])
+        file, fn, (suffix, mode, typ) = imp.find_module(modname, pkg.__path__)
+        assert typ == imp.PY_SOURCE
+        source = file.read()
+        file.close()
         if fn.endswith('.pyc') or fn.endswith('.pyo'):
             fn = fn[:-1]
         app = gateway.applevel(source, filename=fn)
-        applevelcache[mod] = app
+        applevelcache[impbase] = app
 
     def afileloader(space): 
         return app.wget(space, attrname)
@@ -193,7 +196,7 @@ def getappfileloader(pkgroot, spec):
 # ____________________________________________________________
 # Helper to test mixed modules on top of CPython
 
-def testmodule(name):
+def testmodule(name, basepath='pypy.module'):
     """Helper to test mixed modules on top of CPython,
     running with the CPy Object Space.  The module should behave
     more or less as if it had been compiled, either with the
@@ -204,7 +207,8 @@ def testmodule(name):
     import sys, new
     from pypy.objspace.cpy.objspace import CPyObjSpace
     space = CPyObjSpace()
-    fullname = "pypy.module.%s" % name 
+    
+    fullname = "%s.%s" % (basepath, name) 
     Module = __import__(fullname, 
                         None, None, ["Module"]).Module
     if Module.applevel_name is not None:
@@ -212,10 +216,10 @@ def testmodule(name):
     else:
         appname = name
     mod = Module(space, space.wrap(appname))
-    moddict = space.unwrap(mod.getdict())
     res = new.module(appname)
-    res.__dict__.update(moddict)
     sys.modules[appname] = res
+    moddict = space.unwrap(mod.getdict())
+    res.__dict__.update(moddict)
     return res
 
 def compilemodule(name, interactive=False):

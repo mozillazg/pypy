@@ -1,9 +1,9 @@
 import py
 from pypy.tool import isolate
 from pypy.translator.llvm.genllvm import genllvm_compile
-from pypy.translator.llvm.buildllvm import llvm_is_on_path, llvm_version
+from pypy.translator.llvm.buildllvm import llvm_is_on_path, llvm_version, gcc_version
 optimize_tests = False
-MINIMUM_LLVM_VERSION = 1.7
+MINIMUM_LLVM_VERSION = 1.9
 
 ext_modules = []
 
@@ -32,10 +32,15 @@ def llvm_test():
     if not llvm_is_on_path():
         py.test.skip("could not find one of llvm-as or llvm-gcc")
         return False
-    v = llvm_version()
-    if v < MINIMUM_LLVM_VERSION:
+    if llvm_version < MINIMUM_LLVM_VERSION:
         py.test.skip("llvm version not up-to-date (found "
-                     "%.1f, should be >= %.1f)" % (v, MINIMUM_LLVM_VERSION))
+                     "%.1f, should be >= %.1f)" % (llvm_version, MINIMUM_LLVM_VERSION))
+        return False
+    return True
+
+def gcc3_test():
+    if int(gcc_version) != 3:
+        py.test.skip("test required gcc version 3 (found version %.1f)" % gcc_version)
         return False
     return True
 

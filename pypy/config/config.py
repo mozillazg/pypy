@@ -1,5 +1,8 @@
-
+import py
 from py.compat import optparse
+from pypy.tool.pairtype import extendabletype
+
+SUPPRESS_USAGE = optparse.SUPPRESS_USAGE
 
 class AmbigousOptionError(Exception):
     pass
@@ -77,10 +80,10 @@ class Config(object):
         child = getattr(self._cfgimpl_descr, name)
         oldowner = self._cfgimpl_value_owners[child._name]
         oldvalue = getattr(self, name)
-        if oldvalue != value and oldowner != "default":
-            if who == "default":
+        if oldvalue != value and oldowner not in ("default", "suggested"):
+            if who in ("default", "suggested"):
                 return
-            raise ValueError('can not override value %s for option %s' %
+            raise ValueError('cannot override value %s for option %s' %
                                 (value, name))
         child.setoption(self, value, who)
         self._cfgimpl_value_owners[name] = who
@@ -148,35 +151,18 @@ class Config(object):
                 result += substr
         return result
 
-    def getpaths(self, include_groups=False, currpath=None):
+    def getpaths(self, include_groups=False):
         """returns a list of all paths in self, recursively
-        
-            currpath should not be provided (helps with recursion)
         """
-        if currpath is None:
-            currpath = []
-        paths = []
-        for option in self._cfgimpl_descr._children:
-            attr = option._name
-            if attr.startswith('_cfgimpl'):
-                continue
-            value = getattr(self, attr)
-            if isinstance(value, Config):
-                if include_groups:
-                    paths.append('.'.join(currpath + [attr]))
-                currpath.append(attr)
-                paths += value.getpaths(include_groups=include_groups,
-                                        currpath=currpath)
-                currpath.pop()
-            else:
-                paths.append('.'.join(currpath + [attr]))
-        return paths
+        return self._cfgimpl_descr.getpaths(include_groups=include_groups)
 
 
 DEFAULT_OPTION_NAME = object()
 
 
 class Option(object):
+    __metaclass__ = extendabletype
+
     def __init__(self, name, doc, cmdline=DEFAULT_OPTION_NAME):
         self._name = name
         self.doc = doc
@@ -209,47 +195,6 @@ class Option(object):
                                    callback=callback, metavar=self._name.upper(),
                                    *argnames)
 
-class ConfigUpdate(object):
-
-    def __init__(self, config, option):
-        self.config = config
-        self.option = option
-
-    def convert_from_cmdline(self, value):
-        return self.option.convert_from_cmdline(value)
-
-    def __call__(self, option, opt_str, value, parser, *args, **kwargs):
-        try:
-            value = self.convert_from_cmdline(value)
-            self.config.setoption(self.option._name, value, who='cmdline')
-        except ValueError, e:
-            raise optparse.OptionValueError(e.args[0])
-
-    def help_default(self):
-        default = getattr(self.config, self.option._name)
-        owner = self.config._cfgimpl_value_owners[self.option._name]
-        if default is None:
-            if owner == 'default':
-                return ''
-            else:
-                default = '???'
-        return "%s: %s" % (owner, default)
-
-class BoolConfigUpdate(ConfigUpdate):
-    def __init__(self, config, option, which_value):
-        super(BoolConfigUpdate, self).__init__(config, option)
-        self.which_value = which_value
-
-    def convert_from_cmdline(self, value):
-        return self.which_value
-
-    def help_default(self):
-        default = getattr(self.config, self.option._name)
-        owner = self.config._cfgimpl_value_owners[self.option._name]
-        if default == self.which_value:
-            return owner
-        else:
-            return ""
         
 class ChoiceOption(Option):
     opt_type = 'string'
@@ -277,6 +222,7 @@ class ChoiceOption(Option):
     def convert_from_cmdline(self, value):
         return value.strip()
 
+
 def _getnegation(optname):
     if optname.startswith("without"):
         return "with" + optname[len("without"):]
@@ -286,9 +232,11 @@ def _getnegation(optname):
 
 class BoolOption(Option):
     def __init__(self, name, doc, default=None, requires=None,
+                 suggests=None,
                  cmdline=DEFAULT_OPTION_NAME, negation=True):
         super(BoolOption, self).__init__(name, doc, cmdline=cmdline)
         self._requires = requires
+        self._suggests = suggests
         self.default = default
         self.negation = negation
 
@@ -302,6 +250,11 @@ class BoolOption(Option):
                 toplevel = config._cfgimpl_get_toplevel()
                 homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
                 homeconfig.setoption(name, reqvalue, who)
+        if value and self._suggests is not None:
+            for path, reqvalue in self._suggests:
+                toplevel = config._cfgimpl_get_toplevel()
+                homeconfig, name = toplevel._cfgimpl_get_home_by_path(path)
+                homeconfig.setoption(name, reqvalue, "suggested")
         super(BoolOption, self).setoption(config, value, who)
 
     def add_optparse_option(self, argnames, parser, config):
@@ -343,6 +296,7 @@ class IntOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
+
 class FloatOption(Option):
     opt_type = 'float'
 
@@ -363,6 +317,7 @@ class FloatOption(Option):
         except TypeError, e:
             raise ValueError(*e.args)
 
+
 class StrOption(Option):
     opt_type = 'string'
     
@@ -378,6 +333,7 @@ class StrOption(Option):
             super(StrOption, self).setoption(config, value, who)
         except TypeError, e:
             raise ValueError(*e.args)
+
 
 class ArbitraryOption(Option):
     def __init__(self, name, doc, default=None, defaultfactory=None):
@@ -398,8 +354,12 @@ class ArbitraryOption(Option):
             return self.defaultfactory()
         return self.default
 
+
 class OptionDescription(object):
+    __metaclass__ = extendabletype
+
     cmdline = None
+
     def __init__(self, name, doc, children):
         self._name = name
         self.doc = doc
@@ -416,6 +376,30 @@ class OptionDescription(object):
 
     def add_optparse_option(self, argnames, parser, config):
         return
+
+    def getpaths(self, include_groups=False, currpath=None):
+        """returns a list of all paths in self, recursively
+        
+            currpath should not be provided (helps with recursion)
+        """
+        if currpath is None:
+            currpath = []
+        paths = []
+        for option in self._children:
+            attr = option._name
+            if attr.startswith('_cfgimpl'):
+                continue
+            value = getattr(self, attr)
+            if isinstance(value, OptionDescription):
+                if include_groups:
+                    paths.append('.'.join(currpath + [attr]))
+                currpath.append(attr)
+                paths += value.getpaths(include_groups=include_groups,
+                                        currpath=currpath)
+                currpath.pop()
+            else:
+                paths.append('.'.join(currpath + [attr]))
+        return paths
 
 
 class OptHelpFormatter(optparse.IndentedHelpFormatter):
@@ -461,6 +445,51 @@ class OptHelpFormatter(optparse.IndentedHelpFormatter):
             return option.help + ' [%s]' % choices 
 
         return option.help
+
+
+class ConfigUpdate(object):
+
+    def __init__(self, config, option):
+        self.config = config
+        self.option = option
+
+    def convert_from_cmdline(self, value):
+        return self.option.convert_from_cmdline(value)
+
+    def __call__(self, option, opt_str, value, parser, *args, **kwargs):
+        try:
+            value = self.convert_from_cmdline(value)
+            self.config.setoption(self.option._name, value, who='cmdline')
+        except ValueError, e:
+            raise optparse.OptionValueError(e.args[0])
+
+    def help_default(self):
+        default = getattr(self.config, self.option._name)
+        owner = self.config._cfgimpl_value_owners[self.option._name]
+        if default is None:
+            if owner == 'default':
+                return ''
+            else:
+                default = '???'
+        return "%s: %s" % (owner, default)
+
+
+class BoolConfigUpdate(ConfigUpdate):
+    def __init__(self, config, option, which_value):
+        super(BoolConfigUpdate, self).__init__(config, option)
+        self.which_value = which_value
+
+    def convert_from_cmdline(self, value):
+        return self.which_value
+
+    def help_default(self):
+        default = getattr(self.config, self.option._name)
+        owner = self.config._cfgimpl_value_owners[self.option._name]
+        if default == self.which_value:
+            return owner
+        else:
+            return ""
+
 
 def to_optparse(config, useoptions=None, parser=None,
                 parserargs=None, parserkwargs=None):
@@ -510,6 +539,7 @@ def to_optparse(config, useoptions=None, parser=None,
             grp = get_group(path, homeconf._cfgimpl_descr.doc)
             option.add_optparse_option(chunks, grp, homeconf)
     return parser
+
 
 def make_dict(config):
     paths = config.getpaths()

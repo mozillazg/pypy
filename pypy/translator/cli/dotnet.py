@@ -2,7 +2,10 @@ import types
 
 from pypy.annotation.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInstance, SomeOOInstance, SomeInteger, s_None,\
-     s_ImpossibleValue, lltype_to_annotation, annotation_to_lltype, SomeChar, SomeString
+     s_ImpossibleValue, lltype_to_annotation, annotation_to_lltype, SomeChar, SomeString, SomePBC
+from pypy.annotation.binaryop import _make_none_union
+from pypy.annotation import model as annmodel
+from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rpython.error import TyperError
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rmodel import Repr
@@ -45,6 +48,7 @@ class SomeCliStaticMethod(SomeObject):
     def rtyper_makekey(self):
         return self.__class__, self.cli_class, self.meth_name
 
+
 class __extend__(pairtype(SomeOOInstance, SomeInteger)):
     def getitem((ooinst, index)):
         if ooinst.ootype._isArray:
@@ -53,6 +57,8 @@ class __extend__(pairtype(SomeOOInstance, SomeInteger)):
 
     def setitem((ooinst, index), s_value):
         if ooinst.ootype._isArray:
+            if s_value is annmodel.s_None:
+                return s_None
             ELEMENT = ooinst.ootype._ELEMENT
             VALUE = s_value.ootype
             assert ootype.isSubclass(VALUE, ELEMENT)
@@ -99,6 +105,7 @@ class CliStaticMethodRepr(Repr):
         cDesc = hop.inputconst(ootype.Void, desc)
         return hop.genop("direct_call", [cDesc] + vlist, resulttype=resulttype)
 
+
 class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 
     def rtype_getitem((r_inst, r_int), hop):
@@ -110,11 +117,20 @@ class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 
     def rtype_setitem((r_inst, r_int), hop):
         if not r_inst.lowleveltype._isArray:
-            raise TyperError("setitem() on a non-array instance")        
+            raise TyperError("setitem() on a non-array instance")
         vlist = hop.inputargs(*hop.args_r)
         hop.exception_is_here()
         return hop.genop('cli_setelem', vlist, hop.r_result.lowleveltype)
 
+
+class __extend__(OOInstanceRepr):
+
+    def rtype_len(self, hop):
+        if not self.lowleveltype._isArray:
+            raise TypeError("len() on a non-array instance")
+        vlist = hop.inputargs(*hop.args_r)
+        hop.exception_cannot_occur()
+        return hop.genop('cli_arraylength', vlist, hop.r_result.lowleveltype)
 
 ## OOType model
 
@@ -136,14 +152,15 @@ class OverloadingResolver(ootype.OverloadingResolver):
     annotation_to_lltype = classmethod(annotation_to_lltype)
 
     def lltype_to_annotation(cls, TYPE):
-        if TYPE is ootype.Char:
+        if isinstance(TYPE, NativeInstance):
+            return SomeOOInstance(TYPE)
+        elif TYPE is ootype.Char:
             return SomeChar()
         elif TYPE is ootype.String:
             return SomeString()
         else:
             return lltype_to_annotation(TYPE)
     lltype_to_annotation = classmethod(lltype_to_annotation)
-
 
 
 class _static_meth(object):
@@ -271,17 +288,78 @@ class CliNamespace(object):
 
 CLR = CliNamespace(None)
 
-
 BOXABLE_TYPES = [ootype.Signed, ootype.Unsigned, ootype.SignedLongLong,
                  ootype.UnsignedLongLong, ootype.Bool, ootype.Float,
                  ootype.Char, ootype.String]
 
+class BoxedSpace:
+    objects = {}
+    index = 0
+    def put(cls, obj):
+        index = cls.index
+        cls.objects[index] = obj
+        cls.index += 1
+        return index
+    put = classmethod(put)
+
+    def get(cls, index):
+        return cls.objects[index]
+    get = classmethod(get)
+
 def box(x):
-    return x
+    t = type(x)
+    if t is int:
+        return CLR.System.Int32(x)
+    elif t is r_uint:
+        return CLR.System.UInt32(x)
+    elif t is r_longlong:
+        return CLR.System.Int64(x)
+    elif t is r_ulonglong:
+        return CLR.System.UInt64(x)
+    elif t is bool:
+        return CLR.System.Boolean(x)
+    elif t is float:
+        return CLR.System.Double(x)
+    elif t is str or t is unicode:
+        if len(x) == 1:
+            return CLR.System.Char(x)
+        else:
+            return CLR.System.String(x)
+    elif isinstance(x, PythonNet.System.Object):
+        return x
+    elif x is None:
+        return None
+    else:
+        # cast RPython instances to System.Object is trivial when
+        # translated but not when interpreting, because Python for
+        # .NET doesn't support passing aribrary Python objects to
+        # .NET. To solve, we store them in the BoxedSpace, then we
+        # return an opaque objects, which will be used by unbox to
+        # retrieve the original RPython instance.
+        index = BoxedSpace.put(x)
+        res = PythonNet.pypy.test.ObjectWrapper(index)
+        return res
 
 def unbox(x, TYPE):
-    # TODO: check that x is really of type TYPE
-    return x
+    if isinstance(x, PythonNet.pypy.test.ObjectWrapper):
+        x = BoxedSpace.get(x.index)
+
+    if isinstance(TYPE, (type, types.ClassType)):
+        # we need to check the TYPE and return None if it fails
+        if isinstance(x, TYPE):
+            return x
+        else:
+            return None
+
+    # TODO: do the typechecking also in the other cases
+
+    # this is a workaround against a pythonnet limitation: you can't
+    # directly get the, e.g., python int from the System.Int32 object:
+    # a simple way to do this is to put it into an ArrayList and
+    # retrieve the value.
+    tmp = PythonNet.System.Collections.ArrayList()
+    tmp.Add(x)
+    return tmp[0]
 
 
 class Entry(ExtRegistryEntry):
@@ -292,13 +370,16 @@ class Entry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         v_obj, = hop.inputargs(*hop.args_r)
-        if v_obj.concretetype not in BOXABLE_TYPES:
-            raise TyperError, "Can't box values of type %s" % v_obj.concretetype
-        
-        if (v_obj.concretetype is ootype.String):
+
+        hop.exception_cannot_occur()
+        TYPE = v_obj.concretetype
+        if (TYPE is ootype.String or isinstance(TYPE, (ootype.Instance, ootype.BuiltinType, NativeInstance))):
             return hop.genop('ooupcast', [v_obj], hop.r_result.lowleveltype)
         else:
+            if TYPE not in BOXABLE_TYPES:
+                raise TyperError, "Can't box values of type %s" % v_obj.concretetype
             return hop.genop('clibox', [v_obj], hop.r_result.lowleveltype)
+
 
 class Entry(ExtRegistryEntry):
     _about_ = unbox
@@ -308,16 +389,20 @@ class Entry(ExtRegistryEntry):
         assert x_s.ootype == CLR.System.Object._INSTANCE
         assert type_s.is_constant()
         TYPE = type_s.const
-        assert TYPE in BOXABLE_TYPES
-        return OverloadingResolver.lltype_to_annotation(TYPE)
+        if isinstance(TYPE, (type, types.ClassType)):
+            # it's a user-defined class, so we return SomeInstance
+            classdef = self.bookkeeper.getuniqueclassdef(TYPE)
+            return SomeInstance(classdef, can_be_None=x_s.can_be_None)
+        else:
+            assert TYPE in BOXABLE_TYPES
+            return OverloadingResolver.lltype_to_annotation(TYPE)
 
     def specialize_call(self, hop):
         v_obj, v_type = hop.inputargs(*hop.args_r)
-        if v_type.value is ootype.String:
+        if v_type.value is ootype.String or isinstance(v_type.value, (type, types.ClassType)):
             return hop.genop('oodowncast', [v_obj], hop.r_result.lowleveltype)
         else:
             return hop.genop('cliunbox', [v_obj, v_type], hop.r_result.lowleveltype)
-
 
 
 native_exc_cache = {}
@@ -364,7 +449,7 @@ def new_array(type, length):
 
 def init_array(type, *args):
     # PythonNet doesn't provide a straightforward way to create arrays... fake it with a list
-    return args
+    return list(args)
 
 class Entry(ExtRegistryEntry):
     _about_ = new_array
@@ -409,3 +494,22 @@ class Entry(ExtRegistryEntry):
             c_index = hop.inputconst(ootype.Signed, i)
             hop.genop('cli_setelem', [v_array, c_index, v_elem], ootype.Void)
         return v_array
+
+
+def typeof(cliClass):
+    TYPE = cliClass._INSTANCE
+    name = '%s.%s' % (TYPE._namespace, TYPE._classname)
+    return PythonNet.System.Type.GetType(name)
+
+class Entry(ExtRegistryEntry):
+    _about_ = typeof
+
+    def compute_result_annotation(self, cliClass_s):
+        from query import load_class_maybe
+        assert cliClass_s.is_constant()
+        cliType = load_class_maybe('System.Type')
+        return SomeOOInstance(cliType._INSTANCE)
+
+    def specialize_call(self, hop):
+        v_type, = hop.inputargs(*hop.args_r)
+        return hop.genop('cli_typeof', [v_type], hop.r_result.lowleveltype)

@@ -12,15 +12,22 @@ import sys
 #    py.test.skip("Works only in browser (right now?)")
 
 class A(BasicExternal):
-    def method(a={'a':'a'}):
+    def method(self, a={'a':'a'}):
         pass
-    method = described(retval={'a':'a'})(method)
+    method = described(retval={str:str})(method)
 
 a = A()
+a._render_name = 'a'
 
 def fun(x='3'):
     return a.method({'a':x})['a']
 
+def fff():
+    pass
+
 def test_bookkeeper_cleanup():
-    rpython2javascript(sys.modules[__name__], ["fun"])
-    rpython2javascript(sys.modules[__name__], ["fun"])
+    assert rpython2javascript(sys.modules[__name__], ["fun"])
+    assert rpython2javascript(sys.modules[__name__], ["fun"])
+
+def test_module_none():
+    assert rpython2javascript(None, "fff")

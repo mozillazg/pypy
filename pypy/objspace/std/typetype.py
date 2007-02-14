@@ -170,6 +170,9 @@ def descr_set__bases__(space, w_type, w_value):
         raise OperationError(space.w_TypeError,
                              space.wrap("__bases__ assignment: '%s' object layout differs from '%s'" %
                                         (w_type.getname(space, '?'), new_base.getname(space, '?'))))
+    if space.config.objspace.std.withtypeversion:
+        # it does not make sense to cache this type, it changes bases
+        w_type.version_tag = None
 
     saved_bases = w_type.bases_w
     saved_base = w_type.w_bestbase
@@ -221,18 +224,6 @@ def descr__flags(space, w_type):
     w_type = _check(space, w_type)    
     return space.wrap(w_type.__flags__)
 
-def defunct_descr_get__module(space, w_type):
-    if w_type.is_heaptype():
-        return w_type.dict_w['__module__']
-    else:
-        # here CPython checks for a module.name in the type description.
-        # we skip that here and only provide the default
-        return space.wrap('__builtin__')
-
-# heaptypeness is not really the right criteria, because we
-# also might get a module attribute from a faked type.
-# therefore, we use the module attribute whenever it exists.
-
 def descr_get__module(space, w_type):
     w_type = _check(space, w_type)
     return w_type.get_module()
@@ -248,12 +239,7 @@ def descr_set__module(space, w_type, w_value):
 def descr___subclasses__(space, w_type):
     """Return the list of immediate subclasses."""
     w_type = _check(space, w_type)
-    subclasses_w = []
-    for w_ref in w_type.weak_subclasses_w:
-        w_ob = space.call_function(w_ref)
-        if not space.is_w(w_ob, space.w_None):
-            subclasses_w.append(w_ob)
-    return space.newlist(subclasses_w)
+    return space.newlist(w_type.get_subclasses())
 
 # ____________________________________________________________
 
