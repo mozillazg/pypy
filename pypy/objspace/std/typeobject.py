@@ -6,6 +6,7 @@ from pypy.interpreter.typedef import weakref_descr
 from pypy.objspace.std.stdtypedef import std_dict_descr, issubtypedef, Member
 from pypy.objspace.std.objecttype import object_typedef
 from pypy.objspace.std.dictproxyobject import W_DictProxyObject
+from pypy.rlib.objectmodel import we_are_translated
 
 from copy_reg import _HEAPTYPE
 
@@ -37,6 +38,9 @@ def _mangle(name, klass):
             klass = klass[:end]
 
     return "_%s%s" % (klass, name)
+
+class VersionTag(object):
+    pass
 
 class W_TypeObject(W_Object):
     from pypy.objspace.std.typetype import type_typedef as typedef
@@ -77,11 +81,8 @@ class W_TypeObject(W_Object):
                 else:
                     w_globals = caller.w_globals
                     w_str_name = space.wrap('__name__')
-                    try:
-                        w_name = space.getitem(w_globals, w_str_name)
-                    except OperationError:
-                        pass
-                    else:
+                    w_name = space.finditem(w_globals, w_str_name)
+                    if w_name is not None:
                         dict_w['__module__'] = w_name
             # find the most specific typedef
             instancetypedef = object_typedef
@@ -200,6 +201,8 @@ class W_TypeObject(W_Object):
                 w_self.weakrefable = True
             w_type = space.type(w_self)
             if not space.is_w(w_type, space.w_type):
+                if space.config.objspace.std.withtypeversion:
+                    w_self.version_tag = None
                 w_self.mro_w = []
                 mro_func = w_type.lookup('mro')
                 mro_func_args = Arguments(space, [w_self])
@@ -207,6 +210,20 @@ class W_TypeObject(W_Object):
                 w_self.mro_w = space.unpackiterable(w_mro)
                 return
         w_self.mro_w = w_self.compute_mro()
+        if space.config.objspace.std.withtypeversion:
+            if w_self.instancetypedef.hasdict:
+                w_self.version_tag = None
+            else:
+                w_self.version_tag = VersionTag()
+
+    def mutated(w_self):
+        space = w_self.space
+        assert space.config.objspace.std.withtypeversion
+        if w_self.version_tag is not None:
+            w_self.version_tag = VersionTag()
+            subclasses_w = w_self.get_subclasses()
+            for w_subclass in subclasses_w:
+                w_subclass.mutated()
 
     def ready(w_self):
         for w_base in w_self.bases_w:
@@ -257,8 +274,22 @@ class W_TypeObject(W_Object):
                     return w_value
         return w_value
 
-    def lookup(w_self, key):
+    def lookup(w_self, name):
         # note that this doesn't call __get__ on the result at all
+        space = w_self.space
+        if space.config.objspace.std.withmethodcache:
+            return w_self.lookup_where_with_method_cache(name)[1]
+
+        return w_self._lookup(name)
+
+    def lookup_where(w_self, name):
+        space = w_self.space
+        if space.config.objspace.std.withmethodcache:
+            return w_self.lookup_where_with_method_cache(name)
+
+        return w_self._lookup_where(name)
+
+    def _lookup(w_self, key):
         space = w_self.space
         for w_class in w_self.mro_w:
             w_value = w_class.getdictvalue_w(space, key)
@@ -266,7 +297,7 @@ class W_TypeObject(W_Object):
                 return w_value
         return None
 
-    def lookup_where(w_self, key):
+    def _lookup_where(w_self, key):
         # like lookup() but also returns the parent class in which the
         # attribute was found
         space = w_self.space
@@ -275,6 +306,41 @@ class W_TypeObject(W_Object):
             if w_value is not None:
                 return w_class, w_value
         return None, None
+
+    def lookup_where_with_method_cache(w_self, name):
+        space = w_self.space
+        assert space.config.objspace.std.withmethodcache
+        ec = space.getexecutioncontext()
+        try:
+            frame = ec.framestack.top()
+            position_hash = frame.last_instr ^ id(frame.pycode)
+        except IndexError:
+            position_hash = 0
+        version_tag = w_self.version_tag
+        if version_tag is None:
+            tup = w_self._lookup_where(name)
+            return tup
+        SIZE = space.config.objspace.std.methodcachesize
+        method_hash = (id(version_tag) ^ position_hash ^ hash(name)) % SIZE
+        cached_version_tag = ec.method_cache_versions[method_hash]
+        if cached_version_tag is version_tag:
+            cached_name = ec.method_cache_names[method_hash]
+            if cached_name == name:
+                tup = ec.method_cache_lookup_where[method_hash]
+                if space.config.objspace.std.withmethodcachecounter:
+                    ec.method_cache_hits[name] = \
+                            ec.method_cache_hits.get(name, 0) + 1
+#                print "hit", w_self, name
+                return tup
+        tup = w_self._lookup_where(name)
+        ec.method_cache_versions[method_hash] = version_tag
+        ec.method_cache_names[method_hash] = name
+        ec.method_cache_lookup_where[method_hash] = tup
+        if space.config.objspace.std.withmethodcachecounter:
+            ec.method_cache_misses[name] = \
+                    ec.method_cache_misses.get(name, 0) + 1
+#        print "miss", w_self, name
+        return tup
 
     def check_user_subclass(w_self, w_subtype):
         space = w_self.space
@@ -311,7 +377,7 @@ class W_TypeObject(W_Object):
         newdic.initialize_content(dictspec)
         return W_DictProxyObject(newdic)
 
-    def unwrap(w_self):
+    def unwrap(w_self, space):
         if w_self.instancetypedef.fakedcpytype is not None:
             return w_self.instancetypedef.fakedcpytype
         from pypy.objspace.std.model import UnwrapError
@@ -322,10 +388,16 @@ class W_TypeObject(W_Object):
 
     def get_module(w_self):
         space = w_self.space
-        if (not space.is_w(w_self, space.w_type)    # hum
-            and '__module__' in w_self.dict_w):
+        if w_self.is_heaptype() and '__module__' in w_self.dict_w:
             return w_self.dict_w['__module__']
         else:
+            # for non-heap types, CPython checks for a module.name in the
+            # type name.  That's a hack, so we're allowed to use a different
+            # hack...
+            if ('__module__' in w_self.dict_w and
+                space.is_true(space.isinstance(w_self.dict_w['__module__'],
+                                               space.w_str))):
+                return w_self.dict_w['__module__']
             return space.wrap('__builtin__')
 
     def add_subclass(w_self, w_subclass):
@@ -351,6 +423,16 @@ class W_TypeObject(W_Object):
             if space.is_w(ob, w_subclass):
                 del w_self.weak_subclasses_w[i]
                 return
+
+    def get_subclasses(w_self):
+        space = w_self.space
+        subclasses_w = []
+        for w_ref in w_self.weak_subclasses_w:
+            w_ob = space.call_function(w_ref)
+            if not space.is_w(w_ob, space.w_None):
+                subclasses_w.append(w_ob)
+        return subclasses_w
+
 
     # for now, weakref support for W_TypeObject is hard to get automatically
     _lifeline_ = None
@@ -418,6 +500,8 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     # Note. This is exactly the same thing as descroperation.descr__setattr__,
     # but it is needed at bootstrap to avoid a call to w_type.getdict() which
     # would un-lazify the whole type.
+    if space.config.objspace.std.withtypeversion:
+        w_type.mutated()
     name = space.str_w(w_name)
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
@@ -427,6 +511,8 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     w_type.dict_w[name] = w_value
 
 def delattr__Type_ANY(space, w_type, w_name):
+    if space.config.objspace.std.withtypeversion:
+        w_type.mutated()
     if w_type.lazyloaders:
         w_type._freeze_()    # force un-lazification
     name = space.str_w(w_name)
@@ -440,6 +526,7 @@ def delattr__Type_ANY(space, w_type, w_name):
         return
     except KeyError:
         raise OperationError(space.w_AttributeError, w_name)
+
 
 # ____________________________________________________________
 

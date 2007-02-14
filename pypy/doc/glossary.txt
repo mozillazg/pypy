@@ -2,6 +2,12 @@ PyPy, like any large project, has developed a jargon of its own.  This
 document gives brief definition of some of these terms and provides
 links to more information.
 
+**abstract interpretation**
+    The technique of interpreting the bytecode of a user program with
+    an interpreter that handles abstract objects instead of concrete ones.
+    It can be used to check the bytecode or see what it does, without
+    actually executing it with concrete values.  See Theory_.
+
 .. _annotator:
 
 **annotator**
@@ -17,15 +23,21 @@ links to more information.
 
 .. _backend:
 
-**backend** 
+**backend**
     Code generator that converts an `RPython
     <coding-guide.html#restricted-python>`__ program to a `target
     language`_ using the PyPy toolchain_. A backend uses either the
     lltypesystem_ or the ootypesystem_.
 
+.. _`compile-time`:
+
+**compile-time**
+    In the context of the JIT_, compile time is when the JIT is
+    generating machine code "just in time".
+
 .. _CPython:
 
-**CPython** 
+**CPython**
     The "default" implementation of Python, written in C and
     distributed by the PSF_ on http://www.python.org.
 
@@ -53,8 +65,9 @@ links to more information.
 .. _`jit`:
 
 **jit**
-  `just in time compiler`_
-   
+  `just in time compiler`_.  Our jit now has `some draft documentation
+  <jit.html>`__.
+
 .. _`l3interpreter`:
 
 **l3interpreter**
@@ -88,8 +101,13 @@ links to more information.
   a module that accesses PyPy's `interpreter level`_.  The name comes
   from the fact that the module's implementation can be a mixture of
   `application level`_ and `interpreter level`_ code.
-   
+
 .. _`object space`:
+
+**multimethod**
+   A callable object that invokes a different Python function based
+   on the type of all its arguments (instead of just the class of the
+   first argument, as with normal methods).  See Theory_.
 
 **object space**
    The `object space <objspace.html>`__ (often abbreviated to
@@ -117,6 +135,13 @@ links to more information.
 
 .. _`rpython`:
 
+.. _`promotion`:
+
+**promotion**
+   JIT_ terminology.  *promotion* is a way of "using" a `run-time`_
+   value at `compile-time`_, essentially by deferring compilation
+   until the run-time value is known. See if `the jit docs`_ help.
+
 **rpython**
    `Restricted Python`_, a limited subset of the Python_ language.
    The limitations make `type inference`_ possible.
@@ -129,6 +154,12 @@ links to more information.
    Based on the type annotations, the `RPython Typer`_ turns the flow
    graph into one that fits the model of the target platform/backend_
    using either the lltypesystem_ or the ootypesystem_.
+
+.. _`run-time`:
+
+**run-time**
+   In the context of the JIT_, run time is when the code the JIT has
+   generated is executing.
 
 .. _`specialization`:
 
@@ -153,6 +184,11 @@ links to more information.
 
 .. _toolchain:
 
+**timeshifting**
+   JIT_ terminology.  *timeshifting* is to do with moving from the
+   world where there are only `run-time`_ operations to a world where
+   there are both `run-time`_ and `compile-time`_ operations.
+
 **toolchain**
    The `annotator pass`_, `The RPython Typer`_, and various
    `backends`_.
@@ -161,6 +197,12 @@ links to more information.
 
 **transformation**
    Code that modifies flowgraphs to weave in `translation-aspects`_
+
+.. _`translation-time`:
+
+**translation-time**
+   In the context of the JIT_, translation time is when the PyPy
+   source is being analysed and the JIT itself is being created.
 
 .. _`translator`:
 
@@ -184,6 +226,7 @@ links to more information.
 .. _applevel: coding-guide.html#application-level
 .. _`target language`: getting-started.html#trying-out-the-translator
 .. _`just in time compiler`: http://en.wikipedia.org/wiki/Just-in-time_compilation
+.. _`the jit docs`: jit.html
 .. _`type inference article on Wikipedia`: http://en.wikipedia.org/wiki/Type_inference
 .. _`annotator pass`: translation.html#the-annotation-pass
 .. _`The RPython Typer`: translation.html#the-rpython-typer
@@ -196,5 +239,6 @@ links to more information.
 .. _Python: http://www.python.org
 .. _`RPython Typer`: rtyper.html
 .. _`subsystem implementing the Python language`: architecture.html#standard-interpreter
+.. _Theory: theory.html
 
 .. include:: _ref.txt

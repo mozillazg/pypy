@@ -248,6 +248,26 @@ def test_infinite_float():
     res = f1(3)
     assert res == 1.5
 
+def test_nan():
+    from pypy.translator.c.primitive import isnan, isinf
+    inf = 1e300 * 1e300
+    assert isinf(inf)
+    nan = inf/inf
+    assert isnan(nan)
+
+    l = [nan]
+    def f():
+        return nan
+    f1 = compile(f, [])
+    res = f1()
+    assert isnan(res)
+
+    def g(x):
+        return l[x]
+    g2 = compile(g, [int])
+    res = g2(0)
+    assert isnan(res)
+
 def test_x():
     class A:
         pass
@@ -285,43 +305,17 @@ def test_keepalive():
     f1 = compile(f, [])
     assert f1() == 1
 
-# this test shows if we have a problem with refcounting PyObject
-if conftest.option.gcpolicy == 'boehm':
-    def test_refcount_pyobj():
-        from pypy.rpython.lltypesystem.lloperation import llop
-        def prob_with_pyobj(b):
-            return 3, b
-        def collect():
-            llop.gc__collect(Void)
-        f = compile(prob_with_pyobj, [object])
-        c = compile(collect, [])
-        from sys import getrefcount as g
-        obj = None
-        before = g(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        c()
-        c()
-        c()
-        c()
-        c()
-        after = g(obj)
-        assert abs(before - after) < 5
-else:
-    def test_refcount_pyobj():
-        def prob_with_pyobj(b):
-            return 3, b
+def test_refcount_pyobj():
+    def prob_with_pyobj(b):
+        return 3, b
 
-        f = compile(prob_with_pyobj, [object])
-        from sys import getrefcount as g
-        obj = None
-        before = g(obj)
-        f(obj)
-        after = g(obj)
-        assert before == after
+    f = compile(prob_with_pyobj, [object])
+    from sys import getrefcount as g
+    obj = None
+    before = g(obj)
+    f(obj)
+    after = g(obj)
+    assert before == after
 
 def test_refcount_pyobj_setfield():
     import weakref, gc
@@ -369,4 +363,3 @@ def test_oswrite():
     s = t.buildannotator().build_types(f, [])
     rtyper = t.buildrtyper(type_system="lltype")
     rtyper.specialize()
-

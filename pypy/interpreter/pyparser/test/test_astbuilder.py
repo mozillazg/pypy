@@ -168,12 +168,17 @@ EXPECTED = {
     "a[100, 1:]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(1), Const(None)])])))]))",
     "a[100, :2,]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(None), Const(2)])])))]))",
     "a[100, :]": "Module(None, Stmt([Discard(Subscript(Name('a'), 2, Tuple([Const(100), Sliceobj([Const(None), Const(None)])])))]))",
+
+    # stablecompiler produces a Pass statement which does not seem very consistent
+    # (a module should only have a Stmt child)
+    "\t # hello\n": "Module(None, Stmt([]))",
     }
 
 
 class FakeSpace:
     w_None = None
     w_str = str
+    w_basestring = basestring
     w_int = int
     
     def wrap(self,obj):
@@ -299,7 +304,7 @@ LIBSTUFF = [
     ]
 
 def test_snippets():
-    for snippet_name in SNIPPETS + NEW_GRAMMAR_SNIPPETS:
+    for snippet_name in SNIPPETS: # + NEW_GRAMMAR_SNIPPETS: # Disabled 2.5 syntax
         filepath = os.path.join(os.path.dirname(__file__), 'samples', snippet_name)
         source = file(filepath).read()
         # To avoid using the stable compiler we pull an explicit AST out of the snippet

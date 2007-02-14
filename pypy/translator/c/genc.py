@@ -22,16 +22,12 @@ class CBuilder(object):
     symboltable = None
     modulename = None
     
-    def __init__(self, translator, entrypoint, config=None, libraries=None,
+    def __init__(self, translator, entrypoint, config, libraries=None,
                  gcpolicy=None):
         self.translator = translator
         self.entrypoint = entrypoint
         self.originalentrypoint = entrypoint
         self.gcpolicy = gcpolicy
-        if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription)
         if gcpolicy is not None and gcpolicy.requires_stackless:
             config.translation.stackless = True
         self.config = config
@@ -245,6 +241,10 @@ class CStandaloneBuilder(CBuilder):
         assert self.c_source_filename
         assert not self._compiled
         compiler = self.getccompiler(extra_includes=[str(self.targetdir)])
+        if self.config.translation.compilerflags:
+            compiler.compile_extra.append(self.config.translation.compilerflags)
+        if self.config.translation.linkerflags:
+            compiler.link_extra.append(self.config.translation.linkerflags)
         compiler.build()
         self.executable_name = str(compiler.outputfilename)
         self._compiled = True
@@ -265,6 +265,10 @@ class CStandaloneBuilder(CBuilder):
                 prefix = ' ' * len(prefix)
 
         compiler = self.getccompiler(extra_includes=['.'])
+        if self.config.translation.compilerflags:
+            compiler.compile_extra.append(self.config.translation.compilerflags)
+        if self.config.translation.linkerflags:
+            compiler.link_extra.append(self.config.translation.linkerflags)
         cfiles = []
         ofiles = []
         for fn in compiler.cfilenames:
@@ -277,7 +281,6 @@ class CStandaloneBuilder(CBuilder):
             cc = self.config.translation.cc
         else:
             cc = 'gcc'
-
         if self.config.translation.profopt:
             profopt = self.config.translation.profopt
         else:

@@ -120,6 +120,16 @@ def test_ftruncate():
     f1()
     os.unlink(filename)
 
+
+def test_os_access():
+    filename = str(py.magic.autopath())
+    def call_access(path, mode):
+        return os.access(path, mode)
+    f = compile(call_access, [str, int])
+    for mode in os.R_OK, os.W_OK, os.X_OK, (os.R_OK | os.W_OK | os.X_OK):
+        assert f(filename, mode) == os.access(filename, mode)
+
+
 def test_os_stat():
     filename = str(py.magic.autopath())
     def call_stat():
@@ -523,6 +533,15 @@ def test_os_rename():
     assert os.path.exists(tmpfile2)
     assert not os.path.exists(tmpfile1)
 
+def test_os_umask():
+    def does_stuff():
+        mask1 = os.umask(0660)
+        mask2 = os.umask(mask1)
+        return mask2
+    f1 = compile(does_stuff, [])
+    res = f1()
+    assert res == 0660
+
 if hasattr(os, 'getpid'):
     def test_os_getpid():
         def does_stuff():
@@ -683,4 +702,53 @@ def test_opendir_readdir():
     compared_with = os.listdir(str(udir))
     compared_with.sort()
     assert result == compared_with
+
+if hasattr(posix, 'execv'):
+    def test_execv():
+        filename = str(udir.join('test_execv.txt'))
+        def does_stuff():
+            progname = str(sys.executable)
+            l = ['', '']
+            l[0] = progname
+            l[1] = "-c"
+            l.append('open("%s","w").write("1")' % filename)
+            pid = os.fork()
+            if pid == 0:
+                os.execv(progname, l)
+            else:
+                os.waitpid(pid, 0)
+        func = compile(does_stuff, [])
+        func()
+        assert open(filename).read() == "1"
+
+    def test_execv_raising():
+        def does_stuff():
+            l = []
+            l.append("asddsadw32eewdfwqdqwdqwd")
+            os.execv(l[0], l)
+
+        func = compile(does_stuff, [])
+        py.test.raises(OSError, "func()")
+
+    def test_execve():
+        import py; py.test.skip("in-progress")
+        filename = str(udir.join('test_execve.txt'))
+        def does_stuff():
+            progname = str(sys.executable)
+            l = []
+            l.append(progname)
+            l.append("-c")
+            l.append('import os; open("%s", "w").write(os.environ["STH"])' % filename)
+            env = {}
+            env["STH"] = "42"
+            env["sthelse"] = "a"
+            pid = os.fork()
+            if pid == 0:
+                os.execve(progname, l, env)
+            else:
+                os.waitpid(pid, 0)
+
+        func = compile(does_stuff, [])
+        func()
+        assert open(filename).read() == "42"
 

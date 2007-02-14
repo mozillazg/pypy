@@ -195,8 +195,7 @@ declare(os.open     , int           , 'll_os/open')
 declare(os.read     , str           , 'll_os/read')
 declare(os.write    , posannotation , 'll_os/write')
 declare(os.close    , noneannotation, 'll_os/close')
-declare(os.dup      , int           , 'll_os/dup')
-declare(os.dup2     , noneannotation, 'll_os/dup2')
+declare(os.access   , int           , 'll_os/access')
 declare(os.lseek    , r_longlong    , 'll_os/lseek')
 declare(os.isatty   , bool          , 'll_os/isatty')
 if hasattr(posix, 'ftruncate'):
@@ -216,6 +215,7 @@ if hasattr(posix, 'unsetenv'):   # note: faked in os
 declare(os.pipe     , pipeannotation, 'll_os/pipe')
 declare(os.chmod    , noneannotation, 'll_os/chmod')
 declare(os.rename   , noneannotation, 'll_os/rename')
+declare(os.umask    , int           , 'll_os/umask')
 declare(os._exit    , noneannotation, 'll_os/_exit')
 if hasattr(os, 'kill'):
     declare(os.kill     , noneannotation, 'll_os/kill')
@@ -233,6 +233,9 @@ if hasattr(os, 'spawnv'):
     declare(os.spawnv,    int,            'll_os/spawnv')
 if hasattr(os, 'waitpid'):
     declare(os.waitpid ,  waitpidannotation, 'll_os/waitpid')
+#if hasattr(os, 'execv'):
+#    declare(os.execv, noneannotation, 'll_os/execv')
+#    declare(os.execve, noneannotation, 'll_os/execve')
 
 declare(os.path.exists, bool        , 'll_os_path/exists')
 declare(os.path.isdir, bool         , 'll_os_path/isdir')

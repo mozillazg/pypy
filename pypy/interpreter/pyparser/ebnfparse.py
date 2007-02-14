@@ -280,19 +280,3 @@ class EBNFBuilder(AbstractBuilder):
                 self.keywords.append(value)
         self.rule_stack.append(tok)
 
-
-
-## # XXX: parser method ?
-## def parse_grammar_text(parser, txt):
-##     """parses a grammar input
-
-##     txt : the grammar definition
-##     """
-##     from ebnflexer import GrammarSource
-##     from ebnfgrammar import GRAMMAR_GRAMMAR
-##     source = GrammarSource(GRAMMAR_GRAMMAR, txt)
-##     builder = EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=parser)
-##     result = GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
-##     builder.resolve_rules()
-##     parser.build_first_sets()
-##     return parser

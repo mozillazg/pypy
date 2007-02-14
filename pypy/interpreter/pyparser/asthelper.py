@@ -340,7 +340,7 @@ def get_docstring(builder,stmt):
         first_child = stmt.nodes[0]
         if isinstance(first_child, ast.Discard):
             expr = first_child.expr
-            if builder.is_string_const(expr):
+            if builder.is_basestring_const(expr):
                 # This *is* a docstring, remove it from stmt list
                 assert isinstance(expr, ast.Const)
                 del stmt.nodes[0]

@@ -1,4 +1,4 @@
-import os, sys
+import py, os, sys
 from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.rlib.objectmodel import keepalive_until_here
@@ -88,6 +88,7 @@ class I386TimeshiftingTestMixin(object):
                 if bench.stop():
                     break
             os.write(1, convert_result(res) + '\n')
+            rgenop.check_no_open_mc()
             keepalive_until_here(rgenop)    # to keep the code blocks alive
             return 0
             
@@ -96,7 +97,7 @@ class I386TimeshiftingTestMixin(object):
         annhelper.finish()
         t = self.rtyper.annotator.translator
         t.config.translation.gc = 'boehm'
-        cbuilder = CStandaloneBuilder(t, ll_main)
+        cbuilder = CStandaloneBuilder(t, ll_main, config=t.config)
         cbuilder.generate_source()
         cbuilder.compile()
         self.main_cbuilder= cbuilder

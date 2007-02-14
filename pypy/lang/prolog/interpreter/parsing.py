@@ -151,9 +151,9 @@ def add_necessary_regexs(regexs, names, operations=None):
 
 class PrologParseTable(LazyParseTable):
     def terminal_equality(self, symbol, input):
-        if input[0] == "ATOM":
-            return symbol == "ATOM" or symbol == input[1]
-        return symbol == input[0]
+        if input.name == "ATOM":
+            return symbol == "ATOM" or symbol == input.source
+        return symbol == input.name
 
 class PrologPackratParser(PackratParser):
     def __init__(self, rules, startsymbol):
@@ -191,7 +191,7 @@ def parse_file(s, parser=None, callback=_dummyfunc, arg=None):
     line = []
     for tok in tokens:
         line.append(tok)
-        if tok[0] == ".":
+        if tok.name == ".":
             lines.append(line)
             line = []
     if parser is None:
@@ -225,21 +225,24 @@ class OrderTransformer(object):
     def transform(self, node):
         if isinstance(node, Symbol):
             return node
+        children = [c for c in node.children
+                        if isinstance(c, Symbol) or (
+                            isinstance(c, Nonterminal) and len(c.children))]
         if isinstance(node, Nonterminal):
-            if len(node.children) == 1:
+            if len(children) == 1:
                 return Nonterminal(
-                    node.symbol, [self.transform(node.children[0])])
-            if len(node.children) == 2 or len(node.children) == 3:
-                left = node.children[-2]
-                right = node.children[-1]
+                    node.symbol, [self.transform(children[0])])
+            if len(children) == 2 or len(children) == 3:
+                left = children[-2]
+                right = children[-1]
                 if (isinstance(right, Nonterminal) and
                     right.symbol.startswith("extraexpr")):
-                    if len(node.children) == 2:
+                    if len(children) == 2:
                         leftreplacement = self.transform(left)
                     else:
                         leftreplacement = Nonterminal(
                             node.symbol,
-                            [self.transform(node.children[0]),
+                            [self.transform(children[0]),
                              self.transform(left)])
                     children = [leftreplacement,
                                 self.transform(right.children[0]),
@@ -247,14 +250,17 @@ class OrderTransformer(object):
 
                     newnode = Nonterminal(node.symbol, children)
                     return self.transform_extra(right, newnode)
-            children = [self.transform(child) for child in node.children]
+            children = [self.transform(child) for child in children]
             return Nonterminal(node.symbol, children)
 
     def transform_extra(self, extranode, child):
+        children = [c for c in extranode.children
+                        if isinstance(c, Symbol) or (
+                            isinstance(c, Nonterminal) and len(c.children))]
         symbol = extranode.symbol[5:]
-        if len(extranode.children) == 2:
+        if len(children) == 2:
             return child
-        right = extranode.children[2]
+        right = children[2]
         assert isinstance(right, Nonterminal)
         children = [child,
                     self.transform(right.children[0]),
@@ -343,7 +349,7 @@ class TermBuilder(RPythonVisitor):
             name = unescape(node.additional_info[1:end])
         else:
             name = node.additional_info
-        return Atom(name)
+        return Atom.make_atom(name)
 
     def visit_VAR(self, node):
         from pypy.lang.prolog.interpreter.term import Var
@@ -393,7 +399,7 @@ class TermBuilder(RPythonVisitor):
         node = node.children[1]
         if len(node.children) == 1:
             l = self.build_list(node)
-            start = Atom("[]")
+            start = Atom.make_atom("[]")
         else:
             l = self.build_list(node.children[0])
             start = self.visit(node.children[2])

@@ -7,7 +7,7 @@ from pypy.translator.backendopt import support
 from pypy.tool.uid import uid
 
 class CreationPoint(object):
-    def __init__(self, creation_method="?"):
+    def __init__(self, creation_method, lltype):
         self.changes = False
         self.escapes = False
         self.creation_method = creation_method
@@ -15,10 +15,11 @@ class CreationPoint(object):
             self.changes = True
             self.escapes = True
             self.malloced = False
+        self.lltype = lltype
 
     def __repr__(self):
-        return ("CreationPoint(<0x%x>, %s, esc=%s, cha=%s)" %
-                (uid(self), self.creation_method, self.escapes, self.changes))
+        return ("CreationPoint(<0x%x>, %r, %s, esc=%s, cha=%s)" %
+                (uid(self), self.lltype, self.creation_method, self.escapes, self.changes))
 
 class VarState(object):
     def __init__(self, crep=None):
@@ -80,6 +81,9 @@ class AbstractDataFlowInterpreter(object):
         self.dependencies = {} # creationpoint: {block: graph containing it}
         self.functionargs = {} # graph: list of state of args
         self.flown_blocks = {} # block: True
+
+    def seen_graphs(self):
+        return self.functionargs.keys()
     
     def getstate(self, var_or_const):
         if not isonheap(var_or_const):
@@ -90,7 +94,7 @@ class AbstractDataFlowInterpreter(object):
             varstate = VarState()
         else:
             if var_or_const not in self.constant_cps:
-                crep = CreationPoint("constant")
+                crep = CreationPoint("constant", var_or_const.concretetype)
                 self.constant_cps[var_or_const] = crep
             else:
                 crep = self.constant_cps[var_or_const]
@@ -107,7 +111,7 @@ class AbstractDataFlowInterpreter(object):
     def get_creationpoint(self, var, method="?"):
         if var in self.creationpoints:
             return self.creationpoints[var]
-        crep = CreationPoint(method)
+        crep = CreationPoint(method, var.concretetype)
         self.creationpoints[var] = crep
         return crep
     
@@ -236,6 +240,9 @@ class AbstractDataFlowInterpreter(object):
 
     def op_malloc_varsize(self, op, typestate, lengthstate):
         return VarState(self.get_creationpoint(op.result, "malloc_varsize"))
+
+    def op_keepalive(self, op, state):
+        return None
 
     def op_cast_pointer(self, op, state):
         return state

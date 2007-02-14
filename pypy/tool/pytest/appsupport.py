@@ -4,17 +4,41 @@ import py
 from py.__.magic import exprinfo
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
+from py.__.test.outcome import ExceptionFailure
 
 # ____________________________________________________________
 
+class AppCode(object):
+    def __init__(self, space, pycode):
+        self.code = space.unwrap(space.getattr(pycode, space.wrap('co_code')))
+        self.w_file = space.getattr(pycode, space.wrap('co_filename'))
+        self.name = space.getattr(pycode, space.wrap('co_name'))
+        self.firstlineno = space.unwrap(space.getattr(pycode, space.wrap('co_firstlineno')))
+        #try:
+        #    self.path = space.unwrap(space.getattr(self.w_file, space.wrap('__path__')))
+        #except OperationError:
+        #    self.path = space.unwrap(space.getattr(
+        self.path = py.path.local(space.str_w(self.w_file))
+        self.space = space
+    
+    def fullsource(self):
+        try:
+            return self.space.str_w(self.w_file).__source__
+        except AttributeError:
+            return py.code.Source(self.path.read(mode="rU"))
+    fullsource = property(fullsource, None, None, "Full source of AppCode")
+
 class AppFrame(py.code.Frame):
 
-    def __init__(self, pyframe):
-        self.code = py.code.Code(pyframe.pycode)
-        self.lineno = pyframe.get_last_lineno() - 1
-        self.space = pyframe.space
-        self.w_globals = pyframe.w_globals
-        self.w_locals = pyframe.getdictscope()
+    def __init__(self, space, pyframe):
+        self.code = AppCode(space, \
+            space.unwrap(space.getattr(pyframe, space.wrap('f_code'))))
+        #self.code = py.code.Code(pyframe.pycode)
+        self.lineno = space.unwrap(space.getattr(pyframe, space.wrap('f_lineno'))) - 1
+        #pyframe.get_last_lineno() - 1
+        self.space = space
+        self.w_globals = space.getattr(pyframe, space.wrap('f_globals'))
+        self.w_locals = space.getattr(pyframe, space.wrap('f_locals'))
         self.f_locals = self.w_locals   # for py.test's recursion detection
 
     def eval(self, code, **vars):
@@ -41,7 +65,11 @@ class AppExceptionInfo(py.code.ExceptionInfo):
     def __init__(self, space, operr):
         self.space = space
         self.operr = operr
-        self.traceback = AppTraceback(self.operr.application_traceback)
+        self.typename = operr.w_type.name
+        self.traceback = AppTraceback(space, self.operr.application_traceback)
+        debug_excs = getattr(operr, 'debug_excs', [])
+        if debug_excs:
+            self._excinfo = debug_excs[0]
 
     def exconly(self, tryshort=True): 
         return '(application-level) ' + self.operr.errorstr(self.space)
@@ -64,9 +92,9 @@ class AppExceptionInfo(py.code.ExceptionInfo):
 class AppTracebackEntry(py.code.Traceback.Entry):
     exprinfo = None
 
-    def __init__(self, tb):
-        self.frame = AppFrame(tb.frame)
-        self.lineno = tb.lineno - 1
+    def __init__(self, space, tb):
+        self.frame = AppFrame(space, space.getattr(tb, space.wrap('tb_frame')))
+        self.lineno = space.unwrap(space.getattr(tb, space.wrap('tb_lineno'))) - 1
 
     def reinterpret(self):
         # XXX we need to solve a general problem: how to prevent
@@ -81,13 +109,13 @@ class AppTracebackEntry(py.code.Traceback.Entry):
 class AppTraceback(py.code.Traceback): 
     Entry = AppTracebackEntry 
 
-    def __init__(self, apptb):
+    def __init__(self, space, apptb):
         l = []
-        while apptb is not None: 
-            l.append(self.Entry(apptb))
-            apptb = apptb.next 
-        list.__init__(self, l) 
-
+        while apptb is not space.w_None: 
+            l.append(self.Entry(space, apptb))
+            apptb = space.getattr(apptb, space.wrap('tb_next'))
+        list.__init__(self, l)
+    
 # ____________________________________________________________
 
 def build_pytest_assertion(space):
@@ -108,7 +136,7 @@ def build_pytest_assertion(space):
             w_msg = args_w[0]
         else:
             frame = framestack.top(0)
-            runner = AppFrame(frame)
+            runner = AppFrame(space, frame)
             try:
                 source = runner.statement
                 source = str(source).strip()
@@ -190,7 +218,7 @@ def raises_w(space, w_ExpectedException, *args, **kwds):
         if not value.match(space, w_ExpectedException):
             raise type, value, tb
         return excinfo
-    except py.test.Item.ExceptionFailure, e:
+    except ExceptionFailure, e:
         e.tbindex = getattr(e, 'tbindex', -1) - 1
         raise
 

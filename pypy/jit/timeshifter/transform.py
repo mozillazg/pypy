@@ -7,7 +7,6 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import split_block, split_block_at_start
-from pypy.translator.simplify import rec_op_has_side_effects
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import split_block
 
@@ -47,6 +46,11 @@ class HintGraphTransformer(object):
         self.mergepointfamily = MergePointFamily(graph)
         self.c_mpfamily = inputconst(lltype.Void, self.mergepointfamily)
         self.tsgraphs_seen = []
+
+        self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
+
+    def can_raise(self, op):
+        return self.raise_analyzer.analyze(op)
 
     def transform(self):
         self.compute_merge_points()
@@ -108,29 +112,37 @@ class HintGraphTransformer(object):
     def graph_calling_color(self, tsgraph):
         args_hs, hs_res = self.hannotator.bookkeeper.tsgraphsigs[tsgraph]
         if originalconcretetype(hs_res) is lltype.Void:
-            return 'gray'
+            c = 'gray'
         elif hs_res.is_green():
-            return 'yellow'
+            c = 'yellow'
         else:
-            return 'red'
+            c = 'red'
+        return c
 
-    def timeshifted_graph_of(self, graph, args_v):
+    def timeshifted_graph_of(self, graph, args_v, v_result):
         bk = self.hannotator.bookkeeper
         args_hs = [self.hannotator.binding(v) for v in args_v]
-        # fixed is always false here
-        specialization_key = bk.specialization_key(False, args_hs)
+        hs_result = self.hannotator.binding(v_result)
+        if isinstance(hs_result, hintmodel.SomeLLAbstractConstant):
+            fixed = hs_result.is_fixed()
+        else:
+            fixed = False
+        specialization_key = bk.specialization_key(fixed, args_hs)
         tsgraph = bk.get_graph_by_key(graph, specialization_key)
         self.tsgraphs_seen.append(tsgraph)
         return tsgraph
 
     # __________ helpers __________
 
-    def genop(self, block, opname, args, resulttype=None, result_like=None):
+    def genop(self, block, opname, args, resulttype=None, result_like=None, red=False):
         # 'result_like' can be a template variable whose hintannotation is
         # copied
         if resulttype is not None:
             v_res = varoftype(resulttype)
-            hs = hintmodel.SomeLLAbstractConstant(resulttype, {})
+            if red:
+                hs = hintmodel.SomeLLAbstractVariable(resulttype)
+            else:
+                hs = hintmodel.SomeLLAbstractConstant(resulttype, {})
             self.hannotator.setbinding(v_res, hs)
         elif result_like is not None:
             v_res = copyvar(self.hannotator, result_like)
@@ -194,6 +206,8 @@ class HintGraphTransformer(object):
         if by_color_of_vars is None:
             by_color_of_vars = vars
         for v, bcv in zip(vars, by_color_of_vars):
+            if v.concretetype is lltype.Void:
+                continue
             if self.hannotator.binding(bcv).is_green():
                 greens.append(v)
             else:
@@ -262,19 +276,19 @@ class HintGraphTransformer(object):
                             resulttype = lltype.Bool)
 
         block.exitswitch = v_flag
-        true_block = Block([])
-        true_link  = Link([], true_block)
-        true_link.exitcase   = True
-        true_link.llexitcase = True
-        block.recloseblock(link_f, true_link)
+##        true_block = Block([])
+##        true_link  = Link([], true_block)
+##        true_link.exitcase   = True
+##        true_link.llexitcase = True
+##        block.recloseblock(link_f, true_link)
 
-        reds, greens = self.sort_by_color(link_t.args)
-        self.genop(true_block, 'save_locals', reds)
-        self.genop(true_block, 'enter_block', [])
-        true_block.closeblock(Link(link_t.args, link_t.target))
+##        reds, greens = self.sort_by_color(link_t.args)
+##        self.genop(true_block, 'save_locals', reds)
+##        self.genop(true_block, 'enter_block', [])
+##        true_block.closeblock(Link(link_t.args, link_t.target))
 
-        SSA_to_SSI({block     : True,    # reachable from outside
-                    true_block: False}, self.hannotator)
+##        SSA_to_SSI({block     : True,    # reachable from outside
+##                    true_block: False}, self.hannotator)
 
     def get_resume_point_link(self, block):
         try:
@@ -285,7 +299,9 @@ class HintGraphTransformer(object):
             greencount = 0
             newvars = []
             for v in block.inputargs:
-                if self.hannotator.binding(v).is_green():
+                if v.concretetype is lltype.Void:
+                    v1 = self.c_dummy
+                elif self.hannotator.binding(v).is_green():
                     c = inputconst(lltype.Signed, greencount)
                     v1 = self.genop(resumeblock, 'restore_green', [c],
                                     result_like = v)
@@ -345,6 +361,11 @@ class HintGraphTransformer(object):
             N = self.get_resume_point(mergeblock)
             c_resumeindex = inputconst(lltype.Signed, N)
             self.genop(block, 'guard_global_merge', [c_resumeindex])
+
+            # Note: the jitstate.greens list will contain the correct
+            # green gv's for the following global_merge_point, because
+            # the green values have just been restored by the resume
+            # point logic here
         else:
             mergeblock = block
             greens2 = greens1
@@ -398,6 +419,7 @@ class HintGraphTransformer(object):
         if self.graphcolor == 'gray':
             self.genop(block, 'save_locals', [])
         elif self.graphcolor == 'yellow':
+            self.genop(block, 'save_locals', [])
             self.genop(block, 'save_greens', [v_retbox])
         elif self.graphcolor == 'red':
             self.genop(block, 'save_locals', [v_retbox])
@@ -438,8 +460,10 @@ class HintGraphTransformer(object):
             args_v = spaceop.args[1:-1]
         else:
             raise AssertionError(spaceop.opname)
+        if not self.hannotator.policy.look_inside_graphs(graphs):
+            return    # cannot follow this call
         for graph in graphs:
-            tsgraph = self.timeshifted_graph_of(graph, args_v)
+            tsgraph = self.timeshifted_graph_of(graph, args_v, spaceop.result)
             yield graph, tsgraph
 
     def guess_call_kind(self, spaceop):
@@ -447,25 +471,20 @@ class HintGraphTransformer(object):
             c_func = spaceop.args[0]
             fnobj = c_func.value._obj
             if (hasattr(fnobj._callable, 'oopspec') and
-                getattr(self.hannotator.policy, 'oopspec', False)):
+                self.hannotator.policy.oopspec):
+                if fnobj._callable.oopspec.startswith('vable.'):
+                    return 'vable'
                 return 'oopspec'
-
-        for v in spaceop.args:
-            hs_arg = self.hannotator.binding(v)
-            if not hs_arg.is_green():
-                break
-        else:
-            hs_res = self.hannotator.binding(spaceop.result)
-            if hs_res.is_green():
-                # all-green arguments and result.
-                # Does the function have side-effects?
-                t = self.hannotator.base_translator
-                if not rec_op_has_side_effects(t, spaceop):
-                    return 'green'
+        if self.hannotator.bookkeeper.is_green_call(spaceop):
+            return 'green'
         colors = {}
         for graph, tsgraph in self.graphs_from(spaceop):
             color = self.graph_calling_color(tsgraph)
             colors[color] = tsgraph
+        if not colors: # cannot follow this call
+            if not self.can_raise(spaceop):
+                return 'residual_noexc'
+            return 'residual'   
         assert len(colors) == 1, colors   # buggy normalization?
         return color
 
@@ -518,22 +537,40 @@ class HintGraphTransformer(object):
     def handle_red_call(self, block, pos, color='red'):
         link = split_block(self.hannotator, block, pos+1)
         op = block.operations.pop(pos)
+        #if op.opname == 'direct_call':
+        #    f = open('LOG', 'a')
+        #    print >> f, color, op.args[0].value
+        #    f.close()
         assert len(block.operations) == pos
         nextblock = link.target
         linkargs = link.args
         varsalive = list(linkargs)
-        
-        try:
-            index = varsalive.index(op.result)
-            uses_retval = True      # it will be restored by a restore_local
-            del varsalive[index]
-            old_v_result = linkargs.pop(index)
-            linkargs.insert(0, old_v_result)
-            v_result = nextblock.inputargs.pop(index)
-            nextblock.inputargs.insert(0, v_result)      
-        except ValueError:
-            uses_retval = False
 
+        if color == 'red':
+            assert not self.hannotator.binding(op.result).is_green()
+            # the result will be either passed as an extra local 0
+            # by the caller, or restored by a restore_local
+            try:
+                index = varsalive.index(op.result)
+            except ValueError:
+                linkargs.insert(0, op.result)
+                v_result = copyvar(self.hannotator, op.result)
+                nextblock.inputargs.insert(0, v_result)
+            else:
+                del varsalive[index]
+                old_v_result = linkargs.pop(index)
+                linkargs.insert(0, old_v_result)
+                v_result = nextblock.inputargs.pop(index)
+                nextblock.inputargs.insert(0, v_result)
+        else:
+            if op.result in varsalive:
+                index = varsalive.index(op.result)
+                del varsalive[index]
+                linkargs.pop(index)
+                c_void = Constant(None, lltype.Void)
+                linkargs.insert(0, c_void)
+                v_result = nextblock.inputargs.pop(index)
+                nextblock.inputargs.insert(0, v_result)                                
         reds, greens = self.sort_by_color(varsalive)
 
         v_func = op.args[0]
@@ -564,18 +601,15 @@ class HintGraphTransformer(object):
         postconstantblock.recloseblock(Link([], resumeblock))
 
         if nonconstantblock is not None:
-            args_v = op.args[1:]
-            if op.opname == 'indirect_call':
-                del args_v[-1]
-            # pseudo-obscure: the arguments for the call go in save_locals
-            self.genop(nonconstantblock, 'save_locals', args_v)
-            v_res = self.genop(nonconstantblock, 'residual_%s_call' % (color,),
-                               [op.args[0]], result_like = op.result)
+            v_res, nonconstantblock2 = self.handle_residual_call_details(
+                                            nonconstantblock, 0, op,
+                                            color, preserve_res = False)
 
-            if uses_retval:
+            if color == 'red':
                 linkargs[0] = v_res
-            
-            nonconstantblock.closeblock(Link(linkargs, nextblock))
+
+            blockset[nonconstantblock2] = False            
+            nonconstantblock2.recloseblock(Link(linkargs, nextblock))
 
         blockset[block] = True     # reachable from outside
         blockset[nextblock] = True # reachable from outside
@@ -589,6 +623,22 @@ class HintGraphTransformer(object):
         assert op.opname == 'direct_call'
         op.opname = 'oopspec_call'
 
+    def handle_vable_call(self, block, pos):
+        op = block.operations[pos]
+        assert op.opname == 'direct_call'
+        oopspec = op.args[0].value._obj._callable.oopspec
+        name, _ = oopspec.split('(')
+        kind, name = name.split('_', 1)
+
+        if kind == 'vable.get':
+            opname = 'getfield'
+        else:
+            assert kind == 'vable.set'
+            opname = 'setfield'
+        args = op.args[1:]
+        args.insert(1, Constant(name, lltype.Void))
+        block.operations[pos] = SpaceOperation(opname, args, op.result)
+        
     def handle_green_call(self, block, pos):
         # green-returning call, for now (XXX) we assume it's an
         # all-green function that we can just call
@@ -598,6 +648,10 @@ class HintGraphTransformer(object):
 
     def handle_yellow_call(self, block, pos):
         op = block.operations[pos]
+        #if op.opname == 'direct_call':
+        #    f = open('LOG', 'a')
+        #    print >> f, 'handle_yellow_call', op.args[0].value
+        #    f.close()
         hs_result = self.hannotator.binding(op.result)
         if not hs_result.is_green():
             # yellow calls are supposed to return greens,
@@ -643,6 +697,56 @@ class HintGraphTransformer(object):
         SSA_to_SSI({block: True,
                     postblock: False}, self.hannotator)
 
+    def handle_residual_call(self, block, pos, qualifiers=[]):
+        op = block.operations[pos]        
+        if op.result.concretetype is lltype.Void:
+            color = 'gray'
+        else:
+            color = 'red'
+        v_res, _ = self.handle_residual_call_details(block, pos, op, color,
+                                                     qualifiers=qualifiers)
+        return v_res
+
+    def handle_residual_noexc_call(self, block, pos):
+        return self.handle_residual_call(block, pos, qualifiers=['noexc'])
+                    
+    def handle_residual_call_details(self, block, pos, op, color,
+                                     preserve_res=True, qualifiers=[]):
+        if op.opname == 'direct_call':
+            args_v = op.args[1:]
+        elif op.opname == 'indirect_call':
+            args_v = op.args[1:-1]
+        else:
+            raise AssertionError(op.opname)
+        newops = []
+        # pseudo-obscure: the arguments for the call go in save_locals
+        args_v = [v for v in args_v if v.concretetype is not lltype.Void]
+        self.genop(newops, 'save_locals', args_v)
+        call_index = len(newops)
+        qualifiers = '_'.join([color] + qualifiers)
+        v_res = self.genop(newops, 'residual_%s_call' % (qualifiers,),
+                           [op.args[0]], result_like = op.result)
+        v_shape = self.genop(newops, 'after_residual_call', [], resulttype=lltype.Signed, red=True)
+        reshape_index = len(newops)
+        self.genop(newops, 'reshape', [v_shape])
+        reshape_pos = pos+reshape_index
+        block.operations[pos:pos+1] = newops
+        if preserve_res:
+            v_res = newops[call_index].result = op.result
+
+        link = split_block(self.hannotator, block, reshape_pos)
+        nextblock = link.target
+
+        reds, greens = self.sort_by_color(link.args)
+        self.genop(block, 'save_locals', reds)
+        v_finished_flag = self.genop(block, 'promote', [v_shape],
+                                     resulttype = lltype.Bool)
+        self.go_to_dispatcher_if(block, v_finished_flag)
+
+            
+        return v_res, nextblock
+
+
     # __________ hints __________
 
     def handle_hints(self):
@@ -687,7 +791,6 @@ class HintGraphTransformer(object):
         block.operations[i] = newop
 
         link = split_block(self.hannotator, block, i)
-        nextblock = link.target
 
         reds, greens = self.sort_by_color(link.args)
         self.genop(block, 'save_locals', reds)

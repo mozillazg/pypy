@@ -8,7 +8,7 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.translator.cli.support import string_literal
 
 def isnan(v):
-        return v != v*1.0 or (v == 1.0 and v == 2.0)
+    return v != v*1.0 or (v == 1.0 and v == 2.0)
 
 def isinf(v):
     return v!=0 and (v == v*2)
@@ -55,6 +55,7 @@ class IlasmGenerator(object):
         self.code.writeline('.assembly extern mscorlib {}')
         self.code.writeline('.assembly extern pypylib {}')
         self.code.writeline('.assembly %s {}' % name)
+        self.code.writeline('.field static object last_exception') # XXX
 
     def close(self):
         self.out.close()
@@ -210,6 +211,10 @@ class IlasmGenerator(object):
     def load_local(self,v):
         self.opcode('ldloc', repr(v.name))
 
+    def switch(self, targets):
+        cmd = 'switch(%s)' % ', '.join(targets)
+        self.opcode(cmd)
+
     def load_const(self,type_,v):
         if type_ is Void:
             pass
@@ -278,6 +283,9 @@ class CLIBaseGenerator(Generator):
     def function_signature(self, graph, func_name=None):
         return self.cts.graph_to_signature(graph, False, func_name)
 
+    def op_signature(self, op, func_name):
+        return self.cts.op_to_signature(op, func_name)
+
     def class_name(self, TYPE):
         if isinstance(TYPE, ootype.Instance):
             return self.db.class_name(TYPE)
@@ -291,6 +299,10 @@ class CLIBaseGenerator(Generator):
         if func_name is None: # else it is a suggested primitive
             self.db.pending_function(graph)
         func_sig = self.function_signature(graph, func_name)
+        self.ilasm.call(func_sig)
+
+    def call_op(self, op, func_name):
+        func_sig = self.op_signature(op, func_name)
         self.ilasm.call(func_sig)
 
     def call_signature(self, signature):
@@ -325,7 +337,7 @@ class CLIBaseGenerator(Generator):
 
     def downcast(self, TYPE):
         type = self.cts.lltype_to_cts(TYPE)
-        return self.ilasm.opcode('castclass', type)
+        return self.ilasm.opcode('isinst', type)
 
     def instantiate(self):
         self.call_signature('object [pypylib]pypy.runtime.Utils::RuntimeNew(class [mscorlib]System.Type)')
@@ -344,6 +356,9 @@ class CLIBaseGenerator(Generator):
 
     def branch_conditionally(self, cond, target_label):
         self.ilasm.branch_if(cond, target_label)
+
+    def branch_if_equal(self, target_label):
+        self.ilasm.opcode('beq', target_label)
 
     def push_primitive_constant(self, TYPE, value):
         ilasm = self.ilasm

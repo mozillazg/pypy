@@ -438,7 +438,9 @@ class AppTest_LogicFutures(object):
         assert len(sched_info()['blocked_byneed']) == 1
         reset_scheduler()
         assert len(sched_info()['blocked_byneed']) == 0
-        assert len(sched_info().values()[0]['threads']) == 1
+        sp_info = [y for x, y in sched_info().items()
+                   if isinstance(x, int)][0]
+        assert len(sp_info['threads']) == 1
 
     def test_wait_two(self):
 
@@ -461,7 +463,9 @@ class AppTest_LogicFutures(object):
         unify(Y, 42)
         assert X == Y == 42
         assert o == 2
-        assert len(sched_info().values()[0]['threads']) == 1
+        sp_info = [y for x, y in sched_info().items()
+                   if isinstance(x, int)][0]
+        assert len(sp_info['threads']) == 1
         
     def test_fib(self):
         def fib(X):
@@ -472,9 +476,9 @@ class AppTest_LogicFutures(object):
                 
         X = newvar()
         F = future(fib, X)
-        # values > 11 triggers exhaustion of the cpython stack
-        unify(11, X)
-        assert F == 144
+        # values > 10 triggers exhaustion of the cpython stack
+        unify(10, X)
+        assert F == 89
 
     def test_stacklet(self):
 
@@ -498,14 +502,17 @@ class AppTest_LogicFutures(object):
         assert count[0] == max_spawn + erring
         try:
             wait(Failed)
-        except RebindingError, e: 
-            assert len(sched_info().values()[0]['threads']) == 1
+        except RebindingError, e:
+            sp_info = [y for x, y in sched_info().items()
+                       if isinstance(x, int)][0]
+            assert len(sp_info['threads']) == 1
             return
         assert False
                 
     def test_nd_append(self):
         skip("non determnistic choice: yet to come")
         #from CTM p.639
+        #write me correctly...
         """
         def append(A, B, C):
             choice:
@@ -757,6 +764,7 @@ class AppTest_CompSpace(object):
                     break
             if status:
                 unify(Sol, spc.merge())
+                raises(AssertionError, spc.merge)
             else:
                 unify(Sol, False)
 
@@ -793,9 +801,10 @@ class AppTest_CompSpace(object):
         
         
     def test_default_solver(self):
-        skip("segfaulting")
         if is_interpreted():
             skip("will loop infinitely (bug in space.clone())")
+        else:
+            skip("clone segfaults")
         from constraint.examples import conference_scheduling
         from constraint import solver
 
@@ -878,9 +887,8 @@ class AppTest_CompSpace(object):
             solve(s, commit_to, Solution)
             assert Solution in (False, ('beige', 'mauve', 'coral'))
 
-    def test_queens1(self):
-        if not is_interpreted():
-            skip("segfaulting")
+    def test_queens(self):
+        skip("success depends on dict order")
         from constraint.examples import queens1, queens2
 
         def solve(spc, commitment, Sol):
@@ -919,3 +927,20 @@ class AppTest_CompSpace(object):
                 if Solution:
                     sols.add(tuple(Solution))
             assert len(sols) == 2
+
+
+    def test_cloning_queens(self):
+        if is_interpreted():
+            skip("no cloning feature")
+        from constraint.examples import queens1, queens2
+        from constraint.solver import solve
+
+        #switch_debug_info()
+        for queen in (queens1,):# queens2):
+            sols = set()
+            s = newspace(queens1, {'size':8})
+            for sol in solve(s):
+                sols.add(sol)
+                print sol
+            #assert len(sols) == 2
+

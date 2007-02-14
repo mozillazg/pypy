@@ -11,7 +11,7 @@ import autopath
 from pypy.config.config import to_optparse, OptionDescription, BoolOption, \
                                ArbitraryOption, StrOption, IntOption, Config, \
                                ChoiceOption, OptHelpFormatter
-from pypy.config.pypyoption import pypy_optiondescription
+from pypy.config.translationoption import get_combined_translation_config
 
 
 GOALS= [
@@ -76,8 +76,7 @@ OVERRIDES = {
 
     'translation.cc': None,
     'translation.profopt': None,
-
-    'translation.debug_transform': False,
+    'translation.output': None,
 }
 
 import py
@@ -106,8 +105,8 @@ def parse_options_and_load_target():
 
     opt_parser.disable_interspersed_args()
 
-    config = Config(pypy_optiondescription,
-                    **OVERRIDES)
+    config = get_combined_translation_config(
+                overrides=OVERRIDES, translating=True)
     to_optparse(config, parser=opt_parser, useoptions=['translation.*'])
     translateconfig = Config(translate_optiondescr)
     to_optparse(translateconfig, parser=opt_parser)
@@ -145,14 +144,27 @@ def parse_options_and_load_target():
     if args and not targetspec_dic.get('take_options', False):
         log.WARNING("target specific arguments supplied but will be ignored: %s" % ' '.join(args))
 
+    # give the target the possibility to get its own configuration options
+    # into the config
+    if 'get_additional_config_options' in targetspec_dic:
+        optiondescr = targetspec_dic['get_additional_config_options']()
+        config = get_combined_translation_config(
+                optiondescr,
+                existing_config=config,
+                translating=True)
+
     # let the target modify or prepare itself
     # based on the config
     if 'handle_config' in targetspec_dic:
         targetspec_dic['handle_config'](config)
 
-    if translateconfig.help: 
+    if 'handle_translate_config' in targetspec_dic:
+        targetspec_dic['handle_translate_config'](translateconfig)
+
+    if translateconfig.help:
         opt_parser.print_help()
         if 'print_help' in targetspec_dic:
+            print "\n\nTarget specific help:\n\n"
             targetspec_dic['print_help'](config)
         sys.exit(0)
     
@@ -173,7 +185,6 @@ def log_config(config, header="config used"):
 
 def main():
     targetspec_dic, translateconfig, config, args = parse_options_and_load_target()
-
     from pypy.translator import translator
     from pypy.translator import driver
     from pypy.translator.tool.pdbplus import PdbPlusShow
@@ -246,7 +257,9 @@ def main():
         log_config(config.translation, "translation configuration")
         pdb_plus_show.expose({'drv': drv, 'prof': prof})
 
-        if drv.exe_name is None and '__name__' in targetspec_dic:
+        if config.translation.output:
+            drv.exe_name = config.translation.output
+        elif drv.exe_name is None and '__name__' in targetspec_dic:
             drv.exe_name = targetspec_dic['__name__'] + '-%(backend)s'
 
         goals = translateconfig.goals

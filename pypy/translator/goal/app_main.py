@@ -6,6 +6,7 @@ options:
   -i           inspect interactively after running script
   -O           dummy optimization flag for compatibility with C Python
   -c CMD       program passed in as CMD (terminates option list)
+  -u           unbuffered binary stdout and stderr
   -h, --help   show this help message and exit
   --version    print the PyPy version
   --info       print translation information about this PyPy executable
@@ -113,7 +114,7 @@ def print_info():
         optitems = options.items()
         optitems.sort()
         for name, value in optitems:
-            print '   %25s: %s' % (name, value)
+            print ' %51s: %s' % (name, value)
 
 def print_help():
     print 'usage: %s [options]' % (sys.executable,)
@@ -123,6 +124,14 @@ def print_error(msg):
     print >> sys.stderr, msg
     print >> sys.stderr, 'usage: %s [options]' % (sys.executable,)
     print >> sys.stderr, 'Try `%s -h` for more information.' % (sys.executable,)
+
+def set_unbuffered_io():
+    if os.name == 'nt':
+        raise NotImplementedError("binary stdin/stdout not implemented "
+                                  "on Windows")
+    sys.stdin  = sys.__stdin__  = os.fdopen(0, 'rb', 0)
+    sys.stdout = sys.__stdout__ = os.fdopen(1, 'wb', 0)
+    sys.stderr = sys.__stderr__ = os.fdopen(2, 'wb', 0)
 
 # ____________________________________________________________
 # Main entry point
@@ -162,6 +171,7 @@ def entry_point(executable, argv):
         break
 
     go_interactive = False
+    run_command = False
     i = 0
     while i < len(argv):
         arg = argv[i]
@@ -170,10 +180,13 @@ def entry_point(executable, argv):
         if arg == '-i':
             go_interactive = True
         elif arg == '-c':
-            if i >= len(argv)-1:
+            if i >= len(argv):
                 print_error('Argument expected for the -c option')
                 return 2
+            run_command = True
             break
+        elif arg == '-u':
+            set_unbuffered_io()
         elif arg == '-O':
             pass
         elif arg == '--version':
@@ -185,6 +198,9 @@ def entry_point(executable, argv):
         elif arg == '-h' or arg == '--help':
             print_help()
             return 0
+        elif arg == '--':
+            i += 1
+            break     # terminates option list
         else:
             print_error('unrecognized option %r' % (arg,))
             return 2
@@ -205,22 +221,23 @@ def entry_point(executable, argv):
     except ImportError:
         pass
     else:
-        def keyboard_interrupt_handler(*args):
-            raise KeyboardInterrupt
-        signal.signal(signal.SIGINT, keyboard_interrupt_handler)
-        signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+        if hasattr(signal, "SIGPIPE"):
+            signal.signal(signal.SIGPIPE, signal.SIG_IGN)
+
+    success = True
 
     try:
         if sys.argv:
-            if sys.argv[0] == '-c':
+            if run_command:
                 cmd = sys.argv.pop(1)
                 def run_it():
                     exec cmd in mainmodule.__dict__
-                run_toplevel(run_it)
+                success = run_toplevel(run_it)
             else:
                 scriptdir = resolvedirof(sys.argv[0])
                 sys.path.insert(0, scriptdir)
-                run_toplevel(execfile, sys.argv[0], mainmodule.__dict__)
+                success = run_toplevel(execfile, sys.argv[0], mainmodule.__dict__)
         else: 
             sys.argv.append('')
             go_interactive = True
@@ -228,11 +245,11 @@ def entry_point(executable, argv):
             print >> sys.stderr, "debug: importing code" 
             import code
             print >> sys.stderr, "debug: calling code.interact()"
-            run_toplevel(code.interact, local=mainmodule.__dict__)
+            success = run_toplevel(code.interact, local=mainmodule.__dict__)
     except SystemExit, e:
         return e.code
     else:
-        return 0
+        return not success
 
 def resolvedirof(filename):
     try:

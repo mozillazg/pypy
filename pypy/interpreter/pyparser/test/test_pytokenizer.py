@@ -5,16 +5,16 @@ from pypy.interpreter.pyparser.pythonparse import make_pyparser
 
 P = make_pyparser()
 
-EQUAL = P.EQUAL
-ENDMARKER = P.ENDMARKER
-LSQB = P.LSQB
-MINUS = P.MINUS
-NAME = P.NAME
-NEWLINE = P.NEWLINE
-NULLTOKEN = P.NULLTOKEN
-NUMBER = P.NUMBER
-RSQB = P.RSQB
-STRING = P.STRING
+EQUAL = P.tokens['EQUAL']
+ENDMARKER = P.tokens['ENDMARKER']
+LSQB = P.tokens['LSQB']
+MINUS = P.tokens['MINUS']
+NAME = P.tokens['NAME']
+NEWLINE = P.tokens['NEWLINE']
+NULLTOKEN = P.tokens['NULLTOKEN']
+NUMBER = P.tokens['NUMBER']
+RSQB = P.tokens['RSQB']
+STRING = P.tokens['STRING']
 
 def parse_source(source):
     """returns list of parsed tokens"""

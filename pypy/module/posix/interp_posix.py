@@ -1,4 +1,4 @@
-from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import ros
 from pypy.interpreter.error import OperationError
@@ -161,6 +161,24 @@ def dup2(space, old_fd, new_fd):
     except OSError, e: 
         raise wrap_oserror(space, e) 
 dup2.unwrap_spec = [ObjSpace, int, int]
+
+def access(space, path, mode):
+    """
+    access(path, mode) -> 1 if granted, 0 otherwise
+
+    Use the real uid/gid to test for access to a path.  Note that most
+    operations will use the effective uid/gid, therefore this routine can
+    be used in a suid/sgid environment to test if the invoking user has the
+    specified access to the path.  The mode argument can be F_OK to test
+    existence, or the inclusive-OR of R_OK, W_OK, and X_OK.
+    """
+    try:
+        ok = os.access(path, mode)
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
+    else:
+        return space.wrap(ok)
+access.unwrap_spec = [ObjSpace, str, int]
 
 def system(space, cmd):
     """Execute the command (a string) in a subshell."""
@@ -335,6 +353,12 @@ def rename(space, old, new):
         raise wrap_oserror(space, e) 
 rename.unwrap_spec = [ObjSpace, str, str]
 
+def umask(space, mask):
+    "Set the current numeric umask and return the previous umask."
+    prevmask = os.umask(mask)
+    return space.wrap(prevmask)
+umask.unwrap_spec = [ObjSpace, int]
+
 def getpid(space):
     "Return the current process id."
     try: 
@@ -378,11 +402,17 @@ def readlink(space, path):
 readlink.unwrap_spec = [ObjSpace, str]
 
 def fork(space):
-    pid = os.fork()
+    try:
+        pid = os.fork()
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
     return space.wrap(pid)
 
 def waitpid(space, pid, options):
-    pid, status = os.waitpid(pid, options)
+    try:
+        pid, status = os.waitpid(pid, options)
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
     return space.newtuple([space.wrap(pid), space.wrap(status)])
 waitpid.unwrap_spec = [ObjSpace, int, int]
 
@@ -397,6 +427,28 @@ getuid.unwrap_spec = [ObjSpace]
 def geteuid(space):
     return space.wrap(intmask(_c.geteuid()))
 geteuid.unwrap_spec = [ObjSpace]
+
+def execv(space, command, w_args):
+    try:
+        os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
+    except OSError, e: 
+        raise wrap_oserror(space, e) 
+execv.unwrap_spec = [ObjSpace, str, W_Root]
+
+def execve(space, command, w_args, w_env):
+    try:
+        args = [space.str_w(i) for i in space.unpackiterable(w_args)]
+        env = {}
+        keys = space.call_function(space.getattr(w_env, space.wrap('keys')))
+        for key in space.unpackiterable(keys):
+            value = space.getitem(w_env, key)
+            env[space.str_w(key)] = space.str_w(value)
+        os.execve(command, args, env)
+    except ValueError, e:
+        raise OperationError(space.w_ValueError, space.wrap(str(e)))
+    except OSError, e:
+        raise wrap_oserror(space, e)
+execve.unwrap_spec = [ObjSpace, str, W_Root, W_Root]
 
 def uname(space):
     try:

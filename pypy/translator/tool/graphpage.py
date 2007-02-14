@@ -87,7 +87,7 @@ class VariableHistoryGraphPage(GraphPage):
 
 
 def graphsof(translator, func):
-    if isinstance(func, FunctionGraph):
+    if isinstance(func, (FunctionGraph, IncompleteGraph)):
         return [func]   # already a graph
     graphs = []
     if translator.annotator:
@@ -121,6 +121,7 @@ class FlowGraphPage(GraphPage):
                 graphs = list(graphs)
                 graphs += graphsof(translator, translator.entrypoint)
         gs = [(graph.name, graph) for graph in graphs]
+        gs.sort(lambda (_, g), (__ ,h): cmp(g.tag, h.tag))
         if self.annotator and self.annotator.blocked_graphs:
             for block, was_annotated in self.annotator.annotated.items():
                 if not was_annotated:
@@ -375,7 +376,10 @@ class LocalizedCallGraphPage(BaseTranslatorPage):
     that means just including direct callers and callees"""
 
     def graph_name(self, centers):
-        return 'LCG_%s' % nameof(centers[0])
+        if centers:
+            return 'LCG_%s' % nameof(centers[0])
+        else:
+            return 'EMPTY'
 
     def do_compute(self, dotgen, centers):
         centers = dict.fromkeys(centers)
@@ -470,6 +474,7 @@ def try_show(obj):
 
 class IncompleteGraph:
     name = '(incomplete graph)'
+    tag = None
 
     def __init__(self, bunch_of_blocks):
         self.bunch_of_blocks = bunch_of_blocks

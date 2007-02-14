@@ -33,6 +33,7 @@ class FlowObjSpace(ObjSpace):
     """
     
     full_exceptions = False
+    do_imports_immediately = True
 
     def initialize(self):
         import __builtin__
@@ -260,7 +261,9 @@ class FlowObjSpace(ObjSpace):
             ec.build_flow()
         except FlowingError, a:
             # attach additional source info to AnnotatorError
-            raise FlowingError(format_global_error(ec.graph, ec.crnt_offset, str(a)))
+            _, _, tb = sys.exc_info()
+            e = FlowingError(format_global_error(ec.graph, ec.crnt_offset, str(a)))
+            raise FlowingError, e, tb
         checkgraph(graph)
         return graph
 
@@ -497,6 +500,7 @@ del _name, _exc
 
 implicit_exceptions = {
     int: [ValueError],      # built-ins that can always raise exceptions
+    float: [ValueError],
     chr: [ValueError],
     unichr: [ValueError],
     # specifying IndexError, and KeyError beyond Exception,
@@ -573,6 +577,7 @@ def make_op(name, symbol, arity, specialnames):
 
     op = None
     skip = False
+    arithmetic = False
 
     if name.startswith('del') or name.startswith('set') or name.startswith('inplace_'):
         # skip potential mutators
@@ -591,6 +596,7 @@ def make_op(name, symbol, arity, specialnames):
             return s
     else:
         op = FunctionByName[name]
+        arithmetic = (name + '_ovf') in FunctionByName
 
     if not op:
         if not skip:
@@ -621,12 +627,19 @@ def make_op(name, symbol, arity, specialnames):
                     raise flowcontext.OperationThatShouldNotBePropagatedError(
                         self.wrap(etype), self.wrap(msg))
                 else:
-                    try:
-                        return self.wrap(result)
-                    except WrapException:
-                        # type cannot sanely appear in flow graph,
-                        # store operation with variable result instead
+                    # don't try to constant-fold operations giving a 'long'
+                    # result.  The result is probably meant to be sent to
+                    # an intmask(), but the 'long' constant confuses the
+                    # annotator a lot.
+                    if arithmetic and type(result) is long:
                         pass
+                    else:
+                        try:
+                            return self.wrap(result)
+                        except WrapException:
+                            # type cannot sanely appear in flow graph,
+                            # store operation with variable result instead
+                            pass
 
         #print >> sys.stderr, 'Variable operation', name, args_w
         w_result = self.do_operation_with_implicit_exceptions(name, *args_w)

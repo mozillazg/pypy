@@ -14,8 +14,10 @@ class I386PortalTestMixin(object):
         annhelper = self.hrtyper.annhelper
         convert_result = getattr(self.main, 'convert_result', str)
         annotator = self.rtyper.annotator
-        args_s = [annotator.binding(v) for v in self.maingraph.getargs()]
-        s_result = self.rtyper.annotator.binding(self.maingraph.getreturnvar())
+        args_s = [annmodel.lltype_to_annotation(v.concretetype)
+                  for v in self.maingraph.getargs()]
+        retvar = self.maingraph.getreturnvar()
+        s_result = annmodel.lltype_to_annotation(retvar.concretetype)
         main_fnptr = self.rtyper.type_system.getcallable(self.maingraph)
         main = PseudoHighLevelCallable(main_fnptr, args_s, s_result)
         
@@ -44,7 +46,7 @@ class I386PortalTestMixin(object):
         annhelper.finish()
         t = self.rtyper.annotator.translator
         t.config.translation.gc = 'boehm'
-        self.cbuilder = CStandaloneBuilder(t, ll_main)
+        self.cbuilder = CStandaloneBuilder(t, ll_main, config=t.config)
         self.cbuilder.generate_source()
         self.cbuilder.compile()
         

@@ -3,7 +3,7 @@ import sys
 
 from pypy.translator.llvm.log import log 
 from pypy.translator.llvm.funcnode import FuncNode, FuncTypeNode
-from pypy.translator.llvm.extfuncnode import ExternalFuncNode
+from pypy.translator.llvm.extfuncnode import ExternalFuncNode, SimplerExternalFuncNode
 from pypy.translator.llvm.structnode import StructNode, StructVarsizeNode, \
      StructTypeNode, StructVarsizeTypeNode, getindexhelper, \
      FixedSizeArrayTypeNode, FixedSizeArrayNode
@@ -60,6 +60,8 @@ class Database(object):
             if getattr(value._callable, "suggested_primitive", False):
                 node = ExternalFuncNode(self, value)
                 self.externalfuncs[node.callable] = value
+            elif getattr(value, 'external', None) == 'C':
+                node = SimplerExternalFuncNode(self, value)
             else:
                 node = FuncNode(self, value)
 
@@ -101,28 +103,30 @@ class Database(object):
 
         self.obj2node[key] = node 
         self._pendingsetup.append(node)
-        
+
     def prepare_type(self, type_):
         if type_ in self.obj2node:
             return
+
         if isinstance(type_, lltype.Primitive):
             pass
-        elif isinstance(type_, lltype.Ptr): 
+
+        elif isinstance(type_, lltype.Ptr):
             self.prepare_type(type_.TO)
 
         elif isinstance(type_, lltype.FixedSizeArray):
             self.addpending(type_, FixedSizeArrayTypeNode(self, type_))
-            
+
         elif isinstance(type_, lltype.Struct):
             if type_._arrayfld:
                 self.addpending(type_, StructVarsizeTypeNode(self, type_))
             else:
-                self.addpending(type_, StructTypeNode(self, type_))                
+                self.addpending(type_, StructTypeNode(self, type_))
 
-        elif isinstance(type_, lltype.FuncType): 
+        elif isinstance(type_, lltype.FuncType):
             self.addpending(type_, FuncTypeNode(self, type_))
 
-        elif isinstance(type_, lltype.Array): 
+        elif isinstance(type_, lltype.Array):
             if type_.OF is lltype.Void:
                 self.addpending(type_, VoidArrayTypeNode(self, type_))
             else:
@@ -130,7 +134,7 @@ class Database(object):
 
         elif isinstance(type_, lltype.OpaqueType):
             if hasattr(type_, '_exttypeinfo'):
-                self.addpending(type_, ExtOpaqueTypeNode(self, type_))            
+                self.addpending(type_, ExtOpaqueTypeNode(self, type_))
             else:
                 self.addpending(type_, OpaqueTypeNode(self, type_))
 
@@ -147,8 +151,11 @@ class Database(object):
             if type_ is llmemory.Address:
                 # prepare the constant data which this address references
                 assert isinstance(value, llmemory.fakeaddress)
-                if value.ob is not None:
-                    self.prepare_constant(lltype.typeOf(value.ob), value.ob)
+                if value:
+                    self.prepare_constant(lltype.typeOf(value.ptr), value.ptr)
+            return
+
+        if isinstance(type_, lltype.Ptr) and isinstance(value._obj, int):
             return
         
         if isinstance(type_, lltype.Ptr):
@@ -178,8 +185,8 @@ class Database(object):
                 # special cases for address
                 if ct is llmemory.Address:
                     fakedaddress = const_or_var.value
-                    if fakedaddress is not None and fakedaddress.ob is not None:
-                        ptrvalue = fakedaddress.ob
+                    if fakedaddress:
+                        ptrvalue = fakedaddress.ptr
                         ct = lltype.typeOf(ptrvalue)
                     else:
                         return                        
@@ -192,6 +199,9 @@ class Database(object):
                 ptrvalue = const_or_var.value
                 
             value = ptrvalue._obj
+
+            if isinstance(value, int):
+                return
 
             # Only prepare root values at this point 
             if isinstance(ct, lltype.Array) or isinstance(ct, lltype.Struct):
@@ -234,7 +244,11 @@ class Database(object):
                 return self.primitives.repr(arg.concretetype, arg.value)
             else:
                 assert isinstance(arg.value, lltype._ptr)
-                if not arg.value:
+                if isinstance(arg.value._obj, int):
+                    rt = self.repr_type(arg.concretetype)
+                    v = repr(arg.value._obj)
+                    return 'cast (int %s to %s)'%(v, rt)
+                elif not arg.value:
                     return 'null'
                 else:
                     node = self.obj2node[arg.value._obj]
@@ -255,7 +269,11 @@ class Database(object):
             if isinstance(type_, lltype.Primitive):
                 return self.primitives[type_]
             elif isinstance(type_, lltype.Ptr):
-                return self.repr_type(type_.TO) + '*'
+                if isinstance(type_.TO, lltype.FixedSizeArray):
+                    # hack copied from genc
+                    return self.repr_type(type_.TO.OF) + '*'
+                else:
+                    return self.repr_type(type_.TO) + '*'
             else: 
                 raise TypeError("cannot represent %r" %(type_,))
             
@@ -282,6 +300,9 @@ class Database(object):
             # special case, null pointer
             if value is None:
                 return None, "%s null" % toptr
+
+            if isinstance(value, int):
+                return None, '%s cast (int %s to %s)'%(toptr, value, toptr)
 
             node = self.obj2node[value]
             ref = node.get_pbcref(toptr)
@@ -452,41 +473,13 @@ class Primitives(object):
         return repr
 
     def repr_address(self, type_, value):
-        if value is NULL:
+        if not value:
             return 'null'
+        ptr = value.ptr
+        node, ref = self.database.repr_constant(ptr)
+        res = "cast(%s to sbyte*)" % (ref,)
+        return res
 
-        assert isinstance(value, llmemory.fakeaddress)
-
-        if value.offset is None:
-            if value.ob is None:
-                return 'null'
-            else:
-                obj = value.ob._obj
-                typename = self.database.repr_type(lltype.typeOf(obj))
-                ref = self.database.repr_name(obj)
-        else:
-            from_, indices, to = self.get_offset(value.offset)
-            indices_as_str = ", ".join("%s %s" % (w, i) for w, i in indices)
-
-            #original_typename = self.database.repr_type(from_)
-            #orignal_ref = self.database.repr_name(value.ob._obj)
-            #
-            #typename = self.database.repr_type(to)
-            #ref = "getelementptr(%s* %s, %s)" % (original_typename,
-            #                                     orignal_ref,
-            #                                     indices_as_str)
-
-            ptrtype = self.database.repr_type(lltype.Ptr(from_))
-            node = self.database.obj2node[value.ob._obj]
-            parentref = node.get_pbcref(ptrtype)
-
-            typename = self.database.repr_type(to)
-            ref = "getelementptr(%s %s, %s)" % (ptrtype, parentref,
-                                                indices_as_str)
-
-        res = "cast(%s* %s to sbyte*)" % (typename, ref)
-        return res    
-    
     def repr_weakgcaddress(self, type_, value):
         assert isinstance(value, llmemory.fakeweakaddress)
         log.WARNING("XXX weakgcaddress completely ignored...")

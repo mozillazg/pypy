@@ -63,6 +63,7 @@ class Module(MixedModule):
         'meta_path'             : 'space.wrap([])',
         'path_hooks'            : 'space.wrap([])',
         'path_importer_cache'   : 'space.wrap({})',
+        #'subversion'           : added in Python 2.5
 }
     appleveldefs = {
         #'displayhook'           : 'app.displayhook', 
@@ -71,6 +72,7 @@ class Module(MixedModule):
         '__excepthook__'        : 'app.excepthook', 
         'exit'                  : 'app.exit', 
         'exitfunc'              : 'app.exitfunc',
+        'pypy__exithandlers__'  : 'app.pypy__exithandlers__',  # internal
         'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
         'getdefaultencoding'    : 'app.getdefaultencoding', 

@@ -178,13 +178,42 @@ def _buildusercls(cls, hasdict, wants_slots, wants_del, weakrefable):
                 if not space.is_true(space.isinstance(w_dict, space.w_dict)):
                     raise OperationError(space.w_TypeError,
                             space.wrap("setting dictionary to a non-dict"))
+                if space.config.objspace.std.withmultidict:
+                    from pypy.objspace.std import dictmultiobject
+                    assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
                 self.w__dict__ = w_dict
             
             def user_setup(self, space, w_subtype):
                 self.space = space
                 self.w__class__ = w_subtype
-                self.w__dict__ = space.newdict()
+                if space.config.objspace.std.withsharingdict:
+                    from pypy.objspace.std import dictmultiobject
+                    self.w__dict__ = dictmultiobject.W_DictMultiObject(space,
+                            sharing=True)
+                elif space.config.objspace.std.withshadowtracking:
+                    from pypy.objspace.std import dictmultiobject
+                    self.w__dict__ = dictmultiobject.W_DictMultiObject(space)
+                    self.w__dict__.implementation = \
+                        dictmultiobject.ShadowDetectingDictImplementation(
+                                space, w_subtype)
+                else:
+                    self.w__dict__ = space.newdict()
                 self.user_setup_slots(w_subtype.nslots)
+
+            def setclass(self, space, w_subtype):
+                # only used by descr_set___class__
+                self.w__class__ = w_subtype
+                if space.config.objspace.std.withshadowtracking:
+                    self.w__dict__.implementation.shadows_anything = True
+
+            def getdictvalue_attr_is_in_class(self, space, w_name):
+                w_dict = self.w__dict__
+                if space.config.objspace.std.withshadowtracking:
+                    if (not w_dict.implementation.shadows_anything and
+                        self.w__class__.version_tag is not None):
+                        return None
+                return space.finditem(w_dict, w_name)
+            
     else:
         supercls = cls
         
@@ -194,6 +223,7 @@ def _buildusercls(cls, hasdict, wants_slots, wants_del, weakrefable):
                 return self.w__class__
             
             def setclass(self, space, w_subtype):
+
                 # only used by descr_set___class__
                 self.w__class__ = w_subtype
             
@@ -442,7 +472,8 @@ Member.typedef = TypeDef(
 
 from pypy.interpreter.eval import Code, Frame
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
-from pypy.interpreter.pyframe import PyFrame, ControlFlowException
+from pypy.interpreter.pyframe import PyFrame
+from pypy.interpreter.pyopcode import SuspendedUnroller
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import Function, Method, StaticMethod
 from pypy.interpreter.function import BuiltinFunction, descr_function_get
@@ -492,7 +523,7 @@ def fget_co_flags(space, code): # unwrapping through unwrap_spec
     return space.wrap(flags)
 
 def fget_co_consts(space, code): # unwrapping through unwrap_spec
-    w_docstring = space.wrap(code.getdocstring())
+    w_docstring = code.getdocstring(space)
     return space.newtuple([w_docstring])
 
 weakref_descr = GetSetProperty(descr_get_weakref)
@@ -696,7 +727,7 @@ NotImplemented.typedef = TypeDef("NotImplemented",
     __repr__   = interp2app(NotImplemented.descr__repr__),
 )
 
-ControlFlowException.typedef = TypeDef("ControlFlowException")
+SuspendedUnroller.typedef = TypeDef("SuspendedUnroller")
 
 
 interptypes = [ val.typedef for name,val in globals().items() if hasattr(val,'__bases__') and hasattr(val,'typedef')  ]

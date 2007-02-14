@@ -6,7 +6,6 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.translator.js.opcodes import opcodes
 from pypy.translator.js.function import Function
 from pypy.translator.js.log import log
-from pypy.translator.js.jts import JTS
 from pypy.translator.js._class import Class
 from pypy.translator.js.support import JavascriptNameManager
 
@@ -42,18 +41,8 @@ class LowLevelDatabase(object):
         self.name_manager = JavascriptNameManager(self)
         self.pending_consts = []
         self.cts = self.genoo.TypeSystem(self)
-        self.prepare_builtins()
         self.proxies = []
     
-    def prepare_builtins(self):
-        # Document Object Model elements
-        #for module in [dom]:
-        #    for i in dir(module):
-        #        if not i.startswith('__'):
-        #            # FIXME: shit, strange way of doing it
-        #            self.consts[BuiltinConst(module[i])] = i
-        return
-
     def is_primitive(self, type_):
         if type_ in [Void, Bool, Float, Signed, Unsigned, SignedLongLong, UnsignedLongLong, Char, UniChar, ootype.StringBuilder] or \
             isinstance(type_,ootype.StaticMethod):
@@ -62,6 +51,10 @@ class LowLevelDatabase(object):
 
     def pending_function(self, graph):
         self.pending_node(self.genoo.Function(self, graph))
+
+    def pending_abstract_function(self, name):
+        pass
+        # XXX we want to implement it at some point (maybe...)
 
     def pending_class(self, classdef):
         c = Class(self, classdef)
@@ -110,6 +103,8 @@ class LowLevelDatabase(object):
         if self.is_primitive(type_):
             return None
         const = AbstractConst.make(self, value)
+        if not const:
+            return None
         try:
             if retval == 'name':
                 return self.consts[const]
@@ -132,18 +127,20 @@ class LowLevelDatabase(object):
         else:
             return const
 
-    def gen_constants(self, ilasm):
-        if not self.rendered:
-            ilasm.begin_consts(self.const_var.name)
-        
+    def gen_constants(self, ilasm, pending):
         try:
             while True:
                 const,name = self.pending_consts.pop()
                 const.record_fields()
         except IndexError:
             pass
-        
 
+        if pending:
+            return
+
+        if not self.rendered:
+            ilasm.begin_consts(self.const_var.name)
+        
         def generate_constants(consts):
             all_c = [const for const,name in consts.iteritems()]
             dep_ok = set()
@@ -170,15 +167,18 @@ class LowLevelDatabase(object):
         log("Consts: %r"%self.consts)
         # We need to keep track of fields to make sure
         # our items appear earlier than us
-        for const,name in generate_constants(self.consts):
+        to_init = []
+        for const, name in generate_constants(self.consts):
             log("Recording %r %r"%(const,name))
             ilasm.load_local(self.const_var)
             const.init(ilasm)
             ilasm.set_field(None, name)
             ilasm.store_void()
-            const.init_fields(ilasm, self.const_var, name)
+            to_init.append((const, name))
             #ilasm.field(name, const.get_type(), static=True)
-    
+        for const, name in to_init:
+            const.init_fields(ilasm, self.const_var, name)
+
     def load_const(self, type_, value, ilasm):
         if self.is_primitive(type_):
             ilasm.load_const(self.cts.primitive_repr(type_, value))
@@ -229,6 +229,11 @@ class AbstractConst(object):
             return DictConst(db, const)
         elif isinstance(const, bltregistry._external_type):
             return ExtObject(db, const)
+        elif isinstance(const, ootype._class):
+            if const._INSTANCE:
+                return ClassConst(db, const)
+            else:
+                return None
         else:
             assert False, 'Unknown constant: %s %r' % (const, typeOf(const))
     make = staticmethod(make)
@@ -285,32 +290,27 @@ class InstanceConst(AbstractConst):
     def record_fields(self):
         if not self.obj:
             return
-        # we support only primitives, tuples, strings and lists
-        
         INSTANCE = self.obj._TYPE
-        while INSTANCE:
-            for i, (_type, val) in INSTANCE._fields.iteritems():
-                if _type is not ootype.Void and i.startswith('o'):
-                    name = self.db.record_const(getattr(self.obj, i), _type, 'const')
-                    if name is not None:
-                        self.depends.add(name)
-                        name.depends_on.add(self)
-            INSTANCE = INSTANCE._superclass
+        #while INSTANCE:
+        for i, (_type, val) in INSTANCE._allfields().items():
+            if _type is not ootype.Void:
+                name = self.db.record_const(getattr(self.obj, i), _type, 'const')
+                if name is not None:
+                    self.depends.add(name)
+                    name.depends_on.add(self)
         
     def init_fields(self, ilasm, const_var, name):
         if not self.obj:
             return
         
         INSTANCE = self.obj._TYPE
-        while INSTANCE:
-            for i, (_type, el) in INSTANCE._fields.iteritems():
-                if _type is not ootype.Void and i.startswith('o'):
-                    ilasm.load_local(const_var)
-                    self.db.load_const(_type, getattr(self.obj, i), ilasm)
-                    ilasm.set_field(None, "%s.%s"%(name, i))
-                    ilasm.store_void()
-            INSTANCE = INSTANCE._superclass
-            #raise NotImplementedError("Default fields of instances")
+        #while INSTANCE:
+        for i, (_type, el) in INSTANCE._allfields().items():
+            if _type is not ootype.Void:
+                ilasm.load_local(const_var)
+                self.db.load_const(_type, getattr(self.obj, i), ilasm)
+                ilasm.set_field(None, "%s.%s"%(name, i))
+                ilasm.store_void()
 
 class RecordConst(AbstractConst):
     def get_name(self):
@@ -391,14 +391,37 @@ class StringConst(AbstractConst):
         return self.const._str
 
     def init(self, ilasm):
-        s = self.const._str
+        if self.const:
+            s = self.const._str
         # do some escaping
         #s = s.replace("\n", "\\n").replace('"', '\"')
         #s = repr(s).replace("\"", "\\\"")
-        ilasm.load_str("%s" % repr(s))
+            ilasm.load_str("%s" % repr(s))
+        else:
+            ilasm.load_str("undefined")
     
     def init_fields(self, ilasm, const_var, name):
         pass
+
+class ClassConst(AbstractConst):
+    def __init__(self, db, const):
+        super(ClassConst, self).__init__(db, const)
+        self.cts.lltype_to_cts(const._INSTANCE) # force scheduling of class
+    
+    def get_name(self):
+        return "const_class"
+    
+    def get_key(self):
+        return self.get_name()
+    
+    def get_name(self):
+        return self.const._INSTANCE._name.replace(".", "_")
+    
+    def init(self, ilasm):
+        ilasm.load_const("%s" % self.get_name())
+    
+    #def init_fields(self, ilasm, const_var, name):
+    #    pass
 
 class BuiltinConst(AbstractConst):
     def __init__(self, name):
@@ -468,4 +491,7 @@ class ExtObject(AbstractConst):
             ilasm.new(self.get_name())
         else:
             # Otherwise they just exist, or it's not implemented
-            ilasm.load_str("undefined")
+            if not hasattr(self.const.value, '_render_name'):
+                raise ValueError("Prebuilt constant %s has no attribute _render_name,"
+                                  "don't know how to render" % self.const.value)
+            ilasm.load_str(self.const.value._render_name)

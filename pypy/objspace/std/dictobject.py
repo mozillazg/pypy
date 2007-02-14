@@ -41,7 +41,7 @@ class W_DictObject(W_Object):
     def get(w_dict, w_lookup, w_default):
         return w_dict.content.get(w_lookup, w_default)
 
-    def set_str_keyed_item(w_dict, w_key, w_value):
+    def set_str_keyed_item(w_dict, w_key, w_value, shadows_type=True):
         w_dict.content[w_key] = w_value
 
 registerimplementation(W_DictObject)
@@ -52,9 +52,7 @@ def init__Dict(space, w_dict, __args__):
                           (['seq_or_map'], None, 'kwargs'), # signature
                           [W_DictObject(space)])            # default argument
     # w_dict.content.clear() - disabled only for CPython compatibility
-    try:
-        space.getattr(w_src, space.wrap("keys"))
-    except OperationError:
+    if space.findattr(w_src, space.wrap("keys")) is None:
         list_of_w_pairs = space.unpackiterable(w_src)
         for w_pair in list_of_w_pairs:
             pair = space.unpackiterable(w_pair)

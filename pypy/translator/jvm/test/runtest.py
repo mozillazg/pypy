@@ -15,7 +15,6 @@ from pypy.translator.jvm.option import getoption
 
 FLOAT_PRECISION = 8
 
-# CLI duplicate
 class StructTuple(tuple):
     def __getattr__(self, name):
         if name.startswith('item'):
@@ -35,18 +34,26 @@ class OOList(list):
 # CLI duplicate
 class ExceptionWrapper:
     def __init__(self, class_name):
-        self.class_name = class_name
+        # We put all of our classes into some package like 'pypy':
+        # strip the initial 'pypy.' that results from the class name,
+        # and we append a number to make the class name unique. Strip
+        # those.
+        pkg = getoption('package')+'.'
+        assert class_name.startswith(pkg)
+        uniqidx = class_name.rindex('_')
+        self.class_name = class_name[len(pkg):uniqidx]
 
     def __repr__(self):
         return 'ExceptionWrapper(%s)' % repr(self.class_name)
 
 class InstanceWrapper:
-    def __init__(self, fields):
+    def __init__(self, class_name, fields):
+        self.class_name = class_name
         # fields is a list of (name, value) tuples
         self.fields = fields
 
     def __repr__(self):
-        return 'InstanceWrapper(%s)' % repr(self.fields)
+        return 'InstanceWrapper(%s, %r)' % (self.class_name, self.fields)
 
 # CLI could-be duplicate
 class JvmGeneratedSourceWrapper(object):
@@ -130,4 +137,7 @@ class JvmTest(BaseRtypingTest, OORtypeMixin):
         return isinstance(val, InstanceWrapper)
 
     def read_attr(self, obj, name):
-        py.test.skip('read_attr not supported on genjvm tests')
+        py.test.skip("read_attr not supported on JVM")
+        # TODO --- this "almost works": I think the problem is that our
+        # dump methods don't dump fields of the super class??
+        #return obj.fields["o"+name]

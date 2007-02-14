@@ -34,8 +34,6 @@ class KeyComp(object):
 
 class LowLevelAnnotatorPolicy(AnnotatorPolicy):
     allow_someobjects = False
-    # if this exists and is boolean, then it always wins:
-    override_do_imports_immediately = True
 
     def __init__(pol, rtyper=None):
         pol.rtyper = rtyper
@@ -344,6 +342,27 @@ class LLHelperEntry(extregistry.ExtRegistryEntry):
 
 # ____________________________________________________________
 
+def hlstr(ll_s):
+    if hasattr(ll_s, 'items'):
+        return ''.join(items)
+    else:
+        return ll_s._str
+
+class HLStrEntry(extregistry.ExtRegistryEntry):
+    _about_ = hlstr
+
+    def compute_result_annotation(self, s_ll_str):
+        return annmodel.SomeString()
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        assert hop.args_r[0].lowleveltype == hop.r_result.lowleveltype
+        v_ll_str, = hop.inputargs(*hop.args_r)
+        return hop.genop('same_as', [v_ll_str],
+                         resulttype = hop.r_result.lowleveltype)
+
+# ____________________________________________________________
+
 def cast_object_to_ptr(PTR, object):
     raise NotImplementedError("cast_object_to_ptr")
 
@@ -364,11 +383,15 @@ class CastObjectToPtrEntry(extregistry.ExtRegistryEntry):
         return annmodel.SomePtr(s_PTR.const)
 
     def specialize_call(self, hop):
+        from pypy.rpython import rpbc
+        PTR = hop.r_result.lowleveltype
+        if isinstance(hop.args_r[1], rpbc.NoneFrozenPBCRepr):
+            return hop.inputconst(PTR, lltype.nullptr(PTR.TO))
         v_arg = hop.inputarg(hop.args_r[1], arg=1)
         assert isinstance(v_arg.concretetype, lltype.Ptr)
         hop.exception_cannot_occur()
         return hop.genop('cast_pointer', [v_arg],
-                         resulttype = hop.r_result.lowleveltype)
+                         resulttype = PTR)
 
 # ____________________________________________________________
 
@@ -494,5 +517,13 @@ class cachedtype(type):
             return d[args]
         except KeyError:
             instance = d[args] = selfcls.__new__(selfcls, *args)
-            instance.__init__(*args)
+            try:
+                instance.__init__(*args)
+            except:
+                # If __init__ fails, remove the 'instance' from d.
+                # That's a "best effort" attempt, it's not really enough
+                # in theory because some other place might have grabbed
+                # a reference to the same broken 'instance' in the meantime
+                del d[args]
+                raise
             return instance

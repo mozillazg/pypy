@@ -2,16 +2,15 @@ import os #
 from pypy.objspace.flow import model as flowmodel
 from pypy.translator.oosupport.metavm import Generator
 from pypy.rpython.ootypesystem import ootype
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 from pypy.translator.oosupport.constant import push_constant
+import pypy.translator.jvm.typesystem as jvmtype
 from pypy.translator.jvm.typesystem import \
      JvmType, jString, jInt, jLong, jDouble, jBool, jString, \
      jPyPy, jVoid, jMath, desc_for_method, jPrintStream, jClass, jChar, \
-     jObject, jByteArray
-
-# ___________________________________________________________________________
-# Helper class string constants
-
-PYPYJAVA = jPyPy.name
+     jObject, jByteArray, jPyPyExcWrap, jIntegerClass, jLongClass, \
+     jDoubleClass, jCharClass, jStringBuilder, JvmScalarType, jArrayList, \
+     jObjectArray, jPyPyInterlink
 
 # ___________________________________________________________________________
 # Miscellaneous helper functions
@@ -183,6 +182,7 @@ LDC =       Opcode('ldc')       # single-word types
 LDC2 =      Opcode('ldc2_w')    # double-word types: doubles and longs
 GOTO =      Opcode('goto')
 ICONST =    IntConstOpcode('iconst')
+ICONST_0 =  Opcode('iconst_0')  # sometimes convenient to refer to this directly
 ACONST_NULL=Opcode('aconst_null')
 DCONST_0 =  Opcode('dconst_0')
 DCONST_1 =  Opcode('dconst_0')
@@ -205,6 +205,7 @@ IOR =       Opcode('ior')
 ISHL =      Opcode('ishl')
 ISHR =      Opcode('ishr')
 IUSHR =     Opcode('iushr')
+LCMP =      Opcode('lcmp')
 DCMPG =     Opcode('dcmpg')
 DCMPL =     Opcode('dcmpl')
 NOP =       Opcode('nop')
@@ -236,6 +237,7 @@ DUP =       Opcode('dup')
 DUP2 =      Opcode('dup2')
 POP =       Opcode('pop')
 POP2 =      Opcode('pop2')
+SWAP =      Opcode('swap')
 INSTANCEOF= IntClassNameOpcode('instanceof')
 # Loading/storing local variables
 LOAD =      OpcodeFamily(VarOpcode, "load")
@@ -280,7 +282,8 @@ class Label(object):
 # methobj is its Method instance.
 
 class Method(object):
-    
+
+    # Create a virtual method:
     def v(classty, methnm, argtypes, rettype):
         """
         Shorthand to create a virtual method.
@@ -292,12 +295,10 @@ class Method(object):
         """
         assert isinstance(classty, JvmType)
         classnm = classty.name
-        argtypes = [a.descriptor for a in argtypes]
-        rettype = rettype.descriptor
-        return Method(classnm, methnm, desc_for_method(argtypes, rettype),
-                      opcode=INVOKEVIRTUAL)
+        return Method(classnm, methnm, argtypes, rettype, opcode=INVOKEVIRTUAL)
     v = staticmethod(v)
     
+    # Create a static method:
     def s(classty, methnm, argtypes, rettype):
         """
         Shorthand to create a static method.
@@ -309,29 +310,45 @@ class Method(object):
         """
         assert isinstance(classty, JvmType)
         classnm = classty.name
-        argtypes = [a.descriptor for a in argtypes]
-        rettype = rettype.descriptor
-        return Method(classnm, methnm, desc_for_method(argtypes, rettype))
+        return Method(classnm, methnm, argtypes, rettype)
     s = staticmethod(s)
     
-    def __init__(self, classnm, methnm, desc, opcode=INVOKESTATIC):
+    def __init__(self, classnm, methnm, argtypes, rettype, opcode=INVOKESTATIC):
         self.opcode = opcode
         self.class_name = classnm  # String, ie. "java.lang.Math"
         self.method_name = methnm  # String "abs"
-        self.descriptor = desc     # String, (I)I
+        self.argument_types = argtypes # List of jvmtypes
+        self.return_type = rettype     # jvmtype
+
+        # Compute the method descriptior, which is a string like "()I":
+        argtypesdesc = [a.descriptor for a in argtypes]
+        rettypedesc = rettype.descriptor
+        self.descriptor = desc_for_method(argtypesdesc, rettypedesc)  
     def invoke(self, gen):
-        gen._instr(self.opcode, self)
+        gen._instr(self.opcode, self)        
+    def is_static(self):
+        return self.opcode == INVOKESTATIC
     def jasmin_syntax(self):
         return "%s/%s%s" % (self.class_name.replace('.','/'),
                             self.method_name,
                             self.descriptor)
 
+OBJHASHCODE =           Method.v(jObject, 'hashCode', (), jInt)
+OBJTOSTRING =           Method.v(jObject, 'toString', (), jString)
+OBJEQUALS =             Method.v(jObject, 'equals', (jObject,), jBool)
+INTTOSTRINGI =          Method.s(jIntegerClass, 'toString', (jInt,), jString)
+LONGTOSTRINGL =         Method.s(jLongClass, 'toString', (jLong,), jString)
+DOUBLETOSTRINGD =       Method.s(jDoubleClass, 'toString', (jDouble,), jString)
+CHARTOSTRINGC =         Method.s(jCharClass, 'toString', (jChar,), jString)
 MATHIABS =              Method.s(jMath, 'abs', (jInt,), jInt)
 MATHLABS =              Method.s(jMath, 'abs', (jLong,), jLong)
 MATHDABS =              Method.s(jMath, 'abs', (jDouble,), jDouble)
 MATHFLOOR =             Method.s(jMath, 'floor', (jDouble,), jDouble)
 PRINTSTREAMPRINTSTR =   Method.v(jPrintStream, 'print', (jString,), jVoid)
 CLASSFORNAME =          Method.s(jClass, 'forName', (jString,), jClass)
+CLASSISASSIGNABLEFROM = Method.v(jClass, 'isAssignableFrom', (jClass,), jBool)
+PYPYAPPEND =            Method.s(jPyPy, 'append',
+                                 (jStringBuilder, jString), jVoid)
 PYPYUINTCMP =           Method.s(jPyPy, 'uint_cmp', (jInt,jInt,), jInt)
 PYPYULONGCMP =          Method.s(jPyPy, 'ulong_cmp', (jLong,jLong), jInt)
 PYPYUINTTODOUBLE =      Method.s(jPyPy, 'uint_to_double', (jInt,), jDouble)
@@ -344,18 +361,20 @@ PYPYSTRTOULONG =        Method.s(jPyPy, 'str_to_ulong', (jString,), jLong)
 PYPYSTRTOBOOL =         Method.s(jPyPy, 'str_to_bool', (jString,), jBool)
 PYPYSTRTODOUBLE =       Method.s(jPyPy, 'str_to_double', (jString,), jDouble)
 PYPYSTRTOCHAR =         Method.s(jPyPy, 'str_to_char', (jString,), jChar)
-PYPYDUMPINDENTED  =     Method.s(jPyPy, 'dump_indented', (jInt,jString,), jVoid)
-PYPYDUMPINT  =          Method.s(jPyPy, 'dump_int', (jInt,jInt), jVoid)
-PYPYDUMPUINT  =         Method.s(jPyPy, 'dump_uint', (jInt,jInt), jVoid)
-PYPYDUMPLONG  =         Method.s(jPyPy, 'dump_long', (jLong,jInt), jVoid)
-PYPYDUMPDOUBLE  =       Method.s(jPyPy, 'dump_double', (jDouble,jInt), jVoid)
-PYPYDUMPSTRING  =       Method.s(jPyPy, 'dump_string', (jString,jInt), jVoid)
-PYPYDUMPBOOLEAN =       Method.s(jPyPy, 'dump_boolean', (jBool,jInt), jVoid)
-PYPYDUMPOBJECT =        Method.s(jPyPy, 'dump_object', (jObject,jInt,), jVoid)
-PYPYDUMPVOID =          Method.s(jPyPy, 'dump_void', (jInt,), jVoid)
+PYPYDUMP          =     Method.s(jPyPy, 'dump', (jString,), jVoid)
+PYPYSERIALIZEBOOLEAN =  Method.s(jPyPy, 'serialize_boolean', (jBool,), jString)
+PYPYSERIALIZEUINT  =    Method.s(jPyPy, 'serialize_uint', (jInt,), jString)
+PYPYSERIALIZEVOID =     Method.s(jPyPy, 'serialize_void', (), jString)
+PYPYESCAPEDCHAR =       Method.s(jPyPy, 'escaped_char', (jChar,), jString)
+PYPYESCAPEDSTRING =     Method.s(jPyPy, 'escaped_string', (jString,), jString)
+PYPYSERIALIZEOBJECT =   Method.s(jPyPy, 'serializeObject', (jObject,), jString)
+PYPYDUMPEXCWRAPPER =    Method.s(jPyPy, 'dump_exc_wrapper', (jObject,), jVoid)
 PYPYRUNTIMENEW =        Method.s(jPyPy, 'RuntimeNew', (jClass,), jObject)
 PYPYSTRING2BYTES =      Method.s(jPyPy, 'string2bytes', (jString,), jByteArray)
-
+PYPYARRAYTOLIST =       Method.s(jPyPy, 'array_to_list', (jObjectArray,), jArrayList)
+OBJECTGETCLASS =        Method.v(jObject, 'getClass', (), jClass)
+CLASSGETNAME =          Method.v(jClass, 'getName', (), jString)
+EXCWRAPWRAP =           Method.s(jPyPyExcWrap, 'wrap', (jObject,), jPyPyExcWrap)
 
 # ___________________________________________________________________________
 # Fields
@@ -363,10 +382,11 @@ PYPYSTRING2BYTES =      Method.s(jPyPy, 'string2bytes', (jString,), jByteArray)
 # Field objects encode information about fields.
 
 class Field(object):
-    def __init__(self, classnm, fieldnm, jtype, static):
+    def __init__(self, classnm, fieldnm, jtype, static, OOTYPE=None):
         # All fields are public
         self.class_name = classnm  # String, ie. "java.lang.Math"
         self.field_name = fieldnm  # String "someField"
+        self.OOTYPE = OOTYPE       # OOTYPE equivalent of JvmType, may be None
         self.jtype = jtype         # JvmType
         self.is_static = static    # True or False
     def load(self, gen):
@@ -391,6 +411,10 @@ DOUBLENAN =    Field('java.lang.Double', 'NaN', jDouble, True)
 DOUBLEPOSINF = Field('java.lang.Double', 'POSITIVE_INFINITY', jDouble, True)
 DOUBLENEGINF = Field('java.lang.Double', 'NEGATIVE_INFINITY', jDouble, True)
 
+PYPYINTERLINK= Field(jPyPy.name, 'interlink', jPyPyInterlink, True)
+
+EXCWRAPOBJ =   Field(jPyPyExcWrap.name, 'object', jObject, False)
+
 # ___________________________________________________________________________
 # Generator State
 
@@ -409,6 +433,7 @@ class FunctionState(object):
     def __init__(self):
         self.next_offset = 0
         self.local_vars = {}
+        self.function_arguments = []
         self.instr_counter = 0
     def add_var(self, jvar, jtype):
         """ Adds new entry for variable 'jvar', of java type 'jtype' """
@@ -417,6 +442,7 @@ class FunctionState(object):
         if jvar:
             assert jvar not in self.local_vars # never been added before
             self.local_vars[jvar] = idx
+        self.function_arguments.append((jtype, idx))
         return idx
     def var_offset(self, jvar, jtype):
         """ Returns offset for variable 'jvar', of java type 'jtype' """
@@ -449,14 +475,15 @@ class JVMGenerator(Generator):
     # If the name does not begin with '_', it will be called from
     # outside the generator.
 
-    def begin_class(self, classty, superclsty):
+    def begin_class(self, classty, superclsty, abstract=False):
         """
         Begins a class declaration.  Overall flow of class declaration
         looks like:
 
         begin_class()
-        [add_field()]
-        emit_constructor()
+        {implements()}
+        {add_field()}
+        begin_constructor()...end_constructor()
         [begin_function()...end_function()]
         end_class()
 
@@ -467,14 +494,19 @@ class JVMGenerator(Generator):
         """
         assert not self.curclass
         self.curclass = ClassState(classty, superclsty)
-        self._begin_class()
+        self._begin_class(abstract)
 
     def end_class(self):
         self._end_class()
         self.curclass = None
         self.curfunc = None
 
-    def _begin_class(self):
+    def current_type(self):
+        """ Returns the jvm type we are currently defining.  If
+        begin_class() has not been called, returns None. """
+        return self.curclass.class_type
+
+    def _begin_class(self, abstract):
         """ Main implementation of begin_class """
         raise NotImplementedError
 
@@ -482,29 +514,38 @@ class JVMGenerator(Generator):
         """ Main implementation of end_class """
         raise NotImplementedError    
 
+    def implements(self, jinterface):
+        """
+        Indicates that the current class implements the interface
+        jinterface, which should be a JvmType.
+        """
+        raise NotImplementedError
+
     def add_field(self, fobj):
         """
         fobj: a Field object
         """
         unimplemented
 
-    def emit_constructor(self):
+    def begin_constructor(self):
         """
         Emits the constructor for this class, which merely invokes the
         parent constructor.
         
         superclsnm --- same Java name of super class as from begin_class
         """
-        self.begin_function("<init>", [], [self.curclass.class_type], jVoid)
-        self.load_jvm_var(self.curclass.class_type, 0)
-        jmethod = Method(self.curclass.superclass_type.name, "<init>", "()V",
-                         opcode=INVOKESPECIAL)
+        self.begin_function("<init>", [], [self.current_type()], jVoid)
+        self.load_jvm_var(self.current_type(), 0)
+        jmethod = Method(self.curclass.superclass_type.name, "<init>",
+                         (), jVoid, opcode=INVOKESPECIAL)
         jmethod.invoke(self)
+
+    def end_constructor(self):
         self.return_val(jVoid)
         self.end_function()
 
     def begin_function(self, funcname, argvars, argtypes, rettype,
-                       static=False):
+                       static=False, abstract=False):
         """
         funcname --- name of the function
         argvars --- list of objects passed to load() that represent arguments;
@@ -528,9 +569,9 @@ class JVMGenerator(Generator):
         # Prepare a map for the local variable indices we will add
         # Let the subclass do the rest of the work; note that it does
         # not need to know the argvars parameter, so don't pass it
-        self._begin_function(funcname, argtypes, rettype, static)
+        self._begin_function(funcname, argtypes, rettype, static, abstract)
 
-    def _begin_function(self, funcname, argtypes, rettype, static):
+    def _begin_function(self, funcname, argtypes, rettype, static, abstract):
         """
         Main implementation of begin_function.  The begin_function()
         does some generic handling of args.
@@ -557,6 +598,13 @@ class JVMGenerator(Generator):
         """ Returns a value from top of stack of the JvmType 'vartype' """
         self._instr(RETURN.for_type(vartype))
 
+    def load_class_name(self):
+        """ Loads the name of the *Java* class of the object on the top of
+        the stack as a Java string.  Note that the result for a PyPy
+        generated class will look something like 'pypy.some.pkg.cls' """
+        self.emit(OBJECTGETCLASS)
+        self.emit(CLASSGETNAME)
+
     def load_string(self, str):
         """ Pushes a Java version of a Python string onto the stack.
         'str' should be a Python string encoded in UTF-8 (I think) """
@@ -564,6 +612,8 @@ class JVMGenerator(Generator):
         def escape(char):
             if char == '"': return r'\"'
             if char == '\n': return r'\n'
+            if char == "\\": return r'\\'
+            if ord(char) > 127: return r'\u%04x' % ord(char)
             return char
         res = ('"' + 
                "".join(escape(c) for c in str) +
@@ -623,6 +673,46 @@ class JVMGenerator(Generator):
         virtual method, not static methods. """
         self.load_jvm_var(jObject, 0)
 
+    def load_function_argument(self, index):
+        """ Convenience method.  Loads function argument #index; note that
+        the this pointer is index #0. """
+        jtype, jidx = self.curfunc.function_arguments[index]
+        self.load_jvm_var(jtype, jidx)
+
+    def prepare_generic_argument(self, ITEMTYPE):
+        jty = self.db.lltype_to_cts(ITEMTYPE)
+        if jty is jvmtype.jVoid:
+            self.emit(ACONST_NULL)
+        elif isinstance(jty, JvmScalarType):
+            self.box_value(jty)
+
+    def prepare_generic_result(self, ITEMTYPE):
+        jresty = self.db.lltype_to_cts(ITEMTYPE)
+        if jresty is jvmtype.jVoid:
+            self.emit(POP)
+        elif isinstance(jresty, JvmScalarType):
+            # Perform any un-boxing required:
+            self.downcast_jtype(jresty.box_type)
+            self.unbox_value(jresty)
+        else:
+            # Perform any casting required:
+            self.downcast(ITEMTYPE)
+
+    def box_value(self, jscalartype):
+        """ Assuming that an value of type jscalartype is on the stack,
+        boxes it into an Object. """
+        jclasstype = jscalartype.box_type
+        jmethod = Method.s(jclasstype, 'valueOf', (jscalartype,), jclasstype)
+        self.emit(jmethod)
+
+    def unbox_value(self, jscalartype):
+        """ Assuming that a boxed value of type jscalartype is on the stack,
+        unboxes it.  """        
+        jclasstype = jscalartype.box_type
+        jmethod = Method.v(
+            jclasstype, jscalartype.unbox_method, (), jscalartype)
+        self.emit(jmethod)
+
     # __________________________________________________________________
     # Exception Handling
 
@@ -647,10 +737,25 @@ class JVMGenerator(Generator):
         try region is reused.
         'excclsty' --- a JvmType for the class of exception to be caught
         """
-        catchlbl = self.unique_label("catch")
-        self.mark(catchlbl, mark=True)
+        catchlbl = self.unique_label("catch", mark=True)
         self.try_catch_region(
-            excclsty, self.begintrylbl, send.endtrylbl, catchlbl)
+            jPyPyExcWrap, self.begintrylbl, self.endtrylbl, catchlbl)
+
+        # emit the code to unwrap the exception, check the type
+        # of the unwrapped object, and re-throw the exception
+        # if it not the right type
+        catch = self.unique_label('catch')
+        self.emit(DUP)
+        EXCWRAPOBJ.load(self)
+        self.emit(INSTANCEOF, excclsty)
+        self.emit(IFNE, catch)
+        self.emit(ATHROW)
+
+        # If it IS the right type, just dereference and get the
+        # wrapped Python object 
+        self.mark(catch)
+        EXCWRAPOBJ.load(self)
+        self.emit(CHECKCAST, excclsty)
 
     def end_catch(self):
         """
@@ -661,14 +766,60 @@ class JVMGenerator(Generator):
         
     def try_catch_region(self, excclsty, trystartlbl, tryendlbl, catchlbl):
         """
-        Indicates a try/catch region:
+        Indicates a try/catch region.
+
+        Either invoked directly, or from the begin_catch() routine:
+        the latter is invoked by the oosupport code.
+        
         'excclsty' --- a JvmType for the class of exception to be caught
         'trystartlbl', 'tryendlbl' --- labels marking the beginning and end
         of the try region
         'catchlbl' --- label marking beginning of catch region
         """
         unimplemented
-        
+
+    _equals = {
+        ootype.Void:             (None,None),
+        ootype.SignedLongLong:   (LCMP,IFEQ),
+        ootype.UnsignedLongLong: (LCMP,IFEQ),
+        ootype.Float:            (DCMPG,IFEQ),
+        ootype.Signed:           (None,IF_ICMPNE),
+        ootype.Unsigned:         (None,IF_ICMPNE),
+        ootype.Bool:             (None,IF_ICMPNE),
+        ootype.Char:             (None,IF_ICMPNE),
+        ootype.UniChar:          (None,IF_ICMPNE),
+        }
+    def compare_values(self, OOTYPE, unequal_lbl):
+        """ Assumes that two instances of OOTYPE are pushed on the stack;
+        compares them and jumps to 'unequal_lbl' if they are unequal """
+        if OOTYPE in self._equals:
+            i1, i2 = self._equals[OOTYPE]
+            if i1: self.emit(i1)
+            if i2: self.emit(i2, unequal_lbl)
+            return
+        self.emit(OBJEQUALS)
+        self.emit(IFEQ, unequal_lbl)
+
+    _hash = {
+        ootype.Void:             ICONST_0,
+        ootype.SignedLongLong:   L2I,
+        ootype.UnsignedLongLong: L2I,
+        ootype.Float:            D2I,
+        ootype.Signed:           None,
+        ootype.Unsigned:         None,
+        ootype.Bool:             None,
+        ootype.Char:             None,
+        ootype.UniChar:          None,
+        }
+    def hash_value(self, OOTYPE):
+        """ Assumes that an instance of OOTYPE is pushed on the stack.
+        When finished, an int will be on the stack as a hash value. """
+        if OOTYPE in self._hash:
+            i1 = self._hash[OOTYPE]
+            if i1: self.emit(i1)
+            return
+        self.emit(OBJHASHCODE)
+
     # __________________________________________________________________
     # Generator methods and others that are invoked by MicroInstructions
     # 
@@ -687,6 +838,9 @@ class JVMGenerator(Generator):
 
         if isinstance(instr, Method):
             return instr.invoke(self)
+
+        if isinstance(instr, Field):
+            return instr.load(self)
 
         raise Exception("Unknown object in call to emit(): "+repr(instr))
 
@@ -730,14 +884,20 @@ class JVMGenerator(Generator):
 
     def downcast(self, TYPE):
         jtype = self.db.lltype_to_cts(TYPE)
+        self.downcast_jtype(jtype)
+
+    def downcast_jtype(self, jtype):
         self._instr(CHECKCAST, jtype)
         
     def instanceof(self, TYPE):
         jtype = self.db.lltype_to_cts(TYPE)
         self._instr(INSTANCEOF, jtype)
 
+    def isinstance(self, jtype):
+        self._instr(INSTANCEOF, jtype)
+
     def branch_unconditionally(self, target_label):
-        self._instr(GOTO, target_label)
+        self.goto(target_label)
 
     def branch_conditionally(self, cond, target_label):
         if cond:
@@ -754,23 +914,39 @@ class JVMGenerator(Generator):
         mthd = clsobj.lookup_method(method_name)
         mthd.invoke(self)
 
+        # Check if we have to convert the result type at all:
+        gener = jvmtype.Generifier(OOCLASS)
+        RETTYPE = gener.full_types(method_name)[1]
+        jrettype = self.db.lltype_to_cts(RETTYPE)
+        if jrettype != mthd.return_type:
+            # if the intended return type is not the same as the
+            # actual return type in the JVM (mthd.return_type),
+            # we have to "deal with it"
+            self.prepare_generic_result(RETTYPE)
+
     def call_primitive(self, graph):
-        raise NotImplementedError
+        argtypes, rettype = self.db.types_for_graph(graph)
+        mthd = Method.s(jPyPy, graph.func.func_name, argtypes, rettype)
+        self.emit(mthd)
 
     def call_oostring(self, OOTYPE):
         cts_type = self.db.lltype_to_cts(OOTYPE)
-        if cts_type != jByteArray:
-            mthd = Method.s(jPyPy, 'oostring', [cts_type, jInt], jString)
-            self.emit(mthd)
-            if self.db.using_byte_array:
-                self.emit(PYPYSTRING2BYTES)
-        else:
-            mthd = Method.s(jPyPy, 'oostring',
-                            [jByteArray, jInt], jByteArray)
+
+        # treat all objects the same:
+        if isinstance(cts_type, jvmtype.JvmClassType):
+            cts_type = jObject
+            
+        mthd = Method.s(jPyPy, 'oostring', [cts_type, jInt], jString)
+        self.emit(mthd)
+        if self.db.using_byte_array:
+            self.emit(PYPYSTRING2BYTES)
         
     def new(self, TYPE):
         jtype = self.db.lltype_to_cts(TYPE)
-        ctor = Method(jtype.name, "<init>", "()V", opcode=INVOKESPECIAL)
+        self.new_with_jtype(jtype)
+
+    def new_with_jtype(self, jtype):
+        ctor = Method(jtype.name, "<init>", (), jVoid, opcode=INVOKESPECIAL)
         self.emit(NEW, jtype)
         self.emit(DUP)
         self.emit(ctor)
@@ -800,9 +976,13 @@ class JVMGenerator(Generator):
     def push_null(self, OOTYPE):
         self.emit(ACONST_NULL)
 
+    DEFINED_INT_SYMBOLICS = {'MALLOC_ZERO_FILLED':1}
+                            
     def push_primitive_constant(self, TYPE, value):
         if TYPE is ootype.Void:
             return
+        elif isinstance(value, CDefinedIntSymbolic):
+            self.emit(ICONST, self.DEFINED_INT_SYMBOLICS[value.expr])
         elif TYPE in (ootype.Bool, ootype.Signed):
             self.emit(ICONST, int(value))
         elif TYPE is ootype.Unsigned:
@@ -818,15 +998,18 @@ class JVMGenerator(Generator):
         elif TYPE is ootype.Float:
             self._push_double_constant(float(value))
         elif TYPE is ootype.String:
-            self.load_string(str(value))
+            if value == ootype.null(ootype.String):
+                self.emit(ACONST_NULL)
+            else:
+                self.load_string(str(value._str))
 
     def _push_long_constant(self, value):
         if value == 0:
-            gen.emit(LCONST_0)
+            self.emit(LCONST_0)
         elif value == 1:
-            gen.emit(LCONST_1)
+            self.emit(LCONST_1)
         else:
-            gen.emit(LDC2, value)
+            self.emit(LDC2, value)
 
     def _push_double_constant(self, value):
         if _isnan(value):
@@ -835,17 +1018,24 @@ class JVMGenerator(Generator):
             if value > 0: DOUBLEPOSINF.load(self)
             else: DOUBLENEGINF.load(self)
         elif value == 0.0:
-            gen.emit(DCONST_0)
+            self.emit(DCONST_0)
         elif value == 1.0:
-            gen.emit(DCONST_1)
+            self.emit(DCONST_1)
         else:
-            gen.emit(LDC2, self.value)        
+            # Big hack to avoid exponential notation:
+            self.emit(LDC2, "%22.22f" % value)        
 
     # __________________________________________________________________
     # Methods invoked directly by strings in jvm/opcode.py
 
     def throw(self):
         """ Throw the object from top of the stack as an exception """
+
+        # We have to deal with the problem that exceptions must
+        # derive from Throwable, but our exception hierarchy in OOTYPE
+        # does not (today).  For now, we use a wrapper class, which is
+        # probably the worst answer of all, but an easy one.
+        self.emit(EXCWRAPWRAP)
         self._instr(ATHROW)
 
     def iabs(self):
@@ -859,9 +1049,17 @@ class JVMGenerator(Generator):
         self._instr(ICONST, -1)
         self._instr(IXOR)
 
+    def goto(self, label):
+        """ Jumps unconditionally """
+        self._instr(GOTO, label)
+
     def goto_if_true(self, label):
         """ Jumps if the top of stack is true """
         self._instr(IFNE, label)
+
+    def goto_if_false(self, label):
+        """ Jumps if the top of stack is false """
+        self._instr(IFEQ, label)
 
     ##### Comparison methods
     
@@ -883,7 +1081,10 @@ class JVMGenerator(Generator):
         self.mark(endlbl)
 
     is_null = lambda self: self._compare_op(IFNULL)
-    is_not_null = lambda self: self._compare_op(IFNOTNULL)
+    is_not_null = lambda self: self._compare_op(IFNONNULL)
+
+    ref_is_eq = lambda self: self._compare_op(IF_ACMPEQ)
+    ref_is_neq = lambda self: self._compare_op(IF_ACMPNEQ)
 
     logical_not = lambda self: self._compare_op(IFEQ)
     equals_zero = logical_not
@@ -892,7 +1093,7 @@ class JVMGenerator(Generator):
     not_equals = lambda self: self._compare_op(IF_ICMPNE)
     less_than = lambda self: self._compare_op(IF_ICMPLT)
     greater_than = lambda self: self._compare_op(IF_ICMPGT)
-    less_equals = lambda self: self._compare_op(IF_ICMPLT)
+    less_equals = lambda self: self._compare_op(IF_ICMPLE)
     greater_equals = lambda self: self._compare_op(IF_ICMPGE)
 
     def _uint_compare_op(self, cmpopcode):
@@ -908,7 +1109,7 @@ class JVMGenerator(Generator):
 
     def _dbl_compare_op(self, cmpopcode):
         # XXX --- NaN behavior?
-        self._invoke(DCMPG)
+        self.emit(DCMPG)
         self._compare_op(cmpopcode)
 
     dbl_equals = lambda self: self._dbl_compare_op(IFEQ)
@@ -919,7 +1120,7 @@ class JVMGenerator(Generator):
     dbl_greater_equals = lambda self: self._dbl_compare_op(IFGE)
 
     def _long_compare_op(self, cmpopcode):
-        self._invoke(LCMP)
+        self.emit(LCMP)
         self._compare_op(cmpopcode)
 
     long_equals = lambda self: self._long_compare_op(IFEQ)
@@ -946,12 +1147,12 @@ class JasminGenerator(JVMGenerator):
         JVMGenerator.__init__(self, db)
         self.outdir = outdir
 
-    def _begin_class(self):
+    def _begin_class(self, abstract):
         """
         classnm --- full Java name of the class (i.e., "java.lang.String")
         """
 
-        iclassnm = self.curclass.class_type.descriptor.int_class_name()
+        iclassnm = self.current_type().descriptor.int_class_name()
         isuper = self.curclass.superclass_type.descriptor.int_class_name()
         
         jfile = "%s/%s.j" % (self.outdir, iclassnm)
@@ -964,7 +1165,9 @@ class JasminGenerator(JVMGenerator):
         self.db.add_jasmin_file(jfile)
 
         # Write the JasminXT header
-        self.curclass.out(".class public %s\n" % iclassnm)
+        fields = ["public"]
+        if abstract: fields.append('abstract')
+        self.curclass.out(".class %s %s\n" % (" ".join(fields), iclassnm))
         self.curclass.out(".super %s\n" % isuper)
         
     def _end_class(self):
@@ -976,34 +1179,44 @@ class JasminGenerator(JVMGenerator):
     def add_comment(self, comment):
         self.curclass.out("  ; %s\n" % comment)
 
+    def implements(self, jinterface):
+        self.curclass.out(
+            '.implements ' + jinterface.descriptor.int_class_name() + '\n')
+        
     def add_field(self, fobj):
         kw = ['public']
         if fobj.is_static: kw.append('static')
         self.curclass.out('.field %s %s %s\n' % (
             " ".join(kw), fobj.field_name, fobj.jtype.descriptor))
 
-    def _begin_function(self, funcname, argtypes, rettype, static):
+    def _begin_function(self, funcname, argtypes, rettype, static, abstract):
 
         if not static: argtypes = argtypes[1:]
 
         # Throws clause?  Only use RuntimeExceptions?
         kw = ['public']
         if static: kw.append('static')
+        if abstract: kw.append('abstract')
         self.curclass.out('.method %s %s(%s)%s\n' % (
             " ".join(kw),
             funcname,
             "".join([a.descriptor for a in argtypes]),
             rettype.descriptor))
+        self._abstract_method = abstract
 
     def _end_function(self):
-        self.curclass.out('.limit stack 100\n') # HACK, track max offset
-        self.curclass.out('.limit locals %d\n' % self.curfunc.next_offset)
+        if not self._abstract_method:
+            self.curclass.out('.limit stack 100\n') # HACK, track max offset
+            self.curclass.out('.limit locals %d\n' % self.curfunc.next_offset)
         self.curclass.out('.end method\n')
 
     def mark(self, lbl):
         """ Marks the point that a label indicates. """
         assert isinstance(lbl, Label)
         self.curclass.out('  %s:\n' % lbl.jasmin_syntax())
+
+        # We count labels as instructions because ASM does:
+        self.curfunc.instr_counter += 1 
 
     def _instr(self, opcode, *args):
         jvmstr, args = opcode.specialize(args)
@@ -1012,11 +1225,14 @@ class JasminGenerator(JVMGenerator):
             return str(arg)
         strargs = [jasmin_syntax(arg) for arg in args]
         instr_text = '%s %s' % (jvmstr, " ".join(strargs))
-        self.curclass.out('    %-60s ; %d\n' % (
-            instr_text, self.curfunc.instr_counter))
+        self.curclass.out('    .line %d\n' % self.curfunc.instr_counter)
+        self.curclass.out('    %-60s\n' % (instr_text,))
         self.curfunc.instr_counter+=1
 
     def try_catch_region(self, excclsty, trystartlbl, tryendlbl, catchlbl):
         self.curclass.out('  .catch %s from %s to %s using %s\n' % (
-            excclsty.int_class_name(), trystartlbl, tryendlbl, catchlbl))
+            excclsty.descriptor.int_class_name(),
+            trystartlbl.jasmin_syntax(),
+            tryendlbl.jasmin_syntax(),
+            catchlbl.jasmin_syntax()))
                        

@@ -44,6 +44,8 @@ class Class(Node):
         self.ilasm = ilasm
         
         ilasm.begin_function(self.name, [])
+        # we need to copy here all the arguments
+        self.copy_class_attributes(ilasm)
         ilasm.end_function()
         
         # begin to_String method
@@ -63,11 +65,24 @@ class Class(Node):
                 ilasm.inherits(self.name, basename)
         
         for m_name, m_meth in self.classdef._methods.iteritems():
-            f = self.db.genoo.Function(self.db, m_meth.graph, m_name, is_method = True, _class = self.name)
-            f.render(ilasm)
-        
+            graph = getattr(m_meth, 'graph', None)
+            if graph:
+                f = self.db.genoo.Function(self.db, graph, m_name, is_method = True, _class = self.name)
+                f.render(ilasm)
+            else:
+                pass
+                # XXX: We want to implement an abstract method here
+                self.db.pending_abstract_function(m_name)
         
         self.db.record_class(self.classdef, self.name)
+    
+    def copy_class_attributes(self, ilasm):
+        default_values = self.classdef._fields.copy()
+        default_values.update(self.classdef._overridden_defaults)
+        for field_name, (field_type, field_value) in default_values.iteritems():
+            ilasm.load_str("this")
+            self.db.load_const(field_type, field_value, ilasm)
+            ilasm.set_field(None, field_name)
     
     def basename(self, name):
         return name.replace('.', '_')#[-1]

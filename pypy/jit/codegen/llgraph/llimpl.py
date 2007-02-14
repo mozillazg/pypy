@@ -6,7 +6,7 @@ that can be used to produce any other kind of graph.
 
 from pypy.rpython.lltypesystem import lltype, llmemory, rtupletype
 from pypy.objspace.flow import model as flowmodel
-from pypy.translator.simplify import eliminate_empty_blocks, join_blocks
+from pypy.translator.simplify import eliminate_empty_blocks
 from pypy.translator.unsimplify import varoftype
 from pypy.rpython.module.support import init_opaque_object
 from pypy.rpython.module.support import to_opaque_object, from_opaque_object
@@ -28,8 +28,11 @@ def newblock():
     block = flowmodel.Block([])
     return to_opaque_object(block)
 
-def newgraph(gv_FUNCTYPE):
+def newgraph(gv_FUNCTYPE, name):
     FUNCTYPE = from_opaque_object(gv_FUNCTYPE).value
+    # 'name' is just a way to track things
+    if not isinstance(name, str):
+        name = LLSupport.from_rstr(name)
     inputargs = []
     erasedinputargs = []
     for ARG in FUNCTYPE.ARGS:
@@ -40,19 +43,37 @@ def newgraph(gv_FUNCTYPE):
         v.concretetype = lltype.erasedType(ARG)
         erasedinputargs.append(v)
     startblock = flowmodel.Block(inputargs)
+    # insert an exploding operation here which is removed by
+    # builder.end() to ensure that builder.end() is actually called.
+    startblock.operations.append(
+        flowmodel.SpaceOperation("debug_assert",
+                                 [flowmodel.Constant(False, lltype.Bool),
+                                  flowmodel.Constant("you didn't call builder.end()?",
+                                                     lltype.Void)],
+                                 varoftype(lltype.Void)))
     return_var = flowmodel.Variable()
     return_var.concretetype = FUNCTYPE.RESULT
-    graph = flowmodel.FunctionGraph("in_progress", startblock, return_var)
+    graph = flowmodel.FunctionGraph(name, startblock, return_var)
     v1 = flowmodel.Variable()
     v1.concretetype = lltype.erasedType(FUNCTYPE.RESULT)
     graph.prereturnblock = flowmodel.Block([v1])
     casting_link(graph.prereturnblock, [v1], graph.returnblock)
     substartblock = flowmodel.Block(erasedinputargs)
     casting_link(graph.startblock, inputargs, substartblock)
-    return to_opaque_object(graph)
+    fptr = lltype.functionptr(FUNCTYPE, name,
+                              graph=graph)
+    return genconst(fptr)
 
-def getstartblock(graph):
-    graph = from_opaque_object(graph)
+def _getgraph(gv_func):
+     graph = from_opaque_object(gv_func).value._obj.graph
+     return graph
+
+def end(gv_func):
+    graph = _getgraph(gv_func)
+    _buildgraph(graph)
+
+def getstartblock(gv_func):
+    graph = _getgraph(gv_func)
     [link] = graph.startblock.exits
     substartblock = link.target
     return to_opaque_object(substartblock)
@@ -102,11 +123,16 @@ def cast(block, gv_TYPE, gv_var):
     TYPE = from_opaque_object(gv_TYPE).value
     v = from_opaque_object(gv_var)
     if TYPE != v.concretetype:
-        assert v.concretetype == lltype.erasedType(TYPE)
+        if TYPE is llmemory.GCREF or v.concretetype is llmemory.GCREF:
+            lltype.cast_opaque_ptr(TYPE, v.concretetype._defl()) # sanity check
+            opname = 'cast_opaque_ptr'
+        else:
+            assert v.concretetype == lltype.erasedType(TYPE)
+            opname = 'cast_pointer'
         block = from_opaque_object(block)
         v2 = flowmodel.Variable()
         v2.concretetype = TYPE
-        op = flowmodel.SpaceOperation('cast_pointer', [v], v2)
+        op = flowmodel.SpaceOperation(opname, [v], v2)
         block.operations.append(op)
         v = v2
     return to_opaque_object(v)
@@ -161,17 +187,6 @@ def guess_result_type(opname, opvars):
         assert 0, "failed to guess the type of %s: %s" % (opname, e)
     return lltype.typeOf(result)
 
-def gencallableconst(name, graph, gv_FUNCTYPE):
-    # 'name' is just a way to track things
-    if not isinstance(name, str):
-        name = LLSupport.from_rstr(name)
-    graph = from_opaque_object(graph)
-    graph.name = name
-    FUNCTYPE = from_opaque_object(gv_FUNCTYPE).value
-    fptr = lltype.functionptr(FUNCTYPE, name,
-                              graph=_buildgraph(graph, FUNCTYPE))
-    return genconst(fptr)
-
 def genconst(llvalue):
     T = lltype.typeOf(llvalue)
     T1 = lltype.erasedType(T)
@@ -183,23 +198,39 @@ def genconst(llvalue):
         assert not isinstance(llvalue, str) and not isinstance(llvalue, lltype.LowLevelType)
     return to_opaque_object(v)
 
+def _generalcast(T, value):
+    if isinstance(T, lltype.Ptr):
+        return lltype.cast_pointer(T, value)
+    elif T == llmemory.Address:
+        return llmemory.cast_ptr_to_adr(value)
+    else:
+        T1 = lltype.typeOf(value)
+        if T1 is llmemory.Address:
+            value = llmemory.cast_adr_to_int(value)
+        elif isinstance(T1, lltype.Ptr):
+            value = lltype.cast_ptr_to_int(value)
+        else:
+            value = value
+        return lltype.cast_primitive(T, value)    
+
 def revealconst(T, gv_value):
     c = from_opaque_object(gv_value)
     assert isinstance(c, flowmodel.Constant)
-    if isinstance(T, lltype.Ptr):
-        return lltype.cast_pointer(T, c.value)
-    elif T == llmemory.Address:
-        return llmemory.cast_ptr_to_adr(c.value)
-    else:
-        return lltype.cast_primitive(T, c.value)
+    return _generalcast(T, c.value)
+
+def revealconstrepr(gv_value):
+    c = from_opaque_object(gv_value)
+    return LLSupport.to_rstr(repr(c.value))
 
 def isconst(gv_value):
     c = from_opaque_object(gv_value)
     return isinstance(c, flowmodel.Constant)
 
+
 # XXX
-# temporary interface; it's unclera if genop itself should change to ease dinstinguishing
-# Void special args from the rest. Or there should be variation for the ops involving them
+# temporary interface; it's unclear if genop itself should change to
+# ease dinstinguishing Void special args from the rest. Or there
+# should be variation for the ops involving them
 
 def placeholder(dummy):
     c = flowmodel.Constant(dummy)
@@ -332,21 +363,43 @@ def _closelink(link, vars, targetblock):
         raise TypeError
 
 def closelink(link, vars, targetblock):
-    try:
-        link = from_opaque_object(link)
-        targetblock = from_opaque_object(targetblock)
-        vars = _inputvars(vars)
-        _closelink(link, vars, targetblock)
-    except Exception, e:
-        import sys; tb = sys.exc_info()[2]
-        import pdb; pdb.post_mortem(tb)
-        raise
+    link = from_opaque_object(link)
+    targetblock = from_opaque_object(targetblock)
+    vars = _inputvars(vars)
+    _closelink(link, vars, targetblock)
 
-def closereturnlink(link, returnvar, graph):
+def closereturnlink(link, returnvar, gv_func):
     returnvar = from_opaque_object(returnvar)
     link = from_opaque_object(link)
-    graph = from_opaque_object(graph)
+    graph = _getgraph(gv_func)
     _closelink(link, [returnvar], graph.prereturnblock)
+
+def closelinktofreshblock(link, inputargs=None, otherlink=None):
+    link = from_opaque_object(link)
+    prevblockvars = link.prevblock.getvariables()
+    # the next block's inputargs come from 'inputargs' if specified
+    if inputargs is None:
+        inputvars = prevblockvars
+    else:
+        inputvars = _inputvars(inputargs)
+    # the link's arguments are the same as the inputvars, except
+    # if otherlink is specified, in which case they are copied from otherlink
+    if otherlink is None:
+        linkvars = list(inputvars)
+    else:
+        otherlink = from_opaque_object(otherlink)
+        linkvars = list(otherlink.args)
+    # check linkvars for consistency
+    existing_vars = dict.fromkeys(prevblockvars)
+    for v in inputvars:
+        assert isinstance(v, flowmodel.Variable)
+    for v in linkvars:
+        assert v in existing_vars
+
+    nextblock = flowmodel.Block(inputvars)
+    link.args = linkvars
+    link.target = nextblock
+    return to_opaque_object(nextblock)
 
 def casting_link(source, sourcevars, target):
     assert len(sourcevars) == len(target.inputargs)
@@ -370,16 +423,38 @@ class PseudoRTyper(object):
         from pypy.rpython.typesystem import LowLevelTypeSystem
         self.type_system = LowLevelTypeSystem.instance
 
-def _buildgraph(graph, FUNCTYPE):
+def fixduplicatevars(graph):
+    # just rename all vars in all blocks
+    try:
+        done = graph._llimpl_blocks_already_renamed
+    except AttributeError:
+        done = graph._llimpl_blocks_already_renamed = {}
+
+    for block in graph.iterblocks():
+        if block not in done:
+            mapping = {}
+            for a in block.inputargs:
+                mapping[a] = a1 = flowmodel.Variable(a)
+                a1.concretetype = a.concretetype
+            block.renamevariables(mapping)
+            done[block] = True
+
+def _buildgraph(graph):
+    assert graph.startblock.operations[0].opname == 'debug_assert'
+    del graph.startblock.operations[0]
+    # rgenop makes graphs that use the same variable in several blocks,
+    fixduplicatevars(graph)                             # fix this now
     flowmodel.checkgraph(graph)
     eliminate_empty_blocks(graph)
-    join_blocks(graph)
+    # we cannot call join_blocks(graph) here!  It has a subtle problem:
+    # it copies operations between blocks without renaming op.result.
+    # See test_promotion.test_many_promotions for a failure.
     graph.rgenop = True
     return graph
 
 def buildgraph(graph, FUNCTYPE):
     graph = from_opaque_object(graph)
-    return _buildgraph(graph, FUNCTYPE)
+    return _buildgraph(graph)
 
 def testgengraph(gengraph, args, viewbefore=False, executor=LLInterpreter):
     if viewbefore:
@@ -392,10 +467,12 @@ def runblock(graph, FUNCTYPE, args,
     graph = buildgraph(graph, FUNCTYPE)
     return testgengraph(graph, args, viewbefore, executor)
 
-def show_incremental_progress(graph):
+def show_incremental_progress(gv_func):
     from pypy import conftest
+    graph = _getgraph(gv_func)
+    fixduplicatevars(graph)
+    flowmodel.checkgraph(graph)
     if conftest.option.view:
-        graph = from_opaque_object(graph)
         eliminate_empty_blocks(graph)
         graph.show()
 
@@ -452,7 +529,7 @@ def setannotation(func, annotation, specialize_as_constant=False):
                                            hop.r_result.lowleveltype)
                 args_v = hop.inputargs(*hop.args_r)
                 funcptr = lltype.functionptr(FUNCTYPE, func.__name__,
-                                             _callable=func)
+                                             _callable=func, _debugexc=True)
                 cfunc = hop.inputconst(lltype.Ptr(FUNCTYPE), funcptr)
                 return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
 
@@ -466,16 +543,18 @@ s_Block = annmodel.SomePtr(BLOCK)
 s_Graph = annmodel.SomePtr(GRAPH)
 
 setannotation(newblock, s_Block)
-setannotation(newgraph, s_Graph)
+setannotation(newgraph, s_ConstOrVar)
 setannotation(getstartblock, s_Block)
 setannotation(geninputarg, s_ConstOrVar)
 setannotation(getinputarg, s_ConstOrVar)
 setannotation(genop, s_ConstOrVar)
-setannotation(gencallableconst, s_ConstOrVar)
+setannotation(end, None)
 setannotation(genconst, s_ConstOrVar)
 setannotation(cast, s_ConstOrVar)
 setannotation(revealconst, lambda s_T, s_gv: annmodel.lltype_to_annotation(
                                                   s_T.const))
+from pypy.rpython.lltypesystem.rstr import STR
+setannotation(revealconstrepr, annmodel.SomePtr(lltype.Ptr(STR)))
 setannotation(isconst, annmodel.SomeBool())
 setannotation(closeblock1, s_Link)
 setannotation(closeblock2, s_LinkPair)
@@ -484,6 +563,7 @@ setannotation(add_case, s_Link)
 setannotation(add_default, s_Link)
 setannotation(closelink, None)
 setannotation(closereturnlink, None)
+setannotation(closelinktofreshblock, s_Block)
 
 setannotation(isptrtype, annmodel.SomeBool())
 
@@ -493,3 +573,38 @@ setannotation(constTYPE,      s_ConstOrVar, specialize_as_constant=True)
 #setannotation(placeholder,    s_ConstOrVar, specialize_as_constant=True)
 
 setannotation(show_incremental_progress, None)
+
+# read frame var support
+
+def get_frame_info(block, vars_gv):
+    genop(block, 'frame_info', vars_gv, lltype.Void)
+    block = from_opaque_object(block)
+    frame_info = block.operations[-1]
+    return lltype.opaqueptr(llmemory.GCREF.TO, 'frame_info',
+                            info=frame_info)
+
+setannotation(get_frame_info, annmodel.SomePtr(llmemory.GCREF))
+
+def read_frame_var(T, base, info, index):
+    vars = info._obj.info.args
+    v = vars[index]
+    if isinstance(v, flowmodel.Constant):
+        val = v.value
+    else:
+        llframe = base.ptr
+        val = llframe.bindings[v]
+    return _generalcast(T, val)
+
+setannotation(read_frame_var, lambda s_T, s_base, s_info, s_index:
+              annmodel.lltype_to_annotation(s_T.const))
+
+def write_frame_var(base, info, index, value):
+    vars = info._obj.info.args
+    v = vars[index]
+    assert isinstance(v, flowmodel.Variable)
+    llframe = base.ptr
+    value = _generalcast(v.concretetype, value)
+    llframe.bindings[v] = value
+
+
+setannotation(write_frame_var, None)

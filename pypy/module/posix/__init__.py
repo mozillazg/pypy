@@ -33,6 +33,7 @@ corresponding Unix manual entries for more information on calls."""
     'lstat'     : 'interp_posix.lstat',
     'dup'       : 'interp_posix.dup',
     'dup2'      : 'interp_posix.dup2',
+    'access'    : 'interp_posix.access',
     'system'    : 'interp_posix.system',
     'unlink'    : 'interp_posix.unlink',
     'remove'    : 'interp_posix.remove',
@@ -46,6 +47,7 @@ corresponding Unix manual entries for more information on calls."""
     'pipe'      : 'interp_posix.pipe',
     'chmod'     : 'interp_posix.chmod',
     'rename'    : 'interp_posix.rename',
+    'umask'     : 'interp_posix.umask',
     '_exit'     : 'interp_posix._exit',
     #'getuid'    : 'interp_posix.getuid',
     #'geteuid'   : 'interp_posix.geteuid',
@@ -70,9 +72,23 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['fork'] = 'interp_posix.fork'
     if hasattr(os, 'waitpid'):
         interpleveldefs['waitpid'] = 'interp_posix.waitpid'
+    if hasattr(os, 'execv'):
+        interpleveldefs['execv'] = 'interp_posix.execv'
+    if hasattr(os, 'execve')   and 0:     # XXX XXX in-progress
+        interpleveldefs['execve'] = 'interp_posix.execve'
     #if hasattr(ctypes_posix, 'uname'):
     #    interpleveldefs['uname'] = 'interp_posix.uname'
 
+    def setup_after_space_initialization(self):
+        """NOT_RPYTHON"""
+        space = self.space
+        config = space.config
+        # XXX execve does not work under ootypesystem yet :-(
+        # YYY nor does it anywhere else
+        #if config.translating and config.translation.type_system != "lltype":
+        #    space.delattr(self, space.wrap("execve"))
+        if config.translating and config.translation.backend == "llvm":
+            space.delattr(self, space.wrap("execv"))
 
 for constant in dir(os):
     value = getattr(os, constant)

@@ -46,15 +46,17 @@ class Instance(OOType):
             _is_root=False, _hints = {}):
         self._name = name
         self._hints = frozendict(_hints)
+        self._subclasses = []
 
         if _is_root:
             self._superclass = None
         else:
-            assert isinstance(superclass, Instance)
-            self._superclass = superclass
+            if superclass is not None:
+                self._set_superclass(superclass)
 
         self._methods = frozendict()
         self._fields = frozendict()
+        self._overridden_defaults = frozendict()
 
         self._add_fields(fields)
         self._add_methods(methods)
@@ -81,6 +83,15 @@ class Instance(OOType):
 
     def __str__(self):
         return '%s(%s)' % (self.__class__.__name__, self._name)
+
+    def _set_superclass(self, superclass):
+        assert isinstance(superclass, Instance)
+        self._superclass = superclass
+        self._superclass._add_subclass(self)
+
+    def _add_subclass(self, INSTANCE):
+        assert isinstance(INSTANCE, Instance)
+        self._subclasses.append(INSTANCE)
 
     def _add_fields(self, fields):
         fields = fields.copy()    # mutated below
@@ -109,6 +120,13 @@ class Instance(OOType):
 
         self._fields.update(fields)
 
+    def _override_default_for_fields(self, fields):
+        # sanity check
+        for field in fields:
+            INST, TYPE = self._superclass._lookup_field(field)
+            assert TYPE is not None, "Can't find field %s in superclasses" % field
+        self._overridden_defaults.update(fields)
+
     def _add_methods(self, methods):
         # Note to the unwary: _add_methods adds *methods* whereas
         # _add_fields adds *descriptions* of fields.  This is obvious
@@ -126,6 +144,9 @@ class Instance(OOType):
             self._superclass._init_instance(instance)
         
         for name, (ootype, default) in self._fields.iteritems():
+            instance.__dict__[name] = enforce(ootype, default)
+
+        for name, (ootype, default) in self._overridden_defaults.iteritems():
             instance.__dict__[name] = enforce(ootype, default)
 
     def _has_field(self, name):
@@ -379,6 +400,10 @@ class List(BuiltinADTType):
         # 'ITEMTYPE_T' is used as a placeholder for indicating
         # arguments that should have ITEMTYPE type. 'SELFTYPE_T' indicates 'self'
 
+        # XXX clean-up later! Rename _ITEMTYPE to ITEM.  For now they are
+        # just synonyms, please use ITEM in new code.
+        self.ITEM = self._ITEMTYPE
+
         generic_types = {
             self.SELFTYPE_T: self,
             self.ITEMTYPE_T: self._ITEMTYPE,
@@ -463,6 +488,11 @@ class Dict(BuiltinADTType):
         return self._KEYTYPE is not None and self._VALUETYPE is not None
 
     def _init_methods(self):
+        # XXX clean-up later! Rename _KEYTYPE and _VALUETYPE to KEY and VALUE.
+        # For now they are just synonyms, please use KEY/VALUE in new code.
+        self.KEY = self._KEYTYPE
+        self.VALUE = self._VALUETYPE
+
         self._generic_types = frozendict({
             self.SELFTYPE_T: self,
             self.KEYTYPE_T: self._KEYTYPE,
@@ -984,8 +1014,9 @@ class _string(_builtin_type):
 
     def ll_stritem_nonneg(self, i):
         # NOT_RPYTHON
-        assert i >= 0
-        return self._str[i]
+        s = self._str
+        assert 0 <= i < len(s)
+        return s[i]
 
     def ll_strlen(self):
         # NOT_RPYTHON
@@ -1364,6 +1395,9 @@ def addFields(INSTANCE, fields):
 def addMethods(INSTANCE, methods):
     INSTANCE._add_methods(methods)
 
+def overrideDefaultForFields(INSTANCE, fields):
+    INSTANCE._override_default_for_fields(fields)
+
 def runtimeClass(INSTANCE):
     assert isinstance(INSTANCE, Instance)
     return INSTANCE._class
@@ -1416,6 +1450,9 @@ def oostring(obj, base):
 
 def ooparse_int(s, base):
     return int(s._str, base)
+
+def ooparse_float(s):
+    return float(s._str)
 
 def setItemType(LIST, ITEMTYPE):
     return LIST._set_itemtype(ITEMTYPE)

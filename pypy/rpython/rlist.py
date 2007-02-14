@@ -31,7 +31,8 @@ class __extend__(annmodel.SomeList):
     def rtyper_makerepr(self, rtyper):
         listitem = self.listdef.listitem
         s_value = listitem.s_value
-        if listitem.range_step is not None and not listitem.mutated:
+        if (listitem.range_step is not None and not listitem.mutated and
+            not isinstance(s_value, annmodel.SomeImpossibleValue)):
             return rtyper.type_system.rrange.RangeRepr(listitem.range_step)
         elif (s_value.__class__ is annmodel.SomeObject and s_value.knowntype == object):
             return robject.pyobj_repr
@@ -83,6 +84,29 @@ class AbstractBaseListRepr(Repr):
 
     def prepare_const(self, nitems):
         raise NotImplementedError
+
+    def ll_str(self, l):
+        constant = self.rstr_ll.ll_constant
+        start    = self.rstr_ll.ll_build_start
+        push     = self.rstr_ll.ll_build_push
+        finish   = self.rstr_ll.ll_build_finish
+
+        length = l.ll_length()
+        if length == 0:
+            return constant("[]")
+
+        buf = start(2 * length + 1)
+        push(buf, constant("["), 0)
+        item_repr = self.item_repr
+        i = 0
+        while i < length:
+            if i > 0:
+                push(buf, constant(", "), 2 * i)
+            item = l.ll_getitem_fast(i)
+            push(buf, item_repr.ll_str(item), 2 * i + 1)
+            i += 1
+        push(buf, constant("]"), 2 * length)
+        return finish(buf)
 
     def rtype_bltn_list(self, hop):
         v_lst = hop.inputarg(self, 0)
@@ -190,8 +214,8 @@ class __extend__(pairtype(AbstractBaseListRepr, Repr)):
 
 class __extend__(pairtype(AbstractBaseListRepr, IntegerRepr)):
 
-    def rtype_getitem((r_lst, r_int), hop):
-        if hop.has_implicit_exception(IndexError):
+    def rtype_getitem((r_lst, r_int), hop, checkidx=False):
+        if checkidx:
             spec = dum_checkidx
         else:
             spec = dum_nocheck
@@ -201,10 +225,20 @@ class __extend__(pairtype(AbstractBaseListRepr, IntegerRepr)):
             llfn = ll_getitem_nonneg
         else:
             llfn = ll_getitem
-        hop.exception_is_here()
+        if checkidx:
+            hop.exception_is_here()
+        else:
+            hop.exception_cannot_occur()
         v_res = hop.gendirectcall(llfn, v_func, v_lst, v_index)
         return r_lst.recast(hop.llops, v_res)
 
+    rtype_getitem_key = rtype_getitem
+
+    def rtype_getitem_idx((r_lst, r_int), hop):
+        return pair(r_lst, r_int).rtype_getitem(hop, checkidx=True)
+
+    rtype_getitem_idx_key = rtype_getitem_idx
+    
     def rtype_setitem((r_lst, r_int), hop):
         if hop.has_implicit_exception(IndexError):
             spec = dum_checkidx

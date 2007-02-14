@@ -1,16 +1,35 @@
 from pypy.translator.backendopt.raisingop2direct_call import raisingop2direct_call
 from pypy.translator.backendopt import removenoops
 from pypy.translator.backendopt import inline
-from pypy.translator.backendopt.malloc import remove_simple_mallocs
+from pypy.translator.backendopt.malloc import remove_mallocs
 from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.translator.backendopt.stat import print_statistics
 from pypy.translator.backendopt.merge_if_blocks import merge_if_blocks
 from pypy.translator import simplify
 from pypy.translator.backendopt.escape import malloc_to_stack
-from pypy.translator.backendopt.mallocprediction import clever_inlining_and_malloc_removal
+from pypy.translator.backendopt import mallocprediction
 from pypy.translator.backendopt.removeassert import remove_asserts
 from pypy.translator.backendopt.support import log
+from pypy.translator.backendopt.checkvirtual import check_virtual_methods
 from pypy.objspace.flow.model import checkgraph
+
+INLINE_THRESHOLD_FOR_TEST = 33
+
+def get_function(dottedname):
+    parts = dottedname.split('.')
+    module = '.'.join(parts[:-1])
+    name = parts[-1]
+    try:
+        mod = __import__(module, {}, {}, ['__doc__'])
+    except ImportError, e:
+        raise Exception, "Import error loading %s: %s" % (dottedname, e)
+
+    try:
+        func = getattr(mod, name)
+    except AttributeError:
+        raise Exception, "Function %s not found in module" % dottedname
+
+    return func
 
 def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
     # sensible keywords are
@@ -31,6 +50,9 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
     if config.raisingop2direct_call:
         raisingop2direct_call(translator, graphs)
 
+    if translator.rtyper.type_system.name == 'ootypesystem':
+        check_virtual_methods()
+
     # remove obvious no-ops
     for graph in graphs:
         removenoops.remove_same_as(graph)
@@ -42,34 +64,44 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
         print "after no-op removal:"
         print_statistics(translator.graphs[0], translator)
 
-    if not config.clever_malloc_removal:
-        if config.profile_based_inline and not secondary:
-            inline_malloc_removal_phase(config, translator, graphs,
-                                        config.inline_threshold*.5) # xxx tune!
-            inline.instrument_inline_candidates(graphs, config.inline_threshold)
-            counters = translator.driver_instrument_result(
-                       config.profile_based_inline)
-            n = len(counters)
-            def call_count_pred(label):
-                if label >= n:
-                    return False
-                return counters[label] > 250 # xxx tune!
-        else:
-            call_count_pred = None
+    if config.inline and config.inline_threshold != 0:
+        heuristic = get_function(config.inline_heuristic)
         inline_malloc_removal_phase(config, translator, graphs,
                                     config.inline_threshold,
-                                    call_count_pred=call_count_pred)
-    else:
-        assert graphs is translator.graphs  # XXX for now
-        clever_inlining_and_malloc_removal(translator)
+                                    inline_heuristic=heuristic)
 
+    if config.clever_malloc_removal:
+        threshold = config.clever_malloc_removal_threshold
+        heuristic = get_function(config.clever_malloc_removal_heuristic)        
+        log.inlineandremove("phase with threshold factor: %s" % threshold)
+        log.inlineandremove("heuristic: %s.%s" % (heuristic.__module__,
+                                                  heuristic.__name__))
+        count = mallocprediction.clever_inlining_and_malloc_removal(
+            translator, graphs,
+            threshold = threshold,
+            heuristic=heuristic)
+        log.inlineandremove("removed %d simple mallocs in total" % count)
+        constfold(config, graphs)
         if config.print_statistics:
             print "after clever inlining and malloc removal"
-            print_statistics(translator.graphs[0], translator)
+            print_statistics(translator.graphs[0], translator)        
 
-    if config.constfold:
-        for graph in graphs:
-            constant_fold_graph(graph)
+
+    if config.profile_based_inline and not secondary:
+        threshold = config.profile_based_inline_threshold
+        heuristic = get_function(config.profile_based_inline_heuristic)
+        inline.instrument_inline_candidates(graphs, threshold)
+        counters = translator.driver_instrument_result(
+            config.profile_based_inline)
+        n = len(counters)
+        def call_count_pred(label):
+            if label >= n:
+                return False
+            return counters[label] > 250 # xxx introduce an option for this
+        inline_malloc_removal_phase(config, translator, graphs,
+                                    threshold,
+                                    inline_heuristic=heuristic,
+                                    call_count_pred=call_count_pred)
 
     if config.remove_asserts:
         remove_asserts(translator, graphs)
@@ -89,21 +121,25 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
     for graph in graphs:
         checkgraph(graph)
 
+def constfold(config, graphs):
+    if config.constfold:
+        for graph in graphs:
+            constant_fold_graph(graph)    
+
 def inline_malloc_removal_phase(config, translator, graphs, inline_threshold,
+                                inline_heuristic,
                                 call_count_pred=None):
 
+    type_system = translator.rtyper.type_system.name
     log.inlining("phase with threshold factor: %s" % inline_threshold)
+    log.inlining("heuristic: %s.%s" % (inline_heuristic.__module__,
+                                       inline_heuristic.__name__))
 
     # inline functions in each other
     if inline_threshold:
-        callgraph = inline.inlinable_static_callers(graphs)
-        count = inline.auto_inlining(translator, inline_threshold,
-                                     callgraph=callgraph,
-                                     call_count_pred=call_count_pred)
-        log.inlining('inlined %d callsites.'% (count,))
-        for graph in graphs:
-            removenoops.remove_superfluous_keep_alive(graph)
-            removenoops.remove_duplicate_casts(graph, translator)
+        inline.auto_inline_graphs(translator, graphs, inline_threshold,
+                                  heuristic=inline_heuristic,
+                                  call_count_pred=call_count_pred)
 
         if config.print_statistics:
             print "after inlining:"
@@ -111,22 +147,11 @@ def inline_malloc_removal_phase(config, translator, graphs, inline_threshold,
 
     # vaporize mallocs
     if config.mallocs:
-        tot = 0
-        for graph in graphs:
-            count = remove_simple_mallocs(graph)
-            if count:
-                # remove typical leftovers from malloc removal
-                removenoops.remove_same_as(graph)
-                simplify.eliminate_empty_blocks(graph)
-                simplify.transform_dead_op_vars(graph, translator)
-                tot += count
-        log.malloc("removed %d simple mallocs in total" % tot)
+        remove_mallocs(translator, graphs, type_system)
 
         if config.print_statistics:
             print "after malloc removal:"
             print_statistics(translator.graphs[0], translator)    
 
-    if config.constfold:
-        for graph in graphs:
-            constant_fold_graph(graph)
+    constfold(config, graphs)
 

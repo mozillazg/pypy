@@ -42,3 +42,31 @@ class AppTestStringObject(test_stringobject.AppTestStringObject):
         r = "c" + "d"
         t = s + r
         assert len(s) == 2
+
+    def test_add_strjoin_strjoin(self):
+        # make three strjoin objects
+        s = 'a' + 'b'
+        t = 'c' + 'd'
+        u = 'e' + 'f'
+
+        # add two different strjoins to the same string
+        v = s + t
+        w = s + u
+
+        # check that insanity hasn't resulted.
+        assert len(v) == len(w) == 4
+
+    def test_more_adding_fun(self):
+        s = 'a' + 'b' # s is a strjoin now
+        t = s + 'c'   # this calls s.force() which sets s.until to 1
+        u = s + 'd'
+        v = s + 'e'
+        assert v == 'abe' # meaning u is abcd
+
+    def test_buh_even_more(self):
+        a = 'a' + 'b'
+        b = a + 'c'
+        c = '0' + '1'
+        x = c + a
+        assert x == '01ab'
+

@@ -207,7 +207,7 @@ class InstanceRepr(AbstractInstanceRepr):
             else:
                 s_value = attrdef.s_value
                 if isinstance(s_value, annmodel.SomePBC):
-                    if s_value.getKind() == description.MethodDesc:
+                    if len(s_value.descriptions) > 0 and s_value.getKind() == description.MethodDesc:
                         # attrdef is for a method
                         if mangled in allclassattributes:
                             raise TyperError("method overrides class attribute")
@@ -322,6 +322,34 @@ class InstanceRepr(AbstractInstanceRepr):
             r = self.rtyper.getrepr(s_value)
             m = self.attach_class_attr_accessor(mangled, value, r)
 
+        # step 4: do the same with instance fields whose default
+        # values are overridden in subclasses. Not sure it's the best
+        # way to do it.
+        overridden_defaults = {}
+
+        if self.classdef is not None:
+            for name, constant in self.classdef.classdesc.classdict.iteritems():
+                # look for the attrdef in the superclasses
+                classdef = self.classdef.basedef
+                attrdef = None
+                while classdef is not None:
+                    if name in classdef.attrs:
+                        attrdef = classdef.attrs[name]
+                        break
+                    classdef = classdef.basedef
+                if attrdef is not None and not attrdef.readonly:
+                    # it means that the default value for this field
+                    # is overridden in this subclass. Record we know
+                    # about it
+                    repr = self.rtyper.getrepr(attrdef.s_value)
+                    oot = repr.lowleveltype
+                    mangled = mangle(name)
+                    value = self.classdef.classdesc.read_attribute(name)
+                    default = repr.convert_desc_or_const(value)
+                    overridden_defaults[mangled] = oot, default
+
+        ootype.overrideDefaultForFields(self.lowleveltype, overridden_defaults)
+
     def attach_class_attr_accessor(self, mangled, value, r_value):
         def ll_getclassattr(self):
             return oovalue
@@ -399,12 +427,8 @@ class InstanceRepr(AbstractInstanceRepr):
         vinst, = hop.inputargs(self)
         return hop.genop('oononnull', [vinst], resulttype=ootype.Bool)
 
-    def ll_const(c):
-        return c
-    ll_const = staticmethod(ll_const)
-
     def ll_str(self, instance):
-        return ootype.oostring(instance, self.ll_const(-1))
+        return ootype.oostring(instance, -1)
 
     def rtype_type(self, hop):
         if hop.s_result.is_constant():

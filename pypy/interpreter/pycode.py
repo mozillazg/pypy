@@ -9,7 +9,7 @@ import dis, imp, struct, types
 from pypy.interpreter import eval
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import NoneNotWrapped 
-from pypy.interpreter.baseobjspace import ObjSpace, W_Root 
+from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
 
 # helper
@@ -48,29 +48,6 @@ def cpython_code_signature(code):
     return argnames, varargname, kwargname
 
 cpython_magic, = struct.unpack("<i", imp.get_magic())
-
-NESTED    = 1
-GENERATOR = 2
-
-frame_classes = []
-
-def setup_frame_classes():
-    "NOT_RPYTHON"
-    from pypy.interpreter.pyopcode import PyInterpFrame
-    from pypy.interpreter.nestedscope import PyNestedScopeFrame
-    from pypy.interpreter.generator import GeneratorFrameMixin
-
-    class PyGeneratorFrame(GeneratorFrameMixin, PyInterpFrame):
-        pass
-
-    class PyNestedScopeGeneratorFrame(GeneratorFrameMixin, PyNestedScopeFrame):
-        pass
-
-    frame_classes.extend([None]*4)
-    frame_classes[0]                = PyInterpFrame
-    frame_classes[NESTED]           = PyNestedScopeFrame
-    frame_classes[GENERATOR]        = PyGeneratorFrame
-    frame_classes[NESTED|GENERATOR] = PyNestedScopeGeneratorFrame
 
 
 class PyCode(eval.Code):
@@ -195,14 +172,14 @@ class PyCode(eval.Code):
 
     def fastcall_0(self, space, w_func):
         if self.do_fastcall == 0:
-            frame = self.create_frame(space, w_func.w_func_globals,
+            frame = space.createframe(self, w_func.w_func_globals,
                                       w_func.closure)
             return frame.run()
         return None
 
     def fastcall_1(self, space, w_func, w_arg):
         if self.do_fastcall == 1:
-            frame = self.create_frame(space, w_func.w_func_globals,
+            frame = space.createframe(self, w_func.w_func_globals,
                                       w_func.closure)
             frame.fastlocals_w[0] = w_arg # frame.setfastscope([w_arg])
             return frame.run()
@@ -210,7 +187,7 @@ class PyCode(eval.Code):
 
     def fastcall_2(self, space, w_func, w_arg1, w_arg2):
         if self.do_fastcall == 2:
-            frame = self.create_frame(space, w_func.w_func_globals,
+            frame = space.createframe(self, w_func.w_func_globals,
                                       w_func.closure)
             frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
             frame.fastlocals_w[1] = w_arg2
@@ -219,8 +196,8 @@ class PyCode(eval.Code):
 
     def fastcall_3(self, space, w_func, w_arg1, w_arg2, w_arg3):
         if self.do_fastcall == 3:
-            frame = self.create_frame(space, w_func.w_func_globals,
-                                      w_func.closure)
+            frame = space.createframe(self, w_func.w_func_globals,
+                                       w_func.closure)
             frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
             frame.fastlocals_w[1] = w_arg2 
             frame.fastlocals_w[2] = w_arg3 
@@ -229,8 +206,8 @@ class PyCode(eval.Code):
 
     def fastcall_4(self, space, w_func, w_arg1, w_arg2, w_arg3, w_arg4):
         if self.do_fastcall == 4:
-            frame = self.create_frame(space, w_func.w_func_globals,
-                                      w_func.closure)
+            frame = space.createframe(self, w_func.w_func_globals,
+                                       w_func.closure)
             frame.fastlocals_w[0] = w_arg1 # frame.setfastscope([w_arg])
             frame.fastlocals_w[1] = w_arg2 
             frame.fastlocals_w[2] = w_arg3 
@@ -239,7 +216,7 @@ class PyCode(eval.Code):
         return None
 
     def funcrun(self, func, args):
-        frame = self.create_frame(self.space, func.w_func_globals,
+        frame = self.space.createframe(self, func.w_func_globals,
                                   func.closure)
         sig = self._signature
         # speed hack
@@ -248,49 +225,15 @@ class PyCode(eval.Code):
         frame.init_cells()
         return frame.run()
 
-    def get_frame_class(self):
-        # select the appropriate kind of frame
-        if not frame_classes:
-            setup_frame_classes()   # lazily
-        choose = 0
-        if self.co_cellvars or self.co_freevars:
-            choose |= NESTED
-        if self.co_flags & CO_GENERATOR:
-            choose |= GENERATOR
-        Frame = frame_classes[choose]
-        return Frame
-
-    def create_frame(self, space, w_globals, closure=None):
-        "Create an empty PyFrame suitable for this code object."
-        return self.get_frame_class()(space, self, w_globals, closure)
-
     def getvarnames(self):
         return self.co_varnames
 
-    def getdocstring(self):
+    def getdocstring(self, space):
         if self.co_consts_w:   # it is probably never empty
-            const0_w = self.co_consts_w[0]
-            if const0_w is self.space.w_None:
-                return None
-            else:
-                return self.space.str_w(const0_w)
+            return self.co_consts_w[0]
         else:
-            return None
+            return space.w_None
 
-    def initialize_frame_scopes(self, frame): 
-        # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
-        # class bodies only have CO_NEWLOCALS.
-        # CO_NEWLOCALS: make a locals dict unless optimized is also set
-        # CO_OPTIMIZED: no locals dict needed at all 
-        flags = self.co_flags
-        if flags & CO_OPTIMIZED: 
-            return 
-        if flags & CO_NEWLOCALS:
-            frame.w_locals = frame.space.newdict()
-        else:
-            assert frame.w_globals is not None
-            frame.w_locals = frame.w_globals 
-        
     def getjoinpoints(self):
         """Compute the bytecode positions that are potential join points
         (for FlowObjSpace)"""

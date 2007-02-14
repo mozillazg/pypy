@@ -7,7 +7,7 @@ from pypy.rpython.ootypesystem.ootype import meth, Meth, Char, Signed, Float, St
 from pypy.translator.cli.test.runtest import CliTest
 from pypy.translator.cli.dotnet import SomeCliClass, SomeCliStaticMethod,\
      NativeInstance, CLR, box, unbox, OverloadingResolver, NativeException,\
-     native_exc, new_array, init_array
+     native_exc, new_array, init_array, typeof
 
 System = CLR.System
 Math = CLR.System.Math
@@ -111,11 +111,49 @@ class TestDotnetAnnotation(object):
         a = RPythonAnnotator()
         s = a.build_types(fn, [])
         assert isinstance(s, annmodel.SomeOOInstance)
-        assert s.ootype._name == '[mscorlib]System.Object'            
+        assert s.ootype._name == '[mscorlib]System.Object'
+
+    def test_mix_None_and_instance(self):
+        def fn(x):
+            if x:
+                return None
+            else:
+                return box(42)
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [bool])
+        assert isinstance(s, annmodel.SomeOOInstance)
+        assert s.can_be_None == True
+
+    def test_box_instance(self):
+        class Foo:
+            pass
+        def fn():
+            return box(Foo())
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeOOInstance)
+        assert s.ootype._name == '[mscorlib]System.Object'
+
+    def test_unbox_instance(self):
+        class Foo:
+            pass
+        def fn():
+            boxed = box(Foo())
+            return unbox(boxed, Foo)
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef.name.endswith('Foo')
+
 
 class TestDotnetRtyping(CliTest):
     def _skip_pythonnet(self, msg):
         pass
+
+    def _skip_exception(self):
+        from pypy.translator.cli import function
+        if function.USE_LAST:
+            py.test.skip("Fixme!")
 
     def test_staticmeth_call(self):
         def fn(x):
@@ -168,17 +206,19 @@ class TestDotnetRtyping(CliTest):
             return unbox(x.get_Item(0), ootype.String)
         assert self.interpret(fn, []) == 'foo'
 
-    def test_exception(self):
-        py.test.skip("It doesn't work so far")
+    def test_box_method(self):
         def fn():
-            x = ArrayList()
-            try:
-                x.get_Item(0)
-            except System.ArgumentOutOfRangeException:
-                return 42
-            else:
-                return 43
-        assert self.interpret(fn, []) == 42
+            x = box(42)
+            t = x.GetType()
+            return t.get_Name()
+        res = self.interpret(fn, [])
+        assert res == 'Int32'
+
+    def test_box_object(self):
+        def fn():
+            return box(System.Object()).ToString()
+        res = self.interpret(fn, [])
+        assert res == 'System.Object'
 
     def test_array(self):
         def fn():
@@ -198,9 +238,15 @@ class TestDotnetRtyping(CliTest):
 
     def test_init_array(self):
         def fn():
-            x = init_array([box(42), box(43)])
+            x = init_array(System.Object, box(42), box(43))
             return unbox(x[0], ootype.Signed) + unbox(x[1], ootype.Signed)
         assert self.interpret(fn, []) == 42+43
+
+    def test_array_length(self):
+        def fn():
+            x = init_array(System.Object, box(42), box(43))
+            return len(x)
+        assert self.interpret(fn, []) == 2
 
     def test_null(self):
         def fn():
@@ -215,6 +261,7 @@ class TestDotnetRtyping(CliTest):
         assert self.interpret(fn, []) is None
 
     def test_native_exception_precise(self):
+        self._skip_exception()
         ArgumentOutOfRangeException = NativeException(CLR.System.ArgumentOutOfRangeException)
         def fn():
             x = ArrayList()
@@ -226,6 +273,7 @@ class TestDotnetRtyping(CliTest):
         assert self.interpret(fn, []) == True
 
     def test_native_exception_superclass(self):
+        self._skip_exception()
         SystemException = NativeException(CLR.System.Exception)
         def fn():
             x = ArrayList()
@@ -237,6 +285,7 @@ class TestDotnetRtyping(CliTest):
         assert self.interpret(fn, []) == True
 
     def test_native_exception_object(self):
+        self._skip_exception()
         SystemException = NativeException(CLR.System.Exception)
         def fn():
             x = ArrayList()
@@ -250,6 +299,7 @@ class TestDotnetRtyping(CliTest):
         assert res.startswith("Index is less than 0")
 
     def test_native_exception_invoke(self):
+        self._skip_exception()
         TargetInvocationException = NativeException(CLR.System.Reflection.TargetInvocationException)
         def fn():
             x = ArrayList()
@@ -265,6 +315,57 @@ class TestDotnetRtyping(CliTest):
                 return message
         res = self.ll_to_string(self.interpret(fn, []))
         assert res.startswith("Index is less than 0")
+
+    def test_typeof(self):
+        def fn():
+            x = box(42)
+            return x.GetType() == typeof(System.Int32)
+        res = self.interpret(fn, [])
+        assert res is True
+
+    def test_mix_None_and_instance(self):
+        def g(x):
+            return x
+        def fn(flag):
+            if flag:
+                x = None
+            else:
+                x = box(42)
+            return g(x)
+        res = self.interpret(fn, [1])
+        assert res is None
+
+    def test_box_unbox_instance(self):
+        class Foo:
+            pass
+        def fn():
+            obj = Foo()
+            b_obj = box(obj)
+            obj2 = unbox(b_obj, Foo)
+            return obj is obj2
+        res = self.interpret(fn, [])
+        assert res is True
+
+    def test_unbox_instance_fail(self):
+        class Foo:
+            pass
+        def fn():
+            b_obj = box(42)
+            return unbox(b_obj, Foo)
+        res = self.interpret(fn, [])
+        assert res is None
+
+    def test_instance_wrapping(self):
+        class Foo:
+            pass
+        def fn():
+            obj = Foo()
+            x = ArrayList()
+            x.Add(box(obj))
+            obj2 = unbox(x.get_Item(0), Foo)
+            return obj is obj2
+        res = self.interpret(fn, [])
+        assert res is True
 
 class TestPythonnet(TestDotnetRtyping):
     # don't interpreter functions but execute them directly through pythonnet

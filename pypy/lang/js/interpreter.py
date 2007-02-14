@@ -1,273 +1,775 @@
 
-from pypy.lang.js.astgen import *
-from pypy.lang.js.context import ExecutionContext
-from pypy.lang.js.jsobj import W_Number, W_String, W_Object 
-from pypy.lang.js.jsobj import w_Undefined, W_Arguments, W_Boolean
-from pypy.lang.js.scope import scope_manager
+import math
+from pypy.lang.js.jsparser import parse, parse_bytecode
+from pypy.lang.js.jsobj import *
+from pypy.rlib.parsing.ebnfparse import Symbol, Nonterminal
+
+class Node(object):
+    opcode = None
+    def __init__(self, t=None, type='', value='', lineno=0, start=0, end=0):
+        if t is None:
+            self.type = type
+            self.value = value
+            self.lineno = lineno
+            self.start = start
+            self.end = end
+        else:
+            self.type = get_string(t, 'type')
+            self.value = get_string(t, 'value')
+            self.lineno = int(get_string(t, 'lineno'))
+            
+            try:
+                self.start = int(get_string(t, 'start'))
+            except ValueError, e:
+                self.start = 0
+            try:
+                self.end = int(get_string(t, 'end'))
+            except Exception, e:
+                self.end = 0
+            self.from_tree(t)
+
+    def eval(self, ctx):
+        if DEBUG:
+            print self
+        raise NotImplementedError
+
+    def execute(self, ctx):
+        raise NotImplementedError
+    
+    def get_literal(self):
+        raise NotImplementedError
+    
+    def get_args(self, ctx):
+        raise NotImplementedError
+    
+    def __str__(self):
+        return "<ASTop %s %s >"%(self.opcode, self.value)
+
+class Statement(Node):
+    pass
+
+class Expression(Statement):
+    def eval(self, ctx):
+        return W_Root()
+
+    def execute(self, ctx):
+        return self.eval(ctx)
+
+class ListOp(Expression):
+    def from_tree(self, t):
+        self.list = get_objects(t)
+        
+class UnaryOp(Expression):
+    def from_tree(self, t):
+        self.expr = get_obj(t, '0')
+
+class BinaryOp(Expression):
+    def from_tree(self, t):
+        self.left = get_obj(t,'0')
+        self.right = get_obj(t, '1')
+    
+class BinaryComparisonOp(BinaryOp):
+    def eval(self, ctx):
+        s2 = self.left.eval(ctx).GetValue()
+        s4 = self.right.eval(ctx).GetValue()
+        if DEBUG:
+            print "bincomp, op1 and op2 ", s2, s4
+        return self.decision(ctx, s2, s4)
+    
+    def decision(self, ctx, op1, op2):
+        raise NotImplementedError
+
+class BinaryLogicOp(BinaryOp):
+    pass
 
 def writer(x):
     print x
 
-class ExecutionReturned(Exception):
-    def __init__(self, value):
-        self.value = value
+def load_source(script_source):
+    temp_tree = parse(script_source)
+    return from_tree(temp_tree)
 
-class ThrowException(Exception):
-    def __init__(self, exception):
-        self.exception = exception
-        self.args = self.exception
+def load_bytecode(bytecode):
+    temp_tree = parse_bytecode(bytecode)
+    return from_tree(temp_tree)
+
+def evaljs(ctx, args, this):
+    if len(args) >= 1:
+        code = args[0]
+    else:
+        code = W_String('')
+    return load_source(code.ToString()).execute(ctx)
+
+def functionjs(ctx, args, this):
+    if len(args) >= 1:
+        fbody  = args[-1].GetValue().ToString()
+        argslist = []
+        for i in range(len(args)-1):
+            argslist.append(args[i].GetValue().ToString())
+        fargs = ','.join(argslist)
+        functioncode = "__anon__ = function (%s) {%s}"%(fargs, fbody)
+    else:
+        functioncode = "__anon__ = function () {}"
+    print functioncode
+    return evaljs(ctx, [W_String(functioncode),], this)
+
+def printjs(ctx, args, this):
+    writer(",".join([i.GetValue().ToString() for i in args]))
+    return w_Undefined
+
+def objectconstructor(ctx, args, this):
+    return W_Object()
+
+def isnanjs(ctx, args, this):
+    return W_Boolean(args[0].ToNumber() == NaN)
+
+def booleanjs(ctx, args, this):
+    if len(args) > 0:
+        return W_Boolean(args[0].ToBoolean())
+    return W_Boolean(False)
+
+def stringjs(ctx, args, this):
+    if len(args) > 0:
+        return W_String(args[0].ToString())
+    return W_String('')
+
+def numberjs(ctx, args, this):
+    if len(args) > 0:
+        return W_Number(args[0].ToNumber())
+    return W_Number(0)
+        
+def absjs(ctx, args, this):
+    return W_Number(abs(args[0].ToNumber()))
+
+def floorjs(ctx, args, this):
+    return W_Number(math.floor(args[0].ToNumber()))
+
+def versionjs(ctx, args, this):
+    return w_Undefined
+
+class Interpreter(object):
+    """Creates a js interpreter"""
+    def __init__(self):
+        w_Global = W_Object()
+        ctx = global_context(w_Global)
+
+        w_ObjPrototype = W_Object(Prototype=None, Class='Object')
+        
+        #Function stuff
+        w_Function = W_Builtin(functionjs, ctx=ctx, Class='Function', 
+                              Prototype=w_ObjPrototype)
+        w_Function.Put('prototype', w_Function, dd=True, de=True, ro=True)
+        w_Function.Put('constructor', w_Function)
+        
+        #Object stuff
+        w_Object = W_Builtin(Prototype=w_Function)
+        w_Object.set_builtin_call(objectconstructor)
+        w_Object.Put('length', W_Number(1), ro=True, dd=True)
+        w_Object.Put('prototype', w_ObjPrototype, dd=True, de=True, ro=True)
+        w_ObjPrototype.Put('constructor', w_Object)
+        #And some other stuff
+        
+        #Math
+        w_math = W_Object(Class='Math')
+        w_Global.Put('Math', w_math)
+        w_math.Put('abs', W_Builtin(absjs, Class='function'))
+        w_math.Put('floor', W_Builtin(floorjs, Class='function'))
+        
+        w_Global.Put('String', W_Builtin(stringjs, Class='String'))
+        
+        #Global Properties
+        w_Global.Put('Object', w_Object)
+        w_Global.Put('Function', w_Function)
+        w_Global.Put('Array', W_Array())
+        w_Global.Put('version', W_Builtin(versionjs))
+        
+        #Number
+        w_Number = W_Builtin(numberjs, Class="Number")
+        w_Number.Put('NaN', W_Number(NaN))
+        w_Number.Put('POSITIVE_INFINITY', W_Number(Infinity))
+        w_Number.Put('NEGATIVE_INFINITY', W_Number(-Infinity))
+        
+        w_Global.Put('Number', w_Number)
+        w_Global.Put('eval', W_Builtin(evaljs))
+        w_Global.Put('print', W_Builtin(printjs))
+        w_Global.Put('isNaN', W_Builtin(isnanjs))
+        
+        w_Boolean = W_Builtin(booleanjs, Class="Boolean")
+        w_Global.Put('Boolean', W_Builtin(booleanjs, Class="Boolean"))
+        
+
+        w_Global.Put('NaN', W_Number(NaN))
+        w_Global.Put('Infinity', W_Number(Infinity))
+        w_Global.Put('undefined', w_Undefined)
+        w_Global.Put('this', w_Global)
+        
+        
+        self.global_context = ctx
+        self.w_Global = w_Global
+        self.w_Object = w_Object
+
+    def run(self, script):
+        """run the interpreter"""
+        return script.execute(self.global_context)
+
+class PropertyInit(BinaryOp):
+    opcode = 'PROPERTY_INIT'
+
+class Array(ListOp):
+    opcode = 'ARRAY_INIT'
+    
+    def eval(self, ctx):
+        #d = dict(enumerate(self.items))
+        array = W_Array()
+        for i in range(len(self.list)):
+            array.Put(str(i), self.list[i].eval(ctx).GetValue())
+        return array
 
 
-class __extend__(Array):
-    def call(self, context):
-        d = dict(enumerate(self.items))
-        return W_Array(d)
+class Assign(BinaryOp):
+    opcode = 'ASSIGN'
+    
+    def eval(self, ctx):
+        v1 = self.left.eval(ctx)
+        v3 = self.right.eval(ctx).GetValue()
+        op = self.value
+        if op == "=":
+            v1.PutValue(v3, ctx)
+        elif op == "*":
+            v1.PutValue(Mult().mathop(ctx, v1.GetValue(), v3), ctx)
+        elif op == "+":
+            v1.PutValue(Plus().mathop(ctx, v1.GetValue(), v3), ctx)
+        else:
+            print op
+            raise NotImplementedError()
+        return v3
 
-class __extend__(Assign):
-    def call(self, context):
-        print context.locals.keys(), "|||||", context.globals
-        print context.locals['this']
-        val = self.expr.call(context)
-        print val
-        self.identifier.put(context,val)
+class Block(Statement):
+    opcode = 'BLOCK'
 
-class __extend__(Block):
-    def call(self, context):
+    def from_tree(self, t):
+        self.nodes = get_objects(t)        
+
+    def execute(self, ctx):
         try:
             last = w_Undefined
             for node in self.nodes:
-                last = node.call(context)
+                last = node.execute(ctx)
             return last
         except ExecutionReturned, e:
-            return e.value
+            if e.type == 'return':
+                return e.value
+            else:
+                raise e
 
-class __extend__(Call):
-    def call(self, context):
-        name = self.identifier.get_literal()
-        if name == 'print':
-            writer(",".join([i.ToString() for i in self.arglist.call(context)]))
+class Unconditional(Statement):
+    def from_tree(self, t):
+        pieces = get_string(t, 'target').split(',')
+        self.targtype = pieces[0] 
+        self.targlineno = pieces[1]
+        self.targstart = pieces[2]
+        
+class Break(Unconditional):
+    opcode = 'BREAK'
+    
+    def execute(self, ctx):
+        raise ExecutionReturned('break', None, None)
+
+class Continue(Unconditional):
+    opcode = 'CONTINUE'
+    
+    def execute(self, ctx):
+        raise ExecutionReturned('continue', None, None)
+
+class Call(BinaryOp):
+    opcode = 'CALL'
+
+    def eval(self, ctx):
+        if DEBUG:
+            print "calling", self.left, self.right
+        r1 = self.left.eval(ctx)
+        r2 = self.right.eval(ctx)
+        r3 = r1.GetValue()
+        if isinstance(r1, W_Reference):
+            r6 = r1.GetBase()
         else:
-            backup_scope = scope_manager.current_scope
-            
-            w_obj = context.access(name)
-            scope_manager.current_scope = w_obj.function.scope
-            
-            retval = w_obj.Call(context=context, args=[i for i in self.arglist.call(context)])
-            scope_manager.current_scope = backup_scope
-            return retval
+            r6 = None
+        if isinstance(r2, ActivationObject):
+            r7 = None
+        else:
+            r7 = r6
+        retval = r3.Call(ctx=ctx, args=r2.get_args(), this=r7)
+        return retval
 
-class __extend__(Comma):
-    def call(self, context):
-        self.left.call(context)
-        return self.right.call(context)
+class Comma(BinaryOp):
+    opcode = 'COMMA'
+    
+    def eval(self, ctx):
+        self.left.eval(ctx)
+        return self.right.eval(ctx)
 
-class __extend__(Dot):
-    def call(self, context=None):
-        w_obj = self.left.call(context).GetValue().ToObject()
-        name = self.right.get_literal()
-        return w_obj.Get(name)
+class Conditional(Expression):
+    opcode = 'CONDITIONAL'
+
+    def from_tree(self, t):
+        self.logicalexpr = get_obj(t, '0')
+        self.trueop = get_obj(t, '1')
+        self.falseop = get_obj(t, '2')
         
-    def put(self, context, val):
-        print self.left.name, self.right.name, val
-        if isinstance(self.left,Identifier):
-            obj = context.access(self.left.name)
-            print obj.Class
-            obj.dict_w[self.right.name] = val
-        elif isinstance(self.left,Dot):
-            obj = self.left.put(context, val)
+    def eval(self, ctx):
+        if self.logicalexpr.eval(ctx).GetValue().ToBoolean():
+            return self.trueop.eval(ctx).GetValue()
+        else:
+            return self.falseop.eval(ctx).GetValue()
 
-        return obj
+class Dot(BinaryOp):
+    opcode = 'DOT'
 
-        #w_obj = self.left.put(context).GetValue().ToObject()
-        #name = self.right.get_literal()
-        #w_obj.dict_w[self.name] = val
-        
+    def eval(self, ctx):
+        w_obj = self.left.eval(ctx).GetValue().ToObject()
+        name = self.right.eval(ctx).GetPropertyName()
+        return W_Reference(name, w_obj)
 
-class __extend__(Function):
-    def call(self, context):
-       w_obj = W_Object({}, function=self)
+class Function(Expression):
+    opcode = 'FUNCTION'
+
+    def from_tree(self, t):
+        self.name = get_string(t, 'name')
+        self.body = get_obj(t, 'body')
+        params = get_string(t, 'params')
+        if params == '':
+            self.params = []
+        else:
+            self.params = params.split(',')
+
+    def eval(self, ctx):
+       w_obj = W_Object(ctx=ctx, callfunc = self)
        return w_obj
 
-class __extend__(Identifier):
-    def call(self, context):
-        if self.initialiser is not None:
-            context.assign(self.name, self.initialiser.call(context))
-        try:
-            print "trying to access", self.name
-            value = context.access(self.name)
-            print "value", value
-            return value
-        except NameError:
-            return scope_manager.get_variable(self.name)
+class Identifier(Expression):
+    opcode = 'IDENTIFIER'
 
-    def put(self, context, val, obj=None):            
-        context.assign(self.name, val)
+    def from_tree(self, t):
+        self.name = get_string(t,'value')
+        self.initializer = get_obj(t, 'initializer')
+        
+    def __str__(self):
+        return "<id %s init: %s>"%(str(self.name), str(self.initializer))
+    
+    def eval(self, ctx):
+        if self.initializer is not astundef:
+            ref = ctx.resolve_identifier(self.name)
+            ref.PutValue(self.initializer.eval(ctx).GetValue(), ctx)
+        return ctx.resolve_identifier(self.name)
     
     def get_literal(self):
         return self.name
 
-class __extend__(If):
-    def call(self, context=None):
-        if self.condition.call(context).ToBoolean():
-            return self.thenPart.call(context)
+class This(Identifier):
+    opcode = "THIS"
+
+class If(Statement):
+    opcode = 'IF'
+
+    def from_tree(self, t):
+        self.condition = get_obj(t, 'condition')
+        self.thenPart = get_obj(t, 'thenPart')
+        self.elsePart = get_obj(t, 'elsePart')
+
+    def execute(self, ctx):
+        temp = self.condition.eval(ctx).GetValue()
+        if temp.ToBoolean():
+            return self.thenPart.execute(ctx)
         else:
-            return self.elsePart.call(context)
+            return self.elsePart.execute(ctx)
 
-class __extend__(Group):
-    """The __extend__ class."""
-    def call(self, context = None):
-        return self.expr.call(context)
-
-def AbstractRelationalLt(value1, value2):
-    # TODO: really implement the algorithm
-    v1 = value1.ToPrimitive().ToNumber()
-    v2 = value2.ToPrimitive().ToNumber()
-    return v1<v2
-
-class __extend__(Gt):
-    def call(self, context = None):
-        left = self.left.call(context).GetValue()
-        right = self.right.call(context).GetValue()
-        if left != right:
-            return W_Boolean(not AbstractRelationalLt(left, right))
-        else:
-            return W_Boolean(False)
-
-class __extend__(Lt):
-    def call(self, context = None):
-        left = self.left.call(context).GetValue()
-        right = self.right.call(context).GetValue()
-        return W_Boolean(AbstractRelationalLt(left, right))
-
-class __extend__(Index):
-    def call(self, context=None):
-        w_obj = self.left.call(context).GetValue()
-        w_member = self.expr.call(context).GetValue()
-        w_obj = w_obj.ToObject()
-        name = w_member.ToString()
-        return w_obj.Get(name)
-
-class __extend__(List):
-    def call(self, context=None):
-        return [node.call(context) for node in self.nodes]
-
-class __extend__(New):
-    def call(self, context=None):
-        try:
-            constructor = context.access(self.identifier)
-        except NameError:
-            constructor = scope_manager.get_variable(self.identifier)
-        obj = W_Object({})
-        obj.Class = 'Object'
-        #it should be undefined... to be completed
-        obj.dict_w['prototype'] = constructor.dict_w['prototype']
-        #nctx = ExecutionContext(context)
-        #nctx.assign('this',obj)
-        #print nctx.locals.keys()
-        constructor.Call(context, this = obj)
-        
-        return obj
-
-
-class __extend__(Number):
-    def call(self, context):
-        return W_Number(self.num)
+class Group(UnaryOp):
+    opcode = 'GROUP'
     
-    def get_literal(self):
-        # XXX Think about a shortcut later
-        return str(W_Number(self.num))
+    def eval(self, ctx):
+        return self.expr.eval(ctx)
 
-class __extend__(ObjectInit):
-    def call(self, context=None):
-        w_obj = W_Object({})
-        for property in self.properties:
-            name = property.name.get_literal()
-            w_expr = property.value.call(context).GetValue()
+def ARC(ctx, x, y):
+    """
+    Implements the Abstract Relational Comparison x < y
+    Still not 100% to the spec
+    """
+    # TODO complete the funcion with strings comparison
+    s1 = x.ToPrimitive(ctx, 'Number')
+    s2 = y.ToPrimitive(ctx, 'Number')
+    if not (isinstance(s1, W_String) and isinstance(s2, W_String)):
+        s4 = s1.ToNumber()
+        s5 = s2.ToNumber()
+        if s4 == NaN or s5 == NaN:
+            return -1
+        if s4 < s5:
+            return 1
+        else:
+            return 0
+    else:
+        return -1
+
+class Or(BinaryLogicOp):
+    opcode = 'OR'
+    
+    def eval(self, ctx):
+        s2 = self.left.eval(ctx).GetValue()
+        if s2.ToBoolean():
+            return s2
+        s4 = self.right.eval(ctx).GetValue()
+        return s4
+
+class And(BinaryLogicOp):
+    opcode = 'AND'
+    
+    def eval(self, ctx):
+        s2 = self.left.eval(ctx).GetValue()
+        if not s2.ToBoolean():
+            return s2
+        s4 = self.right.eval(ctx).GetValue()
+        return s4
+
+class Ge(BinaryComparisonOp):
+    opcode = 'GE'
+    
+    def decision(self, ctx, op1, op2):
+        s5 = ARC(ctx, op1, op2)
+        if DEBUG:
+            print ">= ARC result:", s5
+        if s5 in (-1, 1):
+            return W_Boolean(False)
+        else:
+            return W_Boolean(True)
+
+class Gt(BinaryComparisonOp):
+    opcode = 'GT'
+    
+    def decision(self, ctx, op1, op2):
+        s5 = ARC(ctx, op2, op1)
+        if DEBUG:
+            print "> ARC result:", s5
+        if s5 == -1:
+            return W_Boolean(False)
+        else:
+            return W_Boolean(s5)
+
+class Le(BinaryComparisonOp):
+    opcode = 'LE'
+    
+    def decision(self, ctx, op1, op2):
+        s5 = ARC(ctx, op2, op1)
+        if s5 in (-1, 1):
+            return W_Boolean(False)
+        else:
+            return W_Boolean(True)
+
+class Lt(BinaryComparisonOp):
+    opcode = 'LT'
+    
+    def decision(self, ctx, op1, op2):
+        s5 = ARC(ctx, op1, op2)
+        if s5 == -1:
+            return W_Boolean(False)
+        else:
+            return W_Boolean(s5)
+
+def AEC(x, y):
+    """
+    Implements the Abstract Equality Comparison x == y
+    not following the specs yet
+    """
+    objtype = x.GetValue().type()
+    if objtype == y.GetValue().type():
+        if objtype == "undefined" or objtype == "null":
+            return True
+        
+    if isinstance(x, W_String) and isinstance(y, W_String):
+        r = x.ToString() == y.ToString()
+    else:
+        r = x.ToNumber() == y.ToNumber()
+    return r
+
+class Eq(BinaryComparisonOp):
+    opcode = 'EQ'
+    
+    def decision(self, ctx, op1, op2):
+        return W_Boolean(AEC(op1, op2))
+
+class Ne(BinaryComparisonOp):
+    opcode = 'NE'
+    
+    def decision(self, ctx, op1, op2):
+        return W_Boolean(not AEC(op1, op2))
+
+
+class In(BinaryComparisonOp):
+    opcode = 'IN'
+    
+    def decision(self, ctx, op1, op2):
+        if not isinstance(op2, W_Object):
+            raise ThrowException(W_String("TypeError"))
+        name = op1.ToString()
+        return W_Boolean(op2.HasProperty(name))
+
+class Increment(UnaryOp):
+    opcode = 'INCREMENT'
+        
+    def eval(self, ctx):
+        thing = self.expr.eval(ctx)
+        val = thing.GetValue()
+        x = val.ToNumber()
+        resl = Plus().mathop(ctx, W_Number(x), W_Number(1))
+        thing.PutValue(resl, ctx)
+        return val
+
+class Index(BinaryOp):
+    opcode = 'INDEX'
+    
+    def eval(self, ctx):
+        w_obj = self.left.eval(ctx).GetValue().ToObject()
+        name= self.right.eval(ctx).GetValue().ToString()
+        return W_Reference(name, w_obj)
+
+class List(ListOp):
+    opcode = 'LIST'
+        
+    def eval(self, ctx):
+        return W_List([node.eval(ctx).GetValue() for node in self.list])
+
+class Minus(BinaryComparisonOp):
+    opcode = 'MINUS'
+    
+    def decision(self, ctx, op1, op2):
+        x = op1.ToNumber()
+        y = op2.ToNumber()
+        return W_Number(x - y)
+
+class New(UnaryOp):
+    opcode = 'NEW'
+
+    def eval(self, ctx):
+        x = self.expr.eval(ctx).GetValue()
+        if not isinstance(x, W_PrimitiveObject):
+            raise TypeError()
+        
+        return x.Construct(ctx=ctx)
+
+class NewWithArgs(BinaryOp):
+    opcode = 'NEW_WITH_ARGS'
+    
+    def eval(self, ctx):
+        x = self.left.eval(ctx).GetValue()
+        if not isinstance(x, W_PrimitiveObject):
+            raise TypeError()
+        args = self.right.eval(ctx).get_args()
+        return x.Construct(ctx=ctx, args=args)
+
+class Null(Expression):
+    opcode = 'NULL'
+    
+    def from_tree(self, t):
+        pass
+    
+    def eval(self, ctx):
+        return w_Null            
+
+class Number(Expression):
+    opcode = 'NUMBER'
+    
+    def from_tree(self, t):
+        self.num = float(get_string(t, 'value'))
+
+    def eval(self, ctx):
+        return W_Number(self.num)
+
+class ObjectInit(ListOp):
+    opcode = 'OBJECT_INIT'
+
+    def eval(self, ctx):
+        w_obj = W_Object()
+        for prop in self.list:
+            if DEBUG:
+                print prop.left
+            name = prop.left.value
+            w_expr = prop.right.eval(ctx).GetValue()
             w_obj.Put(name, w_expr)
         return w_obj
-        #dict_w = {}
-        #for property in self.properties:
-        #    dict_w[property.name
 
-class __extend__(Plus):
-    def call(self, context=None):
-        left = self.left.call(context).GetValue()
-        right = self.right.call(context).GetValue()
-        prim_left = left.ToPrimitive()
-        prim_right = right.ToPrimitive()
-        # INSANE
-        if isinstance(prim_left, W_String) or isinstance(prim_right, W_String):
-            str_left = prim_left.ToString()
-            str_right = prim_right.ToString()
-            return W_String(str_left + str_right)
+class BinaryNumberOp(BinaryOp):
+    def eval(self, ctx):
+        nleft = self.left.eval(ctx).GetValue().ToPrimitive(ctx, 'Number')
+        nright = self.right.eval(ctx).GetValue().ToPrimitive(ctx, 'Number')
+        result = self.mathop(ctx, nleft, nright)
+        if DEBUG:
+            print self.left, nleft, self.opcode, self.right, nright, '=', result
+        return result
+        
+class Plus(BinaryNumberOp):
+    opcode = 'PLUS'
+    
+    def mathop(self, ctx, nleft, nright):
+        if isinstance(nleft, W_String) or isinstance(nright, W_String):
+            sleft = nleft.ToString()
+            sright = nright.ToString()
+            return W_String(sleft + sright)
         else:
-            num_left = prim_left.ToNumber()
-            num_right = prim_right.ToNumber()
-            # XXX: obey all the rules
-            return W_Number(num_left + num_right)
+            fleft = nleft.ToNumber()
+            fright = nright.ToNumber()
+            return W_Number(fleft + fright)
 
-class __extend__(Script):
-    def call(self, context=None, args=(), params=[], this=w_Undefined, first = False):
-        ncontext = ExecutionContext(context)
-        for i, item in enumerate(params):
-            try:
-                temp = args[i]
-            except IndexError:
-                temp = w_Undefined
-            ncontext.assign(item, temp)
+class Mult(BinaryNumberOp):
+    opcode = 'MUL'
+    
+    def mathop(self, ctx, nleft, nright):
+        fleft = nleft.ToNumber()
+        fright = nright.ToNumber()
+        return W_Number(fleft * fright)
 
+class Mod(BinaryNumberOp):
+    opcode = 'MOD'
+    
+    def mathop(self, ctx, nleft, nright):
+        fleft = nleft.ToNumber()
+        fright = nright.ToNumber()
+        return W_Number(fleft % fright)
+
+
+class Div(BinaryNumberOp):
+    opcode = 'DIV'
+    
+    def mathop(self, ctx, nleft, nright):
+        fleft = nleft.ToNumber()
+        fright = nright.ToNumber()
+        return W_Number(fleft / fright)
+
+class Minus(BinaryNumberOp):
+    opcode = 'MINUS'
+    
+    def mathop(self, ctx, nleft, nright):
+        fleft = nleft.ToNumber()
+        fright = nright.ToNumber()
+        return W_Number(fleft - fright)
+
+
+class Script(Statement):
+    opcode = 'SCRIPT'
+
+    def from_tree(self, t):
+        f = get_tree_item(t, 'funDecls')
+        if f.symbol == "dict":
+            func_decl = [from_tree(f),]
+        elif f.symbol == "list":
+            func_decl = [from_tree(x) for x in f.children]
+        else:
+            func_decl = []
+        
+        v = get_tree_item(t, 'varDecls')
+        if v.symbol == "dict":
+            var_decl = [from_tree(v),]
+        elif v.symbol == "list":
+            var_decl = [from_tree(x) for x in v.children]
+        else:
+            var_decl = []
+        
+        self.nodes = get_objects(t)
+        self.var_decl = var_decl
+        self.func_decl = func_decl
+
+    def execute(self, ctx):
         for var in self.var_decl:
-            if first:
-                ncontext.globals[var.name] = w_Undefined
-            else:
-                ncontext.locals[var.name] = w_Undefined
+            ctx.variable.Put(var.name, w_Undefined)
+        for fun in self.func_decl:
+            ctx.variable.Put(fun.name, fun.eval(ctx))
         
-        w_Arguments = W_Arguments(dict([(str(x),y) for x,y in enumerate(args)]))
-        ncontext.assign('arguments', w_Arguments)
-        
-        ncontext.assign('this', this)
-        
+        node = self
+
         try:
             last = w_Undefined
             for node in self.nodes:
-                last = node.call(ncontext)
+                last = node.execute(ctx)
             return last
-        except ExecutionReturned, e:
-            return e.value
+        except Exception, e:
+            if isinstance(e, ExecutionReturned) and e.type == 'return':
+                return e.value
+            else:
+                print "exeception in line: %s, %s - %s"%(node.lineno, node.value, self)
+                raise
 
-class __extend__(Semicolon):
-    def call(self, context=None):
-        return self.expr.call(context)
+class Semicolon(Statement):
+    opcode = 'SEMICOLON'
 
-class __extend__(String):
-    def call(self, context=None):
+    def from_tree(self, t):
+        self.expr = get_obj(t, 'expression')
+    
+    def execute(self, ctx):
+        if self.expr is None:
+            return w_Undefined
+        return self.expr.execute(ctx)
+
+class String(Expression):
+    opcode = 'STRING'
+    
+    def from_tree(self, t):
+        self.strval = get_string(t, 'value')
+
+    def eval(self, ctx):
         return W_String(self.strval)
     
     def get_literal(self):
-        return self.strval
+        return W_String(self.strval).ToString()
 
-class __extend__(Return):
-    def call(self, context=None):
-        raise ExecutionReturned(self.expr.call(context))
+class Return(Statement):
+    opcode = 'RETURN'
 
-class __extend__(Throw):
-    def call(self, context=None):
-        raise ThrowException(self.exception.call(context))
+    def from_tree(self, t):
+        self.expr = get_obj(t, 'value')
 
-class __extend__(Try):
-    def call(self, context=None):
+    def execute(self, ctx):
+        if isinstance(self.expr, Undefined):
+            raise ExecutionReturned('return', None, None)
+        else:
+            raise ExecutionReturned('return', self.expr.eval(ctx), None)
+
+class Throw(Statement):
+    opcode = 'THROW'
+    
+    def from_tree(self, t):
+        self.exception = get_obj(t, 'exception')
+
+    def execute(self, ctx):
+        raise ThrowException(self.exception.eval(ctx))
+
+class Try(Statement):
+    opcode = 'TRY'
+
+    def from_tree(self, t):
+        self.tryblock = get_obj(t, 'tryBlock')
+        self.finallyblock = get_obj(t, 'finallyBlock')
+        catch = get_tree_item(t, 'catchClauses')
+        if catch is not None:
+            #multiple catch clauses is a spidermonkey extension
+            self.catchblock = get_obj(catch, 'block')
+            self.catchparam = get_string(catch, 'varName')
+        else:
+            self.catchblock = None
+            self.catchparam = None
+
+    def execute(self, ctx):
         e = None
+        tryresult = w_Undefined
         try:
-            tryresult = self.tryblock.call(context)
+            tryresult = self.tryblock.execute(ctx)
         except ThrowException, excpt:
             e = excpt
-            ncontext = ExecutionContext(context)
-            ncontext.assign(self.catchparam, e.exception)
             if self.catchblock is not None:
-                tryresult = self.catchblock.call(ncontext)
+                obj = W_Object()
+                obj.Put(self.catchparam, e.exception)
+                ctx.push_object(obj)
+                tryresult = self.catchblock.execute(ctx)
+                ctx.pop_object()
         
         if self.finallyblock is not None:
-            tryresult = self.finallyblock.call(context)
+            tryresult = self.finallyblock.execute(ctx)
         
         #if there is no catchblock reraise the exception
         if (e is not None) and (self.catchblock is None):
@@ -275,17 +777,152 @@ class __extend__(Try):
         
         return tryresult
 
-class __extend__(Undefined):
-    def call(self, context=None):
+class Typeof(UnaryOp):
+    opcode = 'TYPEOF'
+    
+    def eval(self, ctx):
+        val = self.expr.eval(ctx)
+        if isinstance(val, W_Reference) and val.GetBase() is None:
+            return W_String("undefined")
+        return W_String(val.GetValue().type())
+
+class Undefined(Statement):
+    def execute(self, ctx):
         return None
 
-class __extend__(Vars):
-    def call(self, context=None):
-        for var in self.nodes:
-            var.call(context)
+class Vars(Statement):
+    opcode = 'VAR'
 
-class __extend__(While):
-    def call(self, context=None):
-        while self.condition.call(context).ToBoolean():
-            self.body.call(context)
+    def from_tree(self, t):
+        self.nodes = get_objects(t)
+
+    def execute(self, ctx):
+        for var in self.nodes:
+            var.execute(ctx)
+
+class Void(UnaryOp):
+    opcode = 'VOID'
+
+    def eval(self, ctx):
+        self.expr.eval(ctx)
+        return w_Undefined
+
+class While(Statement):
+    opcode = 'WHILE'
+    
+    def from_tree(self, t):
+        self.condition = get_obj(t, 'condition')
+        self.body = get_obj(t, 'body')
+
+    def execute(self, ctx):
+        while self.condition.eval(ctx).ToBoolean():
+            try:
+                self.body.execute(ctx)
+            except ExecutionReturned, e:
+                if e.type == 'break':
+                    break
+                elif e.type == 'continue':
+                    continue
+
+class For(Statement):
+    opcode = 'FOR'
+
+    def from_tree(self, t):
+        self.setup = get_obj(t, 'setup')
+        self.condition = get_obj(t, 'condition')
+        self.update = get_obj(t, 'update')
+        self.body = get_obj(t, 'body')
+    
+    def execute(self, ctx):
+        self.setup.eval(ctx).GetValue()
+        while self.condition.eval(ctx).ToBoolean():
+            try:
+                self.body.execute(ctx)
+                self.update.eval(ctx)
+            except ExecutionReturned, e:
+                if e.type == 'break':
+                    break
+                elif e.type == 'continue':
+                    self.update.eval(ctx)
+                    continue
+    
+class Boolean(Expression):
+    def from_tree(self, t):
+        if self.opcode == 'TRUE':
+            self.bool = True
+        else:
+            self.bool = False
+    
+    def eval(self, ctx):
+        return W_Boolean(self.bool)
+
+class BTrue(Boolean):
+    opcode = 'TRUE'
+
+class BFalse(Boolean):
+    opcode = 'FALSE'
+
+class Not(UnaryOp):
+    opcode = 'NOT'
+    
+    def eval(self, ctx):
+        return W_Boolean(not self.expr.eval(ctx).GetValue().ToBoolean())
+
+class UMinus(UnaryOp):
+    opcode = 'UNARY_MINUS'
+    
+    def eval(self, ctx):
+        return W_Number(-self.expr.eval(ctx).GetValue().ToNumber())
+
+class UPlus(UnaryOp):
+    opcode = 'UNARY_PLUS'
+    
+    def eval(self, ctx):
+        return W_Number(+self.expr.eval(ctx).GetValue().ToNumber())
+
+
+astundef = Undefined()
+def get_obj(t, objname):
+    item = get_tree_item(t, objname)
+    if isinstance(item, Nonterminal):
+        return from_tree(item)
+    else:
+        return astundef
+
+def get_string(t, string):
+        simb = get_tree_item(t, string)
+        if isinstance(simb, Symbol):
+            return str(simb.additional_info)
+        else:
+            return ''
+
+def get_objects(t):
+    item = get_tree_item(t, 'length')
+    if item is None:
+        return []
+    lgt = int(item.additional_info)
+    output = [get_obj(t, str(i)) for i in range(lgt)]
+    return output
+    
+def get_tree_item(t, name):
+    for x in t.children:
+        if isinstance(x.children[0], Symbol):
+            if x.children[0].additional_info == name:
+                return x.children[1]
+    return None
+    
+opcodedict = {}
+for i in locals().values():
+    if isinstance(i, type(Node)) and issubclass(i, Node):
+        if i.opcode is not None:
+            opcodedict[i.opcode] = i
+
+def from_tree(t):
+    if t is None:
+        return None
+    opcode = get_string(t, 'type')
+    if opcode in opcodedict:
+        return opcodedict[opcode](t)
+    else:
+        raise NotImplementedError("Dont know how to handle %s" % opcode)
 

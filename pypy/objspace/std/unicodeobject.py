@@ -4,7 +4,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
-from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
+from pypy.module.unicodedata import unicodedb_3_2_0 as unicodedb
 
 class W_UnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
@@ -59,33 +59,23 @@ def delegate_String2Unicode(space, w_str):
 def str_w__Unicode(space, w_uni):
     return space.str_w(space.str(w_uni))
 
+def unichars_w__Unicode(space, w_uni):
+    return w_uni._value
+
 def str__Unicode(space, w_uni):
     return space.call_method(w_uni, 'encode')
 
-def cmp__Unicode_Unicode(space, w_left, w_right):
+def eq__Unicode_Unicode(space, w_left, w_right):
+    return space.newbool(w_left._value == w_right._value)
+
+def lt__Unicode_Unicode(space, w_left, w_right):
     left = w_left._value
     right = w_right._value
     for i in range(min(len(left), len(right))):
-        test = ord(left[i]) - ord(right[i])
-        if test < 0:
-            return space.wrap(-1)
-        if test > 0:
-            return space.wrap(1)
-            
-    test = len(left) - len(right)
-    if test < 0:
-        return space.wrap(-1)
-    if test > 0:
-        return space.wrap(1)
-    return space.wrap(0)
-
-## XXX what?? the following seems unnecessary
-##def cmp__Unicode_ANY(space, w_left, w_right):
-##    try:
-##        w_right = space.call_function(space.w_unicode, w_right)
-##    except:
-##        return space.wrap(1)
-##    return space.cmp(w_left, w_right)
+        if left[i] != right[i]:
+            return space.newbool(ord(left[i]) < ord(right[i]))
+            # NB. 'unichar < unichar' is not RPython at the moment
+    return space.newbool(len(left) < len(right))
 
 def ord__Unicode(space, w_uni):
     if len(w_uni._value) != 1:
@@ -285,8 +275,7 @@ def unicode_isalnum__Unicode(space, w_unicode):
     if len(w_unicode._value) == 0:
         return space.w_False
     for uchar in w_unicode._value:
-        if not (unicodedb.isalpha(ord(uchar)) or
-                unicodedb.isnumeric(ord(uchar))):
+        if not unicodedb.isalnum(ord(uchar)):
             return space.w_False
     return space.w_True
 
@@ -513,9 +502,12 @@ def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start
 def _to_unichar_w(space, w_char):
     try:
         w_unichar = unicodetype.unicode_from_object(space, w_char)
-    except OperationError:
-        # XXX don't completely eat this exception
-        raise OperationError(space.w_TypeError, space.wrap('The fill character cannot be converted to Unicode'))
+    except OperationError, e:
+        if e.match(space, space.w_TypeError):
+            msg = 'The fill character cannot be converted to Unicode'
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        else:
+            raise
 
     if space.int_w(space.len(w_unichar)) != 1:
         raise OperationError(space.w_TypeError, space.wrap('The fill character must be exactly one character long'))

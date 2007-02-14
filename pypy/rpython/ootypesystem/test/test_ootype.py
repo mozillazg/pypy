@@ -74,6 +74,14 @@ def test_simple_default_class():
 
     py.test.raises(TypeError, "Instance('test', ROOT, {'a': (Signed, 3.0)})")
 
+def test_overridden_default():
+    A = Instance("A", ROOT, {"a": (Signed, 3)})
+    B = Instance("B", A)
+    overrideDefaultForFields(B, {"a": (Signed, 5)})
+
+    b = new(B)
+    assert b.a == 5
+
 def test_simple_null():
     C = Instance("test", ROOT, {"a": Signed})
 
@@ -423,3 +431,15 @@ def test_instance_equality():
     # Instance compares by reference
     assert not A == B
     assert A != B 
+
+def test_subclasses():
+    A = Instance("A", ROOT)
+    B = Instance("B", A)
+    C = Instance("C", A)
+    D = Instance("D", C)
+
+    assert A in ROOT._subclasses
+    assert B in A._subclasses
+    assert not B._subclasses
+    assert C in A._subclasses
+    assert D in C._subclasses

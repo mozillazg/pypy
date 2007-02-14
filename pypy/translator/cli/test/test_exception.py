@@ -32,3 +32,26 @@ class TestCliException(CliTest, BaseTestException):
                 return -1
             return x
         self.interpret_raises(ValueError, fn, [0])
+
+    def test_raise_and_catch_other(self):
+        pass
+
+    def test_raise_prebuilt_and_catch_other(self):
+        pass
+
+    def test_missing_return_block(self):
+        class Base:
+            def foo(self):
+                raise ValueError
+
+        class Derived(Base):
+            def foo(self):
+                return 42
+
+        def fn(x):
+            if x:
+                obj = Base()
+            else:
+                obj = Derived()
+            return obj.foo()
+        assert self.interpret(fn, [0]) == 42

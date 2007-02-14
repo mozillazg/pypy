@@ -1,8 +1,6 @@
 import py
 
 from pypy.translator.driver import TranslationDriver
-from pypy.config.config import Config
-from pypy.config.pypyoption import pypy_optiondescription
 from py.compat import optparse
 
 def cmpl(l1, l2):
@@ -36,15 +34,15 @@ def test_ctr():
     assert td.backend_select_goals(['backendopt_lltype']) == [
         'backendopt_lltype']
 
-    assert cmpl(td.exposed,
-                ['annotate', 'backendopt_lltype',
+    assert cmpl(td.exposed, ['annotate', 'backendopt_lltype',
                  'backendopt_ootype',
                  'llinterpret_lltype',
                  'rtype_ootype', 'rtype_lltype', 'source_cl', 'source_js',
                  'source_squeak', 'source_cli', 'source_c', 'source_llvm',
                  'compile_cl', 'compile_cli', 'compile_c', 'compile_squeak',
                  'compile_llvm', 'compile_js', 'run_cl', 'run_squeak',
-                 'run_llvm', 'run_c', 'run_js', 'run_cli'])
+                 'run_llvm', 'run_c', 'run_js', 'run_cli',
+                 'compile_jvm', 'source_jvm', 'run_jvm'])
 
     td = TranslationDriver({'backend': None, 'type_system': 'lltype'})
 
@@ -56,7 +54,8 @@ def test_ctr():
     assert td.backend_select_goals(['backendopt_lltype']) == [
         'backendopt_lltype']
 
-    assert cmpl(td.exposed,
-                ['annotate', 'backendopt', 'llinterpret', 'rtype', 'source_c',
+    expected = ['annotate', 'backendopt', 'llinterpret', 'rtype', 'source_c',
                  'source_llvm', 'compile_c', 'compile_llvm', 'run_llvm',
-                 'run_c'])
+                 'run_c']
+
+    assert cmpl(td.exposed, expected)

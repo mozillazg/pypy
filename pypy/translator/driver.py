@@ -7,6 +7,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
 from py.compat import optparse
+from pypy.tool.udir import udir
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -28,7 +29,6 @@ DEFAULTS = {
   'translation.fork_before': None,
   'translation.backendopt.raisingop2direct_call' : False,
   'translation.backendopt.merge_if_blocks': True,
-  'translation.debug_transform' : False,
 }
 
 
@@ -86,10 +86,8 @@ class TranslationDriver(SimpleTaskEngine):
         self.log = log
 
         if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription,
-                            **DEFAULTS)
+            from pypy.config.pypyoption import get_pypy_config
+            config = get_pypy_config(DEFAULTS, translating=True)
         self.config = config
         if overrides is not None:
             self.config.override(overrides)
@@ -276,11 +274,6 @@ class TranslationDriver(SimpleTaskEngine):
         
         s = annotator.build_types(self.entry_point, self.inputtypes)
         
-        if self.config.translation.debug_transform:
-            from pypy.translator.transformer.debug import DebugTransformer
-            dt = DebugTransformer(translator)
-            dt.transform_all()
-        
         self.sanity_check_annotation()
         if self.standalone and s.knowntype != int:
             raise Exception("stand-alone program entry point must return an "
@@ -305,7 +298,12 @@ class TranslationDriver(SimpleTaskEngine):
         so = query.qoutput(query.polluted_qgen(translator))
         tot = len(translator.graphs)
         percent = int(tot and (100.0*so / tot) or 0)
-        if percent == 0:
+        # if there are a few SomeObjects even if the policy doesn't allow
+        # them, it means that they were put there in a controlled way
+        # and then it's not a warning.
+        if not translator.annotator.policy.allow_someobjects:
+            pr = self.log.info
+        elif percent == 0:
             pr = self.log.info
         else:
             pr = log.WARNING
@@ -342,14 +340,23 @@ class TranslationDriver(SimpleTaskEngine):
 
     def task_backendopt_ootype(self):
         from pypy.translator.backendopt.all import backend_optimizations
-        backend_optimizations(self.translator,
-                              raisingop2direct_call=False,
-                              inline_threshold=0,
-                              mallocs=False,
-                              merge_if_blocks=False,
-                              constfold=True,
-                              heap2stack=False,
-                              clever_malloc_removal=False)
+        opt = dict(
+            raisingop2direct_call=False,
+            inline=False,
+            mallocs=False,
+            merge_if_blocks=False,
+            constfold=False,
+            heap2stack=False,
+            clever_malloc_removal=False)
+        if self.config.translation.backend == 'cli':
+            opt['merge_if_blocks'] = True
+            opt['inline'] = True
+            opt['mallocs'] = True
+            
+        if self.config.translation.backend == 'jvm':
+            opt['inline'] = True
+            opt['mallocs'] = True
+        backend_optimizations(self.translator, **opt)
     #
     task_backendopt_ootype = taskdef(task_backendopt_ootype, 
                                         [OOTYPE], "ootype back-end optimisations")
@@ -499,7 +506,7 @@ class TranslationDriver(SimpleTaskEngine):
                             idemp=True)
 
     def task_source_cl(self):
-        from pypy.translator.cl.gencl import GenCL
+        from pypy.translator.lisp.gencl import GenCL
         self.gen = GenCL(self.translator, self.entry_point)
         filename = self.gen.emitfile()
         self.log.info("Wrote %s" % (filename,))
@@ -537,8 +544,7 @@ class TranslationDriver(SimpleTaskEngine):
     def task_source_js(self):
         from pypy.translator.js.js import JS
         self.gen = JS(self.translator, functions=[self.entry_point],
-                      stackless=self.config.translation.stackless,
-                      use_debug=self.config.translation.debug_transform)
+                      stackless=self.config.translation.stackless)
         filename = self.gen.write_source()
         self.log.info("Wrote %s" % (filename,))
     task_source_js = taskdef(task_source_js, 
@@ -558,7 +564,6 @@ class TranslationDriver(SimpleTaskEngine):
     def task_source_cli(self):
         from pypy.translator.cli.gencli import GenCli
         from pypy.translator.cli.entrypoint import get_entrypoint
-        from pypy.tool.udir import udir
 
         entry_point_graph = self.translator.graphs[0]
         self.gen = GenCli(udir, self.translator, get_entrypoint(entry_point_graph),
@@ -574,17 +579,67 @@ class TranslationDriver(SimpleTaskEngine):
         filename = self.gen.build_exe()
         self.c_entryp = CliFunctionWrapper(filename)
         # restore original os values
-        unpatch(*self.old_cli_defs)
+        if hasattr(self, 'old_cli_defs'):
+            unpatch(*self.old_cli_defs)
         
         self.log.info("Compiled %s" % filename)
+        if self.standalone and self.exe_name:
+            self.copy_cli_exe()
     task_compile_cli = taskdef(task_compile_cli, ['source_cli'],
                               'Compiling CLI source')
+
+    def copy_cli_exe(self):
+        # XXX messy
+        import os.path
+        import shutil
+        main_exe = self.c_entryp._exe
+        usession_path, main_exe_name = os.path.split(main_exe)
+        pypylib_dll = os.path.join(usession_path, 'pypylib.dll')
+
+        basename = self.exe_name % self.get_info()
+        dirname = basename + '-data/'
+        if '/' not in dirname and '\\' not in dirname:
+            dirname = './' + dirname
+
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
+        shutil.copy(main_exe, dirname)
+        shutil.copy(pypylib_dll, dirname)
+        newexename = basename
+        f = file(newexename, 'w')
+        f.write("""#!/bin/bash
+mono "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
+""" % main_exe_name)
+        f.close()
+        os.chmod(newexename, 0755)
 
     def task_run_cli(self):
         pass
     task_run_cli = taskdef(task_run_cli, ['compile_cli'],
                               'XXX')
+    
+    def task_source_jvm(self):
+        from pypy.translator.jvm.genjvm import GenJvm
+        from pypy.translator.jvm.node import EntryPoint
 
+        entry_point_graph = self.translator.graphs[0]
+        entry_point = EntryPoint(entry_point_graph, False, False)
+        self.gen = GenJvm(udir, self.translator, entry_point)
+        self.jvmsource = self.gen.generate_source()
+        self.log.info("Wrote JVM code")
+    task_source_jvm = taskdef(task_source_jvm, ["?" + OOBACKENDOPT, OOTYPE],
+                             'Generating JVM source')
+
+    def task_compile_jvm(self):
+        self.jvmsource.compile()
+        self.log.info("Compiled JVM source")
+    task_compile_jvm = taskdef(task_compile_jvm, ['source_jvm'],
+                              'Compiling JVM source')
+
+    def task_run_jvm(self):
+        pass
+    task_run_jvm = taskdef(task_run_jvm, ['compile_jvm'],
+                           'XXX')
 
     def proceed(self, goals):
         if not goals:

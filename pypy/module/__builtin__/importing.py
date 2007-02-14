@@ -155,23 +155,29 @@ def importhook(space, modulename, w_globals=None,
               space.wrap("__import__() argument 1 must be string" + helper))
     w = space.wrap
 
+    ctxt_name = None
     if w_globals is not None and not space.is_w(w_globals, space.w_None):
         ctxt_w_name = try_getitem(space, w_globals, w('__name__'))
         ctxt_w_path = try_getitem(space, w_globals, w('__path__'))
+        if ctxt_w_name is not None:
+            try:
+                ctxt_name = space.str_w(ctxt_w_name)
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
     else:
-        ctxt_w_name = None
         ctxt_w_path = None
 
     rel_modulename = None
-    if ctxt_w_name is not None:
+    if ctxt_name is not None:
 
-        ctxt_name_prefix_parts = space.str_w(ctxt_w_name).split('.')
+        ctxt_name_prefix_parts = ctxt_name.split('.')
         if ctxt_w_path is None: # context is a plain module
             ctxt_name_prefix_parts = ctxt_name_prefix_parts[:-1]
             if ctxt_name_prefix_parts:
                 rel_modulename = '.'.join(ctxt_name_prefix_parts+[modulename])
         else: # context is a package module
-            rel_modulename = space.str_w(ctxt_w_name)+'.'+modulename
+            rel_modulename = ctxt_name+'.'+modulename
         if rel_modulename is not None:
             w_mod = check_sys_modules(space, w(rel_modulename))
             if (w_mod is None or
@@ -398,12 +404,7 @@ def check_compiled_module(space, pathname, mtime, cpathname):
     the header; if not, return NULL.
     Doesn't set an exception.
     """
-    try:
-        w_marshal = space.getbuiltinmodule('marshal')
-    except OperationError:
-        #XXX debug
-        #print "skipped checking of", cpathname
-        return -1
+    w_marshal = space.getbuiltinmodule('marshal')
     stream = streamio.open_file_as_stream(cpathname, "rb")
     magic = _r_long(stream)
     try:
@@ -464,22 +465,13 @@ def write_compiled_module(space, co, cpathname, mtime):
     Errors are ignored, if a write error occurs an attempt is made to
     remove the file.
     """
-    # see if marshal exists, already.
-    # if not, skip the writing.
-    try:
-        w_marshal = space.getbuiltinmodule('marshal')
-    except OperationError:
-        # XXX debug
-        #print "skipped writing of", cpathname
-        return
-    else:
-        pass
-        #XXX debug
-        #print "indeed writing", cpathname
+    w_marshal = space.getbuiltinmodule('marshal')
     try:
         w_str = space.call_method(w_marshal, 'dumps', space.wrap(co))
         strbuf = space.str_w(w_str)
-    except OperationError:
+    except OperationError, e:
+        if e.async(space):
+            raise
         #print "Problem while marshalling %s, skipping" % cpathname
         return
     #

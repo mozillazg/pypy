@@ -128,24 +128,6 @@ class JvmType(object):
     def __repr__(self):
         return "%s<%s>" % (self.__class__.__name__, self.descriptor)
 
-class JvmScalarType(JvmType):
-    """
-    Subclass used for all scalar type instances.
-    """
-    def __init__(self, descrstr):
-        JvmType.__init__(self, JvmTypeDescriptor(descrstr))
-    def lookup_field(self, fieldnm):
-        raise KeyError(fieldnm)        # Scalar objects have no fields
-    def lookup_method(self, methodnm): 
-        raise KeyError(methodnm)       # Scalar objects have no methods
-
-jVoid = JvmScalarType('V')
-jInt = JvmScalarType('I')
-jLong = JvmScalarType('J')
-jBool = JvmScalarType('Z')
-jDouble = JvmScalarType('D')
-jByte = JvmScalarType('B')
-jChar = JvmScalarType('C')
 class JvmClassType(JvmType):
     """
     Base class used for all class instances.  Kind of an abstract class;
@@ -161,10 +143,18 @@ class JvmClassType(JvmType):
     def lookup_method(self, methodnm):
         raise KeyError(fieldnm) # we treat as opaque type
 
+jIntegerClass = JvmClassType('java.lang.Integer')
+jLongClass = JvmClassType('java.lang.Long')
+jDoubleClass = JvmClassType('java.lang.Double')
+jByteClass = JvmClassType('java.lang.Byte')
+jCharClass = JvmClassType('java.lang.Character')
+jBoolClass = JvmClassType('java.lang.Boolean')
 jThrowable = JvmClassType('java.lang.Throwable')
 jObject = JvmClassType('java.lang.Object')
 jString = JvmClassType('java.lang.String')
+jCharSequence = JvmClassType('java.lang.CharSequence')
 jArrayList = JvmClassType('java.util.ArrayList')
+jArrays = JvmClassType('java.util.Arrays')
 jHashMap = JvmClassType('java.util.HashMap')
 jIterator = JvmClassType('java.util.Iterator')
 jClass = JvmClassType('java.lang.Class')
@@ -172,9 +162,35 @@ jStringBuilder = JvmClassType('java.lang.StringBuilder')
 jPrintStream = JvmClassType('java.io.PrintStream')
 jMath = JvmClassType('java.lang.Math')
 jList = JvmClassType('java.util.List')
+jArrayList = JvmClassType('java.util.ArrayList')
 jPyPy = JvmClassType('pypy.PyPy')
+jPyPyExcWrap = JvmClassType('pypy.ExceptionWrapper')
 jPyPyConst = JvmClassType('pypy.Constant')
 jPyPyMain = JvmClassType('pypy.Main')
+jPyPyDictItemsIterator = JvmClassType('pypy.DictItemsIterator')
+jPyPyInterlink = JvmClassType('pypy.Interlink')
+
+jArithmeticException = JvmClassType('java.lang.ArithmeticException')
+
+class JvmScalarType(JvmType):
+    """
+    Subclass used for all scalar type instances.
+    """
+    def __init__(self, descrstr, boxtype, unboxmethod):
+        JvmType.__init__(self, JvmTypeDescriptor(descrstr))
+        self.box_type = boxtype
+        self.unbox_method = unboxmethod
+    def lookup_field(self, fieldnm):
+        raise KeyError(fieldnm)        # Scalar objects have no fields
+    def lookup_method(self, methodnm): 
+        raise KeyError(methodnm)       # Scalar objects have no methods
+jVoid = JvmScalarType('V', None, None)
+jInt = JvmScalarType('I', jIntegerClass, 'intValue')
+jLong = JvmScalarType('J', jLongClass, 'longValue')
+jBool = JvmScalarType('Z', jBoolClass, 'booleanValue')
+jDouble = JvmScalarType('D', jDoubleClass, 'doubleValue')
+jByte = JvmScalarType('B', jByteClass, 'byteValue')
+jChar = JvmScalarType('C', jCharClass, 'charValue')
 
 class JvmArrayType(JvmType):
     """
@@ -192,4 +208,60 @@ jByteArray = JvmArrayType(jByte)
 jObjectArray = JvmArrayType(jObject)
 jStringArray = JvmArrayType(jString)
 
+class Generifier(object):
 
+    """
+
+    A utility class for working with generic methods in the OOTYPE
+    system.  You instantiate it with a given type, and you can ask it
+    for the actual or erased types of any method of that type.
+    
+    """
+
+    def __init__(self, OOTYPE):
+        self.OOTYPE = OOTYPE
+
+        # Make a hashtable mapping the generic parameter to a tuple:
+        #    (actual type, erased type)
+        
+        self.generics = {}
+        
+        if hasattr(self.OOTYPE, 'SELFTYPE_T'):
+            self.generics[self.OOTYPE.SELFTYPE_T] = (self.OOTYPE,self.OOTYPE)
+            
+        for pname,pval in (('ITEMTYPE_T', '_ITEMTYPE'),
+                           ('KEYTYPE_T', '_KEYTYPE'),
+                           ('VALUETYPE_T', '_VALUETYPE')):
+            if hasattr(self.OOTYPE, pname):
+                placeholder = getattr(self.OOTYPE, pname)
+                placeholder_val = getattr(self.OOTYPE, pval)
+                self.generics[placeholder] = (placeholder_val, ootype.ROOT)
+
+    def full_types(self, method_name):
+        """
+        Returns a tuple of argument and return types for the method
+        named 'method_name'.  These are the actual generic types.  The set method for
+        a list of strings, for example, might return:
+          ( [INT, STRING], VOID )
+        """
+        GENMETH = self.OOTYPE._GENERIC_METHODS[method_name]
+        ARGS, RESULT = (GENMETH.ARGS, GENMETH.RESULT)
+        ARGS = [self.generics.get(X,(X,))[0] for X in ARGS]
+        RESULT = self.generics.get(RESULT, (RESULT,))[0]
+        return (ARGS, RESULT)
+
+    def erased_types(self, method_name):
+        """
+        Returns a tuple of argument and return types for the method
+        named 'method_name'.  These are the erased generic types.  The set method for
+        a list of strings, for example, might return:
+          ( [INT, OBJECT], VOID )
+        """
+        GENMETH = self.OOTYPE._GENERIC_METHODS[method_name]
+        ARGS, RESULT = (GENMETH.ARGS, GENMETH.RESULT)
+        ARGS = [self.generics.get(X,(None,X))[1] for X in ARGS]
+        RESULT = self.generics.get(RESULT, (None,RESULT))[1]
+        return (ARGS, RESULT)
+
+    
+    

@@ -220,11 +220,11 @@ class ExceptionTransformer(object):
         if need_exc_matching:
             assert lastblock.exitswitch == c_last_exception
             if not self.raise_analyzer.can_raise(lastblock.operations[-1]):
-                print ("XXX: operation %s cannot raise, but has exception"
-                       " guarding in graph %s" % (lastblock.operations[-1],
-                                                  graph))
+                #print ("operation %s cannot raise, but has exception"
+                #       " guarding in graph %s" % (lastblock.operations[-1],
+                #                                  graph))
                 lastblock.exitswitch = None
-                lastblock.exits = [lastblock.exits[0]]
+                lastblock.recloseblock(lastblock.exits[0])
                 lastblock.exits[0].exitcase = None
             else:
                 self.insert_matching(lastblock, graph)
@@ -234,6 +234,9 @@ class ExceptionTransformer(object):
         # attach an except block -- let's hope that nobody uses it
         graph.exceptblock = Block([Variable('etype'),   # exception class
                                    Variable('evalue')])  # exception value
+        graph.exceptblock.operations = ()
+        graph.exceptblock.closeblock()
+        
         result = Variable()
         result.concretetype = lltype.Void
         block.operations = [SpaceOperation(

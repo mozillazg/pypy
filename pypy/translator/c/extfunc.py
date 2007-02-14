@@ -5,13 +5,14 @@ from pypy.translator.c.support import cdecl
 from pypy.rpython.lltypesystem.rstr import STR, mallocstr
 from pypy.rpython.lltypesystem import rstr
 from pypy.rpython.lltypesystem import rlist
-from pypy.rpython.module import ll_time, ll_math, ll_strtod
+from pypy.rpython.module import ll_time, ll_math, ll_os
 from pypy.rpython.module import ll_stackless, ll_stack
 from pypy.rpython.lltypesystem.module.ll_os import STAT_RESULT, PIPE_RESULT
 from pypy.rpython.lltypesystem.module.ll_os import WAITPID_RESULT
 from pypy.rpython.lltypesystem.module.ll_os import Implementation as impl
 from pypy.rpython.lltypesystem.module import ll_math as ll_math2
-from pypy.rpython.lltypesystem.module import ll_strtod as ll_strtod2
+from pypy.rpython.lltypesystem.module import ll_strtod
+from pypy.rlib import ros
 
 try:
     from pypy.module.thread.rpython import ll_thread
@@ -27,8 +28,7 @@ EXTERNALS = {
     impl.ll_read_into:          'LL_read_into', # it's a staticmethod
     impl.ll_os_write.im_func:   'LL_os_write',
     impl.ll_os_close.im_func:   'LL_os_close',
-    impl.ll_os_dup.im_func:     'LL_os_dup',
-    impl.ll_os_dup2.im_func:    'LL_os_dup2',
+    impl.ll_os_access.im_func:  'LL_os_access',
     impl.ll_os_stat.im_func:    'LL_os_stat',
     impl.ll_os_fstat.im_func:   'LL_os_fstat',
     impl.ll_os_lstat.im_func:   'LL_os_lstat',
@@ -51,6 +51,7 @@ EXTERNALS = {
     impl.ll_os_pipe.im_func:    'LL_os_pipe',
     impl.ll_os_chmod.im_func:   'LL_os_chmod',
     impl.ll_os_rename.im_func:  'LL_os_rename',
+    impl.ll_os_umask.im_func:   'LL_os_umask',
     impl.ll_os_getpid.im_func:  'LL_os_getpid',
     impl.ll_os_kill.im_func:    'LL_os_kill',
     impl.ll_os_link.im_func:    'LL_os_link',
@@ -70,9 +71,9 @@ EXTERNALS = {
     ll_math.ll_math_ldexp: 'LL_math_ldexp',
     ll_math2.Implementation.ll_math_modf.im_func:  'LL_math_modf',
     ll_math.ll_math_hypot: 'LL_math_hypot',
-    ll_strtod.ll_strtod_parts_to_float:
+    ll_strtod.Implementation.ll_strtod_parts_to_float:
         'LL_strtod_parts_to_float',
-    ll_strtod2.Implementation.ll_strtod_formatd:
+    ll_strtod.Implementation.ll_strtod_formatd:
         'LL_strtod_formatd',
     ll_stackless.ll_stackless_switch:             'LL_stackless_switch',
     ll_stackless.ll_stackless_stack_frames_depth: 'LL_stackless_stack_frames_depth',
@@ -139,10 +140,20 @@ def predeclare_utility_functions(db, rtyper):
         def _RPyListOfString_New(length=lltype.Signed):
             return LIST_OF_STR.ll_newlist(length)
 
+        def _RPyListOfString_New(length=lltype.Signed):
+            return LIST_OF_STR.ll_newlist(length)
+
         def _RPyListOfString_SetItem(l=p,
                                     index=lltype.Signed,
                                     newstring=lltype.Ptr(STR)):
             rlist.ll_setitem_nonneg(rlist.dum_nocheck, l, index, newstring)
+
+        def _RPyListOfString_GetItem(l=p,
+                                    index=lltype.Signed):
+            return rlist.ll_getitem_fast(l, index)
+
+        def _RPyListOfString_Length(l=p):
+            return rlist.ll_length(l)
 
     for fname, f in locals().items():
         if isinstance(f, types.FunctionType):

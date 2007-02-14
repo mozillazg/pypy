@@ -2,10 +2,20 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import extfunctable
 from pypy.rpython.lltypesystem.lltype import \
-     GcStruct, Signed, Array, Char, Ptr, malloc
+     GcStruct, Signed, Array, Char, Ptr, malloc, GcArray
+from pypy.rpython.rlist import ll_append
+from pypy.rpython.lltypesystem.rlist import ll_newlist, ListRepr,\
+    ll_getitem_fast
+from pypy.rpython.lltypesystem.rstr import string_repr
+from pypy.rpython.lltypesystem.rdict import ll_newdict, DictRepr, dum_items,\
+    ll_kvi, dum_keys, ll_dict_getitem, ll_dict_setitem
+from pypy.rpython.lltypesystem.rstr import StringRepr
+from pypy.rpython.lltypesystem.rtuple import TupleRepr
+from pypy.annotation.dictdef import DictKey, DictValue
+from pypy.annotation.model import SomeString
+import os
 
 # utility conversion functions
-
 class LLSupport:
     _mixin_ = True
     
@@ -17,7 +27,7 @@ class LLSupport:
         for i in range(len(s)):
             p.chars[i] = s[i]
         return p
-    to_rstr = staticmethod(to_rstr)    
+    to_rstr = staticmethod(to_rstr)
 
     def from_rstr(rs):
         if not rs:   # null pointer
@@ -25,7 +35,6 @@ class LLSupport:
         else:
             return ''.join([rs.chars[i] for i in range(len(rs.chars))])
     from_rstr = staticmethod(from_rstr)
-
 
 class OOSupport:
     _mixin_ = True

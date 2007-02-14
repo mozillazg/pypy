@@ -69,6 +69,8 @@ def setup():
         'int_w': 1,
         'float_w': 1,
         'uint_w': 1,
+        'unichars_w': 1,
+        'bigint_w': 1,
         'interpclass_w': 1,
         'unwrap': 1,
         'is_true': 1,
@@ -122,11 +124,11 @@ def cmpproxy(space, parentfn):
         assert isinstance(w_obj1, W_Root)
         assert isinstance(w_obj2, W_Root)
         if space.is_true(space.is_nb_(w_obj1, w_obj2)):
-            return space.newbool(0)
+            return space.newint(0)
         if space.is_true(space.is_free(w_obj1)):
             if space.is_true(space.is_free(w_obj2)):
                 if space.is_true(alias_of(space, w_obj1, w_obj2)):
-                    return space.newbool(0) # and just go on ...
+                    return space.newint(0) # and just go on ...
         return parentfn(wait(space, w_obj1), wait(space, w_obj2))
     return cmp
 

@@ -145,6 +145,8 @@ def setup():
         'int_w': 1,
         'float_w': 1,
         'uint_w': 1,
+        'unichars_w': 1,
+        'bigint_w': 1,
         'interpclass_w': 1,
         'unwrap': 1,
         'is_true': 1,
@@ -186,12 +188,12 @@ def proxymaker(space, opname, parentfn):
     returns_wrapped = opname in op_returning_wrapped
     aligned_opname = '%15s' % opname
     n = nb_args[opname]
-    def proxy(*args):
+    def proxy(*args, **kwds):
         dumper = space.dumper
         args_w = list(args[:n])
         dumper.dump_enter(aligned_opname, args_w)
         try:
-            res = parentfn(*args)
+            res = parentfn(*args, **kwds)
         except Exception, e:
             dumper.dump_raised(aligned_opname, e)
             raise

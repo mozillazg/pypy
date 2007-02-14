@@ -3,6 +3,7 @@ from pypy import conftest
 from py.test import raises
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
+from pypy.annotation.policy import AnnotatorPolicy
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython import robject, rclass, rint
 from pypy.translator.tool.cbuild import enable_fast_compilation
@@ -11,6 +12,10 @@ from pypy.interpreter.baseobjspace import ObjSpace
 import sys, types
 
 P = False  # debug printing
+
+class RaymondAnnotatorPolicy(AnnotatorPolicy):
+    allow_someobjects = True
+    do_imports_immediately = False
 
 SPECIAL_METHODS = {}
 
@@ -59,7 +64,7 @@ def should_expose(func):
 def must_expose(func):
     return hasattr(func, '_initialannotation_')
 
-def get_compiled_module(func, view=conftest.option.view, inline_threshold=1,
+def get_compiled_module(func, view=conftest.option.view,
                 use_boehm=False, exports=None, expose_all=True):
     from pypy.translator.translator import TranslationContext
     from pypy.translator.backendopt.all import backend_optimizations
@@ -69,7 +74,7 @@ def get_compiled_module(func, view=conftest.option.view, inline_threshold=1,
 
     global _t # allow us to view later
     _t = t = TranslationContext(do_imports_immediately=False)
-    ann = t.buildannotator()
+    ann = t.buildannotator(policy=RaymondAnnotatorPolicy())
     rtyper = t.buildrtyper()
     bk = rtyper.annotator.bookkeeper
     if not exports:
@@ -124,15 +129,15 @@ def get_compiled_module(func, view=conftest.option.view, inline_threshold=1,
         t.viewcg()
     t.checkgraphs()
 
-    gcpolicy = None
+    gcpolicy = gc.RefcountingGcPolicy
     if use_boehm:
         gcpolicy = gc.BoehmGcPolicy
 
-    backend_optimizations(t, inline_threshold=inline_threshold)
+    backend_optimizations(t)
     if view:
         t.viewcg()
 
-    cbuilder = CExtModuleBuilder(t, func, gcpolicy=gcpolicy)
+    cbuilder = CExtModuleBuilder(t, func, config=t.config, gcpolicy=gcpolicy)
     # explicit build of database
     db = cbuilder.build_database(exports=exports, pyobj_options=pyobj_options)
     cbuilder.generate_source(db)

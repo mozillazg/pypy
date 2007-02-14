@@ -15,6 +15,49 @@ for a list of past events.
 .. _`iCalendar format`: webcal://pypycal.sabi.net///calendars/PyPy.ics
 .. _eventhistory: eventhistory.html
 
+PyPy Trillke Sprints upcoming, 25-28th Feb and 1-5th March 2007
+==================================================================
+
+The end of the EU project period is nearing and we are going
+for two sprints, one on particular EU related issues and
+one for public coding and discussing the time ahead. 
+Read the `full announcement here`_ and `people known to come`_ already. 
+
+.. _`full announcement here`: http://codespeak.net/pypy/extradoc/sprintinfo/trillke-2007/announcement.html
+.. _`people known to come`: http://codespeak.net/pypy/extradoc/sprintinfo/trillke-2007/people.html
+
+
+Leysin Winter Sports Sprint, 8th - 14th January 2007
+==================================================================
+
+.. raw:: html
+
+   <table border=0><tr><td>
+
+The PyPy Leysin sprint is over. We worked hard on various topics, including
+preparing the upcoming py-lib and PyPy releases. For more details, see the
+`Leysin sprint report`_, the `Leysin announcement`_ and the
+`list of people present`_.
+
+
+.. raw:: html
+
+   </td><td><img src="http://www.ermina.ch/002.JPG"></td></tr></table>
+
+.. _`Leysin announcement`: http://codespeak.net/pypy/extradoc/sprintinfo/leysin-winter-2007/announcement.html
+.. _`Leysin sprint report`: http://codespeak.net/pipermail/pypy-dev/2007q1/003481.html
+.. _`list of people present`: http://codespeak.net/svn/pypy/extradoc/sprintinfo/leysin-winter-2007/people.txt
+
+
+Massive Parallelism and Translation Aspects
+========================================================
+
+Our next big `EU report`_ about Stackless features, optimizations, and
+memory management is finished.  You can download it `as pdf`_.
+
+.. _`EU report`: index-report.html
+.. _`as pdf`: http://codespeak.net/pypy/extradoc/eu-report/D07.1_Massive_Parallelism_and_Translation_Aspects-2006-12-15.pdf
+
 
 Duesseldorf sprint #2, 30th October - 5th November over
 ==================================================================
@@ -90,30 +133,6 @@ PyPy 0.9.0
 We are proud to release PyPy 0.9.0, our fourth public release.  See
 the `release announcement <release-0.9.0.html>`__ to read about the
 many new features in this release.
-
-EuroPython PyPy sprint 6-9 July 2006
-==================================================================
-
-Once again a PyPy sprint will take place right after the EuroPython
-Conference. This year it will be from the *6th to the 9th of July*.
-
-Read more in `EuroPython sprint announcement`_, see who is  planning to attend
-on `the people page`_. There is also a page_ in the python wiki.
-
-.. _`EuroPython sprint announcement`: http://codespeak.net/pypy/extradoc/sprintinfo/post-ep2006/announce.html
-.. _`the people page`: http://codespeak.net/pypy/extradoc/sprintinfo/post-ep2006/people.html
-.. _page: http://wiki.python.org/moin/EuroPython2006
-
-PyPy at XP 2006 and Agile 2006
-==================================================================
-
-PyPy will present experience reports at the two main agile conferences
-this year, `XP 2006`_ and `Agile 2006`_.
-Both experience reports focus on aspects of the sprint-driven
-development method that is being used in PyPy.
-
-.. _`XP 2006`: http://virtual.vtt.fi/virtual/xp2006/ 
-.. _`Agile 2006`: http://www.agile2006.org/
 
 PyPy and Summer of Code 2006
 ==================================================================

@@ -25,7 +25,7 @@ class GenLLVM(object):
     function_count = {}
 
     def __init__(self, translator, gcpolicy, standalone,
-                 debug=False, logging=True, stackless=False, config=None):
+                 debug=False, logging=True, stackless=False):
     
         # reset counters
         LLVMNode.nodename_count = {}    
@@ -39,11 +39,7 @@ class GenLLVM(object):
         self.standalone = standalone
         self.translator = translator
         
-        if config is None:
-            from pypy.config.config import Config
-            from pypy.config.pypyoption import pypy_optiondescription
-            config = Config(pypy_optiondescription)
-        self.config = config
+        self.config = translator.config
         self.stackless = stackless
 
         # the debug flag is for creating comments of every operation
@@ -329,7 +325,10 @@ def genllvm_compile(function,
     # annotate/rtype
     from pypy.translator.translator import TranslationContext
     from pypy.translator.backendopt.all import backend_optimizations
-    translator = TranslationContext()
+    from pypy.config.pypyoption import get_pypy_config
+    config = get_pypy_config(translating=True)
+    config.translation.gc = 'boehm'
+    translator = TranslationContext(config=config)
     translator.buildannotator().build_types(function, annotation)
     translator.buildrtyper().specialize()
 

@@ -1,11 +1,12 @@
 import py
 from pypy.translator.translator import TranslationContext
-from pypy.translator.backendopt.inline import inline_function
+from pypy.translator.backendopt import inline
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.objspace.flow.model import checkgraph, flatten, Block
 from pypy.conftest import option
+import sys
 
 from pypy.translator.backendopt.mallocprediction import *
 
@@ -20,11 +21,11 @@ def rtype(fn, signature):
     
 
 def check_inlining(t, graph, args, result):
-    callgraph, caller_candidates = find_malloc_removal_candidates(t)
+    callgraph, caller_candidates = find_malloc_removal_candidates(t, t.graphs)
     nice_callgraph = {}
     for caller, callee in callgraph:
         nice_callgraph.setdefault(caller, {})[callee] = True
-    inline_and_remove(t)
+    inline_and_remove(t, t.graphs)
     if option.view:
         t.view()
     interp = LLInterpreter(t.rtyper)
@@ -119,13 +120,21 @@ def test_indirect_call():
 def test_pystone():
     from pypy.translator.goal.targetrpystonex import make_target_definition
     entrypoint, _, _ = make_target_definition(10)
+    def heuristic(graph):
+        for block in graph.iterblocks():
+            for op in block.operations:
+                if op.opname in ('malloc',):
+                    return inline.inlining_heuristic(graph)
+        return sys.maxint, False
     # does not crash
     t, graph = rtype(entrypoint, [int])
+    total0 = preparation(t, t.graphs, heuristic=heuristic)
     total = clever_inlining_and_malloc_removal(t)
-    assert total == 8
+    assert total0 + total == 10
 
 def test_richards():
     from pypy.translator.goal.richards import entry_point
     t, graph = rtype(entry_point, [int])
+    total0 = preparation(t, t.graphs)
     total = clever_inlining_and_malloc_removal(t)
-    assert total == 9
+    assert total0 + total == 9

@@ -8,11 +8,13 @@ from pypy.annotation.model import \
      SomeInstance, SomeBuiltin, SomeFloat, SomeIterator, SomePBC, \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
      SomeCTypesObject, s_ImpossibleValue, s_Bool, \
-     unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked
+     unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
+     SomeGenericCallable
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
 from pypy.annotation.binaryop import _clone ## XXX where to put this?
 from pypy.rpython import extregistry
+from pypy.annotation.signature import annotation
 
 # convenience only!
 def immutablevalue(x):
@@ -524,9 +526,12 @@ class __extend__(SomeInstance):
                 s_result = ins.classdef.lookup_filter(s_result, attr)
             elif isinstance(s_result, SomeImpossibleValue):
                 ins.classdef.check_missing_attribute_update(attr)
-                if ins.classdef.classdesc.allslots is not None:
-                    if attr in ins.classdef.classdesc.allslots:
-                        raise HarmlesslyBlocked("getattr on a slot")
+                # blocking is harmless if the attribute is explicitly listed
+                # in the class or a parent class.
+                for basedef in ins.classdef.getmro():
+                    if basedef.classdesc.all_enforced_attrs is not None:
+                        if attr in basedef.classdesc.all_enforced_attrs:
+                            raise HarmlesslyBlocked("get enforced attr")
             return s_result
         return SomeObject()
     getattr.can_only_throw = []
@@ -599,6 +604,13 @@ class __extend__(SomePBC):
         elif not pbc.can_be_None:
             s.const = True
 
+class __extend__(SomeGenericCallable):
+    def call(self, args):
+        bookkeeper = getbookkeeper()
+        for arg, expected in zip(args.unpack()[0], self.args_s):
+            assert expected.contains(arg)
+        
+        return self.s_result
 
 class __extend__(SomeExternalObject):
     def find_method(obj, name):
@@ -641,7 +653,8 @@ class __extend__(SomePtr):
         args_s, kwds_s = args.unpack()
         if kwds_s:
             raise Exception("keyword arguments to call to a low-level fn ptr")
-        llargs = [annotation_to_lltype(s_arg)._defl() for s_arg in args_s]
+        info = 'argument to ll function pointer call'
+        llargs = [annotation_to_lltype(s_arg,info)._defl() for s_arg in args_s]
         v = p.ll_ptrtype._example()(*llargs)
         return ll_to_annotation(v)
 
@@ -663,15 +676,7 @@ class __extend__(SomeExternalBuiltin):
         assert s_attr.is_constant()
         attr = s_attr.const
         entry = extregistry.lookup_type(p.knowntype._class_)
-        # we need to flow it, if it's something which can be called
-        if isinstance(s_value, SomePBC):
-            # we have to have such a declaration to know what we're flowing it with
-            bookkeeper = getbookkeeper()
-            args_ann = entry.get_arg_annotation(p.knowntype, attr)
-            bookkeeper.pbc_call(s_value, bookkeeper.build_args("simple_call", args_ann))
-        p.knowntype.check_update()
-        if not p.knowntype._fields.has_key(attr):
-            entry.set_field_annotation(p.knowntype, attr, s_value)
+        entry.set_field_annotation(p.knowntype, attr, s_value)
     
     def find_method(obj, name):
         return obj.knowntype.get_field(name)

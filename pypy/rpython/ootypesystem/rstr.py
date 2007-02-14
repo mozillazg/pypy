@@ -61,11 +61,8 @@ class UniCharRepr(AbstractUniCharRepr):
 
 class LLHelpers(AbstractLLHelpers):
 
-    def ll_const(c):
-        return c
-
     def ll_chr2str(ch):
-        return ootype.oostring(ch, LLHelpers.ll_const(-1))
+        return ootype.oostring(ch, -1)
 
     def ll_strhash(s):
         return ootype.oohash(s)
@@ -196,6 +193,30 @@ class LLHelpers(AbstractLLHelpers):
             raise ValueError
         return sign * val
 
+    def ll_float(ll_str):
+        return ootype.ooparse_float(ll_str)
+    
+    # interface to build strings:
+    #   x = ll_build_start(n)
+    #   ll_build_push(x, next_string, 0)
+    #   ll_build_push(x, next_string, 1)
+    #   ...
+    #   ll_build_push(x, next_string, n-1)
+    #   s = ll_build_finish(x)
+
+    def ll_build_start(parts_count):
+        return ootype.new(ootype.StringBuilder)
+
+    def ll_build_push(buf, next_string, index):
+        buf.ll_append(next_string)
+
+    def ll_build_finish(buf):
+        return buf.ll_build()
+
+    def ll_constant(s):
+        return ootype.make_string(s)
+    ll_constant._annspecialcase_ = 'specialize:memo'
+
     def do_stringformat(cls, hop, sourcevarsrepr):
         InstanceRepr = hop.rtyper.type_system.rclass.InstanceRepr
         string_repr = hop.rtyper.type_system.rstr.string_repr
@@ -220,9 +241,8 @@ class LLHelpers(AbstractLLHelpers):
                 vitem, r_arg = argsiter.next()
                 if not hasattr(r_arg, 'll_str'):
                     raise TyperError("ll_str unsupported for: %r" % r_arg)
-                if code == 's':
-                    # TODO: for now it works only with types supported by oostring
-                    vchunk = hop.genop('oostring', [vitem, cm1], resulttype=ootype.String)
+                if code == 's' or (code == 'r' and isinstance(r_arg, InstanceRepr)):
+                    vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
                 elif code == 'd':
                     assert isinstance(r_arg, IntegerRepr)
                     vchunk = hop.genop('oostring', [vitem, c10], resulttype=ootype.String)
@@ -235,8 +255,6 @@ class LLHelpers(AbstractLLHelpers):
                 elif code == 'o':
                     assert isinstance(r_arg, IntegerRepr)
                     vchunk = hop.genop('oostring', [vitem, c8], resulttype=ootype.String)
-                elif code == 'r' and isinstance(r_arg, InstanceRepr):
-                    vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
                 else:
                     raise TyperError, "%%%s is not RPython" % (code, )
             else:

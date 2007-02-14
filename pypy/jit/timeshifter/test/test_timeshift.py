@@ -1,6 +1,6 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
-from pypy.jit.hintannotator.annotator import HintAnnotator
+from pypy.jit.hintannotator.annotator import HintAnnotator, HintAnnotatorPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
@@ -14,13 +14,12 @@ from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.objspace.flow.model import checkgraph
-from pypy.annotation.policy import AnnotatorPolicy
 from pypy.translator.backendopt.inline import auto_inlining
 from pypy import conftest
 from pypy.jit.conftest import Benchmark
+from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 
-P_NOVIRTUAL = AnnotatorPolicy()
-P_NOVIRTUAL.novirtualcontainer = True
+P_NOVIRTUAL = HintAnnotatorPolicy(novirtualcontainer=True)
 
 def getargtypes(annotator, values):
     return [annotation(annotator, x) for x in values]
@@ -43,7 +42,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
     rtyper = t.buildrtyper()
     rtyper.specialize()
     if inline:
-        auto_inlining(t, inline)
+        auto_inlining(t, threshold=inline)
     if backendoptimize:
         from pypy.translator.backendopt.all import backend_optimizations
         backend_optimizations(t)
@@ -61,11 +60,16 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
     return hs, hannotator, rtyper
 
 class TimeshiftingTests(object):
-    from pypy.jit.codegen.llgraph.rgenop import RGenOp
+    RGenOp = LLRGenOp
 
     small = True
 
     def setup_class(cls):
+        from pypy.jit.timeshifter.test.conftest import option
+        cls.on_llgraph = cls.RGenOp is LLRGenOp
+        if option.use_dump_backend:
+            from pypy.jit.codegen.dump.rgenop import RDumpGenOp
+            cls.RGenOp = RDumpGenOp
         cls._cache = {}
         cls._cache_order = []
 
@@ -155,7 +159,9 @@ class TimeshiftingTests(object):
             timeshifted_entrypoint_args = ()
 
             sigtoken = rgenop.sigToken(FUNC)
-            builder, entrypoint, inputargs_gv = rgenop.newgraph(sigtoken)
+            builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken,
+                                                                  "generated")
+            builder.start_writing()
             i = 0
             for color in argcolors:
                 if color == "green":
@@ -185,8 +191,7 @@ class TimeshiftingTests(object):
             if top_jitstate is not None:
                 finish_jitstate(top_jitstate, sigtoken)
 
-            gv_generated = rgenop.gencallableconst(sigtoken, "generated",
-                                                   entrypoint)
+            builder.end()
             generated = gv_generated.revealconst(lltype.Ptr(FUNC))
             return generated
 
@@ -322,6 +327,22 @@ class TimeshiftingTests(object):
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
 
+    def check_oops(self, expected=None, **counts):
+        if not self.on_llgraph:
+            return
+        oops = {}
+        for block in self.residual_graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'direct_call':
+                    f = getattr(op.args[0].value._obj, "_callable", None)
+                    if hasattr(f, 'oopspec'):
+                        name, _ = f.oopspec.split('(', 1)
+                        oops[name] = oops.get(name, 0) + 1
+        if expected is not None:
+            assert oops == expected
+        for name, count in counts.items():
+            assert oops.get(name, 0) == count
+
     def check_flexswitches(self, expected_count):
         count = 0
         for block in self.residual_graph.iterblocks():
@@ -329,6 +350,21 @@ class TimeshiftingTests(object):
                 block.exitswitch.concretetype is lltype.Signed):
                 count += 1
         assert count == expected_count
+
+
+class StopAtXPolicy(HintAnnotatorPolicy):
+    def __init__(self, *funcs):
+        HintAnnotatorPolicy.__init__(self, novirtualcontainer=True,
+                                     oopspec=True)
+        self.funcs = funcs
+
+    def look_inside_graph(self, graph):
+        try:
+            if graph.func in self.funcs:
+                return False
+        except AttributeError:
+            pass
+        return True
 
 
 class TestTimeshift(TimeshiftingTests):
@@ -377,7 +413,7 @@ class TestTimeshift(TimeshiftingTests):
     def test_loop_folding(self):
         def ll_function(x, y):
             tot = 0
-            x = hint(x, concrete=True)        
+            x = hint(x, concrete=True)    
             while x:
                 tot += y
                 x -= 1
@@ -683,6 +719,17 @@ class TestTimeshift(TimeshiftingTests):
         res = self.timeshift(ll_function, [0], [])
         assert res == 4 * 4
 
+    def test_degenerate_with_voids(self):
+        S = lltype.GcStruct('S', ('y', lltype.Void),
+                                 ('x', lltype.Signed))
+        def ll_function():
+            s = lltype.malloc(S)
+            s.x = 123
+            return s
+        ll_function.convert_result = lambda s: str(s.x)
+        res = self.timeshift(ll_function, [], [], policy=P_NOVIRTUAL)
+        assert res == "123"
+
     def test_plus_minus_all_inlined(self):
         def ll_plus_minus(s, x, y):
             acc = x
@@ -698,7 +745,7 @@ class TestTimeshift(TimeshiftingTests):
                 pc += 1
             return acc
         ll_plus_minus.convert_arguments = [LLSupport.to_rstr, int, int]
-        res = self.timeshift(ll_plus_minus, ["+-+", 0, 2], [0], inline=999)
+        res = self.timeshift(ll_plus_minus, ["+-+", 0, 2], [0], inline=100000)
         assert res == ll_plus_minus("+-+", 0, 2)
         self.check_insns({'int_add': 2, 'int_sub': 1})
 
@@ -794,6 +841,20 @@ class TestTimeshift(TimeshiftingTests):
                               policy=P_NOVIRTUAL)
          assert res == -42
          self.check_insns(malloc_varsize=1)
+
+    def test_array_of_voids(self):
+        A = lltype.GcArray(lltype.Void)
+        def ll_function(n):
+            a = lltype.malloc(A, 3)
+            a[1] = None
+            b = a[n]
+            res = a, b
+            keepalive_until_here(b)      # to keep getarrayitem around
+            return res
+        ll_function.convert_result = lambda x: str(len(x.item0))
+
+        res = self.timeshift(ll_function, [2], [], policy=P_NOVIRTUAL)
+        assert res == "3"
 
     def test_red_propagate(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
@@ -1099,7 +1160,29 @@ class TestTimeshift(TimeshiftingTests):
 
         res = self.timeshift(f, [0, 2], [0], policy=P_NOVIRTUAL)
         assert res == 42
-        self.check_insns({'int_mul': 1})        
+        self.check_insns({'int_mul': 1})
+
+    def test_simple_red_meth_vars_around(self):
+        class Base(object):
+            def m(self, n):
+                raise NotImplementedError
+            pass  # for inspect.getsource() bugs
+
+        class Concrete(Base):
+            def m(self, n):
+                return 21*n
+            pass  # for inspect.getsource() bugs
+
+        def f(flag, x, y, z):
+            if flag:
+                o = Base()
+            else:
+                o = Concrete()
+            return (o.m(x)+y)-z
+
+        res = self.timeshift(f, [0, 2, 7, 5], [0], policy=P_NOVIRTUAL)
+        assert res == 44
+        self.check_insns({'int_mul': 1, 'int_add': 1, 'int_sub': 1})              
 
     def test_compile_time_const_tuple(self):
         d = {(4, 5): 42, (6, 7): 12}
@@ -1110,3 +1193,102 @@ class TestTimeshift(TimeshiftingTests):
         res = self.timeshift(f, [4, 5], [0, 1], policy=P_NOVIRTUAL)
         assert res == 42
         self.check_insns({})
+
+    def test_green_red_mismatch_in_call(self):
+        #py.test.skip("WIP")
+        def add(a,b, u):
+            return a+b
+
+        def f(x, y, u):
+            r = add(x+1,y+1, u)
+            z = x+y
+            z = hint(z, concrete=True) + r   # this checks that 'r' is green
+            return hint(z, variable=True)
+
+        res = self.timeshift(f, [4, 5, 0], [], policy=P_NOVIRTUAL)
+        assert res == 20
+
+    def test_residual_red_call(self):
+        def g(x):
+            return x+1
+
+        def f(x):
+            return 2*g(x)
+
+        res = self.timeshift(f, [20], [], policy=StopAtXPolicy(g))
+        assert res == 42
+        self.check_insns(int_add=0)
+
+    def test_residual_red_call_with_exc(self):
+        def h(x):
+            if x > 0:
+                return x+1
+            else:
+                raise ValueError
+
+        def g(x):
+            return 2*h(x)
+
+        def f(x):
+            try:
+                return g(x)
+            except ValueError:
+                return 7
+
+        stop_at_h = StopAtXPolicy(h)
+        res = self.timeshift(f, [20], [], policy=stop_at_h)
+        assert res == 42
+        self.check_insns(int_add=0)
+
+        res = self.timeshift(f, [-20], [], policy=stop_at_h)
+        assert res == 7
+        self.check_insns(int_add=0)
+
+    def test_red_call_ignored_result(self):
+        def g(n):
+            return n * 7
+        def f(n, m):
+            g(n)   # ignore the result
+            return m
+
+        res = self.timeshift(f, [4, 212], [], policy=P_NOVIRTUAL)
+        assert res == 212
+
+    def test_green_char_at_merge(self):
+        def f(c, x):
+            c = chr(c)
+            c = hint(c, concrete=True)
+            if x:
+                x = 3
+            else:
+                x = 1
+            c = hint(c, variable=True)
+            return len(c*x)
+
+        res = self.timeshift(f, [ord('a'), 1], [], policy=P_NOVIRTUAL)
+        assert res == 3
+
+        res = self.timeshift(f, [ord('b'), 0], [], policy=P_NOVIRTUAL)
+        assert res == 1
+
+    def test_self_referential_structures(self):
+        S = lltype.GcForwardReference()
+        S.become(lltype.GcStruct('s',
+                                 ('ps', lltype.Ptr(S))))
+
+        def f(x):
+            s = lltype.malloc(S)
+            if x:
+                s.ps = lltype.malloc(S)
+            return s
+        def count_depth(s):
+            x = 0
+            while s:
+                x += 1
+                s = s.ps
+            return str(x)
+        
+        f.convert_result = count_depth
+
+        res = self.timeshift(f, [3], [], policy=P_NOVIRTUAL)
+        assert res == '2'

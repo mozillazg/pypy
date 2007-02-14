@@ -200,7 +200,8 @@ class GCTest(object):
         ARGS = lltype.FixedSizeArray(lltype.Signed, nbargs)
         s_args = annmodel.SomePtr(lltype.Ptr(ARGS))
         t = rtype(entrypoint, [s_args], gcname=self.gcname)
-        cbuild = CStandaloneBuilder(t, entrypoint, gcpolicy=self.gcpolicy)
+        cbuild = CStandaloneBuilder(t, entrypoint, config=t.config,
+                                    gcpolicy=self.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()
         entrypointptr = cbuild.getentrypointptr()
         entrygraph = entrypointptr._obj.graph
@@ -233,6 +234,7 @@ class TestMarkSweepGC(GCTest):
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 4096 }
+            root_stack_depth = 200
     gcname = "framework"
 
     def heap_usage(self, statistics):
@@ -643,8 +645,10 @@ class TestStacklessMarkSweepGC(TestMarkSweepGC):
     class gcpolicy(gc.StacklessFrameworkGcPolicy):
         class transformerclass(stacklessframework.StacklessFrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 4096 }
+            root_stack_depth = 200
 
     def test_x_become(self):
+        from pypy.rlib import objectmodel
         S = lltype.GcStruct("S", ('x', lltype.Signed))
         def f():
             x = lltype.malloc(S)
@@ -655,6 +659,9 @@ class TestStacklessMarkSweepGC(TestMarkSweepGC):
             llop.gc_x_become(lltype.Void,
                              llmemory.cast_ptr_to_adr(x),
                              llmemory.cast_ptr_to_adr(y))
+            # keep 'y' alive until the x_become() is finished, because in
+            # theory it could go away as soon as only its address is present
+            objectmodel.keepalive_until_here(y)
             return z.x
         run = self.runner(f)
         res = run([])
@@ -671,3 +678,4 @@ class TestSemiSpaceGC(TestMarkSweepGC):
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc import SemiSpaceGC as GCClass
             GC_PARAMS = {'space_size': 4096 }
+            root_stack_depth = 200

@@ -11,7 +11,6 @@ from pypy.interpreter.gateway import ApplevelClass
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.module import Module as PyPyModule 
 from pypy.interpreter.main import run_string, run_file
-from py.__.misc.simplecapture import callcapture
 
 # the following adds command line options as a side effect! 
 from pypy.conftest import gettestobjspace, option as pypy_option 
@@ -23,6 +22,10 @@ from pypy.tool.pytest.confpath import pypydir, libpythondir, \
                                       regrtestdir, modregrtestdir, testresultdir
 from pypy.tool.pytest.result import Result, ResultFromMime
 
+pypyexecpath = pypydir.join('bin', 'pypy-c')
+
+dist_rsync_roots = ['.', '../pypy', '../py']
+    
 # 
 # Interfacing/Integrating with py.test's collection process 
 #
@@ -33,19 +36,27 @@ from pypy.tool.pytest.result import Result, ResultFromMime
 #                   type="string", dest="listpassing", 
 #                   help="just display the list of expected-to-pass tests.")
 
-Option = py.test.Config.Option 
-option = py.test.Config.addoptions("compliance testing options", 
+Option = py.test.config.Option 
+option = py.test.config.addoptions("compliance testing options", 
     Option('-C', '--compiled', action="store_true", 
            default=False, dest="use_compiled", 
-           help="use a compiled version of pypy, expected in pypy/bin/pypy-c"),
+           help="use a compiled version of pypy"),
+    Option('--compiled-pypy', action="store", type="string", dest="pypy_executable",
+           default=str(pypyexecpath),
+           help="to use together with -C to specify the path to the "
+                "compiled version of pypy, by default expected in pypy/bin/pypy-c"),
     Option('-E', '--extracttests', action="store_true", 
            default=False, dest="extracttests", 
            help="try to extract single tests and run them via py.test/PyPy"), 
     Option('-T', '--timeout', action="store", type="string", 
            default="100mp", dest="timeout", 
            help="fail a test module after the given timeout. "
-                "specify in seconds or 'NUMmp' aka Mega-Pystones")
-    ) 
+                "specify in seconds or 'NUMmp' aka Mega-Pystones"),
+    Option('--resultdir', action="store", type="string", 
+           default=None, dest="resultdir", 
+           help="directory under which to store results in USER@HOST subdirs",
+           ),
+    )
 
 def gettimeout(): 
     timeout = option.timeout.lower()
@@ -68,8 +79,8 @@ def callex(space, func, *args, **kwargs):
         if appexcinfo.traceback: 
             print "appexcinfo.traceback:"
             py.std.pprint.pprint(appexcinfo.traceback)
-            raise py.test.Item.Failed(excinfo=appexcinfo) 
-        raise py.test.Item.Failed(excinfo=ilevelinfo) 
+            raise py.test.collect.Item.Failed(excinfo=appexcinfo) 
+        raise py.test.collect.Item.Failed(excinfo=ilevelinfo) 
 
 #
 # compliance modules where we invoke test_main() usually call into 
@@ -163,7 +174,7 @@ def collect_intercept(space, w_suites, w_doctestmodules):
     w_namemethods, w_doctestlist = space.unpacktuple(w_result) 
     return w_namemethods, w_doctestlist 
 
-class SimpleRunItem(py.test.Item): 
+class SimpleRunItem(py.test.collect.Item): 
     """ Run a module file and compare its output 
         to the expected output in the output/ directory. 
     """ 
@@ -254,7 +265,7 @@ class InterceptedRunModule(py.test.collect.Module):
         except KeyError: 
             pass
 
-class AppDocTestModule(py.test.Item): 
+class AppDocTestModule(py.test.collect.Item): 
     def __init__(self, name, parent, w_module): 
         super(AppDocTestModule, self).__init__(name, parent) 
         self.w_module = w_module 
@@ -262,7 +273,7 @@ class AppDocTestModule(py.test.Item):
     def run(self): 
         py.test.skip("application level doctest modules not supported yet.")
     
-class AppTestCaseMethod(py.test.Item): 
+class AppTestCaseMethod(py.test.collect.Item): 
     def __init__(self, name, parent, w_method): 
         super(AppTestCaseMethod, self).__init__(name, parent) 
         self.space = gettestobjspace() 
@@ -273,8 +284,8 @@ class AppTestCaseMethod(py.test.Item):
         filename = str(self.fspath) 
         callex(space, set_argv, space, space.wrap(filename))
         #space.call_function(self.w_method)
-        res = callex(space, run_testcase_method, space, self.w_method) 
-        if res:
+        w_res = callex(space, run_testcase_method, space, self.w_method) 
+        if space.is_true(w_res):
             raise AssertionError(
         "testcase instance invociation raised errors, see stdoudt")
 
@@ -301,15 +312,15 @@ class RegrTest:
         self.core = core
 
     def oldstyle(self): 
-        return self._oldstyle or pypy_option.oldstyle 
+        return self._oldstyle #or pypy_option.oldstyle 
     oldstyle = property(oldstyle)
 
     def usemodules(self):
-        return self._usemodules + pypy_option.usemodules
+        return self._usemodules #+ pypy_option.usemodules
     usemodules = property(usemodules)
 
     def compiler(self): 
-        return self._compiler or pypy_option.compiler 
+        return self._compiler #or pypy_option.compiler 
     compiler = property(compiler)
 
     def getoptions(self): 
@@ -796,15 +807,19 @@ def getrev(path):
         return 'unknown'  
 
 def getexecutable(_cache={}):
-    execpath = pypydir.join('bin', 'pypy-c')
+    execpath = py.path.local(option.pypy_executable)
     if not _cache:
         text = execpath.sysexec('-c', 
-            'import sys; print sys.version; print sys.pypy_translation_info')
-        lines = text.split('\n')
-        assert len(lines) == 3 and lines[2] == ''
-        assert lines[1].startswith('{') and lines[1].endswith('}')
-        info = eval(lines[1])
+            'import sys; '
+            'print sys.version; '
+            'print sys.pypy_svn_url; '
+            'print sys.pypy_translation_info; ')
+        lines = [line.strip() for line in text.split('\n')]
+        assert len(lines) == 4 and lines[3] == ''
+        assert lines[2].startswith('{') and lines[2].endswith('}')
+        info = eval(lines[2])
         info['version'] = lines[0]
+        info['rev'] = eval(lines[1])[1]
         _cache.update(info)
     return execpath, _cache
 
@@ -827,15 +842,27 @@ class RunFileExternal(py.test.collect.Module):
         return ReallyRunFileExternal(name, parent=self) 
 
 
-def ensuretestresultdir(): 
-    if not testresultdir.check(dir=1): 
-        py.test.skip("""'testresult' directory not found.
-        To run tests in reporting mode (without -E), you first have to
-        check it out as follows: 
-        svn co http://codespeak.net/svn/pypy/testresult %s""" % (
-            testresultdir, ))
-    return testresultdir 
-
+def ensuretestresultdir():
+    resultdir = option.resultdir
+    default_place = False
+    if resultdir is not None:
+        resultdir = py.path.local(option.resultdir)
+    else:
+        if option.use_compiled:
+            return None
+        default_place = True
+        resultdir = testresultdir
+        
+    if not resultdir.check(dir=1):
+        if default_place:
+            py.test.skip("""'testresult' directory not found.
+                 To run tests in reporting mode (without -E), you first have to
+                 check it out as follows: 
+                 svn co http://codespeak.net/svn/pypy/testresult %s""" % (
+                testresultdir, ))
+        else:
+            py.test.skip("'%s' test result dir not found" % resultdir)
+    return resultdir 
 
 #
 # testmethod: 
@@ -846,7 +873,7 @@ import time
 import socket
 import getpass
 
-class ReallyRunFileExternal(py.test.Item): 
+class ReallyRunFileExternal(py.test.collect.Item): 
     _resultcache = None
     def haskeyword(self, keyword): 
         if keyword == 'core': 
@@ -869,32 +896,45 @@ class ReallyRunFileExternal(py.test.Item):
         python = sys.executable 
         pypy_script = pypydir.join('bin', 'py.py')
         alarm_script = pypydir.join('tool', 'alarm.py')
+        watchdog_script = pypydir.join('tool', 'watchdog.py')
+
         regr_script = pypydir.join('tool', 'pytest', 
                                    'run-script', 'regrverbose.py')
+        
+        if option.use_compiled:
+            execpath, info = getexecutable()        
         pypy_options = []
         if regrtest.oldstyle: 
-            if option.use_compiled:
-                py.test.skip("old-style classes not available in pypy-c")
+            if (option.use_compiled and
+                not info.get('objspace.std.oldstyle', False)):
+                py.test.skip("old-style classes not available with this pypy-c")
             pypy_options.append('--oldstyle') 
         if regrtest.compiler:
             pypy_options.append('--compiler=%s' % regrtest.compiler)
         pypy_options.extend(
             ['--withmod-%s' % mod for mod in regrtest.usemodules])
         sopt = " ".join(pypy_options) 
-        # experimental: always use regrverbose script 
-        # previously we only did it if regrtest.outputpath() was True
-        # the regrverbose script now does the logic that CPython
-        # uses in its regrtest.py 
+        # we use the regrverbose script to run the test, but don't get
+        # confused: it still doesn't set verbose to True by default if
+        # regrtest.outputpath() is true, because output tests get confused
+        # in verbose mode.  You can always force verbose mode by passing
+        # the -v option to py.test.  The regrverbose script contains the
+        # logic that CPython uses in its regrtest.py.
         regrrun = str(regr_script)
-        regrrun_verbosity = regrtest.getoutputpath() and '0' or '1'
+        if not regrtest.getoutputpath() or pypy_option.verbose:
+            regrrun_verbosity = '1'
+        else:
+            regrrun_verbosity = '0'
         
         TIMEOUT = gettimeout()
         if option.use_compiled:
-            execpath, info = getexecutable()
             cmd = "%s %s %s %s" %(
                 execpath, 
                 regrrun, regrrun_verbosity, fspath.purebasename)
-            print cmd
+            if sys.platform != 'win32':
+                cmd = "%s %s %s %s" %(
+                       python, watchdog_script, TIMEOUT,
+                       cmd)
         else:
             cmd = "%s %s %d %s %s %s %s %s" %(
                 python, alarm_script, TIMEOUT, 
@@ -911,26 +951,29 @@ class ReallyRunFileExternal(py.test.Item):
             i am afraid. 
         """ 
         regrtest = self.parent.regrtest
-        testresultdir = ensuretestresultdir() 
         result = self.getresult(regrtest) 
-        resultdir = testresultdir.join(result['userhost'])
-        assert resultdir.ensure(dir=1)
+        testresultdir = ensuretestresultdir()
+        if testresultdir is not None:
+            resultdir = testresultdir.join(result['userhost'])
+            assert resultdir.ensure(dir=1)
 
-        fn = resultdir.join(regrtest.basename).new(ext='.txt') 
-        if result.istimeout(): 
-            if fn.check(file=1): 
-               try: 
-                    oldresult = ResultFromMime(fn)
-               except TypeError: 
-                    pass
-               else: 
-                   if not oldresult.istimeout(): 
-                        py.test.skip("timed out, not overwriting "
-                                     "more interesting non-timeout outcome")
+            fn = resultdir.join(regrtest.basename).new(ext='.txt') 
+            if result.istimeout(): 
+                if fn.check(file=1): 
+                    try: 
+                        oldresult = ResultFromMime(fn)
+                    except TypeError: 
+                        pass
+                    else: 
+                        if not oldresult.istimeout(): 
+                            py.test.skip("timed out, not overwriting "
+                                         "more interesting non-timeout outcome")
             
-        fn.write(result.repr_mimemessage().as_string(unixfrom=False))
-        if result['exit status']:  
+            fn.write(result.repr_mimemessage().as_string(unixfrom=False))
+            
+        if result['exit-status']:  
              time.sleep(0.5)   # time for a Ctrl-C to reach us :-)
+             print >>sys.stdout, result.getnamedtext('stdout') 
              print >>sys.stderr, result.getnamedtext('stderr') 
              py.test.fail("running test failed, see stderr output below") 
 
@@ -963,8 +1006,11 @@ class ReallyRunFileExternal(py.test.Item):
         result['pypy-revision'] = getrev(pypydir) 
         if option.use_compiled:
             execpath, info = getexecutable()
+            result['pypy-revision'] = info['rev']
             result['executable'] = execpath.basename
             for key, value in info.items():
+                if key == 'rev':
+                    continue
                 result['executable-%s' % key] = str(value)
         else:
             result['executable'] = 'py.py'
@@ -991,7 +1037,7 @@ class ReallyRunFileExternal(py.test.Item):
                 test_stdout = "%s\n%s" % (self.fspath.purebasename, test_stdout)     
                 if test_stdout != expected: 
                     exit_status = 2  
-                    res, out, err = callcapture(reportdiff, expected, test_stdout)
+                    res, out, err = py.io.StdCapture.call(reportdiff, expected, test_stdout)
                     outcome = 'ERROUT' 
                     result.addnamedtext('reportdiff', out)
             else:
@@ -1002,7 +1048,7 @@ class ReallyRunFileExternal(py.test.Item):
         else: 
             outcome = "ERR"
         
-        result['exit status'] = exit_status 
+        result['exit-status'] = exit_status 
         result['outcome'] = outcome 
         return result
 

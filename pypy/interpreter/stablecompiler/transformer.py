@@ -617,11 +617,13 @@ class Transformer:
             else:
                 # Normal or-expression
                 return self.com_node(nodelist[0])
-        else:
+        elif len(nodelist) == 5 and nodelist[1][0] =='if':
             # Here we implement conditional expressions
             # XXX: CPython's nodename is IfExp, not CondExpr
             return CondExpr(delist[2], nodelist[0], nodelist[4],
                             nodelist[1].lineno)
+        else:
+            return self.com_binary(Or, nodelist)
 
 
     def and_test(self, nodelist):

@@ -16,8 +16,10 @@ from pypy.annotation.model import SomeAddress, SomeTypedAddressAccess
 from pypy.annotation.model import SomeWeakGcAddress
 from pypy.annotation.model import SomeCTypesObject
 from pypy.annotation.model import unionof, UnionError, set, missing_operation, TLS
+from pypy.annotation.model import read_can_only_throw
 from pypy.annotation.model import add_knowntypedata, merge_knowntypedata
 from pypy.annotation.model import lltype_to_annotation
+from pypy.annotation.model import SomeGenericCallable
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.objspace.flow.model import Variable
 from pypy.annotation.listdef import ListDef
@@ -34,6 +36,7 @@ BINARY_OPERATIONS = set(['add', 'sub', 'mul', 'div', 'mod',
                          'and_', 'or_', 'xor',
                          'lshift', 'rshift',
                          'getitem', 'setitem', 'delitem',
+                         'getitem_idx', 'getitem_key', 'getitem_idx_key',
                          'inplace_add', 'inplace_sub', 'inplace_mul',
                          'inplace_truediv', 'inplace_floordiv', 'inplace_div',
                          'inplace_mod', 'inplace_pow',
@@ -214,6 +217,20 @@ class __extend__(pairtype(SomeObject, SomeObject)):
         else:
             return obj
 
+    # checked getitems
+
+    def _getitem_can_only_throw(s_c1, s_o2):
+        impl = pair(s_c1, s_o2).getitem
+        return read_can_only_throw(impl, s_c1, s_o2)
+
+    def getitem_idx_key((s_c1, s_o2)):
+        impl = pair(s_c1, s_o2).getitem
+        return impl()
+    getitem_idx_key.can_only_throw = _getitem_can_only_throw
+
+    getitem_idx = getitem_idx_key
+    getitem_key = getitem_idx_key
+        
 
 # cloning a function with identical code, for the can_only_throw attribute
 def _clone(f, can_only_throw = None):
@@ -287,7 +304,7 @@ class __extend__(pairtype(SomeInteger, SomeInteger)):
         assert op.opname == opname
         assert len(op.args) == 2
         def tointtype(int0):
-            if int1.knowntype is bool:
+            if int0.knowntype is bool:
                 return int
             return int0.knowntype
         if int1.nonneg and isinstance(op.args[1], Variable):
@@ -512,7 +529,16 @@ class __extend__(pairtype(SomeList, SomeInteger)):
     def getitem((lst1, int2)):
         getbookkeeper().count("list_getitem", int2)
         return lst1.listdef.read_item()
-    getitem.can_only_throw = [IndexError]
+    getitem.can_only_throw = []
+
+    getitem_key = getitem
+
+    def getitem_idx((lst1, int2)):
+        getbookkeeper().count("list_getitem", int2)
+        return lst1.listdef.read_item()
+    getitem_idx.can_only_throw = [IndexError]
+
+    getitem_idx_key = getitem_idx
 
     def setitem((lst1, int2), s_value):
         getbookkeeper().count("list_setitem", int2)        
@@ -552,7 +578,16 @@ class __extend__(pairtype(SomeString, SomeInteger)):
     def getitem((str1, int2)):
         getbookkeeper().count("str_getitem", int2)        
         return SomeChar()
-    getitem.can_only_throw = [IndexError]
+    getitem.can_only_throw = []
+
+    getitem_key = getitem
+
+    def getitem_idx((str1, int2)):
+        getbookkeeper().count("str_getitem", int2)        
+        return SomeChar()        
+    getitem_idx.can_only_throw = [IndexError]
+
+    getitem_idx_key = getitem_idx
 
     def mul((str1, int2)): # xxx do we want to support this
         getbookkeeper().count("str_mul", str1, int2)
@@ -630,10 +665,38 @@ class __extend__(pairtype(SomeBuiltin, SomeBuiltin)):
         return SomeBuiltin(bltn1.analyser, s_self, methodname=bltn1.methodname)
 
 class __extend__(pairtype(SomePBC, SomePBC)):
+
     def union((pbc1, pbc2)):       
         d = pbc1.descriptions.copy()
         d.update(pbc2.descriptions)
         return SomePBC(d, can_be_None = pbc1.can_be_None or pbc2.can_be_None)
+
+    def is_((pbc1, pbc2)):
+        thistype = pairtype(SomePBC, SomePBC)
+        s = super(thistype, pair(pbc1, pbc2)).is_()
+        if not s.is_constant():
+            if not pbc1.can_be_None or not pbc2.can_be_None:
+                for desc in pbc1.descriptions:
+                    if desc in pbc2.descriptions:
+                        break
+                else:
+                    s.const = False    # no common desc in the two sets
+        return s
+
+class __extend__(pairtype(SomeGenericCallable, SomePBC)):
+    def union((gencall, pbc)):
+        for desc in pbc.descriptions:
+            unique_key = desc
+            bk = desc.bookkeeper
+            s_result = bk.emulate_pbc_call(unique_key, pbc, gencall.args_s)
+            s_result = unionof(s_result, gencall.s_result)
+            assert gencall.s_result.contains(s_result)
+        gencall.descriptions.update(pbc.descriptions)
+        return gencall
+
+class __extend__(pairtype(SomePBC, SomeGenericCallable)):
+    def union((pbc, gencall)):
+        return pair(gencall, pbc).union()
 
 class __extend__(pairtype(SomeImpossibleValue, SomeObject)):
     def union((imp1, obj2)):
@@ -645,7 +708,9 @@ class __extend__(pairtype(SomeObject, SomeImpossibleValue)):
 
 # mixing Nones with other objects
 
-def _make_none_union(classname, constructor_args=''):
+def _make_none_union(classname, constructor_args='', glob=None):
+    if glob is None:
+        glob = globals()
     loc = locals()
     source = py.code.Source("""
         class __extend__(pairtype(%(classname)s, SomePBC)):
@@ -662,7 +727,7 @@ def _make_none_union(classname, constructor_args=''):
                 else:
                     return SomeObject()
     """ % loc)
-    exec source.compile() in globals()
+    exec source.compile() in glob
 
 _make_none_union('SomeInstance',   'classdef=obj.classdef, can_be_None=True')
 _make_none_union('SomeString',      'can_be_None=True')
@@ -687,6 +752,8 @@ class __extend__(pairtype(SomeExternalObject, SomeExternalObject)):
 from pypy.annotation.model import SomePtr, SomeOOInstance, SomeOOClass
 from pypy.annotation.model import ll_to_annotation, annotation_to_lltype
 from pypy.rpython.ootypesystem import ootype
+
+_make_none_union('SomeOOInstance', 'ootype=obj.ootype, can_be_None=True')
 
 class __extend__(pairtype(SomePtr, SomePtr)):
     def union((p1, p2)):
@@ -731,7 +798,7 @@ class __extend__(pairtype(SomeOOInstance, SomeOOInstance)):
     def union((r1, r2)):
         common = ootype.commonBaseclass(r1.ootype, r2.ootype)
         assert common is not None, 'Mixing of incompatible instances %r, %r' %(r1.ootype, r2.ootype)
-        return SomeOOInstance(common)
+        return SomeOOInstance(common, can_be_None=r1.can_be_None or r2.can_be_None)
 
 class __extend__(pairtype(SomeOOClass, SomeOOClass)):
     def union((r1, r2)):

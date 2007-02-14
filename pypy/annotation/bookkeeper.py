@@ -11,11 +11,12 @@ from pypy.annotation.model import SomeString, SomeChar, SomeFloat, \
      SomeInteger, SomeExternalObject, SomeOOInstance, TLS, SomeAddress, \
      SomeUnicodeCodePoint, SomeOOStaticMeth, s_None, s_ImpossibleValue, \
      SomeLLADTMeth, SomeBool, SomeTuple, SomeOOClass, SomeImpossibleValue, \
-     SomeList, SomeObject, SomeWeakGcAddress
+     SomeList, SomeObject, SomeWeakGcAddress, HarmlesslyBlocked
 from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
 from pypy.annotation import description
+from pypy.annotation.signature import annotationoftype
 from pypy.interpreter.argument import Arguments, ArgErr
 from pypy.rlib.rarithmetic import r_int, r_uint, r_ulonglong, r_longlong
 from pypy.rlib.rarithmetic import base_int
@@ -391,10 +392,6 @@ class Bookkeeper:
         elif extregistry.is_registered(x, self.policy):
             entry = extregistry.lookup(x, self.policy)
             result = entry.compute_annotation_bk(self)
-##        elif hasattr(x, "compute_result_annotation"):
-##            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
-##        elif hasattr(tp, "compute_annotation"):
-##            result = tp.compute_annotation()
         elif tp in EXTERNAL_TYPE_ANALYZERS:
             result = SomeExternalObject(tp)
         elif isinstance(x, lltype._ptr):
@@ -453,109 +450,6 @@ class Bookkeeper:
     def annotation_from_example(self, x):
         # XXX to kill at some point
         return self.immutablevalue(x, False)
-
-##    def annotation_from_example(self, x):
-##        """The most precise SomeValue instance that contains the
-##        mutable value x."""
-##         # convert unbound methods to the underlying function
-##        if hasattr(x, 'im_self') and x.im_self is None:
-##            x = x.im_func
-##            assert not hasattr(x, 'im_self')
-##        if x is sys: # special case constant sys to someobject
-##            return SomeObject()
-##        tp = type(x)
-##        if issubclass(tp, Symbolic): # symbolic constants support
-##            result = x.annotation()
-##            return result
-##        if tp is bool:
-##            result = SomeBool()
-##        elif tp is int:
-##            result = SomeInteger(nonneg = x>=0)
-##        elif issubclass(tp, str): # py.lib uses annotated str subclasses
-##            if len(x) == 1:
-##                result = SomeChar()
-##            else:
-##                result = SomeString()
-##        elif tp is unicode and len(x) == 1:
-##            result = SomeUnicodeCodePoint()
-##        elif tp is tuple:
-##            result = SomeTuple(items = [self.annotation_from_example(e) for e in x])
-##        elif tp is float:
-##            result = SomeFloat()
-##        elif tp is list:
-##            listdef = ListDef(self, s_ImpossibleValue)
-##            for e in x:
-##                listdef.generalize(self.annotation_from_example(e))
-##            result = SomeList(listdef)
-##        elif tp is dict or tp is r_dict:
-##            dictdef = DictDef(self, 
-##                s_ImpossibleValue,
-##                s_ImpossibleValue,
-##                is_r_dict = tp is r_dict)
-##            if tp is r_dict:
-##                s_eqfn = self.immutablevalue(x.key_eq)
-##                s_hashfn = self.immutablevalue(x.key_hash)
-##                dictdef.dictkey.update_rdict_annotations(s_eqfn,
-##                    s_hashfn)
-##            for ek, ev in x.iteritems():
-##                dictdef.generalize_key(self.annotation_from_example(ek))
-##                dictdef.generalize_value(self.annotation_from_example(ev))
-##            result = SomeDict(dictdef)
-##        elif ishashable(x) and x in BUILTIN_ANALYZERS:
-##            _module = getattr(x,"__module__","unknown")
-##            result = SomeBuiltin(BUILTIN_ANALYZERS[x], methodname="%s.%s" % (_module, x.__name__))
-##        elif extregistry.is_registered(x, self.policy):
-##            entry = extregistry.lookup(x, self.policy)
-##            result = entry.compute_annotation_bk(self)
-####        elif hasattr(x, "compute_result_annotation"):
-####            result = SomeBuiltin(x.compute_result_annotation, methodname=x.__name__)
-####        elif hasattr(tp, "compute_annotation"):
-####            result = tp.compute_annotation()
-##        elif tp in EXTERNAL_TYPE_ANALYZERS:
-##            result = SomeExternalObject(tp)
-##        elif isinstance(x, lltype._ptr):
-##            result = SomePtr(lltype.typeOf(x))
-##        elif isinstance(x, llmemory.fakeaddress):
-##            result = SomeAddress(is_null=not x)
-##        elif isinstance(x, llmemory.fakeweakaddress):
-##            result = SomeWeakGcAddress()
-##        elif isinstance(x, ootype._static_meth):
-##            result = SomeOOStaticMeth(ootype.typeOf(x))
-##        elif isinstance(x, ootype._class):
-##            result = SomeOOClass(x._INSTANCE)   # NB. can be None
-##        elif isinstance(x, ootype.instance_impl): # XXX
-##            result = SomeOOInstance(ootype.typeOf(x))
-##        elif callable(x):
-##            if hasattr(x, '__self__') and x.__self__ is not None:
-##                # for cases like 'l.append' where 'l' is a global constant list
-##                s_self = self.annotation_from_example(x.__self__)
-##                result = s_self.find_method(x.__name__)
-##                if result is None:
-##                    result = SomeObject()
-##            else:
-##                if (self.annotator.policy.allow_someobjects
-##                    and getattr(x, '__module__', None) == '__builtin__'
-##                    # XXX note that the print support functions are __builtin__
-##                    and tp not in (types.FunctionType, types.MethodType)):
-##                    result = SomeObject()
-##                    result.knowntype = tp # at least for types this needs to be correct
-##                else:
-##                    result = SomePBC([self.getdesc(x)])
-##        elif hasattr(x, '_freeze_') and x._freeze_():
-##            # user-defined classes can define a method _freeze_(), which
-##            # is called when a prebuilt instance is found.  If the method
-##            # returns True, the instance is considered immutable and becomes
-##            # a SomePBC().  Otherwise it's just SomeInstance().
-##            result = SomePBC([self.getdesc(x)])
-##        elif hasattr(x, '__class__') \
-##                 and x.__class__.__module__ != '__builtin__':
-##            self.see_mutable(x)
-##            result = SomeInstance(self.getuniqueclassdef(x.__class__))
-##        elif x is None:
-##            return s_None
-##        else:
-##            result = SomeObject()
-##        return result
     
     def getdesc(self, pyobj):
         # get the XxxDesc wrapper for the given Python object, which must be
@@ -646,39 +540,7 @@ class Bookkeeper:
             clsdef.add_source_for_attribute(attr, source) # can trigger reflowing
 
     def valueoftype(self, t):
-        """The most precise SomeValue instance that contains all
-        objects of type t."""
-        assert isinstance(t, (type, types.ClassType))
-        if t is bool:
-            return SomeBool()
-        elif t is int:
-            return SomeInteger()
-        elif issubclass(t, str): # py.lib uses annotated str subclasses
-            return SomeString()
-        elif t is float:
-            return SomeFloat()
-        elif t is list:
-            return SomeList(MOST_GENERAL_LISTDEF)
-        elif t is dict:
-            return SomeDict(MOST_GENERAL_DICTDEF)
-        # can't do tuple
-        elif t is types.NoneType:
-            return s_None
-        elif t in EXTERNAL_TYPE_ANALYZERS:
-            return SomeExternalObject(t)
-##        elif hasattr(t, "compute_annotation"):
-##            return t.compute_annotation()
-        elif extregistry.is_registered_type(t, self.policy):
-            entry = extregistry.lookup_type(t, self.policy)
-            return entry.compute_annotation_bk(self)
-        elif t.__module__ != '__builtin__' and t not in self.pbctypes:
-            classdef = self.getuniqueclassdef(t)
-            return SomeInstance(classdef)
-        else:
-            o = SomeObject()
-            if t != object:
-                o.knowntype = t
-            return o
+        return annotationoftype(t, self)
 
     def get_classpbc_attr_families(self, attrname):
         """Return the UnionFind for the ClassAttrFamilies corresponding to
@@ -707,7 +569,11 @@ class Bookkeeper:
         descs = pbc.descriptions.keys()
         if not descs:
             return s_ImpossibleValue
+
         first = descs[0]
+        if len(descs) == 1:
+            return first.s_read_attribute(attr)
+        
         change = first.mergeattrfamilies(descs[1:], attr)
         attrfamily = first.getattrfamily(attr)
 
@@ -725,7 +591,18 @@ class Bookkeeper:
         if change:
             for position in attrfamily.read_locations:
                 self.annotator.reflowfromposition(position)
-                
+
+        if isinstance(s_result, SomeImpossibleValue):
+            for desc in descs:
+                try:
+                    attrs = desc.read_attribute('_attrs_')
+                except AttributeError:
+                    continue
+                if isinstance(attrs, Constant):
+                    attrs = attrs.value
+                if attr in attrs:
+                    raise HarmlesslyBlocked("getattr on enforced attr")
+
         return s_result
 
     def pbc_call(self, pbc, args, emulated=None):

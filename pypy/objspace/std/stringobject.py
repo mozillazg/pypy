@@ -228,12 +228,12 @@ def str_split__String_None_ANY(space, w_self, w_none, w_maxsplit=-1):
             maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
         # the word is value[i:j]
-        res_w.append(W_StringObject(value[i:j]))
+        res_w.append(sliced(space, value, i, j))
 
         # continue to look from the character following the space after the word
         i = j + 1
 
-    return W_ListObject(res_w)
+    return space.newlist(res_w)
 
 
 def str_split__String_String_ANY(space, w_self, w_by, w_maxsplit=-1):
@@ -250,13 +250,13 @@ def str_split__String_String_ANY(space, w_self, w_by, w_maxsplit=-1):
         next = value.find(by, start)
         if next < 0:
             break
-        res_w.append(W_StringObject(value[start:next]))
+        res_w.append(sliced(space, value, start, next))
         start = next + bylen
         maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
-    res_w.append(W_StringObject(value[start:]))
+    res_w.append(sliced(space, value, start, len(value)))
 
-    return W_ListObject(res_w)
+    return space.newlist(res_w)
 
 def str_rsplit__String_None_ANY(space, w_self, w_none, w_maxsplit=-1):
     maxsplit = space.int_w(w_maxsplit)
@@ -285,13 +285,13 @@ def str_rsplit__String_None_ANY(space, w_self, w_none, w_maxsplit=-1):
         # the word is value[j+1:i+1]
         j1 = j + 1
         assert j1 >= 0
-        res_w.append(W_StringObject(value[j1:i+1]))
+        res_w.append(sliced(space, value, j1, i+1))
 
         # continue to look from the character before the space before the word
         i = j - 1
 
     res_w.reverse()
-    return W_ListObject(res_w)
+    return space.newlist(res_w)
 
 def str_rsplit__String_String_ANY(space, w_self, w_by, w_maxsplit=-1):
     maxsplit = space.int_w(w_maxsplit)
@@ -307,62 +307,36 @@ def str_rsplit__String_String_ANY(space, w_self, w_by, w_maxsplit=-1):
         next = value.rfind(by, 0, end)
         if next < 0:
             break
-        res_w.append(W_StringObject(value[next+bylen:end]))
+        res_w.append(sliced(space, value, next+bylen, end))
         end = next
         maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
-    res_w.append(W_StringObject(value[:end]))
+    res_w.append(sliced(space, value, 0, end))
     res_w.reverse()
-    return W_ListObject(res_w)
+    return space.newlist(res_w)
 
 def str_join__String_ANY(space, w_self, w_list):
-    list = space.unpackiterable(w_list)
+    list_w = space.unpackiterable(w_list)
     str_w = space.str_w
-    if list:
+    if list_w:
         self = w_self._value
-        firstelem = 1
         listlen = 0
         reslen = 0
-        #compute the length of the resulting string 
-        for i in range(len(list)):
-            if not space.is_true(space.isinstance(list[i], space.w_str)):
-                if space.is_true(space.isinstance(list[i], space.w_unicode)):
+        l = []
+        for i in range(len(list_w)):
+            w_s = list_w[i]
+            if not space.is_true(space.isinstance(w_s, space.w_str)):
+                if space.is_true(space.isinstance(w_s, space.w_unicode)):
                     w_u = space.call_function(space.w_unicode, w_self)
-                    return space.call_method(w_u, "join", space.newlist(list))
+                    return space.call_method(w_u, "join", space.newlist(list_w))
                 raise OperationError(
                     space.w_TypeError,
                     space.wrap("sequence item %d: expected string, %s "
-                               "found"%(i, space.type(list[i]).name)))
-            reslen = reslen + len(str_w(list[i]))
-            listlen = listlen + 1
-
-        reslen = reslen + (listlen - 1) * len(self)
-
-        #allocate the string buffer
-        res = [' '] * reslen
-
-        pos = 0
-        #fill in the string buffer
-        for w_item in list:
-            item = str_w(w_item)
-            if firstelem:
-                for i in range(len(item)):
-                    res[i+pos] = item[i]
-                pos = pos + len(item)
-                firstelem = 0
-            else:
-                for i in range(len(self)):
-                    res[i+pos] = self[i]
-                pos = pos + len(self)
-                 
-                for i in range(len(item)):
-                    res[i+pos] = item[i]
-                pos = pos + len(item)
-
-        return space.wrap("".join(res))
+                               "found" % (i, space.type(w_s).name)))
+            l.append(space.str_w(w_s))
+        return space.wrap(self.join(l))
     else:
         return space.wrap("")
-
 
 def str_rjust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
 
@@ -454,92 +428,33 @@ def str_replace__String_String_String_ANY(space, w_self, w_sub, w_by, w_maxsplit
     input = w_self._value
     sub = w_sub._value
     by = w_by._value
-    maxsplit = space.int_w(w_maxsplit)   #I don't use it now
+    maxsplit = space.int_w(w_maxsplit)
+    if maxsplit == 0:
+        return space.wrap(input)
 
     #print "from replace, input: %s, sub: %s, by: %s" % (input, sub, by)
 
-    #what do we have to replace?
+    if not sub:
+        upper = len(input)
+        if maxsplit > 0 and maxsplit < upper + 2:
+            upper = maxsplit - 1
+            assert upper >= 0
+        substrings = [""]
+        for i in range(upper):
+            c = input[i]
+            substrings.append(c)
+        substrings.append(input[upper:])
+        return space.wrap(by.join(substrings))
     startidx = 0
-    indices = []
+    substrings = []
     foundidx = input.find(sub, startidx)
     while foundidx >= 0 and maxsplit != 0:
-        indices.append(foundidx)
-        if len(sub) == 0:
-            #so that we go forward, even if sub is empty
-            startidx = foundidx + 1
-        else: 
-            startidx = foundidx + len(sub)        
+        substrings.append(input[startidx:foundidx])
+        startidx = foundidx + len(sub)        
         foundidx = input.find(sub, startidx)
         maxsplit = maxsplit - 1
-    indiceslen = len(indices)
-    buf = [' '] * (len(input) - indiceslen * len(sub) + indiceslen * len(by))
-    startidx = 0
-
-    #ok, so do it
-    bufpos = 0
-    for i in range(indiceslen):
-        for j in range(startidx, indices[i]):
-            buf[bufpos] = input[j]
-            bufpos = bufpos + 1
- 
-        for j in range(len(by)):
-            buf[bufpos] = by[j]
-            bufpos = bufpos + 1
-
-        startidx = indices[i] + len(sub)
-
-    for j in range(startidx, len(input)):
-        buf[bufpos] = input[j]
-        bufpos = bufpos + 1 
-    return space.wrap("".join(buf))
-
-##def _find(self, sub, start, end, dir):
-
-##    length = len(self)
-
-##    #adjust_indicies
-##    if (end > length):
-##        end = length
-##    elif (end < 0):
-##        end += length
-##    if (end < 0):
-##        end = 0
-##    if (start < 0):
-##        start += length
-##    if (start < 0):
-##        start = 0
-
-##    if dir > 0:
-##        if len(sub) == 0 and start < end:
-##            return start
-
-##        end = end - len(sub) + 1
-
-##        for i in range(start, end):
-##            match = 1
-##            for idx in range(len(sub)):
-##                if sub[idx] != self[idx+i]:
-##                    match = 0
-##                    break
-##            if match: 
-##                return i
-##        return -1
-##    else:
-##        if len(sub) == 0 and start < end:
-##            return end
-
-##        end = end - len(sub)
-
-##        for j in range(end, start-1, -1):
-##            match = 1
-##            for idx in range(len(sub)):
-##                if sub[idx] != self[idx+j]:
-##                    match = 0
-##                    break
-##            if match:
-##                return j
-##        return -1        
-
+    substrings.append(input[startidx:])
+    return space.wrap(by.join(substrings))
 
 def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"
@@ -559,7 +474,7 @@ def _strip(space, w_self, w_chars, left, right):
            rpos -= 1
        
     assert rpos >= lpos    # annotator hint, don't remove
-    return space.wrap(u_self[lpos:rpos])
+    return sliced(space, u_self, lpos, rpos)
 
 def _strip_none(space, w_self, left, right):
     "internal function called by str_xstrip methods"
@@ -578,7 +493,7 @@ def _strip_none(space, w_self, left, right):
            rpos -= 1
        
     assert rpos >= lpos    # annotator hint, don't remove
-    return space.wrap(u_self[lpos:rpos])
+    return sliced(space, u_self, lpos, rpos)
 
 def str_strip__String_String(space, w_self, w_chars):
     return _strip(space, w_self, w_chars, left=1, right=1)
@@ -703,7 +618,7 @@ def str_splitlines__String_ANY(space, w_self, w_keepends):
     u_keepends  = space.int_w(w_keepends)  # truth value, but type checked
     selflen = len(data)
     
-    L = []
+    strs_w = []
     i = j = 0
     while i < selflen:
         # Find a line and append it
@@ -716,13 +631,13 @@ def str_splitlines__String_ANY(space, w_self, w_keepends):
             i += 1
         if u_keepends:
             eol = i
-        L.append(W_StringObject(data[j:eol]))
+        strs_w.append(sliced(space, data, j, eol))
         j = i
 
     if j < selflen:
-        L.append(W_StringObject(data[j:]))
+        strs_w.append(sliced(space, data, j, len(data)))
 
-    return W_ListObject(L)
+    return space.newlist(strs_w)
 
 def str_zfill__String_ANY(space, w_self, w_width):
     input = w_self._value
@@ -732,6 +647,7 @@ def str_zfill__String_ANY(space, w_self, w_width):
         # cannot return w_self, in case it is a subclass of str
         return space.wrap(input)
 
+    result = []
     buf = [' '] * width
     if len(input) > 0 and (input[0] == '+' or input[0] == '-'):
         buf[0] = input[0]
@@ -844,7 +760,7 @@ def mul_string_times(space, w_str, w_times):
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
-    if mul < 0:
+    if mul <= 0:
         return space.wrap('')
     input = w_str._value
     input_len = len(input)

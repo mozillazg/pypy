@@ -6,6 +6,8 @@ from pypy.tool import udir
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.annotation.builtin import *
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
+from pypy.rpython.rctypes.rcarithmetic import CShort
+from pypy.rpython import extfunc
 import py
 
 
@@ -196,6 +198,7 @@ class BaseTestRbuiltin(BaseRtypingTest):
         assert self.ll_to_string(res) == 'hello world'
 
     def test_os_dup(self):
+        py.test.skip("Cannot test it that way")
         import os
         def fn(fd):
             return os.dup(fd)
@@ -358,7 +361,7 @@ class TestLLtype(BaseTestRbuiltin, LLRtypeMixin):
             if i==1: return int(hasattr(A, 'y'))
             if i==2: return int(hasattr(42, 'x'))
         for x, y in zip(range(3), (1, 0, 0)):
-            res = self.interpret(f, [x])
+            res = self.interpret(f, [x], someobjects=True)
             assert res._obj.value == y
         # hmm, would like to test against PyObj, is this the wrong place/way?
 
@@ -386,6 +389,10 @@ class TestLLtype(BaseTestRbuiltin, LLRtypeMixin):
             return lltype.cast_primitive(lltype.UniChar, v)
         res = self.interpret(llf, [ord('x')], policy=LowLevelAnnotatorPolicy())
         assert res == u'x'
+        def llf(v):
+            return lltype.cast_primitive(CShort, v)
+        res = self.interpret(llf, [123], policy=LowLevelAnnotatorPolicy())
+        assert res == 123
 
 
     

@@ -2,6 +2,20 @@ import autopath
 
 
 class AppTestBuiltinApp:
+    def setup_class(cls):
+        class X(object):
+            def __eq__(self, other):
+                raise OverflowError
+            def __hash__(self):
+                return 42
+        d = {X(): 5}
+        try:
+            d[X()]
+        except OverflowError:
+            cls.w_sane_lookup = cls.space.wrap(True)
+        except KeyError:
+            cls.w_sane_lookup = cls.space.wrap(False)
+
     def test_import(self):
         m = __import__('pprint')
         assert m.pformat({}) == '{}'
@@ -83,6 +97,18 @@ class AppTestBuiltinApp:
         assert getattr(a, u'i') == 5
         raises(AttributeError, getattr, a, u'k')
         assert getattr(a, u'k', 42) == 42
+
+    def test_getattr_typecheck(self):
+        class A(object):
+            def __getattribute__(self, name):
+                pass
+            def __setattr__(self, name, value):
+                pass
+            def __delattr__(self, name):
+                pass
+        raises(TypeError, getattr, A(), 42)
+        raises(TypeError, setattr, A(), 42, 'x')
+        raises(TypeError, delattr, A(), 42)
 
     def test_sum(self):
         assert sum([]) ==0
@@ -256,6 +282,8 @@ class AppTestBuiltinApp:
         assert cmp(9,9) == 0
         assert cmp(0,9) < 0
         assert cmp(9,0) > 0
+        assert cmp("abc", 12) != 0
+        assert cmp(u"abc", 12) != 0
 
     def test_cmp_more(self):
         class C:
@@ -268,6 +296,8 @@ class AppTestBuiltinApp:
         raises(RuntimeError, cmp, c1, c2)
 
     def test_cmp_cyclic(self):
+        if not self.sane_lookup:
+            skip("underlying Python implementation has insane dict lookup")
         a = []; a.append(a)
         b = []; b.append(b)
         from UserList import UserList
@@ -425,13 +455,50 @@ class AppTestBuiltinApp:
             bac = property(broken2)
         x = X()
         x.foo = 42
-        assert hasattr(x, '__class__')
-        assert hasattr(x, 'foo')
-        assert not hasattr(x, 'bar')
-        assert not hasattr(x, 'abc')    # CPython compliance
-        assert not hasattr(x, 'bac')    # CPython compliance
+        assert hasattr(x, '__class__') is True
+        assert hasattr(x, 'foo') is True
+        assert hasattr(x, 'bar') is False
+        assert hasattr(x, 'abc') is False    # CPython compliance
+        assert hasattr(x, 'bac') is False    # CPython compliance
         raises(TypeError, hasattr, x, None)
         raises(TypeError, hasattr, x, 42)
+        raises(UnicodeError, hasattr, x, u'\u5678')  # cannot encode attr name
+
+class AppTestBuiltinOptimized(object):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.opcodes.CALL_LIKELY_BUILTIN": True})
+        assert cls.space.config.objspace.opcodes.CALL_LIKELY_BUILTIN
+
+    # hum, we need to invoke the compiler explicitely
+    def test_xrange_len(self):
+        s = """def test():
+        x = xrange(33)
+        assert len(x) == 33
+        x = xrange(33.2)
+        assert len(x) == 33
+        x = xrange(33,0,-1)
+        assert len(x) == 33
+        x = xrange(33,0)
+        assert len(x) == 0
+        x = xrange(33,0.2)
+        assert len(x) == 0
+        x = xrange(0,33)
+        assert len(x) == 33
+        x = xrange(0,33,-1)
+        assert len(x) == 0
+        x = xrange(0,33,2)
+        assert len(x) == 17
+        x = xrange(0,32,2)
+        assert len(x) == 16
+        """
+        ns = {}
+        exec s in ns
+        ns["test"]()
+
+    def test_delete_from_builtins(self):
+        s = """ """
+        # XXX write this test!
 
 class TestInternal:
 

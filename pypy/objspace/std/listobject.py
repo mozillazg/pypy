@@ -32,7 +32,10 @@ def init__List(space, w_list, __args__):
     w_iterable, = __args__.parse('list',
                                (['sequence'], None, None),   # signature
                                [EMPTY_LIST])                 # default argument
-    w_list.wrappeditems = space.unpackiterable(w_iterable)
+    if w_iterable is EMPTY_LIST:
+        w_list.wrappeditems = []
+    else:
+        w_list.wrappeditems = space.unpackiterable(w_iterable)
 
 def len__List(space, w_list):
     result = len(w_list.wrappeditems)
@@ -78,18 +81,13 @@ def iter__List(space, w_list):
 def add__List_List(space, w_list1, w_list2):
     return W_ListObject(w_list1.wrappeditems + w_list2.wrappeditems)
 
-#def radd__List_List(space, w_list1, w_list2):
-#    return W_ListObject(w_list2.wrappeditems + w_list1.wrappeditems)
-
-##def add__List_ANY(space, w_list, w_any):
-##    if space.is_true(space.isinstance(w_any, space.w_list)):
-##        items1_w = w_list.wrappeditems
-##        items2_w = space.unpackiterable(w_any)
-##        return W_ListObject(items1_w + items2_w)
-##    raise FailedToImplement
 
 def inplace_add__List_ANY(space, w_list1, w_iterable2):
     list_extend__List_ANY(space, w_list1, w_iterable2)
+    return w_list1
+
+def inplace_add__List_List(space, w_list1, w_list2):
+    list_extend__List_List(space, w_list1, w_list2)
     return w_list1
 
 def mul_list_times(space, w_list, w_times):
@@ -132,14 +130,6 @@ def equal_wrappeditems(space, items1_w, items2_w):
             return space.w_False
         i += 1
     return space.w_True
-    #return space.newbool(len(w_list1.wrappeditems) == len(w_list2.wrappeditems))
-
-##def eq__List_ANY(space, w_list1, w_any):
-##    if space.is_true(space.isinstance(w_any, space.w_list)):
-##        items1_w = w_list1.wrappeditems
-##        items2_w = space.unpackiterable(w_any)
-##        return equal_wrappeditems(space, items1_w, items2_w)
-##    raise FailedToImplement
 
 def _min(a, b):
     if a < b:
@@ -176,25 +166,9 @@ def lt__List_List(space, w_list1, w_list2):
     return lessthan_unwrappeditems(space, w_list1.wrappeditems,
         w_list2.wrappeditems)
 
-##def lt__List_ANY(space, w_list1, w_any):
-##    # XXX: Implement it not unpacking all the elements
-##    if space.is_true(space.isinstance(w_any, space.w_list)):
-##        items1_w = w_list1.wrappeditems
-##        items2_w = space.unpackiterable(w_any)
-##        return lessthan_unwrappeditems(space, items1_w, items2_w)
-##    raise FailedToImplement
-
 def gt__List_List(space, w_list1, w_list2):
     return greaterthan_unwrappeditems(space, w_list1.wrappeditems,
         w_list2.wrappeditems)
-
-##def gt__List_ANY(space, w_list1, w_any):
-##    # XXX: Implement it not unpacking all the elements
-##    if space.is_true(space.isinstance(w_any, space.w_list)):
-##        items1_w = w_list1.wrappeditems
-##        items2_w = space.unpackiterable(w_any)
-##        return greaterthan_unwrappeditems(space, items1_w, items2_w)
-##    raise FailedToImplement
 
 def delitem__List_ANY(space, w_list, w_idx):
     idx = space.int_w(w_idx)
@@ -358,6 +332,10 @@ def list_append__List_ANY(space, w_list, w_any):
     w_list.wrappeditems.append(w_any)
     return space.w_None
 
+def list_extend__List_List(space, w_list, w_other):
+    w_list.wrappeditems += w_other.wrappeditems
+    return space.w_None
+
 def list_extend__List_ANY(space, w_list, w_any):
     w_list.wrappeditems += space.unpackiterable(w_any)
     return space.w_None
@@ -398,11 +376,13 @@ def list_pop__List_ANY(space, w_list, w_idx=-1):
 def list_remove__List_ANY(space, w_list, w_any):
     # needs to be safe against eq_w() mutating the w_list behind our back
     items = w_list.wrappeditems
-    length = len(items)
-    for i in range(length):
+    i = 0
+    while i < len(items):
         if space.eq_w(items[i], w_any):
-            del items[i]
+            if i < len(items): # if this is wrong the list was changed
+                del items[i]
             return space.w_None
+        i += 1
     raise OperationError(space.w_ValueError,
                          space.wrap("list.remove(x): x not in list"))
 
@@ -441,15 +421,6 @@ def list_reverse__List(space, w_list):
 
 # Reverse a slice of a list in place, from lo up to (exclusive) hi.
 # (used in sort)
-
-def _reverse_slice(lis, lo, hi):
-    hi -= 1
-    while lo < hi:
-        t = lis[lo]
-        lis[lo] = lis[hi]
-        lis[hi] = t
-        lo += 1
-        hi -= 1
 
 class KeyContainer(baseobjspace.W_Root):
     def __init__(self, w_key, w_item):
@@ -530,14 +501,14 @@ def list_sort__List_ANY_ANY_ANY(space, w_list, w_cmp, w_keyfunc, w_reverse):
         # Reverse sort stability achieved by initially reversing the list,
         # applying a stable forward sort, then reversing the final result.
         if has_reverse:
-            _reverse_slice(sorter.list, 0, sorter.listlength)
+            sorter.list.reverse()
 
         # perform the sort
         sorter.sort()
 
         # reverse again
         if has_reverse:
-            _reverse_slice(sorter.list, 0, sorter.listlength)
+            sorter.list.reverse()
 
     finally:
         # unwrap each item if needed

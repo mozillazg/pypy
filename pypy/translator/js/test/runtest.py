@@ -1,5 +1,4 @@
 '''
-    Skipped tests should still be fixed. (or only run with py.test --browser)
     Sests with DONT in front of them will probably not be fixed for the time being.
 '''
 
@@ -12,7 +11,9 @@ from pypy.translator.js import conftest
 from pypy.translator.js.log import log
 from pypy.conftest import option
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
-from pypy.translator.transformer.debug import DebugTransformer
+from pypy.rlib.nonconst import NonConstant
+
+from pypy.rpython.llinterp import LLException
 
 log = log.runtest
 use_browsertest = conftest.option.browser
@@ -21,26 +22,28 @@ use_tg = conftest.option.tg
 port = 8080
 
 def _CLI_is_on_path():
-    try:
-        py.path.local.sysfind('js') #we recommend Spidermonkey
-    except py.error.ENOENT:
+    if py.path.local.sysfind('js') is None:  #we recommend Spidermonkey
         return False
     return True
 
 class compile_function(object):
-    def __init__(self, function, annotations, stackless=False, view=False, html=None, is_interactive=False, root = None, run_browser = True, debug_transform = False):
+    def __init__(self, function, annotations, stackless=False, view=False, html=None, is_interactive=False, root = None, run_browser = True, policy = None):
         if not use_browsertest and not _CLI_is_on_path():
             py.test.skip('Javascript CLI (js) not found')
 
         self.html = html
         self.is_interactive = is_interactive
         t = TranslationContext()
-        ann = t.buildannotator()
+        
+        if policy is None:
+            from pypy.annotation.policy import AnnotatorPolicy
+            policy = AnnotatorPolicy()
+            policy.allow_someobjects = False
+
+        ann = t.buildannotator(policy=policy)
         ann.build_types(function, annotations)
-        if debug_transform:
-            DebugTransformer(t).transform_all()
-            if view or option.view:
-                t.view()
+        if view or option.view:
+            t.view()
         t.buildrtyper(type_system="ootype").specialize()
 
         if view or option.view:
@@ -108,6 +111,11 @@ class compile_function(object):
         for s in output.split('\n'):
             log(s)
 
+        return self.reinterpret(s)
+
+    def reinterpret(cls, s):
+        while s.startswith(" "):
+            s = s[1:] # :-) quite inneficient, but who cares
         if s == 'false':
             res = False
         elif s == 'true':
@@ -118,52 +126,54 @@ class compile_function(object):
             res = 1e300 * 1e300
         elif s == 'NaN':
             res = (1e300 * 1e300) / (1e300 * 1e300)
+        elif s.startswith("uncaught exception:"):
+            raise LLException(str(s))
+        elif s.startswith('[') or s.startswith('('):
+            l = s[1:-1].split(',')
+            res = [cls.reinterpret(i) for i in l]
         else:
-            log('javascript result:', s)
             try:
-                res = eval(s)
-            except:
+                res = float(s)
+                if float(int(res)) == res:
+                    return int(res)
+            except ValueError:
                 res = str(s)
         return res
+    reinterpret = classmethod(reinterpret)
 
 class JsTest(BaseRtypingTest, OORtypeMixin):
-    #def __init__(self):
-    #    self._func = None
-    #    self._ann = None
-    #    self._cli_func = None
-
-    def _compile(self, fn, args):
-        #ann = [lltype_to_annotation(typeOf(x)) for x in args]
-        #if self._func is fn and self._ann == ann:
-        #    return self._cli_func
-        #else:
-        #    self._func = fn
-        #    self._ann = ann
-        #    self._cli_func = compile_function(fn, ann)
-        #    return self._cli_func
-        def f():
-            res = fn(*args)
-            return str(res)
-        return compile_function(f, [])
+    def _compile(self, _fn, args, policy=None):
+        argnames = _fn.func_code.co_varnames[:_fn.func_code.co_argcount]
+        source = py.code.Source("""
+        def %s():
+            from pypy.rlib.nonconst import NonConstant
+            res = _fn(%s)
+            if isinstance(res, type(None)):
+                return None
+            else:
+                return str(res)"""
+        % (_fn.func_name, ",".join(["%s=NonConstant(%s)" % (name,i) for
+                                   name, i in zip(argnames, args)])))
+        exec source.compile() in locals()
+        return compile_function(locals()[_fn.func_name], [], policy=policy)
     
-    def interpret(self, fn, args):
-        #def f(args):
-        #   fn(*args)
-        
-        f = self._compile(fn, args)
+    def interpret(self, fn, args, policy=None):
+        f = self._compile(fn, args, policy)
         res = f(*args)
         return res
-        #if isinstance(res, ExceptionWrapper):
-        #    raise res
-        #return res
 
     def interpret_raises(self, exception, fn, args):
         #import exceptions # needed by eval
         #try:
         #import pdb; pdb.set_trace()
-        res = self.interpret(fn, args)
-        assert res.startswith('uncaught exception:')
-        assert re.search(str(exception), res)
+        try:
+            res = self.interpret(fn, args)
+        except LLException, e:
+            s = e.args[0]
+            assert s.startswith('uncaught exception:')
+            assert re.search(str(exception), s)
+        else:
+            raise AssertionError("Did not raise, returned %s" % res)
         #except ExceptionWrapper, ex:
         #    assert issubclass(eval(ex.class_name), exception)
         #else:
@@ -175,16 +185,19 @@ class JsTest(BaseRtypingTest, OORtypeMixin):
     def ll_to_list(self, l):
         return l
 
+    def ll_unpack_tuple(self, t, length):
+        assert len(t) == length
+        return tuple(t)
+
     def class_name(self, value):
-        return value.class_name.split(".")[-1] 
+        return value[:-10].split('_')[-1]
 
     def is_of_instance_type(self, val):
         m = re.match("^<.* instance>$", val)
         return bool(m)
 
     def read_attr(self, obj, name):
-        pass
-        #py.test.skip('read_attr not supported on gencli tests')
+        py.test.skip('read_attr not supported on genjs tests')
 
 def check_source_contains(compiled_function, pattern):
     import re

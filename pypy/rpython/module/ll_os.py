@@ -20,6 +20,70 @@ from pypy.rlib import ros
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.tool.staticmethods import ClassMethods
 import stat
+from pypy.rpython.extfunc import ExtFuncEntry, register_external
+from pypy.annotation.model import SomeString, SomeInteger, s_ImpossibleValue, \
+    s_None
+from pypy.annotation.listdef import s_list_of_strings
+import ctypes
+import pypy.rpython.rctypes.implementation
+from pypy.rpython.rctypes.tool.libc import libc
+from pypy.rpython.rctypes.aerrno import geterrno
+
+if hasattr(os, 'execv'):
+
+    if os.name == 'nt':
+        os_execv = libc._execv
+    else:
+        os_execv = libc.execv
+    os_execv.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p)]
+    os_execv.restype = ctypes.c_int
+
+    def execv_lltypeimpl(path, args):
+        # XXX incredible code to work around rctypes limitations
+        length = len(args) + 1
+        num_bytes = ctypes.sizeof(ctypes.c_char_p) * length
+        buffer = ctypes.create_string_buffer(num_bytes)
+        array = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_char_p))
+        buffer_addr = ctypes.cast(buffer, ctypes.c_void_p).value
+        for num in range(len(args)):
+            adr1 = buffer_addr + ctypes.sizeof(ctypes.c_char_p) * num
+            ptr = ctypes.c_void_p(adr1)
+            arrayitem = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_char_p))
+            arrayitem[0] = args[num]
+        os_execv(path, array)
+        raise OSError(geterrno(), "execv failed")
+
+    register_external(os.execv, [str, [str]], s_ImpossibleValue, llimpl=
+                      execv_lltypeimpl, export_name="ll_os.ll_os_execv")
+
+if os.name == 'nt':
+    os_dup = libc._dup
+else:
+    os_dup = libc.dup
+os_dup.argtypes = [ctypes.c_int]
+os_dup.restype = ctypes.c_int
+
+def dup_lltypeimpl(fd):
+    newfd = os_dup(fd)
+    if newfd == -1:
+        raise OSError(geterrno(), "dup failed")
+    return newfd
+register_external(os.dup, [int], int, llimpl=dup_lltypeimpl,
+                  export_name="ll_os.ll_os_dup")
+
+if os.name == 'nt':
+    os_dup2 = libc._dup2
+else:
+    os_dup2 = libc.dup2
+os_dup2.argtypes = [ctypes.c_int, ctypes.c_int]
+os_dup2.restype = ctypes.c_int
+
+def dup2_lltypeimpl(fd, newfd):
+    error = os_dup2(fd, newfd)
+    if error == -1:
+        raise OSError(geterrno(), "dup2 failed")
+register_external(os.dup2, [int, int], s_None, llimpl=dup2_lltypeimpl,
+                  export_name="ll_os.ll_os_dup2")
 
 class BaseOS:
     __metaclass__ = ClassMethods
@@ -54,6 +118,10 @@ class BaseOS:
     def ll_os_dup2(cls, old_fd, new_fd):
         os.dup2(old_fd, new_fd)
     ll_os_dup2.suggested_primitive = True
+
+    def ll_os_access(cls, path, mode):
+        return os.access(cls.from_rstr(path), mode)
+    ll_os_access.suggested_primitive = True
 
     def ll_os_lseek(cls, fd,pos,how):
         return r_longlong(os.lseek(fd,pos,how))
@@ -95,6 +163,14 @@ class BaseOS:
     def ll_os_system(cls, cmd):
         return os.system(cls.from_rstr(cmd))
     ll_os_system.suggested_primitive = True
+
+    #def ll_os_execv(cls, cmd, args):
+    #    os.execv(cmd, args)
+    #ll_os_execv.suggested_primitive = True
+
+    #def ll_os_execve(cls, cmd, args, env):
+    #    env_list = from_rdict(env)
+    #    ll_execve(cmd, args, env_list)
 
     def ll_os_unlink(cls, path):
         os.unlink(cls.from_rstr(path))
@@ -138,6 +214,10 @@ class BaseOS:
     def ll_os_rename(cls, path1, path2):
         os.rename(cls.from_rstr(path1), cls.from_rstr(path2))
     ll_os_rename.suggested_primitive = True
+
+    def ll_os_umask(cls, mask):
+        return os.umask(mask)
+    ll_os_umask.suggested_primitive = True
 
     def ll_os_getpid(cls):
         return os.getpid()

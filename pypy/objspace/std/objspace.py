@@ -2,6 +2,7 @@ from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
 from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
+from pypy.interpreter import pyframe
 from pypy.rlib.objectmodel import instantiate
 from pypy.interpreter.gateway import PyPyCacheDir
 from pypy.tool.cache import Cache 
@@ -12,6 +13,7 @@ from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.descroperation import DescrOperation
 from pypy.objspace.std import stdtypedef
 from pypy.rlib.rarithmetic import base_int
+from pypy.rlib.objectmodel import we_are_translated
 import sys
 import os
 import __builtin__
@@ -35,7 +37,6 @@ def registerimplementation(implcls):
     assert issubclass(implcls, W_Object)
     _registered_implementations[implcls] = True
 
-
 ##################################################################
 
 class StdObjSpace(ObjSpace, DescrOperation):
@@ -54,6 +55,69 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # Import all the object types and implementations
         self.model = StdTypeModel(self.config)
+
+        class StdObjSpaceFrame(pyframe.PyFrame):
+            if self.config.objspace.std.optimized_int_add:
+                if self.config.objspace.std.withsmallint:
+                    def BINARY_ADD(f, oparg, *ignored):
+                        from pypy.objspace.std.smallintobject import \
+                             W_SmallIntObject, add__SmallInt_SmallInt
+                        w_2 = f.popvalue()
+                        w_1 = f.popvalue()
+                        if type(w_1) is W_SmallIntObject and type(w_2) is W_SmallIntObject:
+                            try:
+                                w_result = add__SmallInt_SmallInt(f.space, w_1, w_2)
+                            except FailedToImplement:
+                                w_result = f.space.add(w_1, w_2)
+                        else:
+                            w_result = f.space.add(w_1, w_2)
+                        f.pushvalue(w_result)
+                else:
+                    def BINARY_ADD(f, oparg, *ignored):
+                        from pypy.objspace.std.intobject import \
+                             W_IntObject, add__Int_Int
+                        w_2 = f.popvalue()
+                        w_1 = f.popvalue()
+                        if type(w_1) is W_IntObject and type(w_2) is W_IntObject:
+                            try:
+                                w_result = add__Int_Int(f.space, w_1, w_2)
+                            except FailedToImplement:
+                                w_result = f.space.add(w_1, w_2)
+                        else:
+                            w_result = f.space.add(w_1, w_2)
+                        f.pushvalue(w_result)
+
+            def CALL_LIKELY_BUILTIN(f, oparg, *ignored):
+                from pypy.module.__builtin__ import OPTIMIZED_BUILTINS, Module
+                from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+                w_globals = f.w_globals
+                num = oparg >> 8
+                assert isinstance(w_globals, W_DictMultiObject)
+                w_value = w_globals.implementation.get_builtin_indexed(num)
+                if w_value is None:
+                    w_builtins = f.builtin
+                    assert isinstance(w_builtins, Module)
+                    w_builtin_dict = w_builtins.w_dict
+                    assert isinstance(w_builtin_dict, W_DictMultiObject)
+                    w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
+        ##                 if w_value is not None:
+        ##                     print "CALL_LIKELY_BUILTIN fast"
+                if w_value is None:
+                    varname = OPTIMIZED_BUILTINS[num]
+                    message = "global name '%s' is not defined" % varname
+                    raise OperationError(f.space.w_NameError,
+                                         f.space.wrap(message))
+                nargs = oparg & 0xff
+                w_function = w_value
+                try:
+                    w_result = f.space.call_valuestack(w_function, nargs, f)
+                    # XXX XXX fix the problem of resume points!
+                    #rstack.resume_point("CALL_FUNCTION", f, nargs, returns=w_result)
+                finally:
+                    f.dropvalues(nargs)
+                f.pushvalue(w_result)
+
+        self.FrameClass = StdObjSpaceFrame
 
         # XXX store the dict class on the space to access it in various places
         if self.config.objspace.std.withstrdict:
@@ -225,7 +289,22 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # add space specific fields to execution context
         ec = ObjSpace.createexecutioncontext(self)
         ec._py_repr = self.newdict()
+        if self.config.objspace.std.withmethodcache:
+            SIZE = self.config.objspace.std.methodcachesize
+            ec.method_cache_versions = [None] * SIZE
+            ec.method_cache_names = [None] * SIZE
+            ec.method_cache_lookup_where = [(None, None)] * SIZE
+            if self.config.objspace.std.withmethodcachecounter:
+                ec.method_cache_hits = {}
+                ec.method_cache_misses = {}
         return ec
+
+    def createframe(self, code, w_globals, closure=None):
+        from pypy.objspace.std.fake import CPythonFakeCode, CPythonFakeFrame
+        if not we_are_translated() and isinstance(code, CPythonFakeCode):
+            return CPythonFakeFrame(self, code, w_globals)
+        else:
+            return self.FrameClass(self, code, w_globals, closure)
 
     def gettypefor(self, cls):
         return self.gettypeobject(cls.typedef)
@@ -259,19 +338,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_StringObject(x)
         if isinstance(x, unicode):
             return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
-        if isinstance(x, dict):
-            items_w = [(self.wrap(k), self.wrap(v)) for (k, v) in x.iteritems()]
-            r = self.newdict()
-            r.initialize_content(items_w)
-            return r
         if isinstance(x, float):
             return W_FloatObject(x)
-        if isinstance(x, tuple):
-            wrappeditems = [self.wrap(item) for item in list(x)]
-            return W_TupleObject(wrappeditems)
-        if isinstance(x, list):
-            wrappeditems = [self.wrap(item) for item in x]
-            return W_ListObject(wrappeditems)
         if isinstance(x, Wrappable):
             w_result = x.__spacebind__(self)
             #print 'wrapping', x, '->', w_result
@@ -280,7 +348,24 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_LongObject.fromrarith_int(x)
 
         # _____ below here is where the annotator should not get _____
-        
+
+        # wrap() of a container works on CPython, but the code is
+        # not RPython.  Don't use -- it is kept around mostly for tests.
+        # Use instead newdict(), newlist(), newtuple().
+        if isinstance(x, dict):
+            items_w = [(self.wrap(k), self.wrap(v)) for (k, v) in x.iteritems()]
+            r = self.newdict()
+            r.initialize_content(items_w)
+            return r
+        if isinstance(x, tuple):
+            wrappeditems = [self.wrap(item) for item in list(x)]
+            return W_TupleObject(wrappeditems)
+        if isinstance(x, list):
+            wrappeditems = [self.wrap(item) for item in x]
+            return self.newlist(wrappeditems)
+
+        # The following cases are even stranger.
+        # Really really only for tests.
         if isinstance(x, long):
             return W_LongObject.fromlong(x)
         if isinstance(x, slice):
@@ -361,9 +446,17 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_TupleObject(list_w)
 
     def newlist(self, list_w):
-        return W_ListObject(list_w)
+        if self.config.objspace.std.withmultilist:
+            from pypy.objspace.std.listmultiobject import convert_list_w
+            return convert_list_w(self, list_w)
+        else:
+            from pypy.objspace.std.listobject import W_ListObject
+            return W_ListObject(list_w)
 
-    def newdict(self):
+    def newdict(self, track_builtin_shadowing=False):
+        if self.config.objspace.opcodes.CALL_LIKELY_BUILTIN and track_builtin_shadowing:
+            from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+            return W_DictMultiObject(self, wary=True)
         return self.DictObjectCls(self)
 
     def newslice(self, w_start, w_end, w_step):
@@ -451,10 +544,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return w_obj.get(w_key, None)
         return ObjSpace.finditem(self, w_obj, w_key)
 
-    def set_str_keyed_item(self, w_obj, w_key, w_value):
+    def set_str_keyed_item(self, w_obj, w_key, w_value, shadows_type=True):
         # performance shortcut to avoid creating the OperationError(KeyError)
         if type(w_obj) is self.DictObjectCls:
-            w_obj.set_str_keyed_item(w_key, w_value)
+            w_obj.set_str_keyed_item(w_key, w_value, shadows_type)
         else:
             self.setitem(w_obj, w_key, w_value)
 
@@ -495,6 +588,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
         str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
         float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
         uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
+        unichars_w = StdObjSpaceMultiMethod('unichars_w', 1, [])    # returns an unwrapped list of unicode characters
+        bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
         marshal_w = StdObjSpaceMultiMethod('marshal_w', 1, [], extra_args=['marshaller'])
         log     = StdObjSpaceMultiMethod('log', 1, [], extra_args=['base'])
 

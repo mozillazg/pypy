@@ -1,6 +1,20 @@
 import os
 from pypy.tool.udir import udir
+from pypy.tool.pytest.modcheck import skipimporterror
+skipimporterror("ctypes")
+
 from pypy.rpython.lltypesystem.module.ll_os import Implementation as impl
+import sys
+
+def test_access():
+    filename = str(udir.join('test_access.txt'))
+    rsfilename = impl.to_rstr(filename)
+
+    fd = file(filename, 'w')
+    fd.close()
+
+    for mode in os.R_OK, os.W_OK, os.X_OK, os.R_OK | os.W_OK | os.X_OK:
+        assert os.access(filename, mode) == impl.ll_os_access(rsfilename, mode)
 
 
 def test_open_read_write_close():
@@ -101,3 +115,38 @@ def test_opendir_readdir():
     compared_with = os.listdir(dirname)
     compared_with.sort()
     assert result == compared_with
+
+if hasattr(os, 'execv'):
+    from pypy.rpython.extregistry import lookup
+    os_execv = lookup(os.execv).lltypeimpl.im_func
+    
+    def test_execv():
+        filename = str(udir.join('test_execv_ctypes.txt'))
+
+        progname = str(sys.executable)
+        l = ['', '']
+        l[0] = progname
+        l[1] = "-c"
+        l.append('open("%s","w").write("1")' % filename)
+        pid = os.fork()
+        if pid == 0:
+            os_execv(progname, l)
+        else:
+            os.waitpid(pid, 0)
+        assert open(filename).read() == "1"
+
+def test_dup():
+    from pypy.rpython.extregistry import lookup
+    os_dup = lookup(os.dup).lltypeimpl.im_func
+    testf = udir.join('test.txt')
+    testf.write("foo")
+    path = testf.strpath
+
+    def ff(fi):
+        g = os_dup(fi)
+        return g
+    fi = os.open(path,os.O_RDONLY,0755)
+    g = ff(fi)
+    assert os.fstat(g) == os.fstat(fi)
+
+

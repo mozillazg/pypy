@@ -55,8 +55,7 @@ int LL_os_open(RPyString *filename, int flag, int mode);
 long LL_read_into(int fd, RPyString *buffer);
 long LL_os_write(int fd, RPyString *buffer);
 void LL_os_close(int fd);
-int LL_os_dup(int fd);
-void LL_os_dup2(int old_fd, int new_fd);
+int LL_os_access(RPyString *filename, int mode);
 RPySTAT_RESULT* _stat_construct_result_helper(STRUCT_STAT st);
 RPySTAT_RESULT* LL_os_stat(RPyString * fname);
 RPySTAT_RESULT* LL_os_lstat(RPyString * fname);
@@ -73,13 +72,14 @@ void LL_os_mkdir(RPyString * path, int mode);
 void LL_os_rmdir(RPyString * path);
 void LL_os_chmod(RPyString * path, int mode);
 void LL_os_rename(RPyString * path1, RPyString * path2);
+int LL_os_umask(int mode);
 long LL_os_getpid(void);
 void LL_os_kill(int pid, int sig);
 void LL_os_link(RPyString * path1, RPyString * path2);
 void LL_os_symlink(RPyString * path1, RPyString * path2);
 long LL_readlink_into(RPyString *path, RPyString *buffer);
 long LL_os_fork(void);
-#ifdef HAVE_RPY_LIST_OF_STRING     /* argh */
+#if defined(HAVE_SPAWNV) && defined(HAVE_RPY_LIST_OF_STRING) /* argh */
 long LL_os_spawnv(int mode, RPyString *path, RPyListOfString *args);
 #endif
 RPyWAITPID_RESULT* LL_os_waitpid(long pid, long options);
@@ -134,19 +134,9 @@ void LL_os_close(int fd)
 		RPYTHON_RAISE_OSERROR(errno);
 }
 
-int LL_os_dup(int fd)
-{
-	fd = dup(fd);
-	if (fd < 0)
-		RPYTHON_RAISE_OSERROR(errno);
-	return fd;
-}
-
-void LL_os_dup2(int old_fd, int new_fd)
-{
-	new_fd = dup2(old_fd, new_fd);
-	if (new_fd < 0)
-		RPYTHON_RAISE_OSERROR(errno);
+int LL_os_access(RPyString *filename, int mode) {
+	int n = access(RPyString_AsString(filename), mode);
+	return (n == 0);
 }
 
 #ifdef LL_NEED_OS_STAT
@@ -338,6 +328,10 @@ void LL_os_rename(RPyString * path1, RPyString * path2) {
     if (error != 0) {
 	RPYTHON_RAISE_OSERROR(errno);
     }
+}
+
+int LL_os_umask(int mode) {
+	return umask(mode);
 }
 
 long LL_os_getpid(void) {

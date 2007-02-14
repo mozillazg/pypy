@@ -15,12 +15,15 @@ class Directory(py.test.collect.Directory):
 
         return super(Directory, self).run()
 
-Option = py.test.Config.Option
+Option = py.test.config.Option
 
-option = py.test.Config.addoptions("ppc options",
-        Option('--trap', action="store_true", default=False,
-               dest="trap",
+option = py.test.config.addoptions("ppc options",
+        Option('--run-interp-tests', action="store_true", default=False,
+               dest="run_interp_tests",
                help=""),
+        Option('--debug-scribble', action="store_true", default=False,
+               dest="debug_scribble",
+               help="write junk into unused registers and regions of the stack"),
         Option('--debug-print', action="store_true", default=False,
                dest="debug_print",
                help=""))

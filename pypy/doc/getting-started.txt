@@ -106,14 +106,25 @@ may just `start reading sources`_ .
 Running all of PyPy's tests  
 ---------------------------
 
-If you want to see if PyPy works on your machine/platform 
+If you want to see `if PyPy works on your machine/platform`_
 you can simply run PyPy's large test suite with:: 
 
     cd pypy
-    python test_all.py 
+    python test_all.py directory-or-files
 
 test_all.py is just another name for `py.test`_ which is the
-testing tool that we are using and enhancing for PyPy.   
+testing tool that we are using and enhancing for PyPy.
+Note that running all the tests takes a very long time, and
+enormous amounts of memory if you are trying to run them all
+in the same process; test_all.py is only suitable to run a
+subset of them at a time.  To run them all we have an
+`autotest driver`_ that executes the tests directory by
+directory and produces pages like the following one:
+
+    http://wyvern.cs.uni-duesseldorf.de/pypytest/summary.html
+
+.. _`if PyPy works on your machine/platform`: index.html#status
+.. _`autotest driver`: http://codespeak.net/pipermail/pypy-dev/2006q3/003273.html
 
 Filing bugs or feature requests 
 -------------------------------
@@ -172,6 +183,9 @@ To list the PyPy interpreter command line options, type::
     cd pypy/bin
     python py.py --help
 
+(this will give you a daunting list, so it is a good idea to use a pager).
+py.py supports most of the options that CPython supports too (in addition to a
+large amount of options that can be used to customize py.py).
 As an example of using PyPy from the command line, you could type::
 
     python py.py -c "from test import pystone; pystone.main(10)"
@@ -187,7 +201,7 @@ Special PyPy features
 Interpreter-level console
 +++++++++++++++++++++++++
 
-There are a few extra features of the PyPy console: If you press
+There are quite a few extra features of the PyPy console: If you press
 <Ctrl-C> on the console you enter the interpreter-level console, a
 usual CPython console.  You can then access internal objects of PyPy
 (e.g. the object space) and any variables you have created on the PyPy
@@ -319,6 +333,7 @@ To run all the unit tests::
     cd pypy
     python test_all.py
 
+(this is not recommended, since it takes hours and uses huge amounts of RAM).
 Alternatively, you may run subtests by going to the correct subdirectory
 and running them individually::
 
@@ -344,7 +359,7 @@ from the lib-python/2.4.1/test directory. You need to have a checkout of the
 testresult directory. Running one of the above commands tells you how to
 proceed.
 
-.. _`installed py.test`: http://codespeak.net/py/current/doc/getting-started.html
+.. _`installed py.test`: https://codespeak.net/py/current/doc/download.html
 
 Demos
 +++++
@@ -446,7 +461,8 @@ Here is a simple example to try::
 Translating the flow graph to Javascript code
 +++++++++++++++++++++++++++++++++++++++++++++
 
-The Javascript backend is still experimental but will be worked on during this
+The Javascript backend is still experimental but was heavily improved
+during last
 years `Google summer of code`_. It contains some rudimentary support
 for the document object model and a good integration with PyPy's unittesting
 framework. Code can be tested with the `Spidermonkey`_ commandline javascript
@@ -464,13 +480,17 @@ Here is a simple example to try::
    >>> a = t.annotate([int, int])
    >>> source = t.source_js()
 
+If you want to know more about the JavaScript backend please refer to the
+`JavaScript docs`_.
+
+.. _`JavaScript docs`: js/whatis.html
+
 Translating the flow graph to CLI code
 ++++++++++++++++++++++++++++++++++++++
 
-The CLI backend aim to translate RPython code into .NET executables:
-it is still work-in-progress, but it is already somewhat usable for
-small snippets of code since it supports classes, list, dictionaries,
-and strings. You can try out the CLI backend from the interactive
+Use the `CLI backend`_ to translate the flowgraphs into .NET executables:
+``gencli`` is quite mature now and can also compile the whole
+interpreter. You can try out the `CLI backend`_ from the interactive
 translator shell::
 
     >>> def myfunc(a, b): return a+b
@@ -518,6 +538,11 @@ compiled and executed.
 Translating the PyPy interpreter
 --------------------------------
 
+(**Note**: for some hints on how to translate PyPy under Windows, see the 
+`windows document`_)
+
+.. _`windows document`: windows.html
+
 Not for the faint of heart nor the owner of a very old machine: you can
 translate the whole of PyPy to low level C code. This is the largest and
 ultimate example of source that our translation toolchain can process::
@@ -527,8 +552,10 @@ ultimate example of source that our translation toolchain can process::
 
 By default the translation process will try to use the
 `Boehm-Demers-Weiser garbage collector`_ for the translated PyPy (Use
-``--gc=ref`` to use our own reference counting implementation which
-at the moment is slower but doesn't have external dependencies).
+``--gc=framework`` to use our own exact mark-n-sweep implementation which
+at the moment is slower but doesn't have external dependencies). Otherwise, be sure
+to install Boehm before starting the translation (e.g. by running
+``apt-get install libgc-dev`` on Debian).
 
 This whole process will take some time and quite a lot of memory. To
 reduce the memory footprint of the translation process you can use the
@@ -586,7 +613,8 @@ You can also use the translate.py script to try out several smaller
 programs, e.g. a slightly changed version of Pystone::
 
     cd pypy/translator/goal
-    python translate.py targetrpystone
+    python translate.py targetrpystonedalone
+
 
 
 .. _`translate PyPy with the thunk object space`:
@@ -613,13 +641,78 @@ infrastructure::
 
     ./translate.py --text --batch --backend=llvm --raisingop2direct_call targetpypystandalone.py
 
+Translating using the CLI backend
++++++++++++++++++++++++++++++++++
+
+To create a standalone .NET executable using the `CLI backend`_::
+
+    ./translate.py --text --batch --backend=cli targetpypystandalone.py
+
+The executable and all its dependecies will be stored in the
+./pypy-cli-data directory. To run pypy.NET, you can run
+./pypy-cli-data/main.exe. If you are using Linux or Mac, you can use
+the convenience ./pypy-cli script::
+
+  $ ./pypy-cli
+  debug: entry point starting
+  debug:  argv ->
+  debug: importing code
+  debug: calling code.interact()
+  Python 2.4.1 (pypy 0.9.0 build 38134) on linux2
+  Type "help", "copyright", "credits" or "license" for more information.
+  (InteractiveConsole)
+   >>>> 1 + 1
+   2
+   >>>>
+
+Unfortunately, at the moment it's very likely that you won't be able
+to do the translation under Windows because of a bug of Microsoft
+ilasm that crashes when trying to assemble the huge IL file produced
+by GenCLI.  Microsoft .NET SDK 2.0.50727.42 is affected by this bug;
+other version could be affected as well: if you find a version of the
+SDK that works, please tell us.
+
+As a workaround you can use the Mono ilasm, which does the job
+fine. Once assembled, you can run the produced executable with the
+Microsoft Runtime.
+
+You can also try the still very experimental ``clr`` module that
+enables integration with the surrounding .NET environment.  First, you
+have to tell translate.py to include the ``clr`` module::
+
+    ./translate.py --text --batch --backend=cli targetpypystandalone.py --withmod-clr
+
+Then, you can dynamically load .NET classes using the
+``clr.load_cli_classe`` method. After a class has been loaded, you can
+instantiate and use it as it were a normal Python class. Special
+methods such as indexers and properties are supported using the usual
+Python syntax:
+
+    >>>> import clr
+    >>>> ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
+    >>>> obj.Add(1)
+    0
+    >>>> obj.Add(2)
+    1
+    >>>> obj.Add("foo")
+    2
+    >>>> print obj[0], obj[1], obj[2]
+    1 2 foo
+    >>>> print obj.Count
+    3
+
+At the moment the only way to load a .NET class is to explicitly use
+``clr.load_cli_class``; in the future they will be automatically
+loaded when accessing .NET namespaces as they were Python modules, as
+IronPython does.
+
 .. _`start reading sources`: 
 
 Where to start reading the sources
 ---------------------------------- 
 
 PyPy is made from parts that are relatively independent from each other.
-You should start looking at the part that attracts you most (all parts are
+You should start looking at the part that attracts you most (all paths are
 relative to the PyPy toplevel directory).  You may look at our `directory reference`_ 
 or start off at one of the following points:
 
@@ -738,6 +831,7 @@ plan where to meet with us.
 
 .. _`.NET Frameword SDK 2.0`: http://msdn.microsoft.com/netframework/downloads/updates/default.aspx
 .. _Mono: http://www.mono-project.com/Main_Page
+.. _`CLI backend`: cli-backend.html
 
 .. _Dot Graphviz:           http://www.graphviz.org/
 .. _Pygame:                 http://www.pygame.org/

@@ -9,7 +9,7 @@ from pypy.objspace.flow.model import roproperty
 class LLOp(object):
 
     def __init__(self, sideeffects=True, canfold=False, canraise=(),
-                 pyobj=False, canunwindgc=False, canrun=False):
+                 pyobj=False, canunwindgc=False, canrun=False, oo=False):
         # self.opname = ... (set afterwards)
 
         if canfold:
@@ -42,6 +42,9 @@ class LLOp(object):
         # The operation can be run directly with __call__
         self.canrun = canrun or canfold
 
+        # The operation belongs to the ootypesystem
+        self.oo = oo
+
     # __________ make the LLOp instances callable from LL helpers __________
 
     __name__ = property(lambda self: 'llop_'+self.opname)
@@ -62,7 +65,10 @@ class LLOp(object):
         global lltype                 #  <- lazy import hack, worth an XXX
         from pypy.rpython.lltypesystem import lltype
         if self.canrun:
-            from pypy.rpython.lltypesystem.opimpl import get_op_impl
+            if self.oo:
+                from pypy.rpython.ootypesystem.ooopimpl import get_op_impl
+            else:
+                from pypy.rpython.lltypesystem.opimpl import get_op_impl
             op_impl = get_op_impl(self.opname)
         else:
             error = TypeError("cannot constant-fold operation %r" % (
@@ -73,6 +79,13 @@ class LLOp(object):
         self.fold = op_impl
         return op_impl
     fold = roproperty(get_fold_impl)
+
+    def is_pure(self, *ARGTYPES):
+        return (self.canfold or                # canfold => pure operation
+                self is llop.debug_assert or   # debug_assert is pure enough
+                                               # reading from immutable
+                (self in (llop.getfield, llop.getarrayitem) and
+                 ARGTYPES[0].TO._hints.get('immutable')))
 
 
 def enum_ops_without_sideeffects(raising_is_ok=False):
@@ -114,17 +127,14 @@ class StackException(Exception):
 # ____________________________________________________________
 #
 # This list corresponds to the operations implemented by the LLInterpreter.
-# XXX Some clean-ups are needed:
-#      * many exception-raising operations are being replaced by calls to helpers
-#      * float_mod vs float_fmod ?
-# Run test_lloperation after changes.  Feel free to clean up LLInterpreter too :-)
+# Note that many exception-raising operations are being replaced by calls
+# to helpers by rpython/raisingops/.
+# ***** Run test_lloperation after changes. *****
 
 LL_OPERATIONS = {
 
     'direct_call':          LLOp(canraise=(Exception,)),
     'indirect_call':        LLOp(canraise=(Exception,)),
-    #'safe_call':            LLOp(),
-    'unsafe_call':          LLOp(canraise=(Exception,)),
 
     # __________ numeric operations __________
 
@@ -210,20 +220,19 @@ LL_OPERATIONS = {
     'float_sub':            LLOp(canfold=True),
     'float_mul':            LLOp(canfold=True),
     'float_truediv':        LLOp(canfold=True),
-    'float_mod':            LLOp(canfold=True),
     'float_lt':             LLOp(canfold=True),
     'float_le':             LLOp(canfold=True),
     'float_eq':             LLOp(canfold=True),
     'float_ne':             LLOp(canfold=True),
     'float_gt':             LLOp(canfold=True),
     'float_ge':             LLOp(canfold=True),
-    'float_floor':          LLOp(canfold=True),
-    'float_fmod':           LLOp(canfold=True),
     'float_pow':            LLOp(canfold=True),
 
     'llong_is_true':        LLOp(canfold=True),
     'llong_neg':            LLOp(canfold=True),
+    'llong_neg_ovf':        LLOp(canraise=(OverflowError,)),
     'llong_abs':            LLOp(canfold=True),
+    'llong_abs_ovf':        LLOp(canraise=(OverflowError,)),    
     'llong_invert':         LLOp(canfold=True),
 
     'llong_add':            LLOp(canfold=True),
@@ -316,7 +325,7 @@ LL_OPERATIONS = {
     'direct_fieldptr':      LLOp(canfold=True),
     'direct_arrayitems':    LLOp(canfold=True),
     'direct_ptradd':        LLOp(canfold=True),
-    'cast_opaque_ptr':      LLOp(canfold=True),
+    'cast_opaque_ptr':      LLOp(sideeffects=False),
 
     # __________ address operations __________
 
@@ -336,6 +345,7 @@ LL_OPERATIONS = {
     'adr_ne':               LLOp(canfold=True),
     'adr_gt':               LLOp(canfold=True),
     'adr_ge':               LLOp(canfold=True),
+    'adr_call':             LLOp(canraise=(Exception,)),
     'cast_ptr_to_adr':      LLOp(canfold=True),
     'cast_adr_to_ptr':      LLOp(canfold=True),
     'cast_ptr_to_weakadr':  LLOp(canfold=True),
@@ -404,7 +414,33 @@ LL_OPERATIONS = {
 
     # __________ instrumentation _________
     'instrument_count':     LLOp(),
+
+    # __________ ootype operations __________
+    'new':                  LLOp(oo=True, canraise=(Exception,)),
+    'runtimenew':           LLOp(oo=True, canraise=(Exception,)),
+    'oonewcustomdict':      LLOp(oo=True, canraise=(Exception,)),
+    'oosetfield':           LLOp(oo=True),
+    'oogetfield':           LLOp(oo=True, sideeffects=False),
+    'oosend':               LLOp(oo=True, canraise=(Exception,)),
+    'ooupcast':             LLOp(oo=True, canfold=True),
+    'oodowncast':           LLOp(oo=True, canfold=True),
+    'oononnull':            LLOp(oo=True, canfold=True),
+    'oois':                 LLOp(oo=True, canfold=True),
+    'instanceof':           LLOp(oo=True, canfold=True),
+    'classof':              LLOp(oo=True, canfold=True),
+    'subclassof':           LLOp(oo=True, canfold=True),
+    'ooidentityhash':       LLOp(oo=True, sideeffects=False),
+    'oostring':             LLOp(oo=True, sideeffects=False),
+    'ooparse_int':          LLOp(oo=True, canraise=(ValueError,)),
+    'ooparse_float':          LLOp(oo=True, canraise=(ValueError,)),
+    'oohash':               LLOp(oo=True, sideeffects=False),
+
+    # _____ read frame var support ___
+    'get_frame_base':       LLOp(),
+    'frame_info':           LLOp(),
 }
+# ***** Run test_lloperation after changes. *****
+
 
     # __________ operations on PyObjects __________
 

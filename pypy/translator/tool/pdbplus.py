@@ -15,6 +15,7 @@ class PdbPlusShow(pdb.Pdb):
 
     def __init__(self, translator):
         pdb.Pdb.__init__(self)
+        self.prompt = "(Pdb+) "
         self.translator = translator
         self.exposed = {}
 
@@ -336,7 +337,7 @@ the list of the read positions functions is set to var or _."""
             
 
     def do_flowg(self, arg):
-        """callg obj
+        """flowg obj
 show flow graph for function obj, obj can be an expression or a dotted name
 (in which case prefixing with some packages in pypy is tried (see help pypyprefixes))"""            
         from pypy.translator.tool import graphpage                        
@@ -472,6 +473,7 @@ start serving graphs on <port>
 
 def pdbcatch(f):
     "A decorator that throws you in a pdbplus if the given function raises."
+    from pypy.tool.sourcetools import func_with_new_name
     def wrapper(*args, **kwds):
         try:
             return f(*args, **kwds)
@@ -479,4 +481,5 @@ def pdbcatch(f):
             import sys
             PdbPlusShow(None).post_mortem(sys.exc_info()[2])
             raise
+    wrapper = func_with_new_name(wrapper, f.__name__)
     return wrapper

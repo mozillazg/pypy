@@ -2,9 +2,10 @@
 Backend for the JVM.
 """
 
-import os, os.path, subprocess, sys
+import os, os.path, sys
 
 import py
+from py.compat import subprocess
 from pypy.tool.udir import udir
 from pypy.translator.translator import TranslationContext
 from pypy.translator.oosupport.genoo import GenOO
@@ -15,7 +16,10 @@ from pypy.translator.jvm.database import Database
 from pypy.translator.jvm.log import log
 from pypy.translator.jvm.node import EntryPoint, Function
 from pypy.translator.jvm.opcodes import opcodes
-from pypy.translator.jvm.constant import JVMConstantGenerator
+from pypy.rpython.ootypesystem import ootype
+from pypy.translator.jvm.constant import \
+     JVMConstantGenerator, JVMStaticMethodConst
+from pypy.translator.jvm.prebuiltnodes import create_interlink_node
 
 class JvmError(Exception):
     """ Indicates an error occurred in JVM backend """
@@ -94,28 +98,45 @@ class JvmGeneratedSource(object):
             raise JvmSubprogramError(res, args, stdout, stderr)
         return stdout, stderr
 
+    def _compile_helper(self, clsnms):
+        # HACK: compile the Java helper class.  Should eventually
+        # use rte.py
+        tocompile = []
+        for clsnm in clsnms:
+            pypycls = self.classdir.join(clsnm + '.class')
+            if not os.path.exists(str(pypycls)):
+                tocompile.append(clsnm)
+        if tocompile:
+            sl = __file__.rindex('/')
+            javasrcs = [__file__[:sl]+("/src/pypy/%s.java" % clsnm) for
+                        clsnm in tocompile]
+            self._invoke([getoption('javac'),
+                          '-nowarn',
+                          '-d', str(self.classdir)]+
+                         javasrcs,
+                         True)
+        
+
     def compile(self):
         """
         Compiles the .java sources into .class files, ready for execution.
         """
         jascmd = [getoption('jasmin'), '-d', str(self.javadir)]
-        for jasfile in self.jasmin_files:
-            print "Invoking jasmin on %s" % jasfile
-            self._invoke(jascmd+[jasfile], False)
 
-        # HACK: compile the Java helper class.  Should eventually
-        # use rte.py
-        pypycls = self.classdir.join('PyPy.class')
-        if not os.path.exists(str(pypycls)):
-            sl = __file__.rindex('/')
-            javasrc = __file__[:sl]+"/src/PyPy.java"
-            self._invoke([getoption('javac'),
-                          '-nowarn',
-                          '-d', str(self.classdir),
-                          javasrc],
-                         True)
+        print "Invoking jasmin on %s" % self.jasmin_files
+        self._invoke(jascmd+list(self.jasmin_files), False)
+        print "... completed!"
                            
         self.compiled = True
+        self._compile_helper(('DictItemsIterator',
+                              'PyPy',
+                              'ExceptionWrapper',
+                              'Interlink'))
+
+    def _make_str(self, a):
+        if isinstance(a, ootype._string):
+            return a._str
+        return str(a)
 
     def execute(self, args):
         """
@@ -124,12 +145,14 @@ class JvmGeneratedSource(object):
         and will be converted to strings.
         """
         assert self.compiled
-        strargs = [str(a) for a in args]
+        strargs = [self._make_str(a) for a in args]
         cmd = [getoption('java'),
                '-cp',
                str(self.javadir),
                self.package+".Main"] + strargs
+        print "Invoking java to run the code"
         stdout, stderr = self._invoke(cmd, True)
+        print "...done!"
         sys.stderr.write(stderr)
         return stdout
         
@@ -156,9 +179,7 @@ def generate_source_for_function(func, annotation):
 
 def detect_missing_support_programs():
     def check(exechelper):
-        try:
-            py.path.local.sysfind(exechelper)
-        except py.error.ENOENT:
+        if py.path.local.sysfind(exechelper) is None:
             py.test.skip("%s is not on your path" % exechelper)
     check(getoption('jasmin'))
     check(getoption('javac'))
@@ -178,6 +199,7 @@ class GenJvm(GenOO):
     log = log
 
     ConstantGenerator = JVMConstantGenerator
+    StaticMethodConst = JVMStaticMethodConst
     
     def __init__(self, tmpdir, translator, entrypoint):
         """
@@ -187,6 +209,7 @@ class GenJvm(GenOO):
         'entrypoint' --- if supplied, an object with a render method
         """
         GenOO.__init__(self, tmpdir, translator, entrypoint)
+        create_interlink_node(self.db)
         self.jvmsrc = JvmGeneratedSource(tmpdir, getoption('package'))
 
     def generate_source(self):

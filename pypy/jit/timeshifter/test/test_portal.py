@@ -7,17 +7,23 @@ from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.objspace.flow.model import checkgraph, summary
 from pypy.rlib.objectmodel import hint
+from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 
 import py.test
 
-class PortalTest(object):
-    from pypy.jit.codegen.llgraph.rgenop import RGenOp
 
+class PortalTest(object):
+    RGenOp = LLRGenOp
     small = True
 
     def setup_class(cls):
+        from pypy.jit.timeshifter.test.conftest import option
+        if option.use_dump_backend:
+            from pypy.jit.codegen.dump.rgenop import RDumpGenOp
+            cls.RGenOp = RDumpGenOp
         cls._cache = {}
         cls._cache_order = []
+        cls.on_llgraph = cls.RGenOp is LLRGenOp
 
     def teardown_class(cls):
         del cls._cache
@@ -88,8 +94,7 @@ class PortalTest(object):
         res = llinterp.eval_graph(self.maingraph, main_args)
         return res
 
-    def check_insns(self, expected=None, **counts):
-        # XXX only works if the portal is the same as the main
+    def get_residual_graph(self):
         llinterp = LLInterpreter(self.rtyper)
         if self.main_is_portal:
             residual_graph = llinterp.eval_graph(self.readportalgraph,
@@ -98,13 +103,44 @@ class PortalTest(object):
             residual_graphs = llinterp.eval_graph(self.readallportalsgraph, [])
             assert residual_graphs.ll_length() == 1
             residual_graph = residual_graphs.ll_getitem_fast(0)._obj.graph
+        return residual_graph
             
+    def check_insns(self, expected=None, **counts):
+        residual_graph = self.get_residual_graph()
         self.insns = summary(residual_graph)
         if expected is not None:
             assert self.insns == expected
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
 
+
+    def check_oops(self, expected=None, **counts):
+        if not self.on_llgraph:
+            return
+        oops = {}
+        residual_graph = self.get_residual_graph()
+        for block in residual_graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'direct_call':
+                    f = getattr(op.args[0].value._obj, "_callable", None)
+                    if hasattr(f, 'oopspec'):
+                        name, _ = f.oopspec.split('(', 1)
+                        oops[name] = oops.get(name, 0) + 1
+        if expected is not None:
+            assert oops == expected
+        for name, count in counts.items():
+            assert oops.get(name, 0) == count
+
+    def count_direct_calls(self):
+        residual_graph = self.get_residual_graph()
+        calls = {}
+        for block in residual_graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'direct_call':
+                    graph = getattr(op.args[0].value._obj, 'graph', None)
+                    calls[graph] = calls.get(graph, 0) + 1
+        return calls
+        
 class TestPortal(PortalTest):
             
     def test_simple(self):
@@ -309,3 +345,101 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(ll_function, ll_function, [0], policy=P_NOVIRTUAL)
         assert res == ord('2')
         self.check_insns(indirect_call=0, malloc=0)
+
+    def test_simple_recursive_portal_call(self):
+
+        def main(code, x):
+            return evaluate(code, x)
+
+        def evaluate(y, x):
+            hint(y, concrete=True)
+            if y <= 0:
+                return x
+            z = 1 + evaluate(y - 1, x)
+            return z
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 2])
+        assert res == 5
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 5])
+        assert res == 8
+
+        res = self.timeshift_from_portal(main, evaluate, [4, 7])
+        assert res == 11
+    
+
+    def test_simple_recursive_portal_call2(self):
+
+        def main(code, x):
+            return evaluate(code, x)
+
+        def evaluate(y, x):
+            hint(y, concrete=True)
+            if x <= 0:
+                return y
+            z = evaluate(y, x - 1) + 1
+            return z
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 2])
+        assert res == 5
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 5])
+        assert res == 8
+
+        res = self.timeshift_from_portal(main, evaluate, [4, 7])
+        assert res == 11
+    
+    def test_simple_recursive_portal_call_with_exc(self):
+
+        def main(code, x):
+            return evaluate(code, x)
+
+        class Bottom(Exception):
+            pass
+
+        def evaluate(y, x):
+            hint(y, concrete=True)
+            if y <= 0:
+                raise Bottom
+            try:
+                z = 1 + evaluate(y - 1, x)
+            except Bottom:
+                z = 1 + x
+            return z
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 2])
+        assert res == 5
+
+        res = self.timeshift_from_portal(main, evaluate, [3, 5])
+        assert res == 8
+
+        res = self.timeshift_from_portal(main, evaluate, [4, 7])
+        assert res == 11
+    
+    def test_isinstance(self):
+        class Base(object):
+            pass
+        class Int(Base):
+            def __init__(self, n):
+                self.n = n
+        class Str(Base):
+            def __init__(self, s):
+                self.s = s
+
+        def ll_main(n):
+            if n > 0:
+                o = Int(n)
+            else:
+                o = Str('123')
+            return ll_function(o)
+
+        def ll_function(o):
+            hint(o, deepfreeze=True)
+            hint(o, concrete=True)
+            x = isinstance(o, Str)
+            return x
+            
+
+        res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
+        assert not res
+

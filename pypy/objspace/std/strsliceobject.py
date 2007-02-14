@@ -3,6 +3,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import delegate_String2Unicode
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std import slicetype
+from pypy.objspace.std.inttype import wrapint
 
 
 class W_StringSliceObject(W_Object):
@@ -14,6 +15,8 @@ class W_StringSliceObject(W_Object):
         w_self.stop = stop
 
     def force(w_self):
+        if w_self.start == 0 and w_self.stop == len(w_self.str):
+            return w_self.str
         str = w_self.str[w_self.start:w_self.stop]
         w_self.str = str
         w_self.start = 0
@@ -65,6 +68,11 @@ def str_find__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
         return space.wrap(res - w_self.start)
     else:
         return space.wrap(res)
+
+def str_count__StringSlice_String_ANY_ANY(space, w_self, w_arg, w_start, w_end): 
+    (s, arg, start, end) =  _convert_idx_params(
+            space, w_self, w_arg, w_start, w_end)
+    return wrapint(space, s.count(arg, start, end))
 
 def str_rfind__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
