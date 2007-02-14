@@ -51,8 +51,10 @@ class SyntaxToTupleVisitor(AbstractSyntaxVisitor):
         if node.value is not None:
             val = node.value
         else:
-            if num not in ( tokens['NEWLINE'], tokens['INDENT'],
-                            tokens['DEDENT'], tokens['ENDMARKER'] ):
+            if num != tokens['NEWLINE'] and \
+               num != tokens['INDENT'] and \
+               num != tokens['DEDENT'] and \
+               num != tokens['ENDMARKER']:
                 val = space.default_compiler.parser.tok_rvalues[num]
             else:
                 val = node.value or ''

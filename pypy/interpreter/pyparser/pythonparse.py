@@ -196,13 +196,6 @@ def translation_target(grammardef):
 # PYTHON_PARSER = make_pyparser()
 
 ## XXX BROKEN
-## def grammar_rules( space ):
-##     w_rules = space.newdict()
-##     for key, value in PYTHON_PARSER.rules.iteritems():
-##         space.setitem(w_rules, space.wrap(key), space.wrap(value))
-##     return w_rules
-## 
-## 
 ## def parse_grammar(space, w_src):
 ##     """Loads the grammar using the 'dynamic' rpython parser"""
 ##     src = space.str_w( w_src )
@@ -210,3 +203,10 @@ def translation_target(grammardef):
 ##     ebnfbuilder.resolve_rules()
 ##     grammar.build_first_sets(ebnfbuilder.all_rules)
 ##     return space.wrap( ebnfbuilder.root_rules )
+
+def grammar_rules( space ):
+    w_rules = space.newdict()
+    parser = make_pyparser()
+    for key, value in parser.rules.iteritems():
+        space.setitem(w_rules, space.wrap(key), space.wrap(value))
+    return w_rules

@@ -48,7 +48,6 @@ class Module(MixedModule):
          'decode_string_literal': 'pyparser.decode_string_literal',
          'install_compiler_hook' : 'pypy.interpreter.pycompiler.install_compiler_hook',
          'insert_grammar_rule' : 'pypy.interpreter.pycompiler.insert_grammar_rule',
-         #'rules' : 'pypy.interpreter.pyparser.pythonparse.grammar_rules',
          #'parse_grammar' : 'pypy.interpreter.pyparser.pythonparse.parse_grammar',
          }
 
