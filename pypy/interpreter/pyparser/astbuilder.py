@@ -579,8 +579,10 @@ def build_decorator(builder, nb):
     nodes = []
     # remove '@', '(' and ')' from atoms and use parse_attraccess
     for token in atoms[1:]:
-        if isinstance(token, TokenObject) and \
-               token.name in (builder.parser.tokens['LPAR'], builder.parser.tokens['RPAR'], builder.parser.tokens['NEWLINE']):
+        if isinstance(token, TokenObject) and (
+               token.name == builder.parser.tokens['LPAR']
+               or token.name == builder.parser.tokens['RPAR']
+               or token.name == builder.parser.tokens['NEWLINE']):
             # skip those ones
             continue
         else:
@@ -1179,7 +1181,6 @@ class AstBuilder(BaseGrammarBuilder):
     def is_string_const(self, expr):
         if not isinstance(expr,ast.Const):
             return False
-        print 'IS STRING CONST', repr(expr.value)
         space = self.space
         return space.is_true(space.isinstance(expr.value,space.w_str))
 
