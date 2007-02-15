@@ -200,11 +200,10 @@ class PythonAstCompiler(PyCodeCompiler):
          the whole source after having only added a new '\n')
     """
     def __init__(self, space):
-        from pyparser.pythonparse import make_pyparser
+        from pyparser.pythonparse import PYTHON_PARSER
         PyCodeCompiler.__init__(self, space)
-        self.parser = make_pyparser()
+        self.parser = PYTHON_PARSER
         self.additional_rules = {}
-
     
 
     def compile(self, source, filename, mode, flags):

@@ -24,7 +24,7 @@ default_modules.update(dict.fromkeys(
 working_modules = default_modules.copy()
 working_modules.update(dict.fromkeys(
     ["rsocket", "unicodedata", "mmap", "fcntl", "rctime", "select", "bz2",
-     "crypt", "signal",
+     "crypt", "signal", "dyngram",
     ]
 ))
 

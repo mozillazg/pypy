@@ -168,11 +168,11 @@ class PythonParser(grammar.Parser):
         # recompute first sets
         self.build_first_sets()
 
-
-
 def make_pyparser(version="2.4"):
     parser = PythonParser()
     return build_parser_for_version(version, parser=parser)
+
+PYTHON_PARSER = make_pyparser()
 
 def translation_target(grammardef):
     parser = PythonParser() # predefined_symbols=symbol.sym_name)
@@ -183,7 +183,6 @@ def translation_target(grammardef):
     parser.build_first_sets()
     parser.keywords = builder.keywords
     return 0
-
 
 
 ## XXX BROKEN
