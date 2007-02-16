@@ -13,10 +13,11 @@ def setup_module(mod):
                        mailhost=None)
     mod.svr = metaserver.MetaServer(config, FakeChannel())
     
-    mod.c1 = FakeBuildserver({'foo': 1, 'bar': [1,2]})
+    mod.c1 = FakeBuildserver({'foo': 1, 'bar': [1,2]}, {'spam': ['spam',
+                                                                 'eggs']})
     mod.svr.register(mod.c1)
 
-    mod.c2 = FakeBuildserver({'foo': 2, 'bar': [2,3]})
+    mod.c2 = FakeBuildserver({'foo': 2, 'bar': [2,3]}, {'spam': 'eggs'})
     mod.svr.register(mod.c2)
 
 def test_server_issubdict():
@@ -38,6 +39,7 @@ def test_register():
     assert len(svr._builders) == 2
     assert svr._builders[0] == c1
     assert svr._builders[1] == c2
+
 
     py.test.raises(IndexError, "c1.channel.receive()")
 
@@ -158,7 +160,6 @@ def test_cleanup_old_builds():
     assert bp2.check()
 
 def test_status():
-    return
     temppath = py.test.ensuretemp('test_status')
     config = Container(projectname='test', buildpath=temppath)
     svr = metaserver.MetaServer(config, FakeChannel())
@@ -170,10 +171,24 @@ def test_status():
     bs = FakeBuildserver({})
     bs.busy_on = 'foo'
     svr._builders.append(bs)
+    print svr.status()
     assert svr.status() == {
         'done': 2,
         'queued': 3,
-        'waiting': 0,
-        'in_progress': 1,
+        'waiting': 1,
+        'running': 1,
+        'builders': 1,
     }
+
+def test_buildersinfo():
+    bi = svr.buildersinfo()
+    assert len(bi) == 2
+    assert bi[0]['sysinfo'] == {'foo': 1, 'bar': [1,2]}
+    assert bi[0]['busy_on'] == None
+    assert bi[1]['sysinfo'] == {'foo': 2, 'bar': [2,3]}
+    svr._builders[0].busy_on = c1
+    bi = svr.buildersinfo()
+    assert bi[0]['busy_on']
+    # for now, later more info should be made available
+    assert bi[0]['busy_on'] == c1.compileinfo
 

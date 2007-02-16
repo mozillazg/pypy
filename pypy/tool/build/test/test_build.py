@@ -93,7 +93,10 @@ svnurl: file:///foo/bar
 svnrev: HEAD
 revrange: 0
 normalized_rev: 1
-"""
+request_time: %s
+build_start_time: None
+build_end_time: None
+""" % (br.request_time,)
     assert build.BuildRequest.fromstring(ser).serialize() == ser
 
     py.test.raises(SyntaxError, 'build.BuildRequest.fromstring("foo")')
