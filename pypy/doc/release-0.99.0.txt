@@ -59,11 +59,11 @@ Key 0.99.0 Features
   - Tainting: a 270-line proxy object space tracking 
     and boxing sensitive information within an application. 
     A tainted object is completely barred from crossing 
-    an IO barrier, such as writing to files, databases
-    or sockets.  This allows to   to significantly reduce the 
+    an I/O barrier, such as writing to files, databases
+    or sockets.  This allows to significantly reduce the 
     effort of e.g. security reviews to the few places where 
     objects are "declassified" in order to send information 
-    across IO barriers. 
+    across I/O barriers. 
 
   - Transparent proxies: An addition to the standard object space, which allows
     you to create objects of builtin types with completely customised
@@ -105,7 +105,8 @@ Key 0.99.0 Features
 * improved file implementation: Our file implementation was ported to RPython
   and is therefore faster (and not based on libc).
 
-* more stable stackless support
+* The stability of stackless features was greatly improved. For more details
+  see: http://codespeak.net/pypy/dist/pypy/doc/stackless.html
 
 * RPython library: The release contains our emerging RPython library that tries
   to make programming in RPython more pleasant. It contains an experimental
