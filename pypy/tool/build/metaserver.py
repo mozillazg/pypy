@@ -184,12 +184,10 @@ class MetaServer(object):
     def buildersinfo(self):
         ret = []
         for b in self._builders:
-            print 'busy_on:', b.busy_on
-            print 'resolved:', b.busy_on and b.busy_on.compileinfo or None
             ret.append({
                 'hostname': b.hostname,
                 'sysinfo': b.sysinfo,
-                'busy_on': b.busy_on and b.busy_on.compileinfo or None,
+                'busy_on': b.busy_on and b.busy_on.serialize() or None,
             })
         return ret
 

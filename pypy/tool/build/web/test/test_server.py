@@ -1,5 +1,5 @@
 import py
-from pypy.tool.build.web.server import Handler, Resource, Collection, HTTPError
+from pypy.tool.build.web.server import *
 
 class NonInitHandler(Handler):
     request_version = '1.0'
@@ -99,4 +99,15 @@ class TestHandler(object):
 
     def test_get_response_wrong_body(self):
         py.test.raises(ValueError, "self.handler.response(200, {}, u'xxx')")
+
+class TestFsFile(object):
+    def test_handle(self):
+        temp = py.test.ensuretemp('TestStaticResource.test_handle')
+        foo = temp.ensure('foo.txt')
+        foo.write('foo')
+        r = FsFile(foo, 'text/plain')
+        ret = r.handle(None, '/bar/foo.txt', '')
+        assert ret[0] == {'Content-Type': 'text/plain'}
+        assert ret[1] == 'foo'
+        
 

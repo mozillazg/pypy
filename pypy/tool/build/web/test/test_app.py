@@ -4,6 +4,7 @@ from pypy.tool.build.web.app import *
 from pypy.tool.build.web.conftest import option
 from pypy.tool.build.test import fake
 from pypy.tool.build import config as build_config
+from pypy.tool.build import build
 
 TESTPORT = build_config.testport
 
@@ -94,16 +95,28 @@ class TestBuilderInfoPage(object):
     def test_get_builderinfo(self):
         p = BuildersInfoPage(config, gateway)
         assert p.get_buildersinfo() == []
-        server_channel.send(('set_buildersinfo', [{'foo': 'bar'}]))
-        assert p.get_buildersinfo() == [{'foo': 'bar'}]
+        server_channel.send(('set_buildersinfo', [{'sysinfo': 'foo',
+                                                   'busy_on': None}]))
+        assert p.get_buildersinfo() == [{'sysinfo': ['foo'], 'busy_on': None}]
 
     def test_handle(self):
+        b = build.BuildRequest('foo@bar.com', {}, {'foo': 'bar'},
+                               'http://codespeak.net/svn/pypy/dist', 10, 2,
+                               123456789)
+        busy_on = b.serialize()
         server_channel.send(('set_buildersinfo', [{'hostname': 'host1',
-                                                   'sysinfo': str({'foo': 'bar'}),
+                                                   'sysinfo': {
+                                                    'os': 'linux2',
+                                                    'maxint':
+                                                     9223372036854775807,
+                                                    'byteorder': 'little'},
                                                    'busy_on': None},
                                                   {'hostname': 'host2',
-                                                   'sysinfo': {'foo': 'baz'},
-                                                   'busy_on': {'spam': 'eggs'},
+                                                   'sysinfo': {
+                                                    'os': 'zx81',
+                                                    'maxint': 255,
+                                                    'byteorder': 'little'},
+                                                   'busy_on': busy_on,
                                                    }]))
         p = BuildersInfoPage(config, gateway)
         headers, html = p.handle(None, '/buildersinfo', '')
