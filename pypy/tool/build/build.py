@@ -103,16 +103,18 @@ class BuildRequest(object):
         holds information about a build request, and some functionality to
         serialize and unserialize itself
     """
-    def __init__(self, email, sysinfo, compileinfo, svnurl, svnrev, revrange):
+    def __init__(self, email, sysinfo, compileinfo, svnurl, svnrev, revrange,
+                 request_time=None, build_start_time=None,
+                 build_end_time=None):
         self.email = email
         self.sysinfo = sysinfo
         self.compileinfo = compileinfo
         self.svnurl = svnurl
         self.svnrev = svnrev
         self.revrange = revrange
-        self.request_time = py.std.time.time()
-        self.build_start_time = None
-        self.build_end_time = None
+        self.request_time = request_time or py.std.time.time()
+        self.build_start_time = build_start_time
+        self.build_end_time = build_end_time
 
     def __str__(self):
         return '<BuildRequest %s:%s>' % (self.svnurl, self.normalized_rev)
@@ -120,7 +122,7 @@ class BuildRequest(object):
     def __repr__(self):
         """ the result of this method can be exec-ed when build.py is imported
         """
-        return 'build.BuildRequest(%r, %r, %r, %r, %r, %r)' % (
+        return 'build.BuildRequest(%r, %r, %r, %r, %r, %r, %s, %s, %s)' % (
                 self.email, self.sysinfo, self.compileinfo, self.svnurl,
                 self.svnrev, self.revrange, self.request_time,
                 self.build_start_time, self.build_end_time)
