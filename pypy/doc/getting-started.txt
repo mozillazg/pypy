@@ -510,7 +510,7 @@ Once you have compiled the snippet, you can also try to launch the
 executable directly from the shell; you can find the executable in one
 of the ``/tmp/usession-*`` directories::
 
-    anto@anto anto$ mono /tmp/usession-anto/main.exe 4 5
+    $ mono /tmp/usession-<username>/main.exe 4 5
     9
 
 To translate and run for CLI you must have the SDK installed: Windows
@@ -549,7 +549,7 @@ translate the whole of PyPy to low level C code. This is the largest and
 ultimate example of source that our translation toolchain can process::
 
     cd pypy/translator/goal
-    python translate.py --run
+    python translate.py --run targetpypystandalone.py
 
 By default the translation process will try to use the
 `Boehm-Demers-Weiser garbage collector`_ for the translated PyPy (Use
@@ -560,7 +560,11 @@ to install Boehm before starting the translation (e.g. by running
 
 This whole process will take some time and quite a lot of memory. To
 reduce the memory footprint of the translation process you can use the
-option ``--lowmem`` With this option the whole process should be
+option ``--lowmem``::
+
+    python translate.py --run targetpypystandalone.py --lowmem
+
+With this option the whole process should be
 runnable on a machine with 512Mb of RAM. If the translation is
 finished running and after you closed the graph you will be greeted
 (because of ``--run`` option) by the friendly prompt of a PyPy
@@ -581,7 +585,7 @@ executable that is not running on top of CPython any more::
 
 With the default options, you can find the produced executable under the
 name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
-mainly the same basic options of CPython.  In addition, ``pypy-c --info``
+mainly the same basic options as CPython.  In addition, ``pypy-c --info``
 prints the translation options that where used to produce this particular
 executable.  This executable contains a lot of things that are hard-coded
 for your particular system (including paths), so it's not really meant to
@@ -619,6 +623,7 @@ programs, e.g. a slightly changed version of Pystone::
     cd pypy/translator/goal
     python translate.py targetrpystonedalone
 
+This will produce the executable "targetrpystonedalone-c".
 
 .. _`configuration sections`: config/
 
