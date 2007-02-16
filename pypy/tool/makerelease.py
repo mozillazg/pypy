@@ -77,7 +77,7 @@ def build_html(target):
         # Generate the html files.
         out = cexec("python2.4 ../test_all.py")
         # Remove any .pyc files created in the process
-	target.chdir()
+        target.chdir()
         out = cexec("find . -name '*.pyc' -print0 | xargs -0 -r rm")
     finally:
         old.chdir()
