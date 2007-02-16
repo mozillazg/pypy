@@ -124,7 +124,7 @@ allow you to customize PyPy.
 `CLI backend`_ describes the details of the .NET backend.
 
 `JIT Generation in PyPy`_ describes how we produce the Python Just-in-time Compiler
-from our Python interpreter.
+from our Python interpreter (Code not included in 0.99).
 
 
 
@@ -193,18 +193,7 @@ Directory                      explanation/links
 `interpreter/astcompiler/`_    interpreter-level bytecode compiler, via an AST
                                representation
 
-`jit/`_                        the `just-in-time compiler generator`_
-
-`jit/codegen/`_                `jit backends`_ for different architectures
-
-`jit/goal/`_                   the translation targets that produce a PyPy with a JIT_
-
-`jit/hintannotator/`_          the `hint-annotator`_ that analyzes an interpreter
-
-`jit/timeshifter/`_            the `timeshifter`_ that turns an interpreter into a JIT compiler
-
-`jit/tl/`_                     interpreters for toy languages, with which we test the
-                               JIT generator
+`jit/`_                        the `just-in-time compiler generator`_ (not in 0.99)
 
 `lang/`_                       interpreters for non-Python languages, written in RPython_
 
