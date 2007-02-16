@@ -103,7 +103,9 @@ Key 0.99.0 Features
   pypymagic module that contains PyPy-specific functionality.
 
 * improved file implementation: Our file implementation was ported to RPython
-  and is therefore somewhat faster.
+  and is therefore faster (and not based on libc).
+
+* more stable stackless support
 
 * RPython library: The release contains our emerging RPython library that tries
   to make programming in RPython more pleasant. It contains an experimental
