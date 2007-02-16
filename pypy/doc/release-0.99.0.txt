@@ -98,8 +98,8 @@ Key 0.99.0 Features
   translation process. 
 
 * new and improved modules: Since the last release, the signal, mmap, bz2
-  and fcntl standard library modules have been implemented for PyPy. The socket
-  and _sre modules have been greatly improved. In addition we added a the
+  and fcntl standard library modules have been implemented for PyPy. The socket, 
+  _sre and os modules have been greatly improved. In addition we added a the
   pypymagic module that contains PyPy-specific functionality.
 
 * improved file implementation: Our file implementation was ported to RPython
