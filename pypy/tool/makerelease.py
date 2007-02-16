@@ -1,5 +1,5 @@
 
-
+import autopath
 import py
 
 log = py.log.Producer("log")
