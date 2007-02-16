@@ -55,6 +55,7 @@ Key 0.99.0 Features
 =====================
 
 * new object spaces:
+
   - Tainting: a 270-line proxy object space tracking 
     and boxing sensitive information within an application. 
     A tainted object is completely barred from crossing 
@@ -71,16 +72,21 @@ Key 0.99.0 Features
     XXX Move link to the bottom?
  
 * optimizations: 
+
   - Experimental new optimized implementations for various built in Python
     types (strings, dicts, lists)
+
   - Optimized builtin lookups to not require any dictionary lookups if the
     builtin is not shadowed by a name in the global dictionary.
+
   - twice the speed of the 0.9 release, overall 2-3 slower than CPython 
 
 * High level backends:
+
   - It is now possible to translate the PyPy interpreter to run on the .NET
     platform, which gives a very compliant (but somewhat slow) Python
     interpreter.
+
   - the JavaScript backend has evolved to a point where it can be used to write
     AJAX web applications with it. This is still an experimental technique,
     though. For demo applications see:
@@ -91,9 +97,13 @@ Key 0.99.0 Features
   fine-grained configuration of the PyPy standard interpreter and the
   translation process. 
 
-* new modules: Since the last release, the signal, mmap, bz2 and fcntl standard
-  library modules have been implemented for PyPy. In addition we added a the
+* new and improved modules: Since the last release, the signal, mmap, bz2
+  and fcntl standard library modules have been implemented for PyPy. The socket
+  and _sre modules have been greatly improved. In addition we added a the
   pypymagic module that contains PyPy-specific functionality.
+
+* improved file implementation: Our file implementation was ported to RPython
+  and is therefore somewhat faster.
 
 * RPython library: The release contains our emerging RPython library that tries
   to make programming in RPython more pleasant. It contains an experimental
@@ -102,9 +112,9 @@ Key 0.99.0 Features
 
 * improved documentation:
   * XXX video
-  * reports
+  * reports?
   * point to vm-construction?
-  XXX point to main new docs 
+  * XXX point to main new docs 
 
 
 What about 1.0? 
