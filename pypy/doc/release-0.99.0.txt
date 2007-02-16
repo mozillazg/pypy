@@ -74,23 +74,24 @@ Key 0.99.0 Features
     objects are "declassified" in order to send information 
     across IO barriers. 
 
-  - TProxy: An object space hack, which allows you to create
-    objects of any type, with custom behavior, defined by your own
-    function. For details see
+  - Transparent proxies: An addition to the standard object space, which allows
+    you to create objects of builtin types with completely customised
+    behaviour. For details see
     http://codespeak.net/pypy/dist/pypy/doc/proxy.html
     XXX Move link to the bottom?
  
 * optimizations: 
   - experimental new optimized implementations for various built in Python
     types (strings, dicts, lists)
-  - speed up of 5-7 compared to 0.9, overall 2-3 slower than
-    CPython 
+  - twice the of the 0.9 release, overall 2-3 slower than CPython 
 
 * Demonstrations of Javascript-Backend / AJAX experiments: 
   XXX play1 pointer? 
 
 * new configuration system: 
-  XXX 
+  There is a new comprehensive configuration system that allows the
+  fine-grained configuration of the PyPy standard interpreter and the
+  translation process. 
 
 * improved documentation: 
   XXX point to main new docs 
@@ -117,7 +118,7 @@ research and coding work:
 
 * the Logic object space, which provides Logic Variables in PyPy,
   needs to undergo a bit more testing. A constraint problem solver
-  extension module is ready, and needs to be integrated in the codebase. 
+  extension module is ready, and needs to be integrated with the codebase. 
 
 * we'd like to package and improve configurations and 
   and testing, and actually ask for your help
@@ -125,7 +126,7 @@ research and coding work:
   base for further developments
 
 IOW, PyPy 0.99 is the start for getting to 1.0 end of March 2007,
-which we intend to become a base for a longer (and more relaxed:) 
+which we intend to become a base for a longer (and more relaxed :) 
 time to come. 
 
 
