@@ -183,4 +183,16 @@ def run_server(address, handler):
     server = HTTPServer(address, handler)
     server.serve_forever()
 
+# ready-to-use Collection and Resource implementations
+class FsFile(Resource):
+    debug = False
+    def __init__(self, path, content_type):
+        self._path = path
+        self._content_type = content_type
+
+    _data = None
+    def handle(self, handler, path, query):
+        if self._data is None or self.debug:
+            self._data = self._path.read()
+        return ({'Content-Type': self._content_type}, self._data)
 

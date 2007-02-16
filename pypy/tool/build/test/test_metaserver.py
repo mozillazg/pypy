@@ -186,9 +186,12 @@ def test_buildersinfo():
     assert bi[0]['sysinfo'] == {'foo': 1, 'bar': [1,2]}
     assert bi[0]['busy_on'] == None
     assert bi[1]['sysinfo'] == {'foo': 2, 'bar': [2,3]}
-    svr._builders[0].busy_on = c1
+    req = build.BuildRequest('foo@bar.com', {}, {}, 'file:///tmp/repo', '10',
+                             '10')
+    req._nr = '10' # normalized revision
+    svr._builders[0].busy_on = req
     bi = svr.buildersinfo()
     assert bi[0]['busy_on']
     # for now, later more info should be made available
-    assert bi[0]['busy_on'] == c1.compileinfo
+    assert bi[0]['busy_on'] == req.serialize()
 

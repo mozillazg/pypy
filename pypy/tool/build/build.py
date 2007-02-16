@@ -127,9 +127,13 @@ class BuildRequest(object):
                 self.svnrev, self.revrange, self.request_time,
                 self.build_start_time, self.build_end_time)
 
-    def serialize(self):
+    def todict(self):
         data = {'normalized_rev': self.normalized_rev} # it's a property
         data.update(self.__dict__)
+        data.pop('_nr', 0)
+        return data
+
+    def serialize(self):
         return """\
 email: %(email)s
 sysinfo: %(sysinfo)r
@@ -141,7 +145,7 @@ normalized_rev: %(normalized_rev)s
 request_time: %(request_time)s
 build_start_time: %(build_start_time)s
 build_end_time: %(build_end_time)s
-""" % data
+""" % self.todict()
 
     def _fromstring(cls, s):
         data = {}

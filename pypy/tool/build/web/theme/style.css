@@ -1,0 +1,19 @@
+body {
+  background-color: white;
+  color: black;
+  font: Times New Roman;
+}
+
+.infoblock {
+  margin-bottom: 1em;
+}
+
+.title {
+  font-weight: bold;
+}
+
+.sub div {
+  margin-left: 1em;
+  font-size: 0.8em;
+}
+

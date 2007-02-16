@@ -3,9 +3,12 @@
 """ a web server that displays status info of the meta server and builds """
 
 import py
+import time
 from pypy.tool.build import config
 from pypy.tool.build import execnetconference
-from pypy.tool.build.web.server import HTTPError, Resource, Collection, Handler
+from pypy.tool.build.build import BuildRequest
+from pypy.tool.build.web.server import HTTPError, Resource, Collection, \
+                                       Handler, FsFile
 
 from templess import templess
 
@@ -86,7 +89,24 @@ class BuildersInfoPage(ServerPage):
                                            self.get_buildersinfo()})))
 
     def get_buildersinfo(self):
-        return self.call_method('buildersinfo')
+        infos = self.call_method('buildersinfo')
+        # some massaging of the data for Templess
+        for binfo in infos:
+            binfo['sysinfo'] = [binfo['sysinfo']]
+            if binfo['busy_on']:
+                b = binfo['busy_on']
+                d = BuildRequest.fromstring(binfo['busy_on']).todict()
+                d.pop('sysinfo', None) # same as builder
+                d.pop('build_end_time', None) # it's still busy ;)
+                # templess doesn't understand dicts this way...
+                d['compileinfo'] = [{'key': k, 'value': v} for (k, v) in
+                                    d['compileinfo'].items()]
+                for key in ['request_time', 'build_start_time']:
+                    if d[key]:
+                        d[key] = time.strftime('%Y/%m/%d %H:%M:%S',
+                                               time.gmtime(d[key]))
+                binfo['busy_on'] = [d]
+        return infos
 
 class BuildPage(ServerPage):
     """ display information for one build """
@@ -134,6 +154,7 @@ class Builds(Collection):
 class Application(Collection):
     """ the application root """
     index = IndexPage()
+    style = FsFile(mypath.join('theme/style.css'), 'text/css')
     serverstatus = ServerStatusPage(config)
     buildersinfo = BuildersInfoPage(config)
     builds = Builds(config)
