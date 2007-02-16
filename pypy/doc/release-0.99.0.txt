@@ -71,8 +71,10 @@ Key 0.99.0 Features
     XXX Move link to the bottom?
  
 * optimizations: 
-  - experimental new optimized implementations for various built in Python
+  - Experimental new optimized implementations for various built in Python
     types (strings, dicts, lists)
+  - Optimized builtin lookups to not require any dictionary lookups if the
+    builtin is not shadowed by a name in the global dictionary.
   - twice the speed of the 0.9 release, overall 2-3 slower than CPython 
 
 * High level backends:
@@ -92,6 +94,11 @@ Key 0.99.0 Features
 * new modules: Since the last release, the signal, mmap, bz2 and fcntl standard
   library modules have been implemented for PyPy. In addition we added a the
   pypymagic module that contains PyPy-specific functionality.
+
+* RPython library: The release contains our emerging RPython library that tries
+  to make programming in RPython more pleasant. It contains an experimental
+  parser generator framework. For more details see:
+  http://codespeak.net/pypy/dist/pypy/doc/rlib.html
 
 * improved documentation: 
   XXX point to main new docs 
