@@ -5,6 +5,8 @@ import py
 log = py.log.Producer("log")
 logexec = py.log.Producer("exec")
 
+import os
+
 BASEURL = "file:///svn/pypy/release/0.99.x"
 DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
 
@@ -75,7 +77,11 @@ def build_html(target):
     old = docdir.chdir()
     try:
         # Generate the html files.
-        out = cexec("python2.4 ../test_all.py")
+        cmd = "python2.4 ../test_all.py"
+        logexec(cmd)
+        r = os.system(cmd)
+        if r:
+            raise SystemExit, -1
         # Remove any .pyc files created in the process
         target.chdir()
         out = cexec("find . -name '*.pyc' -print0 | xargs -0 -r rm")
