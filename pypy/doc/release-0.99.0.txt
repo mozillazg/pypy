@@ -75,8 +75,14 @@ Key 0.99.0 Features
     types (strings, dicts, lists)
   - twice the speed of the 0.9 release, overall 2-3 slower than CPython 
 
-* Demonstrations of Javascript-Backend / AJAX experiments: 
-  XXX play1 pointer? 
+* High level backends:
+  - It is now possible to translate the PyPy interpreter to run on the .NET
+    platform, which gives a very compliant (but somewhat slow) Python
+    interpreter.
+  - the JavaScript backend has evolved to a point where it can be used to write
+    AJAX web applications with it. This is still an experimental technique,
+    though. For demo applications see:
+    XXX play1 pointer? 
 
 * new configuration system: 
   There is a new comprehensive configuration system that allows 
