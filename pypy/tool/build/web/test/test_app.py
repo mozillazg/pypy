@@ -15,15 +15,6 @@ def html_validate(html):
         py.test.skip('Skipping XHTML validation (rest of the test passed)')
     check_html(html)
 
-class TestTemplate(object):
-    def test_render(self):
-        # XXX stupid test ;) but perhaps we're going to add features later or
-        # something...
-        s = py.std.StringIO.StringIO('<foo>%(foo)s</foo>')
-        s.seek(0)
-        t = Template(s)
-        assert t.render({'foo': 'bar'}) == '<foo>bar</foo>'
-
 class FakeMetaServer(object):
     def __init__(self):
         self._status = {}
@@ -108,7 +99,7 @@ class TestBuilderInfoPage(object):
 
     def test_handle(self):
         server_channel.send(('set_buildersinfo', [{'hostname': 'host1',
-                                                   'sysinfo': {'foo': 'bar'},
+                                                   'sysinfo': str({'foo': 'bar'}),
                                                    'busy_on': None},
                                                   {'hostname': 'host2',
                                                    'sysinfo': {'foo': 'baz'},

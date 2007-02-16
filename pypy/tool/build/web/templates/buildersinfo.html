@@ -1,12 +1,17 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html>
+<html xmlns:t="http://johnnydebris.net/xmlns/templess">
   <head>
     <title>Build meta server builders page</title>
   </head>
   <body>
     <h2>Connected build servers</h2>
     <div class="builders">
-%(builders)s
+      <div class="builder" t:content="builders">
+        <h3 t:content="hostname" />
+        <div class="builderinfo">
+          <div>sysinfo: <t:block t:replace="sysinfo" /></div>
+          <div>busy on: <t:block t:replace="busy_on" /></div>
+        </div>
+      </div>
     </div>
   </body>
 </html>
