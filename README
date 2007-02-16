@@ -11,8 +11,8 @@ Python.
 
 For more, we invite you to head over to our getting-started document:
 
-    pypy/doc/getting-started.txt or
-    pypy/doc/getting-started.html
+    pypy/doc/getting-started.html or
+    pypy/doc/getting-started.txt
     (local if you got a tarball or svn checkout)
 
     http://codespeak.net/pypy/dist/pypy/doc/getting-started.html
