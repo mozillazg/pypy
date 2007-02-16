@@ -83,6 +83,10 @@ Key 0.99.0 Features
   fine-grained configuration of the PyPy standard interpreter and the
   translation process. 
 
+* new modules: Since the last release, the signal, mmap, bz2 and fcntl standard
+  library modules have been implemented for PyPy. In addition we added a the
+  pypymagic module that contains PyPy-specific functionality.
+
 * improved documentation: 
   XXX point to main new docs 
 
