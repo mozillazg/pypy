@@ -7,26 +7,22 @@ from pypy.tool.build import config
 from pypy.tool.build import execnetconference
 from pypy.tool.build.web.server import HTTPError, Resource, Collection, Handler
 
+from templess import templess
+
 mypath = py.magic.autopath().dirpath()
 
-class Template(object):
-    """ very stupid template class
-
-        does nothing more than string interpolation, no loop constructs or
-        other fancyness: you will have to do that yourself
-    """
-    def __init__(self, path):
-        self.template = path.read()
-        
-    def render(self, context):
-        return self.template % context
+def fix_html(html):
+    return ('<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" '
+            '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">\n%s' % (
+            html.strip().encode('UTF-8'),))
 
 class IndexPage(Resource):
     """ the index page """
     def handle(self, handler, path, query):
-        template = Template(mypath.join('templates/index.html'))
+        template = templess.template(
+            mypath.join('templates/index.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
-                template.render({}))
+                fix_html(template.unicode({})))
 
 class ServerPage(Resource):
     """ base class for pages that communicate with the server
@@ -73,29 +69,24 @@ class ServerStatusPage(ServerPage):
     """ a page displaying overall meta server statistics """
 
     def handle(self, handler, path, query):
-        template = Template(mypath.join('templates/serverstatus.html'))
+        template = templess.template(
+            mypath.join('templates/serverstatus.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
-                template.render(self.get_status()))
+                fix_html(template.unicode(self.get_status())))
 
     def get_status(self):
         return self.call_method('status')
 
 class BuildersInfoPage(ServerPage):
     def handle(self, handler, path, query):
-        template = Template(mypath.join('templates/buildersinfo.html'))
-        context = {
-            'builders': '\n'.join([self.get_builder_html(b)
-                                   for b in self.get_buildersinfo()])
-        }
+        template = templess.template(
+            mypath.join('templates/buildersinfo.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
-                template.render(context))
+                fix_html(template.unicode({'builders':
+                                           self.get_buildersinfo()})))
 
     def get_buildersinfo(self):
         return self.call_method('buildersinfo')
-
-    def get_builder_html(self, buildinfo):
-        template = Template(mypath.join('templates/builderinfo.html'))
-        return template.render(buildinfo)
 
 class BuildPage(ServerPage):
     """ display information for one build """
@@ -111,11 +102,10 @@ class BuildsIndexPage(ServerPage):
     """ display the list of available builds """
 
     def handle(self, handler, path, query):
-        template = Template(mypath.join('templates/builds.html'))
-        context = {'builds': '\n'.join([self.get_build_html(b) for b in
-                                        self.get_builds()])}
+        template = templess.template(
+            mypath.join('templates/builds.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
-                template.render(context))
+                fix_html(template.unicode({'builds': self.get_builds()})))
 
     def get_builds(self):
         return []

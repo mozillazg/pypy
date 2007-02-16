@@ -1,16 +1,15 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html>
+<html xmlns:t="http://johnnydebris.net/xmlns/templess">
   <head>
     <title>Build meta server status page</title>
   </head>
   <body>
     <h2>Server status</h2>
     <ul>
-      <li>Connected build servers: %(builders)s</li>
-      <li>Currently running builds: %(running)s</li>
-      <li>Builds done: %(done)s</li>
-      <li>Clients waiting for a build: %(waiting)s</li>
-      <li>Builds for which no suitable server is available: %(queued)s</li>
+      <li>Connected build servers: <t:block t:replace="builders" /></li>
+      <li>Currently running builds: <t:block t:replace="running" /></li>
+      <li>Builds done: <t:block t:replace="done" /></li>
+      <li>Clients waiting for a build: <t:block t:replace="waiting" /></li>
+      <li>Builds for which no suitable server is available: <t:block t:replace="queued" /></li>
     </ul>
   </body>
 </html>
