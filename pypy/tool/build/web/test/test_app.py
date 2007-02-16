@@ -1,6 +1,6 @@
 import py
 from py.__.test.web.webcheck import check_html
-from pypy.tool.build.web.webapp import *
+from pypy.tool.build.web.app import *
 from pypy.tool.build.web.conftest import option
 from pypy.tool.build.test import fake
 from pypy.tool.build import config as build_config
@@ -39,7 +39,7 @@ _metaserver_init = """
     import sys
     sys.path += %r
 
-    from pypy.tool.build.web.test.test_webapp import FakeMetaServer
+    from pypy.tool.build.web.test.test_app import FakeMetaServer
     from pypy.tool import build
     build.metaserver_instance = s = FakeMetaServer()
     try:
@@ -125,21 +125,21 @@ class TestBuildPage(object):
     def test_handle(self):
         pass
 
-class TestBuildCollectionIndexPage(object):
+class TestBuildsIndexPage(object):
     def test_get_builds(self):
         pass
 
     def test_handle(self):
-        p = BuildCollectionIndexPage(config, gateway)
+        p = BuildsIndexPage(config, gateway)
         headers, html = p.handle(None, '/builds/', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
 
-class TestBuildCollection(object):
+class TestBuilds(object):
     def test_traverse(self):
-        p = BuildCollection(config, gateway)
+        p = Builds(config, gateway)
         assert p.traverse(['index'], '/builds/index') is p.index
         assert p.traverse([''], '/builds/') is p.index
         assert isinstance(p.traverse(['foo'], '/builds/foo'), BuildPage)
