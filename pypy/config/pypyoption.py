@@ -5,10 +5,12 @@ import platform
 from pypy.config.config import OptionDescription, BoolOption, IntOption, ArbitraryOption
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 
+exclude = ['readline']
+
 modulepath = py.magic.autopath().dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
                if p.check(dir=True, dotfile=False)
-               and p.join('__init__.py').check()]
+               and p.join('__init__.py').check() and p.basename not in exclude]
 
 essential_modules = dict.fromkeys(
     ["exceptions", "_file", "sys", "__builtin__", "posix"]
