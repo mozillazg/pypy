@@ -114,10 +114,19 @@ Key 0.99.0 Features
   http://codespeak.net/pypy/dist/pypy/doc/rlib.html
 
 * improved documentation:
-  * XXX video
-  * reports?
-  * point to vm-construction?
-  * XXX point to main new docs 
+  
+  - extended documentation about stackless features:
+    http://codespeak.net/pypy/dist/pypy/doc/stackless.html
+  
+  - PyPy video documentation: eight hours of talks, interviews and features:
+    http://codespeak.net/pypy/dist/pypy/doc/video-index.html
+
+  - technical reports about various aspects of PyPy:
+    http://codespeak.net/pypy/dist/pypy/doc/index-report.html
+    
+  The entry point to all our documentation is:
+  http://codespeak.net/pypy/dist/pypy/doc/index.html
+
 
 
 What about 1.0? 
