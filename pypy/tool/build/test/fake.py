@@ -17,9 +17,10 @@ class FakeChannel(object):
         pass
 
 class FakeBuildserver(object):
-    def __init__(self, info):
+    def __init__(self, info, compile_info=None):
         self.channel = FakeChannel()
         self.sysinfo = info
+        self.compileinfo = compile_info or {}
         self.busy_on = None
         self.refused = []
         self.hostname = "fake"

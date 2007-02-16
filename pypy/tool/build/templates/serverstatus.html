@@ -1,3 +1,4 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html>
   <head>
     <title>Build meta server status page</title>
@@ -5,10 +6,10 @@
   <body>
     <h2>Server status</h2>
     <ul>
-      <li>Currently in progress: %(in_progress)s</li>
+      <li>Connected build servers: %(builders)s</li>
+      <li>Currently running builds: %(running)s</li>
       <li>Builds done: %(done)s</li>
-      <li>Waiting (clients for which a suitable build is in progress already):
-          %(waiting)s</li>
+      <li>Clients waiting for a build: %(waiting)s</li>
       <li>Builds for which no suitable server is available: %(queued)s</li>
     </ul>
   </body>

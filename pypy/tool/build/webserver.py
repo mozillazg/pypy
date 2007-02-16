@@ -96,6 +96,9 @@ class Collection(Resource):
             return resource
 
 class Handler(BaseHTTPRequestHandler):
+    """ BaseHTTPRequestHandler that does object publishing
+    """
+
     application = None # attach web root (Collection object) here!!
     bufsize = 1024
     
@@ -143,6 +146,8 @@ class Handler(BaseHTTPRequestHandler):
         return self.application.traverse(chunks, path)
 
     def process_http_error(self, e):
+        """ create the response body and headers for errors
+        """
         headers = {'Content-Type': 'text/plain'} # XXX need more headers here?
         if e.status in [301, 302]:
             headers['Location'] = e.data
@@ -152,6 +157,8 @@ class Handler(BaseHTTPRequestHandler):
         return headers, body
     
     def response(self, status, headers, body):
+        """ generate the HTTP response and send it to the client
+        """
         self.send_response(status)
         if (isinstance(body, str) and
                 not 'content-length' in [k.lower() for k in headers]):
@@ -171,6 +178,8 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError('body is not a plain string or file-like object')
 
 def run_server(address, handler):
+    """ run a BaseHTTPServer instance
+    """
     server = HTTPServer(address, handler)
     server.serve_forever()
 

@@ -110,6 +110,9 @@ class BuildRequest(object):
         self.svnurl = svnurl
         self.svnrev = svnrev
         self.revrange = revrange
+        self.request_time = py.std.time.time()
+        self.build_start_time = None
+        self.build_end_time = None
 
     def __str__(self):
         return '<BuildRequest %s:%s>' % (self.svnurl, self.normalized_rev)
@@ -119,7 +122,8 @@ class BuildRequest(object):
         """
         return 'build.BuildRequest(%r, %r, %r, %r, %r, %r)' % (
                 self.email, self.sysinfo, self.compileinfo, self.svnurl,
-                self.svnrev, self.revrange)
+                self.svnrev, self.revrange, self.request_time,
+                self.build_start_time, self.build_end_time)
 
     def serialize(self):
         data = {'normalized_rev': self.normalized_rev} # it's a property
@@ -132,6 +136,9 @@ svnurl: %(svnurl)s
 svnrev: %(svnrev)s
 revrange: %(revrange)s
 normalized_rev: %(normalized_rev)s
+request_time: %(request_time)s
+build_start_time: %(build_start_time)s
+build_end_time: %(build_end_time)s
 """ % data
 
     def _fromstring(cls, s):
@@ -146,6 +153,9 @@ normalized_rev: %(normalized_rev)s
                   eval(data['compileinfo']), data['svnurl'], data['svnrev'],
                   int(data['revrange']))
         ret._nr = int(data['normalized_rev'])
+        ret.request_time = eval(data['request_time'])
+        ret.build_start_time = eval(data['build_start_time'])
+        ret.build_end_time = eval(data['build_end_time'])
         return ret
     fromstring = classmethod(_fromstring)
 
