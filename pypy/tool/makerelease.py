@@ -70,6 +70,18 @@ def forced_export(BASEURL, target, lineend="LF"):
                             %(lineend, BASEURL, target))
     assert target.check(dir=1)
 
+def build_html(target):
+    docdir = target.join('pypy').join('doc')
+    old = docdir.chdir()
+    try:
+        # Generate the html files.
+        out = cexec("python2.4 ../test_all.py")
+        # Remove any .pyc files created in the process
+	target.chdir()
+        out = cexec("find . -name '*.pyc' -print0 | xargs -0 -r rm")
+    finally:
+        old.chdir()
+
 if __name__ == '__main__':
     argc = len(py.std.sys.argv)
     if argc <= 1:
@@ -80,6 +92,7 @@ if __name__ == '__main__':
     target = tmpdir.join(ver)
 
     forced_export(BASEURL, target, lineend="LF")
+    build_html(target)
     target_targz = maketargz(target)
     assert target_targz.check(file=1) 
     copydownload(target_targz)
@@ -89,6 +102,7 @@ if __name__ == '__main__':
     copydownload(target_tarbzip)
 
     forced_export(BASEURL, target, lineend="CRLF")
+    build_html(target)
     target_zip = makezip(target)
     assert target_zip.check(file=1) 
     copydownload(target_zip)
