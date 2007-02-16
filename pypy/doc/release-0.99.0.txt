@@ -15,8 +15,10 @@ the 0.99.0 highlights and our aims for PyPy 1.0.
 
 have fun, 
 
-    the pypy team, 
-    XXX insert release participants 
+    the PyPy team, 
+    Samuele Pedroni, Carl Friedrich Bolz, Armin Rigo, Michael Hudson,
+    Maciej Fijalkowski, Anders Chrigstroem, Holger Krekel,
+    Guido Wesdorp
 
     and many others: 
     http://codespeak.net/pypy/dist/pypy/doc/contributor.html
@@ -71,7 +73,7 @@ Key 0.99.0 Features
 * optimizations: 
   - experimental new optimized implementations for various built in Python
     types (strings, dicts, lists)
-  - twice the of the 0.9 release, overall 2-3 slower than CPython 
+  - twice the speed of the 0.9 release, overall 2-3 slower than CPython 
 
 * Demonstrations of Javascript-Backend / AJAX experiments: 
   XXX play1 pointer? 
