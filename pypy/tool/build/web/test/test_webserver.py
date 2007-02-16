@@ -1,7 +1,6 @@
 import py
-
-from pypy.tool.build.webserver import Handler, Resource, Collection, \
-                                      HTTPError
+from pypy.tool.build.web.webserver import Handler, Resource, Collection, \
+                                          HTTPError
 
 class NonInitHandler(Handler):
     request_version = '1.0'

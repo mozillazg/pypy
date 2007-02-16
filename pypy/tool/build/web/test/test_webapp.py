@@ -1,14 +1,14 @@
 import py
 from py.__.test.web.webcheck import check_html
-from pypy.tool.build.webapp import *
-from pypy.tool.build.conftest import option
+from pypy.tool.build.web.webapp import *
+from pypy.tool.build.web.conftest import option
 from pypy.tool.build.test import fake
 from pypy.tool.build import config as build_config
 
 TESTPORT = build_config.testport
 
 here = py.magic.autopath().dirpath()
-pypyparent = here.dirpath().dirpath().dirpath().dirpath()
+pypyparent = here.dirpath().dirpath().dirpath().dirpath().dirpath()
 
 def html_validate(html):
     if not option.webcheck:
@@ -39,7 +39,7 @@ _metaserver_init = """
     import sys
     sys.path += %r
 
-    from pypy.tool.build.test.test_webapp import FakeMetaServer
+    from pypy.tool.build.web.test.test_webapp import FakeMetaServer
     from pypy.tool import build
     build.metaserver_instance = s = FakeMetaServer()
     try:

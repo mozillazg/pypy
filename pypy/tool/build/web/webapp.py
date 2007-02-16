@@ -5,7 +5,8 @@
 import py
 from pypy.tool.build import config
 from pypy.tool.build import execnetconference
-from pypy.tool.build.webserver import HTTPError, Resource, Collection, Handler
+from pypy.tool.build.web.webserver import HTTPError, Resource, Collection, \
+                                          Handler
 
 mypath = py.magic.autopath().dirpath()
 
