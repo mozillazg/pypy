@@ -5,8 +5,7 @@
 import py
 from pypy.tool.build import config
 from pypy.tool.build import execnetconference
-from pypy.tool.build.web.webserver import HTTPError, Resource, Collection, \
-                                          Handler
+from pypy.tool.build.web.server import HTTPError, Resource, Collection, Handler
 
 mypath = py.magic.autopath().dirpath()
 
@@ -108,7 +107,7 @@ class BuildPage(ServerPage):
     def handle(self, handler, path, query):
         pass
 
-class BuildCollectionIndexPage(ServerPage):
+class BuildsIndexPage(ServerPage):
     """ display the list of available builds """
 
     def handle(self, handler, path, query):
@@ -121,11 +120,11 @@ class BuildCollectionIndexPage(ServerPage):
     def get_builds(self):
         return []
 
-class BuildCollection(Collection):
-    """ container for BuildCollectionIndexPage and BuildPage """
+class Builds(Collection):
+    """ container for BuildsIndexPage and BuildPage """
 
     def __init__(self, config, gateway=None):
-        self.index = BuildCollectionIndexPage(config, gateway)
+        self.index = BuildsIndexPage(config, gateway)
         self.config = config
         self.gateway = gateway
     
@@ -147,12 +146,12 @@ class Application(Collection):
     index = IndexPage()
     serverstatus = ServerStatusPage(config)
     buildersinfo = BuildersInfoPage(config)
-    builds = BuildCollection(config)
+    builds = Builds(config)
 
 class AppHandler(Handler):
     application = Application()
 
 if __name__ == '__main__':
-    from pypy.tool.build.webserver import run_server
+    from pypy.tool.build.web.server import run_server
     run_server(('', 8080), AppHandler)
 
