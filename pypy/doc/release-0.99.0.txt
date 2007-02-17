@@ -65,9 +65,9 @@ Key 0.99.0 Features
     objects are "declassified" in order to send information 
     across I/O barriers. 
 
-  - Transparent proxies: An addition to the standard object space, which allows
-    you to create objects of builtin types with completely customised
-    behaviour. For details see
+  - Transparent proxies: allow to customize both application and
+    builtin objects from application level code.  Works as an addition
+    to the Standard Object Space (and is translatable). For details see
     http://codespeak.net/pypy/dist/pypy/doc/proxy.html
  
 * optimizations: 
