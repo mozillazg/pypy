@@ -2,14 +2,14 @@
 PyPy: Python in Python implementation / Version 0.99.0
 =======================================================
 
-PyPy is an implementation of the Python programming language, written
-in Python.
+Welcome to PyPy!
 
-PyPy is very much a work in progress, but can already build a
-self-contained Python implementation that is completely independent of
-Python.
+PyPy is both an implementation of the Python programming language, 
+and an extensive compiler framework for dynamic languages. 
+You can build self-contained Python implementations
+which execute independently from CPython. 
 
-For more, we invite you to head over to our getting-started document:
+We invite you to head over to our detailed getting-started document:
 
     pypy/doc/getting-started.html or
     pypy/doc/getting-started.txt
