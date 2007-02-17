@@ -30,11 +30,18 @@ Release Steps
   and release number references, make sure it is generally up-to-date
 * use, after the necessary updates, dist/pypy/tool/makerelease.py to
   make the tarballs on codespeak; this generates html doc for the
-  tarballs too.  (XXX what about tagging?)
+  tarballs too.  Use::
+     
+     makerelease -tag .z pypy-x.y.z
+
+  to tag and produce final tarballs. Without the '-tag' this can
+  be used to make pre-release testing tarballs.
 * nowadays we have an extensive set of nightly builds and test
   runs. Is probably good to do some minimal testing of the tarballs,
   especially to check that things work even outside a working copy or
-  if some stuff is missing.
+  if some stuff is missing. We have some support for running part of
+  our nightly tests on tarballs (see
+  http://codespeak.net/svn/user/pedronis/tarball-testing).
 * write a news item for the release in dist/pypy/doc/news.txt
 * send announcements to pypy-dev, pypy-funding, python-list,
   python-announce, python-dev ...
