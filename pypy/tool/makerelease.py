@@ -103,6 +103,7 @@ if __name__ == '__main__':
         j = 3
         
     ver = py.std.sys.argv[j]
+    assert ver.startswith('pypy-')
     tmpdir = py.path.local("/tmp/pypy-release")
 
     target = tmpdir.join(ver)
