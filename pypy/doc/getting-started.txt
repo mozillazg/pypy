@@ -625,7 +625,7 @@ programs, e.g. a slightly changed version of Pystone::
 
 This will produce the executable "targetrpystonedalone-c".
 
-.. _`configuration sections`: config/
+.. _`configuration sections`: config/index.html
 
 .. _`translate PyPy with the thunk object space`:
 
