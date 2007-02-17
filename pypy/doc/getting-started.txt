@@ -287,8 +287,8 @@ without triggering the computation::
 
 It is interesting to note that this lazy-computing Python extension 
 is solely implemented in a small `objspace/thunk.py`_ file consisting 
-of around 200 lines of code. Since the 0.8.0 release it is even possible
-to `translate PyPy with the thunk object space`_.
+of around 200 lines of code. Since the 0.8.0 release you 
+can `translate PyPy with the thunk object space`_.
 
 Logic programming
 +++++++++++++++++
