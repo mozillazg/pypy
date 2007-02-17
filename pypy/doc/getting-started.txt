@@ -782,9 +782,7 @@ it ships with PyPy and `pypy/test_all.py`_ is an alias for ``py.test``
 but if you want to have the ``py.test`` tool generally in your 
 path, you might like to visit: 
 
-    http://codespeak.net/py/current/doc/getting-started.html
-
-
+    http://codespeak.net/py/dist/download.html
 
 Getting involved 
 ================================== 
