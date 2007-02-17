@@ -166,7 +166,7 @@ and with the support of a consortium partially funded by a 28 months
 European Union IST research grant. The full partners of that 
 consortium are: 
         
-    Heinrich-Heine University (Germany), Openend (Sweden)
+    Heinrich-Heine University (Germany), Open End (Sweden)
     merlinux GmbH (Germany), tismerysoft GmbH (Germany) 
     Logilab Paris (France), DFKI GmbH (Germany)
     ChangeMaker (Sweden), Impara (Germany)
