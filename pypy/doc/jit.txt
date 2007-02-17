@@ -1,0 +1,4 @@
+The JIT is not included in the 0.99 release. See the
+`release announcement (doc/release-0.99.0-txt)`_ for details.
+
+.. _`release announcement (doc/release-0.99.0-txt)`: release-0.99.0.html
