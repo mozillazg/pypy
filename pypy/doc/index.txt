@@ -330,3 +330,4 @@ Directory                      explanation/links
 
 .. include:: _ref.txt
 
+.. _`doc/config/`: config/index.html
