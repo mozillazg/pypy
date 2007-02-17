@@ -437,7 +437,7 @@ Translating the flow graph to LLVM code
 +++++++++++++++++++++++++++++++++++++++
 
 To translate for LLVM (`low level virtual machine`_) you must first have `LLVM
-installed with version 1.7`_ - the `how to install LLVM`_ provides some helpful
+installed with version 1.9`_ - the `how to install LLVM`_ provides some helpful
 hints.  Please note that you do not need the CFrontend to compile, make
 tools-only.
 
@@ -813,7 +813,7 @@ plan where to meet with us.
 .. _`low level virtual machine`: http://llvm.org/
 .. _`how to install LLVM`: http://llvm.org/docs/GettingStarted.html
 .. _`LLVM mailing list`: http://mail.cs.uiuc.edu/mailman/listinfo/llvmdev
-.. _`LLVM installed with version 1.7`: http://llvm.org/releases
+.. _`LLVM installed with version 1.9`: http://llvm.org/releases
 
 .. _`Spidermonkey`: http://www.mozilla.org/js/spidermonkey/
 .. _`Google summer of code`: http://code.google.com/soc
