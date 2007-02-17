@@ -155,8 +155,8 @@ The py.py interpreter
 
 To start interpreting Python with PyPy, use Python 2.3 or greater::
 
-    cd pypy/bin
-    python py.py
+    cd pypy
+    python bin/py.py
 
 After a few seconds (remember: this is running on top of CPython), 
 you should be at the PyPy prompt, which is the same as the Python 
@@ -180,8 +180,8 @@ py.py options
 
 To list the PyPy interpreter command line options, type::
 
-    cd pypy/bin
-    python py.py --help
+    cd pypy
+    python bin/py.py --help
 
 py.py supports most of the options that CPython supports too (in addition to a
 large amount of options that can be used to customize py.py).
@@ -258,8 +258,8 @@ One of the original features provided by PyPy is the "thunk"
 object space, providing lazily-computed objects in a fully
 transparent manner::
 
-    cd pypy/bin
-    python py.py -o thunk
+    cd pypy
+    python bin/py.py -o thunk
 
     >>>> from pypymagic import thunk
     >>>> def longcomputation(lst):
@@ -301,8 +301,8 @@ providing a more extensive way to deal with laziness.
 
 Try it out::
 
-    cd pypy/bin
-    python py.py -o logic
+    cd pypy
+    python bin/py.py -o logic
 
     >>>> X = newvar()         # a logic variable
     >>>> bind(X, 42)          # give it a value
@@ -388,8 +388,8 @@ you need to:
 
 To start the interactive translator shell do::
 
-    cd pypy/bin
-    python translatorshell.py
+    cd pypy
+    python bin/translatorshell.py
 
 Test snippets of translatable code are provided in the file
 ``pypy/translator/test/snippet.py``, which is imported under the name
