@@ -98,7 +98,7 @@ if __name__ == '__main__':
         micro = py.std.sys.argv[2]
         assert micro.startswith('.')
         NEWURL = BASEURL.replace('.x', micro)
-        cexec('svn cp %s %s' % (BASEURL, NEWURL))
+        os.system("svn cp %s %s" % (BASEURL, NEWURL))
         BASEURL = NEWURL
         j = 3
         
