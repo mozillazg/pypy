@@ -69,7 +69,6 @@ Key 0.99.0 Features
     you to create objects of builtin types with completely customised
     behaviour. For details see
     http://codespeak.net/pypy/dist/pypy/doc/proxy.html
-    XXX Move link to the bottom?
  
 * optimizations: 
 
