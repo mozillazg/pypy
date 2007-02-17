@@ -1,4 +1,7 @@
-The JIT is not included in the 0.99 release. See the
+The JIT (and its generator) are not included in the 0.99 release. See the
 `release announcement (doc/release-0.99.0-txt)`_ for details.
+
+The work-in-progress documentation about the JIT generator lives
+at http://codespeak.net/pypy/dist/pypy/doc/jit.html.
 
 .. _`release announcement (doc/release-0.99.0-txt)`: release-0.99.0.html
