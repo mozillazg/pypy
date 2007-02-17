@@ -760,6 +760,16 @@ want to look at generated flowgraphs:
 
 	pygame: http://www.pygame.org/download.shtml
 
+CTypes (highly recommended)
+++++++++++++++++++++++++++++
+
+`ctypes`_ (version 0.9.9.6 or later) is required if you want to translate PyPy
+to C. See the `download page of ctypes`_.
+
+.. _`download page of ctypes`: http://sourceforge.net/project/showfiles.php?group_id=71702
+.. _`ctypes`: http://starship.python.net/crew/theller/ctypes/
+
+
 CLISP
 +++++++
 
