@@ -11,7 +11,7 @@ BASEURL = "file:///svn/pypy/release/0.99.x"
 DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
 
 def usage():
-    print "usage: %s versionbasename" %(py.std.sys.argv[0])
+    print "usage: %s [-tag .<micro>] versionbasename" %(py.std.sys.argv[0])
     raise SystemExit, 1
 
 def cexec(cmd): 
@@ -92,7 +92,17 @@ if __name__ == '__main__':
     argc = len(py.std.sys.argv)
     if argc <= 1:
         usage()
-    ver = py.std.sys.argv[1] 
+
+    j = 1
+    if py.std.sys.argv[1] == '-tag':
+        micro = py.std.sys.argv[2]
+        assert micro.startswith('.')
+        NEWURL = BASEURL.replace('.x', micro)
+        cexec('svn cp %s %s' % (BASEURL, NEWURL))
+        BASEURL = NEWURL
+        j = 3
+        
+    ver = py.std.sys.argv[j]
     tmpdir = py.path.local("/tmp/pypy-release")
 
     target = tmpdir.join(ver)
