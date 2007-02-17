@@ -10,6 +10,8 @@ class AppTestReadline:
 
     def setup_class(cls):
         # enable usage of the readline mixedmodule
+        import py
+        py.test.skip("no readline option in 0.99")
         space = gettestobjspace(usemodules=('readline',))
         cls.space = space
 
