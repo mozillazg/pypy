@@ -11,6 +11,7 @@
 .. _`bin/`: ../../pypy/bin
 .. _`config/`: ../../pypy/config
 .. _`doc/`: ../../pypy/doc
+.. _`doc/config/`: ../../pypy/doc/config
 .. _`doc/discussion/`: ../../pypy/doc/discussion
 .. _`interpreter/`:
 .. _`pypy/interpreter`: ../../pypy/interpreter
