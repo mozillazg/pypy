@@ -78,6 +78,9 @@ Key 0.99.0 Features
   - Optimized builtin lookups to not require any dictionary lookups if the
     builtin is not shadowed by a name in the global dictionary.
 
+  - Improved inlining (now also working for higher level
+    backends) and malloc removal.
+
   - twice the speed of the 0.9 release, overall 2-3 slower than CPython 
 
 * High level backends:
