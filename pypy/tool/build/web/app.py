@@ -7,8 +7,7 @@ import time
 from pypy.tool.build import config
 from pypy.tool.build import execnetconference
 from pypy.tool.build.build import BuildRequest
-from pypy.tool.build.web.server import HTTPError, Resource, Collection, \
-                                       Handler, FsFile
+from pypy.tool.build.web.server import HTTPError, Collection, Handler, FsFile
 
 from templess import templess
 
@@ -19,17 +18,10 @@ def fix_html(html):
             '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">\n%s' % (
             html.strip().encode('UTF-8'),))
 
-class IndexPage(Resource):
-    """ the index page """
-    def handle(self, handler, path, query):
-        template = templess.template(
-            mypath.join('templates/index.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
-                fix_html(template.unicode({})))
-
-class ServerPage(Resource):
+class ServerPage(object):
     """ base class for pages that communicate with the server
     """
+    exposed = True
 
     def __init__(self, config, gateway=None):
         self.config = config
@@ -71,7 +63,7 @@ class ServerPage(Resource):
 class ServerStatusPage(ServerPage):
     """ a page displaying overall meta server statistics """
 
-    def handle(self, handler, path, query):
+    def __call__(self, handler, path, query):
         template = templess.template(
             mypath.join('templates/serverstatus.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
@@ -81,7 +73,7 @@ class ServerStatusPage(ServerPage):
         return self.call_method('status')
 
 class BuildersInfoPage(ServerPage):
-    def handle(self, handler, path, query):
+    def __call__(self, handler, path, query):
         template = templess.template(
             mypath.join('templates/buildersinfo.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
@@ -95,7 +87,11 @@ class BuildersInfoPage(ServerPage):
             binfo['sysinfo'] = [binfo['sysinfo']]
             if binfo['busy_on']:
                 b = binfo['busy_on']
-                d = BuildRequest.fromstring(binfo['busy_on']).todict()
+                req = BuildRequest.fromstring(binfo['busy_on'])
+                id = req.id()
+                d = req.todict()
+                d['id'] = id
+                d['href'] = '/builds/%s' % (id,)
                 d.pop('sysinfo', None) # same as builder
                 d.pop('build_end_time', None) # it's still busy ;)
                 # templess doesn't understand dicts this way...
@@ -115,13 +111,13 @@ class BuildPage(ServerPage):
         super(BuildPage, self).__init__(config, gateway)
         self._buildid = buildid
 
-    def handle(self, handler, path, query):
+    def __call__(self, handler, path, query):
         pass
 
 class BuildsIndexPage(ServerPage):
     """ display the list of available builds """
 
-    def handle(self, handler, path, query):
+    def __call__(self, handler, path, query):
         template = templess.template(
             mypath.join('templates/builds.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
@@ -153,11 +149,17 @@ class Builds(Collection):
 
 class Application(Collection):
     """ the application root """
-    index = IndexPage()
     style = FsFile(mypath.join('theme/style.css'), 'text/css')
     serverstatus = ServerStatusPage(config)
     buildersinfo = BuildersInfoPage(config)
     builds = Builds(config)
+    
+    def index(self, handler, path, query):
+        template = templess.template(
+            mypath.join('templates/index.html').read())
+        return ({'Content-Type': 'text/html; charset=UTF-8'},
+                fix_html(template.unicode({})))
+    index.exposed = True
 
 class AppHandler(Handler):
     application = Application()
