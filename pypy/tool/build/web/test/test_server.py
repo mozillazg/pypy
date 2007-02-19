@@ -10,8 +10,10 @@ class NonInitHandler(Handler):
     def log_request(self, code='-', size='-'):
         pass
 
-class SomePage(Resource):
-    def handle(self, server, path, query):
+class SomePage(object):
+    """ test resource """
+    exposed = True
+    def __call__(self, handler, path, query):
         return ('text/plain', 'foo')
 
 def build_app_structure():
@@ -101,12 +103,12 @@ class TestHandler(object):
         py.test.raises(ValueError, "self.handler.response(200, {}, u'xxx')")
 
 class TestFsFile(object):
-    def test_handle(self):
+    def test_call(self):
         temp = py.test.ensuretemp('TestStaticResource.test_handle')
         foo = temp.ensure('foo.txt')
         foo.write('foo')
         r = FsFile(foo, 'text/plain')
-        ret = r.handle(None, '/bar/foo.txt', '')
+        ret = r(None, '/bar/foo.txt', '')
         assert ret[0] == {'Content-Type': 'text/plain'}
         assert ret[1] == 'foo'
         

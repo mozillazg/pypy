@@ -147,6 +147,13 @@ build_start_time: %(build_start_time)s
 build_end_time: %(build_end_time)s
 """ % self.todict()
 
+    def id(self):
+        # XXX can this be made better? we certainly don't want clashes :|
+        str = '%r\n%r\n%r\n%r\n%r' % (self.email, self.sysinfo,
+                                      self.compileinfo, self.svnurl,
+                                      self.svnrev)
+        return '%s.%s' % (self.request_time, py.std.md5.new(str).hexdigest())
+
     def _fromstring(cls, s):
         data = {}
         for line in s.strip().split('\n'):

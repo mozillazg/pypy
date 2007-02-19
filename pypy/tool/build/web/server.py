@@ -1,3 +1,5 @@
+import sys
+import traceback
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
 # some generic stuff to make working with BaseHTTPServer a bit nicer...
@@ -36,28 +38,18 @@ class HTTPError(Exception):
             data = ' (%s)' % (self.data,)
         return '<HTTPException %s "%s"%s>' % (self.status, self.message, data)
 
-class Resource(object):
-    """ an HTTP resource
-    
-        essentially this is an object with a path that does not end on a slash,
-        and no support for PATH_INFO
-    """
-
-    def handle(self, handler, path, query):
-        """ handle a single request to self 
-        
-            returns a tuple (content_type, data) where data is either a string
-            (non-unicode!) or a file-like object with a read() method that
-            accepts an integer (size) argument
-        """
-        raise NotImplemented('abstract base class')
-
-class Collection(Resource):
+class Collection(object):
     """ an HTTP collection
     
         essentially this is a container object that has a path that ends on a
         slash, and support for PATH_INFO (so can have (virtual or not)
         children)
+
+        children are callable attributes of ourselves that have an 'exposed'
+        attribute themselves, that accept 3 arguments: 'handler', a reference
+        to the BaseHTTPHandler that handles the request (XXX should be
+        abstracted?), 'path', the requested path to the object, and 'query',
+        the (unparsed!) GET query string (without a preceding ?)
     """
 
     def traverse(self, path, orgpath):
@@ -72,7 +64,7 @@ class Collection(Resource):
             a lookup on self, if that fails a 404 is raised, if successful
             the item is used to continue traversal (if the object found is
             a Collection type) or to handle the request (if the object found
-            is a Resource type)
+            is a callable with .exposed set to True)
 
             if path equals '', a lookup for 'index' is done
 
@@ -83,7 +75,9 @@ class Collection(Resource):
         if name == '':
             name = 'index'
         resource = getattr(self, name, None)
-        if resource is None or not isinstance(resource, Resource):
+        if (resource is None or (not isinstance(resource, Collection) and
+                (not callable(resource) or
+                    not getattr(resource, 'exposed', True)))):
             raise HTTPError(404)
         if path:
             if not isinstance(resource, Collection):
@@ -93,6 +87,9 @@ class Collection(Resource):
             if isinstance(resource, Collection):
                 # targeting a collection directly: redirect to its 'index'
                 raise HTTPError(301, orgpath + '/')
+            if not getattr(resource, 'exposed', False):
+                # don't reveal what is not accessible...
+                raise HTTPError(404)
             return resource
 
 class Handler(BaseHTTPRequestHandler):
@@ -107,15 +104,22 @@ class Handler(BaseHTTPRequestHandler):
         path, query = self.process_path(self.path)
         try:
             resource = self.find_resource(path, query)
-            headers, data = resource.handle(self, path, query)
+            headers, data = resource(self, path, query)
         except HTTPError, e:
             status = e.status
             headers, data = self.process_http_error(e)
+        except:
+            exc, e, tb = sys.exc_info()
+            tb_formatted = '\n'.join(traceback.format_tb(tb))
+            status = 200
+            data = 'An error has occurred: %s - %s\n\n%s' % (exc, e,
+                                                             tb_formatted)
+            headers = {'Content-Type': 'text/plain'}
         else:
             status = 200
             if not 'content-type' in [k.lower() for k in headers]:
                 headers['Content-Type'] = 'text/html; charset=UTF-8'
-        self.response(status, headers, data)
+        self.response(status, headers, data, send_body)
 
     do_POST = do_GET
 
@@ -156,7 +160,7 @@ class Handler(BaseHTTPRequestHandler):
             body = 'Error: %s (%s)' % (e.status, e.message)
         return headers, body
     
-    def response(self, status, headers, body):
+    def response(self, status, headers, body, send_body=True):
         """ generate the HTTP response and send it to the client
         """
         self.send_response(status)
@@ -166,6 +170,8 @@ class Handler(BaseHTTPRequestHandler):
         for keyword, value in headers.iteritems():
             self.send_header(keyword, value)
         self.end_headers()
+        if not send_body:
+            return
         if isinstance(body, str):
             self.wfile.write(body)
         elif hasattr(body, 'read'):
@@ -183,15 +189,16 @@ def run_server(address, handler):
     server = HTTPServer(address, handler)
     server.serve_forever()
 
-# ready-to-use Collection and Resource implementations
-class FsFile(Resource):
+# ready-to-use Collection and resource implementations
+class FsFile(object):
+    exposed = True
     debug = False
     def __init__(self, path, content_type):
         self._path = path
         self._content_type = content_type
 
     _data = None
-    def handle(self, handler, path, query):
+    def __call__(self, handler, path, query):
         if self._data is None or self.debug:
             self._data = self._path.read()
         return ({'Content-Type': self._content_type}, self._data)

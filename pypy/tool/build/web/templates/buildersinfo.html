@@ -30,6 +30,7 @@
             <div class="title">busy on build:</div>
             <div class="value" t:not="busy_on">nothing</div>
             <div class="dict" t:cond="busy_on" t:content="busy_on">
+              <a class="title" t:attr="href href" t:content="id" />
               <div class="pair">
                 <span class="key">request time:</span>
                 <span class="value" t:content="request_time" />

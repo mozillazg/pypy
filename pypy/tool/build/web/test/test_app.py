@@ -65,9 +65,9 @@ def teardown_module(mod):
     mod.gateway.exit()
 
 class TestIndexPage(object):
-    def test_handle(self):
-        p = IndexPage()
-        headers, html = p.handle(None, '/', '')
+    def test_call(self):
+        a = Application()
+        headers, html = a.index(None, '/', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
@@ -80,12 +80,12 @@ class TestServerStatusPage(object):
         server_channel.send(('set_status', {'foo': 'bar'}))
         assert p.get_status() == {'foo': 'bar'}
 
-    def test_handle(self):
+    def test_call(self):
         server_channel.send(('set_status', {'builders': 3, 'running': 2,
                                             'done': 7, 'waiting': 5,
                                             'queued': 2}))
         p = ServerStatusPage(config, gateway)
-        headers, html = p.handle(None, '/serverstatus', '')
+        headers, html = p(None, '/serverstatus', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
@@ -99,7 +99,7 @@ class TestBuilderInfoPage(object):
                                                    'busy_on': None}]))
         assert p.get_buildersinfo() == [{'sysinfo': ['foo'], 'busy_on': None}]
 
-    def test_handle(self):
+    def test_call(self):
         b = build.BuildRequest('foo@bar.com', {}, {'foo': 'bar'},
                                'http://codespeak.net/svn/pypy/dist', 10, 2,
                                123456789)
@@ -119,23 +119,23 @@ class TestBuilderInfoPage(object):
                                                    'busy_on': busy_on,
                                                    }]))
         p = BuildersInfoPage(config, gateway)
-        headers, html = p.handle(None, '/buildersinfo', '')
+        headers, html = p(None, '/buildersinfo', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
 
 class TestBuildPage(object):
-    def test_handle(self):
+    def test_call(self):
         pass
 
 class TestBuildsIndexPage(object):
     def test_get_builds(self):
         pass
 
-    def test_handle(self):
+    def test_call(self):
         p = BuildsIndexPage(config, gateway)
-        headers, html = p.handle(None, '/builds/', '')
+        headers, html = p(None, '/builds/', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
