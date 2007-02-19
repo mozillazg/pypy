@@ -1,7 +1,12 @@
+from pypy.conftest import gettestobjspace
+
 class AppTest_InsertGrammarRules:
+    def setup_class(cls):
+        space = gettestobjspace(usemodules=('dyngram', 'recparser'))
+        cls.space = space
 
     def test_do_while(self):
-        import parser
+        import dyngram, parser
 
         newrules = """
         compound_stmt: if_stmt | on_stmt | unless_stmt | dountil_stmt | while_stmt | for_stmt | try_stmt | with_stmt | funcdef | classdef
@@ -40,10 +45,10 @@ class AppTest_InsertGrammarRules:
             test = parser.ASTIf([(parser.ASTName(varname), suite)], else_, items[0].lineno)
             return parser.ASTStmt([assign, test], items[0].lineno)
 
-        parser.insert_grammar_rule(newrules, {'dountil_stmt' : build_dountil_stmt,
-                                              'unless_stmt': build_unless_stmt,
-                                              'on_stmt' : build_on_stmt,
-                                              })
+        dyngram.insert_grammar_rule(newrules, {'dountil_stmt' : build_dountil_stmt,
+                                               'unless_stmt': build_unless_stmt,
+                                               'on_stmt' : build_on_stmt,
+                                               })
 
         # now we should be able to use do...until and unless statements
         d = {}
