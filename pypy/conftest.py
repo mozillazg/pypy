@@ -8,10 +8,11 @@ from inspect import isclass, getmro
 
 rootdir = py.magic.autopath().dirpath()
 
+# distributed testing settings
 dist_rsync_roots = ['.', '../lib-python', '../py', '../demo']
 dist_rsync_ignore = ['_cache']
 
-#
+# 
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
 #

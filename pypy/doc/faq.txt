@@ -12,58 +12,52 @@ General
 What is PyPy?
 -------------
 
-XXX
+PyPy is both a Python reimplementation and a framework to implement
+interpreters and virtual machines for programming languages,
+especially dynamic ones. PyPy tries to find new answers about ease of
+creation, flexibility, maintainability and speed trade-offs for
+language implementations.  For further details see our `goal and
+architecture document`_ .
 
-------------------------------------------------------
-Why a new implementation of Python?  What does it add?
-------------------------------------------------------
+.. _`goal and architecture document`: architecture.html
 
-XXX
 
--------------------------------------------------------------------
-What is the status of the project?  Can it be used in practice yet?
--------------------------------------------------------------------
+.. _`drop in replacement`:
 
-PyPy is a very broad project with varying level of a completion among
-parts. For example compiler toolchain is a relatively mature part,
-which is known of running several other projects (see: XXX).
+------------------------------------------
+Is PyPy a drop in replacement for CPython?
+------------------------------------------
 
-XXX finish that one
-
------------------------------------------
-Is PyPy a drop in replacement of CPython?
------------------------------------------
-
-Not completely yet. There are various areas where PyPy is lacking, such as
-threading_ and `extension modules`_. The language features (including built in
-types and functions) are very complete and well tested, though. That means that
-projects not using many extension modules can probably directly use PyPy. A
+Not completely, at least not yet. There are various areas where PyPy is lacking, such as
+threading_ and `extension modules`_. The language features (including builtin
+types and functions) are very complete and well tested, though. This means that
+a project not using many extension modules can probably directly use PyPy. A
 project using extension modules might get some problems, though.
 
-------------------------------
-On what platforms does it run?
-------------------------------
+--------------------------------
+On what platforms does PyPy run?
+--------------------------------
 
-PyPy is regularly and extensively tested on Linux machines and on Mac OS X and
-mostly works under Windows too (but is tested there less extensively). PyPy
-needs a CPython running on the target platform to bootstrap, cross compilation
-is not really meant to work, currently. Apart from that restriction, translating
-PyPy is supposed to produce nice platform-independent code, so the chances are
-not too bad that it works.
+PyPy is regularly and extensively tested on Linux machines and on Mac
+OS X and mostly works under Windows too (but is tested there less
+extensively). PyPy needs a CPython running on the target platform to
+bootstrap, as cross compilation is not really meant to work yet.
+At the moment you need CPython 2.4 for the translation process, 2.5 is
+not fully supported.
 
-Currently (due to time restrictions) we are not trying hard to make PyPy support
-64 bit platforms. While this seems to still mostly work out, a few modules won't
-work on 64 bit machines, such as ``bz2``.
+Currently (due to time restrictions) we are not trying hard to support
+PyPy in a 64 bit environment.  While things seem to mostly work, a few
+modules won't work on 64 bit machines, such as ``bz2``.
 
-----------------------------------------------
-Which Python version (2.x?) does PyPy support?
-----------------------------------------------
+------------------------------------------------
+Which Python version (2.x?) does PyPy implement?
+------------------------------------------------
 
-PyPy currently targets to be fully compatible with Python 2.4. That means that
-it contains the stdandard library of Python 2.4 and that it supports 2.4
-features (such as decorators) but not the 2.5 features (with statement, ternary
-operators).  The 2.5 features will probably be eventually suported, the most
-important reasons why nobody is working on them is that we did not promise this
+PyPy currently aims to be fully compatible with Python 2.4. That means that
+it contains the standard library of Python 2.4 and that it supports 2.4
+features (such as decorators) but not the 2.5 features (with statement, the ternary
+operator).  The 2.5 features will probably be eventually supported, the most
+important reason why nobody is working on them is that we did not promise this
 to the EU and have currently enough other tasks.
 
 .. _threading:
@@ -72,7 +66,7 @@ to the EU and have currently enough other tasks.
 Do threads work?  What are the modules that work?
 -------------------------------------------------
 
-Operating-System threads work in a limited way. If you enable the ``thread``
+Operating system-level threads work in a limited way. If you enable the ``thread``
 module then PyPy will get support for GIL based threading. One limitation is
 that not that many IO operations actually release the GIL, which reduces the
 usefulness of threads. On the other hand, PyPy fully supports `stackless-like
@@ -90,7 +84,7 @@ list:
 
  * mixed module implementations: exceptions, sys, __builtin__, posix
    _codecs, gc, _weakref, array, marshal, errno, math, _sre,  parser, symbol,
-   _random, socket, unicodedata, mmap, fcntl, time, select, bz2, crypt, 
+   _random, socket, unicodedata, mmap, fcntl, time, select, bz2, crypt,
    signal
 
 
@@ -103,18 +97,38 @@ list:
 Can I use CPython extension modules?
 ------------------------------------
 
-No and there are no current plans to support this. CPython extension modules
+No and there are no short-term plans to support this. CPython extension modules
 rely heavily on CPython's C API which contains a lot of implementation details
-like reference counting, exact C-level objects implementations etc.
+like reference counting, exact C-level object implementation and layout etc.
 
-Although if your module uses ctypes rather than C-level code, there is a hope.
-You can try to write a mixed module (see next question).
+Although if your module uses ctypes rather than C-level code, there is
+a hope -- you can try to write a mixed module (see next question).
+
+The long-term answer might be different.  In principle, it should be possible
+for PyPy to support the CPython C API (or at least a large subset of its
+official part).  It means that "in the fullness of time" you might be able to
+simply recompile existing CPython extension modules and use them with PyPy.
 
 ------------------------------------------
 How do I write extension modules for PyPy?
 ------------------------------------------
 
-XXX
+PyPy extension modules are written in the form of `mixed modules`_, so
+called because they can contain a mixture of compiled and interpreted
+Python code.  At the moment they all need to be translated together with the rest of PyPy.
+
+We have a proof concept of what we call the `extension compiler`_ and
+our support for a static variant of the ctypes interface (`rctypes`_) to
+help with their development. At the moment both have quite some rough
+edges.  This kind of module can even be cross-compiled to regular CPython
+extension modules, although this doesn't deliver completely satisfying
+results so far.  This area is going to improve over time.
+
+.. _`mixed modules`: coding-guide.html#mixed-module-mechanism
+.. _`extension compiler`: extcompiler.html
+.. _`rctypes`: rctypes.html
+
+.. _`slower than CPython`:
 
 -----------------
 How fast is PyPy?
@@ -127,19 +141,21 @@ CPython, the version of PyPy that still runs on top of CPython is slower by
 a factor of 2000. The first translated version was roughly 300 times slower
 than CPython. In later versions, we increased the speed. CPython was about
 10-20 times as fast as version 0.8.0, 4-7 times as fast as version 0.9 and
-2.4 - 5 times as fast as the current version (1.0).
-Note that the speed heavily depends on the enabled options at compile time.
+2 to 4 times as fast as the current version (0.99).
+Note that the speed heavily depends on the options enabled at compile time.
 
+
+.. _`prolog and javascript`:
 
 -----------------------------------------------------------------------
 What is this talk about a JavaScript and a Prolog interpreter in PyPy?
 -----------------------------------------------------------------------
 
-Since a Python interpreter is a rather large and intricate thing, our toolsuite
-became quite advanced to support it. Therefore people had the idea of using it
+Since a Python interpreter is a rather large and intricate thing, our tool suite
+has become quite advanced to support it. This resulted in people having the idea of using it
 to implement interpreters for other dynamic languages than Python and get a lot
 of things for free (translation to various languages, stackless features,
-garbage collection, implementation of various things like arbitraryly long
+garbage collection, implementation of various things like arbitrarily long
 integers). Therefore people started to implement a `JavaScript interpreter`_
 (Leonardo Santagada as his Summer of PyPy project) and a `Prolog interpreter`_
 (Carl Friedrich Bolz as his Masters thesis). Both projects are undocumented and
@@ -165,18 +181,13 @@ sprint.
 Coming to a sprint is usually also the best way to get into PyPy development.
 If you want to start on your own, take a look at the list of `project
 suggestions`_. If you get stuck or need advice, `contact us`_. Usually IRC is
-the most immediate mean to get feedback (at least during some parts of the day,
-many PyPy developers are in Europe) and the mailing list is better for long
+the most immediate way to get feedback (at least during some parts of the day;
+many PyPy developers are in Europe) and the `mailing list`_ is better for long
 discussions.
 
 .. _`project suggestions`: project-ideas.html
 .. _`contact us`: contact.html
-
-----------------------------------
-Why so many levels of abstraction?
-----------------------------------
-
-XXX see pypy-vm-construction
+.. _`mailing list`: contact.html
 
 ----------------------------------------------------------------------
 I am getting strange errors while playing with PyPy, what should I do?
@@ -200,9 +211,9 @@ What is this RPython language?
 ------------------------------
 
 RPython is a restricted subset of the Python language. The restrictions are to
-ensure that type inference (and eventually translation to other languages) of
+ensure that type inference (and so, ultimately, translation to other languages) of
 the program is possible. These restrictions only apply after the full import
-happened, so at import time arbitrary Python code can be executed. Another
+happens, so at import time arbitrary Python code can be executed. Another
 important point is that the property of "being RPython" always applies to a full
 program, not to single functions or modules (the translation tool chain does a
 full program analysis).
@@ -211,14 +222,15 @@ The restrictions that apply to programs to be RPython mostly limit the ability
 of mixing types in arbitrary ways. RPython does not allow the usage of two
 different types in the same variable. In this respect (and in some others) it
 feels a bit like Java. Other features not allowed in RPython are the usage of
-special methods (``__XXX__``) except ``__init__`` and ``__del__`` and reflection
-capabilities (e.g. ``__dict__``).
+special methods (``__xxx__``) except ``__init__`` and ``__del__``, and the
+usage of reflection capabilities (e.g. ``__dict__``).
 
 Most existing standard library modules are not RPython, except for
 some functions in ``os``, ``math`` and ``time`` that are natively
 supported. In general it is quite unlikely that an existing Python
-program is by chance RPython, mostly it has to be rewritten heavily.
-To read more about RPython limitations read `RPython description`_
+program is by chance RPython; it is most likely that it would have to be
+heavily rewritten.
+To read more about the RPython limitations read the `RPython description`_.
 
 .. _`RPython description`: coding-guide.html#restricted-python
 
@@ -265,9 +277,12 @@ coercion rules would probably drive you insane first).  -- mwh
 Do I have to rewrite my programs in RPython?
 --------------------------------------------
 
-No.  PyPy always runs your code in its own interpreter, which is a full
-and compliant Python 2.4 interpreter.  RPython_ is only the language in
-which parts of PyPy itself are written.  XXX
+No.  PyPy always runs your code in its own interpreter, which is a
+full and compliant Python 2.4 interpreter.  RPython_ is only the
+language in which parts of PyPy itself are written and extension
+modules for it.  The answer to whether something needs to be written as
+an extension module, apart from the "gluing to external libraries" reason, will
+change over time as speed for normal Python code improves.
 
 -------------------------
 Which backends are there?
@@ -282,12 +297,12 @@ Somewhat mature backends:
 * Low level backends: C_, LLVM_
 * High level backends: CLI_, JVM_, JavaScript_
 
-Partially implemented backends:
+Partially implemented backends (both high-level):
 
 * Squeak_, `Common Lisp`_
 
 
-To learn more about backends take a look at the `translation document`_
+To learn more about backends take a look at the `translation document`_.
 
 .. _CLI: cli-backend.html
 .. _JavaScript: js/whatis.html
@@ -298,24 +313,15 @@ To learn more about backends take a look at the `translation document`_
 .. _Squeak: translation.html#gensqueak
 .. _`Common Lisp`: translation.html#gencl
 
--------------------------------------------------------
-Are there other projects that need the PyPy tool chain?
--------------------------------------------------------
-
-XXX
-
 ----------------------
 How do I compile PyPy?
 ----------------------
 
-See the `getting-started`_ guide.  Note that at the moment this produces
-an executable that contains a lot of things that are hard-coded for your
-particular system (including paths and other stuff), so it's not
-suitable for being installed or redistributed.    XXX
+See the `getting-started`_ guide.
 
----------------------------------
-How do I compile my own programs?
----------------------------------
+--------------------------------------
+How do I compile my own interpreters?
+--------------------------------------
 
 Start from the example of
 `pypy/translator/goal/targetnopstandalone.py`_, which you compile by
@@ -325,36 +331,11 @@ typing::
 
 You can have a look at intermediate C source code, which is (at the
 moment) put in ``/tmp/usession-*/testing_1/testing_1.c``.  Of course,
-all the function and stuff indirectly used by your ``entry_point()``
-function has to be RPython_.     XXX
-
---------------------------------------------
-Why isn't there a simpler way of doing that?
---------------------------------------------
-
-One answer is that "officially speaking" supporting this is not a goal
-of the PyPy project.
-
-XXX
-
-A better answer might be that when the target of compilation turns out
-not to be RPython, working out *why* can be very difficult, and
-working on the annotator to make these messages clearer -- even if
-possible -- would take time away from other development tasks.
-
-It's not that writing RPython is difficult, but if there was some kind
-of rpythonc compiling tool there would be much more temptation to try
-to compile arbitrary, pre-existing Python programs and this is fairly
-unlikely to work (to start, there is very little in the way of an
-"RPython standard library"). XXX outdated
-
-
----------------------------------------------------------------------------
-What does the error message "slice start must be proven non-negative" mean?
----------------------------------------------------------------------------
-
-XXX
-
+all the functions and stuff used directly and indirectly by your
+``entry_point()`` function has to be RPython_. Another example you may
+want to look at is `pypy/translator/goal/targetprologstandalone.py`_,
+the target for the in-progress Prolog implementation; this target for
+example enables a stackless build programmatically.
 
 
 .. _`RPython`: coding-guide.html#rpython

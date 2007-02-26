@@ -8,10 +8,12 @@ from pypy.interpreter import autopath
 CPYTHON_VERSION            = (2, 4, 1, "alpha", 42)
 CPYTHON_API_VERSION        = 1012
 
-PYPY_VERSION               = (0, 9, 0, "alpha", '?')
+PYPY_VERSION               = (0, 99, 0, "alpha", '?')
 # the last item is replaced by the svn revision ^^^
 
-SVN_URL = "$HeadURL: http://codespeak.net/svn/pypy/dist/pypy/module/sys/version.py $"[10:-28]
+SVN_URL = "$HeadURL$"[10:-28]
+
+REV = "$LastChangedRevision$"[22:-2]
 
 
 # ____________________________________________________________
@@ -62,7 +64,7 @@ def svn_revision():
     "Return the last-changed svn revision number."
     # NB. we hack the number directly out of the .svn directory to avoid
     # to depend on an external 'svn' executable in the path.
-    rev = 0
+    rev = int(REV)
     try:
         f = open(os.path.join(autopath.pypydir, '.svn', 'format'), 'r')
         format = int(f.readline().strip())

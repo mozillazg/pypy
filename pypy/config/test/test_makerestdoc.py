@@ -1,5 +1,5 @@
 from pypy.config.config import *
-import pypy.config.makerestdoc
+from pypy.config.makerestdoc import make_cmdline_overview
 
 from py.__.doc.conftest import restcheck
 
@@ -14,14 +14,16 @@ def checkrest(rest, filename):
 def generate_html(descr):
     config = Config(descr)
     txt = descr.make_rest_doc().text()
-    checkrest(txt, descr._name + ".txt")
+    
+    result = {"": checkrest(txt, descr._name + ".txt")}
     for path in config.getpaths(include_groups=True):
         subconf, step = config._cfgimpl_get_home_by_path(path)
         fullpath = (descr._name + "." + path)
         prefix = fullpath.rsplit(".", 1)[0]
         txt = getattr(subconf._cfgimpl_descr, step).make_rest_doc(
                 prefix).text()
-        checkrest(txt, fullpath + ".txt")
+        result[path] = checkrest(txt, fullpath + ".txt")
+    return result
 
 def test_simple():
     descr = OptionDescription("foo", "doc", [
@@ -60,6 +62,22 @@ def test_bool_requires_suggests():
                        requires=[("a0.bar", "c"), ("a0.B2", True)]),
             ChoiceOption("bar", "more doc", ["a", "b", "c"],
                          default="a")])
+    result = generate_html(descr)
+    assert "more doc" in result[""]
+
+def test_cmdline_overview():
+    descr = OptionDescription("foo", "doc", [
+            ChoiceOption("bar", "more doc", ["a", "b", "c"]),
+            OptionDescription("sub", "nope", [
+                ChoiceOption("subbar", "", ["d", "f"]),
+                BoolOption("boolean", "this is a boolean", default=False,
+                           cmdline="-b --with-b")
+                ]),
+            StrOption("str", "string option!", default="strange"),
+            IntOption("int", "integer option", default=42),
+            FloatOption("float", "float option", default=py.std.math.pi),
+            ArbitraryOption("surprise", "special", defaultfactory=int),
+            ])
     generate_html(descr)
-
-
+    c = make_cmdline_overview(descr)
+    checkrest(c.text(), "index.txt")

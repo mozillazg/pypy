@@ -17,7 +17,7 @@ from pypy.rpython.ootypesystem.bltregistry import MethodDesc, BasicExternal
 from pypy.translator.js import commproxy
 from pypy.rpython.extfunc import _callable
 
-from pypy.translator.js.demo.jsdemo import support
+from pypy.translator.js.lib import support
 from pypy.translator.js.lib import server
 
 commproxy.USE_MOCHIKIT = True
@@ -30,8 +30,8 @@ HTML_PAGE = """
 <html>
 <head>
   <title>Example</title>
-  <script type="text/javascript" src="jssource"/>
-  <script src="MochiKit/MochiKit.js" type="text/javascript"/>
+  <script type="text/javascript" src="jssource"></script>
+  <script src="http://mochikit.com/MochiKit/MochiKit.js" type="text/javascript"></script>
 </head>
 <body onload="setup_page()">
 <h3>Console</h3>

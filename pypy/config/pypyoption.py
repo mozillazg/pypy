@@ -23,20 +23,17 @@ default_modules.update(dict.fromkeys(
 
 working_modules = default_modules.copy()
 working_modules.update(dict.fromkeys(
-    ["rsocket", "unicodedata", "mmap", "fcntl", "rctime", "select", "bz2",
+    ["rsocket", "unicodedata", "mmap", "fcntl", "rctime", "select",
      "crypt", "signal", "dyngram",
     ]
 ))
-
-if platform.machine() == "x86_64" and sys.maxint != 2147483647:
-    del working_modules['bz2'] # not 64 bit ready
 
 module_dependencies = { }
 if os.name == "posix":
     module_dependencies['rctime'] = [("objspace.usemodules.select", True),]
 
-                              
-pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
+
+pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
     ChoiceOption("name", "Object Space name",
                  ["std", "flow", "logic", "thunk", "cpy", "dump", "taint"],
                  "std",
@@ -49,11 +46,11 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
                  },
                  cmdline='--objspace -o'),
 
-    ChoiceOption("parser", "parser",
+    ChoiceOption("parser", "which parser to use for app-level code",
                  ["pypy", "cpython"], "pypy",
                  cmdline='--parser'),
 
-    ChoiceOption("compiler", "compiler",
+    ChoiceOption("compiler", "which compiler to use for app-level code",
                  ["cpython", "ast"], "ast",
                  cmdline='--compiler'),
 
@@ -106,7 +103,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
                    default=False,
                    requires=[("translation.gc", "boehm")]),
 
-        BoolOption("withprebuiltint", "prebuilt commonly used int objects",
+        BoolOption("withprebuiltint", "prebuild commonly used int objects",
                    default=False,
                    requires=[("objspace.std.withsmallint", False)]),
 
@@ -145,7 +142,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
         BoolOption("withrangelist",
                    "enable special range list implementation that does not "
                    "actually create the full list until the resulting "
-                   "list is mutaged",
+                   "list is mutated",
                    default=False),
 
         BoolOption("withtypeversion",
@@ -160,7 +157,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
                    requires=[("objspace.std.withmultidict", True),
                              ("objspace.std.withtypeversion", True)]),
         BoolOption("withmethodcache",
-                   "try to cache methods",
+                   "try to cache method lookups",
                    default=False,
                    requires=[("objspace.std.withshadowtracking", True)]),
         BoolOption("withmethodcachecounter",
@@ -207,15 +204,15 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Option", [
                              ],
                    cmdline="--faassen", negation=False),
 
-        BoolOption("llvmallopts",
-                   "enable all optimizations, and use llvm compiled via C",
-                   default=False,
-                   requires=[("objspace.std.allopts", True),
-                             ("translation.llvm_via_c", True),
-                             ("translation.backend", "llvm")],
-                   cmdline="--llvm-faassen", negation=False),
+##         BoolOption("llvmallopts",
+##                    "enable all optimizations, and use llvm compiled via C",
+##                    default=False,
+##                    requires=[("objspace.std.allopts", True),
+##                              ("translation.llvm_via_c", True),
+##                              ("translation.backend", "llvm")],
+##                    cmdline="--llvm-faassen", negation=False),
      ]),
-    BoolOption("lowmem", "Try to use little memory during translation",
+    BoolOption("lowmem", "Try to use less memory during translation",
                default=False, cmdline="--lowmem",
                requires=[("objspace.geninterp", False)]),
 

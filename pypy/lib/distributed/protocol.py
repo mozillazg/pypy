@@ -39,7 +39,7 @@ try:
     from pypymagic import transparent_proxy as proxy
     from pypymagic import get_transparent_controller
 except ImportError:
-    raise ImportError("Cannot work without transparent proxy functional")
+    raise ImportError("Cannot work without transparent proxy functionality")
 
 from distributed.objkeeper import ObjKeeper
 import sys
@@ -49,9 +49,11 @@ import sys
 """
 TODO list:
 
-1. Add some garbage collection
-2. Add caching of objects that are presented (even on name level)
-3. Add exceptions, frames and error handling
+1. Garbage collection - we would like probably to use weakrefs, but
+   since they're not perfectly working in pypy, let's leave it alone for now
+2. Some error handling - exceptions are working, there are still some
+   applications where it all explodes.
+3. Support inheritance and recursive types
 """
 
 from pypymagic import pypy_repr

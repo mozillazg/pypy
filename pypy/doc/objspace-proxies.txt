@@ -32,6 +32,9 @@ Here is what we implemented so far, in historical order:
   regular built-in objects (list objects, traceback objects, etc.), but
   completely under the control of the application.
 
+Which object space to use can be chosen with :config:`objspace.name` option.
+
+.. _`Object Space`: objspace.html
 
 .. _thunk:
 
@@ -120,7 +123,7 @@ consistency with logic programming terminology.  It is an "empty" object
 with no initial value at all.  It is possible to put a value into this
 object once, and only once, at any point in time.
 
-This is not entierely unrelated to a lazily-computed object, except that
+This is not entirely unrelated to a lazily-computed object, except that
 the object has no built-in knowledge about how it should compute itself.
 Trying to use such an object before it got a value results in a lock:
 the current thread is suspended, in the hope that another thread will
@@ -157,7 +160,7 @@ places that need to explicitly manipulate that sensitive data; all the
 other places merely pass it around, or do entirely unrelated things.
 
 Nevertheless, if a large application needs to be reviewed for security,
-it must be entierely carefully checked, because it is possible that a
+it must be entirely carefully checked, because it is possible that a
 bug at some apparently unrelated place could lead to a leak of sensitive
 information in a way that an external attacker could exploit.  For
 example, if any part of the application provides web services, an
@@ -451,15 +454,17 @@ Transparent Proxy Implementation
 
 Among the unique features of PyPy, there is as well the possibility of
 having multiple implementations of builtin types. Multiple performance
-optimisations using this features are already implemented, some 
-hints are in the `Object Space`_ document.
+optimisations using this features are already implemented, see the document
+about `alternative object implementations`_.
 
 Transparent proxy are implementations of some (maybe all at some point)
 objects like functions, objects, lists etc. which forwards all
 operations performed on these object to app-level functions which have specific
 signatures.
 
-.. _`Object Space`: objspace.html#object-types
+To enable them, use the :config:`objspace.std.withtproxy` option.
+
+.. _`alternative object implementations`: object-optimizations.html
 
 Example:
 ---------
@@ -510,6 +515,18 @@ Note that ``append`` shows up as ``__getattribute__`` and that the ``type(lst)``
 does not show up at all (indeed the type is the only aspect of the instance that
 the controller cannot change).
 
+Provided API:
+-------------
+
+Transparent proxy provides two magic functions appearing in the pypymagic module.
+
+* `transparent_proxy` - a basic function to create proxy object.
+
+* `get_transparent_controller` - for some use-cases there is need to know
+  when an object is a transparent proxy. This function returns an original controller
+  (a callable) or None in case this is a normal Python object. This is
+  the only official way of distinguishing transparent objects from normal ones.
+
 Further points of interest:
 ---------------------------
 
@@ -541,8 +558,8 @@ user created classes & functions, lists, dicts, exceptions, tracebacks and
 frames.
 
 .. _`standard object space`: objspace.html#the-standard-object-space
-.. _`proxy_helpers.py`: http://codespeak.net/svn/pypy/dist/pypy/objspace/std/proxy_helpers.py
-.. _`proxyobject.py`: http://codespeak.net/svn/pypy/dist/pypy/objspace/std/proxyobject.py
-.. _`transparent.py`: http://codespeak.net/svn/pypy/dist/pypy/objspace/std/transparent.py
+.. _`proxy_helpers.py`: ../../pypy/objspace/std/proxy_helpers.py
+.. _`proxyobject.py`: ../../pypy/objspace/std/proxyobject.py
+.. _`transparent.py`: ../../pypy/objspace/std/transparent.py
 
 .. include:: _ref.txt

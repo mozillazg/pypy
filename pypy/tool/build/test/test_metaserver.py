@@ -157,3 +157,23 @@ def test_cleanup_old_builds():
     assert not bp1.check()
     assert bp2.check()
 
+def test_status():
+    return
+    temppath = py.test.ensuretemp('test_status')
+    config = Container(projectname='test', buildpath=temppath)
+    svr = metaserver.MetaServer(config, FakeChannel())
+    svr._done.append('y')
+    svr._done.append('z')
+    svr._queued.append('spam')
+    svr._queued.append('spam')
+    svr._queued.append('eggs')
+    bs = FakeBuildserver({})
+    bs.busy_on = 'foo'
+    svr._builders.append(bs)
+    assert svr.status() == {
+        'done': 2,
+        'queued': 3,
+        'waiting': 0,
+        'in_progress': 1,
+    }
+
