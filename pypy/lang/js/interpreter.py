@@ -62,6 +62,7 @@ class ListOp(Expression):
 class UnaryOp(Expression):
     def from_tree(self, t):
         self.expr = get_obj(t, '0')
+        self.postfix = bool(get_string(t, 'postfix'))
 
 class BinaryOp(Expression):
     def from_tree(self, t):
@@ -75,6 +76,17 @@ class BinaryComparisonOp(BinaryOp):
         if DEBUG:
             print "bincomp, op1 and op2 ", s2, s4
         return self.decision(ctx, s2, s4)
+    
+    def decision(self, ctx, op1, op2):
+        raise NotImplementedError
+
+class BinaryBitwiseOp(BinaryOp):
+    def eval(self, ctx):
+        s5 = self.left.eval(ctx).GetValue().ToInt32()
+        s6 = self.right.eval(ctx).GetValue().ToInt32()
+        if DEBUG:
+            print "bitwisecomp, op1 and op2 ", s2, s4
+        return self.decision(ctx, s5, s6)
     
     def decision(self, ctx, op1, op2):
         raise NotImplementedError
@@ -150,7 +162,7 @@ def versionjs(ctx, args, this):
 class Interpreter(object):
     """Creates a js interpreter"""
     def __init__(self):
-        w_Global = W_Object()
+        w_Global = W_Object(Class="global")
         ctx = global_context(w_Global)
 
         w_ObjPrototype = W_Object(Prototype=None, Class='Object')
@@ -174,6 +186,8 @@ class Interpreter(object):
         w_Global.Put('Math', w_math)
         w_math.Put('abs', W_Builtin(absjs, Class='function'))
         w_math.Put('floor', W_Builtin(floorjs, Class='function'))
+        w_math.Put('E', W_Number(math.e))
+        w_math.Put('PI', W_Number(math.pi))
         
         w_Global.Put('String', W_Builtin(stringjs, Class='String'))
         
@@ -234,15 +248,27 @@ class Assign(BinaryOp):
         v3 = self.right.eval(ctx).GetValue()
         op = self.value
         if op == "=":
-            v1.PutValue(v3, ctx)
+            val = v3
         elif op == "*":
-            v1.PutValue(Mult().mathop(ctx, v1.GetValue(), v3), ctx)
+            val = Mult().mathop(ctx, v1.GetValue(), v3)
         elif op == "+":
-            v1.PutValue(Plus().mathop(ctx, v1.GetValue(), v3), ctx)
+            val = Plus().mathop(ctx, v1.GetValue(), v3)
+        elif op == "/":
+            val = Div().mathop(ctx, v1.GetValue(), v3)
+        elif op == "%":
+            val = Mod().mathop(ctx, v1.GetValue(), v3)
+        elif op == "&":
+            val = BitwiseAnd().mathop(ctx, v1.GetValue(), v3)
+        elif op == "|":
+            val = BitwiseOR().mathop(ctx, v1.GetValue(), v3)
+        elif op == "^":
+            val = BitwiseXOR().mathop(ctx, v1.GetValue(), v3)
         else:
             print op
             raise NotImplementedError()
-        return v3
+        
+        v1.PutValue(val, ctx)
+        return val
 
 class Block(Statement):
     opcode = 'BLOCK'
@@ -261,6 +287,32 @@ class Block(Statement):
                 return e.value
             else:
                 raise e
+
+class BitwiseAnd(BinaryBitwiseOp):
+    opcode = 'BITWISE_AND'
+    
+    def decision(self, ctx, op1, op2):
+        return W_Number(op1&op2)
+
+class BitwiseNot(UnaryOp):
+    opcode = 'BITWISE_NOT'
+
+    def eval(self, ctx):
+        op1 = self.expr.eval(ctx).GetValue().ToInt32()
+        return W_Number(~op1)
+
+
+class BitwiseOR(BinaryBitwiseOp):
+    opcode = 'BITWISE_OR'
+    
+    def decision(self, ctx, op1, op2):
+        return W_Number(op1|op2)
+
+class BitwiseXOR(BinaryBitwiseOp):
+    opcode = 'BITWISE_XOR'
+    
+    def decision(self, ctx, op1, op2):
+        return W_Number(op1^op2)
 
 class Unconditional(Statement):
     def from_tree(self, t):
@@ -511,6 +563,17 @@ class In(BinaryComparisonOp):
         name = op1.ToString()
         return W_Boolean(op2.HasProperty(name))
 
+class Delete(UnaryOp):
+    opcode = 'DELETE'
+    
+    def eval(self, ctx):
+        r1 = self.expr.eval(ctx)
+        if not isinstance(r1, W_Reference):
+            return W_Boolean(True)
+        r3 = r1.GetBase()
+        r4 = r1.GetPropertyName()
+        return W_Boolean(r3.Delete(r4))
+
 class Increment(UnaryOp):
     opcode = 'INCREMENT'
         
@@ -520,7 +583,26 @@ class Increment(UnaryOp):
         x = val.ToNumber()
         resl = Plus().mathop(ctx, W_Number(x), W_Number(1))
         thing.PutValue(resl, ctx)
-        return val
+        if self.postfix:
+            return val
+        else:
+            return resl
+        
+
+class Decrement(UnaryOp):
+    opcode = 'DECREMENT'
+        
+    def eval(self, ctx):
+        thing = self.expr.eval(ctx)
+        val = thing.GetValue()
+        x = val.ToNumber()
+        resl = Plus().mathop(ctx, W_Number(x), W_Number(-1))
+        thing.PutValue(resl, ctx)
+        if self.postfix:
+            return val
+        else:
+            return resl
+
 
 class Index(BinaryOp):
     opcode = 'INDEX'
@@ -807,13 +889,34 @@ class Void(UnaryOp):
         self.expr.eval(ctx)
         return w_Undefined
 
-class While(Statement):
-    opcode = 'WHILE'
-    
+class WhileBase(Statement):
     def from_tree(self, t):
         self.condition = get_obj(t, 'condition')
         self.body = get_obj(t, 'body')
 
+class Do(WhileBase):
+    opcode = 'DO'
+    
+    def execute(self, ctx):
+        try:
+            self.body.execute(ctx)
+        except ExecutionReturned, e:
+            if e.type == 'break':
+                return
+            elif e.type == 'continue':
+                pass
+        while self.condition.eval(ctx).ToBoolean():
+            try:
+                self.body.execute(ctx)
+            except ExecutionReturned, e:
+                if e.type == 'break':
+                    break
+                elif e.type == 'continue':
+                    continue
+    
+class While(WhileBase):
+    opcode = 'WHILE'
+    
     def execute(self, ctx):
         while self.condition.eval(ctx).ToBoolean():
             try:
@@ -824,6 +927,30 @@ class While(Statement):
                 elif e.type == 'continue':
                     continue
 
+class ForIn(Statement):
+    opcode = 'FOR_IN'
+    
+    def from_tree(self, t):
+        self.object = get_obj(t, 'object')
+        self.body = get_obj(t, 'body')
+        self.iterator = get_obj(t, 'iterator')
+
+    def execute(self, ctx):
+        obj = self.object.eval(ctx).GetValue().ToObject()
+        for prop in obj.propdict.values():
+            if prop.de:
+                continue
+            iterator = self.iterator.eval(ctx)
+            print prop.name
+            iterator.PutValue(prop.value, ctx)
+            try:
+                result = self.body.execute(ctx)
+            except ExecutionReturned, e:
+                if e.type == 'break':
+                    break
+                elif e.type == 'continue':
+                    continue
+    
 class For(Statement):
     opcode = 'FOR'
 
@@ -926,3 +1053,16 @@ def from_tree(t):
     else:
         raise NotImplementedError("Dont know how to handle %s" % opcode)
 
+def wrap_arguments(pyargs):
+    "receives a list of arguments and wrap then in their js equivalents"
+    res = []
+    for arg in pyargs:
+        if isinstance(arg, W_Root):
+            res.append(arg)
+        elif isinstance(arg, str):
+            res.append(W_String(arg))
+        elif isinstance(arg, int) or isinstance(arg, float) or isinstance(arg, long):
+            res.append(W_Number(arg))
+        elif isinstance(arg, bool):
+            res.append(W_Boolean(arg))
+    return res

@@ -1,15 +1,17 @@
 
-
+import autopath
 import py
 
 log = py.log.Producer("log")
 logexec = py.log.Producer("exec")
 
-BASEURL = "file:///svn/pypy/release/0.9.x"
+import os
+
+BASEURL = "file:///svn/pypy/release/0.99.x"
 DDIR = py.path.local('/www/codespeak.net/htdocs/download/pypy')
 
 def usage():
-    print "usage: %s versionbasename" %(py.std.sys.argv[0])
+    print "usage: %s [-tag .<micro>] versionbasename" %(py.std.sys.argv[0])
     raise SystemExit, 1
 
 def cexec(cmd): 
@@ -70,16 +72,46 @@ def forced_export(BASEURL, target, lineend="LF"):
                             %(lineend, BASEURL, target))
     assert target.check(dir=1)
 
+def build_html(target):
+    docdir = target.join('pypy').join('doc')
+    old = docdir.chdir()
+    try:
+        # Generate the html files.
+        cmd = "python2.4 ../test_all.py"
+        logexec(cmd)
+        r = os.system(cmd)
+        if r:
+            raise SystemExit, -1
+        # Remove any .pyc files created in the process
+        target.chdir()
+        out = cexec("find . -name '*.pyc' -print0 | xargs -0 -r rm")
+    finally:
+        old.chdir()
+
 if __name__ == '__main__':
     argc = len(py.std.sys.argv)
     if argc <= 1:
         usage()
-    ver = py.std.sys.argv[1] 
+
+    j = 1
+    if py.std.sys.argv[1] == '-tag':
+        micro = py.std.sys.argv[2]
+        assert micro.startswith('.')
+        NEWURL = BASEURL.replace('.x', micro)
+        r = os.system("svn cp %s %s" % (BASEURL, NEWURL))
+        if r:
+            raise SystemExit, -1
+        BASEURL = NEWURL
+        j = 3
+        
+    ver = py.std.sys.argv[j]
+    assert ver.startswith('pypy-')
     tmpdir = py.path.local("/tmp/pypy-release")
 
     target = tmpdir.join(ver)
 
     forced_export(BASEURL, target, lineend="LF")
+    build_html(target)
     target_targz = maketargz(target)
     assert target_targz.check(file=1) 
     copydownload(target_targz)
@@ -89,6 +121,7 @@ if __name__ == '__main__':
     copydownload(target_tarbzip)
 
     forced_export(BASEURL, target, lineend="CRLF")
+    build_html(target)
     target_zip = makezip(target)
     assert target_zip.check(file=1) 
     copydownload(target_zip)

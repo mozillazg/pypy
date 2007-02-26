@@ -1,11 +1,13 @@
 import py
 from py.__.rest.rst import Rest, Paragraph, Strong, ListItem, Title, Link
-from py.__.rest.rst import Directive
+from py.__.rest.rst import Directive, Em, Quote, Text
 
 from pypy.config.config import ChoiceOption, BoolOption, StrOption, IntOption
 from pypy.config.config import FloatOption, OptionDescription, Option, Config
 from pypy.config.config import ArbitraryOption, DEFAULT_OPTION_NAME
 from pypy.config.config import _getnegation
+
+configdocdir = py.magic.autopath().dirpath().dirpath().join("doc", "config")
 
 def get_fullpath(opt, path):
     if path:
@@ -13,7 +15,13 @@ def get_fullpath(opt, path):
     else:
         return opt._name
 
-   
+
+def get_cmdline(cmdline, fullpath):
+    if cmdline is DEFAULT_OPTION_NAME:
+        return '--%s' % (fullpath.replace('.', '-'),)
+    else:
+        return cmdline
+
 
 class __extend__(Option):
     def make_rest_doc(self, path=""):
@@ -26,10 +34,7 @@ class __extend__(Option):
             ListItem(Strong("name:"), self._name),
             ListItem(Strong("description:"), self.doc))
         if self.cmdline is not None:
-            if self.cmdline is DEFAULT_OPTION_NAME:
-                cmdline = '--%s' % (fullpath.replace('.', '-'),)
-            else:
-                cmdline = self.cmdline
+            cmdline = get_cmdline(self.cmdline, fullpath)
             result.add(ListItem(Strong("command-line:"), cmdline))
         return result
 
@@ -140,15 +145,64 @@ class __extend__(OptionDescription):
         stack = []
         prefix = fullpath
         curr = content
-        for subpath in self.getpaths(include_groups=True):
-            subpath = fullpath + "." + subpath
+        config = Config(self)
+        for ending in self.getpaths(include_groups=True):
+            subpath = fullpath + "." + ending
             while not (subpath.startswith(prefix) and
                        subpath[len(prefix)] == "."):
                 curr, prefix = stack.pop()
-            print subpath, fullpath, curr
-            new = curr.add(ListItem(Link(subpath, subpath + ".html")))
+            print subpath, fullpath, ending, curr
+            sub, step = config._cfgimpl_get_home_by_path(ending)
+            doc = getattr(sub._cfgimpl_descr, step).doc
+            if doc:
+                new = curr.add(ListItem(Link(subpath + ":", subpath + ".html"),
+                                        Em(doc)))
+            else:
+                new = curr.add(ListItem(Link(subpath + ":", subpath + ".html")))
             stack.append((curr, prefix))
             prefix = subpath
             curr = new
         return content
+
+
+def _get_section_header(cmdline, fullpath, subdescr):
+    # XXX:  pypy specific hack
+    txtfile = configdocdir.join(fullpath + ".txt")
+    print txtfile,
+    if not txtfile.check():
+        print "not found"
+        return ""
+    print "found"
+    content = txtfile.read()
+    if ".. internal" in content:
+        return "Internal Options"
+    return ""
+
+def make_cmdline_overview(descr):
+    content = Rest(
+        Title("Overwiew of Command Line Options for '%s'" % (descr._name, ),
+              abovechar="=", belowchar="="))
+    cmdlines = []
+    config = Config(descr)
+    for path in config.getpaths(include_groups=False):
+        subconf, step = config._cfgimpl_get_home_by_path(path)
+        fullpath = (descr._name + "." + path)
+        prefix = fullpath.rsplit(".", 1)[0]
+        subdescr = getattr(subconf._cfgimpl_descr, step)
+        cmdline = get_cmdline(subdescr.cmdline, fullpath)
+        if cmdline is not None:
+            header = _get_section_header(cmdline, fullpath, subdescr)
+            cmdlines.append((header, cmdline, fullpath, subdescr))
+    cmdlines.sort(key=lambda x: (x[0], x[1].strip("-")))
+    currheader = ""
+    curr = content
+    for header, cmdline, fullpath, subdescr in cmdlines:
+        if header != currheader:
+            content.add(Title(header, abovechar="", belowchar="="))
+            curr = content.add(Paragraph())
+            currheader = header
+        curr.add(ListItem(Link(cmdline + ":", fullpath + ".html"),
+                          Text(subdescr.doc)))
+    return content
+    
 

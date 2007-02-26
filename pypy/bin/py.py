@@ -13,7 +13,7 @@ except ImportError:
 
 from pypy.tool import option
 from py.compat.optparse import make_option
-from pypy.interpreter import main, interactive, error
+from pypy.interpreter import main, interactive, error, gateway
 from pypy.config.config import OptionDescription, BoolOption, StrOption
 from pypy.config.config import Config, to_optparse
 import os, sys
@@ -27,8 +27,10 @@ cmdline_optiondescr = OptionDescription("interactive", "the options of py.py", [
     BoolOption("completer", "use readline commandline completer",
                default=False, cmdline="-C"),
     BoolOption("optimize",
-               "dummy optimization flag for compatibility with C Python",
+               "dummy optimization flag for compatibility with CPython",
                default=False, cmdline="-O"),
+    BoolOption("no_site_import", "do not 'import site' on initialization",
+               default=False, cmdline="-S"),
     StrOption("runmodule",
               "library module to be run as a script (terminates option list)",
               default=None, cmdline="-m"),
@@ -36,6 +38,16 @@ cmdline_optiondescr = OptionDescription("interactive", "the options of py.py", [
               "program passed in as CMD (terminates option list)",
               default=None, cmdline="-c"),
     ])
+
+pypy_init = gateway.applevel('''
+def pypy_init(import_site):
+    if import_site:
+        try:
+            import site
+        except:
+            import sys
+            print >> sys.stderr, "import site' failed"
+''').interphook('pypy_init')
 
 def main_(argv=None):
     starttime = time.time()
@@ -90,6 +102,7 @@ def main_(argv=None):
     try:
         def do_start():
             space.startup()
+            pypy_init(space, space.wrap(not interactiveconfig.no_site_import))
         if main.run_toplevel(space, do_start,
                              verbose=interactiveconfig.verbose):
             # compile and run it

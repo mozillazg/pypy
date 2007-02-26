@@ -169,6 +169,14 @@ class MetaServer(object):
         finally:
             self._queuelock.release()
 
+    def status(self):
+        # XXX temporary
+        in_progress = len([b for b in self._builders if b.busy_on])
+        return {'in_progress': in_progress,
+                'queued': len(self._queued),
+                'waiting': len(self._waiting),
+                'done': len(self._done)}
+
     def _cleanup_builders(self):
         self._queuelock.acquire()
         try:

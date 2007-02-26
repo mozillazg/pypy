@@ -1,5 +1,5 @@
 from pypy.doc.confrest import *
-import pypy.config.makerestdoc
+from pypy.config.makerestdoc import make_cmdline_overview
 from pypy.config.config import Config
 from pypy.config import pypyoption, translationoption
 
@@ -16,10 +16,10 @@ class PyPyPage(PyPyPage):
         self.menubar[:] = html.div(
             html.a("general documentation", href="../index.html",
                    class_="menu"), " ",
-            html.a("translation options", href="translation.html", 
-                   class_="menu"), 
-            html.a("standard interpreter options", href="objspace.html", 
-                   class_="menu"), 
+            html.a("config index", href="index.html",
+                   class_="menu"), " ",
+            html.a("command-line overview", href="commandline.html",
+                   class_="menu"), " ",
             " ", id="menubar")
 
 class Project(Project): 
@@ -29,10 +29,20 @@ class Project(Project):
     Page = PyPyPage 
 
     def get_content(self, txtpath, encoding):
+        if txtpath.basename == "commandline.txt":
+            result = [".. contents::"]
+            for descr in all_optiondescrs:
+                result.append(".. %s_:\n" % (descr._name, ))
+                result.append(make_cmdline_overview(descr).text())
+                result.append("")
+            result.append(txtpath.read())
+            return "\n".join(result)
         fullpath = txtpath.purebasename
         start = fullpath.split(".")[0]
         path = fullpath.rsplit(".", 1)[0]
-        basedescr = start_to_descr[start]
+        basedescr = start_to_descr.get(start)
+        if basedescr is None:
+            return txtpath.read()
         if fullpath.count(".") == 0:
             descr = basedescr
             path = ""
@@ -43,6 +53,9 @@ class Project(Project):
             descr = getattr(subconf._cfgimpl_descr, step)
         text = unicode(descr.make_rest_doc(path).text())
         if txtpath.check(file=True):
-            return u"%s\n\n%s" % (text, unicode(txtpath.read(), encoding))
+            content = txtpath.read()
+            if content:
+                text += "\nDescription\n==========="
+                return u"%s\n\n%s" % (text, unicode(txtpath.read(), encoding))
         return text
 
