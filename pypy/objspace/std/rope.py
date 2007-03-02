@@ -282,8 +282,8 @@ def multiply(node, times):
     if times == 1:
         return node
     end_length = node.length() * times
-    num_bits = 0
-    mask = times
+    num_bits = 2
+    mask = times >> 2
     while mask:
         num_bits += 1
         mask >>= 1
