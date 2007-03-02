@@ -888,7 +888,7 @@ def ord__Rope(space, w_str):
         raise OperationError(
             space.w_TypeError,
             space.wrap("ord() expected a character, but string "
-                       "of length %d found"%(len(w_str._value),)))
+                       "of length %d found"% (w_str._node.length(),)))
     return space.wrap(ord(node.flatten()[0]))
 
 def getnewargs__Rope(space, w_str):
