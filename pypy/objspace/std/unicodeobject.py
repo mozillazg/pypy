@@ -1,6 +1,7 @@
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
 from pypy.objspace.std.stringobject import W_StringObject
+from pypy.objspace.std.ropeobject import W_RopeObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
@@ -100,11 +101,17 @@ def add__Unicode_Unicode(space, w_left, w_right):
 def add__String_Unicode(space, w_left, w_right):
     return space.add(space.call_function(space.w_unicode, w_left) , w_right)
 
+add__Rope_Unicode = add__String_Unicode
+
 def add__Unicode_String(space, w_left, w_right):
     return space.add(w_left, space.call_function(space.w_unicode, w_right))
 
+add__Unicode_Rope = add__Unicode_String
+
 def contains__String_Unicode(space, w_container, w_item):
     return space.contains(space.call_function(space.w_unicode, w_container), w_item )
+contains__Rope_Unicode = contains__String_Unicode
+
 
 def _find(self, sub, start, end):
     if len(sub) == 0:
@@ -388,6 +395,7 @@ def unicode_strip__Unicode_Unicode(space, w_self, w_chars):
 def unicode_strip__Unicode_String(space, w_self, w_chars):
     return space.call_method(w_self, 'strip',
                              space.call_function(space.w_unicode, w_chars))
+unicode_strip__Unicode_Rope = unicode_strip__Unicode_String
 
 def unicode_lstrip__Unicode_None(space, w_self, w_chars):
     return _strip_none(space, w_self, 1, 0)
@@ -397,6 +405,8 @@ def unicode_lstrip__Unicode_String(space, w_self, w_chars):
     return space.call_method(w_self, 'lstrip',
                              space.call_function(space.w_unicode, w_chars))
 
+unicode_lstrip__Unicode_Rope = unicode_lstrip__Unicode_String
+
 def unicode_rstrip__Unicode_None(space, w_self, w_chars):
     return _strip_none(space, w_self, 0, 1)
 def unicode_rstrip__Unicode_Unicode(space, w_self, w_chars):
@@ -404,6 +414,8 @@ def unicode_rstrip__Unicode_Unicode(space, w_self, w_chars):
 def unicode_rstrip__Unicode_String(space, w_self, w_chars):
     return space.call_method(w_self, 'rstrip',
                              space.call_function(space.w_unicode, w_chars))
+
+unicode_rstrip__Unicode_Rope = unicode_rstrip__Unicode_String
 
 def unicode_capitalize__Unicode(space, w_self):
     input = w_self._value
@@ -999,41 +1011,49 @@ class str_methods:
     import stringtype
     W_UnicodeObject = W_UnicodeObject
     from pypy.objspace.std.stringobject import W_StringObject
+    from pypy.objspace.std.ropeobject import W_RopeObject
     def str_strip__String_Unicode(space, w_self, w_chars):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'strip', w_chars)
+    str_strip__Rope_Unicode = str_strip__String_Unicode
     def str_lstrip__String_Unicode(space, w_self, w_chars):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'lstrip', w_chars)
+    str_lstrip__Rope_Unicode = str_lstrip__String_Unicode
     def str_rstrip__String_Unicode(space, w_self, w_chars):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'rstrip', w_chars)
+    str_rstrip__Rope_Unicode = str_rstrip__String_Unicode
     def str_count__String_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'count', w_substr, w_start, w_end)
+    str_count__Rope_Unicode_ANY_ANY = str_count__String_Unicode_ANY_ANY
     def str_find__String_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'find', w_substr, w_start, w_end)
+    str_find__Rope_Unicode_ANY_ANY = str_find__String_Unicode_ANY_ANY
     def str_rfind__String_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'rfind', w_substr, w_start, w_end)
+    str_rfind__Rope_Unicode_ANY_ANY = str_rfind__String_Unicode_ANY_ANY
     def str_index__String_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'index', w_substr, w_start, w_end)
+    str_index__Rope_Unicode_ANY_ANY = str_index__String_Unicode_ANY_ANY
     def str_rindex__String_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'rindex', w_substr, w_start, w_end)
-
+    str_rindex__Rope_Unicode_ANY_ANY = str_rindex__String_Unicode_ANY_ANY
     def str_replace__String_Unicode_Unicode_ANY(space, w_self, w_old, w_new, w_maxsplit):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'replace', w_old, w_new, w_maxsplit)
-
+    str_replace__Rope_Unicode_Unicode_ANY = str_replace__String_Unicode_Unicode_ANY
     def str_split__String_Unicode_ANY(space, w_self, w_delim, w_maxsplit):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'split', w_delim, w_maxsplit)
-
+    str_split__Rope_Unicode_ANY = str_split__String_Unicode_ANY
     def str_rsplit__String_Unicode_ANY(space, w_self, w_delim, w_maxsplit):
         return space.call_method(space.call_function(space.w_unicode, w_self),
                                  'rsplit', w_delim, w_maxsplit)
-
+    str_rsplit__Rope_Unicode_ANY = str_rsplit__String_Unicode_ANY
     register_all(vars(), stringtype)
