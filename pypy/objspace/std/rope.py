@@ -198,9 +198,8 @@ def concatenate(node1, node2):
     return result
 
 def getslice(node, start, stop, step, slicelength):
-    start, stop, node = find_straddling(node, start, stop)
     if step != 1:
-        # XXX optimize later using SeekableCharIterator
+        start, stop, node = find_straddling(node, start, stop)
         iter = SeekableCharIterator(node)
         iter.seekforward(start)
         result = [iter.next()]
@@ -211,6 +210,7 @@ def getslice(node, start, stop, step, slicelength):
     return getslice_one(node, start, stop)
 
 def getslice_one(node, start, stop):
+    start, stop, node = find_straddling(node, start, stop)
     if isinstance(node, BinaryConcatNode):
         if start == 0:
             if stop == node.length():
