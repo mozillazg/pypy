@@ -857,7 +857,7 @@ def mul_string_times(space, w_str, w_times):
     except OverflowError:
         raise OperationError(
             space.w_OverflowError, 
-            space.wrap("repeated string is too long: %d %d" % (input_len, mul)))
+            space.wrap("repeated string is too long: %d %d" % (length, mul)))
     return W_RopeObject(rope.multiply(node, mul))
 
 def mul__Rope_ANY(space, w_str, w_times):
