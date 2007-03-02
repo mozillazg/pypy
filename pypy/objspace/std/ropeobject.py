@@ -268,11 +268,11 @@ def str_split__Rope_Rope_ANY(space, w_self, w_by, w_maxsplit=-1):
     start = 0
     selfnode = w_self._node
     bynode = w_by._node
-    iter = rope.FindIterator(selfnode, bynode)
     bylen = bynode.length()
     if bylen == 0:
         raise OperationError(space.w_ValueError, space.wrap("empty separator"))
 
+    iter = rope.FindIterator(selfnode, bynode)
     while maxsplit != 0:
         try:
             next = iter.next()

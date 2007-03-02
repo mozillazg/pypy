@@ -90,6 +90,14 @@ def test_getslice():
             for stop in range(start, len(result)):
                 assert s[start:stop].flatten() == result[start:stop]
 
+def test_getslice_bug():
+    s1 = LiteralStringNode("/home/arigo/svn/pypy/branch/rope-branch/pypy/bin")
+    s2 = LiteralStringNode("/pypy")
+    s = s1 + s2
+    r = getslice_one(s, 1, 5)
+    assert r.flatten() == "home"
+
+
 def test_getslice_step():
     s1 = (LiteralStringNode("abcde") + LiteralStringNode("fghijklm") +
           LiteralStringNode("nopqrstu") + LiteralStringNode("vwxyz") + 
