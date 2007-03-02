@@ -25,7 +25,7 @@ class W_RopeObject(W_Object):
         return w_self._node.flatten()
 
     def create_if_subclassed(w_self):
-        if type(w_self) == W_RopeObject:
+        if type(w_self) is W_RopeObject:
             return w_self
         return W_RopeObject(w_self._node)
 
