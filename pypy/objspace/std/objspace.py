@@ -335,6 +335,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
             else:
                 return self.newint(x)
         if isinstance(x, str):
+            if self.config.objspace.std.withrope:
+                from pypy.objspace.std.ropeobject import rope, W_RopeObject
+                return W_RopeObject(rope.LiteralStringNode(x))
             return W_StringObject(x)
         if isinstance(x, unicode):
             return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
@@ -468,7 +471,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
         except ValueError:  # chr(out-of-range)
             raise OperationError(self.w_ValueError,
                                  self.wrap("character code not in range(256)"))
-        return W_StringObject(''.join(chars))
+        if self.config.objspace.std.withrope:
+            from pypy.objspace.std.ropeobject import W_RopeObject, rope
+            return W_RopeObject(rope.rope_from_charlist(chars))
+        else:
+            return W_StringObject(''.join(chars))
 
     def newunicode(self, chars):
         try:

@@ -4,6 +4,7 @@ from pypy.objspace.std.basestringtype import basestring_typedef
 from sys import maxint
 
 def sliced(space, s, start, stop):
+    assert not space.config.objspace.std.withrope
     if space.config.objspace.std.withstrslice:
         from pypy.objspace.std.strsliceobject import W_StringSliceObject
         from pypy.objspace.std.stringobject import W_StringObject
@@ -17,6 +18,7 @@ def sliced(space, s, start, stop):
         return W_StringObject(s[start:stop])
 
 def joined(space, strlist):
+    assert not space.config.objspace.std.withrope
     if space.config.objspace.std.withstrjoin:
         from pypy.objspace.std.strjoinobject import W_StringJoinObject
         return W_StringJoinObject(strlist)
@@ -222,9 +224,15 @@ def descr__new__(space, w_stringtype, w_object=''):
     if space.is_w(w_stringtype, space.w_str):
         return w_obj  # XXX might be reworked when space.str() typechecks
     value = space.str_w(w_obj)
-    w_obj = space.allocate_instance(W_StringObject, w_stringtype)
-    W_StringObject.__init__(w_obj, value)
-    return w_obj
+    if space.config.objspace.std.withrope:
+        from pypy.objspace.std.ropeobject import rope, W_RopeObject
+        w_obj = space.allocate_instance(W_RopeObject, w_stringtype)
+        W_RopeObject.__init__(w_obj, rope.LiteralStringNode(value))
+        return w_obj
+    else:
+        w_obj = space.allocate_instance(W_StringObject, w_stringtype)
+        W_StringObject.__init__(w_obj, value)
+        return w_obj
 
 # ____________________________________________________________
 
