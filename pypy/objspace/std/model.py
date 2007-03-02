@@ -114,7 +114,7 @@ class StdTypeModel:
         self.typeorder[setobject.W_FrozensetObject] = []
         self.typeorder[setobject.W_SetIterObject] = []
 
-        imported_but_not_registered = {
+        self.imported_but_not_registered = {
             dictobject.W_DictObject: True,
             dictobject.W_DictIterObject: True,
             listobject.W_ListObject: True,
@@ -127,7 +127,7 @@ class StdTypeModel:
                     if value:
                         self.typeorder[implcls] = []
                     else:
-                        imported_but_not_registered[implcls] = True
+                        self.imported_but_not_registered[implcls] = True
 
         if (config.objspace.std.withstrdict or
             config.objspace.std.withmultidict):
@@ -143,7 +143,7 @@ class StdTypeModel:
         from pypy.objspace.std.objspace import _registered_implementations
         for implcls in _registered_implementations:
             assert (implcls in self.typeorder or
-                    implcls in imported_but_not_registered), (
+                    implcls in self.imported_but_not_registered), (
                 "please add %r in StdTypeModel.typeorder" % (implcls,))
 
 
