@@ -19,6 +19,14 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
         assert lst == ['', 'home', 'arigo', 'svn', 'pypy',
                        'branch', 'rope-branch', 'pypy', 'bin', 'pypy']
 
+    def test_ord(self):
+        s = ''
+        s += '0'
+        assert ord(s) == 48
+        raises(TypeError, ord, '')
+        s += '3'
+        raises(TypeError, ord, s)
+
 class AppTestRopeUnicode(object):
 
     def setup_class(cls):
