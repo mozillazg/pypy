@@ -12,6 +12,13 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
         import sys
         raises(OverflowError, '"abcdefg" * (sys.maxint // 2)')
 
+    def test_split_bug(self):
+        s = '/home/arigo/svn/pypy/branch/rope-branch/pypy/bin'
+        s += '/pypy'
+        lst = s.split('/')
+        assert lst == ['', 'home', 'arigo', 'svn', 'pypy',
+                       'branch', 'rope-branch', 'pypy', 'bin', 'pypy']
+
 class AppTestRopeUnicode(object):
 
     def setup_class(cls):
