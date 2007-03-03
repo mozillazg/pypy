@@ -792,7 +792,7 @@ def hash__Rope(space, w_str):
     if w_hash is None:
         node = w_str._node
         x = rope.hash_rope(node)
-        w_hash = node._w_hash = wrapint(space, x)
+        w_hash = w_str._w_hash = wrapint(space, x)
     return w_hash
 
 def lt__Rope_Rope(space, w_str1, w_str2):
