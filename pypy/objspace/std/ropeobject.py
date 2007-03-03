@@ -16,6 +16,7 @@ class W_RopeObject(W_Object):
 
     def __init__(w_self, node):
         w_self._node = node
+        w_self._w_hash = None
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -787,9 +788,12 @@ def str_w__Rope(space, w_str):
     return w_str._node.flatten()
 
 def hash__Rope(space, w_str):
-    node = w_str._node
-    x = rope.hash_rope(node)
-    return wrapint(space, x)
+    w_hash = w_str._w_hash
+    if w_hash is None:
+        node = w_str._node
+        x = rope.hash_rope(node)
+        w_hash = node._w_hash = wrapint(space, x)
+    return w_hash
 
 def lt__Rope_Rope(space, w_str1, w_str2):
     n1 = w_str1._node
