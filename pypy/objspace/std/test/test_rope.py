@@ -181,6 +181,13 @@ def test_join():
         for i in range(node.length()):
             assert result1[i] == result2[i]
 
+    strings = ['', '<',
+               '/home/arigo/svn/pypy/branch/rope-branch/py/code/source.py',
+               ':', '213', '>']
+    l = [LiteralStringNode(s) for s in strings]
+    node = join(LiteralStringNode(""), l)
+    assert node.flatten() == ''.join(strings)
+
 def test_join_random():
     l, strs = zip(*[make_random_string(10 * i) for i in range(1, 5)])
     l = list(l)

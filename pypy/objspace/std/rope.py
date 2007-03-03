@@ -322,42 +322,51 @@ def join(node, l):
     return rebalance(nodelist, length)
 
 def rebalance(nodelist, sizehint=-1):
-    if not nodelist:
-        return LiteralStringNode("")
     nodelist.reverse()
     if sizehint < 0:
         sizehint = 0
         for node in nodelist:
             sizehint += node.length()
+    if sizehint == 0:
+        return LiteralStringNode("")
+
+    # this code is based on the Fibonacci identity:
+    #   sum(fib(i) for i in range(n+1)) == fib(n+2)
     l = [None] * (find_fib_index(sizehint) + 2)
     stack = nodelist
     i = 0
     curr = None
     while stack:
         curr = stack.pop()
-        while 1:
-            if isinstance(curr, BinaryConcatNode) and not curr.balanced:
-                stack.append(curr.right)
-                curr = curr.left
+        while isinstance(curr, BinaryConcatNode) and not curr.balanced:
+            stack.append(curr.right)
+            curr = curr.left
+
+        currlen = curr.length()
+        if currlen == 0:
+            continue
+        i = 0
+        a, b = 1, 2
+        while not (currlen < b and l[i] is None):
+            if l[i] is not None:
+                curr = concatenate(l[i], curr)
+                l[i] = None
+                currlen = curr.length()
             else:
-                i = orig_i = find_fib_index(curr.length())
-                index = 0
-                added = False
-                while index <= i:
-                    if l[index] is not None:
-                        curr = concatenate(l[index], curr)
-                        l[index] = None
-                        if index >= orig_i or not added:
-                            i += 1
-                            added = True
-                    index += 1
-                if i == len(l):
-                    return curr
-                l[i] = curr
-                break
-    for index in range(i + 1, len(l)):
+                i += 1
+                a, b = b, a+b
+        if i == len(l):
+            return curr
+        l[i] = curr
+
+    #for index in range(i + 1, len(l)):
+    curr = None
+    for index in range(len(l)):
         if l[index] is not None:
-            curr = BinaryConcatNode(l[index], curr)
+            if curr is None:
+                curr = l[index]
+            else:
+                curr = BinaryConcatNode(l[index], curr)
     assert curr is not None
     curr.check_balanced()
     return curr
