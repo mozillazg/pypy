@@ -296,6 +296,12 @@ def test_hash():
     for i in range(10):
         rope, st = make_random_string()
         assert hash_rope(rope) == _hash_string(st)
+        rope = LiteralStringNode(st)
+        assert hash_rope(rope) == _hash_string(st)
+        charlist = [chr(random.randrange(0, 256)) for i in range(10)]
+        st = "".join(charlist)
+        rope = LiteralStringNode(st)
+        assert hash_rope(rope) == _hash_string(st)
 
 def test_equality():
     l = [make_random_string() for i in range(3)]
