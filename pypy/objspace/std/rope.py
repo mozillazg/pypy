@@ -334,8 +334,9 @@ def rebalance(nodelist, sizehint=-1):
     #   sum(fib(i) for i in range(n+1)) == fib(n+2)
     l = [None] * (find_fib_index(sizehint) + 2)
     stack = nodelist
-    i = 0
-    curr = None
+    empty_up_to = len(l)
+    a = b = sys.maxint
+    first_node = None
     while stack:
         curr = stack.pop()
         while isinstance(curr, BinaryConcatNode) and not curr.balanced:
@@ -345,28 +346,36 @@ def rebalance(nodelist, sizehint=-1):
         currlen = curr.length()
         if currlen == 0:
             continue
-        i = 0
-        a, b = 1, 2
-        while not (currlen < b and l[i] is None):
-            if l[i] is not None:
-                curr = concatenate(l[i], curr)
-                l[i] = None
-                currlen = curr.length()
-            else:
-                i += 1
-                a, b = b, a+b
-        if i == len(l):
-            return curr
-        l[i] = curr
 
-    #for index in range(i + 1, len(l)):
-    curr = None
-    for index in range(len(l)):
+        if currlen < a:
+            # we can put 'curr' to its preferred location, which is in
+            # the known empty part at the beginning of 'l'
+            a, b = 1, 2
+            empty_up_to = 0
+            while not (currlen < b):
+                empty_up_to += 1
+                a, b = b, a+b
+        else:
+            # sweep all elements up to the preferred location for 'curr'
+            while not (currlen < b and l[empty_up_to] is None):
+                if l[empty_up_to] is not None:
+                    curr = concatenate(l[empty_up_to], curr)
+                    l[empty_up_to] = None
+                    currlen = curr.length()
+                else:
+                    empty_up_to += 1
+                    a, b = b, a+b
+
+        if empty_up_to == len(l):
+            return curr
+        l[empty_up_to] = curr
+        first_node = curr
+
+    # sweep all elements
+    curr = first_node
+    for index in range(empty_up_to + 1, len(l)):
         if l[index] is not None:
-            if curr is None:
-                curr = l[index]
-            else:
-                curr = BinaryConcatNode(l[index], curr)
+            curr = BinaryConcatNode(l[index], curr)
     assert curr is not None
     curr.check_balanced()
     return curr
