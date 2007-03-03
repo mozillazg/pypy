@@ -27,14 +27,16 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
         s += '3'
         raises(TypeError, ord, s)
 
-    def test_hash_twice(self):
+    def test_hash_cache(self):
         # check that we have the same hash as CPython for at least 31 bits
         # (but don't go checking CPython's special case -1)
         # check twice to catch hash cache problems`
         s1 = 'hello'
         s2 = 'hello world!'
+        assert hash(s1) is hash(s1) # does the caching actually work?
         assert hash(s1) & 0x7fffffff == 0x347697fd
         assert hash(s1) & 0x7fffffff == 0x347697fd
+        assert hash(s2) is hash(s2) # does the caching actually work?
         assert hash(s2) & 0x7fffffff == 0x2f0bb411
         assert hash(s2) & 0x7fffffff == 0x2f0bb411
 
