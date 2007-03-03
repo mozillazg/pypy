@@ -293,8 +293,9 @@ def test_find_iterator():
 
 def test_hash():
     from pypy.rlib.rarithmetic import _hash_string
-    rope, st = make_random_string()
-    assert hash_rope(rope) == _hash_string(st)
+    for i in range(10):
+        rope, st = make_random_string()
+        assert hash_rope(rope) == _hash_string(st)
 
 def test_equality():
     l = [make_random_string() for i in range(3)]
