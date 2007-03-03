@@ -73,6 +73,7 @@ class LiteralStringNode(StringNode):
         return self.s[index]
 
     def getitem_slice(self, start, stop):
+        assert 0 <= start <= stop
         return LiteralStringNode(self.s[start:stop])
 
     def dot(self, seen, toplevel=False):
@@ -90,7 +91,7 @@ class LiteralStringNode(StringNode):
 class BinaryConcatNode(StringNode):
     def __init__(self, left, right):
         self.left = left
-	self.right = right
+        self.right = right
         self.len = left.length() + right.length()
         self._depth = max(left.depth(), right.depth()) + 1
         self.balanced = False
@@ -150,9 +151,10 @@ class BinaryConcatNode(StringNode):
 
 class SliceNode(StringNode):
     def __init__(self, start, stop, node):
+        assert 0 <= start <= stop
         self.start = start
-	self.stop = stop
-	self.node = node
+        self.stop = stop
+        self.node = node
 
     def length(self):
         return self.stop - self.start
@@ -385,6 +387,7 @@ def find_char(node, c, start=0, stop=-1):
         offset = start - newstart
         start = newstart
         stop = newstop
+    assert 0 <= start <= stop
     if isinstance(node, LiteralStringNode):
         result = node.s.find(c, start, stop)
         if result == -1:
@@ -537,7 +540,7 @@ def view(objs):
 class FringeIterator(object):
     def __init__(self, node):
         self.stack = [node]
-	
+
     def next(self):
         while self.stack:
             curr = self.stack.pop()
@@ -563,7 +566,7 @@ class SeekableFringeIterator(object):
         self.stack = [node]
         self.fringestack = []
         self.fringe = []
-	
+
     def next(self):
         if self.fringestack:
             result = self.fringestack.pop()
