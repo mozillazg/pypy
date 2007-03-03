@@ -766,20 +766,19 @@ def compare(node1, node2):
 
 
 def hash_rope(rope):
-    from pypy.rlib.rarithmetic import intmask
+    from pypy.rlib.rarithmetic import intmask, _hash_string
     from pypy.rlib.objectmodel import we_are_translated
     length = rope.length()
     if length == 0:
         x = -1
     elif isinstance(rope, LiteralStringNode):
         if we_are_translated():
-            x = hash(s)            # to use the hash cache in rpython strings
+            return hash(rope.s) # to use the hash cache in rpython strings
         else:
             # to make sure we get the same hash as rpython (otherwise
             # translation will freeze W_DictObjects where we can't find the
             # keys any more!)
-            x = _hash_string(s)
-        return hash(rope.s)
+            return _hash_string(rope.s)
     else:
         x = ord(rope.getitem(0)) << 7
         iter = CharIterator(rope)
