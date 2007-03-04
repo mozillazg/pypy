@@ -393,19 +393,45 @@ def contains__String_String(space, w_self, w_sub):
     return space.newbool(self.find(sub) >= 0)
 
 def str_find__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     return space.wrap(res)
 
 def str_rfind__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     return space.wrap(res)
 
-def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
+def str_partition__String_String(space, w_self, w_sub):
+    self = w_self._value
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.find(sub)
+    if pos == -1:
+        return space.newtuple([w_self, space.wrap(''), space.wrap('')])
+    else:
+        return space.newtuple([sliced(space, self, 0, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), len(self))])
 
+def str_rpartition__String_String(space, w_self, w_sub):
+    self = w_self._value
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.rfind(sub)
+    if pos == -1:
+        return space.newtuple([space.wrap(''), space.wrap(''), w_self])
+    else:
+        return space.newtuple([sliced(space, self, 0, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), len(self))])
+
+
+def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     if res < 0:
@@ -416,7 +442,6 @@ def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
 
 def str_rindex__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     if res < 0:
@@ -427,7 +452,6 @@ def str_rindex__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
 
 def str_replace__String_String_String_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
-
     input = w_self._value
     sub = w_sub._value
     by = w_by._value

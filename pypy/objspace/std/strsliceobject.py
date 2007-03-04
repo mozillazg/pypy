@@ -5,7 +5,7 @@ from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.inttype import wrapint
 
-from pypy.objspace.std.stringtype import wrapstr, wrapchar
+from pypy.objspace.std.stringtype import wrapstr, wrapchar, sliced
 
 
 class W_StringSliceObject(W_Object):
@@ -63,7 +63,6 @@ def _convert_idx_params(space, w_self, w_sub, w_start, w_end):
 
 
 def str_find__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     if res >= 0:
@@ -71,13 +70,41 @@ def str_find__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     else:
         return space.wrap(res)
 
+def str_partition__StringSlice_String(space, w_self, w_sub):
+    self = w_self.str
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.find(sub, w_self.start, w_self.stop)
+    if pos == -1:
+        return space.newtuple([w_self, space.wrap(''), space.wrap('')])
+    else:
+        return space.newtuple([sliced(space, self, w_self.start, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), w_self.stop)])
+
+def str_rpartition__StringSlice_String(space, w_self, w_sub):
+    self = w_self.str
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.rfind(sub, w_self.start, w_self.stop)
+    if pos == -1:
+        return space.newtuple([space.wrap(''), space.wrap(''), w_self])
+    else:
+        return space.newtuple([sliced(space, self, w_self.start, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), w_self.stop)])
+
+
 def str_count__StringSlice_String_ANY_ANY(space, w_self, w_arg, w_start, w_end): 
     (s, arg, start, end) =  _convert_idx_params(
             space, w_self, w_arg, w_start, w_end)
     return wrapint(space, s.count(arg, start, end))
 
 def str_rfind__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     if res >= 0:
@@ -86,7 +113,6 @@ def str_rfind__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
         return space.wrap(res)
 
 def str_index__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     if res < 0:
@@ -97,7 +123,6 @@ def str_index__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
 
 def str_rindex__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     if res < 0:
