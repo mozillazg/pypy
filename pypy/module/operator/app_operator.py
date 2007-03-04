@@ -1,9 +1,8 @@
-'''NOT_RPYTHON: Operator interface.
+'''Operator interface.
 
 This module exports a set of operators as functions. E.g. operator.add(x,y) is
 equivalent to x+y.
 '''
-import __builtin__
 
 def attrgetter(attr):
     def f(obj):
@@ -41,10 +40,6 @@ def indexOf(a, b):
         index += 1
     raise ValueError, 'sequence.index(x): x not in sequence'
 
-def isCallable(obj,):
-    'isCallable(a) -- Same as callable(a).'
-    return callable(obj) 
-
 # XXX the following is approximative
 def isMappingType(obj,):
     'isMappingType(a) -- Return True if a has a mapping type, False otherwise.'
@@ -72,21 +67,8 @@ def repeat(obj, num):
                        # protocol. We support any with a __mul__
 __repeat__ = repeat
 
-def sequenceIncludes(a, b):
-    'sequenceIncludes(a, b) -- Same as b in a (note reversed operands; deprecated).'
-    for x in a:
-        if x == b:
-            return True
-    return False
-
 def setslice(a, b, c, d):
     'setslice(a, b, c, d) -- Same as a[b:c] = d.'
     a[b:c] = d 
 __setslice__ = setslice
 
-exec """from __future__ import division
-def truediv(a, b):
-    'truediv(a, b) -- Same as a / b when __future__.division is in effect.'
-    return a / b 
-"""
-__truediv__ = truediv
