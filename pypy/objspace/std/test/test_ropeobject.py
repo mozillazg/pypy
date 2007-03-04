@@ -33,14 +33,31 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
         # check twice to catch hash cache problems`
         s1 = 'hello'
         s2 = 'hello world!'
-        assert hash(s1) is hash(s1) # does the caching actually work?
         assert hash(s1) & 0x7fffffff == 0x347697fd
         assert hash(s1) & 0x7fffffff == 0x347697fd
-        assert hash(s2) is hash(s2) # does the caching actually work?
         assert hash(s2) & 0x7fffffff == 0x2f0bb411
         assert hash(s2) & 0x7fffffff == 0x2f0bb411
 
-
+    def test_rope_equality(self):
+        # make sure that they are not just literal nodes
+        s1 = 'hello' * 1000
+        s2 = ('he' + 'llo') * 1000
+        s3 = 'HELLO' * 1000
+        s4 = 'World!' * 1000
+        # fill hash caches one by one:
+        for s in [None, s1, s2, s3, s4]:
+            hash(s)
+            assert s1 == s1
+            assert s1 == s2
+            assert s1 != s3
+            assert s1 != s4
+            assert s2 == s2
+            assert s2 != s3
+            assert s2 != s4
+            assert s3 == s3
+            assert s3 != s4
+            assert s4 == s4
+ 
 class AppTestRopeUnicode(object):
 
     def setup_class(cls):
