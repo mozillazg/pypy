@@ -29,12 +29,13 @@ def contains(space, w_obj1, w_obj2):
     'contains(a, b) -- Same as b in a (note reversed operands).'
     return space.contains(w_obj1, w_obj2)
 __contains__ = contains
+sequenceIncludes = contains
 
 # countOf
 
 def delitem(space, w_obj, w_key):
     'delitem(a,b) -- Same as del a[b]'
-    space.delete(w_obj, w_key)
+    space.delitem(w_obj, w_key)
 
 __delitem__ = delitem
 
@@ -84,7 +85,9 @@ def invert(space, w_obj,):
     return space.invert(w_obj) 
 __invert__ = invert
 
-# isCallable
+def isCallable(space, w_obj):
+    'isCallable(a) -- Same as callable(a).'
+    return space.callable(w_obj)
 
 # isMappingType
 
@@ -92,7 +95,7 @@ __invert__ = invert
 
 # isSequenceType
 
-def _is(space, w_a, w_b):
+def is_(space, w_a, w_b):
     'is_(a,b) -- Same as a is b'
     return space.is_(w_a, w_b)
 
@@ -154,7 +157,7 @@ __pos__ = pos
 
 def pow(space, w_a, w_b):
     'pow(a, b) -- Same as a**b.'
-    return space.pow(w_a, w_b)
+    return space.pow(w_a, w_b, space.w_None)
 __pow__ = pow
 
 # reapeat
@@ -178,9 +181,14 @@ def sub(space, w_a, w_b):
     return space.sub(w_a, w_b) 
 __sub__ = sub
 
+def truediv(space, w_a, w_b):
+    'truediv(a, b) -- Same as a / b when __future__.division is in effect.'
+    return space.truediv(w_a, w_b)
+__truediv__ = truediv
+
 def truth(space, w_a,):
     'truth(a) -- Return True if a is true, False otherwise.'
-    return space.is_true(w_a) 
+    return space.nonzero(w_a)
 
 def xor(space, w_a, w_b):
     'xor(a, b) -- Same as a ^ b.'
