@@ -61,3 +61,13 @@ list(sequence) -> new list initialized from sequence's items''',
     __hash__ = no_hash_descr,
     )
 list_typedef.registermethods(globals())
+
+# ____________________________________________________________
+
+def get_list_index(space, w_index):
+    if not space.lookup(w_index, '__index__'):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("list indices must be integers, not %s" %
+                       space.type(w_index).getname(space, '?')))
+    return space.getindex_w(w_index, space.w_IndexError)

@@ -16,7 +16,7 @@ slice_indices = SMM('indices', 2,
 # utility functions
 def _Eval_SliceIndex(space, w_int):
     try:
-        x = space.int_w(w_int)
+        x = space.getindex_w(w_int) # clamp if long integer is too large
     except OperationError, e:
         if not e.match(space, space.w_OverflowError):
             raise
