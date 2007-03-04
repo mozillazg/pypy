@@ -3,6 +3,7 @@ from pypy.interpreter import gateway
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.module.unicodedata import unicodedb_3_2_0 as unicodedb
 
@@ -881,7 +882,17 @@ def unicode_rpartition__Unicode_Unicode(unistr, unisub):
     else:
         return (unistr[:pos], unisub, unistr[pos+len(unisub):])
 
-#def unicode_startswith_
+def unicode_startswith__Unicode_Tuple_ANY_ANY(unistr, prefixes, start, end):
+    for prefix in prefixes:
+        if unistr.startswith(prefix):
+            return True
+    return False
+
+def unicode_endswith__Unicode_Tuple_ANY_ANY(unistr, suffixes, start, end):
+    for suffix in suffixes:
+        if unistr.endswith(suffix):
+            return True
+    return False
 
 ''')
 
@@ -891,6 +902,8 @@ unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY'
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
 unicode_partition__Unicode_Unicode = app.interphook('unicode_partition__Unicode_Unicode')
 unicode_rpartition__Unicode_Unicode = app.interphook('unicode_rpartition__Unicode_Unicode')
+unicode_startswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_startswith__Unicode_Tuple_ANY_ANY')
+unicode_endswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_endswith__Unicode_Tuple_ANY_ANY')
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):
