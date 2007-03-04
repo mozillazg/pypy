@@ -804,23 +804,29 @@ def le__Rope_Rope(space, w_str1, w_str2):
     n2 = w_str2._node
     return space.newbool(rope.compare(n1, n2) <= 0)
 
-def eq__Rope_Rope(space, w_str1, w_str2):
+def _eq(w_str1, w_str2):
     h1 = w_str1._hash
     h2 = w_str2._hash
     if h1 and h2 and h1 != h2:
-        return space.w_False
+        return False
     n1 = w_str1._node
     n2 = w_str2._node
-    return space.newbool(rope.eq(n1, n2))
+    result = rope.eq(n1, n2)
+    if result:
+        if h1:
+            if not h2:
+                w_str2._hash = h1
+        else:
+            if h2:
+                w_str1._hash = h2
+    return result
+
+
+def eq__Rope_Rope(space, w_str1, w_str2):
+    return space.newbool(_eq(w_str1, w_str2))
 
 def ne__Rope_Rope(space, w_str1, w_str2):
-    h1 = w_str1._hash
-    h2 = w_str2._hash
-    if h1 and h2 and h1 != h2:
-        return space.w_True
-    n1 = w_str1._node
-    n2 = w_str2._node
-    return space.newbool(not rope.eq(n1, n2))
+    return space.newbool(not _eq(w_str1, w_str2))
 
 def gt__Rope_Rope(space, w_str1, w_str2):
     n1 = w_str1._node
