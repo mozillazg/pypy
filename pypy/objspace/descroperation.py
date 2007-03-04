@@ -580,7 +580,7 @@ for targetname, specialname in [
 for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
     if not hasattr(DescrOperation, _name):
         _impl_maker = None
-        if _arity ==2 and _name in ['lt', 'le', 'gt', 'ge', 'ne', 'eq']:
+        if _arity == 2 and _name in ['lt', 'le', 'gt', 'ge', 'ne', 'eq']:
             #print "comparison", _specialnames
             _impl_maker = _make_comparison_impl
         elif _arity == 2 and _name.startswith('inplace_'):

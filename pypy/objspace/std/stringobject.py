@@ -1,4 +1,4 @@
-# -*- Coding: Latin-1 -*-
+# -*- coding: latin-1 -*-
 
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
@@ -730,7 +730,12 @@ def ge__String_String(space, w_str1, w_str2):
         return space.w_False
 
 def getitem__String_ANY(space, w_str, w_index):
-    ival = space.int_w(w_index)
+    if not space.lookup(w_index, '__index__'):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("string indices must be integers, not %s" %
+                       space.type(w_index).getname(space, '?')))
+    ival = space.getindex_w(w_index, space.w_IndexError)
     str = w_str._value
     slen = len(str)
     if ival < 0:
@@ -757,7 +762,7 @@ def getitem__String_Slice(space, w_str, w_slice):
 
 def mul_string_times(space, w_str, w_times):
     try:
-        mul = space.int_w(w_times)
+        mul = space.getindex_w(w_times, space.w_OverflowError)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
@@ -809,9 +814,6 @@ def ord__String(space, w_str):
 
 def getnewargs__String(space, w_str):
     return space.newtuple([wrapstr(space, w_str._value)])
-
-def index__String(space, w_str):
-    return space.wrap(42)
 
 def repr__String(space, w_str):
     s = w_str._value
