@@ -514,6 +514,7 @@ def _make_unaryop_impl(symbol, specialnames):
 
 for targetname, specialname, checkerspec in [
     ('int', '__int__', ("space.w_int", "space.w_long")), 
+    ('index', '__index__', ("space.w_int", "space.w_long")),
     ('long', '__long__', ("space.w_int", "space.w_long")), 
     ('float', '__float__', ("space.w_float",))]:
 
@@ -537,7 +538,7 @@ for targetname, specialname, checkerspec in [
         assert not hasattr(DescrOperation, %(targetname)r)
         DescrOperation.%(targetname)s = %(targetname)s
         del %(targetname)s 
-        \n""" % locals() 
+        \n""" % locals()
     exec compile2(source) 
 
 for targetname, specialname in [
