@@ -16,7 +16,7 @@ class W_RopeObject(W_Object):
 
     def __init__(w_self, node):
         w_self._node = node
-        w_self._w_hash = None
+        w_self._hash = 0
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -788,12 +788,11 @@ def str_w__Rope(space, w_str):
     return w_str._node.flatten()
 
 def hash__Rope(space, w_str):
-    w_hash = w_str._w_hash
-    if w_hash is None:
+    hash = w_str._hash
+    if hash == 0:
         node = w_str._node
-        x = rope.hash_rope(node)
-        w_hash = w_str._w_hash = wrapint(space, x)
-    return w_hash
+        hash = w_str._hash = rope.hash_rope(node)
+    return wrapint(space, hash)
 
 def lt__Rope_Rope(space, w_str1, w_str2):
     n1 = w_str1._node
@@ -806,11 +805,19 @@ def le__Rope_Rope(space, w_str1, w_str2):
     return space.newbool(rope.compare(n1, n2) <= 0)
 
 def eq__Rope_Rope(space, w_str1, w_str2):
+    h1 = w_str1._hash
+    h2 = w_str2._hash
+    if h1 and h2 and h1 != h2:
+        return space.w_False
     n1 = w_str1._node
     n2 = w_str2._node
     return space.newbool(rope.eq(n1, n2))
 
 def ne__Rope_Rope(space, w_str1, w_str2):
+    h1 = w_str1._hash
+    h2 = w_str2._hash
+    if h1 and h2 and h1 != h2:
+        return space.w_True
     n1 = w_str1._node
     n2 = w_str2._node
     return space.newbool(not rope.eq(n1, n2))
