@@ -4,8 +4,7 @@ functional programming.
 """
 from __future__ import generators
 
-
-from operator import lt, gt, index
+from operator import lt, gt
 
 
 def sum(sequence, total=0):
@@ -349,7 +348,8 @@ more memory efficient."""
 
     def __getitem__(self, i):
         # xrange does NOT support slicing
-        i = index(i)
+        import operator
+        i = operator.index(i)
         len = self.len 
         if i < 0:
             i += len
