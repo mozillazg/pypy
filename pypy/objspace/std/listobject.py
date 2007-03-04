@@ -1,5 +1,6 @@
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.listtype import get_list_index
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 
@@ -24,15 +25,6 @@ class W_ListObject(W_Object):
 
 
 registerimplementation(W_ListObject)
-
-
-def get_list_index(space, w_index):
-    if not space.lookup(w_index, '__index__'):
-        raise OperationError(
-            space.w_TypeError,
-            space.wrap("list indices must be integers, not %s" %
-                       space.type(w_index).getname(space, '?')))
-    return space.getindex_w(w_index, space.w_IndexError)
 
 
 EMPTY_LIST = W_ListObject([])
@@ -179,7 +171,7 @@ def gt__List_List(space, w_list1, w_list2):
         w_list2.wrappeditems)
 
 def delitem__List_ANY(space, w_list, w_idx):
-    idx = get_list_index(space, w_list)
+    idx = get_list_index(space, w_idx)
     try:
         del w_list.wrappeditems[idx]
     except IndexError:

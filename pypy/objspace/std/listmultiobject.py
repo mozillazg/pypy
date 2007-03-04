@@ -892,7 +892,7 @@ def len__ListMulti(space, w_list):
     return wrapint(space, result)
 
 def getitem__ListMulti_ANY(space, w_list, w_index):
-    idx = space.int_w(w_index)
+    idx = get_list_index(space, w_index)
     idx = _adjust_index(space, idx, w_list.implementation.length(),
                         "list index out of range")
     return w_list.implementation.getitem(idx)
@@ -1025,7 +1025,7 @@ def gt__ListMulti_ListMulti(space, w_list1, w_list2):
         w_list2.implementation)
 
 def delitem__ListMulti_ANY(space, w_list, w_idx):
-    idx = space.int_w(w_idx)
+    idx = get_list_index(space, w_idx)
     length = w_list.implementation.length()
     idx = _adjust_index(space, idx, length, "list deletion index out of range")
     if length == 1:
@@ -1059,7 +1059,7 @@ def delitem__ListMulti_Slice(space, w_list, w_slice):
     return space.w_None
 
 def setitem__ListMulti_ANY_ANY(space, w_list, w_index, w_any):
-    idx = space.int_w(w_index)
+    idx = get_list_index(space, w_index)
     idx = _adjust_index(space, idx, w_list.implementation.length(),
                         "list index out of range")
     w_list.implementation = w_list.implementation.i_setitem(idx, w_any)
