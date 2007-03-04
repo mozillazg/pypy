@@ -5,13 +5,16 @@ from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.inttype import wrapint
 
-from pypy.objspace.std.stringtype import wrapstr, wrapchar, sliced
+from pypy.objspace.std.stringtype import wrapstr, wrapchar, sliced, \
+     stringendswith, stringstartswith
 
 
 class W_StringSliceObject(W_Object):
     from pypy.objspace.std.stringtype import str_typedef as typedef
 
     def __init__(w_self, str, start, stop):
+        assert start >= 0
+        assert stop >= 0 
         w_self.str = str
         w_self.start = start
         w_self.stop = stop
@@ -131,6 +134,34 @@ def str_rindex__StringSlice_String_ANY_ANY(space, w_self, w_sub, w_start, w_end)
 
     return space.wrap(res - w_self.start)
 
+def str_endswith__StringSlice_String_ANY_ANY(space, w_self, w_suffix, w_start, w_end):
+    (u_self, suffix, start, end) = _convert_idx_params(space, w_self,
+                                                       w_suffix, w_start, w_end)
+    return space.newbool(stringendswith(u_self, suffix, start, end))
+
+#def str_endswith__StringSlice_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
+#    (u_self, _, start, end) = _convert_idx_params(space, w_self,
+#                                                  space.wrap(''), w_start, w_end)
+#    for w_suffix in space.unpacktuple(w_suffixes):
+#        suffix = space.str_w(w_suffix) 
+#        if stringendswith(u_self, suffix, start, end):
+#            return space.w_True
+#    return space.w_False
+
+def str_startswith__StringSlice_String_ANY_ANY(space, w_self, w_prefix, w_start, w_end):
+    (u_self, prefix, start, end) = _convert_idx_params(space, w_self,
+                                                       w_prefix, w_start, w_end)
+    return space.newbool(stringstartswith(u_self, prefix, start, end))
+
+#def str_startswith__StringSlice_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
+#    (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
+#                                                  w_start, w_end)
+#    for w_prefix in space.unpacktuple(w_prefixes):
+#        prefix = space.str_w(w_prefix)
+#        if stringstartswith(u_self, prefix, start, end):
+#            return space.w_True
+#    return space.w_False
+
 
 def str_w__StringSlice(space, w_str):
     return w_str.force()
@@ -177,6 +208,7 @@ def str__StringSlice(space, w_str):
     if type(w_str) is W_StringSliceObject:
         return w_str
     return W_StringSliceObject(w_str.str, w_str.start, w_str.stop)
+
 
 from pypy.objspace.std import stringtype
 register_all(vars(), stringtype)

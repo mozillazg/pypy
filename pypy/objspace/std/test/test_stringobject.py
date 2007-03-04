@@ -334,6 +334,18 @@ class AppTestStringObject:
         assert 'abc'.startswith('bc', 1, 2) is False
         assert 'abc'.startswith('c', -1, 4) is True
 
+    def test_startswith_tuples(self):
+        assert 'hello'.startswith(('he', 'ha'))
+        assert not 'hello'.startswith(('lo', 'llo'))
+        assert 'hello'.startswith(('hellox', 'hello'))
+        assert not 'hello'.startswith(())
+        assert 'helloworld'.startswith(('hellowo', 'rld', 'lowo'), 3)
+        assert not 'helloworld'.startswith(('hellowo', 'ello', 'rld'), 3)
+        assert 'hello'.startswith(('lo', 'he'), 0, -1)
+        assert not 'hello'.startswith(('he', 'hel'), 0, 1)
+        assert 'hello'.startswith(('he', 'hel'), 0, 2)
+        raises(TypeError, 'hello'.startswith, (42,))
+    
     def test_endswith(self):
         assert 'ab'.endswith('ab') is True
         assert 'ab'.endswith('b') is True
@@ -350,7 +362,19 @@ class AppTestStringObject:
         assert 'abc'.endswith('bc', 1) is True
         assert 'abc'.endswith('bc', 2) is False
         assert 'abc'.endswith('b', -3, -1) is True
-      
+
+    def test_endswith_tuple(self):
+        assert not 'hello'.endswith(('he', 'ha'))
+        assert 'hello'.endswith(('lo', 'llo'))
+        assert 'hello'.endswith(('hellox', 'hello'))
+        assert not 'hello'.endswith(())
+        assert 'helloworld'.endswith(('hellowo', 'rld', 'lowo'), 3)
+        assert not 'helloworld'.endswith(('hellowo', 'ello', 'rld'), 3, -1)
+        assert 'hello'.endswith(('hell', 'ell'), 0, -1)
+        assert not 'hello'.endswith(('he', 'hel'), 0, 1)
+        assert 'hello'.endswith(('he', 'hell'), 0, 4)
+        raises(TypeError, 'hello'.endswith, (42,))
+
     def test_expandtabs(self):
         assert 'abc\rab\tdef\ng\thi'.expandtabs() ==    'abc\rab      def\ng       hi'
         assert 'abc\rab\tdef\ng\thi'.expandtabs(8) ==   'abc\rab      def\ng       hi'
