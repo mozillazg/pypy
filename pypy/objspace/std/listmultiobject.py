@@ -940,7 +940,7 @@ def inplace_add__ListMulti_ListMulti(space, w_list1, w_list2):
 
 def mul_list_times(space, w_list, w_times):
     try:
-        times = space.int_w(w_times)
+        times = space.getindex_w(w_times, space.w_OverflowError)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
@@ -957,7 +957,7 @@ def mul__ANY_ListMulti(space, w_times, w_list):
 
 def inplace_mul__ListMulti_ANY(space, w_list, w_times):
     try:
-        times = space.int_w(w_times)
+        times = space.getindex_w(w_times, space.w_OverflowError)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
