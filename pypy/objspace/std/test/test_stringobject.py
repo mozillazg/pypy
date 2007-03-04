@@ -5,7 +5,7 @@ from pypy.conftest import gettestobjspace
 
 class TestW_StringObject:
 
-    def teardown_method(self,method):
+    def teardown_method(self, method):
         pass
 
 ##    def test_order_rich(self):
@@ -435,6 +435,36 @@ class AppTestStringObject:
         raises(TypeError, 'abcdefghijklmn'.rindex, 'abc', 0, 0.0)
         raises(TypeError, 'abcdefghijklmn'.rindex, 'abc', -10.0, 30)
 
+
+    def test_partition(self):
+
+        assert ('this is the par', 'ti', 'tion method') == \
+            'this is the partition method'.partition('ti')
+
+        # from raymond's original specification
+        S = 'http://www.python.org'
+        assert ('http', '://', 'www.python.org') == S.partition('://')
+        assert ('http://www.python.org', '', '') == S.partition('?')
+        assert ('', 'http://', 'www.python.org') == S.partition('http://')
+        assert ('http://www.python.', 'org', '') == S.partition('org')
+
+        raises(ValueError, S.partition, '')
+        raises(TypeError, S.partition, None)
+
+    def test_rpartition(self):
+
+        assert ('this is the rparti', 'ti', 'on method') == \
+            'this is the rpartition method'.rpartition('ti')
+
+        # from raymond's original specification
+        S = 'http://www.python.org'
+        assert ('http', '://', 'www.python.org') == S.rpartition('://')
+        assert ('', '', 'http://www.python.org') == S.rpartition('?')
+        assert ('', 'http://', 'www.python.org') == S.rpartition('http://')
+        assert ('http://www.python.', 'org', '') == S.rpartition('org')
+
+        raises(ValueError, S.rpartition, '')
+        raises(TypeError, S.rpartition, None)
 
     def test_split_maxsplit(self):
         assert "/a/b/c".split('/', 2) == ['','a','b/c']

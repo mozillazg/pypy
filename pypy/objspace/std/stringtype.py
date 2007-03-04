@@ -133,6 +133,18 @@ str_rfind      = SMM('rfind', 4, defaults=(0, maxint),
                          ' s[start,end].  Optional\narguments start and end'
                          ' are interpreted as in slice notation.\n\nReturn -1'
                          ' on failure.')
+str_partition  = SMM('partition', 2,
+                     doc='S.partition(sep) -> (head, sep, tail)\n\nSearches'
+                         ' for the separator sep in S, and returns the part before'
+                         ' it,\nthe separator itself, and the part after it.  If'
+                         ' the separator is not\nfound, returns S and two empty'
+                         ' strings.')
+str_rpartition = SMM('rpartition', 2,
+                     doc='S.rpartition(sep) -> (tail, sep, head)\n\nSearches'
+                         ' for the separator sep in S, starting at the end of S,'
+                         ' and returns\nthe part before it, the separator itself,'
+                         ' and the part after it.  If the\nseparator is not found,'
+                         ' returns two empty strings and S.')
 str_index      = SMM('index', 4, defaults=(0, maxint),
                      doc='S.index(sub [,start [,end]]) -> int\n\nLike S.find()'
                          ' but raise ValueError when the substring is not'
