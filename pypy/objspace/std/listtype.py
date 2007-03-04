@@ -1,5 +1,6 @@
 from __future__ import generators
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError
 from pypy.objspace.std.stdtypedef import *
 from pypy.objspace.std.register_all import register_all
 from sys import maxint

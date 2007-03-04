@@ -1,5 +1,6 @@
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.listtype import get_list_index
 from pypy.objspace.std.sliceobject import W_SliceObject
 
 from pypy.objspace.std import slicetype
