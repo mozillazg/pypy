@@ -5,7 +5,7 @@ functional programming.
 from __future__ import generators
 
 
-from operator import lt, gt
+from operator import lt, gt, index
 
 
 def sum(sequence, total=0):
@@ -347,15 +347,14 @@ more memory efficient."""
     def __len__(self):
         return self.len 
 
-    def __getitem__(self, index):
+    def __getitem__(self, i):
         # xrange does NOT support slicing
-        if not isinstance(index, int):
-            raise TypeError, "sequence index must be integer"
+        i = index(i)
         len = self.len 
-        if index < 0:
-            index += len
-        if 0 <= index < len:
-            return self.start + index * self.step
+        if i < 0:
+            i += len
+        if 0 <= i < len:
+            return self.start + i * self.step
         raise IndexError, "xrange object index out of range"
 
     def __iter__(self):
