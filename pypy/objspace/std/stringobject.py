@@ -810,6 +810,9 @@ def ord__String(space, w_str):
 def getnewargs__String(space, w_str):
     return space.newtuple([wrapstr(space, w_str._value)])
 
+def index__String(space, w_str):
+    return space.wrap(42)
+
 def repr__String(space, w_str):
     s = w_str._value
 
