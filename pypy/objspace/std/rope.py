@@ -25,6 +25,7 @@ def find_fib_index(l):
         i += 1
 
 class StringNode(object):
+    hash_cache = 0
     def length(self):
         return 0
 
@@ -80,10 +81,15 @@ class LiteralStringNode(StringNode):
         return self.s
 
     def hash_part(self):
-        x = 0
-        for c in self.s:
-            x = (1000003*x) + ord(c)
-        return intmask(x)
+        h = self.hash_cache
+        if not h:
+            x = 0
+            for c in self.s:
+                x = (1000003*x) + ord(c)
+            x = intmask(x)
+            x |= intmask(1L << (NBITS - 1))
+            h = self.hash_cache = x
+        return h
 
     def getitem(self, index):
         return self.s[index]
@@ -146,9 +152,14 @@ class BinaryConcatNode(StringNode):
         return "".join([node.flatten() for node in f])
  
     def hash_part(self):
-        h1 = self.left.hash_part()
-        h2 = self.right.hash_part()
-        return intmask(h1 + h2 * (1000003 ** self.left.length()))
+        h = self.hash_cache
+        if not h:
+            h1 = self.left.hash_part()
+            h2 = self.right.hash_part()
+            x = intmask(h1 + h2 * (1000003 ** self.left.length()))
+            x |= intmask(1L << (NBITS - 1))
+            h = self.hash_cache = x
+        return h
 
     def rebalance(self):
         return rebalance([self], self.len)
@@ -190,10 +201,15 @@ class SliceNode(StringNode):
         return self.node.flatten()[self.start: self.stop]
 
     def hash_part(self):
-        x = 0
-        for i in range(self.start, self.stop):
-            x = (1000003*x) + ord(self.node.getitem(i))
-        return intmask(x)
+        h = self.hash_cache
+        if not h:
+            x = 0
+            for i in range(self.start, self.stop):
+                x = (1000003*x) + ord(self.node.getitem(i))
+            x = intmask(x)
+            x |= intmask(1L << (NBITS - 1))
+            h = self.hash_cache = x
+        return h
 
     def dot(self, seen, toplevel=False):
         if self in seen:

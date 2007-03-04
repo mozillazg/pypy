@@ -320,6 +320,8 @@ def test_hash_part():
         if h is None:
             h = s.hash_part()
         else:
+            # try twice due to caching reasons
+            assert s.hash_part() == h
             assert s.hash_part() == h
 
 def test_equality():
