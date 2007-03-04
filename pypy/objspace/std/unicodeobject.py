@@ -865,15 +865,32 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
                         type(retval).__name__)
     return retval
 
-def repr__Unicode(unistr):
-    import _codecs
-    return ''.join(_codecs.unicodeescape_string(unistr,len(unistr),True))
+# XXX: These should probably be written on interplevel 
+
+def unicode_partition__Unicode_Unicode(unistr, unisub):
+    pos = unistr.find(unisub)
+    if pos == -1:
+        return (unistr, u'', u'')
+    else:
+        return (unistr[:pos], unisub, unistr[pos+len(unisub):])
+
+def unicode_rpartition__Unicode_Unicode(unistr, unisub):
+    pos = unistr.rfind(unisub)
+    if pos == -1:
+        return (u'', u'', unistr)
+    else:
+        return (unistr[:pos], unisub, unistr[pos+len(unisub):])
+
+#def unicode_startswith_
 
 ''')
+
+mod__Unicode_ANY = app.interphook('mod__Unicode_ANY')
 unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
-mod__Unicode_ANY = app.interphook('mod__Unicode_ANY')
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
+unicode_partition__Unicode_Unicode = app.interphook('unicode_partition__Unicode_Unicode')
+unicode_rpartition__Unicode_Unicode = app.interphook('unicode_rpartition__Unicode_Unicode')
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):

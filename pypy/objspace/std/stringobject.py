@@ -11,7 +11,8 @@ from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 
-from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar
+from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar, \
+     stringendswith, stringstartswith
 
 
 class W_StringObject(W_Object):
@@ -342,7 +343,6 @@ def str_join__String_ANY(space, w_self, w_list):
         return W_StringObject.EMPTY
 
 def str_rjust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
-
     u_arg = space.int_w(w_arg)
     u_self = w_self._value
     fillchar = space.str_w(w_fillchar)
@@ -359,7 +359,6 @@ def str_rjust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
 
 
 def str_ljust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
-
     u_self = w_self._value
     u_arg = space.int_w(w_arg)
     fillchar = space.str_w(w_fillchar)
@@ -576,26 +575,30 @@ def str_count__String_String_ANY_ANY(space, w_self, w_arg, w_start, w_end):
 def str_endswith__String_String_ANY_ANY(space, w_self, w_suffix, w_start, w_end):
     (u_self, suffix, start, end) = _convert_idx_params(space, w_self,
                                                        w_suffix, w_start, w_end)
-    begin = end - len(suffix)
-    if begin < start:
-        return space.w_False
-    for i in range(len(suffix)):
-        if u_self[begin+i] != suffix[i]:
-            return space.w_False
-    return space.w_True
-    
-    
+    return space.newbool(stringendswith(u_self, suffix, start, end))
+
+def str_endswith__String_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
+    (u_self, _, start, end) = _convert_idx_params(space, w_self,
+                                                  space.wrap(''), w_start, w_end)
+    for w_suffix in space.unpacktuple(w_suffixes):
+        suffix = space.str_w(w_suffix) 
+        if stringendswith(u_self, suffix, start, end):
+            return space.w_True
+    return space.w_False
+
 def str_startswith__String_String_ANY_ANY(space, w_self, w_prefix, w_start, w_end):
     (u_self, prefix, start, end) = _convert_idx_params(space, w_self,
                                                        w_prefix, w_start, w_end)
-    stop = start + len(prefix)
-    if stop > end:
-        return space.w_False
-    for i in range(len(prefix)):
-        if u_self[start+i] != prefix[i]:
-            return space.w_False
-    return space.w_True
-    
+    return space.newbool(stringstartswith(u_self, prefix, start, end))
+
+def str_startswith__String_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
+    (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
+                                                  w_start, w_end)
+    for w_prefix in space.unpacktuple(w_prefixes):
+        prefix = space.str_w(w_prefix)
+        if stringstartswith(u_self, prefix, start, end):
+            return space.w_True
+    return space.w_False
     
 def _tabindent(u_token, u_tabsize):
     "calculates distance behind the token to the next tabstop"
