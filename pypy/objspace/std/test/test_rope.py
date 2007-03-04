@@ -310,6 +310,18 @@ def test_hash():
         rope = LiteralStringNode(st)
         assert hash_rope(rope) == _hash_string(st)
 
+def test_hash_part():
+    a = "".join([chr(random.randrange(256)) * random.randrange(500)])
+    h = None
+    for split in range(1, 499):
+        s1 = LiteralStringNode(a[:split])
+        s2 = LiteralStringNode(a[split:])
+        s = BinaryConcatNode(s1, s2)
+        if h is None:
+            h = s.hash_part()
+        else:
+            assert s.hash_part() == h
+
 def test_equality():
     l = [make_random_string() for i in range(3)]
     l.append((LiteralStringNode(""), ""))

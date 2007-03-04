@@ -1,6 +1,13 @@
 import py
 import sys
+from pypy.rlib.rarithmetic import intmask, _hash_string
+from pypy.rlib.objectmodel import we_are_translated
+import math
 
+LOG2 = math.log(2)
+NBITS = int(math.log(sys.maxint) / LOG2) + 2
+
+# XXX should optimize the numbers
 NEW_NODE_WHEN_LENGTH = 16
 MAX_DEPTH = 32 # maybe should be smaller
 MIN_SLICE_LENGTH = 64
@@ -26,6 +33,9 @@ class StringNode(object):
 
     def rebalance(self):
         return self
+
+    def hash_part(self):
+        raise NotImplementedError("base class")
 
     def flatten(self):
         return ''
@@ -68,6 +78,12 @@ class LiteralStringNode(StringNode):
 
     def flatten(self):
         return self.s
+
+    def hash_part(self):
+        x = 0
+        for c in self.s:
+            x = (1000003*x) + ord(c)
+        return intmask(x)
 
     def getitem(self, index):
         return self.s[index]
@@ -129,6 +145,11 @@ class BinaryConcatNode(StringNode):
         f = fringe(self)
         return "".join([node.flatten() for node in f])
  
+    def hash_part(self):
+        h1 = self.left.hash_part()
+        h2 = self.right.hash_part()
+        return intmask(h1 + h2 * (1000003 ** self.left.length()))
+
     def rebalance(self):
         return rebalance([self], self.len)
 
@@ -167,6 +188,12 @@ class SliceNode(StringNode):
 
     def flatten(self):
         return self.node.flatten()[self.start: self.stop]
+
+    def hash_part(self):
+        x = 0
+        for i in range(self.start, self.stop):
+            x = (1000003*x) + ord(self.node.getitem(i))
+        return intmask(x)
 
     def dot(self, seen, toplevel=False):
         if self in seen:
@@ -784,8 +811,6 @@ def compare(node1, node2):
 
 
 def hash_rope(rope):
-    from pypy.rlib.rarithmetic import intmask, _hash_string
-    from pypy.rlib.objectmodel import we_are_translated
     length = rope.length()
     if length == 0:
         x = -1
@@ -802,11 +827,10 @@ def hash_rope(rope):
         iter = CharIterator(rope)
         while 1:
             try:
-                x = (1000003*x) ^ ord(iter.next())
+                x = (1000003*x) + ord(iter.next())
             except StopIteration:
                 break
         x ^= length
         if x == 0:
             x = -1
-    return intmask(x)
-
+    return intmask(x) 
