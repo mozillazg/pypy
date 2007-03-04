@@ -4,6 +4,10 @@ functional programming.
 """
 from __future__ import generators
 
+
+from operator import lt, gt
+
+
 def sum(sequence, total=0):
     """sum(sequence, start=0) -> value
 
@@ -203,47 +207,48 @@ def range(x, y=None, step=1):
 # min and max could be one function if we had operator.__gt__ and
 # operator.__lt__  Perhaps later when we have operator.
 
-def min(*arr):
+
+def _identity(arg):
+    return arg
+
+
+def min(*arr, **kwargs):
     """return the smallest number in a list,
     or its smallest argument if more than one is given."""
 
+    return min_max(gt, "min", *arr, **kwargs)
+
+def min_max(comp, funcname, *arr, **kwargs):
+    key = kwargs.pop("key", _identity)
+    if len(kwargs):
+        raise TypeError, '%s() got an unexpected keyword argument' % funcname
+
     if not arr:
-        raise TypeError, 'min() takes at least one argument'
+        raise TypeError, '%s() takes at least one argument' % funcname
 
     if len(arr) == 1:
         arr = arr[0]
 
     iterator = iter(arr)
     try:
-        min = iterator.next()
+        min_max_val = iterator.next()
     except StopIteration:
-        raise ValueError, 'min() arg is an empty sequence'
+        raise ValueError, '%s() arg is an empty sequence' % funcname
+
+    keyed_min_max_val = key(min_max_val)
 
     for i in iterator:
-        if min > i:
-            min = i
-    return min
+        keyed = key(i)
+        if comp(keyed_min_max_val, keyed):
+            min_max_val = i
+            keyed_min_max_val = keyed
+    return min_max_val
 
-def max(*arr):
+def max(*arr, **kwargs):
     """return the largest number in a list,
     or its largest argument if more than one is given."""
 
-    if not arr:
-        raise TypeError, 'max() takes at least one argument'
-
-    if len(arr) == 1:
-        arr = arr[0]
-
-    iterator = iter(arr)
-    try:
-        max = iterator.next()
-    except StopIteration:
-        raise ValueError, 'max() arg is an empty sequence'
-
-    for i in iterator:
-        if max < i:
-            max = i
-    return max
+    return min_max(lt, "max", *arr, **kwargs)
 
 class enumerate(object):
     """enumerate(iterable) -> iterator for (index, value) of iterable.
