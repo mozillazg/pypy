@@ -12,6 +12,7 @@ NEW_NODE_WHEN_LENGTH = 16
 MAX_DEPTH = 32 # maybe should be smaller
 MIN_SLICE_LENGTH = 64
 CONCATENATE_WHEN_MULTIPLYING = 128
+HIGHEST_BIT_SET = intmask(1L << (NBITS - 1))
 
 def find_fib_index(l):
     if l == 0:
@@ -113,7 +114,7 @@ class LiteralStringNode(StringNode):
             for c in self.s:
                 x = (1000003*x) + ord(c)
             x = intmask(x)
-            x |= intmask(1L << (NBITS - 1))
+            x |= HIGHEST_BIT_SET
             h = self.hash_cache = x
         return h
 
@@ -186,7 +187,7 @@ class BinaryConcatNode(StringNode):
             h1 = self.left.hash_part()
             h2 = self.right.hash_part()
             x = intmask(h2 + h1 * (masked_power(1000003, self.right.length())))
-            x |= intmask(1L << (NBITS - 1))
+            x |= HIGHEST_BIT_SET
             h = self.hash_cache = x
         return h
 
@@ -236,7 +237,7 @@ class SliceNode(StringNode):
             for i in range(self.start, self.stop):
                 x = (1000003*x) + ord(self.node.getitem(i))
             x = intmask(x)
-            x |= intmask(1L << (NBITS - 1))
+            x |= HIGHEST_BIT_SET
             h = self.hash_cache = x
         return h
 
