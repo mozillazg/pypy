@@ -818,6 +818,9 @@ def eq(node1, node2):
         return False
     if hash_rope(node1) != hash_rope(node2):
         return False
+    if (isinstance(node1, LiteralStringNode) and
+        isinstance(node2, LiteralStringNode)):
+        return node1.s == node2.s
     iter1 = CharIterator(node1)
     iter2 = CharIterator(node2)
     # XXX could be cleverer and detect partial equalities
