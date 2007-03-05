@@ -27,17 +27,6 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
         s += '3'
         raises(TypeError, ord, s)
 
-    def test_hash_cache(self):
-        # check that we have the same hash as CPython for at least 31 bits
-        # (but don't go checking CPython's special case -1)
-        # check twice to catch hash cache problems`
-        s1 = 'hello'
-        s2 = 'hello world!'
-        assert hash(s1) & 0x7fffffff == 0x347697fd
-        assert hash(s1) & 0x7fffffff == 0x347697fd
-        assert hash(s2) & 0x7fffffff == 0x2f0bb411
-        assert hash(s2) & 0x7fffffff == 0x2f0bb411
-
     def test_rope_equality(self):
         # make sure that they are not just literal nodes
         s1 = 'hello' * 1000
@@ -57,6 +46,10 @@ class AppTestRopeObject(test_stringobject.AppTestStringObject):
             assert s3 == s3
             assert s3 != s4
             assert s4 == s4
+
+    def test_hash(self):
+        # does not make sense, since our hash is different than CPython's
+        pass
  
 class AppTestRopeUnicode(object):
 
@@ -65,6 +58,10 @@ class AppTestRopeUnicode(object):
 
     def test_startswith(self):
         assert "abc".startswith("a", 0, 2147483647)
+
+    def test_hash_equality(self):
+        d = {u'abcdefg': 2}
+        assert d['abcdefg'] == 2
 
 class AppTestUnicodeRopeStdOnly(test_unicodeobject.AppTestUnicodeStringStdOnly):
 

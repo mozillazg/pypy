@@ -1,9 +1,10 @@
 import random
 from pypy.objspace.std.rope import *
 
-def make_random_string(operations=10, slicing=True):
+def make_random_string(operations=10, slicing=True, print_seed=True):
     seed = random.randrange(10000)
-    print seed
+    if print_seed:
+        print seed
     random.seed(seed)
     st = "abc"
     curr = LiteralStringNode(st)
@@ -299,21 +300,104 @@ def test_find_iterator():
             start = r2 + max(len(searchstring), 1)
 
 def test_hash():
-    from pypy.rlib.rarithmetic import _hash_string
+    from pypy.rlib.rarithmetic import _hash_string, intmask
     for i in range(10):
-        rope, st = make_random_string()
-        assert hash_rope(rope) == _hash_string(st)
-        rope = LiteralStringNode(st)
-        assert hash_rope(rope) == _hash_string(st)
-        charlist = [chr(random.randrange(0, 256)) for i in range(10)]
-        st = "".join(charlist)
-        rope = LiteralStringNode(st)
-        assert hash_rope(rope) == _hash_string(st)
+        rope, _ = make_random_string()
+        if rope.length() == 0:
+            assert hash_rope(rope) == -1
+            continue
+        h = hash_rope(rope)
+        x = LiteralStringNode(rope.flatten()).hash_part()
+        assert x == rope.hash_part()
+        x <<= 1
+        x ^= ord(rope.getitem(0))
+        x ^= rope.length()
+        assert intmask(x) == h
+        # hash again to check for cache effects
+        h1 = hash_rope(rope)
+        assert h1 == h
+
+def test_hash_collisions_identifiers():
+    hashes1 = {}
+    hashes2 = {}
+    cs = [""] + [chr(i) for i in range(256)]
+    cs = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    for i in range(50000):
+        s = "".join([random.choice(cs)
+                         for i in range(random.randrange(1, 15))])
+        rope = LiteralStringNode(s)
+        h1 = hash_rope(rope)
+        hashes1[h1] = hashes1.get(h1, -1) + 1
+        h2 = hash(s)
+        hashes2[h2] = hashes2.get(h2, -1) + 1
+    # hope that there are only ten percent more collisions
+    # than with CPython's hash:
+    assert sum(hashes1.values()) < sum(hashes2.values()) * 1.10
+
+def test_hash_distribution_tiny_strings():
+    hashes = [0 for i in range(256)]
+    cs = [""] + [chr(i) for i in range(256)]
+    for c1 in cs:
+        for c2 in cs:
+            rope = LiteralStringNode(c1 + c2)
+            h = hash_rope(rope)
+            hashes[h & 0xff] += 1
+            hashes[(h & 0xff00) >> 8] += 1
+            hashes[(h & 0xff0000) >> 16] += 1
+    for h in hashes:
+        assert h > 300
+    print hashes
+
+def test_hash_distribution_small_strings():
+    random.seed(42) # prevent randomly failing test
+    hashes = [0 for i in range(256)]
+    for i in range(20000):
+        s = "".join([chr(random.randrange(256))
+                         for i in range(random.randrange(1, 15))])
+        rope = LiteralStringNode(s)
+        h = hash_rope(rope)
+        hashes[h & 0xff] += 1
+        hashes[(h & 0xff00) >> 8] += 1
+        hashes[(h & 0xff0000) >> 16] += 1
+    for h in hashes:
+        assert h > 180
+    print hashes
+
+def test_hash_distribution_big_strings():
+    random.seed(42) # prevent randomly failing test
+    hashes = [0 for i in range(256)]
+    for i in range(4000):
+        s = "".join([chr(random.randrange(256))
+                         for i in range(random.randrange(20, 500))])
+        rope = LiteralStringNode(s)
+        h = hash_rope(rope)
+        hashes[h & 0xff] += 1
+        hashes[(h & 0xff00) >> 8] += 1
+        hashes[(h & 0xff0000) >> 16] += 1
+    for h in hashes:
+        assert h > 29
+
+def test_hash_distribution_identifiers():
+    random.seed(42) # prevent randomly failing test
+    hashes = [0 for i in range(256)]
+    cs = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    for i in range(50000):
+        s = "".join([random.choice(cs)
+                         for i in range(random.randrange(1, 15))])
+        rope = LiteralStringNode(s)
+        h = hash_rope(rope)
+        hashes[h & 0xff] += 1
+        hashes[(h & 0xff00) >> 8] += 1
+        hashes[(h & 0xff0000) >> 16] += 1
+    for h in hashes:
+        assert h > 450
+    print hashes
+
 
 def test_hash_part():
     a = "".join([chr(random.randrange(256)) * random.randrange(500)])
     h = None
-    for split in range(1, 499):
+    for split in range(1, len(a) - 1):
         s1 = LiteralStringNode(a[:split])
         s2 = LiteralStringNode(a[split:])
         s = BinaryConcatNode(s1, s2)
@@ -323,6 +407,13 @@ def test_hash_part():
             # try twice due to caching reasons
             assert s.hash_part() == h
             assert s.hash_part() == h
+
+def test_hash_part_more():
+    for i in range(100):
+        rope, st = make_random_string()
+        h = rope.hash_part()
+        assert LiteralStringNode(st).hash_part() == h
+
 
 def test_equality():
     l = [make_random_string() for i in range(3)]
@@ -341,3 +432,8 @@ def test_compare_random():
                 c = c // abs(c)
             assert c == cmp(st1, st2)
 
+def test_power():
+    for i in range(0, 60, 13):
+        print i
+        for j in range(1, 10000, 7):
+            assert intmask(i ** j) == masked_power(i, j)

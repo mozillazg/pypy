@@ -16,7 +16,6 @@ class W_RopeObject(W_Object):
 
     def __init__(w_self, node):
         w_self._node = node
-        w_self._hash = 0
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -351,8 +350,6 @@ def str_join__Rope_ANY(space, w_self, w_list):
     str_w = space.str_w
     if list_w:
         self = w_self._node
-        listlen = 0
-        reslen = 0
         l = []
         for i in range(len(list_w)):
             w_s = list_w[i]
@@ -365,8 +362,16 @@ def str_join__Rope_ANY(space, w_self, w_list):
                     space.wrap("sequence item %d: expected string, %s "
                                "found" % (i, space.type(w_s).name)))
             assert isinstance(w_s, W_RopeObject)
-            l.append(w_s._node)
-        return W_RopeObject(rope.join(w_self._node, l))
+            node = w_s._node
+            l.append(node)
+        selfnode = w_self._node
+        length = selfnode.length()
+        listlen_minus_one = len(list_w) - 1
+        try:
+            return W_RopeObject(rope.join(selfnode, l))
+        except OverflowError:
+            raise OperationError(space.w_OverflowError,
+                                 space.wrap("string too long"))
     else:
         return W_RopeObject.empty
 
@@ -483,7 +488,11 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
             substrings.append(rope.LiteralStringNode(iter.next()))
             substrings.append(by)
         substrings.append(rope.getslice_one(node, upper, length))
-        return W_RopeObject(rope.rebalance(substrings))
+        try:
+            return W_RopeObject(rope.rebalance(substrings))
+        except OverflowError:
+            raise OperationError(space.w_OverflowError,
+                                 space.wrap("string too long"))
     startidx = 0
     substrings = []
     iter = rope.FindIterator(node, sub)
@@ -500,7 +509,11 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
             break
         maxsplit = maxsplit - 1
     substrings.append(rope.getslice_one(node, startidx, length))
-    return W_RopeObject(rope.join(by, substrings))
+    try:
+        return W_RopeObject(rope.join(by, substrings))
+    except OverflowError:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("string too long"))
 
 def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"
@@ -788,11 +801,7 @@ def str_w__Rope(space, w_str):
     return w_str._node.flatten()
 
 def hash__Rope(space, w_str):
-    hash = w_str._hash
-    if hash == 0:
-        node = w_str._node
-        hash = w_str._hash = rope.hash_rope(node)
-    return wrapint(space, hash)
+    return wrapint(space, rope.hash_rope(w_str._node))
 
 def lt__Rope_Rope(space, w_str1, w_str2):
     n1 = w_str1._node
@@ -805,22 +814,8 @@ def le__Rope_Rope(space, w_str1, w_str2):
     return space.newbool(rope.compare(n1, n2) <= 0)
 
 def _eq(w_str1, w_str2):
-    h1 = w_str1._hash
-    h2 = w_str2._hash
-    if h1 and h2 and h1 != h2:
-        return False
-    n1 = w_str1._node
-    n2 = w_str2._node
-    result = rope.eq(n1, n2)
-    if result:
-        if h1:
-            if not h2:
-                w_str2._hash = h1
-        else:
-            if h2:
-                w_str1._hash = h2
+    result = rope.eq(w_str1._node, w_str2._node)
     return result
-
 
 def eq__Rope_Rope(space, w_str1, w_str2):
     return space.newbool(_eq(w_str1, w_str2))
@@ -869,13 +864,17 @@ def mul_string_times(space, w_str, w_times):
         return W_RopeObject.empty
     node = w_str._node
     length = node.length()
+#    try:
+#        buflen = ovfcheck(mul * length)
+#    except OverflowError:
+#        raise OperationError(
+#            space.w_OverflowError, 
+#            space.wrap("repeated string is too long: %d %d" % (length, mul)))
     try:
-        buflen = ovfcheck(mul * length)
+        return W_RopeObject(rope.multiply(node, mul))
     except OverflowError:
-        raise OperationError(
-            space.w_OverflowError, 
-            space.wrap("repeated string is too long: %d %d" % (length, mul)))
-    return W_RopeObject(rope.multiply(node, mul))
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("string too long"))
 
 def mul__Rope_ANY(space, w_str, w_times):
     return mul_string_times(space, w_str, w_times)
@@ -886,7 +885,11 @@ def mul__ANY_Rope(space, w_times, w_str):
 def add__Rope_Rope(space, w_left, w_right):
     right = w_right._node
     left = w_left._node
-    return W_RopeObject(rope.concatenate(left, right))
+    try:
+        return W_RopeObject(rope.concatenate(left, right))
+    except OverflowError:
+        raise OperationError(space.w_OverflowError,
+                             space.wrap("string too long"))
 
 def len__Rope(space, w_str):
     return space.wrap(w_str._node.length())

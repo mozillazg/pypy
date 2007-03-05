@@ -1,6 +1,6 @@
 import py
 import sys
-from pypy.rlib.rarithmetic import intmask, _hash_string
+from pypy.rlib.rarithmetic import intmask, _hash_string, ovfcheck
 from pypy.rlib.objectmodel import we_are_translated
 import math
 
@@ -23,6 +23,32 @@ def find_fib_index(l):
             return i
         a, b = b, a + b
         i += 1
+
+def masked_power(a, b):
+    if b == 0:
+        return 1
+    if b == 1:
+        return a
+    if a == 0:
+        return 0
+    if a == 1:
+        return 1
+    num_bits = 2
+    mask = b >> 2
+    while mask:
+        num_bits += 1
+        mask >>= 1
+    result = a
+    mask = 1 << (num_bits - 2)
+    #import pdb; pdb.set_trace()
+    for i in range(num_bits - 1):
+        if mask & b:
+            result = intmask(result * result * a)
+        else:
+            result = intmask(result * result)
+        mask >>= 1
+    return result
+
 
 class StringNode(object):
     hash_cache = 0
@@ -114,7 +140,10 @@ class BinaryConcatNode(StringNode):
     def __init__(self, left, right):
         self.left = left
         self.right = right
-        self.len = left.length() + right.length()
+        try:
+            self.len = ovfcheck(left.length() + right.length())
+        except OverflowError:
+            raise
         self._depth = max(left.depth(), right.depth()) + 1
         self.balanced = False
 
@@ -156,7 +185,7 @@ class BinaryConcatNode(StringNode):
         if not h:
             h1 = self.left.hash_part()
             h2 = self.right.hash_part()
-            x = intmask(h1 + h2 * (1000003 ** self.left.length()))
+            x = intmask(h2 + h1 * (masked_power(1000003, self.right.length())))
             x |= intmask(1L << (NBITS - 1))
             h = self.hash_cache = x
         return h
@@ -784,11 +813,13 @@ class FindIterator(object):
 def eq(node1, node2):
     if node1 is node2:
         return True
-    # could be cleverer and detect partial equalities
     if node1.length() != node2.length():
+        return False
+    if hash_rope(node1) != hash_rope(node2):
         return False
     iter1 = CharIterator(node1)
     iter2 = CharIterator(node2)
+    # XXX could be cleverer and detect partial equalities
     while 1:
         try:
             c = iter1.next()
@@ -825,28 +856,12 @@ def compare(node1, node2):
 # __________________________________________________________________________
 # misc
 
-
 def hash_rope(rope):
     length = rope.length()
     if length == 0:
-        x = -1
-    elif isinstance(rope, LiteralStringNode):
-        if we_are_translated():
-            return hash(rope.s) # to use the hash cache in rpython strings
-        else:
-            # to make sure we get the same hash as rpython (otherwise
-            # translation will freeze W_DictObjects where we can't find the
-            # keys any more!)
-            return _hash_string(rope.s)
-    else:
-        x = ord(rope.getitem(0)) << 7
-        iter = CharIterator(rope)
-        while 1:
-            try:
-                x = (1000003*x) + ord(iter.next())
-            except StopIteration:
-                break
-        x ^= length
-        if x == 0:
-            x = -1
-    return intmask(x) 
+        return -1
+    x = rope.hash_part()
+    x <<= 1 # get rid of the bit that is always set
+    x ^= ord(rope.getitem(0))
+    x ^= rope.length()
+    return intmask(x)
