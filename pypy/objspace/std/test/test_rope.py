@@ -437,3 +437,25 @@ def test_power():
         print i
         for j in range(1, 10000, 7):
             assert intmask(i ** j) == masked_power(i, j)
+
+def test_EfficientGetitemWraper():
+    node1, _ = make_random_string(slicing=False)
+    node2 = EfficientGetitemWraper(node1)
+    for i in range(node2.length()):
+        assert node1.getitem(i) == node2.getitem(i)
+    for j in range(1000):
+        i = random.randrange(node1.length())
+        assert node1.getitem(i) == node2.getitem(i)
+
+def test_seekable_bug():
+    node = BinaryConcatNode(LiteralStringNode("abc"), LiteralStringNode("def"))
+    iter = SeekableCharIterator(node)
+    c = iter.next(); assert c == "a"
+    c = iter.next(); assert c == "b"
+    c = iter.next(); assert c == "c"
+    iter.seekback(1)
+    c = iter.next(); assert c == "c"
+    c = iter.next(); assert c == "d"
+    c = iter.next(); assert c == "e"
+    c = iter.next(); assert c == "f"
+    py.test.raises(StopIteration, iter.next)

@@ -75,7 +75,7 @@ class StringNode(object):
         if isinstance(index, slice):
             start, stop, step = index.indices(self.length())
             # XXX sucks
-            slicelength = len(range(start, stop, step))
+            slicelength = len(xrange(start, stop, step))
             return getslice(self, start, stop, step, slicelength)
         return self.getitem(index)
 
@@ -250,6 +250,49 @@ class SliceNode(StringNode):
         yield '"%s" -> "%s";' % (id(self), id(self.node))
         for line in self.node.dot(seen):
             yield line
+
+class EfficientGetitemWraper(StringNode):
+    def __init__(self, node):
+        assert isinstance(node, BinaryConcatNode)
+        self.node = node
+        self.iter = SeekableCharIterator(node)
+        self.nextpos = 0
+        self.accesses = 0
+        self.seeks = 0
+
+    def length(self):
+        return self.node.length()
+
+    def depth(self):
+        return self.node.depth()
+
+    def rebalance(self):
+        return EfficientGetitemWraper(self.node.rebalance())
+
+    def hash_part(self):
+        return self.node.hash_part()
+
+    def flatten(self):
+        return self.node.flatten()
+
+    def getitem(self, index):
+        self.accesses += 1
+        nextpos = self.nextpos
+        self.nextpos = index + 1
+        if index < nextpos:
+            self.iter.seekback(nextpos - index)
+            self.seeks += nextpos - index
+        elif index > nextpos:
+            self.iter.seekforward(index - nextpos)
+            self.seeks += index - nextpos
+        return self.iter.next()
+
+    def view(self):
+        return self.node.view()
+
+    def check_balanced(self):
+        return self.node.check_balanced()
+
 
 def concatenate(node1, node2):
     if node1.length() == 0:
@@ -487,19 +530,32 @@ def find_char(node, c, start=0, stop=-1):
     elif isinstance(node, SliceNode):
         return find_char(node.node, c, node.start + start,
                          node.start + stop) - node.start + offset
-    iter = CharIterator(node)
+    iter = FringeIterator(node)
+    #import pdb; pdb.set_trace()
     i = 0
     while i < stop:
         try:
-            c2 = iter.next()
-            if i < start:
-                i += 1
-                continue
-            if c == c2:
-                return i + offset
-            i += 1
+            fringenode = iter.next()
         except StopIteration:
             return -1
+        nodelength = fringenode.length()
+        if i + nodelength <= start:
+            i += nodelength
+            continue
+        searchstart = max(0, start - i)
+        searchstop = min(stop - i, nodelength)
+        if isinstance(fringenode, LiteralStringNode):
+            st = fringenode.s
+        elif isinstance(fringenode, SliceNode):
+            n = fringenode.node
+            assert isinstance(n, LiteralStringNode)
+            st = n.s
+            searchstart += fringenode.start
+            searchstop += fringenode.stop
+        pos = fringenode.s.find(c, searchstart, searchstop)
+        if pos != -1:
+            return pos + i + offset
+        i += nodelength
     return -1
 
 def find(node, subnode, start=0, stop=-1):
@@ -507,7 +563,7 @@ def find(node, subnode, start=0, stop=-1):
     len1 = node.length()
     if stop > len1 or stop == -1:
         stop = len1
-    substring = subnode.flatten() # stressful to do it as a node
+    substring = subnode.flatten() # XXX stressful to do it as a node
     len2 = len(substring)
     if len2 == 1:
         return find_char(node, substring[0], start, stop)
@@ -653,6 +709,7 @@ def fringe(node):
             return result
 
 class SeekableFringeIterator(object):
+    # XXX allow to seek in bigger character steps
     def __init__(self, node):
         self.stack = [node]
         self.fringestack = []
@@ -750,6 +807,9 @@ class SeekableCharIterator(object):
     def seekback(self, numchars):
         if numchars <= self.index:
             self.index -= numchars
+            if self.node is None:
+                self.iter.seekback()
+                self.node = self.iter.next()
             return
         numchars -= self.index
         self.iter.seekback() # for first item
@@ -768,7 +828,7 @@ class FindIterator(object):
     def __init__(self, node, sub, start=0, stop=-1):
         self.node = node
         len1 = self.length = node.length()
-        substring = self.substring = sub.flatten() # for now
+        substring = self.substring = sub.flatten() # XXX for now
         len2 = len(substring)
         self.search_length = len2
         if len2 == 0:
