@@ -5,11 +5,14 @@ from sys import maxint
 
 def wrapstr(space, s):
     from pypy.objspace.std.stringobject import W_StringObject
+    from pypy.objspace.std.ropeobject import rope, W_RopeObject
     if space.config.objspace.std.sharesmallstr:
         if space.config.objspace.std.withprebuiltchar:
             # share characters and empty string
             if len(s) <= 1:
                 if len(s) == 0:
+                    if space.config.objspace.std.withrope:
+                        return W_RopeObject.EMPTY
                     return W_StringObject.EMPTY
                 else:
                     s = s[0]     # annotator hint: a single char
@@ -17,17 +20,23 @@ def wrapstr(space, s):
         else:
             # only share the empty string
             if len(s) == 0:
+                if space.config.objspace.std.withrope:
+                    return W_RopeObject.EMPTY
                 return W_StringObject.EMPTY
     if space.config.objspace.std.withrope:
-        from pypy.objspace.std.ropeobject import rope, W_RopeObject
         return W_RopeObject(rope.LiteralStringNode(s))
     return W_StringObject(s)
 
 def wrapchar(space, c):
     from pypy.objspace.std.stringobject import W_StringObject
+    from pypy.objspace.std.ropeobject import rope, W_RopeObject
     if space.config.objspace.std.withprebuiltchar:
+        if space.config.objspace.std.withrope:
+            return W_RopeObject.PREBUILT[ord(c)]
         return W_StringObject.PREBUILT[ord(c)]
     else:
+        if space.config.objspace.std.withrope:
+            return W_RopeObject(rope.LiteralStringNode(c))
         return W_StringObject(c)
 
 def sliced(space, s, start, stop):
