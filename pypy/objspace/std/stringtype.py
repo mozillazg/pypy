@@ -18,7 +18,7 @@ def wrapstr(space, s):
             # only share the empty string
             if len(s) == 0:
                 return W_StringObject.EMPTY
-    if self.config.objspace.std.withrope:
+    if space.config.objspace.std.withrope:
         from pypy.objspace.std.ropeobject import rope, W_RopeObject
         return W_RopeObject(rope.LiteralStringNode(s))
     return W_StringObject(s)
