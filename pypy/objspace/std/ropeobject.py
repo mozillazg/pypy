@@ -413,13 +413,10 @@ def str_ljust__Rope_ANY_ANY(space, w_self, w_arg, w_fillchar):
 def _convert_idx_params(space, w_self, w_sub, w_start, w_end):
     self = w_self._node
     sub = w_sub._node
-    w_len = space.wrap(self.length())
-    w_start = slicetype.adapt_bound(space, w_start, w_len)
-    w_end = slicetype.adapt_bound(space, w_end, w_len)
 
-    start = space.int_w(w_start)
-    end = space.int_w(w_end)
+    start = slicetype.adapt_bound(space, self.length(), w_start)
     assert start >= 0
+    end = slicetype.adapt_bound(space, self.length(), w_end)
     assert end >= 0
 
     return (self, sub, start, end)
@@ -834,7 +831,12 @@ def ge__Rope_Rope(space, w_str1, w_str2):
     return space.newbool(rope.compare(n1, n2) >= 0)
 
 def getitem__Rope_ANY(space, w_str, w_index):
-    ival = space.int_w(w_index)
+    if not space.lookup(w_index, '__index__'):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("string indices must be integers, not %s" %
+                       space.type(w_index).getname(space, '?')))
+    ival = space.getindex_w(w_index, space.w_IndexError)
     node = w_str._node
     slen = node.length()
     if ival < 0:
@@ -855,7 +857,7 @@ def getitem__Rope_Slice(space, w_str, w_slice):
 
 def mul_string_times(space, w_str, w_times):
     try:
-        mul = space.int_w(w_times)
+        mul = space.getindex_w(w_times, space.w_OverflowError)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             raise FailedToImplement

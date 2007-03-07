@@ -128,7 +128,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    default=False),
 
         BoolOption("withprebuiltchar",
-                   "use prebuilt single-character string objects",
+                   "use prebuilt single-character string objects"),
 
         BoolOption("withrope", "use ropes as the string implementation",
                    default=False),
