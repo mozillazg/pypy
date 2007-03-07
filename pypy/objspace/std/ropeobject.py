@@ -602,10 +602,8 @@ def str_count__Rope_Rope_ANY_ANY(space, w_self, w_arg, w_start, w_end):
     length = selfnode.length()
     argnode   = w_arg._node
 
-    w_start = slicetype.adapt_bound(space, w_start, space.wrap(length))
-    w_end = slicetype.adapt_bound(space, w_end, space.wrap(length))
-    u_start = space.int_w(w_start)
-    u_end = space.int_w(w_end)
+    u_start = slicetype.adapt_bound(space, length, w_start)
+    u_end = slicetype.adapt_bound(space, length, w_end)
     assert u_start >= 0
     assert u_end >= 0
     iter = rope.FindIterator(selfnode, argnode, u_start, u_end)
