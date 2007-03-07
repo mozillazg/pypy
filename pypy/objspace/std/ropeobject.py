@@ -8,6 +8,7 @@ from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.objspace.std.stringtype import wrapchar
 
 from pypy.objspace.std import rope
 
@@ -30,6 +31,10 @@ class W_RopeObject(W_Object):
         return W_RopeObject(w_self._node)
 
 W_RopeObject.EMPTY = W_RopeObject(rope.LiteralStringNode(""))
+W_RopeObject.PREBUILT = [W_RopeObject(rope.LiteralStringNode(chr(i)))
+                             for i in range(256)]
+del i
+
 
 def rope_w(space, w_str):
     if isinstance(w_str, W_RopeObject):
@@ -47,9 +52,6 @@ class W_RopeIterObject(W_Object):
         w_self.index = index
 
 registerimplementation(W_RopeIterObject)
-
-def wrap_rpystr(s):
-    return W_RopeObject(rope.LiteralStringNode(s))
 
 def _is_generic(space, w_self, fun): 
     l = w_self._node.length()
@@ -319,7 +321,7 @@ def str_rsplit__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
         # the word is value[j+1:i+1]
         j1 = j + 1
         assert j1 >= 0
-        res_w.append(wrap_rpystr(value[j1:i+1]))
+        res_w.append(space.wrap(value[j1:i+1]))
 
         # continue to look from the character before the space before the word
         i = j - 1
@@ -342,11 +344,11 @@ def str_rsplit__Rope_Rope_ANY(space, w_self, w_by, w_maxsplit=-1):
         next = value.rfind(by, 0, end)
         if next < 0:
             break
-        res_w.append(wrap_rpystr(value[next+bylen: end]))
+        res_w.append(space.wrap(value[next+bylen: end]))
         end = next
         maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
-    res_w.append(wrap_rpystr(value[:end]))
+    res_w.append(space.wrap(value[:end]))
     res_w.reverse()
     return space.newlist(res_w)
 
@@ -909,7 +911,7 @@ def getitem__Rope_ANY(space, w_str, w_index):
         exc = space.call_function(space.w_IndexError,
                                   space.wrap("string index out of range"))
         raise OperationError(space.w_IndexError, exc)
-    return wrap_rpystr(node.getitem(ival))
+    return wrapchar(space, node.getitem(ival))
 
 def getitem__Rope_Slice(space, w_str, w_slice):
     node = w_str._node
@@ -1097,7 +1099,7 @@ def next__RopeIter(space, w_ropeiter):
         raise OperationError(space.w_StopIteration, space.w_None) 
     try:
         char = w_ropeiter.char_iter.next()
-        w_item = wrap_rpystr(char)
+        w_item = space.wrap(char)
     except StopIteration:
         w_ropeiter.node = None
         w_ropeiter.char_iter = None

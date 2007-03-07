@@ -72,3 +72,33 @@ class AppTestUnicodeRope(test_unicodeobject.AppTestUnicodeString):
 
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withrope": True})
+
+class AppTestPrebuilt(test_stringobject.AppTestStringObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withrope": True,
+                                       "objspace.std.withprebuiltchar": True})
+
+    def test_hash(self):
+        # does not make sense, since our hash is different than CPython's
+        pass
+ 
+
+class AppTestShare(test_stringobject.AppTestStringObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withrope": True,
+                                       "objspace.std.sharesmallstr": True})
+
+    def test_hash(self):
+        # does not make sense, since our hash is different than CPython's
+        pass
+ 
+class AppTestPrebuiltShare(test_stringobject.AppTestStringObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withrope": True,
+                                       "objspace.std.withprebuiltchar": True,
+                                       "objspace.std.sharesmallstr": True})
+
+    def test_hash(self):
+        # does not make sense, since our hash is different than CPython's
+        pass
+ 
