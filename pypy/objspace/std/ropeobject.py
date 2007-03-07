@@ -440,6 +440,42 @@ def str_rfind__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     res = self.rfind(sub, start, end)
     return wrapint(space, res)
 
+def str_partition__Rope_Rope(space, w_self, w_sub):
+    self = w_self._node
+    sub = w_sub._node
+    if not sub.length():
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = rope.find(self, sub)
+    if pos == -1:
+        return space.newtuple([w_self, W_RopeObject.empty,
+                               W_RopeObject.empty])
+    else:
+        return space.newtuple(
+            [W_RopeObject(rope.getslice_one(self, 0, pos)),
+             w_sub,
+             W_RopeObject(rope.getslice_one(self, pos + sub.length(),
+                                            self.length()))])
+
+def str_rpartition__Rope_Rope(space, w_self, w_sub):
+    # XXX works but flattens
+    self = w_self._node
+    sub = w_sub._node
+    if not sub.length():
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    flattened_self = self.flatten()
+    flattened_sub = sub.flatten()
+    pos = flattened_self.rfind(flattened_sub)
+    if pos == -1:
+        return space.newtuple([W_RopeObject.empty, W_RopeObject.empty, w_self])
+    else:
+        return space.newtuple(
+            [W_RopeObject(rope.getslice_one(self, 0, pos)),
+             w_sub,
+             W_RopeObject(rope.getslice_one(self, pos + sub.length(),
+                                            self.length()))])
+
 def str_index__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
