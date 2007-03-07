@@ -29,7 +29,7 @@ class W_RopeObject(W_Object):
             return w_self
         return W_RopeObject(w_self._node)
 
-W_RopeObject.empty = W_RopeObject(rope.LiteralStringNode(""))
+W_RopeObject.EMPTY = W_RopeObject(rope.LiteralStringNode(""))
 
 def rope_w(space, w_str):
     if isinstance(w_str, W_RopeObject):
@@ -211,7 +211,7 @@ def str_capitalize__Rope(space, w_self):
             else:
                 buffer[i] = ch
     else:
-        return W_RopeObject.empty
+        return W_RopeObject.EMPTY
 
     return W_RopeObject(rope.rope_from_charlist(buffer))
          
@@ -377,7 +377,7 @@ def str_join__Rope_ANY(space, w_self, w_list):
             raise OperationError(space.w_OverflowError,
                                  space.wrap("string too long"))
     else:
-        return W_RopeObject.empty
+        return W_RopeObject.EMPTY
 
 def str_rjust__Rope_ANY_ANY(space, w_self, w_arg, w_fillchar):
     u_arg = space.int_w(w_arg)
@@ -452,8 +452,8 @@ def str_partition__Rope_Rope(space, w_self, w_sub):
                              space.wrap("empty separator"))
     pos = rope.find(self, sub)
     if pos == -1:
-        return space.newtuple([w_self, W_RopeObject.empty,
-                               W_RopeObject.empty])
+        return space.newtuple([w_self, W_RopeObject.EMPTY,
+                               W_RopeObject.EMPTY])
     else:
         return space.newtuple(
             [W_RopeObject(rope.getslice_one(self, 0, pos)),
@@ -472,7 +472,7 @@ def str_rpartition__Rope_Rope(space, w_self, w_sub):
     flattened_sub = sub.flatten()
     pos = flattened_self.rfind(flattened_sub)
     if pos == -1:
-        return space.newtuple([W_RopeObject.empty, W_RopeObject.empty, w_self])
+        return space.newtuple([W_RopeObject.EMPTY, W_RopeObject.EMPTY, w_self])
     else:
         return space.newtuple(
             [W_RopeObject(rope.getslice_one(self, 0, pos)),
@@ -751,7 +751,7 @@ def str_expandtabs__Rope_ANY(space, w_self, w_tabsize):
     node = w_self._node
     length = node.length()
     if length == 0:
-        return W_RopeObject.empty
+        return W_RopeObject.EMPTY
     tabsize  = space.int_w(w_tabsize)
     
     expanded = []
@@ -916,7 +916,7 @@ def getitem__Rope_Slice(space, w_str, w_slice):
     length = node.length()
     start, stop, step, sl = w_slice.indices4(space, length)
     if sl == 0:
-        return W_RopeObject.empty
+        return W_RopeObject.EMPTY
     return W_RopeObject(rope.getslice(node, start, stop, step, sl))
 
 def mul_string_times(space, w_str, w_times):
@@ -927,7 +927,7 @@ def mul_string_times(space, w_str, w_times):
             raise FailedToImplement
         raise
     if mul <= 0:
-        return W_RopeObject.empty
+        return W_RopeObject.EMPTY
     node = w_str._node
     length = node.length()
 #    try:
