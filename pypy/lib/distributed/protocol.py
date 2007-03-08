@@ -39,9 +39,9 @@ try:
     from pypymagic import transparent_proxy as proxy
     from pypymagic import get_transparent_controller
 except ImportError:
-    raise ImportError("Cannot work without transparent proxy functional")
+    raise ImportError("Cannot work without transparent proxy functionality")
 
-from distributed.objkeeper import ObjKeeper
+from distributed.objkeeper import ObjKeeper, RemoteBase
 import sys
 
 # XXX We do not make any garbage collection. We'll need it at some point
@@ -49,9 +49,11 @@ import sys
 """
 TODO list:
 
-1. Add some garbage collection
-2. Add caching of objects that are presented (even on name level)
-3. Add exceptions, frames and error handling
+1. Garbage collection - we would like probably to use weakrefs, but
+   since they're not perfectly working in pypy, let's leave it alone for now
+2. Some error handling - exceptions are working, there are still some
+   applications where it all explodes.
+3. Support inheritance and recursive types
 """
 
 from pypymagic import pypy_repr
@@ -89,6 +91,7 @@ class AbstractProtocol(object):
         'tp' : None,
         'fr' : types.FrameType,
         'tb' : types.TracebackType,
+        'reg' : RemoteBase
     }
     type_letters = dict([(value, key) for key, value in letter_types.items()])
     assert len(type_letters) == len(letter_types)
@@ -129,6 +132,8 @@ class AbstractProtocol(object):
             id = self.keeper.register_object(obj)
             return (self.type_letters[tp], id)
         elif tp is type:
+            if issubclass(obj, RemoteBase):
+                return "reg", self.keeper.reverse_remote_types[obj]
             try:
                 return self.type_letters[tp], self.type_letters[obj]
             except KeyError:
@@ -154,6 +159,8 @@ class AbstractProtocol(object):
         tp = self.letter_types[tp_letter]
         if tp is None:
             return self.keeper.get_object(obj_data)
+        elif tp is RemoteBase:
+            return self.keeper.exported_types_reverse[obj_data]
         elif tp in self.immutable_primitives:
             return obj_data # this is the object
         elif tp is tuple:
@@ -177,6 +184,9 @@ class AbstractProtocol(object):
             name = self.unwrap(w_name)
             self_ = self.unwrap(w_self)
             if self_:
+                if not tp:
+                    setattr(self_, name, classmethod(self.unwrap(w_func)))
+                    return getattr(self_, name)
                 return getattr(tp, name).__get__(self_, tp)
             func = self.unwrap(w_func)
             setattr(tp, name, func)
@@ -366,4 +376,13 @@ def test_env(exported_names):
     inp, out = channel(), channel()
     remote_protocol = RemoteProtocol(inp.send, out.receive, exported_names)
     t = tasklet(remote_loop)(remote_protocol)
+    
+    #def send_trace(data):
+    #    print "Sending %s" % (data,)
+    #    out.send(data)
+
+    #def receive_trace():
+    #    data = inp.receive()
+    #    print "Received %s" % (data,)
+    #    return data
     return RemoteProtocol(out.send, inp.receive)

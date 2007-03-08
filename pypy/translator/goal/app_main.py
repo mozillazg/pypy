@@ -6,13 +6,17 @@ options:
   -i           inspect interactively after running script
   -O           dummy optimization flag for compatibility with C Python
   -c CMD       program passed in as CMD (terminates option list)
+  -S           do not 'import site' on initialization
   -u           unbuffered binary stdout and stderr
   -h, --help   show this help message and exit
+  -m           library module to be run as a script (terminates option list)
   --version    print the PyPy version
   --info       print translation information about this PyPy executable
 """
 
 import sys, os
+
+DEBUG = False       # dump exceptions before calling the except hook
 
 originalexcepthook = sys.__excepthook__
 
@@ -60,9 +64,8 @@ def run_toplevel(f, *fargs, **fkwds):
     except:
         etype, evalue, etraceback = sys.exc_info()
         try:
-            # XXX extra debugging info in case the code below goes very wrong
-            # XXX (temporary)
-            if hasattr(sys, 'stderr'):
+            # extra debugging info in case the code below goes very wrong
+            if DEBUG and hasattr(sys, 'stderr'):
                 s = getattr(etype, '__name__', repr(etype))
                 print >> sys.stderr, "debug: exception-type: ", s
                 print >> sys.stderr, "debug: exception-value:", str(evalue)
@@ -172,7 +175,9 @@ def entry_point(executable, argv):
 
     go_interactive = False
     run_command = False
+    import_site = True
     i = 0
+    run_module = False
     while i < len(argv):
         arg = argv[i]
         if not arg.startswith('-'):
@@ -180,7 +185,7 @@ def entry_point(executable, argv):
         if arg == '-i':
             go_interactive = True
         elif arg == '-c':
-            if i >= len(argv):
+            if i+1 >= len(argv):
                 print_error('Argument expected for the -c option')
                 return 2
             run_command = True
@@ -198,6 +203,15 @@ def entry_point(executable, argv):
         elif arg == '-h' or arg == '--help':
             print_help()
             return 0
+        elif arg == '-S':
+            import_site = False
+        elif arg == '-m':
+            i += 1
+            if i >= len(argv):
+                print_error('Argument expected for the -m option')
+                return 2
+            run_module = True
+            break
         elif arg == '--':
             i += 1
             break     # terminates option list
@@ -213,6 +227,13 @@ def entry_point(executable, argv):
 
     mainmodule = type(sys)('__main__')
     sys.modules['__main__'] = mainmodule
+
+    if import_site:
+        try:
+            import site
+        except:
+            print >> sys.stderr, "import site' failed"
+
 
     # set up the Ctrl-C => KeyboardInterrupt signal handler, if the
     # signal module is available
@@ -234,6 +255,11 @@ def entry_point(executable, argv):
                 def run_it():
                     exec cmd in mainmodule.__dict__
                 success = run_toplevel(run_it)
+            elif run_module:
+                def run_it():
+                    import runpy
+                    runpy.run_module(sys.argv[0], None, '__main__', True)
+                success = run_toplevel(run_it)
             else:
                 scriptdir = resolvedirof(sys.argv[0])
                 sys.path.insert(0, scriptdir)
@@ -241,7 +267,18 @@ def entry_point(executable, argv):
         else: 
             sys.argv.append('')
             go_interactive = True
-        if go_interactive or os.environ.get('PYTHONINSPECT'):
+            
+        if go_interactive or os.getenv('PYTHONINSPECT'):
+            python_startup = os.getenv('PYTHONSTARTUP')
+            if python_startup:
+                try:
+                    startup = open(python_startup).read()
+                except IOError:
+                    pass
+                else:
+                    def run_it():
+                        exec startup in mainmodule.__dict__
+                    run_toplevel(run_it)
             print >> sys.stderr, "debug: importing code" 
             import code
             print >> sys.stderr, "debug: calling code.interact()"

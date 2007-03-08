@@ -512,6 +512,21 @@ class BaseTestInline:
         assert x4() == 1
         py.test.raises(CannotInline, self.check_inline, x3, x4, [])
 
+    def test_list_iteration(self):
+        def f():
+            tot = 0
+            for item in [1,2,3]:
+                tot += item
+            return tot
+
+        eval_func, t = self.check_auto_inlining(f, [], checkvirtual=True)
+        f_graph = graphof(t, f)
+        called_graphs = collect_called_graphs(f_graph, t, include_oosend=False)
+        assert len(called_graphs) == 0
+
+        result = eval_func([])
+        assert result == 6
+
 
 class TestInlineLLType(LLRtypeMixin, BaseTestInline):
 
@@ -635,4 +650,3 @@ class TestInlineOOType(OORtypeMixin, BaseTestInline):
         eval_func, t = self.check_auto_inlining(fn5, [], checkvirtual=True)
         res = eval_func([])
         assert res == 42
-

@@ -95,9 +95,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
                 assert isinstance(w_globals, W_DictMultiObject)
                 w_value = w_globals.implementation.get_builtin_indexed(num)
                 if w_value is None:
-                    w_builtins = f.builtin
-                    assert isinstance(w_builtins, Module)
-                    w_builtin_dict = w_builtins.w_dict
+                    builtins = f.get_builtin()
+                    assert isinstance(builtins, Module)
+                    w_builtin_dict = builtins.w_dict
                     assert isinstance(w_builtin_dict, W_DictMultiObject)
                     w_value = w_builtin_dict.implementation.get_builtin_indexed(num)
         ##                 if w_value is not None:
@@ -120,13 +120,15 @@ class StdObjSpace(ObjSpace, DescrOperation):
         self.FrameClass = StdObjSpaceFrame
 
         # XXX store the dict class on the space to access it in various places
-        if self.config.objspace.std.withstrdict:
-            from pypy.objspace.std import dictstrobject
-            self.DictObjectCls = dictstrobject.W_DictStrObject
-        elif self.config.objspace.std.withmultidict:
+        if self.config.objspace.std.withmultidict:
             from pypy.objspace.std import dictmultiobject
             self.DictObjectCls = dictmultiobject.W_DictMultiObject
             self.emptydictimpl = dictmultiobject.EmptyDictImplementation(self)
+            if self.config.objspace.std.withbucketdict:
+                from pypy.objspace.std import dictbucket
+                self.DefaultDictImpl = dictbucket.BucketDictImplementation
+            else:
+                self.DefaultDictImpl = dictmultiobject.RDictImplementation
         else:
             from pypy.objspace.std import dictobject
             self.DictObjectCls = dictobject.W_DictObject
@@ -181,6 +183,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
         # fix up a problem where multimethods apparently don't 
         # like to define this at interp-level 
+        # HACK HACK HACK
+        from pypy.objspace.std.typeobject import _HEAPTYPE
+        old_flags = self.w_dict.__flags__
+        self.w_dict.__flags__ |= _HEAPTYPE
         self.appexec([self.w_dict], """
             (dict): 
                 def fromkeys(cls, seq, value=None):
@@ -190,6 +196,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
                     return r
                 dict.fromkeys = classmethod(fromkeys)
         """)
+        self.w_dict.__flags__ = old_flags
 
         if self.config.objspace.std.oldstyle:
             self.enable_old_style_classes_as_default_metaclass()
@@ -335,7 +342,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             else:
                 return self.newint(x)
         if isinstance(x, str):
-            return W_StringObject(x)
+            from pypy.objspace.std.stringtype import wrapstr
+            return wrapstr(self, x)
         if isinstance(x, unicode):
             return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
         if isinstance(x, float):
@@ -468,7 +476,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         except ValueError:  # chr(out-of-range)
             raise OperationError(self.w_ValueError,
                                  self.wrap("character code not in range(256)"))
-        return W_StringObject(''.join(chars))
+        return self.wrap(''.join(chars))
 
     def newunicode(self, chars):
         try:
@@ -616,13 +624,17 @@ def old_slice_range(space, w_obj, w_start, w_stop):
     """Only for backward compatibility for __getslice__()&co methods."""
     if space.is_w(w_start, space.w_None):
         w_start = space.wrap(0)
-    elif space.is_true(space.lt(w_start, space.wrap(0))):
-        w_start = space.add(w_start, space.len(w_obj))
-        # NB. the language ref is inconsistent with the new-style class
-        # behavior when w_obj doesn't implement __len__(), so we just
-        # ignore this case.
+    else:
+        w_start = space.wrap(space.getindex_w(w_start))
+        if space.is_true(space.lt(w_start, space.wrap(0))):
+            w_start = space.add(w_start, space.len(w_obj))
+            # NB. the language ref is inconsistent with the new-style class
+            # behavior when w_obj doesn't implement __len__(), so we just
+            # ignore this case.
     if space.is_w(w_stop, space.w_None):
         w_stop = space.wrap(slice_max)
-    elif space.is_true(space.lt(w_stop, space.wrap(0))):
-        w_stop = space.add(w_stop, space.len(w_obj))
+    else:
+        w_stop = space.wrap(space.getindex_w(w_stop))
+        if space.is_true(space.lt(w_stop, space.wrap(0))):
+            w_stop = space.add(w_stop, space.len(w_obj))
     return w_start, w_stop

@@ -138,12 +138,14 @@ class EmptyDictImplementation(DictImplementation):
 
     def get(self, w_lookup):
         return None
+
     def setitem(self, w_key, w_value):
         if _is_str(self.space, w_key):
             return StrDictImplementation(self.space).setitem_str(w_key, w_value)
             #return SmallStrDictImplementation(self.space, w_key, w_value)
         else:
-            return RDictImplementation(self.space).setitem(w_key, w_value)
+            space = self.space
+            return space.DefaultDictImpl(space).setitem(w_key, w_value)
         #return SmallDictImplementation(self.space, w_key, w_value)
     def setitem_str(self, w_key, w_value, shadows_type=True):
         return StrDictImplementation(self.space).setitem_str(w_key, w_value)
@@ -205,7 +207,7 @@ class SmallDictImplementation(DictImplementation):
             i += 1
 
     def _convert_to_rdict(self):
-        newimpl = RDictImplementation(self.space)
+        newimpl = self.space.DefaultDictImpl(self.space)
         i = 0
         while 1:
             entry = self.entries[i]
@@ -296,13 +298,13 @@ class SmallStrDictImplementation(DictImplementation):
             i += 1
 
     def _convert_to_rdict(self):
-        newimpl = RDictImplementation(self.space)
+        newimpl = self.space.DefaultDictImpl(self.space)
         i = 0
         while 1:
             entry = self.entries[i]
             if entry.w_value is None:
                 break
-            newimpl.content[self.space.wrap(entry.key)] = entry.w_value
+            newimpl.setitem(self.space.wrap(entry.key), entry.w_value)
             i += 1
         return newimpl
 
@@ -450,7 +452,7 @@ class StrDictImplementation(DictImplementation):
 
 
     def _as_rdict(self):
-        newimpl = RDictImplementation(self.space)
+        newimpl = self.space.DefaultDictImpl(self.space)
         for k, w_v in self.content.items():
             newimpl.setitem(self.space.wrap(k), w_v)
         return newimpl
@@ -762,7 +764,7 @@ class SharedDictImplementation(DictImplementation):
         if as_strdict:
             newimpl = StrDictImplementation(self.space)
         else:
-            newimpl = RDictImplementation(self.space)
+            newimpl = self.space.DefaultDictImpl(self.space)
         for k, i in self.structure.keys.items():
             if i >= 0:
                 newimpl.setitem_str(self.space.wrap(k), self.entries[i])
@@ -806,7 +808,6 @@ class SharedKeyIteratorImplementation(IteratorImplementation):
         assert isinstance(implementation, SharedDictImplementation)
         for key, index in self.iterator:
             if index >= 0:
-                w_value = implementation.entries[index]
                 return self.space.wrap(key)
         else:
             return None
@@ -1010,6 +1011,15 @@ class W_DictMultiObject(W_Object):
             result[key] = val
         return result
 
+    def missing_method(w_dict, space, w_key):
+        if not space.is_w(space.type(w_dict), space.w_dict):
+            w_missing = space.lookup(w_dict, "__missing__")
+            if w_missing is None:
+                return None
+            return space.call_function(w_missing, w_dict, w_key)
+        else:
+            return None
+
     def len(w_self):
         return w_self.implementation.length()
 
@@ -1054,6 +1064,11 @@ def getitem__DictMulti_ANY(space, w_dict, w_lookup):
     w_value = w_dict.implementation.get(w_lookup)
     if w_value is not None:
         return w_value
+
+    w_missing_item = w_dict.missing_method(space, w_lookup)
+    if w_missing_item is not None:
+        return w_missing_item
+
     raise OperationError(space.w_KeyError, w_lookup)
 
 def setitem__DictMulti_ANY_ANY(space, w_dict, w_newkey, w_newvalue):

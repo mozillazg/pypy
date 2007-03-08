@@ -27,7 +27,6 @@ class Database(object):
         self._pendingsetup = []
         self._tmpcount = 1
         self.helper2ptr = {}
-        self.externalfuncs = {}
 
         self.primitives = Primitives(self)
     
@@ -59,7 +58,9 @@ class Database(object):
         if isinstance(type_, lltype.FuncType):
             if getattr(value._callable, "suggested_primitive", False):
                 node = ExternalFuncNode(self, value)
-                self.externalfuncs[node.callable] = value
+            elif hasattr(value, '_external_name'):
+                node = ExternalFuncNode(self, value, value._external_name)
+
             elif getattr(value, 'external', None) == 'C':
                 node = SimplerExternalFuncNode(self, value)
             else:
@@ -269,11 +270,7 @@ class Database(object):
             if isinstance(type_, lltype.Primitive):
                 return self.primitives[type_]
             elif isinstance(type_, lltype.Ptr):
-                if isinstance(type_.TO, lltype.FixedSizeArray):
-                    # hack copied from genc
-                    return self.repr_type(type_.TO.OF) + '*'
-                else:
-                    return self.repr_type(type_.TO) + '*'
+                return self.repr_type(type_.TO) + '*'
             else: 
                 raise TypeError("cannot represent %r" %(type_,))
             

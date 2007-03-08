@@ -1,4 +1,3 @@
-import autopath
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.listmultiobject import W_ListMultiObject, \
     SliceTrackingListImplementation
@@ -21,6 +20,11 @@ class AppTest_ListMultiObject(test_listobject.AppTestW_ListObject):
         import pypymagic
         l = ["1", "2", "3", "4", "5"]
         assert "StrListImplementation" in pypymagic.pypy_repr(l)
+
+    def test_strlist_delitem(self):
+        l = ["1", "2"]
+        del l[0]
+        assert l == ["2"]
 
     def test_strlist_append(self):
         import pypymagic
@@ -114,4 +118,29 @@ class TestSliceListImplementation(object):
         assert impl2.getitem(2) == 4
         impl2 = impl2.setitem(2, 5)
         assert impl2.getitem(2) == 5
+
+class AppTest_SmartListObject(test_listobject.AppTestW_ListObject):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{
+            "objspace.std.withsmartresizablelist": True})
+
+
+def _set_chunk_size_bits(bits):
+    from pypy.conftest import option
+    if not option.runappdirect:
+        from pypy.objspace.std import listmultiobject
+        old_value = listmultiobject.CHUNK_SIZE_BITS
+        listmultiobject.CHUNK_SIZE_BITS = bits
+        listmultiobject.CHUNK_SIZE = 2**bits
+        return old_value
+    return -1
+
+class AppTest_ChunkListObject(test_listobject.AppTestW_ListObject):
+
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withchunklist": True})
+        cls.chunk_size_bits = _set_chunk_size_bits(2)
+
+    def teardown_class(cls):
+        _set_chunk_size_bits(cls.chunk_size_bits)
 

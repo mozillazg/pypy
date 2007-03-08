@@ -1,4 +1,3 @@
-import autopath
 from pypy.objspace.std.objspace import *
 from pypy.objspace.std.stdtypedef import *
 
@@ -717,3 +716,9 @@ class AppTestTypeObject:
         exec """class A(object):\n  pass\n""" in d
         A = d['A']
         assert A.__module__ == 'yay'
+
+    def test_immutable_builtin(self):
+        raises(TypeError, setattr, list, 'append', 42)
+        raises(TypeError, setattr, list, 'foobar', 42)
+        raises(TypeError, delattr, dict, 'keys')
+        

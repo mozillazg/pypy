@@ -24,7 +24,7 @@ GET_METHOD_BODY = """
     }
     //logDebug('%(call)s'+str);
     x.open("GET", '%(call)s' + str, true);
-    //x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+    x.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
     x.onreadystatechange = function () { %(real_callback)s(x, callback) };
     //x.setRequestHeader("Connection", "close");
     //x.send(data);
@@ -40,9 +40,7 @@ POST_METHOD_BODY = """
     str = ""
     for(i in data) {
         if (data[i]) {
-            if (str.length == 0) {
-                str += "?";
-            } else {
+            if (str.length != 0) {
                 str += "&";
             }
             str += escape(i) + "=" + escape(data[i].toString());
@@ -104,6 +102,9 @@ class XmlHttp(object):
         self.name = name
         self.use_xml = use_xml
         self.base_url = base_url
+        obj = self.ext_obj._TYPE._class_
+        if not base_url and hasattr(obj, '_render_base_path'):
+            self.base_url = obj._render_base_path
         self.method = method
     
     def render(self, ilasm):
@@ -131,9 +132,11 @@ class XmlHttp(object):
         METHOD_BODY = globals()[self.method + "_METHOD_BODY"]
         if USE_MOCHIKIT and self.use_xml:
             assert 0, "Cannot use mochikit and xml requests at the same time"
+        if USE_MOCHIKIT and self.method == "POST":
+            assert 0, "Cannot use mochikit with POST method"
         if USE_MOCHIKIT:
-            ilasm.codegenerator.write(MOCHIKIT_BODY % {'class':self.name, 'method':url,\
-                'args':','.join(real_args), 'data':data, 'call':method_name})
+            ilasm.codegenerator.write(MOCHIKIT_BODY % {'class':self.name, 'method':method_name,\
+                'args':','.join(real_args), 'data':data, 'call':url})
         else:
             if not self.use_xml:
                 callback_body = CALLBACK_BODY

@@ -454,3 +454,52 @@ class TestInterp(object):
     
     def test_unary_plus(self):
         self.assert_prints("print(+1)", ['1'])
+
+    def test_delete(self):
+        self.assert_prints("""
+        var x = {}
+        x.y = 1;
+        delete x.y
+        print(x.y)
+        """, ['undefined'])
+
+    def test_forin(self):
+        self.assert_prints("""
+        var x = {a:5}
+        for(y in x){
+            print(y)
+        }
+        """, ['5',])
+
+    def test_stricteq(self):
+        self.assert_prints("""
+        print(2 === 2)
+        print(2 === 3)
+        print(2 !== 3)
+        print(2 !== 2)    
+        """, ['true', 'false', 'true', 'false'])
+    
+    def test_with(self):
+        self.assert_prints("""
+        var mock = {x:2}
+        var x=4
+        print(x)
+        try {
+            with(mock) {
+                print(x)
+                throw 3
+                print("not reacheable")
+            }
+        }
+        catch(y){
+            print(y)
+        }
+        print(x)
+        """, ['4', '2', '3', '4'])
+    
+    def test_bitops(self):
+        self.assert_prints("""
+        print(2 ^ 2)
+        print(2 & 3)
+        print(2 | 3)
+        """, ['0', '2', '3'])

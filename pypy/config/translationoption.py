@@ -157,6 +157,20 @@ translation_optiondescription = OptionDescription(
                    "Remove operations that look like 'raise AssertionError', "
                    "which lets the C optimizer remove the asserts",
                    default=False),
+
+        BoolOption("none",
+                   "Do not run any backend optimizations",
+                   requires=[('translation.backendopt.inline', False),
+                             ('translation.backendopt.inline_threshold', 0),
+                             ('translation.backendopt.merge_if_blocks', False),
+                             ('translation.backendopt.mallocs', False),
+                             ('translation.backendopt.constfold', False)])
+    ]),
+
+    OptionDescription("llvm", "GenLLVM options", [
+        BoolOption("debug", "Include the llops in the source as comments", default=False),
+        BoolOption("logging", "Log how long the various parts of llvm generation take", default=False),
+        BoolOption("isolate", "Peform an isolated import", default=True),
     ]),
 
     OptionDescription("cli", "GenCLI options", [

@@ -5,41 +5,85 @@
 # TODO Should be replaced by a real parser
 
 import os
-import py
+import os.path as path
 import re
 from pypy.rlib.parsing.ebnfparse import parse_ebnf, make_parse_function
 from pypy.rlib.parsing.ebnfparse import Symbol
+from pypy.rlib.streamio import open_file_as_stream, fdopen_as_stream
 
 DEBUG = False
 
 class JsSyntaxError(Exception):
     pass
 
-singlequote = re.compile(r"(?<!\\)'")
+SLASH = "\\"
+jsdir = path.join(path.dirname(__file__),"js")
+jsdefspath = path.join(jsdir, "jsdefs.js")
+jsparsepath = path.join(jsdir, "jsparse.js")
+fname = path.join(path.dirname(__file__) ,"tobeparsed.js")
+command = 'js -f %s -f %s -f %s'%(jsdefspath, jsparsepath, fname)
+
 def read_js_output(code_string):
-    stripped_code = re.sub(r"\\(?!')",r"\\\\", code_string)
-    stripped_code = stripped_code.replace("\n", "\\n")
-    stripped_code = singlequote.sub(r"\'", stripped_code)
+    tmp = []
+    last = ""
+    for c in code_string:
+        if c == "'" and last != SLASH:
+            tmp.append("\\'")
+        else:
+            if c == SLASH:
+                tmp.append(SLASH*2)
+            elif c == "\n":
+                tmp.append("\\n")
+            else:
+                tmp.append(c)
+    stripped_code = "".join(tmp)
     if DEBUG:
         print "------ got:"
         print code_string
         print "------ put:"
         print stripped_code
-    jsdir = py.path.local(__file__).dirpath().join("js")
-    jsdefs = jsdir.join("jsdefs.js").read()
-    jsparse = jsdir.join("jsparse.js").read()
-    f = py.test.ensuretemp("jsinterp").join("tobeparsed.js")
-    f.write(jsdefs+jsparse+"print(parse('%s'));\n" % stripped_code)
-    pipe = os.popen("js -f "+str(f), 'r')
-    retval = pipe.read()
+    f = open_file_as_stream(fname, 'w')
+    f.write("print(parse('%s'));\n" % stripped_code)
+    f.close()
+    c2pread, c2pwrite = os.pipe()
+    if os.fork() == 0:
+        #child
+        os.dup2(c2pwrite, 1)
+        for i in range(3, 256):
+            try:
+                os.close(i)
+            except OSError:
+                pass
+        cmd = ['/bin/sh', '-c', command]
+        os.execv(cmd[0], cmd)
+    os.close(c2pwrite)
+    f = fdopen_as_stream(c2pread, 'r', 0)
+    retval = f.readall()
+    f.close()
     if not retval.startswith("{"):
         raise JsSyntaxError(retval)
+    if DEBUG:
+        print "received back:"
+        print retval
     return retval
 
 def unquote(t):
     if isinstance(t, Symbol):
         if t.symbol == "QUOTED_STRING":
-            t.additional_info = t.additional_info.strip("'").replace("\\'", "'")
+            stop = len(t.additional_info)-1
+            if stop < 0:
+                stop = 0
+            t.additional_info = t.additional_info[1:stop]
+            temp = []
+            last = ""
+            for char in t.additional_info:
+                if last == SLASH:
+                    if char == SLASH:
+                        temp.append(SLASH)
+                if char != SLASH:        
+                    temp.append(char)
+                last = char
+            t.additional_info = ''.join(temp)
     else:
         for i in t.children:
             unquote(i)
@@ -58,7 +102,7 @@ def parse_bytecode(bytecode):
     return tree
 
 regexs, rules, ToAST = parse_ebnf(r"""
-    QUOTED_STRING: "'([^\']|\\\')*'";"""+"""
+    QUOTED_STRING: "'([^\\\']|\\[\\\'])*'";"""+"""
     IGNORE: " |\n";
     data: <dict> | <QUOTED_STRING> | <list>;
     dict: ["{"] (dictentry [","])* dictentry ["}"];

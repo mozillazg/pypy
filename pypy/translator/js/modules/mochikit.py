@@ -2,36 +2,74 @@
 """ mochikit wrappers
 """
 
+from pypy.rpython.extfunc import _callable, register_external
+from pypy.rpython.ootypesystem.bltregistry import BasicExternal, MethodDesc
+from pypy.translator.js.modules import dom
+
+# MochiKit.LoggingPane
+
 def createLoggingPane(var):
     pass
-createLoggingPane.suggested_primitive = True
+register_external(createLoggingPane, args=[bool])
+
+# MochiKit.Logging
 
 def log(data):
-    pass
-log.suggested_primitive = True
-log._annspecialcase_ = "specialize:argtype(0)"
+    print data
+register_external(log, args=None)
 
 def logDebug(data):
-    pass
-logDebug.suggested_primitive = True
-logDebug._annspecialcase_ = "specialize:argtype(0)"
+    print "D:", data
+register_external(logDebug, args=None)
 
 def logWarning(data):
-    pass
-logWarning.suggested_primitive = True
-logWarning._annspecialcase_ = "specialize:argtype(0)"
-
+    print "Warning:", data
+register_external(logWarning, args=None)
 
 def logError(data):
-    pass
-logError.suggested_primitive = True
-logError._annspecialcase_ = "specialize:argtype(0)"
+    print "ERROR:", data
+register_external(logError, args=None)
 
 def logFatal(data):
-    pass
-logFatal.suggested_primitive = True
-logFatal._annspecialcase_ = "specialize:argtype(0)"
+    print "FATAL:", data
+register_external(logFatal, args=None)
+
+# MochiKit.DOM
 
 def escapeHTML(data):
     return data
-escapeHTML.suggested_primitive = True
+register_external(escapeHTML, args=[str], result=str)
+
+# MochiKit.Base
+
+def serializeJSON(data):
+    pass
+register_external(serializeJSON, args=None, result=str)
+
+# MochiKit.Signal
+
+class Event(BasicExternal):
+    pass
+
+Event._fields = {
+    '_event': dom.Event,
+}
+
+Event._methods = {
+    'preventDefault': MethodDesc([]),
+}
+
+
+def connect(src, signal, dest):
+    print 'connecting signal %s' % (signal,)
+register_external(connect, args=[dom.EventTarget, str, _callable([Event])],
+                  result=int)
+
+def disconnect(id):
+    pass
+register_external(disconnect, args=[int])
+
+def disconnectAll(src, signal):
+    print 'disconnecting all handlers for signal: %s' % (signal,)
+register_external(disconnectAll, args=[dom.EventTarget, str])
+

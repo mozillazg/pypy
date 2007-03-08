@@ -17,14 +17,14 @@ essential_modules = dict.fromkeys(
 default_modules = essential_modules.copy()
 default_modules.update(dict.fromkeys(
     ["_codecs", "gc", "_weakref", "array", "marshal", "errno",
-     "math", "_sre", "_pickle_support",
+     "math", "_sre", "_pickle_support", "operator",
      "recparser", "symbol", "_random", "pypymagic"]))
 
 
 working_modules = default_modules.copy()
 working_modules.update(dict.fromkeys(
     ["rsocket", "unicodedata", "mmap", "fcntl", "rctime", "select",
-     "crypt", "signal",
+     "crypt", "signal", "dyngram",
     ]
 ))
 
@@ -41,6 +41,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                      "thunk": [("objspace.geninterp", False)],
                      "logic": [("objspace.geninterp", False),
                                ("objspace.usemodules._stackless", True),
+                               ("objspace.usemodules.cclp", True),
                                ("translation.gc", 'framework'),
                                ],
                  },
@@ -58,7 +59,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("CALL_LIKELY_BUILTIN", "emit a special bytecode for likely calls to builtin functions",
                    default=False,
                    requires=[("objspace.usepycfiles", False),
-                             ("objspace.std.withmultidict", True)])
+                             ("objspace.std.withmultidict", True)]),
+        BoolOption("CALL_METHOD", "emit a special bytecode for expr.name()",
+                   default=False,
+                   requires=[("objspace.usepycfiles", False)]),
         ]),
 
     BoolOption("nofaking", "disallow faking in the object space",
@@ -95,6 +99,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
     BoolOption("usepycfiles", "Write and read pyc files when importing",
                default=True),
    
+    BoolOption("honor__builtins__",
+               "Honor the __builtins__ key of a module dictionary",
+               default=False),
+
     OptionDescription("std", "Standard Object Space Options", [
         BoolOption("withtproxy", "support transparent proxies",
                    default=False, cmdline='--with-transparent-proxy'),
@@ -119,14 +127,18 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withstrslice", "use strings optimized for slicing",
                    default=False),
 
-        BoolOption("withstrdict",
-                   "use dictionaries optimized for string keys",
+        BoolOption("withprebuiltchar",
+                   "use prebuilt single-character string objects",
+                   default=False),
+
+        BoolOption("sharesmallstr",
+                   "always reuse the prebuilt string objects "
+                   "(the empty string and potentially single-char strings)",
                    default=False),
 
         BoolOption("withmultidict",
                    "use dictionaries optimized for flexibility",
-                   default=False,
-                   requires=[("objspace.std.withstrdict", False)]),
+                   default=False),
 
         BoolOption("withsharingdict",
                    "use dictionaries that share the keys part",
@@ -136,6 +148,12 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withdictmeasurement",
                    "create huge files with masses of information "
                    "about dictionaries",
+                   default=False,
+                   requires=[("objspace.std.withmultidict", True)]),
+
+        BoolOption("withbucketdict",
+                   "use dictionaries with chained hash tables "
+                   "(default is open addressing)",
                    default=False,
                    requires=[("objspace.std.withmultidict", True)]),
 
@@ -178,6 +196,14 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "make list slicing lazy",
                    default=False,
                    requires=[("objspace.std.withmultilist", True)]),
+        BoolOption("withchunklist",
+                   "introducing a new nesting level to slow down list operations",
+                   default=False,
+                   requires=[("objspace.std.withmultilist", True)]),
+        BoolOption("withsmartresizablelist",
+                   "only overallocate O(sqrt(n)) elements for lists",
+                   default=False,
+                   requires=[("objspace.std.withmultilist", True)]),
         BoolOption("optimized_int_add",
                    "special case the addition of two integers in BINARY_ADD",
                    default=False),
@@ -190,6 +216,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "enable all thought-to-be-working optimizations",
                    default=False,
                    suggests=[("objspace.opcodes.CALL_LIKELY_BUILTIN", True),
+                             ("objspace.opcodes.CALL_METHOD", True),
                              ("translation.withsmallfuncsets", 5),
                              ("translation.profopt",
                               "-c 'from richards import main;main(); from test import pystone; pystone.main()'"),
@@ -200,6 +227,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                              ("objspace.std.withrangelist", True),
                              ("objspace.std.withmethodcache", True),
 #                             ("objspace.std.withfastslice", True),
+                             ("objspace.std.withprebuiltchar", True),
                              ("objspace.std.optimized_int_add", True),
                              ],
                    cmdline="--faassen", negation=False),

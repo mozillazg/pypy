@@ -17,7 +17,7 @@ try:
 except NameError:
     this_dir = os.path.dirname(sys.argv[0])
 
-def debug(msg): 
+def debug(msg):
     os.write(2, "debug: " + msg + '\n')
 
 # __________  Entry point  __________
@@ -29,9 +29,9 @@ def create_entry_point(space, w_dict):
     w_call_startup_gateway = space.wrap(gateway.interp2app(call_startup))
 
     def entry_point(argv):
-        debug("entry point starting") 
-        for arg in argv: 
-            debug(" argv -> " + arg)
+        #debug("entry point starting") 
+        #for arg in argv: 
+        #    debug(" argv -> " + arg)
         try:
             try:
                 space.call_function(w_run_toplevel, w_call_startup_gateway)

@@ -51,6 +51,11 @@ class FixedSizeArrayTypeNode(StructTypeNode):
     def __str__(self):
         return "<FixedArrayTypeNode %r>" % self.ref
 
+    def setup(self):
+        fields = self._fields()
+        if fields:
+            self.db.prepare_type(fields[0])
+
     def writedatatypedecl(self, codewriter):
         codewriter.fixedarraydef(self.ref,
                                  self.struct.length,
@@ -152,14 +157,16 @@ class StructNode(ConstantLLVMNode):
 
     def get_ref(self):
         """ Returns a reference as used for operations in blocks. """        
-        if self._get_ref_cache:
-            return self._get_ref_cache
+        # XXX cache here is **dangerous** considering it can return different values :-(
+        # XXX should write a test to prove this
+        #if self._get_ref_cache:
+        #    return self._get_ref_cache
         p, c = lltype.parentlink(self.value)
         if p is None:
             ref = self.ref
         else:
             ref = self.db.get_childref(p, c)
-        self._get_ref_cache = ref
+        #XXXself._get_ref_cache = ref
         return ref
 
     def get_pbcref(self, toptr):
@@ -176,6 +183,11 @@ class StructNode(ConstantLLVMNode):
 class FixedSizeArrayNode(StructNode):
     prefix = '%fixarrayinstance_'
 
+    def __init__(self, db, struct): 
+        super(FixedSizeArrayNode, self).__init__(db, struct)
+        self.array = struct
+        self.arraytype = self.structtype.OF
+
     def __str__(self):
         return "<FixedSizeArrayNode %r>" % (self.ref,)
 
@@ -185,20 +197,32 @@ class FixedSizeArrayNode(StructNode):
         all_values = ",\n  ".join(values)
         return "%s [\n  %s\n  ]\n" % (self.get_typerepr(), all_values)
 
-    def get_childref(self, index):
-        pos = 0
-        found = False
-        for name in self.structtype._names_without_voids():
-            if name == index:
-                found = True
-                break
-            pos += 1
+    def get_ref(self):
+        p, c = lltype.parentlink(self.value)
+        if p is None:
+            ref = self.ref
+        else:
+            ref = self.db.get_childref(p, c)
+            if isinstance(self.value, lltype._subarray):
+                # ptr -> array of len 1
+                ref = "cast(%s* %s to %s*)" % (self.db.repr_type(self.arraytype),
+                                               ref,
+                                               self.db.repr_type(lltype.typeOf(self.value)))
+        return ref
 
-        return "getelementptr(%s* %s, int 0, int %s)" %(
+    def get_childref(self, index):
+        return "getelementptr(%s* %s, int 0, int %s)" % (
             self.get_typerepr(),
             self.get_ref(),
-            pos)
+            index) 
 
+    def setup(self):
+        if isinstance(self.value, lltype._subarray):
+            p, c = lltype.parentlink(self.value)
+            if p is not None:
+                self.db.prepare_constant(lltype.typeOf(p), p)
+        else:
+            super(FixedSizeArrayNode, self).setup()
 
 class StructVarsizeNode(StructNode):
     """ A varsize struct constant.  Can simply contain

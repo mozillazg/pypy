@@ -26,7 +26,6 @@ from pypy.objspace.std.tupleobject   import W_TupleObject
 from pypy.objspace.std.listobject    import W_ListObject
 from pypy.objspace.std.dictobject    import W_DictObject
 from pypy.objspace.std.dictmultiobject    import W_DictMultiObject
-from pypy.objspace.std.dictstrobject import W_DictStrObject
 from pypy.objspace.std.stringobject  import W_StringObject
 from pypy.objspace.std.typeobject    import W_TypeObject
 from pypy.objspace.std.longobject    import W_LongObject
@@ -303,11 +302,11 @@ def marshal_w__String(space, w_str, m):
         m.atom_str(TYPE_STRING, s)
 
 def unmarshal_String(space, u, tc):
-    return W_StringObject(u.get_str())
+    return space.wrap(u.get_str())
 register(TYPE_STRING, unmarshal_String)
 
 def unmarshal_interned(space, u, tc):
-    w_ret = W_StringObject(u.get_str())
+    w_ret = space.wrap(u.get_str())
     u.stringtable_w.append(w_ret)
     w_intern = space.builtin.get('intern')
     space.call_function(w_intern, w_ret)
@@ -358,18 +357,6 @@ def marshal_w__DictMulti(space, w_dict, m):
         w_key, w_value = space.unpacktuple(w_tuple, 2)
         m.put_w_obj(w_key)
         m.put_w_obj(w_value)
-    m.atom(TYPE_NULL)
-
-def marshal_w__DictStr(space, w_dict, m):
-    m.start(TYPE_DICT)
-    if w_dict.content is not None:
-        for w_key, w_value in w_dict.content.iteritems():
-            m.put_w_obj(w_key)
-            m.put_w_obj(w_value)
-    else:
-        for key, w_value in w_dict.content_str.iteritems():
-            m.put_w_obj(space.wrap(key))
-            m.put_w_obj(w_value)
     m.atom(TYPE_NULL)
 
 def unmarshal_Dict(space, u, tc):
@@ -495,7 +482,7 @@ app = gateway.applevel(r'''
 string_to_buffer = app.interphook('string_to_buffer')
 
 def unmarshal_buffer(space, u, tc):
-    w_s = W_StringObject(u.get_str())
+    w_s = space.wrap(u.get_str())
     return string_to_buffer(space, w_s)
 register(TYPE_UNKNOWN, unmarshal_buffer)
 
