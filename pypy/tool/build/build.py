@@ -149,12 +149,14 @@ build_end_time: %(build_end_time)s
 
     def id(self):
         # XXX can this be made better? we certainly don't want clashes :|
-        str = '%r\n%r\n%r\n%r\n%r' % (self.email, self.sysinfo,
-                                      self.compileinfo, self.svnurl,
-                                      self.svnrev)
+        sorted_sysinfo = sorted(self.sysinfo.items())
+        sorted_compileinfo = sorted(self.compileinfo.items())
+        str = '%r\n%r\n%r\n%r\n%r' % (self.email, sorted_sysinfo,
+                                      sorted_compileinfo, self.svnurl,
+                                      self.normalized_rev)
         return '%s.%s' % (self.request_time, py.std.md5.new(str).hexdigest())
 
-    def _fromstring(cls, s):
+    def fromstring(cls, s):
         data = {}
         for line in s.strip().split('\n'):
             try:
@@ -170,7 +172,7 @@ build_end_time: %(build_end_time)s
         ret.build_start_time = eval(data['build_start_time'])
         ret.build_end_time = eval(data['build_end_time'])
         return ret
-    fromstring = classmethod(_fromstring)
+    fromstring = classmethod(fromstring)
 
     def has_satisfying_data(self, other):
         """ return True if other request's data satisfies our needs """
