@@ -172,28 +172,6 @@ class MetaServer(object):
         finally:
             self._queuelock.release()
 
-    def status(self):
-        # XXX temporary
-        running = len([b for b in self._builders if b.busy_on])
-        return {'builders': len(self._builders),
-                'running': running,
-                'queued': len(self._queued),
-                'waiting': len(self._waiting) + running,
-                'done': len(self._done)}
-
-    def buildersinfo(self):
-        ret = []
-        for b in self._builders:
-            ret.append({
-                'hostname': b.hostname,
-                'sysinfo': b.sysinfo,
-                'busy_on': b.busy_on and b.busy_on.serialize() or None,
-            })
-        return ret
-
-    def buildids(self):
-        pass
-
     def _cleanup_builders(self):
         self._queuelock.acquire()
         try:

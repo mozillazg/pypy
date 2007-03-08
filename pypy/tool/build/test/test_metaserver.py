@@ -159,39 +159,3 @@ def test_cleanup_old_builds():
     assert not bp1.check()
     assert bp2.check()
 
-def test_status():
-    temppath = py.test.ensuretemp('test_status')
-    config = Container(projectname='test', buildpath=temppath)
-    svr = metaserver.MetaServer(config, FakeChannel())
-    svr._done.append('y')
-    svr._done.append('z')
-    svr._queued.append('spam')
-    svr._queued.append('spam')
-    svr._queued.append('eggs')
-    bs = FakeBuildserver({})
-    bs.busy_on = 'foo'
-    svr._builders.append(bs)
-    print svr.status()
-    assert svr.status() == {
-        'done': 2,
-        'queued': 3,
-        'waiting': 1,
-        'running': 1,
-        'builders': 1,
-    }
-
-def test_buildersinfo():
-    bi = svr.buildersinfo()
-    assert len(bi) == 2
-    assert bi[0]['sysinfo'] == {'foo': 1, 'bar': [1,2]}
-    assert bi[0]['busy_on'] == None
-    assert bi[1]['sysinfo'] == {'foo': 2, 'bar': [2,3]}
-    req = build.BuildRequest('foo@bar.com', {}, {}, 'file:///tmp/repo', '10',
-                             '10')
-    req._nr = '10' # normalized revision
-    svr._builders[0].busy_on = req
-    bi = svr.buildersinfo()
-    assert bi[0]['busy_on']
-    # for now, later more info should be made available
-    assert bi[0]['busy_on'] == req.serialize()
-

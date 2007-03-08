@@ -32,7 +32,8 @@ class ServerPage(object):
         sys.path += %r
 
         from pypy.tool.build import metaserver_instance
-        ret = metaserver_instance.%s(%s)
+        from pypy.tool.build.web.app import MetaServerAccessor
+        ret = MetaServerAccessor(metaserver_instance).%s(%s)
         channel.send(ret)
         channel.close()
     """
@@ -112,7 +113,26 @@ class BuildPage(ServerPage):
         self._buildid = buildid
 
     def __call__(self, handler, path, query):
-        pass
+        template = templess.template(
+            mypath.join('templates/build.html').read())
+        return ({'Content-Type': 'text/html; charset=UTF-8'},
+                fix_html(template.unicode(self.get_info())))
+
+    def get_info(self):
+        br = BuildRequest.fromstring(self.call_method('buildrequest',
+                                                      '"%s"' % (
+                                                       self._buildid,)))
+        buildurl = self.call_method('buildurl', '"%s"' % (self._buildid,))
+        return {
+            'url': buildurl,
+            'id': br.id(),
+            'email': br.email,
+            'svnurl': br.svnurl,
+            'svnrev': br.normalized_rev,
+            'request_time': br.request_time,
+            'build_start_time': br.build_start_time,
+            'build_end_time': br.build_end_time,
+        }
 
 class BuildsIndexPage(ServerPage):
     """ display the list of available builds """
@@ -124,7 +144,16 @@ class BuildsIndexPage(ServerPage):
                 fix_html(template.unicode({'builds': self.get_builds()})))
 
     def get_builds(self):
-        return []
+        return [{'id': b.id(),
+                 'href': '/builds/%s' % (b.id(),),
+                 'email': b.email,
+                 'svnurl': b.svnurl,
+                 'svnrev': b.normalized_rev,
+                 'request_time': b.request_time,
+                 'build_start_time': b.build_start_time,
+                 'build_end_time': b.build_end_time} for b in
+                [BuildRequest.fromstring(b) for b in
+                 self.call_method('buildrequests')]]
 
 class Builds(Collection):
     """ container for BuildsIndexPage and BuildPage """
@@ -163,6 +192,47 @@ class Application(Collection):
 
 class AppHandler(Handler):
     application = Application()
+
+class MetaServerAccessor(object):
+    def __init__(self, ms):
+        self.server = ms
+
+    def status(self):
+        running = len([b for b in self.server._builders if b.busy_on])
+        return {'builders': len(self.server._builders),
+                'running': running,
+                'queued': len(self.server._queued),
+                'waiting': len(self.server._waiting) + running,
+                'done': len(self.server._done)}
+
+    def buildersinfo(self):
+        ret = []
+        for b in self.server._builders:
+            ret.append({
+                'hostname': b.hostname,
+                'sysinfo': b.sysinfo,
+                'busy_on': b.busy_on and b.busy_on.serialize() or None,
+            })
+        return ret
+
+    def buildrequests(self):
+        ret = [b.serialize() for b in self._all_requests()]
+        return ret
+
+    def buildrequest(self, id):
+        for r in self._all_requests():
+            if r.id() == id:
+                return r.serialize()
+
+    def buildurl(self, id):
+        for r in self.server._done:
+            if r.request.id() == id:
+                return self.server.config.path_to_url(r)
+
+    def _all_requests(self):
+        running = [b.busy_on for b in self.server._builders if b.busy_on]
+        done = [b.request for b in self.server._done]
+        return self.server._queued + self.server._waiting + running + done
 
 if __name__ == '__main__':
     from pypy.tool.build.web.server import run_server

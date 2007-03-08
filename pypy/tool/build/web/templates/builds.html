@@ -9,8 +9,10 @@
       for download) and waiting or in-progress ones, ordered by date. Click
       on the build to get more information.
     </p>
-    <div class="builds">
-      <div class="build" t:content="builds" />
+    <div class="infoblock" t:content="builds">
+      <div class="title">
+        <a t:attr="href href" t:content="id" />
+      </div>
     </div>
   </body>
 </html>
