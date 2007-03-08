@@ -280,6 +280,10 @@ class Location(BasicExternal):
         'toString' : MethodDesc([], str),
     }
 
+class Navigator(BasicExternal):
+    def __init__(self):
+        self.appName = 'Netscape'
+
 class Window(EventTarget):
     def __init__(self, html=('<html><head><title>Untitled document</title>'
                              '</head><body></body></html>'), parent=None):
@@ -303,6 +307,8 @@ class Window(EventTarget):
         self._location = 'about:blank'
 
         self._original = self # for EventTarget interface (XXX a bit nasty)
+
+        self.navigator = Navigator()
 
     def __getattr__(self, name):
         return globals()[name]
@@ -429,6 +435,8 @@ Element._fields.update({
     # XXX: From HTMLInputElement to make pythonconsole work.
     'value': str,
     'checked': bool,
+    # IMG specific
+    'src': str,
 })
 
 Element._methods = Node._methods.copy()
@@ -536,6 +544,7 @@ Window._fields.update({
     'status' : str,
     'top' : Window,
     'window' : Window,
+    'navigator': Navigator,
 })
 
 Window._methods = Node._methods.copy()
@@ -696,6 +705,13 @@ Event._fields = {
     'relatedTarget': Element,
     'target': Element,
     'type': str,
+    'returnValue': bool,
+    'which': int,
+    'keyCode' : int,
+    'charCode': int,
+    'altKey'  : bool,
+    'ctrlKey' : bool,
+    'shiftKey': bool,
 }
 
 Event._methods = {
@@ -707,19 +723,12 @@ Event._methods = {
 KeyEvent._methods = Event._methods.copy()
 
 KeyEvent._fields = Event._fields.copy()
-KeyEvent._fields.update({
-    'keyCode' : int,
-    'charCode': int,
-    'altKey'  : bool,
-    'ctrlKey' : bool,
-    'shiftKey': bool,
-})
 
-# XXX: Right now this is only way to get it rendered
-setTimeout.suggested_primitive = True
-
-# the following code wraps minidom nodes with Node classes, and makes
-# sure all methods on the nodes return wrapped nodes
+Navigator._methods = {
+}
+Navigator._fields = {
+    'appName': str,
+}
 
 class _FunctionWrapper(object):
     """makes sure function return values are wrapped if appropriate"""

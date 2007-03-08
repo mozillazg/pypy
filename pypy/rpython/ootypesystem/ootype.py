@@ -292,20 +292,23 @@ class Record(BuiltinType):
 
 class BuiltinADTType(BuiltinType):
 
-    def _setup_methods(self, generic_types):
+    def _setup_methods(self, generic_types, can_raise=[]):
         methods = {}
         for name, meth in self._GENERIC_METHODS.iteritems():
             args = [self._specialize_type(arg, generic_types) for arg in meth.ARGS]
             result = self._specialize_type(meth.RESULT, generic_types)
             methods[name] = Meth(args, result)
         self._METHODS = frozendict(methods)
+        self._can_raise = tuple(can_raise)
 
     def _lookup(self, meth_name):
         METH = self._METHODS.get(meth_name)
         meth = None
         if METH is not None:
             cls = self._get_interp_class()
-            meth = _meth(METH, _name=meth_name, _callable=getattr(cls, meth_name))
+            can_raise = meth_name in self._can_raise
+            meth = _meth(METH, _name=meth_name, _callable=getattr(cls, meth_name), _can_raise=can_raise)
+            meth._virtual = False
         return self, meth
 
 
@@ -499,6 +502,9 @@ class Dict(BuiltinADTType):
             self.VALUETYPE_T: self._VALUETYPE
             })
 
+        # ll_get() is always used just after a call to ll_contains(),
+        # always with the same key, so backends can optimize/cache the
+        # result
         self._GENERIC_METHODS = frozendict({
             "ll_length": Meth([], Signed),
             "ll_get": Meth([self.KEYTYPE_T], self.VALUETYPE_T),
@@ -597,8 +603,7 @@ class DictItemsIterator(BuiltinADTType):
             "ll_current_key": Meth([], self.KEYTYPE_T),
             "ll_current_value": Meth([], self.VALUETYPE_T),
         })
-
-        self._setup_methods(generic_types)
+        self._setup_methods(generic_types, can_raise=['ll_go_next'])
 
     def __str__(self):
         return '%s%s' % (self.__class__.__name__,
@@ -1188,15 +1193,17 @@ class _dict(_builtin_type):
         self._TYPE = DICT
         self._dict = {}
         self._stamp = 0
+        self._last_key = object() # placeholder != to everything else
 
     def ll_length(self):
         # NOT_RPYTHON
         return len(self._dict)
 
     def ll_get(self, key):
-        # NOT_RPYTHON        
+        # NOT_RPYTHON
         assert typeOf(key) == self._TYPE._KEYTYPE
         assert key in self._dict
+        assert key == self._last_key
         return self._dict[key]
 
     def ll_set(self, key, value):
@@ -1219,6 +1226,7 @@ class _dict(_builtin_type):
     def ll_contains(self, key):
         # NOT_RPYTHON
         assert typeOf(key) == self._TYPE._KEYTYPE
+        self._last_key = key
         return key in self._dict
 
     def ll_clear(self):

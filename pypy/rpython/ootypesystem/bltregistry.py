@@ -166,7 +166,12 @@ class ExternalType(ootype.OOType):
     
     def get_field(self, attr):
         self.check_update()
-        return self._fields[attr]
+        try:
+            return self._fields[attr]
+        except KeyError:
+            from pypy.tool.error import NoSuchAttrError
+            raise NoSuchAttrError("Basic external %s has no attribute %s" %
+                                  (self._class_, attr))
 
     def find_method(self, meth):
         raise NotImplementedError()
@@ -206,6 +211,8 @@ class Entry_basicexternal(ExtRegistryEntry):
     _type_ = BasicExternal.__metaclass__
     
     def compute_result_annotation(self):
+        if self.bookkeeper is None:
+            return annmodel.SomeExternalBuiltin(ExternalType(self.instance))
         return annmodel.SomeExternalBuiltin(self.bookkeeper.getexternaldesc(self.instance))
     
     def specialize_call(self, hop):

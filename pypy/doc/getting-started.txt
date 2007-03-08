@@ -20,33 +20,33 @@ Eventually, dynamic optimization techniques - implemented as another
 translation aspect - should become robust against language changes. `more...`_
 
 .. _Python: http://docs.python.org/ref
-.. _`more...`: http://codespeak.net/pypy/dist/pypy/doc/architecture.html
+.. _`more...`: architecture.html
 
 Just the facts 
 ============== 
 
 .. _gettingpypy: 
 
-Downloading & running the PyPy 0.9 release 
--------------------------------------------
+Downloading & running the PyPy 0.99 release 
+--------------------------------------------
 
 Download one of the following release files and unpack it: 
 
-*pypy-0.9*
+*pypy-0.99*
     
   * download one of 
 
-    * `pypy-0.9.0.tar.bz2`_ (unix line endings) or
-    * `pypy-0.9.0.tar.gz`_ (unix line endings) or
-    * `pypy-0.9.0.zip`_ (windows line-endings) and unpack it 
+    * `pypy-0.99.0.tar.bz2`_ (unix line endings) or
+    * `pypy-0.99.0.tar.gz`_ (unix line endings) or
+    * `pypy-0.99.0.zip`_ (windows line-endings) and unpack it 
     
   * alternatively run 
   
-    * ``svn co http://codespeak.net/svn/pypy/release/0.9.x pypy-0.9.x``
-      (the 0.9 maintenance branch)
+    * ``svn co http://codespeak.net/svn/pypy/release/0.99.x pypy-0.99.x``
+      (the 0.99 maintenance branch)
 
-to get it from the subversion repository then change to the
-``pypy-0.9.0`` or ``pypy-0.9.x`` directory and execute the following
+to get it from the subversion repository. Then change to the
+``pypy-0.99.0`` or ``pypy-0.99.x`` directory and execute the following
 command line::
 
     python pypy/bin/py.py 
@@ -62,9 +62,9 @@ itself to lower level languages`_ after which it runs standalone, is not
 dependant on CPython anymore and becomes faster.
 
 .. _`95% of CPythons core language regression tests`: http://codespeak.net/~hpk/pypy-testresult/ 
-.. _`pypy-0.9.0.tar.bz2`: http://codespeak.net/download/pypy/pypy-0.9.0.tar.bz2
-.. _`pypy-0.9.0.zip`: http://codespeak.net/download/pypy/pypy-0.9.0.zip
-.. _`pypy-0.9.0.tar.gz`: http://codespeak.net/download/pypy/pypy-0.9.0.tar.gz
+.. _`pypy-0.99.0.tar.bz2`: http://codespeak.net/download/pypy/pypy-0.99.0.tar.bz2
+.. _`pypy-0.99.0.zip`: http://codespeak.net/download/pypy/pypy-0.99.0.zip
+.. _`pypy-0.99.0.tar.gz`: http://codespeak.net/download/pypy/pypy-0.99.0.tar.gz
 
 Svn-check out & run the latest PyPy as a two-liner
 --------------------------------------------------
@@ -155,8 +155,8 @@ The py.py interpreter
 
 To start interpreting Python with PyPy, use Python 2.3 or greater::
 
-    cd pypy/bin
-    python py.py
+    cd pypy
+    python bin/py.py
 
 After a few seconds (remember: this is running on top of CPython), 
 you should be at the PyPy prompt, which is the same as the Python 
@@ -180,8 +180,8 @@ py.py options
 
 To list the PyPy interpreter command line options, type::
 
-    cd pypy/bin
-    python py.py --help
+    cd pypy
+    python bin/py.py --help
 
 py.py supports most of the options that CPython supports too (in addition to a
 large amount of options that can be used to customize py.py).
@@ -242,9 +242,8 @@ it, set ``__pytrace__=1`` on the interactive PyPy console::
     |- 6    BINARY_ADD
       |-    add(W_IntObject(1), W_IntObject(2))   -> W_IntObject(3)
     |- 7    STORE_NAME    0 (a)
-      |-    setitem(W_DictObject([<Entry 3098577608L,W_StringObject('__builtins__'),
-                    <pypy.module..., W_StringObject('a'), W_IntObject(3))   
-            -> <W_NoneObject()>
+      |-    hash(W_StringObject('a'))   -> W_IntObject(-468864544)
+      |-    int_w(W_IntObject(-468864544))   -> -468864544
     |-10    LOAD_CONST    2 (<W_NoneObject()>)
     |-13    RETURN_VALUE
     |- <<<< leave <inline>a = 1 + 2 @ 1 >>>>
@@ -259,8 +258,8 @@ One of the original features provided by PyPy is the "thunk"
 object space, providing lazily-computed objects in a fully
 transparent manner::
 
-    cd pypy/bin
-    python py.py -o thunk
+    cd pypy
+    python bin/py.py -o thunk
 
     >>>> from pypymagic import thunk
     >>>> def longcomputation(lst):
@@ -288,8 +287,8 @@ without triggering the computation::
 
 It is interesting to note that this lazy-computing Python extension 
 is solely implemented in a small `objspace/thunk.py`_ file consisting 
-of around 100 lines of code. Since the 0.8.0 release it is even possible
-to `translate PyPy with the thunk object space`_.
+of around 200 lines of code. Since the 0.8.0 release you 
+can `translate PyPy with the thunk object space`_.
 
 Logic programming
 +++++++++++++++++
@@ -302,8 +301,8 @@ providing a more extensive way to deal with laziness.
 
 Try it out::
 
-    cd pypy/bin
-    python py.py -o logic
+    cd pypy
+    python bin/py.py -o logic
 
     >>>> X = newvar()         # a logic variable
     >>>> bind(X, 42)          # give it a value
@@ -387,10 +386,13 @@ you need to:
     `Dot Graphviz`_ that does not crash. This is only needed if you want to
     look at the flowgraphs.
 
+  * Use Python-2.4 for using translation tools because python2.5 
+    is (as of revision 39130) not fully supported. 
+
 To start the interactive translator shell do::
 
-    cd pypy/bin
-    python translatorshell.py
+    cd pypy
+    python bin/translatorshell.py
 
 Test snippets of translatable code are provided in the file
 ``pypy/translator/test/snippet.py``, which is imported under the name
@@ -438,7 +440,7 @@ Translating the flow graph to LLVM code
 +++++++++++++++++++++++++++++++++++++++
 
 To translate for LLVM (`low level virtual machine`_) you must first have `LLVM
-installed with version 1.7`_ - the `how to install LLVM`_ provides some helpful
+installed with version 1.9`_ - the `how to install LLVM`_ provides some helpful
 hints.  Please note that you do not need the CFrontend to compile, make
 tools-only.
 
@@ -475,8 +477,6 @@ to make it more and more capable to produce full featured web applications.
 Please see the pypy/translator/js/test directory for example unittests.
 
 Here is a simple example to try::
-.. >>> from pypy.translator.interactive import Translation
-.. >>> from pypy.translator.test import snippet 
 
    >>> t = Translation(snippet.my_gcd)
    >>> a = t.annotate([int, int])
@@ -511,7 +511,7 @@ Once you have compiled the snippet, you can also try to launch the
 executable directly from the shell; you can find the executable in one
 of the ``/tmp/usession-*`` directories::
 
-    anto@anto anto$ mono /tmp/usession-anto/main.exe 4 5
+    $ mono /tmp/usession-<username>/main.exe 4 5
     9
 
 To translate and run for CLI you must have the SDK installed: Windows
@@ -550,7 +550,7 @@ translate the whole of PyPy to low level C code. This is the largest and
 ultimate example of source that our translation toolchain can process::
 
     cd pypy/translator/goal
-    python translate.py --run
+    python translate.py --run targetpypystandalone.py
 
 By default the translation process will try to use the
 `Boehm-Demers-Weiser garbage collector`_ for the translated PyPy (Use
@@ -561,7 +561,11 @@ to install Boehm before starting the translation (e.g. by running
 
 This whole process will take some time and quite a lot of memory. To
 reduce the memory footprint of the translation process you can use the
-option ``--lowmem`` With this option the whole process should be
+option ``--lowmem``::
+
+    python translate.py --run targetpypystandalone.py --lowmem
+
+With this option the whole process should be
 runnable on a machine with 512Mb of RAM. If the translation is
 finished running and after you closed the graph you will be greeted
 (because of ``--run`` option) by the friendly prompt of a PyPy
@@ -582,7 +586,7 @@ executable that is not running on top of CPython any more::
 
 With the default options, you can find the produced executable under the
 name ``pypy-c``.  Type ``pypy-c --help`` to see the options it supports --
-mainly the same basic options of CPython.  In addition, ``pypy-c --info``
+mainly the same basic options as CPython.  In addition, ``pypy-c --info``
 prints the translation options that where used to produce this particular
 executable.  This executable contains a lot of things that are hard-coded
 for your particular system (including paths), so it's not really meant to
@@ -620,8 +624,9 @@ programs, e.g. a slightly changed version of Pystone::
     cd pypy/translator/goal
     python translate.py targetrpystonedalone
 
+This will produce the executable "targetrpystonedalone-c".
 
-.. _`configuration sections`: config/
+.. _`configuration sections`: config/index.html
 
 .. _`translate PyPy with the thunk object space`:
 
@@ -756,6 +761,16 @@ want to look at generated flowgraphs:
 
 	pygame: http://www.pygame.org/download.shtml
 
+CTypes (highly recommended)
+++++++++++++++++++++++++++++
+
+`ctypes`_ (version 0.9.9.6 or later) is required if you want to translate PyPy
+to C. See the `download page of ctypes`_.
+
+.. _`download page of ctypes`: http://sourceforge.net/project/showfiles.php?group_id=71702
+.. _`ctypes`: http://starship.python.net/crew/theller/ctypes/
+
+
 CLISP
 +++++++
 
@@ -778,9 +793,7 @@ it ships with PyPy and `pypy/test_all.py`_ is an alias for ``py.test``
 but if you want to have the ``py.test`` tool generally in your 
 path, you might like to visit: 
 
-    http://codespeak.net/py/current/doc/getting-started.html
-
-
+    http://codespeak.net/py/dist/download.html
 
 Getting involved 
 ================================== 
@@ -792,7 +805,7 @@ separatedly announced and often happen around Python conferences such
 as EuroPython or Pycon. Take a look at the list of upcoming events_ to
 plan where to meet with us.
 
-.. _events: http://codespeak.net/pypy/dist/pypy/doc/events.html
+.. _events: http://codespeak.net/pypy/dist/pypy/doc/news.html
 .. _`pypy-dev mailing list`: http://codespeak.net/mailman/listinfo/pypy-dev
 .. _`contact possibilities`: contact.html
 
@@ -801,7 +814,7 @@ plan where to meet with us.
 .. _`low level virtual machine`: http://llvm.org/
 .. _`how to install LLVM`: http://llvm.org/docs/GettingStarted.html
 .. _`LLVM mailing list`: http://mail.cs.uiuc.edu/mailman/listinfo/llvmdev
-.. _`LLVM installed with version 1.7`: http://llvm.org/releases
+.. _`LLVM installed with version 1.9`: http://llvm.org/releases
 
 .. _`Spidermonkey`: http://www.mozilla.org/js/spidermonkey/
 .. _`Google summer of code`: http://code.google.com/soc
@@ -822,11 +835,11 @@ plan where to meet with us.
 .. _mixedmodule.py:          http://codespeak.net/svn/pypy/dist/pypy/interpreter/mixedmodule.py
 .. _typedef.py:             http://codespeak.net/svn/pypy/dist/pypy/interpreter/typedef.py
 .. _Standard object space:  objspace.html#the-standard-object-space
-.. _objspace.py:            http://codespeak.net/pypy/dist/pypy/objspace/std/objspace.py
-.. _thunk:                  http://codespeak.net/pypy/dist/pypy/objspace/thunk.py
-.. _trace:                  http://codespeak.net/pypy/dist/pypy/objspace/trace.py
-.. _flow:                   http://codespeak.net/pypy/dist/pypy/objspace/flow/
-.. _translator.py:          http://codespeak.net/pypy/dist/pypy/translator/translator.py
+.. _objspace.py:            ../../pypy/objspace/std/objspace.py
+.. _thunk:                  ../../pypy/objspace/thunk.py
+.. _trace:                  ../../pypy/objspace/trace.py
+.. _flow:                   ../../pypy/objspace/flow/
+.. _translator.py:          ../../pypy/translator/translator.py
 .. _mailing lists:          contact.html
 .. _documentation:          index.html 
 .. _unit tests:             coding-guide.html#test-design

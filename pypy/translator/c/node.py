@@ -406,15 +406,18 @@ class ContainerNode(object):
             self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
                                                 self.ptrname)
 
+    def is_thread_local(self):
+        return hasattr(self.T, "_hints") and self.T._hints.get('thread_local')
+
     def forward_declaration(self):
         yield '%s;' % (
             forward_cdecl(self.implementationtypename,
-                self.name, self.db.standalone))
+                self.name, self.db.standalone, self.is_thread_local()))
 
     def implementation(self):
         lines = list(self.initializationexpr())
         lines[0] = '%s = %s' % (
-            cdecl(self.implementationtypename, self.name),
+            cdecl(self.implementationtypename, self.name, self.is_thread_local()),
             lines[0])
         lines[-1] += ';'
         return lines
@@ -688,7 +691,10 @@ class FuncNode(ContainerNode):
         funcgen.implementation_end()
 
 def select_function_code_generators(fnobj, db, functionname):
-    if fnobj._callable in extfunc.EXTERNALS:
+    if hasattr(fnobj, '_external_name'):
+        db.externalfuncs[fnobj._external_name] = fnobj
+        return []
+    elif fnobj._callable in extfunc.EXTERNALS:
         # 'fnobj' is one of the ll_xyz() functions with the suggested_primitive
         # flag in pypy.rpython.module.*.  The corresponding C wrappers are
         # written by hand in src/ll_*.h, and declared in extfunc.EXTERNALS.

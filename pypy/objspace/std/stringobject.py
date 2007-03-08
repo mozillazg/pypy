@@ -1,4 +1,4 @@
-# -*- Coding: Latin-1 -*-
+# -*- coding: latin-1 -*-
 
 from pypy.objspace.std.objspace import *
 from pypy.interpreter import gateway
@@ -11,7 +11,8 @@ from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 
-from pypy.objspace.std.stringtype import sliced, joined
+from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar, \
+     stringendswith, stringstartswith
 
 
 class W_StringObject(W_Object):
@@ -27,8 +28,11 @@ class W_StringObject(W_Object):
     def unwrap(w_self, space):
         return w_self._value
 
-
 registerimplementation(W_StringObject)
+
+W_StringObject.EMPTY = W_StringObject('')
+W_StringObject.PREBUILT = [W_StringObject(chr(i)) for i in range(256)]
+del i
 
 
 def _is_generic(space, w_self, fun): 
@@ -332,14 +336,14 @@ def str_join__String_ANY(space, w_self, w_list):
                 raise OperationError(
                     space.w_TypeError,
                     space.wrap("sequence item %d: expected string, %s "
-                               "found" % (i, space.type(w_s).name)))
+                               "found" % (i,
+                                          space.type(w_s).getname(space, '?'))))
             l.append(space.str_w(w_s))
         return space.wrap(self.join(l))
     else:
-        return space.wrap("")
+        return W_StringObject.EMPTY
 
 def str_rjust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
-
     u_arg = space.int_w(w_arg)
     u_self = w_self._value
     fillchar = space.str_w(w_fillchar)
@@ -356,7 +360,6 @@ def str_rjust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
 
 
 def str_ljust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
-
     u_self = w_self._value
     u_arg = space.int_w(w_arg)
     fillchar = space.str_w(w_fillchar)
@@ -374,11 +377,9 @@ def str_ljust__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
 def _convert_idx_params(space, w_self, w_sub, w_start, w_end):
     self = w_self._value
     sub = w_sub._value
-    w_start = slicetype.adapt_bound(space, w_start, space.wrap(len(self)))
-    w_end = slicetype.adapt_bound(space, w_end, space.wrap(len(self)))
+    start = slicetype.adapt_bound(space, len(self), w_start)
+    end = slicetype.adapt_bound(space, len(self), w_end)
 
-    start = space.int_w(w_start)
-    end = space.int_w(w_end)
     assert start >= 0
     assert end >= 0
 
@@ -390,19 +391,45 @@ def contains__String_String(space, w_self, w_sub):
     return space.newbool(self.find(sub) >= 0)
 
 def str_find__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     return space.wrap(res)
 
 def str_rfind__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     return space.wrap(res)
 
-def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
+def str_partition__String_String(space, w_self, w_sub):
+    self = w_self._value
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.find(sub)
+    if pos == -1:
+        return space.newtuple([w_self, space.wrap(''), space.wrap('')])
+    else:
+        return space.newtuple([sliced(space, self, 0, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), len(self))])
 
+def str_rpartition__String_String(space, w_self, w_sub):
+    self = w_self._value
+    sub = w_sub._value
+    if not sub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = self.rfind(sub)
+    if pos == -1:
+        return space.newtuple([space.wrap(''), space.wrap(''), w_self])
+    else:
+        return space.newtuple([sliced(space, self, 0, pos),
+                               w_sub,
+                               sliced(space, self, pos+len(sub), len(self))])
+
+
+def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.find(sub, start, end)
     if res < 0:
@@ -413,7 +440,6 @@ def str_index__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
 
 def str_rindex__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
-
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     res = self.rfind(sub, start, end)
     if res < 0:
@@ -424,7 +450,6 @@ def str_rindex__String_String_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 
 
 def str_replace__String_String_String_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
-
     input = w_self._value
     sub = w_sub._value
     by = w_by._value
@@ -532,43 +557,40 @@ def str_center__String_ANY_ANY(space, w_self, w_arg, w_fillchar):
     else:
         u_centered = u_self
 
-    return W_StringObject(u_centered)
+    return wrapstr(space, u_centered)
 
 def str_count__String_String_ANY_ANY(space, w_self, w_arg, w_start, w_end): 
-    u_self  = w_self._value
-    u_arg   = w_arg._value
-
-    w_start = slicetype.adapt_bound(space, w_start, space.wrap(len(u_self)))
-    w_end = slicetype.adapt_bound(space, w_end, space.wrap(len(u_self)))
-    u_start = space.int_w(w_start)
-    u_end = space.int_w(w_end)
-    assert u_start >= 0
-    assert u_end >= 0
+    u_self, u_arg, u_start, u_end = _convert_idx_params(space, w_self, w_arg,
+                                                        w_start, w_end)
     return wrapint(space, u_self.count(u_arg, u_start, u_end))
 
 def str_endswith__String_String_ANY_ANY(space, w_self, w_suffix, w_start, w_end):
     (u_self, suffix, start, end) = _convert_idx_params(space, w_self,
                                                        w_suffix, w_start, w_end)
-    begin = end - len(suffix)
-    if begin < start:
-        return space.w_False
-    for i in range(len(suffix)):
-        if u_self[begin+i] != suffix[i]:
-            return space.w_False
-    return space.w_True
-    
-    
+    return space.newbool(stringendswith(u_self, suffix, start, end))
+
+def str_endswith__String_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
+    (u_self, _, start, end) = _convert_idx_params(space, w_self,
+                                                  space.wrap(''), w_start, w_end)
+    for w_suffix in space.unpacktuple(w_suffixes):
+        suffix = space.str_w(w_suffix) 
+        if stringendswith(u_self, suffix, start, end):
+            return space.w_True
+    return space.w_False
+
 def str_startswith__String_String_ANY_ANY(space, w_self, w_prefix, w_start, w_end):
     (u_self, prefix, start, end) = _convert_idx_params(space, w_self,
                                                        w_prefix, w_start, w_end)
-    stop = start + len(prefix)
-    if stop > end:
-        return space.w_False
-    for i in range(len(prefix)):
-        if u_self[start+i] != prefix[i]:
-            return space.w_False
-    return space.w_True
-    
+    return space.newbool(stringstartswith(u_self, prefix, start, end))
+
+def str_startswith__String_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
+    (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
+                                                  w_start, w_end)
+    for w_prefix in space.unpacktuple(w_prefixes):
+        prefix = space.str_w(w_prefix)
+        if stringstartswith(u_self, prefix, start, end):
+            return space.w_True
+    return space.w_False
     
 def _tabindent(u_token, u_tabsize):
     "calculates distance behind the token to the next tabstop"
@@ -610,7 +632,7 @@ def str_expandtabs__String_ANY(space, w_self, w_tabsize):
             u_expanded += " " * _tabindent(oldtoken,u_tabsize) + token
             oldtoken = token
             
-    return W_StringObject(u_expanded)        
+    return wrapstr(space, u_expanded)        
  
  
 def str_splitlines__String_ANY(space, w_self, w_keepends):
@@ -647,7 +669,6 @@ def str_zfill__String_ANY(space, w_self, w_width):
         # cannot return w_self, in case it is a subclass of str
         return space.wrap(input)
 
-    result = []
     buf = [' '] * width
     if len(input) > 0 and (input[0] == '+' or input[0] == '-'):
         buf[0] = input[0]
@@ -728,7 +749,12 @@ def ge__String_String(space, w_str1, w_str2):
         return space.w_False
 
 def getitem__String_ANY(space, w_str, w_index):
-    ival = space.int_w(w_index)
+    if not space.lookup(w_index, '__index__'):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("string indices must be integers, not %s" %
+                       space.type(w_index).getname(space, '?')))
+    ival = space.getindex_w(w_index, space.w_IndexError)
     str = w_str._value
     slen = len(str)
     if ival < 0:
@@ -737,7 +763,7 @@ def getitem__String_ANY(space, w_str, w_index):
         exc = space.call_function(space.w_IndexError,
                                   space.wrap("string index out of range"))
         raise OperationError(space.w_IndexError, exc)
-    return W_StringObject(str[ival])
+    return wrapchar(space, str[ival])
 
 def getitem__String_Slice(space, w_str, w_slice):
     w = space.wrap
@@ -745,23 +771,23 @@ def getitem__String_Slice(space, w_str, w_slice):
     length = len(s)
     start, stop, step, sl = w_slice.indices4(space, length)
     if sl == 0:
-        str = ""
+        return W_StringObject.EMPTY
     elif step == 1:
         assert start >= 0 and stop >= 0
         return sliced(space, s, start, stop)
     else:
         str = "".join([s[start + i*step] for i in range(sl)])
-    return W_StringObject(str)
+    return wrapstr(space, str)
 
 def mul_string_times(space, w_str, w_times):
     try:
-        mul = space.int_w(w_times)
+        mul = space.getindex_w(w_times, space.w_OverflowError)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
     if mul <= 0:
-        return space.wrap('')
+        return W_StringObject.EMPTY
     input = w_str._value
     input_len = len(input)
     try:
@@ -790,7 +816,7 @@ def len__String(space, w_str):
 def str__String(space, w_str):
     if type(w_str) is W_StringObject:
         return w_str
-    return W_StringObject(w_str._value)
+    return wrapstr(space, w_str._value)
 
 def iter__String(space, w_list):
     from pypy.objspace.std import iterobject
@@ -806,7 +832,7 @@ def ord__String(space, w_str):
     return space.wrap(ord(u_str))
 
 def getnewargs__String(space, w_str):
-    return space.newtuple([W_StringObject(w_str._value)])
+    return space.newtuple([wrapstr(space, w_str._value)])
 
 def repr__String(space, w_str):
     s = w_str._value

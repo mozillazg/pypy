@@ -21,7 +21,13 @@ def main(options, args):
     else:
         benchmark_result = BenchmarkResultSet()
 
-    benchmarks = [b for b in BENCHMARKS if b.name in options.benchmarks]
+    benchmarks = []
+    for b in BENCHMARKS:
+        if b.name in options.benchmarks:
+            if not b.check():
+                print "can't run %s benchmark for some reason"%(b.name,)
+            else:
+                benchmarks.append(b)
 
     exes = get_executables(args)
     pythons = 'python2.5 python2.4 python2.3'.split()
@@ -35,12 +41,13 @@ def main(options, args):
 
     refs = {}
 
-    exes = full_pythons + exes
+    if not options.nocpython:
+        exes = full_pythons + exes
 
     for i in range(int(options.runcount)):
         for exe in exes:
             for b in benchmarks:
-                benchmark_result.result(exe).run_benchmark(b, verbose=True)
+                benchmark_result.result(exe, allowcreate=True).run_benchmark(b, verbose=True)
 
     pickle.dump(benchmark_result, open(options.picklefile, 'wb'))
 
@@ -59,9 +66,10 @@ def main(options, args):
 if __name__ == '__main__':
     from optparse import OptionParser
     parser = OptionParser()
+    default_benches = ','.join([b.name for b in BENCHMARKS if b.check()])
     parser.add_option(
         '--benchmarks', dest='benchmarks',
-        default=','.join([b.name for b in BENCHMARKS])
+        default=default_benches,
         )
     parser.add_option(
         '--pickle', dest='picklefile',
@@ -73,6 +81,14 @@ if __name__ == '__main__':
         )
     parser.add_option(
         '--relto', dest='relto',
+        default=None,
+        )
+    parser.add_option(
+        '-v', '--verbose', action='store_true', dest='verbose',
+        default=None,
+        )
+    parser.add_option(
+        '--no-cpython', action='store_true', dest='nocpython',
         default=None,
         )
     options, args = parser.parse_args(sys.argv[1:])

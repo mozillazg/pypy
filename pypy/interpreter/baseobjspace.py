@@ -5,7 +5,7 @@ from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
 from pypy.interpreter.miscutils import ThreadLocals
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
-import os
+import os, sys
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
 
@@ -179,6 +179,8 @@ class ObjSpace(object):
 
         # import extra modules for side-effects, possibly based on config
         import pypy.interpreter.nestedscope     # register *_DEREF bytecodes
+        if self.config.objspace.opcodes.CALL_METHOD:
+            import pypy.interpreter.callmethod  # register *_METHOD bytecodes
 
         self.interned_strings = {}
         self.pending_actions = []
@@ -195,7 +197,15 @@ class ObjSpace(object):
 
     def startup(self):
         # To be called before using the space
-        pass
+
+        # Initialize all builtin modules
+        from pypy.interpreter.module import Module
+        for w_modname in self.unpackiterable(
+                                self.sys.get('builtin_module_names')):
+            modname = self.str_w(w_modname)
+            mod = self.getbuiltinmodule(modname)
+            if isinstance(mod, Module):
+                mod.startup(self)
 
     def finish(self):
         w_exitfunc = self.sys.getdictvalue_w(self, 'exitfunc')
@@ -783,6 +793,32 @@ class ObjSpace(object):
             step  = 0
         return start, stop, step
 
+    def getindex_w(self, w_obj, w_exception=None):
+        # shortcut for int objects
+        if self.is_w(self.type(w_obj), self.w_int):
+            return self.int_w(w_obj)
+
+        w_index = self.index(w_obj)
+        try:
+            index = self.int_w(w_index)
+        except OperationError, err:
+            if not err.match(self, self.w_OverflowError):
+                raise
+            if not w_exception:
+                # w_index should be a long object, but can't be sure of that
+                if self.is_true(self.lt(w_index, self.wrap(0))):
+                    return -sys.maxint-1
+                else:
+                    return sys.maxint
+            else:
+                raise OperationError(
+                    w_exception, self.wrap(
+                    "cannot fit '%s' into an index-sized "
+                    "integer" % self.type(w_obj).getname(self, '?')))
+        else:
+            return index
+
+
 class AppExecCache(SpaceCache):
     def build(cache, source):
         """ NOT_RPYTHON """
@@ -839,6 +875,7 @@ ObjSpace.MethodTable = [
     ('or_',             '|',         2, ['__or__', '__ror__']),
     ('xor',             '^',         2, ['__xor__', '__rxor__']),
     ('int',             'int',       1, ['__int__']),
+    ('index',           'index',     1, ['__index__']),
     ('float',           'float',     1, ['__float__']),
     ('long',            'long',      1, ['__long__']),
     ('inplace_add',     '+=',        2, ['__iadd__']),

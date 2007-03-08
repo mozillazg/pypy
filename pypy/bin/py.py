@@ -13,7 +13,7 @@ except ImportError:
 
 from pypy.tool import option
 from py.compat.optparse import make_option
-from pypy.interpreter import main, interactive, error
+from pypy.interpreter import main, interactive, error, gateway
 from pypy.config.config import OptionDescription, BoolOption, StrOption
 from pypy.config.config import Config, to_optparse
 import os, sys
@@ -29,6 +29,8 @@ cmdline_optiondescr = OptionDescription("interactive", "the options of py.py", [
     BoolOption("optimize",
                "dummy optimization flag for compatibility with CPython",
                default=False, cmdline="-O"),
+    BoolOption("no_site_import", "do not 'import site' on initialization",
+               default=False, cmdline="-S"),
     StrOption("runmodule",
               "library module to be run as a script (terminates option list)",
               default=None, cmdline="-m"),
@@ -36,6 +38,26 @@ cmdline_optiondescr = OptionDescription("interactive", "the options of py.py", [
               "program passed in as CMD (terminates option list)",
               default=None, cmdline="-c"),
     ])
+
+pypy_init = gateway.applevel('''
+def pypy_init(import_site):
+    if import_site:
+        try:
+            import site
+        except:
+            import sys
+            print >> sys.stderr, "import site\' failed"
+''').interphook('pypy_init')
+
+def getenv_w(space, name):
+    w_os = space.getbuiltinmodule('os')
+    w_environ = space.getattr(w_os, space.wrap('environ'))
+    w_v = space.call_method(w_environ, 'get', space.wrap(name))
+    try:
+        return space.str_w(w_v)
+    except:
+        return None
+
 
 def main_(argv=None):
     starttime = time.time()
@@ -90,6 +112,7 @@ def main_(argv=None):
     try:
         def do_start():
             space.startup()
+            pypy_init(space, space.wrap(not interactiveconfig.no_site_import))
         if main.run_toplevel(space, do_start,
                              verbose=interactiveconfig.verbose):
             # compile and run it
@@ -98,7 +121,7 @@ def main_(argv=None):
                 exit_status = 1
 
             # start the interactive console
-            if go_interactive:
+            if go_interactive or getenv_w(space, 'PYTHONINSPECT'):
                 con = interactive.PyPyConsole(
                     space, verbose=interactiveconfig.verbose,
                     completer=interactiveconfig.completer)

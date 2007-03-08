@@ -1,9 +1,9 @@
 """
 information table about external functions for annotation/rtyping and backends
 """
+
 import os
 import time
-import math
 import types
 from pypy.rlib.rarithmetic import r_longlong
 
@@ -173,18 +173,6 @@ def waitpidannotation(*args):
                 'OS_WAITPID')
     return SomeTuple((SomeInteger(),)*2)
 
-def frexpannotation(*args):
-    from pypy.annotation.model import SomeInteger, SomeTuple, SomeFloat
-    from pypy.rpython.lltypesystem.module.ll_math import ll_frexp_result
-    record_call(ll_frexp_result, (SomeFloat(), SomeInteger()), 'MATH_FREXP')
-    return SomeTuple((SomeFloat(), SomeInteger()))
-
-def modfannotation(*args):
-    from pypy.annotation.model import SomeTuple, SomeFloat
-    from pypy.rpython.lltypesystem.module.ll_math import ll_modf_result
-    record_call(ll_modf_result, (SomeFloat(), SomeFloat()), 'MATH_MODF')
-    return SomeTuple((SomeFloat(), SomeFloat()))
-
 def strnullannotation(*args):
     from pypy.annotation.model import SomeString
     return SomeString(can_be_None=True)
@@ -242,28 +230,6 @@ declare(os.path.isdir, bool         , 'll_os_path/isdir')
 declare(time.time   , float         , 'll_time/time')
 declare(time.clock  , float         , 'll_time/clock')
 declare(time.sleep  , noneannotation, 'll_time/sleep')
-
-# ___________________________
-# math functions
-
-declare(math.frexp  , frexpannotation, 'll_math/frexp')
-declare(math.atan2  , float         , 'll_math/atan2')
-declare(math.fmod   , float         ,  'll_math/fmod')
-declare(math.floor  , float         ,  'll_math/floor')
-declare(math.ldexp  , float         ,  'll_math/ldexp')
-declare(math.modf   , modfannotation, 'll_math/modf')
-declare(math.hypot  , float         , 'll_math/hypot')
-declare(math.pow    , float         , 'll_math/pow')
-
-# the following functions all take one float, return one float
-# and are part of math.h
-simple_math_functions = [
-    'acos', 'asin', 'atan', 'ceil', 'cos', 'cosh', 'exp', 'fabs',
-    'floor', 'log', 'log10', 'sin', 'sinh', 'sqrt', 'tan', 'tanh'
-    ]
-
-for name in simple_math_functions:
-    declare(getattr(math, name), float, 'll_math/%s' % name)
 
 # ___________________________________________________________
 # win/NT hack: patch ntpath.isabs() to be RPythonic
@@ -325,3 +291,4 @@ standardexceptions = {
     AssertionError   : True,
     RuntimeError     : True,
     }
+

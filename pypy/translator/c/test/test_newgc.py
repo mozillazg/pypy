@@ -859,6 +859,35 @@ class TestUsingFramework(AbstractGCTestClass):
         # the point is just not to segfault
         res = fn()
 
+    def test_dict_segfault(self):
+        " was segfaulting at one point see rev 39665 for fix and details "
+
+        class Element:
+            pass
+
+        elements = [Element() for ii in range(10000)]
+
+        def dostuff():
+            reverse = {}
+            l = elements[:]
+
+            for ii in elements:
+                reverse[ii] = ii
+
+            for jj in range(100):
+                e = l[-1]
+                del reverse[e]
+                l.remove(e)
+
+        def f():
+            for ii in range(100):
+                dostuff()
+            return 0
+
+        fn = self.getcompiled(f)
+        # the point is just not to segfault
+        res = fn()
+
 class TestUsingStacklessFramework(TestUsingFramework):
     gcpolicy = "stacklessgc"
 

@@ -11,14 +11,21 @@ except:
     _, _, tb = sys.exc_info()
     GetSetDescriptor = type(type(tb).tb_frame)
 
+class RemoteBase(object):
+    pass
+
+from types import FunctionType
+
 class ObjKeeper(object):
     def __init__(self, exported_names = {}):
         self.exported_objects = [] # list of object that we've exported outside
         self.exported_names = exported_names # dictionary of visible objects
-        self.exported_types = {} # list of exported types
+        self.exported_types = {} # dict of exported types
         self.remote_types = {}
+        self.reverse_remote_types = {}
         self.remote_objects = {}
         self.exported_types_id = 0 # unique id of exported types
+        self.exported_types_reverse = {} # reverse dict of exported types
     
     def register_object(self, obj):
         # XXX: At some point it makes sense not to export them again and again...
@@ -26,9 +33,7 @@ class ObjKeeper(object):
         return len(self.exported_objects) - 1
     
     def ignore(self, key, value):
-        #key not in ('__dict__', '__weakref__', '__class__', '__new__',
-        #        '__base__', '__flags__', '__mro__', '__bases__')]
-        if key in ('__dict__', '__weakref__', '__class__', '__new__'):
+        if key in ('__dict__', '__weakref__', '__class__'):
             return True
         if isinstance(value, GetSetDescriptor):
             return True
@@ -38,10 +43,9 @@ class ObjKeeper(object):
         try:
             return self.exported_types[tp]
         except KeyError:
-            print "Registering type %s as %s" % (tp, self.exported_types_id)
-            if str(tp).find('getset') != -1:
-                import pdb;pdb.set_trace()
+            #print "Registering type %s as %s" % (tp, self.exported_types_id)
             self.exported_types[tp] = self.exported_types_id
+            self.exported_types_reverse[self.exported_types_id] = tp
             tp_id = self.exported_types_id
             self.exported_types_id += 1
         
@@ -54,20 +58,27 @@ class ObjKeeper(object):
         return tp_id
     
     def fake_remote_type(self, protocol, type_id, _name, _dict):
-        print "Faking type %s as %s" % (_name, type_id)
+        #print "Faking type %s as %s" % (_name, type_id)
         # create and register new type
         d = dict([(key, None) for key in _dict])
+        # some stuff needs to go first...
         if '__doc__' in _dict:
             d['__doc__'] = protocol.unwrap(_dict['__doc__'])
-        tp = type(_name, (object,), d)
+        tp = type(_name, (RemoteBase,), d)
+        # Make sure we cannot instantiate the remote type
         self.remote_types[type_id] = tp
+        self.reverse_remote_types[tp] = type_id
         for key, value in _dict.items():
             if key != '__doc__':
-                try:
-                    setattr(tp, key, protocol.unwrap(value))
-                except TypeError:
-                    # XXX this stays here for debugging reasons
-                    import pdb;pdb.set_trace()
+                v = protocol.unwrap(value)
+                if isinstance(v, FunctionType):
+                    setattr(tp, key, staticmethod(v))
+                else:
+                    setattr(tp, key, v)
+            #elif key == '__new__':
+            #    import pdb
+            #    pdb.set_trace()
+            #    tp.new = value
                     
     def get_type(self, id):
         return self.remote_types[id]

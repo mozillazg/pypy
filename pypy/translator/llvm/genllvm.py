@@ -4,7 +4,6 @@ from pypy.tool.isolate import Isolate
 
 from pypy.translator.llvm import buildllvm
 from pypy.translator.llvm.database import Database 
-from pypy.translator.llvm.pyxwrapper import write_pyx_wrapper 
 from pypy.rpython.rmodel import inputconst
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.lltypesystem import lltype
@@ -17,42 +16,23 @@ from pypy.translator.llvm.node import LLVMNode
 from pypy.translator.llvm.externs2ll import setup_externs, generate_llfile
 from pypy.translator.llvm.gc import GcPolicy
 from pypy.translator.llvm.log import log
-from pypy import conftest
-from pypy.translator.llvm.buildllvm import llvm_is_on_path
+from pypy.translator.llvm.buildllvm import llvm_is_on_path, postfix
 
 class GenLLVM(object):
     # see create_codewriter() below
     function_count = {}
 
-    def __init__(self, translator, gcpolicy, standalone,
-                 debug=False, logging=True, stackless=False):
+    def __init__(self, translator, standalone):
     
         # reset counters
         LLVMNode.nodename_count = {}    
-
-        if gcpolicy is None:
-            gcpolicy = "boehm"
-        
-        self.gcpolicy = gcpolicy
-        
 
         self.standalone = standalone
         self.translator = translator
         
         self.config = translator.config
-        self.stackless = stackless
 
-        # the debug flag is for creating comments of every operation
-        # that may be executed
-        self.debug = debug 
-
-        # the logging flag is for logging information statistics in the build
-        # process
-        self.logging = logging
-
-        self.source_generated = False
-
-    def gen_llvm_source(self, func):
+    def gen_source(self, func):
         self._checkpoint()
 
         codewriter = self.setup(func)
@@ -65,9 +45,9 @@ class GenLLVM(object):
         # write bottom part of llvm file
         self.write_implementations(codewriter)
 
-        self.source_generated = True
         self._checkpoint('done')
         codewriter.close()
+
         return self.filename
 
     def setup(self, func):
@@ -76,15 +56,16 @@ class GenLLVM(object):
             create ll file for c file
             create codewriter """
 
-        # please dont ask!
+        # XXX please dont ask!
         from pypy.translator.c.genc import CStandaloneBuilder
-        from pypy.translator.c import gc
         cbuild = CStandaloneBuilder(self.translator, func, config=self.config)
-        cbuild.stackless = self.stackless
+        #cbuild.stackless = self.stackless
         c_db = cbuild.generate_graphs_for_llinterp()
 
         self.db = Database(self, self.translator)
-        self.db.gcpolicy = GcPolicy.new(self.db, self.gcpolicy)
+
+        # XXX hardcoded for now
+        self.db.gcpolicy = GcPolicy.new(self.db, 'boehm')
 
         # get entry point
         entry_point = self.get_entry_point(func)
@@ -119,6 +100,7 @@ class GenLLVM(object):
     def _set_wordsize(self, s):
         s = s.replace('UWORD', self.db.get_machine_uword())
         s = s.replace( 'WORD', self.db.get_machine_word())
+        s = s.replace('POSTFIX', postfix())
         return s
 
     def write_headers(self, codewriter):
@@ -236,33 +218,15 @@ class GenLLVM(object):
         codewriter.ret("sbyte*", "null")
         codewriter.closefunc()
 
-    def compile_llvm_source(self, optimize=True, exe_name=None, isolate=False):
-        assert self.source_generated
+    def compile_module(self):
+        assert not self.standalone
+        
+        modname, dirpath = buildllvm.Builder(self).make_module()
+        mod, wrap_fun = self.get_module(modname, dirpath)
+        return mod, wrap_fun
 
-        assert hasattr(self, "filename")
-        if exe_name is not None:
-            assert self.standalone
-            assert not isolate
-            return buildllvm.make_module_from_llvm(self, self.filename,
-                                                   optimize=optimize,
-                                                   exe_name=exe_name)
-        else:
-            assert not self.standalone
-
-            # use pyrex to create module for CPython
-            postfix = ''
-            basename = self.filename.purebasename + '_wrapper' + postfix + '.pyx'
-            pyxfile = self.filename.new(basename = basename)
-            write_pyx_wrapper(self, pyxfile)    
-            info = buildllvm.make_module_from_llvm(self, self.filename,
-                                                   pyxfile=pyxfile,
-                                                   optimize=optimize)
-
-            mod, wrap_fun = self.get_module(isolate=isolate, *info)
-            return mod, wrap_fun
-
-    def get_module(self, modname, dirpath, isolate=False):
-        if isolate:
+    def get_module(self, modname, dirpath):
+        if self.config.translation.llvm.isolate:
             mod = Isolate((dirpath, modname))
         else:
             from pypy.translator.tool.cbuild import import_module_from_directory
@@ -271,8 +235,12 @@ class GenLLVM(object):
         wrap_fun = getattr(mod, 'pypy_' + self.entry_func_name + "_wrapper")
         return mod, wrap_fun
 
+    def compile_standalone(self, exe_name):
+        assert self.standalone
+        return buildllvm.Builder(self).make_standalone(exe_name)
+
     def _checkpoint(self, msg=None):
-        if not self.logging:
+        if not self.config.translation.llvm.logging:
             return
         if msg:
             t = (time.time() - self.starttime)
@@ -283,7 +251,7 @@ class GenLLVM(object):
 
     def _print_node_stats(self):
         # disable node stats output
-        if not self.logging: 
+        if not self.config.translation.llvm.logging: 
             return 
 
         nodecount = {}
@@ -298,71 +266,3 @@ class GenLLVM(object):
         for s in stats:
             log('STATS %s' % str(s))
 
-#______________________________________________________________________________
-
-def genllvm_compile(function,
-                    annotation,
-
-                    # genllvm options
-                    gcpolicy=None,
-                    standalone=False,
-                    stackless=False,
-                    
-                    # debug options
-                    view=False,
-                    debug=False,
-                    logging=False,
-                    log_source=False,
-
-                    # pass to compile
-                    optimize=True,
-                    **kwds):
-
-    """ helper for genllvm """
-
-    assert llvm_is_on_path()
-    
-    # annotate/rtype
-    from pypy.translator.translator import TranslationContext
-    from pypy.translator.backendopt.all import backend_optimizations
-    from pypy.config.pypyoption import get_pypy_config
-    config = get_pypy_config(translating=True)
-    config.translation.gc = 'boehm'
-    translator = TranslationContext(config=config)
-    translator.buildannotator().build_types(function, annotation)
-    translator.buildrtyper().specialize()
-
-    # use backend optimizations?
-    if optimize:
-        backend_optimizations(translator, raisingop2direct_call=True)
-    else:
-        backend_optimizations(translator,
-                              raisingop2direct_call=True,
-                              inline_threshold=0,
-                              mallocs=False,
-                              merge_if_blocks=False,
-                              constfold=False)
-
-    # note: this is without stackless and policy transforms
-    if view or conftest.option.view:
-        translator.view()
-
-    if stackless:
-        from pypy.translator.transform import insert_ll_stackcheck
-        insert_ll_stackcheck(translator)
-
-    # create genllvm
-    gen = GenLLVM(translator,
-                  gcpolicy,
-                  standalone,
-                  debug=debug,
-                  logging=logging,
-                  stackless=stackless)
-
-    filename = gen.gen_llvm_source(function)
-    
-    log_source = kwds.pop("log_source", False)
-    if log_source:
-        log(open(filename).read())
-
-    return gen.compile_llvm_source(optimize=optimize, **kwds)

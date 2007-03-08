@@ -8,10 +8,11 @@ from pypy.tool.sourcetools import compile2, func_with_new_name
 
 def raiseattrerror(space, w_obj, name, w_descr=None):
     w_type = space.type(w_obj)
+    typename = w_type.getname(space, '?')
     if w_descr is None:
-        msg = "'%s' object has no attribute '%s'" %(w_type.name, name)
+        msg = "'%s' object has no attribute '%s'" % (typename, name)
     else:
-        msg = "'%s' object attribute '%s' is read-only" %(w_type.name, name)
+        msg = "'%s' object attribute '%s' is read-only" % (typename, name)
     raise OperationError(space.w_AttributeError, space.wrap(msg))
 
 class Object:
@@ -514,6 +515,7 @@ def _make_unaryop_impl(symbol, specialnames):
 
 for targetname, specialname, checkerspec in [
     ('int', '__int__', ("space.w_int", "space.w_long")), 
+    ('index', '__index__', ("space.w_int", "space.w_long")),
     ('long', '__long__', ("space.w_int", "space.w_long")), 
     ('float', '__float__', ("space.w_float",))]:
 
@@ -537,7 +539,7 @@ for targetname, specialname, checkerspec in [
         assert not hasattr(DescrOperation, %(targetname)r)
         DescrOperation.%(targetname)s = %(targetname)s
         del %(targetname)s 
-        \n""" % locals() 
+        \n""" % locals()
     exec compile2(source) 
 
 for targetname, specialname in [
@@ -579,7 +581,7 @@ for targetname, specialname in [
 for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
     if not hasattr(DescrOperation, _name):
         _impl_maker = None
-        if _arity ==2 and _name in ['lt', 'le', 'gt', 'ge', 'ne', 'eq']:
+        if _arity == 2 and _name in ['lt', 'le', 'gt', 'ge', 'ne', 'eq']:
             #print "comparison", _specialnames
             _impl_maker = _make_comparison_impl
         elif _arity == 2 and _name.startswith('inplace_'):

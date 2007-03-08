@@ -372,7 +372,6 @@ def test_direct_arrayitems():
             finally:
                 a[n] = saved
 
-        py.test.skip("wip")
         fn = compile_function(llf, [int])
         res = fn(0)
         assert res == 1000 + 10 + 30 + 40
@@ -386,6 +385,7 @@ def test_direct_arrayitems():
         assert res == 0 + 10 + 30 + 1000
 
 def test_direct_fieldptr():
+    gcc3_test()
     S = GcStruct('S', ('x', Signed), ('y', Signed))
     def llf(n):
         s = malloc(S)
@@ -393,13 +393,24 @@ def test_direct_fieldptr():
         a[0] = n
         return s.y
 
-    py.test.skip("wip")
     fn = compile_function(llf, [int])
     res = fn(34)
     assert res == 34
 
+def test_prebuilt_simple_subarrays():
+    a2 = malloc(FixedSizeArray(Signed, 5), immortal=True)
+    a2[1] = 42
+    p2 = direct_ptradd(direct_arrayitems(a2), 1)
+    def llf():
+        a2[1] += 100
+        return p2[0]
+
+    fn = compile_function(llf, [])
+    res = fn()
+    assert res == 142
+
 def test_prebuilt_subarrays():
-    a1 = malloc(GcArray(Signed), 5)
+    a1 = malloc(GcArray(Signed), 5, zero=True)
     a2 = malloc(FixedSizeArray(Signed, 5), immortal=True)
     s  = malloc(GcStruct('S', ('x', Signed), ('y', Signed)))
     a1[3] = 7000
@@ -417,53 +428,60 @@ def test_prebuilt_subarrays():
         s.y   +=    1
         return p1[0] + p2[0] + p3[0] + p4[0]
 
-    py.test.skip("wip")
     fn = compile_function(llf, [])
     res = fn()
     assert res == 8765
 
-def test_pystruct():
-    PS1 = PyStruct('PS1', ('head', PyObject), ('x', Signed),
-                   hints = {'inline_head': True})
-    class mytype(object):
-        pass
-    mytype_ptr = pyobjectptr(mytype)
-    def llf():
-        p = malloc(PS1, flavor='cpy', extra_args=(mytype_ptr,))
-        return cast_pointer(Ptr(PyObject), p)
-
-    py.test.skip("wip")
-    fn = compile_function(llf)
-    res = fn()
-    assert type(res).__name__.endswith('mytype')
-
-def test_pystruct_prebuilt():
-    py.test.skip("wip")
-    PS1 = PyStruct('PS1', ('head', PyObject), ('x', Signed),
-                   hints = {'inline_head': True})
-    class mytype(object):
-        pass
-
-    def llsetup(phead):
-        "Called when the CPython ext module is imported."
-        p = cast_pointer(Ptr(PS1), phead)
-        p.x = 27
-
-    mytype_ptr = pyobjectptr(mytype)
-    p = malloc(PS1, flavor='cpy', extra_args=(mytype_ptr,))
-    p.x = -5   # overridden by llsetup()
+def test_pointer2fixedsizearray():
+    A = FixedSizeArray(Signed, 1)
+    EmbedS = GcStruct('S', ('data', A))
+    S = GcStruct('S', ('c_data', Ptr(A)))
+                 
+    e = malloc(EmbedS, zero=True)
+    s = malloc(S, zero=True)
+    c_data = s.c_data = e.data
+    c_data[0] = 42
 
     def llf():
-        return p.x
+        return s.c_data[0]
 
-    def process(t):
-        rtyper = t.buildrtyper()
-        rtyper.specialize()
-        llsetup_ptr = rtyper.annotate_helper_fn(llsetup, [Ptr(PyObject)])
-        phead = cast_pointer(Ptr(PyObject), p)
-        phead._obj.setup_fnptr = llsetup_ptr
-
-    self.process = process
-    fn = compile_function(llf)
+    fn = compile_function(llf, [])
     res = fn()
-    assert res == 27
+    assert res == 42
+
+def test_rctypes_array_access():
+    from ctypes import ARRAY, c_int
+    c_int_1 = ARRAY(c_int, 1)
+    
+    my_array = c_int_1()
+    
+    def llf():
+        my_array[0] = 42
+        return my_array[0]
+
+    fn = compile_function(llf, [])
+    res = fn()
+    assert res == 42
+
+def test_rctypes_char_array_value():
+    from ctypes import c_char
+    A = c_char * 3
+
+    def llf(n):
+        a = A()
+        a[n+0] = 'x'
+        a[n+1] = 'y'
+        return a.value == 'xy'
+
+    fn = compile_function(llf, [int])
+    res = fn(0)
+    assert res
+
+def test_rctypes_variants():
+    py.test.skip("wip")
+    from pypy.rpython.rctypes.test import test_rarray
+    llf, expected = test_rarray.maketest()
+
+    fn = compile_function(llf, [])
+    res = fn()
+    assert res == expected

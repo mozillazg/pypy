@@ -13,6 +13,7 @@ micro-op.
 
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.bltregistry import ExternalType
+from pypy.rpython.extfunc import ExtFuncEntry, is_external
 
 class Generator(object):
     
@@ -324,7 +325,8 @@ class _MethodDispatcher(_GeneralDispatcher):
 class _CallDispatcher(_GeneralDispatcher):
     def render(self, generator, op):
         func = op.args[0]
-        if getattr(func.value._callable, 'suggested_primitive', False):
+        # XXX we need to sort out stuff here at some point
+        if is_external(func):
             func_name = func.value._name.split("__")[0]
             try:
                 return self.builtins.builtin_map[func_name](generator, op)
@@ -354,6 +356,8 @@ class _New(MicroInstruction):
             op.args[0].value._hints['_suggested_external']
             generator.ilasm.new(op.args[0].value._name.split('.')[-1])
         except (KeyError, AttributeError):
+            if op.args[0].value is ootype.Void:
+                return
             generator.new(op.args[0].value)
 
 class BranchUnconditionally(MicroInstruction):

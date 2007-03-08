@@ -1,4 +1,3 @@
-import autopath
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.dictmultiobject import \
      W_DictMultiObject, setitem__DictMulti_ANY_ANY, getitem__DictMulti_ANY, \
@@ -70,6 +69,7 @@ class TestDictImplementation:
         self.space = FakeSpace()
         self.space.emptydictimpl = EmptyDictImplementation(self.space)
         self.space.DictObjectCls = W_DictMultiObject
+        self.space.DefaultDictImpl = RDictImplementation
 
     def test_stressdict(self):
         from random import randint
@@ -87,11 +87,13 @@ class TestRDictImplementation:
     ImplementionClass = RDictImplementation
     DevolvedClass = RDictImplementation
     EmptyClass = EmptyDictImplementation
+    DefaultDictImpl = RDictImplementation
 
     def setup_method(self,method):
         self.space = FakeSpace()
         self.space.DictObjectCls = W_DictMultiObject
         self.space.emptydictimpl = EmptyDictImplementation(self.space)
+        self.space.DefaultDictImpl = self.DefaultDictImpl
         self.string = self.space.wrap("fish")
         self.string2 = self.space.wrap("fish2")
         self.impl = self.get_impl()

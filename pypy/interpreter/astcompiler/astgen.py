@@ -297,6 +297,19 @@ class NodeInfo:
         print >> buf, "    def accept(self, visitor):"
         print >> buf, "        return visitor.visit%s(self)" % self.name
 
+
+    def _gen_insertnodes_func(self, buf):
+        print >> buf, "    def descr_insert_after(space, self, node, w_added_nodes):"
+        print >> buf, "        added_nodes = [space.interp_w(Node, w_node) for w_node in space.unpackiterable(w_added_nodes)]"
+        print >> buf, "        index = self.nodes.index(node) + 1"
+        print >> buf, "        self.nodes[index:index] = added_nodes"
+        print >> buf
+        print >> buf, "    def descr_insert_before(space, self, node, w_added_nodes):"
+        print >> buf, "        added_nodes = [space.interp_w(Node, w_node) for w_node in space.unpackiterable(w_added_nodes)]"
+        print >> buf, "        index = self.nodes.index(node)"
+        print >> buf, "        self.nodes[index:index] = added_nodes"
+
+
     def _gen_mutate(self, buf):
         print >> buf, "    def mutate(self, visitor):"
         if len(self.argnames) != 0:
@@ -370,6 +383,8 @@ class NodeInfo:
 
             if "fset_%s" % attr not in self.additional_methods:
                 self._gen_fset_func( buf, attr, prop )
+            if prop[attr] == P_NESTED and attr == 'nodes':
+                self._gen_insertnodes_func(buf)
 
     def _gen_descr_mutate(self, buf):
         if self.applevel_mutate:
@@ -426,6 +441,9 @@ class NodeInfo:
         print >> buf, "                     mutate=interp2app(descr_%s_mutate, unwrap_spec=[ObjSpace, W_Root, W_Root] )," % self.name
         for attr in self.argnames:
             print >> buf, "                    %s=GetSetProperty(%s.fget_%s, %s.fset_%s )," % (attr,self.name,attr,self.name,attr)
+            if self.argprops[attr] == P_NESTED and attr == "nodes":
+                print >> buf, "                     insert_after=interp2app(%s.descr_insert_after.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
+                print >> buf, "                     insert_before=interp2app(%s.descr_insert_before.im_func, unwrap_spec=[ObjSpace, %s, Node, W_Root])," % (self.name, self.name)
         print >> buf, "                    )"
         print >> buf, "%s.typedef.acceptable_as_base_class = False" % self.name
 
@@ -660,6 +678,7 @@ class Node(Wrappable):
     def __init__(self, lineno = -1):
         self.lineno = lineno
         self.filename = ""
+        self.parent = None
         #self.scope = None
         
     def getChildren(self):
@@ -691,6 +710,12 @@ class Node(Wrappable):
     def descr_repr( self, space ):
         return space.wrap( self.__repr__() )
     
+    def fget_parent(space, self):
+        return space.wrap(self.parent)
+
+    def fset_parent(space, self, w_parent):
+        self.parent = space.interp_w(Node, w_parent, can_be_None=False)
+
     def descr_getChildNodes( self, space ):
         lst = self.getChildNodes()
         return space.newlist( [ space.wrap( it ) for it in lst ] )
@@ -714,6 +739,7 @@ Node.typedef = TypeDef('ASTNode',
                        mutate = interp2app(descr_node_mutate, unwrap_spec=[ ObjSpace, W_Root, W_Root ] ),
                        lineno = interp_attrproperty('lineno', cls=Node),
                        filename = interp_attrproperty('filename', cls=Node),
+                       parent=GetSetProperty(Node.fget_parent, Node.fset_parent),
                        )
 
 Node.typedef.acceptable_as_base_class = False

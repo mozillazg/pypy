@@ -1,22 +1,24 @@
 # encoding: utf-8
+from pypy.rlib.rarithmetic import r_uint, intmask
 
 DEBUG = False
 
 class SeePage(NotImplementedError):
     pass
 
-class ExecutionReturned(Exception):
+class JsBaseExcept(Exception): pass
+
+class ExecutionReturned(JsBaseExcept):
     def __init__(self, type='normal', value=None, identifier=None):
         self.type = type
         self.value = value
         self.identifier = identifier
 
-class ThrowException(Exception):
+class ThrowException(JsBaseExcept):
     def __init__(self, exception):
-        self.exception = exception
-        self.args = self.exception
+        self.exception = self.args = exception
 
-class JsTypeError(Exception):
+class JsTypeError(JsBaseExcept):
     pass
 
 Infinity = 1e300 * 1e300
@@ -59,6 +61,12 @@ class W_Root(object):
     def ToNumber(self):
         return NaN
     
+    def ToInt32(self):
+        return 0
+    
+    def ToUInt32(self):
+        return r_uint(0)
+    
     def Get(self, P):
         raise NotImplementedError
     
@@ -67,7 +75,8 @@ class W_Root(object):
         raise NotImplementedError
     
     def PutValue(self, w, ctx):
-        print self, w.ToString(), w.__class__, ctx
+        if DEBUG:
+            print self, w.ToString(), w.__class__, ctx
         raise NotImplementedError
     
     def Call(self, ctx, args=[], this=None):
@@ -122,7 +131,7 @@ class W_PrimitiveObject(W_Root):
                  Value=w_Undefined, callfunc=None):
         self.propdict = {}
         self.propdict['prototype'] = Property('prototype', w_Undefined,
-                                              dd=True)
+                                              dd=True, de=True)
         self.Prototype = Prototype
         self.Class = Class
         self.callfunc = callfunc
@@ -189,7 +198,7 @@ class W_PrimitiveObject(W_Root):
         if self.Prototype is None: return False
         return self.Prototype.HasProperty(P) 
     
-    def Delete(P):
+    def Delete(self, P):
         if P in self.propdict:
             if self.propdict[P].dd: return False
             del self.propdict[P]
@@ -198,12 +207,12 @@ class W_PrimitiveObject(W_Root):
 
     def internal_def_value(self, ctx, tryone, trytwo):
         t1 = self.Get(tryone)
-        if isinstance(t1, W_Object):
+        if isinstance(t1, W_PrimitiveObject):
             val = t1.Call(ctx, this=self)
             if isinstance(val, W_Primitive):
                 return val
         t2 = self.Get(trytwo)
-        if isinstance(t2, W_Object):
+        if isinstance(t2, W_PrimitiveObject):
             val = t2.Call(ctx, this=self)
             if isinstance(val, W_Primitive):
                 return val
@@ -237,7 +246,7 @@ class W_Object(W_PrimitiveObject):
                  Value=w_Undefined, callfunc=None):
         W_PrimitiveObject.__init__(self, ctx, Prototype,
                                    Class, Value, callfunc)
-        self.propdict['toString'] = Property('toString', W_Builtin(str_builtin))
+        self.propdict['toString'] = Property('toString', W_Builtin(str_builtin), de=True)
 
 
 class W_Builtin(W_PrimitiveObject):
@@ -281,13 +290,13 @@ class W_Array(W_Builtin):
                  Value=w_Undefined, callfunc=None):
         W_PrimitiveObject.__init__(self, ctx, Prototype, Class, Value, callfunc)
         toString = W_Builtin(array_str_builtin)
-        self.Put('toString', toString)
+        self.Put('toString', toString, de=True)
         self.Put('length', W_Number(0))
         self.array = []
         self.set_builtin_call(arraycallbi)
-    
-    
-    def Put(self, P, V):
+
+    def Put(self, P, V, dd=False,
+            ro=False, de=False, it=False):
         try:
             x = int(P)
             # print "puting", V, 'in', x
@@ -299,11 +308,7 @@ class W_Array(W_Builtin):
             self.array[x]= V
                     
         except ValueError:
-            if not self.CanPut(P): return
-            if P in self.propdict:
-                self.propdict[P].value = V
-            else:
-                self.propdict[P] = Property(P, V)
+            W_Builtin.Put(self, P, V, dd=dd, ro=ro, de=de, it=it)
 
     def Get(self, P):
         try:
@@ -317,7 +322,7 @@ class W_Array(W_Builtin):
             return W_PrimitiveObject.Get(self, P)
     
     def ToString(self):
-        return ','.join(self.array)
+        return ','.join([item.ToString() for item in self.array])
 
 def array_str_builtin(ctx, args, this):
     return W_String(this.ToString())
@@ -368,7 +373,7 @@ class W_String(W_Primitive):
 
 class W_Number(W_Primitive):
     def __init__(self, floatval):
-        self.floatval = floatval
+        self.floatval = float(floatval)
 
     def ToString(self):
         if str(self.floatval) == str(NaN):
@@ -393,6 +398,24 @@ class W_Number(W_Primitive):
 
     def type(self):
         return 'number'
+    
+    def ToInt32(self):
+        strval = str(self.floatval)
+        if strval == str(NaN) or \
+           strval == str(Infinity) or \
+           strval == str(-Infinity):
+            return 0
+           
+        return int(self.floatval)
+    
+    def ToUInt32(self):
+        strval = str(self.floatval)
+        if strval == str(NaN) or \
+           strval == str(Infinity) or \
+           strval == str(-Infinity):
+            return r_uint(0)
+           
+        return r_uint(self.floatval)
 
 class W_List(W_Root):
     def __init__(self, list_w):
@@ -434,7 +457,7 @@ class ExecutionContext(object):
         self.variable = obj
     
     def pop_object(self):
-        """docstring for pop_object"""
+        """remove the last pushed object"""
         return self.scope.pop(0)
         
     def resolve_identifier(self, identifier):
@@ -493,6 +516,7 @@ class W_Reference(W_Root):
         if self.base is None:
             base = ctx.scope[-1]
         base.Put(self.property_name, w)
+        return w
 
     def GetBase(self):
         return self.base

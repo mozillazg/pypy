@@ -73,16 +73,12 @@ class AppGreenlet(Coroutine):
     _get_state = staticmethod(_get_state)
 
     def hello(self):
-        print "hello  ", id(self), self.subctx.framestack.items
-        print syncstate.things_to_do, syncstate.temp_exc
         ec = self.space.getexecutioncontext()
         self.subctx.enter(ec)
 
     def goodbye(self):
         ec = self.space.getexecutioncontext()
         self.subctx.leave(ec)
-        print "goodbye", id(self), self.subctx.framestack.items
-        print syncstate.things_to_do, syncstate.temp_exc
 
     def w_getcurrent(space):
         return space.wrap(AppGreenlet._get_state(space).current)
@@ -210,14 +206,21 @@ def post_install(module):
     space = module.space
     state = AppGreenlet._get_state(space)
     state.post_install()
-    w_module = space.getbuiltinmodule('_stackless')
-    space.appexec([w_module,
+    w_greenlet = get(space, 'greenlet')
+    # HACK HACK HACK
+    # make the typeobject mutable for a while
+    from pypy.objspace.std.typeobject import _HEAPTYPE, W_TypeObject
+    assert isinstance(w_greenlet, W_TypeObject)
+    old_flags = w_greenlet.__flags__
+    w_greenlet.__flags__ |= _HEAPTYPE
+    space.appexec([w_greenlet,
                    state.w_GreenletExit,
                    state.w_GreenletError], """
-    (mod, exit, error):
-        mod.greenlet.GreenletExit = exit
-        mod.greenlet.error = error
+    (greenlet, exit, error):
+        greenlet.GreenletExit = exit
+        greenlet.error = error
     """)
+    w_greenlet.__flags__ = old_flags
 
 AppGreenlet.typedef = TypeDef("greenlet",
     __new__ = interp2app(AppGreenlet.descr_method__new__.im_func,

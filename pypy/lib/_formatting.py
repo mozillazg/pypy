@@ -6,6 +6,14 @@
 # (1) rounding isn't always right (see comments in _float_formatting).
 # (2) something goes wrong in the f_alt case of %g handling.
 # (3) it's really, really slow.
+#
+# XXX regarding moving the below code to RPython (mostly):
+#     ValueGetter and ValueBox were introduced to encapsulate
+#     dealing with (wrapped/unwrapped) values.  The rest
+#     of the source code appears to be rather RPython except
+#     for the usage of rpython-level unicode strings. 
+
+
 import sys
 
 class _Flags(object):
@@ -19,19 +27,12 @@ class _Flags(object):
     f_zero = 0
 
 
-def value_next(valueiter):
-    try:
-        return valueiter.next()
-    except StopIteration:
-        raise TypeError('not enough arguments for format string')
-
-
-def peel_num(c, fmtiter, valueiter):
+def peel_num(c, fmtiter, valuegetter):
     if c == '*':
-        v = value_next(valueiter)
-        if not isinstance(v, int):
+        v = valuegetter.nextvalue()
+        if not v.isint():
             raise TypeError, "* wants int"
-        return fmtiter.next(), v
+        return fmtiter.next(), v.maybe_int()
     n = ''
     while c in '0123456789':
         n += c
@@ -61,9 +62,9 @@ def peel_flags(c, fmtiter):
     return c, flags
 
 
-def parse_fmt(fmtiter, valueiter, valuedict):
+def parse_fmt(fmtiter, valuegetter):
     """return (char, flags, width, prec, value)
-    partially consumes fmtiter & valueiter"""
+    partially consumes fmtiter & valuegetter"""
     c = fmtiter.next()
     value = None
     gotvalue = False
@@ -79,13 +80,13 @@ def parse_fmt(fmtiter, valueiter, valuedict):
             elif c == '(':
                 pcount += 1
             n += c
-        value = valuedict[n]
+        value = valuegetter.getitem(n)
         gotvalue = True
         c = fmtiter.next()
     c, flags = peel_flags(c, fmtiter)
-    c, width = peel_num(c, fmtiter, valueiter)
+    c, width = peel_num(c, fmtiter, valuegetter)
     if c == '.':
-        c, prec = peel_num(fmtiter.next(), fmtiter, valueiter)
+        c, prec = peel_num(fmtiter.next(), fmtiter, valuegetter)
     else:
         prec = None
     if c in 'hlL':
@@ -97,10 +98,10 @@ def parse_fmt(fmtiter, valueiter, valuedict):
     if not gotvalue:
         if c == '%':
             # did YOU realize that "%4%"%() == '   %'??
-            value = '%'
+            value = valuegetter.makevalue('%')
             c = 's'
         else:
-            value = value_next(valueiter)
+            value = valuegetter.nextvalue()
     return (c, flags, width, prec, value)
 
 
@@ -108,12 +109,12 @@ class NeedUnicodeFormattingError(Exception):
     pass
 
 class Formatter(object):
-    def __init__(self, char, flags, width, prec, value):
+    def __init__(self, char, flags, width, prec, valuebox):
         self.char = char
         self.flags = flags
         self.width = width
         self.prec = prec
-        self.value = value
+        self.valuebox = valuebox
 
     def numeric_preprocess(self, v):
         # negative zeroes?
@@ -166,32 +167,13 @@ class Formatter(object):
         return r
 
 
-def funcFormatter(*funcs):
-    """NOT_RPYTHON"""
-    class _F(Formatter):
-        def format(self):
-            r = self.value
-            for f in funcs:
-                r = f(r)
-            return self.std_wp(r)
-    return _F
+class ReprFormatter(Formatter):
+    def format(self):
+        return self.std_wp(self.valuebox.repr())
 
-
-def maybe_int(value):
-    try:
-        inter = value.__int__
-    except AttributeError:
-        raise TypeError, "int argument required"
-    return inter()
-
-
-def maybe_float(value):
-    try:
-        floater = value.__float__
-    except AttributeError:
-        raise TypeError, "float argument required"
-    return floater()
-
+class PercentFormatter(Formatter):
+    def format(self):
+        return '%'
 
 # isinf isn't too hard...
 def isinf(v):
@@ -202,8 +184,6 @@ def isinf(v):
 # about), and probably when implemented on top of pypy, too.
 def isnan(v):
     return v != v*1.0 or (v == 1.0 and v == 2.0)
-
-from _float_formatting import flonum2digits
 
 class FloatFormatter(Formatter):
     def eDigits(self, ds):
@@ -230,7 +210,7 @@ class FloatFormatter(Formatter):
         return ''.join(ds)
 
     def format(self):
-        v = maybe_float(self.value)
+        v = self.valuebox.maybe_float()
         if isnan(v):
             return 'nan'
         elif isinf(v):
@@ -249,13 +229,8 @@ class FloatFFormatter(FloatFormatter):
     def _format(self, v):
         if v/1e25 > 1e25:
             return FloatGFormatter('g', self.flags, self.width,
-                                   self.prec, self.value).format()
+                                   self.prec, self.valuebox).format()
         return self._formatd('f', v)
-        #ds, k = flonum2digits(v)
-        #digits = self.fDigits(ds, k)
-        #if  not self.flags.f_alt:
-        #    digits = digits.rstrip('.')
-        #return digits
 
 # system specific formatting. Linux does 3, Windows does 4...
 # XXX this works only when we use geninterp!
@@ -270,10 +245,6 @@ else:
 class FloatEFormatter(FloatFormatter):
     def _format(self, v):
         return self._formatd('e', v)
-        #ds, k = flonum2digits(v)
-        #digits = self.eDigits(ds)
-        #return "%%s%%c%%+0%dd" % _EF %(digits, self.char, k-1)
-
 
 class FloatGFormatter(FloatFormatter):
     # The description of %g in the Python documentation lies
@@ -282,28 +253,11 @@ class FloatGFormatter(FloatFormatter):
     # (One has to wonder who might care).
     def _format(self, v):
         return self._formatd('g', v)
-        ## the following is btw. correct for marshal, now:
-        #ds, k = flonum2digits(v)
-        #ds = ds[:self.prec] # XXX rounding!
-        #if -4 < k <= self.prec:
-        #    if k < 0:
-        #        self.prec -= k # grow prec for extra zeros
-        #    digits = self.fDigits(ds, k)
-        #    if not self.flags.f_alt:
-        #        digits = digits.rstrip('0').rstrip('.')
-        #    r = digits
-        #else:
-        #    digits = self.eDigits(ds)
-        #    if not self.flags.f_alt:
-        #        digits = digits.rstrip('0').rstrip('.')
-        #    r = "%%se%%+0%dd" % _EF %(digits, k-1)
-        #return r
-
 
 class HexFormatter(Formatter):
     # NB: this has 2.4 semantics wrt. negative values
     def format(self):
-        v, sign = self.numeric_preprocess(maybe_int(self.value))
+        v, sign = self.numeric_preprocess(self.valuebox.maybe_int())
         r = hex(v)[2:]
         if r[-1]=="L":
             # workaround weird behavior of CPython's hex
@@ -323,7 +277,7 @@ class HexFormatter(Formatter):
 class OctFormatter(Formatter):
     # NB: this has 2.4 semantics wrt. negative values
     def format(self):
-        v, sign = self.numeric_preprocess(maybe_int(self.value))
+        v, sign = self.numeric_preprocess(self.valuebox.maybe_int())
         r = oct(v)
         if r[-1] == "L":
             r = r[:-1]
@@ -337,7 +291,7 @@ class OctFormatter(Formatter):
 class IntFormatter(Formatter):
     # NB: this has 2.4 semantics wrt. negative values (for %u)
     def format(self):
-        v, sign = self.numeric_preprocess(maybe_int(self.value))
+        v, sign = self.numeric_preprocess(self.valuebox.maybe_int())
         r = str(v)
         if self.prec is not None and len(r) < self.prec:
             r = '0'*(self.prec - len(r)) + r
@@ -346,15 +300,14 @@ class IntFormatter(Formatter):
 
 class CharFormatter(Formatter):
     def format(self):
-        if isinstance(self.value, str):
-            v = self.value
+        if self.valuebox.isstr():
+            v = self.valuebox.str()
             if len(v) != 1:
                 raise TypeError, "%c requires int or char"
-        
-        elif isinstance(self.value, unicode):
+        elif self.valuebox.isunicode():
             raise NeedUnicodeFormattingError
         else:
-            i = maybe_int(self.value)
+            i = self.valuebox.maybe_int()
             if not 0 <= i <= 255:
                 raise OverflowError("OverflowError: unsigned byte "
                                     "integer is greater than maximum")
@@ -364,9 +317,9 @@ class CharFormatter(Formatter):
 
 class StringFormatter(Formatter):
     def format(self):
-        if isinstance(self.value, unicode):
+        if self.valuebox.isunicode():
             raise NeedUnicodeFormattingError
-        return self.std_wp(str(self.value))
+        return self.std_wp(self.valuebox.str())
 
 
 
@@ -385,33 +338,30 @@ str_format_registry = {
     'G':FloatGFormatter,
     'c':CharFormatter,
     's':StringFormatter,
-    'r':funcFormatter(repr),
+    'r':ReprFormatter, 
     # this *can* get accessed, by e.g. '%()4%'%{'':1}.
     # The usual %% case has to be handled specially as it
     # doesn't consume a value.
-    '%':funcFormatter(lambda x:'%'),
+    '%':PercentFormatter, 
     }
     
 class UnicodeStringFormatter(Formatter):
     def format(self):
-        if isinstance(self.value, unicode):
-            return self.std_wp(self.value)
-        if hasattr(self.value,'__unicode__'):
-            return self.std_wp(self.value.__unicode__())
-        return self.std_wp(str(self.value))
+        uval = self.valuebox.unicode()
+        return self.std_wp(uval)
 
 class UnicodeCharFormatter(Formatter):
     def format(self):
-        if isinstance(self.value, unicode):
-            v = self.value
+        if self.valuebox.isunicode():
+            v = self.valuebox.unicode()
             if len(v) != 1:
                 raise TypeError, "%c requires int or unicode char"
-        elif isinstance(self.value, str):
-            v = unicode(self.value)
+        elif self.valuebox.isstr():
+            v = unicode(self.valuebox.str())
             if len(v) != 1:
                 raise TypeError, "%c requires int or unicode char"
         else:
-            i = maybe_int(self.value)
+            i = self.valuebox.maybe_int()
             if not 0 <= i <= sys.maxunicode:
                 raise OverflowError("OverflowError: unsigned byte "
                                     "integer is greater than maximum")
@@ -434,29 +384,27 @@ unicode_format_registry = {
     u'G':FloatGFormatter,
     u'c':UnicodeCharFormatter,
     u's':UnicodeStringFormatter,
-    u'r':funcFormatter(repr),
+    u'r':ReprFormatter, 
     # this *can* get accessed, by e.g. '%()4%'%{'':1}.
     # The usual %% case has to be handled specially as it
     # doesn't consume a value.
-    u'%':funcFormatter(lambda x:u'%'),
+    u'%':PercentFormatter, 
     }
     
-
-del funcFormatter # don't irritate flow space
 
 class FmtIter(object):
     def __init__(self, fmt):
         self.fmt = fmt
+        self._fmtlength = len(fmt)
         self.i = 0
 
     def __iter__(self):
         return self
 
     def next(self):
-        try:
-            c = self.fmt[self.i]
-        except IndexError:
-            raise StopIteration
+        if self.i >= self._fmtlength: 
+            raise StopIteration 
+        c = self.fmt[self.i]
         self.i += 1
         return c
 
@@ -472,55 +420,117 @@ class FmtIter(object):
 
 
 def format(fmt, values, valuedict=None, do_unicode=False):
+    vb = ValueGetter(values, valuedict)
+    return _format(fmt, vb, do_unicode)
+
+def _format(fmt, valuegetter, do_unicode=False):
     if do_unicode:
         format_registry = unicode_format_registry
     else:
         format_registry = str_format_registry
-        
     fmtiter = FmtIter(fmt)
-    valueiter = iter(values)
     r = []
-    try:
-        for c in fmtiter:
-            if c == '%':
-                t = parse_fmt(fmtiter, valueiter, valuedict)
-                try:
-                    f = format_registry[t[0]]
-                except KeyError:
-                    char = t[0]
-                    if isinstance(char, unicode):
-                        char = char.encode(sys.getdefaultencoding(), 'replace')
-                    raise ValueError("unsupported format character "
-                                     "'%s' (0x%x) at index %d"
-                                     % (char, ord(t[0]), fmtiter.i - 1))
-                # Trying to translate this using the flow space.
-                # Currently, star args give a problem there,
-                # so let's be explicit about the args:
-                # r.append(f(*t).format())
-                char, flags, width, prec, value = t
-                try:
-                    r.append(f(char, flags, width, prec, value).format())
-                except NeedUnicodeFormattingError:
-                    # Switch to using the unicode formatters and retry.
-                    do_unicode = True
-                    format_registry = unicode_format_registry
-                    f = format_registry[t[0]]
-                    r.append(f(char, flags, width, prec, value).format())
- 
+    for c in fmtiter: 
+        if c == '%':
+            try:
+                t = parse_fmt(fmtiter, valuegetter)
+            except StopIteration:
+                raise ValueError, "incomplete format"
+            try:
+                f = format_registry[t[0]]
+            except KeyError:
+                char = t[0]
+                if isinstance(char, unicode):
+                    char = char.encode(sys.getdefaultencoding(), 'replace')
+                raise ValueError("unsupported format character "
+                                 "'%s' (0x%x) at index %d"
+                                 % (char, ord(t[0]), fmtiter.i - 1))
+            # Trying to translate this using the flow space.
+            # Currently, star args give a problem there,
+            # so let's be explicit about the args:
+            # r.append(f(*t).format())
+            char, flags, width, prec, value = t
+            try:
+                result = f(char, flags, width, prec, value).format()
+            except NeedUnicodeFormattingError:
+                # Switch to using the unicode formatters and retry.
+                do_unicode = True
+                format_registry = unicode_format_registry
+                f = format_registry[t[0]]
+                r.append(f(char, flags, width, prec, value).format())
             else:
-                # efficiency hack:
-                r.append(c + fmtiter.skip_to_fmt())
-    except StopIteration:
-        raise ValueError, "incomplete format"
-    try:
-        valueiter.next()
-    except StopIteration:
-        pass
-    else:
-        if valuedict is None:
-            raise TypeError('not all arguments converted '
-                            'during string formatting')
+                r.append(result)
+        else:
+            # efficiency hack:
+            r.append(c + fmtiter.skip_to_fmt())
+    valuegetter.check_consumed()
     if do_unicode:
         return u''.join(r)
     return ''.join(r)
 
+
+class ValueGetter:
+    """ statefull accesstor to Interpolation Values. """
+
+    def __init__(self, values, valuedict):
+        self._values = values
+        self._valuedict = valuedict
+        self._valueindex = 0
+
+    def check_consumed(self):
+        if (self._valueindex < len(self._values) and 
+            self._valuedict is None):
+            raise TypeError('not all arguments converted '
+                            'during string formatting')
+
+    def makevalue(self, string):
+        return ValueBox(string)
+
+    def nextvalue(self):
+        if self._valueindex >= len(self._values):
+            raise TypeError('not enough arguments for format string')
+        val = self._values[self._valueindex]
+        self._valueindex += 1
+        return ValueBox(val)
+
+    def getitem(self, key):
+        return ValueBox(self._valuedict[key])
+
+class ValueBox:
+    def __init__(self, value):
+        self._value = value
+    def str(self):
+        return str(self._value)
+    def repr(self):
+        return repr(self._value) 
+
+    def isint(self):
+        return isinstance(self._value, int)
+    def isstr(self):
+        return isinstance(self._value, str)
+    def isunicode(self):
+        return isinstance(self._value, unicode)
+
+    def maybe_int(self):
+        try:
+            inter = self._value.__int__
+        except AttributeError:
+            raise TypeError, "int argument required"
+        return inter()
+
+    def maybe_float(self):
+        try:
+            floater = self._value.__float__
+        except AttributeError:
+            raise TypeError, "float argument required"
+        return floater()
+
+    def __str__(self):
+        raise ValueError("use self.str()")
+
+    def unicode(self):
+        if self.isunicode():
+            return self._value 
+        if hasattr(self._value,'__unicode__'):
+            return self._value.__unicode__()
+        return unicode(self.str())

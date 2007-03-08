@@ -3,26 +3,46 @@ from pypy.objspace.std.basestringtype import basestring_typedef
 
 from sys import maxint
 
+def wrapstr(space, s):
+    from pypy.objspace.std.stringobject import W_StringObject
+    if space.config.objspace.std.sharesmallstr:
+        if space.config.objspace.std.withprebuiltchar:
+            # share characters and empty string
+            if len(s) <= 1:
+                if len(s) == 0:
+                    return W_StringObject.EMPTY
+                else:
+                    s = s[0]     # annotator hint: a single char
+                    return wrapchar(space, s)
+        else:
+            # only share the empty string
+            if len(s) == 0:
+                return W_StringObject.EMPTY
+    return W_StringObject(s)
+
+def wrapchar(space, c):
+    from pypy.objspace.std.stringobject import W_StringObject
+    if space.config.objspace.std.withprebuiltchar:
+        return W_StringObject.PREBUILT[ord(c)]
+    else:
+        return W_StringObject(c)
+
 def sliced(space, s, start, stop):
+    assert start >= 0
+    assert stop >= 0 
     if space.config.objspace.std.withstrslice:
         from pypy.objspace.std.strsliceobject import W_StringSliceObject
-        from pypy.objspace.std.stringobject import W_StringObject
         # XXX heuristic, should be improved!
         if (stop - start) > len(s) * 0.20 + 40:
             return W_StringSliceObject(s, start, stop)
-        else:
-            return W_StringObject(s[start:stop])
-    else:
-        from pypy.objspace.std.stringobject import W_StringObject
-        return W_StringObject(s[start:stop])
+    return wrapstr(space, s[start:stop])
 
 def joined(space, strlist):
     if space.config.objspace.std.withstrjoin:
         from pypy.objspace.std.strjoinobject import W_StringJoinObject
         return W_StringJoinObject(strlist)
     else:
-        from pypy.objspace.std.stringobject import W_StringObject
-        return W_StringObject("".join(strlist))
+        return wrapstr(space, "".join(strlist))
 
 str_join    = SMM('join', 2,
                   doc='S.join(sequence) -> string\n\nReturn a string which is'
@@ -115,6 +135,18 @@ str_rfind      = SMM('rfind', 4, defaults=(0, maxint),
                          ' s[start,end].  Optional\narguments start and end'
                          ' are interpreted as in slice notation.\n\nReturn -1'
                          ' on failure.')
+str_partition  = SMM('partition', 2,
+                     doc='S.partition(sep) -> (head, sep, tail)\n\nSearches'
+                         ' for the separator sep in S, and returns the part before'
+                         ' it,\nthe separator itself, and the part after it.  If'
+                         ' the separator is not\nfound, returns S and two empty'
+                         ' strings.')
+str_rpartition = SMM('rpartition', 2,
+                     doc='S.rpartition(sep) -> (tail, sep, head)\n\nSearches'
+                         ' for the separator sep in S, starting at the end of S,'
+                         ' and returns\nthe part before it, the separator itself,'
+                         ' and the part after it.  If the\nseparator is not found,'
+                         ' returns two empty strings and S.')
 str_index      = SMM('index', 4, defaults=(0, maxint),
                      doc='S.index(sub [,start [,end]]) -> int\n\nLike S.find()'
                          ' but raise ValueError when the substring is not'
@@ -238,3 +270,26 @@ If the argument is a string, the return value is the same object.'''
 
 str_typedef.custom_hash = True
 str_typedef.registermethods(globals())
+
+# ____________________________________________________________
+
+# Helpers for several string implementations
+
+def stringendswith(u_self, suffix, start, end):
+    begin = end - len(suffix)
+    if begin < start:
+        return False
+    for i in range(len(suffix)):
+        if u_self[begin+i] != suffix[i]:
+            return False
+    return True
+
+def stringstartswith(u_self, prefix, start, end):
+    stop = start + len(prefix)
+    if stop > end:
+        return False
+    for i in range(len(prefix)):
+        if u_self[start+i] != prefix[i]:
+            return False
+    return True
+    
