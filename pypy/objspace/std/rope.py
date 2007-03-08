@@ -546,15 +546,18 @@ def find_char(node, c, start=0, stop=-1):
         searchstop = min(stop - i, nodelength)
         if isinstance(fringenode, LiteralStringNode):
             st = fringenode.s
-        elif isinstance(fringenode, SliceNode):
+            localoffset = 0
+        else:
+            assert isinstance(fringenode, SliceNode)
             n = fringenode.node
             assert isinstance(n, LiteralStringNode)
             st = n.s
+            localoffset = -fringenode.start
             searchstart += fringenode.start
             searchstop += fringenode.stop
-        pos = fringenode.s.find(c, searchstart, searchstop)
+        pos = st.find(c, searchstart, searchstop)
         if pos != -1:
-            return pos + i + offset
+            return pos + i + offset + localoffset
         i += nodelength
     return -1
 

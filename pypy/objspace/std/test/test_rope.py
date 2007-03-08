@@ -254,6 +254,10 @@ def test_find_char_bugs():
     assert r == -1
     r = find_char(LiteralStringNode("a"), "a")
     assert r == 0
+    r = find_char(BinaryConcatNode(
+        LiteralStringNode("x"),
+        SliceNode(1, 9, LiteralStringNode("a" * 10))), "a")
+    assert r == 1
 
 
 def test_restart_positions():
