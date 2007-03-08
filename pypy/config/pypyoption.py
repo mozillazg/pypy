@@ -137,6 +137,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withrope", "use ropes as the string implementation",
                    default=False,
+                   requires=[("objspace.std.withstrslice", False),
+                             ("objspace.std.withstrjoin", False)],
                    suggests=[("objspace.std.withprebuiltchar", True),
                              ("objspace.std.sharesmallstr", True)]),
 
