@@ -1,6 +1,7 @@
 <html>
   <head>
     <title>Build meta server build %(id)s</title>
+    <link rel="stylesheet" type="text/css" href="/style" />
   </head>
   <body>
     <ul class="sidebar">
@@ -50,6 +51,21 @@
           <span>%(build_end_time)s</span>
         </div>
       %(build_end_time)]c
+      <div>
+      <div class="title">sysinfo:</div>
+      %(sysinfo)[b
+        <div class="valuelist">
+          <span class="smalltitle">%(key)s</span>
+          <span>%(value)s</span>
+        </div>
+      %(sysinfo)]b
+      <div class="title">compileinfo:</div>
+      %(compileinfo)[b
+        <div class="valuelist">
+          <span class="smalltitle">%(key)s:</span>
+          <span>%(value)s</span>
+        </div>
+      %(compileinfo)]b
       <!--
       %%(log)[c
       <div>
