@@ -129,3 +129,30 @@ class TestVList(TimeshiftingTests):
         res = self.timeshift(ll_function, [3, 4], [0, 1], policy=P_OOPSPEC)
         assert res == 5
         self.check_insns({})
+
+    def test_frozen_list(self):
+        lst = [5, 7, 9]
+        def ll_function(x):
+            mylist = hint(lst, deepfreeze=True)
+            z = mylist[x]
+            hint(z, concrete=True)
+            return z
+
+        res = self.timeshift(ll_function, [1], policy=P_OOPSPEC)
+        assert res == 7
+        self.check_insns({})
+
+    def test_frozen_list_indexerror(self):
+        lst = [5, 7, 9]
+        def ll_function(x):
+            mylist = hint(lst, deepfreeze=True)
+            try:
+                z = mylist[x]
+            except IndexError:
+                return -42
+            hint(z, concrete=True)
+            return z
+
+        res = self.timeshift(ll_function, [4], policy=P_OOPSPEC)
+        assert res == -42
+        self.check_insns({})

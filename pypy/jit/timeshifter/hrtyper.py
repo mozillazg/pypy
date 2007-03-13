@@ -1321,7 +1321,31 @@ class HintRTyper(RPythonTyper):
         for r_arg in hop.args_r:
             assert isinstance(r_arg, GreenRepr)
         assert isinstance(hop.r_result, GreenRepr)
+
+        FUNC = hop.args_v[0].concretetype
+        calldesc = rtimeshift.CallDesc(self.RGenOp, FUNC.TO)
+        args_v = hop.args_v
+        args_s = [annmodel.lltype_to_annotation(v.concretetype)
+                  for v in args_v]
+        s_result = annmodel.lltype_to_annotation(FUNC.TO.RESULT)
+        v_jitstate = hop.llops.getjitstate()
+        return hop.llops.genmixlevelhelpercall(calldesc.green_call,
+                                               [self.s_JITState] + args_s,
+                                               [v_jitstate     ] + args_v,
+                                               s_result)
+
+    def translate_op_green_call_noexc(self, hop):
+        for r_arg in hop.args_r:
+            assert isinstance(r_arg, GreenRepr)
+        assert isinstance(hop.r_result, GreenRepr)
         v = hop.genop('direct_call', hop.args_v, hop.r_result.lowleveltype)
+        return v
+
+    def translate_op_green_indirect_call_noexc(self, hop):
+        for r_arg in hop.args_r[:-1]:
+            assert isinstance(r_arg, GreenRepr)
+        assert isinstance(hop.r_result, GreenRepr)
+        v = hop.genop('indirect_call', hop.args_v, hop.r_result.lowleveltype)
         return v
 
     def translate_op_red_call(self, hop):

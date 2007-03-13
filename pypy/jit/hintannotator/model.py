@@ -105,16 +105,6 @@ class CallOpOriginFlags(OriginFlags):
                 deps.append(v)
 
 
-class PureCallOpOriginFlags(CallOpOriginFlags):
-
-    def record_dependencies(self, greenorigindependencies,
-                                  callreturndependencies):
-        OriginFlags.record_dependencies(self, greenorigindependencies,
-                                              callreturndependencies)
-        CallOpOriginFlags.record_dependencies(self, greenorigindependencies,
-                                                    callreturndependencies)
-
-
 class InputArgOriginFlags(OriginFlags):
 
     def __init__(self, bookkeeper, graph, i):
@@ -351,14 +341,11 @@ class __extend__(SomeLLAbstractValue):
         args_hs = args_hs[:-1]
         assert hs_graph_list.is_constant()
         graph_list = hs_graph_list.const
+        if graph_list is None:
+            # cannot follow indirect calls to unknown targets
+            return variableoftype(hs_v1.concretetype.TO.RESULT)
 
         bookkeeper = getbookkeeper()
-        if not bookkeeper.annotator.policy.look_inside_graphs(graph_list):
-            # cannot follow
-            return cannot_follow_call(bookkeeper, graph_list,
-                                      (hs_v1,) + args_hs,
-                                      hs_v1.concretetype.TO.RESULT)
-
         myorigin = bookkeeper.myorigin()
         myorigin.__class__ = CallOpOriginFlags     # thud
         fixed = myorigin.read_fixed()
@@ -418,7 +405,7 @@ class __extend__(SomeLLAbstractConstant):
         if not hasattr(fnobj, 'graph'):
             raise NotImplementedError("XXX call to externals or primitives")
         if not bookkeeper.annotator.policy.look_inside_graph(fnobj.graph):
-            return cannot_follow_call(bookkeeper, [fnobj.graph], args_hs,
+            return cannot_follow_call(bookkeeper, fnobj.graph, args_hs,
                                       lltype.typeOf(fnobj).RESULT)
 
         # recursive call from the entry point to itself: ignore them and
@@ -654,13 +641,17 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
         # Exception: an operation on a frozen container is constant-foldable.
         RESULT = bookkeeper.current_op_concretetype()
         if '.' in operation_name and args_hs[0].deepfrozen:
-            myorigin = bookkeeper.myorigin()
-            d = newset({myorigin: True}, *[hs_c.origins for hs_c in args_hs])
-            return SomeLLAbstractConstant(RESULT, d,
-                                          eager_concrete = False,   # probably
-                                          myorigin = myorigin)
-        else:
-            return variableoftype(RESULT)
+            for hs_v in args_hs:
+                if not isinstance(hs_v, SomeLLAbstractConstant):
+                    break
+            else:
+                myorigin = bookkeeper.myorigin()
+                d = newset({myorigin: True}, *[hs_c.origins
+                                               for hs_c in args_hs])
+                return SomeLLAbstractConstant(RESULT, d,
+                                              eager_concrete = False,   # probably
+                                              myorigin = myorigin)
+        return variableoftype(RESULT)
 
     # --- the code below is not used any more except by test_annotator.py ---
     if operation_name == 'newlist':
@@ -684,17 +675,9 @@ def handle_highlevel_operation(bookkeeper, ll_func, *args_hs):
     hs_result = handler(*args_hs)   # which may raise NotImplementedError
     return hs_result
 
-def cannot_follow_call(bookkeeper, graph_list, args_hs, RESTYPE):
+def cannot_follow_call(bookkeeper, graph, args_hs, RESTYPE):
     # the policy prevents us from following the call
-    if not graph_list:       # no known target, give up
-        return variableoftype(RESTYPE)
-    pure_call = True
-    for graph in graph_list:
-        if not bookkeeper.is_pure_graph(graph):
-            # it's not calling pure graphs either, so the result
-            # is entierely unknown
-            pure_call = False
-            break
+    pure_call = bookkeeper.is_pure_graph(graph)
     # when calling pure graphs, consider the call as an operation.
     for hs in args_hs:
         if not isinstance(hs, SomeLLAbstractConstant):
@@ -707,26 +690,8 @@ def cannot_follow_call(bookkeeper, graph_list, args_hs, RESTYPE):
         h_res = SomeLLAbstractConstant(RESTYPE, d,
                                        eager_concrete = False,   # probably
                                        myorigin = myorigin)
-        fixed = myorigin.read_fixed()
     else:
         h_res = variableoftype(RESTYPE)
-        fixed = False
-
-    look_inside_graph = bookkeeper.annotator.policy.look_inside_graph
-    followable_graphs = [graph for graph in graph_list
-                               if look_inside_graph(graph)]
-    if followable_graphs:
-        # we can still follow this graph, even if we cannot follow all of them
-        tsgraphs_accum = []
-        bookkeeper.graph_family_call(followable_graphs, fixed, args_hs[1:],
-                                     tsgraphs_accum)
-        myorigin = bookkeeper.myorigin()
-        myorigin.any_called_graph = tsgraphs_accum[0]
-        if pure_call:
-            myorigin.__class__ = PureCallOpOriginFlags     # thud
-        else:
-            myorigin.__class__ = CallOpOriginFlags     # thud
-
     return h_res
 
 # ____________________________________________________________

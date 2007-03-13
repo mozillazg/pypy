@@ -818,6 +818,7 @@ def test_indirect_sometimes_residual_red_call():
         return h(x)
 
     P = StopAtXPolicy(h1)
+    P.oopspec = True
     P.entrypoint_returns_red = False
     hs, hannotator = hannotate(f, [int, int], policy=P, annotator=True)
     assert not hs.is_green()
@@ -841,6 +842,7 @@ def test_indirect_sometimes_residual_pure_but_fixed_red_call():
         return z
 
     P = StopAtXPolicy(h1)
+    P.oopspec = True
     P.entrypoint_returns_red = False
     hs, hannotator = hannotate(f, [int, int], policy=P, annotator=True)
     assert hs.is_green()

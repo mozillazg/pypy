@@ -492,11 +492,19 @@ class HintGraphTransformer(object):
             args_v = spaceop.args[1:]
         elif spaceop.opname == 'indirect_call':
             graphs = spaceop.args[-1].value
+            if graphs is None:
+                return     # cannot follow at all
             args_v = spaceop.args[1:-1]
         else:
             raise AssertionError(spaceop.opname)
-        if not self.hannotator.policy.look_inside_graphs(graphs):
-            return    # cannot follow this call
+        # if the graph - or all the called graphs - are marked as "don't
+        # follow", directly return None as a special case.  (This is only
+        # an optimization for the indirect_call case.)
+        for graph in graphs:
+            if self.hannotator.policy.look_inside_graph(graph):
+                break
+        else:
+            return
         for graph in graphs:
             tsgraph = self.timeshifted_graph_of(graph, args_v, spaceop.result)
             yield graph, tsgraph
@@ -511,6 +519,10 @@ class HintGraphTransformer(object):
                 self.hannotator.policy.oopspec):
                 if fnobj._callable.oopspec.startswith('vable.'):
                     return 'vable', None
+                hs_result = self.hannotator.binding(spaceop.result)
+                if (hs_result.is_green() and
+                    hs_result.concretetype is not lltype.Void):
+                    return 'green', self.can_raise(spaceop)
                 return 'oopspec', self.can_raise(spaceop)
         if self.hannotator.bookkeeper.is_green_call(spaceop):
             return 'green', None
@@ -726,12 +738,20 @@ class HintGraphTransformer(object):
         op.opname = 'rpyexc_raise'
         op.args = op.args[1:]
 
-    def handle_green_call(self, block, pos):
-        # green-returning call, for now (XXX) we assume it's an
-        # all-green function that we can just call
+    def handle_green_call(self, block, pos, withexc=False):
+        # an all-green function that we can just call
         op = block.operations[pos]
-        assert op.opname == 'direct_call'
-        op.opname = 'green_call'
+        if op.opname == 'indirect_call':
+            if withexc:
+                op.args.pop()    # remove the graph list
+                op.opname = 'green_call'
+            else:
+                op.opname = 'green_indirect_call_noexc'
+        else:
+            if withexc:
+                op.opname = 'green_call'
+            else:
+                op.opname = 'green_call_noexc'
 
     def handle_yellow_call(self, block, pos, withexc):
         self.handle_red_call(block, pos, color='yellow', withexc=withexc)
@@ -804,6 +824,8 @@ class HintGraphTransformer(object):
         else:
             promoteblock = block
             v_flags2 = v_flags
+        # if there is no global merge point, this 'promote' will actually
+        # always see a constant red box
         v_finished_flag = self.genop(promoteblock, 'promote', [v_flags2],
                                      resulttype = lltype.Bool)
         self.go_to_dispatcher_if(promoteblock, v_finished_flag)

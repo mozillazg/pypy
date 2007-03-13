@@ -2,10 +2,12 @@ import py
 from pypy.tool.tls import tlsobject
 from pypy.tool.ansi_print import ansi_log
 from pypy.objspace.flow.model import copygraph, SpaceOperation, Constant
+from pypy.objspace.flow.model import Variable, Block, Link, FunctionGraph
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, lloperation
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.translator.backendopt import graphanalyze
+from pypy.translator.unsimplify import copyvar
 
 TLS = tlsobject()
 
@@ -42,7 +44,10 @@ class GraphDesc(object):
             return self._cache[key]
         except KeyError:
             bk = self.bookkeeper
-            graph = copygraph(self.origgraph)
+            if bk.annotator.policy.look_inside_graph(self.origgraph):
+                graph = copygraph(self.origgraph)
+            else:
+                graph = self.build_callback_graph(self.origgraph)
             graph.tag = 'timeshifted'
             try:
                 etrafo = bk.annotator.exceptiontransformer
@@ -57,6 +62,20 @@ class GraphDesc(object):
             self.bookkeeper.annotator.translator.graphs.append(graph)
             log(str(graph))
             return graph
+
+    def build_callback_graph(self, graph):
+        args_v = [copyvar(None, v) for v in graph.getargs()]
+        v_res = copyvar(None, graph.getreturnvar())
+        rtyper = self.bookkeeper.annotator.base_translator.rtyper  # fish
+        fnptr = rtyper.getcallable(graph)
+        v_ptr = Constant(fnptr, lltype.typeOf(fnptr))
+        newstartblock = Block(args_v)
+        newstartblock.operations.append(
+            SpaceOperation('direct_call', [v_ptr] + args_v, v_res))
+        newgraph = FunctionGraph(graph.name, newstartblock)
+        newgraph.getreturnvar().concretetype = v_res.concretetype
+        newstartblock.closeblock(Link([v_res], newgraph.returnblock))
+        return newgraph
 
 
 class TsGraphCallFamily:

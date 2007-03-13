@@ -36,5 +36,5 @@ Improvements
 - share code between the machine code backends (MachineCodeBlock,
   possibly register allocation)
 
-- more green vars in the hintannotator: for y=frozen_list[x]
-  and for y=hint(x, deepfreeze=True) if x is green
+- more green vars in the hintannotator: for y=hint(x, deepfreeze=True)
+  if x is green
