@@ -29,6 +29,23 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
         return True
 
 
+class StopAtXPolicy(HintAnnotatorPolicy):
+    """Useful for tests."""
+
+    def __init__(self, *funcs):
+        HintAnnotatorPolicy.__init__(self, novirtualcontainer=True,
+                                     oopspec=True)
+        self.funcs = funcs
+
+    def look_inside_graph(self, graph):
+        try:
+            if graph.func in self.funcs:
+                return False
+        except AttributeError:
+            pass
+        return True
+
+
 class HintAnnotator(RPythonAnnotator):
 
     def __init__(self, translator=None, base_translator=None, policy=None):
