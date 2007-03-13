@@ -500,6 +500,15 @@ class CallDesc:
         self.result_kind = RGenOp.kindToken(FUNCTYPE.RESULT)
         # xxx what if the result is virtualizable?
         self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.RESULT)
+        whatever_return_value = FUNCTYPE.RESULT._defl()
+        def green_call(jitstate, fnptr, *args):
+            try:
+                result = fnptr(*args)
+            except Exception, e:
+                jitstate.residual_exception(e)
+                result = whatever_return_value
+            return result
+        self.green_call = green_call
 
     def _freeze_(self):
         return True
@@ -532,6 +541,7 @@ def ll_after_residual_call(jitstate, exceptiondesc, check_forced):
             else:
                 gv_flags = builder.genop2("int_or", gv_flags, gv_flag)
         else:
+            assert gv_flags is None
             exceptiondesc.fetch_global_excdata(jitstate)
     if gv_flags is None:
         gv_flags = builder.rgenop.constPrebuiltGlobal(0)

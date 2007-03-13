@@ -1,6 +1,7 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.jit.hintannotator.annotator import HintAnnotator, HintAnnotatorPolicy
+from pypy.jit.hintannotator.annotator import StopAtXPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
@@ -346,21 +347,6 @@ class TimeshiftingTests(object):
                 block.exitswitch.concretetype is lltype.Signed):
                 count += 1
         assert count == expected_count
-
-
-class StopAtXPolicy(HintAnnotatorPolicy):
-    def __init__(self, *funcs):
-        HintAnnotatorPolicy.__init__(self, novirtualcontainer=True,
-                                     oopspec=True)
-        self.funcs = funcs
-
-    def look_inside_graph(self, graph):
-        try:
-            if graph.func in self.funcs:
-                return False
-        except AttributeError:
-            pass
-        return True
 
 
 class TestTimeshift(TimeshiftingTests):
@@ -1466,22 +1452,47 @@ class TestTimeshift(TimeshiftingTests):
         assert res == f(4,113)
         self.check_insns({'int_sub': 1})
 
-    def test_indirect_sometimes_residual_red_call(self):
-        py.test.skip("in-progress")
+    def test_indirect_sometimes_residual_pure_red_call(self):
         def h1(x):
             return x-2
         def h2(x):
             return x*4
         l = [h1, h2]
         def f(n, x):
+            hint(None, global_merge_point=True)
+            hint(n, concrete=True)
             frozenl = hint(l, deepfreeze=True)
             h = frozenl[n&1]
             return h(x)
 
         P = StopAtXPolicy(h1)
-        res = self.timeshift(f, [7, 3], [0], policy=P)
+        P.oopspec = True
+        res = self.timeshift(f, [7, 3], [], policy=P)
         assert res == f(7,3)
         self.check_insns({'int_mul': 1})
-        res = self.timeshift(f, [4, 113], [0], policy=P)
+        res = self.timeshift(f, [4, 113], [], policy=P)
         assert res == f(4,113)
         self.check_insns({'direct_call': 1})
+
+    def test_indirect_sometimes_residual_pure_but_fixed_red_call(self):
+        def h1(x):
+            return x-2
+        def h2(x):
+            return x*4
+        l = [h1, h2]
+        def f(n, x):
+            hint(None, global_merge_point=True)
+            frozenl = hint(l, deepfreeze=True)
+            h = frozenl[n&1]
+            z = h(x)
+            hint(z, concrete=True)
+            return z
+
+        P = StopAtXPolicy(h1)
+        P.oopspec = True
+        res = self.timeshift(f, [7, 3], [], policy=P)
+        assert res == f(7,3)
+        self.check_insns({})
+        res = self.timeshift(f, [4, 113], [], policy=P)
+        assert res == f(4,113)
+        self.check_insns({})

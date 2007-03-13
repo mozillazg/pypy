@@ -20,14 +20,6 @@ class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     def look_inside_graph(self, graph):
         return True
 
-    def look_inside_graphs(self, graph_list):
-        if not graph_list:
-            return False   # cannot follow indirect call with no known targets
-        for graph in graph_list:
-            if not self.look_inside_graph(graph):
-                return False
-        return True
-
 
 class StopAtXPolicy(HintAnnotatorPolicy):
     """Useful for tests."""
