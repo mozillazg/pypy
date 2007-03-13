@@ -8,12 +8,20 @@ body {
   margin-bottom: 1em;
 }
 
-.title {
+.title, .smalltitle {
   font-weight: bold;
+}
+
+.valuelist {
+  margin-left: 1em;
 }
 
 .sub div {
   margin-left: 1em;
   font-size: 0.8em;
+}
+
+td {
+  text-align: center;
 }
 

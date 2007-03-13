@@ -1,6 +1,7 @@
 <html>
   <head>
     <title>Build meta server builds page</title>
+    <link rel="stylesheet" type="text/css" href="/style" />
   </head>
   <body>
     <ul class="sidebar">
@@ -14,13 +15,26 @@
       for download) and waiting or in-progress ones, ordered by date. Click
       on the build to get more information.
     </p>
-    %(builds)[b
-      <div class="infoblock">
-        <div class="title">
-          <a href="%(href)s">%(id)s</a>
-        </div>
-      </div>
-    %(builds)]b
+    <table>
+      <thead>
+        <tr>
+          <th>id (link)</th>
+          <th>requested</th>
+          <th>started</th>
+          <th>ended</th>
+        </tr>
+      </thead>
+      <tbody>
+        %(builds)[b
+          <tr>
+            <td><a href="%(href)s">%(id)s</a></td>
+            <td>%(request_time)s</td>
+            <td>%(build_start_time)s</td>
+            <td>%(build_end_time)s</td>
+          </tr>
+        %(builds)]b
+      </tbody>
+    </table>
   </body>
 </html>
 

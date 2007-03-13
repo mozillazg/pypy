@@ -165,8 +165,11 @@ class BuildPage(ServerPage):
             'request_time': format_time(br.request_time),
             'build_start_time': format_time(br.build_start_time),
             'build_end_time': format_time(br.build_end_time),
+            'sysinfo': [{'key': k, 'value': v} for (k, v) in
+                        sorted(br.sysinfo.items())],
+            'compileinfo': [{'key': k, 'value': v} for (k, v) in
+                            sorted(br.compileinfo.items())],
             'status': status,
-            'log': log,
             'error': error,
         }
 
@@ -188,9 +191,10 @@ class BuildsIndexPage(ServerPage):
                  'email': b.email,
                  'svnurl': b.svnurl,
                  'svnrev': b.normalized_rev,
-                 'request_time': b.request_time,
-                 'build_start_time': b.build_start_time,
-                 'build_end_time': b.build_end_time} for b in buildrequests]
+                 'request_time': format_time(b.request_time),
+                 'build_start_time': format_time(b.build_start_time) or '-',
+                 'build_end_time': format_time(b.build_end_time) or '-'}
+                for b in buildrequests]
 
 class Builds(Collection):
     """ container for BuildsIndexPage and BuildPage """
@@ -217,7 +221,7 @@ class Application(Collection):
     """ the application root """
     def __init__(self, config):
         self.style = FsFile(mypath.join('theme/style.css'), 'text/css')
-        self.serverstatus = ServerStatusPage(config)
+        self.index = ServerStatusPage(config)
         self.buildersinfo = BuildersInfoPage(config)
         self.builds = Builds(config)
     
