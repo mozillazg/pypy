@@ -81,15 +81,14 @@ if __name__ == '__main__':
         print data
         for line in channel:
             print line
-    elif type(data) != tuple:
+    elif type(data) != dict:
         raise ValueError, 'invalid data returned: %r' % (data,)
     else:
-        ispath, data = data
-        if ispath:
+        if data['path']:
             print ('a suitable result is already available, you can find it '
-                   'at "%s" on %s' % (data, config.server))
+                   'at "%s" on %s' % (data['path'], config.server))
         else:
-            print data
+            print data['message']
             print 'you will be mailed once it\'s ready'
     channel.close()
     gw.exit()
