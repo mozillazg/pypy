@@ -18,6 +18,12 @@ def fix_html(html):
             '"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">\n%s' % (
             html.strip().encode('UTF-8'),))
 
+def format_time(t):
+    if t is None:
+        return None
+    time = py.std.time
+    return time.strftime('%Y/%m/%d %H:%M', time.gmtime(t))
+
 class ServerPage(object):
     """ base class for pages that communicate with the server
     """
@@ -122,16 +128,37 @@ class BuildPage(ServerPage):
         br = BuildRequest.fromstring(self.call_method('buildrequest',
                                                       '"%s"' % (
                                                        self._buildid,)))
-        buildurl = self.call_method('buildurl', '"%s"' % (self._buildid,))
+        buildurl = None
+        log = None
+        error = None
+        if br.build_start_time:
+            if br.build_end_time:
+                buildurl = self.call_method('buildurl',
+                                            '"%s"' % (self._buildid,))
+                info = self.call_method('buildpathinfo',
+                                        '"%s"' % (self._buildid,))
+                log = info['log']
+                error = info['error']
+                if error:
+                    status = 'failed'
+                else:
+                    status = 'done'
+            else:
+                status = 'in progress'
+        else:
+            status = 'waiting'
         return {
             'url': buildurl,
             'id': br.id(),
             'email': br.email,
             'svnurl': br.svnurl,
             'svnrev': br.normalized_rev,
-            'request_time': br.request_time,
-            'build_start_time': br.build_start_time,
-            'build_end_time': br.build_end_time,
+            'request_time': format_time(br.request_time),
+            'build_start_time': format_time(br.build_start_time),
+            'build_end_time': format_time(br.build_end_time),
+            'status': status,
+            'log': log,
+            'error': error,
         }
 
 class BuildsIndexPage(ServerPage):
@@ -144,6 +171,9 @@ class BuildsIndexPage(ServerPage):
                 fix_html(template.unicode({'builds': self.get_builds()})))
 
     def get_builds(self):
+        buildrequests = [BuildRequest.fromstring(b) for b in
+                         self.call_method('buildrequests')]
+        buildrequests.sort(lambda a, b: cmp(a.request_time, b.request_time))
         return [{'id': b.id(),
                  'href': '/builds/%s' % (b.id(),),
                  'email': b.email,
@@ -151,9 +181,7 @@ class BuildsIndexPage(ServerPage):
                  'svnrev': b.normalized_rev,
                  'request_time': b.request_time,
                  'build_start_time': b.build_start_time,
-                 'build_end_time': b.build_end_time} for b in
-                [BuildRequest.fromstring(b) for b in
-                 self.call_method('buildrequests')]]
+                 'build_end_time': b.build_end_time} for b in buildrequests]
 
 class Builds(Collection):
     """ container for BuildsIndexPage and BuildPage """
@@ -178,10 +206,11 @@ class Builds(Collection):
 
 class Application(Collection):
     """ the application root """
-    style = FsFile(mypath.join('theme/style.css'), 'text/css')
-    serverstatus = ServerStatusPage(config)
-    buildersinfo = BuildersInfoPage(config)
-    builds = Builds(config)
+    def __init__(self, config):
+        self.style = FsFile(mypath.join('theme/style.css'), 'text/css')
+        self.serverstatus = ServerStatusPage(config)
+        self.buildersinfo = BuildersInfoPage(config)
+        self.builds = Builds(config)
     
     def index(self, handler, path, query):
         template = templess.template(
@@ -191,7 +220,9 @@ class Application(Collection):
     index.exposed = True
 
 class AppHandler(Handler):
-    application = Application()
+    def __init__(self, *args, **kwargs):
+        self.application = Application(config)
+        super(AppHandler, self).__init__(*args, **kwargs)
 
 class MetaServerAccessor(object):
     def __init__(self, ms):
@@ -223,6 +254,14 @@ class MetaServerAccessor(object):
         for r in self._all_requests():
             if r.id() == id:
                 return r.serialize()
+
+    def buildpathinfo(self, requestid):
+        for bp in self.server._done:
+            if bp.request.id() == requestid:
+                return {
+                    'log': str(bp.log),
+                    'error': str(bp.error),
+                }
 
     def buildurl(self, id):
         for r in self.server._done:

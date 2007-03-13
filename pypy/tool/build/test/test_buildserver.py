@@ -40,8 +40,8 @@ def test_compile():
     accepted = c1.compile(br)
     assert accepted
     ret = c1.channel.receive()
-    assert ret == br.serialize() # this was still in the buffer
-    assert c1.busy_on.serialize() == br.serialize()
+    assert build.BuildRequest.fromstring(ret).id() == br.id() # this was still in the buffer
+    assert c1.busy_on.id() == br.id()
     c1.channel.send('foo bar')
     c1.channel.send(None)
     c1.channel.send('log')

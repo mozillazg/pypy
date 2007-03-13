@@ -3,20 +3,48 @@
     <title>Build meta server build <t:tag t:replace="id" /></title>
   </head>
   <body>
+    <ul class="sidebar">
+      <li><a href="/serverstatus">server status</a></li>
+      <li><a href="/buildersinfo">connected build servers</a></li>
+      <li><a href="/builds">builds (both in-progress and done)</a></li>
+    </ul>
     <h2>Build <t:tag t:replace="id" /></h2>
     <div class="infoblock">
-      <div class="title">url</div>
-      <div t:content="url" />
-      <div class="title">svn url</div>
-      <div t:content="svnurl" />
-      <div class="title">svn revision</div>
-      <div t:content="svnrev" />
-      <div class="title">request time</div>
-      <div t:content="request_time" />
-      <div class="title">started</div>
-      <div t:content="build_start_time" />
-      <div class="title">ended</div>
-      <div t:content="build_end_time" />
+      <div t:cond="url">
+        <span class="title">url:</span>
+        <a t:attr="href url" t:content="url"></a>
+      </div>
+      <div>
+        <span class="title">status:</span>
+        <span t:content="status" />
+      </div>
+      <div t:cond="error" class="error">
+        <span class="title">error:</span>
+        <span t:content="error" />
+      </div>
+      <div>
+        <span class="title">svn url:</span>
+        <span t:content="svnurl" />
+      </div>
+      <div>
+        <span class="title">svn revision:</span>
+        <span t:content="svnrev" />
+      </div>
+      <div>
+        <span class="title">request time:</span>
+        <span t:content="request_time" />
+      </div>
+      <div t:cond="build_start_time">
+        <span class="title">started:</span>
+        <span t:content="build_start_time" />
+      </div>
+      <div t:cond="build_end_time">
+        <span class="title">ended:</span>
+        <span t:content="build_end_time" />
+      </div>
+      <div t:cond="log">
+        <pre t:content="log" />
+      </div>
     </div>
   </body>
 </html>
