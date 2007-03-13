@@ -84,30 +84,36 @@ class MetaServer(object):
         """
         # store the request, if there's already a build available the
         # storage will return that path
+        requestid = request.id()
         for bp in self._done:
             if request.has_satisfying_data(bp.request):
                 path = str(bp)
                 self._channel.send('already a build for this info available')
-                return (True, path)
+                return {'path': path, 'id': requestid, 'isbuilding': True,
+                        'message': 'build is already available'}
         for builder in self._builders:
             if builder.busy_on and request.has_satisfying_data(builder.busy_on):
                 self._channel.send(
                     "build for %s currently in progress on '%s'" % (
                         request, builder.hostname))
                 self._waiting.append(request)
-                return (False, "this build is already in progress on '%s'" % (
-                    builder.hostname, ))
+                return {'path': None, 'id': requestid, 'isbuilding': True,
+                        'message': "this build is already in progress "
+                                   "on '%s'" % (builder.hostname,)}
         # we don't have a build for this yet, find a builder to compile it
         hostname = self.run(request)
         if hostname is not None:
-            return (False, "found a suitable server, going to build on '%s'" %
-                    (hostname, ))
+            return {'path': None, 'id': requestid, 'isbuilding': True,
+                    'message': "found a suitable server, going to build "
+                               "on '%s'" % (hostname, )}
         self._queuelock.acquire()
         try:
             self._queued.append(request)
         finally:
             self._queuelock.release()
-        return (False, 'no suitable build server found; your request is queued')
+        return {'path': None, 'id': requestid, 'isbuilding': False,
+                'message': 'no suitable build server found; your request '
+                           'is queued'}
     
     def run(self, request):
         """find a suitable build server and run the job if possible"""

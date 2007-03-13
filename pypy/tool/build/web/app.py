@@ -146,6 +146,8 @@ class BuildPage(ServerPage):
                                         '"%s"' % (self._buildid,))
                 log = info['log']
                 error = info['error']
+                if error == 'None':
+                    error = None
                 if error:
                     status = 'failed'
                 else:
