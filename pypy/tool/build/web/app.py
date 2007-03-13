@@ -7,7 +7,8 @@ import time
 from pypy.tool.build import config
 from pypy.tool.build import execnetconference
 from pypy.tool.build.build import BuildRequest
-from pypy.tool.build.web.server import HTTPError, Collection, Handler, FsFile
+from pypy.tool.build.web.server import HTTPError, Collection, Handler, \
+                                       FsFile, get_nocache_headers
 
 from pypy.tool.build.web import templesser
 
@@ -23,6 +24,11 @@ def format_time(t):
         return None
     time = py.std.time
     return time.strftime('%Y/%m/%d %H:%M', time.gmtime(t))
+
+def get_headers():
+    headers = {'Content-Type': 'text/html; charset=UTF-8'}
+    headers.update(get_nocache_headers())
+    return headers
 
 class ServerPage(object):
     """ base class for pages that communicate with the server
@@ -73,8 +79,7 @@ class ServerStatusPage(ServerPage):
     def __call__(self, handler, path, query):
         template = templesser.template(
             mypath.join('templates/serverstatus.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
-                fix_html(template.unicode(self.get_status())))
+        return (get_headers(), fix_html(template.unicode(self.get_status())))
 
     def get_status(self):
         return self.call_method('status')
@@ -83,9 +88,8 @@ class BuildersInfoPage(ServerPage):
     def __call__(self, handler, path, query):
         template = templesser.template(
             mypath.join('templates/buildersinfo.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
-                fix_html(template.unicode({'builders':
-                                           self.get_buildersinfo()})))
+        return (get_headers(), fix_html(template.unicode(
+                                  {'builders': self.get_buildersinfo()})))
 
     def get_buildersinfo(self):
         infos = self.call_method('buildersinfo')
@@ -110,6 +114,8 @@ class BuildersInfoPage(ServerPage):
                         d[key] = time.strftime('%Y/%m/%d %H:%M:%S',
                                                time.gmtime(d[key]))
                 binfo['busy_on'] = [d]
+            else:
+                binfo['busy_on'] = []
         return infos
 
 class BuildPage(ServerPage):
@@ -122,7 +128,7 @@ class BuildPage(ServerPage):
     def __call__(self, handler, path, query):
         template = templesser.template(
             mypath.join('templates/build.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
+        return (get_headers(),
                 fix_html(template.unicode(self.get_info())))
 
     def get_info(self):
@@ -168,7 +174,7 @@ class BuildsIndexPage(ServerPage):
     def __call__(self, handler, path, query):
         template = templesser.template(
             mypath.join('templates/builds.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
+        return (get_headers(),
                 fix_html(template.unicode({'builds': self.get_builds()})))
 
     def get_builds(self):
@@ -216,7 +222,7 @@ class Application(Collection):
     def index(self, handler, path, query):
         template = templesser.template(
             mypath.join('templates/index.html').read())
-        return ({'Content-Type': 'text/html; charset=UTF-8'},
+        return (get_headers(),
                 fix_html(template.unicode({})))
     index.exposed = True
 

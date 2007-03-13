@@ -1,5 +1,6 @@
 import sys
 import traceback
+import time
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 
 # some generic stuff to make working with BaseHTTPServer a bit nicer...
@@ -119,6 +120,7 @@ class Handler(BaseHTTPRequestHandler):
             status = 200
             if not 'content-type' in [k.lower() for k in headers]:
                 headers['Content-Type'] = 'text/html; charset=UTF-8'
+        headers['Connection'] = 'close' # for now? :|
         self.response(status, headers, data, send_body)
 
     do_POST = do_GET
@@ -152,7 +154,9 @@ class Handler(BaseHTTPRequestHandler):
     def process_http_error(self, e):
         """ create the response body and headers for errors
         """
-        headers = {'Content-Type': 'text/plain'} # XXX need more headers here?
+        headers = {'Content-Type': 'text/plain',
+                   }
+        headers.update(get_nocache_headers())
         if e.status in [301, 302]:
             headers['Location'] = e.data
             body = 'Redirecting to %s' % (e.data,)
@@ -189,6 +193,15 @@ def run_server(address, handler):
     server = HTTPServer(address, handler)
     server.serve_forever()
 
+def get_nocache_headers():
+    return {'Connection': 'close',
+            'Pragma': 'no-cache',
+            'Expires': 'Mon, 26 Jul 1997 05:00:00 GMT',
+            'Last-Modified': time.strftime("%a, %d %b %Y %H:%M:%S GMT"),
+            'Cache-Control': 'no-cache, must-revalidate',
+            'Cache-Control': 'post-check=0, pre-check=0',
+            }
+
 # ready-to-use Collection and resource implementations
 class FsFile(object):
     exposed = True
@@ -201,5 +214,6 @@ class FsFile(object):
     def __call__(self, handler, path, query):
         if self._data is None or self.debug:
             self._data = self._path.read()
+        # XXX should handle caching here...
         return ({'Content-Type': self._content_type}, self._data)
 

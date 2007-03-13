@@ -60,7 +60,7 @@ class template(object):
             for subcontext in context[key]:
                 if isinstance(subcontext, dict):
                     t = template(match.group(offset + 2))
-                    processed.append(t.unicode(subcontext))
+                    processed.append(t.unicode(subcontext).replace('%', '%%'))
                 else:
                     if not type(subcontext) in [str, unicode]:
                         subcontext = str(subcontext)

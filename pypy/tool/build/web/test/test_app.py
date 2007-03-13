@@ -72,7 +72,7 @@ class TestIndexPage(object):
     def test_call(self):
         a = Application(config)
         headers, html = a.index(None, '/', '')
-        assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
+        assert headers['Content-Type'] == 'text/html; charset=UTF-8'
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
@@ -101,7 +101,7 @@ class TestServerStatusPage(object):
     def test_call(self):
         p = ServerStatusPage(config, gateway)
         headers, html = p(None, '/serverstatus', '')
-        assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
+        assert headers['Content-Type'] == 'text/html; charset=UTF-8'
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
@@ -115,7 +115,8 @@ class TestBuildersInfoPage(object):
         info = p.get_buildersinfo()
         assert info == [{'sysinfo': [{'foo': 'bar'}],
                          'hostname': 'fake',
-                         'busy_on': None}]
+                         'busy_on': [],
+                         'not_busy': True}]
 
     def test_call(self):
         class TestPage(BuildersInfoPage):
@@ -123,23 +124,30 @@ class TestBuildersInfoPage(object):
                 b = build.BuildRequest('foo@bar.com', {}, {'foo': 'bar'},
                                        'http://codespeak.net/svn/pypy/dist',
                                        10, 2, 123456789)
+                binfo = b.todict()
+                binfo.update({'href': 'file:///foo',
+                              'log': 'everything went well',
+                              'error': None,
+                              'id': 'somebuild'})
                 return [
                     {'hostname': 'host1',
                      'sysinfo': [{
                       'os': 'linux2',
                       'maxint': 9223372036854775807L,
                       'byteorder': 'little'}],
-                     'busy_on': None},
+                     'busy_on': [],
+                     'not_busy': True},
                     {'hostname': 'host2',
                      'sysinfo': [{
                       'os': 'zx81',
                       'maxint': 255,
                       'byteorder': 'little'}],
-                     'busy_on': b.todict()},
+                     'busy_on': [binfo],
+                     'not_busy': False},
                 ]
         p = TestPage(config, gateway)
         headers, html = p(None, '/buildersinfo', '')
-        assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
+        assert headers['Content-Type'] == 'text/html; charset=UTF-8'
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
@@ -155,7 +163,7 @@ class TestBuildsIndexPage(object):
     def test_call(self):
         p = BuildsIndexPage(config, gateway)
         headers, html = p(None, '/builds/', '')
-        assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
+        assert headers['Content-Type'] == 'text/html; charset=UTF-8'
         assert html.strip().startswith('<!DOCTYPE html')
         assert html.strip().endswith('</html>')
         html_validate(html)
