@@ -61,7 +61,7 @@ def init_fake_metaserver(port, path):
 def setup_module(mod):
     mod.path = path = pypyparent.strpath
     mod.server_channel = init_fake_metaserver(TESTPORT, path)
-    mod.config = fake.Container(port=TESTPORT, path=path)
+    mod.config = fake.Container(port=TESTPORT, path=path, server='localhost')
     mod.gateway = py.execnet.PopenGateway()
 
 def teardown_module(mod):
@@ -70,7 +70,7 @@ def teardown_module(mod):
 
 class TestIndexPage(object):
     def test_call(self):
-        a = Application()
+        a = Application(config)
         headers, html = a.index(None, '/', '')
         assert headers == {'Content-Type': 'text/html; charset=UTF-8'}
         assert html.strip().startswith('<!DOCTYPE html')

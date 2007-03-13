@@ -100,7 +100,7 @@ class MetaServer(object):
         # we don't have a build for this yet, find a builder to compile it
         hostname = self.run(request)
         if hostname is not None:
-            return (False, "found a suitable server, going to build on '%s'" % 
+            return (False, "found a suitable server, going to build on '%s'" %
                     (hostname, ))
         self._queuelock.acquire()
         try:

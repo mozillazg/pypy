@@ -28,6 +28,7 @@ class BuildServer(object):
         accepted = self.channel.receive()
         if accepted:
             self.busy_on = request
+            request.build_start_time = py.std.time.time()
             thread.start_new_thread(self.wait_until_done, (request,))
         else:
             self.refused.append(request)
@@ -62,6 +63,8 @@ class BuildServer(object):
             # pretend we're compiling by sleeping a bit...
             py.std.time.sleep(self.testing_sleeptime)
 
+        request.build_end_time = py.std.time.time()
+        buildpath.request = request # re-write to disk
         self.metaserver.compilation_done(buildpath)
         self.busy_on = None
 
