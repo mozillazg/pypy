@@ -9,7 +9,7 @@ from pypy.tool.build import execnetconference
 from pypy.tool.build.build import BuildRequest
 from pypy.tool.build.web.server import HTTPError, Collection, Handler, FsFile
 
-from templess import templess
+from pypy.tool.build.web import templesser
 
 mypath = py.magic.autopath().dirpath()
 
@@ -71,7 +71,7 @@ class ServerStatusPage(ServerPage):
     """ a page displaying overall meta server statistics """
 
     def __call__(self, handler, path, query):
-        template = templess.template(
+        template = templesser.template(
             mypath.join('templates/serverstatus.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
                 fix_html(template.unicode(self.get_status())))
@@ -81,7 +81,7 @@ class ServerStatusPage(ServerPage):
 
 class BuildersInfoPage(ServerPage):
     def __call__(self, handler, path, query):
-        template = templess.template(
+        template = templesser.template(
             mypath.join('templates/buildersinfo.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
                 fix_html(template.unicode({'builders':
@@ -92,6 +92,7 @@ class BuildersInfoPage(ServerPage):
         # some massaging of the data for Templess
         for binfo in infos:
             binfo['sysinfo'] = [binfo['sysinfo']]
+            binfo['not_busy'] = not binfo['busy_on']
             if binfo['busy_on']:
                 b = binfo['busy_on']
                 req = BuildRequest.fromstring(binfo['busy_on'])
@@ -101,7 +102,7 @@ class BuildersInfoPage(ServerPage):
                 d['href'] = '/builds/%s' % (id,)
                 d.pop('sysinfo', None) # same as builder
                 d.pop('build_end_time', None) # it's still busy ;)
-                # templess doesn't understand dicts this way...
+                # templesser doesn't understand dicts this way...
                 d['compileinfo'] = [{'key': k, 'value': v} for (k, v) in
                                     d['compileinfo'].items()]
                 for key in ['request_time', 'build_start_time']:
@@ -119,7 +120,7 @@ class BuildPage(ServerPage):
         self._buildid = buildid
 
     def __call__(self, handler, path, query):
-        template = templess.template(
+        template = templesser.template(
             mypath.join('templates/build.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
                 fix_html(template.unicode(self.get_info())))
@@ -165,7 +166,7 @@ class BuildsIndexPage(ServerPage):
     """ display the list of available builds """
 
     def __call__(self, handler, path, query):
-        template = templess.template(
+        template = templesser.template(
             mypath.join('templates/builds.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
                 fix_html(template.unicode({'builds': self.get_builds()})))
@@ -213,7 +214,7 @@ class Application(Collection):
         self.builds = Builds(config)
     
     def index(self, handler, path, query):
-        template = templess.template(
+        template = templesser.template(
             mypath.join('templates/index.html').read())
         return ({'Content-Type': 'text/html; charset=UTF-8'},
                 fix_html(template.unicode({})))
@@ -222,7 +223,7 @@ class Application(Collection):
 class AppHandler(Handler):
     def __init__(self, *args, **kwargs):
         self.application = Application(config)
-        super(AppHandler, self).__init__(*args, **kwargs)
+        Handler.__init__(self, *args, **kwargs)
 
 class MetaServerAccessor(object):
     def __init__(self, ms):

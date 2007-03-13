@@ -10,11 +10,11 @@
     </ul>
     <h2>Server status</h2>
     <ul>
-      <li>Connected build servers: <t:block t:replace="builders" /></li>
-      <li>Currently running builds: <t:block t:replace="running" /></li>
-      <li>Builds done: <t:block t:replace="done" /></li>
-      <li>Clients waiting for a build: <t:block t:replace="waiting" /></li>
-      <li>Builds for which no suitable server is available: <t:block t:replace="queued" /></li>
+      <li>Connected build servers: %(builders)s</li>
+      <li>Currently running builds: %(running)s</li>
+      <li>Builds done: %(done)s</li>
+      <li>Clients waiting for a build: %(waiting)s</li>
+      <li>Builds for which no suitable server is available: %(queued)s</li>
     </ul>
   </body>
 </html>

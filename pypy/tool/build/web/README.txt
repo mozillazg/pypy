@@ -31,19 +31,11 @@ Requirements
 ------------
 
 The dependencies for this package are a reasonably new Python (tested on 2.4),
-a recent PyPy checkout or release (which you have, else you wouldn't be reading
-this ;) and the Templess templating library, which can be checked out from
-Subversion using the following command::
-
-  $ svn co http://johnnydebris.net/templess/trunk templess
-
-or downloaded from the following location::
-
-  http://johnnydebris.net/templess_package
-
-Minimal version required is 0.2.
+and a recent PyPy checkout or release (which you have, else you wouldn't be
+reading this ;).
 
 Questions, remarks, etc.
 ------------------------
 
 For questions, remarks, etc. about this product, mail guido@merlinux.de.
+

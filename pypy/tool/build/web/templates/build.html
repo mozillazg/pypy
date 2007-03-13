@@ -1,6 +1,6 @@
-<html xmlns:t="http://johnnydebris.net/xmlns/templess">
+<html>
   <head>
-    <title>Build meta server build <t:tag t:replace="id" /></title>
+    <title>Build meta server build %(id)s</title>
   </head>
   <body>
     <ul class="sidebar">
@@ -8,43 +8,53 @@
       <li><a href="/buildersinfo">connected build servers</a></li>
       <li><a href="/builds">builds (both in-progress and done)</a></li>
     </ul>
-    <h2>Build <t:tag t:replace="id" /></h2>
+    <h2>Build %(id)s</h2>
     <div class="infoblock">
-      <div t:cond="url">
-        <span class="title">url:</span>
-        <a t:attr="href url" t:content="url"></a>
-      </div>
+      %(url)[c
+        <div>
+          <span class="title">url:</span>
+          <a href="%(url)s">%(url)s</a>
+        </div>
+      %(url)]c
       <div>
         <span class="title">status:</span>
-        <span t:content="status" />
+        <span>%(status)s</span>
       </div>
-      <div t:cond="error" class="error">
-        <span class="title">error:</span>
-        <span t:content="error" />
-      </div>
+      %(error)[c
+        <div class="error">
+          <span class="title">error:</span>
+          <span>%(error)s</span>
+        </div>
+      %(error)]c
       <div>
         <span class="title">svn url:</span>
-        <span t:content="svnurl" />
+        <span>%(svnurl)s</span>
       </div>
       <div>
         <span class="title">svn revision:</span>
-        <span t:content="svnrev" />
+        <span>%(svnrev)s</span>
       </div>
       <div>
         <span class="title">request time:</span>
-        <span t:content="request_time" />
+        <span>%(request_time)s</span>
       </div>
-      <div t:cond="build_start_time">
-        <span class="title">started:</span>
-        <span t:content="build_start_time" />
+      %(build_start_time)[c
+        <div>
+          <span class="title">started:</span>
+          <span>%(build_start_time)s</span>
+        </div>
+      %(build_start_time)]c
+      %(build_end_time)[c
+        <div>
+          <span class="title">ended:</span>
+          <span>%(build_end_time)s</span>
+        </div>
+      %(build_end_time)]c
+      %(log)[c
+      <div>
+        <pre>%(log)s</pre>
       </div>
-      <div t:cond="build_end_time">
-        <span class="title">ended:</span>
-        <span t:content="build_end_time" />
-      </div>
-      <div t:cond="log">
-        <pre t:content="log" />
-      </div>
+      %(log)]c
     </div>
   </body>
 </html>
