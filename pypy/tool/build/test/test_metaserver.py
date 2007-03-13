@@ -54,9 +54,10 @@ def test_compile():
     br = build.BuildRequest('foo@bar.com', {'foo': 1}, {},
                             str(repodir), 'HEAD', 0)
     ret = svr.compile(br)
-    assert not ret[0]
-    assert ret[1].find('found a suitable server') > -1
-    assert "fake" in ret[1] # hostname
+    assert not ret['path']
+    assert ret['isbuilding']
+    assert ret['message'].find('found a suitable server') > -1
+    assert "fake" in ret['message'] # hostname
     ret = svr._channel.receive()
     assert ret.find('going to send compile job') > -1
     acceptedmsg = svr._channel.receive()
@@ -87,8 +88,9 @@ def test_compile():
     br4 = build.BuildRequest('foo@spam.com', {'foo': 1}, {},
                              str(repodir), 'HEAD', 0)
     ret = svr.compile(br4)
-    assert not ret[0]
-    assert ret[1].find('this build is already') > -1
+    assert not ret['path']
+    assert ret['message'].find('this build is already') > -1
+    assert ret['isbuilding']
     assert svr._channel.receive().find('currently in progress') > -1
 
     c1.busy_on = None
@@ -99,9 +101,10 @@ def test_compile():
     clone = build.BuildRequest.fromstring(bp.request.serialize())
     clone.email = 'test@domain.com'
     ret = svr.compile(clone)
-    assert ret[0]
-    assert isinstance(ret[1], str)
-    assert build.BuildPath(ret[1]) == bp
+    assert ret['path']
+    assert ret['isbuilding']
+    assert isinstance(ret['path'], str)
+    assert build.BuildPath(ret['path']) == bp
     ret = svr._channel.receive()
     assert ret.find('compilation done for') > -1
     for i in range(2):
