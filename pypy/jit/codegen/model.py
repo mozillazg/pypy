@@ -65,6 +65,14 @@ class GenBuilder(object):
 ##     @specialize.arg(1)
 ##     def genop2(self, opname, gv_arg1, gv_arg2):
 
+##     @specialize.arg(1)
+##     def genraisingop1(self, opname, gv_arg):
+##         return a pair (gv_result, gv_flag_set_if_exception)
+
+##     @specialize.arg(1)
+##     def genraisingop2(self, opname, gv_arg1, gv_arg2):
+##         return a pair (gv_result, gv_flag_set_if_exception)
+
 ##     def genop_getfield(self, fieldtoken, gv_ptr):
 ##     def genop_setfield(self, fieldtoken, gv_ptr, gv_value):
 ##     def genop_getsubstruct(self, fieldtoken, gv_ptr):
@@ -402,8 +410,16 @@ class ReplayBuilder(GenBuilder):
         return dummy_var
 
     @specialize.arg(1)
+    def genraisingop1(self, opname, gv_arg):
+        return dummy_var, dummy_var
+
+    @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         return dummy_var
+
+    @specialize.arg(1)
+    def genraisingop2(self, opname, gv_arg1, gv_arg2):
+        return dummy_var, dummy_var
 
     def genop_ptr_iszero(self, kind, gv_ptr):
         return dummy_var

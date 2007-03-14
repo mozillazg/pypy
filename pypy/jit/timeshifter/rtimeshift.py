@@ -8,11 +8,11 @@ from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 
-FOLDABLE_OPS = dict.fromkeys(lloperation.enum_foldable_ops())
-
-FOLDABLE_GREEN_OPS = FOLDABLE_OPS.copy()
+FOLDABLE_GREEN_OPS = dict.fromkeys(lloperation.enum_foldable_ops())
 FOLDABLE_GREEN_OPS['getfield'] = None
 FOLDABLE_GREEN_OPS['getarrayitem'] = None
+
+NULL_OBJECT = base_ptr_lltype()._defl()
 
 debug_view = lloperation.llop.debug_view
 debug_print = lloperation.llop.debug_print
@@ -28,7 +28,8 @@ class OpDesc(object):
     that can be passed around to low level helpers
     to inform op generation
     """
-    
+    canraise = False
+
     def _freeze_(self):
         return True
 
@@ -40,8 +41,14 @@ class OpDesc(object):
         self.ARGS = ARGS
         self.RESULT = RESULT
         self.result_kind = RGenOp.kindToken(RESULT)
+        self.whatever_result = RESULT._defl()
         self.redboxcls = rvalue.ll_redboxcls(RESULT)
-        self.canfold = opname in FOLDABLE_OPS
+        self.canfold = self.llop.canfold
+        self.tryfold = self.llop.tryfold
+        if self.tryfold and self.llop.canraise:
+            self.canraise = True
+            self.gv_True  = RGenOp.constPrebuiltGlobal(True)
+            self.gv_False = RGenOp.constPrebuiltGlobal(False)
 
     def __getattr__(self, name): # .ARGx -> .ARGS[x]
         if name.startswith('ARG'):
@@ -71,12 +78,27 @@ def ll_gen1(opdesc, jitstate, argbox):
     ARG0 = opdesc.ARG0
     RESULT = opdesc.RESULT
     opname = opdesc.name
-    if opdesc.canfold and argbox.is_constant():
+    if opdesc.tryfold and argbox.is_constant():
         arg = rvalue.ll_getvalue(argbox, ARG0)
-        res = opdesc.llop(RESULT, arg)
+        if not opdesc.canraise:
+            res = opdesc.llop(RESULT, arg)
+        else:
+            try:
+                res = opdesc.llop(RESULT, arg)
+            except Exception:   # shouldn't raise anything unexpected
+                res = opdesc.whatever_result
+                gv_flag = opdesc.gv_True
+            else:
+                gv_flag = opdesc.gv_False
+            jitstate.greens.append(gv_flag)
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg = argbox.getgenvar(jitstate)
-    genvar = jitstate.curbuilder.genop1(opdesc.opname, gv_arg)
+    if not opdesc.canraise:
+        genvar = jitstate.curbuilder.genop1(opdesc.opname, gv_arg)
+    else:
+        genvar, gv_raised = jitstate.curbuilder.genraisingop1(opdesc.opname,
+                                                              gv_arg)
+        jitstate.greens.append(gv_raised)    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def ll_gen2(opdesc, jitstate, argbox0, argbox1):
@@ -84,15 +106,30 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     ARG1 = opdesc.ARG1
     RESULT = opdesc.RESULT
     opname = opdesc.name
-    if opdesc.canfold and argbox0.is_constant() and argbox1.is_constant():
+    if opdesc.tryfold and argbox0.is_constant() and argbox1.is_constant():
         # const propagate
         arg0 = rvalue.ll_getvalue(argbox0, ARG0)
         arg1 = rvalue.ll_getvalue(argbox1, ARG1)
-        res = opdesc.llop(RESULT, arg0, arg1)
+        if not opdesc.canraise:
+            res = opdesc.llop(RESULT, arg0, arg1)
+        else:
+            try:
+                res = opdesc.llop(RESULT, arg0, arg1)
+            except Exception:   # shouldn't raise anything unexpected
+                res = opdesc.whatever_result
+                gv_flag = opdesc.gv_True
+            else:
+                gv_flag = opdesc.gv_False
+            jitstate.greens.append(gv_flag)
         return rvalue.ll_fromvalue(jitstate, res)
     gv_arg0 = argbox0.getgenvar(jitstate)
     gv_arg1 = argbox1.getgenvar(jitstate)
-    genvar = jitstate.curbuilder.genop2(opdesc.opname, gv_arg0, gv_arg1)
+    if not opdesc.canraise:
+        genvar = jitstate.curbuilder.genop2(opdesc.opname, gv_arg0, gv_arg1)
+    else:
+        genvar, gv_raised = jitstate.curbuilder.genraisingop2(opdesc.opname,
+                                                              gv_arg0, gv_arg1)
+        jitstate.greens.append(gv_raised)    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
 
 def ll_genmalloc_varsize(jitstate, contdesc, sizebox):
@@ -343,7 +380,7 @@ def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
                                      ptrbox, reverse, list(greens_gv))
 
 def split_nonconstantcase(jitstate, exitgvar, resumepoint,
-                          ptrbox, reverse, greens_gv):
+                          ptrbox, reverse, greens_gv, ll_evalue=NULL_OBJECT):
     resuming = jitstate.get_resuming()
     if resuming is not None and resuming.mergesleft == 0:
         node = resuming.path.pop()
@@ -352,8 +389,11 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
             ptrbox.learn_nonzeroness(jitstate,
                                      nonzeroness = node.answer ^ reverse)
         return node.answer
-    false_gv = jitstate.get_locals_gv() # alive gvs on the false path
-    later_builder = jitstate.curbuilder.jump_if_false(exitgvar, false_gv)
+    later_gv = jitstate.get_locals_gv() # alive gvs on the later path
+    if ll_evalue:    # special case - we want jump_if_true in split_raisingop
+        later_builder = jitstate.curbuilder.jump_if_true(exitgvar, later_gv)
+    else:
+        later_builder = jitstate.curbuilder.jump_if_false(exitgvar, later_gv)
     memo = rvalue.copy_memo()
     jitstate2 = jitstate.split(later_builder, resumepoint, greens_gv, memo)
     if ptrbox is not None:
@@ -364,11 +404,24 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
             pass
         else:
             copybox.learn_nonzeroness(jitstate2, nonzeroness = reverse)
+    if ll_evalue:
+        jitstate2.residual_ll_exception(ll_evalue)
     if resuming is None:
         node = jitstate.promotion_path
         jitstate2.promotion_path = PromotionPathNo(node)
         jitstate .promotion_path = PromotionPathYes(node)
     return True
+
+def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
+    exitgvar = jitstate.greens.pop()   # pushed here by the raising op
+    if exitgvar.is_const:
+        gotexc = exitgvar.revealconst(lltype.Bool)
+    else:
+        gotexc = not split_nonconstantcase(jitstate, exitgvar, resumepoint,
+                                           None, False, list(greens_gv),
+                                           ll_evalue)
+    if gotexc:
+        jitstate.residual_ll_exception(ll_evalue)
 
 def collect_split(jitstate_chain, resumepoint, *greens_gv):
     # YYY split to avoid over-specialization

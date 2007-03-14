@@ -3,7 +3,7 @@ from pypy.objspace.flow.model import SpaceOperation, mkentrymap
 from pypy.annotation        import model as annmodel
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.rmodel import inputconst
 from pypy.translator.unsimplify import varoftype, copyvar
 from pypy.translator.unsimplify import split_block, split_block_at_start
@@ -59,6 +59,7 @@ class HintGraphTransformer(object):
         self.insert_save_return()
         self.insert_splits()
         self.split_after_calls()
+        self.split_after_raisingop()
         self.handle_hints()
         self.insert_merge_points()
         self.insert_enter_frame()
@@ -847,6 +848,43 @@ class HintGraphTransformer(object):
             link_f.exitcase = False
             block.recloseblock(link_f, link_t)
 
+    # __________ raising ops (xxx_ovf & co) __________
+
+    def split_after_raisingop(self):
+        for block in list(self.graph.iterblocks()):
+            for i in range(len(block.operations)-1, -1, -1):
+                op = block.operations[i]
+                try:
+                    opdesc = getattr(lloperation.llop, op.opname)
+                except AttributeError:
+                    continue
+                if opdesc.tryfold and not opdesc.canfold and opdesc.canraise:
+                    self.handle_raisingop(block, i, opdesc)
+
+    def handle_raisingop(self, block, i, opdesc):
+        op = block.operations[i]
+        if self.hannotator.binding(op.result).is_green():
+            # case not really well supported
+            v_red = Variable(op.result)
+            v_red.concretetype = op.result.concretetype
+            hs_red = hintmodel.SomeLLAbstractVariable(op.result.concretetype)
+            self.hannotator.setbinding(v_red, hs_red)
+            spaceop = SpaceOperation('revealconst', [v_red], op.result)
+            op.result = v_red
+            i += 1
+            block.operations.insert(i, spaceop)
+
+        link = split_block(self.hannotator, block, i+1)
+
+        reds, greens = self.sort_by_color(link.args)
+        self.genop(block, 'save_locals', reds)
+        resumepoint = self.get_resume_point(link.target)
+        c_resumepoint = inputconst(lltype.Signed, resumepoint)
+
+        assert len(opdesc.canraise) == 1    # for now
+        c_canraise = inputconst(lltype.Void, opdesc.canraise[0])
+        self.genop(block, 'split_raisingop',
+                   [self.c_dummy, c_resumepoint, c_canraise] + greens)
 
     # __________ hints __________
 

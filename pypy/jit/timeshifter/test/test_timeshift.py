@@ -1,4 +1,5 @@
 import py
+import sys
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.jit.hintannotator.annotator import HintAnnotator, HintAnnotatorPolicy
 from pypy.jit.hintannotator.annotator import StopAtXPolicy
@@ -10,6 +11,7 @@ from pypy.objspace.flow.model import summary, Variable
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rlib.objectmodel import hint, keepalive_until_here, debug_assert
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import PseudoHighLevelCallable
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
@@ -1495,4 +1497,34 @@ class TestTimeshift(TimeshiftingTests):
         self.check_insns({})
         res = self.timeshift(f, [4, 113], [], policy=P)
         assert res == f(4,113)
+        self.check_insns({})
+
+    def test_red_int_add_ovf(self):
+        def f(n, m):
+            try:
+                return ovfcheck(n + m)
+            except OverflowError:
+                return -42
+
+        res = self.timeshift(f, [100, 20])
+        assert res == 120
+        self.check_insns(int_add_ovf=1)
+        res = self.timeshift(f, [sys.maxint, 1])
+        assert res == -42
+        self.check_insns(int_add_ovf=1)
+
+    def test_green_int_add_ovf(self):
+        def f(n, m):
+            try:
+                res = ovfcheck(n + m)
+            except OverflowError:
+                res = -42
+            hint(res, concrete=True)
+            return res
+
+        res = self.timeshift(f, [100, 20])
+        assert res == 120
+        self.check_insns({})
+        res = self.timeshift(f, [sys.maxint, 1])
+        assert res == -42
         self.check_insns({})

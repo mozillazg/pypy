@@ -21,7 +21,6 @@ from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.hintannotator import container as hintcontainer
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, oop
-from pypy.jit.timeshifter.transform import HintGraphTransformer
 from pypy.jit.timeshifter.exception import ExceptionDesc
 from pypy.jit.codegen import model as cgmodel
 
@@ -404,6 +403,7 @@ class HintRTyper(RPythonTyper):
     def timeshift_cflow(self, graph, is_portal=False):
         # prepare the graphs by inserting all bookkeeping/dispatching logic
         # as special operations
+        from pypy.jit.timeshifter.transform import HintGraphTransformer
         assert graph.startblock in self.annotator.annotated
         transformer = HintGraphTransformer(self.annotator, graph,
                                            is_portal=is_portal)
@@ -1040,7 +1040,8 @@ class HintRTyper(RPythonTyper):
                                               self.s_ConstOrVar)
 
     def translate_op_split(self, hop, splitfn=rtimeshift.split,
-                                      reverse=False):
+                                      reverse=False,
+                                      s_result=annmodel.s_Bool):
         if splitfn is rtimeshift.split:
             nb_fixed_args = 2
         else:
@@ -1049,7 +1050,10 @@ class HintRTyper(RPythonTyper):
         r_switch = self.getredrepr(lltype.Bool)
         GREENS = [v.concretetype for v in hop.args_v[nb_fixed_args:]]
         extra_r = [self.getgreenrepr(TYPE) for TYPE in GREENS]
-        if splitfn is not rtimeshift.split:
+        if splitfn is rtimeshift.split_raisingop:
+            r_switch = lltype.Void
+            extra_r.insert(0, lltype.Void)
+        elif splitfn is not rtimeshift.split:
             TYPE = originalconcretetype(hop.args_s[2])
             r_ptrbox = self.getredrepr(TYPE)
             extra_r.insert(0, r_ptrbox)
@@ -1065,7 +1069,20 @@ class HintRTyper(RPythonTyper):
         args_s = [self.s_JITState, self.s_RedBox, s_Int]
         args_v = [v_jitstate, v_switch, c_resumepoint]
 
-        if splitfn is not rtimeshift.split:
+        if splitfn is rtimeshift.split_raisingop:
+            bk = self.rtyper.annotator.bookkeeper
+            excclass = vlist[2].value
+            exccdef = bk.getuniqueclassdef(excclass)
+            ll_exc = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
+                self.rtyper, exccdef)
+            LL_EXC = lltype.typeOf(ll_exc)
+            c_excinstance = hop.inputconst(LL_EXC, ll_exc)
+            s_excinstance = annmodel.lltype_to_annotation(LL_EXC)
+            del args_s[1]    # no v_switch in this case
+            del args_v[1]
+            args_s += [s_excinstance]
+            args_v += [c_excinstance]
+        elif splitfn is not rtimeshift.split:
             v_ptrbox = vlist[2]
             c_reverse = hop.inputconst(lltype.Bool, reverse)
             args_s += [self.s_PtrRedBox,                 annmodel.s_Bool]
@@ -1075,7 +1092,7 @@ class HintRTyper(RPythonTyper):
         args_v += greens_v
         return hop.llops.genmixlevelhelpercall(splitfn,
                                                args_s, args_v,
-                                               annmodel.SomeBool())
+                                               s_result)
 
     def translate_op_split_ptr_nonzero(self, hop):
         return self.translate_op_split(hop, rtimeshift.split_ptr_nonzero,
@@ -1084,6 +1101,10 @@ class HintRTyper(RPythonTyper):
     def translate_op_split_ptr_iszero(self, hop):
         return self.translate_op_split(hop, rtimeshift.split_ptr_nonzero,
                                             reverse=True)
+
+    def translate_op_split_raisingop(self, hop):
+        self.translate_op_split(hop, rtimeshift.split_raisingop,
+                                s_result=annmodel.s_None)
 
     def translate_op_collect_split(self, hop):
         GREENS = [v.concretetype for v in hop.args_v[1:]]
