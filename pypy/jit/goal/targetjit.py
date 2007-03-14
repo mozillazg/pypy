@@ -46,10 +46,12 @@ class PyPyJITTarget(targetpypystandalone.PyPyTarget):
         return super(PyPyJITTarget, self).target(driver, args)
 
     def handle_config(self, config):
+        super(PyPyJITTarget, self).handle_config(config)
         config.translation.fork_before = 'hintannotate'
         config.translation.backendopt.inline_threshold = 20.1
 
     def handle_translate_config(self, translateconfig):
+        super(PyPyJITTarget, self).handle_translate_config(translateconfig)
         translateconfig.goals = ['timeshift']
 
 
