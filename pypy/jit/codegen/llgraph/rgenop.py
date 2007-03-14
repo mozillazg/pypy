@@ -111,11 +111,30 @@ class LLBuilder(GenBuilder):
         return LLVar(llimpl.genop(self.b, opname, [gv_arg], llimpl.guess))
 
     @specialize.arg(1)
+    def genraisingop1(self, opname, gv_arg):
+        debug_assert(self.rgenop.currently_writing is self,
+                     "genraisingop1: bad currently_writing")
+        gv_res = LLVar(llimpl.genop(self.b, opname, [gv_arg], llimpl.guess))
+        gv_exc = LLVar(llimpl.genop(self.b, "check_and_clear_exc", [],
+                                    gv_Bool.v))
+        return gv_res, gv_exc
+
+    @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         debug_assert(self.rgenop.currently_writing is self,
                      "genop2: bad currently_writing")
         return LLVar(llimpl.genop(self.b, opname, [gv_arg1, gv_arg2],
                                   llimpl.guess))
+
+    @specialize.arg(1)
+    def genraisingop2(self, opname, gv_arg1, gv_arg2):
+        debug_assert(self.rgenop.currently_writing is self,
+                     "genraisingop2: bad currently_writing")
+        gv_res = LLVar(llimpl.genop(self.b, opname, [gv_arg1, gv_arg2],
+                                    llimpl.guess))
+        gv_exc = LLVar(llimpl.genop(self.b, "check_and_clear_exc", [],
+                                    gv_Bool.v))
+        return gv_res, gv_exc
 
     def genop_call(self, (ARGS_gv, gv_RESULT, _), gv_callable, args_gv):
         debug_assert(self.rgenop.currently_writing is self,

@@ -7,7 +7,8 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       cast_pointer
                       direct_call
                       indirect_call
-                      int_is_true int_neg int_invert bool_not
+                      int_is_true int_neg int_abs int_invert bool_not
+                      int_neg_ovf int_abs_ovf
                       uint_is_true
                       cast_int_to_char
                       cast_int_to_uint
@@ -20,6 +21,8 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
 
 BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
                        int_lshift int_floordiv int_xor int_or
+                       int_add_ovf int_sub_ovf int_mul_ovf int_mod_ovf
+                       int_floordiv_ovf int_lshift_ovf
                        uint_add uint_sub uint_mul uint_mod uint_and
                        uint_lshift uint_rshift uint_floordiv
                        char_gt char_lt char_le char_ge char_eq char_ne
@@ -730,10 +733,10 @@ def const_binary((hs_c1, hs_c2)):
 def setup(oplist, ValueCls, var_fn, ConstantCls, const_fn):
     for name in oplist:
         llop = getattr(lloperation.llop, name)
-        if not llop.sideeffects:
+        if not llop.sideeffects or llop.tryfold:
             if name not in ValueCls.__dict__:
                 setattr(ValueCls, name, var_fn)
-            if llop.canfold:
+            if llop.canfold or llop.tryfold:
                 if name not in ConstantCls.__dict__:
                     setattr(ConstantCls, name, const_fn)
 setup(UNARY_OPERATIONS,
