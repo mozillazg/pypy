@@ -46,8 +46,10 @@ class GraphDesc(object):
             bk = self.bookkeeper
             if bk.annotator.policy.look_inside_graph(self.origgraph):
                 graph = copygraph(self.origgraph)
+                log(str(graph))
             else:
                 graph = self.build_callback_graph(self.origgraph)
+                log.stub(str(graph))
             graph.tag = 'timeshifted'
             try:
                 etrafo = bk.annotator.exceptiontransformer
@@ -60,7 +62,6 @@ class GraphDesc(object):
                 graph.name = alt_name
             self._cache[key] = graph
             self.bookkeeper.annotator.translator.graphs.append(graph)
-            log(str(graph))
             return graph
 
     def build_callback_graph(self, graph):

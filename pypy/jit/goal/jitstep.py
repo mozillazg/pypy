@@ -18,7 +18,7 @@ class PyPyHintAnnotatorPolicy(HintAnnotatorPolicy):
 
     def look_inside_graph(self, graph):
         if graph in self.timeshift_graphs:
-            return True
+            return self.timeshift_graphs[graph]
         try:
             func = graph.func
         except AttributeError:
@@ -30,6 +30,10 @@ class PyPyHintAnnotatorPolicy(HintAnnotatorPolicy):
             if not mod.startswith('pypy.module.pypyjit.'):
                 return False
         if mod in forbidden_modules:
+            return False
+        if func.__name__.startswith('_mm_') or '_mth_mm_' in func.__name__:
+            return False
+        if func.__name__.startswith('fastfunc_'):
             return False
         return True
 
@@ -101,6 +105,9 @@ def timeshift_graphs(t, portal_graph):
         for i in range(1, len(path)):
             seefunc(path[i-1], path[i])
 
+    def dontsee(func):
+        result_graphs[_graph(func)] = False
+
     # --------------------
     import pypy
     seepath(pypy.interpreter.pyframe.PyFrame.BINARY_ADD,
@@ -118,6 +125,9 @@ def timeshift_graphs(t, portal_graph):
     seepath(pypy.objspace.descroperation.DescrOperation.add,
             pypy.objspace.std.typeobject.W_TypeObject.lookup_where,
             pypy.objspace.std.typeobject.W_TypeObject.getdictvalue_w)
+    seepath(pypy.objspace.std.typeobject.W_TypeObject.lookup_where,
+            is_heaptype)
+    dontsee(pypy.interpreter.pyframe.PyFrame.execute_frame)
     # --------------------
 
     return result_graphs
@@ -150,6 +160,9 @@ def hintannotate(drv):
     #import pdb; pdb.set_trace()
 
 def timeshift(drv):
+    from pypy.tool.udir import udir
+    udir.ensure(dir=1)    # fork-friendly hack
+    udir.join('.lock').ensure()
     from pypy.jit.timeshifter.hrtyper import HintRTyper
     #from pypy.jit.codegen.llgraph.rgenop import RGenOp
     from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
