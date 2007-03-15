@@ -153,6 +153,11 @@ class SomeLLAbstractValue(annmodel.SomeObject):
     def is_green(self):
         return False
 
+    def clone(self):
+        c = object.__new__(self.__class__)
+        c.__dict__.update(self.__dict__)
+        return c
+
 
 class SomeLLAbstractConstant(SomeLLAbstractValue):
     " color: dont know yet.. "
@@ -289,11 +294,8 @@ def originalconcretetype(hs):
 
 def deepunfreeze(hs):
     if hs.deepfrozen:
-        hs1 = annmodel.SomeObject()
-        hs1.__class__ = hs.__class__
-        hs1.__dict__ = hs.__dict__.copy()
-        hs1.deepfrozen = False
-        hs = hs1
+        hs = hs.clone()
+        hs.deepfrozen = False
     return hs
 
 # ____________________________________________________________
@@ -315,6 +317,10 @@ class __extend__(SomeLLAbstractValue):
             hs_concrete = SomeLLAbstractConstant(hs_v1.concretetype, {})
             #hs_concrete.eager_concrete = True
             return hs_concrete 
+        if hs_flags.const.get('deepfreeze', False):
+            hs_clone = hs_v1.clone()
+            hs_clone.deepfrozen = True
+            return hs_clone
         for name in ["reverse_split_queue", "global_merge_point"]:
             if hs_flags.const.get(name, False):
                 return
@@ -383,10 +389,6 @@ class __extend__(SomeLLAbstractConstant):
         if hs_flags.const.get('forget', False):
             assert isinstance(hs_c1, SomeLLAbstractConstant)
             return reorigin(hs_c1)
-        if hs_flags.const.get('deepfreeze', False):
-            return SomeLLAbstractConstant(hs_c1.concretetype,
-                                          hs_c1.origins,
-                                          deepfrozen = True)
         return SomeLLAbstractValue.hint(hs_c1, hs_flags)
 
     def direct_call(hs_f1, *args_hs):
