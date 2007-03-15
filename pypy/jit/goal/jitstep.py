@@ -115,6 +115,39 @@ def timeshift_graphs(t, portal_graph):
             pypy.objspace.std.intobject.add__Int_Int,
             pypy.objspace.std.inttype.wrapint,
             pypy.objspace.std.intobject.W_IntObject.__init__)
+    seepath(pypy.interpreter.pyframe.PyFrame.BINARY_SUBTRACT,
+            pypy.objspace.descroperation.DescrOperation.sub,
+            pypy.objspace.std.intobject.sub__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.BINARY_MULTIPLY,
+            pypy.objspace.descroperation.DescrOperation.mul,
+            pypy.objspace.std.intobject.mul__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.BINARY_AND,
+            pypy.objspace.descroperation.DescrOperation.and_,
+            pypy.objspace.std.intobject.and__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.BINARY_OR,
+            pypy.objspace.descroperation.DescrOperation.or_,
+            pypy.objspace.std.intobject.or__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.BINARY_XOR,
+            pypy.objspace.descroperation.DescrOperation.xor,
+            pypy.objspace.std.intobject.xor__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.lt,
+            pypy.objspace.std.intobject.lt__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.le,
+            pypy.objspace.std.intobject.le__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.eq,
+            pypy.objspace.std.intobject.eq__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.ne,
+            pypy.objspace.std.intobject.ne__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.gt,
+            pypy.objspace.std.intobject.gt__Int_Int)
+    seepath(pypy.interpreter.pyframe.PyFrame.COMPARE_OP,
+            pypy.objspace.descroperation.DescrOperation.ge,
+            pypy.objspace.std.intobject.ge__Int_Int)
     seepath(pypy.objspace.descroperation._invoke_binop,
             pypy.objspace.descroperation._check_notimplemented)
     seepath(pypy.objspace.descroperation.DescrOperation.add,

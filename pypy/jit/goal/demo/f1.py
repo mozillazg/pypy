@@ -8,7 +8,7 @@ def f1(n):
     i = 0
     x = 1
     while i<n:
-        j = ZERO
+        j = 0   #ZERO
         while j<=i:
             j = j + 1
             x = x + (i&j)
