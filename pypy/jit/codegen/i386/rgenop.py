@@ -371,11 +371,29 @@ class Builder(GenBuilder):
         return op
 
     @specialize.arg(1)
+    def genraisingop1(self, opname, gv_arg):
+        cls = getopclass1(opname)
+        op = cls(gv_arg)
+        self.operations.append(op)
+        op_excflag = OpFetchCC(op.ccexcflag)
+        self.operations.append(op_excflag)
+        return op, op_excflag
+
+    @specialize.arg(1)
     def genop2(self, opname, gv_arg1, gv_arg2):
         cls = getopclass2(opname)
         op = cls(gv_arg1, gv_arg2)
         self.operations.append(op)
         return op
+
+    @specialize.arg(1)
+    def genraisingop2(self, opname, gv_arg1, gv_arg2):
+        cls = getopclass2(opname)
+        op = cls(gv_arg1, gv_arg2)
+        self.operations.append(op)
+        op_excflag = OpFetchCC(op.ccexcflag)
+        self.operations.append(op_excflag)
+        return op, op_excflag
 
     def genop_ptr_iszero(self, kind, gv_ptr):
         cls = getopclass1('ptr_iszero')

@@ -50,8 +50,9 @@ class UnaryOp(Op1):
         self.emit(allocator.mc, dstop)
 
 class OpIntNeg(UnaryOp):
-    opname = 'int_neg'
+    opname = 'int_neg', 'int_neg_ovf'
     emit = staticmethod(I386CodeBuilder.NEG)
+    ccexcflag = Conditions['O']
 
 class OpIntInvert(UnaryOp):
     opname = 'int_invert', 'uint_invert'
@@ -75,6 +76,14 @@ class OpIntAbs(Op1):
         mc.SBB(tmpop, tmpop)
         mc.XOR(dstop, tmpop)
         allocator.end_clobber(tmpop)
+
+class OpIntAbsOvf(OpIntAbs):
+    opname = 'int_abs_ovf'
+    ccexcflag = Conditions['E']
+    def generate(self, allocator):
+        OpIntAbs.generate(self, allocator)
+        mc = allocator.mc
+        mc.CMP(allocator.var2loc[self], imm(-sys.maxint-1))
 
 class OpSameAs(Op1):
     clobbers_cc = False    # special handling of the cc
@@ -134,6 +143,17 @@ class OpIntIsZero(OpIntIsTrue):
     suggested_cc = Conditions['E']
     inverted = True
 
+class OpFetchCC(Operation):
+    clobbers_cc = False
+    side_effects = False
+    def __init__(self, cc):
+        self.cc = cc
+    def mark_used_vars(self, allocator):
+        pass
+    def generate(self, allocator):
+        ccop = ccflags[self.cc]
+        allocator.create_in_cc(self, ccop)
+
 class Op2(Operation):
     def __init__(self, x, y):
         self.x = x
@@ -185,13 +205,15 @@ class BinaryOp(Op2):
         self.emit(allocator.mc, dstop, op2)
 
 class OpIntAdd(BinaryOp):
-    opname = 'int_add', 'uint_add'
+    opname = 'int_add', 'uint_add', 'int_add_ovf'
     emit = staticmethod(I386CodeBuilder.ADD)
     commutative = True
+    ccexcflag = Conditions['O']
 
 class OpIntSub(BinaryOp):
-    opname = 'int_sub', 'uint_sub'
+    opname = 'int_sub', 'uint_sub', 'int_sub_ovf'
     emit = staticmethod(I386CodeBuilder.SUB)
+    ccexcflag = Conditions['O']
 
 class OpIntAnd(BinaryOp):
     opname = 'int_and', 'uint_and'
@@ -206,8 +228,9 @@ class OpIntXor(BinaryOp):
     emit = staticmethod(I386CodeBuilder.XOR)
 
 class OpIntMul(Op2):
-    opname = 'int_mul'
+    opname = 'int_mul', 'int_mul_ovf'
     side_effects = False
+    ccexcflag = Conditions['O']
 
     def generate(self, allocator):
         op1 = allocator.get_operand(self.x)
@@ -939,6 +962,15 @@ class CCFLAG(OPERAND):
         return self.cond
 
 
+def load_into_cc_o(mc, srcop):
+    mc.MOV(ecx, srcop)
+    mc.ADD(ecx, imm(sys.maxint))
+
+def load_into_cc_no(self, srcop):
+    mc.MOV(ecx, imm(-sys.maxint-1))
+    mc.ADD(ecx, srcop)
+    mc.DEC(ecx)
+
 def load_into_cc_lt(mc, srcop):
     mc.XOR(ecx, ecx)
     mc.CMP(ecx, srcop)
@@ -956,6 +988,9 @@ def load_into_cc_ne(mc, srcop):
 load_into_cc_gt = load_into_cc_ne
 load_into_cc_ge = load_into_cc_eq
 
+ccflag_o  = CCFLAG('O',  load_into_cc_o)
+ccflag_no = CCFLAG('O',  load_into_cc_no)
+
 ccflag_lt = CCFLAG('L',  load_into_cc_lt)
 ccflag_le = CCFLAG('LE', load_into_cc_le)
 ccflag_eq = CCFLAG('E',  load_into_cc_eq)
@@ -969,6 +1004,8 @@ ccflag_ugt = CCFLAG('A',  load_into_cc_gt)
 ccflag_uge = CCFLAG('AE', load_into_cc_ge)
 
 ccflags = [None] * 16
+ccflags[Conditions['O']]  = ccflag_o
+ccflags[Conditions['NO']] = ccflag_no
 ccflags[Conditions['L']]  = ccflag_lt
 ccflags[Conditions['LE']] = ccflag_le
 ccflags[Conditions['E']]  = ccflag_eq
