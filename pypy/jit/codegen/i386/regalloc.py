@@ -302,6 +302,7 @@ class RegAllocator(object):
 
     def _created(self, v, loc):
         assert v not in self.var2loc
+        assert loc is not None
         self.vars_in_use[v] = ltime = self.lifetime[v]
         assert ltime > self.operationindex
         self.var2loc[v] = loc

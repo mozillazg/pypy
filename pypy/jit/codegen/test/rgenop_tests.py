@@ -1,5 +1,6 @@
-import random
+import random, sys
 from pypy.rpython.annlowlevel import MixLevelAnnotatorPolicy, llhelper
+from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.c.test import test_boehm
@@ -756,6 +757,29 @@ def get_read_frame_place_runner(RGenOp):
         keepalive_until_here(rgenop)    # to keep the code blocks alive
         return res
     return read_frame_place_runner
+
+def make_ovfcheck_adder(rgenop, n):
+    sigtoken = rgenop.sigToken(FUNC)
+    builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "ovfcheck_adder")
+    builder.start_writing()
+    gv_result, gv_flag = builder.genraisingop2("int_add_ovf", gv_x,
+                                               rgenop.genconst(n))
+    gv_flag = builder.genop1("cast_bool_to_int", gv_flag)
+    gv_result = builder.genop2("int_lshift", gv_result, rgenop.genconst(1))
+    gv_result = builder.genop2("int_or", gv_result, gv_flag)
+    builder.finish_and_return(sigtoken, gv_result)
+    builder.end()
+    return gv_fn
+
+def get_ovfcheck_adder_runner(RGenOp):
+    def runner(x, y):
+        rgenop = RGenOp()
+        gv_add_x = make_ovfcheck_adder(rgenop, x)
+        add_x = gv_add_x.revealconst(lltype.Ptr(FUNC))
+        res = add_x(y)
+        keepalive_until_here(rgenop)    # to keep the code blocks alive
+        return res
+    return runner
 
 
 class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
@@ -1765,3 +1789,98 @@ class AbstractRGenOpTests(test_boehm.AbstractGCTestClass):
         P = lltype.Ptr(lltype.Struct('S'))
         gv = RGenOp.genzeroconst(RGenOp.kindToken(P))
         assert gv.revealconst(llmemory.Address) == llmemory.NULL
+
+    def test_ovfcheck_adder_direct(self):
+        rgenop = self.RGenOp()
+        gv_add_5 = make_ovfcheck_adder(rgenop, 5)
+        fnptr = self.cast(gv_add_5, 1)
+        res = fnptr(37)
+        assert res == (42 << 1) | 0
+        res = fnptr(sys.maxint-2)
+        assert (res & 1) == 1
+
+    def test_ovfcheck_adder_compile(self):
+        fn = self.compile(get_ovfcheck_adder_runner(self.RGenOp), [int, int])
+        res = fn(9080983, -9080941)
+        assert res == (42 << 1) | 0
+        res = fn(-sys.maxint, -10)
+        assert (res & 1) == 1
+
+    def test_ovfcheck1_direct(self):
+        yield self.ovfcheck1_direct, "int_neg_ovf", [(18, -18),
+                                                     (-18, 18),
+                                                     (sys.maxint, -sys.maxint),
+                                                     (-sys.maxint, sys.maxint),
+                                                     (-sys.maxint-1, None)]
+        yield self.ovfcheck1_direct, "int_abs_ovf", [(18, 18),
+                                                     (-18, 18),
+                                                     (sys.maxint, sys.maxint),
+                                                     (-sys.maxint, sys.maxint),
+                                                     (-sys.maxint-1, None)]
+
+    def ovfcheck1_direct(self, opname, testcases):
+        rgenop = self.RGenOp()
+        sigtoken = rgenop.sigToken(FUNC)
+        builder, gv_fn, [gv_x] = rgenop.newgraph(sigtoken, "ovfcheck1")
+        builder.start_writing()
+        gv_result, gv_flag = builder.genraisingop1(opname, gv_x)
+        gv_flag = builder.genop1("cast_bool_to_int", gv_flag)
+        gv_result = builder.genop2("int_lshift", gv_result, rgenop.genconst(1))
+        gv_result = builder.genop2("int_or", gv_result, gv_flag)
+        builder.finish_and_return(sigtoken, gv_result)
+        builder.end()
+
+        fnptr = self.cast(gv_fn, 1)
+        for x, expected in testcases:
+            res = fnptr(x)
+            if expected is None:
+                assert (res & 1) == 1
+            else:
+                assert res == intmask(expected << 1) | 0
+
+    def test_ovfcheck2_direct(self):
+        yield self.ovfcheck2_direct, "int_sub_ovf", [(18, 25, -7),
+                                                     (sys.maxint, -1, None),
+                                                     (-2, sys.maxint, None)]
+        yield self.ovfcheck2_direct, "int_mul_ovf", [(6, 7, 42),
+                                                     (sys.maxint-100, 2, None),
+                                                    (-2, sys.maxint-100, None)]
+        # XXX the rest in-progress
+        # XXX also missing the _zer versions
+##        yield self.ovfcheck2_direct, "int_mod_ovf", [
+##            (100, 8, 4),
+##            (-sys.maxint-1, 1, 0),
+##            (-sys.maxint-1, -1, None)]
+##        yield self.ovfcheck2_direct, "int_floordiv_ovf", [
+##            (100, 2, 50),
+##            (-sys.maxint-1, 1, -sys.maxint-1),
+##            (-sys.maxint-1, -1, None)]
+##        yield self.ovfcheck2_direct, "int_lshift_ovf", [
+##            (1, 30, 1<<30),
+##            (1, 31, None),
+##            (0xf23c, 14, 0xf23c << 14),
+##            (0xf23c, 15, None),
+##            (-1, 31, (-1) << 31),
+##            (-2, 31, None),
+##            (-3, 31, None),
+##            (-sys.maxint-1, 0, -sys.maxint-1)]
+
+    def ovfcheck2_direct(self, opname, testcases):
+        rgenop = self.RGenOp()
+        sigtoken = rgenop.sigToken(FUNC2)
+        builder, gv_fn, [gv_x, gv_y] = rgenop.newgraph(sigtoken, "ovfcheck2")
+        builder.start_writing()
+        gv_result, gv_flag = builder.genraisingop2(opname, gv_x, gv_y)
+        gv_flag = builder.genop1("cast_bool_to_int", gv_flag)
+        gv_result = builder.genop2("int_lshift", gv_result, rgenop.genconst(1))
+        gv_result = builder.genop2("int_or", gv_result, gv_flag)
+        builder.finish_and_return(sigtoken, gv_result)
+        builder.end()
+
+        fnptr = self.cast(gv_fn, 1)
+        for x, y, expected in testcases:
+            res = fnptr(x, y)
+            if expected is None:
+                assert (res & 1) == 1
+            else:
+                assert res == intmask(expected << 1) | 0
