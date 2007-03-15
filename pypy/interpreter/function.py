@@ -10,6 +10,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
 from pypy.interpreter.argument import Arguments, ArgumentsFromValuestack
+from pypy.rlib.objectmodel import hint
 
 class Function(Wrappable):
     """A function is a code object captured with some environment:
@@ -36,26 +37,31 @@ class Function(Wrappable):
         return self.code.funcrun(self, args) # delegate activation to code
     
     def funccall(self, *args_w): # speed hack
+        # uuuuuuuuuuuuaaaaaaaaaaaaaaaaaaaaaaa  jit wacking
+        from pypy.interpreter.gateway import BuiltinCode
+        code = hint(self, deepfreeze=True).code
+        if not isinstance(code, BuiltinCode): code = self.code
+        # end of said uuaa
         if len(args_w) == 0:
-            w_res = self.code.fastcall_0(self.space, self)
+            w_res = code.fastcall_0(self.space, self)
             if w_res is not None:
                 return w_res
         elif len(args_w) == 1:
-            w_res = self.code.fastcall_1(self.space, self, args_w[0])
+            w_res = code.fastcall_1(self.space, self, args_w[0])
             if w_res is not None:
                 return w_res
         elif len(args_w) == 2:
-            w_res = self.code.fastcall_2(self.space, self, args_w[0],
+            w_res = code.fastcall_2(self.space, self, args_w[0],
                                            args_w[1])
             if w_res is not None:
                 return w_res
         elif len(args_w) == 3:
-            w_res = self.code.fastcall_3(self.space, self, args_w[0],
+            w_res = code.fastcall_3(self.space, self, args_w[0],
                                            args_w[1], args_w[2])
             if w_res is not None:
                 return w_res
         elif len(args_w) == 4:
-            w_res = self.code.fastcall_4(self.space, self, args_w[0],
+            w_res = code.fastcall_4(self.space, self, args_w[0],
                                            args_w[1], args_w[2], args_w[3])
             if w_res is not None:
                 return w_res
