@@ -118,7 +118,8 @@ def timeshift_graphs(t, portal_graph):
     seepath(pypy.objspace.descroperation._invoke_binop,
             pypy.objspace.descroperation._check_notimplemented)
     seepath(pypy.objspace.descroperation.DescrOperation.add,
-            pypy.objspace.std.Space.type)
+            pypy.objspace.std.Space.type,
+            pypy.objspace.std.Space.gettypeobject)
     #seepath(pypy.objspace.descroperation.DescrOperation.xxx,
     #        pypy.objspace.std.typeobject.W_TypeObject.lookup,
     #        pypy.objspace.std.typeobject.W_TypeObject.getdictvalue_w)
@@ -126,7 +127,9 @@ def timeshift_graphs(t, portal_graph):
             pypy.objspace.std.typeobject.W_TypeObject.lookup_where,
             pypy.objspace.std.typeobject.W_TypeObject.getdictvalue_w)
     seepath(pypy.objspace.std.typeobject.W_TypeObject.lookup_where,
-            is_heaptype)
+            pypy.objspace.std.typeobject.W_TypeObject.is_heaptype)
+    seepath(pypy.objspace.descroperation.DescrOperation.add,
+            pypy.objspace.std.Space.is_w)
     dontsee(pypy.interpreter.pyframe.PyFrame.execute_frame)
     # --------------------
 
