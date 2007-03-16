@@ -495,6 +495,9 @@ class LLFrame(object):
     def op_hint(self, x, hints):
         return x
 
+    def op_is_early_constant(self, x):
+        return False
+
     def op_resume_point(self, *args):
         pass
 

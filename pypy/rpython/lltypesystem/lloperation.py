@@ -407,6 +407,7 @@ LL_OPERATIONS = {
     'keepalive':            LLOp(),
     'same_as':              LLOp(canfold=True),
     'hint':                 LLOp(),
+    'is_early_constant':    LLOp(sideeffects=False),
     'check_no_more_arg':    LLOp(canraise=(Exception,)),
     'check_self_nonzero':   LLOp(canraise=(Exception,)),
     'decode_arg':           LLOp(canraise=(Exception,)),
@@ -444,8 +445,8 @@ LL_OPERATIONS = {
     'oohash':               LLOp(oo=True, sideeffects=False),
 
     # _____ read frame var support ___
-    'get_frame_base':       LLOp(),
-    'frame_info':           LLOp(),
+    'get_frame_base':       LLOp(sideeffects=False),
+    'frame_info':           LLOp(sideeffects=False),
 }
 # ***** Run test_lloperation after changes. *****
 
