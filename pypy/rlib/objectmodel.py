@@ -109,9 +109,7 @@ def we_are_translated():
 def keepalive_until_here(*values):
     pass
 
-def hint(x, **kwds):
-    return x
-
+# ____________________________________________________________
 
 class FREED_OBJECT(object):
     def __getattribute__(self, attr):
@@ -189,6 +187,28 @@ class Entry(ExtRegistryEntry):
         return hop.genop('cast_weakadr_to_int', vlist,
                          resulttype = hop.r_result.lowleveltype)
 
+# ____________________________________________________________
+
+def hint(x, **kwds):
+    return x
+
+def we_are_jitted():
+    return False
+# timeshifts to True
+
+_we_are_jitted = CDefinedIntSymbolic('0 /* we are not jitted here */',
+                                     default=0)
+
+class Entry(ExtRegistryEntry):
+    _about_ = we_are_jitted
+
+    def compute_result_annotation(self):
+        from pypy.annotation import model as annmodel
+        return annmodel.SomeInteger(nonneg=True)
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        return hop.inputconst(lltype.Signed, _we_are_jitted)
 
 def debug_assert(x, msg):
     """After translation to C, this becomes an RPyAssert."""
