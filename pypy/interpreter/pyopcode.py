@@ -10,9 +10,9 @@ from pypy.interpreter.baseobjspace import UnpackValueError, Wrappable
 from pypy.interpreter import gateway, function, eval
 from pypy.interpreter import pyframe, pytraceback
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
+from pypy.interpreter.pycode import PyCode
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rlib.objectmodel import we_are_translated, hint
+from pypy.rlib.objectmodel import we_are_translated, hint, we_are_jitted
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.tool.stdlib_opcode import opcodedesc, HAVE_ARGUMENT
 from pypy.tool.stdlib_opcode import unrolling_opcode_descs
@@ -51,123 +51,49 @@ class __extend__(pyframe.PyFrame):
     ### opcode dispatch ###
 
     def dispatch(self, pycode, next_instr, ec):
-        if JITTING:
-            hint(None, global_merge_point=True)
-            pycode = hint(pycode, deepfreeze=True)
-            # *loads* of nonsense for now
-
-            fastlocals_w = [None] * pycode.co_nlocals
-
-            if next_instr == 0:
-                # first time we enter this function
-                depth = 0
-                self.blockstack = []
-
-                numargs = pycode.co_argcount
-                if pycode.co_flags & CO_VARARGS:     numargs += 1
-                if pycode.co_flags & CO_VARKEYWORDS: numargs += 1
-                while True:
-                    numargs -= 1
-                    if numargs < 0:
-                        break
-                    hint(numargs, concrete=True)
-                    w_obj = self.fastlocals_w[numargs]
-                    assert w_obj is not None
-                    fastlocals_w[numargs] = w_obj
-
-            else:
-                stuff = self.valuestackdepth
-                if len(self.blockstack):
-                    stuff |= (-sys.maxint-1)
-
-                stuff = hint(stuff, promote=True)
-                if stuff >= 0:
-                    # blockdepth == 0, common case
-                    self.blockstack = []
-                depth = stuff & sys.maxint
-
-                i = pycode.co_nlocals
-                while True:
-                    i -= 1
-                    if i < 0:
-                        break
-                    hint(i, concrete=True)
-                    w_obj = self.fastlocals_w[i]
-                    fastlocals_w[i] = w_obj
-
-            self.pycode = pycode
-            self.valuestackdepth = depth
-
-            entry_fastlocals_w = self.fastlocals_w
-            self.fastlocals_w = fastlocals_w
-
-            virtualstack_w = [None] * pycode.co_stacksize
-            while depth > 0:
-                depth -= 1
-                hint(depth, concrete=True)
-                virtualstack_w[depth] = self.valuestack_w[depth]
-            self.valuestack_w = virtualstack_w
-
         # For the sequel, force 'next_instr' to be unsigned for performance
         next_instr = r_uint(next_instr)
         co_code = pycode.co_code
 
         try:
-          while True:
-            hint(None, global_merge_point=True)
-            try:
-                self.last_instr = intmask(next_instr)
-                if not JITTING:
-                    ec.bytecode_trace(self)
-                    next_instr = r_uint(self.last_instr)
-                next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
+            while True:
+                next_instr = self.handle_bytecode(co_code, next_instr, ec)
                 #XXX
                 #rstack.resume_point("dispatch", self, co_code, ec,
                 #                    returns=w_result)
-            except Return:
-                w_result = self.popvalue()
-                if JITTING:
-                    self.blockstack = None
-                    self.valuestack_w = None
-                return w_result
-            except Yield:
-                w_result = self.popvalue()
-                return w_result
-            except OperationError, operr:
-                next_instr = self.handle_operation_error(ec, operr)
-            except Reraise:
-                operr = self.last_exception
-                next_instr = self.handle_operation_error(ec, operr,
-                                                         attach_tb=False)
-            except KeyboardInterrupt:
-                next_instr = self.handle_asynchronous_error(ec,
-                    self.space.w_KeyboardInterrupt)
-            except MemoryError:
-                next_instr = self.handle_asynchronous_error(ec,
-                    self.space.w_MemoryError)
-            except RuntimeError, e:
-                if we_are_translated():
-                    # stack overflows should be the only kind of RuntimeErrors
-                    # in translated PyPy
-                    msg = "internal error (stack overflow?)"
-                else:
-                    msg = str(e)
-                next_instr = self.handle_asynchronous_error(ec,
-                    self.space.w_RuntimeError,
-                    self.space.wrap(msg))
-        finally:
-            if JITTING:
-                i = pycode.co_nlocals
-                while True:
-                    i -= 1
-                    if i < 0:
-                        break
-                    hint(i, concrete=True)
-                    entry_fastlocals_w[i] = self.fastlocals_w[i]
+        except ExitFrame:
+            return self.popvalue()
 
-                self.fastlocals_w = entry_fastlocals_w
-            
-
+    def handle_bytecode(self, co_code, next_instr, ec):
+        try:
+            next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
+            #XXX
+            #rstack.resume_point("dispatch", self, co_code, ec,
+            #                    returns=w_result)
+        except OperationError, operr:
+            next_instr = self.handle_operation_error(ec, operr)
+        except Reraise:
+            operr = self.last_exception
+            next_instr = self.handle_operation_error(ec, operr,
+                                                     attach_tb=False)
+        except KeyboardInterrupt:
+            next_instr = self.handle_asynchronous_error(ec,
+                self.space.w_KeyboardInterrupt)
+        except MemoryError:
+            next_instr = self.handle_asynchronous_error(ec,
+                self.space.w_MemoryError)
+        except RuntimeError, e:
+            if we_are_translated():
+                # stack overflows should be the only kind of RuntimeErrors
+                # in translated PyPy
+                msg = "internal error (stack overflow?)"
+            else:
+                msg = str(e)
+            next_instr = self.handle_asynchronous_error(ec,
+                self.space.w_RuntimeError,
+                self.space.wrap(msg))
+        return next_instr
+        
     def handle_asynchronous_error(self, ec, w_type, w_value=None):
         # catch asynchronous exceptions and turn them
         # into OperationErrors
@@ -181,7 +107,8 @@ class __extend__(pyframe.PyFrame):
         if attach_tb:
             pytraceback.record_application_traceback(
                 self.space, operr, self, self.last_instr)
-            ec.exception_trace(self, operr)
+            if not we_are_jitted():
+                ec.exception_trace(self, operr)
 
         block = self.unrollstack(SApplicationException.kind)
         if block is None:
@@ -200,89 +127,96 @@ class __extend__(pyframe.PyFrame):
 
     def dispatch_bytecode(self, co_code, next_instr, ec):
         space = self.space
-        opcode = ord(co_code[next_instr])
-        next_instr += 1
-        if space.config.objspace.logbytecodes:
-            space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
-
-        if opcode >= HAVE_ARGUMENT:
-            lo = ord(co_code[next_instr])
-            hi = ord(co_code[next_instr+1])
-            next_instr += 2
-            oparg = (hi << 8) | lo
-        else:
-            oparg = 0
-        hint(opcode, concrete=True)
-        hint(oparg, concrete=True)
-
-        while opcode == opcodedesc.EXTENDED_ARG.index:
+        while True:
+            self.last_instr = intmask(next_instr)
+            if not we_are_jitted():
+                ec.bytecode_trace(self)
+                next_instr = r_uint(self.last_instr)
             opcode = ord(co_code[next_instr])
-            if opcode < HAVE_ARGUMENT:
-                raise BytecodeCorruption
-            lo = ord(co_code[next_instr+1])
-            hi = ord(co_code[next_instr+2])
-            next_instr += 3
-            oparg = (oparg << 16) | (hi << 8) | lo
+            next_instr += 1
+            if space.config.objspace.logbytecodes:
+                space.bytecodecounts[opcode] = space.bytecodecounts.get(opcode, 0) + 1
+
+            if opcode >= HAVE_ARGUMENT:
+                lo = ord(co_code[next_instr])
+                hi = ord(co_code[next_instr+1])
+                next_instr += 2
+                oparg = (hi << 8) | lo
+            else:
+                oparg = 0
             hint(opcode, concrete=True)
             hint(oparg, concrete=True)
 
-        if opcode == opcodedesc.RETURN_VALUE.index:
-            w_returnvalue = self.popvalue()
-            block = self.unrollstack(SReturnValue.kind)
-            if block is None:
-                self.pushvalue(w_returnvalue)   # XXX ping pong
-                raise Return
-            else:
-                unroller = SReturnValue(w_returnvalue)
-                next_instr = block.handle(self, unroller)
-                return next_instr    # now inside a 'finally' block
+            while opcode == opcodedesc.EXTENDED_ARG.index:
+                opcode = ord(co_code[next_instr])
+                if opcode < HAVE_ARGUMENT:
+                    raise BytecodeCorruption
+                lo = ord(co_code[next_instr+1])
+                hi = ord(co_code[next_instr+2])
+                next_instr += 3
+                oparg = (oparg << 16) | (hi << 8) | lo
+                hint(opcode, concrete=True)
+                hint(oparg, concrete=True)
 
-        if opcode == opcodedesc.YIELD_VALUE.index:
-            #self.last_instr = intmask(next_instr - 1) XXX clean up!
-            raise Yield
-
-        if opcode == opcodedesc.END_FINALLY.index:
-            unroller = self.end_finally()
-            if isinstance(unroller, SuspendedUnroller):
-                # go on unrolling the stack
-                block = self.unrollstack(unroller.kind)
+            if opcode == opcodedesc.RETURN_VALUE.index:
+                w_returnvalue = self.popvalue()
+                block = self.unrollstack(SReturnValue.kind)
                 if block is None:
-                    w_result = unroller.nomoreblocks()
-                    self.pushvalue(w_result)
+                    self.pushvalue(w_returnvalue)   # XXX ping pong
                     raise Return
                 else:
+                    unroller = SReturnValue(w_returnvalue)
                     next_instr = block.handle(self, unroller)
-            return next_instr
+                    return next_instr    # now inside a 'finally' block
 
-        if we_are_translated():
-            for opdesc in unrolling_opcode_descs:
-                # static checks to skip this whole case if necessary
-                if not opdesc.is_enabled(space):
-                    continue
-                if not hasattr(pyframe.PyFrame, opdesc.methodname):
-                    continue   # e.g. for JUMP_FORWARD, implemented above
+            if opcode == opcodedesc.YIELD_VALUE.index:
+                #self.last_instr = intmask(next_instr - 1) XXX clean up!
+                raise Yield
 
-                if opcode == opdesc.index:
-                    # dispatch to the opcode method
-                    meth = getattr(self, opdesc.methodname)
-                    res = meth(oparg, next_instr)
-                    if opdesc.index == opcodedesc.CALL_FUNCTION.index:
-                        rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
-                    # !! warning, for the annotator the next line is not
-                    # comparing an int and None - you can't do that.
-                    # Instead, it's constant-folded to either True or False
-                    if res is not None:
-                        next_instr = res
-                    break
-            else:
-                self.MISSING_OPCODE(oparg, next_instr)
+            if opcode == opcodedesc.END_FINALLY.index:
+                unroller = self.end_finally()
+                if isinstance(unroller, SuspendedUnroller):
+                    # go on unrolling the stack
+                    block = self.unrollstack(unroller.kind)
+                    if block is None:
+                        w_result = unroller.nomoreblocks()
+                        self.pushvalue(w_result)
+                        raise Return
+                    else:
+                        next_instr = block.handle(self, unroller)
+                return next_instr
 
-        else:  # when we are not translated, a list lookup is much faster
-            methodname = opcode_method_names[opcode]
-            res = getattr(self, methodname)(oparg, next_instr)
-            if res is not None:
-                next_instr = res
-        return next_instr
+            if we_are_translated():
+                for opdesc in unrolling_opcode_descs:
+                    # static checks to skip this whole case if necessary
+                    if not opdesc.is_enabled(space):
+                        continue
+                    if not hasattr(pyframe.PyFrame, opdesc.methodname):
+                        continue   # e.g. for JUMP_FORWARD, implemented above
+
+                    if opcode == opdesc.index:
+                        # dispatch to the opcode method
+                        meth = getattr(self, opdesc.methodname)
+                        res = meth(oparg, next_instr)
+                        if opdesc.index == opcodedesc.CALL_FUNCTION.index:
+                            rstack.resume_point("dispatch_call", self, co_code, next_instr, ec)
+                        # !! warning, for the annotator the next line is not
+                        # comparing an int and None - you can't do that.
+                        # Instead, it's constant-folded to either True or False
+                        if res is not None:
+                            next_instr = res
+                        break
+                else:
+                    self.MISSING_OPCODE(oparg, next_instr)
+
+            else:  # when we are not translated, a list lookup is much faster
+                methodname = opcode_method_names[opcode]
+                res = getattr(self, methodname)(oparg, next_instr)
+                if res is not None:
+                    next_instr = res
+
+            if we_are_jitted():
+                return next_instr
 
     def unrollstack(self, unroller_kind):
         n = len(self.blockstack)
@@ -895,7 +829,7 @@ class __extend__(pyframe.PyFrame):
         
     def CALL_FUNCTION(f, oparg, *ignored):
         # XXX start of hack for performance
-        if (oparg >> 8) & 0xff == 0:
+        if not we_are_jitted() and (oparg >> 8) & 0xff == 0:
             # Only positional arguments
             nargs = oparg & 0xff
             w_function = f.peekvalue(nargs)
@@ -986,9 +920,12 @@ class Reraise(Exception):
     """Signal an application-level OperationError that should not grow
     a new traceback entry nor trigger the trace hook."""
 
-class Return(Exception):
+class ExitFrame(Exception):
+    pass
+
+class Return(ExitFrame):
     """Obscure."""
-class Yield(Exception):
+class Yield(ExitFrame):
     """Obscure."""
 
 class BytecodeCorruption(Exception):
