@@ -444,3 +444,6 @@ class Function(Node, Generator):
         self.load(base_obj)
         self.load(item)
         self.ilasm.list_getitem()
+
+    def push_primitive_constant(self, TYPE, value):
+        self.db.load_const(TYPE, value, self.ilasm)        
