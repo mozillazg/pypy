@@ -9,6 +9,8 @@ To Do Right Now
 Longer-term
 ------------------
 
+- don't follow eagerly the exception path of 'int_xxx_ovf'.
+
 - global merge point and portal should delegate their cache impl.
   to the application (to allow keeping things alive correctly)
 
