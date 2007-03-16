@@ -303,7 +303,7 @@ LL_OPERATIONS = {
     'cast_uint_to_int':     LLOp(canfold=True),
     'cast_uint_to_float':   LLOp(canfold=True),
     'cast_float_to_int':    LLOp(canraise=(OverflowError,), tryfold=True),
-    'cast_float_to_uint':   LLOp(canraise=(OverflowError,), tryfold=True),
+    'cast_float_to_uint':   LLOp(canfold=True),    # XXX need OverflowError?
     'truncate_longlong_to_int':LLOp(canfold=True),
 
     # __________ pointer operations __________
@@ -413,6 +413,7 @@ LL_OPERATIONS = {
     'decode_arg':           LLOp(canraise=(Exception,)),
     'decode_arg_def':       LLOp(canraise=(Exception,)),
     'getslice':             LLOp(canraise=(Exception,)),
+    'check_and_clear_exc':  LLOp(),
 
     # __________ debugging __________
     'debug_view':           LLOp(),
