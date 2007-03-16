@@ -17,6 +17,7 @@ UNARY_OPERATIONS = """same_as hint getfield setfield getsubstruct getarraysize
                       cast_bool_to_int
                       ptr_nonzero
                       ptr_iszero
+                      is_early_constant
                       """.split()
 
 BINARY_OPERATIONS = """int_add int_sub int_mul int_mod int_and int_rshift
@@ -327,6 +328,8 @@ class __extend__(SomeLLAbstractValue):
 
         raise HintError("hint %s makes no sense on %r" % (hs_flags.const,
                                                           hs_v1))
+    def is_early_constant(hs_v1):
+        return SomeLLAbstractConstant(lltype.Bool, {})
 
     def getfield(hs_v1, hs_fieldname):
         S = hs_v1.concretetype.TO
