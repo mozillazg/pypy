@@ -5,7 +5,7 @@ from pypy.jit.hintannotator.annotator import StopAtXPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.rpython.lltypesystem import lltype
-from pypy.rlib.objectmodel import hint
+from pypy.rlib.objectmodel import hint, we_are_jitted
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
 from pypy.translator.backendopt.inline import auto_inlining
@@ -855,4 +855,21 @@ def test_indirect_sometimes_residual_pure_but_fixed_red_call():
     hs = hannotator.binding(tsgraph.getargs()[0])
     assert hs.is_green()
     hs = hannotator.binding(tsgraph.getargs()[1])
+    assert hs.is_green()
+
+def test_ignore_nonjitted_path():
+    def f(n):
+        if we_are_jitted():
+            return 5
+        else:
+            return n
+    hs = hannotate(f, [int])
+    assert hs.is_green()
+
+    def g(n):
+        if not we_are_jitted():
+            return n
+        else:
+            return 5
+    hs = hannotate(g, [int])
     assert hs.is_green()
