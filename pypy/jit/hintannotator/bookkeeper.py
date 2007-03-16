@@ -1,6 +1,7 @@
 import py
 from pypy.tool.tls import tlsobject
 from pypy.tool.ansi_print import ansi_log
+from pypy.rlib import objectmodel
 from pypy.objspace.flow.model import copygraph, SpaceOperation, Constant
 from pypy.objspace.flow.model import Variable, Block, Link, FunctionGraph
 from pypy.annotation import model as annmodel
@@ -14,6 +15,8 @@ TLS = tlsobject()
 log = py.log.Producer("hintannotate")
 py.log.setconsumer("hintannotate", ansi_log)
 
+TIMESHIFTMAP = {Constant(objectmodel._we_are_jitted):
+                Constant(1, lltype.Signed)}
 
 class GraphDesc(object):
 
@@ -45,7 +48,7 @@ class GraphDesc(object):
         except KeyError:
             bk = self.bookkeeper
             if bk.annotator.policy.look_inside_graph(self.origgraph):
-                graph = copygraph(self.origgraph)
+                graph = copygraph(self.origgraph, varmap=TIMESHIFTMAP)
                 log(str(graph))
             else:
                 graph = self.build_callback_graph(self.origgraph)
