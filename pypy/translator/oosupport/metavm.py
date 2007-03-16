@@ -242,6 +242,14 @@ class _PushAllArgs(MicroInstruction):
         for arg in op.args:
             generator.load(arg)
 
+class PushPrimitive(MicroInstruction):
+    def __init__(self, TYPE, value):
+        self.TYPE = TYPE
+        self.value = value
+
+    def render(self, generator, op):
+        generator.push_primitive_constant(self.TYPE, self.value)
+        
 class _StoreResult(MicroInstruction):
     def render(self, generator, op):
         generator.store(op.result)
@@ -433,3 +441,4 @@ CallMethod = _CallMethod()
 RuntimeNew = _RuntimeNew()
 OOString = _OOString()
 CastTo = _CastTo()
+
