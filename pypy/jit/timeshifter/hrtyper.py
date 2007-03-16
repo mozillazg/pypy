@@ -1008,6 +1008,12 @@ class HintRTyper(RPythonTyper):
                   [v_jitstate     , c_index                          , c_TYPE],
                   s_result)
 
+    def translate_op_is_early_constant(self, hop):
+        hs = hop.args_s[0]
+        if hs.is_green():
+            return hop.inputconst(lltype.Bool, True)
+        return self.translate_op_is_constant(hop)
+
     def translate_op_is_constant(self, hop):
         hs = hop.args_s[0]
         r_arg = self.getredrepr(originalconcretetype(hs))
