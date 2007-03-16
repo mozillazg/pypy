@@ -107,10 +107,13 @@ class HintRTyper(RPythonTyper):
         self.portalstate = PortalState()
         self.portalstate.compile_more_functions = compile_more_functions
 
-    def specialize(self, origportalgraph=None, view=False):
+    def specialize(self, origportalgraph=None, view=False,
+                   dont_simplify_again=False):
         """
         Driver for running the timeshifter.
         """
+        if not dont_simplify_again:
+            self.annotator.simplify()
 ##        self.type_system.perform_normalizations(self)
         bk = self.annotator.bookkeeper
 ##        bk.compute_after_normalization()

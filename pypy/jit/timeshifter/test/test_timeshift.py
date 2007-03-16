@@ -106,7 +106,8 @@ class TimeshiftingTests(object):
 
         # make the timeshifted graphs
         hrtyper = HintRTyper(ha, rtyper, self.RGenOp)
-        hrtyper.specialize(view = conftest.option.view and self.small)
+        hrtyper.specialize(view = conftest.option.view and self.small,
+                           dont_simplify_again = True)
         fresh_jitstate = hrtyper.ll_fresh_jitstate
         finish_jitstate = hrtyper.ll_finish_jitstate
         exceptiondesc = hrtyper.exceptiondesc
