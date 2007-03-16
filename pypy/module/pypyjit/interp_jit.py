@@ -8,17 +8,18 @@ pypy/jit/*
 """
 import py
 import sys
+from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rlib.objectmodel import hint
+from pypy.rlib.objectmodel import hint, _is_early_constant
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
+from pypy.interpreter.function import Function
 from pypy.interpreter.pyopcode import Return, Yield
 
 
 PyCode.jit_enable = False     # new default attribute
 super_dispatch = PyFrame.dispatch
-
 
 class __extend__(PyFrame):
 
@@ -123,6 +124,21 @@ class __extend__(PyFrame):
 
 
 PORTAL = PyFrame.dispatch_jit
+
+class __extend__(Function):
+    __metaclass__ = extendabletype
+
+    def getcode(self):
+        # if the self is a compile time constant and if its code
+        # is a BuiltinCode => grab and return its code as a constant
+        if _is_early_constant(self):
+            from pypy.interpreter.gateway import BuiltinCode
+            code = hint(self, deepfreeze=True).code
+            if not isinstance(code, BuiltinCode): code = self.code
+        else:
+            code = self.code
+        return code
+        
 
 # ____________________________________________________________
 #
