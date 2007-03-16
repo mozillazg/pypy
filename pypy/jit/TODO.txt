@@ -1,4 +1,14 @@
 
+To Do Right Now
+------------------
+
+- see the inplace-version of the arithmetic operators
+
+- improve is_true()
+
+Longer-term
+------------------
+
 - global merge point and portal should delegate their cache impl.
   to the application (to allow keeping things alive correctly)
 

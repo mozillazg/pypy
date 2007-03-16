@@ -22,13 +22,13 @@ def run_source(source, testcases):
     print >> f, source
     # some support code...
     print >> f, py.code.Source("""
-        import pypyjit
+        import sys, pypyjit
         pypyjit.enable(main.func_code)
 
         def check(args, expected):
-            print 'trying:', args
+            print >> sys.stderr, 'trying:', args
             result = main(*args)
-            print 'got:', repr(result)
+            print >> sys.stderr, 'got:', repr(result)
             assert result == expected
             assert type(result) is type(expected)
     """)
@@ -77,5 +77,35 @@ def app_test_f1():
     ''',
                [([2117], 1083876708)])
 
-##def test_richards():
-##    xxx
+def app_test_factorial():
+    run_source('''
+        def main(n):
+            r = 1
+            while n > 1:
+                r *= n
+                n -= 1
+            return r
+    ''',
+               [([5], 120),
+                ([20], 2432902008176640000L)])
+
+def app_test_factorialrec():
+    run_source('''
+        def main(n):
+            if n > 1:
+                return n * main(n-1)
+            else:
+                return 1
+    ''',
+               [([5], 120),
+                ([20], 2432902008176640000L)])
+
+def app_test_richards():
+    run_source('''
+        import sys; sys.path[:] = %r
+        import richards
+        
+        def main():
+            return richards.main(iterations = 1)
+    ''' % (sys.path,),
+               [([], 42)])
