@@ -6,7 +6,7 @@ class AppTestPyPyJIT:
         cls.space = space
 
     def test_setup(self):
-        # this just checks that setup() is doing its job correctly, and
+        # this just checks that the module is setting up things correctly, and
         # the resulting code makes sense on top of CPython.
         import pypyjit
 
