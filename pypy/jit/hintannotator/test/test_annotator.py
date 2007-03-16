@@ -873,3 +873,11 @@ def test_ignore_nonjitted_path():
             return 5
     hs = hannotate(g, [int])
     assert hs.is_green()
+
+    def g(n):
+        if not we_are_jitted():
+            return n
+        else:
+            return 5
+    hs = hannotate(g, [int], backendoptimize=True)
+    assert hs.is_green()
