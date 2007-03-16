@@ -1528,3 +1528,68 @@ class TestTimeshift(TimeshiftingTests):
         res = self.timeshift(f, [sys.maxint, 1])
         assert res == -42
         self.check_insns({})
+
+    def test_nonzeroness_assert_while_compiling(self):
+        import py; py.test.skip("in-progress")
+        class X:
+            pass
+        class Y:
+            pass
+
+        def g(x, y):
+            if y.flag:
+                return x.value
+            else:
+                return -7
+
+        def h(n):
+            if n:
+                x = X()
+                x.value = n
+                return x
+            else:
+                return None
+
+        y = Y()
+
+        def f(n):
+            y.flag = True
+            g(h(n), y)
+            y.flag = False
+            return g(h(0), y)
+
+        res = self.timeshift(f, [42], policy=P_NOVIRTUAL)
+        assert res == -7
+
+    def test_segfault_while_compiling(self):
+        import py; py.test.skip("in-progress")
+        class X:
+            pass
+        class Y:
+            pass
+
+        def g(x, y):
+            x = hint(x, deepfreeze=True)
+            if y.flag:
+                return x.value
+            else:
+                return -7
+
+        def h(n):
+            if n:
+                x = X()
+                x.value = n
+                return x
+            else:
+                return None
+
+        y = Y()
+
+        def f(n):
+            y.flag = True
+            g(h(n), y)
+            y.flag = False
+            return g(h(0), y)
+
+        res = self.timeshift(f, [42], policy=P_NOVIRTUAL)
+        assert res == -7
