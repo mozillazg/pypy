@@ -4,7 +4,7 @@ from pypy.rlib.rarithmetic import r_ulonglong, ovfcheck_lshift
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
-from pypy.rlib.objectmodel import ComputedIntSymbolic
+from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
 
 import sys, os
 import math
@@ -874,6 +874,13 @@ class LLFrame(object):
             return ovfcheck(int(f))
         except OverflowError:
             self.make_llexception()
+
+    def op_int_is_true(self, x):
+        # special case
+        if type(x) is CDefinedIntSymbolic:
+            x = x.default
+        assert isinstance(x, int)
+        return bool(x)
 
     # read frame var support
 
