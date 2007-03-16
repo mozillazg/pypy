@@ -156,3 +156,33 @@ class TestVList(TimeshiftingTests):
         res = self.timeshift(ll_function, [4], policy=P_OOPSPEC)
         assert res == -42
         self.check_insns({})
+
+    def test_bogus_index_while_compiling(self):
+        import py; py.test.skip("in-progress")
+        class Y:
+            pass
+
+        def g(lst, y, n):
+            lst = hint(lst, deepfreeze=True)
+            if y.flag:
+                return lst[n]
+            else:
+                return -7
+
+        y = Y()
+        lst1 = [3, 4, 5]
+        lst2 = [6, 2]
+
+        def h(i):
+            if i == 1: return lst1
+            elif i == 2: return lst2
+            else: return []
+
+        def f(n):
+            y.flag = n < 3
+            g(h(1), y, n)
+            y.flag = n < 2
+            return g(h(2), y, n)
+
+        res = self.timeshift(f, [2], [0], policy=P_OOPSPEC)
+        assert res == -7
