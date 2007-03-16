@@ -714,26 +714,38 @@ def var_binary((hs_v1, hs_v2), *rest_hs):
     RESTYPE = getbookkeeper().current_op_concretetype()
     return SomeLLAbstractVariable(RESTYPE)
 
-def const_unary(hs_c1):
+def const_unary(llop, hs_c1):
     #XXX unsure hacks
     bk = getbookkeeper()
     origin = bk.myorigin()
     d = setadd(hs_c1.origins, origin)
     RESTYPE = bk.current_op_concretetype()
-    return SomeLLAbstractConstant(RESTYPE, d,
-                                  eager_concrete = hs_c1.eager_concrete,
-                                  myorigin = origin)
+    hs_res = SomeLLAbstractConstant(RESTYPE, d,
+                                    eager_concrete = hs_c1.eager_concrete,
+                                    myorigin = origin)
+    if hs_c1.is_constant():
+        try:
+            hs_res.const = llop(RESTYPE, hs_c1.const)
+        except Exception:   # XXX not too nice
+            pass
+    return hs_res
 
-def const_binary((hs_c1, hs_c2)):
+def const_binary(llop, (hs_c1, hs_c2)):
     #XXX unsure hacks
     bk = getbookkeeper()
     origin = bk.myorigin()
     d = newset(hs_c1.origins, hs_c2.origins, {origin: True})
     RESTYPE = bk.current_op_concretetype()
-    return SomeLLAbstractConstant(RESTYPE, d,
-                                  eager_concrete = hs_c1.eager_concrete or
-                                                   hs_c2.eager_concrete,
-                                  myorigin = origin)
+    hs_res = SomeLLAbstractConstant(RESTYPE, d,
+                                    eager_concrete = hs_c1.eager_concrete or
+                                                     hs_c2.eager_concrete,
+                                    myorigin = origin)
+    if hs_c1.is_constant() and hs_c2.is_constant():
+        try:
+            hs_res.const = llop(RESTYPE, hs_c1.const, hs_c2.const)
+        except Exception:   # XXX not too nice
+            pass
+    return hs_res
 
 def setup(oplist, ValueCls, var_fn, ConstantCls, const_fn):
     for name in oplist:
@@ -743,7 +755,8 @@ def setup(oplist, ValueCls, var_fn, ConstantCls, const_fn):
                 setattr(ValueCls, name, var_fn)
             if llop.canfold or llop.tryfold:
                 if name not in ConstantCls.__dict__:
-                    setattr(ConstantCls, name, const_fn)
+                    setattr(ConstantCls, name,
+                            lambda s, llop=llop: const_fn(llop, s))
 setup(UNARY_OPERATIONS,
       SomeLLAbstractValue, var_unary,
       SomeLLAbstractConstant, const_unary)
