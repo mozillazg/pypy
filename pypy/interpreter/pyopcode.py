@@ -58,18 +58,16 @@ class __extend__(pyframe.PyFrame):
         try:
             while True:
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
-                #XXX
-                #rstack.resume_point("dispatch", self, co_code, ec,
-                #                    returns=w_result)
+                rstack.resume_point("dispatch", self, co_code, ec,
+                                    returns=next_instr)
         except ExitFrame:
             return self.popvalue()
 
     def handle_bytecode(self, co_code, next_instr, ec):
         try:
             next_instr = self.dispatch_bytecode(co_code, next_instr, ec)
-            #XXX
-            #rstack.resume_point("dispatch", self, co_code, ec,
-            #                    returns=w_result)
+            rstack.resume_point("handle_bytecode", self, co_code, ec,
+                                returns=next_instr)
         except OperationError, operr:
             next_instr = self.handle_operation_error(ec, operr)
         except Reraise:
