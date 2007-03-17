@@ -145,9 +145,10 @@ def genmalloc_varsize(jitstate, contdesc, sizebox):
 
 def ll_gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
-        res = getattr(rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE),
-                      fielddesc.fieldname)
-        return rvalue.ll_fromvalue(jitstate, res)
+        ptr = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
+        if ptr:    # else don't constant-fold the segfault...
+            res = getattr(ptr, fielddesc.fieldname)
+            return rvalue.ll_fromvalue(jitstate, res)
     return argbox.op_getfield(jitstate, fielddesc)
 
 def ll_gensetfield(jitstate, fielddesc, destbox, valuebox):
@@ -155,17 +156,20 @@ def ll_gensetfield(jitstate, fielddesc, destbox, valuebox):
 
 def ll_gengetsubstruct(jitstate, fielddesc, argbox):
     if argbox.is_constant():
-        res = getattr(rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE),
-                      fielddesc.fieldname)
-        return rvalue.ll_fromvalue(jitstate, res)
+        ptr = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
+        if ptr:    # else don't constant-fold - we'd get a bogus pointer
+            res = getattr(ptr, fielddesc.fieldname)
+            return rvalue.ll_fromvalue(jitstate, res)
     return argbox.op_getsubstruct(jitstate, fielddesc)
 
 def ll_gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
     if ((fielddesc.immutable or deepfrozen) and argbox.is_constant()
                                             and indexbox.is_constant()):
         array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        res = array[rvalue.ll_getvalue(indexbox, lltype.Signed)]
-        return rvalue.ll_fromvalue(jitstate, res)
+        index = rvalue.ll_getvalue(indexbox, lltype.Signed)
+        if array and 0 <= index < len(array):  # else don't constant-fold
+            res = array[index]
+            return rvalue.ll_fromvalue(jitstate, res)
     genvar = jitstate.curbuilder.genop_getarrayitem(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate),
@@ -176,8 +180,10 @@ def ll_gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
 def ll_gengetarraysubstruct(jitstate, fielddesc, argbox, indexbox):
     if argbox.is_constant() and indexbox.is_constant():
         array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        res = array[rvalue.ll_getvalue(indexbox, lltype.Signed)]
-        return rvalue.ll_fromvalue(jitstate, res)
+        index = rvalue.ll_getvalue(indexbox, lltype.Signed)
+        if array and 0 <= index < len(array):  # else don't constant-fold
+            res = array[index]
+            return rvalue.ll_fromvalue(jitstate, res)
     genvar = jitstate.curbuilder.genop_getarraysubstruct(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate),
@@ -197,8 +203,9 @@ def ll_gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
 def ll_gengetarraysize(jitstate, fielddesc, argbox):
     if argbox.is_constant():
         array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        res = len(array)
-        return rvalue.ll_fromvalue(jitstate, res)
+        if array:    # else don't constant-fold the segfault...
+            res = len(array)
+            return rvalue.ll_fromvalue(jitstate, res)
     genvar = jitstate.curbuilder.genop_getarraysize(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate))
@@ -386,8 +393,9 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
         node = resuming.path.pop()
         assert isinstance(node, PromotionPathSplit)
         if ptrbox is not None:
-            ptrbox.learn_nonzeroness(jitstate,
-                                     nonzeroness = node.answer ^ reverse)
+            ok = ptrbox.learn_nonzeroness(jitstate,
+                                          nonzeroness = node.answer ^ reverse)
+            assert ok
         return node.answer
     later_gv = jitstate.get_locals_gv() # alive gvs on the later path
     if ll_evalue:    # special case - we want jump_if_true in split_raisingop
@@ -397,13 +405,15 @@ def split_nonconstantcase(jitstate, exitgvar, resumepoint,
     memo = rvalue.copy_memo()
     jitstate2 = jitstate.split(later_builder, resumepoint, greens_gv, memo)
     if ptrbox is not None:
-        ptrbox.learn_nonzeroness(jitstate, nonzeroness = True ^ reverse)
+        ok = ptrbox.learn_nonzeroness(jitstate, nonzeroness = True ^ reverse)
+        assert ok
         try:
             copybox = memo.boxes[ptrbox]
         except KeyError:
             pass
         else:
-            copybox.learn_nonzeroness(jitstate2, nonzeroness = reverse)
+            ok = copybox.learn_nonzeroness(jitstate2, nonzeroness = reverse)
+            assert ok
     if ll_evalue:
         jitstate2.residual_ll_exception(ll_evalue)
     if resuming is None:
@@ -524,8 +534,11 @@ def setexcvaluebox(jitstate, box):
     jitstate.exc_value_box = box
 
 def setexception(jitstate, typebox, valuebox):
-    typebox .learn_nonzeroness(jitstate, True)
-    valuebox.learn_nonzeroness(jitstate, True)
+    ok1 = typebox .learn_nonzeroness(jitstate, True)
+    ok2 = valuebox.learn_nonzeroness(jitstate, True)
+    assert ok1 & ok2       # probably... maybe it's false but it would be
+                           # nice to see what kind of contrieved code can
+                           # make this fail :-)
     jitstate.exc_type_box = typebox
     jitstate.exc_value_box = valuebox
 

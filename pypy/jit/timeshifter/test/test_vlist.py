@@ -158,7 +158,6 @@ class TestVList(TimeshiftingTests):
         self.check_insns({})
 
     def test_bogus_index_while_compiling(self):
-        import py; py.test.skip("in-progress")
         class Y:
             pass
 

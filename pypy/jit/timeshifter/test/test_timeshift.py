@@ -1531,7 +1531,6 @@ class TestTimeshift(TimeshiftingTests):
         self.check_insns({})
 
     def test_nonzeroness_assert_while_compiling(self):
-        import py; py.test.skip("in-progress")
         class X:
             pass
         class Y:
@@ -1563,7 +1562,6 @@ class TestTimeshift(TimeshiftingTests):
         assert res == -7
 
     def test_segfault_while_compiling(self):
-        import py; py.test.skip("in-progress")
         class X:
             pass
         class Y:
