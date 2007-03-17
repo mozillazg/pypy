@@ -181,7 +181,6 @@ def hintannotate(drv):
     for graphname in graphnames:
         print graphname
     print '-' * 20
-    import pdb; pdb.set_trace()
 
     hannotator = HintAnnotator(base_translator=t, policy=POLICY)
     hs = hannotator.build_types(portal_graph,

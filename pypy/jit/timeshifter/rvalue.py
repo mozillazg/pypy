@@ -194,17 +194,19 @@ class PtrRedBox(RedBox):
         self.known_nonzero = known_nonzero
 
     def learn_nonzeroness(self, jitstate, nonzeroness):
+        ok = True
         if nonzeroness:
             if self.is_constant():
-                assert self.known_nonzero   # already
+                ok = self.known_nonzero   # not ok if constant zero
             else:
                 self.known_nonzero = True
         else:
             if self.is_constant():
-                assert not self.genvar.revealconst(llmemory.Address)
+                ok = not self.genvar.revealconst(llmemory.Address) # ok if null
             else:
                 gv_null = jitstate.curbuilder.rgenop.genzeroconst(self.kind)
                 self.setgenvar_hint(gv_null, known_nonzero=False)
+        return ok
 
     def __repr__(self):
         if not self.genvar and self.content is not None:
