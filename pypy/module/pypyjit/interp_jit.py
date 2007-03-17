@@ -12,12 +12,14 @@ from pypy.tool.pairtype import extendabletype
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.objectmodel import hint, _is_early_constant
 import pypy.interpreter.pyopcode   # for side-effects
+from pypy.interpreter.eval import Frame
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.function import Function
 from pypy.interpreter.pyopcode import Return, Yield
 
 
+Frame._virtualizable_ = True
 PyCode.jit_enable = False     # new default attribute
 super_dispatch = PyFrame.dispatch
 
