@@ -41,9 +41,6 @@ def binaryoperation(operationname):
     return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
 
 
-JITTING = False   # see also pypy.module.pypyjit
-
-
 class __extend__(pyframe.PyFrame):
     """A PyFrame that knows about interpretation of standard Python opcodes
     minus the ones related to nested scopes."""
