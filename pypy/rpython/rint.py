@@ -204,22 +204,18 @@ def _rtype_template(hop, func, implicit_excs=[]):
         # correction in the right cases.
         # paper and pencil are encouraged for this :)
 
-        from pypy.rpython.rbool import bool_repr
-        assert isinstance(repr.lowleveltype, Number)
-        c_zero = inputconst(repr.lowleveltype, repr.lowleveltype._default)
-
         if func in ('floordiv', 'floordiv_ovf'):
             # return (x/y) - (((x^y)<0)&((x%y)!=0));
             v_xor = hop.genop(prefix + 'xor', vlist,
                             resulttype=repr)
-            v_xor_le = hop.genop(prefix + 'le', [v_xor, c_zero],
+            v_xor_le = hop.genop(prefix + 'le', [v_xor, inputconst(repr.lowleveltype, 0)],
                                  resulttype=Bool)
-            v_xor_le = hop.llops.convertvar(v_xor_le, bool_repr, repr)
+            v_xor_le = hop.genop('cast_primitive', [v_xor_le], resulttype=repr)
             v_mod = hop.genop(prefix + 'mod', vlist,
                             resulttype=repr)
-            v_mod_ne = hop.genop(prefix + 'ne', [v_mod, c_zero],
+            v_mod_ne = hop.genop(prefix + 'ne', [v_mod, inputconst(repr.lowleveltype, 0)],
                                resulttype=Bool)
-            v_mod_ne = hop.llops.convertvar(v_mod_ne, bool_repr, repr)
+            v_mod_ne = hop.genop('cast_primitive', [v_mod_ne], resulttype=repr)
             v_corr = hop.genop(prefix + 'and', [v_xor_le, v_mod_ne],
                              resulttype=repr)
             v_res = hop.genop(prefix + 'sub', [v_res, v_corr],
@@ -228,12 +224,12 @@ def _rtype_template(hop, func, implicit_excs=[]):
             # return r + y*(((x^y)<0)&(r!=0));
             v_xor = hop.genop(prefix + 'xor', vlist,
                             resulttype=repr)
-            v_xor_le = hop.genop(prefix + 'le', [v_xor, c_zero],
+            v_xor_le = hop.genop(prefix + 'le', [v_xor, inputconst(repr.lowleveltype, 0)],
                                resulttype=Bool)
-            v_xor_le = hop.llops.convertvar(v_xor_le, bool_repr, repr)
-            v_mod_ne = hop.genop(prefix + 'ne', [v_res, c_zero],
+            v_xor_le = hop.genop('cast_primitive', [v_xor_le], resulttype=repr)
+            v_mod_ne = hop.genop(prefix + 'ne', [v_res, inputconst(repr.lowleveltype, 0)],
                                resulttype=Bool)
-            v_mod_ne = hop.llops.convertvar(v_mod_ne, bool_repr, repr)
+            v_mod_ne = hop.genop('cast_primitive', [v_mod_ne], resulttype=repr)
             v_corr1 = hop.genop(prefix + 'and', [v_xor_le, v_mod_ne],
                              resulttype=repr)
             v_corr = hop.genop(prefix + 'mul', [v_corr1, vlist[1]],

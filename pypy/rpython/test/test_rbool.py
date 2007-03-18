@@ -76,13 +76,6 @@ class BaseTestRbool(BaseRtypingTest):
         res = self.interpret(f, [9, 2])
         assert self.ll_to_string(res) == '01'
 
-    def test_bool_int_mixture(self):
-        def f(x, y):
-            return x/y
-        res = self.interpret(f, [True, 1])
-        assert res == 1
-        res = self.interpret(f, [1, True])
-        assert res == 1
 
 class TestLLtype(BaseTestRbool, LLRtypeMixin):
     pass

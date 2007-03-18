@@ -235,8 +235,7 @@ class PythonAstCompiler(PyCodeCompiler):
             try:
                 w_ast_tree = space.call_function(self.w_compile_hook,
                                                  space.wrap(ast_tree),
-                                                 space.wrap(encoding),
-                                                 space.wrap(filename))
+                                                 space.wrap(encoding))
                 ast_tree = space.interp_w(Node, w_ast_tree)
             except OperationError:
                 self.w_compile_hook = space.w_None

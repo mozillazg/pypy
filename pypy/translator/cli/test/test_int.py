@@ -16,5 +16,3 @@ class TestCliInt(CliTest, BaseTestRint):
 
     def test_rarithmetic(self):
         pass # it doesn't make sense here
-
-    div_mod_iteration_count = 20

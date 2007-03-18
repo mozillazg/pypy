@@ -1,18 +1,20 @@
 from pypy.conftest import gettestobjspace
 
 
-class AppTestAOPGeneral(object):
+class AppTestAop(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{'objspace.usepycfiles':False})
+
     def test_init(self):
         import aop
 
-class AppTestPointCut(object):
     def test_static_dynamic_advice_and_pointcut(self):
         from  aop import PointCut, introduce, before, around, after
 
-        dyn_pc = PointCut(func='foo').call()
+        dyn_pc = PointCut('foo').call()
         assert dyn_pc.isdynamic
 
-        stat_pc = PointCut(func='bar')
+        stat_pc = PointCut('bar')
         assert not stat_pc.isdynamic
 
         assert not introduce.requires_dynamic_pointcut
@@ -27,44 +29,6 @@ class AppTestPointCut(object):
             assert adv is not None
 
 
-    def test_pointcut_func(self):
-        from  aop import PointCut
-        pc = PointCut(func='foobar')
-        expected = {'func_re': 'foobar',
-                    'class_re': '.*',
-                    'module_re':'.*'}
-        for key, value in expected.items():
-            assert getattr(pc, key).pattern == expected[key]
-
-    def test_pointcut_class_func(self):
-        from aop import PointCut
-        pc = PointCut(klass='^Mumble.*$', func='foobar')
-        expected = {'func_re': 'foobar',
-                    'class_re': '^Mumble.*$',
-                    'module_re':'.*'}
-        for key, value in expected.items():
-            assert getattr(pc, key).pattern == expected[key]
-            
-    def test_pointcut_module_class_func(self):
-        from aop import PointCut
-        pc = PointCut(module=r'logilab\..*', klass='^Mumble.*$', func='foobar')
-        expected = {'func_re': 'foobar',
-                    'class_re': '^Mumble.*$',
-                    'module_re':r'logilab\..*'}
-        for key, value in expected.items():
-            assert getattr(pc, key).pattern == expected[key]
-
-    def test_pointcut_match_module(self):
-        from aop import PointCut
-        pc = PointCut(module=r'logilab\..+', klass='^Mumble.*$', func='foobar')
-        assert pc.match_module('logilab.common')
-        assert not pc.match_module('logilab')
-        assert not pc.match_module('common.logilab')
-            
-class AppTestWeavingAtExecution(object):
-    def setup_class(cls):
-        cls.space = gettestobjspace(**{'objspace.usepycfiles':False})
-
     def test_simple_aspect_before_execution(self):
         from  aop import PointCut, Aspect, before
         from app_test import sample_aop_code
@@ -75,7 +39,7 @@ class AppTestWeavingAtExecution(object):
             __metaclass__ = Aspect 
             def __init__(self):
                 self.executed = False
-            @before(PointCut(func='foo').execution())
+            @before(PointCut('foo').execution())
             def advice_before_execution(self, tjp):
                 self.executed = True
                 self.argnames = tjp._argnames
@@ -104,7 +68,7 @@ class AppTestWeavingAtExecution(object):
             __metaclass__ = Aspect 
             def __init__(self):
                 self.executed = 0
-            @after(PointCut(func='foo').execution())
+            @after(PointCut('foo').execution())
             def advice_after_execution(self, tjp):
                 self.executed += 1
 
@@ -129,7 +93,7 @@ class AppTestWeavingAtExecution(object):
             def __init__(self):
                 self.executed_before = 0
                 self.executed_after = 0
-            @around(PointCut(func='foo').execution())
+            @around(PointCut('foo').execution())
             def advice_around_execution(self, tjp):
                 print '>>>in', tjp.arguments()
                 self.executed_before += 1
@@ -152,10 +116,6 @@ class AppTestWeavingAtExecution(object):
         sample_aop_code.clean_module('aop_around_execution')
         
 
-class AppTestWeavingAtCall(object):
-    def setup_class(cls):
-        cls.space = gettestobjspace(**{'objspace.usepycfiles':False})
-
     def test_simple_aspect_before_call(self):
         from  aop import PointCut, Aspect, before
         from app_test import sample_aop_code
@@ -166,7 +126,7 @@ class AppTestWeavingAtCall(object):
             __metaclass__ = Aspect 
             def __init__(self):
                 self.executed = False
-            @before(PointCut(func='bar').call())
+            @before(PointCut('bar').call())
             def advice_before_call(self, tjp):
                 print "IN advice before call"
                 self.executed = True
@@ -195,16 +155,12 @@ class AppTestWeavingAtCall(object):
             __metaclass__ = Aspect 
             def __init__(self):
                 self.executed = False
-                self.result = None
-            @after(PointCut(func='bar').call())
+            @after(PointCut('bar').call())
             def advice_after_call(self, tjp):
                 print "IN advice after call"
                 self.executed = True
                 self.arguments = tjp._arguments
-                self.result = tjp.result()
                 print "OUT advice after call"
-                print "result", self.result
-                return self.result
 
         assert __aop__.advices == []
         aspect = AspectTest()
@@ -212,11 +168,9 @@ class AppTestWeavingAtCall(object):
         assert not aspect.executed
 
         from app_test import aop_after_call
-        assert not aspect.executed 
+        assert  aspect.executed == 0
         answ = aop_after_call.foo(1,2)
-        assert aspect.executed 
+        assert aspect.executed == 1
         assert answ == 47
-        assert aspect.result == 42
         sample_aop_code.clean_module('aop_after_call')
 
-    

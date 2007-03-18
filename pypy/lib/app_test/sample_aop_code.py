@@ -15,15 +15,7 @@ def baz(b,c):
     try:
         return foo(b,c)
     finally:
-        bar(3)
-
-class Mumble:
-    def __init__(self, param):
-        self.p = param
-    def frobble(self):
-        return 3 * self.p
-    def __del__(self):
-        print 'poof'
+        bar()
 """
 import os
 import os.path as osp
@@ -40,4 +32,3 @@ def write_module(name):
 
 def clean_module(name):
     os.unlink(_make_filename(name))
-
