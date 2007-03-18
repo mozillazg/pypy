@@ -5,7 +5,7 @@ class ConstMutator(parser.ASTMutator):
             node.value = 2
         return node
 
-def threebecomestwo(ast, enc, filename):
+def threebecomestwo(ast, enc):
     ast.mutate(ConstMutator())
     return ast
 
