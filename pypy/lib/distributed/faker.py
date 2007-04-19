@@ -40,10 +40,6 @@ def wrap_type(protocol, tp, tp_id):
     """ Wrap type to transpotable entity, taking
     care about descriptors
     """
-    print "Wrapping type %s" % tp.__name__
-    #if tp.__name__ == 'file':
-    #    import pdb
-    #    pdb.set_trace()
     # XXX forget about bases right now
     bases = []
     dict_w = {}
@@ -56,10 +52,8 @@ def wrap_type(protocol, tp, tp_id):
             if hasattr(value, '__get__') and not type(value) is MethodType:
                 name = type(value).__name__
                 if hasattr(value, '__set__'):
-                    print "GetSet %s" % name
                     dict_w[item] = ('get', name)
                 else:
-                    print "Get %s" % name
                     dict_w[item] = ('set', name)
             else:
                 dict_w[item] = protocol.wrap(value)
@@ -80,7 +74,6 @@ def unwrap_type(objkeeper, protocol, type_id, name_, dict_w, bases_w):
     """ Unwrap remote type, based on it's description
     """
     # XXX sanity check
-    print "Faking type %s" % name_
     assert bases_w == []
     d = dict.fromkeys(dict_w)
     # XXX we do it in two steps to avoid cyclic dependencies,

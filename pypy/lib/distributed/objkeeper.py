@@ -33,7 +33,6 @@ class ObjKeeper(object):
         try:
             return self.exported_types[tp]
         except KeyError:
-            #print "Registering type %s as %s" % (tp, self.exported_types_id)
             self.exported_types[tp] = self.exported_types_id
             self.exported_types_reverse[self.exported_types_id] = tp
             tp_id = self.exported_types_id
@@ -49,31 +48,7 @@ class ObjKeeper(object):
     def register_remote_type(self, tp, type_id):
         self.remote_types[type_id] = tp
         self.reverse_remote_types[tp] = type_id
-        return
-
-        XXX - stuff
-        #print "Faking type %s as %s" % (_name, type_id)
-        # create and register new type
-        d = dict([(key, None) for key in _dict])
-        # some stuff needs to go first...
-        if '__doc__' in _dict:
-            d['__doc__'] = protocol.unwrap(_dict['__doc__'])
-        tp = type(_name, (object,), d)
-        # Make sure we cannot instantiate the remote type
-        self.remote_types[type_id] = tp
-        self.reverse_remote_types[tp] = type_id
-        for key, value in _dict.items():
-            if key != '__doc__':
-                v = protocol.unwrap(value)
-                if isinstance(v, FunctionType):
-                    setattr(tp, key, staticmethod(v))
-                else:
-                    setattr(tp, key, v)
-            #elif key == '__new__':
-            #    import pdb
-            #    pdb.set_trace()
-            #    tp.new = value
-                    
+    
     def get_type(self, id):
         return self.remote_types[id]
 
