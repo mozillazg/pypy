@@ -41,9 +41,9 @@ def wrap_type(protocol, tp, tp_id):
     care about descriptors
     """
     print "Wrapping type %s" % tp.__name__
-    if tp.__name__ == 'file':
-        import pdb
-        pdb.set_trace()
+    #if tp.__name__ == 'file':
+    #    import pdb
+    #    pdb.set_trace()
     # XXX forget about bases right now
     bases = []
     dict_w = {}
@@ -54,12 +54,13 @@ def wrap_type(protocol, tp, tp_id):
         if ignore(item):
             # we've got shortcut for method
             if hasattr(value, '__get__') and not type(value) is MethodType:
+                name = type(value).__name__
                 if hasattr(value, '__set__'):
-                    print "GetSet %s" % value.__name__
-                    dict_w[item] = ('get', value.__name__)
+                    print "GetSet %s" % name
+                    dict_w[item] = ('get', name)
                 else:
-                    print "Get %s" % value.__name__
-                    dict_w[item] = ('set', value.__name__)
+                    print "Get %s" % name
+                    dict_w[item] = ('set', name)
             else:
                 dict_w[item] = protocol.wrap(value)
     return tp_id, tp.__name__, dict_w, bases

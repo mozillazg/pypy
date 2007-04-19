@@ -253,3 +253,12 @@ class AppTestDistributedTasklets(object):
         l = dir(s)
         assert l
 
+    def test_remote_file_access(self):
+        # cannot do test_env({'file':file}) yet :)
+        def f(name):
+            return open(name)
+
+        protocol = self.test_env({'f':f})
+        xf = protocol.get_remote('f')
+        data = xf('/etc/passwd').read()
+        assert data
