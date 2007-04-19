@@ -41,7 +41,7 @@ try:
 except ImportError:
     raise ImportError("Cannot work without transparent proxy functionality")
 
-from distributed.objkeeper import ObjKeeper, RemoteBase
+from distributed.objkeeper import ObjKeeper
 import sys
 
 # XXX We do not make any garbage collection. We'll need it at some point
@@ -61,6 +61,10 @@ from __pypy__ import internal_repr
 import types
 from marshal import dumps
 import exceptions
+
+class RemoteBase(object):
+    pass
+# just placeholder for letter_types value
 
 class AbstractProtocol(object):
     immutable_primitives = (str, int, float, long, unicode, bool, types.NotImplementedType)
@@ -132,8 +136,10 @@ class AbstractProtocol(object):
             id = self.keeper.register_object(obj)
             return (self.type_letters[tp], id)
         elif tp is type:
-            if issubclass(obj, RemoteBase):
+            try:
                 return "reg", self.keeper.reverse_remote_types[obj]
+            except KeyError:
+                pass
             try:
                 return self.type_letters[tp], self.type_letters[obj]
             except KeyError:
