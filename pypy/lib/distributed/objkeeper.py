@@ -2,19 +2,8 @@
 """ objkeeper - Storage for remoteprotocol
 """
 
-# XXX jeez
-
-import sys
-try:
-    1/0
-except:
-    _, _, tb = sys.exc_info()
-    GetSetDescriptor = type(type(tb).tb_frame)
-
-class RemoteBase(object):
-    pass
-
 from types import FunctionType
+from distributed import faker
 
 class ObjKeeper(object):
     def __init__(self, exported_names = {}):
@@ -33,9 +22,10 @@ class ObjKeeper(object):
         return len(self.exported_objects) - 1
     
     def ignore(self, key, value):
-        if key in ('__dict__', '__weakref__', '__class__'):
-            return True
-        if isinstance(value, GetSetDescriptor):
+        # there are some attributes, which cannot be modified later, nor
+        # passed into default values, ignore them
+        if key in ('__dict__', '__weakref__', '__class__',
+                   '__dict__', '__bases__'):
             return True
         return False
     
@@ -51,6 +41,11 @@ class ObjKeeper(object):
         
         # XXX: We don't support inheritance here, nor recursive types
         #      shall we???
+        ...
+        tp = faker.unwrap_type(tp, ...)
+
+
+        
         _dict = dict([(key, protocol.wrap(getattr(tp, key))) for key in dir(tp) 
             if not self.ignore(key, getattr(tp, key))])
         protocol.send(("type_reg", (tp_id, 
@@ -58,13 +53,15 @@ class ObjKeeper(object):
         return tp_id
     
     def fake_remote_type(self, protocol, type_id, _name, _dict):
+        ...
+        
         #print "Faking type %s as %s" % (_name, type_id)
         # create and register new type
         d = dict([(key, None) for key in _dict])
         # some stuff needs to go first...
         if '__doc__' in _dict:
             d['__doc__'] = protocol.unwrap(_dict['__doc__'])
-        tp = type(_name, (RemoteBase,), d)
+        tp = type(_name, (object,), d)
         # Make sure we cannot instantiate the remote type
         self.remote_types[type_id] = tp
         self.reverse_remote_types[tp] = type_id
@@ -91,3 +88,4 @@ class ObjKeeper(object):
 
     def get_remote_object(self, controller):
         return self.remote_objects[controller]
+        
