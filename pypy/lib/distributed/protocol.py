@@ -42,6 +42,7 @@ except ImportError:
     raise ImportError("Cannot work without transparent proxy functionality")
 
 from distributed.objkeeper import ObjKeeper
+from distributed import faker
 import sys
 
 # XXX We do not make any garbage collection. We'll need it at some point
@@ -62,9 +63,16 @@ import types
 from marshal import dumps
 import exceptions
 
+# just placeholders for letter_types value
 class RemoteBase(object):
     pass
-# just placeholder for letter_types value
+
+class DataDescriptor(object):
+    pass
+
+class NonDataDescriptor(object):
+    pass
+# end of placeholders
 
 class AbstractProtocol(object):
     immutable_primitives = (str, int, float, long, unicode, bool, types.NotImplementedType)
@@ -95,7 +103,9 @@ class AbstractProtocol(object):
         'tp' : None,
         'fr' : types.FrameType,
         'tb' : types.TracebackType,
-        'reg' : RemoteBase
+        'reg' : RemoteBase,
+        'get' : NonDataDescriptor,
+        'set' : DataDescriptor,
     }
     type_letters = dict([(value, key) for key, value in letter_types.items()])
     assert len(type_letters) == len(letter_types)
@@ -202,6 +212,10 @@ class AbstractProtocol(object):
                 return self.letter_types[obj_data]
             id = obj_data
             return self.get_type(obj_data)
+        elif tp is DataDescriptor:            
+            return faker.unwrap_getset_descriptor(self, obj_data)
+        elif tp is NonDataDescriptor:
+            return faker.unwrap_get_descriptor(self, obj_data)
         elif tp is object:
             # we need to create a proper type
             w_tp, id = obj_data
@@ -292,8 +306,7 @@ def remote_loop(protocol):
             exc, val, tb = unwrap(data)
             raise exc, val, tb
         elif command == 'type_reg':
-            type_id, name, _dict = data
-            protocol.keeper.fake_remote_type(protocol, type_id, name, _dict)
+            protocol.keeper.fake_remote_type(protocol, data)
         elif command == 'force':
             obj = protocol.keeper.get_object(data)
             w_obj = protocol.pack(obj)
@@ -301,6 +314,17 @@ def remote_loop(protocol):
         elif command == 'forced':
             obj = protocol.unpack(data)
             return obj
+        elif command == 'desc_get':
+            name, w_obj, w_type = data
+            obj = protocol.unwrap(w_obj)
+            type_ = protocol.unwrap(w_type)
+            send(('finished', protocol.wrap(getattr(type(obj), name).__get__(obj, type_))))
+        elif command == 'desc_set':
+            name, w_obj, w_value = data
+            obj = protocol.unwrap(w_obj)
+            value = protocol.unwrap(w_value)
+            getattr(type(obj), name).__set__(obj, value)
+            send(('finished', protocol.wrap(None)))
         else:
             raise NotImplementedError("command %s" % command)
 
@@ -352,6 +376,14 @@ class RemoteProtocol(AbstractProtocol):
             return self.unpack_dict(w_obj)
         else:
             raise NotImplementedError("Cannot unpack %s" % (data,))
+
+    def get(self, name, obj, type):
+        self.send(("desc_get", (name, self.wrap(obj), self.wrap(type))))
+        retval = remote_loop(self)
+        return retval
+
+    def set(self, obj, value):
+        self.send(("desc_set", (name, self.wrap(obj), self.wrap(value))))
 
 class RemoteObject(object):
     def __init__(self, protocol, id):

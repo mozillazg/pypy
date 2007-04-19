@@ -38,23 +38,20 @@ class ObjKeeper(object):
             self.exported_types_reverse[self.exported_types_id] = tp
             tp_id = self.exported_types_id
             self.exported_types_id += 1
-        
-        # XXX: We don't support inheritance here, nor recursive types
-        #      shall we???
-        ...
-        tp = faker.unwrap_type(tp, ...)
 
-
-        
-        _dict = dict([(key, protocol.wrap(getattr(tp, key))) for key in dir(tp) 
-            if not self.ignore(key, getattr(tp, key))])
-        protocol.send(("type_reg", (tp_id, 
-            tp.__name__, _dict)))
+        protocol.send(('type_reg', faker.wrap_type(protocol, tp, tp_id)))
         return tp_id
     
-    def fake_remote_type(self, protocol, type_id, _name, _dict):
-        ...
-        
+    def fake_remote_type(self, protocol, tp_data):
+        type_id, name_, dict_w, bases_w = tp_data
+        tp = faker.unwrap_type(self, protocol, type_id, name_, dict_w, bases_w)
+
+    def register_remote_type(self, tp, type_id):
+        self.remote_types[type_id] = tp
+        self.reverse_remote_types[tp] = type_id
+        return
+
+        XXX - stuff
         #print "Faking type %s as %s" % (_name, type_id)
         # create and register new type
         d = dict([(key, None) for key in _dict])
