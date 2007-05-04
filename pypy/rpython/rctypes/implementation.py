@@ -120,13 +120,13 @@ class CTypesObjEntry(CTypesEntry):
 
 
 # Importing for side effect of registering types with extregistry
-from pypy.rpython.rctypes.atype import SomeCTypesType
-import pypy.rpython.rctypes.aprimitive
-import pypy.rpython.rctypes.apointer
-import pypy.rpython.rctypes.aarray
-import pypy.rpython.rctypes.afunc
-import pypy.rpython.rctypes.achar_p
-import pypy.rpython.rctypes.astruct
-import pypy.rpython.rctypes.avoid_p
-import pypy.rpython.rctypes.astringbuf
-import pypy.rpython.rctypes.apyobject
+##from pypy.rpython.rctypes.atype import SomeCTypesType
+##import pypy.rpython.rctypes.aprimitive
+##import pypy.rpython.rctypes.apointer
+##import pypy.rpython.rctypes.aarray
+##import pypy.rpython.rctypes.afunc
+##import pypy.rpython.rctypes.achar_p
+##import pypy.rpython.rctypes.astruct
+##import pypy.rpython.rctypes.avoid_p
+##import pypy.rpython.rctypes.astringbuf
+##import pypy.rpython.rctypes.apyobject
