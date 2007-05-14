@@ -1,0 +1,140 @@
+from pypy.jit.hintannotator.annotator import HintAnnotatorPolicy
+from pypy.lang.prolog.interpreter import term, engine
+from pypy.translator.translator import graphof
+from pypy.annotation.specialize import getuniquenondirectgraph
+
+
+forbidden_modules = {'pypy.lang.prolog.interpreter.parser': True,
+                     }
+
+PORTAL = engine.Engine.try_rule
+
+class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
+    novirtualcontainer = True
+    oopspec = True
+
+    def __init__(self, timeshift_graphs):
+        self.timeshift_graphs = timeshift_graphs
+
+    def look_inside_graph(self, graph):
+        if graph in self.timeshift_graphs:
+            return self.timeshift_graphs[graph]
+        try:
+            func = graph.func
+        except AttributeError:
+            return True
+        if hasattr(func, '_look_inside_me_'):
+            return func._look_inside_me_
+        mod = func.__module__ or '?'
+        if mod in forbidden_modules:
+            return False
+#        if "pypy.lang.prolog.builtin" in mod:
+#            return True
+        return False
+
+def jitme(func):
+    func._look_inside_me_ = True
+    return func
+
+def dontjitme(func):
+    func._look_inside_me_ = False
+    return func
+
+
+def enumerate_reachable_graphs(translator, startgraph):
+    from pypy.translator.backendopt.support import find_calls_from
+    pending = [(startgraph, None)]
+    yield pending[0]
+    seen = {startgraph: True}
+    while pending:
+        yield None     # hack: a separator meaning "length increases now"
+        nextlengthlist = []
+        nextseen = {}
+        for node in pending:
+            head, tail = node
+            for block, callee in find_calls_from(translator, head):
+                if callee not in seen:
+                    newnode = callee, node
+                    yield newnode
+                    nextlengthlist.append(newnode)
+                    nextseen[callee] = True
+        pending = nextlengthlist
+        seen.update(nextseen)
+    yield None
+
+def graphs_on_the_path_to(translator, startgraph, targetgraphs):
+    targetgraphs = targetgraphs.copy()
+    result = {}
+    found = {}
+    for node in enumerate_reachable_graphs(translator, startgraph):
+        if node is None:  # hack: a separator meaning "length increases now"
+            for graph in found:
+                del targetgraphs[graph]
+            found.clear()
+            if not targetgraphs:
+                return result
+        elif node[0] in targetgraphs:
+            found[node[0]] = True
+            while node is not None:
+                head, tail = node
+                result[head] = True
+                node = tail
+    raise Exception("did not reach all targets:\nmissing %r" % (
+        targetgraphs.keys(),))
+
+
+def timeshift_graphs(t, portal_graph, log):
+    import pypy
+    result_graphs = {}
+
+    bk = t.annotator.bookkeeper
+
+    def _graph(func):
+        func = getattr(func, 'im_func', func)
+        desc = bk.getdesc(func)
+        return getuniquenondirectgraph(desc)
+
+    def seefunc(fromfunc, *tofuncs):
+        targetgraphs = {}
+        for tofunc in tofuncs:
+            targetgraphs[_graph(tofunc)] = True
+        graphs = graphs_on_the_path_to(t, _graph(fromfunc), targetgraphs)
+        for graph in graphs:
+            if graph not in result_graphs:
+                log('including graph %s' % (graph,))
+            result_graphs[graph] = True
+
+    def seepath(*path):
+        for i in range(1, len(path)):
+            seefunc(path[i-1], path[i])
+
+    def seegraph(func, look=True):
+        graph = _graph(func)
+        if look:
+            extra = ""
+            if look != True:
+                extra = " substituted with %s" % look
+            log('including graph %s%s' % (graph, extra))
+        else:
+            log('excluding graph %s' % (graph,))
+        result_graphs[graph] = look
+
+    for cls in [term.Var, term.Term, term.Number, term.Float, term.Atom]:
+        seegraph(cls.copy)
+        seegraph(cls.__init__)
+        seegraph(cls.copy_and_unify)
+    for cls in [term.Term, term.Number, term.Atom]:
+        seegraph(cls.copy_and_basic_unify)
+    seegraph(pypy.lang.prolog.interpreter.engine.Heap.newvar)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine.try_rule)
+    seegraph(pypy.lang.prolog.interpreter.term.Rule.clone_and_unify_head)
+    return result_graphs
+
+def get_portal(drv):
+    t = drv.translator
+    portal = getattr(PORTAL, 'im_func', PORTAL)
+    portal_graph = graphof(t, portal)
+
+    policy = PyrologHintAnnotatorPolicy(timeshift_graphs(t, portal_graph,
+                                                         drv.log))
+    return portal, policy
