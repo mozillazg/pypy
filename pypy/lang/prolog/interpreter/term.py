@@ -20,6 +20,11 @@ def debug_print(*args):
 
 class PrologObject(object):
     __slots__ = ()
+
+    def __init__(self):
+        raise NotImplementedError("abstract base class")
+        return self
+
     def getvalue(self, heap):
         return self
 
@@ -318,6 +323,9 @@ class BlackBox(NonVar):
     # meant to be subclassed
     TAG = tag()
     STANDARD_ORDER = 4
+    def __init__(self):
+        pass
+
     @specialize.arg(3)
     def basic_unify(self, other, heap, occurs_check=False):
         if self is other:
@@ -486,10 +494,13 @@ class Rule(object):
         if isinstance(head, Term):
             h2 = self.head
             assert isinstance(h2, Term)
-            for i in range(len(h2.args)):
-                arg1 = h2.args[i]
-                arg2 = head.args[i]
-                arg1.copy_and_unify(arg2, heap, memo)
+            i = 0
+            while i < len(h2.args):
+                i = hint(i, concrete=True)
+                arg2 = h2.args[i]
+                arg1 = head.args[i]
+                arg2.copy_and_unify(arg1, heap, memo)
+                i += 1
         body = self.body
         if body is None:
             return None
