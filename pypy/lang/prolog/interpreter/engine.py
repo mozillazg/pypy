@@ -3,6 +3,7 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
 from pypy.lang.prolog.interpreter import error
+from pypy.rlib.objectmodel import hint, specialize
 
 DEBUG = True
 
@@ -162,7 +163,7 @@ class Engine(object):
             signature = rule.signature
         else:
             error.throw_type_error("callable", rule)
-            assert 0, "unreachable" # XXX make annotator happy
+            assert 0, "unreachable" # make annotator happy
         if signature in builtin.builtins:
             error.throw_permission_error(
                 "modify", "static_procedure", rule.head.get_prolog_signature())
@@ -203,6 +204,7 @@ class Engine(object):
             debug_print("calling", query)
         signature = query.signature
         # check for builtins
+        builtins = hint(builtins, deepfreeze=True)
         builtin = builtins.get(signature, None)
         if builtin is not None:
             return builtin.call(self, query, continuation)
@@ -261,6 +263,9 @@ class Engine(object):
         return self.try_rule(rule, query, continuation)
 
     def try_rule(self, rule, query, continuation=DONOTHING):
+        hint(None, global_merge_point=True)
+        rule = hint(rule, promote=True)
+        rule = hint(rule, deepfreeze=True)
         if DEBUG:
             debug_print("trying rule", rule, query, self.heap.vars[:self.heap.needed_vars])
         # standardizing apart
@@ -268,8 +273,9 @@ class Engine(object):
         if DEBUG:
             debug_print("worked", rule, query, self.heap.vars[:self.heap.needed_vars])
         if nextcall is not None:
-            return self.call(nextcall, continuation)
-        return continuation.call(self)
+            self.call(nextcall, continuation)
+        else:
+            continuation.call(self)
 
 
     def continue_after_cut(self, continuation, lsc=None):
