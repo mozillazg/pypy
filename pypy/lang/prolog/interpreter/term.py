@@ -4,7 +4,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.lang.prolog.interpreter.error import UnificationFailed, UncatchableError
 from pypy.rlib.objectmodel import hint, specialize
 
-DEBUG = True
+DEBUG = False
 
 TAGBITS = 3
 CURR_TAG = 1
@@ -20,6 +20,7 @@ def debug_print(*args):
 
 class PrologObject(object):
     __slots__ = ()
+    _immutable_ = True
 
     def __init__(self):
         raise NotImplementedError("abstract base class")
@@ -121,6 +122,7 @@ class Var(PrologObject):
 
     def copy_and_unify(self, other, heap, memo):
         hint(self, concrete=True)
+        self = hint(self, deepfreeze=True)
         try:
             seen_value = memo[self.index]
         except KeyError:
@@ -162,6 +164,7 @@ class Var(PrologObject):
                 self.index == other.index)
 
 class NonVar(PrologObject):
+    __slots__ = ()
 
     def dereference(self, heap):
         return self
@@ -197,6 +200,7 @@ class NonVar(PrologObject):
 
 
 class Callable(NonVar):
+    __slots__ = ("name", "signature")
     name = ""
     signature = ""
 
@@ -394,14 +398,13 @@ class Term(Callable):
             arg = self.args[i].copy(heap, memo)
             newargs.append(arg)
             i += 1
-        return Term(self.name, newargs)
+        return Term(self.name, newargs, self.signature)
 
     def copy_and_basic_unify(self, other, heap, memo):
         hint(self, concrete=True)
         self = hint(self, deepfreeze=True)
         if (isinstance(other, Term) and
-            self.name == other.name and
-            len(self.args) == len(other.args)):
+            self.signature == other.signature):
             newargs = [None] * len(self.args)
             i = 0
             while i < len(self.args):
@@ -409,7 +412,7 @@ class Term(Callable):
                 arg = self.args[i].copy_and_unify(other.args[i], heap, memo)
                 newargs[i] = arg
                 i += 1
-            return Term(self.name, newargs)
+            return Term(self.name, newargs, self.signature)
         else:
             raise UnificationFailed
 
@@ -456,6 +459,7 @@ class Term(Callable):
         
 
 class Rule(object):
+    _immutable_ = True
     unify_hash = []
     def __init__(self, head, body):
         from pypy.lang.prolog.interpreter import helper
@@ -491,9 +495,9 @@ class Rule(object):
 
     def clone_and_unify_head(self, heap, head):
         memo = {}
-        if isinstance(head, Term):
-            h2 = self.head
-            assert isinstance(h2, Term)
+        h2 = self.head
+        if isinstance(h2, Term):
+            assert isinstance(head, Term)
             i = 0
             while i < len(h2.args):
                 i = hint(i, concrete=True)

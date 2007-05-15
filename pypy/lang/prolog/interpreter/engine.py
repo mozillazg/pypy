@@ -5,7 +5,7 @@ from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFou
 from pypy.lang.prolog.interpreter import error
 from pypy.rlib.objectmodel import hint, specialize
 
-DEBUG = True
+DEBUG = False
 
 class Continuation(object):
     def call(self, engine):
@@ -30,6 +30,11 @@ class Heap(object):
         self.vars = [None] * START_NUMBER_OF_VARS
         self.trail = []
         self.needed_vars = 0
+        self.last_branch = 0
+
+    def reset(self):
+        self.vars = [None] * len(self.vars)
+        self.trail = []
         self.last_branch = 0
 
     def clear(self, length):
@@ -274,8 +279,10 @@ class Engine(object):
             debug_print("worked", rule, query, self.heap.vars[:self.heap.needed_vars])
         if nextcall is not None:
             self.call(nextcall, continuation)
+            return "no"
         else:
             continuation.call(self)
+            return "yes"
 
 
     def continue_after_cut(self, continuation, lsc=None):
