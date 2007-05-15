@@ -78,6 +78,7 @@ class Var(PrologObject):
     STANDARD_ORDER = 0
 
     __slots__ = ('index', )
+    cache = {}
 
     def __init__(self, index):
         self.index = index
@@ -115,18 +116,18 @@ class Var(PrologObject):
     def copy(self, heap, memo):
         hint(self, concrete=True)
         try:
-            return memo[self.index]
+            return memo[self]
         except KeyError:
-            newvar = memo[self.index] = heap.newvar()
+            newvar = memo[self] = heap.newvar()
             return newvar
 
     def copy_and_unify(self, other, heap, memo):
         hint(self, concrete=True)
         self = hint(self, deepfreeze=True)
         try:
-            seen_value = memo[self.index]
+            seen_value = memo[self]
         except KeyError:
-            memo[self.index] = other
+            memo[self] = other
             return other
         else:
             seen_value.unify(other, heap)
@@ -138,10 +139,10 @@ class Var(PrologObject):
 
     def clone_compress_vars(self, vars_new_indexes, offset):
         if self.index in vars_new_indexes:
-            return Var(vars_new_indexes[self.index])
+            return Var.newvar(vars_new_indexes[self.index])
         index = len(vars_new_indexes) + offset
         vars_new_indexes[self.index] = index
-        return Var(index)
+        return Var.newvar(index)
     
     def get_unify_hash(self):
         return 0
@@ -162,6 +163,15 @@ class Var(PrologObject):
         # for testing
         return (self.__class__ == other.__class__ and
                 self.index == other.index)
+
+    def newvar(index):
+        result = Var.cache.get(index, None)
+        if result is not None:
+            return result
+        Var.cache[index] = result = Var(index)
+        return result
+    newvar = staticmethod(newvar)
+
 
 class NonVar(PrologObject):
     __slots__ = ()
