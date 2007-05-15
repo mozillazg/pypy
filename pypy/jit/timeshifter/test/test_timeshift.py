@@ -61,6 +61,8 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
         backend_optimizations(t)
     if portal is None:
         portal = func
+    if hasattr(policy, "seetranslator"):
+        policy.seetranslator(t)
     graph1 = graphof(t, portal)
     # build hint annotator types
     hannotator = HintAnnotator(base_translator=t, policy=policy)
@@ -69,7 +71,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
                                          for v in graph1.getargs()])
     hannotator.simplify()
     if conftest.option.view:
-        hannotator.translator.view()
+        hannotator.translator.viewcg()
     return hs, hannotator, rtyper
 
 class TimeshiftingTests(object):

@@ -65,8 +65,8 @@ class PortalTest(object):
         self.hrtyper.specialize(origportalgraph=origportalgraph,
                            view = conftest.option.view and self.small)
 
-        #if conftest.option.view and self.small:
-        #    t.view()
+        if conftest.option.view and self.small:
+            t.viewcg()
         self.postprocess_timeshifting()
         self.readportalgraph = self.hrtyper.readportalgraph
 
