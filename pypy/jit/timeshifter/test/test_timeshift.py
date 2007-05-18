@@ -1513,6 +1513,42 @@ class TestTimeshift(TimeshiftingTests):
         assert res == f(4,113)
         self.check_insns({})
 
+    def test_manual_marking_of_pure_functions(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+        a1 = A()
+        a2 = A()
+        d = {}
+        def h1(b, s):
+            try:
+                return d[s]
+            except KeyError:
+                d[s] = r = A()
+                return r
+        h1._pure_function_ = True
+        b = B()
+        def f(n):
+            hint(None, global_merge_point=True)
+            hint(n, concrete=True)
+            if n == 0:
+                s = "abc"
+            else:
+                s = "123"
+            a = h1(b, s)
+            return hint(n, variable=True)
+
+        P = StopAtXPolicy(h1)
+        P.oopspec = True
+        res = self.timeshift(f, [0], [], policy=P)
+        assert res == 0
+        self.check_insns({})
+        res = self.timeshift(f, [4], [], policy=P)
+        assert res == 4
+        self.check_insns({})
+
+
     def test_red_int_add_ovf(self):
         def f(n, m):
             try:
@@ -1697,3 +1733,5 @@ class TestTimeshift(TimeshiftingTests):
         res = self.timeshift(f, [3, 6], policy=MyPolicy())
         assert res == -3 + 600
         self.check_insns({'int_neg': 1, 'int_add': 1})
+
+
