@@ -1734,4 +1734,19 @@ class TestTimeshift(TimeshiftingTests):
         assert res == -3 + 600
         self.check_insns({'int_neg': 1, 'int_add': 1})
 
+    def test_hash_of_green_string_is_green(self):
+        py.test.skip("unfortunately doesn't work")
+        def f(n):
+            if n == 0:
+                s = "abc"
+            elif n == 1:
+                s = "cde"
+            else:
+                s = "fgh"
+            return hash(s)
+
+        res = self.timeshift(f, [0])
+        self.check_insns({'int_eq': 2})
+        assert res == f(0)
+
 
