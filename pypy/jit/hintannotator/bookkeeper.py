@@ -125,6 +125,14 @@ class ImpurityAnalyzer(graphanalyze.GraphAnalyzer):
         ARGTYPES = [v.concretetype for v in op.args]
         return not operation.is_pure(*ARGTYPES)
 
+    def analyze_direct_call(self, graph, seen=None):
+        try:
+            func = graph.func
+            if getattr(func, "_pure_function_", False):
+                return False
+        except AttributeError:
+            pass
+        return graphanalyze.GraphAnalyzer.analyze_direct_call(self, graph, seen)
 
 class HintBookkeeper(object):
 

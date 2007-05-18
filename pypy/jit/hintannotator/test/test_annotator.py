@@ -919,3 +919,27 @@ def test_cast_ptr_to_int():
 
     hs = hannotate(f, [], policy=P_NOVIRTUAL)
     assert not hs.is_green()
+
+def test_manual_marking_of_pure_functions():
+    d = {}
+    def h1(s):
+        try:
+            return d[s]
+        except KeyError:
+            d[s] = r = hash(s)
+            return r
+    h1._pure_function_ = True
+    def f(n):
+        hint(n, concrete=True)
+        if n == 0:
+            s = "abc"
+        else:
+            s = "123"
+        a = h1(s)
+        return a
+
+    P = StopAtXPolicy(h1)
+    P.oopspec = True
+    P.entrypoint_returns_red = False
+    hs = hannotate(f, [int], policy=P)
+    assert hs.is_green()
