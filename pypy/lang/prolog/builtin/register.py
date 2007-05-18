@@ -2,17 +2,20 @@ import py
 from pypy.lang.prolog.interpreter import arithmetic
 from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder
 from pypy.lang.prolog.interpreter import engine, helper, term, error
-from pypy.lang.prolog.builtin import builtins
+from pypy.lang.prolog.builtin import builtins, builtins_list
 
 from pypy.rlib.objectmodel import we_are_translated
 
 class Builtin(object):
+    _immutable_ = True
     def __init__(self, function):
         self.function = function
 
     def call(self, engine, query, continuation):
         return self.function(engine, query, continuation)
         
+    def _freeze_(self):
+        return True
 
 def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
                    translatable=True):
@@ -80,5 +83,6 @@ def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
     exec py.code.Source("\n".join(code)).compile() in miniglobals
     for name in expose_as:
         signature = "%s/%s" % (name, len(unwrap_spec))
-        builtins[signature] = Builtin(miniglobals[funcname])
-
+        b = Builtin(miniglobals[funcname])
+        builtins[signature] = b
+        builtins_list.append((signature, b))

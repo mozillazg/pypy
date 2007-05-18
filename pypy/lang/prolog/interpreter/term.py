@@ -18,6 +18,10 @@ def debug_print(*args):
     if DEBUG and not we_are_translated():
         print " ".join([str(a) for a in args])
 
+def pure_hash_function(s):
+    return h(s)
+pure_hash_function._pure_function_ = True
+
 class PrologObject(object):
     __slots__ = ()
     _immutable_ = True
@@ -49,7 +53,7 @@ class PrologObject(object):
         # they must not be unifiable
         raise NotImplementedError("abstract base class")
 
-    def unify_hash_of_child(self, i, heap=None):
+    def unify_hash_of_child(self, i):
         raise KeyError
 
     @specialize.arg(3)
@@ -79,6 +83,7 @@ class Var(PrologObject):
 
     __slots__ = ('index', )
     cache = {}
+    _immutable_ = True
 
     def __init__(self, index):
         self.index = index
@@ -223,6 +228,7 @@ class Atom(Callable):
     STANDARD_ORDER = 1
 
     cache = {}
+    _immutable_ = True
 
     def __init__(self, name):
         self.name = name
@@ -253,10 +259,11 @@ class Atom(Callable):
             raise UnificationFailed
 
     def get_unify_hash(self):
-        return intmask(hash(self.name) << TAGBITS | self.TAG)
+        name = hint(self.name, promote=True)
+        return intmask(pure_hash_function(name) << TAGBITS | self.TAG)
 
     def get_prolog_signature(self):
-        return Term("/", [self, Number(0)])
+        return Term("/", [self, NUMBER_0])
 
     def newatom(name):
         result = Atom.cache.get(name, None)
@@ -270,6 +277,7 @@ class Atom(Callable):
 class Number(NonVar):
     TAG = tag()
     STANDARD_ORDER = 2
+    _immutable_ = True
     def __init__(self, num):
         self.num = num
 
@@ -298,10 +306,12 @@ class Number(NonVar):
     def get_unify_hash(self):
         return intmask(self.num << TAGBITS | self.TAG)
 
+NUMBER_0 = Number(0)
 
 class Float(NonVar):
     TAG = tag()
     STANDARD_ORDER = 2
+    _immutable_ = True
     def __init__(self, num):
         self.num = num
 
@@ -374,6 +384,7 @@ def _getvalue(obj, heap):
 class Term(Callable):
     TAG = tag()
     STANDARD_ORDER = 3
+    _immutable_ = True
     def __init__(self, name, args, signature=None):
         self.name = name
         self.args = args
@@ -453,7 +464,8 @@ class Term(Callable):
             return self
 
     def get_unify_hash(self):
-        return intmask(hash(self.signature) << TAGBITS | self.TAG)
+        signature = hint(self.signature, promote=True)
+        return intmask(pure_hash_function(signature) << TAGBITS | self.TAG)
 
     def unify_hash_of_child(self, i):
         return self.args[i].get_unify_hash()
@@ -506,6 +518,7 @@ class Rule(object):
     def clone_and_unify_head(self, heap, head):
         memo = {}
         h2 = self.head
+        hint(h2, concrete=True)
         if isinstance(h2, Term):
             assert isinstance(head, Term)
             i = 0
@@ -516,6 +529,7 @@ class Rule(object):
                 arg2.copy_and_unify(arg1, heap, memo)
                 i += 1
         body = self.body
+        hint(body, concrete=True)
         if body is None:
             return None
         return body.copy(heap, memo)
