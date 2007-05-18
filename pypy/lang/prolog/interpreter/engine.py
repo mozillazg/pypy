@@ -3,7 +3,8 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
 from pypy.lang.prolog.interpreter import error
-from pypy.rlib.objectmodel import hint, specialize
+from pypy.rlib.objectmodel import hint, specialize, _is_early_constant
+from pypy.rlib.unroll import unrolling_iterable
 
 DEBUG = False
 
@@ -95,6 +96,7 @@ class Heap(object):
         return result
 
 class LinkedRules(object):
+    _immutable_ = True
     def __init__(self, rule, next=None):
         self.rule = rule
         self.next = next
@@ -114,13 +116,19 @@ class LinkedRules(object):
         #import pdb;pdb.set_trace()
         while self:
             uh = self.rule.unify_hash
-            for j in range(len(uh)):
+            hint(uh, concrete=True)
+            uh = hint(uh, deepfreeze=True)
+            j = 0
+            while j < len(uh):
+                hint(j, concrete=True)
                 hash1 = uh[j]
                 hash2 = query.unify_hash_of_child(j)
                 if hash1 != 0 and hash2 != 0 and hash1 != hash2:
                     break
+                j += 1
             else:
-                return self
+                #XXX otherwise the result is green which seems wrong
+                return hint(self, variable=True)
             self = self.next
         return None
 
@@ -128,14 +136,19 @@ class LinkedRules(object):
         return "LinkedRules(%r, %r)" % (self.rule, self.next)
 
 
+
 class Function(object):
-    def __init__(self, firstrule):
-        self.rulechain = LinkedRules(firstrule)
-        self.last = self.rulechain
+    def __init__(self, firstrule=None):
+        if firstrule is None:
+            self.rulechain = self.last = None
+        else:
+            self.rulechain = LinkedRules(firstrule)
+            self.last = self.rulechain
 
     def add_rule(self, rule, end):
-        #import pdb; pdb.set_trace()
-        if end:
+        if self.rulechain is None:
+            self.rulechain = self.last = LinkedRules(rule)
+        elif end:
             self.rulechain, last = self.rulechain.copy()
             self.last = LinkedRules(rule)
             last.next = self.last
@@ -146,13 +159,17 @@ class Function(object):
         self.rulechain, last = self.rulechain.copy(rulechain)
         last.next = rulechain.next
 
+
 class Engine(object):
     def __init__(self):
         self.heap = Heap()
         self.signature2function = {}
         self.parser = None
         self.operations = None
-    
+        #XXX circular imports hack
+        from pypy.lang.prolog.builtin import builtins_list
+        globals()['unrolling_builtins'] = unrolling_iterable(builtins_list) 
+
     def add_rule(self, rule, end=True):
         from pypy.lang.prolog import builtin
         if DEBUG:
@@ -204,29 +221,57 @@ class Engine(object):
 
     def call(self, query, continuation=DONOTHING):
         assert isinstance(query, Callable)
-        from pypy.lang.prolog.builtin import builtins
         if DEBUG:
             debug_print("calling", query)
         signature = query.signature
         # check for builtins
-        builtins = hint(builtins, deepfreeze=True)
+        if _is_early_constant(signature):
+            for bsig, builtin in unrolling_builtins:
+                if signature == bsig:
+                    #XXX should be:
+                    #return builtin.call(self, query, continuation)
+                    # but then the JIT explodes sometimes for funny reasons
+                    return builtin.function(self, query, continuation)
+            # do a real call
+            return self.user_call(query, continuation)
+        else:
+            return self._opaque_call(signature, query, continuation)
+
+    def _opaque_call(self, signature, query, continuation):
+        from pypy.lang.prolog.builtin import builtins
+        #builtins = hint(builtins, deepfreeze=True)
         builtin = builtins.get(signature, None)
         if builtin is not None:
-            return builtin.call(self, query, continuation)
+            #XXX should be:
+            #return builtin.call(self, query, continuation)
+            # but then the JIT explodes sometimes for funny reasons
+            return builtin.function(self, query, continuation)
         # do a real call
         return self.user_call(query, continuation)
 
+    def _jit_lookup(self, signature):
+        signature2function = self.signature2function
+        function = signature2function.get(signature, None)
+        if function is None:
+            signature2function[signature] = function = Function()
+        return function
+    _jit_lookup._pure_function_ = True
+
     def user_call(self, query, continuation):
         #import pdb; pdb.set_trace()
-        signature = query.signature
-        function = self.signature2function.get(signature, None)
-        if function is None:
+        signature = hint(query.signature, promote=True)
+        function = self._jit_lookup(signature)
+        startrulechain = function.rulechain
+        startrulechain = hint(startrulechain, promote=True)
+        if startrulechain is None:
             error.throw_existence_error(
                 "procedure", query.get_prolog_signature())
-        rulechain = function.rulechain.find_applicable_rule(query)
+
+        rulechain = startrulechain.find_applicable_rule(query)
         if rulechain is None:
             # none of the rules apply
             raise UnificationFailed()
+        rulechain = hint(rulechain, promote=True)
         rule = rulechain.rule
         rulechain = rulechain.next
         oldstate = self.heap.branch()
@@ -235,6 +280,8 @@ class Engine(object):
             if rulechain is None:
                 self.heap.discard(oldstate)
                 break
+            rulechain = hint(rulechain, promote=True)
+            hint(rule, concrete=True)
             if rule.contains_cut:
                 continuation = LimitedScopeContinuation(continuation)
                 try:
@@ -257,6 +304,7 @@ class Engine(object):
                     self.heap.revert(oldstate)
             rule = rulechain.rule
             rulechain = rulechain.next
+        hint(rule, concrete=True)
         if rule.contains_cut:
             continuation = LimitedScopeContinuation(continuation)
             try:
@@ -268,9 +316,12 @@ class Engine(object):
         return self.try_rule(rule, query, continuation)
 
     def try_rule(self, rule, query, continuation=DONOTHING):
+        return self._portal_try_rule(rule, query, continuation)
+
+    def _portal_try_rule(self, rule, query, continuation=DONOTHING):
         hint(None, global_merge_point=True)
-        rule = hint(rule, promote=True)
         rule = hint(rule, deepfreeze=True)
+        hint(self, concrete=True)
         if DEBUG:
             debug_print("trying rule", rule, query, self.heap.vars[:self.heap.needed_vars])
         # standardizing apart
@@ -283,7 +334,6 @@ class Engine(object):
         else:
             continuation.call(self)
             return "yes"
-
 
     def continue_after_cut(self, continuation, lsc=None):
         while 1:
@@ -306,3 +356,7 @@ class Engine(object):
         if self.operations is None:
             return default_operations
         return self.operations
+
+
+
+
