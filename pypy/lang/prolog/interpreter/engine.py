@@ -126,7 +126,7 @@ class LinkedRules(object):
             curr = curr.next
         return first, copy
 
-    def find_applicable_rule(self, query):
+    def find_applicable_rule(self, uh2):
         #import pdb;pdb.set_trace()
         while self:
             uh = self.rule.unify_hash
@@ -136,8 +136,8 @@ class LinkedRules(object):
             while j < len(uh):
                 hint(j, concrete=True)
                 hash1 = uh[j]
-                hash2 = query.unify_hash_of_child(j)
-                if hash1 != 0 and hash2 != 0 and hash1 != hash2:
+                hash2 = uh2[j]
+                if hash1 != 0 and hash2 != 0 and hash2 != hash1:
                     break
                 j += 1
             else:
@@ -316,7 +316,16 @@ class Engine(object):
             error.throw_existence_error(
                 "procedure", query.get_prolog_signature())
 
-        rulechain = startrulechain.find_applicable_rule(query)
+        #XXX make a nice method
+        if isinstance(query, Term):
+            unify_hash = []
+            i = 0
+            while i < len(query.args):
+                unify_hash.append(query.unify_hash_of_child(i))
+                i += 1
+        else:
+            unify_hash = []
+        rulechain = startrulechain.find_applicable_rule(unify_hash)
         if rulechain is None:
             # none of the rules apply
             raise UnificationFailed()
@@ -325,7 +334,7 @@ class Engine(object):
         rulechain = rulechain.next
         oldstate = self.heap.branch()
         while rulechain:
-            rulechain = rulechain.find_applicable_rule(query)
+            rulechain = rulechain.find_applicable_rule(unify_hash)
             if rulechain is None:
                 self.heap.discard(oldstate)
                 break
@@ -366,8 +375,8 @@ class Engine(object):
 
     def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
                  inline=False):
-        if not choice_point:
-            return (TRY_RULE, query, continuation, rule)
+        #if not choice_point and inline:
+        #    return (TRY_RULE, query, continuation, rule)
         if not we_are_jitted():
             return self.portal_main_loop(TRY_RULE, query, continuation, rule)
         return self._opaque_main_loop(TRY_RULE, query, continuation, rule)
