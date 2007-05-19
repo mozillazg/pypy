@@ -19,7 +19,7 @@ def debug_print(*args):
         print " ".join([str(a) for a in args])
 
 def pure_hash_function(s):
-    return h(s)
+    return hash(s)
 pure_hash_function._pure_function_ = True
 
 class PrologObject(object):
