@@ -252,7 +252,7 @@ class Atom(Callable):
 
     def copy_and_basic_unify(self, other, heap, memo):
         hint(self, concrete=True)
-        if isinstance(other, Atom) and (self is other or
+        if isinstance(other, Atom) and (hint(self is other, promote=True) or
                                         other.name == self.name):
             return self
         else:

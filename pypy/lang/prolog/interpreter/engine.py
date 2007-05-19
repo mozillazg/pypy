@@ -4,6 +4,7 @@ from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFou
     CutException
 from pypy.lang.prolog.interpreter import error
 from pypy.rlib.objectmodel import hint, specialize, _is_early_constant
+from pypy.rlib.objectmodel import we_are_jitted
 from pypy.rlib.unroll import unrolling_iterable
 
 DEBUG = False
@@ -241,20 +242,20 @@ class Engine(object):
 
     def _call(self, query, continuation):
         signature = query.signature
-        # check for builtins
-#        if _is_early_constant(signature):
-#            for bsig, builtin in unrolling_builtins:
-#                if signature == bsig:
-#                    #XXX should be:
-#                    #return builtin.call(self, query, continuation)
-#                    # but then the JIT explodes sometimes for funny reasons
-#                    return builtin.function(self, query, continuation)
-#            # do a real call
-#            return self.user_call(query, continuation, tail_call=True)
-#        else:
-#            return self._opaque_call(signature, query, continuation)
         from pypy.lang.prolog.builtin import builtins
-        #builtins = hint(builtins, deepfreeze=True)
+        builtins = hint(builtins, deepfreeze=True)
+        signature = hint(signature, promote=True)
+        for bsig, builtin in unrolling_builtins:
+            if signature == bsig:
+                #XXX should be:
+                #return builtin.call(self, query, continuation)
+                # but then the JIT explodes sometimes for funny reasons
+                return builtin.call(self, query, continuation)
+        return self.user_call(query, continuation, choice_point=False)
+
+    def _opaque_call(self, query, continuation):
+        from pypy.lang.prolog.builtin import builtins
+        signature = query.signature
         builtin = builtins.get(signature, None)
         if builtin is not None:
             return builtin.call(self, query, continuation)
@@ -265,25 +266,33 @@ class Engine(object):
         from pypy.lang.prolog.builtin.control import AndContinuation
         from pypy.lang.prolog.interpreter import helper
         next = (DONE, None, None, None)
+        hint(where, concrete=True)
+        hint(rule, concrete=True)
         while 1:
             #print "  " * self.depth, where, query
             if where == CALL:
                 next = self._call(query, continuation)
-                assert next is not None
             elif where == TRY_RULE:
+                rule = hint(rule, promote=True)
                 next = self._try_rule(rule, query, continuation)
-                assert next is not None
             elif where == USER_CALL:
                 next = self._user_call(query, continuation)
-                assert next is not None
             elif where == CONTINUATION:
+                hint(continuation.__class__, promote=True)
                 next = continuation._call(self)
-                assert next is not None
             elif where == DONE:
                 return next
             else:
                 raise Exception("unknown bytecode")
             where, query, continuation, rule = next
+            where = hint(where, promote=True)
+
+    def _opaque_main_loop(self, where, query, continuation, rule=None):
+        return self.portal_main_loop(where, query, continuation, rule)
+
+    def portal_main_loop(self, where, query, continuation, rule=None):
+        hint(None, global_merge_point=True)
+        return self.main_loop(where, query, continuation, rule)
 
     def _jit_lookup(self, signature):
         signature2function = self.signature2function
@@ -359,7 +368,9 @@ class Engine(object):
                  inline=False):
         if not choice_point:
             return (TRY_RULE, query, continuation, rule)
-        return self.main_loop(TRY_RULE, query, continuation, rule)
+        if not we_are_jitted():
+            return self.portal_main_loop(TRY_RULE, query, continuation, rule)
+        return self._opaque_main_loop(TRY_RULE, query, continuation, rule)
 
     def _try_rule(self, rule, query, continuation):
         rule = hint(rule, deepfreeze=True)

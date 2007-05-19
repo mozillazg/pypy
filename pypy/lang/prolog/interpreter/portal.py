@@ -11,7 +11,7 @@ good_modules = {'pypy.lang.prolog.builtin.control': True,
                 'pypy.lang.prolog.builtin.register': True
                }
 
-PORTAL = engine.Engine._portal_try_rule.im_func
+PORTAL = engine.Engine.portal_main_loop.im_func
 
 class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
     novirtualcontainer = True
@@ -139,8 +139,17 @@ def timeshift_graphs(t, portal_graph):
     seegraph(pypy.lang.prolog.interpreter.engine.Heap.newvar)
     seegraph(pypy.lang.prolog.interpreter.term.Rule.clone_and_unify_head)
     seegraph(pypy.lang.prolog.interpreter.engine.Engine.call)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine._call)
     seegraph(pypy.lang.prolog.interpreter.engine.Engine.user_call)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine._user_call)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine.try_rule)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine._try_rule)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine.main_loop)
     seegraph(pypy.lang.prolog.interpreter.engine.LinkedRules.find_applicable_rule)
+    seegraph(pypy.lang.prolog.interpreter.engine.Continuation.call)
+    for cls in [engine.Continuation, engine.LimitedScopeContinuation,
+                pypy.lang.prolog.builtin.control.AndContinuation]:
+        seegraph(cls._call)
     return result_graphs
 
 def get_portal(drv):
