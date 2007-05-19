@@ -45,7 +45,7 @@ def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
         elif spec in ("concrete", "list"):
             code.append("    %s = query.args[%s].getvalue(engine.heap)" %
                         (varname, i))
-        if spec in ("callable", "int", "atom", "arithmetic", "list"):
+        if spec in ("int", "atom", "arithmetic", "list"):
             code.append(
                 "    if isinstance(%s, term.Var):" % (varname,))
             code.append(
@@ -77,7 +77,9 @@ def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
     call = "    result = %s(%s)" % (func.func_name, ", ".join(subargs))
     code.append(call)
     if not handles_continuation:
-        code.append("    return continuation.call(engine)")
+        code.append("    return continuation.call(engine, choice_point=False)")
+    else:
+        code.append("    return result")
     miniglobals = globals().copy()
     miniglobals[func.func_name] = func
     exec py.code.Source("\n".join(code)).compile() in miniglobals

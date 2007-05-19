@@ -8,9 +8,22 @@ from pypy.rlib.unroll import unrolling_iterable
 
 DEBUG = False
 
+# bytecodes:
+CALL = chr(0)
+USER_CALL = chr(1)
+TRY_RULE = chr(2)
+CONTINUATION = chr(3)
+DONE = chr(4)
+
+
 class Continuation(object):
-    def call(self, engine):
-        pass
+    def call(self, engine, choice_point=True):
+        if choice_point:
+            return engine.main_loop(CONTINUATION, None, self, None)
+        return (CONTINUATION, None, self, None)
+
+    def _call(self, engine):
+        return (DONE, None, None, None)
 
 DONOTHING = Continuation()
 
@@ -19,9 +32,9 @@ class LimitedScopeContinuation(Continuation):
         self.scope_active = True
         self.continuation = continuation
 
-    def call(self, engine):
+    def _call(self, engine):
         self.scope_active = False
-        return self.continuation.call(engine)
+        return self.continuation.call(engine, choice_point=False)
 
 START_NUMBER_OF_VARS = 4096
 
@@ -201,9 +214,9 @@ class Engine(object):
         vars = query.get_max_var() + 1
         self.heap.clear(vars)
         try:
-            return self.call(query, continuation)
+            return self.call(query, continuation, choice_point=True)
         except CutException, e:
-            self.continue_after_cut(e.continuation)
+            return self.continue_after_cut(e.continuation)
 
     def _build_and_run(self, tree):
         from pypy.lang.prolog.interpreter.parsing import TermBuilder
@@ -219,35 +232,58 @@ class Engine(object):
         from pypy.lang.prolog.interpreter.parsing import parse_file
         trees = parse_file(s, self.parser, Engine._build_and_run, self)
 
-    def call(self, query, continuation=DONOTHING):
+    def call(self, query, continuation=DONOTHING, choice_point=True,
+             inline=False):
         assert isinstance(query, Callable)
-        if DEBUG:
-            debug_print("calling", query)
+        if not choice_point:
+            return (CALL, query, continuation, None)
+        return self.main_loop(CALL, query, continuation)
+
+    def _call(self, query, continuation):
         signature = query.signature
         # check for builtins
-        if _is_early_constant(signature):
-            for bsig, builtin in unrolling_builtins:
-                if signature == bsig:
-                    #XXX should be:
-                    #return builtin.call(self, query, continuation)
-                    # but then the JIT explodes sometimes for funny reasons
-                    return builtin.function(self, query, continuation)
-            # do a real call
-            return self.user_call(query, continuation)
-        else:
-            return self._opaque_call(signature, query, continuation)
-
-    def _opaque_call(self, signature, query, continuation):
+#        if _is_early_constant(signature):
+#            for bsig, builtin in unrolling_builtins:
+#                if signature == bsig:
+#                    #XXX should be:
+#                    #return builtin.call(self, query, continuation)
+#                    # but then the JIT explodes sometimes for funny reasons
+#                    return builtin.function(self, query, continuation)
+#            # do a real call
+#            return self.user_call(query, continuation, tail_call=True)
+#        else:
+#            return self._opaque_call(signature, query, continuation)
         from pypy.lang.prolog.builtin import builtins
         #builtins = hint(builtins, deepfreeze=True)
         builtin = builtins.get(signature, None)
         if builtin is not None:
-            #XXX should be:
-            #return builtin.call(self, query, continuation)
-            # but then the JIT explodes sometimes for funny reasons
-            return builtin.function(self, query, continuation)
+            return builtin.call(self, query, continuation)
         # do a real call
-        return self.user_call(query, continuation)
+        return self.user_call(query, continuation, choice_point=False)
+
+    def main_loop(self, where, query, continuation, rule=None):
+        from pypy.lang.prolog.builtin.control import AndContinuation
+        from pypy.lang.prolog.interpreter import helper
+        next = (DONE, None, None, None)
+        while 1:
+            #print "  " * self.depth, where, query
+            if where == CALL:
+                next = self._call(query, continuation)
+                assert next is not None
+            elif where == TRY_RULE:
+                next = self._try_rule(rule, query, continuation)
+                assert next is not None
+            elif where == USER_CALL:
+                next = self._user_call(query, continuation)
+                assert next is not None
+            elif where == CONTINUATION:
+                next = continuation._call(self)
+                assert next is not None
+            elif where == DONE:
+                return next
+            else:
+                raise Exception("unknown bytecode")
+            where, query, continuation, rule = next
 
     def _jit_lookup(self, signature):
         signature2function = self.signature2function
@@ -257,8 +293,12 @@ class Engine(object):
         return function
     _jit_lookup._pure_function_ = True
 
-    def user_call(self, query, continuation):
-        #import pdb; pdb.set_trace()
+    def user_call(self, query, continuation, choice_point=True, inline=False):
+        if not choice_point:
+            return (USER_CALL, query, continuation, None)
+        return self.main_loop(USER_CALL, query, continuation)
+
+    def _user_call(self, query, continuation):
         signature = hint(query.signature, promote=True)
         function = self._jit_lookup(signature)
         startrulechain = function.rulechain
@@ -311,34 +351,30 @@ class Engine(object):
                 return self.try_rule(rule, query, continuation)
             except CutException, e:
                 if continuation.scope_active:
-                    self.continue_after_cut(e.continuation, continuation)
+                    return self.continue_after_cut(e.continuation, continuation)
                 raise
-        return self.try_rule(rule, query, continuation)
+        return self.try_rule(rule, query, continuation, choice_point=False)
 
-    def try_rule(self, rule, query, continuation=DONOTHING):
-        return self._portal_try_rule(rule, query, continuation)
+    def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
+                 inline=False):
+        if not choice_point:
+            return (TRY_RULE, query, continuation, rule)
+        return self.main_loop(TRY_RULE, query, continuation, rule)
 
-    def _portal_try_rule(self, rule, query, continuation=DONOTHING):
-        hint(None, global_merge_point=True)
+    def _try_rule(self, rule, query, continuation):
         rule = hint(rule, deepfreeze=True)
         hint(self, concrete=True)
-        if DEBUG:
-            debug_print("trying rule", rule, query, self.heap.vars[:self.heap.needed_vars])
         # standardizing apart
         nextcall = rule.clone_and_unify_head(self.heap, query)
-        if DEBUG:
-            debug_print("worked", rule, query, self.heap.vars[:self.heap.needed_vars])
         if nextcall is not None:
-            self.call(nextcall, continuation)
-            return "no"
+            return self.call(nextcall, continuation, choice_point=False)
         else:
-            continuation.call(self)
-            return "yes"
+            return continuation.call(self, choice_point=False)
 
     def continue_after_cut(self, continuation, lsc=None):
         while 1:
             try:
-                return continuation.call(self)
+                return continuation.call(self, choice_point=True)
             except CutException, e:
                 if lsc is not None and not lsc.scope_active:
                     raise
