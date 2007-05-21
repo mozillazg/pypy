@@ -40,15 +40,6 @@ class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
             return False
         return True
 
-def jitme(func):
-    func._look_inside_me_ = True
-    return func
-
-def dontjitme(func):
-    func._look_inside_me_ = False
-    return func
-
-
 def enumerate_reachable_graphs(translator, startgraph):
     from pypy.translator.backendopt.support import find_calls_from
     pending = [(startgraph, None)]
@@ -144,6 +135,7 @@ def timeshift_graphs(t, portal_graph):
     seegraph(pypy.lang.prolog.interpreter.engine.Engine.try_rule)
     seegraph(pypy.lang.prolog.interpreter.engine.Engine._try_rule)
     seegraph(pypy.lang.prolog.interpreter.engine.Engine.main_loop)
+    seegraph(pypy.lang.prolog.interpreter.engine.Engine.dispatch_bytecode)
     seegraph(pypy.lang.prolog.interpreter.engine.LinkedRules.find_applicable_rule)
     seegraph(pypy.lang.prolog.interpreter.engine.Continuation.call)
     seegraph(term.Term.unify_hash_of_child)

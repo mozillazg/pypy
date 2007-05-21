@@ -141,8 +141,7 @@ class LinkedRules(object):
                     break
                 j += 1
             else:
-                #XXX otherwise the result is green which seems wrong
-                return hint(self, variable=True)
+                return self
             self = self.next
         return None
 
@@ -247,9 +246,6 @@ class Engine(object):
         signature = hint(signature, promote=True)
         for bsig, builtin in unrolling_builtins:
             if signature == bsig:
-                #XXX should be:
-                #return builtin.call(self, query, continuation)
-                # but then the JIT explodes sometimes for funny reasons
                 return builtin.call(self, query, continuation)
         return self.user_call(query, continuation, choice_point=False)
 
@@ -263,30 +259,33 @@ class Engine(object):
         return self.user_call(query, continuation, choice_point=False)
 
     def main_loop(self, where, query, continuation, rule=None):
-        from pypy.lang.prolog.builtin.control import AndContinuation
-        from pypy.lang.prolog.interpreter import helper
         next = (DONE, None, None, None)
         hint(where, concrete=True)
         hint(rule, concrete=True)
         while 1:
-            hint(None, global_merge_point=True)
+            #hint(None, global_merge_point=True)
             #print "  " * self.depth, where, query
-            if where == CALL:
-                next = self._call(query, continuation)
-            elif where == TRY_RULE:
-                rule = hint(rule, promote=True)
-                next = self._try_rule(rule, query, continuation)
-            elif where == USER_CALL:
-                next = self._user_call(query, continuation)
-            elif where == CONTINUATION:
-                hint(continuation.__class__, promote=True)
-                next = continuation._call(self)
-            elif where == DONE:
+            if where == DONE:
                 return next
-            else:
-                raise Exception("unknown bytecode")
+            next = self.dispatch_bytecode(where, query, continuation, rule)
             where, query, continuation, rule = next
             where = hint(where, promote=True)
+
+
+    def dispatch_bytecode(self, where, query, continuation, rule):
+        if where == CALL:
+            next = self._call(query, continuation)
+        elif where == TRY_RULE:
+            rule = hint(rule, promote=True)
+            next = self._try_rule(rule, query, continuation)
+        elif where == USER_CALL:
+            next = self._user_call(query, continuation)
+        elif where == CONTINUATION:
+            hint(continuation.__class__, promote=True)
+            next = continuation._call(self)
+        else:
+            raise Exception("unknown bytecode")
+        return next
 
     def _jit_lookup(self, signature):
         signature2function = self.signature2function
@@ -296,7 +295,7 @@ class Engine(object):
         return function
     _jit_lookup._pure_function_ = True
 
-    def user_call(self, query, continuation, choice_point=True, inline=False):
+    def user_call(self, query, continuation, choice_point=True):
         if not choice_point:
             return (USER_CALL, query, continuation, None)
         return self.main_loop(USER_CALL, query, continuation)
@@ -323,7 +322,6 @@ class Engine(object):
         if rulechain is None:
             # none of the rules apply
             raise UnificationFailed()
-        rulechain = hint(rulechain, promote=True)
         rule = rulechain.rule
         rulechain = rulechain.next
         oldstate = self.heap.branch()
@@ -332,7 +330,6 @@ class Engine(object):
             if rulechain is None:
                 self.heap.discard(oldstate)
                 break
-            rulechain = hint(rulechain, promote=True)
             hint(rule, concrete=True)
             if rule.contains_cut:
                 continuation = LimitedScopeContinuation(continuation)
@@ -370,12 +367,12 @@ class Engine(object):
     def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
                  inline=False):
         if not we_are_jitted():
-            if not choice_point:
-                return (TRY_RULE, query, continuation, rule)
             return self.portal_try_rule(rule, query, continuation, choice_point)
-        if _is_early_constant(rule):
-            rule = hint(rule, promote=True)
-            return self.portal_try_rule(rule, query, continuation, choice_point)
+        if not choice_point:
+            return (TRY_RULE, query, continuation, rule)
+        #if _is_early_constant(rule):
+        #    rule = hint(rule, promote=True)
+        #    return self.portal_try_rule(rule, query, continuation, choice_point)
         return self._opaque_try_rule(rule, query, continuation, choice_point)
 
     def _opaque_try_rule(self, rule, query, continuation, choice_point):
@@ -386,7 +383,18 @@ class Engine(object):
         #hint(choice_point, concrete=True)
         #if not choice_point:
         #    return self._try_rule(rule, query, continuation)
-        return self.main_loop(TRY_RULE, query, continuation, rule)
+        where = TRY_RULE
+        next = (DONE, None, None, None)
+        hint(where, concrete=True)
+        hint(rule, concrete=True)
+        while 1:
+            hint(None, global_merge_point=True)
+            rule = hint(rule, promote=True)
+            if where == DONE:
+                return next
+            next = self.dispatch_bytecode(where, query, continuation, rule)
+            where, query, continuation, rule = next
+            where = hint(where, promote=True)
 
     def _try_rule(self, rule, query, continuation):
         rule = hint(rule, deepfreeze=True)

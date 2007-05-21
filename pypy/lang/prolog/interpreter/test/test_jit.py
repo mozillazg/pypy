@@ -72,6 +72,31 @@ class TestPortal(PortalTest):
                                          backendoptimize=True)
         assert res == True
 
+    def test_append(self):
+        e = get_engine("""
+            append([], L, L).
+            append([X|Y], L, [X|Z]) :- append(Y, L, Z).
+        """)
+        t = parse_query_term("append([a, b, c], [d, f, g], X).")
+        X = e.heap.newvar()
+
+        def main(n):
+            if n == 0:
+                e.call(t)
+                return isinstance(X.dereference(e.heap), term.Term)
+            else:
+                return False
+
+        res = main(0)
+        assert res == True
+
+        e.heap.reset()
+        res = self.timeshift_from_portal(main, portal.PORTAL,
+                                         [0], policy=POLICY,
+                                         backendoptimize=True)
+        assert res == True
+
+
     def test_user_call(self):
         e = get_engine("""
             h(X) :- f(X, b).
