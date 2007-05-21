@@ -1,5 +1,9 @@
 from pypy.rpython.extregistry import ExtRegistryEntry
 
+def purefunction(func):
+    func._pure_function_ = True
+    return func
+
 def hint(x, **kwds):
     return x
 
