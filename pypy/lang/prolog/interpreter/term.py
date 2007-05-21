@@ -19,9 +19,6 @@ def debug_print(*args):
     if DEBUG and not we_are_translated():
         print " ".join([str(a) for a in args])
 
-def pure_hash_function(s):
-    return hash(s)
-pure_hash_function._pure_function_ = True
 
 class PrologObject(object):
     __slots__ = ()
@@ -261,7 +258,7 @@ class Atom(Callable):
 
     def get_unify_hash(self):
         name = hint(self.name, promote=True)
-        return intmask(pure_hash_function(name) << TAGBITS | self.TAG)
+        return intmask(hash(name) << TAGBITS | self.TAG)
 
     def get_prolog_signature(self):
         return Term("/", [self, NUMBER_0])
@@ -466,7 +463,7 @@ class Term(Callable):
 
     def get_unify_hash(self):
         signature = hint(self.signature, promote=True)
-        return intmask(pure_hash_function(signature) << TAGBITS | self.TAG)
+        return intmask(hash(signature) << TAGBITS | self.TAG)
 
     def unify_hash_of_child(self, i):
         return self.args[i].get_unify_hash()

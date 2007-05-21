@@ -3,7 +3,7 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
 from pypy.lang.prolog.interpreter import error
-from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant
+from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant, purefunction
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
 
@@ -287,13 +287,13 @@ class Engine(object):
             raise Exception("unknown bytecode")
         return next
 
+    @purefunction
     def _jit_lookup(self, signature):
         signature2function = self.signature2function
         function = signature2function.get(signature, None)
         if function is None:
             signature2function[signature] = function = Function()
         return function
-    _jit_lookup._pure_function_ = True
 
     def user_call(self, query, continuation, choice_point=True):
         if not choice_point:
