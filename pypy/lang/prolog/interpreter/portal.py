@@ -18,6 +18,8 @@ class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
     oopspec = True
 
     def seetranslator(self, t):
+        from pypy.jit.hintannotator.bookkeeper import ImpurityAnalyzer
+        self.analyzer = ImpurityAnalyzer(t)
         portal = getattr(PORTAL, 'im_func', PORTAL)
         portal_graph = graphof(t, portal)
         self.timeshift_graphs = timeshift_graphs(t, portal_graph)
@@ -25,12 +27,18 @@ class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
     def look_inside_graph(self, graph):
         if graph in self.timeshift_graphs:
             return self.timeshift_graphs[graph]
+        # don't look into pure functions
+        if not self.analyzer.analyze_direct_call(graph):
+            return False
+
         try:
             func = graph.func
         except AttributeError:
             return True
         if hasattr(func, '_look_inside_me_'):
             return func._look_inside_me_
+        if getattr(func, '_pure_function_', False):
+            return False
         mod = func.__module__ or '?'
         if mod in forbidden_modules:
             return False
