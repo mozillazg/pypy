@@ -9,7 +9,8 @@ from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.objspace.flow.model import summary, Variable
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr
-from pypy.rlib.objectmodel import hint, keepalive_until_here, debug_assert
+from pypy.rlib.jit import hint
+from pypy.rlib.objectmodel import keepalive_until_here, debug_assert
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import PseudoHighLevelCallable, cachedtype
