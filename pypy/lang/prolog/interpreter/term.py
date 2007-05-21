@@ -2,7 +2,8 @@ import math
 from pypy.rlib.objectmodel import we_are_translated, UnboxedValue
 from pypy.rlib.rarithmetic import intmask
 from pypy.lang.prolog.interpreter.error import UnificationFailed, UncatchableError
-from pypy.rlib.objectmodel import hint, specialize
+from pypy.rlib.jit import hint
+from pypy.rlib.objectmodel import specialize
 
 DEBUG = False
 

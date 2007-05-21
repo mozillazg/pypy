@@ -3,8 +3,8 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Rule, Atom, debug_print
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound, \
     CutException
 from pypy.lang.prolog.interpreter import error
-from pypy.rlib.objectmodel import hint, specialize, _is_early_constant
-from pypy.rlib.objectmodel import we_are_jitted
+from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant
+from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
 
 DEBUG = False
