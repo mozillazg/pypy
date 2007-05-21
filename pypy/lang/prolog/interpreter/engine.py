@@ -137,7 +137,7 @@ class LinkedRules(object):
                 hint(j, concrete=True)
                 hash1 = uh[j]
                 hash2 = uh2[j]
-                if hash1 != 0 and hash2 != 0 and hash2 != hash1:
+                if hash1 != 0 and hash2 * (hash2 - hash1) != 0:
                     break
                 j += 1
             else:
@@ -269,6 +269,7 @@ class Engine(object):
         hint(where, concrete=True)
         hint(rule, concrete=True)
         while 1:
+            hint(None, global_merge_point=True)
             #print "  " * self.depth, where, query
             if where == CALL:
                 next = self._call(query, continuation)
@@ -286,13 +287,6 @@ class Engine(object):
                 raise Exception("unknown bytecode")
             where, query, continuation, rule = next
             where = hint(where, promote=True)
-
-    def _opaque_main_loop(self, where, query, continuation, rule=None):
-        return self.portal_main_loop(where, query, continuation, rule)
-
-    def portal_main_loop(self, where, query, continuation, rule=None):
-        hint(None, global_merge_point=True)
-        return self.main_loop(where, query, continuation, rule)
 
     def _jit_lookup(self, signature):
         signature2function = self.signature2function
@@ -375,11 +369,24 @@ class Engine(object):
 
     def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
                  inline=False):
-        #if not choice_point and inline:
-        #    return (TRY_RULE, query, continuation, rule)
         if not we_are_jitted():
-            return self.portal_main_loop(TRY_RULE, query, continuation, rule)
-        return self._opaque_main_loop(TRY_RULE, query, continuation, rule)
+            if not choice_point:
+                return (TRY_RULE, query, continuation, rule)
+            return self.portal_try_rule(rule, query, continuation, choice_point)
+        if _is_early_constant(rule):
+            rule = hint(rule, promote=True)
+            return self.portal_try_rule(rule, query, continuation, choice_point)
+        return self._opaque_try_rule(rule, query, continuation, choice_point)
+
+    def _opaque_try_rule(self, rule, query, continuation, choice_point):
+        return self.portal_try_rule(rule, query, continuation, choice_point)
+
+    def portal_try_rule(self, rule, query, continuation, choice_point):
+        hint(None, global_merge_point=True)
+        #hint(choice_point, concrete=True)
+        #if not choice_point:
+        #    return self._try_rule(rule, query, continuation)
+        return self.main_loop(TRY_RULE, query, continuation, rule)
 
     def _try_rule(self, rule, query, continuation):
         rule = hint(rule, deepfreeze=True)

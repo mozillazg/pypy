@@ -98,3 +98,24 @@ class TestPortal(PortalTest):
                                          backendoptimize=True)
         assert res == True
 
+    def test_loop(self):
+        e = get_engine("""
+            f(X) :- h(X).
+            f(a).
+            h(X) :- h(X).
+        """)
+        X = e.heap.newvar()
+
+        def main(n):
+            e.heap.reset()
+            if n == 0:
+                e.call(term.Term("f", [X]))
+                return isinstance(X.dereference(e.heap), term.Atom)
+            else:
+                return False
+
+        res = self.timeshift_from_portal(main, portal.PORTAL,
+                                         [0], policy=POLICY,
+                                         backendoptimize=True)
+        assert res == True
+
