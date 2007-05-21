@@ -1749,4 +1749,11 @@ class TestTimeshift(TimeshiftingTests):
         self.check_insns({'int_eq': 2})
         assert res == f(0)
 
-
+    def test_misplaced_global_merge_point(self):
+        def g(n):
+            hint(None, global_merge_point=True)
+            return n+1
+        def f(n):
+            hint(None, global_merge_point=True)
+            return g(n)
+        py.test.raises(AssertionError, self.timeshift, f, [7], [])
