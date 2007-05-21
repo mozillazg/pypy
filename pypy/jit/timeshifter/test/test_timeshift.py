@@ -58,7 +58,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
         auto_inlining(t, threshold=inline)
     if backendoptimize:
         from pypy.translator.backendopt.all import backend_optimizations
-        backend_optimizations(t)
+        backend_optimizations(t, inline_threshold=inline)
     if portal is None:
         portal = func
     if hasattr(policy, "seetranslator"):
