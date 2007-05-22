@@ -1,4 +1,4 @@
-from pypy.jit.hintannotator.annotator import HintAnnotatorPolicy
+from pypy.jit.hintannotator.policy import ManualGraphPolicy
 from pypy.lang.prolog.interpreter import term, engine
 from pypy.translator.translator import graphof
 from pypy.annotation.specialize import getuniquenondirectgraph
@@ -13,33 +13,8 @@ good_modules = {'pypy.lang.prolog.builtin.control': True,
 
 PORTAL = engine.Engine.portal_try_rule.im_func
 
-class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
-    novirtualcontainer = True
-    oopspec = True
-
-    def seetranslator(self, t):
-        from pypy.jit.hintannotator.bookkeeper import ImpurityAnalyzer
-        self.analyzer = ImpurityAnalyzer(t)
-        portal = getattr(PORTAL, 'im_func', PORTAL)
-        portal_graph = graphof(t, portal)
-        self.timeshift_graphs = timeshift_graphs(t, portal_graph)
-
-    def look_inside_graph(self, graph):
-        if graph in self.timeshift_graphs:
-            return self.timeshift_graphs[graph]
-        # don't look into pure functions
-        if not self.analyzer.analyze_direct_call(graph):
-            return False
-
-        try:
-            func = graph.func
-        except AttributeError:
-            return True
-        if hasattr(func, '_look_inside_me_'):
-            return func._look_inside_me_
-        if getattr(func, '_pure_function_', False):
-            return False
-        mod = func.__module__ or '?'
+class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
+    def look_inside_graph_of_module(self, graph, mod):
         if mod in forbidden_modules:
             return False
         if mod in good_modules:
@@ -48,109 +23,36 @@ class PyrologHintAnnotatorPolicy(HintAnnotatorPolicy):
             return False
         return True
 
-def enumerate_reachable_graphs(translator, startgraph):
-    from pypy.translator.backendopt.support import find_calls_from
-    pending = [(startgraph, None)]
-    yield pending[0]
-    seen = {startgraph: True}
-    while pending:
-        yield None     # hack: a separator meaning "length increases now"
-        nextlengthlist = []
-        nextseen = {}
-        for node in pending:
-            head, tail = node
-            for block, callee in find_calls_from(translator, head):
-                if callee not in seen:
-                    newnode = callee, node
-                    yield newnode
-                    nextlengthlist.append(newnode)
-                    nextseen[callee] = True
-        pending = nextlengthlist
-        seen.update(nextseen)
-    yield None
-
-def graphs_on_the_path_to(translator, startgraph, targetgraphs):
-    targetgraphs = targetgraphs.copy()
-    result = {}
-    found = {}
-    for node in enumerate_reachable_graphs(translator, startgraph):
-        if node is None:  # hack: a separator meaning "length increases now"
-            for graph in found:
-                del targetgraphs[graph]
-            found.clear()
-            if not targetgraphs:
-                return result
-        elif node[0] in targetgraphs:
-            found[node[0]] = True
-            while node is not None:
-                head, tail = node
-                result[head] = True
-                node = tail
-    raise Exception("did not reach all targets:\nmissing %r" % (
-        targetgraphs.keys(),))
-
-
-def timeshift_graphs(t, portal_graph):
-    import pypy
-    result_graphs = {}
-
-    bk = t.annotator.bookkeeper
-
-    def _graph(func):
-        func = getattr(func, 'im_func', func)
-        desc = bk.getdesc(func)
-        return getuniquenondirectgraph(desc)
-
-    def seefunc(fromfunc, *tofuncs):
-        targetgraphs = {}
-        for tofunc in tofuncs:
-            targetgraphs[_graph(tofunc)] = True
-        graphs = graphs_on_the_path_to(t, _graph(fromfunc), targetgraphs)
-        for graph in graphs:
-            result_graphs[graph] = True
-
-    def seepath(*path):
-        for i in range(1, len(path)):
-            seefunc(path[i-1], path[i])
-
-    def seegraph(func, look=True):
-        graph = _graph(func)
-        if look:
-            extra = ""
-            if look != True:
-                extra = " substituted with %s" % look
-        result_graphs[graph] = look
-
-    for cls in [term.Var, term.Term, term.Number, term.Float, term.Atom]:
-        seegraph(cls.copy)
-        seegraph(cls.__init__)
-        seegraph(cls.copy_and_unify)
-    for cls in [term.Term, term.Number, term.Atom]:
-        seegraph(cls.copy_and_basic_unify)
-        seegraph(cls.dereference)
-        seegraph(cls.copy_and_basic_unify)
-    for cls in [term.Var, term.Term, term.Number, term.Atom]:
-        seegraph(cls.get_unify_hash)
-    for cls in [term.Callable, term.Atom, term.Term]:
-        seegraph(cls.get_prolog_signature)
-    seegraph(PORTAL)
-    seegraph(pypy.lang.prolog.interpreter.engine.Heap.newvar)
-    seegraph(pypy.lang.prolog.interpreter.term.Rule.clone_and_unify_head)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine.call)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine._call)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine.user_call)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine._user_call)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine.try_rule)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine._try_rule)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine.main_loop)
-    seegraph(pypy.lang.prolog.interpreter.engine.Engine.dispatch_bytecode)
-    seegraph(pypy.lang.prolog.interpreter.engine.LinkedRules.find_applicable_rule)
-    seegraph(pypy.lang.prolog.interpreter.engine.Continuation.call)
-    seegraph(term.Term.unify_hash_of_child)
-    for cls in [engine.Continuation, engine.LimitedScopeContinuation,
-                pypy.lang.prolog.builtin.control.AndContinuation]:
-        seegraph(cls._call)
-    return result_graphs
+    def fill_timeshift_graphs(self, t, portal_graph):
+        for cls in [term.Var, term.Term, term.Number, term.Float, term.Atom]:
+            self.seegraph(cls.copy)
+            self.seegraph(cls.__init__)
+            self.seegraph(cls.copy_and_unify)
+        for cls in [term.Term, term.Number, term.Atom]:
+            self.seegraph(cls.copy_and_basic_unify)
+            self.seegraph(cls.dereference)
+            self.seegraph(cls.copy_and_basic_unify)
+        for cls in [term.Var, term.Term, term.Number, term.Atom]:
+            self.seegraph(cls.get_unify_hash)
+        for cls in [term.Callable, term.Atom, term.Term]:
+            self.seegraph(cls.get_prolog_signature)
+        self.seegraph(PORTAL)
+        self.seegraph(engine.Heap.newvar)
+        self.seegraph(term.Rule.clone_and_unify_head)
+        self.seegraph(engine.Engine.call)
+        self.seegraph(engine.Engine._call)
+        self.seegraph(engine.Engine.user_call)
+        self.seegraph(engine.Engine._user_call)
+        self.seegraph(engine.Engine.try_rule)
+        self.seegraph(engine.Engine._try_rule)
+        self.seegraph(engine.Engine.main_loop)
+        self.seegraph(engine.Engine.dispatch_bytecode)
+        self.seegraph(engine.LinkedRules.find_applicable_rule)
+        self.seegraph(engine.Continuation.call)
+        self.seegraph(term.Term.unify_hash_of_child)
+        for cls in [engine.Continuation, engine.LimitedScopeContinuation,
+                    self.pypy.lang.prolog.builtin.control.AndContinuation]:
+            self.seegraph(cls._call)
 
 def get_portal(drv):
     t = drv.translator
