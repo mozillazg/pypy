@@ -1,4 +1,4 @@
-from pypy.jit.hintannotator.annotator import HintAnnotatorPolicy
+from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
 from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
 from pypy.rlib.jit import hint
 
