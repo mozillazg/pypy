@@ -1,5 +1,6 @@
 from pypy.annotation import policy
 from pypy.annotation.specialize import getuniquenondirectgraph
+from pypy.translator.translator import graphof
 
 class HintAnnotatorPolicy(policy.AnnotatorPolicy):
     novirtualcontainer     = False
@@ -48,7 +49,7 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
         self.translator = t
         self.bookkeeper = t.annotator.bookkeeper
         self.timeshift_graphs = {}
-        portal = getattr(PORTAL, 'im_func', PORTAL)
+        portal = getattr(self.PORTAL, 'im_func', self.PORTAL)
         portal_graph = graphof(t, portal)
         self.fill_timeshift_graphs(t, portal_graph)
 
@@ -90,15 +91,15 @@ class ManualGraphPolicy(HintAnnotatorPolicy):
         graphs = graphs_on_the_path_to(self.translator, self._graph(fromfunc),
                                        targetgraphs)
         for graph in graphs:
-            result_graphs[graph] = True
+            self.timeshift_graphs[graph] = True
 
     def seepath(self, *path):
         for i in range(1, len(path)):
             self.seefunc(path[i-1], path[i])
 
     def seegraph(self, func, look=True):
-        graph = _graph(func)
-        result_graphs[graph] = look
+        graph = self._graph(func)
+        self.timeshift_graphs[graph] = look
 
 
 
