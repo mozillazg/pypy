@@ -1,8 +1,8 @@
 import py
 import sys
 from pypy.translator.translator import TranslationContext, graphof
-from pypy.jit.hintannotator.annotator import HintAnnotator, HintAnnotatorPolicy
-from pypy.jit.hintannotator.annotator import StopAtXPolicy
+from pypy.jit.hintannotator.annotator import HintAnnotator
+from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.jit.timeshifter.hrtyper import HintRTyper, originalconcretetype
