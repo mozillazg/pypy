@@ -5,7 +5,7 @@ from pypy.jit.hintannotator.annotator import StopAtXPolicy
 from pypy.jit.hintannotator.bookkeeper import HintBookkeeper
 from pypy.jit.hintannotator.model import *
 from pypy.rpython.lltypesystem import lltype
-from pypy.rlib.objectmodel import hint, we_are_jitted
+from pypy.rlib.jit import hint, we_are_jitted
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow import model as flowmodel
 from pypy.translator.backendopt.inline import auto_inlining
