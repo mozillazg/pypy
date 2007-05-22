@@ -1,4 +1,5 @@
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 def purefunction(func):
     func._pure_function_ = True
