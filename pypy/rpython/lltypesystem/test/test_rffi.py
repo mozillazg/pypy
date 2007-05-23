@@ -50,34 +50,3 @@ def test_string():
 
     xf = compile(f, [], backendopt=False)
     assert xf() == 3
-
-def test_stringstar():
-    import py
-    py.test.skip("completely broken")
-    c_source = """
-    int f(char *args[]) {
-        char **p = args;
-        int l = 0;
-        while (p) {
-            l += strlen(p*);
-            p++;
-        }
-        return (l);
-    }
-    """
-    elem_T = lltype.FixedSizeArray(lltype.Char, 1)
-    T = lltype.FixedSizeArray(Ptr(elem_T), 1) # this is char**
-    z = llexternal('f', [Ptr(T)], Signed, includes=['stdio.h'])
-    alloc_T = lltype.Array(CCHARP)
-
-    def f():
-        ss = malloc(alloc_T, 4, flavor='raw')
-        ref1, ss[0] = str2charp("xxx")
-        ref2, ss[1] = str2charp("x")
-        ref3, ss[2] = str2charp("xxxx")
-        _, ss[3] = lltype.nullptr(elem_T)
-        to_fun = lltype._subarray._makeptr(ss._obj, 0, ss._solid)
-        return z(to_fun)
-
-    xf = compile(f, [])
-    assert xf() == 8
