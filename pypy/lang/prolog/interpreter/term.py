@@ -46,13 +46,10 @@ class PrologObject(object):
     def clone_compress_vars(self, vars_new_indexes, offset):
         return self
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         # if two non-var objects return two different numbers
         # they must not be unifiable
         raise NotImplementedError("abstract base class")
-
-    def unify_hash_of_child(self, i):
-        raise KeyError
 
     @specialize.arg(3)
     def unify(self, other, heap, occurs_check=False):
@@ -147,7 +144,12 @@ class Var(PrologObject):
         vars_new_indexes[self.index] = index
         return Var.newvar(index)
     
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
+        if heap is not None:
+            self = self.dereference(heap)
+            if isinstance(self, Var):
+                return 0
+            return self.get_unify_hash(heap)
         return 0
 
     def contains_var(self, var, heap):
@@ -220,6 +222,9 @@ class Callable(NonVar):
     def get_prolog_signature(self):
         raise NotImplementedError("abstract base")
 
+    def unify_hash_of_children(self, heap):
+        raise NotImplementedError("abstract base")
+
 
 class Atom(Callable):
     TAG = tag()
@@ -250,15 +255,18 @@ class Atom(Callable):
 
     def copy_and_basic_unify(self, other, heap, memo):
         hint(self, concrete=True)
-        if isinstance(other, Atom) and (hint(self is other, promote=True) or
+        if isinstance(other, Atom) and (self is other or
                                         other.name == self.name):
             return self
         else:
             raise UnificationFailed
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         name = hint(self.name, promote=True)
         return intmask(hash(name) << TAGBITS | self.TAG)
+
+    def unify_hash_of_children(self, heap):
+        return []
 
     def get_prolog_signature(self):
         return Term("/", [self, NUMBER_0])
@@ -301,7 +309,7 @@ class Number(NonVar):
     def __repr__(self):
         return "Number(%r)" % (self.num, )
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         return intmask(self.num << TAGBITS | self.TAG)
 
 NUMBER_0 = Number(0)
@@ -329,7 +337,7 @@ class Float(NonVar):
         else:
             raise UnificationFailed
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         #XXX no clue whether this is a good idea...
         m, e = math.frexp(self.num)
         m = intmask(int(m / 2 * 2 ** (32 - TAGBITS)))
@@ -364,7 +372,7 @@ class BlackBox(NonVar):
         else:
             raise UnificationFailed
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         return intmask(id(self) << TAGBITS | self.TAG)
 
 
@@ -461,12 +469,17 @@ class Term(Callable):
         else:
             return self
 
-    def get_unify_hash(self):
+    def get_unify_hash(self, heap):
         signature = hint(self.signature, promote=True)
         return intmask(hash(signature) << TAGBITS | self.TAG)
 
-    def unify_hash_of_child(self, i):
-        return self.args[i].get_unify_hash()
+    def unify_hash_of_children(self, heap):
+        unify_hash = []
+        i = 0
+        while i < len(self.args):
+            unify_hash.append(self.args[i].get_unify_hash(heap))
+            i += 1
+        return unify_hash
 
     def get_prolog_signature(self):
         return Term("/", [Atom.newatom(self.name), Number(len(self.args))])
@@ -495,7 +508,7 @@ class Rule(object):
         self.numvars = len(d)
         self.signature = self.head.signature
         if isinstance(head, Term):
-            self.unify_hash = [arg.get_unify_hash() for arg in head.args]
+            self.unify_hash = [arg.get_unify_hash(None) for arg in head.args]
         self._does_contain_cut()
 
     def _does_contain_cut(self):

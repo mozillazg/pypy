@@ -11,9 +11,11 @@ good_modules = {'pypy.lang.prolog.builtin.control': True,
                 'pypy.lang.prolog.builtin.register': True
                }
 
+
 PORTAL = engine.Engine.portal_try_rule.im_func
 
 class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
+    PORTAL = PORTAL
     def look_inside_graph_of_module(self, graph, mod):
         if mod in forbidden_modules:
             return False
@@ -24,6 +26,7 @@ class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
         return True
 
     def fill_timeshift_graphs(self, t, portal_graph):
+        import pypy
         for cls in [term.Var, term.Term, term.Number, term.Float, term.Atom]:
             self.seegraph(cls.copy)
             self.seegraph(cls.__init__)
@@ -36,6 +39,7 @@ class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
             self.seegraph(cls.get_unify_hash)
         for cls in [term.Callable, term.Atom, term.Term]:
             self.seegraph(cls.get_prolog_signature)
+            self.seegraph(cls.unify_hash_of_children)
         self.seegraph(PORTAL)
         self.seegraph(engine.Heap.newvar)
         self.seegraph(term.Rule.clone_and_unify_head)
@@ -48,10 +52,11 @@ class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
         self.seegraph(engine.Engine.main_loop)
         self.seegraph(engine.Engine.dispatch_bytecode)
         self.seegraph(engine.LinkedRules.find_applicable_rule)
+        for method in "branch revert discard newvar extend maxvar".split():
+            self.seegraph(getattr(engine.Heap, method))
         self.seegraph(engine.Continuation.call)
-        self.seegraph(term.Term.unify_hash_of_child)
         for cls in [engine.Continuation, engine.LimitedScopeContinuation,
-                    self.pypy.lang.prolog.builtin.control.AndContinuation]:
+                    pypy.lang.prolog.builtin.control.AndContinuation]:
             self.seegraph(cls._call)
 
 def get_portal(drv):

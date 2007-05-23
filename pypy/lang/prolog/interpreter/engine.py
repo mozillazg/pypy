@@ -10,11 +10,11 @@ from pypy.rlib.unroll import unrolling_iterable
 DEBUG = False
 
 # bytecodes:
-CALL = chr(0)
-USER_CALL = chr(1)
-TRY_RULE = chr(2)
-CONTINUATION = chr(3)
-DONE = chr(4)
+CALL = 'a'
+USER_CALL = 'u'
+TRY_RULE = 't'
+CONTINUATION = 'c'
+DONE = 'd'
 
 
 class Continuation(object):
@@ -232,8 +232,7 @@ class Engine(object):
         from pypy.lang.prolog.interpreter.parsing import parse_file
         trees = parse_file(s, self.parser, Engine._build_and_run, self)
 
-    def call(self, query, continuation=DONOTHING, choice_point=True,
-             inline=False):
+    def call(self, query, continuation=DONOTHING, choice_point=True):
         assert isinstance(query, Callable)
         if not choice_point:
             return (CALL, query, continuation, None)
@@ -263,14 +262,11 @@ class Engine(object):
         hint(where, concrete=True)
         hint(rule, concrete=True)
         while 1:
-            #hint(None, global_merge_point=True)
-            #print "  " * self.depth, where, query
             if where == DONE:
                 return next
             next = self.dispatch_bytecode(where, query, continuation, rule)
             where, query, continuation, rule = next
             where = hint(where, promote=True)
-
 
     def dispatch_bytecode(self, where, query, continuation, rule):
         if where == CALL:
@@ -309,15 +305,7 @@ class Engine(object):
             error.throw_existence_error(
                 "procedure", query.get_prolog_signature())
 
-        #XXX make a nice method
-        if isinstance(query, Term):
-            unify_hash = []
-            i = 0
-            while i < len(query.args):
-                unify_hash.append(query.unify_hash_of_child(i))
-                i += 1
-        else:
-            unify_hash = []
+        unify_hash = query.unify_hash_of_children(self.heap)
         rulechain = startrulechain.find_applicable_rule(unify_hash)
         if rulechain is None:
             # none of the rules apply
@@ -325,11 +313,12 @@ class Engine(object):
         rule = rulechain.rule
         rulechain = rulechain.next
         oldstate = self.heap.branch()
-        while rulechain:
-            rulechain = rulechain.find_applicable_rule(unify_hash)
-            if rulechain is None:
-                self.heap.discard(oldstate)
-                break
+        while 1:
+            if rulechain is not None:
+                rulechain = rulechain.find_applicable_rule(unify_hash)
+                choice_point = rulechain is not None
+            else:
+                choice_point = False
             hint(rule, concrete=True)
             if rule.contains_cut:
                 continuation = LimitedScopeContinuation(continuation)
@@ -345,31 +334,29 @@ class Engine(object):
                                                        continuation)
                     raise
             else:
+                inline = False #XXX rule.body is None # inline facts
                 try:
-                    result = self.try_rule(rule, query, continuation)
+                    # for the last rule (rulechain is None), this will always
+                    # return, because choice_point is False
+                    result = self.try_rule(rule, query, continuation,
+                                           choice_point=choice_point,
+                                           inline=inline)
                     self.heap.discard(oldstate)
                     return result
                 except UnificationFailed:
+                    assert choice_point
                     self.heap.revert(oldstate)
             rule = rulechain.rule
             rulechain = rulechain.next
-        hint(rule, concrete=True)
-        if rule.contains_cut:
-            continuation = LimitedScopeContinuation(continuation)
-            try:
-                return self.try_rule(rule, query, continuation)
-            except CutException, e:
-                if continuation.scope_active:
-                    return self.continue_after_cut(e.continuation, continuation)
-                raise
-        return self.try_rule(rule, query, continuation, choice_point=False)
 
     def try_rule(self, rule, query, continuation=DONOTHING, choice_point=True,
                  inline=False):
-        if not we_are_jitted():
-            return self.portal_try_rule(rule, query, continuation, choice_point)
         if not choice_point:
             return (TRY_RULE, query, continuation, rule)
+        if not we_are_jitted():
+            return self.portal_try_rule(rule, query, continuation, choice_point)
+        if inline:
+            return self.main_loop(TRY_RULE, query, continuation, rule)
         #if _is_early_constant(rule):
         #    rule = hint(rule, promote=True)
         #    return self.portal_try_rule(rule, query, continuation, choice_point)
@@ -380,20 +367,25 @@ class Engine(object):
 
     def portal_try_rule(self, rule, query, continuation, choice_point):
         hint(None, global_merge_point=True)
-        #hint(choice_point, concrete=True)
-        #if not choice_point:
-        #    return self._try_rule(rule, query, continuation)
+        hint(choice_point, concrete=True)
+        if not choice_point:
+            return self._try_rule(rule, query, continuation)
         where = TRY_RULE
         next = (DONE, None, None, None)
         hint(where, concrete=True)
         hint(rule, concrete=True)
+        signature = hint(query.signature, promote=True)
         while 1:
             hint(None, global_merge_point=True)
-            rule = hint(rule, promote=True)
             if where == DONE:
                 return next
+            if rule is not None:
+                assert rule.signature == signature
             next = self.dispatch_bytecode(where, query, continuation, rule)
             where, query, continuation, rule = next
+            rule = hint(rule, promote=True)
+            if query is not None:
+                signature = hint(query.signature, promote=True)
             where = hint(where, promote=True)
 
     def _try_rule(self, rule, query, continuation):

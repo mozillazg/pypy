@@ -39,16 +39,20 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [1], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
         
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
 
     def test_and(self):
         e = get_engine("""
+            h(X) :- f(X).
+            h(a).
             b(a).
             a(a).
             f(X) :- b(X), a(X).
@@ -59,7 +63,7 @@ class TestPortal(PortalTest):
         def main(n):
             e.heap.reset()
             if n == 0:
-                e.call(term.Term("f", [X]))
+                e.call(term.Term("h", [X]))
                 return isinstance(X.dereference(e.heap), term.Atom)
             else:
                 return False
@@ -69,7 +73,8 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
 
     def test_append(self):
@@ -93,7 +98,8 @@ class TestPortal(PortalTest):
         e.heap.reset()
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
 
 
@@ -120,7 +126,8 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
 
     def test_loop(self):
@@ -141,6 +148,7 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, portal.PORTAL,
                                          [0], policy=POLICY,
-                                         backendoptimize=True)
+                                         backendoptimize=True, 
+                                         inline=0.0)
         assert res == True
 
