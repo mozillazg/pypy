@@ -6,6 +6,7 @@ from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine
 
 POLICY = portal.PyrologHintAnnotatorPolicy()
 
+py.test.skip()
 
 class TestPortal(PortalTest):
     small = False
