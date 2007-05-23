@@ -590,6 +590,8 @@ class FunctionCodeGenerator(object):
         else:
             raise NotImplementedError
 
+    OP_FLAVORED_MALLOC_VARSIZE = OP_FLAVORED_MALLOC
+
     def OP_FLAVORED_FREE(self, op):
         flavor = op.args[0].value
         if flavor == "raw":
