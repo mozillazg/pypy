@@ -66,7 +66,7 @@ class PortalTest(object):
                            view = conftest.option.view and self.small)
 
         #if conftest.option.view and self.small:
-        #    t.viewcg()
+        #    t.view()
         self.postprocess_timeshifting()
         self.readportalgraph = self.hrtyper.readportalgraph
 
