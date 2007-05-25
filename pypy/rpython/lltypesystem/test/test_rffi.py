@@ -40,7 +40,7 @@ def test_hashdefine():
     assert xf() == 8+3
 
 def test_string():
-    z = llexternal('strlen', [Ptr(CCHARP)], Signed, includes=['string.h'])
+    z = llexternal('strlen', [CCHARP], Signed, includes=['string.h'])
 
     def f():
         s = str2charp("xxx")
@@ -67,7 +67,7 @@ def test_stringstar():
     """
     c_file = udir.join("stringstar.c")
     c_file.write(c_source)
-    z = llexternal('f', [Ptr(CCHARPP)], Signed, sources=[str(c_file)])
+    z = llexternal('f', [CCHARPP], Signed, sources=[str(c_file)])
 
     def f():
         l = ["xxx", "x", "xxxx"]
