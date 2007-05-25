@@ -115,19 +115,3 @@ def test_opendir_readdir():
     compared_with = os.listdir(dirname)
     compared_with.sort()
     assert result == compared_with
-
-def test_dup():
-    from pypy.rpython.extregistry import lookup
-    os_dup = lookup(os.dup).lltypeimpl
-    testf = udir.join('test.txt')
-    testf.write("foo")
-    path = testf.strpath
-
-    def ff(fi):
-        g = os_dup(fi)
-        return g
-    fi = os.open(path,os.O_RDONLY,0755)
-    g = ff(fi)
-    assert os.fstat(g) == os.fstat(fi)
-
-
