@@ -708,16 +708,13 @@ if hasattr(posix, 'execv'):
         filename = str(udir.join('test_execv.txt'))
         def does_stuff():
             progname = str(sys.executable)
-            l = ['', '']
-            l[0] = progname
-            l[1] = "-c"
-            l.append('open("%s","w").write("1")' % filename)
+            l = [progname, '-c', 'open("%s","w").write("1")' % filename]
             pid = os.fork()
             if pid == 0:
                 os.execv(progname, l)
             else:
                 os.waitpid(pid, 0)
-        func = compile(does_stuff, [])
+        func = compile(does_stuff, [], backendopt=False)
         func()
         assert open(filename).read() == "1"
 
