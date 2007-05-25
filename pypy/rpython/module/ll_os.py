@@ -37,8 +37,8 @@ if hasattr(os, 'execv'):
         name = '_execv'
     else:
         name = 'execv'
-    os_execv = rffi.llexternal(name, [lltype.Ptr(rffi.CCHARP),
-                               lltype.Ptr(rffi.CCHARPP)], lltype.Signed)
+    os_execv = rffi.llexternal(name, [rffi.CCHARP, rffi.CCHARPP],
+                               lltype.Signed)
 
     def execv_lltypeimpl(path, args):
         l_path = rffi.str2charp(path)

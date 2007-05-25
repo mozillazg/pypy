@@ -9,28 +9,28 @@ def llexternal(name, args, result, sources=[], includes=[]):
                               includes=tuple(includes))
 
 # char *
-CCHARP = lltype.Array(lltype.Char, hints={'nolength': True})
+CCHARP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
 
 # various type mapping
 def str2charp(s):
     """ str -> char*
     """
-    array = lltype.malloc(CCHARP, len(s) + 1, flavor='raw')
+    array = lltype.malloc(CCHARP.TO, len(s) + 1, flavor='raw')
     for i in range(len(s)):
         array[i] = s[i]
     array[len(s)] = '\x00'
     return array
 
 # char**
-CCHARPP = lltype.Array(lltype.Ptr(CCHARP), hints={'nolength': True})
+CCHARPP = lltype.Ptr(lltype.Array(CCHARP, hints={'nolength': True}))
 
 def liststr2charpp(l):
     """ list[str] -> char**, NULL terminated
     """
-    array = lltype.malloc(CCHARPP, len(l) + 1, flavor='raw')
+    array = lltype.malloc(CCHARPP.TO, len(l) + 1, flavor='raw')
     for i in range(len(l)):
         array[i] = str2charp(l[i])
-    array[len(l)] = lltype.nullptr(CCHARP)
+    array[len(l)] = lltype.nullptr(CCHARP.TO)
     return array
 
 def free_charpp(ref):
