@@ -116,25 +116,6 @@ def test_opendir_readdir():
     compared_with.sort()
     assert result == compared_with
 
-if hasattr(os, 'execv'):
-    from pypy.rpython.extregistry import lookup
-    os_execv = lookup(os.execv).lltypeimpl
-    
-    def test_execv():
-        filename = str(udir.join('test_execv_ctypes.txt'))
-
-        progname = str(sys.executable)
-        l = ['', '']
-        l[0] = progname
-        l[1] = "-c"
-        l.append('open("%s","w").write("1")' % filename)
-        pid = os.fork()
-        if pid == 0:
-            os_execv(progname, l)
-        else:
-            os.waitpid(pid, 0)
-        assert open(filename).read() == "1"
-
 def test_dup():
     from pypy.rpython.extregistry import lookup
     os_dup = lookup(os.dup).lltypeimpl
