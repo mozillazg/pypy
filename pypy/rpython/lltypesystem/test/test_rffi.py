@@ -1,6 +1,6 @@
 
 #import py
-from pypy.rpython.lltypesystem.rffi import llexternal, str2charp, CCHARP
+from pypy.rpython.lltypesystem.rffi import *
 from pypy.translator.c.test.test_genc import compile
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem import lltype
@@ -40,7 +40,7 @@ def test_hashdefine():
     assert xf() == 8+3
 
 def test_string():
-    z = llexternal('strlen', [Ptr(CCHARP)], Signed, includes=['stdio.h'])
+    z = llexternal('strlen', [Ptr(CCHARP)], Signed, includes=['string.h'])
 
     def f():
         s = str2charp("xxx")
@@ -50,3 +50,31 @@ def test_string():
 
     xf = compile(f, [], backendopt=False)
     assert xf() == 3
+
+def test_stringstar():
+    c_source = """
+    #include <string.h>
+    
+    int f(char *args[]) {
+        char **p = args;
+        int l = 0;
+        while (*p) {
+            l += strlen(*p);
+            p++;
+        }
+        return (l);
+    }
+    """
+    c_file = udir.join("stringstar.c")
+    c_file.write(c_source)
+    z = llexternal('f', [Ptr(CCHARPP)], Signed, sources=[str(c_file)])
+
+    def f():
+        l = ["xxx", "x", "xxxx"]
+        ss = liststr2charpp(l)
+        result = z(ss)
+        free_charpp(ss)
+        return result
+
+    xf = compile(f, [], backendopt=False)
+    assert xf() == 8
