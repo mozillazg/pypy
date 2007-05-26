@@ -564,6 +564,8 @@ class FunctionCodeGenerator(object):
             result += '\nif(%s) %s->%s = %s;' % (eresult, eresult, lenfld, elength)
         result += '\n}'
         return result
+    
+    OP_ZERO_MALLOC_VARSIZE = OP_MALLOC_VARSIZE
 
     def OP_RAW_MALLOC(self, op):
         eresult = self.expr(op.result)
