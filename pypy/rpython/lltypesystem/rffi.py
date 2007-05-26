@@ -1,6 +1,7 @@
 
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 def llexternal(name, args, result, sources=[], includes=[]):
     ext_type = lltype.FuncType(args, result)
@@ -20,6 +21,9 @@ def CStruct(name, *fields, **kwds):
     # probably because of _ attributes
     c_fields = [('c_' + key, value) for key, value in fields]
     return lltype.Ptr(lltype.Struct(name, *c_fields, **kwds))
+
+# XXX slightly hackish
+c_errno = CDefinedIntSymbolic('errno', default=-1)
 
 # char *
 CCHARP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
