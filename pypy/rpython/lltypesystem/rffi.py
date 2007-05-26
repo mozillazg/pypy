@@ -8,6 +8,19 @@ def llexternal(name, args, result, sources=[], includes=[]):
                               sources=tuple(sources),
                               includes=tuple(includes))
 
+def cstruct(name, *fields, **kwds):
+    """ A small helper to create external C structure, not the
+    pypy one
+    """
+    if 'hints' not in kwds:
+        kwds['hints'] = {}
+    kwds['hints']['external'] = 'C'
+    kwds['hints']['c_name'] = name
+    # XXX obscure hack, stolen for unknown reason from ctypes,
+    # probably because of _ attributes
+    c_fields = [('c_' + key, value) for key, value in fields]
+    return lltype.Ptr(lltype.Struct(name, *c_fields, **kwds))
+
 # char *
 CCHARP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
 
