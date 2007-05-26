@@ -8,7 +8,7 @@ def llexternal(name, args, result, sources=[], includes=[]):
                               sources=tuple(sources),
                               includes=tuple(includes))
 
-def cstruct(name, *fields, **kwds):
+def CStruct(name, *fields, **kwds):
     """ A small helper to create external C structure, not the
     pypy one
     """

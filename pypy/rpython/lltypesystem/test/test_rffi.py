@@ -97,7 +97,7 @@ def test_struct():
       return (z->one + z->three);
     }
     """
-    TP = cstruct('xx', ('one', Signed), ('two', Char), ('three', Signed))
+    TP = CStruct('xx', ('one', Signed), ('two', Char), ('three', Signed))
 
     c_file = udir.join("structxx.c")
     c_file.write(c_source)
