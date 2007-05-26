@@ -1,7 +1,21 @@
 
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import CDefinedIntSymbolic
+from pypy.annotation.model import lltype_to_annotation
+from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
+
+class CConstant(Symbolic):
+    """ A C-level constant, maybe #define, rendered directly.
+    """
+    def __init__(self, c_name, TP):
+        self.c_name = c_name
+        self.TP = TP
+
+    def annotation(self):
+        return lltype_to_annotation(self.TP)
+
+    def lltype(self):
+        return self.TP
 
 def llexternal(name, args, result, sources=[], includes=[]):
     ext_type = lltype.FuncType(args, result)
@@ -22,8 +36,7 @@ def CStruct(name, *fields, **kwds):
     c_fields = [('c_' + key, value) for key, value in fields]
     return lltype.Ptr(lltype.Struct(name, *c_fields, **kwds))
 
-# XXX slightly hackish
-c_errno = CDefinedIntSymbolic('errno', default=-1)
+c_errno = CConstant('errno', lltype.Signed)
 
 # char *
 CCHARP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
