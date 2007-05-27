@@ -37,6 +37,8 @@ def machine_key():
     import platform
     return platform.processor(), platform.architecture(), platform.system()
 
+# XXX add float types as well here
+
 TYPES = []
 for _name in 'char short int long'.split():
     for name in (_name, 'unsigned ' + _name):
@@ -58,6 +60,12 @@ def get_type_sizes(filename, platform_key=machine_key(), types=TYPES,
         value = dict([(i, sizeof_c_type(i, compiler_exe=compiler_exe))
                       for i in types])
         platforms[platform_key] = value
-        py.path.local(filename).write('platforms = ' + repr(platforms))
+        comment = "# this is automatically generated cache files for c types\n"
+        py.path.local(filename).write(comment + 'platforms = ' +
+                                      repr(platforms) + "\n")
         return value
+
+from pypy.tool import autopath
+CACHE = py.path.local(autopath.pypydir).join('_cache').join('typecache.py')
+platform = get_type_sizes(CACHE)
 
