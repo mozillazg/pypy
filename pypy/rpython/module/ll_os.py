@@ -13,7 +13,7 @@ Dummy low-level implementations for the external functions of the 'os' module.
 # 'suggested_primitive' flag is set to another function, if the conversion
 # and buffer preparation stuff is not useful.
 
-import os, errno
+import os
 from pypy.rpython.module.support import ll_strcpy, _ll_strfill
 from pypy.rpython.module.support import to_opaque_object, from_opaque_object
 from pypy.rlib import ros
@@ -24,12 +24,8 @@ from pypy.rpython.extfunc import ExtFuncEntry, register_external
 from pypy.annotation.model import SomeString, SomeInteger, s_ImpossibleValue, \
     s_None
 from pypy.annotation.listdef import s_list_of_strings
-import ctypes
-import pypy.rpython.rctypes.implementation
-from pypy.rpython.rctypes.tool.libc import libc
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.rctypes.aerrno import geterrno
 
 if hasattr(os, 'execv'):
 
@@ -46,7 +42,7 @@ if hasattr(os, 'execv'):
         os_execv(l_path, l_args)
         rffi.free_charpp(l_args)
         lltype.free(l_path, flavor='raw')
-        raise OSError(geterrno(), "execv failed")
+        raise OSError(rffi.c_errno, "execv failed")
 
     register_external(os.execv, [str, [str]], s_ImpossibleValue, llimpl=
                       execv_lltypeimpl, export_name="ll_os.ll_os_execv")
@@ -60,7 +56,7 @@ os_dup = rffi.llexternal(name, [lltype.Signed], lltype.Signed)
 def dup_lltypeimpl(fd):
     newfd = os_dup(fd)
     if newfd == -1:
-        raise OSError(geterrno(), "dup failed")
+        raise OSError(rffi.c_errno, "dup failed")
     return newfd
 register_external(os.dup, [int], int, llimpl=dup_lltypeimpl,
                   export_name="ll_os.ll_os_dup")
@@ -74,9 +70,40 @@ os_dup2 = rffi.llexternal(name, [lltype.Signed, lltype.Signed], lltype.Signed)
 def dup2_lltypeimpl(fd, newfd):
     error = os_dup2(fd, newfd)
     if error == -1:
-        raise OSError(geterrno(), "dup2 failed")
+        raise OSError(rffi.c_errno, "dup2 failed")
 register_external(os.dup2, [int, int], s_None, llimpl=dup2_lltypeimpl,
                   export_name="ll_os.ll_os_dup2")
+
+
+UTIMEBUFP = rffi.CStruct('utimbuf', ('actime', rffi.SIZE_T),
+                         ('modtime', rffi.SIZE_T))
+
+# XXX sys/types.h is not portable at all
+ros_utime = rffi.llexternal('utime', [rffi.CCHARP, UTIMEBUFP], lltype.Signed,
+                            includes=['utime.h', 'sys/types.h'])
+
+def utime_null_lltypeimpl(path):
+    l_path = rffi.str2charp(path)
+    error = ros_utime(l_path, lltype.nullptr(UTIMEBUFP.TO))
+    lltype.free(l_path, flavor='raw')
+    if error == -1:
+        raise OSError(rffi.c_errno, "utime_null failed")
+register_external(ros.utime_null, [str], s_None, llimpl=utime_null_lltypeimpl)
+
+def utime_tuple_lltypeimpl(path, tp):
+    # XXX right now they're all ints, might change in future
+    # XXX does not use utimes, even when available
+    l_path = rffi.str2charp(path)
+    l_utimebuf = lltype.malloc(UTIMEBUFP.TO, flavor='raw')
+    l_utimebuf.c_actime, l_utimebuf.c_modtime = tp    
+    error = ros_utime(l_path, l_utimebuf)
+    lltype.free(l_path, flavor='raw')
+    lltype.free(l_utimebuf, flavor='raw')
+    if error == -1:
+        raise OSError(rffi.c_errno, "utime_tuple failed")
+register_external(ros.utime_tuple, [str, (int, int)],
+                  llimpl=utime_tuple_lltypeimpl)    
+
 
 class BaseOS:
     __metaclass__ = ClassMethods
