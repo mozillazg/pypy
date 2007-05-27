@@ -3,6 +3,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.annotation.model import lltype_to_annotation
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
+from pypy.rlib import rarithmetic
 
 class CConstant(Symbolic):
     """ A C-level constant, maybe #define, rendered directly.
@@ -22,6 +23,24 @@ def llexternal(name, args, result, sources=[], includes=[]):
     return lltype.functionptr(ext_type, name, external='C',
                               sources=tuple(sources),
                               includes=tuple(includes))
+
+def setup():
+    """ creates necessary c-level types
+    """
+    from pypy.rpython.lltypesystem.rfficache import platform
+    for name, bits in platform.items():
+        if name.startswith('unsigned'):
+            name = 'u' + name[9:]
+            signed = False
+        else:
+            signed = True
+        name = name.replace(' ', '')
+        llname = name.upper()
+        inttype = rarithmetic.build_int('r_' + name, signed, bits)
+        globals()['r_' + name] = inttype
+        globals()[llname] = lltype.build_number(llname, inttype)
+
+setup()
 
 def CStruct(name, *fields, **kwds):
     """ A small helper to create external C structure, not the
@@ -72,4 +91,3 @@ def free_charpp(ref):
         lltype.free(next[i], flavor='raw')
         i += 1
     lltype.free(ref, flavor='raw')
-
