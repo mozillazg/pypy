@@ -66,6 +66,6 @@ def get_type_sizes(filename, platform_key=machine_key(), types=TYPES,
         return value
 
 from pypy.tool import autopath
-CACHE = py.path.local(autopath.pypydir).join('_cache').join('typecache.py')
+CACHE = py.magic.autopath().dirpath().join('typecache.py')
 platform = get_type_sizes(CACHE)
 
