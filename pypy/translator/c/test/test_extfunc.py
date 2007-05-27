@@ -749,3 +749,23 @@ if hasattr(posix, 'execv'):
         func()
         assert open(filename).read() == "42"
 
+def test_utime():
+    # XXX utimes & float support
+    path = str(udir.ensure("test_utime.txt"))
+    from time import time, sleep
+    t0 = time()
+    sleep(1)
+
+    def does_stuff():
+        ros.utime_null(path)
+
+    func = compile(does_stuff, [])
+    func()
+    assert os.stat(path).st_atime > t0
+
+    def utime_tuple():
+        ros.utime_tuple(path, (int(t0), int(t0)))
+
+    func = compile(utime_tuple, [])
+    func()
+    assert int(os.stat(path).st_atime) == int(t0)

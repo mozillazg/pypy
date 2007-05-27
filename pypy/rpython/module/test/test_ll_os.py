@@ -1,7 +1,6 @@
 import os
 from pypy.tool.udir import udir
 from pypy.tool.pytest.modcheck import skipimporterror
-skipimporterror("ctypes")
 
 from pypy.rpython.lltypesystem.module.ll_os import Implementation as impl
 import sys
