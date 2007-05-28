@@ -16,22 +16,6 @@ def test_access():
         assert os.access(filename, mode) == impl.ll_os_access(rsfilename, mode)
 
 
-def test_open_read_write_close():
-    filename = str(udir.join('test_open_read_write_close.txt'))
-    rsfilename = impl.to_rstr(filename)
-
-    fd = impl.ll_os_open(rsfilename, os.O_WRONLY | os.O_CREAT, 0777)
-    count = impl.ll_os_write(fd, impl.to_rstr("hello world\n"))
-    assert count == len("hello world\n")
-    impl.ll_os_close(fd)
-
-    fd = impl.ll_os_open(rsfilename, os.O_RDONLY, 0777)
-    data = impl.ll_os_read(fd, 500)
-    assert impl.from_rstr(data) == "hello world\n"
-    impl.ll_os_close(fd)
-
-    os.unlink(filename)
-
 def test_getcwd():
     data = impl.ll_os_getcwd()
     assert impl.from_rstr(data) == os.getcwd()
