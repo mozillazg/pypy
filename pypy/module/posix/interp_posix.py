@@ -1,21 +1,9 @@
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import ros
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, wrap_oserror
 
 import os
-
-def wrap_oserror(space, e): 
-    assert isinstance(e, OSError) 
-    errno = e.errno
-    try:
-        msg = os.strerror(errno)
-    except ValueError:
-        msg = 'error %d' % errno
-    w_error = space.call_function(space.w_OSError,
-                                  space.wrap(errno),
-                                  space.wrap(msg))
-    return OperationError(space.w_OSError, w_error)
                           
 def open(space, fname, flag, mode=0777):
     """Open a file (for low level IO).
