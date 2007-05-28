@@ -4,12 +4,14 @@ keeps information about C type sizes on various platforms
 """
 
 import py
+import os
 from pypy.translator.tool.cbuild import build_executable
 from subprocess import PIPE, Popen
 from pypy.tool.udir import udir
 
 def sizeof_c_type(c_typename, includes={}, compiler_exe=None):
     includes['stdio.h'] = True
+    includes['sys' + os.path.sep + 'types.h'] = True
     include_string = "\n".join(["#include <%s>" % i for i in includes.keys()])
     c_source = py.code.Source('''
     // includes
@@ -43,9 +45,7 @@ TYPES = []
 for _name in 'char short int long'.split():
     for name in (_name, 'unsigned ' + _name):
         TYPES.append(name)
-TYPES.append('long long')
-TYPES.append('unsigned long long')
-TYPES.append('size_t')
+TYPES += ['long long', 'unsigned long long', 'size_t', 'mode_t']
 
 def get_type_sizes(filename, platform_key=machine_key(), types=TYPES,
                    compiler_exe=None):
@@ -55,7 +55,12 @@ def get_type_sizes(filename, platform_key=machine_key(), types=TYPES,
     except (ImportError, py.error.ENOENT):
         platforms = {}
     try:
-        return platforms[platform_key]
+        result = platforms[platform_key]
+        if sorted(result.keys()) != sorted(TYPES):
+            # invalidate file
+            platforms = {}
+            raise KeyError
+        return result
     except KeyError:
         value = dict([(i, sizeof_c_type(i, compiler_exe=compiler_exe))
                       for i in types])
