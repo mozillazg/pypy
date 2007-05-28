@@ -141,6 +141,18 @@ class AppTestPosix:
             os = self.posix
             raises(OSError, 'os.execv("saddsadsadsadsa", ["saddsadsasaddsa"])')
 
+        def test_execv_raising2(self):
+            os = self.posix
+            def t(n):
+                try:
+                    os.execv("xxx", n)
+                except TypeError,t:
+                    assert t.args[0] == "execv() arg 2 must be an iterable of strings"
+                else:
+                    py.test.fail("didn't raise")
+            t(3)
+            t([3, "a"])
+
         def test_execve(self):
             skip("Not implemented")
             os = self.posix
