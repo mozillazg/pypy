@@ -8,11 +8,7 @@
 
 #define OP_RAW_MALLOC(size, r, restype)  {				\
 		r = (restype) PyObject_Malloc(size);			\
-		if (r == NULL) {					\
-			FAIL_EXCEPTION(PyExc_MemoryError,		\
-				       "out of memory");		\
-		} 							\
-		else {							\
+		if (r != NULL) {					\
 			memset((void*)r, 0, size);			\
 			COUNT_MALLOC;					\
 		}							\
@@ -22,13 +18,9 @@
 
 #define OP_RAW_MALLOC(size, r, restype)  {				\
 		r = (restype) PyObject_Malloc(size);			\
-		if (r == NULL) {					\
-			FAIL_EXCEPTION(PyExc_MemoryError,		\
-				       "out of memory");		\
-		} 							\
-		else {							\
+		if (r != NULL) {					\
 			COUNT_MALLOC;					\
-		}							\
+		} 							\
 	}
 
 #endif
