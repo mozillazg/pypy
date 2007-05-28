@@ -428,6 +428,13 @@ def geteuid(space):
 geteuid.unwrap_spec = [ObjSpace]
 
 def execv(space, command, w_args):
+    """ execv(path, args)
+
+Execute an executable path with arguments, replacing current process.
+
+        path: path of executable file
+        args: iterable of strings
+    """
     try:
         os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
     except OperationError, e:
@@ -440,6 +447,14 @@ def execv(space, command, w_args):
 execv.unwrap_spec = [ObjSpace, str, W_Root]
 
 def execve(space, command, w_args, w_env):
+    """ execve(path, args, env)
+
+Execute a path with arguments and environment, replacing current process.
+
+        path: path of executable file
+        args: iterable of arguments
+        env: dictionary of strings mapping to strings
+    """
     try:
         args = [space.str_w(i) for i in space.unpackiterable(w_args)]
         env = {}
@@ -455,6 +470,10 @@ def execve(space, command, w_args, w_env):
 execve.unwrap_spec = [ObjSpace, str, W_Root, W_Root]
 
 def uname(space):
+    """ uname() -> (sysname, nodename, release, version, machine)
+
+Return a tuple identifying the current operating system.
+    """
     try:
         result = _c.uname()
     except OSError, e: 
@@ -463,5 +482,10 @@ def uname(space):
 uname.unwrap_spec = [ObjSpace]
 
 #def utime(space, path, w_tuple):
-#    
+#    """ utime(path, (atime, mtime))
+#utime(path, None)
+#
+#Set the access and modified time of the file to the given values.  If the
+#second form is used, set the access and modified times to the current time.
+#    """
 #utime.unwrap_spec = [ObjSpace, str, W_Root]
