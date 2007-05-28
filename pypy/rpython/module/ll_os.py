@@ -1,5 +1,5 @@
 """
-Dummy low-level implementations for the external functions of the 'os' module.
+Low-level implementations for the external functions of the 'os' module.
 """
 
 # Idea: each ll_os_xxx() function calls back the os.xxx() function that it
