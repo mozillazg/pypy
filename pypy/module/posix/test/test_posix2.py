@@ -171,6 +171,27 @@ class AppTestPosix:
             stream = os.popen('echo 1')
             assert stream.read() == '1\n'
 
+    def test_utime(self):
+        os = self.posix
+        import os.path
+        # XXX utimes & float support
+        path = os.path.join(self.pdir, "test_utime.txt")
+        fh = open(path, "w")
+        fh.write("x")
+        fh.close()
+        from time import time, sleep
+        t0 = time()
+        sleep(1)
+        os.utime(path, None)
+        assert os.stat(path).st_atime > t0
+        os.utime(path, (int(t0), int(t0)))
+        assert int(os.stat(path).st_atime) == int(t0)
+
+    def test_utime_raises(self):
+        os = self.posix
+        raises(TypeError, "os.utime('xxx', 3)")
+        raises(OSError, "os.utime('somefilewhichihopewouldneverappearhere', None)")
+
 class AppTestEnvironment(object):
     def setup_class(cls): 
         cls.space = space 

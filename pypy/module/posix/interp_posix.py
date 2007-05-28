@@ -481,11 +481,31 @@ Return a tuple identifying the current operating system.
     return space.newtuple([space.wrap(ob) for ob in result])
 uname.unwrap_spec = [ObjSpace]
 
-#def utime(space, path, w_tuple):
-#    """ utime(path, (atime, mtime))
-#utime(path, None)
-#
-#Set the access and modified time of the file to the given values.  If the
-#second form is used, set the access and modified times to the current time.
-#    """
-#utime.unwrap_spec = [ObjSpace, str, W_Root]
+def utime(space, path, w_tuple):
+    """ utime(path, (atime, mtime))
+utime(path, None)
+
+Set the access and modified time of the file to the given values.  If the
+second form is used, set the access and modified times to the current time.
+    """
+    if space.is_w(w_tuple, space.w_None):
+        try:
+            ros.utime_null(path)
+            return
+        except OSError, e:
+            raise wrap_oserror(space, e)
+    try:
+        msg = "utime() arg 2 must be a tuple (atime, mtime) or None"
+        args_w = space.unpackiterable(w_tuple)
+        if len(args_w) != 2:
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        actime = space.int_w(args_w[0])
+        modtime = space.int_w(args_w[1])
+        ros.utime_tuple(path, (actime, modtime))
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    except OperationError, e:
+        if not e.match(space, space.w_TypeError):
+            raise
+        raise OperationError(space.w_TypeError, space.wrap(msg))
+utime.unwrap_spec = [ObjSpace, str, W_Root]
