@@ -2,6 +2,12 @@
 Low-level implementations for the external functions of the 'os' module.
 """
 
+# actual idea might be found in doc/rffi.txt
+
+# ------------------------------------------
+# WARNING! old vision, don't use it WARNING!
+# ------------------------------------------
+
 # Idea: each ll_os_xxx() function calls back the os.xxx() function that it
 # is supposed to implement, either directly or indirectly if there is some
 # argument decoding and buffering preparation that can be done here.
