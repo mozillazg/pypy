@@ -20,6 +20,10 @@ SPEED_T = rffi.UINT
 
 includes = ['termios.h', 'unistd.h']
 
+# XXX all functions here raise OSError, because they cannot
+# raise termios.error (lack of translation possibilities). hence
+# I don't know how to solve this, the tests will probably don't work
+
 TERMIOSP = rffi.CStruct('termios', ('c_iflag', TCFLAG_T), ('c_oflag', TCFLAG_T),
                         ('c_cflag', TCFLAG_T), ('c_lflag', TCFLAG_T),
                         ('c_cc', lltype.FixedSizeArray(CC_T, NCCS)))
@@ -49,3 +53,4 @@ def tcgetattr_llimpl(fd):
 register_external(termios.tcgetattr, [int], (int, int, int, int, int, int, [str]),
                   llimpl=tcgetattr_llimpl, export_name='termios.tcgetattr')
 
+#def tcsetattr_llimpl(fd
