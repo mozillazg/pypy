@@ -51,6 +51,7 @@ corresponding Unix manual entries for more information on calls."""
     '_exit'     : 'interp_posix._exit',
     #'getuid'    : 'interp_posix.getuid',
     #'geteuid'   : 'interp_posix.geteuid',
+    'utime'     : 'interp_posix.utime',
     }
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
