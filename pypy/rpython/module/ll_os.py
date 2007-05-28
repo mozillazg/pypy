@@ -104,13 +104,21 @@ def utime_tuple_lltypeimpl(path, tp):
 register_external(ros.utime_tuple, [str, (int, int)],
                   llimpl=utime_tuple_lltypeimpl)    
 
+os_open = rffi.llexternal('open', [rffi.CCHARP, lltype.Signed, rffi.MODE_T],
+                          lltype.Signed)
+
+def os_open_lltypeimpl(path, flags, mode):
+    l_path = rffi.str2charp(path)
+    result = os_open(l_path, flags, mode)
+    lltype.free(l_path, flavor='raw')
+    if result == -1:
+        raise OSError(rffi.c_errno, "os_open failed")
+    return result
+register_external(os.open, [str, int, int], int, export_name="open",
+                  llimpl=os_open_lltypeimpl)
 
 class BaseOS:
     __metaclass__ = ClassMethods
-
-    def ll_os_open(cls, fname, flag, mode):
-        return os.open(cls.from_rstr(fname), flag, mode)
-    ll_os_open.suggested_primitive = True
 
     def ll_os_write(cls, fd, astring):
         return os.write(fd, cls.from_rstr(astring))
