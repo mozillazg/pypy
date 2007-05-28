@@ -29,7 +29,6 @@ import stat
 from pypy.rpython.extfunc import ExtFuncEntry, register_external
 from pypy.annotation.model import SomeString, SomeInteger, s_ImpossibleValue, \
     s_None
-from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 
@@ -94,7 +93,8 @@ def utime_null_lltypeimpl(path):
     lltype.free(l_path, flavor='raw')
     if error == -1:
         raise OSError(rffi.c_errno, "utime_null failed")
-register_external(ros.utime_null, [str], s_None, llimpl=utime_null_lltypeimpl)
+register_external(ros.utime_null, [str], s_None, "ll_os.utime_null",
+                  llimpl=utime_null_lltypeimpl)
 
 def utime_tuple_lltypeimpl(path, tp):
     # XXX right now they're all ints, might change in future
@@ -107,7 +107,7 @@ def utime_tuple_lltypeimpl(path, tp):
     lltype.free(l_utimebuf, flavor='raw')
     if error == -1:
         raise OSError(rffi.c_errno, "utime_tuple failed")
-register_external(ros.utime_tuple, [str, (int, int)],
+register_external(ros.utime_tuple, [str, (int, int)], s_None, "ll_os.utime_tuple",
                   llimpl=utime_tuple_lltypeimpl)    
 
 os_open = rffi.llexternal('open', [rffi.CCHARP, lltype.Signed, rffi.MODE_T],
@@ -120,7 +120,7 @@ def os_open_lltypeimpl(path, flags, mode):
     if result == -1:
         raise OSError(rffi.c_errno, "os_open failed")
     return result
-register_external(os.open, [str, int, int], int, export_name="open",
+register_external(os.open, [str, int, int], int, "ll_os.open",
                   llimpl=os_open_lltypeimpl)
 
 class BaseOS:
