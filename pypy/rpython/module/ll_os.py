@@ -139,14 +139,6 @@ class BaseOS:
         os.close(fd)
     ll_os_close.suggested_primitive = True
 
-    def ll_os_dup(cls, fd):
-        return os.dup(fd)
-    ll_os_dup.suggested_primitive = True
-
-    def ll_os_dup2(cls, old_fd, new_fd):
-        os.dup2(old_fd, new_fd)
-    ll_os_dup2.suggested_primitive = True
-
     def ll_os_access(cls, path, mode):
         return os.access(cls.from_rstr(path), mode)
     ll_os_access.suggested_primitive = True
