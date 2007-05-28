@@ -5,9 +5,6 @@ from pypy.interpreter.error import OperationError
 
 import os
 
-# Turned off for now. posix must support targets without ctypes
-#from pypy.module.posix import ctypes_posix as _c
-
 def wrap_oserror(space, e): 
     assert isinstance(e, OSError) 
     errno = e.errno
@@ -433,7 +430,12 @@ geteuid.unwrap_spec = [ObjSpace]
 def execv(space, command, w_args):
     try:
         os.execv(command, [space.str_w(i) for i in space.unpackiterable(w_args)])
-    except OSError, e: 
+    except OperationError, e:
+        if not e.match(space, space.w_TypeError):
+            raise
+        msg = "execv() arg 2 must be an iterable of strings"
+        raise OperationError(space.w_TypeError, space.wrap(str(msg)))
+    except OSError, e:
         raise wrap_oserror(space, e) 
 execv.unwrap_spec = [ObjSpace, str, W_Root]
 
@@ -460,3 +462,6 @@ def uname(space):
     return space.newtuple([space.wrap(ob) for ob in result])
 uname.unwrap_spec = [ObjSpace]
 
+#def utime(space, path, w_tuple):
+#    
+#utime.unwrap_spec = [ObjSpace, str, W_Root]
