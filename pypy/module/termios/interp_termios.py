@@ -5,9 +5,9 @@ little use of termios module on RPython level by itself
 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
+from pypy.rpython.module import ll_termios
 import os
 import termios
-from pypy.rlib.objectmodel import we_are_translated
 
 # proper semantics are to have termios.error, but since it's not documented
 # anyway, let's have it as OSError on interplevel. We need to have
@@ -30,23 +30,15 @@ def tcsetattr(space, fd, when, w_attributes):
 tcsetattr.unwrap_spec = [ObjSpace, int, int, W_Root]
 
 def tcgetattr(space, fd):
-    # XXX Argh argh argh argh. ARGH!
-    if we_are_translated():
-        try:
-            tup_w = termios.tcgetattr(fd)
-        except OSError, e:
-            raise convert_error(space, e)
-    else:
-        try:
-            tup_w = termios.tcgetattr(fd)
-        except termios.error, e:
-            e.errno = e.args[0]
-            raise convert_error(space, e)
-    l_w = []
-    for w_item in tup_w[:-1]:
-        l_w.append(space.wrap(w_item))
+    try:
+        tup = termios.tcgetattr(fd)
+    except termios.error, e:
+        e.errno = e.args[0]
+        raise convert_error(space, e)
+    iflag, oflag, cflag, lflag, ispeed, ospeed, cc = tup
+    l_w = [space.wrap(i) for i in [iflag, oflag, cflag, lflag, ispeed, ospeed]]
     # last one need to be chosen carefully
-    w_cc = space.newlist([space.wrap(i) for i in tup_w[-1]])
+    w_cc = space.newlist([space.wrap(i) for i in cc])
     l_w.append(w_cc)
     return space.newlist(l_w)
 tcgetattr.unwrap_spec = [ObjSpace, int]
