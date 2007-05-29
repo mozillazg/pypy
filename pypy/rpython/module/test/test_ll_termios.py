@@ -32,7 +32,7 @@ class TestTermios(object):
     def spawn(self, argv):
         return self._spawn(sys.executable, argv)
 
-    def test_getattr(self):
+    def test_tcgetattr(self):
         source = py.code.Source("""
         import sys
         sys.path.insert(0, '%s')
@@ -58,14 +58,29 @@ class TestTermios(object):
         second = child.match.group(0)
         assert first == second
 
-    #def test_one(self):
-    #    child = self.spawn()
-    #    child.expect("Python ")
-    #    child.expect('>>> ')
-    #    child.sendline('import termios')
-    #    child.expect('>>> ')
-    #    child.sendline('termios.tcgetattr(0)')
-    #    child.expect('\[.*?\[.*?\]\]')
-    #    lst = eval(child.match.group(0))
-    #    assert len(lst) == 7
-    #    assert len(lst[-1]) == 32 # XXX is this portable???
+    def test_tcgetattr2(self):
+        source = py.code.Source("""
+        import sys
+        sys.path.insert(0, '%s')
+        from pypy.translator.c.test.test_genc import compile
+        from pypy.rpython.module import ll_termios
+        import termios
+        def runs_tcgetattr():
+            try:
+                termios.tcgetattr(338)
+            except termios.error, e:
+                return 2
+            return 3
+
+        fn = compile(runs_tcgetattr, [], backendopt=False)
+        res = fn()
+        if res == 2:
+            print 'OK!'
+        else:
+            print 'fail!'
+        """ % os.path.dirname(pypydir))
+        f = udir.join("test_tcgetattr.py")
+        f.write(source)
+        child = self.spawn([str(f)])
+        child.expect("OK!")
+

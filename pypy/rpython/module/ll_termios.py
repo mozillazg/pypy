@@ -10,6 +10,9 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.extfunc import register_external
 from pypy.rlib.rarithmetic import intmask
+from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.annotation import model as annmodel
+from pypy.rpython import rclass
 
 # XXX is this portable? well.. not at all, ideally
 # I would like to have NCCS = CLaterConstant(NCCS)
@@ -19,10 +22,6 @@ NCCS = 32
 SPEED_T = rffi.UINT
 
 includes = ['termios.h', 'unistd.h']
-
-# XXX all functions here raise OSError, because they cannot
-# raise termios.error (lack of translation possibilities). hence
-# I don't know how to solve this, the tests will probably don't work
 
 TERMIOSP = rffi.CStruct('termios', ('c_iflag', TCFLAG_T), ('c_oflag', TCFLAG_T),
                         ('c_cflag', TCFLAG_T), ('c_lflag', TCFLAG_T),
@@ -35,12 +34,16 @@ c_cfgetispeed = rffi.llexternal('cfgetispeed', [TERMIOSP], SPEED_T,
 c_cfgetospeed = rffi.llexternal('cfgetospeed', [TERMIOSP], SPEED_T,
                                 includes=includes)
 
+class termios_error(termios.error):
+    def __init__(self, num, msg):
+        self.args = (num, msg)
+
 def tcgetattr_llimpl(fd):
     c_struct = lltype.malloc(TERMIOSP.TO, flavor='raw')
     error = c_tcgetattr(fd, c_struct)
     if error == -1:
         lltype.free(c_struct, flavor='raw')
-        raise OSError(error, 'tcgetattr failed')
+        raise termios_error(error, 'tcgetattr failed')
     cc = [chr(c_struct.c_c_cc[i]) for i in range(NCCS)]
     ispeed = c_cfgetispeed(c_struct)
     ospeed = c_cfgetospeed(c_struct)

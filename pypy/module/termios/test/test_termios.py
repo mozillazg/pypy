@@ -52,7 +52,6 @@ class AppTestTermios(object):
         cls.w_orig_module_dict = cls.space.appexec([], "(): return %r" % (d,))
 
     def test_values(self):
-        skip("Not supported yet")
         import termios
         d = {}
         for name in dir(termios):
