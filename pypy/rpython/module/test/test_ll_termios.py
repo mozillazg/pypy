@@ -84,3 +84,30 @@ class TestTermios(object):
         child = self.spawn([str(f)])
         child.expect("OK!")
 
+    def test_tcsetattr(self):
+        # a test, which doesn't even check anything.
+        # I've got no idea how to test it to be honest :-(
+        source = py.code.Source("""
+        import sys
+        sys.path.insert(0, '%s')
+        from pypy.translator.c.test.test_genc import compile
+        from pypy.rpython.module import ll_termios
+        import termios, time
+        def runs_tcsetattr():
+            tp = termios.tcgetattr(2)
+            a, b, c, d, e, f, g = tp
+            termios.tcsetattr(2, termios.TCSANOW, (a, b, c, d, e, f, g))
+            time.sleep(1)
+            tp = termios.tcgetattr(2)
+            assert tp[5] == f
+
+        fn = compile(runs_tcsetattr, [], backendopt=False)
+        fn()
+        print 'OK!'
+        """ % os.path.dirname(pypydir))
+        f = udir.join("test_tcsetattr.py")
+        f.write(source)
+        child = self.spawn([str(f)])
+        child.expect("OK!")
+        
+        
