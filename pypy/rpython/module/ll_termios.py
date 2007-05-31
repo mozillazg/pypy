@@ -20,6 +20,7 @@ TCFLAG_T = rffi.UINT
 CC_T = rffi.UCHAR
 NCCS = 32
 SPEED_T = rffi.UINT
+INT = rffi.INT
 
 includes = ['termios.h', 'unistd.h']
 
@@ -27,19 +28,19 @@ TERMIOSP = rffi.CStruct('termios', ('c_iflag', TCFLAG_T), ('c_oflag', TCFLAG_T),
                         ('c_cflag', TCFLAG_T), ('c_lflag', TCFLAG_T),
                         ('c_cc', lltype.FixedSizeArray(CC_T, NCCS)))
 
-c_tcgetattr = rffi.llexternal('tcgetattr', [lltype.Signed, TERMIOSP],
-                              lltype.Signed, includes=includes)
-c_tcsetattr = rffi.llexternal('tcsetattr', [lltype.Signed, lltype.Signed,
-                              TERMIOSP], lltype.Signed, includes=includes)
-c_cfgetispeed = rffi.llexternal('cfgetispeed', [TERMIOSP], SPEED_T,
-                                includes=includes)
-c_cfgetospeed = rffi.llexternal('cfgetospeed', [TERMIOSP], SPEED_T,
-                                includes=includes)
-c_cfsetispeed = rffi.llexternal('cfsetispeed', [TERMIOSP, SPEED_T],
-                                lltype.Signed, includes=includes)
-c_cfsetospeed = rffi.llexternal('cfsetospeed', [TERMIOSP, SPEED_T],
-                                lltype.Signed, includes=includes)
+def c_external(name, args, result):
+    return rffi.llexternal(name, args, result, includes=includes)
 
+c_tcgetattr = c_external('tcgetattr', [INT, TERMIOSP], INT)
+c_tcsetattr = c_external('tcsetattr', [INT, INT, TERMIOSP], INT)
+c_cfgetispeed = c_external('cfgetispeed', [TERMIOSP], SPEED_T)
+c_cfgetospeed = c_external('cfgetospeed', [TERMIOSP], SPEED_T)
+c_cfsetispeed = c_external('cfsetispeed', [TERMIOSP, SPEED_T], INT)
+c_cfsetospeed = c_external('cfsetospeed', [TERMIOSP, SPEED_T], INT)
+c_tcsendbreak = c_external('tcsendbreak', [INT, INT], INT)
+c_tcdrain = c_external('tcdrain', [INT], INT)
+c_tcflush = c_external('tcflush', [INT, INT], INT)
+c_tcflow = c_external('tcflow', [INT, INT], INT)
 
 class termios_error(termios.error):
     def __init__(self, num, msg):
@@ -88,4 +89,33 @@ register_external(termios.tcsetattr, [int, int, (r_uint, r_uint, r_uint,
                   r_uint, r_uint, r_uint, [str])], llimpl=tcsetattr_llimpl,
                   export_name='termios.tcsetattr')
 
-                                      
+# a bit C-c C-v code follows...
+
+def tcsendbreak_llimpl(fd, duration):
+    error = c_tcsendbreak(fd, duration)
+    if error == -1:
+        raise termios_error(error, 'tcsendbreak failed')
+register_external(termios.tcsendbreak, [int, int],
+                  llimpl=tcsendbreak_llimpl,
+                  export_name='termios.tcsendbreak')
+
+def tcdrain_llimpl(fd):
+    error = c_tcdrain(fd)
+    if error == -1:
+        raise termios_error(error, 'tcdrain failed')
+register_external(termios.tcdrain, [int], llimpl=tcdrain_llimpl,
+                  export_name='termios.tcdrain')
+
+def tcflush_llimpl(fd, queue_selector):
+    error = c_tcflush(fd, queue_selector)
+    if error == -1:
+        raise termios_error(error, 'tcflush failed')
+register_external(termios.tcflush, [int, int], llimpl=tcflush_llimpl,
+                  export_name='termios.tcflush')
+
+def tcflow_llimpl(fd, action):
+    error = c_tcflow(fd, action)
+    if error == -1:
+        raise termios_error(error, 'tcflow failed')
+register_external(termios.tcflow, [int, int], llimpl=tcflow_llimpl,
+                  export_name='termios.tcflow')

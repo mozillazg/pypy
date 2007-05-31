@@ -110,4 +110,25 @@ class TestTermios(object):
         child = self.spawn([str(f)])
         child.expect("OK!")
         
-        
+    def test_tcrest(self):
+        source = py.code.Source("""
+        import sys
+        sys.path.insert(0, '%s')
+        from pypy.translator.c.test.test_genc import compile
+        from pypy.rpython.module import ll_termios
+        import termios, time
+        def runs_tcall():
+            termios.tcsendbreak(2, 0)
+            termios.tcdrain(2)
+            termios.tcflush(2, termios.TCIOFLUSH)
+            termios.tcflow(2, termios.TCOON)
+
+        fn = compile(runs_tcall, [], backendopt=False)
+        fn()
+        print 'OK!'
+        """ % os.path.dirname(pypydir))
+        f = udir.join("test_tcall.py")
+        f.write(source)
+        child = self.spawn([str(f)])
+        child.expect("OK!")
+
