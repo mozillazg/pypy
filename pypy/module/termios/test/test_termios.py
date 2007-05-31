@@ -3,6 +3,7 @@ import py
 import sys
 from pypy.conftest import gettestobjspace
 from pypy.tool.autopath import pypydir
+from pypy.tool.udir import udir
 
 def setup_module(mod):
     try:
@@ -41,6 +42,24 @@ class TestTermios(object):
         assert len(lst) == 7
         assert len(lst[-1]) == 32 # XXX is this portable???
 
+    def test_tcall(self):
+        """ Again - a test that doesnt really test anything
+        """
+        source = py.code.Source("""
+        import termios
+        f = termios.tcgetattr(2)
+        termios.tcsetattr(2, termios.TCSANOW, f)
+        termios.tcsendbreak(2, 0)
+        termios.tcdrain(2)
+        termios.tcflush(2, termios.TCIOFLUSH)
+        termios.tcflow(2, termios.TCOON)
+        print 'ok!'
+        """)
+        f = udir.join("test_tcall.py")
+        f.write(source)
+        child = self.spawn(['--withmod-termios', str(f)])
+        child.expect('ok!')
+
 class AppTestTermios(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['termios'])
@@ -64,3 +83,4 @@ class AppTestTermios(object):
         # XXX not always true, but good assumption
         import termios
         raises(termios.error, "termios.tcgetattr(334)")
+        
