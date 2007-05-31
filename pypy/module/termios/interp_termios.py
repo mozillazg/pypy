@@ -45,7 +45,7 @@ def tcsetattr(space, fd, when, w_attributes):
         except termios.error, e:
             e.errno = e.args[0]
             raise convert_error(space, e)
-    except OperationError:
+    except OperationError, e:
         if not e.match(space, space.w_TypeError):
             raise
         msg = "tcsetattr must be called with int, int and 7-arg tuple"
