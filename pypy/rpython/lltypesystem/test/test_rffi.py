@@ -1,5 +1,5 @@
 
-#import py
+import py
 from pypy.rpython.lltypesystem.rffi import *
 from pypy.translator.c.test.test_genc import compile
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
@@ -50,6 +50,33 @@ def test_string():
 
     xf = compile(f, [], backendopt=False)
     assert xf() == 3
+
+def test_string_reverse():
+    c_source = py.code.Source("""
+    #include <string.h>
+
+    char *f(char* arg)
+    {
+        char *ret;
+        ret = (char*)malloc(strlen(arg) + 1);
+        strcpy(ret, arg);
+        return ret;
+    }
+    """)
+    c_file = udir.join("stringrev.c")
+    c_file.write(c_source)
+    z = llexternal('f', [CCHARP], CCHARP, sources=[str(c_file)])    
+
+    def f():
+        s = str2charp("xxx")
+        l_res = z(s)
+        res = charp2str(l_res)
+        lltype.free(l_res, flavor='raw')
+        lltype.free(s, flavor='raw')
+        return len(res)
+
+    xf = compile(f, [], backendopt=False)
+    assert xf(expected_extra_mallocs=-1) == 3
 
 def test_stringstar():
     c_source = """

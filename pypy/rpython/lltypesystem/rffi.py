@@ -18,11 +18,12 @@ class CConstant(Symbolic):
     def lltype(self):
         return self.TP
 
-def llexternal(name, args, result, sources=[], includes=[]):
+def llexternal(name, args, result, sources=[], includes=[], libraries=[]):
     ext_type = lltype.FuncType(args, result)
     return lltype.functionptr(ext_type, name, external='C',
                               sources=tuple(sources),
-                              includes=tuple(includes))
+                              includes=tuple(includes),
+                              libraries=tuple(libraries))
 
 def setup():
     """ creates necessary c-level types
@@ -61,6 +62,7 @@ c_errno = CConstant('errno', lltype.Signed)
 CCHARP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
 
 # various type mapping
+# str -> char*
 def str2charp(s):
     """ str -> char*
     """
@@ -69,6 +71,16 @@ def str2charp(s):
         array[i] = s[i]
     array[len(s)] = '\x00'
     return array
+
+# char* -> str
+# doesn't free char*
+def charp2str(cp):
+    l = []
+    i = 0
+    while cp[i] != '\x00':
+        l.append(cp[i])
+        i += 1
+    return "".join(l)
 
 # char**
 CCHARPP = lltype.Ptr(lltype.Array(CCHARP, hints={'nolength': True}))
