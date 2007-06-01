@@ -49,17 +49,18 @@ class termios_error(termios.error):
 def tcgetattr_llimpl(fd):
     c_struct = lltype.malloc(TERMIOSP.TO, flavor='raw')
     error = c_tcgetattr(fd, c_struct)
-    if error == -1:
+    try:
+        if error == -1:
+            raise termios_error(error, 'tcgetattr failed')
+        cc = [chr(c_struct.c_c_cc[i]) for i in range(NCCS)]
+        ispeed = c_cfgetispeed(c_struct)
+        ospeed = c_cfgetospeed(c_struct)
+        result = (intmask(c_struct.c_c_iflag), intmask(c_struct.c_c_oflag),
+                  intmask(c_struct.c_c_cflag), intmask(c_struct.c_c_lflag),
+                  intmask(ispeed), intmask(ospeed), cc)
+        return result
+    finally:
         lltype.free(c_struct, flavor='raw')
-        raise termios_error(error, 'tcgetattr failed')
-    cc = [chr(c_struct.c_c_cc[i]) for i in range(NCCS)]
-    ispeed = c_cfgetispeed(c_struct)
-    ospeed = c_cfgetospeed(c_struct)
-    result = (intmask(c_struct.c_c_iflag), intmask(c_struct.c_c_oflag),
-              intmask(c_struct.c_c_cflag), intmask(c_struct.c_c_lflag),
-              intmask(ispeed), intmask(ospeed), cc)
-    lltype.free(c_struct, flavor='raw')
-    return result
 
 register_external(termios.tcgetattr, [int], (int, int, int, int, int, int, [str]),
                   llimpl=tcgetattr_llimpl, export_name='termios.tcgetattr')
@@ -68,21 +69,20 @@ def tcsetattr_llimpl(fd, when, attributes):
     c_struct = lltype.malloc(TERMIOSP.TO, flavor='raw')
     c_struct.c_c_iflag, c_struct.c_c_oflag, c_struct.c_c_cflag, \
     c_struct.c_c_lflag, ispeed, ospeed, cc = attributes
-    for i in range(NCCS):
-        c_struct.c_c_cc[i] = rffi.r_uchar(ord(cc[i]))
-    error = c_cfsetispeed(c_struct, ispeed)
-    if error == -1:
+    try:
+        for i in range(NCCS):
+            c_struct.c_c_cc[i] = rffi.r_uchar(ord(cc[i]))
+        error = c_cfsetispeed(c_struct, ispeed)
+        if error == -1:
+            raise termios_error(error, 'tcsetattr failed')
+        error = c_cfsetospeed(c_struct, ospeed)
+        if error == -1:
+            raise termios_error(error, 'tcsetattr failed')
+        error = c_tcsetattr(fd, when, c_struct)
+        if error == -1:
+            raise termios_error(error, 'tcsetattr failed')
+    finally:
         lltype.free(c_struct, flavor='raw')
-        raise termios_error(error, 'tcsetattr failed')
-    error = c_cfsetospeed(c_struct, ospeed)
-    if error == -1:
-        lltype.free(c_struct, flavor='raw')
-        raise termios_error(error, 'tcsetattr failed')
-    error = c_tcsetattr(fd, when, c_struct)
-    if error == -1:
-        lltype.free(c_struct, flavor='raw')
-        raise termios_error(error, 'tcsetattr failed')
-    lltype.free(c_struct, flavor='raw')
 
 r_uint = rffi.r_uint
 register_external(termios.tcsetattr, [int, int, (r_uint, r_uint, r_uint,
