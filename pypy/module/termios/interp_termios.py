@@ -33,7 +33,8 @@ def tcsetattr(space, fd, when, w_attributes):
             space.wrap(0), space.wrap(-1), space.wrap(1)))
         w_iflag, w_oflag, w_cflag, w_lflag, w_ispeed, w_ospeed = \
                  space.unpackiterable(tup_w)
-        cc = [space.str_w(c) for c in space.unpackiterable(w_cc)]
+        cc = [space.str_w(space.call_function(space.getattr(w_c,
+              space.wrap('__str__')))) for w_c in space.unpackiterable(w_cc)]
         tup = (space.int_w(w_iflag), space.int_w(w_oflag),
                space.int_w(w_cflag), space.int_w(w_lflag),
                space.int_w(w_ispeed), space.int_w(w_ospeed), cc)
