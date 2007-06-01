@@ -60,6 +60,17 @@ class TestTermios(object):
         child = self.spawn(['--withmod-termios', str(f)])
         child.expect('ok!')
 
+    def test_tcsetattr(self):
+        source = py.code.Source("""
+        import termios
+        termios.tcsetattr(0, 1, [16640, 4, 191, 2608, 15, 15, ['\x03', '\x1c', '\x7f', '\x15', '\x04', 0, 1, '\x00', '\x11', '\x13', '\x1a', '\x00', '\x12', '\x0f', '\x17', '\x16', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00']])
+        print 'ok!'
+        """)
+        f = udir.join("test_tcsetattr.py")
+        f.write(source)
+        child = self.spawn(['--withmod-termios', str(f)])
+        child.expect('ok!')
+
 class AppTestTermios(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=['termios'])
