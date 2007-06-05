@@ -2,7 +2,6 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.objspace.flow.model import Constant
 from pypy.annotation.model import unionof
-from pypy.annotation.listdef import TooLateForChange
 from pypy.annotation.signature import annotation
 
 import py
@@ -27,26 +26,15 @@ class _ext_callable(ExtRegistryEntry):
 
 class ExtFuncEntry(ExtRegistryEntry):
     def compute_result_annotation(self, *args_s):
-        bookkeeper = self.bookkeeper
-        if self.signature_args is None:
-            signature_args = None
-        else:
-            signature_args = [annotation(arg, bookkeeper)
-                              for arg in self.signature_args]
-        signature_result = annotation(self.signature_result, bookkeeper)
         if hasattr(self, 'ann_hook'):
             self.ann_hook()
-        if signature_args is not None:
-            assert len(args_s) == len(signature_args),\
+        if self.signature_args is not None:
+            assert len(args_s) == len(self.signature_args),\
                    "Argument number mismatch"
-            for arg, expected in zip(args_s, signature_args):
+            for arg, expected in zip(args_s, self.signature_args):
                 arg = unionof(arg, expected)
                 assert expected.contains(arg)
-        # XXX: obviously very very dangerous hack. I need
-        # to reconsifder it a bit, invalidate and so on
-        self.__class__.signature_args = signature_args
-        self.__class__.signature_result = signature_result
-        return signature_result
+        return self.signature_result
 
     def specialize_call(self, hop):
         rtyper = hop.rtyper
@@ -56,7 +44,7 @@ class ExtFuncEntry(ExtRegistryEntry):
             iter_args = self.signature_args
         args_r = [rtyper.getrepr(s_arg) for s_arg in iter_args]
         args_ll = [r_arg.lowleveltype for r_arg in args_r]
-        r_result = rtyper.getrepr(self.signature_result)
+        r_result = rtyper.getrepr(hop.s_result)
         ll_result = r_result.lowleveltype
         name = getattr(self, 'name', None) or self.instance.__name__
         method_name = rtyper.type_system.name[:2] + 'typeimpl'
@@ -65,8 +53,7 @@ class ExtFuncEntry(ExtRegistryEntry):
         fakeimpl = getattr(self, fake_method_name, self.instance)
         if impl:
             obj = rtyper.getannmixlevel().delayedfunction(
-                impl, self.signature_args,
-                self.signature_result)
+                impl, self.signature_args, hop.s_result)
         else:
             obj = rtyper.type_system.getexternalcallable(args_ll, ll_result,
                                  name, _external_name=self.name, _callable=fakeimpl)
@@ -90,13 +77,11 @@ def register_external(function, args, result=None, export_name=None,
 
     class FunEntry(ExtFuncEntry):
         _about_ = function
-        #if args is None:
-        #    signature_args = None
-        #else:
-        #    signature_args = [annotation(arg, None) for arg in args]
-        #signature_result = annotation(result, None)
-        signature_args = args
-        signature_result = result
+        if args is None:
+            signature_args = None
+        else:
+            signature_args = [annotation(arg, None) for arg in args]
+        signature_result = annotation(result, None)
         name=export_name
         if llimpl:
             lltypeimpl = staticmethod(llimpl)
