@@ -1,7 +1,6 @@
 
 from pypy.interpreter.mixedmodule import MixedModule
 import termios
-from pypy.rpython.module.ll_termios import termios_error
 from pypy.rlib.nonconst import NonConstant
 
 class Module(MixedModule):
@@ -27,13 +26,6 @@ class Module(MixedModule):
         'tcsendbreak' : 'interp_termios.tcsendbreak',
         'tcsetattr'   : 'interp_termios.tcsetattr',
     }
-
-    def startup(self, space):
-        # XXX nasty annotation trick
-        try:
-            raise termios_error(NonConstant(-3), NonConstant("xxx"))
-        except termios.error, e:
-            pass
 
 import termios
 from pypy.module.termios import interp_termios
