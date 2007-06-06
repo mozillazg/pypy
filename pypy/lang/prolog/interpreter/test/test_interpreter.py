@@ -14,4 +14,12 @@ def test_simple():
     where, _, c2, _ = res
     assert cont is c2
 
+    query, vars = get_query_and_vars("f(X).")
+    frame = r.make_frame(query)
+    cont = object()
+    res = frame.run(frame.code.opcode, 0, cont)
+    where, _, c2, _ = res
+    assert cont is c2
+    assert vars['X'].dereference(e.heap).name == 'a'
+
 
