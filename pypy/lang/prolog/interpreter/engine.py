@@ -61,10 +61,6 @@ class Heap(object):
     def discard(self, state):
         pass #XXX for now
 
-    def maxvar(self):
-        XXX
-        return self.needed_vars
-
     def newvar(self):
         result = Var(self)
         return result
@@ -109,7 +105,6 @@ class LinkedRules(object):
         return "LinkedRules(%r, %r)" % (self.rule, self.next)
 
 
-
 class Function(object):
     def __init__(self, firstrule=None):
         if firstrule is None:
@@ -149,12 +144,12 @@ class Engine(object):
             debug_print("add_rule", rule)
         if isinstance(rule, Term):
             if rule.name == ":-":
-                rule = Rule(rule.args[0], rule.args[1])
+                rule = Rule(rule.args[0], rule.args[1], self)
             else:
-                rule = Rule(rule, None)
+                rule = Rule(rule, None, self)
             signature = rule.signature
         elif isinstance(rule, Atom):
-            rule = Rule(rule, None)
+            rule = Rule(rule, None, self)
             signature = rule.signature
         else:
             error.throw_type_error("callable", rule)
@@ -317,7 +312,10 @@ class Engine(object):
             return self.main_loop(TRY_RULE, query, continuation, rule)
         #if _is_early_constant(rule):
         #    rule = hint(rule, promote=True)
-        #    return self.portal_try_rule(rule, query, continuation, choice_point)
+        #    #force right colors
+        #    query = hint(query, variable=True)
+        #    continuation = hint(continuation, variable=True)
+        #    return self.portal_try_rule(rule, query, continuation, True)
         return self._opaque_try_rule(rule, query, continuation, choice_point)
 
     def _opaque_try_rule(self, rule, query, continuation, choice_point):
@@ -366,7 +364,7 @@ class Engine(object):
                 continuation = e.continuation
 
     def parse(self, s):
-        from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder, lexer
+        from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder
         builder = TermBuilder()
         trees = parse_file(s, self.parser)
         terms = builder.build_many(trees)
@@ -377,7 +375,4 @@ class Engine(object):
         if self.operations is None:
             return default_operations
         return self.operations
-
-
-
 
