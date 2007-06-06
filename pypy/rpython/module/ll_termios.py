@@ -22,6 +22,11 @@ NCCS = 32
 SPEED_T = rffi.UINT
 INT = rffi.INT
 
+def termios_error_init(self, num, msg):
+    self.args = (num, msg)
+
+termios.error.__init__ = termios_error_init
+
 includes = ['termios.h', 'unistd.h']
 
 TERMIOSP = rffi.CStruct('termios', ('c_iflag', TCFLAG_T), ('c_oflag', TCFLAG_T),
@@ -42,16 +47,16 @@ c_tcdrain = c_external('tcdrain', [INT], INT)
 c_tcflush = c_external('tcflush', [INT, INT], INT)
 c_tcflow = c_external('tcflow', [INT, INT], INT)
 
-class termios_error(termios.error):
-    def __init__(self, num, msg):
-        self.args = (num, msg)
+#class termios_error(termios.error):
+#    def __init__(self, num, msg):
+#        self.args = (num, msg)
 
 def tcgetattr_llimpl(fd):
     c_struct = lltype.malloc(TERMIOSP.TO, flavor='raw')
     error = c_tcgetattr(fd, c_struct)
     try:
         if error == -1:
-            raise termios_error(error, 'tcgetattr failed')
+            raise termios.error(error, 'tcgetattr failed')
         cc = [chr(c_struct.c_c_cc[i]) for i in range(NCCS)]
         ispeed = c_cfgetispeed(c_struct)
         ospeed = c_cfgetospeed(c_struct)
@@ -74,13 +79,13 @@ def tcsetattr_llimpl(fd, when, attributes):
             c_struct.c_c_cc[i] = rffi.r_uchar(ord(cc[i]))
         error = c_cfsetispeed(c_struct, ispeed)
         if error == -1:
-            raise termios_error(error, 'tcsetattr failed')
+            raise termios.error(error, 'tcsetattr failed')
         error = c_cfsetospeed(c_struct, ospeed)
         if error == -1:
-            raise termios_error(error, 'tcsetattr failed')
+            raise termios.error(error, 'tcsetattr failed')
         error = c_tcsetattr(fd, when, c_struct)
         if error == -1:
-            raise termios_error(error, 'tcsetattr failed')
+            raise termios.error(error, 'tcsetattr failed')
     finally:
         lltype.free(c_struct, flavor='raw')
 
@@ -94,7 +99,7 @@ register_external(termios.tcsetattr, [int, int, (r_uint, r_uint, r_uint,
 def tcsendbreak_llimpl(fd, duration):
     error = c_tcsendbreak(fd, duration)
     if error == -1:
-        raise termios_error(error, 'tcsendbreak failed')
+        raise termios.error(error, 'tcsendbreak failed')
 register_external(termios.tcsendbreak, [int, int],
                   llimpl=tcsendbreak_llimpl,
                   export_name='termios.tcsendbreak')
@@ -102,20 +107,20 @@ register_external(termios.tcsendbreak, [int, int],
 def tcdrain_llimpl(fd):
     error = c_tcdrain(fd)
     if error == -1:
-        raise termios_error(error, 'tcdrain failed')
+        raise termios.error(error, 'tcdrain failed')
 register_external(termios.tcdrain, [int], llimpl=tcdrain_llimpl,
                   export_name='termios.tcdrain')
 
 def tcflush_llimpl(fd, queue_selector):
     error = c_tcflush(fd, queue_selector)
     if error == -1:
-        raise termios_error(error, 'tcflush failed')
+        raise termios.error(error, 'tcflush failed')
 register_external(termios.tcflush, [int, int], llimpl=tcflush_llimpl,
                   export_name='termios.tcflush')
 
 def tcflow_llimpl(fd, action):
     error = c_tcflow(fd, action)
     if error == -1:
-        raise termios_error(error, 'tcflow failed')
+        raise termios.error(error, 'tcflow failed')
 register_external(termios.tcflow, [int, int], llimpl=tcflow_llimpl,
                   export_name='termios.tcflow')
