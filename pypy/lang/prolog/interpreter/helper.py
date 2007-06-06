@@ -27,6 +27,18 @@ def is_callable(var, engine):
     return isinstance(var, term.Callable)
 is_callable._look_inside_me_ = True
 
+def is_ground(obj, engine):
+    stack = [obj]
+    while stack:
+        obj = stack.pop().dereference(engine.heap)
+        if isinstance(obj, term.Var):
+            return False
+        if isinstance(obj, term.Term):
+            for arg in obj.args:
+                stack.append(arg)
+    return True
+
+
 def ensure_callable(var):
     if isinstance(var, term.Var):
         error.throw_instantiation_error()

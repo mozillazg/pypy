@@ -1,7 +1,7 @@
 import py
 from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder
 from pypy.lang.prolog.interpreter import engine, helper, term, error
-from pypy.lang.prolog.builtin import builtins, builtins_list
+from pypy.lang.prolog.builtin import builtins, builtins_list, builtins_index
 
 from pypy.rlib.objectmodel import we_are_translated
 
@@ -90,7 +90,5 @@ def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
         b = Builtin(miniglobals[funcname], funcname, len(unwrap_spec),
                     signature)
         builtins[signature] = b
-        if signature in [",/2", "is/2"]:
-            builtins_list.insert(0, (signature, b))
-        else:
-            builtins_list.append((signature, b))
+        builtins_index[signature] = len(builtins_list)
+        builtins_list.append((signature, b))

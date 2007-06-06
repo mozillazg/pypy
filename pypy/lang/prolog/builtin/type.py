@@ -54,11 +54,8 @@ def impl_callable(engine, var):
 expose_builtin(impl_callable, "callable", unwrap_spec=["obj"])
 
 def impl_ground(engine, var):
-    if isinstance(var, term.Var):
+    if not helper.is_ground(var, engine):
         raise error.UnificationFailed()
-    if isinstance(var, term.Term):
-        for arg in var.args:
-            impl_ground(engine, arg)
 expose_builtin(impl_ground, "ground", unwrap_spec=["concrete"])
 
 

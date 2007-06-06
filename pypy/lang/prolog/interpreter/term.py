@@ -504,7 +504,7 @@ class Term(Callable):
 class Rule(object):
     _immutable_ = True
     unify_hash = []
-    def __init__(self, head, body):
+    def __init__(self, head, body, engine):
         from pypy.lang.prolog.interpreter import helper
         assert isinstance(head, Callable)
         self.head = head
