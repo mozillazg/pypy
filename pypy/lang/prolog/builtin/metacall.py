@@ -13,9 +13,7 @@ def impl_call(engine, call, continuation):
 expose_builtin(impl_call, "call", unwrap_spec=["callable"],
                handles_continuation=True)
 
-def impl_once(engine, clause, continuation):
+def impl_once(engine, clause):
     engine.call(clause)
-    return continuation.call(engine, choice_point=False)
-expose_builtin(impl_once, "once", unwrap_spec=["callable"],
-               handles_continuation=True)
+expose_builtin(impl_once, "once", unwrap_spec=["callable"])
 
