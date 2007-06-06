@@ -93,7 +93,7 @@ def tparm_llimpl(s, args):
                      l[7], l[8], l[9])
     lltype.free(ll_s, flavor='raw')
     # XXX - how to make this happy?
-    # lltype.free(ll_res, flavor.raw)
+    #lltype.free(ll_res, flavor.raw)
     return rffi.charp2str(ll_res)
 
 register_external(interp_curses._curses_tparm, [str, [int]], str,

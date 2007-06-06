@@ -21,13 +21,6 @@ class Module(MixedModule):
         'tparm'          : 'interp_curses.tparm',
     }
 
-    def startup(self, space):
-        # XXX nasty annotation trick
-        try:
-            raise interp_curses.curses_error(NonConstant("xxx"))
-        except _curses.error, e:
-            pass
-
 import _curses
 for i in dir(_curses):
     val = getattr(_curses, i)
