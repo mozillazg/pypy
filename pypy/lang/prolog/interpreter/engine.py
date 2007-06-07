@@ -164,9 +164,8 @@ class Engine(object):
         rule = Query(query, self)
         frame = rule.make_frame()
         try:
-            cont = frame.run_directly(continuation)
-            while cont is not None:
-                cont = cont._call(self)
+            #import pdb;pdb.set_trace()
+            frame.run_directly(continuation)
         except CutException, e:
             return self.continue_after_cut(e.continuation)
 
