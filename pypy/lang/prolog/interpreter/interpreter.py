@@ -2,7 +2,7 @@ from pypy.lang.prolog.interpreter import helper
 from pypy.lang.prolog.interpreter import error
 from pypy.lang.prolog.interpreter.term import Term, Atom, Var, Callable
 from pypy.lang.prolog.interpreter.engine import Continuation, \
-    LimitedScopeContinuation
+    LimitedScopeContinuation, DONOTHING
 from pypy.lang.prolog.interpreter.prologopcode import unrolling_opcode_descs, \
     HAVE_ARGUMENT
 
@@ -77,8 +77,9 @@ class Frame(object):
             continuation = self.run(self.code.opcode, 0, continuation)
         if not choice_point:
             return continuation
-        while continuation is not None:
+        while continuation is not DONOTHING:
             continuation = continuation._call(self.engine)
+        return DONOTHING
 
     def run(self, bytecode, pc, continuation):
         stack = []
@@ -109,8 +110,8 @@ class Frame(object):
                         else:
                             res = meth(stack)
                     if res is not None:
-                        while 1:
-                            continuation = res
+                        continuation = res
+                        while continuation is not DONOTHING:
                             if isinstance(continuation, FrameContinuation):
                                 self = continuation.frame
                                 pc = continuation.pc
@@ -119,7 +120,8 @@ class Frame(object):
                                 stack = []
                                 break
                             else:
-                                res = continuation._call(self.engine)
+                                print continuation
+                                continuation = continuation._call(self.engine)
                     break
             else:
                 assert 0, "missing opcode"
@@ -187,8 +189,7 @@ class Frame(object):
                 continuation = LimitedScopeContinuation(continuation)
                 try:
                     frame = rule.make_frame(query)
-                    frame.run_directly(continuation)
-                    return
+                    return frame.run_directly(continuation)
                 except error.UnificationFailed:
                     self.engine.heap.revert(oldstate)
                 except error.CutException, e:
@@ -199,8 +200,7 @@ class Frame(object):
             else:
                 try:
                     frame = rule.make_frame(query)
-                    frame.run_directly(continuation)
-                    return
+                    return frame.run_directly(continuation)
                 except error.UnificationFailed:
                     self.engine.heap.revert(oldstate)
             rulechain = rulechain.next

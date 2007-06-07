@@ -1,3 +1,4 @@
+import autopath
 import os, sys
 from pypy.rlib.parsing.parsing import ParseError
 from pypy.rlib.parsing.deterministic import LexerError
@@ -143,5 +144,12 @@ def execute(e, filename):
     e.run(term.Term("consult", [term.Atom(filename)]))
 
 if __name__ == '__main__':
+    argv = sys.argv
     e = Engine()
-    repl(e)
+    if len(argv) == 2:
+        execute(e, argv[1])
+    try:
+        repl(e)
+    except SystemExit:
+        sys.exit(1)
+    sys.exit(0)
