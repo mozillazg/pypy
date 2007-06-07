@@ -110,22 +110,21 @@ class Frame(object):
                             res = meth(stack, oparg)
                         else:
                             res = meth(stack)
-                    if res is not None:
-                        continuation = res
-                        while continuation is not DONOTHING:
-                            if isinstance(continuation, FrameContinuation):
-                                self = continuation.frame
-                                pc = continuation.pc
-                                bytecode = self.code.opcode
-                                continuation = continuation.continuation
-                                stack = []
-                                break
-                            else:
-                                print continuation
-                                continuation = continuation._call(self.engine)
                     break
             else:
-                assert 0, "missing opcode"
+                raise error.UncatchableError("bytecode corruption")
+            if res is not None:
+                continuation = res
+                while continuation is not DONOTHING:
+                    if isinstance(continuation, FrameContinuation):
+                        self = continuation.frame
+                        pc = continuation.pc
+                        bytecode = self.code.opcode
+                        continuation = continuation.continuation
+                        stack = []
+                        break
+                    else:
+                        continuation = continuation._call(self.engine)
         if len(stack) != 0:
             self.stack = stack
         return continuation
