@@ -185,7 +185,7 @@ class Engine(object):
         query = helper.ensure_callable(query)
         frame = dynamic_call_frame(self, query)
         #XXX handle choice_point correctly
-        return frame.run_directly(continuation)
+        return frame.run_directly(continuation, choice_point)
 
     @purefunction
     def lookup_userfunction(self, signature):
