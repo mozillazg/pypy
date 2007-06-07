@@ -1,5 +1,5 @@
 from pypy.lang.prolog.interpreter.compiler import compile
-from pypy.lang.prolog.interpreter.term import Atom, Var, Term
+from pypy.lang.prolog.interpreter.term import Atom, Var, Term, Number
 from pypy.lang.prolog.interpreter.parsing import get_engine, get_query_and_vars
 
 def test_simple():
@@ -78,4 +78,16 @@ def test_cut():
     assert code.term_info == [("f", 2, "f/2")]
     assert code.can_contain_cut
 
-
+def test_arithmetic():
+    # XXX compile is
+    e = get_engine("")
+    head, body = get_query_and_vars("f(X) :- Y is X - 1, f(Y).")[0].args
+    code = compile(head, body, e)
+    assert code.opcode_head == "l\x00\x00t\x00\x00"
+    assert code.opcode.startswith(
+        "l\x00\x01l\x00\x00c\x00\x00t\x00\x01t\x00\x02b")
+    assert code.constants == [Number(1)]
+    assert code.term_info == [("f", 1, "f/1"), ("-", 2, "-/2"),
+                              ("is", 2, "is/2")]
+    assert not code.can_contain_cut
+ 
