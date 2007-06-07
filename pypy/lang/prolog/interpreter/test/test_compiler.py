@@ -85,8 +85,7 @@ def test_arithmetic():
     code = compile(head, body, e)
     assert code.opcode_head == "m\x00\x00t\x00\x00"
     assert code.opcode.startswith(
-        "a\x00\x00m\x00\x01l\x00\x00c\x00\x00t\x00\x01t\x00\x02b\x00\x02"
-        "a\x00\x01")
+        "a\x00\x00m\x00\x01a\x00\x01l\x00\x00c\x00\x00t\x00\x01t\x00\x02b")
     assert code.constants == [Number(1)]
     assert code.term_info == [("f", 1, "f/1"), ("-", 2, "-/2"),
                               ("is", 2, "is/2")]
