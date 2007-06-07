@@ -28,6 +28,8 @@ HAVE_ARGUMENT = 97 # capitals
 # term construction
 argument_op("PUTCONSTANT", 'c')
 argument_op("PUTLOCALVAR", 'l')
+argument_op("MAKELOCALVAR", 'm')
+argument_op("ACTIVATE_LOCAL", 'a')
 argument_op("MAKETERM", 't')
 
 # running
