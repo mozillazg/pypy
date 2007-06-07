@@ -115,6 +115,7 @@ class Frame(object):
                                 self = continuation.frame
                                 pc = continuation.pc
                                 bytecode = self.code.opcode
+                                continuation = continuation.continuation
                                 stack = []
                                 break
                             else:
@@ -202,7 +203,6 @@ class Frame(object):
                     return
                 except error.UnificationFailed:
                     self.engine.heap.revert(oldstate)
-            rule = rulechain.rule
             rulechain = rulechain.next
         raise error.UnificationFailed
 

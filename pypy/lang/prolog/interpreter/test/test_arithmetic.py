@@ -101,3 +101,11 @@ def test_comparison():
     assert_false("1 > 1.")
     assert_false("1 =\\= 1.0.")
     assert_true("1 =\\= 32.")
+
+def test_countdown():
+    e = get_engine("""
+        f(0).
+        f(X) :- Y is X - 1, f(Y).
+    """)
+    assert_true("f(100).", e)
+ 
