@@ -9,13 +9,6 @@ from pypy.rlib.jit import we_are_jitted, hint, purefunction
 
 DEBUG = False
 
-TAGBITS = 3
-CURR_TAG = 1
-def tag():
-    global CURR_TAG
-    CURR_TAG += 1
-    assert CURR_TAG <= 2 ** TAGBITS
-    return CURR_TAG
 
 def debug_print(*args):
     if DEBUG and not we_are_translated():
@@ -37,11 +30,6 @@ class PrologObject(object):
         raise NotImplementedError("abstract base class")
 
     def copy(self, heap, memo):
-        raise NotImplementedError("abstract base class")
-
-    def get_unify_hash(self, heap):
-        # if two non-var objects return two different numbers
-        # they must not be unifiable
         raise NotImplementedError("abstract base class")
 
     @specialize.arg(3)
@@ -68,7 +56,6 @@ class PrologObject(object):
         error.throw_type_error("evaluable", self)
 
 class Var(PrologObject):
-    TAG = 0
     STANDARD_ORDER = 0
 
     __slots__ = ('binding', )
@@ -118,14 +105,6 @@ class Var(PrologObject):
         except KeyError:
             newvar = memo[self] = heap.newvar()
             return newvar
-
-    def get_unify_hash(self, heap):
-        if heap is not None:
-            self = self.dereference(heap)
-            if isinstance(self, Var):
-                return 0
-            return self.get_unify_hash(heap)
-        return 0
 
     def contains_var(self, var, heap):
         self = self.dereference(heap)
@@ -195,12 +174,8 @@ class Callable(NonVar):
     def get_prolog_signature(self):
         raise NotImplementedError("abstract base")
 
-    def unify_hash_of_children(self, heap):
-        raise NotImplementedError("abstract base")
-
 
 class Atom(Callable):
-    TAG = tag()
     STANDARD_ORDER = 1
 
     cache = {}
@@ -226,13 +201,6 @@ class Atom(Callable):
     def copy(self, heap, memo):
         return self
 
-    def get_unify_hash(self, heap):
-        name = hint(self.name, promote=True)
-        return intmask(hash(name) << TAGBITS | self.TAG)
-
-    def unify_hash_of_children(self, heap):
-        return []
-
     def get_prolog_signature(self):
         return Term("/", [self, NUMBER_0])
 
@@ -255,7 +223,6 @@ class Atom(Callable):
 
 
 class Number(NonVar):
-    TAG = tag()
     STANDARD_ORDER = 2
     _immutable_ = True
     def __init__(self, num):
@@ -276,16 +243,12 @@ class Number(NonVar):
     def __repr__(self):
         return "Number(%r)" % (self.num, )
 
-    def get_unify_hash(self, heap):
-        return intmask(self.num << TAGBITS | self.TAG)
-
     def eval_arithmetic(self, engine):
         return self
 
 NUMBER_0 = Number(0)
 
 class Float(NonVar):
-    TAG = tag()
     STANDARD_ORDER = 2
     _immutable_ = True
     def __init__(self, floatval):
@@ -299,12 +262,6 @@ class Float(NonVar):
 
     def copy(self, heap, memo):
         return self
-
-    def get_unify_hash(self, heap):
-        #XXX no clue whether this is a good idea...
-        m, e = math.frexp(self.floatval)
-        m = intmask(int(m / 2 * 2 ** (32 - TAGBITS)))
-        return intmask(m << TAGBITS | self.TAG)
 
     def __str__(self):
         return repr(self.floatval)
@@ -322,7 +279,6 @@ Float.pi = Float(math.pi)
 
 class BlackBox(NonVar):
     # meant to be subclassed
-    TAG = tag()
     STANDARD_ORDER = 4
     def __init__(self):
         pass
@@ -336,10 +292,6 @@ class BlackBox(NonVar):
     def copy(self, heap, memo):
         return self
 
-    def get_unify_hash(self, heap):
-        return intmask(id(self) << TAGBITS | self.TAG)
-
-
 
 # helper functions for various Term methods
 
@@ -347,7 +299,6 @@ def _getvalue(obj, heap):
     return obj.getvalue(heap)
 
 class Term(Callable):
-    TAG = tag()
     STANDARD_ORDER = 3
     _immutable_ = True
     def __init__(self, name, args, signature=None):
@@ -402,18 +353,6 @@ class Term(Callable):
             return Term(self.name, args, self.signature)
         else:
             return self
-
-    def get_unify_hash(self, heap):
-        signature = hint(self.signature, promote=True)
-        return intmask(hash(signature) << TAGBITS | self.TAG)
-
-    def unify_hash_of_children(self, heap):
-        unify_hash = []
-        i = 0
-        while i < len(self.args):
-            unify_hash.append(self.args[i].get_unify_hash(heap))
-            i += 1
-        return unify_hash
 
     def get_prolog_signature(self):
         return Term("/", [Atom.newatom(self.name), Number(len(self.args))])

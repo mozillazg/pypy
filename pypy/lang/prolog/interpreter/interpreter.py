@@ -215,4 +215,3 @@ class Frame(object):
                     self.engine.heap.revert(oldstate)
             rulechain = rulechain.next
         raise error.UnificationFailed
-
