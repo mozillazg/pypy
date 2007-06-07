@@ -65,7 +65,9 @@ class Frame(object):
         self.stack = None
 
     def run_directly(self, continuation):
-        return self.run(self.code.opcode, 0, continuation)
+        cont = self.run(self.code.opcode, 0, continuation)
+        while cont is not None:
+            cont = cont._call(self.engine)
 
     def run(self, bytecode, pc, continuation):
         stack = []
@@ -150,7 +152,8 @@ class Frame(object):
             rule = rulechain.rule
             try:
                 frame = rule.make_frame(query)
-                return frame.run_directly(continuation)
+                frame.run_directly(continuation)
+                return
             except error.UnificationFailed:
                 self.engine.heap.revert(oldstate)
             rule = rulechain.rule
