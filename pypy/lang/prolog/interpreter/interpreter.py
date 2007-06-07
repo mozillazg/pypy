@@ -1,7 +1,7 @@
 from pypy.lang.prolog.interpreter import helper
 from pypy.lang.prolog.interpreter import error
 from pypy.lang.prolog.interpreter.term import Term, Atom, Var, Callable
-from pypy.lang.prolog.interpreter.engine import CONTINUATION, Continuation
+from pypy.lang.prolog.interpreter.engine import Continuation
 from pypy.lang.prolog.interpreter.prologopcode import unrolling_opcode_descs, \
     HAVE_ARGUMENT
 
@@ -97,8 +97,7 @@ class Frame(object):
                             res = meth(stack)
                     if res is not None:
                         while 1:
-                            where, _, continuation, _ = res
-                            assert where == CONTINUATION
+                            continuation = res
                             if isinstance(continuation, FrameContinuation):
                                 self = continuation.frame
                                 pc = continuation.pc
@@ -112,7 +111,7 @@ class Frame(object):
                 assert 0, "missing opcode"
         if len(stack) != 0:
             self.stack = stack
-        return (CONTINUATION, None, continuation, None)
+        return continuation
 
     def PUTCONSTANT(self, stack, number):
         stack.append(self.code.constants[number])
