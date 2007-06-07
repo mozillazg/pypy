@@ -1,10 +1,11 @@
-from pypy.lang.prolog.interpreter.term import NonVar, Term, Var
+from pypy.lang.prolog.interpreter.term import NonVar, Term, Var, Atom
 from pypy.lang.prolog.interpreter.engine import Continuation
 from pypy.lang.prolog.interpreter import helper, error
 from pypy.lang.prolog.interpreter.prologopcode import opcodedesc
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint, we_are_jitted
 
+queryatom = Atom.newatom("<dummy>")
 
 class Code(object):
     _immutable_ = True
@@ -20,9 +21,15 @@ def compile(head, body, engine):
     comp = Compiler(engine)
     return comp.compile(head, body)
 
+def compile_query(body, engine):
+    comp = Compiler(engine, True)
+    return comp.compile(queryatom, body)
+
+
 class Compiler(object):
-    def __init__(self, engine):
+    def __init__(self, engine, query=False):
         self.engine = engine
+        self.query = query
 
     def compile(self, head, body):
         self.term_info = [] # tuples of (functor, numargs, signature)
@@ -34,7 +41,6 @@ class Compiler(object):
         self.varmap = {}
         result = Code()
         self.compile_termbuilding(head)
-        self.emit_opcode(opcodedesc.UNIFY)
         result.opcode_head = self.getbytecode()
         if body is not None:
             self.compile_body(body)
@@ -49,8 +55,12 @@ class Compiler(object):
             num = self.getconstnum(term)
             self.emit_opcode(opcodedesc.PUTCONSTANT, num)
         elif isinstance(term, Var):
-            num = self.getvarnum(term)
-            self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
+            if self.query:
+                num = self.getconstnum(term)
+                self.emit_opcode(opcodedesc.PUTCONSTANT, num)
+            else:
+                num = self.getvarnum(term)
+                self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
         else:
             assert isinstance(term, Term)
             for arg in term.args:
