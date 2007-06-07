@@ -1,3 +1,5 @@
+import py
+py.test.skip("jit doesn't work")
 from pypy.jit.hintannotator.policy import ManualGraphPolicy
 from pypy.lang.prolog.interpreter import term, engine, helper
 from pypy.translator.translator import graphof

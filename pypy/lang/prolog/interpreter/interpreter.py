@@ -71,8 +71,10 @@ class Frame(object):
         self.stack[0].unify(head, self.engine.heap)
         self.stack = None
 
-    def run_directly(self, continuation):
+    def run_directly(self, continuation, choice_point=True):
         cont = self.run(self.code.opcode, 0, continuation)
+        if not choice_point:
+            return cont
         while cont is not None:
             cont = cont._call(self.engine)
 
