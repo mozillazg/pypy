@@ -165,6 +165,19 @@ class Var(PrologObject):
         return self.eval_arithmetic(engine)
 
 
+class LocalVar(Var):
+    __slots__ = ("binding", "active")
+
+    def __init__(self):
+        self.binding = None
+        self.active = False
+
+    def setvalue(self, value, heap):
+        if self.active:
+            heap.add_trail(self)
+        self.binding = value
+
+
 class NonVar(PrologObject):
     __slots__ = ()
 

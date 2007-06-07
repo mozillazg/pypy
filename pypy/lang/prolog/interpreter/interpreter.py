@@ -1,6 +1,7 @@
 from pypy.lang.prolog.interpreter import helper
 from pypy.lang.prolog.interpreter import error
-from pypy.lang.prolog.interpreter.term import Term, Atom, Var, Callable
+from pypy.lang.prolog.interpreter.term import Term, Atom, Var, Callable, \
+    LocalVar
 from pypy.lang.prolog.interpreter.engine import Continuation, \
     LimitedScopeContinuation, DONOTHING
 from pypy.lang.prolog.interpreter.prologopcode import unrolling_opcode_descs, \
@@ -132,11 +133,20 @@ class Frame(object):
     def PUTCONSTANT(self, stack, number):
         stack.append(self.code.constants[number])
 
+    def MAKELOCALVAR(self, stack, number):
+        result = self.localvarcache[number] = self.engine.heap.newvar()
+        stack.append(result)
+
     def PUTLOCALVAR(self, stack, number):
         result = self.localvarcache[number]
-        if result is None:
-            result = self.localvarcache[number] = self.engine.heap.newvar()
+        assert result is not None
         stack.append(result)
+
+    def ACTIVATE_LOCAL(self, stack, number):
+        var = self.localvarcache[number]
+        if isinstance(var, LocalVar):
+            self.localvarcache[number] = var.dereference(self.heap)
+            var.active = True
 
     def MAKETERM(self, stack, number):
         name, numargs, signature = self.code.term_info[number]

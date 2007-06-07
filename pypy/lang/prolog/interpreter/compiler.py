@@ -38,6 +38,7 @@ class Compiler(object):
         self.term_info = [] # tuples of (functor, numargs, signature)
         self.term_info_map = {}
         self.opcode = []
+        self.localactivations = []
         self.constants = [] # list of ground Prolog objects
         self.constant_map = {}
         self.functions = [] # list of Function objects
@@ -49,6 +50,7 @@ class Compiler(object):
         self.compile_termbuilding(head)
         result.opcode_head = self.getbytecode()
         if body is not None:
+            self.add_localactivations()
             self.compile_body(body)
         result.opcode = self.getbytecode()
         result.constants = self.constants
@@ -63,8 +65,7 @@ class Compiler(object):
             num = self.getconstnum(term)
             self.emit_opcode(opcodedesc.PUTCONSTANT, num)
         elif isinstance(term, Var):
-            num = self.getvarnum(term)
-            self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
+            self.compile_localvar(term)
         else:
             assert isinstance(term, Term)
             for arg in term.args:
@@ -99,31 +100,43 @@ class Compiler(object):
             i = builtins_index[body.signature]
             self.compile_termbuilding(body)
             self.emit_opcode(opcodedesc.CALL_BUILTIN, i)
+            self.add_localactivations()
         else:
             self.compile_termbuilding(body)
             num = self.getfunction(body.signature)
             self.emit_opcode(opcodedesc.STATIC_CALL, num)
+            self.add_localactivations()
 
-    def emit_opcode(self, desc, arg=-1):
-        self.opcode.append(desc.index)
+    def compile_localvar(self, var):
+        try:
+            num = self.varmap[var]
+        except KeyError:
+            num = self.varmap[var] = len(self.varmap)
+            self.emit_opcode(opcodedesc.MAKELOCALVAR, num)
+            self.emit_opcode(opcodedesc.ACTIVATE_LOCAL, num, True)
+            return
+        self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
+
+    def add_localactivations(self):
+        self.opcode.extend(self.localactivations)
+        self.localactivations = []
+
+    def emit_opcode(self, desc, arg=-1, to_activations=False):
+        if to_activations:
+            opcode = self.localactivations
+        else:
+            opcode = self.opcode
+        opcode.append(desc.index)
         if desc.hasargument:
             if not 0 <= arg < 65536:
                 raise error.UncatchableError("too many constants or variables!")
-            self.opcode.append(arg >> 8)
-            self.opcode.append(arg & 0xff)
+            opcode.append(arg >> 8)
+            opcode.append(arg & 0xff)
 
     def getbytecode(self):
         bytecodes = [chr(c) for c in self.opcode]
         self.opcode = []
         return "".join(bytecodes)
-
-
-    def getvarnum(self, var):
-        try:
-            return self.varmap[var]
-        except KeyError:
-            result = self.varmap[var] = len(self.varmap)
-            return result
 
     def getsignum(self, term):
         try:
