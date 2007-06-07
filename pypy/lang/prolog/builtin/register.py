@@ -7,11 +7,13 @@ from pypy.rlib.objectmodel import we_are_translated
 
 class Builtin(object):
     _immutable_ = True
-    def __init__(self, function, name, numargs, signature):
+    def __init__(self, function, name, numargs, signature
+                 handles_continuation):
         self.function = function
         self.name = name
         self.numargs = numargs
         self.signature = signature
+        self.handles_continuation = handles_continuation
 
     def call(self, engine, query, continuation):
         return self.function(engine, query, continuation)
@@ -88,7 +90,7 @@ def expose_builtin(func, name, unwrap_spec=None, handles_continuation=False,
     for name in expose_as:
         signature = "%s/%s" % (name, len(unwrap_spec))
         b = Builtin(miniglobals[funcname], funcname, len(unwrap_spec),
-                    signature)
+                    signature, handles_continuation)
         builtins[signature] = b
         builtins_index[signature] = len(builtins_list)
         builtins_list.append((signature, b))
