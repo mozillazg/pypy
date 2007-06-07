@@ -501,62 +501,6 @@ class Term(Callable):
             error.throw_type_error("evaluable", self.get_prolog_signature())
         return func(engine, self)
 
-class Rule(object):
-    _immutable_ = True
-    unify_hash = []
-    def __init__(self, head, body, engine):
-        from pypy.lang.prolog.interpreter import helper
-        assert isinstance(head, Callable)
-        self.head = head
-        if body is not None:
-            body = helper.ensure_callable(body)
-            self.body = body
-        else:
-            self.body = None
-        self.signature = self.head.signature
-        if isinstance(head, Term):
-            self.unify_hash = [arg.get_unify_hash(None) for arg in head.args]
-        self._does_contain_cut()
-
-    def _does_contain_cut(self):
-        if self.body is None:
-            self.contains_cut = False
-            return
-        stack = [self.body]
-        while stack:
-            current = stack.pop()
-            if isinstance(current, Atom):
-                if current.name == "!":
-                    self.contains_cut = True
-                    return
-            elif isinstance(current, Term):
-                stack.extend(current.args)
-        self.contains_cut = False
-
-    def clone_and_unify_head(self, heap, head):
-        memo = {}
-        h2 = self.head
-        hint(h2, concrete=True)
-        if isinstance(h2, Term):
-            assert isinstance(head, Term)
-            i = 0
-            while i < len(h2.args):
-                i = hint(i, concrete=True)
-                arg2 = h2.args[i]
-                arg1 = head.args[i]
-                arg2.copy_and_unify(arg1, heap, memo)
-                i += 1
-        body = self.body
-        hint(body, concrete=True)
-        if body is None:
-            return None
-        return body.copy(heap, memo)
-
-    def __repr__(self):
-        if self.body is None:
-            return "%s." % (self.head, )
-        return "%s :- %s." % (self.head, self.body)
-
 
 @specialize.argtype(0)
 def rcmp(a, b): # RPython does not support cmp...

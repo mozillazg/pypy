@@ -62,7 +62,8 @@ def test_run():
                            Term("f", [Y, X])]))
     X = e.heap.newvar()
     e.run(Term("f", [Atom.newatom("b"), X]))
-    assert X.dereference(e.heap).name == "b"
+    assert X.dereference(e.heap).name == "a"
     e.run(Term("f", [Atom.newatom("b"), Atom.newatom("a")]))
+    e.run(Term("f", [Atom.newatom("c"), Atom.newatom("c")]))
 
 

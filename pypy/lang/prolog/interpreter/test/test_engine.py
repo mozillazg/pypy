@@ -224,11 +224,9 @@ def test_indexing():
                       % (chr(i), chr(i + 1))
                                 for i in range(97, 122)]))
     t = parse_query_term("f(x, g(y)).")
-    for i in range(200):
-        e.run(t)
+    e.run(t)
     t = parse_query_term("f(x, g(y, a)).")
-    for i in range(200):
-        py.test.raises(UnificationFailed, e.run, t)
+    py.test.raises(UnificationFailed, e.run, t)
 
 def test_indexing2():
     e = get_engine("""
