@@ -52,9 +52,6 @@ class Heap(object):
             var.binding = val
         del self.trail[trails:]
 
-    def discard(self, state):
-        pass #XXX for now
-
     def newvar(self):
         result = Var(self)
         return result
@@ -75,25 +72,6 @@ class LinkedRules(object):
             copy = new
             curr = curr.next
         return first, copy
-
-    def find_applicable_rule(self, uh2):
-        #import pdb;pdb.set_trace()
-        while self:
-            uh = self.rule.unify_hash
-            hint(uh, concrete=True)
-            uh = hint(uh, deepfreeze=True)
-            j = 0
-            while j < len(uh):
-                hint(j, concrete=True)
-                hash1 = uh[j]
-                hash2 = uh2[j]
-                if hash1 != 0 and hash2 * (hash2 - hash1) != 0:
-                    break
-                j += 1
-            else:
-                return self
-            self = self.next
-        return None
 
     def __repr__(self):
         return "LinkedRules(%r, %r)" % (self.rule, self.next)
