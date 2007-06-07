@@ -193,7 +193,7 @@ def test_cut():
         f(X) :- Y is X - 1, !, f(Y).
         f(X) :- Y is X - 2, !, f(Y).
     """)
-    assert_true("f(20).", e)
+    assert_true("f(10).", e)
 
 def test_call_cut():
     e = get_engine("""
