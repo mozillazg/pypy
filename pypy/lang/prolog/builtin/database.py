@@ -47,11 +47,13 @@ def impl_retract(engine, pattern):
     while rulechain:
         rule = rulechain.rule
         oldstate = engine.heap.branch()
-        # standardizing apart
         try:
-            deleted_body = rule.clone_and_unify_head(engine.heap, head)
+            memo = {}
+            rulehead = rule.head.copy(engine.heap, memo)
+            rulehead.unify(head, engine.heap)
             if body is not None:
-                body.unify(deleted_body, engine.heap)
+                rulebody = rule.body.copy(engine.heap, memo)
+                rulebody.unify(body, engine.heap)
         except error.UnificationFailed:
             engine.heap.revert(oldstate)
         else:
