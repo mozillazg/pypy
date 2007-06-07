@@ -3,7 +3,7 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Atom, debug_print, \
     Callable
 from pypy.lang.prolog.interpreter.error import UnificationFailed, \
     FunctionNotFound, CutException
-from pypy.lang.prolog.interpreter import error
+from pypy.lang.prolog.interpreter import error, helper
 from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant, purefunction
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.unroll import unrolling_iterable
@@ -159,8 +159,7 @@ class Engine(object):
 
     def run(self, query, continuation=DONOTHING):
         from pypy.lang.prolog.interpreter.interpreter import dynamic_call_frame
-        if not isinstance(query, Callable):
-            error.throw_type_error("callable", query)
+        query = helper.ensure_callable(query)
         frame = dynamic_call_frame(self, query)
         try:
             frame.run_directly(continuation)
@@ -182,11 +181,11 @@ class Engine(object):
         trees = parse_file(s, self.parser, Engine._build_and_run, self)
 
     def call(self, query, continuation=DONOTHING, choice_point=True):
-        py.test.skip("can't do a call like this right now")
-        assert isinstance(query, Callable)
-        if not choice_point:
-            return (CALL, query, continuation, None)
-        return self.main_loop(CALL, query, continuation)
+        from pypy.lang.prolog.interpreter.interpreter import dynamic_call_frame
+        query = helper.ensure_callable(query)
+        frame = dynamic_call_frame(self, query)
+        #XXX handle choice_point correctly
+        return frame.run_directly(continuation)
 
     def _call(self, query, continuation):
         py.test.skip("can't do a call like this right now")
