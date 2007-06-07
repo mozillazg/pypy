@@ -91,8 +91,6 @@ class Compiler(object):
             self.compile_termbuilding(body.args[0])
             self.compile_termbuilding(body.args[1])
             self.emit_opcode(opcodedesc.UNIFY)
-        elif body.signature == "call/1": #XXX interactions with cuts correct?
-            self.compile_body(body.args[0])
         elif body.signature == "!/0":
             self.can_contain_cut = True
             self.emit_opcode(opcodedesc.CUT)
