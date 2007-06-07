@@ -65,8 +65,8 @@ def test_dynamic_call():
     head, body = get_query_and_vars("f(X, Y) :- X, call(Y).")[0].args
     code = compile(head, body, e)
     assert code.opcode_head == "l\x00\x00l\x00\x01t\x00\x00"
-    assert code.opcode == "l\x00\x00Dl\x00\x01D"
-    assert code.term_info == [("f", 2, "f/2")]
+    assert code.opcode.startswith("l\x00\x00Dl\x00\x01t\x00\x01b")
+    assert code.term_info == [("f", 2, "f/2"), ("call", 1, "call/1")]
     assert code.can_contain_cut
 
 def test_cut():
