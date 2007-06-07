@@ -10,23 +10,15 @@ from pypy.rlib.unroll import unrolling_iterable
 
 DEBUG = False
 
-# bytecodes:
-CALL = 'a'
-USER_CALL = 'u'
-TRY_RULE = 't'
-CONTINUATION = 'c'
-DONE = 'd'
-
-
 class Continuation(object):
     def call(self, engine, choice_point=True):
-        py.test.skip("can't do a call like this right now")
-        if choice_point:
-            return engine.main_loop(CONTINUATION, None, self, None)
-        return (CONTINUATION, None, self, None)
+        if not choice_point:
+            return self
+        while self is not None:
+            self = self._call(engine)
 
     def _call(self, engine):
-        return (DONE, None, None, None)
+        pass
 
 DONOTHING = Continuation()
 
@@ -37,7 +29,7 @@ class LimitedScopeContinuation(Continuation):
 
     def _call(self, engine):
         self.scope_active = False
-        return self.continuation.call(engine, choice_point=False)
+        return self.continuation
 
 class Heap(object):
     def __init__(self):
@@ -172,9 +164,9 @@ class Engine(object):
         rule = Query(query, self)
         frame = rule.make_frame()
         try:
-            where, _, cont, _ = frame.run_directly(continuation)
-            while where == CONTINUATION:
-                where, _, cont, _ = cont._call(self)
+            cont = frame.run_directly(continuation)
+            while cont is not None:
+                cont = cont._call(self)
         except CutException, e:
             return self.continue_after_cut(e.continuation)
 
