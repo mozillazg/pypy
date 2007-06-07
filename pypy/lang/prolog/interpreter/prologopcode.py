@@ -36,6 +36,7 @@ argument_op("CLEAR_LOCAL", 'x')
 def_op("UNIFY", 'U')
 def_op("CONTINUE", 'O')
 def_op("DYNAMIC_CALL", 'D', True)
+argument_op("STATIC_CALL", 's', True)
 
 class OpcodeDesc(object):
     def __init__(self, name, index):

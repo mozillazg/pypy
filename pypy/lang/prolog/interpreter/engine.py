@@ -158,13 +158,11 @@ class Engine(object):
             self.signature2function[signature] = Function(rule)
 
     def run(self, query, continuation=DONOTHING):
-        from pypy.lang.prolog.interpreter.interpreter import Query
+        from pypy.lang.prolog.interpreter.interpreter import dynamic_call_frame
         if not isinstance(query, Callable):
             error.throw_type_error("callable", query)
-        rule = Query(query, self)
-        frame = rule.make_frame()
+        frame = dynamic_call_frame(self, query)
         try:
-            #import pdb;pdb.set_trace()
             frame.run_directly(continuation)
         except CutException, e:
             return self.continue_after_cut(e.continuation)
@@ -202,7 +200,7 @@ class Engine(object):
         return self.user_call(query, continuation, choice_point=False)
 
     @purefunction
-    def _jit_lookup(self, signature):
+    def lookup_userfunction(self, signature):
         signature2function = self.signature2function
         function = signature2function.get(signature, None)
         if function is None:

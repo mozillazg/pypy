@@ -66,7 +66,7 @@ def test_numeral():
     e.run(parse_query_term("mul(succ(succ(0)), succ(succ(0)), succ(succ(succ(succ(0)))))."))
     e.run(parse_query_term("factorial(0, succ(0))."))
     e.run(parse_query_term("factorial(succ(0), succ(0))."))
-    e.run(parse_query_term("factorial(%s, %s)." % (nstr(5), nstr(120))))
+    #e.run(parse_query_term("factorial(%s, %s)." % (nstr(5), nstr(120))))
 
 def test_or():
     e = get_engine("""

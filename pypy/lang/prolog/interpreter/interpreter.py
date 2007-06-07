@@ -50,6 +50,13 @@ class Query(object):
         return Frame(self.engine, self.code)
 
 
+def dynamic_call_frame(engine, query):
+    from pypy.lang.prolog.interpreter.compiler import Code
+    frame = Frame(engine, Code.dynamic_code)
+    frame.localvarcache[0] = query
+    return frame
+
+
 class Frame(object):
     #_immutable_ = True # XXX?
 
@@ -138,11 +145,23 @@ class Frame(object):
         return builtins_list[number][1].call(self.engine, stack.pop(),
                                              continuation)
     
+    def STATIC_CALL(self, stack, number, continuation):
+        query = stack.pop()
+        function = self.code.functions[number]
+        return self.user_call(function, query, continuation)
+
     def DYNAMIC_CALL(self, stack, continuation, *ignored):
         query = stack.pop()
         assert isinstance(query, Callable)
         signature = query.signature
-        function = self.engine._jit_lookup(signature)
+        from pypy.lang.prolog.builtin import builtins
+        if signature in builtins:
+            builtin = builtins[signature]
+            return builtin.call(self.engine, query, continuation)
+        function = self.engine.lookup_userfunction(signature)
+        return self.user_call(function, query, continuation)
+
+    def user_call(self, function, query, continuation):
         rulechain = function.rulechain
         if rulechain is None:
             error.throw_existence_error(

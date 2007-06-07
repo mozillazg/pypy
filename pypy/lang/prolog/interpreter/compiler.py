@@ -9,27 +9,30 @@ queryatom = Atom.newatom("<dummy>")
 
 class Code(object):
     _immutable_ = True
-    def __init__(self):
+
+    def empty_init(self):
         self.term_info = [] # tuples of (functor, numargs, signature)
         self.opcode_head = ""
         self.opcode = ""
         self.constants = [] # list of ground Prolog objects
+        self.functions = [] # list of Function objects
         self.maxlocalvar = 0
+
+
+Code.dynamic_code = Code()
+Code.dynamic_code.empty_init()
+Code.dynamic_code.maxlocalvar = 1
+Code.dynamic_code.opcode_head = "l\x00\x00"
+Code.dynamic_code.opcode = "l\x00\x00D"
 
 
 def compile(head, body, engine):
     comp = Compiler(engine)
     return comp.compile(head, body)
 
-def compile_query(body, engine):
-    comp = Compiler(engine, True)
-    return comp.compile(queryatom, body)
-
-
 class Compiler(object):
-    def __init__(self, engine, query=False):
+    def __init__(self, engine):
         self.engine = engine
-        self.query = query
 
     def compile(self, head, body):
         self.term_info = [] # tuples of (functor, numargs, signature)
@@ -37,6 +40,8 @@ class Compiler(object):
         self.opcode = []
         self.constants = [] # list of ground Prolog objects
         self.constant_map = {}
+        self.functions = [] # list of Function objects
+        self.functionmap = {}
         self.maxlocalvar = 0
         self.varmap = {}
         result = Code()
@@ -47,6 +52,7 @@ class Compiler(object):
         result.opcode = self.getbytecode()
         result.constants = self.constants
         result.term_info = self.term_info
+        result.functions = self.functions
         result.maxlocalvar = len(self.varmap)
         return result
 
@@ -55,12 +61,8 @@ class Compiler(object):
             num = self.getconstnum(term)
             self.emit_opcode(opcodedesc.PUTCONSTANT, num)
         elif isinstance(term, Var):
-            if self.query:
-                num = self.getconstnum(term)
-                self.emit_opcode(opcodedesc.PUTCONSTANT, num)
-            else:
-                num = self.getvarnum(term)
-                self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
+            num = self.getvarnum(term)
+            self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
         else:
             assert isinstance(term, Term)
             for arg in term.args:
@@ -94,7 +96,8 @@ class Compiler(object):
             self.emit_opcode(opcodedesc.CALL_BUILTIN, i)
         else:
             self.compile_termbuilding(body)
-            self.emit_opcode(opcodedesc.DYNAMIC_CALL)
+            num = self.getfunction(body.signature)
+            self.emit_opcode(opcodedesc.STATIC_CALL, num)
 
     def emit_opcode(self, desc, arg=-1):
         self.opcode.append(desc.index)
@@ -135,6 +138,12 @@ class Compiler(object):
             self.constants.append(const)
             return result
 
-            self.constants.append(term.getvalue(self.engine.heap))
-
+    def getfunction(self, signature):
+        try:
+            return self.functionmap[signature]
+        except KeyError:
+            result = len(self.functionmap)
+            self.functionmap[signature] = result
+            self.functions.append(self.engine.lookup_userfunction(signature))
+            return result
 
