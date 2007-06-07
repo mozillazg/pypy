@@ -187,17 +187,6 @@ class Engine(object):
         #XXX handle choice_point correctly
         return frame.run_directly(continuation)
 
-    def _call(self, query, continuation):
-        py.test.skip("can't do a call like this right now")
-        signature = query.signature
-        from pypy.lang.prolog.builtin import builtins
-        builtins = hint(builtins, deepfreeze=True)
-        signature = hint(signature, promote=True)
-        for bsig, builtin in unrolling_builtins:
-            if signature == bsig:
-                return builtin.call(self, query, continuation)
-        return self.user_call(query, continuation, choice_point=False)
-
     @purefunction
     def lookup_userfunction(self, signature):
         signature2function = self.signature2function
