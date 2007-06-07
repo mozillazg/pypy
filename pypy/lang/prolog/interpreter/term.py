@@ -39,9 +39,6 @@ class PrologObject(object):
     def copy(self, heap, memo):
         raise NotImplementedError("abstract base class")
 
-    def copy_and_unify(self, other, heap, memo):
-        raise NotImplementedError("abstract base class")
-
     def get_unify_hash(self, heap):
         # if two non-var objects return two different numbers
         # they must not be unifiable
@@ -122,18 +119,6 @@ class Var(PrologObject):
             newvar = memo[self] = heap.newvar()
             return newvar
 
-    def copy_and_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        self = hint(self, deepfreeze=True)
-        try:
-            seen_value = memo[self]
-        except KeyError:
-            memo[self] = other
-            return other
-        else:
-            seen_value.unify(other, heap)
-            return seen_value
-
     def get_unify_hash(self, heap):
         if heap is not None:
             self = self.dereference(heap)
@@ -201,18 +186,6 @@ class NonVar(PrologObject):
         else:
             self.basic_unify(other, heap, occurs_check)
 
-    def copy_and_unify(self, other, heap, memo):
-        other = other.dereference(heap)
-        if isinstance(other, Var):
-            copy = self.copy(heap, memo)
-            other._unify(copy, heap)
-            return copy
-        else:
-            return self.copy_and_basic_unify(other, heap, memo)
-
-    def copy_and_basic_unify(self, other, heap, memo):
-        raise NotImplementedError("abstract base class")
-
 
 class Callable(NonVar):
     __slots__ = ("name", "signature")
@@ -252,14 +225,6 @@ class Atom(Callable):
 
     def copy(self, heap, memo):
         return self
-
-    def copy_and_basic_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        if isinstance(other, Atom) and (self is other or
-                                        other.name == self.name):
-            return self
-        else:
-            raise UnificationFailed
 
     def get_unify_hash(self, heap):
         name = hint(self.name, promote=True)
@@ -305,13 +270,6 @@ class Number(NonVar):
     def copy(self, heap, memo):
         return self
 
-    def copy_and_basic_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        if isinstance(other, Number) and other.num == self.num:
-            return self
-        else:
-            raise UnificationFailed
-
     def __str__(self):
         return repr(self.num)
 
@@ -341,13 +299,6 @@ class Float(NonVar):
 
     def copy(self, heap, memo):
         return self
-
-    def copy_and_basic_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        if isinstance(other, Float) and other.floatval == self.floatval:
-            return self
-        else:
-            raise UnificationFailed
 
     def get_unify_hash(self, heap):
         #XXX no clue whether this is a good idea...
@@ -384,13 +335,6 @@ class BlackBox(NonVar):
 
     def copy(self, heap, memo):
         return self
-
-    def copy_and_basic_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        if self is other:
-            return self
-        else:
-            raise UnificationFailed
 
     def get_unify_hash(self, heap):
         return intmask(id(self) << TAGBITS | self.TAG)
@@ -444,22 +388,6 @@ class Term(Callable):
             newargs.append(arg)
             i += 1
         return Term(self.name, newargs, self.signature)
-
-    def copy_and_basic_unify(self, other, heap, memo):
-        hint(self, concrete=True)
-        self = hint(self, deepfreeze=True)
-        if (isinstance(other, Term) and
-            self.signature == other.signature):
-            newargs = [None] * len(self.args)
-            i = 0
-            while i < len(self.args):
-                hint(i, concrete=True)
-                arg = self.args[i].copy_and_unify(other.args[i], heap, memo)
-                newargs[i] = arg
-                i += 1
-            return Term(self.name, newargs, self.signature)
-        else:
-            raise UnificationFailed
 
     def getvalue(self, heap):
         return self._copy_term(_getvalue, heap)
