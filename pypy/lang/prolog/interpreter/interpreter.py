@@ -1,7 +1,8 @@
 from pypy.lang.prolog.interpreter import helper
 from pypy.lang.prolog.interpreter import error
 from pypy.lang.prolog.interpreter.term import Term, Atom, Var, Callable
-from pypy.lang.prolog.interpreter.engine import Continuation
+from pypy.lang.prolog.interpreter.engine import Continuation, \
+    LimitedScopeContinuation
 from pypy.lang.prolog.interpreter.prologopcode import unrolling_opcode_descs, \
     HAVE_ARGUMENT
 
@@ -72,11 +73,12 @@ class Frame(object):
         self.stack = None
 
     def run_directly(self, continuation, choice_point=True):
-        cont = self.run(self.code.opcode, 0, continuation)
+        if self.code.opcode:
+            continuation = self.run(self.code.opcode, 0, continuation)
         if not choice_point:
-            return cont
-        while cont is not None:
-            cont = cont._call(self.engine)
+            return continuation
+        while continuation is not None:
+            continuation = continuation._call(self.engine)
 
     def run(self, bytecode, pc, continuation):
         stack = []
@@ -133,7 +135,7 @@ class Frame(object):
             result = self.localvarcache[number] = self.engine.heap.newvar()
         stack.append(result)
 
-    def MAKETERM(self, stack, number, *ignored):
+    def MAKETERM(self, stack, number):
         name, numargs, signature = self.code.term_info[number]
         args = [None] * numargs
         i = numargs - 1
@@ -142,17 +144,20 @@ class Frame(object):
             i -= 1
         stack.append(Term(name, args, signature))
 
-    def CALL_BUILTIN(self, stack, number, continuation, *ignored):
+    def CALL_BUILTIN(self, stack, number, continuation):
         from pypy.lang.prolog.builtin import builtins_list
         return builtins_list[number][1].call(self.engine, stack.pop(),
                                              continuation)
+
+    def CUT(self, stack, continuation):
+        raise error.CutException(continuation)
     
     def STATIC_CALL(self, stack, number, continuation):
         query = stack.pop()
         function = self.code.functions[number]
         return self.user_call(function, query, continuation)
 
-    def DYNAMIC_CALL(self, stack, continuation, *ignored):
+    def DYNAMIC_CALL(self, stack, continuation):
         query = stack.pop()
         assert isinstance(query, Callable)
         signature = query.signature
@@ -163,6 +168,12 @@ class Frame(object):
         function = self.engine.lookup_userfunction(signature)
         return self.user_call(function, query, continuation)
 
+    def CLEAR_LOCAL(self, stack, number):
+        self.localvarcache[number] = None
+
+    def UNIFY(self, stack):
+        stack.pop().unify(stack.pop(), self.engine.heap)
+
     def user_call(self, function, query, continuation):
         rulechain = function.rulechain
         if rulechain is None:
@@ -171,20 +182,27 @@ class Frame(object):
         oldstate = self.engine.heap.branch()
         while rulechain is not None:
             rule = rulechain.rule
-            try:
-                frame = rule.make_frame(query)
-                frame.run_directly(continuation)
-                return
-            except error.UnificationFailed:
-                self.engine.heap.revert(oldstate)
+            if rule.code.can_contain_cut:
+                continuation = LimitedScopeContinuation(continuation)
+                try:
+                    frame = rule.make_frame(query)
+                    frame.run_directly(continuation)
+                    return
+                except error.UnificationFailed:
+                    self.engine.heap.revert(oldstate)
+                except error.CutException, e:
+                    if continuation.scope_active:
+                        return self.engine.continue_after_cut(e.continuation,
+                                                              continuation)
+                    raise
+            else:
+                try:
+                    frame = rule.make_frame(query)
+                    frame.run_directly(continuation)
+                    return
+                except error.UnificationFailed:
+                    self.engine.heap.revert(oldstate)
             rule = rulechain.rule
             rulechain = rulechain.next
         raise error.UnificationFailed
-
-    def CLEAR_LOCAL(self, stack, number, *ignored):
-        self.localvarcache[number] = None
-
-    def UNIFY(self, stack, *ignored):
-        stack.pop().unify(stack.pop(), self.engine.heap)
-
 

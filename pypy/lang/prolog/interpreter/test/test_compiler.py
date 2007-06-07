@@ -9,6 +9,7 @@ def test_simple():
     assert not code.opcode
     assert code.opcode_head == "c\x00\x00"
     assert code.constants == [foo]
+    assert not code.can_contain_cut
 
 def test_simple_withbody():
     e = get_engine("")
@@ -18,6 +19,7 @@ def test_simple_withbody():
     assert code.opcode_head == "c\x00\x00"
     assert code.opcode == "c\x00\x01s\x00\x00"
     assert code.constants == [foo, bar]
+    assert not code.can_contain_cut
 
 def test_simple_withargs():
     e = get_engine("")
@@ -27,6 +29,7 @@ def test_simple_withargs():
     assert code.opcode == "l\x00\x00t\x00\x01s\x00\x00"
     assert code.constants == []
     assert code.term_info == [("f", 1, "f/1"), ("g", 1, "g/1")]
+    assert not code.can_contain_cut
 
 def test_simple_and():
     e = get_engine("")
@@ -36,6 +39,7 @@ def test_simple_and():
     assert code.opcode == "l\x00\x00t\x00\x01s\x00\x00l\x00\x01t\x00\x02s\x00\x01"
     assert code.constants == []
     assert code.term_info == [("f", 2, "f/2"), ("g", 1, "g/1"), ("h", 1, "h/1")]
+    assert not code.can_contain_cut
 
 def test_nested_term():
     e = get_engine("")
@@ -44,6 +48,7 @@ def test_nested_term():
     assert code.opcode_head == "l\x00\x00t\x00\x00c\x00\x00t\x00\x01"
     assert code.term_info == [("g", 1, "g/1"), ("f", 2, "f/2")]
     assert code.constants == [Atom("a")]
+    assert not code.can_contain_cut
 
 def test_unify():
     e = get_engine("")
@@ -53,6 +58,7 @@ def test_unify():
     assert code.opcode == "l\x00\x00t\x00\x01l\x00\x01t\x00\x01U"
     assert code.constants == []
     assert code.term_info == [("f", 2, "f/2"), ("g", 1, "g/1")]
+    assert not code.can_contain_cut
 
 def test_dynamic_call():
     e = get_engine("")
@@ -61,5 +67,15 @@ def test_dynamic_call():
     assert code.opcode_head == "l\x00\x00l\x00\x01t\x00\x00"
     assert code.opcode == "l\x00\x00Dl\x00\x01D"
     assert code.term_info == [("f", 2, "f/2")]
+    assert code.can_contain_cut
+
+def test_cut():
+    e = get_engine("")
+    head, body = get_query_and_vars("f(X, Y) :- !.")[0].args
+    code = compile(head, body, e)
+    assert code.opcode_head == "l\x00\x00l\x00\x01t\x00\x00"
+    assert code.opcode == "C"
+    assert code.term_info == [("f", 2, "f/2")]
+    assert code.can_contain_cut
 
 
