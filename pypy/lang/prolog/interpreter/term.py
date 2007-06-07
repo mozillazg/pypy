@@ -343,9 +343,6 @@ class BlackBox(NonVar):
 
 # helper functions for various Term methods
 
-def _clone(obj, offset):
-    return obj.clone(offset)
-
 def _getvalue(obj, heap):
     return obj.getvalue(heap)
 
