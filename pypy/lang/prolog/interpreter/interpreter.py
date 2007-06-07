@@ -125,10 +125,10 @@ class Frame(object):
     def MAKETERM(self, stack, number, *ignored):
         name, numargs, signature = self.code.term_info[number]
         args = [None] * numargs
-        i = 0
-        while i < numargs:
+        i = numargs - 1
+        while i >= 0:
             args[i] = stack.pop()
-            i += 1
+            i -= 1
         stack.append(Term(name, args, signature))
 
     def CALL_BUILTIN(self, stack, number, continuation, *ignored):
@@ -155,6 +155,7 @@ class Frame(object):
                 self.engine.heap.revert(oldstate)
             rule = rulechain.rule
             rulechain = rulechain.next
+        raise error.UnificationFailed
 
     def CLEAR_LOCAL(self, stack, number, *ignored):
         self.localvarcache[number] = None
