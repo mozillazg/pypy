@@ -134,7 +134,7 @@ class Frame(object):
         stack.append(self.code.constants[number])
 
     def MAKELOCALVAR(self, stack, number):
-        result = self.localvarcache[number] = self.engine.heap.newvar()
+        result = self.localvarcache[number] = LocalVar()
         stack.append(result)
 
     def PUTLOCALVAR(self, stack, number):
@@ -145,7 +145,7 @@ class Frame(object):
     def ACTIVATE_LOCAL(self, stack, number):
         var = self.localvarcache[number]
         if isinstance(var, LocalVar):
-            self.localvarcache[number] = var.dereference(self.heap)
+            self.localvarcache[number] = var.dereference(self.engine.heap)
             var.active = True
 
     def MAKETERM(self, stack, number):

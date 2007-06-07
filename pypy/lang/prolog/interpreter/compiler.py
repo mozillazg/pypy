@@ -47,10 +47,12 @@ class Compiler(object):
         self.varmap = {}
         self.can_contain_cut = False
         result = Code()
+        self.activate_vars_later = True
         self.compile_termbuilding(head)
         result.opcode_head = self.getbytecode()
         if body is not None:
             self.add_localactivations()
+            self.activate_vars_later = False
             self.compile_body(body)
         result.opcode = self.getbytecode()
         result.constants = self.constants
@@ -100,12 +102,10 @@ class Compiler(object):
             i = builtins_index[body.signature]
             self.compile_termbuilding(body)
             self.emit_opcode(opcodedesc.CALL_BUILTIN, i)
-            self.add_localactivations()
         else:
             self.compile_termbuilding(body)
             num = self.getfunction(body.signature)
             self.emit_opcode(opcodedesc.STATIC_CALL, num)
-            self.add_localactivations()
 
     def compile_localvar(self, var):
         try:
@@ -113,7 +113,8 @@ class Compiler(object):
         except KeyError:
             num = self.varmap[var] = len(self.varmap)
             self.emit_opcode(opcodedesc.MAKELOCALVAR, num)
-            self.emit_opcode(opcodedesc.ACTIVATE_LOCAL, num, True)
+            self.emit_opcode(opcodedesc.ACTIVATE_LOCAL, num,
+                             self.activate_vars_later)
             return
         self.emit_opcode(opcodedesc.PUTLOCALVAR, num)
 
