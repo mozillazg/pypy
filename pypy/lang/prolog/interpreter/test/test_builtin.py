@@ -196,13 +196,12 @@ def test_cut():
     assert_true("f(20).", e)
 
 def test_call_cut():
-    py.test.skip("cuts don't work properly in the presence of calls right now")
     e = get_engine("""
         f(X) :- call(X).
         f(!).
     """)
     heaps = collect_all(e, "f(!).")
-    assert len(heaps) == 1
+    assert len(heaps) == 2
 
 
 def test_term_construction():
