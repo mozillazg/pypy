@@ -7,7 +7,7 @@ from pypy.rlib.objectmodel import we_are_translated
 
 class Builtin(object):
     _immutable_ = True
-    def __init__(self, function, name, numargs, signature
+    def __init__(self, function, name, numargs, signature,
                  handles_continuation):
         self.function = function
         self.name = name
