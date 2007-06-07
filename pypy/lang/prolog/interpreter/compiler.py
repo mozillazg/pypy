@@ -82,12 +82,13 @@ class Compiler(object):
             self.emit_opcode(opcodedesc.DYNAMIC_CALL)
             return
         body = helper.ensure_callable(body)
-        if isinstance(body, Term):
-            if body.signature == ",/2":
-                self.compile_body(body.args[0])
-                self.compile_body(body.args[1])
-                return
-        if body.signature == "=/2":
+        if body.signature == ",/2":
+            assert isinstance(body, Term)
+            self.compile_body(body.args[0])
+            self.compile_body(body.args[1])
+            return
+        elif body.signature == "=/2":
+            assert isinstance(body, Term)
             self.compile_termbuilding(body.args[0])
             self.compile_termbuilding(body.args[1])
             self.emit_opcode(opcodedesc.UNIFY)
