@@ -178,6 +178,7 @@ class Frame(object):
         stack.pop().unify(stack.pop(), self.engine.heap)
 
     def user_call(self, function, query, continuation):
+        assert isinstance(query, Callable)
         rulechain = function.rulechain
         if rulechain is None:
             error.throw_existence_error(
