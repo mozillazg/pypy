@@ -44,6 +44,7 @@ class Compiler(object):
         self.functionmap = {}
         self.maxlocalvar = 0
         self.varmap = {}
+        self.can_contain_cut = False
         result = Code()
         self.compile_termbuilding(head)
         result.opcode_head = self.getbytecode()
@@ -54,6 +55,7 @@ class Compiler(object):
         result.term_info = self.term_info
         result.functions = self.functions
         result.maxlocalvar = len(self.varmap)
+        result.can_contain_cut = self.can_contain_cut
         return result
 
     def compile_termbuilding(self, term):
@@ -75,6 +77,7 @@ class Compiler(object):
 
         body = body.dereference(self.engine.heap)
         if isinstance(body, Var):
+            self.can_contain_cut = True
             self.compile_termbuilding(body)
             self.emit_opcode(opcodedesc.DYNAMIC_CALL)
             return
@@ -90,6 +93,9 @@ class Compiler(object):
             self.emit_opcode(opcodedesc.UNIFY)
         elif body.signature == "call/1": #XXX interactions with cuts correct?
             self.compile_body(body.args[0])
+        elif body.signature == "!/0":
+            self.can_contain_cut = True
+            self.emit_opcode(opcodedesc.CUT)
         elif body.signature in builtins_index:
             i = builtins_index[body.signature]
             self.compile_termbuilding(body)
