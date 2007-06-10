@@ -294,3 +294,19 @@ def test_access_directly_method():
 
     res = interp.eval_graph(graph, [23])
     assert res == 2323
+
+def test_prebuilt_virtualizable_instance():
+    py.test.skip("breaks right now")
+    class A(object):
+        _virtualizable_ = True
+        def __init__(self, x):
+            self.x = x
+
+    a = A(32)
+
+    def f():
+        return a.x
+
+    res = interpret(f, [])
+    assert res == 32
+
