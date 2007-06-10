@@ -5,7 +5,7 @@ from pypy.lang.prolog.interpreter.error import UnificationFailed, UncatchableErr
 from pypy.lang.prolog.interpreter import error
 from pypy.rlib.jit import hint
 from pypy.rlib.objectmodel import specialize
-from pypy.rlib.jit import we_are_jitted, hint, purefunction
+from pypy.rlib.jit import we_are_jitted, hint, purefunction, _is_early_constant
 
 DEBUG = False
 
@@ -61,7 +61,7 @@ class Var(PrologObject):
     __slots__ = ('binding', )
     cache = {}
 
-    def __init__(self, heap=None):
+    def __init__(self):
         self.binding = None
 
     @specialize.arg(3)
@@ -82,11 +82,17 @@ class Var(PrologObject):
         next = self.binding
         if next is None:
             return self
-        else:
-            result = next.dereference(heap)
-            # do path compression
+        if isinstance(next, Var):
+            if _is_early_constant(next):
+                result = next.dereference(heap)
+            else:
+                result = next.opaque_dereference(heap)
             self.setvalue(result, heap)
             return result
+        return next
+
+    def opaque_dereference(self, heap):
+        return self.dereference(heap)
 
     def getvalue(self, heap):
         res = self.dereference(heap)
@@ -95,11 +101,11 @@ class Var(PrologObject):
         return res
 
     def setvalue(self, value, heap):
-        heap.add_trail(self)
-        self.binding = value
+        if value is not self.binding:
+            heap.add_trail(self)
+            self.binding = value
 
     def copy(self, heap, memo):
-        hint(self, concrete=True)
         try:
             return memo[self]
         except KeyError:
@@ -259,6 +265,7 @@ class Float(NonVar):
         if isinstance(other, Float) and other.floatval == self.floatval:
             return
         raise UnificationFailed
+    basic_unify._look_inside_me_ = False
 
     def copy(self, heap, memo):
         return self
@@ -320,18 +327,17 @@ class Term(Callable):
         if (isinstance(other, Term) and
             self.name == other.name and
             len(self.args) == len(other.args)):
-            for i in range(len(self.args)):
+            i = 0
+            while i < len(self.args):
                 self.args[i].unify(other.args[i], heap, occurs_check)
+                i += 1
         else:
             raise UnificationFailed
 
     def copy(self, heap, memo):
-        hint(self, concrete=True)
-        self = hint(self, deepfreeze=True)
         newargs = []
         i = 0
         while i < len(self.args):
-            hint(i, concrete=True)
             arg = self.args[i].copy(heap, memo)
             newargs.append(arg)
             i += 1

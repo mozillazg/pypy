@@ -2,11 +2,10 @@ import py
 from pypy.jit.timeshifter.test.test_portal import PortalTest, P_NOVIRTUAL
 from pypy.lang.prolog.interpreter import portal
 from pypy.lang.prolog.interpreter import engine, term
-from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine
+from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine, \
+    get_query_and_vars
 
 POLICY = portal.PyrologHintAnnotatorPolicy()
-
-py.test.skip()
 
 class TestPortal(PortalTest):
     small = False
@@ -80,16 +79,20 @@ class TestPortal(PortalTest):
 
     def test_append(self):
         e = get_engine("""
+            a(X, Y, Z) :- append(X, Y, Z).
+            a(X, Y, Z) :- append(X, Y, Z).
             append([], L, L).
             append([X|Y], L, [X|Z]) :- append(Y, L, Z).
         """)
-        t = parse_query_term("append([a, b, c], [d, f, g], X).")
-        X = e.heap.newvar()
 
+        t, vars = get_query_and_vars("a([a, b, c], [d, f, g], X).")
         def main(n):
+            e.heap = engine.Heap()
+
             if n == 0:
                 e.call(t)
-                return isinstance(X.dereference(e.heap), term.Term)
+                assert isinstance(vars['X'].dereference(e.heap), term.Term)
+                return True
             else:
                 return False
 
@@ -133,15 +136,15 @@ class TestPortal(PortalTest):
 
     def test_loop(self):
         e = get_engine("""
-            f(X) :- h(X, _).
+            f(X) :- h(X).
             f(50).
-            h(0, _).
-            h(X, Y) :- Y is X - 1, h(Y, _).
+            h(0).
+            h(X) :- Y is X - 1, h(Y).
         """)
         num = term.Number(50)
 
         def main(n):
-            e.heap.reset()
+            e.heap = engine.Heap()
             if n == 0:
                 e.call(term.Term("f", [num]))
                 return True

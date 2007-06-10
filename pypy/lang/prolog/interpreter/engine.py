@@ -4,9 +4,9 @@ from pypy.lang.prolog.interpreter.term import Var, Term, Atom, debug_print, \
 from pypy.lang.prolog.interpreter.error import UnificationFailed, \
     FunctionNotFound, CutException
 from pypy.lang.prolog.interpreter import error, helper
-from pypy.rlib.jit import hint, we_are_jitted, _is_early_constant, purefunction
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.jit import purefunction, hint
 
 DEBUG = False
 
@@ -31,29 +31,49 @@ class LimitedScopeContinuation(Continuation):
         self.scope_active = False
         return self.continuation
 
-class Heap(object):
-    def __init__(self):
+class TrailChunk(object):
+    def __init__(self, last=None):
+        self.last = last
         self.trail = []
+
+    def __str__(self):
+        return "TrailChunk(%s, %s)" % (self.last, self.trail)
+
+class Heap(object):
+    _virtualizable_ = True
+    def __init__(self):
+        self.current_chunk = TrailChunk()
 
     def reset(self):
-        self.trail = []
-        self.last_branch = 0
+        self.current_chunk = TrailChunk()
 
     def add_trail(self, var):
-        self.trail.append((var, var.binding))
+        self.current_chunk.trail.append((var, var.binding))
 
     def branch(self):
-        return len(self.trail)
+        result = TrailChunk(self.current_chunk)
+        self.current_chunk = result
+        return result
 
-    def revert(self, state):
-        trails = state
-        for i in range(len(self.trail) - 1, trails - 1, -1):
-            var, val = self.trail[i]
-            var.binding = val
-        del self.trail[trails:]
+    def revert(self, chunk):
+        curr = self.current_chunk
+        while curr is not None:
+            i = len(curr.trail) - 1
+            while i >= 0:
+                var, val = curr.trail[i]
+                var.binding = val
+                i -= 1
+            if curr is chunk:
+                break
+            curr = curr.last
+        else:
+            self.current_chunk = TrailChunk()
+            return
+        self.current_chunk = chunk
+        chunk.trail = []
 
     def newvar(self):
-        result = Var(self)
+        result = Var()
         return result
 
 class LinkedRules(object):
@@ -107,8 +127,9 @@ class Engine(object):
         self.parser = None
         self.operations = None
         #XXX circular imports hack
-        from pypy.lang.prolog.builtin import builtins_list
-        globals()['unrolling_builtins'] = unrolling_iterable(builtins_list) 
+        if not we_are_translated():
+            from pypy.lang.prolog.builtin import builtins_list
+            globals()['unrolling_builtins'] = unrolling_iterable(builtins_list) 
 
     def add_rule(self, rule, end=True):
         from pypy.lang.prolog import builtin
