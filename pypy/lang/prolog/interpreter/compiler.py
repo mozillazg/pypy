@@ -1,4 +1,4 @@
-from pypy.lang.prolog.interpreter.term import NonVar, Term, Var, Atom
+from pypy.lang.prolog.interpreter.term import NonVar, Term, Var, Atom, Callable
 from pypy.lang.prolog.interpreter.engine import Continuation
 from pypy.lang.prolog.interpreter import helper, error
 from pypy.lang.prolog.interpreter.prologopcode import opcodedesc
@@ -49,7 +49,9 @@ class Compiler(object):
         self.can_contain_cut = False
         result = Code()
         self.activate_vars_later = True
-        self.compile_termbuilding(head)
+        if isinstance(head, Term):
+            for arg in head.args:
+                self.compile_termbuilding(arg)
         result.opcode_head = self.getbytecode()
         if body is not None:
             self.add_localactivations()
@@ -106,8 +108,10 @@ class Compiler(object):
                     self.compile_termbuilding(arg)
             self.emit_opcode(opcodedesc.CALL_BUILTIN, i)
         else:
-            self.compile_termbuilding(body)
-            num = self.getfunction(body.signature)
+            if isinstance(body, Term):
+                for arg in body.args:
+                    self.compile_termbuilding(arg)
+            num = self.getfunction(body)
             self.emit_opcode(opcodedesc.STATIC_CALL, num)
 
     def compile_localvar(self, var):
@@ -160,12 +164,15 @@ class Compiler(object):
             self.constants.append(const)
             return result
 
-    def getfunction(self, signature):
+    def getfunction(self, query):
+        assert isinstance(query, Callable)
+        signature = query.signature
         try:
             return self.functionmap[signature]
         except KeyError:
             result = len(self.functionmap)
             self.functionmap[signature] = result
-            self.functions.append(self.engine.lookup_userfunction(signature))
+            self.functions.append(self.engine.lookup_userfunction(
+                signature, query.get_prolog_signature()))
             return result
 

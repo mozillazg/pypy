@@ -98,7 +98,9 @@ class LinkedRules(object):
 
 
 class Function(object):
-    def __init__(self, firstrule=None):
+    def __init__(self, signature, prolog_signature, firstrule=None):
+        self.signature = signature
+        self.prolog_signature = prolog_signature
         if firstrule is None:
             self.rulechain = self.last = None
         else:
@@ -154,7 +156,8 @@ class Engine(object):
         if function is not None:
             self.signature2function[signature].add_rule(rule, end)
         else:
-            self.signature2function[signature] = Function(rule)
+            self.signature2function[signature] = Function(
+                signature, rule.head.get_prolog_signature(), rule)
 
     def run(self, query, continuation=DONOTHING):
         from pypy.lang.prolog.interpreter.interpreter import dynamic_call_frame
@@ -186,12 +189,13 @@ class Engine(object):
         #XXX handle choice_point correctly
         return frame.run_directly(continuation, choice_point)
 
-    @purefunction
-    def lookup_userfunction(self, signature):
+    def lookup_userfunction(self, signature, prolog_signature=None):
         signature2function = self.signature2function
         function = signature2function.get(signature, None)
         if function is None:
-            signature2function[signature] = function = Function()
+            assert prolog_signature is not None
+            signature2function[signature] = function = Function(
+                signature, prolog_signature)
         return function
 
     def continue_after_cut(self, continuation, lsc=None):

@@ -7,8 +7,8 @@ def test_simple():
     foo = Atom("foo")
     code = compile(foo, None, e)
     assert not code.opcode
-    assert code.opcode_head == "c\x00\x00"
-    assert code.constants == [foo]
+    assert code.opcode_head == ""
+    assert code.constants == []
     assert not code.can_contain_cut
 
 def test_simple_withbody():
@@ -16,37 +16,37 @@ def test_simple_withbody():
     foo = Atom("foo")
     bar = Atom("bar")
     code = compile(foo, bar, e)
-    assert code.opcode_head == "c\x00\x00"
-    assert code.opcode == "c\x00\x01s\x00\x00"
-    assert code.constants == [foo, bar]
+    assert code.opcode_head == ""
+    assert code.opcode == "s\x00\x00"
+    assert code.constants == []
     assert not code.can_contain_cut
 
 def test_simple_withargs():
     e = get_engine("")
     head, body = get_query_and_vars("f(X) :- g(X).")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00t\x00\x00"
-    assert code.opcode == "a\x00\x00l\x00\x00t\x00\x01s\x00\x00"
+    assert code.opcode_head == "m\x00\x00"
+    assert code.opcode == "a\x00\x00l\x00\x00s\x00\x00"
     assert code.constants == []
-    assert code.term_info == [("f", 1, "f/1"), ("g", 1, "g/1")]
+    assert code.term_info == []
     assert not code.can_contain_cut
 
 def test_simple_and():
     e = get_engine("")
     head, body = get_query_and_vars("f(X, Y) :- g(X), h(Y).")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00m\x00\x01t\x00\x00"
-    assert code.opcode == "a\x00\x00a\x00\x01l\x00\x00t\x00\x01s\x00\x00l\x00\x01t\x00\x02s\x00\x01"
+    assert code.opcode_head == "m\x00\x00m\x00\x01"
+    assert code.opcode == "a\x00\x00a\x00\x01l\x00\x00s\x00\x00l\x00\x01s\x00\x01"
     assert code.constants == []
-    assert code.term_info == [("f", 2, "f/2"), ("g", 1, "g/1"), ("h", 1, "h/1")]
+    assert code.term_info == []
     assert not code.can_contain_cut
 
 def test_nested_term():
     e = get_engine("")
     head = get_query_and_vars("f(g(X), a).")[0]
     code = compile(head, None, e)
-    assert code.opcode_head == "m\x00\x00t\x00\x00c\x00\x00t\x00\x01"
-    assert code.term_info == [("g", 1, "g/1"), ("f", 2, "f/2")]
+    assert code.opcode_head == "m\x00\x00t\x00\x00c\x00\x00"
+    assert code.term_info == [("g", 1, "g/1")]
     assert code.constants == [Atom("a")]
     assert not code.can_contain_cut
 
@@ -54,28 +54,28 @@ def test_unify():
     e = get_engine("")
     head, body = get_query_and_vars("f(X, Y) :- g(X) = g(Y).")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00m\x00\x01t\x00\x00"
-    assert code.opcode == "a\x00\x00a\x00\x01l\x00\x00t\x00\x01l\x00\x01t\x00\x01U"
+    assert code.opcode_head == "m\x00\x00m\x00\x01"
+    assert code.opcode == "a\x00\x00a\x00\x01l\x00\x00t\x00\x00l\x00\x01t\x00\x00U"
     assert code.constants == []
-    assert code.term_info == [("f", 2, "f/2"), ("g", 1, "g/1")]
+    assert code.term_info == [("g", 1, "g/1")]
     assert not code.can_contain_cut
 
 def test_dynamic_call():
     e = get_engine("")
     head, body = get_query_and_vars("f(X, Y) :- X, call(Y).")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00m\x00\x01t\x00\x00"
+    assert code.opcode_head == "m\x00\x00m\x00\x01"
     assert code.opcode.startswith("a\x00\x00a\x00\x01l\x00\x00Dl\x00\x01b")
-    assert code.term_info == [("f", 2, "f/2")]
+    assert code.term_info == []
     assert code.can_contain_cut
 
 def test_cut():
     e = get_engine("")
     head, body = get_query_and_vars("f(X, Y) :- !.")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00m\x00\x01t\x00\x00"
+    assert code.opcode_head == "m\x00\x00m\x00\x01"
     assert code.opcode == "a\x00\x00a\x00\x01C"
-    assert code.term_info == [("f", 2, "f/2")]
+    assert code.term_info == []
     assert code.can_contain_cut
 
 def test_arithmetic():
@@ -83,10 +83,10 @@ def test_arithmetic():
     e = get_engine("")
     head, body = get_query_and_vars("f(X) :- Y is X - 1, f(Y).")[0].args
     code = compile(head, body, e)
-    assert code.opcode_head == "m\x00\x00t\x00\x00"
+    assert code.opcode_head == "m\x00\x00"
     assert code.opcode.startswith(
-        "a\x00\x00m\x00\x01a\x00\x01l\x00\x00c\x00\x00t\x00\x01b")
+        "a\x00\x00m\x00\x01a\x00\x01l\x00\x00c\x00\x00t\x00\x00b")
     assert code.constants == [Number(1)]
-    assert code.term_info == [("f", 1, "f/1"), ("-", 2, "-/2")]
+    assert code.term_info == [("-", 2, "-/2")]
     assert not code.can_contain_cut
  
