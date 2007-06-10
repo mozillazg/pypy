@@ -33,9 +33,9 @@ class Rule(object):
         self.signature = self.head.signature
         self.engine = engine
 
-    def make_frame(self, head):
+    def make_frame(self, stack):
         f = Frame(self.engine, self.code)
-        f.unify_head(head)
+        f.unify_head(stack)
         return f
 
     def __repr__(self):
@@ -64,16 +64,17 @@ class Frame(object):
     def getcode(self):
         return hint(hint(self.code, promote=True), deepfreeze=True)
 
-    def unify_head(self, head):
+    def unify_head(self, stack):
         self.run(self.getcode(), True, 0, None)
-        if isinstance(head, Term):
-            result = self.result
-            assert isinstance(result, Term)
+        result = self.result
+        if len(result):
             i = 0
-            m = hint(len(head.args), promote=True)
+            # These should be early constants, really
+            m = hint(len(result), promote=True)
+            startfrom = hint(len(stack) - m, promote=True)
             while i < m:
                 hint(i, concrete=True)
-                result.args[i].unify(head.args[i], self.heap)
+                result[i].unify(stack[startfrom + i], self.heap)
                 i += 1
         self.result = None
 
@@ -162,7 +163,7 @@ class Frame(object):
                     else:
                         continuation = continuation._call(self.engine)
         if head:
-            self.result = stack[0]
+            self.result = stack
         return continuation
 
     def _run(self, codeobject, head, pc, continuation):
@@ -204,7 +205,7 @@ class Frame(object):
                     else:
                         continuation = continuation._call(self.engine)
         if head:
-            self.result = stack[0]
+            self.result = stack
         return continuation
 
 
@@ -278,9 +279,8 @@ class Frame(object):
         raise error.CutException(continuation)
     
     def STATIC_CALL(self, stack, number, continuation):
-        query = stack.pop()
         function = self.getcode().functions[number]
-        return self.user_call(function, query, continuation)
+        return self.user_call(function, stack, continuation)
 
     def DYNAMIC_CALL(self, stack, continuation):
         query = stack.pop()
@@ -294,8 +294,13 @@ class Frame(object):
             else:
                 args = None
             return builtin.call(self.engine, args, continuation)
-        function = self.engine.lookup_userfunction(signature)
-        return self.user_call(function, query, continuation)
+        function = self.engine.lookup_userfunction(
+            signature, query.get_prolog_signature())
+        if isinstance(query, Term):
+            args = query.args
+        else:
+            args = None
+        return self.user_call(function, args, continuation)
 
     def CLEAR_LOCAL(self, stack, number):
         self.localvarcache[number] = None
@@ -303,13 +308,12 @@ class Frame(object):
     def UNIFY(self, stack):
         stack.pop().unify(stack.pop(), self.heap)
 
-    def user_call(self, function, query, continuation):
-        assert isinstance(query, Callable)
+    def user_call(self, function, args, continuation):
         rulechain = function.rulechain
         rulechain = hint(rulechain, promote=True)
         if rulechain is None:
             error.throw_existence_error(
-                "procedure", query.get_prolog_signature())
+                "procedure", function.prolog_signature)
         oldstate = self.heap.branch()
         while rulechain is not None:
             rule = rulechain.rule
@@ -318,7 +322,7 @@ class Frame(object):
             if rule.code.can_contain_cut:
                 continuation = LimitedScopeContinuation(continuation)
                 try:
-                    frame = rule.make_frame(query)
+                    frame = rule.make_frame(args)
                     result = frame.run_directly(continuation)
                     return result
                 except error.UnificationFailed:
@@ -330,7 +334,7 @@ class Frame(object):
                     raise
             else:
                 try:
-                    frame = rule.make_frame(query)
+                    frame = rule.make_frame(args)
                     result = frame.run_directly(continuation, choice_point)
                     return result
                 except error.UnificationFailed:
