@@ -1,5 +1,6 @@
 from pypy.lang.prolog.interpreter.parsing import parse_file, TermBuilder, OrderTransformer
-from pypy.lang.prolog.interpreter.parsing import parse_query_term
+from pypy.lang.prolog.interpreter.parsing import parse_query_term, \
+    get_query_and_vars
 
 
 def test_simple():
@@ -34,12 +35,10 @@ greater_than(succ(X), succ(Y)) :- greater_than(X, Y).
     four = Term("succ", [Term("succ", [Term("succ",
                 [Term("succ", [Atom("null")])])])])
     e.run(parse_query_term("numeral(succ(succ(null)))."))
-    term = parse_query_term(
+    term, vars = get_query_and_vars(
         """add_numeral(succ(succ(null)), succ(succ(null)), X).""")
     e.run(term)
-    var = Var(0).getvalue(e.heap)
-    print var, e.heap
-    # does not raise
+    var = vars['X'].getvalue(e.heap)
     var.unify(four, e.heap)
     term = parse_query_term(
         """greater_than(succ(succ(succ(null))), succ(succ(null))).""")

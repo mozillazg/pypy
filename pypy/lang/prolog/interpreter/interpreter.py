@@ -257,8 +257,13 @@ class Frame(object):
 
     def CALL_BUILTIN(self, stack, number, continuation):
         from pypy.lang.prolog.builtin import builtins_list
-        return builtins_list[number][1].call(self.engine, stack.pop(),
-                                             continuation)
+        builtin = builtins_list[number][1]
+        result = builtin.call(self.engine, stack, continuation)
+        i = 0
+        while i < builtin.numargs:
+            hint(i, concrete=True)
+            stack.pop()
+            i += 1
 
     def CUT(self, stack, continuation):
         raise error.CutException(continuation)
@@ -275,7 +280,11 @@ class Frame(object):
         from pypy.lang.prolog.builtin import builtins
         if signature in builtins:
             builtin = builtins[signature]
-            return builtin.call(self.engine, query, continuation)
+            if isinstance(query, Term):
+                args = query.args
+            else:
+                args = None
+            return builtin.call(self.engine, args, continuation)
         function = self.engine.lookup_userfunction(signature)
         return self.user_call(function, query, continuation)
 

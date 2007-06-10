@@ -101,7 +101,9 @@ class Compiler(object):
             self.emit_opcode(opcodedesc.CUT)
         elif body.signature in builtins_index:
             i = builtins_index[body.signature]
-            self.compile_termbuilding(body)
+            if isinstance(body, Term):
+                for arg in body.args:
+                    self.compile_termbuilding(arg)
             self.emit_opcode(opcodedesc.CALL_BUILTIN, i)
         else:
             self.compile_termbuilding(body)
