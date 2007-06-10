@@ -66,7 +66,15 @@ class Frame(object):
 
     def unify_head(self, head):
         self.run(self.getcode(), True, 0, None)
-        self.result.unify(head, self.heap)
+        if isinstance(head, Term):
+            result = self.result
+            assert isinstance(result, Term)
+            i = 0
+            m = hint(len(head.args), promote=True)
+            while i < m:
+                hint(i, concrete=True)
+                result.args[i].unify(head.args[i], self.heap)
+                i += 1
         self.result = None
 
     def run_directly(self, continuation, choice_point=True):
@@ -264,6 +272,7 @@ class Frame(object):
             hint(i, concrete=True)
             stack.pop()
             i += 1
+        return result
 
     def CUT(self, stack, continuation):
         raise error.CutException(continuation)
