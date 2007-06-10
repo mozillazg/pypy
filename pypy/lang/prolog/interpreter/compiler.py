@@ -24,6 +24,7 @@ Code.dynamic_code.empty_init()
 Code.dynamic_code.maxlocalvar = 1
 Code.dynamic_code.opcode_head = "l\x00\x00"
 Code.dynamic_code.opcode = "l\x00\x00D"
+Code.dynamic_code.can_contain_cut = True
 
 
 def compile(head, body, engine):
