@@ -52,13 +52,15 @@ def dynamic_call_frame(engine, query):
 
 
 class Frame(object):
-    _virtualizable_ = True
-
-    def __init__(self, engine, code):
+    def __init__(self, engine, code, localvarcache=None, heap=None):
         self.engine = engine
-        self.heap = engine.heap
+        if heap is None:
+            heap = engine.heap 
+        self.heap = heap
         self.code = code
-        self.localvarcache = [None] * code.maxlocalvar
+        if localvarcache is None:
+            localvarcache = [None] * code.maxlocalvar
+        self.localvarcache = localvarcache
         self.result = None
 
     def getcode(self):
@@ -99,74 +101,15 @@ class Frame(object):
             return self._run(codeobject, head, pc, continuation)
         if not we_are_jitted():
             assert codeobject is not None
-            return self.run_jit(self.heap, codeobject, head, pc, continuation)
+            return run_jit(self.localvarcache, self.engine, self.heap,
+                           codeobject, head, pc, continuation)
         return self.opaque_run(codeobject, head, pc, continuation)
 
     def opaque_run(self, codeobject, head, pc, continuation):
-        return self.run_jit(self.heap, codeobject, head, pc, continuation)
+        return run_jit(self.localvarcache, self.engine, self.heap,
+                       codeobject, head, pc, continuation)
     opaque_run._look_inside_me = False
 
-    def jit_enter_function(self):
-        # funnyness
-        code = self.getcode()
-        localvarcache = [None] * code.maxlocalvar
-        i = code.maxlocalvar
-        while True:
-            i -= 1
-            if i < 0:
-                break
-            hint(i, concrete=True)
-            obj = self.localvarcache[i]
-            localvarcache[i] = obj
-        self.localvarcache = localvarcache
-
-    def run_jit(self, heap, codeobject, head, pc, continuation):
-        hint(None, global_merge_point=True)
-        hint(codeobject, concrete=True)
-        codeobject = hint(codeobject, deepfreeze=True)
-        hint(head, concrete=True)
-        if head:
-            bytecode = codeobject.opcode_head
-            pc = 0
-        else:
-            bytecode = codeobject.opcode
-            pc = hint(pc, promote=True)
-        self.code = codeobject
-        self.heap = heap
-
-        self.jit_enter_function()
-        stack = []
-        while pc < len(bytecode):
-            hint(None, global_merge_point=True)
-            opcode = ord(bytecode[pc])
-            pc += 1
-            if opcode >= HAVE_ARGUMENT:
-                hi = ord(bytecode[pc])
-                lo = ord(bytecode[pc+1])
-                pc += 2
-                oparg = (hi << 8) | lo
-            else:
-                oparg = 0
-            hint(opcode, concrete=True)
-            hint(oparg, concrete=True)
-            #import pdb; pdb.set_trace()
-            res = self.dispatch_bytecode(opcode, oparg, bytecode, pc,
-                                         stack, continuation)
-            if res is not None:
-                continuation = res
-                while continuation is not DONOTHING:
-                    if isinstance(continuation, FrameContinuation):
-                        self = continuation.frame
-                        bytecode = self.getcode().opcode
-                        pc = hint(continuation.pc, promote=True)
-                        continuation = continuation.continuation
-                        stack = []
-                        break
-                    else:
-                        continuation = continuation._call(self.engine)
-        if head:
-            self.result = stack
-        return continuation
 
     def _run(self, codeobject, head, pc, continuation):
         codeobject = hint(codeobject, promote=True)
@@ -340,3 +283,81 @@ class Frame(object):
                     if not choice_point:
                         raise
             rulechain = rulechain.next
+
+def run_jit(original_localvarcache, engine, heap, codeobject,
+            head, pc, continuation):
+    hint(None, global_merge_point=True)
+    hint(codeobject, concrete=True)
+    codeobject = hint(codeobject, deepfreeze=True)
+    hint(head, concrete=True)
+    if head:
+        bytecode = codeobject.opcode_head
+        pc = 0
+    else:
+        bytecode = codeobject.opcode
+        pc = hint(pc, promote=True)
+    self = jit_enter_function(engine, heap, codeobject, original_localvarcache)
+    original_self = self
+    original_code = codeobject
+
+    stack = []
+    while pc < len(bytecode):
+        hint(None, global_merge_point=True)
+        opcode = ord(bytecode[pc])
+        pc += 1
+        if opcode >= HAVE_ARGUMENT:
+            hi = ord(bytecode[pc])
+            lo = ord(bytecode[pc+1])
+            pc += 2
+            oparg = (hi << 8) | lo
+        else:
+            oparg = 0
+        hint(opcode, concrete=True)
+        hint(oparg, concrete=True)
+        #import pdb; pdb.set_trace()
+        res = self.dispatch_bytecode(opcode, oparg, bytecode, pc,
+                                     stack, continuation)
+        if res is not None:
+            continuation = res
+            while continuation is not DONOTHING:
+                if isinstance(continuation, FrameContinuation):
+                    self = continuation.frame
+                    bytecode = self.getcode().opcode
+                    pc = hint(continuation.pc, promote=True)
+                    continuation = continuation.continuation
+                    stack = []
+                    break
+                else:
+                    continuation = continuation._call(self.engine)
+    if head:
+        self.result = stack
+    jit_leave_function(original_code, original_self.localvarcache,
+                       original_localvarcache)
+    return continuation
+
+def jit_enter_function(engine, heap, code, concrete_localvarcache):
+    # complete funnyness
+    localvarcache = [None] * code.maxlocalvar
+    i = code.maxlocalvar
+    while True:
+        i -= 1
+        if i < 0:
+            break
+        hint(i, concrete=True)
+        obj = concrete_localvarcache[i]
+        localvarcache[i] = obj
+    self = Frame(engine, code, localvarcache)
+    self.localvarcache = localvarcache
+    self.heap = heap
+    return self
+
+def jit_leave_function(code, localvarcache, original_localvarcache):
+    i = code.maxlocalvar
+    while True:
+        i -= 1
+        if i < 0:
+            break
+        hint(i, concrete=True)
+        obj = localvarcache[i]
+        original_localvarcache[i] = obj
+

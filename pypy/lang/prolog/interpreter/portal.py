@@ -14,7 +14,7 @@ good_modules = {'pypy.lang.prolog.builtin.control': True,
                }
 
 
-PORTAL = interpreter.Frame.run_jit.im_func
+PORTAL = interpreter.run_jit
 
 class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
     PORTAL = PORTAL
@@ -45,10 +45,12 @@ class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
         self.seegraph(engine.Heap.newvar)
         self.seegraph(engine.TrailChunk.__init__)
         self.seegraph(interpreter.Rule.make_frame)
+        self.seegraph(interpreter.jit_enter_function)
+        self.seegraph(interpreter.jit_leave_function)
         for method in "branch revert newvar add_trail".split():
             self.seegraph(getattr(engine.Heap, method))
         for method in ("unify_head run_directly run user_call "
-                       "dispatch_bytecode getcode jit_enter_function "
+                       "dispatch_bytecode getcode "
                        "__init__ _run").split():
             self.seegraph(getattr(interpreter.Frame, method))
         for num in prologopcode.allopcodes:
