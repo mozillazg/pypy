@@ -50,8 +50,9 @@ TYPES += ['long long', 'unsigned long long', 'size_t', 'mode_t']
 def get_type_sizes(filename, platform_key=machine_key(), types=TYPES,
                    compiler_exe=None):
     try:
-        mod = py.path.local(filename).pyimport()
-        platforms = mod.platforms
+        mod = {}
+        exec py.path.local(filename).read() in mod
+        platforms = mod['platforms']
     except (ImportError, py.error.ENOENT):
         platforms = {}
     try:
