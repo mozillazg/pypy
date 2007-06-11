@@ -333,6 +333,7 @@ class LLHelpers(AbstractLLHelpers):
             j += 1
 
         return True
+    ll_streq._pure_function_ = True
 
     def ll_startswith(s1, s2):
         len1 = len(s1.chars)
