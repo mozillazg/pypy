@@ -47,12 +47,13 @@ def CStruct(name, *fields, **kwds):
     """ A small helper to create external C structure, not the
     pypy one
     """
-    if 'hints' not in kwds:
-        kwds['hints'] = {}
-    kwds['hints']['external'] = 'C'
-    kwds['hints']['c_name'] = name
-    # XXX obscure hack, stolen for unknown reason from ctypes,
-    # probably because of _ attributes
+    hints = kwds.get('hints', {})
+    hints = hints.copy()
+    kwds['hints'] = hints
+    hints['external'] = 'C'
+    hints['c_name'] = name
+    # Hack: prefix all attribute names with 'c_' to cope with names starting
+    # with '_'.  The genc backend removes the 'c_' prefixes...
     c_fields = [('c_' + key, value) for key, value in fields]
     return lltype.Ptr(lltype.Struct(name, *c_fields, **kwds))
 
