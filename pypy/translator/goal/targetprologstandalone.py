@@ -15,6 +15,7 @@ term.DEBUG = False
 
 def entry_point(argv):
     from pypy.jit.codegen.hlinfo import highleveljitinfo
+    e = Engine()
     if highleveljitinfo.sys_executable is None:
         highleveljitinfo.sys_executable = argv[0]
     if len(argv) == 2:
