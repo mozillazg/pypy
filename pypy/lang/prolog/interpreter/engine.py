@@ -39,7 +39,7 @@ class TrailChunk(object):
     def __str__(self):
         return "TrailChunk(%s, %s)" % (self.last, self.trail)
 
-class Heap(object):
+class Trail(object):
     _virtualizable_ = True
     def __init__(self):
         self.current_chunk = TrailChunk()
@@ -124,7 +124,7 @@ class Function(object):
 
 class Engine(object):
     def __init__(self):
-        self.heap = Heap()
+        self.trail = Trail()
         self.signature2function = {}
         self.parser = None
         self.operations = None

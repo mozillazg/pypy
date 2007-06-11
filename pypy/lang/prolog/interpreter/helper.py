@@ -30,7 +30,7 @@ is_callable._look_inside_me_ = True
 def is_ground(obj, engine):
     stack = [obj]
     while stack:
-        obj = stack.pop().dereference(engine.heap)
+        obj = stack.pop().dereference(engine.trail)
         if isinstance(obj, term.Var):
             return False
         if isinstance(obj, term.Term):

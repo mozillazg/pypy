@@ -87,7 +87,7 @@ class TestPortal(PortalTest):
 
         t, vars = get_query_and_vars("a([a, b, c], [d, f, g], X).")
         def main(n):
-            e.heap = engine.Heap()
+            e.heap = engine.Trail()
 
             if n == 0:
                 e.call(t)
@@ -144,7 +144,7 @@ class TestPortal(PortalTest):
         num = term.Number(50)
 
         def main(n):
-            e.heap = engine.Heap()
+            e.heap = engine.Trail()
             if n == 0:
                 e.call(term.Term("f", [num]))
                 return True

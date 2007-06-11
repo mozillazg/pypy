@@ -1,7 +1,7 @@
 import py
 from pypy.lang.prolog.interpreter.error import UnificationFailed, FunctionNotFound
 from pypy.lang.prolog.interpreter.parsing import parse_query_term, get_engine
-from pypy.lang.prolog.interpreter.engine import Continuation, Heap, Engine
+from pypy.lang.prolog.interpreter.engine import Continuation, Trail, Engine
 
 def assert_true(query, e=None):
     if e is None:
@@ -9,7 +9,7 @@ def assert_true(query, e=None):
     terms, vars = e.parse(query)
     term, = terms
     e.run(term)
-    return dict([(name, var.dereference(e.heap))
+    return dict([(name, var.dereference(e.trail))
                      for name, var in vars.iteritems()])
 def assert_false(query, e=None):
     if e is None:
@@ -27,7 +27,7 @@ class CollectAllContinuation(Continuation):
         self.vars = vars
 
     def _call(self, engine):
-        self.heaps.append(dict([(name, var.dereference(engine.heap))
+        self.heaps.append(dict([(name, var.dereference(engine.trail))
                                     for name, var in self.vars.iteritems()]))
         print "restarting computation"
         raise UnificationFailed

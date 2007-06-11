@@ -23,24 +23,24 @@ class PrologObject(object):
         raise NotImplementedError("abstract base class")
         return self
 
-    def getvalue(self, heap):
+    def getvalue(self, trail):
         return self
 
-    def dereference(self, heap):
+    def dereference(self, trail):
         raise NotImplementedError("abstract base class")
 
-    def copy(self, heap, memo):
-        raise NotImplementedError("abstract base class")
-
-    @specialize.arg(3)
-    def unify(self, other, heap, occurs_check=False):
+    def copy(self, trail, memo):
         raise NotImplementedError("abstract base class")
 
     @specialize.arg(3)
-    def _unify(self, other, heap, occurs_check=False):
+    def unify(self, other, trail, occurs_check=False):
         raise NotImplementedError("abstract base class")
 
-    def contains_var(self, var, heap):
+    @specialize.arg(3)
+    def _unify(self, other, trail, occurs_check=False):
+        raise NotImplementedError("abstract base class")
+
+    def contains_var(self, var, trail):
         return False
 
     def __eq__(self, other):
@@ -65,59 +65,59 @@ class Var(PrologObject):
         self.binding = None
 
     @specialize.arg(3)
-    def unify(self, other, heap, occurs_check=False):
-        return self.dereference(heap)._unify(other, heap, occurs_check)
+    def unify(self, other, trail, occurs_check=False):
+        return self.dereference(trail)._unify(other, trail, occurs_check)
 
     @specialize.arg(3)
-    def _unify(self, other, heap, occurs_check=False):
-        other = other.dereference(heap)
+    def _unify(self, other, trail, occurs_check=False):
+        other = other.dereference(trail)
         if isinstance(other, Var) and other is self:
             pass
-        elif occurs_check and other.contains_var(self, heap):
+        elif occurs_check and other.contains_var(self, trail):
             raise UnificationFailed()
         else:
-            self.setvalue(other, heap)
+            self.setvalue(other, trail)
 
-    def dereference(self, heap):
+    def dereference(self, trail):
         next = self.binding
         if next is None:
             return self
         if isinstance(next, Var):
             if _is_early_constant(next):
-                result = next.dereference(heap)
+                result = next.dereference(trail)
             else:
-                result = next.opaque_dereference(heap)
-            self.setvalue(result, heap)
+                result = next.opaque_dereference(trail)
+            self.setvalue(result, trail)
             return result
         return next
 
-    def opaque_dereference(self, heap):
-        return self.dereference(heap)
+    def opaque_dereference(self, trail):
+        return self.dereference(trail)
 
-    def getvalue(self, heap):
-        res = self.dereference(heap)
+    def getvalue(self, trail):
+        res = self.dereference(trail)
         if not isinstance(res, Var):
-            return res.getvalue(heap)
+            return res.getvalue(trail)
         return res
 
-    def setvalue(self, value, heap):
+    def setvalue(self, value, trail):
         if value is not self.binding:
-            heap.add_trail(self)
+            trail.add_trail(self)
             self.binding = value
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         try:
             return memo[self]
         except KeyError:
-            newvar = memo[self] = heap.newvar()
+            newvar = memo[self] = trail.newvar()
             return newvar
 
-    def contains_var(self, var, heap):
-        self = self.dereference(heap)
+    def contains_var(self, var, trail):
+        self = self.dereference(trail)
         if self is var:
             return True
         if not isinstance(self, Var):
-            return self.contains_var(var, heap)
+            return self.contains_var(var, trail)
         return False
 
     def __repr__(self):
@@ -129,7 +129,7 @@ class Var(PrologObject):
         return self is other
 
     def eval_arithmetic(self, engine):
-        self = self.dereference(engine.heap)
+        self = self.dereference(engine.trail)
         if isinstance(self, Var):
             error.throw_instantiation_error()
         return self.eval_arithmetic(engine)
@@ -142,34 +142,34 @@ class LocalVar(Var):
         self.binding = None
         self.active = False
 
-    def setvalue(self, value, heap):
+    def setvalue(self, value, trail):
         if self.active:
-            heap.add_trail(self)
+            trail.add_trail(self)
         self.binding = value
 
 
 class NonVar(PrologObject):
     __slots__ = ()
 
-    def dereference(self, heap):
+    def dereference(self, trail):
         return self
 
     @specialize.arg(3)
-    def unify(self, other, heap, occurs_check=False):
-        return self._unify(other, heap, occurs_check)
+    def unify(self, other, trail, occurs_check=False):
+        return self._unify(other, trail, occurs_check)
 
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         raise NotImplementedError("abstract base class")
 
     @specialize.arg(3)
-    def _unify(self, other, heap, occurs_check=False):
-        other = other.dereference(heap)
+    def _unify(self, other, trail, occurs_check=False):
+        other = other.dereference(trail)
         if isinstance(other, Var):
-            other._unify(self, heap, occurs_check)
+            other._unify(self, trail, occurs_check)
         else:
-            self.basic_unify(other, heap, occurs_check)
+            self.basic_unify(other, trail, occurs_check)
 
 
 class Callable(NonVar):
@@ -198,13 +198,13 @@ class Atom(Callable):
         return "Atom(%r)" % (self.name,)
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         if isinstance(other, Atom) and (self is other or
                                         other.name == self.name):
             return
         raise UnificationFailed
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         return self
 
     def get_prolog_signature(self):
@@ -235,12 +235,12 @@ class Number(NonVar):
         self.num = num
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         if isinstance(other, Number) and other.num == self.num:
             return
         raise UnificationFailed
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         return self
 
     def __str__(self):
@@ -261,13 +261,13 @@ class Float(NonVar):
         self.floatval = floatval
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         if isinstance(other, Float) and other.floatval == self.floatval:
             return
         raise UnificationFailed
     basic_unify._look_inside_me_ = False
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         return self
 
     def __str__(self):
@@ -291,19 +291,19 @@ class BlackBox(NonVar):
         pass
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         if self is other:
             return
         raise UnificationFailed
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         return self
 
 
 # helper functions for various Term methods
 
-def _getvalue(obj, heap):
-    return obj.getvalue(heap)
+def _getvalue(obj, trail):
+    return obj.getvalue(trail)
 
 class Term(Callable):
     STANDARD_ORDER = 3
@@ -323,28 +323,28 @@ class Term(Callable):
         return "%s(%s)" % (self.name, ", ".join([str(a) for a in self.args]))
 
     @specialize.arg(3)
-    def basic_unify(self, other, heap, occurs_check=False):
+    def basic_unify(self, other, trail, occurs_check=False):
         if (isinstance(other, Term) and
             self.name == other.name and
             len(self.args) == len(other.args)):
             i = 0
             while i < len(self.args):
-                self.args[i].unify(other.args[i], heap, occurs_check)
+                self.args[i].unify(other.args[i], trail, occurs_check)
                 i += 1
         else:
             raise UnificationFailed
 
-    def copy(self, heap, memo):
+    def copy(self, trail, memo):
         newargs = []
         i = 0
         while i < len(self.args):
-            arg = self.args[i].copy(heap, memo)
+            arg = self.args[i].copy(trail, memo)
             newargs.append(arg)
             i += 1
         return Term(self.name, newargs, self.signature)
 
-    def getvalue(self, heap):
-        return self._copy_term(_getvalue, heap)
+    def getvalue(self, trail):
+        return self._copy_term(_getvalue, trail)
 
     def _copy_term(self, copy_individual, *extraargs):
         args = [None] * len(self.args)
@@ -363,9 +363,9 @@ class Term(Callable):
     def get_prolog_signature(self):
         return Term("/", [Atom.newatom(self.name), Number(len(self.args))])
     
-    def contains_var(self, var, heap):
+    def contains_var(self, var, trail):
         for arg in self.args:
-            if arg.contains_var(var, heap):
+            if arg.contains_var(var, trail):
                 return True
         return False
         
@@ -393,7 +393,7 @@ def rcmp(a, b): # RPython does not support cmp...
         return -1
     return 1
 
-def cmp_standard_order(obj1, obj2, heap):
+def cmp_standard_order(obj1, obj2, trail):
     c = rcmp(obj1.STANDARD_ORDER, obj2.STANDARD_ORDER)
     if c != 0:
         return c
@@ -412,9 +412,9 @@ def cmp_standard_order(obj1, obj2, heap):
         if c != 0:
             return c
         for i in range(len(obj1.args)):
-            a1 = obj1.args[i].dereference(heap)
-            a2 = obj2.args[i].dereference(heap)
-            c = cmp_standard_order(a1, a2, heap)
+            a1 = obj1.args[i].dereference(trail)
+            a2 = obj2.args[i].dereference(trail)
+            c = cmp_standard_order(a1, a2, trail)
             if c != 0:
                 return c
         return 0
