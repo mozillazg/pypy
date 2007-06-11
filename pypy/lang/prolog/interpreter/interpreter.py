@@ -269,11 +269,8 @@ class Frame(object):
         from pypy.lang.prolog.builtin import builtins_list
         builtin = builtins_list[number][1]
         result = builtin.call(self.engine, stack, continuation)
-        i = 0
-        while i < builtin.numargs:
-            hint(i, concrete=True)
-            stack.pop()
-            i += 1
+        # popping from the stack is not needed, the stack will be discarded now
+        # anyway
         return result
 
     def CUT(self, stack, continuation):
