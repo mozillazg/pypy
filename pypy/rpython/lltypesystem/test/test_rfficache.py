@@ -11,13 +11,14 @@ def test_gettypesizes():
     tmpfile = udir.join("somecrappyfile.py")
     assert get_type_sizes(tmpfile)['char'] == 8
     # this should not invoke a compiler
-    assert get_type_sizes(tmpfile, compiler_exe='xxx')['char'] == 8
+    res = get_type_sizes(tmpfile, compiler_exe='xxx')
+    assert res['char'] == 8
 
 def test_gettypesizes_platforms():
     tmpfile = udir.join("plat.py")
     tmpfile.write(py.code.Source("""
-    platforms = {'xxx':{'char':4}}
-    """))
+    platforms = {'xxx':{%s}}
+    """ % ", ".join(['"%s":4' % i for i in TYPES])))
     assert get_type_sizes(tmpfile)['char'] == 8
     assert get_type_sizes(tmpfile, platform_key='xxx', compiler_exe='xxx')['char'] == 4
 
