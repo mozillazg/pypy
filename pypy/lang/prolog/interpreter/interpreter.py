@@ -74,7 +74,9 @@ class Frame(object):
             startfrom = hint(len(stack) - m, promote=True)
             while i < m:
                 hint(i, concrete=True)
-                result[i].unify(stack[startfrom + i], self.heap)
+                arg = stack[startfrom + i]
+                hint(arg.__class__, promote=True)
+                result[i].unify(arg, self.heap)
                 i += 1
         self.result = None
 
@@ -249,9 +251,8 @@ class Frame(object):
 
     def ACTIVATE_LOCAL(self, stack, number):
         var = self.localvarcache[number]
-        assert var.__class__ == LocalVar
+        assert type(var) is LocalVar
         self.localvarcache[number] = result = var.dereference(self.heap)
-        hint(result.__class__, promote=True)
         var.active = True
 
     def MAKETERM(self, stack, number):
