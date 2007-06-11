@@ -52,11 +52,11 @@ def dynamic_call_frame(engine, query):
 
 
 class Frame(object):
-    def __init__(self, engine, code, localvarcache=None, heap=None):
+    def __init__(self, engine, code, localvarcache=None, trail=None):
         self.engine = engine
-        if heap is None:
-            heap = engine.heap 
-        self.heap = heap
+        if trail is None:
+            trail = engine.trail 
+        self.trail = trail
         self.code = code
         if localvarcache is None:
             localvarcache = [None] * code.maxlocalvar
@@ -78,7 +78,7 @@ class Frame(object):
                 hint(i, concrete=True)
                 arg = stack[startfrom + i]
                 hint(arg.__class__, promote=True)
-                result[i].unify(arg, self.heap)
+                result[i].unify(arg, self.trail)
                 i += 1
         self.result = None
 
@@ -101,12 +101,12 @@ class Frame(object):
             return self._run(codeobject, head, pc, continuation)
         if not we_are_jitted():
             assert codeobject is not None
-            return run_jit(self.localvarcache, self.engine, self.heap,
+            return run_jit(self.localvarcache, self.engine, self.trail,
                            codeobject, head, pc, continuation)
         return self.opaque_run(codeobject, head, pc, continuation)
 
     def opaque_run(self, codeobject, head, pc, continuation):
-        return run_jit(self.localvarcache, self.engine, self.heap,
+        return run_jit(self.localvarcache, self.engine, self.trail,
                        codeobject, head, pc, continuation)
     opaque_run._look_inside_me = False
 
@@ -195,7 +195,7 @@ class Frame(object):
     def ACTIVATE_LOCAL(self, stack, number):
         var = self.localvarcache[number]
         assert type(var) is LocalVar
-        self.localvarcache[number] = result = var.dereference(self.heap)
+        self.localvarcache[number] = result = var.dereference(self.trail)
         var.active = True
 
     def MAKETERM(self, stack, number):
@@ -247,7 +247,7 @@ class Frame(object):
         self.localvarcache[number] = None
 
     def UNIFY(self, stack):
-        stack.pop().unify(stack.pop(), self.heap)
+        stack.pop().unify(stack.pop(), self.trail)
 
     def user_call(self, function, args, continuation):
         rulechain = function.rulechain
@@ -255,7 +255,7 @@ class Frame(object):
         if rulechain is None:
             error.throw_existence_error(
                 "procedure", function.prolog_signature)
-        oldstate = self.heap.branch()
+        oldstate = self.trail.branch()
         while rulechain is not None:
             rule = rulechain.rule
             choice_point = rulechain.next is not None
@@ -267,7 +267,7 @@ class Frame(object):
                     result = frame.run_directly(continuation)
                     return result
                 except error.UnificationFailed:
-                    self.heap.revert(oldstate)
+                    self.trail.revert(oldstate)
                 except error.CutException, e:
                     if continuation.scope_active:
                         return self.engine.continue_after_cut(e.continuation,
@@ -279,12 +279,12 @@ class Frame(object):
                     result = frame.run_directly(continuation, choice_point)
                     return result
                 except error.UnificationFailed:
-                    self.heap.revert(oldstate)
+                    self.trail.revert(oldstate)
                     if not choice_point:
                         raise
             rulechain = rulechain.next
 
-def run_jit(original_localvarcache, engine, heap, codeobject,
+def run_jit(original_localvarcache, engine, trail, codeobject,
             head, pc, continuation):
     hint(None, global_merge_point=True)
     hint(codeobject, concrete=True)
@@ -296,7 +296,7 @@ def run_jit(original_localvarcache, engine, heap, codeobject,
     else:
         bytecode = codeobject.opcode
         pc = hint(pc, promote=True)
-    self = jit_enter_function(engine, heap, codeobject, original_localvarcache)
+    self = jit_enter_function(engine, trail, codeobject, original_localvarcache)
     original_self = self
     original_code = codeobject
 
@@ -335,7 +335,7 @@ def run_jit(original_localvarcache, engine, heap, codeobject,
                        original_localvarcache)
     return continuation
 
-def jit_enter_function(engine, heap, code, concrete_localvarcache):
+def jit_enter_function(engine, trail, code, concrete_localvarcache):
     # complete funnyness
     localvarcache = [None] * code.maxlocalvar
     i = code.maxlocalvar
@@ -348,7 +348,7 @@ def jit_enter_function(engine, heap, code, concrete_localvarcache):
         localvarcache[i] = obj
     self = Frame(engine, code, localvarcache)
     self.localvarcache = localvarcache
-    self.heap = heap
+    self.trail = trail
     return self
 
 def jit_leave_function(code, localvarcache, original_localvarcache):

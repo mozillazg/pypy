@@ -8,7 +8,7 @@ def test_simple():
     r = Rule(head, body, e)
     query = get_query_and_vars("f(a).")[0]
     frame = r.make_frame(query.args)
-    assert frame.localvarcache[0].dereference(e.heap).name == "a"
+    assert frame.localvarcache[0].dereference(e.trail).name == "a"
     cont = object()
     c2 = frame.run(frame.code, False, 0, cont)
     assert cont is c2
@@ -18,7 +18,7 @@ def test_simple():
     cont = object()
     c2 = frame.run(frame.code, False, 0, cont)
     assert cont is c2
-    assert vars['X'].dereference(e.heap).name == 'a'
+    assert vars['X'].dereference(e.trail).name == 'a'
 
 def test_build_term():
     e = get_engine("")
@@ -28,5 +28,5 @@ def test_build_term():
     frame = Frame(e, r.code)
     frame.run(frame.code, True, 0, None)
     frame.run(frame.code, False, 0, None)
-    assert frame.result[0].dereference(e.heap).name == "a"
-    assert frame.result[1].dereference(e.heap).name == "b"
+    assert frame.result[0].dereference(e.trail).name == "a"
+    assert frame.result[1].dereference(e.trail).name == "b"

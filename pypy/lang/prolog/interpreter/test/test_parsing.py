@@ -38,8 +38,8 @@ greater_than(succ(X), succ(Y)) :- greater_than(X, Y).
     term, vars = get_query_and_vars(
         """add_numeral(succ(succ(null)), succ(succ(null)), X).""")
     e.run(term)
-    var = vars['X'].getvalue(e.heap)
-    var.unify(four, e.heap)
+    var = vars['X'].getvalue(e.trail)
+    var.unify(four, e.trail)
     term = parse_query_term(
         """greater_than(succ(succ(succ(null))), succ(succ(null))).""")
     e.run(term)

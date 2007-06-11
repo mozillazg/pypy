@@ -42,13 +42,13 @@ class PyrologHintAnnotatorPolicy(ManualGraphPolicy):
         for cls in [term.Callable, term.Atom, term.Term]:
             self.seegraph(cls.get_prolog_signature)
         self.seegraph(PORTAL)
-        self.seegraph(engine.Heap.newvar)
+        self.seegraph(engine.Trail.newvar)
         self.seegraph(engine.TrailChunk.__init__)
         self.seegraph(interpreter.Rule.make_frame)
         self.seegraph(interpreter.jit_enter_function)
         self.seegraph(interpreter.jit_leave_function)
         for method in "branch revert newvar add_trail".split():
-            self.seegraph(getattr(engine.Heap, method))
+            self.seegraph(getattr(engine.Trail, method))
         for method in ("unify_head run_directly run user_call "
                        "dispatch_bytecode getcode "
                        "__init__ _run").split():

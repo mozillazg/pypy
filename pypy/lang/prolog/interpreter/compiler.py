@@ -81,7 +81,7 @@ class Compiler(object):
     def compile_body(self, body):
         from pypy.lang.prolog.builtin import builtins_list, builtins_index
 
-        body = body.dereference(self.engine.heap)
+        body = body.dereference(self.engine.trail)
         if isinstance(body, Var):
             self.can_contain_cut = True
             self.compile_termbuilding(body)
