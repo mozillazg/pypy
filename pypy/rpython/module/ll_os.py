@@ -56,7 +56,9 @@ if os.name == 'nt':
     name = '_dup'
 else:
     name = 'dup'
-os_dup = rffi.llexternal(name, [lltype.Signed], lltype.Signed)
+
+os_dup = rffi.llexternal(name, [lltype.Signed], lltype.Signed,
+                         _callable=os.dup)
 
 def dup_lltypeimpl(fd):
     newfd = os_dup(fd)
@@ -110,8 +112,12 @@ def utime_tuple_lltypeimpl(path, tp):
 register_external(ros.utime_tuple, [str, (int, int)], s_None, "ll_os.utime_tuple",
                   llimpl=utime_tuple_lltypeimpl)    
 
+def fake_os_open(l_path, flags, mode):
+    path = rffi.charp2str(l_path)
+    return os.open(path, flags, mode)
+
 os_open = rffi.llexternal('open', [rffi.CCHARP, lltype.Signed, rffi.MODE_T],
-                          lltype.Signed)
+                          lltype.Signed, _callable=fake_os_open)
 
 def os_open_lltypeimpl(path, flags, mode):
     l_path = rffi.str2charp(path)
@@ -120,6 +126,7 @@ def os_open_lltypeimpl(path, flags, mode):
     if result == -1:
         raise OSError(rffi.c_errno, "os_open failed")
     return result
+
 register_external(os.open, [str, int, int], int, "ll_os.open",
                   llimpl=os_open_lltypeimpl)
 
