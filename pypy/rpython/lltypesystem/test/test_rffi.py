@@ -5,6 +5,7 @@ from pypy.translator.c.test.test_genc import compile
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
+from pypy.rpython.test.test_llinterp import interpret
 
 def test_basic():
     c_source = """
@@ -162,3 +163,13 @@ def test_constant():
     import errno
     assert gn() == errno.EBADF
 
+def test_external_callable():
+    """ Try to call some llexternal function with llinterp
+    """
+    z = llexternal('z', [Signed], Signed, _callable=lambda x:x+1)
+    
+    def f():
+        return z(2)
+
+    res = interpret(f, [])
+    assert res == 3
