@@ -18,12 +18,13 @@ class CConstant(Symbolic):
     def lltype(self):
         return self.TP
 
-def llexternal(name, args, result, sources=[], includes=[], libraries=[]):
+def llexternal(name, args, result, _callable=None, sources=[], includes=[], libraries=[]):
     ext_type = lltype.FuncType(args, result)
     return lltype.functionptr(ext_type, name, external='C',
                               sources=tuple(sources),
                               includes=tuple(includes),
-                              libraries=tuple(libraries))
+                              libraries=tuple(libraries),
+                              _callable=_callable)
 
 def setup():
     """ creates necessary c-level types
