@@ -642,10 +642,10 @@ class LLFrame(object):
         return self.heap.malloc(obj, size, zero=True)
 
     def op_flavored_malloc_varsize(self, flavor, obj, size):
-        XXX # probably should be never seen, and if so, should
-        # be tested
-        assert isinstance(flavor, str)
-        return self.heap.malloc(obj, flavor=flavor)
+        # XXX should we keep info about all mallocs for later checks of
+        # frees?
+        assert flavor == 'raw'
+        return self.heap.malloc(obj, size, flavor=flavor)
 
     def op_flavored_malloc(self, flavor, obj):
         assert isinstance(flavor, str)
