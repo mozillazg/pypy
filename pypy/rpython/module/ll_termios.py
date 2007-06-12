@@ -13,6 +13,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
 from pypy.rpython import rclass
+from pypy.rlib import rtermios
 
 # XXX is this portable? well.. not at all, ideally
 # I would like to have NCCS = CLaterConstant(NCCS)
@@ -67,7 +68,7 @@ def tcgetattr_llimpl(fd):
     finally:
         lltype.free(c_struct, flavor='raw')
 
-register_external(termios.tcgetattr, [int], (int, int, int, int, int, int, [str]),
+register_external(rtermios.tcgetattr, [int], (int, int, int, int, int, int, [str]),
                   llimpl=tcgetattr_llimpl, export_name='termios.tcgetattr')
 
 def tcsetattr_llimpl(fd, when, attributes):
@@ -90,7 +91,7 @@ def tcsetattr_llimpl(fd, when, attributes):
         lltype.free(c_struct, flavor='raw')
 
 r_uint = rffi.r_uint
-register_external(termios.tcsetattr, [int, int, (r_uint, r_uint, r_uint,
+register_external(rtermios.tcsetattr, [int, int, (r_uint, r_uint, r_uint,
                   r_uint, r_uint, r_uint, [str])], llimpl=tcsetattr_llimpl,
                   export_name='termios.tcsetattr')
 
