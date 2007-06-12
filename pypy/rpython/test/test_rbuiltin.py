@@ -158,6 +158,7 @@ class BaseTestRbuiltin(BaseRtypingTest):
         assert self.ll_to_string(res) == fn()
         
     def test_os_write(self):
+        self._skip_oo('os.open oo fake impl')
         tmpdir = str(udir.udir.join("os_write_test"))
         import os
         def wr_open(fname):
@@ -172,6 +173,7 @@ class BaseTestRbuiltin(BaseRtypingTest):
         assert hello == "hello world"
 
     def test_os_write_single_char(self):
+        self._skip_oo('os.open oo fake impl')
         tmpdir = str(udir.udir.join("os_write_test_char"))
         import os
         def wr_open(fname):
@@ -186,6 +188,7 @@ class BaseTestRbuiltin(BaseRtypingTest):
         assert hello == "x"
 
     def test_os_read(self):
+        self._skip_oo('os.open oo fake impl')
         import os
         tmpfile = str(udir.udir.join("os_read_test"))
         f = file(tmpfile, 'w')
@@ -198,7 +201,8 @@ class BaseTestRbuiltin(BaseRtypingTest):
         assert self.ll_to_string(res) == 'hello world'
 
     def test_os_dup(self):
-        py.test.skip("Cannot test it that way")
+        self._skip_oo('os.dup oo fake impl')
+        from pypy.rpython.module.ll_os import dup_lltypeimpl
         import os
         def fn(fd):
             return os.dup(fd)
@@ -210,11 +214,13 @@ class BaseTestRbuiltin(BaseRtypingTest):
         count = 0
         for dir_call in enum_direct_calls(test_llinterp.typer.annotator.translator, fn):
             cfptr = dir_call.args[0]
-            assert self.get_callable(cfptr.value) == self.ll_os.Implementation.ll_os_dup.im_func
+            assert self.get_callable(cfptr.value) == dup_lltypeimpl
             count += 1
         assert count == 1
 
     def test_os_open(self):
+        self._skip_oo('os.open oo fake impl')
+        from pypy.rpython.module.ll_os import os_open_lltypeimpl
         tmpdir = str(udir.udir.join("os_open_test"))
         import os
         def wr_open(fname):
@@ -226,7 +232,7 @@ class BaseTestRbuiltin(BaseRtypingTest):
         count = 0
         for dir_call in enum_direct_calls(test_llinterp.typer.annotator.translator, wr_open):
             cfptr = dir_call.args[0]
-            assert self.get_callable(cfptr.value) == self.ll_os.Implementation.ll_os_open.im_func
+            assert self.get_callable(cfptr.value) == os_open_lltypeimpl
             count += 1
         assert count == 1
 
