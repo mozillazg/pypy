@@ -38,24 +38,25 @@ class TestTermios(object):
         sys.path.insert(0, '%s')
         from pypy.translator.c.test.test_genc import compile
         import termios
+        from pypy.rlib import rtermios
         def runs_tcgetattr():
-            tpl = list(termios.tcgetattr(2)[:-1])
+            tpl = list(rtermios.tcgetattr(2)[:-1])
             print tpl
 
         fn = compile(runs_tcgetattr, [], backendopt=False,
 )
         print 'XXX'
         fn(expected_extra_mallocs=1)
-        print str(termios.tcgetattr(2)[:-1])
+        print str(rtermios.tcgetattr(2)[:-1])
         """ % os.path.dirname(pypydir))
         f = udir.join("test_tcgetattr.py")
         f.write(source)
         child = self.spawn([str(f)])
         child.expect("XXX")
-        child.expect('\[[^\]]*\]')
-        first = child.match.group(0)
-        child.expect('\[[^\]]*\]')
-        second = child.match.group(0)
+        child.expect('\[([^\]]*)\]')
+        first = child.match.group(1)
+        child.expect('\(([^\]]*)\)')
+        second = child.match.group(1)
         assert first == second
 
     def test_tcgetattr2(self):
@@ -64,10 +65,11 @@ class TestTermios(object):
         sys.path.insert(0, '%s')
         from pypy.translator.c.test.test_genc import compile
         from pypy.rpython.module import ll_termios
+        from pypy.rlib import rtermios
         import termios
         def runs_tcgetattr():
             try:
-                termios.tcgetattr(338)
+                rtermios.tcgetattr(338)
             except termios.error, e:
                 return 2
             return 3
@@ -92,13 +94,14 @@ class TestTermios(object):
         sys.path.insert(0, '%s')
         from pypy.translator.c.test.test_genc import compile
         from pypy.rpython.module import ll_termios
+        from pypy.rlib import rtermios
         import termios, time
         def runs_tcsetattr():
-            tp = termios.tcgetattr(2)
+            tp = rtermios.tcgetattr(2)
             a, b, c, d, e, f, g = tp
-            termios.tcsetattr(2, termios.TCSANOW, (a, b, c, d, e, f, g))
+            rtermios.tcsetattr(2, rtermios.TCSANOW, (a, b, c, d, e, f, g))
             time.sleep(1)
-            tp = termios.tcgetattr(2)
+            tp = rtermios.tcgetattr(2)
             assert tp[5] == f
 
         fn = compile(runs_tcsetattr, [], backendopt=False)
@@ -132,3 +135,26 @@ class TestTermios(object):
         child = self.spawn([str(f)])
         child.expect("OK!")
 
+    def test_tcsetattr_icanon(self):
+        source = py.code.Source("""
+        import sys
+        sys.path.insert(0, '%s')
+        from pypy.rlib import rtermios
+        import termios
+        old_tcsetattr = termios.tcsetattr
+        def check(fd, when, attributes):
+            count = len([i for i in attributes[-1] if isinstance(i, int)])
+            assert count == 2
+        termios.tcsetattr = check
+        try:
+            attr = list(rtermios.tcgetattr(2))
+            attr[3] |= termios.ICANON
+            rtermios.tcsetattr(2, termios.TCSANOW, attr)
+        finally:
+            termios.tcsetattr = old_tcsetattr
+        print 'OK!'
+        """ % os.path.dirname(pypydir))
+        f = udir.join("test_tcsetattricanon.py")
+        f.write(source)
+        child = self.spawn([str(f)])
+        child.expect("OK!")
