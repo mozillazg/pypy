@@ -19,6 +19,7 @@ class BaseTestPosix(BaseRtypingTest):
         testfile.close()
 
     def test_open(self):
+        self._skip_oo('os.open oo fake impl')
         def f():
             ff = posix.open(path,posix.O_RDONLY,0777)
             return ff
