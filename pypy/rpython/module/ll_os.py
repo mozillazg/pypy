@@ -66,7 +66,7 @@ def dup_lltypeimpl(fd):
         raise OSError(rffi.c_errno, "dup failed")
     return newfd
 register_external(os.dup, [int], int, llimpl=dup_lltypeimpl,
-                  export_name="ll_os.ll_os_dup")
+                  export_name="ll_os.ll_os_dup", oofakeimpl=os.dup)
 
 if os.name == 'nt':
     name = '_dup2'
@@ -127,8 +127,11 @@ def os_open_lltypeimpl(path, flags, mode):
         raise OSError(rffi.c_errno, "os_open failed")
     return result
 
+def os_open_oofakeimpl(o_path, flags, mode):
+    return os.open(o_path._str, flags, mode)
+
 register_external(os.open, [str, int, int], int, "ll_os.open",
-                  llimpl=os_open_lltypeimpl)
+                  llimpl=os_open_lltypeimpl, oofakeimpl=os_open_oofakeimpl)
 
 class BaseOS:
     __metaclass__ = ClassMethods
