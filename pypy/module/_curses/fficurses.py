@@ -73,8 +73,6 @@ def tigetstr_llimpl(cap):
         if num == 0 or num == -1:
             raise interp_curses.TermError()
         res = rffi.charp2str(ll_res)
-        # XXX - how to avoid a problem with leaking stuff here???
-        #lltype.free(ll_res, flavor='raw')
         return res
     finally:
         lltype.free(ll_cap, flavor='raw')
@@ -92,9 +90,9 @@ def tparm_llimpl(s, args):
     ll_res = c_tparm(ll_s, l[0], l[1], l[2], l[3], l[4], l[5], l[6],
                      l[7], l[8], l[9])
     lltype.free(ll_s, flavor='raw')
-    # XXX - how to make this happy?
-    #lltype.free(ll_res, flavor.raw)
-    return rffi.charp2str(ll_res)
+    res = rffi.charp2str(ll_res)
+    lltype.free(ll_res, flavor='raw')
+    return res
 
 register_external(interp_curses._curses_tparm, [str, [int]], str,
                   export_name='_curses.tparm', llimpl=tparm_llimpl)
