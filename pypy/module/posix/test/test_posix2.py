@@ -192,6 +192,11 @@ class AppTestPosix:
         raises(TypeError, "os.utime('xxx', 3)")
         raises(OSError, "os.utime('somefilewhichihopewouldneverappearhere', None)")
 
+    def test_wifsignaled(self):
+        os = self.posix
+        assert os.WIFSIGNALED(0) == False
+        assert os.WIFSIGNALED(1) == True
+
 class AppTestEnvironment(object):
     def setup_class(cls): 
         cls.space = space 

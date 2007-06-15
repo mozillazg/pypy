@@ -497,3 +497,7 @@ second form is used, set the access and modified times to the current time.
             raise
         raise OperationError(space.w_TypeError, space.wrap(msg))
 utime.unwrap_spec = [ObjSpace, str, W_Root]
+
+def WIFSIGNALED(space, status):
+    return space.newbool(os.WIFSIGNALED(status))
+WIFSIGNALED.unwrap_spec = [ObjSpace, int]
