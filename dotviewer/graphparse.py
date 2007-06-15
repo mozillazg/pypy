@@ -19,7 +19,7 @@ def dot2plain(content, use_codespeak=False):
             cmdline = 'dot -Tplain'
         else:
             cmdline = 'neato -Tplain'
-        print >> sys.stderr, '* running:', cmdline
+        #print >> sys.stderr, '* running:', cmdline
         child_in, child_out = os.popen2(cmdline, 'r')
         thread.start_new_thread(bkgndwrite, (child_in, content))
         plaincontent = child_out.read()
