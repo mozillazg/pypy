@@ -2,7 +2,7 @@ import py
 
 class Node(object):
     def view(self):
-        from pypy.translator.tool.pygame import graphclient
+        from dotviewer import graphclient
         content = ["digraph G{"]
         content.extend(self.dot())
         content.append("}")
