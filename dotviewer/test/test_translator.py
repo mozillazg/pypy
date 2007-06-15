@@ -3,7 +3,7 @@ Test the integration with PyPy.
 """
 
 import py, sys
-from dotviewer.test.conftest import option
+from dotviewer.conftest import option
 
 def setup_module(mod):
     if not option.pygame:
