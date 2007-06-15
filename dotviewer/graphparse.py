@@ -101,7 +101,7 @@ def parse_plain(graph_id, plaincontent, links={}):
                         color = None
                     if color is not None:
                         yield (msgstruct.CMSG_ADD_LINK, word,
-                               statusbartext, color)
+                               statusbartext, color[0], color[1], color[2])
                     else:
                         yield (msgstruct.CMSG_ADD_LINK, word, statusbartext)
                     seen[word] = True

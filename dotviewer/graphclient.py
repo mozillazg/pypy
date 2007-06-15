@@ -63,6 +63,9 @@ def display_page(page, wait=True):
                         reload(graph_id)
         except EOFError:
             pass
+        except Exception, e:
+            send_error(io, e)
+            raise
         io.close()
 
 def page_messages(page, graph_id):
@@ -87,6 +90,17 @@ def send_graph_messages(io, messages):
                                      "(graphserver crash?)")
     if ioerror is not None:
         raise ioerror
+
+def send_error(io, e):
+    try:
+        errmsg = str(e)
+        if errmsg:
+            errmsg = '%s: %s' % (e.__class__.__name__, errmsg)
+        else:
+            errmsg = '%s' % (e.__class__.__name__,)
+        io.sendmsg(msgstruct.CMSG_SAY, errmsg)
+    except Exception:
+        pass
 
 def spawn_handler():
     gsvar = os.environ.get('GRAPHSERVER')
