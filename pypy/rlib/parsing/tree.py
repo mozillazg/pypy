@@ -21,9 +21,11 @@ class Symbol(Node):
         return "Symbol(%r, %r)" % (self.symbol, self.additional_info)
 
     def dot(self):
+        symbol = (self.symbol.replace("\\", "\\\\").replace('"', '\\"')
+                                                   .replace('\n', '\\l'))
         addinfo = str(self.additional_info).replace('"', "'") or "_"
         yield ('"%s" [shape=box,label="%s\\n%s"];' % (
-            id(self), self.symbol.replace("\\", "\\\\"),
+            id(self), symbol,
             repr(addinfo).replace('"', '').replace("\\", "\\\\")))
 
     def visit(self, visitor):
