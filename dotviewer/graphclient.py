@@ -8,7 +8,7 @@ GRAPHSERVER = os.path.join(this_dir, 'graphserver.py')
 def display_dot_file(dotfile, wait=True):
     """ Display the given dot file in a subprocess.
     """
-    if not os.path.exists(dotfile):
+    if not os.path.exists(str(dotfile)):
         raise IOError("No such file: %s" % (dotfile,))
     import graphpage
     page = graphpage.DotFileGraphPage(str(dotfile))
