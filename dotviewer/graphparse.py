@@ -68,7 +68,7 @@ def parse_plain(graph_id, plaincontent, links={}, fixedfont=False):
             del lines[i+1]
     header = splitline(lines.pop(0))
     if header[0] != 'graph':
-        raise PlainParseError("%s: should start with 'graph'" % (plainfile,))
+        raise PlainParseError("should start with 'graph'")
     yield (msgstruct.CMSG_START_GRAPH, graph_id) + tuple(header[1:])
 
     texts = []
@@ -76,7 +76,7 @@ def parse_plain(graph_id, plaincontent, links={}, fixedfont=False):
         line = splitline(line)
         if line[0] == 'node':
             if len(line) != 11:
-                raise PlainParseError("%s: bad 'node'" % (plainfile,))
+                raise PlainParseError("bad 'node'")
             yield (msgstruct.CMSG_ADD_NODE,) + tuple(line[1:])
             texts.append(line[6])
         if line[0] == 'edge':
