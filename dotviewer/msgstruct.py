@@ -20,8 +20,8 @@ MSG_FOLLOW_LINK  = 'L'
 
 # ____________________________________________________________
 
-long_min = -sys.maxint-1
-long_max = sys.maxint
+long_min = -2147483648
+long_max = 2147483647
 
 
 def message(tp, *values):
@@ -37,9 +37,12 @@ def message(tp, *values):
         else:
             typecodes.append('q')
     typecodes = ''.join(typecodes)
-    assert len(typecodes) < 256
-    return pack(("!B%dsc" % len(typecodes)) + typecodes,
-                len(typecodes), typecodes, tp, *values)
+    if len(typecodes) < 256:
+        return pack(("!B%dsc" % len(typecodes)) + typecodes,
+                    len(typecodes), typecodes, tp, *values)
+    else:
+        # too many values - encapsulate the message in another one
+        return message('\x00', typecodes, pack("!c" + typecodes, tp, *values))
 
 def decodemessage(data):
     if data:
@@ -48,7 +51,10 @@ def decodemessage(data):
             typecodes = "!c" + data[1:limit]
             end = limit + calcsize(typecodes)
             if len(data) >= end:
-                return unpack(typecodes, data[limit:end]), data[end:]
+                msg = unpack(typecodes, data[limit:end])
+                if msg[0] == '\x00':
+                    msg = unpack("!c" + msg[1], msg[2])
+                return msg, data[end:]
             #elif end > 1000000:
             #    raise OverflowError
     return None, data
