@@ -111,6 +111,12 @@ class Server(object):
 
 def listen_server(local_address):
     import socket, graphclient, thread
+    if isinstance(local_address, str):
+        if ':' in local_address:
+            interface, port = local_address.split(':')
+        else:
+            interface, port = '', local_address
+        local_address = interface, int(port)
     s1 = socket.socket()
     s1.bind(local_address)
     s1.listen(5)
@@ -163,5 +169,4 @@ if __name__ == '__main__':
                     print >> f, help
             io.sendmsg(msgstruct.MSG_ERROR, f.getvalue())
     else:
-        port = int(sys.argv[1])
-        listen_server(('', port))
+        listen_server(sys.argv[1])
