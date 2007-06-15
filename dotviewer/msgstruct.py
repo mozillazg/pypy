@@ -10,6 +10,7 @@ CMSG_ADD_EDGE    = 'e'
 CMSG_ADD_LINK    = 'l'
 CMSG_STOP_GRAPH  = ']'
 CMSG_MISSING_LINK= 'm'
+CMSG_SAY         = 's'
 
 MSG_OK           = 'O'
 MSG_ERROR        = 'E'
@@ -23,6 +24,7 @@ long_max = sys.maxint
 
 
 def message(tp, *values):
+    #print >> sys.stderr, tp, values
     typecodes = ['']
     for v in values:
         if type(v) is str:

@@ -1,5 +1,5 @@
 
-class GraphPage:
+class GraphPage(object):
     """Base class for the client-side content of one of the 'pages'
     (one graph) sent over to and displayed by the external process.
     """
@@ -26,6 +26,11 @@ class GraphPage:
         "Display a graph page."
         import graphclient
         graphclient.display_page(self)
+
+    def display_background(self):
+        "Display a graph page in a background thread."
+        import graphclient, thread
+        thread.start_new_thread(graphclient.display_page, (self,))
 
 
 class DotFileGraphPage(GraphPage):

@@ -135,3 +135,15 @@ def test_graphserver():
             del os.environ['GRAPHSERVER']
     finally:
         os.kill(pid, signal.SIGTERM)
+
+def test_colors():
+    from dotviewer import graphpage, graphclient
+    class MyPage(graphpage.DotFileGraphPage):
+        def compute(self, dotfile):
+            super(MyPage, self).compute(dotfile)
+            self.links = {'v2721': 'Hello world',
+                          'v2720': ('Something green', (0, 192, 0)),
+                          }
+    dotfile = udir.join('graph1.dot')
+    page = MyPage(str(dotfile))
+    graphclient.display_page(page)

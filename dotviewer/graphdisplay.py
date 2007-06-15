@@ -650,10 +650,13 @@ class GraphDisplay(Display):
         self.quit()
      
     def process_UserEvent(self, event): # new layout request
-        if event.layout is None:
-            self.setstatusbar('cannot follow this link')
-        else:
-            self.setlayout(event.layout)
+        if hasattr(event, 'layout'):
+            if event.layout is None:
+                self.setstatusbar('cannot follow this link')
+            else:
+                self.setlayout(event.layout)
+        elif hasattr(event, 'say'):
+            self.setstatusbar(event.say)
     
     def quit(self):
         raise StopIteration

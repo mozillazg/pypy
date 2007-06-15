@@ -82,6 +82,8 @@ class Server(object):
     def cmsg_add_link(self, word, *info):
         if len(info) == 1:
             info = info[0]
+        elif len(info) >= 4:
+            info = (info[0], info[1:4])
         self.newlayout.links[word] = info
 
     def cmsg_stop_graph(self, *rest):
@@ -92,6 +94,10 @@ class Server(object):
     def cmsg_missing_link(self, *rest):
         self.setlayout(None)
 
+    def cmsg_say(self, errmsg, *rest):
+        from drawgraph import display_async_cmd
+        display_async_cmd(say=errmsg)
+
     MESSAGES = {
         msgstruct.CMSG_START_GRAPH: cmsg_start_graph,
         msgstruct.CMSG_ADD_NODE:    cmsg_add_node,
@@ -99,6 +105,7 @@ class Server(object):
         msgstruct.CMSG_ADD_LINK:    cmsg_add_link,
         msgstruct.CMSG_STOP_GRAPH:  cmsg_stop_graph,
         msgstruct.CMSG_MISSING_LINK:cmsg_missing_link,
+        msgstruct.CMSG_SAY:         cmsg_say,
         }
 
 
