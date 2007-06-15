@@ -86,6 +86,9 @@ class Server(object):
             info = (info[0], info[1:4])
         self.newlayout.links[word] = info
 
+    def cmsg_fixed_font(self, *rest):
+        self.newlayout.fixedfont = True
+
     def cmsg_stop_graph(self, *rest):
         self.setlayout(self.newlayout)
         del self.newlayout
@@ -103,6 +106,7 @@ class Server(object):
         msgstruct.CMSG_ADD_NODE:    cmsg_add_node,
         msgstruct.CMSG_ADD_EDGE:    cmsg_add_edge,
         msgstruct.CMSG_ADD_LINK:    cmsg_add_link,
+        msgstruct.CMSG_FIXED_FONT:  cmsg_fixed_font,
         msgstruct.CMSG_STOP_GRAPH:  cmsg_stop_graph,
         msgstruct.CMSG_MISSING_LINK:cmsg_missing_link,
         msgstruct.CMSG_SAY:         cmsg_say,
