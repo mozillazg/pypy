@@ -133,6 +133,18 @@ def os_open_oofakeimpl(o_path, flags, mode):
 register_external(os.open, [str, int, int], int, "ll_os.open",
                   llimpl=os_open_lltypeimpl, oofakeimpl=os_open_oofakeimpl)
 
+def fake_WIFSIGNALED(status):
+    return int(os.WIFSIGNALED(status))
+
+os_WIFSIGNALED = rffi.llexternal('WIFSIGNALED', [lltype.Signed], lltype.Signed,
+                                 _callable=fake_WIFSIGNALED)
+
+def WIFSIGNALED_lltypeimpl(status):
+    return bool(os_WIFSIGNALED(status))
+
+register_external(os.WIFSIGNALED, [int], int, "ll_os.WIFSIGNALED",
+                  llimpl=WIFSIGNALED_lltypeimpl)
+
 class BaseOS:
     __metaclass__ = ClassMethods
 

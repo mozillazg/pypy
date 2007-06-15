@@ -1,6 +1,7 @@
 import os
 from pypy.tool.udir import udir
 from pypy.tool.pytest.modcheck import skipimporterror
+from pypy.translator.c.test.test_genc import compile
 
 from pypy.rpython.lltypesystem.module.ll_os import Implementation as impl
 import sys
@@ -100,3 +101,11 @@ def test_opendir_readdir():
     compared_with = os.listdir(dirname)
     compared_with.sort()
     assert result == compared_with
+
+def test_os_wifsignaled():
+    def fun(s):
+        return os.WIFSIGNALED(s)
+
+    fn = compile(fun, [int])
+    assert fn(0) == False
+    assert fn(1) == True
