@@ -60,7 +60,7 @@ def splitline(line, re_word = re.compile(r'[^\s"]\S*|["]["]|["].*?[^\\]["]')):
         result.append(word)
     return result
 
-def parse_plain(graph_id, plaincontent, links={}):
+def parse_plain(graph_id, plaincontent, links={}, fixedfont=False):
     lines = plaincontent.splitlines(True)
     for i in range(len(lines)-2, -1, -1):
         if lines[i].endswith('\\\n'):   # line ending in '\'
@@ -106,13 +106,16 @@ def parse_plain(graph_id, plaincontent, links={}):
                         yield (msgstruct.CMSG_ADD_LINK, word, statusbartext)
                     seen[word] = True
 
+    if fixedfont:
+        yield (msgstruct.CMSG_FIXED_FONT,)
+
     yield (msgstruct.CMSG_STOP_GRAPH,)
 
-def parse_dot(graph_id, content, links={}):
+def parse_dot(graph_id, content, links={}, fixedfont=False):
     try:
         plaincontent = dot2plain(content, use_codespeak=False)
-        return list(parse_plain(graph_id, plaincontent, links))
+        return list(parse_plain(graph_id, plaincontent, links, fixedfont))
     except PlainParseError:
         # failed, retry via codespeak
         plaincontent = dot2plain(content, use_codespeak=True)
-        return list(parse_plain(graph_id, plaincontent, links))
+        return list(parse_plain(graph_id, plaincontent, links, fixedfont))

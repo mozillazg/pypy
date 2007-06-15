@@ -70,7 +70,8 @@ def display_page(page, wait=True):
 
 def page_messages(page, graph_id):
     import graphparse
-    return graphparse.parse_dot(graph_id, page.source, page.links)
+    return graphparse.parse_dot(graph_id, page.source, page.links,
+                                getattr(page, 'fixedfont', False))
 
 def send_graph_messages(io, messages):
     ioerror = None
