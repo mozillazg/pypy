@@ -7,7 +7,7 @@ from pypy.annotation.description import MethodDesc
 from pypy.annotation.classdef import ClassDef
 from pypy.tool.uid import uid
 
-from pypy.translator.tool.pygame.graphpage import GraphPage
+from dotviewer.graphpage import GraphPage
 
 
 class VariableHistoryGraphPage(GraphPage):
