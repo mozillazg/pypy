@@ -147,3 +147,12 @@ def test_colors():
     dotfile = udir.join('graph1.dot')
     page = MyPage(str(dotfile))
     graphclient.display_page(page)
+
+def test_fixedfont():
+    from dotviewer import graphpage, graphclient
+    class MyPage(graphpage.DotFileGraphPage):
+        fixedfont = True
+    dotfile = udir.join('graph1.dot')
+    page = MyPage(str(dotfile))
+    page.fixedfont = True
+    graphclient.display_page(page)
