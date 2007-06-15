@@ -1,6 +1,6 @@
 import py
 import sys, os, signal, thread, time
-from dotviewer.test.conftest import option
+from dotviewer.conftest import option
 
 SOURCE1 = r'''digraph _generated__graph {
 subgraph _generated__ {
