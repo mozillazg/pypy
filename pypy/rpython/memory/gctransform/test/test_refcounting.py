@@ -5,16 +5,13 @@ from pypy.translator.c.gc import RefcountingGcPolicy
 from pypy.translator.translator import TranslationContext, graphof
 from pypy import conftest
 
-class RefcountingGcPolicy2(RefcountingGcPolicy):
-    transformerclass = RefcountingGCTransformer
-
 def llinterpreter_for_refcounted_graph(f, args_s):
     from pypy.rpython.llinterp import LLInterpreter
     from pypy.translator.c.genc import CStandaloneBuilder
     from pypy.translator.c import gc
 
     t = rtype(f, args_s)
-    cbuild = CStandaloneBuilder(t, f, t.config, gcpolicy=RefcountingGcPolicy2)
+    cbuild = CStandaloneBuilder(t, f, t.config, gcpolicy=RefcountingGcPolicy)
     db = cbuild.generate_graphs_for_llinterp()
     graph = cbuild.getentrypointptr()._obj.graph
     llinterp = LLInterpreter(t.rtyper)
