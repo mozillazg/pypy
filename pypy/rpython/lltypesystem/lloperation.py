@@ -339,6 +339,8 @@ LL_OPERATIONS = {
 
     # __________ address operations __________
 
+    'boehm_malloc':         LLOp(),
+    'boehm_malloc_atomic':  LLOp(),
     'raw_malloc':           LLOp(),
     'raw_malloc_usage':     LLOp(sideeffects=False),
     'raw_free':             LLOp(),
