@@ -48,6 +48,15 @@ class BasicGcPolicy(object):
     def gc_startup_code(self):
         return []
 
+    def struct_setup(self, structdefnode, rtti):
+        return None
+
+    def array_setup(self, arraydefnode):
+        return None
+
+    def rtti_type(self):
+        return ''
+
     def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
         if expr == 'NULL':
