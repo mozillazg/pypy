@@ -116,10 +116,8 @@ PyObject* malloc_counters(PyObject* self, PyObject* args)
 
 #define OP_BOEHM_ZERO_MALLOC(size, r, restype, is_atomic, is_varsize)   {             \
 	r = (restype) BOEHM_MALLOC_ ## is_atomic ## _ ## is_varsize (size);    \
-        else {                                                               \
-            if (is_atomic)  /* the non-atomic versions return cleared memory */  \
-                memset((void*) r, 0, size);                                   \
-        }                                                                     \
+	if (r && is_atomic)  /* the non-atomic versions return cleared memory */ \
+                memset((void*) r, 0, size);				\
   }
 
 /* as we said in rbuiltin.py: 
