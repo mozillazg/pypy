@@ -44,9 +44,9 @@ class BoehmGCTransformer(GCTransformer):
             self.malloc_fixedsize_atomic_ptr = self.inittime_helper(
                 ll_malloc_fixedsize_atomic, [lltype.Signed], llmemory.Address)
             self.malloc_varsize_no_length_ptr = self.inittime_helper(
-                ll_malloc_varsize_no_length, [lltype.Signed]*3, llmemory.Address)
+                ll_malloc_varsize_no_length, [lltype.Signed]*3, llmemory.Address, inline=False)
             self.malloc_varsize_ptr = self.inittime_helper(
-                ll_malloc_varsize, [lltype.Signed]*4, llmemory.Address)
+                ll_malloc_varsize, [lltype.Signed]*4, llmemory.Address, inline=False)
             self.mixlevelannotator.finish()   # for now
 
     def push_alive_nopyobj(self, var, llops):
