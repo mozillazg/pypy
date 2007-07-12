@@ -18,10 +18,6 @@ def llinterpreter_for_refcounted_graph(f, args_s):
     if conftest.option.view:
         t.view()
     return llinterp, graph
-    res = llinterp.eval_graph(graph, [0])
-    assert res == f(0)
-    res = llinterp.eval_graph(graph, [1])
-    assert res == f(1)
 
 
 def test_llinterp_refcounted_graph():
