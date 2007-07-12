@@ -155,6 +155,8 @@ class RefcountingGCTransformer(GCTransformer):
                           resulttype=llmemory.Address)
         hop.cast_result(v_raw)
 
+    gct_zero_malloc = gct_malloc
+
     def gct_malloc_varsize(self, hop):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
 
@@ -189,6 +191,8 @@ class RefcountingGCTransformer(GCTransformer):
                                 c_const_size, c_item_size, intconst(offset_to_length)],
                                resulttype=llmemory.Address)
         hop.cast_result(v_raw)
+
+    gct_zero_malloc_varsize = gct_malloc_varsize
 
     def gct_gc_deallocate(self, hop):
         TYPE = hop.spaceop.args[0].value
