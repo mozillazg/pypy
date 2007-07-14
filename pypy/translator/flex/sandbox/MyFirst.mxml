@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application 
+    xmlns:mx="http://www.adobe.com/2006/mxml" 
+    viewSourceURL="src/GettingStartedActionScript/index.html"
+
+    creationComplete="flash_main();"
+    width="300" height="80"
+ >
+<mx:Script source="misc.as" />
+
+
+    <mx:Script>
+
+        <![CDATA[
+
+            import mx.controls.Button;
+            import mx.events.FlexEvent;
+            import flash.events.*;
+            import flash.net.*;
+
+            private var myButton:Button;
+
+            private function flash_main():void
+
+            {
+                // Create a Button instance and set its label 
+                myButton = new Button();
+                myButton.label = "I'm a button!" + xx(22);
+                
+                // Get notified once button component has been created and processed for layout
+                myButton.addEventListener (FlexEvent.CREATION_COMPLETE, buttonCreationCompleteHandler);
+                
+                // Add the Button instance to the DisplayList
+                addChild (myButton);
+
+                // var c = this.container = createEmptyMovieClip("container", 0); 
+                // c.onEnterFrame = onEnterFrame;
+                addEventListener(Event.ENTER_FRAME, enterFrameHandler);
+            } 
+
+            private function enterFrameHandler(event:Event):void {
+                // removeEventListener("enterFrame", enterFrameHandler);
+                myButton.x += .1;
+                myButton.y -= .1;
+                myTrace("enterFrameHandler: " + event);
+                var n = 0;
+                while(n < 1000000) {
+                    n++;
+                }
+                myButton.y += .2;
+            }
+            
+            private function buttonCreationCompleteHandler ( evt:FlexEvent ):void
+
+            {
+                // Center the button 
+                myButton.x = parent.width/2 - myButton.width/2;
+                myButton.y = parent.height/2 - myButton.height/2;
+            }
+
+            public function myTrace( text:String ):void
+            {
+                var myUrl:URLRequest = new URLRequest("javascript:console.log('" + text + "');void(0);");
+                sendToURL(myUrl);
+            }
+
+            public function onEnterFrame()
+            {
+                myButton.x += 1;
+            }
+
+        ]]>
+    </mx:Script>
+</mx:Application>

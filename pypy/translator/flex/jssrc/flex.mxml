@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application 
+    xmlns:mx="http://www.adobe.com/2006/mxml" 
+    viewSourceURL="src/GettingStartedActionScript/index.html"
+
+    creationComplete="__flash_main();"
+    width="300" height="80"
+ >
+
+    <mx:Script>
+
+        <![CDATA[
+%s
+
+%s
+        ]]>
+    </mx:Script>
+</mx:Application>

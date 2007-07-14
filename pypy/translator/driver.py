@@ -627,6 +627,27 @@ class TranslationDriver(SimpleTaskEngine):
     task_run_js = taskdef(task_run_js, ['compile_js'],
                               'Please manually run the generated code')
 
+
+    def task_source_flex(self):
+        from pypy.translator.flex.js import JS
+        self.gen = JS(self.translator, functions=[self.entry_point],
+                      stackless=self.config.translation.stackless)
+        filename = self.gen.write_source()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_flex = taskdef(task_source_flex, 
+                        [OOTYPE],
+                        'Generating Flex source')
+
+    def task_compile_flex(self):
+        pass
+    task_compile_flex = taskdef(task_compile_flex, ['source_flex'],
+                              'Skipping Javascript compilation')
+
+    def task_run_flex(self):
+        pass
+    task_run_flex = taskdef(task_run_flex, ['compile_flex'],
+                              'Please manually run the generated code')
+
     def task_source_cli(self):
         from pypy.translator.cli.gencli import GenCli
         from pypy.translator.cli.entrypoint import get_entrypoint
