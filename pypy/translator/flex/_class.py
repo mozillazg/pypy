@@ -46,8 +46,8 @@ class Class(Node):
 
         self.ilasm = ilasm
         
-        old_codegenerator =  ilasm.codegenerator
-        ilasm.codegenerator = asmgen.CodeGenerator(open("py/%s.as"%self.name, "w"))
+        ilasm.push_gen("py/%s.as"%self.name)
+        
         if not self.is_root(self.classdef):
             basename = self.basename(self.classdef._superclass._name)
             if basename != 'Root':
@@ -57,16 +57,16 @@ class Class(Node):
         else:
             ilasm.begin_class(self.name)
             
-        ilasm.begin_function(self.name, [])
+        ilasm.begin_function(self.name, [], push=False)
         # we need to copy here all the arguments
         self.copy_class_attributes(ilasm)
-        ilasm.end_function()
+        ilasm.end_function(pop=False)
         
         # begin to_String method
-        ilasm.begin_method("toString", self.name, [])
+        ilasm.begin_method("toString", self.name, [], push=False)
         ilasm.load_str("'<%s object>'" % self.real_name)
         ilasm.ret()
-        ilasm.end_function()
+        ilasm.end_function(pop=False)
 
         #for f_name, (f_type, f_default) in self.classdef._fields.iteritems():
         #    cts_type = self.cts.lltype_to_cts(f_type)
@@ -88,8 +88,7 @@ class Class(Node):
         self.db.record_class(self.classdef, self.name)
         
         ilasm.end_class()
-        ilasm.codegenerator._out.close()
-        ilasm.codegenerator = old_codegenerator
+        ilasm.pop_gen()
     
     def copy_class_attributes(self, ilasm):
         default_values = self.classdef._fields.copy()

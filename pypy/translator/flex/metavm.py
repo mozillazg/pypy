@@ -217,7 +217,7 @@ class _IsInstance(MicroInstruction):
         # FIXME: just temporary hack
         generator.load(op.args[0])
         generator.ilasm.load_const(op.args[1].value._name.replace('.', '_'))#[-1])
-        generator.cast_function("isinstanceof", 2)
+        generator.cast_function("__consts_0.isinstanceof", 2)
 
 class _IndirectCall(MicroInstruction):
     def render(self, generator, op):
@@ -277,7 +277,7 @@ IndirectCall = _IndirectCall()
 IsInstance = _IsInstance()
 CallMethod = _CallMethod()
 CopyName = [PushAllArgs, _SameAs ()]
-CastString = _CastFun("convertToString", 1)
+CastString = _CastFun("__consts_0.convertToString", 1)
 SameAs = CopyName
 DiscardStack = _DiscardStack()
 

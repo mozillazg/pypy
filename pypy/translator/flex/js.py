@@ -109,26 +109,25 @@ class JS(GenOO):
         constants_code_generator = asmgen.CodeGenerator(open("py/__load_consts_flex.as", "w"))
         constants_code_generator.write("package py ")
         constants_code_generator.openblock()
-
+        constants_code_generator.writeline("import flash.net.*;");
         while self.db._pending_nodes:
             self.gen_pendings()
             
-            old_codegenerator =  self.ilasm.codegenerator
-            self.ilasm.codegenerator = constants_code_generator
+            self.ilasm.push_gen( constants_code_generator )
             
             self.db.gen_constants(self.ilasm, self.db._pending_nodes)
             
-            self.ilasm.codegenerator = old_codegenerator
+            self.ilasm.pop_gen()
             
             
-        old_codegenerator =  self.ilasm.codegenerator
-        self.ilasm.codegenerator = constants_code_generator
+        self.ilasm.push_gen( constants_code_generator )
         self.ilasm.end_consts()
+        const_filename = _path_join(os.path.dirname(__file__), 'jssrc', 'library.as')
+        constants_code_generator.write( open(const_filename).read() )
         constants_code_generator.closeblock()
         self.ilasm.close()
         
-        self.ilasm.codegenerator = old_codegenerator
-        
+        self.ilasm.pop_gen()        
         self.ilasm.close()
         assert len(self.ilasm.right_hand) == 0
         return self.tmpfile.strpath
