@@ -18,6 +18,8 @@ from pypy.tool.udir import udir
 from pypy.translator.flex.log import log
 
 from pypy.translator.flex.asmgen import AsmGen
+import pypy.translator.flex.asmgen as asmgen
+
 from pypy.translator.flex.jts import JTS
 from pypy.translator.flex.opcodes import opcodes
 from pypy.translator.flex.function import Function
@@ -99,11 +101,34 @@ class JS(GenOO):
         self.ilasm = self.create_assembler()
         self.fix_names()
         self.gen_entrypoint()
+        constants_code_generator = asmgen.CodeGenerator(open("py/__consts_0.as", "w"))
+        constants_code_generator.write("package py ")
+        constants_code_generator.openblock()
+        constants_code_generator.writeline("public var __consts_0 = {};")
+        constants_code_generator.closeblock()
+        constants_code_generator = asmgen.CodeGenerator(open("py/__load_consts_flex.as", "w"))
+        constants_code_generator.write("package py ")
+        constants_code_generator.openblock()
+
         while self.db._pending_nodes:
             self.gen_pendings()
+            
+            old_codegenerator =  self.ilasm.codegenerator
+            self.ilasm.codegenerator = constants_code_generator
+            
             self.db.gen_constants(self.ilasm, self.db._pending_nodes)
-
+            
+            self.ilasm.codegenerator = old_codegenerator
+            
+            
+        old_codegenerator =  self.ilasm.codegenerator
+        self.ilasm.codegenerator = constants_code_generator
         self.ilasm.end_consts()
+        constants_code_generator.closeblock()
+        self.ilasm.close()
+        
+        self.ilasm.codegenerator = old_codegenerator
+        
         self.ilasm.close()
         assert len(self.ilasm.right_hand) == 0
         return self.tmpfile.strpath

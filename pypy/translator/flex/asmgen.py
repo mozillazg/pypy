@@ -90,8 +90,11 @@ class AsmGen(object):
         self.codegenerator.writeline("")
         
     def begin_class(self, name, base="Object"):
+
         self.codegenerator.write("package py ")
+
         self.codegenerator.openblock()
+        self.codegenerator.writeline("import py.__consts_0;")
 
         self.codegenerator.write("dynamic public class %s extends %s "%(name, base))
         self.codegenerator.openblock()
@@ -243,8 +246,8 @@ class AsmGen(object):
     
     def begin_consts(self, name):
         # load consts, maybe more try to use stack-based features?
-        self.codegenerator.writeline("var %s = {}"%name)
-        self.codegenerator.writeline("function __load_consts_flex() ")
+        #self.codegenerator.writeline("var %s = {}"%name)
+        self.codegenerator.writeline("public function __load_consts_flex() ")
         self.codegenerator.openblock()
 
     def end_consts(self):

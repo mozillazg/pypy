@@ -5,6 +5,7 @@ import mx.controls.Button;
 
 
 import py.*;
+import py.__consts_0;
 //import py.f.DictIter;
 
 
@@ -219,7 +220,7 @@ function __flash_main() {
 
 
 
-    __load_consts_flex()
+    py.__load_consts_flex()
 
     aaa.label = "after consts";
     flash_main(1)
