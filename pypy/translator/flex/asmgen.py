@@ -37,6 +37,9 @@ class CodeGenerator(object):
     def closeblock(self):
         self._indent -= self._indentstep
         self.writeline(self._endblock)
+        
+    def close(self):
+        self._out.close()
 
 class Queue(object):
     def __init__(self, l, subst_table):
@@ -71,23 +74,49 @@ class AsmGen(object):
         self.subst_table = {}
         self.right_hand = Queue([], self.subst_table)
         self.codegenerator = CodeGenerator(outfile)
-
+        self.gen_stack = []
+        
+    def push_gen(self, generator):
+        self.gen_stack.append( self.codegenerator )
+        if isinstance(generator, str):
+            generator = CodeGenerator(open(generator, "w") )
+        self.codegenerator = generator 
+        
+    def pop_gen(self):
+        #self.codegenerator.close()
+        self.codegenerator = self.gen_stack.pop()
+        
     def close(self):
         self.outfile.close()
     
-    def begin_function(self, name, arglist):
+    def begin_function(self, name, arglist, push=True):
+        if push:
+            self.push_gen("py/"+name+".as")
+            self.codegenerator.write("package py ")
+            self.codegenerator.openblock()
+            self.codegenerator.writeline("import py.__consts_0;")
+        
         args = ",".join([i[1] for i in arglist])
-        self.codegenerator.write("function %s (%s) "%(name, args))
+        self.codegenerator.write("public function %s (%s) "%(name, args))
         self.codegenerator.openblock()
     
-    def begin_method(self, name, _class, arglist):
+    def begin_method(self, name, _class, arglist, push=True):
+        if push:
+            self.push_gen("py/"+name+".as")
+            self.codegenerator.write("package py ")
+            self.codegenerator.openblock()
+            self.codegenerator.writeline("import py.__consts_0;")
+            
         args = ",".join(arglist)
         self.codegenerator.write("%s.prototype.%s = function (%s)"%(_class, name, args))
         self.codegenerator.openblock()
     
-    def end_function(self):
+    def end_function(self, pop=True):
         self.codegenerator.closeblock()
         self.codegenerator.writeline("")
+        if pop:
+            self.codegenerator.closeblock()
+            self.pop_gen()
         
     def begin_class(self, name, base="Object"):
 
@@ -95,7 +124,7 @@ class AsmGen(object):
 
         self.codegenerator.openblock()
         self.codegenerator.writeline("import py.__consts_0;")
-
+            
         self.codegenerator.write("dynamic public class %s extends %s "%(name, base))
         self.codegenerator.openblock()
 
@@ -314,7 +343,7 @@ class AsmGen(object):
     
     def throw_real(self, s):
         # use throwit wrapper function... because of compiler weirdness with flex compiler.
-        self.codegenerator.writeline("throwit(%s);"%s)
+        self.codegenerator.writeline("__consts_0.throwit(%s);"%s)
 
     def clean_stack(self):
         self.right_hand.empty()
