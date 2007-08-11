@@ -28,7 +28,7 @@ class _Builtins(object):
             'll_math.ll_math_fmod' : InstructionList([_PushAllArgs(slice(1, None)), '%']),
             'll_time_time' : CallBuiltin('time'),
             'll_time_clock' : CallBuiltin('clock'),
-            'll_os_write' : CallBuiltin('print'),
+            'll_os_write' : CallBuiltin('_consts_0.flexTrace'),
         }
         self.builtin_obj_map = {
             ootype.String.__class__: {

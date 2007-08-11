@@ -17,7 +17,7 @@ import mx.controls.Button;
 
 
 import py.*;
-import py.__consts_0;
+import py._consts_0;
 //import py.f.DictIter;
 
 
@@ -50,19 +50,19 @@ function __flash_main() {
     try {
         py.__load_consts_flex()
     } catch (exc) {
-        __consts_0.flexTrace("consts error");
-        __consts_0.flexTrace(String(exc));
+        localFlexTrace("consts error");
+        localFlexTrace(String(exc));
     }
     try {
         flash_main(1)
     } catch (exc) {
-        __consts_0.flexTrace("flash_main error");
-        __consts_0.flexTrace(String(exc));
-        __consts_0.flexTrace(String(exc.message));
-        __consts_0.flexTrace(exc.getStackTrace());
+        localFlexTrace("flash_main error");
+        localFlexTrace(String(exc));
+        localFlexTrace(String(exc.message));
+        localFlexTrace(exc.getStackTrace());
         
     }
-    __consts_0.flexTrace("Exit");
+    localFlexTrace("Exit");
 
 }
 

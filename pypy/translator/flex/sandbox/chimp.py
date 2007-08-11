@@ -122,7 +122,7 @@ class Chimp(pygame.sprite.Sprite):
             self.original = self.image
 
 
-def flash_main():
+def flash_main(a=0):
     """this function is called when the program starts.
        it initializes everything it needs, then runs in
        a loop until the function returns."""

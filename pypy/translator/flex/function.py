@@ -205,7 +205,7 @@ class Function(function.Function, BaseGenerator):
 
     def begin_catch(self, llexitcase):
         real_name = self.cts.lltype_to_cts(llexitcase._inst.class_._INSTANCE)
-        s = "__consts_0.isinstanceof(exc, %s)"%real_name
+        s = "_consts_0.isinstanceof(exc, %s)"%real_name
         self.ilasm.branch_if_string(s)
     
     def end_catch(self, target_label):

@@ -37,7 +37,7 @@ class LowLevelDatabase(object):
         self.reverse_consts = {}
         self.const_names = set()
         self.rendered = set()
-        self.const_var = Variable("__consts")
+        self.const_var = Variable("_consts")
         self.name_manager = JavascriptNameManager(self)
         self.pending_consts = []
         self.cts = self.genoo.TypeSystem(self)
