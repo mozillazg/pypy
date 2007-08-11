@@ -47,7 +47,7 @@ class Class(Node):
         self.ilasm = ilasm
         
         ilasm.push_gen("py/%s.as"%self.name)
-        
+        ilasm.set_push(False)
         if not self.is_root(self.classdef):
             basename = self.basename(self.classdef._superclass._name)
             if basename != 'Root':
@@ -57,16 +57,16 @@ class Class(Node):
         else:
             ilasm.begin_class(self.name)
             
-        ilasm.begin_function(self.name, [], push=False)
+        ilasm.begin_function(self.name, [])
         # we need to copy here all the arguments
         self.copy_class_attributes(ilasm)
-        ilasm.end_function(pop=False)
+        ilasm.end_function()
         
         # begin to_String method
-        ilasm.begin_method("toString", self.name, [], push=False)
+        ilasm.begin_method("toString", self.name, [])
         ilasm.load_str("'<%s object>'" % self.real_name)
         ilasm.ret()
-        ilasm.end_function(pop=False)
+        ilasm.end_function()
 
         #for f_name, (f_type, f_default) in self.classdef._fields.iteritems():
         #    cts_type = self.cts.lltype_to_cts(f_type)
@@ -77,6 +77,7 @@ class Class(Node):
         
         for m_name, m_meth in self.classdef._methods.iteritems():
             graph = getattr(m_meth, 'graph', None)
+            if m_name=="o__init__": continue
             if graph:
                 f = self.db.genoo.Function(self.db, graph, m_name, is_method = True, _class = self.name)
                 f.render(ilasm)
@@ -87,7 +88,9 @@ class Class(Node):
         
         self.db.record_class(self.classdef, self.name)
         
+        ilasm.set_push(True)
         ilasm.end_class()
+        
         ilasm.pop_gen()
     
     def copy_class_attributes(self, ilasm):

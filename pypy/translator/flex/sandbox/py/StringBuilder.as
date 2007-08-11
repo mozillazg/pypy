@@ -1,7 +1,7 @@
 package py {
 
 
-public class StringBuilder {
+dynamic public class StringBuilder {
 
     public function StringBuilder() {
         this.l = [];

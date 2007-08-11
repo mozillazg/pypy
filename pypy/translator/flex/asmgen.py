@@ -75,6 +75,10 @@ class AsmGen(object):
         self.right_hand = Queue([], self.subst_table)
         self.codegenerator = CodeGenerator(outfile)
         self.gen_stack = []
+        self.push = True
+        
+    def set_push(self, value):
+        self.push = value
         
     def push_gen(self, generator):
         self.gen_stack.append( self.codegenerator )
@@ -89,32 +93,34 @@ class AsmGen(object):
     def close(self):
         self.outfile.close()
     
-    def begin_function(self, name, arglist, push=True):
-        if push:
+    def begin_function(self, name, arglist):
+        if self.push:
             self.push_gen("py/"+name+".as")
             self.codegenerator.write("package py ")
             self.codegenerator.openblock()
-            self.codegenerator.writeline("import py.__consts_0;")
-        
+            self.codegenerator.writeline("import py._consts_0;")
+            self.codegenerator.writeline("import ll_os_path.ll_join;")
+
         args = ",".join([i[1] for i in arglist])
         self.codegenerator.write("public function %s (%s) "%(name, args))
         self.codegenerator.openblock()
     
-    def begin_method(self, name, _class, arglist, push=True):
-        if push:
+    def begin_method(self, name, _class, arglist):
+        if self.push:
             self.push_gen("py/"+name+".as")
             self.codegenerator.write("package py ")
             self.codegenerator.openblock()
-            self.codegenerator.writeline("import py.__consts_0;")
-            
+            self.codegenerator.writeline("import py._consts_0;")
+            self.codegenerator.writeline("import ll_os_path.ll_join;")
+
         args = ",".join(arglist)
         self.codegenerator.write("%s.prototype.%s = function (%s)"%(_class, name, args))
         self.codegenerator.openblock()
     
-    def end_function(self, pop=True):
+    def end_function(self):
         self.codegenerator.closeblock()
         self.codegenerator.writeline("")
-        if pop:
+        if self.push:
             self.codegenerator.closeblock()
             self.pop_gen()
         
@@ -123,7 +129,8 @@ class AsmGen(object):
         self.codegenerator.write("package py ")
 
         self.codegenerator.openblock()
-        self.codegenerator.writeline("import py.__consts_0;")
+        self.codegenerator.writeline("import py._consts_0;")
+        self.codegenerator.writeline("import ll_os_path.ll_join;")
             
         self.codegenerator.write("dynamic public class %s extends %s "%(name, base))
         self.codegenerator.openblock()
@@ -343,7 +350,7 @@ class AsmGen(object):
     
     def throw_real(self, s):
         # use throwit wrapper function... because of compiler weirdness with flex compiler.
-        self.codegenerator.writeline("__consts_0.throwit(%s);"%s)
+        self.codegenerator.writeline("_consts_0.throwit(%s);"%s)
 
     def clean_stack(self):
         self.right_hand.empty()
