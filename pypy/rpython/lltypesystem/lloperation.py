@@ -91,6 +91,9 @@ class LLOp(object):
                 (self in (llop.getfield, llop.getarrayitem) and
                  ARGTYPES[0].TO._hints.get('immutable')))
 
+    def __repr__(self):
+        return '<LLOp %s>' % (getattr(self, 'opname', '?'),)
+
 
 def enum_ops_without_sideeffects(raising_is_ok=False):
     """Enumerate operations that have no side-effects

@@ -24,7 +24,6 @@ PrimitiveErrorValue = {lltype.Signed: -1,
                        lltype.UniChar: unichr(0xFFFF), # XXX is this always right?
                        lltype.Bool: True,
                        llmemory.Address: NULL,
-                       llmemory.WeakRef: llmemory.fakeweakref(None),
                        lltype.Void: None}
 
 def error_value(T):

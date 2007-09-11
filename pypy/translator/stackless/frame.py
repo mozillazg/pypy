@@ -20,7 +20,6 @@ STORAGE_TYPES_AND_FIELDS = [
     (lltype.SignedLongLong, 'longlong'),
     (lltype.Signed, 'long'),
     (lltype.Float, 'float'),
-    (llmemory.WeakRef, 'weak'),
      ]
 
 STORAGE_TYPES = []
@@ -55,8 +54,6 @@ def storage_type(T):
         return lltype.SignedLongLong
     elif T is llmemory.Address:
         return llmemory.Address
-    elif T is llmemory.WeakRef:
-        return llmemory.WeakRef
     elif isinstance(T, lltype.Primitive):
         return lltype.Signed
     else:
