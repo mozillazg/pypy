@@ -494,11 +494,10 @@ def cast_int_to_adr(int):
 #                 target malloc'ed structure alive.  When the target dies
 #                 all WeakRefs to it are cleared.
 #
-# WeakGcAddress - like WeakRef but not automatically cleared.  There is
-#                 no direct way to know if the target is still alive.
-#                 We should more or less deprecate them in favor of WeakRef.
 
-class fakeweakaddress(object):
+# ____________________________________________________________
+
+class fakeweakref(object):
     # XXX convoluted code to support both lltype._ptr and simulatorptr
     def __init__(self, ob):
         if ob is not None:
@@ -531,32 +530,11 @@ class fakeweakaddress(object):
         else:
             s = str(self.obref)
         return '<%s %s>' % (self.__class__.__name__, s)
-    def cast_to_int(self):
-        # this is not always the behaviour that is really happening
-        # but make sure that nobody depends on it
-        return self.id ^ ~3
+    #def cast_to_int(self):
+    #    # this is not always the behaviour that is really happening
+    #    # but make sure that nobody depends on it
+    #    return self.id ^ ~3
 
-WeakGcAddress = lltype.Primitive("WeakGcAddress",
-                                 fakeweakaddress(None))
-
-def cast_ptr_to_weakadr(obj):
-    assert isinstance(lltype.typeOf(obj), lltype.Ptr)
-    return fakeweakaddress(obj)
-
-def cast_weakadr_to_ptr(adr, EXPECTED_TYPE):
-    result = adr.get()
-    if result is None:
-        return lltype.nullptr(EXPECTED_TYPE.TO)
-    else:
-        return lltype.cast_pointer(EXPECTED_TYPE, result)
-
-fakeweakaddress._TYPE = WeakGcAddress
-WEAKNULL = fakeweakaddress(None)
-
-# ____________________________________________________________
-
-class fakeweakref(fakeweakaddress):
-    pass        # inheriting only to copy all methods
 
 WeakRef = lltype.Primitive("WeakRef", fakeweakref(None))
 

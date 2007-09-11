@@ -6,7 +6,7 @@ import sys
 from pypy.annotation.model import SomeInteger, SomeObject, SomeChar, SomeBool
 from pypy.annotation.model import SomeString, SomeTuple, SomeSlice, s_Bool
 from pypy.annotation.model import SomeUnicodeCodePoint, SomeAddress
-from pypy.annotation.model import SomeFloat, SomeWeakGcAddress, unionof
+from pypy.annotation.model import SomeFloat, unionof
 from pypy.annotation.model import SomePBC, SomeInstance, SomeDict
 from pypy.annotation.model import SomeExternalObject
 from pypy.annotation.model import SomeWeakRef, SomeLLWeakRef
@@ -331,13 +331,6 @@ def llmemory_cast_adr_to_ptr(s, s_type):
     assert s_type.is_constant()
     return SomePtr(s_type.const)
 
-def llmemory_cast_ptr_to_weakadr(s):
-    return SomeWeakGcAddress()
-
-def llmemory_cast_weakadr_to_ptr(s, s_type):
-    assert s_type.is_constant()
-    return SomePtr(s_type.const)
-
 def llmemory_cast_adr_to_int(s):
     return SomeInteger() # xxx
 
@@ -389,8 +382,6 @@ BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_adr] = llmemory
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_ptr] = llmemory_cast_adr_to_ptr
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_int] = llmemory_cast_adr_to_int
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_int_to_adr] = llmemory_cast_int_to_adr
-BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_weakadr] = llmemory_cast_ptr_to_weakadr
-BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_weakadr_to_ptr] = llmemory_cast_weakadr_to_ptr
 BUILTIN_ANALYZERS[pypy.rlib.rstack.yield_current_frame_to_caller] = (
     rstack_yield_current_frame_to_caller)
 
