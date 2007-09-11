@@ -370,8 +370,8 @@ class StacklessTransformer(object):
                 code.fetch_retval_addr, [], annmodel.SomeAddress()),
             SAVED_REFERENCE: mixlevelannotator.constfunc(
                 code.fetch_retval_ref, [], annmodel.SomePtr(SAVED_REFERENCE)),
-            llmemory.WeakGcAddress: mixlevelannotator.constfunc(
-                code.fetch_retval_weak, [], annmodel.SomeWeakGcAddress()),
+            llmemory.WeakRef: mixlevelannotator.constfunc(
+                code.fetch_retval_weak, [], annmodel.SomeLLWeakRef()),
             }
 
         s_StatePtr = annmodel.SomePtr(frame.OPAQUE_STATE_HEADER_PTR)
@@ -422,9 +422,9 @@ class StacklessTransformer(object):
                 code.resume_after_ref,
                 [s_StatePtr, annmodel.SomePtr(SAVED_REFERENCE)],
                 annmodel.s_None),
-            llmemory.WeakGcAddress: mixlevelannotator.constfunc(
+            llmemory.WeakRef: mixlevelannotator.constfunc(
                 code.resume_after_weak,
-                [s_StatePtr, annmodel.SomeWeakGcAddress()],
+                [s_StatePtr, annmodel.SomeLLWeakRef()],
                 annmodel.s_None),
             }
         exception_def = bk.getuniqueclassdef(Exception)

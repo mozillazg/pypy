@@ -5,7 +5,7 @@ from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem.llmemory import Address, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
-     CompositeOffset, ArrayLengthOffset, WeakGcAddress, fakeweakaddress, \
+     CompositeOffset, ArrayLengthOffset, \
      GCHeaderOffset, WeakRef, fakeweakref
 from pypy.translator.c.support import cdecl
 
@@ -112,15 +112,6 @@ def name_address(value, db):
     else:
         return 'NULL'
 
-def name_weakgcaddress(value, db):
-    assert isinstance(value, fakeweakaddress)
-    if value.ref is None: 
-        return 'HIDE_POINTER(NULL)'
-    else:
-        ob = value.ref()
-        assert ob is not None
-        return 'HIDE_POINTER(%s)'%db.get(ob)
-
 def name_weakref(value, db):
     assert isinstance(value, fakeweakref)
     target = value.get()
@@ -142,7 +133,6 @@ PrimitiveName = {
     Bool:     name_bool,
     Void:     name_void,
     Address:  name_address,
-    WeakGcAddress:  name_weakgcaddress,
     WeakRef:  name_weakref,
     }
 
@@ -157,7 +147,6 @@ PrimitiveType = {
     Bool:     'bool_t @',
     Void:     'void @',
     Address:  'void* @',
-    WeakGcAddress:  'GC_hidden_pointer @',
     WeakRef:  'GCWeakRef @',
     }
 
@@ -172,7 +161,6 @@ PrimitiveErrorValue = {
     Bool:     '0 /* error */',
     Void:     '/* error */',
     Address:  'NULL',
-    WeakGcAddress:  'HIDE_POINTER(NULL)',
     WeakRef:  'NULL',
     }
 

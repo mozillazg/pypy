@@ -296,7 +296,7 @@ class StacklessData:
         self.retval_float = 0.0
         self.retval_addr = llmemory.NULL
         self.retval_ref = frame.null_saved_ref
-        self.retval_weak = llmemory.WEAKNULL
+        self.retval_weak = llmemory.WEAKREFNULL
         self.exception = None
         self.masterarray = lltype.malloc(frame.FRAME_INFO_ARRAY, 0,
                                          immortal=True)

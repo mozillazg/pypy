@@ -4,7 +4,6 @@ from pypy.rpython.lltypesystem.lltype import \
      GcStruct, GcArray, RttiStruct, PyStruct, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray, _pyobjheader
-from pypy.rpython.lltypesystem.llmemory import WeakGcAddress
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
@@ -593,9 +592,6 @@ def generic_initializationexpr(db, value, access_expr, decoration):
             db.late_initializations.append(('%s' % access_expr, db.get(value)))
             expr = '0.0 /* patched later by %sinfinity */' % (
                 '-+'[value > 0])
-        elif typeOf(value) == WeakGcAddress and value.ref is not None:
-            db.late_initializations.append(('%s' % access_expr, db.get(value)))
-            expr = 'HIDE_POINTER(NULL) /* patched later */'
         else:
             expr = db.get(value)
             if typeOf(value) is Void:
