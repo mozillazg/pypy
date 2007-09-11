@@ -510,12 +510,6 @@ class SomeDeadWeakRef(SomeObject):
     def can_be_none(self):
         return False
 
-class SomeLLWeakRef(SomeObject):
-    immutable = True
-
-    def can_be_none(self):
-        return False
-
 # ____________________________________________________________
 # memory addresses
 
@@ -593,7 +587,6 @@ annotation_to_ll_map = [
     (SomeChar(), lltype.Char),
     (SomeUnicodeCodePoint(), lltype.UniChar),
     (SomeAddress(), llmemory.Address),
-    (SomeLLWeakRef(), llmemory.WeakRef),
 ]
 
 def annotation_to_lltype(s_val, info=None):

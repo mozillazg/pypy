@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem.lltype import \
      GcStruct, GcArray, RttiStruct, PyStruct, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray, _pyobjheader
+from pypy.rpython.lltypesystem import llmemory
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
@@ -859,6 +860,16 @@ def objectnode_factory(db, T, obj):
         return PyObjectNode(db, T, obj)
 
 
+def weakrefnode_factory(db, T, obj):
+    assert isinstance(obj, llmemory._wref)
+    ptarget = obj._dereference()
+    wrapper = db.gcpolicy.convert_weakref_to(ptarget)
+    container = wrapper._obj
+    T = typeOf(container)
+    nodefactory = ContainerNodeFactory[T.__class__]
+    return nodefactory(db, T, container)
+
+
 ContainerNodeFactory = {
     Struct:       StructNode,
     GcStruct:     StructNode,
@@ -869,4 +880,5 @@ ContainerNodeFactory = {
     FuncType:     FuncNode,
     OpaqueType:   opaquenode_factory,
     PyObjectType: objectnode_factory,
+    llmemory._WeakRefType: weakrefnode_factory,
     }
