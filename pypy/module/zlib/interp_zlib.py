@@ -1,11 +1,11 @@
 # import zlib
 
-from pypy.interpreter.gateway import ObjSpace, interp2app
+from pypy.interpreter.gateway import ObjSpace, W_Root, interp2app
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.error import OperationError
 
-from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.rpython.lltypesystem import rffi, lltype, llmemory
 from pypy.rpython.tool import rffi_platform
 
 includes = ['zlib.h']
@@ -28,6 +28,9 @@ class SimpleCConfig:
     Z_STREAM_ERROR = rffi_platform.ConstantInteger('Z_STREAM_ERROR')
 
     ZLIB_VERSION = rffi_platform.DefinedConstantString('ZLIB_VERSION')
+
+    Z_DEFLATED = rffi_platform.ConstantInteger('Z_DEFLATED')
+    Z_DEFAULT_STRATEGY = rffi_platform.ConstantInteger('Z_DEFAULT_STRATEGY')
     Z_DEFAULT_COMPRESSION = rffi_platform.ConstantInteger(
         'Z_DEFAULT_COMPRESSION')
     Z_NO_FLUSH = rffi_platform.ConstantInteger(
@@ -44,8 +47,11 @@ Z_OK = config['Z_OK']
 Z_STREAM_ERROR = config['Z_STREAM_ERROR']
 
 ZLIB_VERSION = config['ZLIB_VERSION']
+
 Z_DEFAULT_COMPRESSION = config['Z_DEFAULT_COMPRESSION']
+Z_DEFAULT_STRATEGY = config['Z_DEFAULT_STRATEGY']
 Z_NO_FLUSH = config['Z_DEFAULT_COMPRESSION']
+Z_DEFLATED = config['Z_DEFLATED']
 
 class ComplexCConfig:
     """
@@ -89,10 +95,30 @@ def zlib_external(*a, **kw):
 
 _crc32 = zlib_external('crc32', [uLong, Bytefp, uInt], uLong)
 _adler32 = zlib_external('adler32', [uLong, Bytefp, uInt], uLong)
-_deflateInit = zlib_external(
-    'deflateInit_', [z_stream_p, rffi.INT, rffi.CCHARP, rffi.INT],
+
+
+# XXX I want to call deflateInit2, not deflateInit2_
+_deflateInit2_ = zlib_external(
+    'deflateInit2_',
+    [z_stream_p, # stream
+     rffi.INT, # level
+     rffi.INT, # method
+     rffi.INT, # window bits
+     rffi.INT, # mem level
+     rffi.INT, # strategy
+     rffi.CCHARP, # version
+     rffi.INT], # stream size
     rffi.INT)
 _deflate = zlib_external('deflate', [z_stream_p, rffi.INT], rffi.INT)
+
+def _deflateInit2(stream, level, method, wbits, memlevel, strategy):
+    version = rffi.str2charp(ZLIB_VERSION)
+    size = llmemory.sizeof(z_stream)
+    result = _deflateInit2_(
+        stream, level, method, wbits, memlevel, strategy, version, size)
+    rffi.free_charp(version)
+    return result
+
 
 def crc32(space, string, start=0):
     """
@@ -143,6 +169,7 @@ class _StreamBase(Wrappable):
         self.stream.c_zalloc = lltype.nullptr(z_stream.c_zalloc.TO)
         self.stream.c_zfree = lltype.nullptr(z_stream.c_zfree.TO)
         self.stream.c_avail_in = rffi.cast(lltype.Unsigned, 0)
+        self.stream.c_next_in = lltype.nullptr(z_stream.c_next_in.TO)
 
 
     def __del__(self):
@@ -173,11 +200,13 @@ class Compress(_StreamBase):
 
         _StreamBase.__init__(self, space)
 
-        # XXX I want to call deflateInit, not deflateInit_
-        size = z_stream._hints['size']
-        version = rffi.str2charp(ZLIB_VERSION)
-        result = _deflateInit(self.stream, level, version, size)
-        rffi.free_charp(version)
+        method = Z_DEFLATED
+        windowBits = 15
+        memLevel = 8
+        strategy = Z_DEFAULT_STRATEGY
+
+        result = _deflateInit2(
+            self.stream, level, method, windowBits, memLevel, strategy)
 
         if result != Z_OK:
             raise error_from_zlib(self.space, result)
@@ -197,22 +226,13 @@ class Compress(_StreamBase):
             Bytefp.TO, len(data), flavor='raw')
         for i in xrange(len(data)):
             self.stream.c_next_in[i] = rffi.cast(Bytef, data[i])
-        try:
-            self.stream.c_avail_out = rffi.cast(lltype.Unsigned, length)
-            self.stream.c_next_out = lltype.malloc(
-                Bytefp.TO, length, flavor='raw')
-            try:
-                result = _deflate(self.stream, Z_NO_FLUSH)
-                if result != Z_OK:
-                    raise error_from_zlib(self.space, result)
-                else:
-                    return rffi.charp2str(self.stream.c_next_out)
-            finally:
-                lltype.free(self.stream.c_next_out, flavor='raw')
-                self.stream.c_avail_out = rffi.cast(lltype.Unsigned, 0)
-        finally:
-            lltype.free(self.stream.c_next_in, flavor='raw')
-            self.stream.c_avail_in = rffi.cast(lltype.Unsigned, 0)
+        self.stream.c_avail_out = rffi.cast(lltype.Unsigned, length)
+        self.stream.c_next_out = lltype.malloc(
+            Bytefp.TO, length, flavor='raw')
+        result = _deflate(self.stream, Z_NO_FLUSH)
+        if result != Z_OK:
+            raise error_from_zlib(self.space, result)
+        return rffi.charp2str(self.stream.c_next_out)
     compress.unwrap_spec = ['self', str, int]
 
 
@@ -232,14 +252,15 @@ class Compress(_StreamBase):
     flush.unwrap_spec = ['self', int]
 
 
-def Compress___new__(space, w_subtype, w_anything=None):
+def Compress___new__(space, w_subtype, w_level=None):
     """
     Create a new z_stream and call its initializer.
     """
     stream = space.allocate_instance(Compress, w_subtype)
     stream = space.interp_w(Compress, stream)
-    Compress.__init__(stream, space, w_anything)
+    Compress.__init__(stream, space, w_level)
     return space.wrap(stream)
+Compress___new__.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 
 Compress.typedef = TypeDef(
@@ -306,7 +327,7 @@ def Decompress___new__(space, w_subtype, w_anything=None):
     stream = space.interp_w(Decompress, stream)
     Decompress.__init__(stream, space, w_anything)
     return space.wrap(stream)
-
+Decompress___new__.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 
 Decompress.typedef = TypeDef(
