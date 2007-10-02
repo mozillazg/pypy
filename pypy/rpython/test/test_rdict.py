@@ -548,7 +548,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
 
         res = self.interpret(func2, [ord(x), ord(y)])
         for i in range(len(res.entries)): 
-            assert not (res.entries[i].everused() and not res.entries[i].valid())
+            assert not (res.entry_everused(i) and not res.entry_valid(i))
 
         def func3(c0, c1, c2, c3, c4, c5, c6, c7):
             d = {}
@@ -568,7 +568,7 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
                                    for i in range(rdict.DICT_INITSIZE)])
         count_frees = 0
         for i in range(len(res.entries)):
-            if not res.entries[i].everused():
+            if not res.entry_everused(i):
                 count_frees += 1
         assert count_frees >= 3
 
@@ -610,8 +610,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         res = self.interpret(f, [])
         assert res.item0 == True
         DICT = lltype.typeOf(res.item1).TO
-        assert not hasattr(DICT.entries.TO.OF, 'f_everused')# non-None string keys
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')   # strings have a dummy
+        assert not DICT.entry_has_f_everused# non-None string keys
+        assert not DICT.entry_has_f_valid   # strings have a dummy
 
     def test_opt_nullvaluemarker(self):
         def f(n):
@@ -621,8 +621,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         res = self.interpret(f, [-5])
         assert res.item0 == 4
         DICT = lltype.typeOf(res.item1).TO
-        assert not hasattr(DICT.entries.TO.OF, 'f_everused')# non-None str values
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')   # strs have a dummy
+        assert not DICT.entry_has_f_everused# non-None string keys
+        assert not DICT.entry_has_f_valid   # strings have a dummy
 
     def test_opt_nonullmarker(self):
         class A:
@@ -638,8 +638,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         res = self.interpret(f, [-5])
         assert res.item0 == -5441
         DICT = lltype.typeOf(res.item1).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # can-be-None A instances
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')# with a dummy A instance
+        assert DICT.entry_has_f_everused # can-be-None A instances
+        assert not DICT.entry_has_f_valid# with a dummy A instance
 
         res = self.interpret(f, [6])
         assert res.item0 == -5441
@@ -654,8 +654,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         assert res.item0 == 1
         assert res.item1 == 24
         DICT = lltype.typeOf(res.item2).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # all ints can be zero
-        assert not hasattr(DICT.entries.TO.OF, 'f_valid')# nonneg int: dummy -1
+        assert DICT.entry_has_f_everused # all ints can be zero
+        assert not DICT.entry_has_f_valid# nonneg int: dummy -1
 
     def test_opt_no_dummy(self):
         def f(n):
@@ -667,8 +667,8 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         assert res.item0 == 1
         assert res.item1 == -24
         DICT = lltype.typeOf(res.item2).TO
-        assert hasattr(DICT.entries.TO.OF, 'f_everused') # all ints can be zero
-        assert hasattr(DICT.entries.TO.OF, 'f_valid')    # no dummy available
+        assert DICT.entry_has_f_everused # all ints can be zero
+        assert DICT.entry_has_f_valid    # no dummy available
 
     def test_opt_multiple_identical_dicts(self):
         def f(n):
