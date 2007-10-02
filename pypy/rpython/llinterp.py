@@ -558,6 +558,31 @@ class LLFrame(object):
                 result = self.op_direct_call(write_barrier, *args)
     op_bare_setfield = op_setfield
 
+    def op_getinteriorfield(self, obj, *offsets):
+        checkptr(obj)
+        ob = obj
+        for o in offsets:
+            if isinstance(o, str):
+                ob = getattr(ob, o)
+            else:
+                ob = ob[o]
+        assert not isinstance(ob, lltype._interior_ptr)
+        return ob
+
+    def op_setinteriorfield(self, obj, *fieldnamesval):
+        prefields, finalfield, fieldvalue = (
+            fieldnamesval[:-2], fieldnamesval[-2], fieldnamesval[-1])
+        for o in prefields:
+            if isinstance(o, str):
+                obj = getattr(obj, o)
+            else:
+                obj = obj[o]
+        if isinstance(finalfield, str):
+            setattr(obj, finalfield, fieldvalue)
+        else:
+            obj[finalfield] = fieldvalue
+    op_bare_setinteriorfield = op_setinteriorfield
+
     def op_getarrayitem(self, array, index):
         return array[index]
 

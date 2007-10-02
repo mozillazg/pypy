@@ -120,6 +120,31 @@ def op_getarraysubstruct(array, index):
     # the diff between op_getarrayitem and op_getarraysubstruct
     # is the same as between op_getfield and op_getsubstruct
 
+def op_getinteriorarraysize(obj, *offsets):
+    checkptr(obj)
+    ob = obj
+    for o in offsets:
+        if isinstance(o, str):
+            ob = getattr(ob, o)
+        else:
+            ob = ob[o]
+    return len(ob)
+
+def op_getinteriorfield(obj, *offsets):
+    checkptr(obj)
+    ob = obj
+    T = lltype.typeOf(obj).TO
+    for o in offsets:
+        if not T._hints.get('immutable'):
+            raise TypeError("cannot fold getinteriorfield on mutable struct")
+        if isinstance(o, str):
+            ob = getattr(ob, o)
+            T = getattr(T, o)
+        else:
+            raise TypeError("cannot fold getfield on mutable struct")
+    assert not isinstance(ob, lltype._interior_ptr)
+    return ob
+
 def op_getarraysize(array):
     checkptr(array)
     return len(array)

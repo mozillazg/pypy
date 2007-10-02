@@ -628,7 +628,6 @@ BUILTIN_ANALYZERS[pypy.rlib.objectmodel.free_non_gc_object] = (
 # memory address
 
 from pypy.rpython.memory import lladdress
-from pypy.rpython.lltypesystem import llmemory
 
 def raw_malloc(s_size):
     assert isinstance(s_size, SomeInteger) #XXX add noneg...?
@@ -669,7 +668,6 @@ BUILTIN_ANALYZERS[llmemory.raw_memcopy] = raw_memcopy
 #_________________________________
 # offsetof/sizeof
 
-from pypy.rpython.lltypesystem import llmemory 
 
 def offsetof(TYPE, fldname):
     return SomeInteger()
