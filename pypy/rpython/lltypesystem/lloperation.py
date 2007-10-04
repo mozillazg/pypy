@@ -323,6 +323,7 @@ LL_OPERATIONS = {
     'getinteriorfield':     LLOp(sideeffects=False, canrun=True),
     'getinteriorarraysize': LLOp(canfold=True),
     'setinteriorfield':     LLOp(),
+    'bare_setinteriorfield':     LLOp(),
     'getarraysubstruct':    LLOp(canfold=True),
     'setfield':             LLOp(),
     'bare_setfield':        LLOp(),
