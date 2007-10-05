@@ -693,6 +693,9 @@ def typeOf(val):
             return UniChar
         if issubclass(tp, Symbolic):
             return val.lltype()
+        # if you get a TypeError: typeOf('_interior_ptr' object)
+        # here, it is very likely that you are accessing an interior pointer
+        # in an illegal way!
         raise TypeError("typeOf(%r object)" % (tp.__name__,))
 
 _to_primitive = {
