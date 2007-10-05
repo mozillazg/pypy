@@ -696,6 +696,7 @@ def gen_zero_gc_pointers(TYPE, v, llops):
             llops.genop('bare_setfield', [v, c_name, c_null])
         elif isinstance(FIELD, lltype.Struct):
             c_name = rmodel.inputconst(lltype.Void, name)
+            XXX  # should use 'setinteriorfield'
             v1 = llops.genop('getsubstruct', [v, c_name],
                              resulttype = lltype.Ptr(FIELD))
             gen_zero_gc_pointers(FIELD, v1, llops)
