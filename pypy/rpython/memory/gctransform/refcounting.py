@@ -120,6 +120,19 @@ class RefcountingGCTransformer(GCTransformer):
         self.dynamic_deallocator_funcptrs = {}
         self.queryptr2dynamic_deallocator_funcptr = {}
 
+    def finish_helpers(self):
+        GCTransformer.finish_helpers(self)
+        from pypy.translator.backendopt.malloc import remove_mallocs
+        seen = {}
+        graphs = []
+        for fptr in self.static_deallocator_funcptrs.itervalues():
+            graph = fptr._obj.graph
+            if graph in seen:
+                continue
+            seen[graph] = True
+            graphs.append(graph)
+        remove_mallocs(self.translator, graphs)
+
     def var_needs_set_transform(self, var):
         return var_needsgc(var)
 
