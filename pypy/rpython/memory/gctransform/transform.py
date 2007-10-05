@@ -51,7 +51,8 @@ class GcHighLevelOp(object):
             gct.livevars.append(v_result)
             if var_ispyobj(v_result):
                 if opname in ('getfield', 'getarrayitem', 'same_as',
-                                 'cast_pointer', 'getsubstruct'):
+                                 'cast_pointer', 'getsubstruct',
+                                 'getinteriorfield'):
                     # XXX more operations?
                     gct.push_alive(v_result)
             elif opname not in ('direct_call', 'indirect_call'):
