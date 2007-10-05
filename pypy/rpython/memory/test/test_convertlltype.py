@@ -128,6 +128,6 @@ def test_convertsubstructure():
 def test_convertsubstructure_of_array():
     cvter = LLTypeConverter(lladdress.raw_malloc(100))
     S1 = lltype.Struct("s1", ("v1", lltype.Signed))
-    A = lltype.GcArray(S1)
-    lla = lltype.malloc(A, 3)
+    A = lltype.Array(S1)
+    lla = lltype.malloc(A, 3, immortal=True)
     s1 = cvter.convert(lla[0])
