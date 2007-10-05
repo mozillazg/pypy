@@ -695,12 +695,6 @@ def typeOf(val):
             return val.lltype()
         raise TypeError("typeOf(%r object)" % (tp.__name__,))
 
-def rawTypeOf(val):
-    if isinstance(val, _interior_ptr):
-        return Ptr(val._T)
-    else:
-        return typeOf(val)
-
 _to_primitive = {
     Char: chr,
     UniChar: unichr,
