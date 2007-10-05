@@ -374,11 +374,10 @@ def genreccopy_arrayitem(llops, v_source, v_destarray, v_destindex):
         llops.genop('setarrayitem', [v_destarray, v_destindex, v_source])
 
 def genreccopy_structfield(llops, v_source, v_deststruct, fieldname):
-    c_name = inputconst(lltype.Void, fieldname)
     FIELDTYPE = getattr(v_deststruct.concretetype.TO, fieldname)
     if isinstance(FIELDTYPE, lltype.ContainerType):
-        v_dest = llops.genop('getsubstruct', [v_deststruct, c_name],
-                             resulttype = lltype.Ptr(FIELDTYPE))
+        v_dest = gen_unsafe_getfield(llops, v_deststruct, fieldname)
         genreccopy(llops, v_source, v_dest)
     else:
+        c_name = inputconst(lltype.Void, fieldname)
         llops.genop('setfield', [v_deststruct, c_name, v_source])
