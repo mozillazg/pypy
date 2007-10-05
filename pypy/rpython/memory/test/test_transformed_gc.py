@@ -160,7 +160,6 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.memory.gctransform import framework
 from pypy.rpython.memory.gctransform import stacklessframework
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.memory.support import INT_SIZE
 from pypy.rpython.memory.gc import X_CLONE, X_POOL, X_POOL_PTR
 from pypy import conftest
@@ -680,6 +679,64 @@ class TestMarkSweepGC(GCTest):
         run = self.runner(func, nbargs=2)
         res = run([3, 0])
         assert res == 1
+
+    def test_interior_ptrs(self):
+        from pypy.rpython.lltypesystem.lltype import Struct, GcStruct, GcArray
+        from pypy.rpython.lltypesystem.lltype import Array, Signed, malloc
+
+        S1 = Struct("S1", ('x', Signed))
+        T1 = GcStruct("T1", ('s', S1))
+        def f1():
+            t = malloc(T1)
+            t.s.x = 1
+            return t.s.x
+
+        S2 = Struct("S2", ('x', Signed))
+        T2 = GcArray(S2)
+        def f2():
+            t = malloc(T2, 1)
+            t[0].x = 1
+            return t[0].x
+
+        S3 = Struct("S3", ('x', Signed))
+        T3 = GcStruct("T3", ('items', Array(S3)))
+        def f3():
+            t = malloc(T3, 1)
+            t.items[0].x = 1
+            return t.items[0].x
+
+        S4 = Struct("S4", ('x', Signed))
+        T4 = Struct("T4", ('s', S4))
+        U4 = GcArray(T4)
+        def f4():
+            u = malloc(U4, 1)
+            u[0].s.x = 1
+            return u[0].s.x
+
+        S5 = Struct("S5", ('x', Signed))
+        T5 = GcStruct("T5", ('items', Array(S5)))
+        def f5():
+            t = malloc(T5, 1)
+            return len(t.items)
+
+        T6 = GcStruct("T6", ('s', Array(Signed)))
+        def f6():
+            t = malloc(T6, 1)
+            t.s[0] = 1
+            return t.s[0]
+
+        def func():
+            return (f1() * 100000 +
+                    f2() * 10000 +
+                    f3() * 1000 +
+                    f4() * 100 +
+                    f5() * 10 +
+                    f6())
+
+        assert func() == 111111
+        run = self.runner(func)
+        res = run([])
+        assert res == 111111
 
 
 class TestStacklessMarkSweepGC(TestMarkSweepGC):

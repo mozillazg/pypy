@@ -272,8 +272,8 @@ def reccopy(source, dest):
         ITEMTYPE = T.OF
         for i in range(source._obj.getlength()):
             if isinstance(ITEMTYPE, lltype.ContainerType):
-                subsrc = source._obj._getitem(i)._as_ptr()
-                subdst = dest._obj._getitem(i)._as_ptr()
+                subsrc = source._obj.getitem(i)._as_ptr()
+                subdst = dest._obj.getitem(i)._as_ptr()
                 reccopy(subsrc, subdst)
             else:
                 # this is a hack XXX de-hack this
