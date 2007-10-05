@@ -686,20 +686,22 @@ def weakpointer_offset(TYPE):
         return llmemory.offsetof(WEAKREF, "weakptr")
     return -1
 
-def gen_zero_gc_pointers(TYPE, v, llops):
+def gen_zero_gc_pointers(TYPE, v, llops, previous_steps=None):
+    if previous_steps is None:
+        previous_steps = []
     assert isinstance(TYPE, lltype.Struct)
     for name in TYPE._names:
+        c_name = rmodel.inputconst(lltype.Void, name)
         FIELD = getattr(TYPE, name)
         if isinstance(FIELD, lltype.Ptr) and FIELD._needsgc():
-            c_name = rmodel.inputconst(lltype.Void, name)
             c_null = rmodel.inputconst(FIELD, lltype.nullptr(FIELD.TO))
-            llops.genop('bare_setfield', [v, c_name, c_null])
+            if not previous_steps:
+                llops.genop('bare_setfield', [v, c_name, c_null])
+            else:
+                llops.genop('bare_setinteriorfield',
+                            [v] + previous_steps + [c_name, c_null])
         elif isinstance(FIELD, lltype.Struct):
-            c_name = rmodel.inputconst(lltype.Void, name)
-            XXX  # should use 'setinteriorfield'
-            v1 = llops.genop('getsubstruct', [v, c_name],
-                             resulttype = lltype.Ptr(FIELD))
-            gen_zero_gc_pointers(FIELD, v1, llops)
+            gen_zero_gc_pointers(FIELD, v, llops, previous_steps + [c_name])
 
 def gc_pointers_inside(v, adr):
     t = lltype.typeOf(v)
