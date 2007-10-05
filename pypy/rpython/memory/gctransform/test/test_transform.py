@@ -22,6 +22,11 @@ class LLInterpedTranformerTests:
         cbuild = CStandaloneBuilder(t, f, t.config, gcpolicy=self.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()
         graph = cbuild.getentrypointptr()._obj.graph
+        # arguments cannot be GC objects because nobody would put a
+        # proper header on them
+        for v in graph.getargs():
+            if isinstance(v.concretetype, lltype.Ptr):
+                assert v.concretetype.TO._gckind != 'gc', "fix the test!"
         llinterp = LLInterpreter(t.rtyper)
         if conftest.option.view:
             t.view()
