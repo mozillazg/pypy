@@ -297,6 +297,7 @@ def sizeof(TYPE, n=None):
 def offsetof(TYPE, fldname):
     assert fldname in TYPE._flds
     return FieldOffset(TYPE, fldname)
+offsetof._annspecialcase_ = 'specialize:memo'
 
 def itemoffsetof(TYPE, n=0):
     return ArrayItemsOffset(TYPE) + ItemOffset(TYPE.OF) * n
