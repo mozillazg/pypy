@@ -195,7 +195,9 @@ class ArrayItemsOffset(AddressOffset):
     def ref(self, arrayptr):
         assert lltype.typeOf(arrayptr).TO == self.TYPE
         if isinstance(self.TYPE.OF, lltype.ContainerType):
-            return arrayptr[0]
+            # XXX this doesn't support empty arrays
+            o = arrayptr._obj.getitem(0)
+            return o._as_ptr()
         else:
             return lltype.direct_arrayitems(arrayptr)
 
