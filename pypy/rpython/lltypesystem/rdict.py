@@ -452,7 +452,7 @@ def ll_dict_insertclean(d, key, value, hash):
     # the dict contains no deleted entries.  This routine has the advantage
     # of never calling d.keyhash() and d.keyeq(), so it cannot call back
     # to user code.  ll_dict_insertclean() doesn't resize the dict, either.
-    i = ll_dict_lookup(d, key, hash)
+    i = ll_dict_lookup_clean(d, hash)
     entry = d.entries[i]
     DICT = lltype.typeOf(d).TO
     entry.value = value
