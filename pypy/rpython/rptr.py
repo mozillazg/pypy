@@ -45,8 +45,7 @@ class PtrRepr(Repr):
                 return hop.genop('cast_pointer', [hop.inputarg(self, 0)],
                                  resulttype=hop.r_result.lowleveltype)
             elif isinstance(hop.r_result, InteriorPtrRepr):
-                return hop.genop('same_as', [hop.inputarg(self, 0)],
-                                 resulttype=self.lowleveltype)
+                return hop.inputarg(self, 0)
             else:
                 newopname = 'getsubstruct'
         else:
@@ -276,8 +275,7 @@ class InteriorPtrRepr(Repr):
             return hop.inputarg(hop.r_result, arg=0)
         FIELD_TYPE = getattr(self.resulttype.TO, attr)
         if isinstance(FIELD_TYPE, lltype.ContainerType):
-            return hop.genop('same_as', [hop.inputarg(self, 0)],
-                             resulttype=self.lowleveltype)
+            return hop.inputarg(self, 0)
         else:
             v_self, v_attr = hop.inputargs(self, lltype.Void)
             vlist = self.getinteriorfieldargs(hop, v_self) + [v_attr]
