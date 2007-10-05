@@ -114,7 +114,8 @@ class FieldOffset(AddressOffset):
             struct = lltype.cast_pointer(lltype.Ptr(self.TYPE), struct)
         FIELD = getattr(self.TYPE, self.fldname)
         if isinstance(FIELD, lltype.ContainerType):
-            return getattr(struct, self.fldname)
+            substruct = struct._obj._getattr(self.fldname)
+            return substruct._as_ptr()
         else:
             return lltype.direct_fieldptr(struct, self.fldname)
 
