@@ -165,11 +165,12 @@ from pypy.rpython.memory.gc import X_CLONE, X_POOL, X_POOL_PTR
 from pypy import conftest
 
 
-def rtype(func, inputtypes, specialize=True, gcname='ref'):
+def rtype(func, inputtypes, specialize=True, gcname='ref', stacklessgc=False):
     from pypy.translator.translator import TranslationContext
     t = TranslationContext()
     # XXX XXX XXX mess
     t.config.translation.gc = gcname
+    t.config.translation.stacklessgc = stacklessgc
     t.buildannotator().build_types(func, inputtypes)
     if specialize:
         t.buildrtyper().specialize()
@@ -179,6 +180,7 @@ def rtype(func, inputtypes, specialize=True, gcname='ref'):
 
 class GCTest(object):
     gcpolicy = None
+    stacklessgc = False
 
     def runner(self, f, nbargs=0, statistics=False):
         if nbargs == 2:
@@ -198,14 +200,15 @@ class GCTest(object):
 
         ARGS = lltype.FixedSizeArray(lltype.Signed, nbargs)
         s_args = annmodel.SomePtr(lltype.Ptr(ARGS))
-        t = rtype(entrypoint, [s_args], gcname=self.gcname)
+        t = rtype(entrypoint, [s_args], gcname=self.gcname,
+                                        stacklessgc=self.stacklessgc)
         cbuild = CStandaloneBuilder(t, entrypoint, config=t.config,
                                     gcpolicy=self.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()
         entrypointptr = cbuild.getentrypointptr()
         entrygraph = entrypointptr._obj.graph
         if conftest.option.view:
-            t.view()
+            t.viewcg()
 
         llinterp = LLInterpreter(t.rtyper)
 
@@ -741,7 +744,7 @@ class TestMarkSweepGC(GCTest):
 
 class TestStacklessMarkSweepGC(TestMarkSweepGC):
 
-    gcname = "stacklessgc"
+    stacklessgc = True
     class gcpolicy(gc.StacklessFrameworkGcPolicy):
         class transformerclass(stacklessframework.StacklessFrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 4096 }
