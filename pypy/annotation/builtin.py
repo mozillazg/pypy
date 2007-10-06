@@ -325,6 +325,8 @@ def robjmodel_keepalive_until_here(*args_s):
     return immutablevalue(None)
 
 def llmemory_cast_ptr_to_adr(s):
+    from pypy.annotation.model import SomeInteriorPtr
+    assert not isinstance(s, SomeInteriorPtr)
     return SomeAddress()
 
 def llmemory_cast_adr_to_ptr(s, s_type):
