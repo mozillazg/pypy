@@ -164,17 +164,21 @@ class TestLowLevelType(test_typed.CompilationTestCase):
             assert res == 0 + 10 + 30 + 1000
 
     def test_structarray_add(self):
-        py.test.skip("XXX fix this!")
         from pypy.rpython.lltypesystem import llmemory
         S = Struct("S", ("x", Signed))
         PS = Ptr(S)
         size = llmemory.sizeof(S)
         A = GcArray(S)
+        itemoffset = llmemory.itemoffsetof(A, 0)
         def llf(n):
             a = malloc(A, 5)
+            a[0].x = 1
+            a[1].x = 2
+            a[2].x = 3
             a[3].x = 42
-            adr_s = llmemory.cast_ptr_to_adr(a[0])
-            adr_s += size * n
+            a[4].x = 4
+            adr_s = llmemory.cast_ptr_to_adr(a)
+            adr_s += itemoffset + size * n
             s = llmemory.cast_adr_to_ptr(adr_s, PS)
             return s.x
         fn = self.getcompiled(llf, [int])
