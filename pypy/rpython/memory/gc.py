@@ -88,6 +88,18 @@ class GCBase(object):
     def setup(self):
         pass
 
+    def statistics(self, index):
+        return -1
+
+    def x_swap_pool(self, newpool):
+        return newpool
+
+    def x_clone(self, clonedata):
+        raise RuntimeError("no support for x_clone in the GC")
+
+    def x_become(self, target_addr, source_addr):
+        raise RuntimeError("no support for x_become in the GC")
+
 class DummyGC(GCBase):
     _alloc_flavor_ = "raw"
 
@@ -995,7 +1007,8 @@ class SemiSpaceGC(GCBase):
     HDR = lltype.Struct('header', ('forw', lltype.Signed),
                                   ('typeid', lltype.Signed))
 
-    def __init__(self, AddressLinkedList, space_size=1024*int_size,
+    def __init__(self, AddressLinkedList,
+                 space_size=llmemory.arena(lltype.Signed, 1024),
                  get_roots=None):
         self.bytes_malloced = 0
         self.space_size = space_size
@@ -1013,6 +1026,8 @@ class SemiSpaceGC(GCBase):
         self.fromspace = raw_malloc(self.space_size)
         debug_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
+        raw_memclear(self.tospace, self.space_size)
+        raw_memclear(self.fromspace, self.space_size)
 
     def free_memory(self):
         "NOT_RPYTHON"
@@ -1034,7 +1049,12 @@ class SemiSpaceGC(GCBase):
         # should eventually be killed
         return llmemory.cast_ptr_to_adr(ref)
     
-    def malloc_fixedsize(self, typeid, size, can_collect):
+    def malloc_fixedsize(self, typeid, size, can_collect, has_finalizer=False,
+                         contains_weakptr=False):
+        if has_finalizer:
+            raise NotImplementedError("finalizers in SemiSpaceGC")
+        if contains_weakptr:
+            raise NotImplementedError("weakptr in SemiSpaceGC")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         if can_collect and self.free + totalsize > self.top_of_space:
@@ -1049,15 +1069,17 @@ class SemiSpaceGC(GCBase):
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
     def malloc_varsize(self, typeid, length, size, itemsize, offset_to_length,
-                       can_collect):
+                       can_collect, has_finalizer=False):
+        if has_finalizer:
+            raise NotImplementedError("finalizers in SemiSpaceGC")
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        nonvarsize = size_gc_header + size
         try:
             varsize = ovfcheck(itemsize * length)
+            totalsize = ovfcheck(nonvarsize + varsize)
         except OverflowError:
             raise memoryError
-        # XXX also check for overflow on the various '+' below!
-        size += varsize
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        totalsize = size_gc_header + size
+        # XXX we can't use ovfcheck() for self.free + totalsize...
         if can_collect and self.free + totalsize > self.top_of_space:
             self.collect()
             #XXX need to increase the space size if the object is too big
@@ -1069,6 +1091,10 @@ class SemiSpaceGC(GCBase):
         (result + size_gc_header + offset_to_length).signed[0] = length
         self.free += totalsize
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+
+    # for now, the spaces are filled with zeroes in advance
+    malloc_fixedsize_clear = malloc_fixedsize
+    malloc_varsize_clear   = malloc_varsize
 
     def collect(self):
 ##         print "collecting"
@@ -1090,6 +1116,7 @@ class SemiSpaceGC(GCBase):
             curr = scan + self.size_gc_header()
             self.trace_and_copy(curr)
             scan += self.get_size(curr) + self.size_gc_header()
+        raw_memclear(fromspace, self.space_size)
 
     def copy(self, obj):
         if not self.fromspace <= obj < self.fromspace + self.space_size:
@@ -1166,9 +1193,14 @@ class SemiSpaceGC(GCBase):
         return self.gcheaderbuilder.size_gc_header
 
     def init_gc_object(self, addr, typeid):
-        addr.signed[0] = 0
-        addr.signed[1] = typeid
-    init_gc_object_immortal = init_gc_object
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        #hdr.forw = 0      -- unneeded, the space is initially filled with zero
+        hdr.typeid = typeid
+
+    def init_gc_object_immortal(self, addr, typeid):
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.forw = 0
+        hdr.typeid = typeid
 
 class DeferredRefcountingGC(GCBase):
     _alloc_flavor_ = "raw"
