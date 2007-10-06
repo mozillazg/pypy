@@ -652,7 +652,7 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn()
 
     def test_prebuilt_nolength_char_array(self):
-        py.test.skip("XXX fix this!")
+        py.test.skip("fails on the trunk too")
         for lastchar in ('\x00', 'X'):
             A = Array(Char, hints={'nolength': True})
             a = malloc(A, 5, immortal=True)
