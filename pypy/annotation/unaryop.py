@@ -763,15 +763,15 @@ class __extend__(SomeWeakRef):
 #_________________________________________
 # memory addresses
 
-from pypy.rpython.memory import lladdress
+from pypy.rpython.lltypesystem import llmemory
 
 class __extend__(SomeAddress):
     def getattr(s_addr, s_attr):
         assert s_attr.is_constant()
         assert isinstance(s_attr, SomeString)
-        assert s_attr.const in lladdress.supported_access_types
+        assert s_attr.const in llmemory.supported_access_types
         return SomeTypedAddressAccess(
-            lladdress.supported_access_types[s_attr.const])
+            llmemory.supported_access_types[s_attr.const])
     getattr.can_only_throw = []
 
     def is_true(s_addr):

@@ -3,16 +3,12 @@ from pypy.rpython.lltypesystem.llmemory import raw_memcopy, raw_memclear
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.memory.support import get_address_linked_list
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
-from pypy.rpython.memory import lltypesimulation
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.objectmodel import free_non_gc_object, debug_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
 
 import sys, os
-
-int_size = lltypesimulation.sizeof(lltype.Signed)
-gc_header_two_ints = 2*int_size
 
 X_POOL = lltype.GcOpaqueType('gc.pool')
 X_POOL_PTR = lltype.Ptr(X_POOL)
@@ -184,7 +180,7 @@ class MarkSweepGC(GCBase):
         size = self.fixed_size(typeid)
         needs_finalizer =  bool(self.getfinalizer(typeid))
         contains_weakptr = self.weakpointer_offset(typeid) != -1
-        assert needs_finalizer != contains_weakptr
+        assert not (needs_finalizer and contains_weakptr)
         if self.is_varsize(typeid):
             assert not contains_weakptr
             itemsize = self.varsize_item_sizes(typeid)
@@ -1326,5 +1322,5 @@ class DeferredRefcountingGC(GCBase):
         addr.signed[1] = typeid
 
     def size_gc_header(self, typeid=0):
-        return gc_header_two_ints
+        XXX
 
