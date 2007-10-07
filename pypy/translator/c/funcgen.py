@@ -441,15 +441,13 @@ class FunctionCodeGenerator(object):
                                                      op.args[1].value)
         return self.generic_get(op, expr)
 
-    def OP_SETFIELD(self, op):
+    def OP_BARE_SETFIELD(self, op):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
         expr = structdef.ptr_access_expr(self.expr(op.args[0]),
                                          op.args[1].value)
         return self.generic_set(op, expr)
-
-    OP_BARE_SETFIELD = OP_SETFIELD
 
     def OP_GETSUBSTRUCT(self, op):
         RESULT = self.lltypemap(op.result).TO
@@ -522,7 +520,6 @@ class FunctionCodeGenerator(object):
 
     def OP_BARE_SETINTERIORFIELD(self, op):
         return self.generic_set(op, self.interior_expr(op.args[:-1]))
-    OP_SETINTERIORFIELD = OP_BARE_SETINTERIORFIELD
 
     def OP_GETINTERIORARRAYSIZE(self, op):
         expr, ARRAY = self.interior_expr(op.args, True)
