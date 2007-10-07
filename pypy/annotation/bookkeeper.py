@@ -24,7 +24,6 @@ from pypy.rlib.objectmodel import r_dict, Symbolic
 from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.memory import lladdress
 from pypy.rpython import extregistry
 
 class Stats:

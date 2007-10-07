@@ -470,6 +470,11 @@ class _address_fakeaccessor(_fakeaccessor):
             raise TypeError(TARGETTYPE)
         ptr[0] = value
 
+supported_access_types = {"signed":    lltype.Signed,
+                          "unsigned":  lltype.Unsigned,
+                          "char":      lltype.Char,
+                          "address":   Address,
+                          }
 
 fakeaddress.signed = property(_signed_fakeaccessor)
 fakeaddress.char = property(_char_fakeaccessor)

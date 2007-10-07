@@ -18,7 +18,6 @@ from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rlib.rarithmetic import ovfcheck
 import sets, os, sys
-from pypy.rpython.memory import lladdress
 from pypy.rpython.lltypesystem.lloperation import llop
 
 def var_ispyobj(var):
@@ -404,7 +403,7 @@ def mallocHelpers():
         result = mh.allocate(tot_size)
         if not result:
             raise MemoryError()
-        lladdress.raw_memclear(result, tot_size)
+        llmemory.raw_memclear(result, tot_size)
         return result
     mh.ll_malloc_varsize_no_length_zero = _ll_malloc_varsize_no_length_zero
 
@@ -416,7 +415,7 @@ class GCTransformer(BaseGCTransformer):
         super(GCTransformer, self).__init__(translator, inline=inline)
 
         mh = mallocHelpers()
-        mh.allocate = lladdress.raw_malloc
+        mh.allocate = llmemory.raw_malloc
         ll_raw_malloc_fixedsize = mh._ll_malloc_fixedsize
         ll_raw_malloc_varsize_no_length = mh.ll_malloc_varsize_no_length
         ll_raw_malloc_varsize = mh.ll_malloc_varsize

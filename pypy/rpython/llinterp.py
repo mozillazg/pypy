@@ -42,20 +42,18 @@ def type_name(etype):
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
 
-    def __init__(self, typer, heap=llheap, tracing=True, exc_data_ptr=None,
+    def __init__(self, typer, tracing=True, exc_data_ptr=None,
                  malloc_check=True):
         self.bindings = {}
         self.typer = typer
-        self.heap = heap  #module that provides malloc, etc for lltypes
+        # 'heap' is module or object that provides malloc, etc for lltype ops
+        self.heap = llheap
         self.exc_data_ptr = exc_data_ptr
         self.active_frame = None
         self.tracer = None
         self.malloc_check = malloc_check
         self.frame_class = LLFrame
         self.mallocs = {}
-        if hasattr(heap, "prepare_graphs_and_create_gc"):
-            flowgraphs = typer.annotator.translator.graphs
-            heap.prepare_graphs_and_create_gc(self, flowgraphs)
         if tracing:
             self.tracer = Tracer()
 
@@ -574,7 +572,7 @@ class LLFrame(object):
                 obj = obj[o]
         T = obj._T
         if isinstance(finalfield, str):
-            if getattr(T, fieldname) is not lltype.Void:
+            if getattr(T, finalfield) is not lltype.Void:
                 heap.setfield(obj, finalfield, fieldvalue)
         else:
             if T.OF is not lltype.Void:
