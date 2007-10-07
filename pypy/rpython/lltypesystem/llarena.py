@@ -106,6 +106,8 @@ class fakearenaaddress(llmemory.fakeaddress):
     def __eq__(self, other):
         if isinstance(other, fakearenaaddress):
             return self.arena is other.arena and self.offset == other.offset
+        elif isinstance(other, llmemory.fakeaddress) and not other:
+            return False      # 'self' can't be equal to NULL
         else:
             return llmemory.fakeaddress.__eq__(self, other)
 
@@ -132,12 +134,15 @@ def arena_malloc(nbytes, zero):
 
 def arena_free(arena_addr):
     """Release an arena."""
-    arena_reset(arena_addr, False)
+    assert isinstance(arena_addr, fakearenaaddress)
+    assert arena_addr.offset == 0
+    arena_addr.arena.reset(False)
     arena_addr.arena.freed = True
 
-def arena_reset(arena_addr, zero):
+def arena_reset(arena_addr, myarenasize, zero):
     """Free all objects in the arena, which can then be reused.
     The arena is filled with zeroes if 'zero' is True."""
     assert isinstance(arena_addr, fakearenaaddress)
     assert arena_addr.offset == 0
+    assert myarenasize == arena_addr.arena.nbytes
     arena_addr.arena.reset(zero)

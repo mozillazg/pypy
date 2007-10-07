@@ -8,7 +8,10 @@ def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
     SPTR = lltype.Ptr(S)
     ssize = llmemory.raw_malloc_usage(llmemory.sizeof(S))
-    a = arena_malloc(2*ssize+1, False)
+    myarenasize = 2*ssize+1
+    a = arena_malloc(myarenasize, False)
+    assert a != llmemory.NULL
+    assert a + 3 != llmemory.NULL
 
     s1_ptr1 = cast_adr_to_ptr(a, SPTR)
     s1_ptr1.x = 1
@@ -34,7 +37,7 @@ def test_arena():
     py.test.raises(ArenaError, cast_adr_to_ptr, a+2*ssize, SPTR)
     py.test.raises(ArenaError, cast_adr_to_ptr, a+2*ssize+1, SPTR)
 
-    arena_reset(a, True)
+    arena_reset(a, myarenasize, True)
     s1_ptr1 = cast_adr_to_ptr(a, SPTR)
     assert s1_ptr1.x == 0
     s1_ptr1.x = 5
