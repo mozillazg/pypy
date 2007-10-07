@@ -1,9 +1,10 @@
-from pypy.rpython.memory.lladdress import raw_malloc, raw_free, raw_memcopy, raw_memclear
-from pypy.rpython.memory.lladdress import NULL, _address, raw_malloc_usage
+from pypy.rpython.lltypesystem.llmemory import raw_malloc, raw_free
+from pypy.rpython.lltypesystem.llmemory import raw_memcopy, raw_memclear
+from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.memory.support import get_address_linked_list
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory import lltypesimulation
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.objectmodel import free_non_gc_object, debug_assert
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck
@@ -1007,8 +1008,7 @@ class SemiSpaceGC(GCBase):
     HDR = lltype.Struct('header', ('forw', lltype.Signed),
                                   ('typeid', lltype.Signed))
 
-    def __init__(self, AddressLinkedList,
-                 space_size=llmemory.arena(lltype.Signed, 1024),
+    def __init__(self, AddressLinkedList, space_size=4096,
                  get_roots=None):
         self.bytes_malloced = 0
         self.space_size = space_size
@@ -1020,20 +1020,18 @@ class SemiSpaceGC(GCBase):
         self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
 
     def setup(self):
-        self.tospace = raw_malloc(self.space_size)
+        self.tospace = llarena.arena_malloc(self.space_size, True)
         debug_assert(bool(self.tospace), "couldn't allocate tospace")
         self.top_of_space = self.tospace + self.space_size
-        self.fromspace = raw_malloc(self.space_size)
+        self.fromspace = llarena.arena_malloc(self.space_size, True)
         debug_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
-        raw_memclear(self.tospace, self.space_size)
-        raw_memclear(self.fromspace, self.space_size)
 
     def free_memory(self):
         "NOT_RPYTHON"
-        raw_free(self.tospace)
+        llarena.arena_free(self.tospace)
         self.tospace = NULL
-        raw_free(self.fromspace)
+        llarena.arena_free(self.fromspace)
         self.fromspace = NULL
 
     def malloc(self, typeid, length=0):
@@ -1116,7 +1114,7 @@ class SemiSpaceGC(GCBase):
             curr = scan + self.size_gc_header()
             self.trace_and_copy(curr)
             scan += self.get_size(curr) + self.size_gc_header()
-        raw_memclear(fromspace, self.space_size)
+        llarena.arena_reset(fromspace, self.space_size, True)
 
     def copy(self, obj):
         if not self.fromspace <= obj < self.fromspace + self.space_size:

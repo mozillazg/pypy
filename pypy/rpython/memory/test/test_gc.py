@@ -94,31 +94,13 @@ class GCTest(object):
         assert res == concat(100)
         assert simulator.current_size - curr < 16000 * INT_SIZE / 4
 
-
-class GCTestOnLLInterp(GCTest):
-
-    def setup_class(cls):
-        gclltype.prepare_graphs_and_create_gc = gclltype.create_gc_run_on_llinterp
-        gclltype.use_gc = cls.GCClass
-        from pypy.rpython.memory import gc as gcimpl
-        gcimpl.DEBUG_PRINT = False
-
 class TestMarkSweepGC(GCTest):
     GCClass = MarkSweepGC
-
-if 0:   ## - - - disabling this: the simulator is getting deprecated
-    class TestMarkSweepGCRunningOnLLinterp(GCTestOnLLInterp):
-        GCClass = MarkSweepGC
 
 class TestSemiSpaceGC(GCTest):
     GCClass = SemiSpaceGC
 
-class TestSemiSpaceGCRunningOnLLinterp(GCTestOnLLInterp):
-    GCClass = SemiSpaceGC
-
 class TestDeferredRefcountingGC(GCTest):
     GCClass = DeferredRefcountingGC
-
-class TestDeferredRefcountingGCRunningOnLLinterp(GCTestOnLLInterp):
-    GCClass = DeferredRefcountingGC
-
+    def setup_class(cls):
+        py.test.skip("DeferredRefcounting is unmaintained")

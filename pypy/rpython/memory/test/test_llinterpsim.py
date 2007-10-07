@@ -1,5 +1,6 @@
 
 import py
+py.test.skip("kill me!")
 from pypy.rpython.lltypesystem.lltype import typeOf, Ptr, PyObject
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.rpython.llinterp import LLInterpreter, LLException,log
