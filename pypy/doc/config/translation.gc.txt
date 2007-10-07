@@ -3,8 +3,9 @@ Choose the Garbage Collector used by the translated program:
   - "ref": reference counting. Takes very long to translate and the result is
     slow.
 
-  - "framework": our custom mark-and-sweep collector. Takes moderately long and
-    is the fastest option without external dependencies.
+  - "framework": one of our custom garbage collectors. Takes moderately long
+    and is the fastest option without external dependencies.  See
+    :config:`translation.frameworkgc`.
 
   - "boehm": use the Boehm conservative GC
 
