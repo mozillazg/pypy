@@ -51,6 +51,12 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--stacklessgc",
                requires=[("translation.gc", "framework"),
                          ("translation.stackless", True)]),
+    ChoiceOption("frameworkgc", "Select one of our custom GCs",
+                 ["marksweep", "semispace"],
+                 "marksweep", requires={
+                    "marksweep": [("translation.gc", "framework")],
+                    "semispace": [("translation.gc", "framework")],
+                 }),
     BoolOption("thread", "enable use of threading primitives",
                default=False, cmdline="--thread",
                requires=[("translation.gc", "boehm")]),
