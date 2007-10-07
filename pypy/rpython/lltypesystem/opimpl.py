@@ -133,15 +133,17 @@ def op_getinteriorarraysize(obj, *offsets):
 def op_getinteriorfield(obj, *offsets):
     checkptr(obj)
     ob = obj
-    T = lltype.typeOf(obj).TO
     for o in offsets:
-        if not T._hints.get('immutable'):
-            raise TypeError("cannot fold getinteriorfield on mutable struct")
+        innermostcontainer = ob
         if isinstance(o, str):
             ob = getattr(ob, o)
-            T = getattr(T, o)
         else:
-            raise TypeError("cannot fold getfield on mutable struct")
+            ob = ob[o]
+    # we can constant-fold this if the innermost structure from which we
+    # read the final field is immutable.
+    T = lltype.typeOf(innermostcontainer).TO
+    if not T._hints.get('immutable'):
+        raise TypeError("cannot fold getinteriorfield on mutable struct")
     assert not isinstance(ob, lltype._interior_ptr)
     return ob
 
