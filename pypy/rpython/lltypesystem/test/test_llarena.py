@@ -60,3 +60,47 @@ def test_arena():
     assert cast_adr_to_ptr((a + ssize + 1) - 1, S2PTR).y == 'X'
 
     assert (a + 4) - (a + 1) == 3
+
+
+def lt(x, y):
+    if x < y:
+        assert     (x < y)  and     (y > x)
+        assert     (x <= y) and     (y >= x)
+        assert not (x == y) and not (y == x)
+        assert     (x != y) and     (y != x)
+        assert not (x > y)  and not (y < x)
+        assert not (x >= y) and not (y <= x)
+        return True
+    else:
+        assert (x >= y) and (y <= x)
+        assert (x == y) == (not (x != y)) == (y == x) == (not (y != x))
+        assert (x > y) == (not (x == y)) == (y < x)
+        return False
+
+def eq(x, y):
+    if x == y:
+        assert not (x != y) and not (y != x)
+        assert not (x < y)  and not (y > x)
+        assert not (x > y)  and not (y < x)
+        assert     (x <= y) and     (y >= x)
+        assert     (x >= y) and     (y <= x)
+        return True
+    else:
+        assert (x != y) and (y != x)
+        assert ((x < y) == (x <= y) == (not (x > y)) == (not (x >= y)) ==
+                (y > x) == (y >= x) == (not (y < x)) == (not (y <= x)))
+        return False
+
+
+def test_address_order():
+    a = arena_malloc(20, False)
+    assert eq(a, a)
+    assert lt(a, a+1)
+    assert lt(a+5, a+20)
+
+    b = arena_malloc(20, False)
+    if a > b:
+        a, b = a, b
+    assert lt(a, b)
+    assert lt(a+19, b)
+    assert lt(a, b+19)

@@ -25,7 +25,7 @@ class AddressOffset(Symbolic):
     def _raw_malloc(self, rest, zero):
         raise NotImplementedError("_raw_malloc(%r, %r)" % (self, rest))
 
-    def raw_memcopy(self, srcadr, dstsrc):
+    def raw_memcopy(self, srcadr, dstadr):
         raise NotImplementedError("raw_memcopy(%r)" % (self,))
 
 
