@@ -123,6 +123,7 @@ class LLInterpreter(object):
             log.traceback(line)
 
     def find_roots(self):
+        """Return a list of the addresses of the roots."""
         #log.findroots("starting")
         frame = self.active_frame
         roots = []
@@ -455,14 +456,17 @@ class LLFrame(object):
 
     def find_roots(self, roots):
         #log.findroots(self.curr_block.inputargs)
-        PyObjPtr = lltype.Ptr(lltype.PyObject)
-        for arg in self.curr_block.inputargs:
-            if (isinstance(arg, Variable) and
-                isinstance(getattr(arg, 'concretetype', PyObjPtr), lltype.Ptr)):
-                roots.append(self.getval(arg))
+        vars = []
+        for v in self.curr_block.inputargs:
+            if isinstance(v, Variable):
+                vars.append(v)
         for op in self.curr_block.operations[:self.curr_operation_index]:
-            if isinstance(getattr(op.result, 'concretetype', PyObjPtr), lltype.Ptr):
-                roots.append(self.getval(op.result))
+            vars.append(op.result)
+
+        for v in vars:
+            TYPE = getattr(v, 'concretetype', None)
+            if isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
+                roots.append(_address_of_local_var(self, v))
 
     # __________________________________________________________
     # misc LL operation implementations
@@ -1208,6 +1212,30 @@ def enumerate_exceptions_top_down():
     for cls in exceptions.__dict__.values():
         addcls(cls)
     return result
+
+class _address_of_local_var(object):
+    _TYPE = llmemory.Address
+    def __init__(self, frame, v):
+        self._frame = frame
+        self._v = v
+    def _getaddress(self):
+        return _address_of_local_var_accessor(self._frame, self._v)
+    address = property(_getaddress)
+
+class _address_of_local_var_accessor(object):
+    def __init__(self, frame, v):
+        self.frame = frame
+        self.v = v
+    def __getitem__(self, index):
+        if index != 0:
+            raise IndexError("address of local vars only support [0] indexing")
+        p = self.frame.getval(self.v)
+        return llmemory.cast_ptr_to_adr(p)
+    def __setitem__(self, index, newvalue):
+        if index != 0:
+            raise IndexError("address of local vars only support [0] indexing")
+        p = llmemory.cast_adr_to_ptr(newvalue, self.v.concretetype)
+        self.frame.setvar(self.v, p)
 
 # by default we route all logging messages to nothingness
 # e.g. tests can then switch on logging to get more help

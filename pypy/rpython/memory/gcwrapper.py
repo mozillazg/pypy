@@ -37,11 +37,8 @@ class GCManagedHeap(object):
         ll = self.AddressLinkedList()
         for addrofaddr in self.constantroots:
             ll.append(addrofaddr)
-        for root in self.llinterp.find_roots():
-            if lltype.typeOf(root).TO._gckind == 'gc':
-                addrofaddr = llmemory.raw_malloc(sizeofaddr)
-                addrofaddr.address[0] = llmemory.cast_ptr_to_adr(root)
-                ll.append(addrofaddr)
+        for addrofaddr in self.llinterp.find_roots():
+            ll.append(addrofaddr)
         return ll
 
     # ____________________________________________________________

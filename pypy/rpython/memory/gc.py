@@ -88,6 +88,9 @@ class GCBase(object):
     def statistics(self, index):
         return -1
 
+    def size_gc_header(self, typeid=0):
+        return self.gcheaderbuilder.size_gc_header
+
     def x_swap_pool(self, newpool):
         return newpool
 
@@ -115,9 +118,6 @@ class DummyGC(GCBase):
          
     def collect(self):
         self.get_roots() #this is there so that the annotator thinks get_roots is a function
-
-    def size_gc_header(self, typeid=0):
-        return self.gcheaderbuilder.size_gc_header
 
     def init_gc_object(self, addr, typeid):
         return
@@ -1120,8 +1120,8 @@ class SemiSpaceGC(GCBase):
 ##             print "already copied to", self.get_forwarding_address(obj)
             return self.get_forwarding_address(obj)
         else:
-            newaddr = self.free
-            totalsize = self.get_size(obj) + self.size_gc_header()
+            totalsize = self.size_gc_header() + self.get_size(obj)
+            newaddr = llarena.arena_reserve(self.free, totalsize)
             raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
             self.free += totalsize
             newobj = newaddr + self.size_gc_header()
