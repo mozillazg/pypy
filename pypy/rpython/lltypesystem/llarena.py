@@ -14,20 +14,22 @@ class ArenaError(Exception):
     pass
 
 class Arena(object):
+    object_arena_location = {}     # {container: (arena, offset)}
 
     def __init__(self, nbytes, zero):
         self.nbytes = nbytes
         self.usagemap = array.array('c')
-        self.objects = {}
+        self.objectptrs = {}        # {offset: ptr-to-container}
         self.freed = False
         self.reset(zero)
 
     def reset(self, zero):
         self.check()
-        for obj in self.objects.itervalues():
+        for ptr in self.objectptrs.itervalues():
+            obj = ptr._obj
             obj._free()
-        self.objects.clear()
-        self.pendinggcheaders = {}
+            del Arena.object_arena_location[obj]
+        self.objectptrs.clear()
         if zero:
             initialbyte = "0"
         else:
@@ -47,29 +49,34 @@ class Arena(object):
             raise ArenaError("Address offset is outside the arena")
         return fakearenaaddress(self, offset)
 
-    def allocate_object(self, offset, TYPE):
+    def allocate_object(self, offset, size):
         self.check()
-        size = llmemory.raw_malloc_usage(llmemory.sizeof(TYPE))
-        if offset + size > self.nbytes:
+        bytes = llmemory.raw_malloc_usage(size)
+        if offset + bytes > self.nbytes:
             raise ArenaError("object overflows beyond the end of the arena")
         zero = True
-        for c in self.usagemap[offset:offset+size]:
+        for c in self.usagemap[offset:offset+bytes]:
             if c == '0':
                 pass
             elif c == '#':
                 zero = False
             else:
                 raise ArenaError("new object overlaps a previous object")
-        p = lltype.malloc(TYPE, flavor='raw', zero=zero)
-        self.usagemap[offset:offset+size] = array.array('c', 'X' * size)
-        self.objects[offset] = p._obj
-        if offset in self.pendinggcheaders:
-            size_gc_header = self.pendinggcheaders.pop(offset)
-            gcheaderbuilder = size_gc_header.gcheaderbuilder
-            HDR = gcheaderbuilder.HDR
-            headeraddr = self.getaddr(offset) - size_gc_header
-            headerptr = llmemory.cast_adr_to_ptr(headeraddr, lltype.Ptr(HDR))
-            gcheaderbuilder.attach_header(p, headerptr)
+        assert offset not in self.objectptrs
+        addr2 = size._raw_malloc([], zero=zero)
+        self.usagemap[offset:offset+bytes] = array.array('c', 'X' * bytes)
+        self.objectptrs[offset] = addr2.ptr
+        Arena.object_arena_location[addr2.ptr._obj] = self, offset
+        # common case: 'size' starts with a GCHeaderOffset.  In this case
+        # we can also remember that the real object starts after the header.
+        if (isinstance(size, llmemory.CompositeOffset) and
+            isinstance(size.offsets[0], llmemory.GCHeaderOffset)):
+            objaddr = addr2 + size.offsets[0]
+            objoffset = offset + llmemory.raw_malloc_usage(size.offsets[0])
+            assert objoffset not in self.objectptrs
+            self.objectptrs[objoffset] = objaddr.ptr
+            Arena.object_arena_location[objaddr.ptr._obj] = self, objoffset
+        return addr2
 
 class fakearenaaddress(llmemory.fakeaddress):
 
@@ -79,12 +86,11 @@ class fakearenaaddress(llmemory.fakeaddress):
 
     def _getptr(self):
         try:
-            obj = self.arena.objects[self.offset]
+            return self.arena.objectptrs[self.offset]
         except KeyError:
             self.arena.check()
             raise ArenaError("don't know yet what type of object "
                              "is at offset %d" % (self.offset,))
-        return obj._as_ptr()
     ptr = property(_getptr)
 
     def __repr__(self):
@@ -95,11 +101,6 @@ class fakearenaaddress(llmemory.fakeaddress):
             position = self.offset + other
         elif isinstance(other, llmemory.AddressOffset):
             position = self.offset + llmemory.raw_malloc_usage(other)
-            if isinstance(other, llmemory.GCHeaderOffset):
-                # take the expression 'addr + size_gc_header' as a hint that
-                # there is at 'addr' a GC header for the object
-                if position not in self.arena.objects:
-                    self.arena.pendinggcheaders[position] = other
         else:
             return NotImplemented
         return self.arena.getaddr(position)
@@ -110,9 +111,9 @@ class fakearenaaddress(llmemory.fakeaddress):
         if isinstance(other, (int, long)):
             return self.arena.getaddr(self.offset - other)
         if isinstance(other, fakearenaaddress):
-            if self.other is not other.arena:
+            if self.arena is not other.arena:
                 raise ArenaError("The two addresses are from different arenas")
-            return other.offset - self.offset
+            return self.offset - other.offset
         return NotImplemented
 
     def __nonzero__(self):
@@ -121,31 +122,31 @@ class fakearenaaddress(llmemory.fakeaddress):
     def __eq__(self, other):
         if isinstance(other, fakearenaaddress):
             return self.arena is other.arena and self.offset == other.offset
-        elif isinstance(other, llmemory.fakeaddress) and not other:
-            return False      # 'self' can't be equal to NULL
+        elif isinstance(other, llmemory.fakeaddress):
+            if other.ptr and other.ptr._obj in Arena.object_arena_location:
+                arena, offset = Arena.object_arena_location[other.ptr._obj]
+                return self.arena is arena and self.offset == offset
+            else:
+                return False
         else:
             return llmemory.fakeaddress.__eq__(self, other)
 
     def __lt__(self, other):
         if isinstance(other, fakearenaaddress):
-            if self.arena is not other.arena:
-                return cmp(self.arena._getid(), other.arena._getid())
+            arena = other.arena
+            offset = other.offset
+        elif isinstance(other, llmemory.fakeaddress):
+            if other.ptr and other.ptr._obj in Arena.object_arena_location:
+                arena, offset = Arena.object_arena_location[other.ptr._obj]
             else:
-                return cmp(self.offset, other.offset)
-        elif isinstance(other, llmemory.fakeaddress) and not other:
-            return 1          # 'self' > NULL
+                return 1   # arbitrarily, 'self' > any address not in any arena
         else:
             raise TypeError("comparing a %s and a %s" % (
                 self.__class__.__name__, other.__class__.__name__))
-
-    def _cast_to_ptr(self, EXPECTED_TYPE):
-        if EXPECTED_TYPE == llmemory.GCREF:
-            obj = lltype._opaque(EXPECTED_TYPE.TO, _original_address = self)
-            return obj._as_ptr()
-        # the first cast determines what object type is at this address
-        if self.offset not in self.arena.objects:
-            self.arena.allocate_object(self.offset, EXPECTED_TYPE.TO)
-        return llmemory.fakeaddress._cast_to_ptr(self, EXPECTED_TYPE)
+        if self.arena is arena:
+            return cmp(self.offset, offset)
+        else:
+            return cmp(self.arena._getid(), arena._getid())
 
     def _cast_to_int(self):
         return self.arena._getid() + self.offset
@@ -176,3 +177,12 @@ def arena_reset(arena_addr, myarenasize, zero):
     assert arena_addr.offset == 0
     assert myarenasize == arena_addr.arena.nbytes
     arena_addr.arena.reset(zero)
+
+def arena_reserve(addr, size):
+    """Mark some bytes in an arena as reserved, and returns addr.
+    For debugging this can check that reserved ranges of bytes don't
+    overlap.  The size must be symbolic; in non-translated version
+    the returned 'addr' is not a fakearenaaddress but a fakeaddress
+    inside a fresh lltype object."""
+    assert isinstance(addr, fakearenaaddress)
+    return addr.arena.allocate_object(addr.offset, size)
