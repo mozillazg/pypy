@@ -112,6 +112,9 @@ class fakearenaaddress(llmemory.fakeaddress):
             return llmemory.fakeaddress.__eq__(self, other)
 
     def _cast_to_ptr(self, EXPECTED_TYPE):
+        if EXPECTED_TYPE == llmemory.GCREF:
+            obj = lltype._opaque(EXPECTED_TYPE.TO, _original_address = self)
+            return obj._as_ptr()
         # the first cast determines what object type is at this address
         if self.offset not in self.arena.objects:
             self.arena.allocate_object(self.offset, EXPECTED_TYPE.TO)
