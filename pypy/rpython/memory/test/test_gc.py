@@ -87,8 +87,6 @@ class TestMarkSweepGC(GCTest):
 
 class TestSemiSpaceGC(GCTest):
     from pypy.rpython.memory.gc import SemiSpaceGC as GCClass
-    def setup_class(cls):
-        py.test.skip("in-progress")
 
 class TestDeferredRefcountingGC(GCTest):
     from pypy.rpython.memory.gc import DeferredRefcountingGC as GCClass

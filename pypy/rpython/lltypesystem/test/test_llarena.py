@@ -104,3 +104,15 @@ def test_address_order():
     assert lt(a, b)
     assert lt(a+19, b)
     assert lt(a, b+19)
+
+
+def test_look_inside_object():
+    S = lltype.Struct('S', ('x',lltype.Signed))
+    SPTR = lltype.Ptr(S)
+    a = arena_malloc(50, False)
+    b = a + 4
+    arena_reserve(b, llmemory.sizeof(S))
+    (b + llmemory.offsetof(S, 'x')).signed[0] = 123
+    assert llmemory.cast_adr_to_ptr(b, SPTR).x == 123
+    llmemory.cast_adr_to_ptr(b, SPTR).x += 1
+    assert (b + llmemory.offsetof(S, 'x')).signed[0] == 124
