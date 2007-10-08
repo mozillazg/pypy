@@ -117,7 +117,7 @@ class DummyGC(GCBase):
         self.get_roots() #this is there so that the annotator thinks get_roots is a function
 
     def size_gc_header(self, typeid=0):
-        return 0
+        return self.gcheaderbuilder.size_gc_header
 
     def init_gc_object(self, addr, typeid):
         return
@@ -618,9 +618,6 @@ class MarkSweepGC(GCBase):
             return self.bytes_malloced
         return -1
 
-    def size_gc_header(self, typeid=0):
-        return self.gcheaderbuilder.size_gc_header
-
     def init_gc_object(self, addr, typeid):
         hdr = llmemory.cast_adr_to_ptr(addr, self.HDRPTR)
         hdr.typeid = typeid << 1
@@ -1001,7 +998,7 @@ class MarkSweepGC(GCBase):
 class SemiSpaceGC(GCBase):
     _alloc_flavor_ = "raw"
 
-    HDR = lltype.Struct('header', ('forw', lltype.Signed),
+    HDR = lltype.Struct('header', ('forw', llmemory.Address),
                                   ('typeid', lltype.Signed))
 
     def __init__(self, AddressLinkedList, space_size=4096,
@@ -1136,8 +1133,8 @@ class SemiSpaceGC(GCBase):
         return obj
 
     def trace_and_copy(self, obj):
-        gc_info = obj - self.size_gc_header()
-        typeid = gc_info.signed[1]
+        gc_info = self.header(obj)
+        typeid = gc_info.typeid
 ##         print "scanning", obj, typeid
         offsets = self.offsets_to_gc_pointers(typeid)
         i = 0
@@ -1164,18 +1161,17 @@ class SemiSpaceGC(GCBase):
                 i += 1
 
     def is_forwarded(self, obj):
-        return (obj - self.size_gc_header()).signed[1] < 0
+        return self.header(obj).forw != NULL
 
     def get_forwarding_address(self, obj):
-        return (obj - self.size_gc_header()).address[0]
+        return self.header(obj).forw
 
     def set_forwarding_address(self, obj, newobj):
-        gc_info = obj - self.size_gc_header()
-        gc_info.signed[1] = -gc_info.signed[1] - 1
-        gc_info.address[0] = newobj
+        gc_info = self.header(obj)
+        gc_info.forw = newobj
 
     def get_size(self, obj):
-        typeid = (obj - self.size_gc_header()).signed[1]
+        typeid = self.header(obj).typeid
         size = self.fixed_size(typeid)
         if self.is_varsize(typeid):
             lenaddr = obj + self.varsize_offset_to_length(typeid)
@@ -1183,17 +1179,18 @@ class SemiSpaceGC(GCBase):
             size += length * self.varsize_item_sizes(typeid)
         return size
 
-    def size_gc_header(self, typeid=0):
-        return self.gcheaderbuilder.size_gc_header
+    def header(self, addr):
+        addr -= self.gcheaderbuilder.size_gc_header
+        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
 
     def init_gc_object(self, addr, typeid):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        #hdr.forw = 0      -- unneeded, the space is initially filled with zero
+        #hdr.forw = NULL   -- unneeded, the space is initially filled with zero
         hdr.typeid = typeid
 
     def init_gc_object_immortal(self, addr, typeid):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.forw = 0
+        hdr.forw = NULL
         hdr.typeid = typeid
 
 class DeferredRefcountingGC(GCBase):

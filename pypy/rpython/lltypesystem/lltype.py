@@ -1194,6 +1194,9 @@ class _ptr(_abstract_ptr):
 ##            addr = llmemory.fakeaddress(normalizeptr(_ptr(Ptr(T), parent)))
 ##            addr += llmemory.itemoffsetof(T, parentindex)
 ##            return addr
+        elif (isinstance(self._obj, _opaque)
+              and hasattr(self._obj, '_original_address')):
+            return self._obj._original_address      # for llarena.py
         else:
             # normal case
             return llmemory.fakeaddress(normalizeptr(self))
@@ -1754,7 +1757,8 @@ def malloc(T, n=None, flavor='gc', immortal=False, extra_args=(), zero=False):
     elif isinstance(T, Array):
         o = _array(T, n, initialization=initialization)
     elif isinstance(T, OpaqueType):
-        o = _opaque(T, n, initialization=initialization)
+        assert n is None
+        o = _opaque(T, initialization=initialization)
     else:
         raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
