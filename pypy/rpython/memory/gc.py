@@ -1056,7 +1056,8 @@ class SemiSpaceGC(GCBase):
             #for bonus points do big objects differently
             if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
                 raise memoryError
-        result = llarena.arena_reserve(self.free, totalsize)
+        result = self.free
+        llarena.arena_reserve(result, totalsize)
         self.init_gc_object(result, typeid)
         self.free += totalsize
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
@@ -1080,7 +1081,8 @@ class SemiSpaceGC(GCBase):
             #for bonus points do big objects differently
             if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
                 raise memoryError
-        result = llarena.arena_reserve(self.free, totalsize)
+        result = self.free
+        llarena.arena_reserve(result, totalsize)
         self.init_gc_object(result, typeid)
         (result + size_gc_header + offset_to_length).signed[0] = length
         self.free += totalsize
@@ -1120,8 +1122,9 @@ class SemiSpaceGC(GCBase):
 ##             print "already copied to", self.get_forwarding_address(obj)
             return self.get_forwarding_address(obj)
         else:
+            newaddr = self.free
             totalsize = self.size_gc_header() + self.get_size(obj)
-            newaddr = llarena.arena_reserve(self.free, totalsize)
+            llarena.arena_reserve(newaddr, totalsize)
             raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
             self.free += totalsize
             newobj = newaddr + self.size_gc_header()

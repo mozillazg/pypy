@@ -20,6 +20,7 @@ class Arena(object):
         self.nbytes = nbytes
         self.usagemap = array.array('c')
         self.objectptrs = {}        # {offset: ptr-to-container}
+        self.objectsizes = {}       # {offset: size}
         self.freed = False
         self.reset(zero)
 
@@ -30,6 +31,7 @@ class Arena(object):
             obj._free()
             del Arena.object_arena_location[obj]
         self.objectptrs.clear()
+        self.objectsizes.clear()
         if zero:
             initialbyte = "0"
         else:
@@ -64,17 +66,21 @@ class Arena(object):
                 raise ArenaError("new object overlaps a previous object")
         assert offset not in self.objectptrs
         addr2 = size._raw_malloc([], zero=zero)
-        self.usagemap[offset:offset+bytes] = array.array('c', 'X' * bytes)
+        pattern = 'X' + 'x'*(bytes-1)
+        self.usagemap[offset:offset+bytes] = array.array('c', pattern)
         self.objectptrs[offset] = addr2.ptr
+        self.objectsizes[offset] = bytes
         Arena.object_arena_location[addr2.ptr._obj] = self, offset
         # common case: 'size' starts with a GCHeaderOffset.  In this case
         # we can also remember that the real object starts after the header.
         if (isinstance(size, llmemory.CompositeOffset) and
             isinstance(size.offsets[0], llmemory.GCHeaderOffset)):
             objaddr = addr2 + size.offsets[0]
-            objoffset = offset + llmemory.raw_malloc_usage(size.offsets[0])
+            hdrbytes = llmemory.raw_malloc_usage(size.offsets[0])
+            objoffset = offset + hdrbytes
             assert objoffset not in self.objectptrs
             self.objectptrs[objoffset] = objaddr.ptr
+            self.objectsizes[objoffset] = bytes - hdrbytes
             Arena.object_arena_location[objaddr.ptr._obj] = self, objoffset
         return addr2
 
@@ -100,7 +106,16 @@ class fakearenaaddress(llmemory.fakeaddress):
         if isinstance(other, (int, long)):
             position = self.offset + other
         elif isinstance(other, llmemory.AddressOffset):
-            position = self.offset + llmemory.raw_malloc_usage(other)
+            # this is really some Do What I Mean logic.  There are two
+            # possible meanings: either we want to go past the current
+            # object in the arena, or we want to take the address inside
+            # the current object.  Try to guess...
+            bytes = llmemory.raw_malloc_usage(other)
+            if (self.offset in self.arena.objectsizes and
+                bytes < self.arena.objectsizes[self.offset]):
+                # looks like we mean "inside the object"
+                return llmemory.fakeaddress.__add__(self, other)
+            position = self.offset + bytes
         else:
             return NotImplemented
         return self.arena.getaddr(position)
@@ -183,7 +198,6 @@ def arena_reserve(addr, size):
     """Mark some bytes in an arena as reserved, and returns addr.
     For debugging this can check that reserved ranges of bytes don't
     overlap.  The size must be symbolic; in non-translated version
-    the returned 'addr' is not a fakearenaaddress but a fakeaddress
-    inside a fresh lltype object."""
+    this is used to know what type of lltype object to allocate."""
     assert isinstance(addr, fakearenaaddress)
-    return addr.arena.allocate_object(addr.offset, size)
+    addr.arena.allocate_object(addr.offset, size)
