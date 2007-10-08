@@ -1194,9 +1194,6 @@ class _ptr(_abstract_ptr):
 ##            addr = llmemory.fakeaddress(normalizeptr(_ptr(Ptr(T), parent)))
 ##            addr += llmemory.itemoffsetof(T, parentindex)
 ##            return addr
-        elif (isinstance(self._obj, _opaque)
-              and hasattr(self._obj, '_original_address')):
-            return self._obj._original_address      # for llarena.py
         else:
             # normal case
             return llmemory.fakeaddress(normalizeptr(self))
