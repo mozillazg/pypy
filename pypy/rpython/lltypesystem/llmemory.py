@@ -351,6 +351,15 @@ class fakeaddress(object):
         else:
             return NotImplemented
 
+    def __lt__(self, other):
+        raise TypeError("cannot compare fakeaddresses with '<'")
+    def __le__(self, other):
+        return self == other or self < other
+    def __gt__(self, other):
+        return not (self == other or self < other)
+    def __ge__(self, other):
+        return not (self < other)
+
     def ref(self):
         if not self:
             raise NullAddressError

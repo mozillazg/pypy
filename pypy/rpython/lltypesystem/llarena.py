@@ -27,6 +27,7 @@ class Arena(object):
         for obj in self.objects.itervalues():
             obj._free()
         self.objects.clear()
+        self.pendinggcheaders = {}
         if zero:
             initialbyte = "0"
         else:
@@ -62,6 +63,13 @@ class Arena(object):
         p = lltype.malloc(TYPE, flavor='raw', zero=zero)
         self.usagemap[offset:offset+size] = array.array('c', 'X' * size)
         self.objects[offset] = p._obj
+        if offset in self.pendinggcheaders:
+            size_gc_header = self.pendinggcheaders.pop(offset)
+            gcheaderbuilder = size_gc_header.gcheaderbuilder
+            HDR = gcheaderbuilder.HDR
+            headeraddr = self.getaddr(offset) - size_gc_header
+            headerptr = llmemory.cast_adr_to_ptr(headeraddr, lltype.Ptr(HDR))
+            gcheaderbuilder.attach_header(p, headerptr)
 
 class fakearenaaddress(llmemory.fakeaddress):
 
@@ -83,11 +91,18 @@ class fakearenaaddress(llmemory.fakeaddress):
         return '<arenaaddr %s + %d>' % (self.arena, self.offset)
 
     def __add__(self, other):
-        if isinstance(other, llmemory.AddressOffset):
-            other = llmemory.raw_malloc_usage(other)
         if isinstance(other, (int, long)):
-            return self.arena.getaddr(self.offset + other)
-        return NotImplemented
+            position = self.offset + other
+        elif isinstance(other, llmemory.AddressOffset):
+            position = self.offset + llmemory.raw_malloc_usage(other)
+            if isinstance(other, llmemory.GCHeaderOffset):
+                # take the expression 'addr + size_gc_header' as a hint that
+                # there is at 'addr' a GC header for the object
+                if position not in self.arena.objects:
+                    self.arena.pendinggcheaders[position] = other
+        else:
+            return NotImplemented
+        return self.arena.getaddr(position)
 
     def __sub__(self, other):
         if isinstance(other, llmemory.AddressOffset):
@@ -110,6 +125,18 @@ class fakearenaaddress(llmemory.fakeaddress):
             return False      # 'self' can't be equal to NULL
         else:
             return llmemory.fakeaddress.__eq__(self, other)
+
+    def __lt__(self, other):
+        if isinstance(other, fakearenaaddress):
+            if self.arena is not other.arena:
+                return cmp(self.arena._getid(), other.arena._getid())
+            else:
+                return cmp(self.offset, other.offset)
+        elif isinstance(other, llmemory.fakeaddress) and not other:
+            return 1          # 'self' > NULL
+        else:
+            raise TypeError("comparing a %s and a %s" % (
+                self.__class__.__name__, other.__class__.__name__))
 
     def _cast_to_ptr(self, EXPECTED_TYPE):
         if EXPECTED_TYPE == llmemory.GCREF:
