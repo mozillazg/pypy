@@ -91,6 +91,34 @@ class GCBase(object):
     def size_gc_header(self, typeid=0):
         return self.gcheaderbuilder.size_gc_header
 
+    def malloc(self, typeid, length=0, zero=False):
+        """For testing.  The interface used by the gctransformer is
+        the four malloc_[fixed,var]size[_clear]() functions.
+        """
+        size = self.fixed_size(typeid)
+        needs_finalizer = bool(self.getfinalizer(typeid))
+        contains_weakptr = self.weakpointer_offset(typeid) != -1
+        assert not (needs_finalizer and contains_weakptr)
+        if self.is_varsize(typeid):
+            assert not contains_weakptr
+            itemsize = self.varsize_item_sizes(typeid)
+            offset_to_length = self.varsize_offset_to_length(typeid)
+            if zero:
+                malloc_varsize = self.malloc_varsize_clear
+            else:
+                malloc_varsize = self.malloc_varsize
+            ref = malloc_varsize(typeid, length, size, itemsize,
+                                 offset_to_length, True, needs_finalizer)
+        else:
+            if zero:
+                malloc_fixedsize = self.malloc_fixedsize_clear
+            else:
+                malloc_fixedsize = self.malloc_fixedsize
+            ref = malloc_fixedsize(typeid, size, True, needs_finalizer,
+                                   contains_weakptr)
+        # lots of cast and reverse-cast around...
+        return llmemory.cast_ptr_to_adr(ref)
+
     def x_swap_pool(self, newpool):
         return newpool
 
@@ -107,13 +135,16 @@ class DummyGC(GCBase):
         self.get_roots = get_roots
         #self.set_query_functions(None, None, None, None, None, None, None)
    
-    def malloc(self, typeid, length=0):
+    def malloc(self, typeid, length=0, zero=False):
         size = self.fixed_size(typeid)
         if self.is_varsize(typeid):
             size += length * self.varsize_item_sizes(typeid)
         result = raw_malloc(size)
         if not result:
             raise memoryError
+        if zero:
+            raw_memclear(result, size)
+        # XXX set the length field?
         return result
          
     def collect(self):
@@ -175,24 +206,6 @@ class MarkSweepGC(GCBase):
         self.poolnodes = lltype.nullptr(self.POOLNODE)
         self.collect_in_progress = False
         self.prev_collect_end_time = 0.0
-
-    def malloc(self, typeid, length=0):
-        size = self.fixed_size(typeid)
-        needs_finalizer =  bool(self.getfinalizer(typeid))
-        contains_weakptr = self.weakpointer_offset(typeid) != -1
-        assert not (needs_finalizer and contains_weakptr)
-        if self.is_varsize(typeid):
-            assert not contains_weakptr
-            itemsize = self.varsize_item_sizes(typeid)
-            offset_to_length = self.varsize_offset_to_length(typeid)
-            ref = self.malloc_varsize(typeid, length, size, itemsize,
-                                      offset_to_length, True, needs_finalizer)
-        else:
-            ref = self.malloc_fixedsize(typeid, size, True, needs_finalizer,
-                                        contains_weakptr)
-        # XXX lots of cast and reverse-cast around, but this malloc()
-        # should eventually be killed
-        return llmemory.cast_ptr_to_adr(ref)
 
     def malloc_fixedsize(self, typeid, size, can_collect, has_finalizer=False,
                          contains_weakptr=False):
@@ -1026,19 +1039,6 @@ class SemiSpaceGC(GCBase):
         self.tospace = NULL
         llarena.arena_free(self.fromspace)
         self.fromspace = NULL
-
-    def malloc(self, typeid, length=0):
-        size = self.fixed_size(typeid)
-        if self.is_varsize(typeid):
-            itemsize = self.varsize_item_sizes(typeid)
-            offset_to_length = self.varsize_offset_to_length(typeid)
-            ref = self.malloc_varsize(typeid, length, size, itemsize,
-                                      offset_to_length, True)
-        else:
-            ref = self.malloc_fixedsize(typeid, size, True)
-        # XXX lots of cast and reverse-cast around, but this malloc()
-        # should eventually be killed
-        return llmemory.cast_ptr_to_adr(ref)
     
     def malloc_fixedsize(self, typeid, size, can_collect, has_finalizer=False,
                          contains_weakptr=False):

@@ -48,7 +48,7 @@ class GCManagedHeap(object):
     def malloc(self, TYPE, n=None, flavor='gc', zero=False):
         if flavor == 'gc':
             typeid = self.get_type_id(TYPE)
-            addr = self.gc.malloc(typeid, n)
+            addr = self.gc.malloc(typeid, n, zero=zero)
             return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
         else:
             return lltype.malloc(TYPE, n, flavor=flavor, zero=zero)
