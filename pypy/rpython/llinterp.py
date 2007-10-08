@@ -269,7 +269,7 @@ class LLFrame(object):
                 if nextblock is None:
                     self.llinterpreter.active_frame = self.f_back
                     for obj in self.alloca_objects:
-                        self.heap.free(obj, flavor='raw')
+                        obj._obj._free()
                     return args
         finally:
             if tracer:
