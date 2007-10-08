@@ -100,7 +100,7 @@ def test_address_order():
 
     b = arena_malloc(20, False)
     if a > b:
-        a, b = a, b
+        a, b = b, a
     assert lt(a, b)
     assert lt(a+19, b)
     assert lt(a, b+19)
