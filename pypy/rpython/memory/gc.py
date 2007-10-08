@@ -1048,13 +1048,15 @@ class SemiSpaceGC(GCBase):
             raise NotImplementedError("weakptr in SemiSpaceGC")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
-        if can_collect and self.free + totalsize > self.top_of_space:
+        if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
+            if not can_collect:
+                raise memoryError
             self.collect()
             #XXX need to increase the space size if the object is too big
             #for bonus points do big objects differently
-            if self.free + totalsize > self.top_of_space:
+            if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
                 raise memoryError
-        result = self.free
+        result = llarena.arena_reserve(self.free, totalsize)
         self.init_gc_object(result, typeid)
         self.free += totalsize
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
@@ -1070,14 +1072,15 @@ class SemiSpaceGC(GCBase):
             totalsize = ovfcheck(nonvarsize + varsize)
         except OverflowError:
             raise memoryError
-        # XXX we can't use ovfcheck() for self.free + totalsize...
-        if can_collect and self.free + totalsize > self.top_of_space:
+        if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
+            if not can_collect:
+                raise memoryError
             self.collect()
             #XXX need to increase the space size if the object is too big
             #for bonus points do big objects differently
-            if self.free + totalsize > self.top_of_space:
+            if raw_malloc_usage(totalsize) > self.top_of_space - self.free:
                 raise memoryError
-        result = self.free
+        result = llarena.arena_reserve(self.free, totalsize)
         self.init_gc_object(result, typeid)
         (result + size_gc_header + offset_to_length).signed[0] = length
         self.free += totalsize
