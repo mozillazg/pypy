@@ -139,14 +139,15 @@ class fakearenaaddress(llmemory.fakeaddress):
             if other.ptr and other.ptr._obj in Arena.object_arena_location:
                 arena, offset = Arena.object_arena_location[other.ptr._obj]
             else:
-                return 1   # arbitrarily, 'self' > any address not in any arena
+                # arbitrarily, 'self' > any address not in any arena
+                return False
         else:
             raise TypeError("comparing a %s and a %s" % (
                 self.__class__.__name__, other.__class__.__name__))
         if self.arena is arena:
-            return cmp(self.offset, offset)
+            return self.offset < offset
         else:
-            return cmp(self.arena._getid(), arena._getid())
+            return self.arena._getid() < arena._getid()
 
     def _cast_to_int(self):
         return self.arena._getid() + self.offset
