@@ -57,13 +57,17 @@ class TupleBuilder(AbstractBuilder):
     """A builder that directly produce the AST"""
 
     def __init__(self, parser, debug=0, lineno=True):
-        AbstractBuilder.__init__(self, parser, debug)
+        AbstractBuilder.__init__(self, debug)
         # This attribute is here for convenience
         self.source_encoding = None
         self.lineno = lineno
         self.stack = []
-        self.space_token = ( self.parser.tokens['NEWLINE'], self.parser.tokens['INDENT'],
-                             self.parser.tokens['DEDENT'], self.parser.tokens['ENDMARKER'] )
+        self.space_token = (parser.tokens['NEWLINE'],
+                            parser.tokens['INDENT'],
+                            parser.tokens['DEDENT'],
+                            parser.tokens['ENDMARKER'] )
+
+        self.parser = parser
 
     def context(self):
         """Returns the state of the builder to be restored later"""
