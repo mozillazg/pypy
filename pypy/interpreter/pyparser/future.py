@@ -64,7 +64,6 @@ class FutureAutomaton(object):
     
     def __init__(self, string):
         self.s = string
-        self.end = len(string)
         self.pos = 0
         self.docstringConsumed = False
         self.flags = 0
@@ -237,10 +236,47 @@ class FutureAutomaton(object):
             self.getMore(parenList=parenList)
 
     def setFlag(self, feature):
-        if feature == "division":
-            self.flags |= CO_FUTURE_DIVISION
-        elif feature == "generators":
-            self.flags |= CO_GENERATOR_ALLOWED
-        elif feature == "with_statement":
-            self.flags |= CO_FUTURE_WITH_STATEMENT
+        try:
+            self.flags |= futureFlags.compiler_features[feature]
+        except IndexError:
+            pass
 
+from codeop import PyCF_DONT_IMPLY_DEDENT
+from pypy.interpreter.error import OperationError
+
+from pypy.tool import stdlib___future__ as future
+
+class FutureFlags(object):
+    def __init__(self, version):
+        compiler_flags = 0
+        self.compiler_features = {}
+        self.mandatory_flags = 0
+        for fname in future.all_feature_names:
+            feature = getattr(future, fname)
+            if version >= feature.getOptionalRelease():
+                flag = feature.compiler_flag
+                compiler_flags |= flag
+                self.compiler_features[fname] = flag
+            if version >= feature.getMandatoryRelease():
+                self.mandatory_flags |= feature.compiler_flag
+        self.allowed_flags = compiler_flags | PyCF_DONT_IMPLY_DEDENT
+
+    def get_flag_names(self, space, flags):
+        if flags & ~self.allowed_flags:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("compile(): unrecognized flags"))
+        flag_names = []
+        for name, value in self.compiler_features.items():
+            if flags & value:
+                flag_names.append(name)
+        return flag_names
+
+# XXX This is a hack to deal with the fact that we currently are
+#     using the Python 2.4.1 libraries even when running Python 2.5
+#     and that we have a hacked __future__ module.
+from pypy.config.pypyoption import get_pypy_config
+config = get_pypy_config(translating=False)
+if config.objspace.pyversion == '2.4':
+    futureFlags = FutureFlags((2, 4, 4, 'final', 0))
+else:
+    futureFlags = FutureFlags((2, 5, 0, 'final', 0))
