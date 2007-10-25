@@ -62,7 +62,7 @@ class TokenError(SyntaxError):
         SyntaxError.__init__(self, msg, lineno, offset, line)
         self.token_stack = token_stack
 
-def generate_tokens( parser, lines, flags):
+def generate_tokens(parser, lines, flags):
     """
     This is a rewrite of pypy.module.parser.pytokenize.generate_tokens since
     the original function is not RPYTHON (uses yield)
@@ -147,12 +147,17 @@ def generate_tokens( parser, lines, flags):
             if not line: break
             column = 0
             while pos < max:                   # measure leading whitespace
-                if line[pos] == ' ': column = column + 1
-                elif line[pos] == '\t': column = (column/tabsize + 1)*tabsize
-                elif line[pos] == '\f': column = 0
-                else: break
+                if line[pos] == ' ':
+                    column = column + 1
+                elif line[pos] == '\t':
+                    column = (column / tabsize + 1) * tabsize
+                elif line[pos] == '\f':
+                    column = 0
+                else:
+                    break
                 pos = pos + 1
-            if pos == max: break
+            if pos == max:
+                break
 
             if line[pos] in '#\r\n':           # skip comments or blank lines
                 if line[pos] == '#':
@@ -270,9 +275,10 @@ def generate_tokens( parser, lines, flags):
                 start = whiteSpaceDFA.recognize(line, pos)
                 if start < 0:
                     start = pos
-                if start<max and line[start] in single_quoted:
-                    raise TokenError("EOL while scanning single-quoted string", line,
-                             (lnum, start), token_list)
+                if start < max and line[start] in single_quoted:
+                    raise TokenError(
+                        'EOL while scanning single-quoted string', line,
+                        x(lnum, start), token_list)
                 tok = Token(parser, parser.tokens['ERRORTOKEN'], line[pos])
                 token_list.append((tok, line, lnum, pos))
                 last_comment = ''
@@ -280,16 +286,20 @@ def generate_tokens( parser, lines, flags):
 
     lnum -= 1
     if not (flags & PyCF_DONT_IMPLY_DEDENT):
-        if token_list and token_list[-1][0].codename != parser.tokens['NEWLINE']:
-            token_list.append((Token(parser, parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
+        if (token_list and
+            token_list[-1][0].codename != parser.tokens['NEWLINE']):
+            token_list.append(
+                (Token(parser, parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
+            
         for indent in indents[1:]:                # pop remaining indent levels
             tok = Token(parser, parser.tokens['DEDENT'], '')
             token_list.append((tok, line, lnum, pos))
     #if token_list and token_list[-1][0].codename != pytoken.NEWLINE:
-    token_list.append((Token(parser, parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
+    token_list.append(
+        (Token(parser, parser.tokens['NEWLINE'], ''), '\n', lnum, 0))
 
-    tok = Token(parser, parser.tokens['ENDMARKER'], '',)
-    token_list.append((tok, line, lnum, pos))
+    token_list.append(
+        (Token(parser, parser.tokens['ENDMARKER'], '',), line, lnum, pos))
     #for t in token_list:
     #    print '%20s  %-25s %d' % (pytoken.tok_name.get(t[0].codename, '?'), t[0], t[-2])
     #print '----------------------------------------- pyparser/pythonlexer.py'
@@ -297,7 +307,7 @@ def generate_tokens( parser, lines, flags):
 
 
 class PythonSourceContext(AbstractContext):
-    def __init__(self, pos ):
+    def __init__(self, pos):
         self.pos = pos
 
 class PythonSource(TokenSource):
@@ -307,7 +317,7 @@ class PythonSource(TokenSource):
         #self.parser = parser
         
         self.input = strings
-        tokens = generate_tokens( parser, strings, flags)
+        tokens = generate_tokens(parser, strings, flags)
         self.token_stack = tokens
         self._current_line = '' # the current line (as a string)
         self._lineno = -1
