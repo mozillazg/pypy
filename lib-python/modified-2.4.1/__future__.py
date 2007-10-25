@@ -62,7 +62,7 @@ __all__ = ["all_feature_names"] + all_feature_names
 # they're not exported in __all__, because they don't really belong to
 # this module.
 CO_NESTED            = 0x0010   # nested_scopes
-CO_GENERATOR_ALLOWED = 0        # generators (obsolete, was 0x1000)
+CO_GENERATOR_ALLOWED = 0x0100   # generators
 CO_FUTURE_DIVISION   = 0x2000   # division
 CO_FUTURE_ABSIMPORT  = 0x4000   # absolute_import
 CO_FUTURE_WITH_STATEMENT  = 0x8000   # with statement
