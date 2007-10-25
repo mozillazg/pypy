@@ -1,4 +1,4 @@
-from grammar import Token, GrammarProxy
+from grammar import Token, EmptyToken, GrammarProxy
 from grammar import AbstractBuilder, AbstractContext
 
 
@@ -72,7 +72,7 @@ class NameToken(Token):
         """
         if not isinstance(other, Token):
             raise RuntimeError("Unexpected token type")
-        if other is self.parser.EmptyToken:
+        if other is EmptyToken:
             return False
         if other.codename != self.codename:
             return False
@@ -93,7 +93,7 @@ class EBNFBuilderContext(AbstractContext):
 class EBNFBuilder(AbstractBuilder):
     """Build a grammar tree"""
     def __init__(self, gram_parser, dest_parser):
-        AbstractBuilder.__init__(self, dest_parser)
+        AbstractBuilder.__init__(self)
         self.gram = gram_parser
         self.rule_stack = []
         self.seqcounts = [] # number of items in the current sequence
@@ -105,9 +105,12 @@ class EBNFBuilder(AbstractBuilder):
         self.current_rule_name = ""
         self.tokens = {}
         self.keywords = []
-        NAME = dest_parser.add_token('NAME')
+        NAME = dest_parser.add_token(Token(dest_parser, 'NAME'))
         # NAME = dest_parser.tokens['NAME']
         self.tokens[NAME] = NameToken(dest_parser, keywords=self.keywords)
+
+        # XXX Temporary. We should be able to get rid of it later
+        self.parser = dest_parser
 
     def context(self):
         return EBNFBuilderContext(len(self.rule_stack), self.seqcounts, self.altcounts)

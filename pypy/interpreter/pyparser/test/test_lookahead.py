@@ -1,7 +1,7 @@
-from pypy.interpreter.pyparser.grammar import Alternative, Sequence, KleeneStar, \
-     Token, Parser
+from pypy.interpreter.pyparser.grammar import Alternative,\
+     Sequence, KleeneStar, Token, EmptyToken, Parser
 
-class TestLookAheadBasics:
+class TestLookAheadBasics(object):
 
     def setup_method(self, method):
         self.parser = Parser()
@@ -31,7 +31,7 @@ class TestLookAheadBasics:
         kstar2 = self.parser.KleeneStar_n("k2", 0, 3, tok1)
         self.parser.build_first_sets()
         assert kstar1.first_set == [tok1]
-        assert kstar2.first_set == [tok1, self.parser.EmptyToken]
+        assert kstar2.first_set == [tok1, EmptyToken]
 
 
     def test_maybe_empty_sequence(self):
@@ -43,7 +43,7 @@ class TestLookAheadBasics:
         k2 = self.parser.KleeneStar_n("k2", 0, 2, tok2)
         seq = self.parser.Sequence_n( "seq", [k1, k2])
         self.parser.build_first_sets()
-        assert seq.first_set == [tok1, tok2, self.parser.EmptyToken]
+        assert seq.first_set == [tok1, tok2, EmptyToken]
 
 
     def test_not_empty_sequence(self):
@@ -68,7 +68,7 @@ class TestLookAheadBasics:
 
 
 
-class TestLookAhead:
+class TestLookAhead(object):
 
      def setup_method(self, method):
          p = self.parser = Parser()
@@ -86,7 +86,7 @@ class TestLookAhead:
          p = self.parser
          LOW = p.tokens['LOW']
          CAP = p.tokens['CAP']
-         for s in  [Token(p, LOW, 'low'), p.EmptyToken, Token(p, CAP, 'cap')]:
+         for s in  [Token(p, LOW, 'low'), EmptyToken, Token(p, CAP, 'cap')]:
              assert s in self.A.first_set
              assert s in self.B.first_set
              assert s in self.C.first_set

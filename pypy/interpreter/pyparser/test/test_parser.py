@@ -1,5 +1,5 @@
 from pypy.interpreter.pyparser.asthelper import get_atoms
-from pypy.interpreter.pyparser.grammar import Parser
+from pypy.interpreter.pyparser.grammar import Parser, Token
 from pypy.interpreter.pyparser import error
 from fakes import FakeSpace
 
@@ -7,7 +7,7 @@ from fakes import FakeSpace
 def test_symbols():
     p = Parser()
     x1 = p.add_symbol('sym')
-    x2 = p.add_token('tok')
+    x2 = p.add_token(Token(p, 'tok'))
     x3 = p.add_anon_symbol(':sym')
     x4 = p.add_anon_symbol(':sym1')
     # test basic numbering assumption
@@ -20,7 +20,7 @@ def test_symbols():
     assert x3 < 0
     y1 = p.add_symbol('sym')
     assert y1 == x1
-    y2 = p.add_token('tok')
+    y2 = p.add_token(Token(p, 'tok'))
     assert y2 == x2
     y3 = p.add_symbol(':sym')
     assert y3 == x3

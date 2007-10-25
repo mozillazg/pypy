@@ -1099,10 +1099,11 @@ class AstBuilderContext(AbstractContext):
         self.d = len(rule_stack)
 
 class AstBuilder(BaseGrammarBuilder):
-    """A builder that directly produce the AST"""
+    """A builder that directly produces the AST"""
 
     def __init__(self, parser, grammar_version, debug=0, space=None):
-        BaseGrammarBuilder.__init__(self, parser, debug)
+        BaseGrammarBuilder.__init__(self, debug)
+        self.parser = parser
         self.rule_stack = []
         self.space = space
         self.source_encoding = None

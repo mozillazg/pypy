@@ -11,7 +11,8 @@ from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.pythonlexer import Source, match_encoding_declaration
 from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
-import pypy.interpreter.pyparser.pysymbol as pysymbol
+# XXX seems dead
+#import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
 import pypy.interpreter.pyparser.ebnfparse as ebnfparse
 from pypy.interpreter.pyparser.ebnflexer import GrammarSource
@@ -190,6 +191,7 @@ def translation_target(grammardef):
 ##     grammar.build_first_sets(ebnfbuilder.all_rules)
 ##     return space.wrap( ebnfbuilder.root_rules )
 
+# XXX Unused?
 def grammar_rules( space ):
     w_rules = space.newdict()
     parser = make_pyparser(space.config.objspace.pyversion)
