@@ -1,5 +1,4 @@
 from pypy.interpreter.error import OperationError, debug_print
-import pypy.interpreter.pyparser.pythonparse
 
 from pypy.interpreter.mixedmodule import MixedModule 
 
