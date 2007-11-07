@@ -4,7 +4,7 @@ class AppTestDotnet:
     def setup_class(cls):
         # XXX the zipimport below is nonsense, of course, but leaving
         # it out crashes
-        space = gettestobjspace(usemodules=('clr', 'zipimport'))
+        space = gettestobjspace(usemodules=('clr', ))
         cls.space = space
 
     def test_import_hook_simple(self):
