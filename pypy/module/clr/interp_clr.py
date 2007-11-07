@@ -188,6 +188,9 @@ def load_cli_class(space, namespace, classname):
 
        - classname: the name of the class in the specified namespace
          (e.g. ``ArrayList``).    """
+    #import sys
+    #for module in sys.modules:
+    #    print "mod ----> %s"%module
     fullname = '%s.%s' % (namespace, classname)
     w_cls = CliClassCache.get(fullname)
     if w_cls is None:
