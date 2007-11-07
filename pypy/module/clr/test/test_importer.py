@@ -2,7 +2,9 @@ from pypy.conftest import gettestobjspace
 
 class AppTestDotnet:
     def setup_class(cls):
-        space = gettestobjspace(usemodules=('clr',))
+        # XXX the zipimport below is nonsense, of course, but leaving
+        # it out crashes
+        space = gettestobjspace(usemodules=('clr', 'zipimport'))
         cls.space = space
 
     def test_import_hook_simple(self):
