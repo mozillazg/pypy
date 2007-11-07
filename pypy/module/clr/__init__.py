@@ -7,7 +7,7 @@ class Module(MixedModule):
     """CLR module"""
 
     appleveldefs = {
-        #'dotnetimporter': 'app_importer.importer'
+        'dotnetimporter': 'app_importer.importer'
         }
     
     interpleveldefs = {
@@ -19,5 +19,5 @@ class Module(MixedModule):
     def setup_after_space_initialization(self):
         self.space.appexec([self], """(clr_module):
             import sys
-            #sys.meta_path.append(clr_module.dotnetimporter())
+            sys.meta_path.append(clr_module.dotnetimporter())
             """)

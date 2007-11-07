@@ -17,19 +17,25 @@ class loader(object):
         self.Names = [] 
 
     def load_module(self, fullname):
-        try:
-            return sys.modules[fullname]
-        except KeyError:
-            pass
+       
+        # Now since the module was not found .. Call the Loader and load it.
+        if fullname == "System.Math":
+            import clr
+            return clr.load_cli_class('System','Math')
+
+        if fullname == "System.Collections.ArrayList":
+            import clr
+            return clr.load_cli_class('System.Collections','ArrayList')
+
         # Now create a new module and append it at the end of the sys.modules list
         mod = imp.new_module(fullname)
         mod.__file__ = "<%s>" % self.__class__.__name__
         mod.__loader__ = self
         mod.__name__ = fullname
-        '''#if ispkg:
-        if :
-            mod.__path__ = []
-        exec code in mod.__dict__'''
+        #if ispkg:
+        #if :
+        #    mod.__path__ = []
+        #exec code in mod.__dict__'''
 
         # add it to the modules list
         sys.modules[fullname] = mod
@@ -50,8 +56,7 @@ class importer(object):
             return sys.modules[fullname]
         except KeyError:
             pass
-       
-        # Now since the module was not found .. Call the Loader and load it.
+
         try:
             return self.loader
         except ImportError:
