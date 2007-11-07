@@ -9,5 +9,6 @@ class AppTestDotnet:
 
     def test_import_hook_simple(self):
         import clr
+        import System.Math
         # import System.Math ...
 
