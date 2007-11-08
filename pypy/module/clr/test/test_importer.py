@@ -10,7 +10,7 @@ class AppTestDotnet:
         import System.Math
 
         assert System.Math.Abs(-5) == -5
-        assert System.Math.Pow(2,5) == 2**5
+        assert System.Math.Pow(2, 5) == 2**5
 
         # import System.Math ...
 
