@@ -9,8 +9,8 @@ class AppTestDotnet:
         import clr
         import System.Math
 
-        print " abs(-5) = %s"%System.Math.Abs(-5)
-        print " 2^5     = %s"%System.Math.Pow(2,5)
+        assert System.Math.Abs(-5) == -5
+        assert System.Math.Pow(2,5) == 2**5
 
         # import System.Math ...
 
