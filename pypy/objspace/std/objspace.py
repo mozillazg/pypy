@@ -525,14 +525,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newslice(self, w_start, w_end, w_step):
         return W_SliceObject(w_start, w_end, w_step)
 
-    def newstring(self, chars_w):
-        try:
-            chars = [chr(self.int_w(w_c)) for w_c in chars_w]
-        except ValueError:  # chr(out-of-range)
-            raise OperationError(self.w_ValueError,
-                                 self.wrap("character code not in range(256)"))
-        return self.wrap(''.join(chars))
-
     def newseqiter(self, w_obj):
         return W_SeqIterObject(w_obj)
 

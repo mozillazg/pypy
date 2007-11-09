@@ -57,7 +57,6 @@ def setup():
         'is_w': 2,
         'newtuple': 0,
         'newlist': 0,
-        'newstring': 0,
         'newdict': 0,
         'newslice': 0,
         'call_args': 1,
