@@ -21,9 +21,6 @@ class AppTestUnicodeString:
         check(u'a' + 'b', u'ab')
         check('a' + u'b', u'ab')
 
-    def test_hash(self):
-        assert hash(u'') == 0
-        
     def test_join(self):
         def check(a, b):
             assert a == b
@@ -277,4 +274,63 @@ class AppTestUnicodeString:
             assert 'need string or buffer' in str(t)
         else:
             raise Exception("DID NOT RAISE")
+
+    def test_startswith(self):
+        assert u'ab'.startswith(u'ab') is True
+        assert u'ab'.startswith(u'a') is True
+        assert u'ab'.startswith(u'') is True
+        assert u'x'.startswith(u'a') is False
+        assert u'x'.startswith(u'x') is True
+        assert u''.startswith(u'') is True
+        assert u''.startswith(u'a') is False
+        assert u'x'.startswith(u'xx') is False
+        assert u'y'.startswith(u'xx') is False
+
+    def test_startswith_more(self):
+        assert u'ab'.startswith(u'a', 0) is True
+        assert u'ab'.startswith(u'a', 1) is False
+        assert u'ab'.startswith(u'b', 1) is True
+        assert u'abc'.startswith(u'bc', 1, 2) is False
+        assert u'abc'.startswith(u'c', -1, 4) is True
+
+    def test_startswith_tuples(self):
+        assert u'hello'.startswith((u'he', u'ha'))
+        assert not u'hello'.startswith((u'lo', u'llo'))
+        assert u'hello'.startswith((u'hellox', u'hello'))
+        assert not u'hello'.startswith(())
+        assert u'helloworld'.startswith((u'hellowo', u'rld', u'lowo'), 3)
+        assert not u'helloworld'.startswith((u'hellowo', u'ello', u'rld'), 3)
+        assert u'hello'.startswith((u'lo', u'he'), 0, -1)
+        assert not u'hello'.startswith((u'he', u'hel'), 0, 1)
+        assert u'hello'.startswith((u'he', u'hel'), 0, 2)
+        raises(TypeError, u'hello'.startswith, (42,))
+    
+    def test_endswith(self):
+        assert u'ab'.endswith(u'ab') is True
+        assert u'ab'.endswith(u'b') is True
+        assert u'ab'.endswith(u'') is True
+        assert u'x'.endswith(u'a') is False
+        assert u'x'.endswith(u'x') is True
+        assert u''.endswith(u'') is True
+        assert u''.endswith(u'a') is False
+        assert u'x'.endswith(u'xx') is False
+        assert u'y'.endswith(u'xx') is False
+
+    def test_endswith_more(self):
+        assert u'abc'.endswith(u'ab', 0, 2) is True
+        assert u'abc'.endswith(u'bc', 1) is True
+        assert u'abc'.endswith(u'bc', 2) is False
+        assert u'abc'.endswith(u'b', -3, -1) is True
+
+    def test_endswith_tuple(self):
+        assert not u'hello'.endswith((u'he', u'ha'))
+        assert u'hello'.endswith((u'lo', u'llo'))
+        assert u'hello'.endswith((u'hellox', u'hello'))
+        assert not u'hello'.endswith(())
+        assert u'helloworld'.endswith((u'hellowo', u'rld', u'lowo'), 3)
+        assert not u'helloworld'.endswith((u'hellowo', u'ello', u'rld'), 3, -1)
+        assert u'hello'.endswith((u'hell', u'ell'), 0, -1)
+        assert not u'hello'.endswith((u'he', u'hel'), 0, 1)
+        assert u'hello'.endswith((u'he', u'hell'), 0, 4)
+        raises(TypeError, u'hello'.endswith, (42,))
 
