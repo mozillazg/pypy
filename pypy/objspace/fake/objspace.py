@@ -88,7 +88,6 @@ class FakeObjSpace(ObjSpace):
     str_w             = str_dummy
     call_args         = make_dummy()
     new_interned_str  = make_dummy()
-    newstring         = make_dummy()
     newint            = make_dummy()
     newlong           = make_dummy()
     newfloat          = make_dummy()

@@ -230,13 +230,6 @@ class CPyObjSpace(baseobjspace.ObjSpace):
         PyString_InternInPlace(byref(w_s))
         return w_s
 
-    def newstring(self, bytes_w):
-        length = len(bytes_w)
-        buf = ctypes.create_string_buffer(length)
-        for i in range(length):
-            buf[i] = chr(self.int_w(bytes_w[i]))
-        return PyString_FromStringAndSize(buf, length)
-
     def newint(self, intval):
         return PyInt_FromLong(intval)
 

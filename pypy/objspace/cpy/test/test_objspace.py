@@ -49,9 +49,9 @@ def test_exception():
     w2 = space.wrap(11)
     raises_w(space, space.w_TypeError, space.sub, w1, w2)
 
-def test_newstring():
+def test_wrapstring():
     space = CPyObjSpace()
-    w = space.newstring([space.wrap(65), space.wrap(66)])
+    w = space.wrap('AB')
     assert space.str_w(w) == 'AB'
 
 def test_wrapunicode():

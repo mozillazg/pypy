@@ -1036,7 +1036,6 @@ ObjSpace.ExceptionTable = [
 #                              is_true(w_x) -> True or False
 #                  newtuple([w_1, w_2,...]) -> w_tuple
 #                   newlist([w_1, w_2,...]) -> w_list
-#                 newstring([w_1, w_2,...]) -> w_string from ascii numbers (bytes)
 #                                 newdict() -> empty w_dict
 #           newslice(w_start,w_stop,w_step) -> w_slice
 #              call_args(w_obj,Arguments()) -> w_result
@@ -1055,7 +1054,6 @@ ObjSpace.IrregularOpTable = [
     'is_w',
     'newtuple',
     'newlist',
-    'newstring',
     'newdict',
     'newslice',
     'call_args',
