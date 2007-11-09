@@ -1,4 +1,6 @@
-# NOT_RPYTHON
+# NOT_RPYTHON   -- flowing results in
+# AttributeError:   << 'FlowObjSpace' object has no attribute 'w_AttributeError'
+# XXX investigate!
 """
 The 'sys' module.
 """
@@ -44,3 +46,17 @@ def callstats():
     """Not implemented."""
     return None
 
+defaultencoding = 'ascii'
+
+def getdefaultencoding():
+    """Return the current default string encoding used by the Unicode 
+implementation."""
+    return defaultencoding
+
+def setdefaultencoding(encoding):
+    """Set the current default string encoding used by the Unicode 
+implementation."""
+    global defaultencoding
+    import codecs
+    codecs.lookup(encoding)
+    defaultencoding = encoding

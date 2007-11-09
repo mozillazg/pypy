@@ -14,9 +14,6 @@ def throwOverflowError():
 def throwValueError():
     raise ValueError
 
-def throwUnicodeDecodeError():
-    raise UnicodeDecodeError
-
 # ___________________________________________________________________________
 
 def create_interlink_node(db):

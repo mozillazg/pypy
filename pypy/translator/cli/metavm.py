@@ -55,7 +55,7 @@ class _CallMethod(_Call):
                 generator.load(arg)
 
         # XXX: very hackish, need refactoring
-        if this.concretetype in (ootype.String, ootype.Unicode):
+        if this.concretetype is ootype.String:
             # special case for string: don't use methods, but plain functions
             METH = this.concretetype._METHODS[method_name]
             cts = generator.cts
@@ -94,6 +94,17 @@ class _RuntimeNew(MicroInstruction):
         generator.load(op.args[0])
         generator.call_signature('object [pypylib]pypy.runtime.Utils::RuntimeNew(class [mscorlib]System.Type)')
         generator.cast_to(op.result.concretetype)
+
+class _OOString(MicroInstruction):
+    def render(self, generator, op):
+        ARGTYPE = op.args[0].concretetype
+        if isinstance(ARGTYPE, ootype.Instance):
+            argtype = 'object'
+        else:
+            argtype = generator.cts.lltype_to_cts(ARGTYPE)
+        generator.load(op.args[0])
+        generator.load(op.args[1])
+        generator.call_signature('string [pypylib]pypy.runtime.Utils::OOString(%s, int32)' % argtype)
 
 class _NewCustomDict(MicroInstruction):
     def render(self, generator, op):
@@ -214,6 +225,7 @@ Call = _Call()
 CallMethod = _CallMethod()
 IndirectCall = _IndirectCall()
 RuntimeNew = _RuntimeNew()
+OOString = _OOString()
 NewCustomDict = _NewCustomDict()
 #CastWeakAdrToPtr = _CastWeakAdrToPtr()
 Box = _Box()

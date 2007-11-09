@@ -1563,21 +1563,14 @@ def oostring(obj, base):
 
 def oounicode(obj, base):
     """
-    Convert:
-      - an unichar into an unicode string OR
-      - a string into an unicode string
+    Convert an unichar into an unicode string.
 
     base must be -1, for consistency with oostring.
     """
     assert base == -1
-    if isinstance(obj, unicode):
-        assert len(obj) == 1
-        return make_unicode(obj)
-    elif isinstance(obj, _string):
-        s = unicode(obj._str)
-        return make_unicode(s)
-    else:
-        assert False
+    assert isinstance(obj, unicode)
+    assert len(obj) == 1
+    return make_unicode(obj)
 
 def ooparse_int(s, base):
     return int(s._str, base)

@@ -10,43 +10,14 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.translator.llvm.codewriter import CodeWriter
 from pypy.translator.llvm import extfuncnode
-from pypy.translator.llvm.module.support import extfunctions
+from pypy.translator.llvm.module.support import \
+     extdeclarations, extfunctions, extfunctions_standalone, write_raise_exc
 from pypy.translator.llvm.node import Node
 from pypy.translator.llvm.externs2ll import setup_externs, generate_llfile
 from pypy.translator.llvm.gc import GcPolicy
 from pypy.translator.llvm.log import log
-from pypy.rlib.nonconst import NonConstant
-from pypy.annotation.listdef import s_list_of_strings
-from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
-from pypy.annotation import model as annmodel
-from pypy.rpython.lltypesystem import rffi
-
-def augment_entrypoint(translator, entrypoint):
-    bk = translator.annotator.bookkeeper
-    graph_entrypoint = bk.getdesc(entrypoint).getuniquegraph()
-    s_result = translator.annotator.binding(graph_entrypoint.getreturnvar())
-    get_argc = rffi.llexternal('_pypy_getargc', [], rffi.INT)
-    get_argv = rffi.llexternal('_pypy_getargv', [], rffi.CCHARPP)
-
-    def new_entrypoint():
-        argc = get_argc()
-        argv = get_argv()
-        args = [rffi.charp2str(argv[i]) for i in range(argc)]
-        return entrypoint(args)
-
-    entrypoint._annenforceargs_ = [s_list_of_strings]
-    mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
-    graph = mixlevelannotator.getgraph(new_entrypoint, [], s_result)
-    mixlevelannotator.finish()
-
-    from pypy.translator.backendopt.all import backend_optimizations
-    backend_optimizations(translator)
-    
-    return new_entrypoint
 
 class GenLLVM(object):
-    debug = False
-    
     # see create_codewriter() below
     function_count = {}
 
@@ -61,43 +32,19 @@ class GenLLVM(object):
         self.config = translator.config
 
     def gen_source(self, func):
-        self._checkpoint("before gen source")
+        self._checkpoint()
 
         codewriter = self.setup(func)
 
-        codewriter.header_comment("Extern code")
-        codewriter.write_lines(self.llcode)
+        # write top part of llvm file
+        self.write_headers(codewriter)
 
-        codewriter.header_comment("Type declarations")
-        for typ_decl in self.db.gettypedefnodes():
-            typ_decl.writetypedef(codewriter)
+        codewriter.startimpl()
 
-        codewriter.header_comment("Function prototypes")
-        for node in self.db.getnodes():
-            if hasattr(node, 'writedecl'):
-                node.writedecl(codewriter)
+        # write bottom part of llvm file
+        self.write_implementations(codewriter)
 
-        codewriter.header_comment("Prebuilt constants")
-        for node in self.db.getnodes():
-            # XXX tmp
-            if hasattr(node, "writeglobalconstants"):
-                node.writeglobalconstants(codewriter)
-
-        self._checkpoint("before definitions")
-
-        codewriter.header_comment('Suppport definitions')
-        codewriter.write_lines(extfunctions, patch=True)
-
-        codewriter.header_comment('Startup definition')
-        self.write_startup_impl(codewriter)
-
-        codewriter.header_comment("Function definitions")
-        for node in self.db.getnodes():
-            if hasattr(node, 'writeimpl'):
-                node.writeimpl(codewriter)
-
-        self._debug()
-        
+        # write entry point if there is one
         codewriter.comment("End of file")
         codewriter.close()
         self._checkpoint('done')
@@ -110,9 +57,6 @@ class GenLLVM(object):
             create ll file for c file
             create codewriter """
 
-        if self.standalone:
-            func = augment_entrypoint(self.translator, func)
-
         # XXX please dont ask!
         from pypy.translator.c.genc import CStandaloneBuilder
         cbuild = CStandaloneBuilder(self.translator, func, config=self.config)
@@ -120,7 +64,9 @@ class GenLLVM(object):
         c_db = cbuild.generate_graphs_for_llinterp()
 
         self.db = Database(self, self.translator)
-        self.db.gcpolicy = GcPolicy.new(self.db, self.config.translation.gc)
+
+        # XXX hardcoded for now
+        self.db.gcpolicy = GcPolicy.new(self.db, 'boehm')
 
         # get entry point
         entry_point = self.get_entry_point(func)
@@ -152,7 +98,65 @@ class GenLLVM(object):
         self._checkpoint('setup_externs')
 
         return codewriter
-   
+
+    def write_headers(self, codewriter):
+        # write external function headers
+        codewriter.header_comment('External Function Headers')
+        codewriter.write_lines(self.llexterns_header)
+
+        codewriter.header_comment("Type Declarations")
+
+        # write extern type declarations
+        self.write_extern_decls(codewriter)
+        self._checkpoint('write externs type declarations')
+
+        # write node type declarations
+        for typ_decl in self.db.gettypedefnodes():
+            typ_decl.writetypedef(codewriter)
+        self._checkpoint('write data type declarations')
+
+        codewriter.header_comment("Global Data")
+
+        # write pbcs
+        for node in self.db.getnodes():
+            # XXX tmp
+            if hasattr(node, "writeglobalconstants"):
+                node.writeglobalconstants(codewriter)
+        self._checkpoint('write global constants')
+
+        codewriter.header_comment("Function Prototypes")
+
+        # write external protos
+        codewriter.write_lines(extdeclarations, patch=True)
+
+        # write node protos
+        for node in self.db.getnodes():
+            if hasattr(node, 'writedecl'):
+                node.writedecl(codewriter)
+
+        self._checkpoint('write function prototypes')
+
+    def write_implementations(self, codewriter):
+        codewriter.header_comment("Function Implementation")
+
+        # write external function implementations
+        codewriter.header_comment('External Function Implementation')
+        codewriter.write_lines(self.llexterns_functions)
+        codewriter.write_lines(extfunctions, patch=True)
+        if self.standalone:
+            codewriter.write_lines(extfunctions_standalone, patch=True)
+        self.write_extern_impls(codewriter)
+        self.write_setup_impl(codewriter)
+        
+        self._checkpoint('write support implentations')
+
+        # write all node implementations
+        for node in self.db.getnodes():
+            if hasattr(node, 'writeimpl'):
+                node.writeimpl(codewriter)
+
+        self._checkpoint('write node implementations')
+    
     def get_entry_point(self, func):
         assert func is not None
         self.entrypoint = func
@@ -187,13 +191,14 @@ class GenLLVM(object):
             for source in sources:
                 c_sources[source] = True
 
-        self.llcode = generate_llfile(self.db,
-                                      self.extern_decls,
-                                      self.entrynode,
-                                      c_includes,
-                                      c_sources,
-                                      self.standalone, 
-                                      codewriter.cconv)
+        self.llexterns_header, self.llexterns_functions = \
+                               generate_llfile(self.db,
+                                               self.extern_decls,
+                                               self.entrynode,
+                                               c_includes,
+                                               c_sources,
+                                               self.standalone, 
+                                               codewriter.cconv)
 
     def create_codewriter(self):
         # prevent running the same function twice in a test
@@ -203,8 +208,24 @@ class GenLLVM(object):
             return CodeWriter(f, self.db), filename
         else:
             return CodeWriter(f, self.db, cconv='ccc', linkage=''), filename
+
+    def write_extern_decls(self, codewriter):        
+        for c_name, obj in self.extern_decls:
+            if isinstance(obj, lltype.LowLevelType):
+                if isinstance(obj, lltype.Ptr):
+                    obj = obj.TO
+
+                l = "%%%s = type %s" % (c_name, self.db.repr_type(obj))
+                codewriter.write_lines(l)
                 
-    def write_startup_impl(self, codewriter):
+    def write_extern_impls(self, codewriter):
+        for c_name, obj in self.extern_decls:
+            if c_name.startswith("RPyExc_"):
+                c_name = c_name[1:]
+                exc_repr = self.db.repr_constant(obj)[1]
+                write_raise_exc(c_name, exc_repr, codewriter)
+
+    def write_setup_impl(self, codewriter):
         open_decl =  "i8* @LLVM_RPython_StartupCode()"
         codewriter.openfunc(open_decl)
         for node in self.db.getnodes():
@@ -261,13 +282,3 @@ class GenLLVM(object):
         for s in stats:
             log('STATS %s' % str(s))
 
-    def _debug(self):
-        if self.debug:
-            if self.db.debugstringnodes:            
-                codewriter.header_comment("Debug string")
-                for node in self.db.debugstringnodes:
-                    node.writeglobalconstants(codewriter)
-
-            #print "Start"
-            #print self.db.dump_pbcs()
-            #print "End"

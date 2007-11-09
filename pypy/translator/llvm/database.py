@@ -6,12 +6,12 @@ from pypy.translator.llvm.log import log
 from pypy.translator.llvm.typedefnode import create_typedef_node
 
 from pypy.translator.llvm.funcnode import FuncImplNode
-from pypy.translator.llvm.extfuncnode import ExternalFuncNode
+from pypy.translator.llvm.extfuncnode import ExternalFuncNode, SimplerExternalFuncNode
 from pypy.translator.llvm.opaquenode import OpaqueNode, ExtOpaqueNode
 from pypy.translator.llvm.structnode import StructNode, StructVarsizeNode, \
      getindexhelper,  FixedSizeArrayNode
 from pypy.translator.llvm.arraynode import ArrayNode, StrArrayNode, \
-     VoidArrayNode, ArrayNoLengthNode, DebugStrNode
+     VoidArrayNode, ArrayNoLengthNode
      
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.objspace.flow.model import Constant, Variable
@@ -29,6 +29,7 @@ class Database(object):
         self.obj2node = {}
         self._pendingsetup = []
         self._tmpcount = 1
+        self.helper2ptr = {}
 
         self.primitives = Primitives(self)
 
@@ -37,34 +38,25 @@ class Database(object):
         self.typedefnodes = []
         self.containernodes = []
 
-        self.debugstringnodes = []
-
-
     #_______debuggging______________________________________
 
     def dump_pbcs(self):
         r = ""
         for k, v in self.obj2node.iteritems():
-
-            if isinstance(v, FuncImplNode):
-                continue
             
             if isinstance(k, lltype.LowLevelType):
                 continue
 
             assert isinstance(lltype.typeOf(k), lltype.ContainerType)
-            
             # Only dump top levels
             p, _ = lltype.parentlink(k)
-            ref = v.get_ref()
-            type_ = self.repr_type(lltype.Ptr(lltype.typeOf(k)))
-            pbc_ref = v.get_pbcref(type_)
+            if p is None:
+                ref = v.get_ref()
+                pbc_ref = v.get_ref()
                 
-            r += "\ndump_pbcs %s (%s)\n" \
-                 "parent %s\n" \
-                 "type %s\n" \
-                 "getref -> %s \n" \
-                 "pbcref -> %s \n" % (v, k, p, type_, ref, pbc_ref)
+                r += "\ndump_pbcs %s (%s)\n" \
+                     "getref -> %s \n" \
+                     "pbcref -> %s \n" % (v, k, ref, pbc_ref)
         return r
     
     #_______setting up and preparation______________________________
@@ -72,10 +64,13 @@ class Database(object):
     def create_constant_node(self, type_, value):
         node = None
         if isinstance(type_, lltype.FuncType):
-            if hasattr(value, '_external_name'):
-                node = ExternalFuncNode(self, value, value._external_name)
-            elif getattr(value, 'external', None) == 'C':
+            if getattr(value._callable, "suggested_primitive", False):
                 node = ExternalFuncNode(self, value)
+            elif hasattr(value, '_external_name'):
+                node = ExternalFuncNode(self, value, value._external_name)
+
+            elif getattr(value, 'external', None) == 'C':
+                node = SimplerExternalFuncNode(self, value)
             else:
                 node = FuncImplNode(self, value)
 
@@ -100,7 +95,7 @@ class Database(object):
                     node = ArrayNode(self, value)
 
         elif isinstance(type_, lltype.OpaqueType):
-            if type_.hints.get('render_structure', False):
+            if hasattr(type_, '_exttypeinfo'):
                 node = ExtOpaqueNode(self, value)
             else:
                 node = OpaqueNode(self, value)
@@ -250,7 +245,11 @@ class Database(object):
                 return self.primitives.repr(arg.concretetype, arg.value)
             else:
                 assert isinstance(arg.value, lltype._ptr)
-                if not arg.value:
+                if isinstance(arg.value._obj, int):
+                    rt = self.repr_type(arg.concretetype)
+                    v = repr(arg.value._obj)
+                    return 'cast (int %s to %s)' % (v, rt)
+                elif not arg.value:
                     return 'null'
                 else:
                     node = self.obj2node[arg.value._obj]
@@ -299,6 +298,9 @@ class Database(object):
             if value is None:
                 return None, "%s null" % toptr
 
+            if isinstance(value, int):
+                return None, '%s cast (int %s to %s)' % (toptr, value, toptr)
+
             node = self.obj2node[value]
             ref = node.get_pbcref(toptr)
             return node, "%s %s" % (toptr, ref)
@@ -325,6 +327,9 @@ class Database(object):
     def get_machine_word(self):
         return self.primitives[lltype.Signed]
 
+    def get_machine_uword(self):
+        return self.primitives[lltype.Unsigned]
+
     def is_function_ptr(self, arg):
         if isinstance(arg, (Constant, Variable)): 
             arg = arg.concretetype 
@@ -337,10 +342,6 @@ class Database(object):
         node = self.obj2node[parent]
         return node.get_childref(child)
 
-    def create_debug_string(self, s):
-        r = DebugStrNode(s)
-        self.debugstringnodes.append(r)
-        return r
 
 class Primitives(object):
     def __init__(self, database):        
@@ -355,7 +356,7 @@ class Primitives(object):
             lltype.UnsignedLongLong: "i64",
             lltype.SignedLongLong: "i64",
             llmemory.Address: "i8*",
-            #XXX llmemory.WeakGcAddress: "i8*",
+            #llmemory.WeakGcAddress: "sbyte*",
             }
 
         # 32 bit platform
@@ -428,6 +429,7 @@ class Primitives(object):
   
     def repr_char(self, type_, value):
         x = ord(value)
+        print x
         if x >= 128:
             # XXX check this really works
             r = "trunc (i16 %s to i8)" % x
@@ -461,6 +463,7 @@ class Primitives(object):
     def repr_singlefloat(self, type_, value):
         from pypy.rlib.rarithmetic import isinf, isnan
         
+        # XXX this doesnt work on 1.9 -> only hex repr supported for single floats
         f = float(value)
         if isinf(f) or isnan(f):
             import struct
@@ -470,9 +473,7 @@ class Primitives(object):
             assert len(packed) == 4
             repr =  "0x" + "".join([("%02x" % ord(ii)) for ii in packed])
         else:
-            #repr = "%f" % f
-            # XXX work around llvm2.1 bug, seems it doesnt like constants for floats
-            repr = "fptrunc(double %f to float)" % f
+            repr = "%f" % f
             
             # llvm requires a . when using e notation
             if "e" in repr and "." not in repr:
@@ -527,7 +528,7 @@ class Primitives(object):
         return repr
     
     def repr_offset(self, value):
-        from_, indices, to = self.get_offset(value, [])
+        from_, indices, to = self.get_offset(value)
 
         # void array special cases
         if isinstance(from_, lltype.Array) and from_.OF is lltype.Void:
@@ -552,15 +553,13 @@ class Primitives(object):
                                                                      r(from_),
                                                                      indices_as_str)
 
-    def get_offset(self, value, indices):
+    def get_offset(self, value, initialindices=None):
         " return (from_type, (indices, ...), to_type) "
-
         word = self.database.get_machine_word()
+        uword = self.database.get_machine_uword()
+        indices = initialindices or [(word, 0)]
 
         if isinstance(value, llmemory.ItemOffset):
-            if not indices:
-                indices.append((word, 0))
-            
             # skips over a fixed size item (eg array access)
             from_ = value.TYPE
             lasttype, lastvalue = indices[-1]
@@ -569,42 +568,26 @@ class Primitives(object):
             to = value.TYPE
         
         elif isinstance(value, llmemory.FieldOffset):
-            if not indices:
-                indices.append((word, 0))
-
             # jumps to a field position in a struct
             from_ = value.TYPE
             pos = getindexhelper(value.fldname, value.TYPE)
-            indices.append((word, pos))
+            indices.append((uword, pos))
             to = getattr(value.TYPE, value.fldname)            
 
         elif isinstance(value, llmemory.ArrayLengthOffset):
-            assert not value.TYPE._hints.get("nolength", False)
-
-            if not indices:
-                indices.append((word, 0))
-
             # jumps to the place where the array length is stored
             from_ = value.TYPE     # <Array of T> or <GcArray of T>
             assert isinstance(value.TYPE, lltype.Array)
-            indices.append((word, 0))
+            if not value.TYPE._hints.get("nolength", False):
+                indices.append((uword, 0))
             to = lltype.Signed
 
         elif isinstance(value, llmemory.ArrayItemsOffset):
-            if not indices:
-                if isinstance(value.TYPE, lltype.Array) and value.TYPE._hints.get("nolength", False):
-                    pass
-                else:
-                    indices.append((word, 0))
-                    
             # jumps to the beginning of array area
             from_ = value.TYPE
             if not isinstance(value.TYPE, lltype.FixedSizeArray) and not value.TYPE._hints.get("nolength", False):
-                indices.append((word, 1))
-                indices.append((word, 0)) # go to the 1st item
-            if isinstance(value.TYPE, lltype.FixedSizeArray):
-                indices.append((word, 0)) # go to the 1st item
-                            
+                indices.append((uword, 1))
+            indices.append((word, 0))    # go to the 1st item
             to = value.TYPE.OF
 
         elif isinstance(value, llmemory.CompositeOffset):

@@ -87,7 +87,7 @@ class LowLevelDatabase(object):
                     node = BareBoneArrayDefNode(self, T, varlength)
                 else:
                     node = ArrayDefNode(self, T, varlength)
-            elif isinstance(T, OpaqueType) and T.hints.get("render_structure", False):
+            elif isinstance(T, OpaqueType) and hasattr(T, '_exttypeinfo'):
                 node = ExtTypeOpaqueDefNode(self, T)
             elif T == WeakRef:
                 REALT = self.gcpolicy.get_real_weakref_type()
@@ -134,7 +134,8 @@ class LowLevelDatabase(object):
         elif isinstance(T, OpaqueType):
             if T == RuntimeTypeInfo:
                 return  self.gcpolicy.rtti_type()
-            elif T.hints.get("render_structure", False):
+            elif hasattr(T, '_exttypeinfo'):
+                # for external types (pypy.rpython.extfunctable.declaretype())
                 node = self.gettypedefnode(T, varlength=varlength)
                 if who_asks is not None:
                     who_asks.dependencies[node] = True

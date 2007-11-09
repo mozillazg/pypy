@@ -1,4 +1,3 @@
-import py
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.rstr import string_repr
 from pypy.rpython.test.test_llinterp import interpret 
@@ -27,17 +26,3 @@ def test_constant_repr():
 
     res = interpret(f, [], type_system='ootype')
     assert res._str == 'foo'
-
-def test_oounicode():
-    u = ootype.oounicode(u'a', -1)
-    assert isinstance(u, ootype._string)
-    assert ootype.typeOf(u) is ootype.Unicode
-
-    s = ootype.make_string('a string')
-    u = ootype.oounicode(s, -1)
-    assert isinstance(u, ootype._string)
-    assert ootype.typeOf(u) is ootype.Unicode
-
-    s = ootype.make_string('non-ascii string: \xe0')
-    py.test.raises(UnicodeDecodeError, ootype.oounicode, s, -1)
-    

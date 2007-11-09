@@ -1,4 +1,4 @@
-" THIS IS ONLY FOR TESTING "
+" XXX THIS IS ONLY FOR TESTING XXX "
 
 import py
 import ctypes
@@ -10,6 +10,7 @@ class CtypesModule:
 
     prolog = """
 import ctypes
+from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from os.path import join, dirname, realpath
 
 _c = ctypes.CDLL(join(dirname(realpath(__file__)), "%s"))
@@ -48,28 +49,31 @@ def entrypoint(*args):
 def identity(res):
     return res
 
+def from_unichar(arg):
+    return ord(arg)
+
+def from_float(arg):
+    return ctypes.c_double(arg)
+
+def to_unichar(res):
+    return unichr(res)
+
 def from_str(arg):
+    # XXX wont work over isolate : arg should be converted into a string first
+    n = len(arg.chars)
     class Chars(ctypes.Structure):
         _fields_ = [("size", ctypes.c_int),
-                    ("data", ctypes.c_byte * len(arg))]
+                    ("data", ctypes.c_byte * n)]
+
     class STR(ctypes.Structure):
         _fields_ = [("hash", ctypes.c_int),
                     ("chars", Chars)]
     s = STR()
     s.hash = 0
-    s.chars.size = len(arg)
-    for ii in range(len(arg)):
-        s.chars.data[ii] = ord(arg[ii])
+    s.chars.size = len(arg.chars)
+    for ii in range(s.chars.size):
+        s.chars.data[ii] = ord(arg.chars[ii])
     return ctypes.addressof(s)
-
-def to_r_uint(res):
-    return {'type':'r_uint', 'value':long(res)}
-
-def to_r_longlong(res):
-    return {'type':'r_longlong', 'value':long(res)}
-
-def to_r_ulonglong(res):
-    return {'type':'r_ulonglong', 'value':long(res)}
 
 def to_str(res):
     class Chars(ctypes.Structure):
@@ -86,13 +90,10 @@ def to_str(res):
     else:
         return None
 
-def struct_to_tuple(res, C_TYPE_actions):
+def struct_to_tuple(res, size, C_TYPE, action):
     if res:
-        class S(ctypes.Structure):
-            _fields_ = [("item%%s" %% ii, C_TYPE) for ii, (C_TYPE, _) in enumerate(C_TYPE_actions)]        
-        s = ctypes.cast(res, ctypes.POINTER(S)).contents
-        items = [action(getattr(s, 'item%%s' %% ii)) for ii, (_, action) in enumerate(C_TYPE_actions)]
-        return {'type':'tuple', 'value':tuple(items)}
+        t = ctypes.cast(res, ctypes.POINTER(C_TYPE * size)).contents
+        return {'type':'tuple', 'value':tuple([action(ii) for ii in t])}
     else:
         return None
 
@@ -193,10 +194,10 @@ __entrypoint__.restype = %(returntype)s
             ctype_s.append(self.to_ctype(A))
 
             if A is lltype.UniChar:
-                action = 'ord'
+                action = 'from_unichar'
 
             elif A is lltype.Float:
-                action = 'ctypes.c_double'
+                action = 'from_float'
 
             elif isinstance(A, lltype.Ptr) and A.TO is STR:
                 action = 'from_str'
@@ -216,13 +217,13 @@ __entrypoint__.restype = %(returntype)s
             action = 'unichr'
 
         elif T is lltype.Unsigned:
-            action = 'to_r_uint'
+            action = 'r_uint'
 
         elif T is lltype.SignedLongLong:
-            action = 'to_r_longlong'
+            action = 'r_longlong'
 
         elif T is lltype.UnsignedLongLong:
-            action = 'to_r_ulonglong'
+            action = 'r_ulonglong'
 
         elif isinstance(T, lltype.Ptr) and T.TO is STR:
             action = 'to_str'
@@ -233,9 +234,10 @@ __entrypoint__.restype = %(returntype)s
             if fields:
                 F0, name = fields[0]
                 if name.startswith("item"):
-                    ctype_actions = "%s" % [self.build_lltype_to_ctypes_to_res(f[0]) for f in fields]
-                    ctype_actions = ctype_actions.replace("'", "")
-                    action = self.create_simple_closure('res', 'struct_to_tuple(res, %s)' % (ctype_actions))
+                    _c_type, _action = self.build_lltype_to_ctypes_to_res(F0)
+                    action = self.create_simple_closure('res', 'struct_to_tuple(res, %s, %s, %s)' % (len(fields), 
+                                                                                                     _c_type, 
+                                                                                                     _action))
                 elif name == "length" and fields[1][1] == "items":
                     _c_type, _action = self.build_lltype_to_ctypes_to_res(fields[1][0])
                     action = self.create_simple_closure('res', 'list_to_array(res, %s)' % (_action))

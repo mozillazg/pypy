@@ -16,7 +16,7 @@ from pypy.objspace.flow.model import *
 from pypy.rlib.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
 from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib import objectmodel
-from pypy.objspace.flow.objspace import FlowObjSpace
+from pypy.objspace.flow import FlowObjSpace
 
 from pypy.translator.test import snippet
 
@@ -2961,19 +2961,6 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [unicode, str])
         assert isinstance(s, annmodel.SomeUnicodeCodePoint)
-
-    def test_negative_slice(self):
-        def f(s, e):
-            return [1, 2, 3][s:e]
-
-        a = self.RPythonAnnotator()
-        py.test.raises(TypeError, "a.build_types(f, [int, int])")
-        a.build_types(f, [annmodel.SomeInteger(nonneg=True),
-                          annmodel.SomeInteger(nonneg=True)])
-        def f(x):
-            return x[:-1]
-
-        a.build_types(f, [str])
 
 def g(n):
     return [0,1,2,n]

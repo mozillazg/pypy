@@ -16,6 +16,8 @@ ZIPSEP = '/'
 # note that zipfiles always use slash, but for OSes with other
 # separators, we need to pretend that we had the os.sep.
 
+zip_importer_cache = {}
+
 ENUMERATE_EXTS = unrolling_iterable(
     [(True, True, os.path.sep + '__init__.pyc'),
      (True, True, os.path.sep + '__init__.pyo'),
@@ -165,19 +167,14 @@ class W_ZipImporter(Wrappable):
         return space.wrap(self.name)
 
 def descr_new_zipimporter(space, w_type, name):
-    w_zip_cache = space.getattr(space.getbuiltinmodule('zipimport'),
-                                space.wrap('_zip_directory_cache'))
     try:
-        w_result = space.getitem(w_zip_cache, space.wrap(name))
-        if space.is_w(w_result, space.w_None):
+        result = zip_importer_cache[name]
+        if result is None:
             raise OperationError(space.w_ImportError, space.wrap(
                 "Cannot import %s from zipfile, recursion detected or"
                 "already tried and failed" % (name,)))
-        return w_result
-    except OperationError, o:
-        if not o.match(space, space.w_KeyError):
-            raise
-        space.setitem(w_zip_cache, space.wrap(name), space.w_None)
+    except KeyError:
+        zip_importer_cache[name] = None
     ok = False
     parts = name.split(os.path.sep)
     filename = "" # make annotator happy
@@ -208,9 +205,9 @@ def descr_new_zipimporter(space, w_type, name):
     except OperationError, e: # we catch everything as this function
         raise OperationError(space.w_ImportError, space.wrap(
             "%s seems not to be a zipfile" % (filename,)))
-    w_result = space.wrap(W_ZipImporter(space, name, w_dir, w_zipfile))
-    space.setitem(w_zip_cache, space.wrap(name), w_result)
-    return w_result
+    result = space.wrap(W_ZipImporter(space, name, w_dir, w_zipfile))
+    zip_importer_cache[name] = result
+    return result
     
 descr_new_zipimporter.unwrap_spec = [ObjSpace, W_Root, str]
 
