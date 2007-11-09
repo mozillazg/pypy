@@ -5,6 +5,65 @@ Plain Python definition of the builtin descriptors.
 # Descriptor code, shamelessly stolen from Raymond Hettinger:
 #    http://users.rcn.com/python/download/Descriptor.htm
 
+
+# XXX there is an interp-level pypy.interpreter.function.StaticMethod
+# XXX because __new__ needs to be a StaticMethod early.
+class staticmethod(object):
+    """staticmethod(function) -> static method
+
+Convert a function to be a static method.
+
+A static method does not receive an implicit first argument.
+To declare a static method, use this idiom:
+
+     class C:
+         def f(arg1, arg2, ...): ...
+         f = staticmethod(f)
+
+It can be called either on the class (e.g. C.f()) or on an instance
+(e.g. C().f()).  The instance is ignored except for its class."""
+    __slots__ = ['_f']
+
+    def __init__(self, f):
+        self._f = f
+
+    def __get__(self, obj, objtype=None):
+        return self._f
+
+
+class classmethod(object):
+    """classmethod(function) -> class method
+
+Convert a function to be a class method.
+
+A class method receives the class as implicit first argument,
+just like an instance method receives the instance.
+To declare a class method, use this idiom:
+
+  class C:
+      def f(cls, arg1, arg2, ...): ...
+      f = classmethod(f)
+
+It can be called either on the class (e.g. C.f()) or on an instance
+(e.g. C().f()).  The instance is ignored except for its class.
+If a class method is called for a derived class, the derived class
+object is passed as the implied first argument."""
+    __slots__ = ['_f']
+
+    def __init__(self, f):
+        if not callable(f):
+            raise TypeError, "'%s' object is not callable" % type(f).__name__
+        self._f = f
+
+    def __get__(self, obj, klass=None):
+        if klass is None:
+            klass = type(obj)
+        return MethodType(self._f, klass)
+
+def dummy(): pass
+MethodType = type(dummy.__get__(42))
+del dummy
+
 # It's difficult to have a class that has both a docstring and a slot called
 # '__doc__', but not impossible...
 class docstring(object):
@@ -83,3 +142,62 @@ class C(object):
         self.fdel(obj)
 
 docstring.capture(property, 'slot__doc__')
+
+
+# super is a modified version from Guido's tutorial
+#     http://www.python.org/2.2.3/descrintro.html
+# it exposes the same special attributes as CPython's.
+class super(object):
+    """super(type) -> unbound super object
+super(type, obj) -> bound super object; requires isinstance(obj, type)
+super(type, type2) -> bound super object; requires issubclass(type2, type)
+
+Typical use to call a cooperative superclass method:
+
+class C(B):
+    def meth(self, arg):
+        super(C, self).meth(arg)"""
+    __slots__ = ['__thisclass__', '__self__', '__self_class__']
+    def __init__(self, typ, obj=None):
+        if obj is None:
+            objcls = None        # unbound super object
+        elif _issubtype(type(obj), type) and _issubtype(obj, typ):
+            objcls = obj         # special case for class methods
+        elif _issubtype(type(obj), typ):
+            objcls = type(obj)   # normal case
+        else:
+            objcls = getattr(obj, '__class__', type(obj))
+            if not _issubtype(objcls, typ):
+                raise TypeError, ("super(type, obj): "
+                                  "obj must be an instance or subtype of type")
+        self.__thisclass__ = typ
+        self.__self__ = obj
+        self.__self_class__ = objcls
+    def __get__(self, obj, type=None):
+        if obj is None or super.__self__.__get__(self) is not None:
+            return self
+        else:
+            return self.__class__(super.__thisclass__.__get__(self), obj)
+    def __getattribute__(self, attr):
+        _self_class_ = super.__self_class__.__get__(self)
+        if (attr != '__class__' # we want super().__class__ to be the real class
+              and _self_class_ is not None): # no magic for unbound type objects
+            _thisclass_ = super.__thisclass__.__get__(self)
+            mro = iter(_self_class_.__mro__)
+            for cls in mro:
+                if cls is _thisclass_:
+                    break
+            # Note: mro is an iterator, so the second loop
+            # picks up where the first one left off!
+            for cls in mro:
+                try:                
+                    x = cls.__dict__[attr]
+                except KeyError:
+                    continue
+                if hasattr(x, '__get__'):
+                    _self_ = super.__self__.__get__(self)
+                    if _self_ is _self_class_:
+                        _self_ = None   # performs an unbound __get__
+                    x = x.__get__(_self_, _self_class_)
+                return x
+        return object.__getattribute__(self, attr)     # fall-back

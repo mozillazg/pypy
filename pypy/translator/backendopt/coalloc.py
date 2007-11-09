@@ -398,8 +398,6 @@ def do_coalloc(adi, graph, setblock, setop, fromcreps, tocrep):
                 seen_setvar = True
             if not op.opname.startswith("malloc"):
                 continue
-            if op.args[1].value['flavor'] != 'gc':
-                continue
             if adi.getstate(op.result).get_crep(checksingle=True) is not tocrep:
                 continue
             TYPE = op.result.concretetype.TO

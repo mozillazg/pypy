@@ -41,6 +41,7 @@ class OpReprInvoke(OpReprCall):
 class OpWriter(object):            
   
     shift_operations = {
+        # ZZZ i guessed rshifts - ashr or lshr ?????? 
         'int_lshift': 'shl',
         'int_rshift': 'lshr',
         
@@ -89,6 +90,7 @@ class OpWriter(object):
         for oo in 'lt le eq ne ge gt'.split():
             binary_operations['%s_%s' % (tt, oo)] = 'fcmp o%s' % oo
 
+    # ZZZ check that operation should be checking unsigned
     binary_operations.update({'char_lt': 'icmp ult',
                               'char_le': 'icmp ule',
                               'char_eq': 'icmp eq',
@@ -113,11 +115,9 @@ class OpWriter(object):
         if isinstance(ARRAYTYPE, lltype.Array):
             if not ARRAYTYPE._hints.get("nolength", False):
                 # skip the length field
-                indices.append((self.word, 0))
                 indices.append((self.word, 1))
         else:
             assert isinstance(ARRAYTYPE, lltype.FixedSizeArray)
-            indices.append((self.word, 0))
         return indices
 
     def write_operation(self, op):
@@ -150,10 +150,7 @@ class OpWriter(object):
             if not meth:
                 raise Exception, "operation %s not found" % op.opname
             meth(opr)            
-
-        if self.db.genllvm.config.translation.llvm.debug:
-            self.codewriter.newline()
-
+    
     def _skipped(self, opr):
         self.codewriter.comment('***Skipping operation %s()' % opr.op.opname)
     keepalive = _skipped
@@ -207,7 +204,14 @@ class OpWriter(object):
         op = opr.op
         name = self.shift_operations[op.opname]
 
-        var = opr.argrefs[1]            
+        var = opr.argrefs[1]
+        # ZZZ why did we do this???
+        #if isinstance(op.args[1], Constant):
+        #    var = opr.argrefs[1]
+        #else:
+        #    var = self._tmp()
+        #    self.codewriter.cast(var, opr.argtypes[1], opr.argrefs[1], 'i8')
+            
         self.codewriter.shiftop(name, opr.retref, opr.argtypes[0], opr.argrefs[0], var)
 
     def cast_primitive(self, opr):
@@ -315,14 +319,11 @@ class OpWriter(object):
                              [word], [opr.argrefs[0]])
 
     def to_getelementptr(self, TYPE, args):
-        if isinstance(TYPE, lltype.Array) and TYPE._hints.get("nolength", False):
-            indices = []
-        else:
-            indices = [("i32", 0)]
+        indices = []
         for arg in args:
             name = None
-            # this is because FixedSizeArray can sometimes be accessed like an
-            # Array and then sometimes a Struct
+            # XXX this is because FixedSizeArray can sometimes be accessed
+            # like an Array and then sometimes a Struct
             if arg.concretetype is lltype.Void:
                 name = arg.value
                 assert name in list(TYPE._names)
@@ -356,7 +357,7 @@ class OpWriter(object):
             op = opr.op
             _, indices = self.to_getelementptr(op.args[0].concretetype.TO, op.args[1:])
             tmpvar = self._tmp()
-            self.codewriter.getelementptr(tmpvar, opr.argtypes[0], opr.argrefs[0], indices, getptr=False)
+            self.codewriter.getelementptr(tmpvar, opr.argtypes[0], opr.argrefs[0], indices)
             self.codewriter.load(opr.retref, opr.rettype, tmpvar)
         else:
             self._skipped(opr)
@@ -370,7 +371,7 @@ class OpWriter(object):
         assert opr.rettype != "void"
         op = opr.op
         _, indices = self.to_getelementptr(op.args[0].concretetype.TO, op.args[1:])
-        self.codewriter.getelementptr(opr.retref, opr.argtypes[0], opr.argrefs[0], indices, getptr=False)
+        self.codewriter.getelementptr(opr.retref, opr.argtypes[0], opr.argrefs[0], indices)
 
     # struct, name
     getsubstruct = _getinteriorpointer
@@ -380,9 +381,10 @@ class OpWriter(object):
     def setinteriorfield(self, opr):
         op = opr.op
         if opr.argtypes[-1] != "void":
+            print op.args, op.args[1:-1]
             _, indices = self.to_getelementptr(op.args[0].concretetype.TO, op.args[1:-1])
             tmpvar = self._tmp()
-            self.codewriter.getelementptr(tmpvar, opr.argtypes[0], opr.argrefs[0], indices, getptr=False)
+            self.codewriter.getelementptr(tmpvar, opr.argtypes[0], opr.argrefs[0], indices)
             self.codewriter.store(opr.argtypes[-1], opr.argrefs[-1], tmpvar)
         else:
             self._skipped(opr)            
@@ -397,13 +399,14 @@ class OpWriter(object):
         op = opr.op
         TYPE, indices = self.to_getelementptr(op.args[0].concretetype.TO, op.args[1:])
         if isinstance(TYPE, lltype.Array):
-            assert not TYPE._hints.get("nolength", False) 
             # gets the length
             indices.append(("i32", 0))
             lengthref = self._tmp()
-            self.codewriter.getelementptr(lengthref, opr.argtypes[0], opr.argrefs[0], indices, getptr=False)
+            self.codewriter.getelementptr(lengthref, opr.argtypes[0], opr.argrefs[0], indices)
         else:
-            assert False, "known at compile time"
+            assert isinstance(TYPE, lltype.FixedSizeArray)
+            lengthref = TYPE.length
+            XXX # no tests for this - is it valid even since known at compile time ????
 
         self.codewriter.load(opr.retref, opr.rettype, lengthref)
 
@@ -413,6 +416,7 @@ class OpWriter(object):
     def direct_fieldptr(self, opr):        
         from pypy.translator.llvm.structnode import getindexhelper
         
+        # XXX use to_getelementptr ?
         op = opr.op
         assert opr.rettype != "void"
         index = getindexhelper(op.args[1].value,
@@ -428,13 +432,14 @@ class OpWriter(object):
         self.codewriter.cast(opr.retref, element_type, tmpvar, opr.rettype)
 
     def direct_arrayitems(self, opr):
+        # XXX use to_getelementptr ?
         assert opr.rettype != "void"
 
         array = opr.argrefs[0]
         arraytype = opr.argtypes[0]
         indices = self._arrayindices(opr.op.args[0]) + [(self.word, 0)]
         tmpvar = self._tmp()
-        self.codewriter.getelementptr(tmpvar, arraytype, array, indices, getptr=False)
+        self.codewriter.getelementptr(tmpvar, arraytype, array, indices)
 
         # getelementptr gets a pointer to the right type, except the generated code really expected 
         # an array of size 1... so we just cast it
@@ -446,13 +451,7 @@ class OpWriter(object):
         arraytype, _ = opr.argtypes
         
         tmpvar = self._tmp()
-
-        indices = []
-        ARRAY = opr.op.args[0].concretetype.TO
-        if not (isinstance(ARRAY, lltype.Array) and ARRAY._hints.get("nolength", False)):
-            indices.append( (self.word, 0))
-        indices.append((self.word, incr))
-        self.codewriter.getelementptr(tmpvar, arraytype, array, indices, getptr=False)
+        self.codewriter.getelementptr(tmpvar, arraytype, array, [(self.word, incr)])
 
         # getelementptr gets a pointer to the right type, except the generated code really expected 
         # an array of size 1... so we just cast it
@@ -503,6 +502,9 @@ class OpWriter(object):
     def adr_ge(self, opr):
         self._op_adr_cmp(opr, "icmp sge")
 
+    # XXX Not sure any of this makes sense - maybe seperate policy for
+    # different flavours of mallocs?  Well it depend on what happens the GC
+    # developments
     def raw_malloc(self, opr):
         self.codewriter.call(opr.retref, opr.rettype, "@raw_malloc",
                              opr.argtypes, opr.argrefs)

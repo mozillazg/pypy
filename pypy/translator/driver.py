@@ -589,6 +589,42 @@ class TranslationDriver(SimpleTaskEngine):
                             "Running compiled llvm source",
                             idemp=True)
 
+    def task_source_cl(self):
+        from pypy.translator.lisp.gencl import GenCL
+        self.gen = GenCL(self.translator, self.entry_point)
+        filename = self.gen.emitfile()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_cl = taskdef(task_source_cl, [OOTYPE],
+                             'Generating Common Lisp source')
+
+    def task_compile_cl(self):
+        pass
+    task_compile_cl = taskdef(task_compile_cl, ['source_cl'],
+                              'XXX')
+
+    def task_run_cl(self):
+        pass
+    task_run_cl = taskdef(task_run_cl, ['compile_cl'],
+                              'XXX')
+
+    def task_source_squeak(self):
+        from pypy.translator.squeak.gensqueak import GenSqueak
+        self.gen = GenSqueak(dir, self.translator)
+        filename = self.gen.gen()
+        self.log.info("Wrote %s" % (filename,))
+    task_source_squeak = taskdef(task_source_squeak, [OOTYPE],
+                             'Generating Squeak source')
+
+    def task_compile_squeak(self):
+        pass
+    task_compile_squeak = taskdef(task_compile_squeak, ['source_squeak'],
+                              'XXX')
+
+    def task_run_squeak(self):
+        pass
+    task_run_squeak = taskdef(task_run_squeak, ['compile_squeak'],
+                              'XXX')
+
     def task_source_js(self):
         from pypy.translator.js.js import JS
         self.gen = JS(self.translator, functions=[self.entry_point],
@@ -665,9 +701,8 @@ class TranslationDriver(SimpleTaskEngine):
         newexename = basename
         f = file(newexename, 'w')
         f.write("""#!/bin/bash
-LEDIT=`type -p ledit`
 if [ `uname -o` = 'Cygwin' ]; then MONO=; else MONO=mono; fi
-$LEDIT $MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
+$MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if it's placed in PATH
 """ % main_exe_name)
         f.close()
         os.chmod(newexename, 0755)
@@ -713,49 +748,10 @@ $LEDIT $MONO "$(dirname $0)/$(basename $0)-data/%s" "$@" # XXX doesn't work if i
         # restore original os values
         if hasattr(self, 'old_cli_defs'):
             unpatch_os(self.old_cli_defs)
+
         self.log.info("Compiled JVM source")
-        if self.standalone and self.exe_name:
-            self.copy_jvm_jar()
     task_compile_jvm = taskdef(task_compile_jvm, ['source_jvm'],
                               'Compiling JVM source')
-
-    def copy_jvm_jar(self):
-        from py.compat import subprocess
-        basename = self.exe_name % self.get_info()
-        root = udir.join('pypy')
-        manifest = self.create_manifest(root)
-        classlist = self.create_classlist(root)
-        jarfile = py.path.local(basename + '.jar')
-        self.log.info('Creating jar file')
-        oldpath = root.chdir()
-        subprocess.call(['jar', 'cmf', str(manifest), str(jarfile), '@'+str(classlist)])
-        oldpath.chdir()
-
-        # create a convenience script
-        newexename = basename
-        f = file(newexename, 'w')
-        f.write("""#!/bin/bash
-LEDIT=`type -p ledit`
-$LEDIT java -jar $0.jar "$@"
-""")
-        f.close()
-        os.chmod(newexename, 0755)
-
-    def create_manifest(self, root):
-        filename = root.join('manifest.txt')
-        manifest = filename.open('w')
-        manifest.write('Main-class: pypy.Main\n\n')
-        manifest.close()
-        return filename
-
-    def create_classlist(self, root):
-        filename = root.join('classlist.txt')
-        classlist = filename.open('w')
-        classfiles = root.visit('*.class', True)
-        for classfile in classfiles:
-            print >> classlist, classfile.relto(root)
-        classlist.close()
-        return filename
 
     def task_run_jvm(self):
         pass

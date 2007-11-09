@@ -1,9 +1,9 @@
 from pypy.translator.cli.metavm import  Call, CallMethod, \
-     IndirectCall, GetField, SetField, DownCast, NewCustomDict,\
+     IndirectCall, GetField, SetField, OOString, DownCast, NewCustomDict,\
      MapException, Box, Unbox, NewArray, GetArrayElem, SetArrayElem,\
-     TypeOf, CastPrimitive
+     TypeOf, CastPrimitive, OOUnicode
 from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
-    New, RuntimeNew, CastTo, PushPrimitive, OOString, OOUnicode
+    New, RuntimeNew, CastTo, PushPrimitive
 from pypy.translator.cli.cts import WEAKREF
 from pypy.rpython.ootypesystem import ootype
 
