@@ -182,14 +182,11 @@ def unicode_from_string(space, w_str):
     if not space.eq_w(w_encoding, space.wrap('ascii')):
         return unicode_from_object(space, w_str)
     s = space.str_w(w_str)
-    codelist = []
-    for i in range(len(s)):
-        code = ord(s[i])
-        if code >= 128:
-            # raising UnicodeDecodeError is messy, so "please crash for me"
-            return unicode_from_object(space, w_str)
-        codelist.append(unichr(code))
-    return W_UnicodeObject(codelist)
+    try:
+        return W_UnicodeObject(s.decode("ascii"))
+    except UnicodeDecodeErrors:
+        # raising UnicodeDecodeErrors is messy, "please crash for me"
+        return unicode_from_object(space, w_str)
 
 
 def descr__new__(space, w_unicodetype, w_string='', w_encoding=None, w_errors=None):

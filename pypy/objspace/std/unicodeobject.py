@@ -7,23 +7,25 @@ from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.module.unicodedata import unicodedb_3_2_0 as unicodedb
+from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.objspace.std.formatting import mod_format
 
 class W_UnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
 
-    def __init__(w_self, unicodechars):
-        w_self._value = unicodechars
-        w_self.w_hash = None
+    def __init__(w_self, unistr):
+        assert isinstance(unistr, unicode)
+        w_self._value = unistr
+
     def __repr__(w_self):
         """ representation for debugging purposes """
         return "%s(%r)" % (w_self.__class__.__name__, w_self._value)
 
     def unwrap(w_self, space):
-        # For faked functions taking unicodearguments.
-        # Remove when we no longer need faking.
-        return u''.join(w_self._value)
+        # for testing
+        return w_self._value
+W_UnicodeObject.EMPTY = W_UnicodeObject(u'')
 
 registerimplementation(W_UnicodeObject)
 
@@ -63,7 +65,7 @@ def delegate_String2Unicode(space, w_str):
 def str_w__Unicode(space, w_uni):
     return space.str_w(space.str(w_uni))
 
-def unichars_w__Unicode(space, w_uni):
+def unicode_w__Unicode(space, w_uni):
     return w_uni._value
 
 def str__Unicode(space, w_uni):
@@ -75,11 +77,7 @@ def eq__Unicode_Unicode(space, w_left, w_right):
 def lt__Unicode_Unicode(space, w_left, w_right):
     left = w_left._value
     right = w_right._value
-    for i in range(min(len(left), len(right))):
-        if left[i] != right[i]:
-            return space.newbool(ord(left[i]) < ord(right[i]))
-            # NB. 'unichar < unichar' is not RPython at the moment
-    return space.newbool(len(left) < len(right))
+    return space.newbool(left < right)
 
 def ord__Unicode(space, w_uni):
     if len(w_uni._value) != 1:
@@ -107,108 +105,58 @@ def contains__String_Unicode(space, w_container, w_item):
 contains__Rope_Unicode = contains__String_Unicode
 
 
-def _find(self, sub, start, end):
-    if len(sub) == 0:
-        return start
-    if start >= end:
-        return -1
-    for i in range(start, end - len(sub) + 1):
-        for j in range(len(sub)):
-            if self[i + j]  != sub[j]:
-                break
-        else:
-            return i
-    return -1
-
-def _rfind(self, sub, start, end):
-    if len(sub) == 0:
-        return end
-    if end - start < len(sub):
-        return -1
-    for i in range(end - len(sub), start - 1, -1):
-        for j in range(len(sub)):
-            if self[i + j]  != sub[j]:
-                break
-        else:
-            return i
-    return -1
-
 def contains__Unicode_Unicode(space, w_container, w_item):
     item = w_item._value
     container = w_container._value
-    return space.newbool(_find(container, item, 0, len(container)) >= 0)
+    return space.newbool(container.find(item) != -1)
 
 def unicode_join__Unicode_ANY(space, w_self, w_list):
-    list = space.unpackiterable(w_list)
+    l = space.unpackiterable(w_list)
     delim = w_self._value
     totlen = 0
-    if len(list) == 0:
-        return W_UnicodeObject([])
-    if (len(list) == 1 and
-        space.is_w(space.type(list[0]), space.w_unicode)):
-        return list[0]
+    if len(l) == 0:
+        return W_UnicodeObject.EMPTY
+    if (len(l) == 1 and
+        space.is_w(space.type(l[0]), space.w_unicode)):
+        return l[0]
     
-    values_list = [None] * len(list)
-    values_list[0] = [u'\0']
-    for i in range(len(list)):
-        item = list[i]
+    values_list = []
+    for i in range(len(l)):
+        item = l[i]
         if space.is_true(space.isinstance(item, space.w_unicode)):
-            pass
+            item = item._value
         elif space.is_true(space.isinstance(item, space.w_str)):
-            item = space.call_function(space.w_unicode, item)
+            item = space.unicode_w(item)
         else:
             w_msg = space.mod(space.wrap('sequence item %d: expected string or Unicode'),
                               space.wrap(i))
             raise OperationError(space.w_TypeError, w_msg)
-        assert isinstance(item, W_UnicodeObject)
-        item = item._value
-        totlen += len(item)
-        values_list[i] = item
-    totlen += len(delim) * (len(values_list) - 1)
-    if len(values_list) == 1:
-        return W_UnicodeObject(values_list[0])
-    # Allocate result
-    result = [u'\0'] * totlen
-    first = values_list[0]
-    for i in range(len(first)):
-        result[i] = first[i]
-    offset = len(first)
-    for i in range(1, len(values_list)):
-        item = values_list[i]
-        # Add delimiter
-        for j in range(len(delim)):
-            result[offset + j] = delim[j]
-        offset += len(delim)
-        # Add item from values_list
-        for j in range(len(item)):
-            result[offset + j] = item[j]
-        offset += len(item)
-    return W_UnicodeObject(result)
-
+        values_list.append(item)
+    return W_UnicodeObject(w_self._value.join(values_list))
 
 def hash__Unicode(space, w_uni):
-    if w_uni.w_hash is None:
-        # hrmpf
-        chars = w_uni._value
-        if len(chars) == 0:
+    s = w_uni._value
+    if space.config.objspace.std.withrope:
+        # be compatible with the special ropes hash
+        # XXX no caching
+        if len(s) == 0:
             return space.wrap(0)
-        if space.config.objspace.std.withrope:
-            x = 0
-            for c in chars:
-                x = intmask((1000003 * x) + ord(c))
-            x <<= 1
-            x ^= len(chars)
-            x ^= ord(chars[0])
-            h = intmask(x)
-        else:
-            x = ord(chars[0]) << 7
-            for c in chars:
-                x = intmask((1000003 * x) ^ ord(c))
-            h = intmask(x ^ len(chars))
-            if h == -1:
-                h = -2
-        w_uni.w_hash = space.wrap(h)
-    return w_uni.w_hash
+        x = 0
+        for c in s:
+            x = intmask((1000003 * x) + ord(c))
+        x <<= 1
+        x ^= len(s)
+        x ^= ord(s[0])
+        h = intmask(x)
+        return space.wrap(h)
+    if we_are_translated():
+        x = hash(s)            # to use the hash cache in rpython strings
+    else:
+        from pypy.rlib.rarithmetic import _hash_string
+        x = _hash_string(s)    # to make sure we get the same hash as rpython
+        # (otherwise translation will freeze W_DictObjects where we can't find
+        #  the keys any more!)
+    return space.wrap(x)
 
 def len__Unicode(space, w_uni):
     return space.wrap(len(w_uni._value))
@@ -223,7 +171,7 @@ def getitem__Unicode_ANY(space, w_uni, w_index):
         exc = space.call_function(space.w_IndexError,
                                   space.wrap("unicode index out of range"))
         raise OperationError(space.w_IndexError, exc)
-    return W_UnicodeObject([uni[ival]])
+    return W_UnicodeObject(uni[ival])
 
 def getitem__Unicode_Slice(space, w_uni, w_slice):
     uni = w_uni._value
@@ -235,7 +183,7 @@ def getitem__Unicode_Slice(space, w_uni, w_slice):
         assert start >= 0 and stop >= 0
         r = uni[start:stop]
     else:
-        r = [uni[start + i*step] for i in range(sl)]
+        r = u"".join([uni[start + i*step] for i in range(sl)])
     return W_UnicodeObject(r)
 
 def mul__Unicode_ANY(space, w_uni, w_times):
@@ -245,18 +193,13 @@ def mul__Unicode_ANY(space, w_uni, w_times):
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
-    chars = w_uni._value
-    charlen = len(chars)
-    if times <= 0 or charlen == 0:
-        return W_UnicodeObject([])
-    if times == 1:
-        return space.call_function(space.w_unicode, w_uni)
-    if charlen == 1:
-        return W_UnicodeObject([w_uni._value[0]] * times)
-
+    uni = w_uni._value
+    length = len(uni)
+    if times <= 0 or length == 0:
+        return W_UnicodeObject.EMPTY
     try:
-        result_size = ovfcheck(charlen * times)
-        result = chars * times
+        result_size = ovfcheck(length * times)
+        result = uni * times
     except (OverflowError, MemoryError):
         raise OperationError(space.w_OverflowError, space.wrap('repeated string is too long'))
     return W_UnicodeObject(result)
@@ -267,53 +210,23 @@ def mul__ANY_Unicode(space, w_times, w_uni):
 def _isspace(uchar):
     return unicodedb.isspace(ord(uchar))
 
-def unicode_isspace__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isspace(ord(uchar)):
+def make_generic(funcname):
+    def func(space, w_self): 
+        v = w_self._value
+        if len(v) == 0:
             return space.w_False
-    return space.w_True
+        for idx in range(len(v)):
+            if not getattr(unicodedb, funcname)(ord(v[idx])):
+                return space.w_False
+        return space.w_True
+    return func_with_new_name(func, "unicode_%s__Unicode" % (funcname, ))
 
-def unicode_isalpha__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isalpha(ord(uchar)):
-            return space.w_False
-    return space.w_True
-
-def unicode_isalnum__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isalnum(ord(uchar)):
-            return space.w_False
-    return space.w_True
-
-def unicode_isdecimal__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isdecimal(ord(uchar)):
-            return space.w_False
-    return space.w_True
-
-def unicode_isdigit__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isdigit(ord(uchar)):
-            return space.w_False
-    return space.w_True
-
-def unicode_isnumeric__Unicode(space, w_unicode):
-    if len(w_unicode._value) == 0:
-        return space.w_False
-    for uchar in w_unicode._value:
-        if not unicodedb.isnumeric(ord(uchar)):
-            return space.w_False
-    return space.w_True
+unicode_isspace__Unicode = make_generic("isspace")
+unicode_isalpha__Unicode = make_generic("isalpha")
+unicode_isalnum__Unicode = make_generic("isalnum")
+unicode_isdecimal__Unicode = make_generic("isdecimal")
+unicode_isdigit__Unicode = make_generic("isdigit")
+unicode_isnumeric__Unicode = make_generic("isnumeric")
 
 def unicode_islower__Unicode(space, w_unicode):
     cased = False
@@ -423,12 +336,12 @@ unicode_rstrip__Unicode_Rope = unicode_rstrip__Unicode_String
 def unicode_capitalize__Unicode(space, w_self):
     input = w_self._value
     if len(input) == 0:
-        return W_UnicodeObject([])
+        return W_UnicodeObject.EMPTY
     result = [u'\0'] * len(input)
     result[0] = unichr(unicodedb.toupper(ord(input[0])))
     for i in range(1, len(input)):
         result[i] = unichr(unicodedb.tolower(ord(input[i])))
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_title__Unicode(space, w_self):
     input = w_self._value
@@ -436,7 +349,7 @@ def unicode_title__Unicode(space, w_self):
         return w_self
     result = [u'\0'] * len(input)
 
-    previous_is_cased = 0
+    previous_is_cased = False
     for i in range(len(input)):
         unichar = ord(input[i])
         if previous_is_cased:
@@ -444,21 +357,21 @@ def unicode_title__Unicode(space, w_self):
         else:
             result[i] = unichr(unicodedb.totitle(unichar))
         previous_is_cased = unicodedb.iscased(unichar)
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_lower__Unicode(space, w_self):
     input = w_self._value
     result = [u'\0'] * len(input)
     for i in range(len(input)):
         result[i] = unichr(unicodedb.tolower(ord(input[i])))
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_upper__Unicode(space, w_self):
     input = w_self._value
     result = [u'\0'] * len(input)
     for i in range(len(input)):
         result[i] = unichr(unicodedb.toupper(ord(input[i])))
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_swapcase__Unicode(space, w_self):
     input = w_self._value
@@ -471,7 +384,7 @@ def unicode_swapcase__Unicode(space, w_self):
             result[i] = unichr(unicodedb.tolower(unichar))
         else:
             result[i] = input[i]
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def _normalize_index(length, index):
     if index < 0:
@@ -516,7 +429,7 @@ def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start
 
 def _to_unichar_w(space, w_char):
     try:
-        w_unichar = unicodetype.unicode_from_object(space, w_char)
+        unistr = space.unicode_w(w_char)
     except OperationError, e:
         if e.match(space, space.w_TypeError):
             msg = 'The fill character cannot be converted to Unicode'
@@ -524,10 +437,9 @@ def _to_unichar_w(space, w_char):
         else:
             raise
 
-    if space.int_w(space.len(w_unichar)) != 1:
+    if len(unistr) != 1:
         raise OperationError(space.w_TypeError, space.wrap('The fill character must be exactly one character long'))
-    unichar = unichr(space.int_w(space.ord(w_unichar)))
-    return unichar
+    return unistr[0]
 
 def unicode_center__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._value
@@ -540,7 +452,7 @@ def unicode_center__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     result = [fillchar] * width
     for i in range(len(self)):
         result[leftpad + i] = self[i]
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_ljust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._value
@@ -552,7 +464,7 @@ def unicode_ljust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     result = [fillchar] * width
     for i in range(len(self)):
         result[i] = self[i]
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_rjust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._value
@@ -564,13 +476,13 @@ def unicode_rjust__Unicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     result = [fillchar] * width
     for i in range(len(self)):
         result[padding + i] = self[i]
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
     
 def unicode_zfill__Unicode_ANY(space, w_self, w_width):
     self = w_self._value
     width = space.int_w(w_width)
     if len(self) == 0:
-        return W_UnicodeObject([u'0'] * width)
+        return W_UnicodeObject(u'0' * width)
     padding = width - len(self)
     if padding <= 0:
         return space.call_function(space.w_unicode, w_self)
@@ -581,7 +493,7 @@ def unicode_zfill__Unicode_ANY(space, w_self, w_width):
     if self[0] in (u'+', u'-'):
         result[0] = self[0]
         result[padding] = u'0'
-    return W_UnicodeObject(result)
+    return W_UnicodeObject(u''.join(result))
 
 def unicode_splitlines__Unicode_ANY(space, w_self, w_keepends):
     self = w_self._value
@@ -617,21 +529,21 @@ def unicode_find__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_en
     start = _normalize_index(len(self), space.int_w(w_start))
     end = _normalize_index(len(self), space.int_w(w_end))
     substr = w_substr._value
-    return space.wrap(_find(self, substr, start, end))
+    return space.wrap(self.find(substr, start, end))
 
 def unicode_rfind__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self = w_self._value
     start = _normalize_index(len(self), space.int_w(w_start))
     end = _normalize_index(len(self), space.int_w(w_end))
     substr = w_substr._value
-    return space.wrap(_rfind(self, substr, start, end))
+    return space.wrap(self.rfind(substr, start, end))
 
 def unicode_index__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self = w_self._value
     start = _normalize_index(len(self), space.int_w(w_start))
     end = _normalize_index(len(self), space.int_w(w_end))
     substr = w_substr._value
-    index = _find(self, substr, start, end)
+    index = self.find(substr, start, end)
     if index < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap('substring not found'))
@@ -642,7 +554,7 @@ def unicode_rindex__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_
     start = _normalize_index(len(self), space.int_w(w_start))
     end = _normalize_index(len(self), space.int_w(w_end))
     substr = w_substr._value
-    index = _rfind(self, substr, start, end)
+    index = self.rfind(substr, start, end)
     if index < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap('substring not found'))
@@ -653,15 +565,7 @@ def unicode_count__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_e
     start = _normalize_index(len(self), space.int_w(w_start))
     end = _normalize_index(len(self), space.int_w(w_end))
     substr = w_substr._value
-    count = 0
-    while start <= end:
-        index = _find(self, substr, start, end)
-        if index < 0:
-            break
-        start = index + 1
-        count += 1
-    return space.wrap(count)
-
+    return space.wrap(self.count(substr, start, end))
 
 def unicode_split__Unicode_None_ANY(space, w_self, w_none, w_maxsplit):
     self = w_self._value
@@ -703,18 +607,8 @@ def unicode_split__Unicode_Unicode_ANY(space, w_self, w_delim, w_maxsplit):
     if delim_len == 0:
         raise OperationError(space.w_ValueError,
                              space.wrap('empty separator'))
-    parts = []
-    start = 0
-    end = len(self)
-    while maxsplit != 0:
-        index = _find(self, delim, start, end)
-        if index < 0:
-            break
-        parts.append(W_UnicodeObject(self[start:index]))
-        start = index + delim_len
-        maxsplit -= 1
-    parts.append(W_UnicodeObject(self[start:]))
-    return space.newlist(parts)
+    parts = _split_with(self, delim, maxsplit)
+    return space.newlist([W_UnicodeObject(part) for part in parts])
 
 
 def unicode_rsplit__Unicode_None_ANY(space, w_self, w_none, w_maxsplit):
@@ -764,7 +658,7 @@ def unicode_rsplit__Unicode_Unicode_ANY(space, w_self, w_delim, w_maxsplit):
     start = 0
     end = len(self)
     while maxsplit != 0:
-        index = _rfind(self, delim, 0, end)
+        index = self.rfind(delim, 0, end)
         if index < 0:
             break
         parts.append(W_UnicodeObject(self[index+delim_len:end]))
@@ -774,31 +668,47 @@ def unicode_rsplit__Unicode_Unicode_ANY(space, w_self, w_delim, w_maxsplit):
     parts.reverse()
     return space.newlist(parts)
 
-def _split(space, self, maxsplit):
+def _split_into_chars(self, maxsplit):
     if maxsplit == 0:
-        return [W_UnicodeObject(self)]
+        return [self]
     index = 0
     end = len(self)
-    parts = [W_UnicodeObject([])]
+    parts = [u'']
     maxsplit -= 1
     while maxsplit != 0:
         if index >= end:
             break
-        parts.append(W_UnicodeObject([self[index]]))
+        parts.append(self[index])
         index += 1
         maxsplit -= 1
-    parts.append(W_UnicodeObject(self[index:]))
+    parts.append(self[index:])
+    return parts
+
+def _split_with(self, with_, maxsplit):
+    parts = []
+    start = 0
+    end = len(self)
+    length = len(with_)
+    while maxsplit != 0:
+        index = self.find(with_, start, end)
+        if index < 0:
+            break
+        parts.append(self[start:index])
+        start = index + length
+        maxsplit -= 1
+    parts.append(self[start:])
     return parts
 
 def unicode_replace__Unicode_Unicode_Unicode_ANY(space, w_self, w_old,
                                                  w_new, w_maxsplit):
     if len(w_old._value):
-        w_parts = space.call_method(w_self, 'split', w_old, w_maxsplit)
+        parts = _split_with(w_self._value, w_old._value,
+                            space.int_w(w_maxsplit))
     else:
         self = w_self._value
         maxsplit = space.int_w(w_maxsplit)
-        w_parts = space.newlist(_split(space, self, maxsplit))
-    return space.call_method(w_new, 'join', w_parts)
+        parts = _split_into_chars(self, maxsplit)
+    return W_UnicodeObject(w_new._value.join(parts))
     
 
 app = gateway.applevel(r'''
@@ -877,13 +787,13 @@ def unicode_rpartition__Unicode_Unicode(unistr, unisub):
 
 def unicode_startswith__Unicode_Tuple_ANY_ANY(unistr, prefixes, start, end):
     for prefix in prefixes:
-        if unistr.startswith(prefix):
+        if unistr.startswith(prefix, start, end):
             return True
     return False
 
 def unicode_endswith__Unicode_Tuple_ANY_ANY(unistr, suffixes, start, end):
     for suffix in suffixes:
-        if unistr.endswith(suffix):
+        if unistr.endswith(suffix, start, end):
             return True
     return False
 
@@ -1016,7 +926,6 @@ def repr__Unicode(space, w_unicode):
     i += 1
     return space.wrap(''.join(result[:i]))
         
-#repr__Unicode = app.interphook('repr__Unicode') # uncomment when repr code is moved to _codecs
 
 def mod__Unicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)
@@ -1028,6 +937,10 @@ register_all(vars(), unicodetype)
 # str.strip(unicode) needs to convert self to unicode and call unicode.strip we
 # use the following magic to register strip_string_unicode as a String
 # multimethod.
+
+# XXX couldn't string and unicode _share_ the multimethods that make up their
+# methods?
+
 class str_methods:
     import stringtype
     W_UnicodeObject = W_UnicodeObject

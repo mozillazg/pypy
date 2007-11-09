@@ -25,7 +25,7 @@ def unichr(space, code):
     except ValueError:
         raise OperationError(space.w_ValueError,
                              space.wrap("unichr() arg out of range"))
-    return space.newunicode([c])
+    return space.wrap(c)
 unichr.unwrap_spec = [ObjSpace, int]
 
 def len(space, w_obj):

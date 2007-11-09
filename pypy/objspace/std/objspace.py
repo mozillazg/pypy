@@ -400,7 +400,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             from pypy.objspace.std.stringtype import wrapstr
             return wrapstr(self, x)
         if isinstance(x, unicode):
-            return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
+            return W_UnicodeObject(x)
         if isinstance(x, float):
             return W_FloatObject(x)
         if isinstance(x, Wrappable):
@@ -533,9 +533,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
                                  self.wrap("character code not in range(256)"))
         return self.wrap(''.join(chars))
 
-    def newunicode(self, chars):
-        return W_UnicodeObject(chars)
-
     def newseqiter(self, w_obj):
         return W_SeqIterObject(w_obj)
 
@@ -653,7 +650,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
         float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
         uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
-        unichars_w = StdObjSpaceMultiMethod('unichars_w', 1, [])    # returns an unwrapped list of unicode characters
+        unicode_w = StdObjSpaceMultiMethod('unicode_w', 1, [])    # returns an unwrapped list of unicode characters
         bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
         # NOTE: when adding more sometype_w() methods, you need to write a
         # stub in default.py to raise a space.w_TypeError
