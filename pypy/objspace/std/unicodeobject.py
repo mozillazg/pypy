@@ -769,21 +769,6 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
                         type(retval).__name__)
     return retval
 
-# XXX: These should probably be written on interplevel 
-
-def unicode_partition__Unicode_Unicode(unistr, unisub):
-    pos = unistr.find(unisub)
-    if pos == -1:
-        return (unistr, u'', u'')
-    else:
-        return (unistr[:pos], unisub, unistr[pos+len(unisub):])
-
-def unicode_rpartition__Unicode_Unicode(unistr, unisub):
-    pos = unistr.rfind(unisub)
-    if pos == -1:
-        return (u'', u'', unistr)
-    else:
-        return (unistr[:pos], unisub, unistr[pos+len(unisub):])
 
 def unicode_startswith__Unicode_Tuple_ANY_ANY(unistr, prefixes, start, end):
     for prefix in prefixes:
@@ -799,13 +784,42 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(unistr, suffixes, start, end):
 
 ''')
 
+
+
 unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
-unicode_partition__Unicode_Unicode = app.interphook('unicode_partition__Unicode_Unicode')
-unicode_rpartition__Unicode_Unicode = app.interphook('unicode_rpartition__Unicode_Unicode')
 unicode_startswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_startswith__Unicode_Tuple_ANY_ANY')
 unicode_endswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_endswith__Unicode_Tuple_ANY_ANY')
+
+def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
+    unistr = w_unistr._value
+    unisub = w_unisub._value
+    if not unisub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = unistr.find(unisub)
+    if pos == -1:
+        return space.newtuple([w_unistr, W_UnicodeObject.EMPTY,
+                               W_UnicodeObject.EMPTY])
+    else:
+        return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
+                               space.wrap(unistr[pos+len(unisub):])])
+
+def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
+    unistr = w_unistr._value
+    unisub = w_unisub._value
+    if not unisub:
+        raise OperationError(space.w_ValueError,
+                             space.wrap("empty separator"))
+    pos = unistr.rfind(unisub)
+    if pos == -1:
+        return space.newtuple([W_UnicodeObject.EMPTY,
+                               W_UnicodeObject.EMPTY, w_unistr])
+    else:
+        return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
+                               space.wrap(unistr[pos+len(unisub):])])
+
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):
