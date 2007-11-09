@@ -6,14 +6,43 @@ from pypy.rpython.lltypesystem.rstr import STR, mallocstr
 from pypy.rpython.lltypesystem import rstr
 from pypy.rpython.lltypesystem import rlist
 from pypy.rpython.module import ll_time, ll_os
+from pypy.rpython.module import ll_stackless, ll_stack
+from pypy.rpython.lltypesystem.module import ll_strtod
 
 # table of functions hand-written in src/ll_*.h
 # Note about *.im_func: The annotator and the rtyper expect direct
 # references to functions, so we cannot insert classmethods here.
 
 EXTERNALS = {
-    'LL_flush_icache': 'LL_flush_icache',
+    ll_strtod.Implementation.ll_strtod_parts_to_float:
+        'LL_strtod_parts_to_float',
+    ll_strtod.Implementation.ll_strtod_formatd:
+        'LL_strtod_formatd',
+    ll_stackless.ll_stackless_switch:             'LL_stackless_switch',
+    ll_stackless.ll_stackless_stack_frames_depth: 'LL_stackless_stack_frames_depth',
+    ll_stack.ll_stack_unwind: 'LL_stack_unwind',
+    ll_stack.ll_stack_too_big: 'LL_stack_too_big',
     }
+
+#______________________________________________________
+# insert 'simple' math functions into EXTERNALs table:
+
+# XXX: messy, messy, messy
+# this interacts in strange ways with node.select_function_code_generators,
+# because it fakes to be an ll_* function.
+
+math_functions = [
+    'acos', 'asin', 'atan', 'ceil', 'cos', 'cosh', 'exp', 'fabs',
+    'floor', 'log', 'log10', 'sin', 'sinh', 'sqrt', 'tan', 'tanh',
+    'pow', 'atan2', 'fmod', 'ldexp', 'hypot'
+    ]
+# frexp and modf have been ported to the new rffi style already
+
+import math
+for name in math_functions:
+    EXTERNALS['ll_math.ll_math_%s' % name] = 'LL_math_%s' % name
+
+EXTERNALS['LL_flush_icache'] = 'LL_flush_icache'
 
 #______________________________________________________
 
@@ -24,6 +53,7 @@ def find_list_of_str(rtyper):
     return None
 
 def predeclare_common_types(db, rtyper):
+    from pypy.rpython.lltypesystem.module import ll_math
     # Common types
     yield ('RPyString', STR)
     LIST_OF_STR = find_list_of_str(rtyper)

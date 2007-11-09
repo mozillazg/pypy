@@ -28,15 +28,12 @@ class Entry_oounicode(ExtRegistryEntry):
     _about_ = ootype.oounicode
 
     def compute_result_annotation(self, obj_s, base_s):
-        assert isinstance(obj_s, annmodel.SomeUnicodeCodePoint) or \
-               (isinstance(obj_s, annmodel.SomeOOInstance)
-                and obj_s.ootype in (ootype.String, ootype.Unicode))
+        assert isinstance(obj_s, annmodel.SomeUnicodeCodePoint)
         assert isinstance(base_s, annmodel.SomeInteger)
         return annmodel.SomeOOInstance(ootype.Unicode)
 
     def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0], (annmodel.SomeUnicodeCodePoint,
-                                          annmodel.SomeOOInstance))
+        assert isinstance(hop.args_s[0],annmodel.SomeUnicodeCodePoint)
         vlist = hop.inputargs(hop.args_r[0], ootype.Signed)
         return hop.genop('oounicode', vlist, resulttype = ootype.Unicode)
     

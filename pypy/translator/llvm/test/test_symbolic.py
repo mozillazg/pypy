@@ -92,7 +92,7 @@ def test_sizeof_constsize_struct():
     assert res == 51
 
 def test_computed_int_symbolic():
-    py.test.skip("'GCHeaderOffset' object has no attribute 'TYPE'")
+    llvm_test()
     too_early = True
     def compute_fn():
         assert not too_early

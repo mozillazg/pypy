@@ -1,4 +1,5 @@
-# this registry uses the new interface for external functions
+# this registry use the new interface for external functions
+# all the above declarations in extfunctable should be moved here at some point.
 
 from extfunc import register_external
 
@@ -19,18 +20,24 @@ else:
 
 # the following functions all take one float, return one float
 # and are part of math.h
-for name in ll_math.unary_math_functions:
-    llimpl = getattr(ll_math, 'll_math_%s' % name, None)
+simple_math_functions = [
+    'acos', 'asin', 'atan', 'ceil', 'cos', 'cosh', 'exp', 'fabs',
+    'floor', 'log', 'log10', 'sin', 'sinh', 'sqrt', 'tan', 'tanh'
+    ]
+for name in simple_math_functions:
     register_external(getattr(math, name), [float], float,
-                      export_name="ll_math.ll_math_%s" % name,
-                       sandboxsafe=True, llimpl=llimpl)
+                      "ll_math.ll_math_%s" % name,
+                       sandboxsafe=True)
 
 complex_math_functions = [
     ('frexp', [float],        (float, int)),
+    ('atan2', [float, float], float),
+    ('fmod',  [float, float], float),
     ('ldexp', [float, int],   float),
     ('modf',  [float],        (float, float)),
-    ] + [(name, [float, float], float) for name in
-         ll_math.binary_math_functions]
+    ('hypot', [float, float], float),
+    ('pow',   [float, float], float),
+    ]
 
 for name, args, res in complex_math_functions:
     func = getattr(math, name)
@@ -67,7 +74,3 @@ for name, args, res in path_functions:
     llimpl = func_with_new_name(func, name)
     register_external(func, args, res, 'll_os_path.ll_%s' % name,
                       llimpl=llimpl, sandboxsafe=True)
-
-# -------------------- strtod functions ----------------------
-
-from pypy.rpython.module import ll_strtod

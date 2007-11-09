@@ -615,6 +615,8 @@ class LLFrame(object):
     def perform_call(self, f, ARGS, args):
         fobj = self.llinterpreter.typer.type_system.deref(f)
         has_callable = getattr(fobj, '_callable', None) is not None
+        if has_callable and getattr(fobj._callable, 'suggested_primitive', False):
+                return self.invoke_callable_with_pyexceptions(f, *args)
         if hasattr(fobj, 'graph'):
             graph = fobj.graph
         else:
@@ -810,17 +812,6 @@ class LLFrame(object):
     def op_yield_current_frame_to_caller(self):
         raise NotImplementedError("yield_current_frame_to_caller")
 
-    def op_stack_frames_depth(self):
-        return len(self.llinterpreter.frame_stack)
-
-    def op_stack_switch(self, frametop):
-        raise NotImplementedError("stack_switch")
-
-    def op_stack_unwind(self):
-        raise NotImplementedError("stack_unwind")
-
-    def op_stack_capture(self):
-        raise NotImplementedError("stack_capture")
 
     # operations on pyobjects!
     for opname in lloperation.opimpls.keys():
@@ -1096,10 +1087,7 @@ class LLFrame(object):
         return ootype.oostring(obj, base)
 
     def op_oounicode(self, obj, base):
-        try:
-            return ootype.oounicode(obj, base)
-        except UnicodeDecodeError:
-            self.make_llexception()
+        return ootype.oounicode(obj, base)
 
     def op_ooparse_int(self, s, base):
         try:
