@@ -400,7 +400,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
             from pypy.objspace.std.stringtype import wrapstr
             return wrapstr(self, x)
         if isinstance(x, unicode):
-            return W_UnicodeObject(x)
+            return W_UnicodeObject([unichr(ord(u)) for u in x]) # xxx
         if isinstance(x, float):
             return W_FloatObject(x)
         if isinstance(x, Wrappable):
@@ -525,6 +525,17 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newslice(self, w_start, w_end, w_step):
         return W_SliceObject(w_start, w_end, w_step)
 
+    def newstring(self, chars_w):
+        try:
+            chars = [chr(self.int_w(w_c)) for w_c in chars_w]
+        except ValueError:  # chr(out-of-range)
+            raise OperationError(self.w_ValueError,
+                                 self.wrap("character code not in range(256)"))
+        return self.wrap(''.join(chars))
+
+    def newunicode(self, chars):
+        return W_UnicodeObject(chars)
+
     def newseqiter(self, w_obj):
         return W_SeqIterObject(w_obj)
 
@@ -540,14 +551,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def lookup_in_type_where(self, w_type, name):
         return w_type.lookup_where(name)
     lookup_in_type_where._annspecialcase_ = 'specialize:lookup_in_type_where'
-
-    def lookup_in_type_starting_at(self, w_type, w_starttype, name):
-        """ Only supposed to be used to implement super, w_starttype
-        and w_type are the same as for super(starttype, type)
-        """
-        assert isinstance(w_type, W_TypeObject)
-        assert isinstance(w_starttype, W_TypeObject)
-        return w_type.lookup_starting_at(w_starttype, name)
 
     def allocate_instance(self, cls, w_subtype):
         """Allocate the memory needed for an instance of an internal or
@@ -650,7 +653,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
         float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
         uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
-        unicode_w = StdObjSpaceMultiMethod('unicode_w', 1, [])    # returns an unwrapped list of unicode characters
+        unichars_w = StdObjSpaceMultiMethod('unichars_w', 1, [])    # returns an unwrapped list of unicode characters
         bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
         # NOTE: when adding more sometype_w() methods, you need to write a
         # stub in default.py to raise a space.w_TypeError

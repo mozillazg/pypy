@@ -410,6 +410,12 @@ class _Call(MicroInstruction):
             graph = callee.graph
         except AttributeError:
             return callee._name.rsplit('.', 1)
+        else:
+            if getattr(graph.func, 'suggested_primitive', False):
+                _, module = graph.func.__module__.rsplit('.', 1)
+                return module, graph.func.func_name
+            else:
+                return None
 
     def render(self, generator, op):
         callee = op.args[0].value
@@ -446,15 +452,6 @@ class _OOString(MicroInstruction):
         generator.load(op.args[1])
         generator.call_oostring(ARGTYPE)
 
-class _OOUnicode(MicroInstruction):
-    def render(self, generator, op):
-        v_base = op.args[1]
-        assert v_base.value == -1, "The second argument of oounicode must be -1"
-
-        ARGTYPE = op.args[0].concretetype
-        generator.load(op.args[0])
-        generator.call_oounicode(ARGTYPE)
-
 class _CastTo(MicroInstruction):
     def render(self, generator, op):
         generator.load(op.args[0])
@@ -474,6 +471,5 @@ Call = _Call()
 CallMethod = _CallMethod()
 RuntimeNew = _RuntimeNew()
 OOString = _OOString()
-OOUnicode = _OOUnicode()
 CastTo = _CastTo()
 
