@@ -149,10 +149,10 @@ def unicode_from_encoded_object(space, w_obj, encoding, errors):
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
         w_retval, w_length = space.unpacktuple(
-            space.call(w_decode, obj, space.wrap(encoding)), 2)
+            space.call(w_decode, w_obj, space.wrap(encoding)), 2)
     else:
         w_retval, w_length = space.unpacktuple(
-            space.call(w_decode, obj, space.wrap(encoding),
+            space.call(w_decode, w_obj, space.wrap(encoding),
                        space.wrap(errors)), 2)
     if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
         raise OperationError(
