@@ -8,6 +8,7 @@ class Module(MixedModule):
         super(Module, self).__init__(space, w_name) 
         self.checkinterval = 100
         self.recursionlimit = 100
+        self.defaultencoding = "ascii"
         
     interpleveldefs = {
         '__name__'              : '(space.wrap("sys"))', 
