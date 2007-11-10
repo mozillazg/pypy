@@ -699,7 +699,7 @@ def _split_into_chars(self, maxsplit):
     parts.append(self[index:])
     return parts
 
-def _split_with(self, with_, maxsplit):
+def _split_with(self, with_, maxsplit=-1):
     parts = []
     start = 0
     end = len(self)
@@ -729,25 +729,6 @@ def unicode_replace__Unicode_Unicode_Unicode_ANY(space, w_self, w_old,
 app = gateway.applevel(r'''
 import sys
 
-def unicode_expandtabs__Unicode_ANY(self, tabsize):
-    parts = self.split(u'\t')
-    result = [ parts[0] ]
-    prevsize = 0
-    for ch in parts[0]:
-        prevsize += 1
-        if ch in (u"\n", u"\r"):
-            prevsize = 0
-    for i in range(1, len(parts)):
-        pad = tabsize - prevsize % tabsize
-        result.append(u' ' * pad)
-        nextpart = parts[i]
-        result.append(nextpart)
-        prevsize = 0
-        for ch in nextpart:
-            prevsize += 1
-            if ch in (u"\n", u"\r"):
-                prevsize = 0
-    return u''.join(result)
 
 def unicode_translate__Unicode_ANY(self, table):
     result = []
@@ -790,7 +771,6 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
 
 
 
-unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
 
@@ -821,6 +801,29 @@ def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
     else:
         return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
                                space.wrap(unistr[pos+len(unisub):])])
+
+
+def unicode_expandtabs__Unicode_ANY(space, w_self, w_tabsize):
+    self = w_self._value
+    tabsize  = space.int_w(w_tabsize)
+    parts = _split_with(self, u'\t')
+    result = [parts[0]]
+    prevsize = 0
+    for ch in parts[0]:
+        prevsize += 1
+        if ch == u"\n" or ch ==  u"\r":
+            prevsize = 0
+    for i in range(1, len(parts)):
+        pad = tabsize - prevsize % tabsize
+        result.append(u' ' * pad)
+        nextpart = parts[i]
+        result.append(nextpart)
+        prevsize = 0
+        for ch in nextpart:
+            prevsize += 1
+            if ch in (u"\n", u"\r"):
+                prevsize = 0
+    return space.wrap(u''.join(result))
 
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
