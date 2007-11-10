@@ -831,7 +831,7 @@ def unicode_translate__Unicode_ANY(space, w_self, w_table):
                 raise OperationError(
                     space.w_TypeError,
                     space.wrap("character mapping must return integer, None or unicode"))
-    return W_UnicodeObject(''.join(result))
+    return W_UnicodeObject(u''.join(result))
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):
