@@ -180,7 +180,7 @@ def getitem__Unicode_Slice(space, w_uni, w_slice):
     length = len(uni)
     start, stop, step, sl = w_slice.indices4(space, length)
     if sl == 0:
-        r = []
+        r = u""
     elif step == 1:
         assert start >= 0 and stop >= 0
         r = uni[start:stop]
