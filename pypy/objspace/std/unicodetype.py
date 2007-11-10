@@ -143,10 +143,7 @@ from pypy.objspace.std.stringtype import str_lstrip as unicode_lstrip
 # ____________________________________________________________
 
 def getdefaultencoding(space):
-    w_sys = space.getbuiltinmodule("sys")
-    return space.str_w(
-        space.call_function(
-            space.getattr(w_sys, space.wrap("getdefaultencoding"))))
+    return space.sys.defaultencoding
 
 def unicode_from_encoded_object(space, w_obj, encoding, errors):
     w_codecs = space.getbuiltinmodule("_codecs")

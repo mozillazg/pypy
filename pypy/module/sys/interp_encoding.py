@@ -1,13 +1,7 @@
-
-class EncodingState(object):
-    def __init__(self, space):
-        self.space = space
-        self.defaultencoding = "ascii"
-
 def getdefaultencoding(space):
     """Return the current default string encoding used by the Unicode 
 implementation."""
-    return space.wrap(space.fromcache(EncodingState).defaultencoding)
+    return space.wrap(space.sys.defaultencoding)
 
 def setdefaultencoding(space, w_encoding):
     """Set the current default string encoding used by the Unicode 
@@ -17,4 +11,4 @@ implementation."""
     w_lookup = space.getattr(mod, space.wrap("lookup"))
     # check whether the encoding is there
     space.call_function(w_lookup, w_encoding)
-    space.fromcache(EncodingState).defaultencoding = encoding
+    space.sys.defaultencoding = encoding
