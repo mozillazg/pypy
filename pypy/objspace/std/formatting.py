@@ -442,7 +442,7 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
         fmt = space.unicode_w(w_fmt)
     formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
     result = formatter.format()
-    return space.wrap(''.join(result))
+    return space.wrap(u''.join(result))
 
 def mod_format(space, w_format, w_values, do_unicode=False):
     if space.is_true(space.isinstance(w_values, space.w_tuple)):
