@@ -142,24 +142,26 @@ from pypy.objspace.std.stringtype import str_lstrip as unicode_lstrip
 
 # ____________________________________________________________
 
-app = gateway.applevel('''
-def unicode_from_encoded_object(obj, encoding, errors):
-    import codecs, sys
+def unicode_from_encoded_object(space, w_obj, encoding, errors):
+    w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
-        encoding = sys.getdefaultencoding()
-    decoder = codecs.getdecoder(encoding)
+        encoding = space.defaultencoding
+    w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
-        retval, length = decoder(obj)
+        w_retval, w_length = space.unpacktuple(
+            space.call(w_decode, obj, space.wrap(encoding)), 2)
     else:
-        retval, length = decoder(obj, errors)
-    if not isinstance(retval, unicode):
-        raise TypeError("decoder did not return an unicode object (type=%s)" %
-                        type(retval).__name__)
+        w_retval, w_length = space.unpacktuple(
+            space.call(w_decode, obj, space.wrap(encoding),
+                       space.wrap(errors)), 2)
+    if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap(
+                "decoder did not return an unicode object (type=%s)" %
+                        space.type(retval).getname('?')))
     return retval
 
-    
-''')
-unicode_from_encoded_object = app.interphook('unicode_from_encoded_object')
 
 def unicode_from_object(space, w_obj):
     if space.is_true(space.isinstance(w_obj, space.w_str)):
@@ -178,8 +180,7 @@ def unicode_from_object(space, w_obj):
             w_res = space.call(w_unicode_method)
     if space.is_true(space.isinstance(w_res, space.w_unicode)):
         return w_res
-    return unicode_from_encoded_object(w_res, space.w_None,
-                                       space.wrap("strict"))
+    return unicode_from_encoded_object(w_res, None, "strict")
 
 def unicode_from_string(space, w_str):
     # this is a performance and bootstrapping hack
@@ -218,7 +219,16 @@ def descr__new__(space, w_unicodetype, w_obj='', w_encoding=None, w_errors=None)
         else:
             w_value = unicode_from_object(space, w_obj)
     else:
-        w_value = unicode_from_encoded_object(space, w_obj, w_encoding, w_errors)
+        if space.is_w(w_encoding, space.w_None):
+            encoding = None
+        else:
+            encoding = space.str_w(w_encoding)
+        if space.is_w(w_errors, space.w_None):
+            errors = None
+        else:
+            errors = space.str_w(w_errors)
+        errors 
+        w_value = unicode_from_encoded_object(space, w_obj, encoding, errors)
     # help the annotator! also the ._value depends on W_UnicodeObject layout
     assert isinstance(w_value, W_UnicodeObject)
     w_newobj = space.allocate_instance(W_UnicodeObject, w_unicodetype)
