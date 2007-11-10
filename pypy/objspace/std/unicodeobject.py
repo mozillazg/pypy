@@ -201,7 +201,7 @@ def mul__Unicode_ANY(space, w_uni, w_times):
         return W_UnicodeObject.EMPTY
     try:
         result_size = ovfcheck(length * times)
-        result = uni * times
+        result = u''.join([uni] * times)
     except (OverflowError, MemoryError):
         raise OperationError(space.w_OverflowError, space.wrap('repeated string is too long'))
     return W_UnicodeObject(result)
@@ -769,6 +769,7 @@ def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
         return space.newtuple([w_unistr, W_UnicodeObject.EMPTY,
                                W_UnicodeObject.EMPTY])
     else:
+        assert pos > 0
         return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
                                space.wrap(unistr[pos+len(unisub):])])
 
@@ -783,6 +784,7 @@ def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
         return space.newtuple([W_UnicodeObject.EMPTY,
                                W_UnicodeObject.EMPTY, w_unistr])
     else:
+        assert pos > 0
         return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
                                space.wrap(unistr[pos+len(unisub):])])
 
