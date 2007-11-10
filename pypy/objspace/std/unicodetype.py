@@ -177,7 +177,7 @@ def unicode_from_object(space, w_obj):
             else:
                 raise
         else:
-            w_res = space.call(w_unicode_method)
+            w_res = space.call(w_unicode_method, space.newlist([]))
     if space.is_true(space.isinstance(w_res, space.w_unicode)):
         return w_res
     return unicode_from_encoded_object(space, w_res, None, "strict")
