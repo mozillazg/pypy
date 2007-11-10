@@ -334,3 +334,23 @@ class AppTestUnicodeString:
         assert u'hello'.endswith((u'he', u'hell'), 0, 4)
         raises(TypeError, u'hello'.endswith, (42,))
 
+    def test_expandtabs(self):
+        assert u'abc\rab\tdef\ng\thi'.expandtabs() ==    u'abc\rab      def\ng       hi'
+        assert u'abc\rab\tdef\ng\thi'.expandtabs(8) ==   u'abc\rab      def\ng       hi'
+        assert u'abc\rab\tdef\ng\thi'.expandtabs(4) ==   u'abc\rab  def\ng   hi'
+        assert u'abc\r\nab\tdef\ng\thi'.expandtabs(4) == u'abc\r\nab  def\ng   hi'
+        assert u'abc\rab\tdef\ng\thi'.expandtabs() ==    u'abc\rab      def\ng       hi'
+        assert u'abc\rab\tdef\ng\thi'.expandtabs(8) ==   u'abc\rab      def\ng       hi'
+        assert u'abc\r\nab\r\ndef\ng\r\nhi'.expandtabs(4) == u'abc\r\nab\r\ndef\ng\r\nhi'
+
+        s = u'xy\t'
+        assert s.expandtabs() =='xy      '
+        
+        s = u'\txy\t'
+        assert s.expandtabs() =='        xy      '
+        assert s.expandtabs(1) ==' xy '
+        assert s.expandtabs(2) =='  xy  '
+        assert s.expandtabs(3) =='   xy '
+        
+        assert u'xy'.expandtabs() =='xy'
+        assert u''.expandtabs() ==''
