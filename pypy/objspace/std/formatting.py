@@ -439,7 +439,7 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
         else:
             return space.wrap(''.join(result))
     else:
-        fmt = space.unicode_w(w_fmt)
+        fmt = space.unichars_w(w_fmt)
     formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
     result = formatter.format()
     return space.wrap(u''.join(result))
