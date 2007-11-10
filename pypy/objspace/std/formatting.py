@@ -435,11 +435,11 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
             result = formatter.format()
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
-            fmt = [c for c in fmt]     # string => list of unichars
+            fmt = unicode(fmt)
         else:
             return space.wrap(''.join(result))
     else:
-        fmt = space.unichars_w(w_fmt)
+        fmt = space.unicode_w(w_fmt)
     formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
     result = formatter.format()
     return space.wrap(u''.join(result))
