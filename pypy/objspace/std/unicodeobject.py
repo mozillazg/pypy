@@ -437,18 +437,20 @@ def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start
 def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for prefix in space.unpacktuple(w_prefixes):
+    for w_prefix in space.unpacktuple(w_prefixes):
+        prefix = space.unicode_w(w_prefix)
         if unistr.startswith(prefix, start, end):
-            return True
-    return False
+            return space.w_True
+    return space.w_False
 
 def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for suffix in space.unpacktuple(w_suffixes):
+    for w_suffix in space.unpacktuple(w_suffixes):
+        suffix = space.unicode_w(w_suffix)
         if unistr.endswith(suffix, start, end):
-            return True
-    return False
+            return space.w_True
+    return space.w_False
 
 def _to_unichar_w(space, w_char):
     try:
