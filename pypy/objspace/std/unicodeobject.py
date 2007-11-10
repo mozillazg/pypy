@@ -756,7 +756,6 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
 
 
 
-unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
 
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
