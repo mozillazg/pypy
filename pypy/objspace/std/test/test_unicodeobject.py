@@ -373,3 +373,7 @@ class AppTestUnicodeString:
     def test_unicode_startswith_tuple(self):
         assert u'xxx'.startswith(('x', 'y', 'z'), 0)
         assert u'xxx'.endswith(('x', 'y', 'z'), 0)
+
+    def test_missing_cases(self):
+        # some random cases, which are discovered to not be tested during annotation
+        assert u'xxx'[1:1] == u''
