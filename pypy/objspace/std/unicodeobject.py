@@ -729,8 +729,6 @@ def unicode_replace__Unicode_Unicode_Unicode_ANY(space, w_self, w_old,
 app = gateway.applevel(r'''
 import sys
 
-
-
 def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
     import codecs, sys
     if encoding is None:
@@ -745,9 +743,6 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
         raise TypeError("encoder did not return a string object (type=%s)" %
                         type(retval).__name__)
     return retval
-
-
-
 ''')
 
 
