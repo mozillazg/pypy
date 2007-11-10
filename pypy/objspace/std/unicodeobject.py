@@ -124,7 +124,8 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
     values_list = []
     for i in range(len(l)):
         item = l[i]
-        if space.is_true(space.isinstance(item, space.w_unicode)):
+        if isinstance(item, W_UnicodeObject):
+            # shortcut for performane
             item = item._value
         elif space.is_true(space.isinstance(item, space.w_str)):
             item = space.unicode_w(item)
