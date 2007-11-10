@@ -407,40 +407,48 @@ def _convert_idx_params(space, w_self, w_start, w_end):
 
     return (self, start, end)
 
+def _check_startswith_substring(str, substr, start, end):
+    substr_len = len(substr)
+    
+    if end - start < substr_len:
+        return False # substring is too long
+    
+    for i in range(substr_len):
+        if str[start + i] != substr[i]:
+            return False
+    return True    
+
+def _check_endswith_substring(str, substr, start, end):
+    substr_len = len(substr)
+
+    if end - start < substr_len:
+        return False # substring is too long
+    start = end - substr_len
+    for i in range(substr_len):
+        if str[start + i] != substr[i]:
+            return False
+    return True
+
 def unicode_endswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
-    substr_len = len(substr)
-    
-    if end - start < substr_len:
-        return space.w_False # substring is too long
-    start = end - substr_len
-    for i in range(substr_len):
-        if self[start + i] != substr[i]:
-            return space.w_False
-    return space.w_True
+    return space.wrap(_check_endswith_substring(self, substr, start, end))
 
 def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
+    # XXX this stuff can be waaay better for ootypebased backends if
+    #     we re-use more of our rpython machinery (ie implement startswith
+    #     with additional parameters as rpython)
 
     substr = w_substr._value
-    substr_len = len(substr)
-    
-    if end - start < substr_len:
-        return space.w_False # substring is too long
-    
-    for i in range(substr_len):
-        if self[start + i] != substr[i]:
-            return space.w_False
-    return space.w_True
-
+    return space.wrap(_check_startswith_substring(self, substr, start, end))
 
 def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
     for w_prefix in space.unpacktuple(w_prefixes):
         prefix = space.unicode_w(w_prefix)
-        if unistr.startswith(prefix, start, end):
+        if _check_startswith_substring(unistr, prefix, start, end):
             return space.w_True
     return space.w_False
 
@@ -449,7 +457,7 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
     for w_suffix in space.unpacktuple(w_suffixes):
         suffix = space.unicode_w(w_suffix)
-        if unistr.endswith(suffix, start, end):
+        if _check_endswith_substring(unistr, suffix, start, end):
             return space.w_True
     return space.w_False
 

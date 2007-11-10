@@ -370,3 +370,6 @@ class AppTestUnicodeString:
         assert unicode('x', 'utf-8') == u'x'
         assert unicode('x', 'utf-8', 'strict') == u'x'
         
+    def test_unicode_startswith_tuple(self):
+        assert u'xxx'.startswith(('x', 'y', 'z'), 0)
+        assert u'xxx'.endswith(('x', 'y', 'z'), 0)
