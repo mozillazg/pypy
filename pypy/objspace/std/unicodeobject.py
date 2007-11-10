@@ -4,6 +4,7 @@ from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.ropeobject import W_RopeObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std import slicetype
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.module.unicodedata import unicodedb_3_2_0 as unicodedb
@@ -395,11 +396,18 @@ def _normalize_index(length, index):
         index = length
     return index
 
-def unicode_endswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
+def _convert_idx_params(space, w_self, w_start, w_end):
     self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    start = slicetype.adapt_bound(space, len(self), w_start)
+    end = slicetype.adapt_bound(space, len(self), w_end)
 
+    assert start >= 0
+    assert end >= 0
+
+    return (self, start, end)
+
+def unicode_endswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     substr_len = len(substr)
     
@@ -412,9 +420,7 @@ def unicode_endswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, 
     return space.w_True
 
 def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
 
     substr = w_substr._value
     substr_len = len(substr)
@@ -426,6 +432,23 @@ def unicode_startswith__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start
         if self[start + i] != substr[i]:
             return space.w_False
     return space.w_True
+
+
+def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
+                                              w_start, w_end):
+    unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
+    for prefix in space.unpacktuple(w_prefixes):
+        if unistr.startswith(prefix, start, end):
+            return True
+    return False
+
+def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
+                                            w_start, w_end):
+    unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
+    for suffix in space.unpacktuple(w_suffixes):
+        if unistr.endswith(suffix, start, end):
+            return True
+    return False
 
 def _to_unichar_w(space, w_char):
     try:
@@ -525,23 +548,17 @@ def unicode_splitlines__Unicode_ANY(space, w_self, w_keepends):
     return space.newlist(lines)
 
 def unicode_find__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     return space.wrap(self.find(substr, start, end))
 
 def unicode_rfind__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     return space.wrap(self.rfind(substr, start, end))
 
 def unicode_index__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     index = self.find(substr, start, end)
     if index < 0:
@@ -550,9 +567,7 @@ def unicode_index__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_e
     return space.wrap(index)
 
 def unicode_rindex__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     index = self.rfind(substr, start, end)
     if index < 0:
@@ -561,9 +576,7 @@ def unicode_rindex__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_
     return space.wrap(index)
 
 def unicode_count__Unicode_Unicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
-    self = w_self._value
-    start = _normalize_index(len(self), space.int_w(w_start))
-    end = _normalize_index(len(self), space.int_w(w_end))
+    self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     substr = w_substr._value
     return space.wrap(self.count(substr, start, end))
 
@@ -770,17 +783,6 @@ def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
     return retval
 
 
-def unicode_startswith__Unicode_Tuple_ANY_ANY(unistr, prefixes, start, end):
-    for prefix in prefixes:
-        if unistr.startswith(prefix, start, end):
-            return True
-    return False
-
-def unicode_endswith__Unicode_Tuple_ANY_ANY(unistr, suffixes, start, end):
-    for suffix in suffixes:
-        if unistr.endswith(suffix, start, end):
-            return True
-    return False
 
 ''')
 
@@ -789,8 +791,6 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(unistr, suffixes, start, end):
 unicode_expandtabs__Unicode_ANY = app.interphook('unicode_expandtabs__Unicode_ANY')
 unicode_translate__Unicode_ANY = app.interphook('unicode_translate__Unicode_ANY')
 unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
-unicode_startswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_startswith__Unicode_Tuple_ANY_ANY')
-unicode_endswith__Unicode_Tuple_ANY_ANY = app.interphook('unicode_endswith__Unicode_Tuple_ANY_ANY')
 
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
     unistr = w_unistr._value
