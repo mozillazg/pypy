@@ -354,3 +354,14 @@ class AppTestUnicodeString:
         
         assert u'xy'.expandtabs() =='xy'
         assert u''.expandtabs() ==''
+
+    def test_translate(self):
+        assert u'bbbc' == u'abababc'.translate({ord('a'):None})
+        assert u'iiic' == u'abababc'.translate({ord('a'):None, ord('b'):ord('i')})
+        assert u'iiix' == u'abababc'.translate({ord('a'):None, ord('b'):ord('i'), ord('c'):u'x'})
+        assert u'<i><i><i>c' == u'abababc'.translate({ord('a'):None, ord('b'):u'<i>'})
+        assert u'c' == u'abababc'.translate({ord('a'):None, ord('b'):u''})
+        assert u'xyyx' == u'xzx'.translate({ord('z'):u'yy'})
+
+        raises(TypeError, u'hello'.translate)
+        raises(TypeError, u'abababc'.translate, {ord('a'):''})
