@@ -45,7 +45,7 @@ def _decode_ascii(space, s):
                 raise OperationError(
                     space.w_UnicodeDecodeError,
                     space.wrap(("'ascii' codec can't decode byte %s in position %s:"
-                                " ordinal not in range(128)") % (hex(ord(i)), i)))
+                                " ordinal not in range(128)") % (hex(ord(s[i])), i)))
 
 def unicode_w__String(space, w_self):
     # XXX should this use the default encoding?
