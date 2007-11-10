@@ -159,7 +159,7 @@ def unicode_from_encoded_object(space, w_obj, encoding, errors):
             space.w_TypeError,
             space.wrap(
                 "decoder did not return an unicode object (type=%s)" %
-                        space.type(w_retval).getname('?')))
+                        space.type(w_retval).getname(space, '?')))
     return w_retval
 
 
