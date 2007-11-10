@@ -197,22 +197,32 @@ def unicode_from_string(space, w_str):
         return unicode_from_object(space, w_str)
 
 
+def _get_encoding_and_errors(space, w_encoding, w_errors):
+    if space.is_w(w_encoding, space.w_None):
+        encoding = None
+    else:
+        encoding = space.str_w(w_encoding)
+    if space.is_w(w_errors, space.w_None):
+        errors = None
+    else:
+        errors = space.str_w(w_errors)
+    return encoding, errors
+
 def descr__new__(space, w_unicodetype, w_obj='', w_encoding=None, w_errors=None):
     # NB. the default value of w_obj is really a *wrapped* empty string:
     #     there is gateway magic at work
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
     w_obj_type = space.type(w_obj)
     
+    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors) 
     if space.is_w(w_obj_type, space.w_unicode):
-        if (not space.is_w(w_encoding, space.w_None) or
-            not space.is_w(w_errors, space.w_None)):
+        if encoding is not None or errors is not None:
             raise OperationError(space.w_TypeError,
                                  space.wrap('decoding Unicode is not supported'))
         if space.is_w(w_unicodetype, space.w_unicode):
             return w_obj
         w_value = w_obj
-    elif (space.is_w(w_encoding, space.w_None) and
-          space.is_w(w_errors, space.w_None)):
+    elif encoding is None and errors is None:
         if space.is_true(space.isinstance(w_obj, space.w_str)):
             w_value = unicode_from_string(space, w_obj)
         elif space.is_true(space.isinstance(w_obj, space.w_unicode)):
@@ -220,15 +230,6 @@ def descr__new__(space, w_unicodetype, w_obj='', w_encoding=None, w_errors=None)
         else:
             w_value = unicode_from_object(space, w_obj)
     else:
-        if space.is_w(w_encoding, space.w_None):
-            encoding = None
-        else:
-            encoding = space.str_w(w_encoding)
-        if space.is_w(w_errors, space.w_None):
-            errors = None
-        else:
-            errors = space.str_w(w_errors)
-        errors 
         w_value = unicode_from_encoded_object(space, w_obj, encoding, errors)
     # help the annotator! also the ._value depends on W_UnicodeObject layout
     assert isinstance(w_value, W_UnicodeObject)
