@@ -157,29 +157,35 @@ def unicode_from_encoded_object(obj, encoding, errors):
                         type(retval).__name__)
     return retval
 
-def unicode_from_object(obj):
-    if isinstance(obj, str):
-        res = obj
-    else:
-        try:
-            unicode_method = obj.__unicode__
-        except AttributeError:
-            res = str(obj)
-        else:
-            res = unicode_method()
-    if isinstance(res, unicode):
-        return res
-    return unicode_from_encoded_object(res, None, "strict")
     
 ''')
-unicode_from_object = app.interphook('unicode_from_object')
 unicode_from_encoded_object = app.interphook('unicode_from_encoded_object')
+
+def unicode_from_object(space, w_obj):
+    if space.is_true(space.isinstance(w_obj, space.w_str)):
+        w_res = w_obj
+    else:
+        try:
+            # XXX should we have a space.unicode so we can go through
+            # descroperation?
+            w_unicode_method = space.getattr(w_obj, space.wrap("__unicode__"))
+        except OperationError, e:
+            if e.match(space, space.w_AttributeError):
+                w_res = space.str(w_obj)
+            else:
+                raise
+        else:
+            w_res = space.call(w_unicode_method)
+    if space.is_true(space.isinstance(w_res, space.w_unicode)):
+        return w_res
+    return unicode_from_encoded_object(w_res, space.w_None,
+                                       space.wrap("strict"))
 
 def unicode_from_string(space, w_str):
     # this is a performance and bootstrapping hack
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
-    w_encoding = space.call_function(space.sys.get('getdefaultencoding'))
-    if not space.eq_w(w_encoding, space.wrap('ascii')):
+    encoding = space.defaultencoding
+    if encoding != 'ascii':
         return unicode_from_object(space, w_str)
     s = space.str_w(w_str)
     try:
