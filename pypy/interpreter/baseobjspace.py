@@ -188,7 +188,6 @@ class ObjSpace(object):
         self.interned_strings = {}
         self.pending_actions = []
         self.setoptions(**kw)
-        self.defaultencoding = "ascii"
 
 #        if self.config.objspace.logbytecodes:
 #            self.bytecodecounts = {}

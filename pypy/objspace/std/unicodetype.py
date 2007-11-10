@@ -142,18 +142,22 @@ from pypy.objspace.std.stringtype import str_lstrip as unicode_lstrip
 
 # ____________________________________________________________
 
+def getdefaultencoding(space):
+    w_sys = space.getbuiltinmodule("sys")
+    return space.str_w(
+        space.call_function(
+            space.getattr(w_sys, space.wrap("getdefaultencoding"))))
+
 def unicode_from_encoded_object(space, w_obj, encoding, errors):
     w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
-        encoding = space.defaultencoding
+        encoding = getdefaultencoding(space)
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
-        w_retval = space.call(w_decode, space.newlist([w_obj,
-                                                       space.wrap(encoding)]))
+        w_retval = space.call_function(w_decode, w_obj, space.wrap(encoding))
     else:
-        w_retval = space.call(w_decode, space.newlist([w_obj,
-                                                       space.wrap(encoding),
-                                                       space.wrap(errors)]))
+        w_retval = space.call_function(w_decode, w_obj, space.wrap(encoding),
+                                       space.wrap(errors))
     if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
         raise OperationError(
             space.w_TypeError,
@@ -177,7 +181,7 @@ def unicode_from_object(space, w_obj):
             else:
                 raise
         else:
-            w_res = space.call(w_unicode_method, space.newlist([]))
+            w_res = space.call_function(w_unicode_method)
     if space.is_true(space.isinstance(w_res, space.w_unicode)):
         return w_res
     return unicode_from_encoded_object(space, w_res, None, "strict")
@@ -185,7 +189,7 @@ def unicode_from_object(space, w_obj):
 def unicode_from_string(space, w_str):
     # this is a performance and bootstrapping hack
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
-    encoding = space.defaultencoding
+    encoding = getdefaultencoding(space)
     if encoding != 'ascii':
         return unicode_from_object(space, w_str)
     s = space.str_w(w_str)
