@@ -148,12 +148,12 @@ def unicode_from_encoded_object(space, w_obj, encoding, errors):
         encoding = space.defaultencoding
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
-        w_retval, w_length = space.unpacktuple(
-            space.call(w_decode, w_obj, space.wrap(encoding)), 2)
+        w_retval = space.call(w_decode, space.newlist([w_obj,
+                                                       space.wrap(encoding)]))
     else:
-        w_retval, w_length = space.unpacktuple(
-            space.call(w_decode, w_obj, space.wrap(encoding),
-                       space.wrap(errors)), 2)
+        w_retval = space.call(w_decode, space.newlist([w_obj,
+                                                       space.wrap(encoding),
+                                                       space.wrap(errors)]))
     if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
         raise OperationError(
             space.w_TypeError,
@@ -180,7 +180,7 @@ def unicode_from_object(space, w_obj):
             w_res = space.call(w_unicode_method)
     if space.is_true(space.isinstance(w_res, space.w_unicode)):
         return w_res
-    return unicode_from_encoded_object(w_res, None, "strict")
+    return unicode_from_encoded_object(space, w_res, None, "strict")
 
 def unicode_from_string(space, w_str):
     # this is a performance and bootstrapping hack
