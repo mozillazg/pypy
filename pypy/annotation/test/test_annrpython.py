@@ -2970,6 +2970,10 @@ class TestAnnotateTestCase:
         py.test.raises(TypeError, "a.build_types(f, [int, int])")
         a.build_types(f, [annmodel.SomeInteger(nonneg=True),
                           annmodel.SomeInteger(nonneg=True)])
+        def f(x):
+            return x[:-1]
+
+        a.build_types(f, [str])
 
 def g(n):
     return [0,1,2,n]

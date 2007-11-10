@@ -602,7 +602,8 @@ class __extend__(pairtype(SomeList, SomeInteger)):
 def check_negative_slice(s_slice):
     if isinstance(s_slice.start, SomeInteger) and not s_slice.start.nonneg:
         raise TypeError("%s not proven to have negative start" % s_slice)
-    if isinstance(s_slice.stop, SomeInteger) and not s_slice.stop.nonneg:
+    if isinstance(s_slice.stop, SomeInteger) and not s_slice.stop.nonneg and\
+           getattr(s_slice.stop, 'const', 0) != -1:
         raise TypeError("%s not proven to have negative stop" % s_slice)
 
 class __extend__(pairtype(SomeList, SomeSlice)):
