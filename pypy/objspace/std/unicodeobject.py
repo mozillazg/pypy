@@ -730,25 +730,6 @@ app = gateway.applevel(r'''
 import sys
 
 
-def unicode_translate__Unicode_ANY(self, table):
-    result = []
-    for unichar in self:
-        try:
-            newval = table[ord(unichar)]
-        except KeyError:
-            result.append(unichar)
-        else:
-            if newval is None:
-                continue
-            elif isinstance(newval, int):
-                if newval < 0 or newval > sys.maxunicode:
-                    raise TypeError("character mapping must be in range(0x%x)"%(sys.maxunicode + 1,))
-                result.append(unichr(newval))
-            elif isinstance(newval, unicode):
-                result.append(newval)
-            else:
-                raise TypeError("character mapping must return integer, None or unicode")
-    return ''.join(result)
 
 def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
     import codecs, sys
@@ -825,6 +806,37 @@ def unicode_expandtabs__Unicode_ANY(space, w_self, w_tabsize):
                 prevsize = 0
     return space.wrap(u''.join(result))
 
+
+def unicode_translate__Unicode_ANY(space, w_self, w_table):
+    self = w_self._value
+    w_sys = space.getbuiltinmodule('sys')
+    maxunicode = space.int_w(space.getattr(w_sys, space.wrap("maxunicode")))
+    result = []
+    for unichar in self:
+        try:
+            w_newval = space.getitem(w_table, space.wrap(ord(unichar)))
+        except OperationError, e:
+            if e.match(space, space.w_KeyError):
+                result.append(unichar)
+            else:
+                raise
+        else:
+            if space.is_w(w_newval, space.w_None):
+                continue
+            elif space.is_true(space.isinstance(w_newval, space.w_int)):
+                newval = space.int_w(w_newval)
+                if newval < 0 or newval > maxunicode:
+                    raise OperationError(
+                            space.w_TypeError,
+                            space.wrap("character mapping must be in range(0x%x)" % (maxunicode + 1,)))
+                result.append(unichr(newval))
+            elif space.is_true(space.isinstance(w_newval, space.w_unicode)):
+                result.append(space.unicode_w(w_newval))
+            else:
+                raise OperationError(
+                    space.w_TypeError,
+                    space.wrap("character mapping must return integer, None or unicode"))
+    return W_UnicodeObject(''.join(result))
 
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):
