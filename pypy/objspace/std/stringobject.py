@@ -42,11 +42,10 @@ def _decode_ascii(space, s):
     except UnicodeDecodeError:
         for i in range(len(s)):
             if ord(s[i]) > 127:
-                break
-        raise OperationError(
-            space.w_UnicodeDecodeError,
-            space.wrap(("'ascii' codec can't decode byte %s in position %s:"
-                        " ordinal not in range(128)") % (hex(ord(i)), i)))
+                raise OperationError(
+                    space.w_UnicodeDecodeError,
+                    space.wrap(("'ascii' codec can't decode byte %s in position %s:"
+                                " ordinal not in range(128)") % (hex(ord(i)), i)))
 
 def unicode_w__String(space, w_self):
     # XXX should this use the default encoding?
