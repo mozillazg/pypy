@@ -735,28 +735,29 @@ def unicode_replace__Unicode_Unicode_Unicode_ANY(space, w_self, w_old,
     return W_UnicodeObject(w_new._value.join(parts))
     
 
-app = gateway.applevel(r'''
-import sys
+def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
+                                    w_encoding=None,
+                                    w_errors=None):
 
-def unicode_encode__Unicode_ANY_ANY(unistr, encoding=None, errors=None):
-    import codecs, sys
+    from pypy.objspace.std.unicodetype import getdefaultencoding
+    from pypy.objspace.std.unicodetype import _get_encoding_and_errors
+    w_codecs = space.getbuiltinmodule("_codecs")
+    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
     if encoding is None:
-        encoding = sys.getdefaultencoding()
-
-    encoder = codecs.getencoder(encoding)
+        encoding = getdefaultencoding(space)
+    w_encode = space.getattr(w_codecs, space.wrap("encode"))
     if errors is None:
-        retval, lenght = encoder(unistr)
+        w_retval = space.call_function(w_encode, w_unistr, space.wrap(encoding))
     else:
-        retval, length = encoder(unistr, errors)
-    if not isinstance(retval,str):
-        raise TypeError("encoder did not return a string object (type=%s)" %
-                        type(retval).__name__)
-    return retval
-''')
-
-
-
-unicode_encode__Unicode_ANY_ANY = app.interphook('unicode_encode__Unicode_ANY_ANY')
+        w_retval = space.call_function(w_encode, w_unistr, space.wrap(encoding),
+                                       space.wrap(errors))
+    if not space.is_true(space.isinstance(w_retval, space.w_str)):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap(
+                "encoder did not return an unicode object (type=%s)" %
+                        space.type(w_retval).getname(space, '?')))
+    return w_retval
 
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
     unistr = w_unistr._value
