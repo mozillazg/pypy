@@ -10,7 +10,6 @@ from pypy.rpython import extregistry
 from pypy.rpython.extfunc import register_external
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.rtupletype import TUPLE_TYPE
-from pypy.rlib import rposix
 
 # XXX on Windows, stat() is flawed; see CPython's posixmodule.c for
 # an implementation based on the Win32 API
@@ -139,20 +138,12 @@ class MakeStatResultEntry(extregistry.ExtRegistryEntry):
 
 if sys.platform.startswith('win'):
     _name_struct_stat = '_stati64'
-    INCLUDES = ['sys/types.h', 'sys/stat.h']
+    INCLUDES = []
 else:
     _name_struct_stat = 'stat'
     INCLUDES = ['sys/types.h', 'sys/stat.h', 'unistd.h']
+STRUCT_STAT = rffi.CStructPtr(_name_struct_stat, *LL_STAT_FIELDS)
 
-from pypy.rpython.tool import rffi_platform as platform
-class CConfig:
-    # This must be set to 64 on some systems to enable large file support.
-    _header_ = '#define _FILE_OFFSET_BITS 64'
-    _includes_ = INCLUDES
-    STAT_STRUCT = platform.Struct('struct %s' % _name_struct_stat, LL_STAT_FIELDS)
-config = platform.configure(CConfig)
-
-STAT_STRUCT = lltype.Ptr(config['STAT_STRUCT'])
 
 def build_stat_result(st):
     # only for LL backends
@@ -197,11 +188,11 @@ def register_stat_variant(name):
         ARG1 = rffi.CCHARP
     else:
         ARG1 = rffi.INT
-    os_mystat = rffi.llexternal(c_func_name, [ARG1, STAT_STRUCT], rffi.INT,
+    os_mystat = rffi.llexternal(c_func_name, [ARG1, STRUCT_STAT], rffi.INT,
                                 includes=INCLUDES)
 
     def os_mystat_llimpl(arg):
-        stresult = lltype.malloc(STAT_STRUCT.TO, flavor='raw')
+        stresult = lltype.malloc(STRUCT_STAT.TO, flavor='raw')
         try:
             if arg_is_path:
                 arg = rffi.str2charp(arg)
@@ -209,7 +200,7 @@ def register_stat_variant(name):
             if arg_is_path:
                 rffi.free_charp(arg)
             if error != 0:
-                raise OSError(rposix.get_errno(), "os_?stat failed")
+                raise OSError(rffi.get_errno(), "os_?stat failed")
             return build_stat_result(stresult)
         finally:
             lltype.free(stresult, flavor='raw')

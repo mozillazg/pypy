@@ -10,15 +10,20 @@ from pypy.translator.llvm.buildllvm import llvm_gcc_version
 
 from pypy.tool.udir import udir
 
-def predeclare_stuff(c_db):
-    exctransformer = c_db.exctransformer
-    yield ('_rpyexc_occured_ptr',  exctransformer._rpyexc_occured_ptr.value)
-    yield ('rpyexc_fetch_type_ptr', exctransformer.rpyexc_fetch_type_ptr.value)
-    yield ('rpyexc_clear_ptr',     exctransformer.rpyexc_clear_ptr.value)
-
 support_functions = [
+    "@raisePyExc_IOError",
+    "@raisePyExc_ValueError",
+    "@raisePyExc_OverflowError",
+    "@raisePyExc_ZeroDivisionError",
+    "@raisePyExc_RuntimeError",
+    "@raisePyExc_thread_error",
+    "@RPyString_FromString",
+    "@RPyString_AsString",
+    "@RPyString_Size",
+    "@RPyExceptionOccurred",
     "@LLVM_RPython_StartupCode",
     ]
+
 
 skip_lines = [
     "%RPyString = type opaque",
@@ -115,21 +120,23 @@ def get_ll(ccode, function_names, default_cconv):
         ll_lines2.append(line)
 
     ll_lines2.append("declare ccc void @abort()")
-    return'\n'.join(ll_lines2)
 
-def find_list_of_str(rtyper):
-    from pypy.rpython.lltypesystem import rlist
-    for r in rtyper.reprs.itervalues():
-        if isinstance(r, rlist.ListRepr) and r.item_repr is rstr.string_repr:
-            return r.lowleveltype.TO
-    return None
+    llcode = '\n'.join(ll_lines2)
+    decl, impl = '', llcode
+    #try:
+    #    decl, impl = llcode.split('implementation')
+    #except:
+    #    raise Exception("Can't compile external function code (llcode.c)")
+    return decl, impl
+
 
 def setup_externs(c_db, db):
-    # hacks to make predeclare_all work    
-
     rtyper = db.translator.rtyper
-    decls = list(predeclare_stuff(c_db))
-    
+    from pypy.translator.c.extfunc import predeclare_all
+
+    # hacks to make predeclare_all work    
+    decls = list(predeclare_all(c_db, rtyper))
+
     for c_name, obj in decls:
         if isinstance(obj, lltype.LowLevelType):
             db.prepare_type(obj)
@@ -155,8 +162,8 @@ def setup_externs(c_db, db):
     return decls
 
 def get_c_cpath():
-    from pypy.translator.c import genc
-    return os.path.dirname(genc.__file__)
+    from pypy.translator import translator
+    return os.path.dirname(translator.__file__)
 
 def get_llvm_cpath():
     return os.path.join(os.path.dirname(__file__), "module")
@@ -194,37 +201,41 @@ def generate_llfile(db, extern_decls, entrynode, c_includes, c_sources, standalo
         if isinstance(obj, lltype.LowLevelType):
             s = "#define %s struct %s\n%s;\n" % (c_name, c_name, c_name)
             ccode.append(s)
-            
         elif isinstance(obj, FunctionGraph):
             funcptr = db.translator.rtyper.getcallable(obj)
             c = inputconst(lltype.typeOf(funcptr), funcptr)
             predeclarefn(c_name, db.repr_arg(c))
-
         elif isinstance(lltype.typeOf(obj), lltype.Ptr):
-            pass
-
+            if c_name.startswith("RPyExc_"):
+                c_name = c_name[1:]
+                ccode.append("void raise%s(char *);\n" % c_name)
+            #else:
+            #    # XXX we really shouldnt do this
+            #    predeclarefn(c_name, db.obj2node[obj._obj].ref)                
         elif type(c_name) is str and type(obj) is int:
             ccode.append("#define\t%s\t%d\n" % (c_name, obj))
-
         else:
             assert False, "unhandled extern_decls %s %s %s" % (c_name, type(obj), obj)
 
+
+    # append protos
+    ccode.append(open(get_module_file('protos.h')).read())
 
     # include this early to get constants and macros for any further includes
     ccode.append('#include <Python.h>\n')
 
     # ask gcpolicy for any code needed
     ccode.append('%s\n' % db.gcpolicy.genextern_code())
-
+    
+    ccode.append('\n')
     for c_include in c_includes:
         ccode.append('#include <%s>\n' % c_include)
-        
+
     for c_source in c_sources:
+        for l in c_source:
+            ccode.append(l)
         ccode.append('\n')
-        ccode.append(c_source + '\n') 
-    ccode.append('\n')
 
     # append our source file
     ccode.append(open(get_module_file('genexterns.c')).read())
-    llcode = get_ll("".join(ccode), function_names, default_cconv)
-    return llcode
+    return get_ll("".join(ccode), function_names, default_cconv)

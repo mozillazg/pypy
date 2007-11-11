@@ -1,4 +1,4 @@
-" THIS IS ONLY FOR TESTING "
+" XXX THIS IS ONLY FOR TESTING XXX "
 
 import py
 import ctypes

@@ -645,10 +645,6 @@ class AppTestStringObject:
     def test_decode(self):
         assert 'hello'.decode('rot-13') == 'uryyb'
         assert 'hello'.decode('string-escape') == 'hello'
-
-    def test_encode(self):
-        assert 'hello'.encode() == 'hello'
-        assert type('hello'.encode()) is str
         
     def test_hash(self):
         # check that we have the same hash as CPython for at least 31 bits

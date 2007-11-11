@@ -126,7 +126,7 @@ class MixedModule(Module):
             assert os.path.basename(fname).startswith('__init__.py')
             # make it clear that it's not really the interp-level module
             # at this path that we are seeing, but an app-level version of it
-            fname = os.path.dirname(fname)
+            fname = os.path.join(os.path.dirname(fname), '*.py')
             cls._fname = fname 
         return space.wrap(fname) 
 

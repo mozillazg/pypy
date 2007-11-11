@@ -5,13 +5,13 @@ log = log.codewriter
 
 class CodeWriter(object): 
     tail = ''       #/tail
-    cconv = 'ccc'    #ccc/fastcc
+    cconv = 'fastcc'    #ccc/fastcc
     linkage = 'internal '       #/internal (disabled for now because of the JIT)
 
     def __init__(self, file, db, tail=None, cconv=None, linkage=None): 
-        self.db = db
         self.file = file
         self.word_repr = db.get_machine_word()
+        self.uword_repr = db.get_machine_uword()
         if tail is not None:
             self.tail = tail
         if cconv is not None:
@@ -48,6 +48,7 @@ class CodeWriter(object):
     def write_lines(self, lines, patch=False):
         for l in lines.split("\n"):
             if patch:
+                l = l.replace('UWORD', self.uword_repr)
                 l = l.replace('WORD', self.word_repr)
                 l = l.replace('POSTFIX', postfix())
                 l = l.replace('CC', self.cconv)
@@ -62,9 +63,7 @@ class CodeWriter(object):
 
     def header_comment(self, s):
         self.newline()
-        self.comment('=' * 78, indent=False)
-        self.comment(s, indent=False)
-        self.comment('=' * 78, indent=False)
+        self.comment(s)
         self.newline()
 
     def newline(self):
@@ -86,6 +85,11 @@ class CodeWriter(object):
         if cconv is None:
             cconv = self.cconv
         self._append("declare %s %s" %(cconv, decl,))
+
+    def startimpl(self):
+        self.newline()
+        #self._append("implementation")
+        self.newline()
 
     def br_uncond(self, blockname): 
         self._indent("br label %%%s" %(blockname,))
@@ -192,7 +196,7 @@ class CodeWriter(object):
         self._indent("%s = alloca %s" % (targetvar, vartype))
 
     def malloc(self, targetvar, vartype, numelements=1):
-        XXX # we should use this for raw malloc (unless it is slow)
+        XXX
         if numelements == 1:
             self._indent("%s = malloc %s" % (targetvar, vartype))
         else:
@@ -203,12 +207,4 @@ class CodeWriter(object):
             
 
     def free(self, vartype, varref):
-        XXX # we should use this for raw malloc (unless it is slow)
         self._indent("free %s %s" % (vartype, varref))
-
-    def debug_print(self, s):
-        var = self.db.repr_tmpvar()
-        node = self.db.create_debug_string(s)
-        self.call(var, "i32", "@write",
-                  ['i32', '[0 x i8]*', 'i32'],
-                  ['2', node.get_childref(0), '%d' % node.get_length()])

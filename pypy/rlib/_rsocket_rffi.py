@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem.rffi import CCHARP
-from pypy.rlib.rposix import get_errno as geterrno
+from pypy.rpython.lltypesystem.rffi import get_errno as geterrno
 
 from pypy.rlib.rarithmetic import intmask, r_uint
 import os
@@ -461,7 +461,7 @@ getprotobyname = external('getprotobyname', [rffi.CCHARP], lltype.Ptr(cConfig.pr
 
 if _POSIX:
     fcntl = external('fcntl', [socketfd_type, rffi.INT, rffi.INT], rffi.INT)
-    socketpair_t = rffi.CArray(socketfd_type)
+    socketpair_t = rffi.CFixedArray(socketfd_type, 2)
     socketpair = external('socketpair', [rffi.INT, rffi.INT, rffi.INT,
                           lltype.Ptr(socketpair_t)], rffi.INT)
 

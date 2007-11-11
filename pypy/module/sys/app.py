@@ -1,4 +1,6 @@
-# NOT_RPYTHON
+# NOT_RPYTHON   -- flowing results in
+# AttributeError:   << 'FlowObjSpace' object has no attribute 'w_AttributeError'
+# XXX investigate!
 """
 The 'sys' module.
 """
