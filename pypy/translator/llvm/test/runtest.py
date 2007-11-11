@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem.lltype import typeOf
 
 optimize_tests = False
 native_llvm_backend = True
-MINIMUM_LLVM_VERSION = 2.0
+MINIMUM_LLVM_VERSION = 2.1
 FLOAT_PRECISION = 8
 
 # prevents resource leaking
@@ -39,7 +39,7 @@ def _cleanup(leave=0):
         del _ext_modules[:-leave]
     else:
         del _ext_modules[:]
-
+            
 def teardown_module(mod):
     _cleanup()
     
@@ -92,13 +92,12 @@ def wrapfn(fn):
 
 def genllvm_compile(function,
                     annotation,
-                    gcpolicy='boehm',
                     
                     # debug options
                     debug=True,
                     logging=False,
                     isolate=True,
-                    
+
                     # pass to compile
                     optimize=True,
                     extra_opts={}):
@@ -114,7 +113,7 @@ def genllvm_compile(function,
         'translation.llvm.logging': logging,
         'translation.llvm.isolate': isolate,
         'translation.backendopt.none': not optimize,
-        'translation.gc': gcpolicy,
+        'translation.gc': 'boehm',
         'translation.llvm_via_c' : not native_llvm_backend 
         }
 
@@ -131,8 +130,8 @@ def genllvm_compile(function,
     driver.compile() 
     if conftest.option.view:
         driver.translator.view()
-    return driver
-    
+    return driver.c_module, driver.c_entryp
+
 def compile_test(function, annotation, isolate_hint=True, **kwds):
     " returns module and compiled function "    
     llvm_test()
@@ -146,9 +145,8 @@ def compile_test(function, annotation, isolate_hint=True, **kwds):
     # maintain only 3 isolated process (if any)
     _cleanup(leave=3)
     optimize = kwds.pop('optimize', optimize_tests)
-    driver = genllvm_compile(function, annotation, optimize=optimize,
-                             isolate=isolate, **kwds)
-    mod, fn = driver.c_module, driver.c_entryp
+    mod, fn = genllvm_compile(function, annotation, optimize=optimize,
+                              isolate=isolate, **kwds)
     if isolate:
         _ext_modules.append(mod)
     return mod, wrapfn(fn)
@@ -157,9 +155,6 @@ def compile_function(function, annotation, isolate_hint=True, **kwds):
     " returns compiled function "
     return compile_test(function, annotation, isolate_hint=isolate_hint, **kwds)[1]
 
-def compile_standalone(function, **kwds):
-    optimize = kwds.pop('optimize', optimize_tests)
-    drvier = genllvm_compile(function, None, optimize=optimize, **kwds)
 #______________________________________________________________________________
 
 # XXX Work in progress, this was mostly copied from cli
@@ -194,8 +189,7 @@ class LLVMTest(BaseRtypingTest, LLRtypeMixin):
             py.test.skip('PowerPC --> %s' % reason)
 
     def _skip_llinterpreter(self, reason, skipLL=True, skipOO=True):
-        if skipLL:
-            py.test.skip("skip_llinterpreter - skipLL=True")
+        pass
 
     def interpret(self, fn, args, annotation=None):
         fn = self._compile(fn, args, annotation)
@@ -210,7 +204,6 @@ class LLVMTest(BaseRtypingTest, LLRtypeMixin):
             self.interpret(fn, args)
         except ExceptionWrapper, ex:
             assert issubclass(eval(ex.class_name), exception)
-            return True
         else:
             assert False, 'function did raise no exception at all'
 
