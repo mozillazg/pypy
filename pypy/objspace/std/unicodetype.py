@@ -145,7 +145,34 @@ from pypy.objspace.std.stringtype import str_lstrip as unicode_lstrip
 def getdefaultencoding(space):
     return space.sys.defaultencoding
 
-def unicode_from_encoded_object(space, w_obj, encoding, errors):
+def _get_encoding_and_errors(space, w_encoding, w_errors):
+    if space.is_w(w_encoding, space.w_None):
+        encoding = None
+    else:
+        encoding = space.str_w(w_encoding)
+    if space.is_w(w_errors, space.w_None):
+        errors = None
+    else:
+        errors = space.str_w(w_errors)
+    return encoding, errors
+
+def encode_object(space, w_object, encoding, errors):
+    w_codecs = space.getbuiltinmodule("_codecs")
+    w_encode = space.getattr(w_codecs, space.wrap("encode"))
+    if errors is None:
+        w_retval = space.call_function(w_encode, w_object, space.wrap(encoding))
+    else:
+        w_retval = space.call_function(w_encode, w_object, space.wrap(encoding),
+                                       space.wrap(errors))
+    if not space.is_true(space.isinstance(w_retval, space.w_str)):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap(
+                "encoder did not return an string object (type=%s)" %
+                        space.type(w_retval).getname(space, '?')))
+    return w_retval
+
+def decode_object(space, w_object, encoding, errors):
     w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
         encoding = getdefaultencoding(space)
@@ -155,6 +182,11 @@ def unicode_from_encoded_object(space, w_obj, encoding, errors):
     else:
         w_retval = space.call_function(w_decode, w_obj, space.wrap(encoding),
                                        space.wrap(errors))
+    return w_retval
+
+
+def unicode_from_encoded_object(space, w_obj, encoding, errors):
+    w_retval = decode_object(space, w_obj, encoding, errors)
     if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
         raise OperationError(
             space.w_TypeError,
@@ -162,7 +194,6 @@ def unicode_from_encoded_object(space, w_obj, encoding, errors):
                 "decoder did not return an unicode object (type=%s)" %
                         space.type(w_retval).getname(space, '?')))
     return w_retval
-
 
 def unicode_from_object(space, w_obj):
     if space.is_true(space.isinstance(w_obj, space.w_str)):
@@ -196,17 +227,6 @@ def unicode_from_string(space, w_str):
         # raising UnicodeDecodeError is messy, "please crash for me"
         return unicode_from_object(space, w_str)
 
-
-def _get_encoding_and_errors(space, w_encoding, w_errors):
-    if space.is_w(w_encoding, space.w_None):
-        encoding = None
-    else:
-        encoding = space.str_w(w_encoding)
-    if space.is_w(w_errors, space.w_None):
-        errors = None
-    else:
-        errors = space.str_w(w_errors)
-    return encoding, errors
 
 def descr__new__(space, w_unicodetype, w_obj='', w_encoding=None, w_errors=None):
     # NB. the default value of w_obj is really a *wrapped* empty string:
