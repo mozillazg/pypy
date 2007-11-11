@@ -51,7 +51,6 @@ def unicode_w__String(space, w_self):
     # XXX should this use the default encoding?
     return _decode_ascii(space, w_self._value)
 
-
 def _is_generic(space, w_self, fun): 
     v = w_self._value
     if len(v) == 0:
@@ -905,29 +904,25 @@ app = gateway.applevel(r'''
         L =  [ table[ord(s[i])] for i in range(len(s)) if s[i] not in deletechars ]
         return ''.join(L)
 
-    def str_decode__String_ANY_ANY(str, encoding=None, errors=None):
-        import codecs
-        if encoding is None and errors is None:
-            return unicode(str)
-        elif errors is None:
-            return codecs.getdecoder(encoding)(str)[0]
-        else:
-            return codecs.getdecoder(encoding)(str, errors)[0]
-
-    def str_encode__String_ANY_ANY(str, encoding=None, errors=None):
-        import codecs
-        if encoding is None and errors is None:
-            return unicode(str)
-        elif errors is None:
-            return codecs.getencoder(encoding)(str)[0]
-        else:
-            return codecs.getencoder(encoding)(str, errors)[0]
 ''', filename=__file__) 
 
 
 str_translate__String_ANY_ANY = app.interphook('str_translate__String_ANY_ANY') 
-str_decode__String_ANY_ANY = app.interphook('str_decode__String_ANY_ANY') 
-str_encode__String_ANY_ANY = app.interphook('str_encode__String_ANY_ANY') 
+
+def str_decode__String_ANY_ANY(space, w_string, w_encoding=None, w_errors=None):
+    from pypy.objspace.std.unicodetype import _get_encoding_and_errors, \
+        unicode_from_string, encode_object
+    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
+    if encoding is None and errors is None:
+        return unicode_from_string(space, w_string)
+    return encode_object(space, w_string, encoding, errors)
+
+def str_encode__String_ANY_ANY(space, w_string, w_encoding=None, w_errors=None):
+    #import pdb; pdb.set_trace()
+    from pypy.objspace.std.unicodetype import _get_encoding_and_errors, \
+        encode_object
+    encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
+    return encode_object(space, w_string, encoding, errors)
 
 # CPython's logic for deciding if  ""%values  is
 # an error (1 value, 0 %-formatters) or not

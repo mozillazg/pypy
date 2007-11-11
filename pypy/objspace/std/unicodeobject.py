@@ -739,24 +739,12 @@ def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
                                     w_encoding=None,
                                     w_errors=None):
 
-    from pypy.objspace.std.unicodetype import getdefaultencoding
-    from pypy.objspace.std.unicodetype import _get_encoding_and_errors
-    w_codecs = space.getbuiltinmodule("_codecs")
+    from pypy.objspace.std.unicodetype import getdefaultencoding, \
+        _get_encoding_and_errors, encode_object
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
     if encoding is None:
         encoding = getdefaultencoding(space)
-    w_encode = space.getattr(w_codecs, space.wrap("encode"))
-    if errors is None:
-        w_retval = space.call_function(w_encode, w_unistr, space.wrap(encoding))
-    else:
-        w_retval = space.call_function(w_encode, w_unistr, space.wrap(encoding),
-                                       space.wrap(errors))
-    if not space.is_true(space.isinstance(w_retval, space.w_str)):
-        raise OperationError(
-            space.w_TypeError,
-            space.wrap(
-                "encoder did not return an string object (type=%s)" %
-                        space.type(w_retval).getname(space, '?')))
+    w_retval = encode_object(space, w_unistr, encoding, errors)
     return w_retval
 
 def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
