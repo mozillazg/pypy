@@ -755,7 +755,7 @@ def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
         raise OperationError(
             space.w_TypeError,
             space.wrap(
-                "encoder did not return an unicode object (type=%s)" %
+                "encoder did not return an string object (type=%s)" %
                         space.type(w_retval).getname(space, '?')))
     return w_retval
 
