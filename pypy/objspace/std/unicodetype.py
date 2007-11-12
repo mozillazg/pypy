@@ -172,7 +172,7 @@ def encode_object(space, w_object, encoding, errors):
                         space.type(w_retval).getname(space, '?')))
     return w_retval
 
-def decode_object(space, w_object, encoding, errors):
+def decode_object(space, w_obj, encoding, errors):
     w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
         encoding = getdefaultencoding(space)
