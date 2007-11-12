@@ -11,7 +11,12 @@ def raise_unicode_exception(errors, encoding, msg, s, startingpos, endingpos,
                 "%s can't decode byte %s in position %s: %s" % (
                 encoding, s[startingpos], startingpos, msg))
     else:
-        XXX
+        raise UnicodeEncodeError(
+                "%s can't encode byte %s in position %s: %s" % (
+                encoding, s[startingpos], startingpos, msg))
+
+# ____________________________________________________________ 
+# unicode decoding
 
 utf8_code_length = [
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
@@ -290,3 +295,144 @@ def str_decode_ascii(s, size, errors, final=False,
                                   s,  pos, pos + 1)
             p += r
     return u"".join(p), pos
+
+
+# ____________________________________________________________ 
+# unicode encoding 
+
+
+def unicode_encode_utf8(s, size, errors, errorhandler=raise_unicode_exception):
+    assert(size >= 0)
+    p = []
+    i = 0
+    while i < size:
+        ch = s[i]
+        i += 1
+        if (ord(ch) < 0x80):
+            # Encode ASCII 
+            p += chr(ord(ch))
+        elif (ord(ch) < 0x0800) :
+            # Encode Latin-1 
+            p += chr((0xc0 | (ord(ch) >> 6)))
+            p += chr((0x80 | (ord(ch) & 0x3f)))
+        else:
+            # Encode UCS2 Unicode ordinals
+            if (ord(ch) < 0x10000):
+                # Special case: check for high surrogate
+                if (0xD800 <= ord(ch) and ord(ch) <= 0xDBFF and i != size) :
+                    ch2 = s[i]
+                    # Check for low surrogate and combine the two to
+                    # form a UCS4 value
+                    if (0xDC00 <= ord(ch2) and ord(ch2) <= 0xDFFF) :
+                        ch3 = ((ord(ch) - 0xD800) << 10 | (ord(ch2) - 0xDC00)) + 0x10000
+                        i += 1
+                        _encodeUCS4(p, ch)
+                        continue
+                # Fall through: handles isolated high surrogates
+                p += (chr((0xe0 | (ord(ch) >> 12))))
+                p += (chr((0x80 | ((ord(ch) >> 6) & 0x3f))))
+                p += (chr((0x80 | (ord(ch) & 0x3f))))
+                continue
+            else:
+                _encodeUCS4(p, ord(ch))
+    return "".join(p)
+
+def _encodeUCS4(p, ch):
+    # Encode UCS4 Unicode ordinals
+    p +=  (chr((0xf0 | (ch >> 18))))
+    p +=  (chr((0x80 | ((ch >> 12) & 0x3f))))
+    p +=  (chr((0x80 | ((ch >> 6) & 0x3f))))
+    p +=  (chr((0x80 | (ch & 0x3f))))
+
+
+def unicode_encode_ucs1_helper(p, size, errors,
+                               errorhandler=raise_unicode_exception, limit=256):
+    
+    if limit == 256:
+        reason = "ordinal not in range(256)"
+        encoding = "latin-1"
+    else:
+        reason = "ordinal not in range(128)"
+        encoding = "ascii"
+    
+    if (size == 0):
+        return ''
+    res = []
+    pos = 0
+    while pos < len(p):
+        ch = p[pos]
+        
+        if ord(ch) < limit:
+            res += chr(ord(ch))
+            pos += 1
+        else:
+            # startpos for collecting unencodable chars
+            collstart = pos 
+            collend = pos+1 
+            while collend < len(p) and ord(p[collend]) >= limit:
+                collend += 1
+            x = errorhandler(errors, encoding, reason, p,
+                             collstart, collend, False)
+            res += str(x[0])
+            pos = x[1]
+    
+    return "".join(res)
+
+def unicode_encode_latin1(p, size, errors):
+    res = unicode_encode_ucs1_helper(p, size, errors, 256)
+    return res
+
+def unicode_encode_ascii(p, size, errors):
+    res = unicode_encode_ucs1_helper(p, size, errors, 128)
+    return res
+
+
+def _STORECHAR(p, CH, byteorder):
+    hi = chr(((CH) >> 8) & 0xff)
+    lo = chr((CH) & 0xff)
+    if byteorder == 'little':
+        p.append(lo)
+        p.append(hi)
+    else:
+        p.append(hi)
+        p.append(lo)
+
+def unicode_encode_utf16_helper(s, size, errors,
+                                errorhandler=raise_unicode_exception,
+                                byteorder='little'):
+    p = []
+    if (byteorder == 'native'):
+        _STORECHAR(p, 0xFEFF, sys.byteorder)
+        byteorder = sys.byteorder
+        
+    if size == 0:
+        return ""
+
+    i = 0
+    while i < size:
+        ch = ord(s[i])
+        i += 1
+        ch2 = 0
+        if (ch >= 0x10000) :
+            ch2 = 0xDC00 | ((ch-0x10000) & 0x3FF)
+            ch  = 0xD800 | ((ch-0x10000) >> 10)
+
+        _STORECHAR(p, ch, byteorder)
+        if ch2:
+            _STORECHAR(p, ch2, byteorder)
+
+    return "".join(p)
+
+def unicode_encode_utf16(s, size, errors,
+                         errorhandler=raise_unicode_exception):
+    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "native")
+
+
+def unicode_encode_utf16be(s, size, errors,
+                           errorhandler=raise_unicode_exception):
+    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "big")
+
+
+def unicode_encode_utf16le(s, size, errors,
+                           errorhandler=raise_unicode_exception):
+    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "little")
