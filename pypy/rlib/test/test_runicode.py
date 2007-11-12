@@ -118,6 +118,23 @@ class TestDecoding(UnicodeTests):
     def test_ascii_error(self):
         self.checkdecodeerror("abc\xFF\xFF\xFFcde", "ascii", 3, 4)
 
+    def test_utf16_errors(self):
+        # trunkated BOM
+        for s in ["\xff", "\xfe"]:
+            self.checkdecodeerror(s, "utf16", 0, len(s), addstuff=False)
+
+        for s in [
+                  # unexpected end of data ascii
+                  "\xff\xfeF",
+                  # unexpected end of data
+                  '\xff\xfe\xc0\xdb\x00', '\xff\xfe\xc0\xdb', '\xff\xfe\xc0', 
+                  ]:
+            self.checkdecodeerror(s, "utf16", 2, len(s), addstuff=False)
+        for s in [
+                  # illegal surrogate
+                  "\xff\xfe\xff\xdb\xff\xff",
+                  ]:
+            self.checkdecodeerror(s, "utf16", 2, 4, addstuff=False)
 
 class TestEncoding(UnicodeTests):
     def test_all_ascii(self):
