@@ -154,9 +154,27 @@ def str_decode_utf8(s, size, errors, final=False,
 
 def str_decode_latin1(s, size, errors, final=False,
                       errorhandler=raise_unicode_exception):
+    # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
     p = []
     while (pos < size):
         p += unichr(ord(s[pos]))
         pos += 1
+    return u"".join(p), pos
+
+
+def str_decode_ascii(s, size, errors, final=False,
+                     errorhandler=raise_unicode_exception):
+    # ASCII is equivalent to the first 128 ordinals in Unicode.
+    p = []
+    pos = 0
+    while pos < len(s):
+        c = s[pos]
+        if ord(c) < 128:
+            p += unichr(ord(c))
+            pos += 1
+        else:
+            r, pos = errorhandler(errors, "ascii", "ordinal not in range(128)",
+                                  s,  pos, pos + 1)
+            p += r
     return u"".join(p), pos

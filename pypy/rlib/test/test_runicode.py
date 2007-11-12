@@ -21,7 +21,7 @@ class TestDecoding(UnicodeTests):
     
     def test_all_ascii(self):
         for i in range(128):
-            for encoding in "utf8 latin1".split():
+            for encoding in "utf8 latin1 ascii".split():
                 self.checkdecode(chr(i), encoding)
 
     def test_all_first_256(self):
