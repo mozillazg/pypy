@@ -347,10 +347,9 @@ def _encodeUCS4(p, ch):
 
 def unicode_encode_ucs1_helper(p, size, errors,
                                errorhandler=raise_unicode_exception, limit=256):
-    
     if limit == 256:
         reason = "ordinal not in range(256)"
-        encoding = "latin-1"
+        encoding = "latin1"
     else:
         reason = "ordinal not in range(128)"
         encoding = "ascii"
@@ -371,19 +370,18 @@ def unicode_encode_ucs1_helper(p, size, errors,
             collend = pos+1 
             while collend < len(p) and ord(p[collend]) >= limit:
                 collend += 1
-            x = errorhandler(errors, encoding, reason, p,
-                             collstart, collend, False)
-            res += str(x[0])
-            pos = x[1]
+            r, pos = errorhandler(errors, encoding, reason, p,
+                                  collstart, collend, False)
+            res += r
     
     return "".join(res)
 
-def unicode_encode_latin1(p, size, errors):
-    res = unicode_encode_ucs1_helper(p, size, errors, 256)
+def unicode_encode_latin1(p, size, errors, errorhandler=raise_unicode_exception):
+    res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
     return res
 
-def unicode_encode_ascii(p, size, errors):
-    res = unicode_encode_ucs1_helper(p, size, errors, 128)
+def unicode_encode_ascii(p, size, errors, errorhandler=raise_unicode_exception):
+    res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 128)
     return res
 
 

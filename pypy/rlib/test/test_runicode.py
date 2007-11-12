@@ -28,6 +28,23 @@ class UnicodeTests(object):
         result = encoder(s, len(s), True)
         self.typeequals(trueresult, result)
 
+    def checkencodeerror(self, s, encoding, start, stop):
+        called = [False]
+        def errorhandler(errors, enc, msg, t, startingpos,
+                         endingpos, decode):
+            called[0] = True
+            assert errors == "foo!"
+            assert enc == encoding
+            assert t is s
+            assert start == startingpos
+            assert stop == endingpos
+            assert not decode
+            return "42424242", stop
+        encoder = getattr(runicode,
+                          "unicode_encode_%s" % encoding.replace("-", ""))
+        result = encoder(s, len(s), "foo!", errorhandler)
+        assert called[0]
+        assert "42424242" in result
 
 class TestDecoding(UnicodeTests):
     
@@ -76,3 +93,9 @@ class TestEncoding(UnicodeTests):
     def test_single_chars_utf8(self):
         for s in ["\xd7\x90", "\xd6\x96", "\xeb\x96\x95", "\xf0\x90\x91\x93"]:
             self.checkencode(s, "utf8")
+
+    def test_ascii_error(self):
+        self.checkencodeerror(u"abc\xFF\xFF\xFFcde", "ascii", 3, 6)
+
+    def test_latin1_error(self):
+        self.checkencodeerror(u"abc\uffff\uffff\uffffcde", "latin1", 3, 6)
