@@ -37,7 +37,7 @@ utf8_code_length = [
     4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 0, 0
 ]
 
-def str_decode_utf8(s, size, errors, final=False,
+def str_decode_utf_8(s, size, errors, final=False,
                     errorhandler=raise_unicode_exception):
     if (size == 0):
         return u'', 0
@@ -56,13 +56,13 @@ def str_decode_utf8(s, size, errors, final=False,
             if not final:
                 break
             else:
-                r, pos = errorhandler(errors, "utf8",
+                r, pos = errorhandler(errors, "utf-8",
                                       "unexpected end of data", s,  pos, size)
                 p += r
                 if (pos + n > size):
                     break
         if n == 0:
-            res = errorhandler(errors, "utf8", "unexpected code byte",
+            res = errorhandler(errors, "utf-8", "unexpected code byte",
                                s,  pos, pos + 1)
             p += res[0]
             pos = res[1]
@@ -76,13 +76,13 @@ def str_decode_utf8(s, size, errors, final=False,
             y, six = splitter[5, 3](ordch1)
             assert six == 6
             if (two != 2):
-                r, pos = errorhandler(errors, "utf8", "invalid data",
+                r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 2)
                 p += r
             else:
                 c = (y << 6) + z
                 if c < 0x80:
-                    r, pos = errorhandler(errors, "utf8", "illegal encoding",
+                    r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 2)
                     p += r
                 else:
@@ -97,7 +97,7 @@ def str_decode_utf8(s, size, errors, final=False,
             x, fourteen = splitter[4, 4](ordch1)
             assert fourteen == 14
             if (two1 != 2 or two2 != 2):
-                r, pos = errorhandler(errors, "utf8", "invalid data",
+                r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 3)
                 p += r
             else:
@@ -108,7 +108,7 @@ def str_decode_utf8(s, size, errors, final=False,
                 #     to recombine the surrogates into a single code
                 #     unit.
                 if c < 0x0800:
-                    r, pos = errorhandler(errors, "utf8", "illegal encoding",
+                    r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 3)
                     p += r
                 else:
@@ -126,7 +126,7 @@ def str_decode_utf8(s, size, errors, final=False,
             w, thirty = splitter[3, 5](ordch1)
             assert thirty == 30
             if (two1 != 2 or two2 != 2 or two3 != 2):
-                r, pos = errorhandler(errors, "utf8", "invalid data",
+                r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 4)
                 p += r
             else:
@@ -134,7 +134,7 @@ def str_decode_utf8(s, size, errors, final=False,
                 # minimum value allowed for 4 byte encoding
                 # maximum value allowed for UTF-16
                 if ((c < 0x10000) or (c > 0x10ffff)):
-                    r, pos = errorhandler(errors, "utf8", "illegal encoding",
+                    r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 4)
                     p += r
                 else:
@@ -151,7 +151,7 @@ def str_decode_utf8(s, size, errors, final=False,
                         p.append(unichr(0xDC00 + (c & 0x03FF)))
                     pos += n
         else:
-            r, pos = errorhandler(errors, "utf8",
+            r, pos = errorhandler(errors, "utf-8",
                                   "unsupported Unicode code range",
                                   s,  pos, pos + n)
             p += r
@@ -159,27 +159,27 @@ def str_decode_utf8(s, size, errors, final=False,
     return u"".join(p), pos
 
 
-def str_decode_utf16(s, size, errors, final=True,
+def str_decode_utf_16(s, size, errors, final=True,
                      errorhandler=raise_unicode_exception):
-    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
-                                                        errorhandler, "native")
+    result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
+                                                         errorhandler, "native")
     return result, length
 
-def str_decode_utf16be(s, size, errors, final=True,
+def str_decode_utf_16_be(s, size, errors, final=True,
                        errorhandler=raise_unicode_exception):
-    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
-                                                        errorhandler, "big")
+    result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
+                                                         errorhandler, "big")
     return result, length
 
-def str_decode_utf16le(s, size, errors, final=True,
-                       errorhandler=raise_unicode_exception):
-    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
-                                                        errorhandler, "little")
+def str_decode_utf_16_le(s, size, errors, final=True,
+                         errorhandler=raise_unicode_exception):
+    result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
+                                                         errorhandler, "little")
     return result, length
 
-def str_decode_utf16_helper(s, size, errors, final=True,
-                            errorhandler=raise_unicode_exception,
-                            byteorder="native"):
+def str_decode_utf_16_helper(s, size, errors, final=True,
+                             errorhandler=raise_unicode_exception,
+                             byteorder="native"):
 
     bo = 0
     consumed = 0
@@ -236,7 +236,7 @@ def str_decode_utf16_helper(s, size, errors, final=True,
         if len(s) - pos < 2:
             if not final:
                 break
-            r, pos = errorhandler(errors, 'utf16', "truncated data",
+            r, pos = errorhandler(errors, 'utf-16', "truncated data",
                                 s, pos, len(s), True)
             result.append(r)
             if len(s) - pos < 2:
@@ -251,7 +251,7 @@ def str_decode_utf16_helper(s, size, errors, final=True,
             if not final:
                 break
             errmsg = "unexpected end of data"
-            r, pos = errorhandler(errors, 'utf16', errmsg, s, pos - 2, len(s))
+            r, pos = errorhandler(errors, 'utf-16', errmsg, s, pos - 2, len(s))
             result.append(r)
             if len(s) - pos < 2:
                 break
@@ -266,7 +266,7 @@ def str_decode_utf16_helper(s, size, errors, final=True,
                     result += unichr((((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000)
                 continue
             else:
-                r, pos = errorhandler(errors, 'utf16',
+                r, pos = errorhandler(errors, 'utf-16',
                                       "illegal UTF-16 surrogate",
                                       s, pos - 4, pos - 2)
                 result.append(r)
@@ -306,7 +306,7 @@ def str_decode_ascii(s, size, errors, final=False,
 # unicode encoding 
 
 
-def unicode_encode_utf8(s, size, errors, errorhandler=raise_unicode_exception):
+def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception):
     assert(size >= 0)
     p = []
     i = 0
@@ -400,9 +400,9 @@ def _STORECHAR(p, CH, byteorder):
         p.append(hi)
         p.append(lo)
 
-def unicode_encode_utf16_helper(s, size, errors,
-                                errorhandler=raise_unicode_exception,
-                                byteorder='little'):
+def unicode_encode_utf_16_helper(s, size, errors,
+                                 errorhandler=raise_unicode_exception,
+                                 byteorder='little'):
     p = []
     if (byteorder == 'native'):
         _STORECHAR(p, 0xFEFF, sys.byteorder)
@@ -426,16 +426,16 @@ def unicode_encode_utf16_helper(s, size, errors,
 
     return "".join(p)
 
-def unicode_encode_utf16(s, size, errors,
-                         errorhandler=raise_unicode_exception):
-    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "native")
+def unicode_encode_utf_16(s, size, errors,
+                          errorhandler=raise_unicode_exception):
+    return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "native")
 
 
-def unicode_encode_utf16be(s, size, errors,
+def unicode_encode_utf_16_be(s, size, errors,
                            errorhandler=raise_unicode_exception):
-    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "big")
+    return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "big")
 
 
-def unicode_encode_utf16le(s, size, errors,
-                           errorhandler=raise_unicode_exception):
-    return unicode_encode_utf16_helper(s, size, errors, errorhandler, "little")
+def unicode_encode_utf_16_le(s, size, errors,
+                             errorhandler=raise_unicode_exception):
+    return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "little")
