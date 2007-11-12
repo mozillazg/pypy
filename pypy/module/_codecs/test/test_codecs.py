@@ -6,6 +6,10 @@ class AppTestCodecs:
         space = gettestobjspace(usemodules=('unicodedata',))
         cls.space = space
 
+    def test_register_noncallable(self):
+        import _codecs
+        raises(TypeError, _codecs.register, 1)
+
     def test_bigU_codecs(self):
         import sys
         oldmaxunicode = sys.maxunicode

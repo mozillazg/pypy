@@ -41,100 +41,6 @@ Copyright (c) Corporation for National Research Initiatives.
 #from unicodecodec import *
 
 import sys
-#/* --- Registry ----------------------------------------------------------- */
-codec_search_path = []
-codec_search_cache = {}
-codec_error_registry = {}
-codec_need_encodings = [True]
-
-def codec_register( search_function ):
-    """register(search_function)
-    
-    Register a codec search function. Search functions are expected to take
-    one argument, the encoding name in all lower case letters, and return
-    a tuple of functions (encoder, decoder, stream_reader, stream_writer).
-    """
-
-    if callable(search_function):
-        codec_search_path.append(search_function)
-
-register = codec_register
-
-def codec_lookup(encoding):
-    """lookup(encoding) -> (encoder, decoder, stream_reader, stream_writer)
-    Looks up a codec tuple in the Python codec registry and returns
-    a tuple of functions.
-    """
-    if not isinstance(encoding, str):
-        raise TypeError("Encoding must be a string")
-    normalized_encoding = encoding.replace(" ", "-").lower()    
-    result = codec_search_cache.get(normalized_encoding, None)
-    if not result:
-        if codec_need_encodings:
-            import encodings
-            if len(codec_search_path) == 0:
-                raise LookupError("no codec search functions registered: can't find encoding")
-            del codec_need_encodings[:]
-        for search in codec_search_path:
-            result = search(normalized_encoding)
-            if result:
-                if not (type(result) == tuple and len(result) == 4):
-                    raise TypeError("codec search functions must return 4-tuples")
-                else:
-                    codec_search_cache[normalized_encoding] = result 
-                    return result
-        if not result:
-            raise LookupError("unknown encoding: %s" % encoding)
-    return result
-    
-
-lookup = codec_lookup
-
-def encode(v, encoding=None, errors='strict'):
-    """encode(obj, [encoding[,errors]]) -> object
-    
-    Encodes obj using the codec registered for encoding. encoding defaults
-    to the default encoding. errors may be given to set a different error
-    handling scheme. Default is 'strict' meaning that encoding errors raise
-    a ValueError. Other possible values are 'ignore', 'replace' and
-    'xmlcharrefreplace' as well as any other name registered with
-    codecs.register_error that can handle ValueErrors.
-    """
-    if encoding == None:
-        encoding = sys.getdefaultencoding()
-    if isinstance(encoding, str):
-        encoder = lookup(encoding)[0]
-        if encoder and isinstance(errors, str):
-            res = encoder(v, errors)
-            return res[0]
-        else:
-            raise TypeError("Errors must be a string")
-    else:
-        raise TypeError("Encoding must be a string")
-
-def decode(obj, encoding=None, errors='strict'):
-    """decode(obj, [encoding[,errors]]) -> object
-
-    Decodes obj using the codec registered for encoding. encoding defaults
-    to the default encoding. errors may be given to set a different error
-    handling scheme. Default is 'strict' meaning that encoding errors raise
-    a ValueError. Other possible values are 'ignore' and 'replace'
-    as well as any other name registerd with codecs.register_error that is
-    able to handle ValueErrors.
-    """
-    if encoding == None:
-        encoding = sys.getdefaultencoding()
-    if isinstance(encoding, str):
-        decoder = lookup(encoding)[1]
-        if decoder and isinstance(errors, str):
-            res = decoder(obj, errors)
-            if not isinstance(res, tuple) or len(res) != 2:
-                raise TypeError("encoder must return a tuple (object, integer)")
-            return res[0]
-        else:
-            raise TypeError("Errors must be a string")
-    else:
-        raise TypeError("Encoding must be a string")
 
 def latin_1_encode( obj, errors='strict'):
     """None
@@ -500,6 +406,14 @@ def backslashreplace_errors(exc):
         raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
 
 
+def _register_existing_errors():
+    import _codecs
+    _codecs.register_error("strict", strict_errors)
+    _codecs.register_error("ignore", ignore_errors)
+    _codecs.register_error("replace", replace_errors)
+    _codecs.register_error("xmlcharrefreplace", xmlcharrefreplace_errors)
+    _codecs.register_error("backslashreplace", backslashreplace_errors)
+
 #  ----------------------------------------------------------------------
 
 ##import sys
@@ -531,38 +445,7 @@ utf7_special = [
 unicode_latin1 = [None]*256
 
 
-def lookup_error(errors):
-    """lookup_error(errors) -> handler
 
-    Return the error handler for the specified error handling name
-    or raise a LookupError, if no handler exists under this name.
-    """
-    
-    try:
-        err_handler = codec_error_registry[errors]
-    except KeyError:
-        raise LookupError("unknown error handler name %s"%errors)
-    return err_handler
-
-def register_error(errors, handler):
-    """register_error(errors, handler)
-
-    Register the specified error handler under the name
-    errors. handler must be a callable object, that
-    will be called with an exception instance containing
-    information about the location of the encoding/decoding
-    error and must return a (replacement, new position) tuple.
-    """
-    if callable(handler):
-        codec_error_registry[errors] = handler
-    else:
-        raise TypeError("handler must be callable")
-
-register_error("strict", strict_errors)
-register_error("ignore", ignore_errors)
-register_error("replace", replace_errors)
-register_error("xmlcharrefreplace", xmlcharrefreplace_errors)
-register_error("backslashreplace", backslashreplace_errors)
     
 def SPECIAL(c, encodeO, encodeWS):
     c = ord(c)
@@ -1032,7 +915,8 @@ def PyUnicode_EncodeMBCS(p, size, errors):
 def unicode_call_errorhandler(errors,  encoding, 
                 reason, input, startinpos, endinpos, decode=True):
     
-    errorHandler = lookup_error(errors)
+    import _codecs
+    errorHandler = _codecs.lookup_error(errors)
     if decode:
         exceptionObject = UnicodeDecodeError(encoding, input, startinpos, endinpos, reason)
     else:
