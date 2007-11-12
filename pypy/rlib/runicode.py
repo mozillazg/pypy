@@ -45,7 +45,7 @@ def str_decode_utf8(s, size, errors, final=False,
             p += unichr(ordch1)
             pos += 1
             continue
-        
+
         n = utf8_code_length[ordch1]
         if (pos + n > size):
             if not final:
@@ -67,7 +67,7 @@ def str_decode_utf8(s, size, errors, final=False,
             ordch2 = ord(s[pos+1])
             z, two = splitter[6, 2](ordch2)
             y, six = splitter[5, 3](ordch1)
-            assert six == 6 
+            assert six == 6
             if (two != 2):
                 r, pos = errorhandler(errors, "utf8", "invalid data",
                                       s,  pos, pos + 2)
@@ -151,6 +151,118 @@ def str_decode_utf8(s, size, errors, final=False,
 
     return u"".join(p), pos
 
+
+def str_decode_utf16(s, size, errors, final=True,
+                     errorhandler=raise_unicode_exception):
+    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
+                                                        errorhandler, "native")
+    return result, length
+
+def str_decode_utf16be(s, size, errors, final=True,
+                       errorhandler=raise_unicode_exception):
+    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
+                                                        errorhandler, "big")
+    return result, length
+
+def str_decode_utf16le(s, size, errors, final=True,
+                       errorhandler=raise_unicode_exception):
+    result, length, byteorder = str_decode_utf16_helper(s, size, errors, final,
+                                                        errorhandler, "little")
+    return result, length
+
+def str_decode_utf16_helper(s, size, errors, final=True,
+                            errorhandler=raise_unicode_exception,
+                            byteorder="native"):
+
+    bo = 0
+    consumed = 0
+
+    if sys.byteorder == 'little':
+        ihi = 1
+        ilo = 0
+    else:
+        ihi = 0
+        ilo = 1
+
+    #  Check for BOM marks (U+FEFF) in the input and adjust current
+    #  byte order setting accordingly. In native mode, the leading BOM
+    #  mark is skipped, in all other modes, it is copied to the output
+    #  stream as-is (giving a ZWNBSP character).
+    q = 0
+    p = []
+    if byteorder == 'native':
+        if (size >= 2):
+            bom = (ord(s[ihi]) << 8) | ord(s[ilo])
+            if sys.byteorder == 'little':
+                if (bom == 0xFEFF):
+                    q += 2
+                    bo = -1
+                elif bom == 0xFFFE:
+                    q += 2
+                    bo = 1
+            else:
+                if bom == 0xFEFF:
+                    q += 2
+                    bo = 1
+                elif bom == 0xFFFE:
+                    q += 2
+                    bo = -1
+    elif byteorder == 'little':
+        bo = -1
+    else:
+        bo = 1
+    if (size == 0):
+        return u'', 0, bo
+    if (bo == -1):
+        # force little endian
+        ihi = 1
+        ilo = 0
+
+    elif (bo == 1):
+        # force big endian
+        ihi = 0
+        ilo = 1
+
+    #XXX I think the errors are not correctly handled here
+    while (q < len(s)):
+        # remaining bytes at the end? (size should be even)
+        if len(s) - q < 2:
+            if not final:
+                break
+            errmsg = "truncated data"
+            startinpos = q
+            endinpos = len(s)
+            errorhandler(errors, 'utf-16', "truncated data",
+                         s, startinpos, endinpos, True)
+            # CPython ignores the remaining input chars if the callback
+            # chooses to skip the input. XXX is this sensible?
+        ch = (ord(s[q + ihi]) << 8) | ord(s[q + ilo])
+        q += 2
+        if (ch < 0xD800 or ch > 0xDFFF):
+            p += unichr(ch)
+            continue
+        # UTF-16 code pair:
+        if (q >= len(s)):
+            errmsg = "unexpected end of data"
+            errorhandler(errors, 'utf-16', errmsg, s, q - 2, len(s))
+        elif (0xD800 <= ch and ch <= 0xDBFF):
+            ch2 = (ord(s[q+ihi]) << 8) | ord(s[q+ilo])
+            q += 2
+            if (0xDC00 <= ch2 and ch2 <= 0xDFFF):
+                if MAXUNICODE < 65536:
+                    p += unichr(ch)
+                    p += unichr(ch2)
+                else:
+                    p += unichr((((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000)
+                continue
+            else:
+                errmsg = "illegal UTF-16 surrogate"
+                errorhandler(errors, 'utf-16', errmsg, s, q - 4, q - 2)
+        errmsg = "illegal encoding"
+        startinpos = q-2
+        endinpos = startinpos+2
+        errorhandler(errors, 'utf-16', errmsg, s, startinpos, endinpos, True)
+    return u"".join(p), q, bo
 
 def str_decode_latin1(s, size, errors, final=False,
                       errorhandler=raise_unicode_exception):
