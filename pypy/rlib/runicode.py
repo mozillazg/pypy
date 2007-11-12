@@ -59,6 +59,8 @@ def str_decode_utf8(s, size, errors, final=False,
                 r, pos = errorhandler(errors, "utf8",
                                       "unexpected end of data", s,  pos, size)
                 p += r
+                if (pos + n > size):
+                    break
         if n == 0:
             res = errorhandler(errors, "utf8", "unexpected code byte",
                                s,  pos, pos + 1)
