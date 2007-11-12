@@ -195,24 +195,24 @@ def str_decode_utf16_helper(s, size, errors, final=True,
     #  byte order setting accordingly. In native mode, the leading BOM
     #  mark is skipped, in all other modes, it is copied to the output
     #  stream as-is (giving a ZWNBSP character).
-    q = 0
-    p = []
+    pos = 0
+    result = []
     if byteorder == 'native':
         if (size >= 2):
             bom = (ord(s[ihi]) << 8) | ord(s[ilo])
             if sys.byteorder == 'little':
                 if (bom == 0xFEFF):
-                    q += 2
+                    pos += 2
                     bo = -1
                 elif bom == 0xFFFE:
-                    q += 2
+                    pos += 2
                     bo = 1
             else:
                 if bom == 0xFEFF:
-                    q += 2
+                    pos += 2
                     bo = 1
                 elif bom == 0xFFFE:
-                    q += 2
+                    pos += 2
                     bo = -1
     elif byteorder == 'little':
         bo = -1
@@ -231,45 +231,48 @@ def str_decode_utf16_helper(s, size, errors, final=True,
         ilo = 1
 
     #XXX I think the errors are not correctly handled here
-    while (q < len(s)):
+    while (pos < len(s)):
         # remaining bytes at the end? (size should be even)
-        if len(s) - q < 2:
+        if len(s) - pos < 2:
             if not final:
                 break
-            errmsg = "truncated data"
-            startinpos = q
-            endinpos = len(s)
-            errorhandler(errors, 'utf-16', "truncated data",
-                         s, startinpos, endinpos, True)
-            # CPython ignores the remaining input chars if the callback
-            # chooses to skip the input. XXX is this sensible?
-        ch = (ord(s[q + ihi]) << 8) | ord(s[q + ilo])
-        q += 2
+            r, pos = errorhandler(errors, 'utf16', "truncated data",
+                                s, pos, len(s), True)
+            result.append(r)
+            if len(s) - pos < 2:
+                break
+        ch = (ord(s[pos + ihi]) << 8) | ord(s[pos + ilo])
+        pos += 2
         if (ch < 0xD800 or ch > 0xDFFF):
-            p += unichr(ch)
+            result += unichr(ch)
             continue
         # UTF-16 code pair:
-        if (q >= len(s)):
+        if len(s) - pos < 2:
+            if not final:
+                break
             errmsg = "unexpected end of data"
-            errorhandler(errors, 'utf-16', errmsg, s, q - 2, len(s))
+            r, pos = errorhandler(errors, 'utf16', errmsg, s, pos - 2, len(s))
+            result.append(r)
+            if len(s) - pos < 2:
+                break
         elif (0xD800 <= ch and ch <= 0xDBFF):
-            ch2 = (ord(s[q+ihi]) << 8) | ord(s[q+ilo])
-            q += 2
+            ch2 = (ord(s[pos+ihi]) << 8) | ord(s[pos+ilo])
+            pos += 2
             if (0xDC00 <= ch2 and ch2 <= 0xDFFF):
                 if MAXUNICODE < 65536:
-                    p += unichr(ch)
-                    p += unichr(ch2)
+                    result += unichr(ch)
+                    result += unichr(ch2)
                 else:
-                    p += unichr((((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000)
+                    result += unichr((((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000)
                 continue
             else:
-                errmsg = "illegal UTF-16 surrogate"
-                errorhandler(errors, 'utf-16', errmsg, s, q - 4, q - 2)
-        errmsg = "illegal encoding"
-        startinpos = q-2
-        endinpos = startinpos+2
-        errorhandler(errors, 'utf-16', errmsg, s, startinpos, endinpos, True)
-    return u"".join(p), q, bo
+                r, pos = errorhandler(errors, 'utf16',
+                                      "illegal UTF-16 surrogate",
+                                      s, pos - 4, pos - 2)
+                result.append(r)
+        else:
+            assert 0, "unreachable"
+    return u"".join(result), pos, bo
 
 def str_decode_latin1(s, size, errors, final=False,
                       errorhandler=raise_unicode_exception):
