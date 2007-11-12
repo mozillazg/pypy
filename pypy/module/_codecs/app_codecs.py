@@ -150,22 +150,6 @@ def unicode_internal_decode( unistr, errors='strict'):
         res = u''.join(p)
         return res, len(res)
 
-def utf_16_ex_decode( data, errors='strict', byteorder=0, final=0):
-    """None
-    """
-    if byteorder == 0:
-        bm = 'native'
-    elif byteorder == -1:
-        bm = 'little'
-    else:
-        bm = 'big'
-    consumed = len(data)
-    if final:
-        consumed = 0
-    res, consumed, byteorder = PyUnicode_DecodeUTF16Stateful(data, len(data), errors, bm, final)
-    res = ''.join(res)
-    return res, consumed, byteorder
-
 # XXX needs error messages when the input is invalid
 def escape_decode(data, errors='strict'):
     """None
