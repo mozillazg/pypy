@@ -33,13 +33,13 @@ def check_decode(encoding, s):
 def check_with_length(length):
     try:
         s = make_random_encoded_string(length, 10)
-        for encoding in all_encodinds:
+        for encoding in all_encodings:
             check_decode(encoding, s)
     except Exception, e:
         print "decoding:", encoding, repr(s)
     try:
         s = make_random_unicode(length, 10)
-        for encoding in all_encodinds:
+        for encoding in all_encodings:
             check_encode(encoding, s)
     except Exception, e:
         print "encoding:", encoding, repr(s)
@@ -56,7 +56,7 @@ def main():
         for i in range(100):
             check_with_length(length)
 
-all_encodinds = "utf-8 latin1 ascii utf-16 utf-16-be utf-16-le utf-7".split()
+all_encodings = "utf-8 latin1 ascii utf-16 utf-16-be utf-16-le utf-7".split()
 
 if __name__ == '__main__':
     main()
