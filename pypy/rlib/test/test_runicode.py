@@ -1,3 +1,4 @@
+import sys, random
 from pypy.rlib import runicode
 
 class UnicodeTests(object):
@@ -6,7 +7,7 @@ class UnicodeTests(object):
         assert type(x) is type(y)
 
     def checkdecode(self, s, encoding):
-        decoder = getattr(runicode, "str_decode_%s" % encoding)
+        decoder = getattr(runicode, "str_decode_%s" % encoding.replace("-", ""))
         if isinstance(s, str):
             trueresult = s.decode(encoding)
         else:
@@ -26,7 +27,13 @@ class TestDecoding(UnicodeTests):
 
     def test_all_first_256(self):
         for i in range(256):
-            for encoding in "utf8 latin1".split():
+            for encoding in "utf8 latin1 utf16 utf-16-be utf-16-le".split():
+                self.checkdecode(unichr(i), encoding)
+
+    def test_random(self):
+        for i in range(10000):
+            uni = unichr(random.randrange(sys.maxunicode))
+            for encoding in "utf8 utf16 utf-16-be utf-16-le".split():
                 self.checkdecode(unichr(i), encoding)
 
     def test_single_chars_utf8(self):
