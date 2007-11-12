@@ -163,7 +163,7 @@ def decode(space, w_obj, encoding=NoneNotWrapped, errors='strict'):
     able to handle ValueErrors.
     """
     if encoding is None:
-        encoding = sys.getdefaultencoding()
+        encoding = space.sys.defaultencoding
     w_decoder = space.getitem(lookup_codec(space, encoding), space.wrap(1))
     if space.is_true(w_decoder):
         w_res = space.call_function(w_decoder, w_obj, space.wrap(errors))
