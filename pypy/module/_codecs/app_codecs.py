@@ -331,9 +331,6 @@ utf7_special = [
     3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 1, 1,
 ]
-unicode_latin1 = [None]*256
-
-
 
     
 def SPECIAL(c, encodeO, encodeWS):
@@ -631,54 +628,6 @@ def unicode_call_errorhandler(errors,  encoding,
         raise TypeError("encoding error handler must return (unicode, int) tuple, not %s" % repr(res))
 
 
-#/* --- Latin-1 Codec ------------------------------------------------------ */
-
-def PyUnicode_DecodeLatin1(s, size, errors):
-    #/* Latin-1 is equivalent to the first 256 ordinals in Unicode. */
-##    if (size == 1):
-##        return [PyUnicode_FromUnicode(s, 1)]
-    pos = 0
-    p = []
-    while (pos < size):
-        p += unichr(ord(s[pos]))
-        pos += 1
-    return p
-
-def unicode_encode_ucs1(p, size, errors, limit):
-    
-    if limit == 256:
-        reason = "ordinal not in range(256)"
-        encoding = "latin-1"
-    else:
-        reason = "ordinal not in range(128)"
-        encoding = "ascii"
-    
-    if (size == 0):
-        return ['']
-    res = []
-    pos = 0
-    while pos < len(p):
-    #for ch in p:
-        ch = p[pos]
-        
-        if ord(ch) < limit:
-            res += chr(ord(ch))
-            pos += 1
-        else:
-            #/* startpos for collecting unencodable chars */
-            collstart = pos 
-            collend = pos+1 
-            while collend < len(p) and ord(p[collend]) >= limit:
-                collend += 1
-            x = unicode_call_errorhandler(errors, encoding, reason, p, collstart, collend, False)
-            res += str(x[0])
-            pos = x[1]
-    
-    return res
-
-def PyUnicode_EncodeLatin1(p, size, errors):
-    res = unicode_encode_ucs1(p, size, errors, 256)
-    return res
 
 hexdigits = [hex(i)[-1] for i in range(16)]+[hex(i)[-1].upper() for i in range(10, 16)]
 
@@ -872,7 +821,8 @@ def PyUnicode_EncodeCharmap(p, size, mapping='latin-1', errors='strict'):
 
 #    /* Default to Latin-1 */
     if mapping == 'latin-1':
-        return PyUnicode_EncodeLatin1(p, size, errors)
+        import _codecs
+        return _codecs.latin_1_encode(p, size, errors)
     if (size == 0):
         return ''
     inpos = 0
@@ -897,7 +847,8 @@ def PyUnicode_DecodeCharmap(s, size, mapping, errors):
 
 ##    /* Default to Latin-1 */
     if (mapping == None):
-        return PyUnicode_DecodeLatin1(s, size, errors)
+        import _codecs
+        return _codecs.latin_1_decode(s, size, errors)
 
     if (size == 0):
         return u''
