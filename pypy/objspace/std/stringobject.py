@@ -889,25 +889,28 @@ def repr__String(space, w_str):
     return space.wrap("".join(buf[:i+1])) # buffer was overallocated, so slice
 
    
-app = gateway.applevel(r'''
-    def str_translate__String_ANY_ANY(s, table, deletechars=''):
-        """charfilter - unicode handling is not implemented
-        
-        Return a copy of the string where all characters occurring 
-        in the optional argument deletechars are removed, and the 
-        remaining characters have been mapped through the given translation table, 
-        which must be a string of length 256"""
+def str_translate__String_ANY_ANY(space, w_string, w_table, w_deletechars=''):
+    """charfilter - unicode handling is not implemented
+    
+    Return a copy of the string where all characters occurring 
+    in the optional argument deletechars are removed, and the 
+    remaining characters have been mapped through the given translation table, 
+    which must be a string of length 256"""
 
-        if len(table) != 256:
-            raise ValueError("translation table must be 256 characters long")
+    # XXX CPython accepts buffers, too, not sure what we should do
+    table = space.str_w(w_table)
+    if len(table) != 256:
+        raise OperationError(
+            space.w_ValueError,
+            space.wrap("translation table must be 256 characters long"))
 
-        L =  [ table[ord(s[i])] for i in range(len(s)) if s[i] not in deletechars ]
-        return ''.join(L)
-
-''', filename=__file__) 
-
-
-str_translate__String_ANY_ANY = app.interphook('str_translate__String_ANY_ANY') 
+    string = w_string._value
+    chars = []
+    for char in string:
+        w_char = W_StringObject.PREBUILT[ord(char)]
+        if not space.is_true(space.contains(w_deletechars, w_char)):
+             chars.append(table[ord(char)])
+    return W_StringObject(''.join(chars))
 
 def str_decode__String_ANY_ANY(space, w_string, w_encoding=None, w_errors=None):
     from pypy.objspace.std.unicodetype import _get_encoding_and_errors, \
