@@ -12,7 +12,7 @@ class CodecState(object):
 
     def make_errorhandler(self, space):
         def unicode_call_errorhandler(errors,  encoding, reason, input,
-                                      startinpos, endinpos, decode=True):
+                                      startpos, endpos, decode=True):
             
             w_errorhandler = lookup_error(space, errors)
             if decode:
@@ -23,8 +23,8 @@ class CodecState(object):
                 w_cls,
                 space.wrap(encoding),
                 space.wrap(input),
-                space.wrap(startinpos),
-                space.wrap(endingpos),
+                space.wrap(startpos),
+                space.wrap(endpos),
                 space.wrap(reason))
             w_res = space.call_function(w_errorhandler, w_exc)
             try:
