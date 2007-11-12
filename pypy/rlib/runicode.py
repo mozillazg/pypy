@@ -2,6 +2,7 @@ import sys
 from pypy.lang.smalltalk.tool.bitmanipulation import splitter
 
 MAXUNICODE = sys.maxunicode
+BYTEORDER = sys.byteorder
 
 
 def raise_unicode_exception(errors, encoding, msg, s, startingpos, endingpos,
@@ -184,7 +185,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     bo = 0
     consumed = 0
 
-    if sys.byteorder == 'little':
+    if BYTEORDER == 'little':
         ihi = 1
         ilo = 0
     else:
@@ -200,7 +201,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     if byteorder == 'native':
         if (size >= 2):
             bom = (ord(s[ihi]) << 8) | ord(s[ilo])
-            if sys.byteorder == 'little':
+            if BYTEORDER == 'little':
                 if (bom == 0xFEFF):
                     pos += 2
                     bo = -1
@@ -405,8 +406,8 @@ def unicode_encode_utf_16_helper(s, size, errors,
                                  byteorder='little'):
     p = []
     if (byteorder == 'native'):
-        _STORECHAR(p, 0xFEFF, sys.byteorder)
-        byteorder = sys.byteorder
+        _STORECHAR(p, 0xFEFF, BYTEORDER)
+        byteorder = BYTEORDER
         
     if size == 0:
         return ""
