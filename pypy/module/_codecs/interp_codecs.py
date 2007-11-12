@@ -8,6 +8,52 @@ class CodecState(object):
         self.codec_search_cache = {}
         self.codec_error_registry = {}
         self.codec_need_encodings = True
+        self.error_handler = self.make_errorhandler(space)
+
+    def make_errorhandler(self, space):
+        def unicode_call_errorhandler(errors,  encoding, reason, input,
+                                      startinpos, endinpos, decode=True):
+            
+            w_errorhandler = lookup_error(space, errors)
+            if decode:
+                w_cls = space.w_UnicodeDecodeError
+            else:
+                w_cls = space.w_UnicodeEncodeError
+            w_exc =  space.call_function(
+                w_cls,
+                space.wrap(encoding),
+                space.wrap(input),
+                space.wrap(startinpos),
+                space.wrap(endingpos),
+                space.wrap(reason))
+            w_res = space.call_function(w_errorhandler, w_exc)
+            try:
+                w_replace, w_newpos = space.unpacktuple(w_res, 2)
+            except OperationError, e:
+                if not e.match(space, space.w_TypeError):
+                    raise
+                raise OperationError(
+                    space.w_TypeError,
+                    space.wrap("encoding error handler must return "
+                               "(unicode, int) tuple, not %s" % (
+                                   space.str_w(space.repr(w_res)))))
+            newpos = space.int_w(w_newpos)
+            if (newpos < 0):
+                newpos = len(input) + newpos
+            if newpos < 0 or newpos > len(input):
+                raise OperationError(
+                    space.w_IndexError,
+                    space.wrap("position %d from error handler "
+                               "out of bounds" % newpos))
+            if decode:
+                replace = space.unicode_w(w_replace)
+                return replace, newpos
+            else:
+                replace = space.str_w(w_replace)
+                return replace, newpos
+        unicode_call_errorhandler._annspecialcase_ = "specialize:arg(6)"
+        return unicode_call_errorhandler
+
 
 def register_codec(space, w_search_function):
     """register(search_function)
@@ -95,6 +141,7 @@ def encode(space, w_obj, encoding=NoneNotWrapped, errors='strict'):
     'xmlcharrefreplace' as well as any other name registered with
     codecs.register_error that can handle ValueErrors.
     """
+    #import pdb; pdb.set_trace()
     if encoding is None:
         encoding = space.sys.defaultencoding
     w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
@@ -145,3 +192,50 @@ def register_error(space, errors, w_handler):
             space.w_TypeError,
             space.wrap("handler must be callable"))
 register_error.unwrap_spec = [ObjSpace, str, W_Root]
+
+# ____________________________________________________________
+# delegation to runicode
+
+from pypy.rlib import runicode
+
+def make_encoder_wrapper(name):
+    rname = "unicode_encode_%s" % (name.replace("_encode", ""), )
+    def wrap_encoder(space, uni, errors="strict"):
+        state = space.fromcache(CodecState)
+        func = getattr(runicode, rname)
+        result = func(uni, len(uni), errors, state.error_handler)
+        return space.newtuple([space.wrap(result), space.wrap(len(result))])
+    wrap_encoder.unwrap_spec = [ObjSpace, unicode, str]
+    globals()[name] = wrap_encoder
+
+def make_decoder_wrapper(name):
+    rname = "str_decode_%s" % (name.replace("_decode", ""), )
+    def wrap_decoder(space, string, errors="strict", w_final=True):
+        final = space.is_true(w_final)
+        state = space.fromcache(CodecState)
+        func = getattr(runicode, rname)
+        result, consumed = func(string, len(string), errors,
+                                final, state.error_handler)
+        return space.newtuple([space.wrap(result), space.wrap(consumed)])
+    wrap_decoder.unwrap_spec = [ObjSpace, str, str, W_Root]
+    globals()[name] = wrap_decoder
+
+for encoders in [
+         "ascii_encode",
+         "latin_1_encode",
+         "utf_8_encode",
+         "utf_16_encode",
+         "utf_16_be_encode",
+         "utf_16_le_encode",
+        ]:
+    make_encoder_wrapper(encoders)
+
+for decoders in [
+         "ascii_decode",
+         "latin_1_decode",
+         "utf_8_decode",
+         "utf_16_decode",
+         "utf_16_be_decode",
+         "utf_16_le_decode",
+         ]:
+    make_decoder_wrapper(decoders)
