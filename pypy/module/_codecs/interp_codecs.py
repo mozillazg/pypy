@@ -200,6 +200,7 @@ from pypy.rlib import runicode
 
 def make_encoder_wrapper(name):
     rname = "unicode_encode_%s" % (name.replace("_encode", ""), )
+    assert hasattr(runicode, rname)
     def wrap_encoder(space, uni, errors="strict"):
         state = space.fromcache(CodecState)
         func = getattr(runicode, rname)
@@ -210,6 +211,7 @@ def make_encoder_wrapper(name):
 
 def make_decoder_wrapper(name):
     rname = "str_decode_%s" % (name.replace("_decode", ""), )
+    assert hasattr(runicode, rname)
     def wrap_decoder(space, string, errors="strict", w_final=True):
         final = space.is_true(w_final)
         state = space.fromcache(CodecState)
