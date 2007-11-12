@@ -239,3 +239,25 @@ for decoders in [
          "utf_16_le_decode",
          ]:
     make_decoder_wrapper(decoders)
+
+
+def utf_16_ex_decode(space, data, errors='strict', byteorder=0, w_final=False):
+    """None
+    """
+    final = space.is_true(w_final)
+    state = space.fromcache(CodecState)
+    if byteorder == 0:
+        byteorder = 'native'
+    elif byteorder == -1:
+        byteorder = 'little'
+    else:
+        byteorder = 'big'
+    consumed = len(data)
+    if final:
+        consumed = 0
+    res, consumed, byteorder = runicode.str_decode_utf_16_helper(
+        data, len(data), errors, final, state.error_handler, byteorder)
+    return space.newtuple([space.wrap(res), space.wrap(consumed),
+                           space.wrap(byteorder)])
+utf_16_ex_decode.unwrap_spec = [ObjSpace, str, str, int, W_Root]
+

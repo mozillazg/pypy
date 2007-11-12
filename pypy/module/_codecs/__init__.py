@@ -20,7 +20,6 @@ class Module(MixedModule):
          'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
          'utf_7_decode' :  'app_codecs.utf_7_decode',
          'utf_7_encode' :  'app_codecs.utf_7_encode',
-         'utf_16_ex_decode' : 'app_codecs.utf_16_ex_decode',
          '_register_existing_errors': 'app_codecs._register_existing_errors',
     }
     interpleveldefs = {
@@ -44,6 +43,7 @@ class Module(MixedModule):
          'utf_16_encode'    : 'interp_codecs.utf_16_encode',
          'utf_16_le_decode' : 'interp_codecs.utf_16_le_decode',
          'utf_16_le_encode' : 'interp_codecs.utf_16_le_encode',
+         'utf_16_ex_decode' : 'interp_codecs.utf_16_ex_decode',
     }
 
     def setup_after_space_initialization(self):
