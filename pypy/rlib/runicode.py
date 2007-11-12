@@ -152,3 +152,11 @@ def str_decode_utf8(s, size, errors, final=False,
     return u"".join(p), pos
 
 
+def str_decode_latin1(s, size, errors, final=False,
+                      errorhandler=raise_unicode_exception):
+    pos = 0
+    p = []
+    while (pos < size):
+        p += unichr(ord(s[pos]))
+        pos += 1
+    return u"".join(p), pos
