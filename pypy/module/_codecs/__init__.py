@@ -13,15 +13,11 @@ class Module(MixedModule):
          'escape_encode' :  'app_codecs.escape_encode',
          'latin_1_decode' :  'app_codecs.latin_1_decode',
          'latin_1_encode' :  'app_codecs.latin_1_encode',
-         'lookup' :  'app_codecs.lookup',
-         'lookup_error' :  'app_codecs.lookup_error',
          'mbcs_decode' :  'app_codecs.mbcs_decode',
          'mbcs_encode' :  'app_codecs.mbcs_encode',
          'raw_unicode_escape_decode' :  'app_codecs.raw_unicode_escape_decode',
          'raw_unicode_escape_encode' :  'app_codecs.raw_unicode_escape_encode',
          'readbuffer_encode' :  'app_codecs.readbuffer_encode',
-         'register' :  'app_codecs.register',
-         'register_error' :  'app_codecs.register_error',
          'unicode_escape_decode' :  'app_codecs.unicode_escape_decode',
          'unicode_escape_encode' :  'app_codecs.unicode_escape_encode',
          'unicode_internal_decode' :  'app_codecs.unicode_internal_decode',
@@ -37,8 +33,21 @@ class Module(MixedModule):
          'utf_7_encode' :  'app_codecs.utf_7_encode',
          'utf_8_decode' :  'app_codecs.utf_8_decode',
          'utf_8_encode' :  'app_codecs.utf_8_encode',
-         'encode': 'app_codecs.encode',
-         'decode': 'app_codecs.decode'
+         '_register_existing_errors': 'app_codecs._register_existing_errors',
     }
     interpleveldefs = {
+         'encode':         'interp_codecs.encode',
+         'decode':         'interp_codecs.decode',
+         'lookup':         'interp_codecs.lookup_codec',
+         'lookup_error':   'interp_codecs.lookup_error',
+         'register':       'interp_codecs.register_codec',
+         'register_error': 'interp_codecs.register_error',
     }
+
+    def setup_after_space_initialization(self):
+        "NOT_RPYTHON"
+        self.space.appexec([], """():
+            import _codecs
+            _codecs._register_existing_errors()
+            del _codecs._register_existing_errors
+        """)
