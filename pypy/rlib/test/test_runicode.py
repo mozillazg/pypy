@@ -82,12 +82,12 @@ class TestDecoding(UnicodeTests):
 
     def test_all_ascii(self):
         for i in range(128):
-            for encoding in "utf-8 latin1 ascii".split():
+            for encoding in "utf-8 latin-1 ascii".split():
                 self.checkdecode(chr(i), encoding)
 
     def test_all_first_256(self):
         for i in range(256):
-            for encoding in "utf-8 latin1 utf-16 utf-16-be utf-16-le".split():
+            for encoding in "utf-8 latin-1 utf-16 utf-16-be utf-16-le".split():
                 self.checkdecode(unichr(i), encoding)
 
     def test_random(self):
@@ -143,12 +143,12 @@ class TestDecoding(UnicodeTests):
 class TestEncoding(UnicodeTests):
     def test_all_ascii(self):
         for i in range(128):
-            for encoding in "utf-8 latin1 ascii".split():
+            for encoding in "utf-8 latin-1 ascii".split():
                 self.checkencode(unichr(i), encoding)
 
     def test_all_first_256(self):
         for i in range(256):
-            for encoding in "utf-8 latin1 utf-16 utf-16-be utf-16-le".split():
+            for encoding in "utf-8 latin-1 utf-16 utf-16-be utf-16-le".split():
                 self.checkencode(unichr(i), encoding)
 
     def test_random(self):
@@ -165,4 +165,4 @@ class TestEncoding(UnicodeTests):
         self.checkencodeerror(u"abc\xFF\xFF\xFFcde", "ascii", 3, 6)
 
     def test_latin1_error(self):
-        self.checkencodeerror(u"abc\uffff\uffff\uffffcde", "latin1", 3, 6)
+        self.checkencodeerror(u"abc\uffff\uffff\uffffcde", "latin-1", 3, 6)

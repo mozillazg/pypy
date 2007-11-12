@@ -274,7 +274,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
             assert 0, "unreachable"
     return u"".join(result), pos, bo
 
-def str_decode_latin1(s, size, errors, final=False,
+def str_decode_latin_1(s, size, errors, final=False,
                       errorhandler=raise_unicode_exception):
     # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
@@ -354,7 +354,7 @@ def unicode_encode_ucs1_helper(p, size, errors,
                                errorhandler=raise_unicode_exception, limit=256):
     if limit == 256:
         reason = "ordinal not in range(256)"
-        encoding = "latin1"
+        encoding = "latin-1"
     else:
         reason = "ordinal not in range(128)"
         encoding = "ascii"
@@ -381,7 +381,7 @@ def unicode_encode_ucs1_helper(p, size, errors,
     
     return "".join(res)
 
-def unicode_encode_latin1(p, size, errors, errorhandler=raise_unicode_exception):
+def unicode_encode_latin_1(p, size, errors, errorhandler=raise_unicode_exception):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
     return res
 
