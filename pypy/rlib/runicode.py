@@ -313,34 +313,35 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception):
     i = 0
     while i < size:
         ch = s[i]
+        ordch = ord(ch)
         i += 1
-        if (ord(ch) < 0x80):
+        if (ordch < 0x80):
             # Encode ASCII 
-            p += chr(ord(ch))
-        elif (ord(ch) < 0x0800) :
+            p += chr(ordch)
+        elif (ordch < 0x0800) :
             # Encode Latin-1 
-            p += chr((0xc0 | (ord(ch) >> 6)))
-            p += chr((0x80 | (ord(ch) & 0x3f)))
+            p += chr((0xc0 | (ordch >> 6)))
+            p += chr((0x80 | (ordch & 0x3f)))
         else:
             # Encode UCS2 Unicode ordinals
-            if (ord(ch) < 0x10000):
+            if (ordch < 0x10000):
                 # Special case: check for high surrogate
-                if (0xD800 <= ord(ch) and ord(ch) <= 0xDBFF and i != size) :
+                if (0xD800 <= ordch and ordch <= 0xDBFF and i != size) :
                     ch2 = s[i]
                     # Check for low surrogate and combine the two to
                     # form a UCS4 value
                     if (0xDC00 <= ord(ch2) and ord(ch2) <= 0xDFFF) :
-                        ch3 = ((ord(ch) - 0xD800) << 10 | (ord(ch2) - 0xDC00)) + 0x10000
+                        ch3 = ((ordch - 0xD800) << 10 | (ord(ch2) - 0xDC00)) + 0x10000
                         i += 1
-                        _encodeUCS4(p, ord(ch))
+                        _encodeUCS4(p, ch3)
                         continue
                 # Fall through: handles isolated high surrogates
-                p += (chr((0xe0 | (ord(ch) >> 12))))
-                p += (chr((0x80 | ((ord(ch) >> 6) & 0x3f))))
-                p += (chr((0x80 | (ord(ch) & 0x3f))))
+                p += (chr((0xe0 | (ordch >> 12))))
+                p += (chr((0x80 | ((ordch >> 6) & 0x3f))))
+                p += (chr((0x80 | (ordch & 0x3f))))
                 continue
             else:
-                _encodeUCS4(p, ord(ch))
+                _encodeUCS4(p, ordch)
     return "".join(p)
 
 def _encodeUCS4(p, ch):
