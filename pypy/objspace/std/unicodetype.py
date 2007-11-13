@@ -219,7 +219,7 @@ def unicode_from_string(space, w_str):
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
     encoding = getdefaultencoding(space)
     if encoding != 'ascii':
-        return unicode_from_object(space, w_str)
+        return unicode_from_encoded_object(space, w_str, encoding, "strict")
     s = space.str_w(w_str)
     try:
         return W_UnicodeObject(s.decode("ascii"))
