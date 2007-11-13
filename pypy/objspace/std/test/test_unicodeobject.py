@@ -461,3 +461,5 @@ class AppTestUnicodeString:
     def test_repr_bug(self):
         assert (repr(u'\U00090418\u027d\U000582b9\u54c3\U000fcb6e') == 
                 "u'\\U00090418\\u027d\\U000582b9\\u54c3\\U000fcb6e'")
+        assert (repr(u'\n') == 
+                "u'\\n'")
