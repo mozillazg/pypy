@@ -913,7 +913,6 @@ def repr__Unicode(space, w_unicode):
         if code == ord('\n'):
             result.append('\\')
             result.append('n')
-            i += 2
             j += 1
             continue
         if code < ord(' ') or code >= 0x7f:
