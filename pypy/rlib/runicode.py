@@ -9,12 +9,10 @@ def raise_unicode_exception(errors, encoding, msg, s, startingpos, endingpos,
                             decode=True):
     if decode:
         raise UnicodeDecodeError(
-                "%s can't decode byte %s in position %s: %s" % (
-                encoding, s[startingpos], startingpos, msg))
+                encoding, s[startingpos], startingpos, endingpos, msg)
     else:
         raise UnicodeEncodeError(
-                "%s can't encode byte %s in position %s: %s" % (
-                encoding, s[startingpos], startingpos, msg))
+                encoding, s[startingpos], startingpos, endingpos, msg)
 
 # ____________________________________________________________ 
 # unicode decoding
@@ -272,7 +270,10 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
                                       s, pos - 4, pos - 2)
                 result.append(r)
         else:
-            assert 0, "unreachable"
+            r, pos = errorhandler(errors, 'utf-16',
+                                  "illegal encoding",
+                                  s, pos - 2, pos)
+            result.append(r)
     return u"".join(result), pos, bo
 
 def str_decode_latin_1(s, size, errors, final=False,

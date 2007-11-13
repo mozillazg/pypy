@@ -1,3 +1,4 @@
+import py
 import sys, random
 from pypy.rlib import runicode
 
@@ -140,6 +141,12 @@ class TestDecoding(UnicodeTests):
                   ]:
             self.checkdecodeerror(s, "utf-16", 2, 4, addstuff=False)
 
+    def test_utf16_bugs(self):
+        s = '\x80-\xe9\xdeL\xa3\x9b'
+        py.test.raises(UnicodeDecodeError, runicode.str_decode_utf_16_le,
+                       s, len(s), True)
+
+
 class TestEncoding(UnicodeTests):
     def test_all_ascii(self):
         for i in range(128):
@@ -175,3 +182,14 @@ class TestEncoding(UnicodeTests):
 
     def test_latin1_error(self):
         self.checkencodeerror(u"abc\uffff\uffff\uffffcde", "latin-1", 3, 6)
+
+class TestTranslation(object):
+    def test_utf8(self):
+        from pypy.rpython.test.test_llinterp import interpret
+        def f(x):
+            s1 = "\xd7\x90\xd6\x96\xeb\x96\x95\xf0\x90\x91\x93" * x
+            u = runicode.str_decode_utf_8(s1, len(s1), True)
+            s2 = runicode.unicode_encode_utf_8(u, len(u), True)
+            return s1 == s2
+        res = interpret(f, [2])
+        assert res
