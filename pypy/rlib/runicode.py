@@ -42,13 +42,13 @@ def str_decode_utf_8(s, size, errors, final=False,
                     errorhandler=raise_unicode_exception):
     if (size == 0):
         return u'', 0
-    p = []
+    result = []
     pos = 0
     while pos < size:
         ch = s[pos]
         ordch1 = ord(ch)
         if ordch1 < 0x80:
-            p += unichr(ordch1)
+            result.append(unichr(ordch1))
             pos += 1
             continue
 
@@ -59,14 +59,13 @@ def str_decode_utf_8(s, size, errors, final=False,
             else:
                 r, pos = errorhandler(errors, "utf-8",
                                       "unexpected end of data", s,  pos, size)
-                p += r
+                result.append(r)
                 if (pos + n > size):
                     break
         if n == 0:
-            res = errorhandler(errors, "utf-8", "unexpected code byte",
-                               s,  pos, pos + 1)
-            p += res[0]
-            pos = res[1]
+            r, pos = errorhandler(errors, "utf-8", "unexpected code byte",
+                                  s,  pos, pos + 1)
+            result.append(r)
         elif n == 1:
             assert 0, "you can never get here"
         elif n == 2:
@@ -79,15 +78,15 @@ def str_decode_utf_8(s, size, errors, final=False,
             if (two != 2):
                 r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 2)
-                p += r
+                result.append(r)
             else:
                 c = (y << 6) + z
                 if c < 0x80:
                     r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 2)
-                    p += r
+                    result.append(r)
                 else:
-                    p += unichr(c)
+                    result.append(unichr(c))
                     pos += n
         elif n == 3:
             #  1110xxxx 10yyyyyy 10zzzzzz ====> 00000000 xxxxyyyy yyzzzzzz
@@ -100,7 +99,7 @@ def str_decode_utf_8(s, size, errors, final=False,
             if (two1 != 2 or two2 != 2):
                 r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 3)
-                p += r
+                result.append(r)
             else:
                 c = (x << 12) + (y << 6) + z
                 # Note: UTF-8 encodings of surrogates are considered
@@ -111,9 +110,9 @@ def str_decode_utf_8(s, size, errors, final=False,
                 if c < 0x0800:
                     r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 3)
-                    p += r
+                    result.append(r)
                 else:
-                    p += unichr(c)
+                    result.append(unichr(c))
                     pos += n
         elif n == 4:
             # 11110www 10xxxxxx 10yyyyyy 10zzzzzz ====>
@@ -129,7 +128,7 @@ def str_decode_utf_8(s, size, errors, final=False,
             if (two1 != 2 or two2 != 2 or two3 != 2):
                 r, pos = errorhandler(errors, "utf-8", "invalid data",
                                       s,  pos, pos + 4)
-                p += r
+                result.append(r)
             else:
                 c = (w << 18) + (x << 12) + (y << 6) + z
                 # minimum value allowed for 4 byte encoding
@@ -137,27 +136,27 @@ def str_decode_utf_8(s, size, errors, final=False,
                 if ((c < 0x10000) or (c > 0x10ffff)):
                     r, pos = errorhandler(errors, "utf-8", "illegal encoding",
                                           s,  pos, pos + 4)
-                    p += r
+                    result.append(r)
                 else:
                     # convert to UTF-16 if necessary
                     if c < MAXUNICODE:
-                        p.append(unichr(c))
+                        result.append(unichr(c))
                     else:
                         # compute and append the two surrogates:
                         # translate from 10000..10FFFF to 0..FFFF
                         c -= 0x10000
                         # high surrogate = top 10 bits added to D800
-                        p.append(unichr(0xD800 + (c >> 10)))
+                        result.append(unichr(0xD800 + (c >> 10)))
                         # low surrogate = bottom 10 bits added to DC00
-                        p.append(unichr(0xDC00 + (c & 0x03FF)))
+                        result.append(unichr(0xDC00 + (c & 0x03FF)))
                     pos += n
         else:
             r, pos = errorhandler(errors, "utf-8",
                                   "unsupported Unicode code range",
                                   s,  pos, pos + n)
-            p += r
+            result.append(r)
 
-    return u"".join(p), pos
+    return u"".join(result), pos
 
 
 def str_decode_utf_16(s, size, errors, final=True,
@@ -245,7 +244,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
         ch = (ord(s[pos + ihi]) << 8) | ord(s[pos + ilo])
         pos += 2
         if (ch < 0xD800 or ch > 0xDFFF):
-            result += unichr(ch)
+            result.append(unichr(ch))
             continue
         # UTF-16 code pair:
         if len(s) - pos < 2:
@@ -261,10 +260,11 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
             pos += 2
             if (0xDC00 <= ch2 and ch2 <= 0xDFFF):
                 if MAXUNICODE < 65536:
-                    result += unichr(ch)
-                    result += unichr(ch2)
+                    result.append(unichr(ch))
+                    result.append(unichr(ch2))
                 else:
-                    result += unichr((((ch & 0x3FF)<<10) | (ch2 & 0x3FF)) + 0x10000)
+                    result.append(unichr((((ch & 0x3FF)<<10) |
+                                           (ch2 & 0x3FF)) + 0x10000))
                 continue
             else:
                 r, pos = errorhandler(errors, 'utf-16',
@@ -279,28 +279,28 @@ def str_decode_latin_1(s, size, errors, final=False,
                       errorhandler=raise_unicode_exception):
     # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
-    p = []
+    result = []
     while (pos < size):
-        p += unichr(ord(s[pos]))
+        result.append(unichr(ord(s[pos])))
         pos += 1
-    return u"".join(p), pos
+    return u"".join(result), pos
 
 
 def str_decode_ascii(s, size, errors, final=False,
                      errorhandler=raise_unicode_exception):
     # ASCII is equivalent to the first 128 ordinals in Unicode.
-    p = []
+    result = []
     pos = 0
     while pos < len(s):
         c = s[pos]
         if ord(c) < 128:
-            p += unichr(ord(c))
+            result.append(unichr(ord(c)))
             pos += 1
         else:
             r, pos = errorhandler(errors, "ascii", "ordinal not in range(128)",
                                   s,  pos, pos + 1)
-            p += r
-    return u"".join(p), pos
+            result.append(r)
+    return u"".join(result), pos
 
 
 # ____________________________________________________________ 
@@ -309,18 +309,18 @@ def str_decode_ascii(s, size, errors, final=False,
 
 def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception):
     assert(size >= 0)
-    p = []
+    result = []
     i = 0
     while i < size:
         ch = ord(s[i])
         i += 1
         if (ch < 0x80):
             # Encode ASCII 
-            p += chr(ch)
+            result.append(chr(ch))
         elif (ch < 0x0800) :
             # Encode Latin-1 
-            p += chr((0xc0 | (ch >> 6)))
-            p += chr((0x80 | (ch & 0x3f)))
+            result.append(chr((0xc0 | (ch >> 6))))
+            result.append(chr((0x80 | (ch & 0x3f))))
         else:
             # Encode UCS2 Unicode ordinals
             if (ch < 0x10000):
@@ -332,23 +332,23 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception):
                     if (0xDC00 <= ch2 and ch2 <= 0xDFFF) :
                         ch3 = ((ch - 0xD800) << 10 | (ch2 - 0xDC00)) + 0x10000
                         i += 1
-                        _encodeUCS4(p, ch3)
+                        _encodeUCS4(result, ch3)
                         continue
                 # Fall through: handles isolated high surrogates
-                p += (chr((0xe0 | (ch >> 12))))
-                p += (chr((0x80 | ((ch >> 6) & 0x3f))))
-                p += (chr((0x80 | (ch & 0x3f))))
+                result.append((chr((0xe0 | (ch >> 12)))))
+                result.append((chr((0x80 | ((ch >> 6) & 0x3f)))))
+                result.append((chr((0x80 | (ch & 0x3f)))))
                 continue
             else:
-                _encodeUCS4(p, ch)
-    return "".join(p)
+                _encodeUCS4(result, ch)
+    return "".join(result)
 
-def _encodeUCS4(p, ch):
+def _encodeUCS4(result, ch):
     # Encode UCS4 Unicode ordinals
-    p +=  (chr((0xf0 | (ch >> 18))))
-    p +=  (chr((0x80 | ((ch >> 12) & 0x3f))))
-    p +=  (chr((0x80 | ((ch >> 6) & 0x3f))))
-    p +=  (chr((0x80 | (ch & 0x3f))))
+    result.append((chr((0xf0 | (ch >> 18)))))
+    result.append((chr((0x80 | ((ch >> 12) & 0x3f)))))
+    result.append((chr((0x80 | ((ch >> 6) & 0x3f)))))
+    result.append((chr((0x80 | (ch & 0x3f)))))
 
 
 def unicode_encode_ucs1_helper(p, size, errors,
@@ -362,13 +362,13 @@ def unicode_encode_ucs1_helper(p, size, errors,
     
     if (size == 0):
         return ''
-    res = []
+    result = []
     pos = 0
     while pos < len(p):
         ch = p[pos]
         
         if ord(ch) < limit:
-            res += chr(ord(ch))
+            result.append(chr(ord(ch)))
             pos += 1
         else:
             # startpos for collecting unencodable chars
@@ -378,9 +378,9 @@ def unicode_encode_ucs1_helper(p, size, errors,
                 collend += 1
             r, pos = errorhandler(errors, encoding, reason, p,
                                   collstart, collend, False)
-            res += r
+            result.append(r)
     
-    return "".join(res)
+    return "".join(result)
 
 def unicode_encode_latin_1(p, size, errors, errorhandler=raise_unicode_exception):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
@@ -391,22 +391,22 @@ def unicode_encode_ascii(p, size, errors, errorhandler=raise_unicode_exception):
     return res
 
 
-def _STORECHAR(p, CH, byteorder):
+def _STORECHAR(result, CH, byteorder):
     hi = chr(((CH) >> 8) & 0xff)
     lo = chr((CH) & 0xff)
     if byteorder == 'little':
-        p.append(lo)
-        p.append(hi)
+        result.append(lo)
+        result.append(hi)
     else:
-        p.append(hi)
-        p.append(lo)
+        result.append(hi)
+        result.append(lo)
 
 def unicode_encode_utf_16_helper(s, size, errors,
                                  errorhandler=raise_unicode_exception,
                                  byteorder='little'):
-    p = []
+    result = []
     if (byteorder == 'native'):
-        _STORECHAR(p, 0xFEFF, BYTEORDER)
+        _STORECHAR(result, 0xFEFF, BYTEORDER)
         byteorder = BYTEORDER
         
     if size == 0:
@@ -421,11 +421,11 @@ def unicode_encode_utf_16_helper(s, size, errors,
             ch2 = 0xDC00 | ((ch-0x10000) & 0x3FF)
             ch  = 0xD800 | ((ch-0x10000) >> 10)
 
-        _STORECHAR(p, ch, byteorder)
+        _STORECHAR(result, ch, byteorder)
         if ch2:
-            _STORECHAR(p, ch2, byteorder)
+            _STORECHAR(result, ch2, byteorder)
 
-    return "".join(p)
+    return "".join(result)
 
 def unicode_encode_utf_16(s, size, errors,
                           errorhandler=raise_unicode_exception):
