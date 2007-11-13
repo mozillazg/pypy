@@ -848,36 +848,23 @@ def repr__Unicode(space, w_unicode):
         quote = '"'
     else:
         quote = '\''
-    result = ['\0'] * (3 + size*6)
-    result[0] = 'u'
-    result[1] = quote
-    i = 2
+    result = ['u', quote]
     j = 0
     while j<len(chars):
         ch = chars[j]
-##        if ch == u"'":
-##            quote ='''"'''
-##            result[1] = quote
-##            result[i] = '\''
-##            #result[i + 1] = "'"
-##            i += 1
-##            continue
         code = ord(ch)
         if code >= 0x10000:
             # Resize if needed
-            if i + 12 > len(result):
-                result.extend(['\0'] * 100)
-            result[i] = '\\'
-            result[i + 1] = "U"
-            result[i + 2] = hexdigits[(code >> 28) & 0xf] 
-            result[i + 3] = hexdigits[(code >> 24) & 0xf] 
-            result[i + 4] = hexdigits[(code >> 20) & 0xf] 
-            result[i + 5] = hexdigits[(code >> 16) & 0xf] 
-            result[i + 6] = hexdigits[(code >> 12) & 0xf] 
-            result[i + 7] = hexdigits[(code >>  8) & 0xf] 
-            result[i + 8] = hexdigits[(code >>  4) & 0xf] 
-            result[i + 9] = hexdigits[(code >>  0) & 0xf]
-            i += 10
+            result.extend(['\\', "U",
+                           hexdigits[(code >> 28) & 0xf],
+                           hexdigits[(code >> 24) & 0xf],
+                           hexdigits[(code >> 20) & 0xf],
+                           hexdigits[(code >> 16) & 0xf],
+                           hexdigits[(code >> 12) & 0xf],
+                           hexdigits[(code >>  8) & 0xf],
+                           hexdigits[(code >>  4) & 0xf],
+                           hexdigits[(code >>  0) & 0xf],
+                           ])
             j += 1
             continue
         if code >= 0xD800 and code < 0xDC00:
@@ -886,70 +873,60 @@ def repr__Unicode(space, w_unicode):
                 code2 = ord(ch2)
                 if code2 >= 0xDC00 and code2 <= 0xDFFF:
                     code = (((code & 0x03FF) << 10) | (code2 & 0x03FF)) + 0x00010000
-                    if i + 12 > len(result):
-                        result.extend(['\0'] * 100)
-                    result[i] = '\\'
-                    result[i + 1] = "U"
-                    result[i + 2] = hexdigits[(code >> 28) & 0xf] 
-                    result[i + 3] = hexdigits[(code >> 24) & 0xf] 
-                    result[i + 4] = hexdigits[(code >> 20) & 0xf] 
-                    result[i + 5] = hexdigits[(code >> 16) & 0xf] 
-                    result[i + 6] = hexdigits[(code >> 12) & 0xf] 
-                    result[i + 7] = hexdigits[(code >>  8) & 0xf] 
-                    result[i + 8] = hexdigits[(code >>  4) & 0xf] 
-                    result[i + 9] = hexdigits[(code >>  0) & 0xf]
-                    i += 10
+                    result.extend(["U",
+                                   hexdigits[(code >> 28) & 0xf],
+                                   hexdigits[(code >> 24) & 0xf],
+                                   hexdigits[(code >> 20) & 0xf],
+                                   hexdigits[(code >> 16) & 0xf],
+                                   hexdigits[(code >> 12) & 0xf],
+                                   hexdigits[(code >>  8) & 0xf],
+                                   hexdigits[(code >>  4) & 0xf],
+                                   hexdigits[(code >>  0) & 0xf],
+                                  ])
                     j += 2
                     continue
                 
         if code >= 0x100:
-            result[i] = '\\'
-            result[i + 1] = "u"
-            result[i + 2] = hexdigits[(code >> 12) & 0xf] 
-            result[i + 3] = hexdigits[(code >>  8) & 0xf] 
-            result[i + 4] = hexdigits[(code >>  4) & 0xf] 
-            result[i + 5] = hexdigits[(code >>  0) & 0xf] 
-            i += 6
+            result.extend(['\\', "u",
+                           hexdigits[(code >> 12) & 0xf],
+                           hexdigits[(code >>  8) & 0xf],
+                           hexdigits[(code >>  4) & 0xf],
+                           hexdigits[(code >>  0) & 0xf],
+                          ])
             j += 1
             continue
         if code == ord('\\') or code == ord(quote):
-            result[i] = '\\'
-            result[i + 1] = chr(code)
-            i += 2
+            result.append('\\')
+            result.append(chr(code))
             j += 1
             continue
         if code == ord('\t'):
-            result[i] = '\\'
-            result[i + 1] = "t"
-            i += 2
+            result.append('\\')
+            result.append('t')
             j += 1
             continue
         if code == ord('\r'):
-            result[i] = '\\'
-            result[i + 1] = "r"
-            i += 2
+            result.append('\\')
+            result.append('r')
             j += 1
             continue
         if code == ord('\n'):
-            result[i] = '\\'
-            result[i + 1] = "n"
+            result.append('\\')
+            result.append('n')
             i += 2
             j += 1
             continue
         if code < ord(' ') or code >= 0x7f:
-            result[i] = '\\'
-            result[i + 1] = "x"
-            result[i + 2] = hexdigits[(code >> 4) & 0xf] 
-            result[i + 3] = hexdigits[(code >> 0) & 0xf] 
-            i += 4
+            result.extend(['\\', "x",
+                           hexdigits[(code >> 4) & 0xf], 
+                           hexdigits[(code >> 0) & 0xf],
+                          ])
             j += 1
             continue
-        result[i] = chr(code)
-        i += 1
+        result.append(chr(code))
         j += 1
-    result[i] = quote
-    i += 1
-    return space.wrap(''.join(result[:i]))
+    result.append(quote)
+    return space.wrap(''.join(result))
         
 
 def mod__Unicode_ANY(space, w_format, w_values):
