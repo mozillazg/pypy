@@ -169,7 +169,9 @@ def decode(space, w_obj, encoding=NoneNotWrapped, errors='strict'):
         w_res = space.call_function(w_decoder, w_obj, space.wrap(errors))
         if (not space.is_true(space.isinstance(w_res, space.w_tuple))
             or space.int_w(space.len(w_res)) != 2):
-            raise TypeError("encoder must return a tuple (object, integer)")
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("encoder must return a tuple (object, integer)"))
         return space.getitem(w_res, space.wrap(0))
     else:
         assert 0, "XXX, what to do here?"
