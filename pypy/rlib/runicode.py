@@ -332,7 +332,7 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception):
                     if (0xDC00 <= ord(ch2) and ord(ch2) <= 0xDFFF) :
                         ch3 = ((ord(ch) - 0xD800) << 10 | (ord(ch2) - 0xDC00)) + 0x10000
                         i += 1
-                        _encodeUCS4(p, ch)
+                        _encodeUCS4(p, ord(ch))
                         continue
                 # Fall through: handles isolated high surrogates
                 p += (chr((0xe0 | (ord(ch) >> 12))))

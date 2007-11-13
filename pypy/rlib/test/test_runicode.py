@@ -158,8 +158,11 @@ class TestEncoding(UnicodeTests):
                 self.checkencode(unichr(i), encoding)
 
     def test_single_chars_utf8(self):
+        # check every number of bytes per char
         for s in ["\xd7\x90", "\xd6\x96", "\xeb\x96\x95", "\xf0\x90\x91\x93"]:
             self.checkencode(s, "utf-8")
+        # check replacing of two surrogates by single char while encoding
+        self.checkencode(u"\ud800\udc10", "utf-8")
 
     def test_ascii_error(self):
         self.checkencodeerror(u"abc\xFF\xFF\xFFcde", "ascii", 3, 6)
