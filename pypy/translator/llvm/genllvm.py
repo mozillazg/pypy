@@ -15,38 +15,8 @@ from pypy.translator.llvm.node import Node
 from pypy.translator.llvm.externs2ll import setup_externs, generate_llfile
 from pypy.translator.llvm.gc import GcPolicy
 from pypy.translator.llvm.log import log
-from pypy.rlib.nonconst import NonConstant
-from pypy.annotation.listdef import s_list_of_strings
-from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
-from pypy.annotation import model as annmodel
-from pypy.rpython.lltypesystem import rffi
-
-def augment_entrypoint(translator, entrypoint):
-    bk = translator.annotator.bookkeeper
-    graph_entrypoint = bk.getdesc(entrypoint).getuniquegraph()
-    s_result = translator.annotator.binding(graph_entrypoint.getreturnvar())
-    get_argc = rffi.llexternal('_pypy_getargc', [], rffi.INT)
-    get_argv = rffi.llexternal('_pypy_getargv', [], rffi.CCHARPP)
-
-    def new_entrypoint():
-        argc = get_argc()
-        argv = get_argv()
-        args = [rffi.charp2str(argv[i]) for i in range(argc)]
-        return entrypoint(args)
-
-    entrypoint._annenforceargs_ = [s_list_of_strings]
-    mixlevelannotator = MixLevelHelperAnnotator(translator.rtyper)
-    graph = mixlevelannotator.getgraph(new_entrypoint, [], s_result)
-    mixlevelannotator.finish()
-
-    from pypy.translator.backendopt.all import backend_optimizations
-    backend_optimizations(translator)
-    
-    return new_entrypoint
 
 class GenLLVM(object):
-    debug = False
-    
     # see create_codewriter() below
     function_count = {}
 
@@ -96,8 +66,6 @@ class GenLLVM(object):
             if hasattr(node, 'writeimpl'):
                 node.writeimpl(codewriter)
 
-        self._debug()
-        
         codewriter.comment("End of file")
         codewriter.close()
         self._checkpoint('done')
@@ -110,9 +78,6 @@ class GenLLVM(object):
             create ll file for c file
             create codewriter """
 
-        if self.standalone:
-            func = augment_entrypoint(self.translator, func)
-
         # XXX please dont ask!
         from pypy.translator.c.genc import CStandaloneBuilder
         cbuild = CStandaloneBuilder(self.translator, func, config=self.config)
@@ -120,7 +85,9 @@ class GenLLVM(object):
         c_db = cbuild.generate_graphs_for_llinterp()
 
         self.db = Database(self, self.translator)
-        self.db.gcpolicy = GcPolicy.new(self.db, self.config.translation.gc)
+
+        # XXX hardcoded for now
+        self.db.gcpolicy = GcPolicy.new(self.db, 'boehm')
 
         # get entry point
         entry_point = self.get_entry_point(func)
@@ -261,13 +228,3 @@ class GenLLVM(object):
         for s in stats:
             log('STATS %s' % str(s))
 
-    def _debug(self):
-        if self.debug:
-            if self.db.debugstringnodes:            
-                codewriter.header_comment("Debug string")
-                for node in self.db.debugstringnodes:
-                    node.writeglobalconstants(codewriter)
-
-            #print "Start"
-            #print self.db.dump_pbcs()
-            #print "End"

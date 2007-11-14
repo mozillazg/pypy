@@ -17,6 +17,9 @@ class StacklessTest(object):
     def setup_class(cls):
         import py
         if cls.gcpolicy in (None, "ref"):
+            # to re-enable this, remove the two characters 'gc' in the
+            # declaregcptrtype(rstack.frame_stack_top,...) call in
+            # rpython/extfunctable.  Doing so breaks translator/stackless/.
             import py
             py.test.skip("stackless + refcounting doesn't work any more for now")
         elif cls.gcpolicy == "boehm":
@@ -130,6 +133,30 @@ class TestStackless(StacklessTest):
 
         res = self.wrap_stackless_function(fn)
         assert res == 10010255
+
+
+    def test_stack_too_big(self):
+        def f1():
+            return stack_too_big()
+        def f2():
+            return lst[1]()
+        def f3():
+            return lst[2]()
+        def f4():
+            return lst[3]()
+        def f5():
+            return lst[4]()
+        lst = [None,f1,f2,f3,f4,f5]
+
+        def f(n):
+            if lst[5]():
+                return n
+            return f(n)+1
+
+        def fn():
+            return f(0)
+        res = self.wrap_stackless_function(fn)
+        assert res > 500
 
 
     def test_stack_unwind(self):

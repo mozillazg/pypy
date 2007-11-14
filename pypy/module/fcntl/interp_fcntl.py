@@ -2,7 +2,6 @@ from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
-from pypy.rlib import rposix
 import sys
 
 class CConfig:
@@ -68,7 +67,7 @@ if has_flock:
     c_flock = external('flock', [rffi.INT, rffi.INT], rffi.INT)
 
 def _get_error_msg():
-    errno = rposix.get_errno()
+    errno = rffi.get_errno()
     return rffi.charp2str(strerror(errno))
 
 def _get_module_object(space, obj_name):

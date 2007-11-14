@@ -9,8 +9,57 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.translator.llvm.buildllvm import llvm_gcc_version
 
 from pypy.tool.udir import udir
+from pypy.rpython.module import ll_stack
+from pypy.rpython.lltypesystem.module import ll_strtod
+
+ll_stack_too_big = """
+
+define internal ccc i1 @LL_stack_too_big_() {
+    %result = call ccc i32 @LL_stack_too_big()
+    %tmp = trunc i32 %result to i1
+    ret i1 %tmp
+}
+
+"""
+
+# table of functions hand-written in src/ll_*.h
+# Note about *.im_func: The annotator and the rtyper expect direct
+# references to functions, so we cannot insert classmethods here.
+
+EXTERNALS = {
+    ll_stack.ll_stack_unwind: 'LL_stack_unwind',
+    ll_stack.ll_stack_too_big: 'LL_stack_too_big_',
+    }
+
+
+math_functions = [
+    'asin', 'atan', 'ceil', 'cos', 'cosh', 'exp', 'fabs',
+    'floor', 'log', 'log10', 'sin', 'sinh', 'sqrt', 'tan', 'tanh',
+    'pow', 'atan2', 'fmod', 'ldexp', 'hypot'
+    ]
+import math
+for name in math_functions:
+    EXTERNALS['ll_math.ll_math_%s' % name] = 'LL_math_%s' % name
 
 def predeclare_stuff(c_db):
+    modules = {}
+    def module_name(c_name):
+        frags = c_name[3:].split('_')
+        if frags[0] == '':
+            return '_' + frags[1]
+        else:
+            return frags[0]
+
+    for func, funcobj in c_db.externalfuncs.items():
+        c_name = EXTERNALS[func]
+        # construct a define LL_NEED_<modname> to make it possible to isolate in-development externals and headers
+        modname = module_name(c_name)
+        if modname not in modules:
+            modules[modname] = True
+            yield 'LL_NEED_%s' % modname.upper(), 1
+        funcptr = funcobj._as_ptr()
+        yield c_name, funcptr
+
     exctransformer = c_db.exctransformer
     yield ('_rpyexc_occured_ptr',  exctransformer._rpyexc_occured_ptr.value)
     yield ('rpyexc_fetch_type_ptr', exctransformer.rpyexc_fetch_type_ptr.value)
@@ -155,8 +204,8 @@ def setup_externs(c_db, db):
     return decls
 
 def get_c_cpath():
-    from pypy.translator.c import genc
-    return os.path.dirname(genc.__file__)
+    from pypy.translator import translator
+    return os.path.dirname(translator.__file__)
 
 def get_llvm_cpath():
     return os.path.join(os.path.dirname(__file__), "module")
@@ -190,6 +239,7 @@ def generate_llfile(db, extern_decls, entrynode, c_includes, c_sources, standalo
         predeclarefn("__ENTRY_POINT__", entrynode.get_ref())
         ccode.append('#define ENTRY_POINT_DEFINED 1\n\n')
 
+    LL_stack_too_big_ = False
     for c_name, obj in extern_decls:
         if isinstance(obj, lltype.LowLevelType):
             s = "#define %s struct %s\n%s;\n" % (c_name, c_name, c_name)
@@ -204,6 +254,8 @@ def generate_llfile(db, extern_decls, entrynode, c_includes, c_sources, standalo
             pass
 
         elif type(c_name) is str and type(obj) is int:
+            if c_name == 'LL_NEED_STACK':
+                LL_stack_too_big_ = True
             ccode.append("#define\t%s\t%d\n" % (c_name, obj))
 
         else:
@@ -215,16 +267,22 @@ def generate_llfile(db, extern_decls, entrynode, c_includes, c_sources, standalo
 
     # ask gcpolicy for any code needed
     ccode.append('%s\n' % db.gcpolicy.genextern_code())
-
+    
+    ccode.append('\n')
     for c_include in c_includes:
         ccode.append('#include <%s>\n' % c_include)
-        
+
     for c_source in c_sources:
+        for l in c_source:
+            ccode.append(l)
         ccode.append('\n')
-        ccode.append(c_source + '\n') 
-    ccode.append('\n')
 
     # append our source file
     ccode.append(open(get_module_file('genexterns.c')).read())
     llcode = get_ll("".join(ccode), function_names, default_cconv)
+
+    # XXX enormous temporary hack
+    if LL_stack_too_big_:
+        llcode += ll_stack_too_big
+        
     return llcode

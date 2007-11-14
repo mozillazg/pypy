@@ -2,7 +2,6 @@ import autopath
 
 import os, sys, inspect, re, imp
 from pypy.translator.tool import stdoutcapture
-from pypy.tool.autopath import pypydir
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -49,7 +48,6 @@ def compile_c_module(cfiles, modname, include_dirs=[], libraries=[],
     #    print "ERROR IMPORTING"
     #    pass
     include_dirs = list(include_dirs)
-    include_dirs.append(py.path.local(pypydir).join('translator', 'c'))
     library_dirs = list(library_dirs)
     if sys.platform == 'darwin':    # support Fink & Darwinports
         for s in ('/sw/', '/opt/local/'):
@@ -143,7 +141,7 @@ def compile_c_module(cfiles, modname, include_dirs=[], libraries=[],
         lastdir.chdir()
 
 def cache_c_module(cfiles, modname, cache_dir=None,
-                   include_dirs=[], libraries=[]):
+                   include_dirs=None, libraries=[]):
     """ Same as build c module, but instead caches results.
     XXX currently there is no way to force a recompile, so this is pretty
     useless as soon as the sources (or headers they depend on) change :-/
@@ -158,7 +156,6 @@ def cache_c_module(cfiles, modname, cache_dir=None,
     modname = str(cache_dir.join(modname))
     compile_c_module(cfiles, modname, include_dirs=include_dirs,
                      libraries=libraries)
-    return modname + '.so'
 
 def make_module_from_c(cfile, include_dirs=None, libraries=[]):
     cfile = py.path.local(cfile)
