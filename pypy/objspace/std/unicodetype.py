@@ -159,6 +159,8 @@ def _get_encoding_and_errors(space, w_encoding, w_errors):
 def encode_object(space, w_object, encoding, errors):
     w_codecs = space.getbuiltinmodule("_codecs")
     w_encode = space.getattr(w_codecs, space.wrap("encode"))
+    if encoding is None:
+        encoding = getdefaultencoding(space)
     if errors is None:
         w_retval = space.call_function(w_encode, w_object, space.wrap(encoding))
     else:
