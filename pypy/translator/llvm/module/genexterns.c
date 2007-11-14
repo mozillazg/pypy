@@ -2,6 +2,35 @@
 
 char *LLVM_RPython_StartupCode(void);
 
+#define RPyRaiseSimpleException(exctype, errormsg) raise##exctype(errormsg);
+
+// XXX abort() this is just to make tests pass.  actually it is a million times
+// better than it was since it used to basically be a nooop.
+
+// all of these will go away at some point
+
+#define FAKE_ERROR(name) \
+  int raisePyExc_##name(char *x) { \
+    abort(); \
+   }
+
+#ifdef LL_NEED_MATH
+  FAKE_ERROR(OverflowError);
+  FAKE_ERROR(ValueError);
+  #include "c/src/ll_math.h"
+
+#endif
+
+#ifdef LL_NEED_STRTOD
+  #include "c/src/ll_strtod.h"
+#endif
+
+#ifdef LL_NEED_STACK
+  FAKE_ERROR(RuntimeError);
+  #include "c/src/thread.h"
+  #include "c/src/stack.h"
+#endif
+
 
 // raw malloc code
 char *raw_malloc(long size) {
@@ -29,36 +58,41 @@ char *RPython_StartupCode() {
 
 #ifdef ENTRY_POINT_DEFINED
 
-int _argc;
-char **_argv;
+int __ENTRY_POINT__(RPyListOfString *);
 
-int _pypy_getargc() {
-  return _argc;
-}
+int main(int argc, char *argv[])
+{
+    XXX
+    char *errmsg;
+    int i, exitcode;
+    RPyListOfString *list;
+    errmsg = RPython_StartupCode();
+    if (errmsg) goto error;
+    
+    list = _RPyListOfString_New(argc);
+    if (_RPyExceptionOccurred()) goto memory_out;
+    for (i=0; i<argc; i++) {
+      RPyString *s = RPyString_FromString(argv[i]);
 
-char ** _pypy_getargv() {
-  return _argv;
-}
+      if (_RPyExceptionOccurred()) {
+	goto memory_out;
+      }
 
-/* we still need to forward declare our entry point */
-int __ENTRY_POINT__(void);
+      _RPyListOfString_SetItem(list, i, s);
+    }
 
-#include <stdio.h>
+    exitcode = __ENTRY_POINT__(list);
 
-int main(int argc, char *argv[]) {
-  int res;
-  char *errmsg;
-  errmsg = RPython_StartupCode();
-  if (errmsg) {
+    if (_RPyExceptionOccurred()) {
+      goto error; // XXX see genc
+    }
+    return exitcode;
+
+ memory_out:
+    errmsg = "out of memory";
+ error:
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
     return 1;
-  }
-
-  _argc = argc;
-  _argv = argv;
-
-  res = __ENTRY_POINT__();
-  return res;
 }
 
 #else

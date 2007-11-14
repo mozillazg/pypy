@@ -1,11 +1,11 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython import extfunctable
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.rpython.annlowlevel import annotate_lowlevel_helper
 from pypy.objspace.flow.model import FunctionGraph
 from pypy.tool.sourcetools import compile2
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
-from pypy.rlib import rstack
 
 # ____________________________________________________________
 # generic data types
@@ -69,7 +69,8 @@ STATE_HEADER.f_back.TO.become(STATE_HEADER)
 
 null_state = lltype.nullptr(STATE_HEADER)
 
-OPAQUE_STATE_HEADER_PTR = rstack.OPAQUE_STATE_HEADER_PTR
+OPAQUE_STATE_HEADER_PTR = lltype.Ptr(
+    extfunctable.frametop_type_info.get_lltype())
 
 
 def make_state_header_type(name, *fields):

@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem.lltype import \
      Array, malloc, Ptr, PyObject, pyobjectptr, \
      FuncType, functionptr, Signed
 from pypy.rpython.exceptiondata import AbstractExceptionData
+from pypy.rpython.extfunctable import standardexceptions
 from pypy.annotation.classdef import FORCE_ATTRIBUTES_INTO_CLASSES
 
 class ExceptionData(AbstractExceptionData):
@@ -104,5 +105,8 @@ class ExceptionData(AbstractExceptionData):
         helper_fn = rtyper.annotate_helper_fn(ll_pyexcclass2exc, [s_pyobj])
         return helper_fn
 
-    def cast_exception(self, TYPE, value):
-        return rclass.ll_cast_to_object(value)
+    def get_standard_ll_exc_instance(self, rtyper, clsdef):
+        r_inst = rclass.getinstancerepr(rtyper, clsdef)
+        example = r_inst.get_reusable_prebuilt_instance()
+        example = rclass.ll_cast_to_object(example)
+        return example
