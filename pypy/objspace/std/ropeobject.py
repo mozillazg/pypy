@@ -663,65 +663,34 @@ def str_count__Rope_Rope_ANY_ANY(space, w_self, w_arg, w_start, w_end):
         i += 1
     return wrapint(space, i)
 
-def ropeendswith(self, suffix, start, end):
-    if suffix.length() == 0:
-        return True
-    if self.length() == 0:
-        return False
-    begin = end - suffix.length()
-    if begin < start:
-        return False
-    iter1 = rope.SeekableItemIterator(self)
-    iter1.seekforward(begin)
-    iter2 = rope.ItemIterator(suffix)
-    for i in range(suffix.length()):
-        if iter1.nextchar() != iter2.nextchar():
-            return False
-    return True
-
 
 def str_endswith__Rope_Rope_ANY_ANY(space, w_self, w_suffix, w_start, w_end):
     (self, suffix, start, end) = _convert_idx_params(space, w_self,
                                                      w_suffix, w_start, w_end)
-    return space.newbool(ropeendswith(self, suffix, start, end))
+    return space.newbool(rope.endswith(self, suffix, start, end))
 
 def str_endswith__Rope_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
     (self, _, start, end) = _convert_idx_params(space, w_self,
                                                   space.wrap(''), w_start, w_end)
     for w_suffix in space.unpacktuple(w_suffixes):
         suffix = rope_w(space, w_suffix) 
-        if ropeendswith(self, suffix, start, end):
+        if rope.endswith(self, suffix, start, end):
             return space.w_True
     return space.w_False
 
-def ropestartswith(self, prefix, start, end):
-    if prefix.length() == 0:
-        return True
-    if self.length() == 0:
-        return False
-    stop = start + prefix.length()
-    if stop > end:
-        return False
-    iter1 = rope.SeekableItemIterator(self)
-    iter1.seekforward(start)
-    iter2 = rope.ItemIterator(prefix)
-    for i in range(prefix.length()):
-        if iter1.nextchar() != iter2.nextchar():
-            return False
-    return True
   
 
 def str_startswith__Rope_Rope_ANY_ANY(space, w_self, w_prefix, w_start, w_end):
     (self, prefix, start, end) = _convert_idx_params(space, w_self,
                                                      w_prefix, w_start, w_end)
-    return space.newbool(ropestartswith(self, prefix, start, end))
+    return space.newbool(rope.startswith(self, prefix, start, end))
     
 def str_startswith__Rope_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
     (self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
                                                   w_start, w_end)
     for w_prefix in space.unpacktuple(w_prefixes):
         prefix = rope_w(space, w_prefix)
-        if ropestartswith(self, prefix, start, end):
+        if rope.startswith(self, prefix, start, end):
             return space.w_True
     return space.w_False
  
