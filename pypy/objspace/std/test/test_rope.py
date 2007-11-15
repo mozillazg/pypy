@@ -28,7 +28,7 @@ def make_random_string(operations=10, slicing=True, print_seed=True):
                 continue
             start = random.randrange(len(st) // 3)
             stop = random.randrange(len(st) // 3 * 2, len(st))
-            curr = curr[start: stop]
+            curr = getslice_one(curr, start, stop)
             st = st[start: stop]
     return curr, st
 
@@ -38,20 +38,20 @@ def test_add():
          LiteralStringNode("d" * 32) + LiteralStringNode("ef" * 32) +
          LiteralStringNode(""))
     assert s.depth() == 3
-    assert s.flatten() == "".join([c * 32 for c in "a", "bc", "d", "ef"])
+    assert s.flatten_string() == "".join([c * 32 for c in "a", "bc", "d", "ef"])
     s = s.rebalance()
-    assert s.flatten() == "".join([c * 32 for c in "a", "bc", "d", "ef"])
+    assert s.flatten_string() == "".join([c * 32 for c in "a", "bc", "d", "ef"])
 
 def test_dont_rebalance_again():
     s = (LiteralStringNode("a" * 32) + LiteralStringNode("b" * 32) +
          LiteralStringNode("d" * 32) + LiteralStringNode("e" * 32) +
          LiteralStringNode(""))
     assert s.depth() == 3
-    assert s.flatten() == "".join([c * 32 for c in "abde"])
+    assert s.flatten_string() == "".join([c * 32 for c in "abde"])
     s = s.rebalance()
     assert s.check_balanced()
     assert s.balanced
-    assert s.flatten() == "".join([c * 32 for c in "abde"])
+    assert s.flatten_string() == "".join([c * 32 for c in "abde"])
 
 def test_random_addition_test():
     seed = random.randrange(10000)
@@ -67,9 +67,9 @@ def test_random_addition_test():
         else:
             curr = LiteralStringNode(a) + curr
             st = a + st
-        assert curr.flatten() == st
+        assert curr.flatten_string() == st
     curr = curr.rebalance()
-    assert curr.flatten() == st
+    assert curr.flatten_string() == st
 
 def test_getitem():
     result = "".join([c * 32 for c in "a", "bc", "d", "ef"])
@@ -79,7 +79,8 @@ def test_getitem():
     s2 = s1.rebalance()
     for i in range(len(result)):
         for s in [s1, s2]:
-            assert s[i] == result[i]
+            assert s.getchar(i) == result[i]
+            assert s.getint(i) == ord(result[i])
 
 def test_getslice():
     result = "".join([c * 32 for c in "a", "bc", "d", "ef"])
@@ -90,14 +91,14 @@ def test_getslice():
     for s in [s1, s2]:
         for start in range(0, len(result)):
             for stop in range(start, len(result)):
-                assert s[start:stop].flatten() == result[start:stop]
+                assert getslice_one(s, start, stop).flatten_string() == result[start:stop]
 
 def test_getslice_bug():
     s1 = LiteralStringNode("/home/arigo/svn/pypy/branch/rope-branch/pypy/bin")
     s2 = LiteralStringNode("/pypy")
     s = s1 + s2
     r = getslice_one(s, 1, 5)
-    assert r.flatten() == "home"
+    assert r.flatten_string() == "home"
 
 
 def test_getslice_step():
@@ -105,13 +106,13 @@ def test_getslice_step():
           LiteralStringNode("nopqrstu") + LiteralStringNode("vwxyz") + 
           LiteralStringNode("zyxwvut") + LiteralStringNode("srqpomnlk"))
     s2 = s1.rebalance()
-    result = s1.flatten()
-    assert s2.flatten() == result
+    result = s1.flatten_string()
+    assert s2.flatten_string() == result
     for s in [s1, s2]:
         for start in range(0, len(result)):
             for stop in range(start, len(result)):
                 for step in range(1, stop - start):
-                    assert s[start:stop:step].flatten() == result[start:stop:step]
+                    assert getslice(s, start, stop, step).flatten_string() == result[start:stop:step]
 
 
 def test_random_addition_and_slicing():
@@ -141,27 +142,27 @@ def test_random_addition_and_slicing():
             #import pdb; pdb.set_trace()
             start = random.randrange(len(st) // 3)
             stop = random.randrange(len(st) // 3 * 2, len(st))
-            curr = curr[start: stop]
+            curr = getslice_one(curr, start, stop)
             st = st[start: stop]
-        assert curr.flatten() == st
+        assert curr.flatten_string() == st
     curr = curr.rebalance()
-    assert curr.flatten() == st
+    assert curr.flatten_string() == st
 
 def test_iteration():
     rope, real_st = make_random_string(200)
-    iter = CharIterator(rope)
+    iter = ItemIterator(rope)
     for c in real_st:
-        c2 = iter.next()
+        c2 = iter.nextchar()
         assert c2 == c
-    py.test.raises(StopIteration, iter.next)
+    py.test.raises(StopIteration, iter.nextchar)
 
 def test_reverse_iteration():
     rope, real_st = make_random_string(200)
-    iter = ReverseCharIterator(rope)
+    iter = ReverseItemIterator(rope)
     for c in py.builtin.reversed(real_st):
-        c2 = iter.next()
+        c2 = iter.nextchar()
         assert c2 == c
-    py.test.raises(StopIteration, iter.next)
+    py.test.raises(StopIteration, iter.nextchar)
 
 def test_multiply():
     strs = [(LiteralStringNode("a"), "a"), (LiteralStringNode("abc"), "abc"),
@@ -175,7 +176,7 @@ def test_multiply():
     for r, st in strs:
         for i in times:
             r2 = multiply(r, i)
-            assert r2.flatten() == st * i
+            assert r2.flatten_string() == st * i
 
 def test_join():
     seps = [(LiteralStringNode("a"), "a"), (LiteralStringNode("abc"), "abc"),
@@ -186,7 +187,7 @@ def test_join():
     l = list(l)
     for s, st in seps:
         node = join(s, l)
-        result1 = node.flatten()
+        result1 = node.flatten_string()
         result2 = st.join(strs)
         for i in range(node.length()):
             assert result1[i] == result2[i]
@@ -196,7 +197,7 @@ def test_join():
                ':', '213', '>']
     l = [LiteralStringNode(s) for s in strings]
     node = join(LiteralStringNode(""), l)
-    assert node.flatten() == ''.join(strings)
+    assert node.flatten_string() == ''.join(strings)
 
 def test_join_random():
     l, strs = zip(*[make_random_string(10 * i) for i in range(1, 5)])
@@ -205,7 +206,7 @@ def test_join_random():
             make_random_string(500)]
     for s, st in seps:
         node = join(s, l)
-        result1 = node.flatten()
+        result1 = node.flatten_string()
         result2 = st.join(strs)
         for i in range(node.length()):
             assert result1[i] == result2[i]
@@ -214,18 +215,18 @@ def test_seekbackward():
     rope = BinaryConcatNode(BinaryConcatNode(LiteralStringNode("abc"),
                                              LiteralStringNode("def")),
                             LiteralStringNode("ghi"))
-    iter = SeekableCharIterator(rope)
+    iter = SeekableItemIterator(rope)
     for c in "abcdefgh":
-        c2 = iter.next()
+        c2 = iter.nextchar()
         assert c2 == c
     for i in range(7):
         iter.seekback(i)
         for c in "abcdefghi"[-1-i:-1]:
-            c2 = iter.next()
+            c2 = iter.nextchar()
             assert c2 == c
-    c2 = iter.next()
+    c2 = iter.nextchar()
     assert c2 == "i"
-    py.test.raises(StopIteration, iter.next)
+    py.test.raises(StopIteration, iter.nextchar)
 
 def test_fringe_iterator():
     ABC = LiteralStringNode("abc")
@@ -277,41 +278,37 @@ def test_seekforward():
                                              LiteralStringNode("def")),
                             LiteralStringNode("ghi"))
     rope = rope + rope
-    result = rope.flatten()
+    result = rope.flatten_string()
     for j in range(len(result) - 1):
         for i in range(len(result) - 1 - j):
-            iter = SeekableCharIterator(rope)
+            iter = SeekableItemIterator(rope)
 #            if (j, i) == (3, 1):
 #                import pdb; pdb.set_trace()
             for c in result[:j]:
-                c2 = iter.next()
+                c2 = iter.nextchar()
                 assert c2 == c
             iter.seekforward(i)
             for c in result[i + j:]:
-                c2 = iter.next()
+                c2 = iter.nextchar()
                 assert c2 == c
-        py.test.raises(StopIteration, iter.next)
+        py.test.raises(StopIteration, iter.nextchar)
 
-def test_find_char():
+def test_find_int():
     rope, st = make_random_string()
-    rope = rope[10:100]
+    rope = getslice_one(rope, 10, 100)
     st = st[10:100]
     for i in range(len(st)):
         print i
         for j in range(i + 1, len(st)):
             c = st[i:j][(j - i) // 2]
-            pos = find_char(rope, c, i, j)
+            pos = find_int(rope, ord(c), i, j)
             assert pos == st.find(c, i, j)
 
-def test_find_char_bugs():
-    r = find_char(LiteralStringNode("ascii"), " ", 0, 5)
+def test_find_int_bugs():
+    r = find_int(LiteralStringNode("ascii"), ord(" "), 0, 5)
     assert r == -1
-    r = find_char(LiteralStringNode("a"), "a")
+    r = find_int(LiteralStringNode("a"), ord("a"))
     assert r == 0
-    r = find_char(BinaryConcatNode(
-        LiteralStringNode("x"),
-        SliceNode(1, 9, LiteralStringNode("a" * 10))), "a")
-    assert r == 1
 
 
 def test_restart_positions():
@@ -335,16 +332,16 @@ def test_fromcharlist():
     for i in range(0, 100, 10):
         chars = ["a"] * 50 + ["b"] * i
         node = rope_from_charlist(chars)
-        assert node.flatten() == "a" * 50  + "b" * i
-    assert rope_from_charlist([]).flatten() == ""
+        assert node.flatten_string() == "a" * 50  + "b" * i
+    assert rope_from_charlist([]).flatten_string() == ""
 
 def test_find_iterator():
-    for searchstring in ["abc", "a", "", "x", "xyz"]:
+    for searchstring in ["abc", "a", "", "x", "xyz", "abababcabcabb"]:
         node = join(LiteralStringNode(searchstring),
                     [LiteralStringNode("cde" * i) for i in range(1, 10)])
-    #   node.view()
+        #node.view()
         iter = FindIterator(node, LiteralStringNode(searchstring))
-        s = node.flatten()
+        s = node.flatten_string()
         assert s == searchstring.join(["cde" * i for i in range(1, 10)])
         start = 0
         while 1:
@@ -365,10 +362,10 @@ def test_hash():
             assert hash_rope(rope) == -1
             continue
         h = hash_rope(rope)
-        x = LiteralStringNode(rope.flatten()).hash_part()
+        x = LiteralStringNode(rope.flatten_string()).hash_part()
         assert x == rope.hash_part()
         x <<= 1
-        x ^= ord(rope.getitem(0))
+        x ^= rope.getint(0)
         x ^= rope.length()
         assert intmask(x) == h
         # hash again to check for cache effects
@@ -496,24 +493,25 @@ def test_power():
         for j in range(1, 10000, 7):
             assert intmask(i ** j) == masked_power(i, j)
 
-def test_EfficientGetitemWraper():
-    node1, _ = make_random_string(slicing=False)
-    node2 = EfficientGetitemWraper(node1)
-    for i in range(node2.length()):
-        assert node1.getitem(i) == node2.getitem(i)
-    for j in range(1000):
-        i = random.randrange(node1.length())
-        assert node1.getitem(i) == node2.getitem(i)
 
 def test_seekable_bug():
     node = BinaryConcatNode(LiteralStringNode("abc"), LiteralStringNode("def"))
-    iter = SeekableCharIterator(node)
-    c = iter.next(); assert c == "a"
-    c = iter.next(); assert c == "b"
-    c = iter.next(); assert c == "c"
+    iter = SeekableItemIterator(node)
+    c = iter.nextchar(); assert c == "a"
+    c = iter.nextchar(); assert c == "b"
+    c = iter.nextchar(); assert c == "c"
     iter.seekback(1)
-    c = iter.next(); assert c == "c"
-    c = iter.next(); assert c == "d"
-    c = iter.next(); assert c == "e"
-    c = iter.next(); assert c == "f"
-    py.test.raises(StopIteration, iter.next)
+    c = iter.nextchar(); assert c == "c"
+    c = iter.nextchar(); assert c == "d"
+    c = iter.nextchar(); assert c == "e"
+    c = iter.nextchar(); assert c == "f"
+    py.test.raises(StopIteration, iter.nextchar)
+    node = LiteralStringNode("abcdef")
+    iter = SeekableItemIterator(node)
+    c = iter.nextchar(); assert c == "a"
+    c = iter.nextchar(); assert c == "b"
+    c = iter.nextchar(); assert c == "c"
+    iter.seekback(3)
+    c = iter.nextchar(); assert c == "a"
+    c = iter.nextchar(); assert c == "b"
+    c = iter.nextchar(); assert c == "c"
