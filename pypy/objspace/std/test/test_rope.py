@@ -170,6 +170,29 @@ def test_iteration():
         c2 = iter.nextchar()
         assert c2 == c
     py.test.raises(StopIteration, iter.nextchar)
+    iter = ItemIterator(rope)
+    for c in real_st:
+        c2 = iter.nextunichar()
+        assert c2 == c
+    py.test.raises(StopIteration, iter.nextchar)
+    iter = ItemIterator(rope)
+    for c in real_st:
+        c2 = iter.nextint()
+        assert c2 == ord(c)
+    py.test.raises(StopIteration, iter.nextchar)
+
+def test_iteration_unicode():
+    rope, real_st = make_random_string(200, unicode=True)
+    iter = ItemIterator(rope)
+    for c in real_st:
+        c2 = iter.nextunichar()
+        assert c2 == c
+    py.test.raises(StopIteration, iter.nextchar)
+    iter = ItemIterator(rope)
+    for c in real_st:
+        c2 = iter.nextint()
+        assert c2 == ord(c)
+    py.test.raises(StopIteration, iter.nextchar)
 
 def test_reverse_iteration():
     rope, real_st = make_random_string(200)
@@ -177,6 +200,24 @@ def test_reverse_iteration():
     for c in py.builtin.reversed(real_st):
         c2 = iter.nextchar()
         assert c2 == c
+    py.test.raises(StopIteration, iter.nextchar)
+    iter = ReverseItemIterator(rope)
+    for c in py.builtin.reversed(real_st):
+        c2 = iter.nextint()
+        assert c2 == ord(c)
+    py.test.raises(StopIteration, iter.nextchar)
+
+def test_reverse_iteration_unicode():
+    rope, real_st = make_random_string(200, unicode=True)
+    iter = ReverseItemIterator(rope)
+    for c in py.builtin.reversed(real_st):
+        c2 = iter.nextunichar()
+        assert c2 == c
+    py.test.raises(StopIteration, iter.nextchar)
+    iter = ReverseItemIterator(rope)
+    for c in py.builtin.reversed(real_st):
+        c2 = iter.nextint()
+        assert c2 == ord(c)
     py.test.raises(StopIteration, iter.nextchar)
 
 def test_multiply():
@@ -192,6 +233,21 @@ def test_multiply():
         for i in times:
             r2 = multiply(r, i)
             assert r2.flatten_string() == st * i
+
+def test_multiply_unicode():
+    strs = [(LiteralUnicodeNode(u"\uaaaa"), u"\uaaaa"),
+            (LiteralUnicodeNode(u"\uaaaa\ubbbb\ucccc"), u"\uaaaa\ubbbb\ucccc"),
+            make_random_string(500)]
+    times = range(100)
+    for i in range(9, 30):
+        times.append(i ** 2 - 1)
+        times.append(i ** 2)
+        times.append(i ** 2 + 1)
+        times.append(i ** 2 + 2)
+    for r, st in strs:
+        for i in times:
+            r2 = multiply(r, i)
+            assert r2.flatten_unicode() == st * i
 
 def test_join():
     seps = [(LiteralStringNode("a"), "a"), (LiteralStringNode("abc"), "abc"),
@@ -222,6 +278,18 @@ def test_join_random():
     for s, st in seps:
         node = join(s, l)
         result1 = node.flatten_string()
+        result2 = st.join(strs)
+        for i in range(node.length()):
+            assert result1[i] == result2[i]
+
+def test_join_random_unicode():
+    l, strs = zip(*[make_random_string(10 * i, unicode=True) for i in range(1, 5)])
+    l = list(l)
+    seps = [(LiteralStringNode("a"), "a"), (LiteralStringNode("abc"), "abc"),
+            make_random_string(500)]
+    for s, st in seps:
+        node = join(s, l)
+        result1 = node.flatten_unicode()
         result2 = st.join(strs)
         for i in range(node.length()):
             assert result1[i] == result2[i]
