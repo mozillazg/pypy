@@ -1,8 +1,9 @@
 import py
-import random
+import random, sys
 from pypy.objspace.std.rope import *
 
-def make_random_string(operations=10, slicing=True, print_seed=True):
+def make_random_string(operations=10, slicing=True, print_seed=True,
+                       unicode=False):
     seed = random.randrange(10000)
     if print_seed:
         print seed
@@ -14,14 +15,20 @@ def make_random_string(operations=10, slicing=True, print_seed=True):
     else:
         choice = [0, 1]
     for i in range(operations):
-        a = (chr(random.randrange(ord('a'), ord('z') + 1)) *
-                random.randrange(500))
+        if not unicode:
+            a = (chr(random.randrange(ord('a'), ord('z') + 1)) *
+                    random.randrange(500))
+            node = LiteralStringNode(a)
+        else:
+            a = (unichr(random.randrange(sys.maxunicode)) *
+                        random.randrange(500))
+            node = LiteralUnicodeNode(a)
         c = random.choice(choice)
         if c == 0:
-            curr = curr + LiteralStringNode(a)
+            curr = curr + node
             st = st + a
         elif c == 1:
-            curr = LiteralStringNode(a) + curr
+            curr = node + curr
             st = a + st
         else:
             if len(st) < 10:
@@ -80,6 +87,14 @@ def test_getitem():
     for i in range(len(result)):
         for s in [s1, s2]:
             assert s.getchar(i) == result[i]
+            assert s.getint(i) == ord(result[i])
+
+def test_getitem_unicode():
+    s1, result = make_random_string(200, unicode=True)
+    s2 = s1.rebalance()
+    for i in range(len(result)):
+        for s in [s1, s2]:
+            assert s.getunichar(i) == result[i]
             assert s.getint(i) == ord(result[i])
 
 def test_getslice():
