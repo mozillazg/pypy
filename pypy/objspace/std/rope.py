@@ -1197,6 +1197,21 @@ def strip(node, left=True, right=True, predicate=lambda i: chr(i).isspace()):
     return getslice_one(node, lpos, rpos)
 strip._annspecialcase_ = "specialize:arg(3)"
 
+def split(node, sub, maxsplit=-1):
+    startidx = 0
+    substrings = []
+    iter = FindIterator(node, sub)
+    while maxsplit != 0:
+        try:
+            foundidx = iter.next()
+        except StopIteration:
+            break
+        substrings.append(getslice_one(node, startidx, foundidx))
+        startidx = foundidx + sub.length()
+        maxsplit = maxsplit - 1
+    substrings.append(getslice_one(node, startidx, node.length()))
+    return substrings
+
 # __________________________________________________________________________
 # misc
 

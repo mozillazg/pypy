@@ -17,6 +17,7 @@ class W_RopeObject(W_Object):
     from pypy.objspace.std.stringtype import str_typedef as typedef
 
     def __init__(w_self, node):
+        assert node.is_bytestring()
         w_self._node = node
 
     def __repr__(w_self):
@@ -155,42 +156,35 @@ otherwise."""
 
     return space.newbool(cased)
 
-def str_upper__Rope(space, w_self):
-    l = w_self._node.length()
+def _local_transform(node, transform):
+    l = node.length()
     res = [' '] * l
-    iter = rope.ItemIterator(w_self._node)
+    iter = rope.ItemIterator(node)
     for i in range(l):
         ch = iter.nextchar()
-        res[i] = _upper(ch)
+        res[i] = transform(ch)
 
     return W_RopeObject(rope.rope_from_charlist(res))
+_local_transform._annspecialcase_ = "specialize:arg(1)"
+
+def str_upper__Rope(space, w_self):
+    return _local_transform(w_self._node, _upper)
 
 def str_lower__Rope(space, w_self):
-    l = w_self._node.length()
-    res = [' '] * l
-    iter = rope.ItemIterator(w_self._node)
-    for i in range(l):
-        ch = iter.nextchar()
-        res[i] = _lower(ch)
+    return _local_transform(w_self._node, _lower)
 
-    return W_RopeObject(rope.rope_from_charlist(res))
+def _swapcase(ch):
+    if ch.isupper():
+        o = ord(ch) + 32
+        return chr(o)
+    elif ch.islower():
+        o = ord(ch) - 32
+        return chr(o)
+    else:
+        return ch
 
 def str_swapcase__Rope(space, w_self):
-    l = w_self._node.length()
-    res = [' '] * l
-    iter = rope.ItemIterator(w_self._node)
-    for i in range(l):
-        ch = iter.nextchar()
-        if ch.isupper():
-            o = ord(ch) + 32
-            res[i] = chr(o)
-        elif ch.islower():
-            o = ord(ch) - 32
-            res[i] = chr(o)
-        else:
-            res[i] = ch
-
-    return W_RopeObject(rope.rope_from_charlist(res))
+    return _local_transform(w_self._node, _swapcase)
 
     
 def str_capitalize__Rope(space, w_self):
@@ -218,6 +212,7 @@ def str_capitalize__Rope(space, w_self):
 
     return W_RopeObject(rope.rope_from_charlist(buffer))
          
+
 def str_title__Rope(space, w_self):
     node = w_self._node
     length = node.length()
@@ -269,29 +264,16 @@ def str_split__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
 
     return space.newlist(res_w)
 
-
 def str_split__Rope_Rope_ANY(space, w_self, w_by, w_maxsplit=-1):
     maxsplit = space.int_w(w_maxsplit)
-    res_w = []
     start = 0
     selfnode = w_self._node
     bynode = w_by._node
     bylen = bynode.length()
     if bylen == 0:
         raise OperationError(space.w_ValueError, space.wrap("empty separator"))
-
-    iter = rope.FindIterator(selfnode, bynode)
-    while maxsplit != 0:
-        try:
-            next = iter.next()
-        except StopIteration:
-            break
-        res_w.append(W_RopeObject(rope.getslice_one(selfnode, start, next)))
-        start = next + bylen
-        maxsplit -= 1   # NB. if it's already < 0, it stays < 0
-
-    res_w.append(W_RopeObject(rope.getslice_one(
-        selfnode, start, selfnode.length())))
+    res_w = [W_RopeObject(node)
+                for node in rope.split(selfnode, bynode, maxsplit)]
     return space.newlist(res_w)
 
 def str_rsplit__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
@@ -537,22 +519,9 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
         except OverflowError:
             raise OperationError(space.w_OverflowError,
                                  space.wrap("string too long"))
-    startidx = 0
-    substrings = []
-    iter = rope.FindIterator(node, sub)
-    try:
-        foundidx = iter.next()
-    except StopIteration:
+    substrings = rope.split(node, sub, maxsplit)
+    if substrings is None:
         return w_self.create_if_subclassed()
-    while maxsplit != 0:
-        substrings.append(rope.getslice_one(node, startidx, foundidx))
-        startidx = foundidx + sub.length()
-        try:
-            foundidx = iter.next()
-        except StopIteration:
-            break
-        maxsplit = maxsplit - 1
-    substrings.append(rope.getslice_one(node, startidx, length))
     try:
         return W_RopeObject(rope.join(by, substrings))
     except OverflowError:
@@ -581,47 +550,24 @@ def _strip(space, w_self, w_chars, left, right):
        
     return W_RopeObject(rope.getslice_one(node, lpos, rpos))
 
-def _strip_none(space, w_self, left, right):
-    "internal function called by str_xstrip methods"
-    node = w_self._node
-    length = node.length()
-    
-    lpos = 0
-    rpos = length
-    
-    if left:
-        #print "while %d < %d and -%s- in -%s-:"%(lpos, rpos, u_self[lpos],w_chars)
-        iter = rope.ItemIterator(node)
-        while lpos < rpos and iter.nextchar().isspace():
-           lpos += 1
-       
-    if right:
-        iter = rope.ReverseItemIterator(node)
-        while rpos > lpos and iter.nextchar().isspace():
-           rpos -= 1
-       
-    assert rpos >= lpos    # annotator hint, don't remove
-    return W_RopeObject(rope.getslice_one(node, lpos, rpos))
 
 def str_strip__Rope_Rope(space, w_self, w_chars):
     return _strip(space, w_self, w_chars, left=1, right=1)
 
 def str_strip__Rope_None(space, w_self, w_chars):
-    return _strip_none(space, w_self, left=1, right=1)
+    return W_RopeObject(rope.strip(w_self._node, left=True, right=True))
    
 def str_rstrip__Rope_Rope(space, w_self, w_chars):
     return _strip(space, w_self, w_chars, left=0, right=1)
 
 def str_rstrip__Rope_None(space, w_self, w_chars):
-    return _strip_none(space, w_self, left=0, right=1)
+    return W_RopeObject(rope.strip(w_self._node, left=False, right=True))
 
-   
 def str_lstrip__Rope_Rope(space, w_self, w_chars):
     return _strip(space, w_self, w_chars, left=1, right=0)
 
 def str_lstrip__Rope_None(space, w_self, w_chars):
-    return _strip_none(space, w_self, left=1, right=0)
-
+    return W_RopeObject(rope.strip(w_self._node, left=True, right=False))
 
 
 def str_center__Rope_ANY_ANY(space, w_self, w_arg, w_fillchar):
@@ -899,13 +845,6 @@ def mul_string_times(space, w_str, w_times):
     if mul <= 0:
         return W_RopeObject.EMPTY
     node = w_str._node
-    length = node.length()
-#    try:
-#        buflen = ovfcheck(mul * length)
-#    except OverflowError:
-#        raise OperationError(
-#            space.w_OverflowError, 
-#            space.wrap("repeated string is too long: %d %d" % (length, mul)))
     try:
         return W_RopeObject(rope.multiply(node, mul))
     except OverflowError:
