@@ -1120,6 +1120,39 @@ def compare(node1, node2):
     return len1 - len2
 
 
+def startswith(self, prefix, start, end):
+    if prefix.length() == 0:
+        return True
+    if self.length() == 0:
+        return False
+    stop = start + prefix.length()
+    if stop > end:
+        return False
+    iter1 = SeekableItemIterator(self)
+    iter1.seekforward(start)
+    iter2 = ItemIterator(prefix)
+    for i in range(prefix.length()):
+        if iter1.nextint() != iter2.nextint():
+            return False
+    return True
+
+def endswith(self, suffix, start, end):
+    if suffix.length() == 0:
+        return True
+    if self.length() == 0:
+        return False
+    begin = end - suffix.length()
+    if begin < start:
+        return False
+    iter1 = SeekableItemIterator(self)
+    iter1.seekforward(begin)
+    iter2 = ItemIterator(suffix)
+    for i in range(suffix.length()):
+        if iter1.nextint() != iter2.nextint():
+            return False
+    return True
+
+
 # __________________________________________________________________________
 # misc
 
