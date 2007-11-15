@@ -695,3 +695,22 @@ def test_getrope():
             assert isinstance(r, LiteralNode)
             assert r.getint(0) >= 128 or isinstance(r, LiteralStringNode)
             assert r.getrope(0) is r
+
+def test_split():
+    seps = [(LiteralStringNode("a"), "a"), (LiteralStringNode("abc"), "abc"),
+            (LiteralStringNode("d"), "d"), (LiteralStringNode(""), "")]
+    l, strs = zip(*[(LiteralStringNode("x"), "x"),
+                    (LiteralStringNode("xyz"), "xyz"),
+                    (LiteralStringNode("w"), "w")])
+    l = list(l)
+    for s, st in seps:
+        node = join(s, l)
+        l2 = split(node, s)
+        for n1, n2 in zip(l, l2):
+            assert n1.flatten_string() == n2.flatten_string()
+    for i in range(4):
+        l1 = split(LiteralStringNode("ababababa"), LiteralStringNode("b"), i)
+        l2 = "ababababa".split("b", i)
+        assert len(l1) == len(l2)
+        for n, s in zip(l1, l2):
+            assert n.flatten_string() == s
