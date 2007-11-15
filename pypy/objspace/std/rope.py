@@ -220,7 +220,7 @@ class LiteralUnicodeNode(StringNode):
     def getunichar(self, index):
         return self.u[index]
 
-    def getbyte(self, index):
+    def getint(self, index):
         return ord(self.u[index])
 
     def getslice(self, start, stop):
