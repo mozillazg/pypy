@@ -24,7 +24,7 @@ class W_RopeObject(W_Object):
         return "%s(%r)" % (w_self.__class__.__name__, w_self._node)
 
     def unwrap(w_self, space):
-        return w_self._node.flatten()
+        return w_self._node.flatten_string()
 
     def create_if_subclassed(w_self):
         if type(w_self) is W_RopeObject:
@@ -49,7 +49,7 @@ class W_RopeIterObject(W_Object):
 
     def __init__(w_self, w_rope, index=0):
         w_self.node = node = w_rope._node
-        w_self.char_iter = rope.CharIterator(node)
+        w_self.item_iter = rope.ItemIterator(node)
         w_self.index = index
 
 registerimplementation(W_RopeIterObject)
@@ -58,9 +58,9 @@ def _is_generic(space, w_self, fun):
     l = w_self._node.length()
     if l == 0:
         return space.w_False
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for i in range(l):
-        if not fun(iter.next()):
+        if not fun(iter.nextchar()):
             return space.w_False
     return space.w_True
 _is_generic._annspecialcase_ = "specialize:arg(2)"
@@ -104,9 +104,9 @@ at least one cased character in S, False otherwise."""
     if l == 0:
         return space.w_False
     cased = False
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for idx in range(l):
-        c = iter.next()
+        c = iter.nextchar()
         if c.islower():
             return space.w_False
         elif not cased and c.isupper():
@@ -121,9 +121,9 @@ at least one cased character in S, False otherwise."""
     if l == 0:
         return space.w_False
     cased = False
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for idx in range(l):
-        c = iter.next()
+        c = iter.nextchar()
         if c.isupper():
             return space.w_False
         elif not cased and c.islower():
@@ -138,9 +138,9 @@ otherwise."""
     cased = False
     previous_is_cased = False
 
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for pos in range(0, w_self._node.length()):
-        ch = iter.next()
+        ch = iter.nextchar()
         if ch.isupper():
             if previous_is_cased:
                 return space.w_False
@@ -158,9 +158,9 @@ otherwise."""
 def str_upper__Rope(space, w_self):
     l = w_self._node.length()
     res = [' '] * l
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for i in range(l):
-        ch = iter.next()
+        ch = iter.nextchar()
         res[i] = _upper(ch)
 
     return W_RopeObject(rope.rope_from_charlist(res))
@@ -168,9 +168,9 @@ def str_upper__Rope(space, w_self):
 def str_lower__Rope(space, w_self):
     l = w_self._node.length()
     res = [' '] * l
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for i in range(l):
-        ch = iter.next()
+        ch = iter.nextchar()
         res[i] = _lower(ch)
 
     return W_RopeObject(rope.rope_from_charlist(res))
@@ -178,9 +178,9 @@ def str_lower__Rope(space, w_self):
 def str_swapcase__Rope(space, w_self):
     l = w_self._node.length()
     res = [' '] * l
-    iter = rope.CharIterator(w_self._node)
+    iter = rope.ItemIterator(w_self._node)
     for i in range(l):
-        ch = iter.next()
+        ch = iter.nextchar()
         if ch.isupper():
             o = ord(ch) + 32
             res[i] = chr(o)
@@ -198,8 +198,8 @@ def str_capitalize__Rope(space, w_self):
     length = node.length()
     buffer = [' '] * length
     if length > 0:
-        iter = rope.CharIterator(node)
-        ch = iter.next()
+        iter = rope.ItemIterator(node)
+        ch = iter.nextchar()
         if ch.islower():
             o = ord(ch) - 32
             buffer[0] = chr(o)
@@ -207,7 +207,7 @@ def str_capitalize__Rope(space, w_self):
             buffer[0] = ch
 
         for i in range(1, length):
-            ch = iter.next()
+            ch = iter.nextchar()
             if ch.isupper():
                 o = ord(ch) + 32
                 buffer[i] = chr(o)
@@ -224,9 +224,9 @@ def str_title__Rope(space, w_self):
     buffer = [' '] * length
     prev_letter = ' '
 
-    iter = rope.CharIterator(node)
+    iter = rope.ItemIterator(node)
     for pos in range(0, length):
-        ch = iter.next()
+        ch = iter.nextchar()
         if not prev_letter.isalpha():
             buffer[pos] = _upper(ch)
         else:
@@ -242,11 +242,11 @@ def str_split__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
     node = w_self._node
     length = node.length()
     i = 0
-    iter = rope.CharIterator(node)
+    iter = rope.ItemIterator(node)
     while True:
         # find the beginning of the next word
         while i < length:
-            if not iter.next().isspace():
+            if not iter.nextchar().isspace():
                 break   # found
             i += 1
         else:
@@ -257,7 +257,7 @@ def str_split__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
             j = length   # take all the rest of the string
         else:
             j = i + 1
-            while j < length and not iter.next().isspace():
+            while j < length and not iter.nextchar().isspace():
                 j += 1
             maxsplit -= 1   # NB. if it's already < 0, it stays < 0
 
@@ -298,7 +298,7 @@ def str_rsplit__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
     # XXX works but flattens
     maxsplit = space.int_w(w_maxsplit)
     res_w = []
-    value = w_self._node.flatten()
+    value = w_self._node.flatten_string()
     i = len(value)-1
     while True:
         # starting from the end, find the end of the next word
@@ -334,9 +334,9 @@ def str_rsplit__Rope_Rope_ANY(space, w_self, w_by, w_maxsplit=-1):
     # XXX works but flattens
     maxsplit = space.int_w(w_maxsplit)
     res_w = []
-    value = w_self._node.flatten()
+    value = w_self._node.flatten_string()
     end = len(value)
-    by = w_by._node.flatten()
+    by = w_by._node.flatten_string()
     bylen = len(by)
     if bylen == 0:
         raise OperationError(space.w_ValueError, space.wrap("empty separator"))
@@ -446,8 +446,8 @@ def str_find__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 def str_rfind__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     # XXX works but flattens
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
-    self = self.flatten()
-    sub = sub.flatten()
+    self = self.flatten_string()
+    sub = sub.flatten_string()
     res = self.rfind(sub, start, end)
     return wrapint(space, res)
 
@@ -475,8 +475,8 @@ def str_rpartition__Rope_Rope(space, w_self, w_sub):
     if not sub.length():
         raise OperationError(space.w_ValueError,
                              space.wrap("empty separator"))
-    flattened_self = self.flatten()
-    flattened_sub = sub.flatten()
+    flattened_self = self.flatten_string()
+    flattened_sub = sub.flatten_string()
     pos = flattened_self.rfind(flattened_sub)
     if pos == -1:
         return space.newtuple([W_RopeObject.EMPTY, W_RopeObject.EMPTY, w_self])
@@ -501,8 +501,8 @@ def str_index__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
 def str_rindex__Rope_Rope_ANY_ANY(space, w_self, w_sub, w_start, w_end):
     (self, sub, start, end) =  _convert_idx_params(space, w_self, w_sub, w_start, w_end)
     # XXX works but flattens
-    self = self.flatten()
-    sub = sub.flatten()
+    self = self.flatten_string()
+    sub = sub.flatten_string()
     res = self.rfind(sub, start, end)
     if res < 0:
         raise OperationError(space.w_ValueError,
@@ -527,9 +527,9 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
             upper = maxsplit - 1
             assert upper >= 0
         substrings = [by]
-        iter = rope.CharIterator(node)
+        iter = rope.ItemIterator(node)
         for i in range(upper):
-            substrings.append(rope.LiteralStringNode.PREBUILT[ord(iter.next())])
+            substrings.append(rope.LiteralStringNode.PREBUILT[ord(iter.nextchar())])
             substrings.append(by)
         substrings.append(rope.getslice_one(node, upper, length))
         try:
@@ -570,13 +570,13 @@ def _strip(space, w_self, w_chars, left, right):
     
     if left:
         #print "while %d < %d and -%s- in -%s-:"%(lpos, rpos, u_self[lpos],w_chars)
-        iter = rope.CharIterator(node)
-        while lpos < rpos and iter.next() in u_chars:
+        iter = rope.ItemIterator(node)
+        while lpos < rpos and iter.nextchar() in u_chars:
            lpos += 1
        
     if right:
-        iter = rope.ReverseCharIterator(node)
-        while rpos > lpos and iter.next() in u_chars:
+        iter = rope.ReverseItemIterator(node)
+        while rpos > lpos and iter.nextchar() in u_chars:
            rpos -= 1
        
     return W_RopeObject(rope.getslice_one(node, lpos, rpos))
@@ -591,13 +591,13 @@ def _strip_none(space, w_self, left, right):
     
     if left:
         #print "while %d < %d and -%s- in -%s-:"%(lpos, rpos, u_self[lpos],w_chars)
-        iter = rope.CharIterator(node)
-        while lpos < rpos and iter.next().isspace():
+        iter = rope.ItemIterator(node)
+        while lpos < rpos and iter.nextchar().isspace():
            lpos += 1
        
     if right:
-        iter = rope.ReverseCharIterator(node)
-        while rpos > lpos and iter.next().isspace():
+        iter = rope.ReverseItemIterator(node)
+        while rpos > lpos and iter.nextchar().isspace():
            rpos -= 1
        
     assert rpos >= lpos    # annotator hint, don't remove
@@ -671,11 +671,11 @@ def ropeendswith(self, suffix, start, end):
     begin = end - suffix.length()
     if begin < start:
         return False
-    iter1 = rope.SeekableCharIterator(self)
+    iter1 = rope.SeekableItemIterator(self)
     iter1.seekforward(begin)
-    iter2 = rope.CharIterator(suffix)
+    iter2 = rope.ItemIterator(suffix)
     for i in range(suffix.length()):
-        if iter1.next() != iter2.next():
+        if iter1.nextchar() != iter2.nextchar():
             return False
     return True
 
@@ -702,11 +702,11 @@ def ropestartswith(self, prefix, start, end):
     stop = start + prefix.length()
     if stop > end:
         return False
-    iter1 = rope.SeekableCharIterator(self)
+    iter1 = rope.SeekableItemIterator(self)
     iter1.seekforward(start)
-    iter2 = rope.CharIterator(prefix)
+    iter2 = rope.ItemIterator(prefix)
     for i in range(prefix.length()):
-        if iter1.next() != iter2.next():
+        if iter1.nextchar() != iter2.nextchar():
             return False
     return True
   
@@ -732,13 +732,13 @@ def _tabindent(node, tabsize):
     distance = tabsize
     if length:
         distance = 0
-        iter = rope.ReverseCharIterator(node)
+        iter = rope.ReverseItemIterator(node)
 
         while 1:
             # no sophisticated linebreak support now
             # '\r' just for passing adapted CPython test
             try:
-                char = iter.next()
+                char = iter.nextchar()
             except StopIteration:
                 break
             if char == "\n" or char == "\r":
@@ -800,17 +800,17 @@ def str_splitlines__Rope_ANY(space, w_self, w_keepends):
         return space.newlist([])
 
     strs_w = []
-    iter = rope.CharIterator(node)
+    iter = rope.ItemIterator(node)
     i = j = 0
     last = " "
-    char = iter.next()
+    char = iter.nextchar()
     while i < length:
         # Find a line and append it
         while char != '\n' and char != '\r':
             try:
                 i += 1
                 last = char
-                char = iter.next()
+                char = iter.nextchar()
             except StopIteration:
                 break
         # Skip the line break reading CRLF as one line break
@@ -818,7 +818,7 @@ def str_splitlines__Rope_ANY(space, w_self, w_keepends):
         i += 1
         last = char
         try:
-            char = iter.next()
+            char = iter.nextchar()
         except StopIteration:
             pass
         else:
@@ -826,7 +826,7 @@ def str_splitlines__Rope_ANY(space, w_self, w_keepends):
                 i += 1
                 try:
                     last = char
-                    char = iter.next()
+                    char = iter.nextchar()
                 except StopIteration:
                     pass
         if keepends:
@@ -853,7 +853,7 @@ def str_zfill__Rope_ANY(space, w_self, w_width):
         return W_RopeObject(rope.multiply(zero, width))
 
     middle = width - length
-    firstchar = node.getitem(0)
+    firstchar = node.getchar(0)
     if length > 0 and (firstchar == '+' or firstchar == '-'):
         return W_RopeObject(rope.rebalance(
             [rope.LiteralStringNode.PREBUILT[ord(firstchar)],
@@ -865,7 +865,7 @@ def str_zfill__Rope_ANY(space, w_self, w_width):
             rope.multiply(zero, middle), node))
 
 def str_w__Rope(space, w_str):
-    return w_str._node.flatten()
+    return w_str._node.flatten_string()
 
 def hash__Rope(space, w_str):
     return wrapint(space, rope.hash_rope(w_str._node))
@@ -910,7 +910,7 @@ def getitem__Rope_ANY(space, w_str, w_index):
         exc = space.call_function(space.w_IndexError,
                                   space.wrap("string index out of range"))
         raise OperationError(space.w_IndexError, exc)
-    return wrapchar(space, node.getitem(ival))
+    return wrapchar(space, node.getchar(ival))
 
 def getitem__Rope_Slice(space, w_str, w_slice):
     node = w_str._node
@@ -976,7 +976,7 @@ def ord__Rope(space, w_str):
             space.w_TypeError,
             space.wrap("ord() expected a character, but string "
                        "of length %d found"% (w_str._node.length(),)))
-    return space.wrap(ord(node.flatten()[0]))
+    return space.wrap(ord(node.flatten_string()[0]))
 
 def getnewargs__Rope(space, w_str):
     return space.newtuple([W_RopeObject(w_str._node)])
@@ -989,15 +989,16 @@ def repr__Rope(space, w_str):
     buf = [' '] * (length * 4 + 2) # safely overallocate
 
     quote = "'"
-    if rope.find_char(node, quote) != -1 and rope.find_char(node, '"') == -1:
+    if (rope.find_int(node, ord(quote)) != -1 and
+        rope.find_int(node, ord('"')) == -1):
         quote = '"'
 
     buf[0] = quote
 
-    iter = rope.CharIterator(node)
+    iter = rope.ItemIterator(node)
     while 1:
         try:
-            c = iter.next()
+            c = iter.nextchar()
             i += 1
         except StopIteration:
             break
@@ -1047,10 +1048,10 @@ def str_translate__Rope_ANY_ANY(space, w_string, w_table, w_deletechars=''):
 
     node = w_string._node
     chars = []
-    iter = rope.CharIterator(node)
+    iter = rope.ItemIterator(node)
     while 1:
         try:
-            c = iter.next()
+            c = iter.nextchar()
             w_char = W_RopeObject.PREBUILT[ord(c)]
             if not space.is_true(space.contains(w_deletechars, w_char)):
                  chars.append(table[ord(c)])
@@ -1082,7 +1083,7 @@ def next__RopeIter(space, w_ropeiter):
     if w_ropeiter.node is None:
         raise OperationError(space.w_StopIteration, space.w_None) 
     try:
-        char = w_ropeiter.char_iter.next()
+        char = w_ropeiter.item_iter.nextchar()
         w_item = space.wrap(char)
     except StopIteration:
         w_ropeiter.node = None
