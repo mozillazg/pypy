@@ -532,7 +532,7 @@ def _strip(space, w_self, w_chars, left, right):
     "internal function called by str_xstrip methods"
     node = w_self._node
     length = node.length()
-    u_chars = space.str_w(w_chars)
+    u_chars = w_chars._node.flatten_string()
     
     lpos = 0
     rpos = length
@@ -625,7 +625,6 @@ def str_endswith__Rope_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
     return space.w_False
 
   
-
 def str_startswith__Rope_Rope_ANY_ANY(space, w_self, w_prefix, w_start, w_end):
     (self, prefix, start, end) = _convert_idx_params(space, w_self,
                                                      w_prefix, w_start, w_end)
@@ -675,39 +674,18 @@ def str_expandtabs__Rope_ANY(space, w_self, w_tabsize):
         return W_RopeObject.EMPTY
     tabsize  = space.int_w(w_tabsize)
     
-    expanded = []
-    iter = rope.FindIterator(node, rope.LiteralStringNode.PREBUILT[ord("\t")])
-    #split = u_self.split("\t")
-    #u_expanded = oldtoken = split.pop(0)
-
-    #for token in split:  
-    #    u_expanded += " " * _tabindent(oldtoken,u_tabsize) + token
-    #    oldtoken = token
-    start = 0
-    try:
-        start = iter.next()
-        last = rope.getslice_one(node, 0, start)
-        start += 1
-    except StopIteration:
-        return w_self.create_if_subclassed()
-    expanded.append(last)
-    while 1:
+    splitted = rope.split(node, rope.LiteralStringNode.PREBUILT[ord("\t")])
+    last = splitted[0]
+    expanded = [last]
+    for i in range(1, len(splitted)):
         expanded.append(rope.multiply(rope.LiteralStringNode.PREBUILT[ord(" ")],
                                       _tabindent(last, tabsize)))
-        try:
-            next = iter.next()
-        except StopIteration:
-            break
-        last = rope.getslice_one(node, start, next)
+        last = splitted[i]
         expanded.append(last)
-        start = next + 1
-
-    expanded.append(rope.getslice_one(node, start, length))
     return W_RopeObject(rope.rebalance(expanded))
  
  
 def str_splitlines__Rope_ANY(space, w_self, w_keepends):
-    #import pdb; pdb.set_trace()
     keepends  = bool(space.int_w(w_keepends))  # truth value, but type checked
     node = w_self._node
     length = node.length()
