@@ -760,7 +760,7 @@ def construct_restart_positions_node(node):
         elif j>0:
             new_j = restart[j-1]
             assert new_j < j
-            iter2.seekback(j - new_j)
+            iter2.seekback(j - new_j + 1)
             c2 = iter2.nextint()
             j = new_j
         else:

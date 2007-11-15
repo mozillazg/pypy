@@ -317,6 +317,17 @@ def test_restart_positions():
     assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4]
     restart = construct_restart_positions("ababcabab")
     assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4]
+    restart = construct_restart_positions("ababcababb")
+    assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4, 0]
+    restart = construct_restart_positions_node(
+        BinaryConcatNode(LiteralStringNode("aba"), LiteralStringNode("bcababb")))
+    assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4, 0]
+    restart = construct_restart_positions("ababb")
+    assert restart == [0, 0, 1, 2, 0]
+    restart = construct_restart_positions_node(LiteralStringNode("ababb"))
+    assert restart == [0, 0, 1, 2, 0]
+    #abababcabcabb
+
 
 def test_find():
     node = BinaryConcatNode(LiteralStringNode("aba"),
