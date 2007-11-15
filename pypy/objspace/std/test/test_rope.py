@@ -663,3 +663,35 @@ def test_seekable_bug():
     c = iter.nextchar(); assert c == "a"
     c = iter.nextchar(); assert c == "b"
     c = iter.nextchar(); assert c == "c"
+
+def test_strip():
+    node = BinaryConcatNode(LiteralStringNode(" \t\n abc "),
+                            LiteralStringNode("def    "))
+    r = strip(node)
+    assert r.flatten_string() == "abc def"
+    r = strip(node, left=False)
+    assert r.flatten_string() == " \t\n abc def"
+    r = strip(node, right=False)
+    assert r.flatten_string() == "abc def    "
+
+    node = BinaryConcatNode(LiteralStringNode("aaaYYYYa"),
+                            LiteralStringNode("abab"))
+    predicate = lambda i: chr(i) in "ab"
+    r = strip(node, predicate=predicate)
+    assert r.flatten_string() == "YYYY"
+    r = strip(node, left=False, predicate=predicate)
+    assert r.flatten_string() == "aaaYYYY"
+    r = strip(node, right=False, predicate=predicate)
+    assert r.flatten_string() == "YYYYaabab"
+
+def test_getrope():
+    s1, result = make_random_string(200, unicode=True)
+    s2 = s1.rebalance()
+    for i in range(len(result)):
+        for s in [s1, s2]:
+            r = s.getrope(i)
+            assert r.length() == 1
+            assert r.getint(0) == s.getint(i)
+            assert isinstance(r, LiteralNode)
+            assert r.getint(0) >= 128 or isinstance(r, LiteralStringNode)
+            assert r.getrope(0) is r

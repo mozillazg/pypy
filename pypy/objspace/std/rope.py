@@ -80,6 +80,9 @@ class StringNode(object):
     def getint(self, index):
         raise NotImplementedError("abstract base class")
 
+    def getrope(self, index):
+        raise NotImplementedError("abstract base class")
+
     def getslice(self, start, stop):
         raise NotImplementedError("abstract base class")
 
@@ -153,6 +156,9 @@ class LiteralStringNode(LiteralNode):
     def getint(self, index):
         return ord(self.s[index])
 
+    def getrope(self, index):
+        return LiteralStringNode.PREBUILT[ord(self.s[index])]
+
     def getslice(self, start, stop):
         assert 0 <= start <= stop
         return LiteralStringNode(self.s[start:stop])
@@ -225,6 +231,14 @@ class LiteralUnicodeNode(LiteralNode):
     def getint(self, index):
         return ord(self.u[index])
 
+    def getrope(self, index):
+        ch = ord(self.u[index])
+        if ch < 256:
+            return LiteralStringNode.PREBUILT[ord(self.s[index])]
+        if len(self.u) == 1:
+            return self
+        return LiteralUnicodeNode(unichr(ch))
+
     def getslice(self, start, stop):
         assert 0 <= start <= stop
         return LiteralUnicodeNode(self.u[start:stop])
@@ -255,6 +269,7 @@ class LiteralUnicodeNode(LiteralNode):
         yield ('"%s" [shape=box,label="length: %s\\n%s"];' % (
             id(self), len(self.u),
             repr(addinfo).replace('"', '').replace("\\", "\\\\")))
+
 
 class BinaryConcatNode(StringNode):
     def __init__(self, left, right):
@@ -317,6 +332,13 @@ class BinaryConcatNode(StringNode):
             return self.right.getint(index - llen)
         else:
             return self.left.getint(index)
+
+    def getrope(self, index):
+        llen = self.left.length()
+        if index >= llen:
+            return self.right.getrope(index - llen)
+        else:
+            return self.left.getrope(index)
 
     def flatten_string(self):
         f = fringe(self)
@@ -590,6 +612,9 @@ def rope_from_unicharlist(charlist):
         if chunk:
             nodelist.append(LiteralStringNode("".join(chunk)))
     return rebalance(nodelist, length)
+rope_from_unicharlist._annspecialcase_ = "specialize:argtype(0)"
+
+rope_from_unicode = rope_from_unicharlist
 
 # __________________________________________________________________________
 # searching
@@ -1152,6 +1177,25 @@ def endswith(self, suffix, start, end):
             return False
     return True
 
+def strip(node, left=True, right=True, predicate=lambda i: chr(i).isspace()):
+    length = node.length()
+    
+    lpos = 0
+    rpos = length
+    
+    if left:
+        iter = ItemIterator(node)
+        while lpos < rpos and predicate(iter.nextint()):
+           lpos += 1
+       
+    if right:
+        iter = ReverseItemIterator(node)
+        while rpos > lpos and predicate(iter.nextint()):
+           rpos -= 1
+       
+    assert rpos >= lpos
+    return getslice_one(node, lpos, rpos)
+strip._annspecialcase_ = "specialize:arg(3)"
 
 # __________________________________________________________________________
 # misc
@@ -1165,3 +1209,4 @@ def hash_rope(rope):
     x ^= rope.getint(0)
     x ^= rope.length()
     return intmask(x)
+
