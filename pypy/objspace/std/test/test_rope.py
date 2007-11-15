@@ -380,8 +380,31 @@ def test_find_iterator():
             assert r1 == r2
             start = r2 + max(len(searchstring), 1)
 
+
+def test_find_iterator_unicode():
+    for searchstring in [
+        u"\uAAAA\uBBBB\uCCCC", u"\uAAAA", u"", u"\u6666",
+        u"\u6666\u7777\u8888",
+        u"\uAAAA\uBBBB\uAAAA\uBBBB\uAAAA\uBBBB\uCCCC\uAAAA\uBBBB\uCCCC\uAAAA\uBBBB\uBBBB"]:
+        node = join(LiteralUnicodeNode(searchstring),
+                    [LiteralUnicodeNode(u"\ucccc\udddd" * i)
+                        for i in range(1, 10)])
+        iter = FindIterator(node, LiteralUnicodeNode(searchstring))
+        s = node.flatten_unicode()
+        assert s == searchstring.join([u"\ucccc\udddd" * i for i in range(1, 10)])
+        start = 0
+        while 1:
+            r2 = s.find(searchstring, start)
+            try:
+                r1 = iter.next()
+            except StopIteration:
+                assert r2 == -1
+                break
+            assert r1 == r2
+            start = r2 + max(len(searchstring), 1)
+
 def test_hash():
-    from pypy.rlib.rarithmetic import _hash_string, intmask
+    from pypy.rlib.rarithmetic import intmask
     for i in range(10):
         rope, _ = make_random_string()
         if rope.length() == 0:
@@ -489,14 +512,34 @@ def test_hash_part():
             assert s.hash_part() == h
             assert s.hash_part() == h
 
+def test_hash_part_unicode():
+    a, st = make_random_string(unicode=True)
+    h = a.hash_part()
+    for split in range(1, len(st) - 1):
+        s1 = LiteralUnicodeNode(st[:split])
+        s2 = LiteralUnicodeNode(st[split:])
+        s = BinaryConcatNode(s1, s2)
+        if h is None:
+            h = s.hash_part()
+        else:
+            # try twice due to caching reasons
+            assert s.hash_part() == h
+            assert s.hash_part() == h
+
 def test_hash_part_more():
     for i in range(100):
         rope, st = make_random_string()
         h = rope.hash_part()
         assert LiteralStringNode(st).hash_part() == h
 
-
 def test_equality():
+    l = [make_random_string() for i in range(3)]
+    l.append((LiteralStringNode(""), ""))
+    for rope1, st1 in l:
+        for rope2, st2 in l:
+            assert eq(rope1, rope2) == (st1 == st2)
+
+def test_equality_unicode():
     l = [make_random_string() for i in range(3)]
     l.append((LiteralStringNode(""), ""))
     for rope1, st1 in l:
@@ -512,6 +555,17 @@ def test_compare_random():
             if c:
                 c = c // abs(c)
             assert c == cmp(st1, st2)
+
+def test_compare_random_unicode():
+    l = [make_random_string() for i in range(3)]
+    l.append((LiteralStringNode(""), ""))
+    for rope1, st1 in l:
+        for rope2, st2 in l:
+            c = compare(rope1, rope2)
+            if c:
+                c = c // abs(c)
+            assert c == cmp(st1, st2)
+
 
 def test_power():
     for i in range(0, 60, 13):

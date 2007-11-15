@@ -109,6 +109,7 @@ class LiteralNode(StringNode):
 
 class LiteralStringNode(LiteralNode):
     def __init__(self, s):
+        assert isinstance(s, str)
         self.s = s
         is_ascii = True
         for c in s:
@@ -190,8 +191,9 @@ LiteralStringNode.PREBUILT = [LiteralStringNode(chr(i)) for i in range(256)]
 del i
 
 
-class LiteralUnicodeNode(StringNode):
+class LiteralUnicodeNode(LiteralNode):
     def __init__(self, u):
+        assert isinstance(u, unicode)
         self.u = u
     
     def length(self):
@@ -228,7 +230,7 @@ class LiteralUnicodeNode(StringNode):
         return LiteralUnicodeNode(self.u[start:stop])
 
     def find_int(self, what, start, stop):
-        result = node.u.find(unichr(what), start, stop)
+        result = self.u.find(unichr(what), start, stop)
         if result == -1:
             return -1
         return result
@@ -236,7 +238,7 @@ class LiteralUnicodeNode(StringNode):
     def literal_concat(self, other):
         if (isinstance(other, LiteralUnicodeNode) and
             len(other.u) + len(self.u) < NEW_NODE_WHEN_LENGTH):
-            return LiteralStringNode(self.u + other.u)
+            return LiteralUnicodeNode(self.u + other.u)
         elif (isinstance(other, LiteralStringNode) and
               len(other.s) + len(self.u) < NEW_NODE_WHEN_LENGTH and
               len(other.s) < CONVERT_WHEN_SMALLER):
@@ -247,11 +249,11 @@ class LiteralUnicodeNode(StringNode):
         if self in seen:
             return
         seen[self] = True
-        addinfo = str(self.s).replace('"', "'") or "_"
+        addinfo = repr(self.u).replace('"', "'") or "_"
         if len(addinfo) > 10:
             addinfo = addinfo[:3] + "..." + addinfo[-3:]
         yield ('"%s" [shape=box,label="length: %s\\n%s"];' % (
-            id(self), len(self.s),
+            id(self), len(self.u),
             repr(addinfo).replace('"', '').replace("\\", "\\\\")))
 
 class BinaryConcatNode(StringNode):
@@ -322,7 +324,7 @@ class BinaryConcatNode(StringNode):
 
     def flatten_unicode(self):
         f = fringe(self)
-        return "".join([node.flatten_string() for node in f])
+        return "".join([node.flatten_unicode() for node in f])
  
     def hash_part(self):
         h = self.hash_cache
@@ -1038,8 +1040,6 @@ class FindIterator(object):
             self.restart_positions = None
         else:
             self.restart_positions = construct_restart_positions_node(sub)
-            # XXX
-            assert self.restart_positions == construct_restart_positions(sub.flatten_string())
         self.start = start
         if stop == -1 or stop > len1:
             stop = len1
