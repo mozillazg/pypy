@@ -11,7 +11,8 @@ from pypy.rlib.rarithmetic import ovfcheck
 from pypy.objspace.std.stringtype import wrapchar
 
 from pypy.objspace.std import rope
-from pypy.objspace.std.stringobject import mod__String_ANY as mod__Rope_ANY
+from pypy.objspace.std.stringobject import mod__String_ANY as mod__Rope_ANY,\
+    _upper, _lower    
 
 class W_RopeObject(W_Object):
     from pypy.objspace.std.stringtype import str_typedef as typedef
@@ -65,20 +66,6 @@ def _is_generic(space, w_self, fun):
             return space.w_False
     return space.w_True
 _is_generic._annspecialcase_ = "specialize:arg(2)"
-
-def _upper(ch):
-    if ch.islower():
-        o = ord(ch) - 32
-        return chr(o)
-    else:
-        return ch
-    
-def _lower(ch):
-    if ch.isupper():
-        o = ord(ch) + 32
-        return chr(o)
-    else:
-        return ch
 
 _isspace = lambda c: c.isspace()
 _isdigit = lambda c: c.isdigit()
