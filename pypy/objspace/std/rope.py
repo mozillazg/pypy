@@ -920,6 +920,13 @@ class ItemIterator(object):
         self.advance_index()
         return result
 
+    def nextrope(self):
+        node = self.getnode()
+        index = self.index
+        result = node.getrope(self.index)
+        self.advance_index()
+        return result
+
     def nextint(self):
         node = self.getnode()
         index = self.index
@@ -1212,6 +1219,18 @@ def split(node, sub, maxsplit=-1):
     substrings.append(getslice_one(node, startidx, node.length()))
     return substrings
 
+def split_completely(node, maxsplit=-1):
+    upper = node.length()
+    if maxsplit > 0 and maxsplit < upper + 2:
+        upper = maxsplit - 1
+        assert upper >= 0
+    substrings = [by]
+    iter = ItemIterator(node)
+    for i in range(upper):
+        substrings.append(iter.nextrope())
+    substrings.append(rope.getslice_one(node, upper, length))
+
+
 # __________________________________________________________________________
 # misc
 
@@ -1225,3 +1244,69 @@ def hash_rope(rope):
     x ^= rope.length()
     return intmask(x)
 
+# ____________________________________________________________
+# to and from unicode conversion
+
+def str_decode(rope, encoding):
+    assert rope.is_bytestring()
+    if encoding == "ascii":
+        if rope.is_ascii():
+            return rope
+    elif encoding == "latin-1":
+        return rope
+    elif encoding == "utf-8":
+        from pypy.rlib.runicode import str_decode_utf_8
+        if rope.is_ascii():
+            return rope
+        elif isinstance(rope, BinaryConcatNode):
+            lresult = str_decode(rope.left, "utf-8")
+            if result is not None:
+                return BinaryConcatNode(lresult,
+                                        str_decode(rope.right, "utf-8"))
+        elif isinstance(rope, LiteralStringNode):
+            result, consumed = str_decode_utf_8(rope.s, len(rope.s), False,
+                                                "strict")
+            if consumed < len(rope.s):
+                return None
+            return rope_from_unicode(result)
+        s = rope.flatten_string()
+        return str_decode_utf_8(s, len(s), True)
+    else:
+        raise NotImplementedError("unknown encoding")
+
+def unicode_encode(rope, encoding):
+    if encoding == "ascii":
+        if rope.is_ascii():
+            return rope
+    elif encoding == "latin-1":
+        return rope
+    elif encoding == "utf-8":
+        from pypy.rlib.runicode import unicode_encode_utf_8
+        if rope.is_ascii():
+            return rope
+        elif isinstance(rope, BinaryConcatNode):
+            return BinaryConcatNode(unicode_encode(rope.left, "utf-8"),
+                                    unicode_encode(rope.right, "utf-8"))
+        elif isinstance(rope, LiteralUnicodeNode):
+            return unicode_encode_utf_8(rope.u, len(rope.u), "strict")
+        elif isinstance(rope, LiteralStringNode):
+            return LiteralStringNode(_str_encode_utf_8(rope.s))
+        s = rope.flatten_string()
+        return str_decode_utf_8(s, len(s), True)
+    else:
+        raise NotImplementedError("unknown encoding")
+
+def _str_encode_utf_8(s):
+    size = len(s)
+    result = []
+    i = 0
+    while i < size:
+        ch = ord(s[i])
+        i += 1
+        if (ch < 0x80):
+            # Encode ASCII 
+            result.append(chr(ch))
+        # Encode Latin-1 
+        result.append(chr((0xc0 | (ch >> 6))))
+        result.append(chr((0x80 | (ch & 0x3f))))
+    return LiteralStringNode("".join(s))

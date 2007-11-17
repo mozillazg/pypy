@@ -498,7 +498,7 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
         substrings = [by]
         iter = rope.ItemIterator(node)
         for i in range(upper):
-            substrings.append(rope.LiteralStringNode.PREBUILT[ord(iter.nextchar())])
+            substrings.append(iter.nextrope()])
             substrings.append(by)
         substrings.append(rope.getslice_one(node, upper, length))
         try:
@@ -507,7 +507,7 @@ def str_replace__Rope_Rope_Rope_ANY(space, w_self, w_sub, w_by, w_maxsplit=-1):
             raise OperationError(space.w_OverflowError,
                                  space.wrap("string too long"))
     substrings = rope.split(node, sub, maxsplit)
-    if substrings is None:
+    if not substrings:
         return w_self.create_if_subclassed()
     try:
         return W_RopeObject(rope.join(by, substrings))
@@ -639,10 +639,10 @@ def _tabindent(node, tabsize):
             # no sophisticated linebreak support now
             # '\r' just for passing adapted CPython test
             try:
-                char = iter.nextchar()
+                char = iter.nextint()
             except StopIteration:
                 break
-            if char == "\n" or char == "\r":
+            if char == ord("\n") or char == ord("\r"):
                 break
             distance += 1
                 
