@@ -345,7 +345,7 @@ class BinaryConcatNode(StringNode):
 
     def flatten_unicode(self):
         f = fringe(self)
-        return "".join([node.flatten_unicode() for node in f])
+        return u"".join([node.flatten_unicode() for node in f])
  
     def hash_part(self):
         h = self.hash_cache
