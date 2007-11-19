@@ -745,7 +745,7 @@ def unicode_rpartition__RopeUnicode_RopeUnicode(space, w_unistr, w_unisub):
         return space.newtuple([W_RopeUnicodeObject.EMPTY,
                                W_RopeUnicodeObject.EMPTY, w_unistr])
     else:
-        assert pos > 0
+        assert pos >= 0
         return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
                                space.wrap(unistr[pos+len(unisub):])])
 

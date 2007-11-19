@@ -491,15 +491,15 @@ class AppTestUnicodeString:
 
     def test_rpartition(self):
 
-        assert ('this is the rparti', 'ti', 'on method') == \
-            'this is the rpartition method'.rpartition('ti')
+        assert (u'this is the rparti', u'ti', u'on method') == \
+            u'this is the rpartition method'.rpartition(u'ti')
 
         # from raymond's original specification
-        S = 'http://www.python.org'
-        assert ('http', '://', 'www.python.org') == S.rpartition('://')
-        assert ('', '', 'http://www.python.org') == S.rpartition('?')
-        assert ('', 'http://', 'www.python.org') == S.rpartition('http://')
-        assert ('http://www.python.', 'org', '') == S.rpartition('org')
+        S = u'http://www.python.org'
+        assert (u'http', u'://', u'www.python.org') == S.rpartition(u'://')
+        assert (u'', u'', u'http://www.python.org') == S.rpartition(u'?')
+        assert (u'', u'http://', u'www.python.org') == S.rpartition(u'http://')
+        assert (u'http://www.python.', u'org', u'') == S.rpartition(u'org')
 
-        raises(ValueError, S.rpartition, '')
+        raises(ValueError, S.rpartition, u'')
         raises(TypeError, S.rpartition, None)
