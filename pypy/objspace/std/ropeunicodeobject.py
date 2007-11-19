@@ -594,13 +594,13 @@ def unicode_rindex__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_s
     # XXX works but flattens string
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     self = self.flatten_unicode()
-    sub = sub.flatten_unicode()
+    sub = w_substr._node.flatten_unicode()
     res = self.rfind(sub, start, end)
     if res < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap("substring not found in string.rindex"))
 
-    return wrapint(space, res)
+    return space.wrap(res)
 
 def unicode_count__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)

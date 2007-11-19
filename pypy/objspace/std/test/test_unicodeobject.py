@@ -503,3 +503,20 @@ class AppTestUnicodeString:
 
         raises(ValueError, S.rpartition, u'')
         raises(TypeError, S.rpartition, None)
+
+
+    def test_rindex(self):
+        from sys import maxint
+        assert u'abcdefghiabc'.rindex(u'') == 12
+        assert u'abcdefghiabc'.rindex(u'def') == 3
+        assert u'abcdefghiabc'.rindex(u'abc') == 9
+        assert u'abcdefghiabc'.rindex(u'abc', 0, -1) == 0
+        assert u'abcdefghiabc'.rindex(u'abc', -4*maxint, 4*maxint) == 9
+        raises(ValueError, u'abcdefghiabc'.rindex, u'hib')
+        raises(ValueError, u'defghiabc'.rindex, u'def', 1)
+        raises(ValueError, u'defghiabc'.rindex, u'abc', 0, -1)
+        raises(ValueError, u'abcdefghi'.rindex, u'ghi', 0, 8)
+        raises(ValueError, u'abcdefghi'.rindex, u'ghi', 0, -1)
+        raises(TypeError, u'abcdefghijklmn'.rindex, u'abc', 0, 0.0)
+        raises(TypeError, u'abcdefghijklmn'.rindex, u'abc', -10.0, 30)
+
