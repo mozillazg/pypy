@@ -577,9 +577,9 @@ def unicode_find__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_sta
 def unicode_rfind__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     self = self.flatten_unicode()
-    sub = sub.flatten_unicode()
+    sub = w_substr._node.flatten_unicode()
     res = self.rfind(sub, start, end)
-    return wrapint(space, res)
+    return space.wrap(res)
 
 def unicode_index__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
@@ -921,13 +921,13 @@ def next__RopeUnicodeIter(space, w_ropeiter):
 
 def len__RopeUnicodeIter(space,  w_ropeiter):
     if w_ropeiter.node is None:
-        return wrapint(space, 0)
+        return space.wrap(0)
     index = w_ropeiter.index
     length = w_ropeiter.node.length()
     result = length - index
     if result < 0:
-        return wrapint(space, 0)
-    return wrapint(space, result)
+        return space.wrap(0)
+    return space.wrap(result)
 
 import unicodetype
 register_all(vars(), unicodetype)
