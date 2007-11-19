@@ -307,11 +307,10 @@ class AppTestUnicodeString:
         raises(TypeError, u'hello'.startswith, (42,))
 
     def test_startswith_endswith_convert(self):
-        skip("fix me")
         assert 'hello'.startswith((u'he\u1111', u'he'))
         assert not 'hello'.startswith((u'lo\u1111', u'llo'))
         assert 'hello'.startswith((u'hellox\u1111', u'hello'))
-        assert 'hello'.startswith((u'lo', u'he\u1111'), 0, -1)
+        assert not 'hello'.startswith((u'lo', u'he\u1111'), 0, -1)
         assert not 'hello'.endswith((u'he\u1111', u'he'))
         assert 'hello'.endswith((u'\u1111lo', u'llo'))
         assert 'hello'.endswith((u'\u1111hellox', u'hello'))

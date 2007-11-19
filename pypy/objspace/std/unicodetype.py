@@ -265,7 +265,7 @@ def descr__new__(space, w_unicodetype, w_obj='', w_encoding=None, w_errors=None)
             w_value = unicode_from_object(space, w_obj)
     else:
         w_value = unicode_from_encoded_object(space, w_obj, encoding, errors)
-    if space.config.objspace.std.withrope:
+    if space.config.objspace.std.withropeunicode:
         assert isinstance(w_value, W_RopeUnicodeObject)
         w_newobj = space.allocate_instance(W_RopeUnicodeObject, w_unicodetype)
         W_RopeUnicodeObject.__init__(w_newobj, w_value._node)

@@ -19,23 +19,47 @@ def wrapunicode(space, uni):
     return W_RopeUnicodeObject(rope.rope_from_unicode(uni))
 
 def unicode_from_string(space, w_str):
-    from pypy.objspace.std.unicodetype import getdefaultencoding, \
-        unicode_from_encoded_object
+    from pypy.objspace.std.unicodetype import getdefaultencoding
     assert isinstance(w_str, W_RopeObject)
-    node = w_str._node
     encoding = getdefaultencoding(space)
-    if encoding == 'ascii':
-        result = rope.str_decode_ascii(node)
-        if result is not None:
-            return W_RopeUnicodeObject(result)
-    elif encoding == 'latin-1':
-        assert node.is_bytestring()
-        return W_RopeUnicodeObject(node)
-    elif encoding == "utf-8":
-        result = rope.str_decode_utf8(node)
-        if result is not None:
-            return W_RopeUnicodeObject(result)
-    return unicode_from_encoded_object(space, w_str, encoding, "strict")
+    return decode_string(space, w_str, encoding, "strict")
+
+def decode_string(space, w_str, encoding, errors):
+    from pypy.objspace.std.unicodetype import unicode_from_encoded_object
+    if errors is None or errors == "strict":
+        node = w_str._node
+        if encoding == 'ascii':
+            result = rope.str_decode_ascii(node)
+            if result is not None:
+                return W_RopeUnicodeObject(result)
+        elif encoding == 'latin-1':
+            assert node.is_bytestring()
+            return W_RopeUnicodeObject(node)
+        elif encoding == "utf-8":
+            result = rope.str_decode_utf8(node)
+            if result is not None:
+                return W_RopeUnicodeObject(result)
+    return unicode_from_encoded_object(space, w_str, encoding, errors)
+
+def encode_unicode(space, w_unistr, encoding, errors):
+    from pypy.objspace.std.unicodetype import getdefaultencoding, \
+        _get_encoding_and_errors, encode_object
+    from pypy.objspace.std.ropeobject import W_RopeObject
+    if errors is None or errors == "strict":
+        node = w_unistr._node
+        if encoding == 'ascii':
+            result = rope.unicode_encode_ascii(node)
+            if result is not None:
+                return W_RopeObject(result)
+        elif encoding == 'latin-1':
+            result = rope.unicode_encode_latin1(node)
+            if result is not None:
+                return W_RopeObject(result)
+        elif encoding == "utf-8":
+            result = rope.unicode_encode_utf8(node)
+            if result is not None:
+                return W_RopeObject(result)
+    return encode_object(space, w_unistr, encoding, errors)
 
 
 class W_RopeUnicodeObject(W_Object):
@@ -55,19 +79,33 @@ class W_RopeUnicodeObject(W_Object):
     def create_if_subclassed(w_self):
         if type(w_self) is W_RopeUnicodeObject:
             return w_self
-        return W_RopeUnicodeObject(w_self._value)
+        return W_RopeUnicodeObject(w_self._node)
 
 W_RopeUnicodeObject.EMPTY = W_RopeUnicodeObject(rope.LiteralStringNode.EMPTY)
 
 registerimplementation(W_RopeUnicodeObject)
 
+def _isspace(uchar_ord):
+    return unicodedb.isspace(uchar_ord)
 
 def ropeunicode_w(space, w_str):
     if isinstance(w_str, W_RopeUnicodeObject):
         return w_str._node
-    # XXX do the right thing for W_RopeObject
+    if isinstance(w_str, W_RopeObject):
+        return unicode_from_string(space, w_str)._node
     return rope.LiteralUnicodeNode(space.unicode_w(w_str))
 
+
+class W_RopeUnicodeIterObject(W_Object):
+    from pypy.objspace.std.itertype import iter_typedef as typedef
+
+    def __init__(w_self, w_rope, index=0):
+        w_self.node = node = w_rope._node
+        w_self.item_iter = rope.ItemIterator(node)
+        w_self.index = index
+
+def iter__RopeUnicode(space, w_uni):
+    return W_RopeUnicodeIterObject(w_uni)
 
 # Helper for converting int/long
 def unicode_to_decimal_w(space, w_unistr):
@@ -145,7 +183,7 @@ def ge__RopeUnicode_RopeUnicode(space, w_str1, w_str2):
 
 
 def ord__RopeUnicode(space, w_uni):
-    if w_uni.length() != 1:
+    if w_uni._node.length() != 1:
         raise OperationError(space.w_TypeError, space.wrap('ord() expected a character'))
     return space.wrap(w_uni._node.getint(0))
 
@@ -177,7 +215,7 @@ def contains__Rope_RopeUnicode(space, w_container, w_item):
 
 def unicode_join__RopeUnicode_ANY(space, w_self, w_list):
     l_w = space.unpackiterable(w_list)
-    delim = w_self._value
+    delim = w_self._node
     totlen = 0
     if len(l_w) == 0:
         return W_RopeUnicodeObject.EMPTY
@@ -199,7 +237,7 @@ def unicode_join__RopeUnicode_ANY(space, w_self, w_list):
             raise OperationError(space.w_TypeError, w_msg)
         values_list.append(item)
     try:
-        return W_RopeUnicodeObject(rope.join(self, values_list))
+        return W_RopeUnicodeObject(rope.join(w_self._node, values_list))
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("string too long"))
@@ -223,7 +261,7 @@ def getitem__RopeUnicode_ANY(space, w_uni, w_index):
     return W_RopeUnicodeObject(uni.getrope(ival))
 
 def getitem__RopeUnicode_Slice(space, w_uni, w_slice):
-    node = w_uni._noed
+    node = w_uni._node
     length = node.length()
     start, stop, step, sl = w_slice.indices4(space, length)
     if sl == 0:
@@ -239,7 +277,7 @@ def mul__RopeUnicode_ANY(space, w_uni, w_times):
         raise
     node = w_uni._node
     try:
-        return W_RopeUnicodeObject(rope.multiply(node, mul))
+        return W_RopeUnicodeObject(rope.multiply(node, times))
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("string too long"))
@@ -317,47 +355,33 @@ def unicode_istitle__RopeUnicode(space, w_unicode):
             previous_is_cased = False
 
 
-def _strip(space, w_self, w_chars, left, right):
-    "internal function called by str_xstrip methods"
-    XXX
-    u_self = w_self._value
-    u_chars = w_chars._value
-    
-    lpos = 0
-    rpos = len(u_self)
-    
-    if left:
-        while lpos < rpos and u_self[lpos] in u_chars:
-           lpos += 1
-       
-    if right:
-        while rpos > lpos and u_self[rpos - 1] in u_chars:
-           rpos -= 1
-           
-    assert rpos >= 0
-    result = u_self[lpos: rpos]
-    return W_UnicodeObject(result)
+def _contains(i, uni):
+    return unichr(i) in uni
 
 def unicode_strip__RopeUnicode_None(space, w_self, w_chars):
-    return W_RopeUnicodeObject(rope.strip(w_self._none, True, True, _isspace))
+    return W_RopeUnicodeObject(rope.strip(w_self._node, True, True, _isspace))
 def unicode_strip__RopeUnicode_RopeUnicode(space, w_self, w_chars):
-    return _strip(space, w_self, w_chars, 1, 1)
+    return W_RopeUnicodeObject(rope.strip(w_self._node, True, True, _contains,
+                               w_chars._node.flatten_unicode()))
+
 def unicode_strip__RopeUnicode_Rope(space, w_self, w_chars):
     return space.call_method(w_self, 'strip',
                              unicode_from_string(space, w_chars))
 
 def unicode_lstrip__RopeUnicode_None(space, w_self, w_chars):
-    return W_RopeUnicodeObject(rope.strip(w_self._none, True, False, _isspace))
+    return W_RopeUnicodeObject(rope.strip(w_self._node, True, False, _isspace))
 def unicode_lstrip__RopeUnicode_RopeUnicode(space, w_self, w_chars):
-    return _strip(space, w_self, w_chars, 1, 0)
+    return W_RopeUnicodeObject(rope.strip(w_self._node, True, False, _contains,
+                               w_chars._node.flatten_unicode()))
 def unicode_lstrip__RopeUnicode_Rope(space, w_self, w_chars):
     return space.call_method(w_self, 'lstrip',
                              unicode_from_string(space, w_chars))
 
 def unicode_rstrip__RopeUnicode_None(space, w_self, w_chars):
-    return W_RopeUnicodeObject(rope.strip(w_self._none, False, True, _isspace))
+    return W_RopeUnicodeObject(rope.strip(w_self._node, False, True, _isspace))
 def unicode_rstrip__RopeUnicode_RopeUnicode(space, w_self, w_chars):
-    return _strip(space, w_self, w_chars, 0, 1)
+    return W_RopeUnicodeObject(rope.strip(w_self._node, False, True, _contains,
+                               w_chars._node.flatten_unicode()))
 def unicode_rstrip__RopeUnicode_Rope(space, w_self, w_chars):
     return space.call_method(w_self, 'rstrip',
                              unicode_from_string(space, w_chars))
@@ -383,7 +407,7 @@ def unicode_title__RopeUnicode(space, w_self):
     iter = rope.ItemIterator(input)
 
     previous_is_cased = False
-    for i in range(len(input)):
+    for i in range(input.length()):
         unichar = iter.nextint()
         if previous_is_cased:
             result[i] = unichr(unicodedb.tolower(unichar))
@@ -436,30 +460,6 @@ def _convert_idx_params(space, w_self, w_start, w_end):
 
     return (self, start, end)
 
-def _check_startswith_substring(str, substr, start, end):
-    XXX
-    substr_len = len(substr)
-    
-    if end - start < substr_len:
-        return False # substring is too long
-    
-    for i in range(substr_len):
-        if str[start + i] != substr[i]:
-            return False
-    return True    
-
-def _check_endswith_substring(str, substr, start, end):
-    XXX
-    substr_len = len(substr)
-
-    if end - start < substr_len:
-        return False # substring is too long
-    start = end - substr_len
-    for i in range(substr_len):
-        if str[start + i] != substr[i]:
-            return False
-    return True
-
 def unicode_endswith__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
     return space.newbool(rope.endswith(self, w_substr._node, start, end))
@@ -477,8 +477,8 @@ def unicode_startswith__RopeUnicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
     for w_prefix in space.unpacktuple(w_prefixes):
-        prefix = unicoderope_w(space, w_prefix)
-        if rope.startswith(self, prefxix, start, end)
+        prefix = ropeunicode_w(space, w_prefix)
+        if rope.startswith(unistr, prefix, start, end):
             return space.w_True
     return space.w_False
 
@@ -486,8 +486,8 @@ def unicode_endswith__RopeUnicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
     for w_suffix in space.unpacktuple(w_suffixes):
-        suffix = unicoderope_w(space, w_suffix)
-        if _check_endswith_substring(unistr, suffix, start, end):
+        suffix = ropeunicode_w(space, w_suffix)
+        if rope.endswith(unistr, suffix, start, end):
             return space.w_True
     return space.w_False
 
@@ -508,7 +508,7 @@ def _to_unichar_w(space, w_char):
 
 def unicode_center__RopeUnicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._node
-    length = self.length
+    length = self.length()
     width = space.int_w(w_width)
     fillchar = _to_unichar_w(space, w_fillchar)
     padding = width - length
@@ -517,82 +517,57 @@ def unicode_center__RopeUnicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     offset = padding // 2
     pre = rope.multiply(fillchar, offset)
     post = rope.multiply(fillchar, (padding - offset))
-    centered = rope.rebalance([pre, node, post])
+    centered = rope.rebalance([pre, self, post])
     return W_RopeUnicodeObject(centered)
 
 def unicode_ljust__RopeUnicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._node
-    length = self.length
+    length = self.length()
     width = space.int_w(w_width)
     fillchar = _to_unichar_w(space, w_fillchar)
     padding = width - length
     if padding < 0:
         return w_self.create_if_subclassed()
-    resultnode = rope.concatenate(self, rope.multiply(fillchar, d))
+    resultnode = rope.concatenate(self, rope.multiply(fillchar, padding))
     return W_RopeUnicodeObject(resultnode)
 
 def unicode_rjust__RopeUnicode_ANY_ANY(space, w_self, w_width, w_fillchar):
     self = w_self._node
-    length = self.length
+    length = self.length()
     width = space.int_w(w_width)
     fillchar = _to_unichar_w(space, w_fillchar)
     padding = width - length
     if padding < 0:
         return w_self.create_if_subclassed()
-    resultnode = rope.concatenate(rope.multiply(fillchar, d), self)
+    resultnode = rope.concatenate(rope.multiply(fillchar, padding), self)
     return W_RopeUnicodeObject(resultnode)
     
 def unicode_zfill__RopeUnicode_ANY(space, w_self, w_width):
-    self = w_self._value
-    length = self.length
+    self = w_self._node
+    length = self.length()
     width = space.int_w(w_width)
+    zero = rope.LiteralStringNode.PREBUILT[ord("0")]
     if self.length() == 0:
         return W_RopeUnicodeObject(
-            rope.multiply(rope.LiteralStringNode.PREBUILT[ord(" ")], width))
-    padding = width - self.length()
+            rope.multiply(zero, width))
+    padding = width - length
     if padding <= 0:
         return w_self.create_if_subclassed()
     firstchar = self.getunichar(0)
     if firstchar in (u'+', u'-'):
         return W_RopeUnicodeObject(rope.rebalance(
             [rope.LiteralStringNode.PREBUILT[ord(firstchar)],
-             rope.multiply(zero, middle),
-             rope.getslice_one(node, 1, length)]))
+             rope.multiply(zero, padding),
+             rope.getslice_one(self, 1, length)]))
     else:
-        middle = width - length
         return W_RopeUnicodeObject(rope.concatenate(
-            rope.multiply(zero, middle), node))
+            rope.multiply(zero, padding), self))
 
 def unicode_splitlines__RopeUnicode_ANY(space, w_self, w_keepends):
-    XXX
-    self = w_self._value
-    keepends = 0
-    if space.int_w(w_keepends):
-        keepends = 1
-    if len(self) == 0:
-        return space.newlist([])
-    
-    start = 0
-    end = len(self)
-    pos = 0
-    lines = []
-    while pos < end:
-        if unicodedb.islinebreak(ord(self[pos])):
-            if (self[pos] == u'\r' and pos + 1 < end and
-                self[pos + 1] == u'\n'):
-                # Count CRLF as one linebreak
-                lines.append(W_UnicodeObject(self[start:pos + keepends * 2]))
-                pos += 1
-            else:
-                lines.append(W_UnicodeObject(self[start:pos + keepends]))
-            pos += 1
-            start = pos
-        else:
-            pos += 1
-    if not unicodedb.islinebreak(ord(self[end - 1])):
-        lines.append(W_UnicodeObject(self[start:]))
-    return space.newlist(lines)
-
+    keepends = bool(space.int_w(w_keepends))  # truth value, but type checked
+    node = w_self._node
+    return space.newlist(
+        [W_RopeUnicodeObject(n) for n in rope.splitlines(node, keepends)])
 
 def unicode_find__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
@@ -629,86 +604,44 @@ def unicode_rindex__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_s
 
 def unicode_count__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_start, w_end):
     self, start, end = _convert_idx_params(space, w_self, w_start, w_end)
-    substr = w_substr._value
-    return space.wrap(self.count(substr, start, end))
+    assert start >= 0
+    assert end >= 0
+    iter = rope.FindIterator(self, w_substr._node, start, end)
+    i = 0
+    while 1:
+        try:
+            index = iter.next()
+        except StopIteration:
+            break
+        i += 1
+    return wrapint(space, i)
 
 def unicode_split__RopeUnicode_None_ANY(space, w_self, w_none, w_maxsplit):
-    self = w_self._value
+    selfnode = w_self._node
     maxsplit = space.int_w(w_maxsplit)
-    parts = []
-    if len(self) == 0:
-        return space.newlist([])
-    start = 0
-    end = len(self)
-    inword = 0
-
-    while maxsplit != 0 and start < end:
-        index = start
-        for index in range(start, end):
-            if _isspace(self[index]):
-                break
-            else:
-                inword = 1
-        else:
-            break
-        if inword == 1:
-            parts.append(W_UnicodeObject(self[start:index]))
-            maxsplit -= 1
-        # Eat whitespace
-        for start in range(index + 1, end):
-            if not _isspace(self[start]):
-                break
-        else:
-            return space.newlist(parts)
-
-    parts.append(W_UnicodeObject(self[start:]))
-    return space.newlist(parts)
+    res_w = [W_RopeUnicodeObject(node)
+                for node in rope.split_chars(selfnode, maxsplit, _isspace)]
+    return space.newlist(res_w)
 
 def unicode_split__RopeUnicode_RopeUnicode_ANY(space, w_self, w_delim, w_maxsplit):
     maxsplit = space.int_w(w_maxsplit)
     start = 0
     selfnode = w_self._node
-    bynode = w_by._node
-    bylen = bynode.length()
-    if bylen == 0:
+    delimnode = w_delim._node
+    delimlen = delimnode.length()
+    if delimlen == 0:
         raise OperationError(space.w_ValueError, space.wrap("empty separator"))
     res_w = [W_RopeUnicodeObject(node)
-                for node in rope.split(selfnode, bynode, maxsplit)]
+                for node in rope.split(selfnode, delimnode, maxsplit)]
     return space.newlist(res_w)
 
 def unicode_rsplit__RopeUnicode_None_ANY(space, w_self, w_none, w_maxsplit):
-    XXX
-    self = w_self._value
+    selfnode = w_self._node
     maxsplit = space.int_w(w_maxsplit)
-    parts = []
-    if len(self) == 0:
-        return space.newlist([])
-    start = 0
-    end = len(self)
-    inword = 0
+    res_w = [W_RopeUnicodeObject(node)
+                for node in rope.rsplit_chars(selfnode, maxsplit, _isspace)]
+    return space.newlist(res_w)
 
-    while maxsplit != 0 and start < end:
-        index = end
-        for index in range(end-1, start-1, -1):
-            if _isspace(self[index]):
-                break
-            else:
-                inword = 1
-        else:
-            break
-        if inword == 1:
-            parts.append(W_UnicodeObject(self[index+1:end]))
-            maxsplit -= 1
-        # Eat whitespace
-        for end in range(index, start-1, -1):
-            if not _isspace(self[end-1]):
-                break
-        else:
-            return space.newlist(parts)
-
-    parts.append(W_UnicodeObject(self[:end]))
-    parts.reverse()
-    return space.newlist(parts)
 
 def unicode_rsplit__RopeUnicode_RopeUnicode_ANY(space, w_self, w_delim, w_maxsplit):
     # XXX works but flattens
@@ -733,7 +666,7 @@ def unicode_rsplit__RopeUnicode_RopeUnicode_ANY(space, w_self, w_delim, w_maxspl
         end = index
         maxsplit -= 1
     parts.append(W_RopeUnicodeObject(
-        rope.getslice_one(w_self._node, 0, :end)))
+        rope.getslice_one(w_self._node, 0, end)))
     parts.reverse()
     return space.newlist(parts)
 
@@ -741,7 +674,7 @@ def _split_into_chars(self, maxsplit):
     if maxsplit == 0:
         return [self]
     index = 0
-    end = len(self)
+    end = self.length()
     parts = [rope.LiteralStringNode.EMPTY]
     maxsplit -= 1
     while maxsplit != 0:
@@ -750,50 +683,40 @@ def _split_into_chars(self, maxsplit):
         parts.append(self.getrope(index))
         index += 1
         maxsplit -= 1
-    parts.append(rope.getslice_one(self, index, self.length())
+    parts.append(rope.getslice_one(self, index, self.length()))
     return parts
 
 def unicode_replace__RopeUnicode_RopeUnicode_RopeUnicode_ANY(
         space, w_self, w_old, w_new, w_maxsplit):
+    self = w_self._node
     old = w_old._node
-    oldlength = old.length
+    maxsplit = space.int_w(w_maxsplit)
+    oldlength = old.length()
     if not oldlength:
-        self = w_self._value
-        maxsplit = space.int_w(w_maxsplit)
         parts = _split_into_chars(self, maxsplit)
         return W_RopeUnicodeObject(rope.join(w_new._node, parts))
-    substrings = rope.split(node, old, maxsplit)
+    substrings = rope.split(self, old, maxsplit)
     if not substrings:
         return w_self.create_if_subclassed()
-    substrings = rope.split(node, sub, maxsplit)
-    if substrings is None:
-        return w_self.create_if_subclassed()
     try:
-        return W_RopeObject(rope.join(by, substrings))
+        return W_RopeUnicodeObject(rope.join(w_new._node, substrings))
     except OverflowError:
         raise OperationError(space.w_OverflowError,
                              space.wrap("string too long"))
-    try:
-        return W_RopeObject(rope.join(by, substrings))
-    except OverflowError:
-        raise OperationError(space.w_OverflowError,
-                             space.wrap("string too long"))
-    return W_UnicodeObject(w_new._value.join(parts))
     
 
-def unicode_encode__Unicode_ANY_ANY(space, w_unistr,
-                                    w_encoding=None,
-                                    w_errors=None):
+def unicode_encode__RopeUnicode_ANY_ANY(space, w_unistr,
+                                        w_encoding=None,
+                                        w_errors=None):
 
     from pypy.objspace.std.unicodetype import getdefaultencoding, \
-        _get_encoding_and_errors, encode_object
+        _get_encoding_and_errors
     encoding, errors = _get_encoding_and_errors(space, w_encoding, w_errors)
     if encoding is None:
         encoding = getdefaultencoding(space)
-    w_retval = encode_object(space, w_unistr, encoding, errors)
-    return w_retval
+    return encode_unicode(space, w_unistr, encoding, errors)
 
-def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
+def unicode_partition__RopeUnicode_RopeUnicode(space, w_unistr, w_unisub):
     self = w_unistr._node
     sub = w_unisub._node
     if not sub.length():
@@ -810,7 +733,7 @@ def unicode_partition__Unicode_Unicode(space, w_unistr, w_unisub):
              W_RopeUnicodeObject(rope.getslice_one(self, pos + sub.length(),
                                             self.length()))])
 
-def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
+def unicode_rpartition__RopeUnicode_RopeUnicode(space, w_unistr, w_unisub):
     # XXX works but flattens
     unistr = w_unistr._node.flatten_unicode()
     unisub = w_unisub._node.flatten_unicode()
@@ -819,8 +742,8 @@ def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
                              space.wrap("empty separator"))
     pos = unistr.rfind(unisub)
     if pos == -1:
-        return space.newtuple([W_UnicodeObject.EMPTY,
-                               W_UnicodeObject.EMPTY, w_unistr])
+        return space.newtuple([W_RopeUnicodeObject.EMPTY,
+                               W_RopeUnicodeObject.EMPTY, w_unistr])
     else:
         assert pos > 0
         return space.newtuple([space.wrap(unistr[:pos]), w_unisub,
@@ -828,9 +751,10 @@ def unicode_rpartition__Unicode_Unicode(space, w_unistr, w_unisub):
 
 
 def unicode_expandtabs__RopeUnicode_ANY(space, w_self, w_tabsize):
+    from pypy.objspace.std.ropeobject import _tabindent
     self = w_self._node
     tabsize  = space.int_w(w_tabsize)
-    splitted = rope.split(node, rope.LiteralStringNode.PREBUILT[ord('\t')])
+    splitted = rope.split(self, rope.LiteralStringNode.PREBUILT[ord('\t')])
     last = splitted[0]
     expanded = [last]
     for i in range(1, len(splitted)):
@@ -865,9 +789,9 @@ def unicode_translate__RopeUnicode_ANY(space, w_self, w_table):
                     raise OperationError(
                             space.w_TypeError,
                             space.wrap("character mapping must be in range(0x%x)" % (maxunicode + 1,)))
-                result.append(unichr(newval))
+                result.append(rope.rope_from_unichar(unichr(newval)))
             elif space.is_true(space.isinstance(w_newval, space.w_unicode)):
-                result.append(unicoderope_w(w_newval))
+                result.append(ropeunicode_w(space, w_newval))
             else:
                 raise OperationError(
                     space.w_TypeError,
@@ -877,11 +801,11 @@ def unicode_translate__RopeUnicode_ANY(space, w_self, w_table):
 # Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__RopeUnicode(space, w_unicode):
     hexdigits = "0123456789abcdef"
-    chars = w_unicode._node
+    node = w_unicode._node
     size = node.length()
     
     singlequote = doublequote = False
-    iter = rope.ItemIterator()
+    iter = rope.ItemIterator(node)
     for i in range(size):
         c = iter.nextunichar()
         if singlequote and doublequote:
@@ -895,7 +819,7 @@ def repr__RopeUnicode(space, w_unicode):
     else:
         quote = '\''
     result = ['u', quote]
-    iter = rope.ItemIterator()
+    iter = rope.ItemIterator(node)
     j = 0
     while j < size:
         code = iter.nextint()
@@ -915,6 +839,8 @@ def repr__RopeUnicode(space, w_unicode):
         if code >= 0xD800 and code < 0xDC00:
             if j < size - 1:
                 code2 = iter.nextint()
+                # XXX this is wrong: if the next if is false,
+                # code2 is lost
                 if code2 >= 0xDC00 and code2 <= 0xDFFF:
                     code = (((code & 0x03FF) << 10) | (code2 & 0x03FF)) + 0x00010000
                     result.extend(["U",
@@ -974,6 +900,34 @@ def repr__RopeUnicode(space, w_unicode):
 def mod__RopeUnicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)
 
+
+# methods of the iterator
+
+def iter__RopeUnicodeIter(space, w_ropeiter):
+    return w_ropeiter
+
+def next__RopeUnicodeIter(space, w_ropeiter):
+    if w_ropeiter.node is None:
+        raise OperationError(space.w_StopIteration, space.w_None) 
+    try:
+        unichar = w_ropeiter.item_iter.nextunichar()
+        w_item = space.wrap(unichar)
+    except StopIteration:
+        w_ropeiter.node = None
+        w_ropeiter.char_iter = None
+        raise OperationError(space.w_StopIteration, space.w_None) 
+    w_ropeiter.index += 1 
+    return w_item
+
+def len__RopeUnicodeIter(space,  w_ropeiter):
+    if w_ropeiter.node is None:
+        return wrapint(space, 0)
+    index = w_ropeiter.index
+    length = w_ropeiter.node.length()
+    result = length - index
+    if result < 0:
+        return wrapint(space, 0)
+    return wrapint(space, result)
 
 import unicodetype
 register_all(vars(), unicodetype)

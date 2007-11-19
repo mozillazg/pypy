@@ -129,6 +129,21 @@ def test_getslice_step():
                 for step in range(1, stop - start):
                     assert getslice(s, start, stop, step).flatten_string() == result[start:stop:step]
 
+def test_getslice_step_unicode():
+    s1 = (LiteralUnicodeNode(u"\uaaaa") +
+          LiteralUnicodeNode(u"\ubbbb" * 5) +
+          LiteralUnicodeNode(u"\uaaaa\ubbbb\u1000\u2000") +
+          LiteralUnicodeNode(u"vwxyz") + 
+          LiteralUnicodeNode(u"zyxwvu\u1234" * 2) +
+          LiteralUnicodeNode(u"12355"))
+    s2 = s1.rebalance()
+    result = s1.flatten_unicode()
+    assert s2.flatten_unicode() == result
+    for s in [s1, s2]:
+        for start in range(0, len(result)):
+            for stop in range(start, len(result)):
+                for step in range(1, stop - start):
+                    assert getslice(s, start, stop, step).flatten_unicode() == result[start:stop:step]
 
 def test_random_addition_and_slicing():
     seed = random.randrange(10000)
@@ -180,6 +195,17 @@ def test_iteration():
         c2 = iter.nextint()
         assert c2 == ord(c)
     py.test.raises(StopIteration, iter.nextchar)
+
+def test_iteration_startpos():
+    rope, real_st = make_random_string(200)
+    for i in range(0, len(real_st), len(real_st) // 20):
+        iter = ItemIterator(rope, i)
+        x = i
+        for c in real_st[i:]:
+            x += 1
+            c2 = iter.nextchar()
+            assert c2 == c
+        py.test.raises(StopIteration, iter.nextchar)
 
 def test_iteration_unicode():
     rope, real_st = make_random_string(200, unicode=True)
@@ -381,7 +407,6 @@ def test_find_int():
     rope = getslice_one(rope, 10, 100)
     st = st[10:100]
     for i in range(len(st)):
-        print i
         for j in range(i + 1, len(st)):
             c = st[i:j][(j - i) // 2]
             pos = find_int(rope, ord(c), i, j)
@@ -518,7 +543,6 @@ def test_hash_distribution_tiny_strings():
             hashes[(h & 0xff0000) >> 16] += 1
     for h in hashes:
         assert h > 300
-    print hashes
 
 def test_hash_distribution_small_strings():
     random.seed(42) # prevent randomly failing test
@@ -581,7 +605,7 @@ def test_hash_part():
             assert s.hash_part() == h
 
 def test_hash_part_unicode():
-    a, st = make_random_string(unicode=True)
+    a, st = make_random_string(5, unicode=True)
     h = a.hash_part()
     for split in range(1, len(st) - 1):
         s1 = LiteralUnicodeNode(st[:split])
@@ -714,3 +738,31 @@ def test_split():
         assert len(l1) == len(l2)
         for n, s in zip(l1, l2):
             assert n.flatten_string() == s
+
+def test_splitlines():
+    seps = [(LiteralStringNode("\n"), "\n"), (LiteralStringNode("\r"), "\r"),
+            (LiteralStringNode("\r\n"), "\r\n")]
+    l, strs = zip(*[(LiteralStringNode("xafnarsp"), "xafnarsp"),
+                    (LiteralStringNode("xyzaaaa"), "xyzaaaa"),
+                    (LiteralStringNode("wxxxx"), "wxxxx")])
+    l = list(l)
+    for s, st in seps:
+        node = join(s, l)
+        l2 = splitlines(node)
+        for n1, n2 in zip(l, l2):
+            assert n1.flatten_string() == n2.flatten_string()
+    for keepends in [True, False]:
+        l1 = splitlines(LiteralStringNode("ab\nab\n\raba\rba"), keepends)
+        l2 = "ab\nab\n\raba\rba".splitlines(keepends)
+        assert len(l1) == len(l2)
+        for n, s in zip(l1, l2):
+            assert n.flatten_string() == s
+
+def test_rope_from_unicode():
+    node = rope_from_unicode(u"aaabbbbbcccdddeeefffggggnnn")
+    assert node.is_bytestring()
+    assert node.is_ascii()
+    node = rope_from_unicode(u"a" * 30 + u"\ufffd" * 30 + "x" * 30)
+    assert node.length() == 90
+    assert not node.is_ascii()
+    assert not node.is_bytestring()
