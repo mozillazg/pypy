@@ -151,7 +151,7 @@ class LiteralStringNode(LiteralNode):
         return self.s[index]
 
     def getunichar(self, index):
-        return unicode(self.s[index])
+        return unichr(ord(self.s[index]))
 
     def getint(self, index):
         return ord(self.s[index])
@@ -404,12 +404,18 @@ def getslice(node, start, stop, step, slicelength=-1):
         start, stop, node = find_straddling(node, start, stop)
         iter = SeekableItemIterator(node)
         iter.seekforward(start)
-        #XXX doesn't work for unicode
-        result = [iter.nextchar()]
-        for i in range(slicelength - 1):
-            iter.seekforward(step - 1)
-            result.append(iter.nextchar())
-        return rope_from_charlist(result)
+        if node.is_bytestring():
+            result = [iter.nextchar()]
+            for i in range(slicelength - 1):
+                iter.seekforward(step - 1)
+                result.append(iter.nextchar())
+            return rope_from_charlist(result)
+        else:
+            result = [iter.nextunichar()]
+            for i in range(slicelength - 1):
+                iter.seekforward(step - 1)
+                result.append(iter.nextunichar())
+            return rope_from_unicharlist(result)
     return getslice_one(node, start, stop)
 
 def getslice_one(node, start, stop):
@@ -589,32 +595,61 @@ def rope_from_charlist(charlist):
 def rope_from_unicharlist(charlist):
     nodelist = []
     length = len(charlist)
-    if length:
+    if not length:
         return LiteralStringNode.EMPTY
     i = 0
     while i < length:
-        chunk = []
+        unichunk = []
         while i < length:
             c = ord(charlist[i])
             if c < 256:
                 break
-            chunk.append(unichr(c))
+            unichunk.append(unichr(c))
             i += 1
-        if chunk:
-            nodelist.append(LiteralUnicodeNode("".join(chunk)))
-        chunck = []
+        if unichunk:
+            nodelist.append(LiteralUnicodeNode("".join(unichunk)))
+        strchunk = []
         while i < length:
             c = ord(charlist[i])
             if c >= 256:
                 break
-            chunk.append(chr(c))
+            strchunk.append(chr(c))
             i += 1
-        if chunk:
-            nodelist.append(LiteralStringNode("".join(chunk)))
+        if strchunk:
+            nodelist.append(LiteralStringNode("".join(strchunk)))
     return rebalance(nodelist, length)
-rope_from_unicharlist._annspecialcase_ = "specialize:argtype(0)"
 
-rope_from_unicode = rope_from_unicharlist
+def rope_from_unicode(uni):
+    nodelist = []
+    length = len(uni)
+    if not length:
+        return LiteralStringNode.EMPTY
+    i = 0
+    while i < length:
+        start = i
+        while i < length:
+            c = ord(uni[i])
+            if c < 256:
+                break
+            i += 1
+        if i != start:
+            nodelist.append(LiteralUnicodeNode(uni[start:i]))
+        start = i
+        strchunk = []
+        while i < length:
+            c = ord(uni[i])
+            if c >= 256:
+                break
+            i += 1
+        if i != start:
+            nodelist.append(LiteralStringNode(uni[start:i].encode("latin-1")))
+    return rebalance(nodelist, length)
+
+def rope_from_unichar(unichar):
+    intval = ord(unichar)
+    if intval > 256:
+        return LiteralUnicodeNode(unichar)
+    return LiteralStringNode.PREBUILT[intval]
 
 # __________________________________________________________________________
 # searching
@@ -881,12 +916,27 @@ class SeekableFringeIterator(FringeIterator):
 
 
 class ItemIterator(object):
-    def __init__(self, node):
+    def __init__(self, node, start=0):
         self.iter = FringeIterator(node)
         self.node = None
         self.nodelength = 0
         self.index = 0
-
+        if start:
+            self._advance_to(start)
+    
+    def _advance_to(self, index):
+        assert index > 0
+        assert self.index == 0
+        while 1:
+            node = self.iter.next()
+            length = node.length()
+            if index < length:
+                self.index = index
+                self.node = node
+                self.nodelength = length
+                break
+            index -= length
+            assert index >= 0
 
     def getnode(self):
         node = self.node
@@ -1160,8 +1210,7 @@ def startswith(self, prefix, start, end):
     stop = start + prefix.length()
     if stop > end:
         return False
-    iter1 = SeekableItemIterator(self)
-    iter1.seekforward(start)
+    iter1 = ItemIterator(self, start)
     iter2 = ItemIterator(prefix)
     for i in range(prefix.length()):
         if iter1.nextint() != iter2.nextint():
@@ -1176,15 +1225,15 @@ def endswith(self, suffix, start, end):
     begin = end - suffix.length()
     if begin < start:
         return False
-    iter1 = SeekableItemIterator(self)
-    iter1.seekforward(begin)
+    iter1 = ItemIterator(self, begin)
     iter2 = ItemIterator(suffix)
     for i in range(suffix.length()):
         if iter1.nextint() != iter2.nextint():
             return False
     return True
 
-def strip(node, left=True, right=True, predicate=lambda i: chr(i).isspace()):
+def strip(node, left=True, right=True, predicate=lambda i: chr(i).isspace(),
+          *extraargs):
     length = node.length()
     
     lpos = 0
@@ -1192,12 +1241,12 @@ def strip(node, left=True, right=True, predicate=lambda i: chr(i).isspace()):
     
     if left:
         iter = ItemIterator(node)
-        while lpos < rpos and predicate(iter.nextint()):
+        while lpos < rpos and predicate(iter.nextint(), *extraargs):
            lpos += 1
        
     if right:
         iter = ReverseItemIterator(node)
-        while rpos > lpos and predicate(iter.nextint()):
+        while rpos > lpos and predicate(iter.nextint(), *extraargs):
            rpos -= 1
        
     assert rpos >= lpos
@@ -1219,6 +1268,76 @@ def split(node, sub, maxsplit=-1):
     substrings.append(getslice_one(node, startidx, node.length()))
     return substrings
 
+
+def split_chars(node, maxsplit=-1, predicate=lambda x: chr(x).isspace()):
+    result = []
+    length = node.length()
+    if not length:
+        return result
+    i = 0
+    iter = ItemIterator(node)
+    while True:
+        # find the beginning of the next word
+        while i < length:
+            if not predicate(iter.nextint()):
+                break   # found
+            i += 1
+        else:
+            break  # end of string, finished
+
+        # find the end of the word
+        if maxsplit == 0:
+            j = length   # take all the rest of the string
+        else:
+            j = i + 1
+            while j < length and not predicate(iter.nextint()):
+                j += 1
+            maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+        # the word is value[i:j]
+        result.append(getslice_one(node, i, j))
+
+        # continue to look from the character following the space after the word
+        i = j + 1
+    return result
+
+
+def rsplit_chars(node, maxsplit=-1, predicate=lambda x: chr(x).isspace()):
+    result = []
+    length = node.length()
+    i = length - 1
+    iter = ReverseItemIterator(node)
+    while True:
+        # starting from the end, find the end of the next word
+        while i >= 0:
+            if not predicate(iter.nextint()):
+                break   # found
+            i -= 1
+        else:
+            break  # end of string, finished
+
+        # find the start of the word
+        # (more precisely, 'j' will be the space character before the word)
+        if maxsplit == 0:
+            j = -1   # take all the rest of the string
+        else:
+            j = i - 1
+            while j >= 0 and not predicate(iter.nextint()):
+                j -= 1
+            maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+        # the word is value[j+1:i+1]
+        j1 = j + 1
+        assert j1 >= 0
+        result.append(getslice_one(node, j1, i + 1))
+
+        # continue to look from the character before the space before the word
+        i = j - 1
+
+    result.reverse()
+    return result
+
+
 def split_completely(node, maxsplit=-1):
     upper = node.length()
     if maxsplit > 0 and maxsplit < upper + 2:
@@ -1230,6 +1349,53 @@ def split_completely(node, maxsplit=-1):
         substrings.append(iter.nextrope())
     substrings.append(rope.getslice_one(node, upper, length))
 
+
+def splitlines(node, keepends=False):
+    length = node.length()
+    if length == 0:
+        return []
+
+    result = []
+    iter = ItemIterator(node)
+    i = j = 0
+    last = ord(" ")
+    char = iter.nextint()
+    while i < length:
+        # Find a line and append it
+        while char != ord('\n') and char != ord('\r'):
+            try:
+                i += 1
+                last = char
+                char = iter.nextint()
+            except StopIteration:
+                break
+        # Skip the line break reading CRLF as one line break
+        eol = i
+        i += 1
+        last = char
+        try:
+            char = iter.nextint()
+        except StopIteration:
+            pass
+        else:
+            if last == ord('\r') and char == ord('\n'):
+                i += 1
+                try:
+                    last = char
+                    char = iter.nextint()
+                except StopIteration:
+                    pass
+        if keepends:
+            eol = i
+        result.append(getslice_one(node, j, eol))
+        j = i
+
+    if j == 0:
+        result.append(node)
+    elif j < length:
+        result.append(getslice_one(node, j, length))
+
+    return result
 
 # __________________________________________________________________________
 # misc
@@ -1247,54 +1413,65 @@ def hash_rope(rope):
 # ____________________________________________________________
 # to and from unicode conversion
 
-def str_decode(rope, encoding):
+def str_decode_ascii(rope):
     assert rope.is_bytestring()
-    if encoding == "ascii":
-        if rope.is_ascii():
-            return rope
-    elif encoding == "latin-1":
+    if rope.is_ascii():
         return rope
-    elif encoding == "utf-8":
-        from pypy.rlib.runicode import str_decode_utf_8
-        if rope.is_ascii():
-            return rope
-        elif isinstance(rope, BinaryConcatNode):
-            lresult = str_decode(rope.left, "utf-8")
-            if result is not None:
-                return BinaryConcatNode(lresult,
-                                        str_decode(rope.right, "utf-8"))
-        elif isinstance(rope, LiteralStringNode):
+    return None
+
+def str_decode_latin1(rope):
+    assert rope.is_bytestring()
+    return rope
+
+def str_decode_utf8(rope):
+    from pypy.rlib.runicode import str_decode_utf_8
+    if rope.is_ascii():
+        return rope
+    elif isinstance(rope, BinaryConcatNode):
+        lresult = str_decode_utf8(rope.left)
+        if lresult is not None:
+            return BinaryConcatNode(lresult,
+                                    str_decode_utf8(rope.right))
+    elif isinstance(rope, LiteralStringNode):
+        try:
             result, consumed = str_decode_utf_8(rope.s, len(rope.s), False,
                                                 "strict")
-            if consumed < len(rope.s):
-                return None
-            return rope_from_unicode(result)
-        s = rope.flatten_string()
-        return str_decode_utf_8(s, len(s), True)
-    else:
-        raise NotImplementedError("unknown encoding")
+        except UnicodeDecodeError:
+            return None
+        if consumed < len(rope.s):
+            return None
+        return rope_from_unicode(result)
+    s = rope.flatten_string()
+    try:
+        result, consumed = str_decode_utf_8(s, len(s), True)
+        return rope_from_unicode(result)
+    except UnicodeDecodeError:
+        pass
 
-def unicode_encode(rope, encoding):
-    if encoding == "ascii":
-        if rope.is_ascii():
-            return rope
-    elif encoding == "latin-1":
+
+def unicode_encode_ascii(rope):
+    if rope.is_ascii():
         return rope
-    elif encoding == "utf-8":
-        from pypy.rlib.runicode import unicode_encode_utf_8
-        if rope.is_ascii():
-            return rope
-        elif isinstance(rope, BinaryConcatNode):
-            return BinaryConcatNode(unicode_encode(rope.left, "utf-8"),
-                                    unicode_encode(rope.right, "utf-8"))
-        elif isinstance(rope, LiteralUnicodeNode):
-            return unicode_encode_utf_8(rope.u, len(rope.u), "strict")
-        elif isinstance(rope, LiteralStringNode):
-            return LiteralStringNode(_str_encode_utf_8(rope.s))
-        s = rope.flatten_string()
-        return str_decode_utf_8(s, len(s), True)
-    else:
-        raise NotImplementedError("unknown encoding")
+
+def unicode_encode_latin1(rope):
+    if rope.is_bytestring():
+        return rope
+
+def unicode_encode_utf8(rope):
+    from pypy.rlib.runicode import unicode_encode_utf_8
+    if rope.is_ascii():
+        return rope
+    elif isinstance(rope, BinaryConcatNode):
+        return BinaryConcatNode(unicode_encode_utf8(rope.left),
+                                unicode_encode_utf8(rope.right))
+    elif isinstance(rope, LiteralUnicodeNode):
+        try:
+            return LiteralStringNode(
+                unicode_encode_utf_8(rope.u, len(rope.u), "strict"))
+        except UnicodeDecodeError:
+            return None
+    elif isinstance(rope, LiteralStringNode):
+        return LiteralStringNode(_str_encode_utf_8(rope.s))
 
 def _str_encode_utf_8(s):
     size = len(s)
