@@ -544,3 +544,6 @@ class AppTestUnicodeString:
         assert 'aaa'.count('a', 0, -1) == 2
         assert 'aaa'.count('a', 0, -10) == 0
         assert 'ababa'.count('aba') == 1
+
+    def test_swapcase(self):
+        assert u'\xe4\xc4\xdf'.swapcase() == u'\xc4\xe4\xdf'
