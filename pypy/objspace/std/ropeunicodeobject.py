@@ -724,12 +724,12 @@ def unicode_partition__RopeUnicode_RopeUnicode(space, w_unistr, w_unisub):
                              space.wrap("empty separator"))
     pos = rope.find(self, sub)
     if pos == -1:
-        return space.newtuple([w_self, W_RopeUnicodeObject.EMPTY,
+        return space.newtuple([w_unistr, W_RopeUnicodeObject.EMPTY,
                                W_RopeUnicodeObject.EMPTY])
     else:
         return space.newtuple(
             [W_RopeUnicodeObject(rope.getslice_one(self, 0, pos)),
-             w_sub,
+             w_unisub,
              W_RopeUnicodeObject(rope.getslice_one(self, pos + sub.length(),
                                             self.length()))])
 
