@@ -614,7 +614,7 @@ def unicode_count__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr, w_st
         except StopIteration:
             break
         i += 1
-    return wrapint(space, i)
+    return space.wrap(i)
 
 def unicode_split__RopeUnicode_None_ANY(space, w_self, w_none, w_maxsplit):
     selfnode = w_self._node

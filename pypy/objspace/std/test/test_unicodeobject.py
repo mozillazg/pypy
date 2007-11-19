@@ -530,3 +530,17 @@ class AppTestUnicodeString:
         assert u'abcdefghiabc'.rfind(u'') == 12
         assert u'abcdefghiabc'.rfind(u'abcd') == 0
         assert u'abcdefghiabc'.rfind(u'abcz') == -1
+
+
+    def test_count(self):
+        assert u"".count(u"x") ==0
+        assert u"".count(u"") ==1
+        assert u"Python".count(u"") ==7
+        assert u"ab aaba".count(u"ab") ==2
+        assert 'aaa'.count('a') == 3
+        assert 'aaa'.count('b') == 0
+        assert 'aaa'.count('a', -1) == 1
+        assert 'aaa'.count('a', -10) == 3
+        assert 'aaa'.count('a', 0, -1) == 2
+        assert 'aaa'.count('a', 0, -10) == 0
+        assert 'ababa'.count('aba') == 1
