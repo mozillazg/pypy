@@ -423,18 +423,11 @@ def test_restart_positions():
     restart = construct_restart_positions_node(
         BinaryConcatNode(LiteralStringNode("aba"), LiteralStringNode("bcabab")))
     assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4]
-    restart = construct_restart_positions("ababcabab")
-    assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4]
-    restart = construct_restart_positions("ababcababb")
-    assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4, 0]
     restart = construct_restart_positions_node(
         BinaryConcatNode(LiteralStringNode("aba"), LiteralStringNode("bcababb")))
     assert restart == [0, 0, 1, 2, 0, 1, 2, 3, 4, 0]
-    restart = construct_restart_positions("ababb")
-    assert restart == [0, 0, 1, 2, 0]
     restart = construct_restart_positions_node(LiteralStringNode("ababb"))
     assert restart == [0, 0, 1, 2, 0]
-    #abababcabcabb
 
 
 def test_find():
@@ -445,6 +438,17 @@ def test_find():
     node = BinaryConcatNode(LiteralStringNode("btffp"),
                             LiteralStringNode("bacbb"))
     pos = find(node, LiteralStringNode("a"), 0, node.length())
+    assert pos == 6
+
+
+def test_find_unicode():
+    node = BinaryConcatNode(LiteralUnicodeNode(u"\uaaaa\ubbbb\uaaaa"),
+                            LiteralUnicodeNode(u"\ubbbb\ucccc\uaaaa\ubbbb\uaaaa\ubbbb"))
+    pos = find(node, LiteralUnicodeNode(u"\uaaaa\ubbbb\ucccc"), 0, node.length())
+    assert pos == 2
+    node = BinaryConcatNode(LiteralUnicodeNode(u"btffp"),
+                            LiteralUnicodeNode(u"b\uaaaacbb"))
+    pos = find(node, LiteralUnicodeNode(u"\uaaaa"), 0, node.length())
     assert pos == 6
 
 def test_fromcharlist():
