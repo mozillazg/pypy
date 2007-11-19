@@ -439,10 +439,10 @@ def unicode_upper__RopeUnicode(space, w_self):
     return _local_transform(w_self._node, _toupper)
 
 def _swapcase(ordch):
-    if unicodedb.islower(unichar):
-        return unichr(unicodedb.toupper(unichar))
-    elif unicodedb.isupper(unichar):
-        return unichr(unicodedb.tolower(unichar))
+    if unicodedb.islower(ordch):
+        return unichr(unicodedb.toupper(ordch))
+    elif unicodedb.isupper(ordch):
+        return unichr(unicodedb.tolower(ordch))
     else:
         return unichr(ordch)
 
