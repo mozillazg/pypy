@@ -133,7 +133,6 @@ class LiteralStringNode(LiteralNode):
         return self.s
 
     def flatten_unicode(self):
-        # XXX not RPython yet
         return self.s.decode('latin-1')
 
     def hash_part(self):
@@ -706,40 +705,6 @@ def find(node, subnode, start=0, stop=-1):
     restart = construct_restart_positions_node(subnode)
     return _find_node(node, subnode, start, stop, restart)
 
-def _find(node, substring, start, stop, restart):
-    # XXX
-    assert node.is_bytestring()
-    len2 = len(substring)
-    i = 0
-    m = start
-    iter = SeekableItemIterator(node)
-    iter.seekforward(start)
-    c = iter.nextchar()
-    while m + i < stop:
-        if c == substring[i]:
-            i += 1
-            if i == len2:
-                return m
-            if m + i < stop:
-                c = iter.nextchar()
-        else:
-            # mismatch, go back to the last possible starting pos
-            if i==0:
-                m += 1
-                if m + i < stop:
-                    c = iter.nextchar()
-            else:
-                e = restart[i-1]
-                new_m = m + i - e
-                assert new_m <= m + i
-                seek = m + i - new_m
-                if seek:
-                    iter.seekback(m + i - new_m)
-                    c = iter.nextchar()
-                m = new_m
-                i = e
-    return -1
-
 def _find_node(node, subnode, start, stop, restart):
     len2 = subnode.length()
     m = start
@@ -777,27 +742,7 @@ def _find_node(node, subnode, start, stop, restart):
                 i = e
     return -1
 
-def construct_restart_positions(s):
-    length = len(s)
-    restart = [0] * length
-    restart[0] = 0
-    i = 1
-    j = 0
-    while i < length:
-        if s[i] == s[j]:
-            j += 1
-            restart[i] = j
-            i += 1
-        elif j>0:
-            j = restart[j-1]
-        else:
-            restart[i] = 0
-            i += 1
-            j = 0
-    return restart
-
 def construct_restart_positions_node(node):
-    # really a bit overkill
     length = node.length()
     restart = [0] * length
     restart[0] = 0
