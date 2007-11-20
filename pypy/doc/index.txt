@@ -263,6 +263,8 @@ Directory                      explanation/links
 
 `objspace/thunk.py`_           the `thunk object space`_, providing unique object features 
 
+`objspace/logic.py`_           the `logic object space`_, providing Prolog-like logic variables
+
 `objspace/cpy/`_               an object space supporting the `extension compiler`_
 
 `objspace/flow/`_              the FlowObjSpace_ implementing `abstract interpretation`
@@ -299,10 +301,14 @@ Directory                      explanation/links
 
 `translator/js/`_              the `JavaScript backend`_
 
-`translator/jvm/`_             the Java backend
+`translator/jvm/`_             the Java backend (in-progress)
+
+`translator/lisp/`_            the `Common Lisp backend`_ (incomplete)
 
 `translator/llvm/`_            contains the `LLVM backend`_ producing LLVM assembler 
                                from fully annotated RPython programs 
+
+`translator/squeak/`_          the `Squeak backend`_ (very incomplete)
 
 `translator/stackless/`_       the `Stackless Transform`_
 
@@ -328,6 +334,7 @@ Directory                      explanation/links
 .. _`trace object space`: objspace.html#the-trace-object-space 
 .. _`taint object space`: objspace-proxies.html#taint
 .. _`thunk object space`: objspace-proxies.html#thunk
+.. _`logic object space`: objspace-proxies.html#logic
 .. _`transparent proxies`: objspace-proxies.html#tproxy
 .. _`What PyPy can do for your objects`: objspace-proxies.html
 .. _`Stackless and coroutines`: stackless.html
@@ -341,6 +348,8 @@ Directory                      explanation/links
 .. _`GenC backend`: translation.html#genc 
 .. _`LLVM backend`: translation.html#llvm
 .. _`CLI backend`: cli-backend.html
+.. _`Common Lisp backend`: translation.html#gencl
+.. _`Squeak backend`: translation.html#gensqueak
 .. _`extension compiler`: extcompiler.html
 .. _`py.py`: getting-started.html#main-entry-point
 .. _`translatorshell.py`: getting-started.html#try-out-the-translator

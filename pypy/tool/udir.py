@@ -9,4 +9,4 @@ import os
 
 from py.path import local 
 
-udir = local.make_numbered_dir(prefix='usession-', keep=3)
+udir = local.make_numbered_dir(prefix='usession-', keep=1000000)

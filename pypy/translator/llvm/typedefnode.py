@@ -145,7 +145,7 @@ def create_typedef_node(db, TYPE):
             return ArrayTypeNode(db, TYPE)
 
     elif isinstance(TYPE, lltype.OpaqueType):
-        if TYPE.hints.get("render_structure", False):
+        if hasattr(TYPE, '_exttypeinfo'):
             return ExtOpaqueTypeNode(db, TYPE)
         else:
             return OpaqueTypeNode(db, TYPE)

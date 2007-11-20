@@ -924,10 +924,9 @@ if __name__ == "__main__":
         cls.seed = md5.new(str(GI_VERSION)).digest()
         if GI_VERSION != GI_VERSION_RENDERED or GI_VERSION is None:
             for pth in p.listdir():
-                if pth.check(file=1):
-                    try:
-                        pth.remove()
-                    except: pass
+                try:
+                    pth.remove()
+                except: pass
             f = file(get_tmp_file_name(str(ini)), "w")
             f.write("""\
 # This folder acts as a cache for code snippets which have been
