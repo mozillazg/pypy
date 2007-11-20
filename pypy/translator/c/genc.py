@@ -108,6 +108,7 @@ class CBuilder(object):
 
         if db is None:
             db = self.build_database()
+            self.db = db
         pf = self.getentrypointptr()
         pfname = db.get(pf)
 
@@ -182,9 +183,11 @@ class CExtModuleBuilder(CBuilder):
 
         from pypy.translator.llsupport.modwrapper import CtypesModule
         dll_filename = self.c_source_filename.new(ext='so')
+        gcfields = self.db.gcpolicy.common_gcheader_definition()
         modname = CtypesModule(self.entrypoint_name,
                                self.graph_entrypoint,
-                               dll_filename).create()
+                               dll_filename,
+                               gcfields).create()
         self.modname = modname
         self._compiled = True
         
