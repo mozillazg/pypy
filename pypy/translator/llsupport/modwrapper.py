@@ -22,9 +22,13 @@ rpyexc_fetch_type = _c.pypy_g_RPyFetchExceptionType
 rpyexc_fetch_type.argtypes = []
 rpyexc_fetch_type.restype = ctypes.c_void_p
 
-GC_get_heap_size_wrapper = _c.GC_get_heap_size
-GC_get_heap_size_wrapper.argtypes = []
-GC_get_heap_size_wrapper.restype = ctypes.c_int
+try:
+    GC_get_heap_size_wrapper = _c.GC_get_heap_size
+    GC_get_heap_size_wrapper.argtypes = []
+    GC_get_heap_size_wrapper.restype = ctypes.c_int
+except AttributeError:
+    pass # only if there is Boehm
+
 
 startup_code = _c.ctypes_RPython_StartupCode
 startup_code.argtypes = []
