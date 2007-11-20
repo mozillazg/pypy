@@ -5,7 +5,7 @@ Compiler instances are stored into 'space.getexecutioncontext().compiler'.
 from codeop import PyCF_DONT_IMPLY_DEDENT
 from pypy.interpreter.error import OperationError
 
-class AbstractCompiler:
+class AbstractCompiler(object):
     """Abstract base class for a bytecode compiler."""
 
     # The idea is to grow more methods here over the time,
@@ -78,42 +78,53 @@ class AbstractCompiler:
 # faked compiler
 
 import warnings
-from pypy.tool import stdlib___future__
-compiler_flags = 0
-compiler_features = {}
-for fname in stdlib___future__.all_feature_names:
-    flag = getattr(stdlib___future__, fname).compiler_flag
-    compiler_flags |= flag
-    compiler_features[fname] = flag
-allowed_flags = compiler_flags | PyCF_DONT_IMPLY_DEDENT
 
-def get_flag_names(space, flags):
-    if flags & ~allowed_flags:
-        raise OperationError(space.w_ValueError,
-                             space.wrap("compile(): unrecognized flags"))
-    flag_names = []
-    for name, value in compiler_features.items():
-        if flags & value:
-            flag_names.append( name )
-    return flag_names
+## from pypy.tool import stdlib___future__
+## compiler_flags = 0
+## compiler_features = {}
+## for fname in stdlib___future__.all_feature_names:
+##     flag = getattr(stdlib___future__, fname).compiler_flag
+##     compiler_flags |= flag
+##     compiler_features[fname] = flag
+## allowed_flags = compiler_flags | PyCF_DONT_IMPLY_DEDENT
+
+## def get_flag_names(space, flags):
+##     if flags & ~allowed_flags:
+##         raise OperationError(space.w_ValueError,
+##                              space.wrap("compile(): unrecognized flags"))
+##     flag_names = []
+##     for name, value in compiler_features.items():
+##         if flags & value:
+##             flag_names.append( name )
+##     return flag_names
 
 
 class PyCodeCompiler(AbstractCompiler):
     """Base class for compilers producing PyCode objects."""
 
     def getcodeflags(self, code):
+        """Return the __future__ compiler flags that were used to compile
+        the given code object."""
         from pypy.interpreter.pycode import PyCode
         if isinstance(code, PyCode):
-            return code.co_flags & compiler_flags
+            return code.co_flags & self.compiler_flags
         else:
             return 0
 
+from pypy.interpreter.pyparser.future import futureFlags
 
 class CPythonCompiler(PyCodeCompiler):
     """Faked implementation of a compiler, using the underlying compile()."""
 
+    def __init__(self, space):
+        self.space = space
+        self.w_compile_hook = space.w_None
+
+        self.compiler_flags = futureFlags.allowed_flags
+
     def compile(self, source, filename, mode, flags):
-        flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
+        from pypy.tool import stdlib___future__
+        #flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             old = self.setup_warn_explicit(warnings)
@@ -191,6 +202,7 @@ class CPythonCompiler(PyCodeCompiler):
 
 
 ########
+
 class PythonAstCompiler(PyCodeCompiler):
     """Uses the stdlib's python implementation of compiler
 
@@ -207,6 +219,8 @@ class PythonAstCompiler(PyCodeCompiler):
         self.parser = make_pyparser(self.grammar_version)
         self.additional_rules = {}
 
+        self.compiler_flags = futureFlags.allowed_flags
+
     def compile(self, source, filename, mode, flags):
         from pyparser.error import SyntaxError
         from pypy.interpreter import astcompiler
@@ -218,13 +232,16 @@ class PythonAstCompiler(PyCodeCompiler):
         from pypy.interpreter.pycode import PyCode
         from pypy.interpreter.function import Function
 
-        flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
+        from pypy.interpreter.pyparser.future import getFutures
+
+##         flags |= stdlib___future__.generators.compiler_flag   # always on (2.2 compat)
         space = self.space
         try:
             builder = AstBuilder(self.parser, self.grammar_version, space=space)
             for rulename, buildfunc in self.additional_rules.iteritems():
                 assert isinstance(buildfunc, Function)
                 builder.user_build_rules[rulename] = buildfunc
+            flags |= getFutures(source)
             self.parser.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
             encoding = builder.source_encoding
@@ -244,7 +261,7 @@ class PythonAstCompiler(PyCodeCompiler):
                 raise
         try:
             astcompiler.misc.set_filename(filename, ast_tree)
-            flag_names = get_flag_names(space, flags)
+            flag_names = futureFlags.get_flag_names(space, flags)
             if mode == 'exec':
                 codegenerator = ModuleCodeGenerator(space, ast_tree, flag_names)
             elif mode == 'single':
@@ -257,7 +274,7 @@ class PythonAstCompiler(PyCodeCompiler):
                                  e.wrap_info(space, filename))
         except (ValueError, TypeError), e:
             raise OperationError(space.w_SystemError, space.wrap(str(e)))
-        assert isinstance(c,PyCode)
+        assert isinstance(c, PyCode)
         return c
 
 

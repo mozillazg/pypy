@@ -4,13 +4,13 @@
 helper functions are provided that use the grammar to parse
 using file_input, single_input and eval_input targets
 """
-import sys
-import os
-from pypy.interpreter.error import OperationError, debug_print
+#import sys
+#import os
+#from pypy.interpreter.error import OperationError, debug_print
 from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.pythonlexer import Source, match_encoding_declaration
-from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
+#from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 # XXX seems dead
 #import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
@@ -18,8 +18,8 @@ import pypy.interpreter.pyparser.ebnfparse as ebnfparse
 from pypy.interpreter.pyparser.ebnflexer import GrammarSource
 from pypy.interpreter.pyparser.ebnfgrammar import GRAMMAR_GRAMMAR
 import pypy.interpreter.pyparser.grammar as grammar
-from pypy.interpreter.pyparser.pythonutil import build_parser_for_version, build_parser
-
+from pypy.interpreter.pyparser.pythonutil import build_parser_for_version
+#from pypy.interpreter.pyparser.pythonutil import build_parser
 # try:
 from pypy.interpreter.pyparser import symbol
 # except ImportError:
