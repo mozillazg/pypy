@@ -284,4 +284,25 @@ __entrypoint__.restype = %(returntype)s
             return 'ctypes.c_void_p'
         else:
             return self.TO_CTYPES[T]
- 
+
+def wrapfn(fn):
+    def wrapped(*args):
+        callargs = []
+        for a in args:
+            if hasattr(a, 'chars'):
+                callargs.append(''.join(a.chars))
+            else:
+                callargs.append(a)
+        res = fn(*callargs)
+        if isinstance(res, dict):
+            # these mappings are a simple protocol to work over isolate
+            mapping = {
+                "exceptiontypename": ExceptionWrapper,
+                "tuple": StructTuple,
+                "r_uint": r_uint,
+                "r_longlong": r_longlong,
+                "r_ulonglong": r_ulonglong,
+                }
+            res = mapping[res["type"]](res["value"])
+        return res
+    return wrapped
