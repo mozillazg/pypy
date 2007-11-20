@@ -3,6 +3,7 @@
 import py
 import ctypes
 from pypy.rpython.lltypesystem import lltype 
+from pypy.rpython.lltypesystem import llmemory
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rpython.lltypesystem.rstr import STR
 
@@ -156,11 +157,12 @@ __entrypoint__.restype = %(returntype)s
                  lltype.SingleFloat: "ctypes.c_float",
                  lltype.Float: "ctypes.c_double",
                  lltype.Char: "ctypes.c_char",
-                 lltype.Signed: "ctypes.c_int",
-                 lltype.Unsigned: "ctypes.c_uint",
+                 lltype.Signed: "ctypes.c_long",
+                 lltype.Unsigned: "ctypes.c_ulong",
                  lltype.SignedLongLong: "ctypes.c_longlong",
                  lltype.UnsignedLongLong: "ctypes.c_ulonglong",
                  lltype.Void: None,
+                 llmemory.Address: "ctypes.c_long",
                  lltype.UniChar: "ctypes.c_uint",
                  }
 
@@ -302,9 +304,9 @@ def unwrap(value):
             "r_ulonglong": r_ulonglong,
             }
         if t == "exceptiontypename":
-            exc_class = getattr(exceptions, v)
+            exc_class = getattr(exceptions, v, None)
             if exc_class is None:
-                exc_class = ExceptionWrapper(v)
+                raise ExceptionWrapper(v)
             raise exc_class()
         if t == "tuple":
             return StructTuple([unwrap(element) for element in v])
