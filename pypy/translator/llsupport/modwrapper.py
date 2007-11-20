@@ -131,8 +131,7 @@ def array_to_list(res, C_TYPE, action, size=-1):
 
 def to_exception_type(addr):
     # XXX we should define the structure
-    XXX
-    addr_str = ctypes.cast(addr+GC_OFFSET+12, ctypes.POINTER(ctypes.c_int)).contents.value
+    addr_str = ctypes.cast(addr+12, ctypes.POINTER(ctypes.c_int)).contents.value
     size = ctypes.cast(addr_str, ctypes.POINTER(ctypes.c_int)).contents.value - 1
     name = ctypes.string_at(addr_str+4, size)
     return name
