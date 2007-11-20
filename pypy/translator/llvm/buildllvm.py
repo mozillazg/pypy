@@ -135,9 +135,8 @@ class Builder(object):
             self.execute_cmds()
             gen = self.genllvm
             modname = CtypesModule(gen.entry_name,
-                                   gen.filename,
                                    gen.entrynode.graph,
-                                   "%s.so" % base).create()
+                                   py.path.local("%s.so" % base)).create()
 
         finally:
             self.lastdir.chdir()
