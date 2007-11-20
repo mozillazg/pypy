@@ -30,8 +30,6 @@ try:
 except AttributeError:
     pass # only if there is Boehm
 
-GC_OFFSET = getattr(_c, "pypy_g__size_of_gc_header", 0)
-
 startup_code = _c.ctypes_RPython_StartupCode
 startup_code.argtypes = []
 startup_code.restype = ctypes.c_int
