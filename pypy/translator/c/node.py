@@ -78,7 +78,7 @@ class StructDefNode:
         STRUCT = self.STRUCT
         varlength = self.varlength
         if needs_gcheader(self.STRUCT):
-            for fname, T in db.gcpolicy.struct_gcheader_definition(self):
+            for fname, T in db.gcpolicy.struct_gcheader_definition():
                 self.fields.append((fname, db.gettype(T, who_asks=self)))
         for name in STRUCT._names:
             T = self.c_struct_field_type(name)
@@ -223,7 +223,7 @@ class ArrayDefNode:
         ARRAY = self.ARRAY
         self.gcinfo    # force it to be computed
         if needs_gcheader(ARRAY):
-            for fname, T in db.gcpolicy.array_gcheader_definition(self):
+            for fname, T in db.gcpolicy.array_gcheader_definition():
                 self.gcfields.append((fname, db.gettype(T, who_asks=self)))
         self.itemtypename = db.gettype(ARRAY.OF, who_asks=self)
 
