@@ -37,7 +37,7 @@ class CBuilder(object):
         self.libraries = libraries
         self.exports = {}
 
-    def build_database(self, exports=[], pyobj_options=None):
+    def build_database(self, pyobj_options=None):
         translator = self.translator
 
         gcpolicyclass = self.get_gcpolicyclass()
@@ -75,20 +75,6 @@ class CBuilder(object):
         pf = self.getentrypointptr()
         pfname = db.get(pf)
         self.exports[self.entrypoint.func_name] = pf
-        for obj in exports:
-            if type(obj) is tuple:
-                objname, obj = obj
-            elif hasattr(obj, '__name__'):
-                objname = obj.__name__
-            else:
-                objname = None
-            po = self.getentrypointptr(obj)
-            poname = db.get(po)
-            objname = objname or poname
-            if objname in self.exports:
-                raise NameError, 'duplicate name in export: %s is %s and %s' % (
-                    objname, db.get(self.exports[objname]), poname)
-            self.exports[objname] = po
         db.complete()
 
         # add library dependencies
