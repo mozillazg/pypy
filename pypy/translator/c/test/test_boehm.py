@@ -195,31 +195,6 @@ class TestUsingBoehm(AbstractGCTestClass):
         res = fn()
         assert res == 10
         
-    # this test shows if we have a problem with refcounting PyObject
-    def test_refcount_pyobj(self):
-        from pypy.rpython.lltypesystem.lloperation import llop
-        def prob_with_pyobj(b):
-            return 3, b
-        def collect():
-            llop.gc__collect(lltype.Void)
-        f = self.getcompiled(prob_with_pyobj, [object])
-        c = self.getcompiled(collect, [])
-        from sys import getrefcount as g
-        obj = None
-        before = g(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        f(obj)
-        c()
-        c()
-        c()
-        c()
-        c()
-        after = g(obj)
-        assert abs(before - after) < 5
-
     def test_zero_malloc(self):
         T = lltype.GcStruct("C", ('x', lltype.Signed))
         def fixed_size():
