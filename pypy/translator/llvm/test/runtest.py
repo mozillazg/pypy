@@ -1,7 +1,6 @@
 import py
 
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.translator.llvm.buildllvm import llvm_is_on_path, llvm_version, gcc_version
 from pypy.translator.llvm.genllvm import GenLLVM
 from pypy.annotation.model import lltype_to_annotation
@@ -79,20 +78,6 @@ def llvm_test():
 
 #______________________________________________________________________________
 
-class ExceptionWrapper:
-    def __init__(self, class_name):
-        self.class_name = class_name
-
-    def __repr__(self):
-        return 'ExceptionWrapper(%s)' % repr(self.class_name)
-
-class StructTuple(tuple):
-    def __getattr__(self, name):
-        if name.startswith('item'):
-            i = int(name[len('item'):])
-            return self[i]
-        else:
-            raise AttributeError, name
 
 def genllvm_compile(function,
                     annotation,
@@ -203,20 +188,11 @@ class LLVMTest(BaseRtypingTest, LLRtypeMixin):
 
     def interpret(self, fn, args, annotation=None):
         fn = self._compile(fn, args, annotation)
-        res = fn(*args)
-        if isinstance(res, ExceptionWrapper):
-            raise res
-        return res
+        return fn(*args)
     
     def interpret_raises(self, exception, fn, args):
         import exceptions # needed by eval
-        try:
-            self.interpret(fn, args)
-        except ExceptionWrapper, ex:
-            assert issubclass(eval(ex.class_name), exception)
-            return True
-        else:
-            assert False, 'function did raise no exception at all'
+        return py.test.raises(exception, self.interpret, fn, args)
 
     def float_eq(self, x, y):
         diff = abs(x-y)

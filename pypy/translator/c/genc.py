@@ -207,9 +207,10 @@ class CExtModuleBuilder(CBuilder):
         return self.c_ext_module
         
     def get_entry_point(self):
+        from pypy.translator.llsupport import modwrapper
         assert self.c_ext_module 
-        return getattr(self.c_ext_module, 
-                       self.entrypoint.func_name)
+        return modwrapper.wrapfn(getattr(self.c_ext_module, 
+                                 self.entrypoint.func_name))
 
     def cleanup(self):
         assert self.c_ext_module
