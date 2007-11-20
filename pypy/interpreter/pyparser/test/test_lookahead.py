@@ -86,7 +86,7 @@ class TestLookAhead(object):
          p = self.parser
          LOW = p.tokens['LOW']
          CAP = p.tokens['CAP']
-         for s in  [Token(p, LOW, 'low'), EmptyToken, Token(p, CAP, 'cap')]:
+         for s in  [Token(LOW, 'low'), EmptyToken, Token(CAP, 'cap')]:
              assert s in self.A.first_set
              assert s in self.B.first_set
              assert s in self.C.first_set

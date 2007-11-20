@@ -588,7 +588,7 @@ with somtehing as stuff:
 
         source2 = "with = 3"
 
-        code = self.compiler.compile(source, '<filename2>', 'exec', 0)
+        code = self.compiler.compile(source2, '<filename2>', 'exec', 0)
         assert isinstance(code, PyCode)
         assert code.co_filename == '<filename2>'
 
