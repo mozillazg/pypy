@@ -15,20 +15,20 @@ class BasicGcPolicy(object):
         self.db = db
         self.thread_enabled = thread_enabled
 
-    def common_gcheader_definition(self, defnode):
+    def common_gcheader_definition(self):
         return []
 
     def common_gcheader_initdata(self, defnode):
         return []
 
-    def struct_gcheader_definition(self, defnode):
-        return self.common_gcheader_definition(defnode)
+    def struct_gcheader_definition(self):
+        return self.common_gcheader_definition()
 
     def struct_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
 
-    def array_gcheader_definition(self, defnode):
-        return self.common_gcheader_definition(defnode)
+    def array_gcheader_definition(self):
+        return self.common_gcheader_definition()
 
     def array_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
@@ -79,9 +79,9 @@ from pypy.rlib.objectmodel import CDefinedIntSymbolic
 class RefcountingGcPolicy(BasicGcPolicy):
     transformerclass = refcounting.RefcountingGCTransformer
 
-    def common_gcheader_definition(self, defnode):
-        if defnode.db.gctransformer is not None:
-            HDR = defnode.db.gctransformer.HDR
+    def common_gcheader_definition(self):
+        if self.db.gctransformer is not None:
+            HDR = self.db.gctransformer.HDR
             return [(name, HDR._flds[name]) for name in HDR._names]
         else:
             return []
@@ -312,7 +312,7 @@ class FrameworkGcPolicy(BasicGcPolicy):
         args = [funcgen.expr(v) for v in op.args]
         return '%s = %s; /* for moving GCs */' % (args[1], args[0])
 
-    def common_gcheader_definition(self, defnode):
+    def common_gcheader_definition(self):
         return defnode.db.gctransformer.gc_fields()
 
     def common_gcheader_initdata(self, defnode):
