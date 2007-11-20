@@ -29,6 +29,7 @@ try:
 except AttributeError:
     pass # only if there is Boehm
 
+GC_OFFSET = getattr(_c, "pypy_g__size_of_gc_header", 0)
 
 startup_code = _c.ctypes_RPython_StartupCode
 startup_code.argtypes = []
@@ -57,7 +58,7 @@ def from_str(arg):
         _fields_ = [("size", ctypes.c_int),
                     ("data", ctypes.c_byte * len(arg))]
     class STR(ctypes.Structure):
-        _fields_ = [("padding", ctypes.c_byte * GC_OFFSET),
+        _fields_ = get_gc_header() + [
                     ("hash", ctypes.c_int),
                     ("chars", Chars)]
     s = STR()
@@ -82,7 +83,7 @@ def to_str(res):
                     ("data", ctypes.c_char * 1)]
 
     class STR(ctypes.Structure):
-        _fields_ = [("padding", ctypes.c_byte * GC_OFFSET),
+        _fields_ = get_gc_header() + [
                     ("hash", ctypes.c_int),
                     ("array", Chars)]
 
@@ -95,7 +96,7 @@ def to_str(res):
 def struct_to_tuple(res, C_TYPE_actions):
     if res:
         class S(ctypes.Structure):
-            _fields_ = ([("padding", ctypes.c_byte * GC_OFFSET)] + 
+            _fields_ = (get_gc_header() + 
                         [("item%%s" %% ii, C_TYPE) for ii, (C_TYPE, _) in enumerate(C_TYPE_actions)])
         s = ctypes.cast(res, ctypes.POINTER(S)).contents
         items = [action(getattr(s, 'item%%s' %% ii)) for ii, (_, action) in enumerate(C_TYPE_actions)]
@@ -106,7 +107,7 @@ def struct_to_tuple(res, C_TYPE_actions):
 def list_to_array(res, action):
     if res:
         class List(ctypes.Structure):
-            _fields_ = [("padding", ctypes.c_byte * GC_OFFSET),
+            _fields_ = get_gc_header() + [
                         ("length", ctypes.c_int),
                         ("items", ctypes.c_void_p)]
         list = ctypes.cast(res, ctypes.POINTER(List)).contents
@@ -120,7 +121,7 @@ def array_to_list(res, C_TYPE, action, size=-1):
         if size == -1:
             size = ctypes.cast(res, ctypes.POINTER(ctypes.c_int)).contents.value
         class Array(ctypes.Structure):
-            _fields_ = [("padding", ctypes.c_byte * GC_OFFSET),
+            _fields_ = get_gc_header() + [
                         ("size", ctypes.c_int),
                         ("data", C_TYPE * size)]
         array = ctypes.cast(res, ctypes.POINTER(Array)).contents
@@ -130,6 +131,7 @@ def array_to_list(res, C_TYPE, action, size=-1):
 
 def to_exception_type(addr):
     # XXX we should define the structure
+    XXX
     addr_str = ctypes.cast(addr+GC_OFFSET+12, ctypes.POINTER(ctypes.c_int)).contents.value
     size = ctypes.cast(addr_str, ctypes.POINTER(ctypes.c_int)).contents.value - 1
     name = ctypes.string_at(addr_str+4, size)
@@ -160,17 +162,19 @@ __entrypoint__.restype = %(returntype)s
                  lltype.UniChar: "ctypes.c_uint",
                  }
 
-    def __init__(self, entryname, graph, dllname, gcoffset=0):
+    def __init__(self, entryname, graph, dllname, gcfields=None):
         self.entryname = entryname
         self.dllname = dllname
         basename = self.entryname + '_wrapper.py'
         self.modfilename = dllname.new(basename=basename)
         self.count = 0
         self.graph = graph
+        if gcfields is None:
+            gcfields = []
+        self.gcfields = gcfields
         
     def create(self):
         self.file = open(str(self.modfilename), 'w')
-        self.file.write("GC_OFFSET = 0")
         self.file.write(self.prolog % self.dllname)
         
         g = self.graph
@@ -185,11 +189,19 @@ __entrypoint__.restype = %(returntype)s
 
         RT = g.returnblock.inputargs[0].concretetype
         returntype, ll_to_res = self.build_lltype_to_ctypes_to_res(RT)
+
+        self.create_gc_header_function()
         
         self.file.write(self.epilog % locals())
         self.file.write("\n%s = entrypoint" % (self.graph.name, ))
         self.file.close()
         return self.modfilename.purebasename
+
+    def create_gc_header_function(self):
+        self.file.write("\ndef get_gc_header():\n")
+        fields = ['(%r, %s)' % (fieldname, self.to_ctype(T))
+                    for (fieldname, T) in self.gcfields]
+        self.file.write("    return [%s]" % ", ".join(fields))
 
     def create_simple_closure(self, args, code):
         name = 'tmpfunction_%s' % self.count
