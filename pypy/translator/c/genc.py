@@ -167,10 +167,9 @@ class CExtModuleBuilder(CBuilder):
     standalone = False
     c_ext_module = None 
 
-    def getentrypointptr(self, obj=None):
-        if obj is None:
-            obj = self.entrypoint
-        return lltype.pyobjectptr(obj)
+    def getentrypointptr(self):
+        bk = self.translator.annotator.bookkeeper
+        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
     def compile(self):
         assert self.c_source_filename 

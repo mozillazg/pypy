@@ -150,18 +150,19 @@ __entrypoint__.restype = %(returntype)s
                  lltype.UniChar: "ctypes.c_uint",
                  }
 
-    def __init__(self, genllvm, dllname):
-        self.genllvm = genllvm
+    def __init__(self, entryname, filename, graph, dllname):
+        self.entryname = entryname
         self.dllname = dllname
-        basename = self.genllvm.entry_name + '_wrapper.py'
-        self.modfilename = genllvm.filename.new(basename=basename)
+        basename = self.entryname + '_wrapper.py'
+        self.modfilename = filename.new(basename=basename)
         self.count = 0
-
+        self.graph = graph
+        
     def create(self):
         self.file = open(str(self.modfilename), 'w')
         self.file.write(self.prolog % self.dllname)
         
-        g = self.genllvm.entrynode.graph  
+        g = self.graph
         name = self.genllvm.entry_name
 
         ARGS = [a.concretetype for a in g.startblock.inputargs]
