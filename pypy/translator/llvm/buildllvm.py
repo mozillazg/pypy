@@ -134,7 +134,7 @@ class Builder(object):
         try:
             self.execute_cmds()
             gen = self.genllvm
-            modname = CtypesModule(gen.entry_name,
+            modname = CtypesModule(gen.entrynode.ref[1:],
                                    gen.entrynode.graph,
                                    py.path.local("%s.so" % base)).create()
 
