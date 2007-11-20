@@ -2,6 +2,24 @@
 
 char *LLVM_RPython_StartupCode(void);
 
+#define RPyRaiseSimpleException(exctype, errormsg) raise##exctype(errormsg);
+
+// XXX abort() this is just to make tests pass.  actually it is a million times
+// better than it was since it used to basically be a nooop.
+
+// all of these will go away at some point
+
+#define FAKE_ERROR(name) \
+  int raisePyExc_##name(char *x) { \
+    abort(); \
+   }
+
+#ifdef LL_NEED_STACK
+  FAKE_ERROR(RuntimeError);
+  #include "src/thread.h"
+  #include "src/stack.h"
+#endif
+
 
 // raw malloc code
 char *raw_malloc(long size) {
@@ -30,7 +48,7 @@ char *RPython_StartupCode() {
 #ifdef ENTRY_POINT_DEFINED
 
 int _argc;
-char **_argv;
+char **argv;
 
 int _pypy_getargc() {
   return _argc;
@@ -40,25 +58,14 @@ char ** _pypy_getargv() {
   return _argv;
 }
 
-/* we still need to forward declare our entry point */
-int __ENTRY_POINT__(void);
-
-#include <stdio.h>
-
 int main(int argc, char *argv[]) {
-  int res;
-  char *errmsg;
-  errmsg = RPython_StartupCode();
+  char *errmsg = RPython_StartupCode();
   if (errmsg) {
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
     return 1;
   }
 
-  _argc = argc;
-  _argv = argv;
-
-  res = __ENTRY_POINT__();
-  return res;
+  return __ENTRY_POINT__();
 }
 
 #else

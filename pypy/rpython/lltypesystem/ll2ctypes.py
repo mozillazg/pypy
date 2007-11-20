@@ -14,7 +14,7 @@ from pypy.tool.uid import fixid
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.annotation import model as annmodel
-from pypy.translator.tool.cbuild import cache_c_module
+from pypy.rpython.rbuiltin import gen_cast
 
 
 def uaddressof(obj):
@@ -512,16 +512,6 @@ if ctypes:
 
 # ____________________________________________
 
-
-def compile_c_snippet(name, source):
-    from pypy.tool.udir import udir
-    cname = udir.join(name + '.c')
-    f = cname.open('w')
-    f.write(source)
-    f.write('\n')
-    f.close()
-    return cache_c_module([cname], name)
-    
 def get_ctypes_callable(funcptr, calling_conv):
     if not ctypes:
         raise ImportError("ctypes is needed to use ll2ctypes")
@@ -534,16 +524,13 @@ def get_ctypes_callable(funcptr, calling_conv):
         except AttributeError:
             pass
     
-    sources = getattr(funcptr._obj, 'sources', None)
-    if sources:
-        assert len(sources) == 1
-        dllname = compile_c_snippet(funcptr._obj._name, sources[0])
-        libraries = [dllname]
-    else:
-        libraries = getattr(funcptr._obj, 'libraries', None)
-
+    if getattr(funcptr._obj, 'sources', None):
+        # give up - for tests with an inlined bit of C code
+        raise NotImplementedError("cannot call a C function defined in "
+                                  "a custom C source snippet")
     FUNCTYPE = lltype.typeOf(funcptr).TO
     funcname = funcptr._obj._name
+    libraries = getattr(funcptr._obj, 'libraries', None)
     if not libraries:
         cfunc = get_on_lib(standard_c_lib, funcname)
         # XXX magic: on Windows try to load the function from 'kernel32' too
@@ -649,7 +636,6 @@ class ForceCastEntry(ExtRegistryEntry):
         return annmodel.lltype_to_annotation(RESTYPE)
 
     def specialize_call(self, hop):
-        from pypy.rpython.rbuiltin import gen_cast
         hop.exception_cannot_occur()
         s_RESTYPE = hop.args_s[0]
         assert s_RESTYPE.is_constant()
@@ -702,7 +688,7 @@ class ForceCastEntry(ExtRegistryEntry):
 # should have in C.  We have to save it away from one external C function
 # call to the next.  Otherwise a non-zero value left behind will confuse
 # CPython itself a bit later, and/or CPython will stamp on it before we
-# try to inspect it via rposix.get_errno().
+# try to inspect it via rffi.get_errno().
 TLS = tlsobject()
 
 # helpers to save/restore the C-level errno -- platform-specific because

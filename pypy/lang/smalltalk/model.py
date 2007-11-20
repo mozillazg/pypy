@@ -141,10 +141,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         self._vars = [w_nil] * size
 
     def at0(self, index0):
-        return self.fetch(index0)
+        return self.fetchvarpointer(index0)
 
     def atput0(self, index0, w_value):
-        self.store(index0, w_value)
+        self.storevarpointer(index0, w_value)
 
     def fetch(self, n0):
         return self._vars[n0]
@@ -165,9 +165,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     def instsize(self):
         return self.getclass().as_class_get_shadow().instsize()
-
-    def primsize(self):
-        return self.varsize()
 
     def size(self):
         return len(self._vars)
@@ -219,9 +216,6 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
 
     def size(self):
         return len(self.bytes)    
-
-    def primsize(self):
-        return self.size()
 
     def __str__(self):
         return self.as_string()
@@ -354,21 +348,19 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
                 self.primitive is not None)       
 
     def size(self):
-        return self.literalsize() + len(self.bytes)
+        return self.varsize()
 
-    def literalsize(self):
+    def staticsize(self):
         return len(self.literals) * constants.BYTES_PER_WORD
 
-    def primsize(self):
-        return self.size() + self.headersize()
-
-    def headersize(self):
-        return constants.BYTES_PER_WORD
+    def varsize(self):
+        # XXX
+        return  self.staticsize() + len(self.bytes)
 
     def at0(self, index0):
         # XXX
         from pypy.lang.smalltalk import utility
-        index0 = index0 - self.literalsize()
+        index0 = index0 - self.staticsize()
         if index0 < 0:
             # XXX Do something useful with this.... we are not a block
             # of memory as smalltalk expects but wrapped in py-os
@@ -377,7 +369,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
-        index0 = index0 - self.literalsize()
+        index0 = index0 - self.staticsize()
         if index0 < 0:
             # XXX Do something useful with this.... we are not a block
             # of memory as smalltalk expects but wrapped in py-os

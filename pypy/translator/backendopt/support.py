@@ -108,6 +108,8 @@ def split_block_with_keepalive(block, index_operation,
     return splitlink
 
 def find_calls_from(translator, graph):
+    if getattr(getattr(graph, "func", None), "suggested_primitive", False):
+        return
     for block in graph.iterblocks():
         for op in block.operations:
             if op.opname == "direct_call":
@@ -183,12 +185,9 @@ def find_loop_blocks(graph):
 
 def md5digest(translator):
     import md5
-    graph2digest = {}
-    for graph in translator.graphs:
-        m = md5.new()
-        for op in graph_operations(graph):
-            m.update(op.opname + str(op.result))
-            for a in op.args:
-                m.update(str(a))
-        graph2digest[graph.name] = m.digest()
-    return graph2digest
+    m = md5.new()
+    for op in all_operations(translator.graphs):
+        m.update(op.opname + str(op.result))
+        for a in op.args:
+            m.update(str(a))
+    return m.digest()[:]
