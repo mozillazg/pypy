@@ -6,6 +6,7 @@ from pypy.translator.llvm.buildllvm import llvm_is_on_path, llvm_version, gcc_ve
 from pypy.translator.llvm.genllvm import GenLLVM
 from pypy.annotation.model import lltype_to_annotation
 from pypy.rpython.lltypesystem.lltype import typeOf
+from pypy.translator.llsupport.modwrapper import wrapfn
 
 optimize_tests = False
 native_llvm_backend = True
@@ -92,28 +93,6 @@ class StructTuple(tuple):
             return self[i]
         else:
             raise AttributeError, name
-        
-def wrapfn(fn):
-    def wrapped(*args):
-        callargs = []
-        for a in args:
-            if hasattr(a, 'chars'):
-                callargs.append(''.join(a.chars))
-            else:
-                callargs.append(a)
-        res = fn(*callargs)
-        if isinstance(res, dict):
-            # these mappings are a simple protocol to work over isolate
-            mapping = {
-                "exceptiontypename": ExceptionWrapper,
-                "tuple": StructTuple,
-                "r_uint": r_uint,
-                "r_longlong": r_longlong,
-                "r_ulonglong": r_ulonglong,
-                }
-            res = mapping[res["type"]](res["value"])
-        return res
-    return wrapped
 
 def genllvm_compile(function,
                     annotation,
