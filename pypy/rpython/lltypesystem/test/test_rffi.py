@@ -1,7 +1,6 @@
 
 import py
 from pypy.rpython.lltypesystem.rffi import *
-from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem import lltype
@@ -288,7 +287,8 @@ def test_rffi_offsetof():
     assert offsetof(S, "c_b") == struct.calcsize("hi") - struct.calcsize("i")
     assert offsetof(S, "c_c") == struct.calcsize("hii") - struct.calcsize("i")
 
-def test_prebuilt_constant():
+def test_prebuild_constant():
+    py.test.skip("WIP")
     h_source = py.code.Source("""
     #ifndef _CONSTANTS
     #define _CONSTANTS

@@ -54,18 +54,15 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
         check_virtual_methods()
 
     # remove obvious no-ops
-    def remove_obvious_noops():
-        for graph in graphs:
-            removenoops.remove_same_as(graph)
-            simplify.eliminate_empty_blocks(graph)
-            simplify.transform_dead_op_vars(graph, translator)
-            removenoops.remove_duplicate_casts(graph, translator)
+    for graph in graphs:
+        removenoops.remove_same_as(graph)
+        simplify.eliminate_empty_blocks(graph)
+        simplify.transform_dead_op_vars(graph, translator)
+        removenoops.remove_duplicate_casts(graph, translator)
 
-        if config.print_statistics:
-            print "after no-op removal:"
-            print_statistics(translator.graphs[0], translator)
-
-    remove_obvious_noops()
+    if config.print_statistics:
+        print "after no-op removal:"
+        print_statistics(translator.graphs[0], translator)
 
     if config.inline or config.mallocs:
         heuristic = get_function(config.inline_heuristic)
@@ -131,8 +128,6 @@ def backend_optimizations(translator, graphs=None, secondary=False, **kwds):
     if config.coalloc and not secondary:
         from pypy.translator.backendopt import coalloc
         coalloc.malloc_to_coalloc(translator)
-
-    remove_obvious_noops()
 
     for graph in graphs:
         checkgraph(graph)

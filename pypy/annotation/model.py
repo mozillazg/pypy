@@ -29,8 +29,7 @@ generic element in some specific subset of the set of all objects.
 
 
 from types import BuiltinFunctionType, MethodType, FunctionType
-import pypy
-from pypy.tool import descriptor
+import pypy.tool.instancemethod
 from pypy.tool.pairtype import pair, extendabletype
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong, base_int
@@ -442,7 +441,7 @@ class SomeBuiltin(SomeObject):
 
     def __init__(self, analyser, s_self=None, methodname=None):
         if isinstance(analyser, MethodType):
-            analyser = descriptor.InstanceMethod(
+            analyser = pypy.tool.instancemethod.InstanceMethod(
                 analyser.im_func,
                 analyser.im_self,
                 analyser.im_class)
@@ -460,7 +459,9 @@ class SomeBuiltinMethod(SomeBuiltin):
 
 class SomeExternalObject(SomeObject):
     """Stands for an object of 'external' type.  External types have a Repr
-    controlled by pypy.rpython.extregistry."""
+    controlled by pypy.rpython.extregistry; or they come from the (obsolete)
+    table created by pypy.rpython.extfunctable.declaretype() and represent
+    simple types with some methods that need direct back-end support."""
 
     def __init__(self, knowntype):
         self.knowntype = knowntype

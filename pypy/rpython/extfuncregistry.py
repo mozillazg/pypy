@@ -1,4 +1,6 @@
 # this registry uses the new interface for external functions
+# all the above declarations in extfunctable should be moved here
+# at some point.
 
 from extfunc import register_external
 

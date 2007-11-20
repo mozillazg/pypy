@@ -437,6 +437,9 @@ class __extend__(SomeLLAbstractConstant):
                                                   *args_hs)
             except NotImplementedError:
                 pass
+        # don't try to annotate suggested_primitive graphs
+        if getattr(getattr(fnobj, '_callable', None), 'suggested_primitive', False):
+            return variableoftype(lltype.typeOf(fnobj).RESULT)
 
         # normal call
         if not hasattr(fnobj, 'graph'):

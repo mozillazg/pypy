@@ -4,7 +4,6 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.rarithmetic import ovfcheck_float_to_int
-from pypy.rlib import rposix
 import math
 import os
 import sys
@@ -136,7 +135,7 @@ def _init_timezone():
     return timezone, daylight, tzname, altzone
 
 def _get_error_msg():
-    errno = rposix.get_errno()
+    errno = rffi.get_errno()
     return os.strerror(errno)
 
 def sleep(secs):

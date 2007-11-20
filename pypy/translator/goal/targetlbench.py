@@ -5,26 +5,27 @@ from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr, raw_memclear,\
 
 TP = lltype.GcArray(lltype.Signed)
 
-def longername(a, b, size):
+def f(x):
     if 1:
-        baseofs = itemoffsetof(TP, 0)
-        onesize = sizeof(TP.OF)
-        size = baseofs + onesize*(size - 1)
-        raw_memcopy(cast_ptr_to_adr(b)+baseofs, cast_ptr_to_adr(a)+baseofs, size)
+        a = lltype.malloc(TP, x)
+        for i in range(x):
+            a[i] = i
+        b = lltype.malloc(TP, x, zero=False)
+        for j in range(1000):
+            #for i in range(x):
+            #    b[i] = a[i]
+            baseofs = itemoffsetof(TP, 0)
+            onesize = sizeof(TP.OF)
+            size = baseofs + onesize*(x - 1)
+            raw_memcopy(cast_ptr_to_adr(b)+baseofs, cast_ptr_to_adr(a)+baseofs, size)
     else:
         a = []
         for i in range(x):
             a.append(i)
     return 0
-longername.dont_inline = True
 
 def entry_point(argv):
-    size = int(argv[1])
-    a = lltype.malloc(TP, size)
-    b = lltype.malloc(TP, size, zero=False)
-    for i in range(size):
-        a[i] = i
-    print longername(a, b, size)
+    print f(int(argv[1]))
     return 0
 
 # _____ Define and setup target ___

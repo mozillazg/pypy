@@ -138,20 +138,20 @@ def test_simple_rtype_with_type_system():
 
     t = Translation(f)
     s = t.annotate([int, int])
-    t.rtype(backend='cli')
+    t.rtype(backend='squeak')
     assert 'rtype_ootype' in t.driver.done
 
 
-    t = Translation(f, backend='cli', type_system='ootype')
+    t = Translation(f, backend='squeak', type_system='ootype')
     s = t.annotate([int, int])
     t.rtype()
     assert 'rtype_ootype' in t.driver.done        
 
     t = Translation(f, type_system='lltype')
     s = t.annotate([int, int])
-    py.test.raises(Exception, "t.rtype(backend='cli')")
+    py.test.raises(Exception, "t.rtype(backend='squeak')")
 
-    t = Translation(f, backend='cli')
+    t = Translation(f, backend='squeak')
     s = t.annotate([int, int])
     py.test.raises(Exception, "t.rtype(type_system='lltype')")
 
