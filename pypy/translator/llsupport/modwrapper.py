@@ -142,7 +142,7 @@ __entrypoint__.argtypes = %(args)s
 # %(ARGS)r
 ll_to_res = %(ll_to_res)s
 __entrypoint__.restype = %(returntype)s
-    """
+"""
     
     TO_CTYPES = {lltype.Bool: "ctypes.c_byte",
                  lltype.SingleFloat: "ctypes.c_float",
@@ -183,6 +183,7 @@ __entrypoint__.restype = %(returntype)s
         returntype, ll_to_res = self.build_lltype_to_ctypes_to_res(RT)
         
         self.file.write(self.epilog % locals())
+        self.file.write("\n%s = entrypoint" % (self.graph.name, ))
         self.file.close()
         return self.modfilename.purebasename
 
