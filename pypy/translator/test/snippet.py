@@ -371,7 +371,7 @@ def inheritance2():
     d = D()
     d.stuff = (-12, -12)
     e = E()
-    e.stuff = (3, "world")
+    e.stuff = (3, 14.0)
     return _getstuff(d), _getstuff(e)
 
 class F:

@@ -61,7 +61,7 @@ class TestTypedTestCase(CompilationTestCase):
 
     def test_inheritance2(self):
         inheritance2 = self.getcompiled(snippet.inheritance2)
-        assert inheritance2() == ((-12, -12), (3, "world"))
+        assert inheritance2() == ((-12, -12.0), (3, 14.0))
 
     def test_factorial2(self):
         factorial2 = self.getcompiled(snippet.factorial2, [int])
