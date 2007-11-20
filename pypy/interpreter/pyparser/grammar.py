@@ -655,9 +655,8 @@ class KleeneStar(GrammarElement):
 
 class Token(GrammarElement):
     """Represents a Token in a grammar rule (a lexer token)"""
-    def __init__(self, parser, codename, value=None):
+    def __init__(self, codename, value=None):
         GrammarElement.__init__(self, codename)
-        self.parser = parser
         self.value = value
         self.first_set = [self]
         # self.first_set = {self: 1}
@@ -693,11 +692,10 @@ class Token(GrammarElement):
         return 0
 
     def display(self, level=0):
-        name = self.parser.symbol_repr( self.codename )
         if self.value is None:
-            return "<%s>" % name
+            return "<%s>" % self.codename
         else:
-            return "<%s>=='%s'" % (name, self.value)
+            return "<%s>=='%s'" % (self.codename, self.value)
 
     def match_token(self, builder, other):
         """convenience '==' implementation, this is *not* a *real* equality test
@@ -738,7 +736,7 @@ class Token(GrammarElement):
         return False
 
 
-EmptyToken = Token(None, -1, None)
+EmptyToken = Token(-1, None)
 
 class Parser(object):
     def __init__(self):
@@ -875,9 +873,9 @@ class Parser(object):
 
         # XXX What is the significance of the name_id? Needs to be found
         # out for full refactoring of this code.
-        t = Token(self, name, value)
+        t = Token(name, value)
         name_id = self.add_token(t)
-        return Token(self, name_id, value)
+        return Token(name_id, value)
 
     # Debugging functions
     def show_rules(self, name):

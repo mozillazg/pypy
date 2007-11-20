@@ -27,7 +27,7 @@ def grammar_grammar():
       group: '(' alternative ')' star?
     """
     p = GRAMMAR_GRAMMAR
-    p.add_token(Token('EOF','EOF'))
+    p.add_token(Token('EOF'))
 
     # star: '*' | '+'
     star          = p.Alternative_n( "star", [p.Token_n('TOK_STAR', '*'), p.Token_n('TOK_ADD', '+')] )

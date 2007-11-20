@@ -41,7 +41,7 @@ TERMINALS = ['NAME', 'NUMBER', 'STRING', 'NEWLINE', 'ENDMARKER',
 class NameToken(Token):
     """A token that is not a keyword"""
     def __init__(self, parser, keywords=None):
-        Token.__init__(self, parser, parser.tokens['NAME'])
+        Token.__init__(self, parser.tokens['NAME'])
         self.keywords = keywords
 
     def match(self, source, builder, level=0):
@@ -105,7 +105,7 @@ class EBNFBuilder(AbstractBuilder):
         self.current_rule_name = ""
         self.tokens = {}
         self.keywords = []
-        NAME = dest_parser.add_token(Token(dest_parser, 'NAME'))
+        NAME = dest_parser.add_token(Token('NAME'))
         # NAME = dest_parser.tokens['NAME']
         self.tokens[NAME] = NameToken(dest_parser, keywords=self.keywords)
 
@@ -158,7 +158,7 @@ class EBNFBuilder(AbstractBuilder):
         """Returns a new or existing Token"""
         if codename in self.tokens:
             return self.tokens[codename]
-        token = self.tokens[codename] = Token(self.parser, codename, None)
+        token = self.tokens[codename] = Token(codename, None)
         return token
 
     def get_symbolcode(self, name):
@@ -273,12 +273,12 @@ class EBNFBuilder(AbstractBuilder):
         if value in self.parser.tok_values:
             # punctuation
             tokencode = self.parser.tok_values[value]
-            tok = Token(self.parser, tokencode, None)
+            tok = Token(tokencode, None)
         else:
             if not is_py_name(value):
                 raise RuntimeError("Unknown STRING value ('%s')" % value)
             # assume a keyword
-            tok = Token(self.parser, self.parser.tokens['NAME'], value)
+            tok = Token(self.parser.tokens['NAME'], value)
             if value not in self.keywords:
                 self.keywords.append(value)
         self.rule_stack.append(tok)

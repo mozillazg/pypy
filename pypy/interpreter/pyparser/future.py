@@ -276,7 +276,7 @@ class FutureFlags(object):
 #     and that we have a hacked __future__ module.
 from pypy.config.pypyoption import get_pypy_config
 config = get_pypy_config(translating=False)
-if config.objspace.pyversion == '2.4':
+if config.objspace.pyversion == '2.4' and False:
     futureFlags = FutureFlags((2, 4, 4, 'final', 0))
 else:
     futureFlags = FutureFlags((2, 5, 0, 'final', 0))
