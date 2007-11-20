@@ -185,14 +185,14 @@ class CExtModuleBuilder(CBuilder):
         modname = CtypesModule(self.entrypoint_name,
                                self.graph_entrypoint,
                                dll_filename).create()
-
+        self.modname = modname
         self._compiled = True
         
     def import_module(self):
         assert self._compiled
         assert not self.c_ext_module
         mod = import_module_from_directory(self.c_source_filename.dirpath(),
-                                           self.c_source_filename.purebasename)
+                                           self.modname)
         self.c_ext_module = mod
         return mod
 
@@ -200,7 +200,7 @@ class CExtModuleBuilder(CBuilder):
         assert self._compiled
         assert not self.c_ext_module
         self.c_ext_module = isolate.Isolate((str(self.c_source_filename.dirpath()),
-                                             self.c_source_filename.purebasename))
+                                             self.modname))
         return self.c_ext_module
         
     def get_entry_point(self):
