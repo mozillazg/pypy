@@ -69,15 +69,10 @@
 #else /*COUNT_OP_MALLOCS*/
 /*------------------------------------------------------------*/
 
-static int count_mallocs=0, count_frees=0;
+int pypy_g__count_mallocs=0, pypy_g__count_frees=0;
 
-#define COUNT_MALLOC	count_mallocs++
-#define COUNT_FREE	count_frees++
-
-PyObject* malloc_counters(PyObject* self, PyObject* args)
-{
-  return Py_BuildValue("ii", count_mallocs, count_frees);
-}
+#define COUNT_MALLOC	pypy_g__count_mallocs++
+#define COUNT_FREE	pypy_g__count_frees++
 
 /*------------------------------------------------------------*/
 #endif /*COUNT_OP_MALLOCS*/

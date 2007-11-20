@@ -30,6 +30,10 @@ try:
 except AttributeError:
     pass # only if there is Boehm
 
+def malloc_counters():
+    return (ctypes.c_int.in_dll(_c, "pypy_g__count_frees").value,
+            ctypes.c_int.in_dll(_c, "pypy_g__count_mallocs").value)
+
 startup_code = _c.ctypes_RPython_StartupCode
 startup_code.argtypes = []
 startup_code.restype = ctypes.c_int
