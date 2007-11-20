@@ -163,7 +163,8 @@ __entrypoint__.restype = %(returntype)s
         self.file.write(self.prolog % self.dllname)
         
         g = self.graph
-        name = self.genllvm.entry_name
+
+        name = self.entryname
 
         ARGS = [a.concretetype for a in g.startblock.inputargs]
         inputargtypes, to_llargs = self.build_args_to_ctypes_to_lltype(ARGS)
