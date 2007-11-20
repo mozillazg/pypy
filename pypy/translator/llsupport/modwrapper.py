@@ -3,6 +3,7 @@
 import py
 import ctypes
 from pypy.rpython.lltypesystem import lltype 
+from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rpython.lltypesystem.rstr import STR
 
 class CtypesModule:
@@ -285,6 +286,29 @@ __entrypoint__.restype = %(returntype)s
         else:
             return self.TO_CTYPES[T]
 
+
+def unwrap(value):
+    import exceptions
+    if isinstance(value, dict):
+        # these mappings are a simple protocol to work over isolate
+        t = value["type"]
+        v = value["value"]
+        mapping = {
+            "exceptiontypename": ExceptionWrapper,
+            "r_uint": r_uint,
+            "r_longlong": r_longlong,
+            "r_ulonglong": r_ulonglong,
+            }
+        if t == "exceptiontypename":
+            exc_class = getattr(exceptions, v)
+            if exc_class is None:
+                exc_class = ExceptionWrapper(v)
+            raise exc_class()
+        if t == "tuple":
+            return StructTuple([unwrap(element) for element in v])
+        value = mapping[t](v)
+    return value
+
 def wrapfn(fn):
     def wrapped(*args):
         callargs = []
@@ -294,15 +318,20 @@ def wrapfn(fn):
             else:
                 callargs.append(a)
         res = fn(*callargs)
-        if isinstance(res, dict):
-            # these mappings are a simple protocol to work over isolate
-            mapping = {
-                "exceptiontypename": ExceptionWrapper,
-                "tuple": StructTuple,
-                "r_uint": r_uint,
-                "r_longlong": r_longlong,
-                "r_ulonglong": r_ulonglong,
-                }
-            res = mapping[res["type"]](res["value"])
-        return res
+        return unwrap(res)
     return wrapped
+
+class ExceptionWrapper:
+    def __init__(self, class_name):
+        self.class_name = class_name
+
+    def __repr__(self):
+        return 'ExceptionWrapper(%s)' % repr(self.class_name)
+
+class StructTuple(tuple):
+    def __getattr__(self, name):
+        if name.startswith('item'):
+            i = int(name[len('item'):])
+            return self[i]
+        else:
+            raise AttributeError, name
