@@ -14,11 +14,11 @@ from os.path import join, dirname, realpath
 
 _c = ctypes.CDLL(join(dirname(realpath(__file__)), "%s"))
 
-rpyexc_occured = _c.pypy__rpyexc_occured
+rpyexc_occured = _c.pypy_g__RPyExceptionOccurred
 rpyexc_occured.argtypes = []
 rpyexc_occured.restype = ctypes.c_int
 
-rpyexc_fetch_type = _c.pypy_rpyexc_fetch_type
+rpyexc_fetch_type = _c.pypy_g_RPyFetchExceptionType
 rpyexc_fetch_type.argtypes = []
 rpyexc_fetch_type.restype = ctypes.c_void_p
 
@@ -133,7 +133,7 @@ def to_exception_type(addr):
 """
 
     epilog = """
-__entrypoint__ = _c.pypy_%(name)s
+__entrypoint__ = _c.%(name)s
 
 # %(RT)r
 to_llargs = %(to_llargs)s
@@ -156,11 +156,11 @@ __entrypoint__.restype = %(returntype)s
                  lltype.UniChar: "ctypes.c_uint",
                  }
 
-    def __init__(self, entryname, filename, graph, dllname, gcoffset=0):
+    def __init__(self, entryname, graph, dllname, gcoffset=0):
         self.entryname = entryname
         self.dllname = dllname
         basename = self.entryname + '_wrapper.py'
-        self.modfilename = filename.new(basename=basename)
+        self.modfilename = dllname.new(basename=basename)
         self.count = 0
         self.graph = graph
         

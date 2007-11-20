@@ -35,7 +35,6 @@ class CBuilder(object):
         if libraries is None:
             libraries = []
         self.libraries = libraries
-        self.exports = {}
 
     def build_database(self, pyobj_options=None):
         translator = self.translator
@@ -74,7 +73,7 @@ class CBuilder(object):
         # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
         pfname = db.get(pf)
-        self.exports[self.entrypoint.func_name] = pf
+        self.entrypoint_name = pfname
         db.complete()
 
         # add library dependencies
@@ -129,7 +128,6 @@ class CBuilder(object):
             cfile, extra, include_dirs, library_dirs = \
                    gen_source(db, modulename, targetdir,
                               defines = defines,
-                              exports = self.exports,
                               libraries = self.libraries)
         else:
             if self.config.translation.instrument:
@@ -169,7 +167,8 @@ class CExtModuleBuilder(CBuilder):
 
     def getentrypointptr(self):
         bk = self.translator.annotator.bookkeeper
-        return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
+        self.graph_entrypoint = bk.getdesc(self.entrypoint).getuniquegraph()
+        return getfunctionptr(self.graph_entrypoint)
 
     def compile(self):
         assert self.c_source_filename 
@@ -180,8 +179,15 @@ class CExtModuleBuilder(CBuilder):
                          include_dirs = [autopath.this_dir] + extra_includes,
                          library_dirs = self.library_dirs,
                          libraries=self.libraries)
-        self._compiled = True
 
+        from pypy.translator.llsupport.modwrapper import CtypesModule
+        dll_filename = self.c_source_filename.new(ext='so')
+        modname = CtypesModule(self.entrypoint_name,
+                               self.graph_entrypoint,
+                               dll_filename).create()
+
+        self._compiled = True
+        
     def import_module(self):
         assert self._compiled
         assert not self.c_ext_module
@@ -682,8 +688,7 @@ def gen_source_standalone(database, modulename, targetdir,
     return filename, sg.getextrafiles(), include_dirs, library_dirs
 
 
-def gen_source(database, modulename, targetdir, defines={}, exports={},
-               libraries=[]):
+def gen_source(database, modulename, targetdir, defines={}, libraries=[]):
     assert not database.standalone
     if isinstance(targetdir, str):
         targetdir = py.path.local(targetdir)
@@ -730,69 +735,6 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     sg.write_extra_sources(sources)
 
     #
-    # PyObject support (strange) code
-    #
-    pyobjmaker = database.pyobjmaker
-    print >> f
-    print >> f, '/***********************************************************/'
-    print >> f, '/***  Table of global PyObjects                          ***/'
-    print >> f
-    print >> f, 'static globalobjectdef_t globalobjectdefs[] = {'
-    for node in database.containerlist:
-        if isinstance(node, (PyObjectNode, PyObjHeadNode)):
-            for target in node.where_to_copy_me:
-                print >> f, '\t{%s, "%s"},' % (target, node.exported_name)
-    print >> f, '\t{ NULL, NULL }\t/* Sentinel */'
-    print >> f, '};'
-    print >> f
-    print >> f, 'static cpyobjheaddef_t cpyobjheaddefs[] = {'
-    for node in database.containerlist:
-        if isinstance(node, PyObjHeadNode):
-            print >> f, '\t{"%s", %s, %s},' % (node.exported_name,
-                                               node.ptrname,
-                                               node.get_setupfn_name())
-    print >> f, '\t{ NULL, NULL, NULL }\t/* Sentinel */'
-    print >> f, '};'
-    print >> f
-    print >> f, '/***********************************************************/'
-    print >> f, '/***  Table of functions                                 ***/'
-    print >> f
-    print >> f, 'static globalfunctiondef_t globalfunctiondefs[] = {'
-    wrappers = pyobjmaker.wrappers.items()
-    wrappers.sort()
-    for globalobject_name, (base_name, wrapper_name, func_doc) in wrappers:
-        print >> f, ('\t{&%s, "%s", {"%s", (PyCFunction)%s, '
-                     'METH_VARARGS|METH_KEYWORDS, %s}},' % (
-            globalobject_name,
-            globalobject_name,
-            base_name,
-            wrapper_name,
-            func_doc and c_string_constant(func_doc) or 'NULL'))
-    print >> f, '\t{ NULL }\t/* Sentinel */'
-    print >> f, '};'
-    print >> f, 'static globalfunctiondef_t *globalfunctiondefsptr = &globalfunctiondefs[0];'
-    print >> f
-    print >> f, '/***********************************************************/'
-    print >> f, '/***  Frozen Python bytecode: the initialization code    ***/'
-    print >> f
-    print >> f, 'static char *frozen_initcode[] = {"\\'
-    bytecode, originalsource = database.pyobjmaker.getfrozenbytecode()
-    g = targetdir.join('frozen.py').open('w')
-    g.write(originalsource)
-    g.close()
-    def char_repr(c):
-        if c in '\\"': return '\\' + c
-        if ' ' <= c < '\x7F': return c
-        return '\\%03o' % ord(c)
-    for i in range(0, len(bytecode), 32):
-        print >> f, ''.join([char_repr(c) for c in bytecode[i:i+32]])+'\\'
-        if (i+32) % 1024 == 0:
-            print >> f, '", "\\'
-    print >> f, '"};'
-    print >> f, "#define FROZEN_INITCODE_SIZE %d" % len(bytecode)
-    print >> f
-
-    #
     # Module initialization function
     #
     print >> f, '/***********************************************************/'
@@ -800,16 +742,14 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     print >> f
     gen_startupcode(f, database)
     print >> f
-    print >> f, 'MODULE_INITFUNC(%s)' % modulename
-    print >> f, '{'
-    print >> f, '\tSETUP_MODULE(%s);' % modulename
-    for publicname, pyobjptr in exports.items():
-        # some fishing needed to find the name of the obj
-        pyobjnode = database.containernodes[pyobjptr._obj]
-        print >> f, '\tPyModule_AddObject(m, "%s", %s);' % (publicname,
-                                                            pyobjnode.name)
-    print >> f, '\tcall_postsetup(m);'
+
+    print >> f, 'int ctypes_RPython_StartupCode() {'
+    print >> f, '  char *res = RPython_StartupCode();'
+    print >> f, '  if (res == NULL) return 1;'
+    print >> f, '  return 0;'
     print >> f, '}'
+    print >> f
+
     f.close()
 
     #

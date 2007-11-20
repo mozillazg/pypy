@@ -11,7 +11,7 @@ class BranchException(Exception):
     pass
 
 class FuncImplNode(FuncNode):
-    prefix = '@pypy_'
+    prefix = '@pypy_g_'
     __slots__ = "db value graph block_to_name bad_switch_block".split()
 
     def __init__(self, db, value):
@@ -20,7 +20,9 @@ class FuncImplNode(FuncNode):
         self.graph = value.graph
         self.bad_switch_block = False
 
-        self.make_name(value.graph.name)
+        name = value._name
+        #name = value.graph.name
+        self.make_name(name)
 
     def setup(self):
         assert self.graph, "cannot traverse"
