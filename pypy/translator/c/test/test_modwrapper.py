@@ -81,6 +81,12 @@ class WrapperTests(object):
         assert fn(2, 1) == 44
         assert fn(6, 2) == 90
 
+    def test_argument_string(self):
+        def fn(s):
+            return len(s)
+        fn = self.getcompiled(fn, [str])
+        assert fn('aaa') == 3
+
 
 
 class TestWrapperRefcounting(CompilationTestCase, WrapperTests):
