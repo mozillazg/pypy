@@ -36,6 +36,9 @@ class CBuilder(object):
             libraries = []
         self.libraries = libraries
 
+    def augment_entrypoint(self):
+        pass
+
     def build_database(self, pyobj_options=None):
         translator = self.translator
 
@@ -52,6 +55,8 @@ class CBuilder(object):
             self.entrypoint = stacklesstransformer.slp_entry_point
         else:
             stacklesstransformer = None
+
+        self.augment_entrypoint()
 
         db = LowLevelDatabase(translator, standalone=self.standalone,
                               gcpolicyclass=gcpolicyclass,
@@ -108,7 +113,7 @@ class CBuilder(object):
 
         if db is None:
             db = self.build_database()
-            self.db = db
+        self.db = db
         pf = self.getentrypointptr()
         pfname = db.get(pf)
 
@@ -171,6 +176,10 @@ class CExtModuleBuilder(CBuilder):
         self.graph_entrypoint = bk.getdesc(self.entrypoint).getuniquegraph()
         return getfunctionptr(self.graph_entrypoint)
 
+    def augment_entrypoint(self):
+        from pypy.translator.llsupport import modwrapper
+        self.entrypoint = modwrapper.augment_entrypoint(self.translator,
+                                                        self.entrypoint)
     def compile(self):
         assert self.c_source_filename 
         assert not self._compiled
