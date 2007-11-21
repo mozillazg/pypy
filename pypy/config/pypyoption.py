@@ -153,7 +153,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    suggests=[("objspace.std.withprebuiltchar", True),
                              ("objspace.std.sharesmallstr", True)]),
 
-        BoolOption("withropeunicod", "use ropes for the unicode implementation",
+        BoolOption("withropeunicode", "use ropes for the unicode implementation",
                    default=False,
                    requires=[("objspace.std.withrope", True)]),
 
