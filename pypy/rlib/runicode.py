@@ -13,7 +13,6 @@ def raise_unicode_exception(errors, encoding, msg, s, startingpos, endingpos,
     else:
         raise UnicodeEncodeError(
                 encoding, s[startingpos], startingpos, endingpos, msg)
-raise_unicode_exception._annspecialcase_ = "specialize:arg(6)"
 
 # ____________________________________________________________ 
 # unicode decoding
