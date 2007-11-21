@@ -13,6 +13,7 @@ def raise_unicode_exception(errors, encoding, msg, s, startingpos, endingpos,
     else:
         raise UnicodeEncodeError(
                 encoding, s[startingpos], startingpos, endingpos, msg)
+raise_unicode_exception._annspecialcase_ = "specialize:arg(6)"
 
 # ____________________________________________________________ 
 # unicode decoding
@@ -235,7 +236,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
             if not final:
                 break
             r, pos = errorhandler(errors, 'utf-16', "truncated data",
-                                s, pos, len(s), True)
+                                  s, pos, len(s))
             result.append(r)
             if len(s) - pos < 2:
                 break
