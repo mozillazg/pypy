@@ -10,7 +10,7 @@ using file_input, single_input and eval_input targets
 from pypy.interpreter import gateway
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.pyparser.pythonlexer import Source, match_encoding_declaration
-#from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
+from pypy.interpreter.astcompiler.consts import CO_FUTURE_WITH_STATEMENT
 # XXX seems dead
 #import pypy.interpreter.pyparser.pysymbol as pysymbol
 import pypy.interpreter.pyparser.pytoken as pytoken
@@ -124,12 +124,20 @@ class PythonParser(grammar.Parser):
 
 
     def parse_lines(self, lines, goal, builder, flags=0):
-        # builder.keywords = self.keywords.copy()
-        # if flags & CO_FUTURE_WITH_STATEMENT:
-        #     builder.enable_with()
         goalnumber = self.symbols[goal]
         target = self.root_rules[goalnumber]
-        src = Source(self, lines, flags)
+        keywords = {} # dict.fromkeys(self.keywords)
+        for keyword in self.keywords:
+            keywords[keyword] = None
+       
+        if flags & CO_FUTURE_WITH_STATEMENT:
+	    keywords.update({'with': None,
+                             'as': None })
+        else:
+            keywords.pop('with', None)
+            keywords.pop('as', None)
+        src = Source(self, lines, keywords, flags)
+
         if not target.match(src, builder):
             line, lineno = src.debug()
             # XXX needs better error messages

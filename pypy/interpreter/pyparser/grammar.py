@@ -655,6 +655,7 @@ class KleeneStar(GrammarElement):
 
 class Token(GrammarElement):
     """Represents a Token in a grammar rule (a lexer token)"""
+    isKeyword = True
     def __init__(self, codename, value=None):
         GrammarElement.__init__(self, codename)
         self.value = value
@@ -679,7 +680,7 @@ class Token(GrammarElement):
 
         ctx = source.context()
         tk = source.next()
-        if tk.codename == self.codename:
+        if tk.codename == self.codename and tk.isKeyword:
             if self.value is None:
                 ret = builder.token( tk.codename, tk.value, source )
                 return ret
@@ -713,7 +714,7 @@ class Token(GrammarElement):
         # if (self.value is not None and builder.keywords is not None
         #     and self.value not in builder.keywords):
         #     return False
-        res = other.codename == self.codename and self.value in [None, other.value]
+        res = other.isKeyword and other.codename == self.codename and self.value in [None, other.value]
         #print "matching", self, other, res
         return res
 

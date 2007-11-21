@@ -3,7 +3,7 @@ import pypy.interpreter.pyparser.future as future
 from pypy.tool import stdlib___future__ as fut
 
 def run(s):
-    f = future.FutureAutomaton(s)
+    f = future.FutureAutomaton(future.futureFlags_2_5, s)
     try:
         f.start()
     except IndexError, future.DoneException:
@@ -124,12 +124,12 @@ def test_semicolon():
 
 def test_full_chain():
     s = '"abc" #def\n  #ghi\nfrom  __future__ import (division as b, generators,);  from __future__ import with_statement\n'
-    flags = future.getFutures(s)
+    flags = future.getFutures(future.futureFlags_2_5, s)
     assert flags == (fut.CO_FUTURE_DIVISION |
                      fut.CO_GENERATOR_ALLOWED |
                      fut.CO_FUTURE_WITH_STATEMENT)
 
 def test_intervening_code():
     s = 'from  __future__ import (division as b, generators,)\nfrom sys import modules\nfrom __future__ import with_statement\n'
-    flags = future.getFutures(s)
+    flags = future.getFutures(future.futureFlags_2_5, s)
     assert flags & fut.CO_FUTURE_WITH_STATEMENT == 0
