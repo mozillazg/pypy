@@ -770,3 +770,69 @@ def test_rope_from_unicode():
     assert node.length() == 90
     assert not node.is_ascii()
     assert not node.is_bytestring()
+
+def test_encode():
+    node = LiteralStringNode("abc")
+    assert unicode_encode_ascii(node) is node
+    assert unicode_encode_latin1(node) is node
+    assert unicode_encode_utf8(node) is node
+    node = LiteralStringNode("abc\xff")
+    assert unicode_encode_ascii(node) is None
+    assert unicode_encode_latin1(node) is node
+    assert unicode_encode_utf8(node).s == 'abc\xc3\xbf'
+    node = LiteralUnicodeNode(u"\uffffab")
+    assert unicode_encode_ascii(node) is None
+    assert unicode_encode_latin1(node) is None
+    assert unicode_encode_utf8(node).s == '\xef\xbf\xbfab'
+    node = BinaryConcatNode(LiteralStringNode("abc"),
+                            LiteralUnicodeNode(u"\uffffab"))
+    assert unicode_encode_ascii(node) is None
+    assert unicode_encode_latin1(node) is None
+    res = unicode_encode_utf8(node)
+    assert res.left is node.left
+    assert res.right.s == '\xef\xbf\xbfab'
+
+def test_decode():
+    node = LiteralStringNode("abc")
+    assert str_decode_ascii(node) is node
+    assert str_decode_latin1(node) is node
+    assert str_decode_utf8(node) is node
+    node = LiteralStringNode("abc\xff")
+    assert str_decode_ascii(node) is None
+    assert str_decode_latin1(node) is node
+
+def test_decode_utf8():
+    # bad data
+    node = LiteralStringNode("\xd7\x50")
+    assert str_decode_utf8(node) is None
+    node = LiteralStringNode("\xf0\x90\x91")
+    assert str_decode_utf8(node) is None
+
+    # correct data in one node
+    node = LiteralStringNode('\xef\xbf\xbfab')
+    assert str_decode_utf8(node).u == u"\uffffab"
+
+    # binary node, left node can be decoded
+    node = BinaryConcatNode(LiteralStringNode('\xef\xbf\xbfab'),
+                            LiteralStringNode('\xef\xbf\xbfab'))
+    res = str_decode_utf8(node)
+    assert res.left.u == u"\uffffab"
+    assert res.right.u == u"\uffffab"
+
+    # binary node, left node alone cannot be decoded
+    node = BinaryConcatNode(LiteralStringNode('\xef'),
+                            LiteralStringNode('\xbf\xbfab'))
+    res = str_decode_utf8(node)
+    assert res.u == u"\uffffab"
+
+    # binary node, left node cannot be decoded, bad data
+    node = BinaryConcatNode(LiteralStringNode("\xf0\x90"),
+                            LiteralStringNode("\x91"))
+    assert str_decode_utf8(node) is None
+
+    # binary node, incomplete data
+    node = BinaryConcatNode(LiteralStringNode('ab\xef'),
+                            LiteralStringNode('\xbf'))
+    
+    res = str_decode_utf8(node)
+    assert res is None
