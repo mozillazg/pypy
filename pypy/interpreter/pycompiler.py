@@ -2,6 +2,8 @@
 General classes for bytecode compilers.
 Compiler instances are stored into 'space.getexecutioncontext().compiler'.
 """
+
+import sys
 from codeop import PyCF_DONT_IMPLY_DEDENT
 from pypy.interpreter.error import OperationError
 
@@ -111,7 +113,7 @@ class PyCodeCompiler(AbstractCompiler):
         else:
             return 0
 
-from pypy.interpreter.pyparser.future import futureFlags
+from pypy.interpreter.pyparser import future
 
 class CPythonCompiler(PyCodeCompiler):
     """Faked implementation of a compiler, using the underlying compile()."""
@@ -119,8 +121,10 @@ class CPythonCompiler(PyCodeCompiler):
     def __init__(self, space):
         self.space = space
         self.w_compile_hook = space.w_None
-
-        self.compiler_flags = futureFlags.allowed_flags
+        if sys.version_info >= (2.5):
+            self.compiler_flags = future.futureFlags_2_5.allowed_flags
+        else:
+            self.compiler_flags = future.futureFlags_2_4.allowed_flags
 
     def compile(self, source, filename, mode, flags):
         from pypy.tool import stdlib___future__
@@ -218,8 +222,11 @@ class PythonAstCompiler(PyCodeCompiler):
         self.grammar_version = override_version or space.config.objspace.pyversion
         self.parser = make_pyparser(self.grammar_version)
         self.additional_rules = {}
-
-        self.compiler_flags = futureFlags.allowed_flags
+        if self.grammar_version >= '2.5':
+            self.futureFlags = future.futureFlags_2_5
+        else:
+            self.futureFlags = future.futureFlags_2_4
+        self.compiler_flags = self.futureFlags.allowed_flags
 
     def compile(self, source, filename, mode, flags):
         from pyparser.error import SyntaxError
@@ -241,7 +248,7 @@ class PythonAstCompiler(PyCodeCompiler):
             for rulename, buildfunc in self.additional_rules.iteritems():
                 assert isinstance(buildfunc, Function)
                 builder.user_build_rules[rulename] = buildfunc
-            flags |= getFutures(source)
+            flags |= getFutures(self.futureFlags, source)
             self.parser.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
             encoding = builder.source_encoding
@@ -261,7 +268,7 @@ class PythonAstCompiler(PyCodeCompiler):
                 raise
         try:
             astcompiler.misc.set_filename(filename, ast_tree)
-            flag_names = futureFlags.get_flag_names(space, flags)
+            flag_names = self.futureFlags.get_flag_names(space, flags)
             if mode == 'exec':
                 codegenerator = ModuleCodeGenerator(space, ast_tree, flag_names)
             elif mode == 'single':

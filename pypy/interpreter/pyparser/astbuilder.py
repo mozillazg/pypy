@@ -869,13 +869,6 @@ def build_import_from(builder, nb):
             names.append((name, as_name))
             if index < l: # case ','
                 index += 1
-##     if from_name == '__future__':
-##         for name, asname in names:
-##             if name == 'with_statement':
-##                 # found from __future__ import with_statement
-##                 if not builder.with_enabled:
-##                     builder.enable_with()
-##                     #raise pythonparse.AlternateGrammarException()
     builder.push(ast.From(from_name, names, atoms[0].lineno))
 
 
@@ -1069,16 +1062,8 @@ class AstBuilder(BaseGrammarBuilder):
         self.rule_stack = []
         self.space = space
         self.source_encoding = None
-##        self.with_enabled = False
         self.build_rules = ASTRULES_Template
         self.user_build_rules = {}
-
-##     def enable_with(self):
-##         if self.with_enabled:
-##             return
-##         self.with_enabled = True
-##         # XXX
-##         # self.keywords.update({'with':None, 'as': None})
 
     def context(self):
         return AstBuilderContext(self.rule_stack)

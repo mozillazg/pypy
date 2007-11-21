@@ -62,7 +62,7 @@ class TokenError(SyntaxError):
         SyntaxError.__init__(self, msg, lineno, offset, line)
         self.token_stack = token_stack
 
-def generate_tokens(parser, lines, flags):
+def generate_tokens(parser, lines, flags, keywords):
     """
     This is a rewrite of pypy.module.parser.pytokenize.generate_tokens since
     the original function is not RPYTHON (uses yield)
@@ -251,6 +251,8 @@ def generate_tokens(parser, lines, flags):
                         last_comment = ''
                 elif initial in namechars:                 # ordinary name
                     tok = Token(parser.tokens['NAME'], token)
+                    if token not in keywords:
+                        tok.isKeyword = False
                     token_list.append((tok, line, lnum, pos))
                     last_comment = ''
                 elif initial == '\\':                      # continued stmt
@@ -312,12 +314,9 @@ class PythonSourceContext(AbstractContext):
 
 class PythonSource(TokenSource):
     """This source uses Jonathan's tokenizer"""
-    def __init__(self, parser, strings, flags=0):
-        # TokenSource.__init__(self)
-        #self.parser = parser
-        
+    def __init__(self, parser, strings, keywords, flags=0):
         self.input = strings
-        tokens = generate_tokens(parser, strings, flags)
+        tokens = generate_tokens(parser, strings, flags, keywords)
         self.token_stack = tokens
         self._current_line = '' # the current line (as a string)
         self._lineno = -1
@@ -393,14 +392,3 @@ class PythonSource(TokenSource):
 
 Source = PythonSource
 
-def tokenize_file(filename):
-    f = file(filename).read()
-    src = Source(f)
-    token = src.next()
-    while token != ("ENDMARKER", None) and token != (None, None):
-        print token
-        token = src.next()
-
-if __name__ == '__main__':
-    import sys
-    tokenize_file(sys.argv[1])
