@@ -51,7 +51,6 @@ class CodecState(object):
             else:
                 replace = space.str_w(w_replace)
                 return replace, newpos
-        unicode_call_errorhandler._annspecialcase_ = "specialize:arg(6)"
         return unicode_call_errorhandler
 
 
