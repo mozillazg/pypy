@@ -39,7 +39,9 @@ def decode_string(space, w_str, encoding, errors):
             result = rope.str_decode_utf8(node)
             if result is not None:
                 return W_RopeUnicodeObject(result)
-    return unicode_from_encoded_object(space, w_str, encoding, errors)
+    result = unicode_from_encoded_object(space, w_str, encoding, errors)
+    assert isinstance(result, W_RopeUnicodeObject)
+    return result
 
 def encode_unicode(space, w_unistr, encoding, errors):
     from pypy.objspace.std.unicodetype import getdefaultencoding, \

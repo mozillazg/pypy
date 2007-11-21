@@ -233,7 +233,7 @@ class LiteralUnicodeNode(LiteralNode):
     def getrope(self, index):
         ch = ord(self.u[index])
         if ch < 256:
-            return LiteralStringNode.PREBUILT[ord(self.s[index])]
+            return LiteralStringNode.PREBUILT[ch]
         if len(self.u) == 1:
             return self
         return LiteralUnicodeNode(unichr(ch))
@@ -606,7 +606,7 @@ def rope_from_unicharlist(charlist):
             unichunk.append(unichr(c))
             i += 1
         if unichunk:
-            nodelist.append(LiteralUnicodeNode("".join(unichunk)))
+            nodelist.append(LiteralUnicodeNode(u"".join(unichunk)))
         strchunk = []
         while i < length:
             c = ord(charlist[i])
@@ -1379,8 +1379,8 @@ def str_decode_utf8(rope):
                                     str_decode_utf8(rope.right))
     elif isinstance(rope, LiteralStringNode):
         try:
-            result, consumed = str_decode_utf_8(rope.s, len(rope.s), False,
-                                                "strict")
+            result, consumed = str_decode_utf_8(rope.s, len(rope.s), "strict",
+                                                False)
         except UnicodeDecodeError:
             return None
         if consumed < len(rope.s):
@@ -1388,7 +1388,7 @@ def str_decode_utf8(rope):
         return rope_from_unicode(result)
     s = rope.flatten_string()
     try:
-        result, consumed = str_decode_utf_8(s, len(s), True)
+        result, consumed = str_decode_utf_8(s, len(s), "strict", True)
         return rope_from_unicode(result)
     except UnicodeDecodeError:
         pass
@@ -1410,11 +1410,8 @@ def unicode_encode_utf8(rope):
         return BinaryConcatNode(unicode_encode_utf8(rope.left),
                                 unicode_encode_utf8(rope.right))
     elif isinstance(rope, LiteralUnicodeNode):
-        try:
-            return LiteralStringNode(
-                unicode_encode_utf_8(rope.u, len(rope.u), "strict"))
-        except UnicodeDecodeError:
-            return None
+        return LiteralStringNode(
+            unicode_encode_utf_8(rope.u, len(rope.u), "strict"))
     elif isinstance(rope, LiteralStringNode):
         return LiteralStringNode(_str_encode_utf_8(rope.s))
 
@@ -1428,7 +1425,8 @@ def _str_encode_utf_8(s):
         if (ch < 0x80):
             # Encode ASCII 
             result.append(chr(ch))
+            continue
         # Encode Latin-1 
         result.append(chr((0xc0 | (ch >> 6))))
         result.append(chr((0x80 | (ch & 0x3f))))
-    return LiteralStringNode("".join(s))
+    return "".join(result)
