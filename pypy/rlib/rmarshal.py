@@ -23,6 +23,11 @@ def get_marshaller(type):
     with new data when the marshaller is called.
     """
     s_obj = annotation(type, None)
+    return _get_marshaller_s_obj(s_obj)
+get_marshaller._annspecialcase_ = 'specialize:memo'
+
+
+def _get_marshaller_s_obj(s_obj):
     try:
         # look for a marshaller in the 'dumpers' list
         return find_dumper(s_obj)
@@ -30,7 +35,6 @@ def get_marshaller(type):
         # ask the annotation to produce an appropriate dumper
         pair(_tag, s_obj).install_marshaller()
         return find_dumper(s_obj)
-get_marshaller._annspecialcase_ = 'specialize:memo'
 
 def get_loader(type):
     s_obj = annotation(type, None)
