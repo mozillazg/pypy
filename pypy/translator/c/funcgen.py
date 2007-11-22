@@ -388,6 +388,7 @@ class FunctionCodeGenerator(object):
                 continue    # skip 'void' argument
             args.append(self.expr(v))
             # special case for rctypes: by-value container args:
+            # XXX is this still needed now that rctypes is gone
             if isinstance(ARGTYPE, ContainerType):
                 args[-1] = '*%s' % (args[-1],)
 

@@ -170,12 +170,11 @@ def gc_malloc_fnaddr():
             import py
             py.test.skip("must run in the main thread")
         try:
-            from ctypes import cast, c_void_p
-            from pypy.rpython.rctypes.tool import util
+            from ctypes import cast, c_void_p, util
             path = util.find_library('gc')
             if path is None:
                 raise ImportError("Boehm (libgc) not found")
-            boehmlib = util.load_library(path)
+            boehmlib = ctypes.cdll.LoadLibrary(path)
         except ImportError, e:
             import py
             py.test.skip(str(e))

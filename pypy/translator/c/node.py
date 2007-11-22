@@ -114,7 +114,7 @@ class StructDefNode:
         return self.prefix + name
 
     def verbatim_field_name(self, name):
-        if name.startswith('c_'):   # produced in this way by rctypes
+        if name.startswith('c_'):   # produced in this way by rffi
             return name[2:]
         else:
             # field names have to start with 'c_' or be meant for names that
