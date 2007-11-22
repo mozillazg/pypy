@@ -1,9 +1,9 @@
 from __future__ import generators
 from pypy.rpython.lltypesystem.lltype import \
      Struct, Array, FixedSizeArray, FuncType, PyObjectType, typeOf, \
-     GcStruct, GcArray, RttiStruct, PyStruct, ContainerType, \
+     GcStruct, GcArray, RttiStruct, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
-     RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray, _pyobjheader
+     RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
 from pypy.rpython.lltypesystem import llmemory
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
@@ -546,13 +546,9 @@ class StructNode(ContainerNode):
             data = data[0:1]
 
         for name, value in data:
-            if isinstance(value, _pyobjheader):   # hack
-                node = self.db.getcontainernode(value)
-                lines = [node.pyobj_initexpr()]
-            else:
-                c_expr = defnode.access_expr(self.name, name)
-                lines = generic_initializationexpr(self.db, value, c_expr,
-                                                   decoration + name)
+            c_expr = defnode.access_expr(self.name, name)
+            lines = generic_initializationexpr(self.db, value, c_expr,
+                                               decoration + name)
             for line in lines:
                 yield '\t' + line
             if not lines[0].startswith('/*'):
@@ -896,47 +892,6 @@ class PyObjectNode(ContainerNode):
     def implementation(self):
         return []
 
-
-class PyObjHeadNode(ContainerNode):
-    nodekind = 'pyobj'
-
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
-        self.where_to_copy_me = []
-        self.exported_name = db.namespace.uniquename('cpyobj')
-
-    def basename(self):
-        raise Exception("PyObjHead should always have a parent")
-
-    def enum_dependencies(self):
-        yield self.obj.ob_type
-        if self.obj.setup_fnptr:
-            yield self.obj.setup_fnptr
-
-    def get_setupfn_name(self):
-        if self.obj.setup_fnptr:
-            return self.db.get(self.obj.setup_fnptr)
-        else:
-            return 'NULL'
-
-    def pyobj_initexpr(self):
-        parent, parentindex = parentlink(self.obj)
-        typenode = self.db.getcontainernode(self.obj.ob_type._obj)
-        typenode.where_to_copy_me.append('(PyObject **) & %s.ob_type' % (
-            self.name,))
-        if typeOf(parent)._hints.get('inline_head'):
-            return 'PyObject_HEAD_INIT(NULL)'
-        else:
-            return '{ PyObject_HEAD_INIT(NULL) },'
-
-
-def objectnode_factory(db, T, obj):
-    if isinstance(obj, _pyobjheader):
-        return PyObjHeadNode(db, T, obj)
-    else:
-        return PyObjectNode(db, T, obj)
-
-
 def weakrefnode_factory(db, T, obj):
     assert isinstance(obj, llmemory._wref)
     ptarget = obj._dereference()
@@ -948,12 +903,11 @@ def weakrefnode_factory(db, T, obj):
 ContainerNodeFactory = {
     Struct:       StructNode,
     GcStruct:     StructNode,
-    PyStruct:     StructNode,
     Array:        ArrayNode,
     GcArray:      ArrayNode,
     FixedSizeArray: FixedSizeArrayNode,
     FuncType:     FuncNode,
     OpaqueType:   opaquenode_factory,
-    PyObjectType: objectnode_factory,
+    PyObjectType: PyObjectNode,
     llmemory._WeakRefType: weakrefnode_factory,
     }

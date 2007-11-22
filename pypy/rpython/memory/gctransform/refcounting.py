@@ -68,8 +68,6 @@ class RefcountingGCTransformer(GCTransformer):
                     gcheader.refcount = refcount
         def ll_no_pointer_dealloc(adr):
             llop.gc_free(lltype.Void, adr)
-        def ll_no_pointer_cpydealloc(adr):
-            llop.cpy_free(lltype.Void, adr)
 
         mh = mallocHelpers()
         mh.allocate = llmemory.raw_malloc
@@ -103,8 +101,6 @@ class RefcountingGCTransformer(GCTransformer):
                 ll_decref_simple, [llmemory.Address], lltype.Void)
             self.no_pointer_dealloc_ptr = self.inittime_helper(
                 ll_no_pointer_dealloc, [llmemory.Address], lltype.Void)
-            self.no_pointer_cpydealloc_ptr = self.inittime_helper(
-                ll_no_pointer_cpydealloc, [llmemory.Address], lltype.Void)
             self.malloc_fixedsize_ptr = self.inittime_helper(
                 ll_malloc_fixedsize, [lltype.Signed], llmemory.Address)
             self.malloc_varsize_no_length_ptr = self.inittime_helper(
@@ -152,14 +148,6 @@ class RefcountingGCTransformer(GCTransformer):
                 lltype.typeOf(dealloc_fptr), dealloc_fptr)
             llops.genop("direct_call", [self.decref_ptr, v_adr, cdealloc_fptr])
 
-    def gct_gc_protect(self, hop):
-        """ protect this object from gc (make it immortal) """
-        self.push_alive(hop.spaceop.args[0], hop.llops)
-
-    def gct_gc_unprotect(self, hop):
-        """ get this object back into gc control """
-        self.pop_alive(hop.spaceop.args[0], hop.llops)
-
     def gct_fv_gc_malloc(self, hop, flags, TYPE, c_size):
         v_raw = hop.genop("direct_call", [self.malloc_fixedsize_ptr, c_size],
                           resulttype=llmemory.Address)
@@ -189,7 +177,7 @@ class RefcountingGCTransformer(GCTransformer):
 
     def consider_constant(self, TYPE, value):
         if value is not lltype.top_container(value):
-            return
+                return
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
             p = value._as_ptr()
             if not self.gcheaderbuilder.get_header(p):
@@ -210,11 +198,8 @@ class RefcountingGCTransformer(GCTransformer):
             DESTR_ARG = None
 
         if destrptr is None and not find_gc_ptrs_in_type(TYPE):
-            #print repr(TYPE)[:80], 'is dealloc easy'
-            if TYPE._gckind == 'cpy':
-                p = self.no_pointer_cpydealloc_ptr.value
-            else:
-                p = self.no_pointer_dealloc_ptr.value
+            assert TYPE._gckind != 'cpy'
+            p = self.no_pointer_dealloc_ptr.value
             self.static_deallocator_funcptrs[TYPE] = p
             return p
 
