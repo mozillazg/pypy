@@ -40,7 +40,9 @@ utf8_code_length = [
 ]
 
 def str_decode_utf_8(s, size, errors, final=False,
-                    errorhandler=raise_unicode_exception_decode):
+                     errorhandler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
     if (size == 0):
         return u'', 0
     result = []
@@ -161,27 +163,28 @@ def str_decode_utf_8(s, size, errors, final=False,
 
 
 def str_decode_utf_16(s, size, errors, final=True,
-                     errorhandler=raise_unicode_exception_decode):
+                      errorhandler=None):
     result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
                                                          errorhandler, "native")
     return result, length
 
 def str_decode_utf_16_be(s, size, errors, final=True,
-                       errorhandler=raise_unicode_exception_decode):
+                         errorhandler=None):
     result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
                                                          errorhandler, "big")
     return result, length
 
 def str_decode_utf_16_le(s, size, errors, final=True,
-                         errorhandler=raise_unicode_exception_decode):
+                         errorhandler=None):
     result, length, byteorder = str_decode_utf_16_helper(s, size, errors, final,
                                                          errorhandler, "little")
     return result, length
 
 def str_decode_utf_16_helper(s, size, errors, final=True,
-                             errorhandler=raise_unicode_exception_decode,
+                             errorhandler=None,
                              byteorder="native"):
-
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
     bo = 0
     consumed = 0
 
@@ -280,7 +283,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     return u"".join(result), pos, bo
 
 def str_decode_latin_1(s, size, errors, final=False,
-                      errorhandler=raise_unicode_exception_decode):
+                       errorhandler=None):
     # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
     result = []
@@ -291,7 +294,9 @@ def str_decode_latin_1(s, size, errors, final=False,
 
 
 def str_decode_ascii(s, size, errors, final=False,
-                     errorhandler=raise_unicode_exception_decode):
+                     errorhandler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
     # ASCII is equivalent to the first 128 ordinals in Unicode.
     result = []
     pos = 0
@@ -311,7 +316,7 @@ def str_decode_ascii(s, size, errors, final=False,
 # unicode encoding 
 
 
-def unicode_encode_utf_8(s, size, errors, errorhandler=raise_unicode_exception_encode):
+def unicode_encode_utf_8(s, size, errors, errorhandler=None):
     assert(size >= 0)
     result = []
     i = 0
@@ -356,7 +361,9 @@ def _encodeUCS4(result, ch):
 
 
 def unicode_encode_ucs1_helper(p, size, errors,
-                               errorhandler=raise_unicode_exception_encode, limit=256):
+                               errorhandler=None, limit=256):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_encode
     if limit == 256:
         reason = "ordinal not in range(256)"
         encoding = "latin-1"
@@ -386,11 +393,11 @@ def unicode_encode_ucs1_helper(p, size, errors,
     
     return "".join(result)
 
-def unicode_encode_latin_1(p, size, errors, errorhandler=raise_unicode_exception_encode):
+def unicode_encode_latin_1(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
     return res
 
-def unicode_encode_ascii(p, size, errors, errorhandler=raise_unicode_exception_encode):
+def unicode_encode_ascii(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 128)
     return res
 
@@ -406,7 +413,7 @@ def _STORECHAR(result, CH, byteorder):
         result.append(lo)
 
 def unicode_encode_utf_16_helper(s, size, errors,
-                                 errorhandler=raise_unicode_exception_encode,
+                                 errorhandler=None,
                                  byteorder='little'):
     result = []
     if (byteorder == 'native'):
@@ -432,15 +439,15 @@ def unicode_encode_utf_16_helper(s, size, errors,
     return "".join(result)
 
 def unicode_encode_utf_16(s, size, errors,
-                          errorhandler=raise_unicode_exception_encode):
+                          errorhandler=None):
     return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "native")
 
 
 def unicode_encode_utf_16_be(s, size, errors,
-                           errorhandler=raise_unicode_exception_encode):
+                             errorhandler=None):
     return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "big")
 
 
 def unicode_encode_utf_16_le(s, size, errors,
-                             errorhandler=raise_unicode_exception_encode):
+                             errorhandler=None):
     return unicode_encode_utf_16_helper(s, size, errors, errorhandler, "little")
