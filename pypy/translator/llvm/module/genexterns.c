@@ -1,7 +1,38 @@
-#include <stdlib.h>
 
-char *LLVM_RPython_StartupCode(void);
+// append some genc files here manually from python
+#ifdef _RPyListOfString_New     /*  :-(  */
+#  define HAVE_RPY_LIST_OF_STRING
+#endif
 
+#include "c/src/thread.h"
+#ifdef LL_NEED_MATH
+  #include "c/src/ll_math.h"
+#endif
+
+#ifdef LL_NEED_STRTOD
+  #include "c/src/ll_strtod.h"
+#endif
+
+#ifdef LL_NEED_STACK
+  #include "c/src/stack.h"
+#endif
+
+// setup code for ThreadLock Opaque types
+/*char *RPyOpaque_LLVM_SETUP_ThreadLock(struct RPyOpaque_ThreadLock *lock,
+				      int initially_locked) {
+
+  struct RPyOpaque_ThreadLock tmp = RPyOpaque_INITEXPR_ThreadLock;
+  memcpy(lock, &tmp, sizeof(struct RPyOpaque_ThreadLock));
+
+  if (!RPyThreadLockInit(lock)) {
+    return "Thread lock init error";
+  }
+  if ((initially_locked) && !RPyThreadAcquireLock(lock, 1)) {
+    return "Cannot acquire thread lock at init";
+  }
+  return NULL;
+}
+*/
 
 // raw malloc code
 char *raw_malloc(long size) {
@@ -20,7 +51,10 @@ void raw_memclear(void* ptr, long size) {
   memset(ptr, 0, size);
 }
 
+char *LLVM_RPython_StartupCode();
+
 char *RPython_StartupCode() {
+
   // is there any garbage collection / memory management initialisation
   __GC_STARTUP_CODE__
 
@@ -29,36 +63,40 @@ char *RPython_StartupCode() {
 
 #ifdef ENTRY_POINT_DEFINED
 
-int _argc;
-char **_argv;
+int __ENTRY_POINT__(RPyListOfString *);
 
-int _pypy_getargc() {
-  return _argc;
-}
+int main(int argc, char *argv[])
+{
+    char *errmsg;
+    int i, exitcode;
+    RPyListOfString *list;
+    errmsg = RPython_StartupCode();
+    if (errmsg) goto error;
+    
+    list = _RPyListOfString_New(argc);
+    if (_RPyExceptionOccurred()) goto memory_out;
+    for (i=0; i<argc; i++) {
+      RPyString *s = RPyString_FromString(argv[i]);
 
-char ** _pypy_getargv() {
-  return _argv;
-}
+      if (_RPyExceptionOccurred()) {
+	goto memory_out;
+      }
 
-/* we still need to forward declare our entry point */
-int __ENTRY_POINT__(void);
+      _RPyListOfString_SetItem(list, i, s);
+    }
 
-#include <stdio.h>
+    exitcode = __ENTRY_POINT__(list);
 
-int main(int argc, char *argv[]) {
-  int res;
-  char *errmsg;
-  errmsg = RPython_StartupCode();
-  if (errmsg) {
+    if (_RPyExceptionOccurred()) {
+      goto error; // XXX see genc
+    }
+    return exitcode;
+
+ memory_out:
+    errmsg = "out of memory";
+ error:
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
     return 1;
-  }
-
-  _argc = argc;
-  _argv = argv;
-
-  res = __ENTRY_POINT__();
-  return res;
 }
 
 #else

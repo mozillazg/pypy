@@ -57,7 +57,7 @@ from pypy.interpreter.argument import Arguments
 from pypy.translator.backendopt.ssa import SSI_to_SSA
 
 from pypy.translator.translator import TranslationContext
-from pypy.objspace.flow.objspace import FlowObjSpace
+from pypy.objspace.flow import FlowObjSpace
 
 from pypy.tool.sourcetools import render_docstr, NiceCompile
 
@@ -177,7 +177,7 @@ class GenRpy:
 
         # special constructors:
         self.has_listarg = {}
-        for name in "newtuple newlist".split():
+        for name in "newtuple newlist newstring".split():
             self.has_listarg[name] = name
 
         # catching all builtins in advance, to avoid problems

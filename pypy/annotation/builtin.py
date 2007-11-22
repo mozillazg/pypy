@@ -18,6 +18,7 @@ from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 import pypy.rlib.rarithmetic
 import pypy.rlib.objectmodel
+import pypy.rlib.rstack
 
 # convenience only!
 def immutablevalue(x):
@@ -338,6 +339,9 @@ def llmemory_cast_adr_to_int(s):
 def llmemory_cast_int_to_adr(s):
     return SomeAddress()
 
+def rstack_yield_current_frame_to_caller():
+    return SomeExternalObject(pypy.rlib.rstack.frame_stack_top)
+    
 
 ##def rarith_ovfcheck(s_obj):
 ##    if isinstance(s_obj, SomeInteger) and s_obj.unsigned:
@@ -361,6 +365,7 @@ def import_func(*args):
 # collect all functions
 import __builtin__, exceptions
 BUILTIN_ANALYZERS = {}
+EXTERNAL_TYPE_ANALYZERS = {}
 for name, value in globals().items():
     if name.startswith('builtin_'):
         original = getattr(__builtin__, name[8:])
@@ -379,6 +384,8 @@ BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_adr] = llmemory
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_ptr] = llmemory_cast_adr_to_ptr
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_int] = llmemory_cast_adr_to_int
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_int_to_adr] = llmemory_cast_int_to_adr
+BUILTIN_ANALYZERS[pypy.rlib.rstack.yield_current_frame_to_caller] = (
+    rstack_yield_current_frame_to_caller)
 
 BUILTIN_ANALYZERS[getattr(OSError.__init__, 'im_func', OSError.__init__)] = (
     OSError_init)
@@ -661,3 +668,25 @@ def offsetof(TYPE, fldname):
 
 BUILTIN_ANALYZERS[llmemory.offsetof] = offsetof
 
+#_________________________________
+# external functions
+
+
+from pypy.rpython import extfunctable
+
+def update_exttables():
+
+    # import annotation information for external functions 
+    # from the extfunctable.table  into our own annotation specific table 
+    for func, extfuncinfo in extfunctable.table.iteritems():
+        BUILTIN_ANALYZERS[func] = extfuncinfo.annotation 
+
+    # import annotation information for external types
+    # from the extfunctable.typetable  into our own annotation specific table 
+    for typ, exttypeinfo in extfunctable.typetable.iteritems():
+        EXTERNAL_TYPE_ANALYZERS[typ] = exttypeinfo.get_annotations()
+
+# Note: calls to declare() may occur after builtin.py is first imported.
+# We must track future changes to the extfunctables.
+extfunctable.table_callbacks.append(update_exttables)
+update_exttables()

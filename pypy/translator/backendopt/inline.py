@@ -634,6 +634,9 @@ def inlinable_static_callers(graphs):
                     graph = getattr(funcobj, 'graph', None)
                     if graph is not None:
                         if getattr(getattr(funcobj, '_callable', None),
+                                   'suggested_primitive', False):
+                            continue
+                        if getattr(getattr(funcobj, '_callable', None),
                                    'dont_inline', False):
                             continue
                         result.append((parentgraph, graph))
@@ -665,6 +668,9 @@ def instrument_inline_candidates(graphs, threshold):
                     funcobj = get_funcobj(op.args[0].value)
                     graph = getattr(funcobj, 'graph', None)
                     if graph is not None:
+                        if getattr(getattr(funcobj, '_callable', None),
+                                   'suggested_primitive', False):
+                            continue
                         if getattr(getattr(funcobj, '_callable', None),
                                    'dont_inline', False):
                             continue

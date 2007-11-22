@@ -2,7 +2,6 @@ from pypy.objspace.cpy.objspace import CPyObjSpace
 from pypy.tool.pytest.appsupport import raises_w
 from pypy.rlib.rarithmetic import r_longlong, r_ulonglong
 from pypy.rlib.rbigint import rbigint
-import py
 
 def test_simple():
     space = CPyObjSpace()
@@ -50,30 +49,28 @@ def test_exception():
     w2 = space.wrap(11)
     raises_w(space, space.w_TypeError, space.sub, w1, w2)
 
-def test_wrapstring():
+def test_newstring():
     space = CPyObjSpace()
-    w = space.wrap('AB')
+    w = space.newstring([space.wrap(65), space.wrap(66)])
     assert space.str_w(w) == 'AB'
 
-def test_wrapunicode():
-    py.test.skip("fix me")
+def test_newunicode():
     space = CPyObjSpace()
-    w = space.wrap(unichr(65) + unichr(66))
+    w = space.newunicode([unichr(65), unichr(66)])
     assert space.is_w(space.type(w), space.w_unicode)
     for i in range(2):
         code = space.int_w(space.ord(space.getitem(w, space.wrap(i))))
         assert code == 65+i
 
 def test_ord():
-    py.test.skip("fix me")
     space = CPyObjSpace()
     w = space.wrap('A')
     assert space.int_w(space.ord(w)) == 65
     w = space.wrap('\x00')
     assert space.int_w(space.ord(w)) == 0
-    w = space.wrap(unichr(65))
+    w = space.newunicode([unichr(65)])
     assert space.int_w(space.ord(w)) == 65
-    w = space.wrap(unichr(0))
+    w = space.newunicode([unichr(0)])
     assert space.int_w(space.ord(w)) == 0
 
 def test_id():

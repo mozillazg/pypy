@@ -7,11 +7,7 @@ from pypy.rpython.test.test_exception import BaseTestException
 from pypy.translator.llvm.test.runtest import *
 
 class TestLLVMException(LLVMTest, BaseTestException):
-    def test_raise_and_catch_other(self):
-        py.test.skip('XXX special case me')
-
-    def test_raise_prebuilt_and_catch_other(self):
-        py.test.skip('XXX special case me')
+    pass
 
 class TestException(Exception):
     pass

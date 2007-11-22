@@ -42,7 +42,7 @@ class AppTestZipimport:
         """).compile()
         space = gettestobjspace(usemodules=['zipimport', 'zlib', 'rctime'])
         cls.space = space
-        tmpdir = udir.ensure('zipimport_%s' % cls.__name__, dir=1)
+        tmpdir = udir.ensure('zipimport', dir=1)
         now = time.time()
         cls.w_now = space.wrap(now)
         test_pyc = cls.make_pyc(space, co, now)
@@ -81,9 +81,6 @@ class AppTestZipimport:
         space.appexec([space.wrap(self)], """(self):
         self.write_files = []
         """)
-        space.setattr(space.getbuiltinmodule('zipimport'),
-                      space.wrap('_zip_directory_cache'),
-                      space.newdict({}))
 
     def teardown_method(self, meth):
         space = self.space
@@ -92,15 +89,6 @@ class AppTestZipimport:
         while sys.path[0].endswith('.zip'):
             sys.path.pop(0)
         """)
-
-    def test_cache(self):
-        self.writefile(self, 'x.py', 'y')
-        from zipimport import _zip_directory_cache, zipimporter
-        new_importer = zipimporter(self.zipfile)
-        try:
-            assert zipimporter(self.zipfile) is new_importer
-        finally:
-            del _zip_directory_cache[self.zipfile]
 
     def test_good_bad_arguments(self):
         from zipimport import zipimporter
@@ -186,13 +174,12 @@ class AppTestZipimport:
 
     def test_package(self):
         import os, sys
-        self.writefile(self, "xxuuu"+os.sep+"__init__.py", "")
-        self.writefile(self, "xxuuu"+os.sep+"yy.py", "def f(x): return x")
-        mod = __import__("xxuuu", globals(), locals(), ['yy'])
+        self.writefile(self, "xx"+os.sep+"__init__.py", "")
+        self.writefile(self, "xx"+os.sep+"yy.py", "def f(x): return x")
+        mod = __import__("xx", globals(), locals(), ['yy'])
         assert mod.__path__
         assert mod.yy.f(3) == 3
-        del sys.modules['xxuuu']
-        del sys.modules['xxuuu.yy']
+        del sys.modules['xx']
 
     def test_functions(self):
         import os

@@ -3,7 +3,7 @@ import types
 from pypy.annotation.model import SomeBool, SomeInteger, SomeString,\
      SomeFloat, SomeList, SomeDict, s_None, SomeExternalObject,\
      SomeObject, SomeInstance, SomeTuple, lltype_to_annotation,\
-     unionof, SomeUnicodeString
+     unionof
 from pypy.annotation.classdef import ClassDef, InstanceSource
 from pypy.annotation.listdef import ListDef, MOST_GENERAL_LISTDEF
 from pypy.annotation.dictdef import DictDef, MOST_GENERAL_DICTDEF
@@ -66,6 +66,7 @@ def _compute_annotation(t, bookkeeper=None):
 
 def annotationoftype(t, bookkeeper=False):
     from pypy.annotation.builtin import BUILTIN_ANALYZERS
+    from pypy.annotation.builtin import EXTERNAL_TYPE_ANALYZERS
     from pypy.rpython import extregistry
 
     """The most precise SomeValue instance that contains all
@@ -79,8 +80,6 @@ def annotationoftype(t, bookkeeper=False):
         return SomeFloat()
     elif issubclass(t, str): # py.lib uses annotated str subclasses
         return SomeString()
-    elif t is unicode:
-        return SomeUnicodeString()
     elif t is list:
         return SomeList(MOST_GENERAL_LISTDEF)
     elif t is dict:
@@ -88,6 +87,8 @@ def annotationoftype(t, bookkeeper=False):
     # can't do tuple
     elif t is types.NoneType:
         return s_None
+    elif t in EXTERNAL_TYPE_ANALYZERS:
+        return SomeExternalObject(t)
     elif bookkeeper and extregistry.is_registered_type(t, bookkeeper.policy):
         entry = extregistry.lookup_type(t, bookkeeper.policy)
         return entry.compute_annotation_bk(bookkeeper)

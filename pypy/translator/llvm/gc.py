@@ -76,14 +76,14 @@ class RawGcPolicy(GcPolicy):
                     exc_flag=False):
         """ assumes malloc of word size """
         XXX
-        word = self.db.get_machine_word()
+        uword = self.db.get_machine_uword()
         boundary_size = 0
 
         # malloc_size is unsigned right now
-        codewriter.malloc(targetvar, "i8", size)
+        codewriter.malloc(targetvar, "sbyte", size)
         # XXX uses own cconv
         codewriter.call(None, 'void', '@llvm.memset' + postfix(),
-                        ['i8*', 'i8', word, word],
+                        ['sbyte*', 'ubyte', uword, uword],
                         [targetvar, 0, size, boundary_size],
                         cconv='ccc')               
 
@@ -107,7 +107,10 @@ class BoehmGcPolicy(GcPolicy):
                     exc_flag=False):
         """ assumes malloc of word size """
         boundary_size = 0
+
         word = self.db.get_machine_word()
+        uword = self.db.get_machine_uword()
+
         fnname = '@pypy_malloc' + (atomic and '_atomic' or '')
 
 ##        XXX (arigo) disabled the ring buffer for comparison purposes
@@ -118,6 +121,9 @@ class BoehmGcPolicy(GcPolicy):
 ##            # dont clear the ringbuffer data
 ##            atomic = False 
 
+        # malloc_size is unsigned right now
+        #sizeu = '%malloc_sizeu' + self.get_count()        
+        #codewriter.cast(sizeu, word, size, uword)
         codewriter.call(targetvar, 'i8*', fnname, [word], [size])
 
         if atomic:
@@ -150,6 +156,8 @@ class FrameworkGcPolicy(GcPolicy):
         self.db = db
 
     def genextern_code(self):
+        # XXX
+        # This is not finished: we must call the gc init function!
         r  = ''
         r += '#define __GC_STARTUP_CODE__\n'
         r += '#define __GC_SETUP_CODE__\n'

@@ -24,22 +24,6 @@ class Entry_oostring(ExtRegistryEntry):
         vlist = hop.inputargs(hop.args_r[0], ootype.Signed)
         return hop.genop('oostring', vlist, resulttype = ootype.String)
 
-class Entry_oounicode(ExtRegistryEntry):
-    _about_ = ootype.oounicode
-
-    def compute_result_annotation(self, obj_s, base_s):
-        assert isinstance(obj_s, annmodel.SomeUnicodeCodePoint) or \
-               (isinstance(obj_s, annmodel.SomeOOInstance)
-                and obj_s.ootype in (ootype.String, ootype.Unicode))
-        assert isinstance(base_s, annmodel.SomeInteger)
-        return annmodel.SomeOOInstance(ootype.Unicode)
-
-    def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0], (annmodel.SomeUnicodeCodePoint,
-                                          annmodel.SomeOOInstance))
-        vlist = hop.inputargs(hop.args_r[0], ootype.Signed)
-        return hop.genop('oounicode', vlist, resulttype = ootype.Unicode)
-    
 
 class Entry_ootype_string(ExtRegistryEntry):
     _type_ = ootype._string
@@ -88,13 +72,11 @@ class Entry_oohash(ExtRegistryEntry):
 
     def compute_result_annotation(self, str_s):
         assert isinstance(str_s, annmodel.SomeOOInstance)\
-               and (str_s.ootype is ootype.String or
-                    str_s.ootype is ootype.Unicode)
+               and str_s.ootype is ootype.String
         return annmodel.SomeInteger()
 
     def specialize_call(self, hop):
         assert isinstance(hop.args_s[0], annmodel.SomeOOInstance)\
-               and (hop.args_s[0].ootype is ootype.String or
-                    hop.args_s[0].ootype is ootype.Unicode)
+               and hop.args_s[0].ootype is ootype.String
         vlist = hop.inputargs(hop.args_r[0])
         return hop.genop('oohash', vlist, resulttype=ootype.Signed)

@@ -1,18 +1,11 @@
 import py
 
-from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
-from pypy.rlib import rarithmetic
-
-class BaseTestStrtod(BaseRtypingTest):    
-    def test_formatd(self):
-        def f(y):
-            return rarithmetic.formatd("%.2f", y)
-
-        assert self.ll_to_string(self.interpret(f, [3.0])) == f(3.0)
-
+class BaseTest(object):
+    
     def test_parts_to_float(self):
-        def f(a, b, c, d):
-            return rarithmetic.parts_to_float(a, b, c, d)
+        #py.test.skip("wip")
+        Support = self.Support
+        Impl = self.Implementation
         
         data = [
         (("","1","","")     , 1.0),
@@ -24,8 +17,20 @@ class BaseTestStrtod(BaseRtypingTest):
         ]
 
         for parts, val in data:
-            args = [self.string_to_ll(i) for i in parts]
-            assert self.interpret(f, args) == val
+            assert Impl.ll_strtod_parts_to_float(*map(Support.to_rstr, parts)) == val
 
-class TestLLStrtod(BaseTestStrtod, LLRtypeMixin):
-    pass
+
+    def test_formatd(self):
+        Support = self.Support
+        Impl = self.Implementation
+        
+        res = Impl.ll_strtod_formatd(Support.to_rstr("%.2f"), 1.5)
+        assert Support.from_rstr(res) == "1.50"
+
+class TestLL(BaseTest):
+    from pypy.rpython.module.support import LLSupport as Support
+    from pypy.rpython.lltypesystem.module.ll_strtod import Implementation
+
+class TestOO(BaseTest):
+    from pypy.rpython.module.support import OOSupport as Support
+    from pypy.rpython.ootypesystem.module.ll_strtod import Implementation
