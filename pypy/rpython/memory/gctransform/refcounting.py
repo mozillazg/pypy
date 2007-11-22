@@ -254,6 +254,7 @@ def ll_deallocator(addr):
         return fptr
 
     def dynamic_deallocation_funcptr_for_type(self, TYPE):
+        assert TYPE._gckind != 'cpy'
         if TYPE in self.dynamic_deallocator_funcptrs:
             return self.dynamic_deallocator_funcptrs[TYPE]
         #print_call_chain(self)
