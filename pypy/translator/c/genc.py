@@ -1,7 +1,7 @@
 import autopath
 import py
 import sys
-from pypy.translator.c.node import PyObjectNode, PyObjHeadNode, FuncNode
+from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.gensupp import uniquemodulename, NameManager
@@ -38,7 +38,7 @@ class CBuilder(object):
         self.libraries = libraries
         self.exports = {}
 
-    def build_database(self, exports=[], pyobj_options=None):
+    def build_database(self, pyobj_options=None):
         translator = self.translator
 
         gcpolicyclass = self.get_gcpolicyclass()
@@ -76,20 +76,6 @@ class CBuilder(object):
         pf = self.getentrypointptr()
         pfname = db.get(pf)
         self.exports[self.entrypoint.func_name] = pf
-        for obj in exports:
-            if type(obj) is tuple:
-                objname, obj = obj
-            elif hasattr(obj, '__name__'):
-                objname = obj.__name__
-            else:
-                objname = None
-            po = self.getentrypointptr(obj)
-            poname = db.get(po)
-            objname = objname or poname
-            if objname in self.exports:
-                raise NameError, 'duplicate name in export: %s is %s and %s' % (
-                    objname, db.get(self.exports[objname]), poname)
-            self.exports[objname] = po
         db.complete()
 
         # add library dependencies
@@ -777,19 +763,10 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     print >> f
     print >> f, 'static globalobjectdef_t globalobjectdefs[] = {'
     for node in database.containerlist:
-        if isinstance(node, (PyObjectNode, PyObjHeadNode)):
+        if isinstance(node, PyObjectNode):
             for target in node.where_to_copy_me:
                 print >> f, '\t{%s, "%s"},' % (target, node.exported_name)
     print >> f, '\t{ NULL, NULL }\t/* Sentinel */'
-    print >> f, '};'
-    print >> f
-    print >> f, 'static cpyobjheaddef_t cpyobjheaddefs[] = {'
-    for node in database.containerlist:
-        if isinstance(node, PyObjHeadNode):
-            print >> f, '\t{"%s", %s, %s},' % (node.exported_name,
-                                               node.ptrname,
-                                               node.get_setupfn_name())
-    print >> f, '\t{ NULL, NULL, NULL }\t/* Sentinel */'
     print >> f, '};'
     print >> f
     print >> f, '/***********************************************************/'

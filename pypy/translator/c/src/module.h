@@ -38,11 +38,9 @@
 	} \
 	if (setup_globalfunctions(globalfunctiondefs, #modname) < 0) \
 		return;	\
-	if (setup_exportglobalobjects(cpyobjheaddefs) < 0)	\
-		return;	\
 	if (setup_initcode(frozen_initcode, FROZEN_INITCODE_SIZE) < 0) \
 		return;	\
-	if (setup_globalobjects(globalobjectdefs, cpyobjheaddefs) < 0) \
+	if (setup_globalobjects(globalobjectdefs) < 0) \
 		return;
 
 /*** table of global objects ***/
@@ -53,12 +51,6 @@ typedef struct {
 	PyObject** p;
 	char* name;
 } globalobjectdef_t;
-
-typedef struct {
-	char* name;
-	PyObject* cpyobj;
-	void (*setupfn)(PyObject *);
-} cpyobjheaddef_t;
 
 typedef struct {
 	PyObject** p;
@@ -77,33 +69,10 @@ int call_postsetup(PyObject *m);
 
 #ifndef PYPY_NOT_MAIN_FILE
 
-static int setup_exportglobalobjects(cpyobjheaddef_t* cpyheadtable)
-{
-	PyObject* obj;
-	cpyobjheaddef_t* cpydef;
-
-	/* Store the object given by their heads into the module's dict.
-	   Warning: these object heads might still be invalid, e.g.
-	   typically their ob_type needs patching!
-	   But PyDict_SetItemString() doesn't inspect them...
-	*/
-	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
-		obj = cpydef->cpyobj;
-		if (obj->ob_type == NULL)
-			obj->ob_type = &PyType_Type;
-		if (PyDict_SetItemString(this_module_globals,
-					 cpydef->name, obj) < 0)
-			return -1;
-	}
-	return 0;
-}
-
-static int setup_globalobjects(globalobjectdef_t* globtable,
-			       cpyobjheaddef_t* cpyheadtable)
+static int setup_globalobjects(globalobjectdef_t* globtable)
 {
 	PyObject* obj;
 	globalobjectdef_t* def;
-	cpyobjheaddef_t* cpydef;
 
 	/* Patch all locations that need to contain a specific PyObject*.
 	   This must go after the previous loop, otherwise
@@ -119,30 +88,6 @@ static int setup_globalobjects(globalobjectdef_t* globtable,
 		}
 		Py_INCREF(obj);
 		*def->p = obj;   /* store the object ref in the global var */
-	}
-	/* All objects should be valid at this point.  Loop again and
-	   make sure all types are ready.
-	*/
-	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
-		obj = cpydef->cpyobj;
-		if (PyType_Check(obj)) {
-			/* XXX hmmm */
-			obj->ob_type = NULL;
-			if (PyType_Ready((PyTypeObject*) obj) < 0)
-				return -1;
-		}
-        }
-        /* call the user-defined setups *after* all types are ready
-         * in case of dependencies */
-	for (cpydef = cpyheadtable; cpydef->name != NULL; cpydef++) {
-		obj = cpydef->cpyobj;
-		if (cpydef->setupfn) {
-			cpydef->setupfn(obj);
-			if (RPyExceptionOccurred()) {
-				RPyConvertExceptionToCPython();
-				return -1;
-			}
-		}
 	}
 	return 0;
 }

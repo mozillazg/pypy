@@ -8,7 +8,6 @@ from pypy.annotation.description import NoStandardGraph
 from pypy.translator.gensupp import builtin_base, builtin_type_base
 from pypy.translator.c.support import log
 from pypy.translator.c.wrapper import gen_wrapper, new_method_graph
-from pypy.translator.tool.raymond import should_expose
 
 from pypy.rlib.rarithmetic import r_int, r_uint
 from pypy.rpython.lltypesystem.lltype import pyobjectptr, LowLevelType
@@ -53,16 +52,7 @@ class PyObjMaker:
             stackentry = obj
         self.debugstack = (self.debugstack, stackentry)
         try:
-            try:
-                self.translator.rtyper   # check for presence
-                entry = extregistry.lookup(obj)
-                getter = entry.get_ll_pyobjectptr
-            except (KeyError, AttributeError):
-                # common case: 'p' is a _pyobject
-                p = pyobjectptr(obj)
-            else:
-                # 'p' should be a PyStruct pointer, i.e. a _pyobjheader
-                p = getter(self.translator.rtyper)
+            p = pyobjectptr(obj)
             node = self.db.getcontainernode(p._obj)
         finally:
             self.debugstack, x = self.debugstack
@@ -584,9 +574,6 @@ class PyObjMaker:
                 if isinstance(value, FunctionType):
                     func = value
                     fname = '%s.%s' % (cls.__name__, func.__name__)
-                    if not should_expose(func):
-                        log.REMARK('method %s hidden from wrapper' % fname)
-                        continue
                     if func.__name__ == '__init__':
                         init_seen = True
                         # there is the problem with exposed classes inheriting from
