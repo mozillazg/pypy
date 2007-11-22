@@ -189,6 +189,8 @@ class RefcountingGCTransformer(GCTransformer):
             return self.static_deallocator_funcptrs[TYPE]
         #print_call_chain(self)
 
+        if TYPE._gckind == 'cpy':
+            return # you don't really have an RPython deallocator for PyObjects
         rtti = get_rtti(TYPE) 
         if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
             destrptr = rtti._obj.destructor_funcptr
@@ -198,7 +200,6 @@ class RefcountingGCTransformer(GCTransformer):
             DESTR_ARG = None
 
         if destrptr is None and not find_gc_ptrs_in_type(TYPE):
-            assert TYPE._gckind != 'cpy'
             p = self.no_pointer_dealloc_ptr.value
             self.static_deallocator_funcptrs[TYPE] = p
             return p
