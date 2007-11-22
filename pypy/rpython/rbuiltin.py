@@ -116,8 +116,7 @@ class BuiltinFunctionRepr(Repr):
 
     def rtype_call_args(self, hop):
         # calling a built-in function with keyword arguments:
-        # mostly for rpython.objectmodel.hint() and for constructing
-        # rctypes structures
+        # mostly for rpython.objectmodel.hint()
         hop, kwds_i = call_args_expand(hop)
 
         bltintyper = self.findbltintyper(hop.rtyper)
