@@ -14,12 +14,8 @@ def abs(space, w_val):
 
 def chr(space, w_ascii):
     "Return a string of one character with the given ascii code."
-    try:
-        char = __builtin__.chr(space.int_w(w_ascii))
-    except ValueError:  # chr(out-of-range)
-        raise OperationError(space.w_ValueError,
-                             space.wrap("character code not in range(256)"))
-    return space.wrap(char)
+    w_character = space.newstring([w_ascii])
+    return w_character
 
 def unichr(space, code):
     "Return a Unicode string of one character with the given ordinal."
@@ -29,7 +25,7 @@ def unichr(space, code):
     except ValueError:
         raise OperationError(space.w_ValueError,
                              space.wrap("unichr() arg out of range"))
-    return space.wrap(c)
+    return space.newunicode([c])
 unichr.unwrap_spec = [ObjSpace, int]
 
 def len(space, w_obj):

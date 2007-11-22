@@ -1,19 +1,12 @@
-#ifndef LL_STRTOD_H
-#define LL_STRTOD_H
-
 #include <locale.h>
 #include <ctype.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
 
 
 /* prototypes */
 
-double LL_strtod_parts_to_float(char *sign, char *beforept,
-				char *afterpt, char *exponent);
-char *LL_strtod_formatd(char *fmt, double x);
+double LL_strtod_parts_to_float(RPyString *sign, RPyString *beforept,
+				RPyString *afterpt, RPyString *exponent);
+RPyString *LL_strtod_formatd(RPyString *fmt, double x);
 
 
 /* implementations */
@@ -21,10 +14,10 @@ char *LL_strtod_formatd(char *fmt, double x);
 #ifndef PYPY_NOT_MAIN_FILE
 
 double LL_strtod_parts_to_float(
-	char *sign, 
-	char *beforept, 
-	char *afterpt, 
-	char *exponent)
+	RPyString *sign, 
+	RPyString *beforept, 
+	RPyString *afterpt, 
+	RPyString *exponent)
 {
 	char *fail_pos;
 	struct lconv *locale_data;
@@ -32,7 +25,7 @@ double LL_strtod_parts_to_float(
 	int decimal_point_len;
 	double x;
 	char *last;
-	char *expo = exponent;
+	char *expo = RPyString_AsString(exponent);
 	int buf_size;
 	char *s;
 
@@ -44,20 +37,20 @@ double LL_strtod_parts_to_float(
 	decimal_point = locale_data->decimal_point;
 	decimal_point_len = strlen(decimal_point);
 
-	buf_size = strlen(sign) + 
-		strlen(beforept) +
+	buf_size = RPyString_Size(sign) + 
+		RPyString_Size(beforept) +
 		decimal_point_len +
-		strlen(afterpt) +
+		RPyString_Size(afterpt) +
 		1 /* e */ +
 		strlen(expo) + 
 		1 /*  asciiz  */ ;
 
         s = (char*)malloc(buf_size);
 
-	strcpy(s, sign);
-	strcat(s, beforept);
+	strcpy(s, RPyString_AsString(sign));
+	strcat(s, RPyString_AsString(beforept));
 	strcat(s, decimal_point);
-	strcat(s, afterpt);
+	strcat(s, RPyString_AsString(afterpt));
 	strcat(s, "e");
 	strcat(s, expo);
 
@@ -68,7 +61,7 @@ double LL_strtod_parts_to_float(
 		fail_pos = last;
 	if (fail_pos == s || *fail_pos != '\0' || fail_pos != last) {
 		free(s);
-    errno = 42; // just because
+		RPyRaiseSimpleException(PyExc_ValueError, "invalid float literal");
 		return -1.0;
 	}
 	if (x == 0.0) { /* maybe a denormal value, ask for atof behavior */
@@ -79,12 +72,12 @@ double LL_strtod_parts_to_float(
 	return x;
 }
 
-char buffer[120]; /* this should be enough, from PyString_Format code */
-int buflen = 120;
 
-char* LL_strtod_formatd(char *fmt, double x) {
+RPyString *LL_strtod_formatd(RPyString *fmt, double x) {
+	char buffer[120]; /* this should be enough, from PyString_Format code */
+	int buflen = 120;
 	int res;
-	res = snprintf(buffer, buflen, fmt, x);
+	res = snprintf(buffer, buflen, RPyString_AsString(fmt), x);
 	if (res <= 0 || res >= buflen) {
 		strcpy(buffer, "??.?"); /* should not occur */
 	} else {
@@ -124,8 +117,7 @@ char* LL_strtod_formatd(char *fmt, double x) {
 		
 	}
 
-	return buffer;
+	return RPyString_FromString(buffer);
 }
 
 #endif /* PYPY_NOT_MAIN_FILE */
-#endif

@@ -426,17 +426,12 @@ class __extend__(pairtype(SomeChar, SomeChar)):
         return SomeChar()
 
 
-class __extend__(pairtype(SomeChar, SomeUnicodeCodePoint),
+class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeCodePoint),
+                 pairtype(SomeChar, SomeUnicodeCodePoint),
                  pairtype(SomeUnicodeCodePoint, SomeChar)):
+
     def union((uchr1, uchr2)):
         return SomeUnicodeCodePoint()
-
-class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeCodePoint)):
-    def union((uchr1, uchr2)):
-        return SomeUnicodeCodePoint()
-
-    def add((chr1, chr2)):
-        return SomeUnicodeString()
 
 class __extend__(pairtype(SomeString, SomeObject)):
 
@@ -599,38 +594,26 @@ class __extend__(pairtype(SomeList, SomeInteger)):
         lst1.listdef.resize()
     delitem.can_only_throw = [IndexError]
 
-def check_negative_slice(s_slice):
-    if isinstance(s_slice.start, SomeInteger) and not s_slice.start.nonneg:
-        raise TypeError("%s not proven to have negative start" % s_slice)
-    if isinstance(s_slice.stop, SomeInteger) and not s_slice.stop.nonneg and\
-           getattr(s_slice.stop, 'const', 0) != -1:
-        raise TypeError("%s not proven to have negative stop" % s_slice)
-
 class __extend__(pairtype(SomeList, SomeSlice)):
 
     def getitem((lst, slic)):
-        check_negative_slice(slic)
         return lst.listdef.offspring()
     getitem.can_only_throw = []
 
     def setitem((lst, slic), s_iterable):
-        check_negative_slice(slic)
         # we need the same unifying effect as the extend() method for
         # the case lst1[x:y] = lst2.
         lst.method_extend(s_iterable)
     setitem.can_only_throw = []
 
     def delitem((lst1, slic)):
-        check_negative_slice(slic)
         lst1.listdef.resize()
     delitem.can_only_throw = []
 
-class __extend__(pairtype(SomeString, SomeSlice),
-                 pairtype(SomeUnicodeString, SomeSlice)):
+class __extend__(pairtype(SomeString, SomeSlice)):
 
     def getitem((str1, slic)):
-        check_negative_slice(slic)
-        return str1.basestringclass()
+        return SomeString()
     getitem.can_only_throw = []
 
 class __extend__(pairtype(SomeString, SomeInteger)):
@@ -668,30 +651,23 @@ class __extend__(pairtype(SomeUnicodeString, SomeInteger)):
 
     getitem_idx_key = getitem_idx
 
-    def mul((str1, int2)): # xxx do we want to support this
-        getbookkeeper().count("str_mul", str1, int2)
-        return SomeUnicodeString()
+    # uncomment if we really want to support that
+    #def mul((str1, int2)): # xxx do we want to support this
+    #    getbookkeeper().count("str_mul", str1, int2)
+    #    return SomeString()
 
-class __extend__(pairtype(SomeInteger, SomeString),
-                 pairtype(SomeInteger, SomeUnicodeString)):
+class __extend__(pairtype(SomeInteger, SomeString)):
     
     def mul((int1, str2)): # xxx do we want to support this
         getbookkeeper().count("str_mul", str2, int1)
-        return str2.basestringclass()
+        return SomeString()
 
-class __extend__(pairtype(SomeUnicodeCodePoint, SomeUnicodeString),
-                 pairtype(SomeUnicodeString, SomeUnicodeCodePoint),
+class __extend__(pairtype(SomeString, SomeUnicodeString),
+                 pairtype(SomeUnicodeString, SomeString),
                  pairtype(SomeUnicodeString, SomeUnicodeString)):
     def union((str1, str2)):
-        return SomeUnicodeString(can_be_None=str1.can_be_none() or
-                                 str2.can_be_none())
-
-    def add((str1, str2)):
-        # propagate const-ness to help getattr(obj, 'prefix' + const_name)
-        result = SomeUnicodeString()
-        if str1.is_immutable_constant() and str2.is_immutable_constant():
-            result.const = str1.const + str2.const
-        return result
+        return SomeUnicodeString(can_be_None=str1.can_be_None or
+                                 str2.can_be_None)
 
 class __extend__(pairtype(SomeInteger, SomeList)):
     

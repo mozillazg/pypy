@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, rclass, llmemory
 from pypy.rpython import rint, raddress
-from pypy.rlib import rarithmetic, objectmodel
+from pypy.rlib import rarithmetic, rstack, objectmodel
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr, inputconst
 from pypy.rpython.rrange import rtype_builtin_range, rtype_builtin_xrange
@@ -218,9 +218,6 @@ def rtype_builtin_unichr(hop):
     assert hop.nb_args == 1
     return hop.args_r[0].rtype_unichr(hop)
 
-def rtype_builtin_unicode(hop):
-    return hop.args_r[0].rtype_unicode(hop)
-
 def rtype_builtin_list(hop):
     return hop.args_r[0].rtype_bltn_list(hop)
 
@@ -272,6 +269,10 @@ def rtype_OSError__init__(hop):
 def rtype_we_are_translated(hop):
     hop.exception_cannot_occur()
     return hop.inputconst(lltype.Bool, True)
+
+def rtype_yield_current_frame_to_caller(hop):
+    return hop.genop('yield_current_frame_to_caller', [],
+                     resulttype=hop.r_result)
 
 def rtype_hlinvoke(hop):
     _, s_repr = hop.r_s_popfirstarg()
@@ -512,8 +513,57 @@ BUILTIN_TYPER[lltype.Ptr] = rtype_const_result
 BUILTIN_TYPER[lltype.runtime_type_info] = rtype_runtime_type_info
 BUILTIN_TYPER[rarithmetic.intmask] = rtype_intmask
 BUILTIN_TYPER[objectmodel.we_are_translated] = rtype_we_are_translated
+BUILTIN_TYPER[rstack.yield_current_frame_to_caller] = (
+    rtype_yield_current_frame_to_caller)
 
 BUILTIN_TYPER[objectmodel.hlinvoke] = rtype_hlinvoke
+
+from pypy.rpython import extfunctable
+
+def rnormalize(rtyper, r):
+    # this replaces char_repr with string_repr, because so far we have
+    # no external function expecting a char, but only external functions
+    # that happily crash if passed a char instead of a string
+    if r == rtyper.type_system.rstr.char_repr:
+        r = rtyper.type_system.rstr.string_repr
+    return r
+
+def make_rtype_extfunc(extfuncinfo):
+    if extfuncinfo.ll_annotable:
+        def rtype_extfunc(hop):
+            ll_function = extfuncinfo.get_ll_function(hop.rtyper.type_system)
+            vars = hop.inputargs(*[rnormalize(hop.rtyper, r)
+                                   for r in hop.args_r])
+            hop.exception_is_here()
+            return hop.gendirectcall(ll_function, *vars)
+    else:
+        def rtype_extfunc(hop):
+            ll_function = extfuncinfo.get_ll_function(hop.rtyper.type_system)
+            resulttype = hop.r_result
+            vars = hop.inputargs(*[rnormalize(hop.rtyper, r)
+                                   for r in hop.args_r])
+            hop.exception_is_here()
+            return hop.llops.genexternalcall(ll_function.__name__, vars, resulttype=resulttype,
+                                             _callable = ll_function)
+            
+    if extfuncinfo.func is not None:
+        rtype_extfunc = sourcetools.func_with_new_name(rtype_extfunc,
+            "rtype_extfunc_%s" % extfuncinfo.func.__name__)
+    return rtype_extfunc
+
+
+def update_exttable():
+    """import rtyping information for external functions 
+    from the extfunctable.table  into our own specific table
+    """
+    for func, extfuncinfo in extfunctable.table.iteritems():
+        if func not in BUILTIN_TYPER:
+            BUILTIN_TYPER[func] = make_rtype_extfunc(extfuncinfo)
+
+# Note: calls to declare() may occur after rbuiltin.py is first imported.
+# We must track future changes to the extfunctable.
+extfunctable.table_callbacks.append(update_exttable)
+update_exttable()
 
 
 # _________________________________________________________________

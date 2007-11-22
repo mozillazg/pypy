@@ -3,7 +3,6 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.controllerentry import Controller
 from pypy.rpython.extfunc import register_external
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.rlib import rposix
 
 # ____________________________________________________________
 #
@@ -85,7 +84,7 @@ def putenv_llimpl(name, value):
     error = os_putenv(l_string)
     if error:
         rffi.free_charp(l_string)
-        raise OSError(rposix.get_errno(), "os_putenv failed")
+        raise OSError(rffi.get_errno(), "os_putenv failed")
     # keep 'l_string' alive - we know that the C library needs it
     # until the next call to putenv() with the same 'name'.
     l_oldstring = envkeepalive.byname.get(name, lltype.nullptr(rffi.CCHARP.TO))
@@ -116,7 +115,7 @@ if hasattr(__import__(os.name), 'unsetenv'):
         error = os_unsetenv(l_name)     # 'error' is None on OS/X
         rffi.free_charp(l_name)
         if error:
-            raise OSError(rposix.get_errno(), "os_unsetenv failed")
+            raise OSError(rffi.get_errno(), "os_unsetenv failed")
         try:
             l_oldstring = envkeepalive.byname[name]
         except KeyError:
@@ -133,7 +132,7 @@ if hasattr(__import__(os.name), 'unsetenv'):
 # Access to the 'environ' external variable
 
 if sys.platform.startswith('darwin'):
-    CCHARPPP = rffi.CArrayPtr(rffi.CCHARPP)
+    CCHARPPP = lltype.Ptr(lltype.FixedSizeArray(rffi.CCHARPP, 1))
     _os_NSGetEnviron = rffi.llexternal('_NSGetEnviron', [], CCHARPPP,
                                        includes=['crt_externs.h'])
     def os_get_environ():

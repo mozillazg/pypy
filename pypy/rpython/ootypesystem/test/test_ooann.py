@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.ootypesystem.ootype import *
 from pypy.annotation import model as annmodel
-from pypy.objspace.flow.objspace import FlowObjSpace
+from pypy.objspace.flow import FlowObjSpace
 from pypy.annotation.annrpython import RPythonAnnotator
 import exceptions
 from pypy.rpython.ootypesystem import ooregistry # side effects
@@ -324,17 +324,3 @@ def test_overload_upcast_fail():
         return c.foo(c)
     a = RPythonAnnotator()
     py.test.raises(TypeError, a.build_types, f, [])
-
-def test_unicode_iterator():
-    from pypy.rpython.ootypesystem import rstr
-    ITER = rstr.UnicodeRepr.string_iterator_repr.lowleveltype
-
-    def fn():
-        it = new(ITER)
-        return it.string
-    a = RPythonAnnotator()
-    res = a.build_types(fn, [])
-
-    assert ITER._field_type("string") is Unicode
-    assert isinstance(res, annmodel.SomeOOInstance)
-    assert res.ootype is Unicode

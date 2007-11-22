@@ -4,7 +4,7 @@ from pypy.objspace.flow.model import Constant, Block, Link, Variable, traverse
 from pypy.objspace.flow.model import flatten
 from pypy.interpreter.argument import Arguments
 from pypy.translator.simplify import simplify_graph
-from pypy.objspace.flow.objspace import FlowObjSpace 
+from pypy.objspace.flow import FlowObjSpace 
 from pypy.objspace.flow import objspace
 from pypy import conftest
 
@@ -711,21 +711,6 @@ class TestFlowObjSpace(Base):
                 s = x.abc
             return x[s]
         graph = self.codetest(myfunc)
-
-    def test_unichr_constfold(self):
-        py.test.skip("not working")
-        def myfunc():
-            return unichr(1234)
-        graph = self.codetest(myfunc)
-        assert graph.startblock.exits[0].target is graph.returnblock
-
-    def test_unicode_constfold(self):
-        py.test.skip("not working for now")
-        def myfunc():
-            return unicode("1234")
-        graph = self.codetest(myfunc)
-        assert graph.startblock.exits[0].target is graph.returnblock
-        
 
     def test_getitem(self):
         def f(c, x):

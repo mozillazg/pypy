@@ -1,7 +1,6 @@
 
 import py
 from pypy.rpython.lltypesystem.rffi import *
-from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile
 from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
 from pypy.rpython.lltypesystem import lltype
@@ -248,7 +247,6 @@ def test_rffi_sizeof():
     cache = {
         lltype.Signed:   ctypes.c_long,
         lltype.Unsigned: ctypes.c_ulong,
-        lltype.UniChar:  ctypes.c_uint,
         lltype.Char:     ctypes.c_ubyte,
         DOUBLE:     ctypes.c_double,
         SIGNEDCHAR: ctypes.c_byte,
@@ -268,7 +266,6 @@ def test_rffi_sizeof():
         assert sizeof(ll) == ctypes.sizeof(ctp)
     assert not size_and_sign(lltype.Signed)[1]
     assert not size_and_sign(lltype.Char)[1]
-    assert not size_and_sign(lltype.UniChar)[1]
     assert size_and_sign(UINT)[1]
 
 def test_rffi_offsetof():
@@ -288,7 +285,8 @@ def test_rffi_offsetof():
     assert offsetof(S, "c_b") == struct.calcsize("hi") - struct.calcsize("i")
     assert offsetof(S, "c_c") == struct.calcsize("hii") - struct.calcsize("i")
 
-def test_prebuilt_constant():
+def test_prebuild_constant():
+    py.test.skip("WIP")
     h_source = py.code.Source("""
     #ifndef _CONSTANTS
     #define _CONSTANTS

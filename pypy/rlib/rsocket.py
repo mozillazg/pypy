@@ -128,11 +128,6 @@ class Address(object):
         raise RSocketError("unknown address family")
     from_object = staticmethod(from_object)
 
-    def fill_from_object(self, space, w_address):
-        """ Purely abstract
-        """
-        raise NotImplementedError
-
 # ____________________________________________________________
 
 def makeipaddr(name, result=None):
@@ -193,11 +188,6 @@ class IPAddress(Address):
         # (with variable size numbers).
         host, serv = getnameinfo(self, NI_NUMERICHOST | NI_NUMERICSERV)
         return host
-
-    def lock_in_addr(self):
-        """ Purely abstract
-        """
-        raise NotImplementedError
 
 # ____________________________________________________________
 
@@ -1027,7 +1017,7 @@ if hasattr(_c, 'socketpair'):
         The arguments are the same as for socket() except the default family is
         AF_UNIX if defined on the platform; otherwise, the default is AF_INET.
         """
-        result = lltype.malloc(_c.socketpair_t, 2, flavor='raw')
+        result = lltype.malloc(_c.socketpair_t, flavor='raw')
         res = _c.socketpair(family, type, proto, result)
         if res < 0:
             raise last_error()

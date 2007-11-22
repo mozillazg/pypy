@@ -140,9 +140,6 @@ class JvmTest(BaseRtypingTest, OORtypeMixin):
     def ll_to_string(self, s):
         return s
 
-    def ll_to_unicode(self, s):
-        return s
-
     def ll_to_list(self, l):
         return l
 

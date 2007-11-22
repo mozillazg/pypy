@@ -1,11 +1,13 @@
 
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
 from pypy.rlib import rarithmetic
+from pypy.rpython.rbuiltin import parse_kwds
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.tool.sourcetools import func_with_new_name
@@ -242,52 +244,40 @@ def COpaque(name, hints=None, **kwds):
 def COpaquePtr(*args, **kwds):
     return lltype.Ptr(COpaque(*args, **kwds))
 
-def CExternVariable(TYPE, name, _CConstantClass=CConstant, includes=[],
-                    include_dirs=[], sandboxsafe=False):
+def CExternVariable(TYPE, name, _CConstantClass=CConstant):
     """Return a pair of functions - a getter and a setter - to access
     the given global C variable.
     """
-    from pypy.translator.c.primitive import PrimitiveType
-    # XXX we cannot really enumerate all C types here, do it on a case-by-case
-    #     basis
-    if TYPE == CCHARPP:
-        c_type = 'char **'
-    elif TYPE == CCHARP:
-        c_type = 'char *'
-    else:
-        c_type = PrimitiveType[TYPE]
-        assert c_type.endswith(' @')
-        c_type = c_type[:-2] # cut the trailing ' @'
+    # XXX THIS IS ONLY A QUICK HACK TO MAKE IT WORK
+    # In general, we need to re-think a few things to be more consistent,
+    # e.g. what if a CStruct, COpaque or CExternVariable requires
+    # some #include...
+    assert not isinstance(TYPE, lltype.ContainerType)
+    CTYPE = lltype.FixedSizeArray(TYPE, 1)
+    c_variable_ref = _CConstantClass('(&%s)' % (name,), lltype.Ptr(CTYPE))
+    def getter():
+        return c_variable_ref[0]
+    def setter(newvalue):
+        c_variable_ref[0] = newvalue
+    return (func_with_new_name(getter, '%s_getter' % (name,)),
+            func_with_new_name(setter, '%s_setter' % (name,)))
 
-    getter_name = 'get_' + name
-    setter_name = 'set_' + name
-    c_getter = "%(c_type)s %(getter_name)s () { return %(name)s; }" % locals()
-    c_setter = "void %(setter_name)s (%(c_type)s v) { %(name)s = v; }" % locals()
 
-    lines = ["#include <%s>" % i for i in includes]
-    lines.append(c_getter)
-    lines.append(c_setter)
-    sources = ('\n'.join(lines),)
+class CConstantErrno(CConstant):
+    # these accessors are used when calling get_errno() or set_errno()
+    # on top of CPython
+    def __getitem__(self, index):
+        assert index == 0
+        try:
+            return ll2ctypes.TLS.errno
+        except AttributeError:
+            raise ValueError("no C function call occurred so far, "
+                             "errno is undefined")
+    def __setitem__(self, index, value):
+        assert index == 0
+        ll2ctypes.TLS.errno = value
 
-    kwds = {'includes': includes, 'sources':sources,
-            'include_dirs':include_dirs, 'sandboxsafe': sandboxsafe}
-    getter = llexternal(getter_name, [], TYPE, **kwds)
-    setter = llexternal(setter_name, [TYPE], lltype.Void, **kwds)
-    return getter, setter
-    
-##    # XXX THIS IS ONLY A QUICK HACK TO MAKE IT WORK
-##    # In general, we need to re-think a few things to be more consistent,
-##    # e.g. what if a CStruct, COpaque or CExternVariable requires
-##    # some #include...
-##    assert not isinstance(TYPE, lltype.ContainerType)
-##    CTYPE = lltype.FixedSizeArray(TYPE, 1)
-##    c_variable_ref = _CConstantClass('(&%s)' % (name,), lltype.Ptr(CTYPE))
-##    def getter():
-##        return c_variable_ref[0]
-##    def setter(newvalue):
-##        c_variable_ref[0] = newvalue
-##    return (func_with_new_name(getter, '%s_getter' % (name,)),
-##            func_with_new_name(setter, '%s_setter' % (name,)))
+get_errno, set_errno = CExternVariable(lltype.Signed, 'errno', CConstantErrno)
 
 # char, represented as a Python character
 # (use SIGNEDCHAR or UCHAR for the small integer types)
@@ -414,8 +404,6 @@ def sizeof(tp):
         tp = ULONG     # XXX!
     if tp is lltype.Char:
         return 1
-    if tp is lltype.UniChar:
-        return 4
     if tp is lltype.Float:
         return 8
     assert isinstance(tp, lltype.Number)

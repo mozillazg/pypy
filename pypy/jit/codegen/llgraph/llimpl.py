@@ -8,34 +8,28 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rtupletype
 from pypy.objspace.flow import model as flowmodel
 from pypy.translator.simplify import eliminate_empty_blocks
 from pypy.translator.unsimplify import varoftype
+from pypy.rpython.module.support import init_opaque_object
+from pypy.rpython.module.support import to_opaque_object, from_opaque_object
 from pypy.rpython.module.support import LLSupport
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem.rclass import fishllattr
 from pypy.rpython.lltypesystem.lloperation import llop
 
-def _from_opaque(opq):
-    return opq._obj.externalobj
-
-_TO_OPAQUE = {}
-
-def _to_opaque(value):
-    return lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
-                            externalobj=value)
 
 # for debugging, sanity checks in non-RPython code
-reveal = _from_opaque
+reveal = from_opaque_object
 
 def isptrtype(gv_type):
-    c = _from_opaque(gv_type)
+    c = from_opaque_object(gv_type)
     return isinstance(c.value, lltype.Ptr)
 
 def newblock():
     block = flowmodel.Block([])
-    return _to_opaque(block)
+    return to_opaque_object(block)
 
 def newgraph(gv_FUNCTYPE, name):
-    FUNCTYPE = _from_opaque(gv_FUNCTYPE).value
+    FUNCTYPE = from_opaque_object(gv_FUNCTYPE).value
     # 'name' is just a way to track things
     if not isinstance(name, str):
         name = LLSupport.from_rstr(name)
@@ -71,7 +65,7 @@ def newgraph(gv_FUNCTYPE, name):
     return genconst(fptr)
 
 def _getgraph(gv_func):
-     graph = _from_opaque(gv_func).value._obj.graph
+     graph = from_opaque_object(gv_func).value._obj.graph
      return graph
 
 def end(gv_func):
@@ -82,22 +76,22 @@ def getstartblock(gv_func):
     graph = _getgraph(gv_func)
     [link] = graph.startblock.exits
     substartblock = link.target
-    return _to_opaque(substartblock)
+    return to_opaque_object(substartblock)
 
 def geninputarg(block, gv_CONCRETE_TYPE):
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     assert not block.operations, "block already contains operations"
     assert block.exits == [], "block already closed"
-    CONCRETE_TYPE = _from_opaque(gv_CONCRETE_TYPE).value
+    CONCRETE_TYPE = from_opaque_object(gv_CONCRETE_TYPE).value
     v = flowmodel.Variable()
     v.concretetype = lltype.erasedType(CONCRETE_TYPE)
     block.inputargs.append(v)
-    return _to_opaque(v)
+    return to_opaque_object(v)
 
 def getinputarg(block, i):
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     v = block.inputargs[i]
-    return _to_opaque(v)
+    return to_opaque_object(v)
 
 def _inputvars(vars):
     newvars = []
@@ -120,14 +114,14 @@ def _inputvars(vars):
             newvars.append(v)
     res = []
     for v1 in newvars:
-        v = _from_opaque(v1)
+        v = from_opaque_object(v1)
         assert isinstance(v, (flowmodel.Constant, flowmodel.Variable))
         res.append(v)
     return res
 
 def cast(block, gv_TYPE, gv_var):
-    TYPE = _from_opaque(gv_TYPE).value
-    v = _from_opaque(gv_var)
+    TYPE = from_opaque_object(gv_TYPE).value
+    v = from_opaque_object(gv_var)
     if TYPE != v.concretetype:
         if TYPE is llmemory.GCREF or v.concretetype is llmemory.GCREF:
             lltype.cast_opaque_ptr(TYPE, v.concretetype._defl()) # sanity check
@@ -135,13 +129,13 @@ def cast(block, gv_TYPE, gv_var):
         else:
             assert v.concretetype == lltype.erasedType(TYPE)
             opname = 'cast_pointer'
-        block = _from_opaque(block)
+        block = from_opaque_object(block)
         v2 = flowmodel.Variable()
         v2.concretetype = TYPE
         op = flowmodel.SpaceOperation(opname, [v], v2)
         block.operations.append(op)
         v = v2
-    return _to_opaque(v)
+    return to_opaque_object(v)
 
 def erasedvar(v, block):
     T = lltype.erasedType(v.concretetype)
@@ -158,7 +152,7 @@ def genop(block, opname, vars_gv, gv_RESULT_TYPE):
     # gv_RESULT_TYPE comes from constTYPE
     if not isinstance(opname, str):
         opname = LLSupport.from_rstr(opname)
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     assert block.exits == [], "block already closed"
     opvars = _inputvars(vars_gv)
     if gv_RESULT_TYPE is guess:
@@ -166,12 +160,12 @@ def genop(block, opname, vars_gv, gv_RESULT_TYPE):
     elif isinstance(gv_RESULT_TYPE, lltype.LowLevelType):
         RESULT_TYPE = gv_RESULT_TYPE
     else:
-        RESULT_TYPE = _from_opaque(gv_RESULT_TYPE).value
+        RESULT_TYPE = from_opaque_object(gv_RESULT_TYPE).value
     v = flowmodel.Variable()
     v.concretetype = RESULT_TYPE
     op = flowmodel.SpaceOperation(opname, opvars, v)
     block.operations.append(op)
-    return _to_opaque(erasedvar(v, block))
+    return to_opaque_object(erasedvar(v, block))
 
 RESULT_TYPES = {
     'cast_ptr_to_int': lltype.Signed,
@@ -212,14 +206,14 @@ def genconst(llvalue):
     v.concretetype = T1
     if v.concretetype == lltype.Void: # XXX genconst should not really be used for Void constants
         assert not isinstance(llvalue, str) and not isinstance(llvalue, lltype.LowLevelType)
-    return _to_opaque(v)
+    return to_opaque_object(v)
 
 def genzeroconst(gv_TYPE):
-    TYPE = _from_opaque(gv_TYPE).value
+    TYPE = from_opaque_object(gv_TYPE).value
     TYPE = lltype.erasedType(TYPE)
     c = flowmodel.Constant(TYPE._defl())
     c.concretetype = TYPE
-    return _to_opaque(c)
+    return to_opaque_object(c)
 
 def _generalcast(T, value):
     if isinstance(T, lltype.Ptr):
@@ -237,16 +231,16 @@ def _generalcast(T, value):
         return lltype.cast_primitive(T, value)    
 
 def revealconst(T, gv_value):
-    c = _from_opaque(gv_value)
+    c = from_opaque_object(gv_value)
     assert isinstance(c, flowmodel.Constant)
     return _generalcast(T, c.value)
 
 def revealconstrepr(gv_value):
-    c = _from_opaque(gv_value)
+    c = from_opaque_object(gv_value)
     return LLSupport.to_rstr(repr(c.value))
 
 def isconst(gv_value):
-    c = _from_opaque(gv_value)
+    c = from_opaque_object(gv_value)
     return isinstance(c, flowmodel.Constant)
 
 
@@ -258,48 +252,48 @@ class InteriorPtrVariable(object):
         self.base_and_offsets_gv = base_and_offsets_gv
 
 def gengetsubstruct(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     # don't generate any operation for an interior getsubstruct,
     # but just return a special pseudo-variable
     if isinstance(v_ptr, InteriorPtrVariable):
         # a nested getsubstruct
         v = InteriorPtrVariable(v_ptr.base_and_offsets_gv + [gv_fieldname])
-        return _to_opaque(v)
+        return to_opaque_object(v)
     # in all other cases we need a proper cast
     gv_ptr = cast(block, gv_PTRTYPE, gv_ptr)
-    PTRTYPE = _from_opaque(gv_PTRTYPE).value
+    PTRTYPE = from_opaque_object(gv_PTRTYPE).value
     if PTRTYPE.TO._gckind == 'gc':
         # reading from a GcStruct requires returning an interior pointer
         # pseudo-variable
         v = InteriorPtrVariable([gv_ptr, gv_fieldname])
-        return _to_opaque(v)
+        return to_opaque_object(v)
     else:
         vars_gv = [gv_ptr, gv_fieldname]
-        c_fieldname = _from_opaque(gv_fieldname)
+        c_fieldname = from_opaque_object(gv_fieldname)
         RESULTTYPE = lltype.Ptr(getattr(PTRTYPE.TO, c_fieldname.value))
         return genop(block, "getsubstruct", vars_gv, RESULTTYPE)
 
 def gengetarraysubstruct(block, gv_ptr, gv_index):
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     # don't generate any operation for an interior getarraysubstruct,
     # but just return a special pseudo-variable
     if isinstance(v_ptr, InteriorPtrVariable):
         # a nested getarraysubstruct
         v = InteriorPtrVariable(v_ptr.base_and_offsets_gv + [gv_index])
-        return _to_opaque(v)
+        return to_opaque_object(v)
     PTRTYPE = v_ptr.concretetype
     if PTRTYPE.TO._gckind == 'gc':
         # reading from a GcArray requires returning an interior pointer
         # pseudo-variable
         v = InteriorPtrVariable([gv_ptr, gv_index])
-        return _to_opaque(v)
+        return to_opaque_object(v)
     else:
         vars_gv = [gv_ptr, gv_index]
         RESULTTYPE = lltype.Ptr(PTRTYPE.TO.OF)
         return genop(block, "getarraysubstruct", vars_gv, RESULTTYPE)
 
 def gensetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname, gv_value):
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):
         # this is really a setinteriorfield
         vars_gv = v_ptr.base_and_offsets_gv + [gv_fieldname, gv_value]
@@ -312,10 +306,10 @@ def gensetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname, gv_value):
         genop(block, "setfield", vars_gv, lltype.Void)
 
 def gengetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
-    PTRTYPE = _from_opaque(gv_PTRTYPE).value
-    c_fieldname = _from_opaque(gv_fieldname)
+    PTRTYPE = from_opaque_object(gv_PTRTYPE).value
+    c_fieldname = from_opaque_object(gv_fieldname)
     RESULTTYPE = getattr(PTRTYPE.TO, c_fieldname.value)
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):
         # this is really a getinteriorfield
         vars_gv = v_ptr.base_and_offsets_gv + [gv_fieldname]
@@ -328,7 +322,7 @@ def gengetfield(block, gv_ptr, gv_PTRTYPE, gv_fieldname):
         return genop(block, "getfield", vars_gv, RESULTTYPE)
 
 def gensetarrayitem(block, gv_ptr, gv_index, gv_value):
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):
         # this is really a setinteriorfield
         vars_gv = v_ptr.base_and_offsets_gv + [gv_index, gv_value]
@@ -338,8 +332,8 @@ def gensetarrayitem(block, gv_ptr, gv_index, gv_value):
         genop(block, "setarrayitem", vars_gv, lltype.Void)
 
 def gengetarrayitem(block, gv_ITEMTYPE, gv_ptr, gv_index):
-    ITEMTYPE = _from_opaque(gv_ITEMTYPE).value
-    v_ptr = _from_opaque(gv_ptr)
+    ITEMTYPE = from_opaque_object(gv_ITEMTYPE).value
+    v_ptr = from_opaque_object(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):
         # this is really a getinteriorfield
         vars_gv = v_ptr.base_and_offsets_gv + [gv_index]
@@ -349,7 +343,7 @@ def gengetarrayitem(block, gv_ITEMTYPE, gv_ptr, gv_index):
         return genop(block, "getarrayitem", vars_gv, ITEMTYPE)
 
 def gengetarraysize(block, gv_ptr):
-    v_ptr = _from_opaque(gv_ptr)
+    v_ptr = from_opaque_object(gv_ptr)
     if isinstance(v_ptr, InteriorPtrVariable):
         # this is really a getinteriorarraysize
         vars_gv = v_ptr.base_and_offsets_gv
@@ -366,29 +360,29 @@ def gengetarraysize(block, gv_ptr):
 def placeholder(dummy):
     c = flowmodel.Constant(dummy)
     c.concretetype = lltype.Void
-    return _to_opaque(c)    
+    return to_opaque_object(c)    
 
 def constFieldName(name):
     assert isinstance(name, str)
     c = flowmodel.Constant(name)
     c.concretetype = lltype.Void
-    return _to_opaque(c)
+    return to_opaque_object(c)
 
 def constTYPE(TYPE):
     assert isinstance(TYPE, lltype.LowLevelType)
     c = flowmodel.Constant(TYPE)
     c.concretetype = lltype.Void
-    return _to_opaque(c)
+    return to_opaque_object(c)
 
 def closeblock1(block):
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     link = flowmodel.Link([], None)
     block.closeblock(link)
-    return _to_opaque(link)
+    return to_opaque_object(link)
 
 def closeblock2(block, exitswitch):
-    block = _from_opaque(block)
-    exitswitch = _from_opaque(exitswitch)
+    block = from_opaque_object(block)
+    exitswitch = from_opaque_object(exitswitch)
     assert isinstance(exitswitch, flowmodel.Variable)
     block.exitswitch = exitswitch
     false_link = flowmodel.Link([], None)
@@ -398,8 +392,8 @@ def closeblock2(block, exitswitch):
     true_link.exitcase = True
     true_link.llexitcase = True
     block.closeblock(false_link, true_link)
-    return pseudotuple(_to_opaque(false_link),
-                       _to_opaque(true_link))
+    return pseudotuple(to_opaque_object(false_link),
+                       to_opaque_object(true_link))
 
 _color_num = 1
 _color_den = 2
@@ -415,9 +409,9 @@ def getcolor():
     return '#'+''.join(['%02x' % int(p*255) for p in rgb])
     
 def closeblockswitch(block, exitswitch):
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     block.blockcolor = getcolor()
-    exitswitch = _from_opaque(exitswitch)
+    exitswitch = from_opaque_object(exitswitch)
     assert isinstance(exitswitch, flowmodel.Variable)
     TYPE = exitswitch.concretetype
     if isinstance(TYPE, lltype.Ptr):
@@ -431,8 +425,8 @@ def closeblockswitch(block, exitswitch):
     return
 
 def add_case(block, exitcase):
-    block = _from_opaque(block)
-    exitcase = _from_opaque(exitcase)
+    block = from_opaque_object(block)
+    exitcase = from_opaque_object(exitcase)
     assert isinstance(exitcase, flowmodel.Constant)
     assert isinstance(block.exitswitch, flowmodel.Variable)
     case_link = flowmodel.Link([], None)
@@ -447,10 +441,10 @@ def add_case(block, exitcase):
     else:
         exits = block.exits + (case_link,)
     block.recloseblock(*exits)
-    return _to_opaque(case_link)
+    return to_opaque_object(case_link)
 
 def add_default(block):
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     assert isinstance(block.exitswitch, flowmodel.Variable)
     default_link = flowmodel.Link([], None)
     default_link.exitcase = 'default'
@@ -460,7 +454,7 @@ def add_default(block):
     else:
         exits = block.exits + (default_link,)
     block.recloseblock(*exits)
-    return _to_opaque(default_link)
+    return to_opaque_object(default_link)
 
 class pseudotuple(object):
     # something that looks both like a hl and a ll tuple
@@ -494,19 +488,19 @@ def _closelink(link, vars, targetblock):
         raise TypeError
 
 def closelink(link, vars, targetblock):
-    link = _from_opaque(link)
-    targetblock = _from_opaque(targetblock)
+    link = from_opaque_object(link)
+    targetblock = from_opaque_object(targetblock)
     vars = _inputvars(vars)
     _closelink(link, vars, targetblock)
 
 def closereturnlink(link, returnvar, gv_func):
-    returnvar = _from_opaque(returnvar)
-    link = _from_opaque(link)
+    returnvar = from_opaque_object(returnvar)
+    link = from_opaque_object(link)
     graph = _getgraph(gv_func)
     _closelink(link, [returnvar], graph.prereturnblock)
 
 def closelinktofreshblock(link, inputargs=None, otherlink=None):
-    link = _from_opaque(link)
+    link = from_opaque_object(link)
     prevblockvars = link.prevblock.getvariables()
     # the next block's inputargs come from 'inputargs' if specified
     if inputargs is None:
@@ -519,7 +513,7 @@ def closelinktofreshblock(link, inputargs=None, otherlink=None):
     if otherlink is None:
         linkvars = list(inputvars)
     else:
-        otherlink = _from_opaque(otherlink)
+        otherlink = from_opaque_object(otherlink)
         linkvars = list(otherlink.args)
     # check linkvars for consistency
     existing_vars = dict.fromkeys(prevblockvars)
@@ -531,7 +525,7 @@ def closelinktofreshblock(link, inputargs=None, otherlink=None):
     nextblock = flowmodel.Block(inputvars)
     link.args = linkvars
     link.target = nextblock
-    return _to_opaque(nextblock)
+    return to_opaque_object(nextblock)
 
 def casting_link(source, sourcevars, target):
     assert len(sourcevars) == len(target.inputargs)
@@ -585,7 +579,7 @@ def _buildgraph(graph):
     return graph
 
 def buildgraph(graph, FUNCTYPE):
-    graph = _from_opaque(graph)
+    graph = from_opaque_object(graph)
     return _buildgraph(graph)
 
 def testgengraph(gengraph, args, viewbefore=False, executor=LLInterpreter):
@@ -609,18 +603,23 @@ def show_incremental_progress(gv_func):
         graph.show()
 
 # ____________________________________________________________
+# RTyping of the above functions
 
-CONSTORVAR = lltype.Ptr(lltype.OpaqueType("ConstOrVar"))
-BLOCK = lltype.Ptr(lltype.OpaqueType("Block"))
-LINK = lltype.Ptr(lltype.OpaqueType("Link"))
-GRAPH = lltype.Ptr(lltype.OpaqueType("FunctionGraph"))
+from pypy.rpython.extfunctable import declareptrtype
 
-_TO_OPAQUE[flowmodel.Block] = BLOCK.TO
-_TO_OPAQUE[flowmodel.Constant] = CONSTORVAR.TO
-_TO_OPAQUE[flowmodel.Variable] = CONSTORVAR.TO
-_TO_OPAQUE[InteriorPtrVariable] = CONSTORVAR.TO
-_TO_OPAQUE[flowmodel.Link] = LINK.TO
-_TO_OPAQUE[flowmodel.FunctionGraph] = GRAPH.TO
+blocktypeinfo = declareptrtype(flowmodel.Block, "Block")
+consttypeinfo = declareptrtype(flowmodel.Constant, "ConstOrVar")
+vartypeinfo   = declareptrtype(flowmodel.Variable, "ConstOrVar")
+vartypeinfo.set_lltype(consttypeinfo.get_lltype())   # force same lltype
+interiorptrvartypeinfo = declareptrtype(InteriorPtrVariable, "ConstOrVar")
+interiorptrvartypeinfo.set_lltype(vartypeinfo.get_lltype()) # force same lltype
+linktypeinfo  = declareptrtype(flowmodel.Link, "Link")
+graphtypeinfo = declareptrtype(flowmodel.FunctionGraph, "FunctionGraph")
+
+CONSTORVAR = lltype.Ptr(consttypeinfo.get_lltype())
+BLOCK = lltype.Ptr(blocktypeinfo.get_lltype())
+LINK = lltype.Ptr(linktypeinfo.get_lltype())
+GRAPH = lltype.Ptr(graphtypeinfo.get_lltype())
 
 # support constants and types
 
@@ -665,8 +664,8 @@ def setannotation(func, annotation, specialize_as_constant=False):
 # annotations
 from pypy.annotation import model as annmodel
 
-s_ConstOrVar = annmodel.SomePtr(CONSTORVAR)
-s_Link = annmodel.SomePtr(LINK)
+s_ConstOrVar = annmodel.SomePtr(CONSTORVAR)#annmodel.SomeExternalObject(flowmodel.Variable)
+s_Link = annmodel.SomePtr(LINK)#annmodel.SomeExternalObject(flowmodel.Link)
 s_LinkPair = annmodel.SomeTuple([s_Link, s_Link])
 s_Block = annmodel.SomePtr(BLOCK)
 s_Graph = annmodel.SomePtr(GRAPH)
@@ -715,7 +714,7 @@ setannotation(show_incremental_progress, None)
 
 def get_frame_info(block, vars_gv):
     genop(block, 'frame_info', vars_gv, lltype.Void)
-    block = _from_opaque(block)
+    block = from_opaque_object(block)
     frame_info = block.operations[-1]
     return lltype.opaqueptr(llmemory.GCREF.TO, 'frame_info',
                             info=frame_info)

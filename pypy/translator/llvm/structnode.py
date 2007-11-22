@@ -19,7 +19,7 @@ class StructNode(ConstantNode):
     """
     __slots__ = "db value structtype _get_ref_cache _get_types".split()
 
-    prefix = '@s_inst_'
+    prefix = '@structinstance_'
 
     def __init__(self, db, value):
         self.db = db
@@ -89,15 +89,12 @@ class StructNode(ConstantNode):
     def constantvalue(self):
         """ Returns the constant representation for this node. """
         values = self._getvalues()
-        if len(values) > 3:
-            all_values = ",\n\t".join(values)
-            return "%s {\n\t%s }" % (self.get_typerepr(), all_values)
-        else:
-            all_values = ",  ".join(values)
-            return "%s { %s }" % (self.get_typerepr(), all_values)
+        all_values = ",\n  ".join(values)
+        return "%s {\n  %s\n  }\n" % (self.get_typerepr(), all_values)
+                
                 
 class FixedSizeArrayNode(StructNode):
-    prefix = '@fa_inst_'
+    prefix = '@fixarrayinstance_'
 
     def __init__(self, db, struct): 
         super(FixedSizeArrayNode, self).__init__(db, struct)
@@ -150,8 +147,6 @@ class StructVarsizeNode(StructNode):
     OR
     a series of embedded structs, which has as its last element an array.
     """
-
-    prefix = '@sv_inst_'
 
     def _getvalues(self):
         values = []

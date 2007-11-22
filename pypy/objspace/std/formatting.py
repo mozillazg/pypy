@@ -132,16 +132,11 @@ def make_formatter_subclass(do_unicode):
     # to build two subclasses of the BaseStringFormatter class,
     # each one getting its own subtle differences and RPython types.
 
-    if do_unicode:
-        const = unicode
-    else:
-        const = str
-
     class StringFormatter(BaseStringFormatter):
 
         def __init__(self, space, fmt, values_w, w_valuedict):
             BaseStringFormatter.__init__(self, space, values_w, w_valuedict)
-            self.fmt = fmt    # either a string or a unicode
+            self.fmt = fmt    # either a string or a list of unichars
 
         def peekchr(self):
             # return the 'current' character
@@ -181,7 +176,10 @@ def make_formatter_subclass(do_unicode):
             if self.w_valuedict is None:
                 raise OperationError(space.w_TypeError,
                                      space.wrap("format requires a mapping"))
-            w_key = space.wrap(key)
+            if do_unicode:
+                w_key = space.newunicode(key)
+            else:
+                w_key = space.wrap(key)
             return space.getitem(self.w_valuedict, w_key)
 
         def parse_fmt(self):
@@ -267,9 +265,9 @@ def make_formatter_subclass(do_unicode):
                         break
                     i += 1
                 else:
-                    result.append(const(fmt[i0:]))
+                    result += fmt[i0:]
                     break     # end of 'fmt' string 
-                result.append(const(fmt[i0:i]))
+                result += fmt[i0:i]
                 self.fmtpos = i + 1
 
                 # interpret the next formatter
@@ -303,7 +301,7 @@ def make_formatter_subclass(do_unicode):
             if do_unicode:
                 w_defaultencoding = space.call_function(
                     space.sys.get('getdefaultencoding'))
-                w_s = space.call_method(space.wrap(c),
+                w_s = space.call_method(space.newunicode([c]),
                                         "encode",
                                         w_defaultencoding,
                                         space.wrap('replace'))
@@ -322,12 +320,10 @@ def make_formatter_subclass(do_unicode):
             result = self.result
             padding = self.width - length
             if not self.f_ljust:
-                result.append(const(' ' * padding))
-                # add any padding at the left of 'r'
+                result += ' ' * padding    # add any padding at the left of 'r'
                 padding = 0
-            result.append(const(r[:length]))       # add 'r' itself
-            result.append(const(' ' * padding))
-            # add any remaining padding at the right
+            result += r[:length]       # add 'r' itself
+            result += ' ' * padding    # add any remaining padding at the right
         std_wp._annspecialcase_ = 'specialize:argtype(1)'
 
         def std_wp_number(self, r, prefix=''):
@@ -354,15 +350,15 @@ def make_formatter_subclass(do_unicode):
                 padnumber = '>'
 
             if padnumber == '>':
-                result.append(const(' ' * padding))    # pad with spaces on the left
+                result += ' ' * padding    # pad with spaces on the left
             if sign:
-                result.append(const(r[0]))        # the sign
-            result.append(const(prefix))               # the prefix
+                result.append(r[0])        # the sign
+            result += prefix               # the prefix
             if padnumber == '0':
-                result.append(const('0' * padding))    # pad with zeroes
-            result.append(const(r[int(sign):]))        # the rest of the number
+                result += '0' * padding    # pad with zeroes
+            result += r[int(sign):]        # the rest of the number
             if padnumber == '<':           # spaces on the right
-                result.append(const(' ' * padding))
+                result += ' ' * padding
 
         def fmt_s(self, w_value):
             space = self.space
@@ -375,7 +371,7 @@ def make_formatter_subclass(do_unicode):
             else:
                 if not got_unicode:
                     w_value = space.call_function(space.w_unicode, w_value)
-                s = space.unicode_w(w_value)
+                s = space.unichars_w(w_value)
             self.std_wp(s)
 
         def fmt_r(self, w_value):
@@ -393,11 +389,11 @@ def make_formatter_subclass(do_unicode):
             elif space.is_true(space.isinstance(w_value, space.w_unicode)):
                 if not do_unicode:
                     raise NeedUnicodeFormattingError
-                ustr = space.unicode_w(w_value)
-                if len(ustr) != 1:
+                lst = space.unichars_w(w_value)
+                if len(lst) != 1:
                     raise OperationError(space.w_TypeError,
                                       space.wrap("%c requires int or unichar"))
-                self.std_wp(ustr)
+                self.std_wp(lst)
             else:
                 n = space.int_w(w_value)
                 if do_unicode:
@@ -406,7 +402,7 @@ def make_formatter_subclass(do_unicode):
                     except ValueError:
                         raise OperationError(space.w_OverflowError,
                             space.wrap("unicode character code out of range"))
-                    self.std_wp(c)
+                    self.std_wp([c])
                 else:
                     try:
                         s = chr(n)
@@ -442,14 +438,14 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
             result = formatter.format()
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
-            fmt = unicode(fmt)
+            fmt = [c for c in fmt]     # string => list of unichars
         else:
             return space.wrap(''.join(result))
     else:
-        fmt = space.unicode_w(w_fmt)
+        fmt = space.unichars_w(w_fmt)
     formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
     result = formatter.format()
-    return space.wrap(u''.join(result))
+    return space.newunicode(result)
 
 def mod_format(space, w_format, w_values, do_unicode=False):
     if space.is_true(space.isinstance(w_values, space.w_tuple)):
