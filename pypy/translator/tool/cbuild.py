@@ -11,6 +11,11 @@ py.log.setconsumer("cbuild", ansi_log)
 
 debug = 0
 
+if sys.platform == 'win32':
+    so_ext = '.dll'
+else:
+    so_ext = '.so'
+
 def compiler_command():
     # e.g. for tcc, you might set this to
     #    "tcc -shared -o %s.so %s.c"
@@ -158,7 +163,7 @@ def cache_c_module(cfiles, modname, cache_dir=None,
     modname = str(cache_dir.join(modname))
     compile_c_module(cfiles, modname, include_dirs=include_dirs,
                      libraries=libraries)
-    return modname + '.so'
+    return modname + so_ext
 
 def make_module_from_c(cfile, include_dirs=None, libraries=[]):
     cfile = py.path.local(cfile)
