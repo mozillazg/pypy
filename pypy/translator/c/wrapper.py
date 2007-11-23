@@ -26,21 +26,15 @@ def gen_wrapper(func, translator, newname=None):
     # get the fully typed low-level pointer to the function, if available
 
     do_inline = ALWAYS_INLINE
-    if translator.annotator is None:
-        # get the graph from the translator, "push it back" so that it's
-        # still available for further buildflowgraph() calls
-        graph = translator.buildflowgraph(func)
-        translator._prebuilt_graphs[func] = graph
+    if isinstance(func, FunctionGraph):
+        graph = func
+        func = graph.func
+        # in this case we want to inline for sure, because we
+        # created this extra graph with a single call-site.
+        do_inline = True
     else:
-        if isinstance(func, FunctionGraph):
-            graph = func
-            func = graph.func
-            # in this case we want to inline for sure, because we
-            # created this extra graph with a single call-site.
-            do_inline = True
-        else:
-            bk = translator.annotator.bookkeeper
-            graph = bk.getdesc(func).getuniquegraph()
+        bk = translator.annotator.bookkeeper
+        graph = bk.getdesc(func).getuniquegraph()
 
     f = getfunctionptr(graph)
     FUNCTYPE = typeOf(f).TO
