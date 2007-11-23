@@ -144,56 +144,15 @@ def set_unbuffered_io():
 # ____________________________________________________________
 # Main entry point
 
-# faking os, until we really are able to import it from source
-"""
-Why reload_os ?
----------------
-
-When pypy is starting, the builtin modules are there, but os.path
-is a Python module. The current startup code depends on os.py,
-which had the side effect that os.py got frozen into the binary.
-
-Os.py is a wrapper for system specific built-in modules and tries
-to unify the interface. One problem is os.environ which looks
-very differently per os.
-Access to os.environ is not possible on Windows, due to caching
-problems. We solve that by passing the PATH envirnment setting
-in from a low-level interface.
-
-As an intermediate hack, the os.path functions are used until
-os.py can be imported. The module is then re-imported. This
-intermediate, since it will still leave os.environ unusable.
-(the last version solved that by hairy import tricks)
-
-The next version will avoid early import of os, alltogether.
-"""
+# see nanos.py for explainment why we do not import os here
+# CAUTION!
+# remember to update nanos.py if you are using more functions
+# from os or os.path!
+# Running test/test_nanos.py might be helpful as well.
 
 def we_are_translated():
-    # this function does not exist on app-level.
-    # Don't confuse it with
-    # from pypy.rlib.objectmodel import we_are_translated
-    # which I did.
+    # app-level, very different from pypy.rlib.objectmodel.we_are_translated
     return hasattr(sys, 'pypy_translation_info')
-
-class reload_os:
-    def __init__(self):
-        self.pre_import = sys.modules.keys()
-
-    def reload(self):
-        # re-load modules instead of using the pre-compiled ones
-        # note that this gives trouble if we are not translated,
-        # since some exithandler in threading.py complains
-        if we_are_translated():
-            for mod in sys.modules.keys():
-                if mod not in self.pre_import:
-                    del sys.modules[mod]
-        global os
-        import os
-        
-reload_os = reload_os()
-import os
-
-AUTOSUBPATH = 'share' + os.sep + 'pypy-%d.%d'
 
 if 'nt' in sys.builtin_module_names:
     IS_WINDOWS = True
@@ -201,7 +160,11 @@ if 'nt' in sys.builtin_module_names:
 else:
     IS_WINDOWS = False
 
-def entry_point(executable, argv, path):
+def entry_point(executable, argv, nanos):
+    # a substituted os if we are translated
+    global os
+    os = nanos
+    AUTOSUBPATH = 'share' + os.sep + 'pypy-%d.%d'
     # find the full path to the executable, assuming that if there is no '/'
     # in the provided one then we must look along the $PATH
     if we_are_translated() and IS_WINDOWS and not executable.lower().endswith('.exe'):
@@ -209,8 +172,7 @@ def entry_point(executable, argv, path):
     if os.sep in executable or (IS_WINDOWS and DRIVE_LETTER_SEP in executable):
         pass    # the path is already more than just an executable name
     else:
-        # path = os.getenv('PATH')
-        # we avoid getenv
+        path = os.getenv('PATH')
         if path:
             for dir in path.split(os.pathsep):
                 fn = os.path.join(dir, executable)
@@ -237,8 +199,6 @@ def entry_point(executable, argv, path):
                 continue
         sys.path = newpath      # found!
         break
-    
-    reload_os.reload() # from now on use a fresh import
     
     go_interactive = False
     run_command = False
@@ -441,6 +401,7 @@ def interactive_console(mainmodule):
 
 
 if __name__ == '__main__':
+    import os
     import autopath
     # obscure! try removing the following line, see how it crashes, and
     # guess why...
@@ -459,5 +420,5 @@ if __name__ == '__main__':
     from pypy.module.sys.version import PYPY_VERSION
     sys.pypy_version_info = PYPY_VERSION
     sys.pypy_initial_path = pypy_initial_path
-    sys.exit(entry_point(sys.argv[0], sys.argv[1:], os.getenv("PATH")))
+    sys.exit(entry_point(sys.argv[0], sys.argv[1:], os))
     #sys.exit(entry_point('app_main.py', sys.argv[1:]))
