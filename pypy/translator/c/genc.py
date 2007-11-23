@@ -20,7 +20,6 @@ from pypy.translator.c import gc
 class CBuilder(object):
     c_source_filename = None
     _compiled = False
-    symboltable = None
     modulename = None
     
     def __init__(self, translator, entrypoint, config, libraries=None,
@@ -128,14 +127,10 @@ class CBuilder(object):
             CBuilder.have___thread = check_under_under_thread()
         if not self.standalone:
             assert not self.config.translation.instrument
-            from pypy.translator.c.symboltable import SymbolTable
-            # XXX fix symboltable
-            #self.symboltable = SymbolTable()
             cfile, extra, include_dirs, library_dirs = \
                    gen_source(db, modulename, targetdir,
                               defines = defines,
                               exports = self.exports,
-                              symboltable = self.symboltable,
                               libraries = self.libraries,
                               extra_info = extra_info)
         else:
@@ -197,8 +192,6 @@ class CExtModuleBuilder(CBuilder):
         mod = import_module_from_directory(self.c_source_filename.dirpath(),
                                            self.c_source_filename.purebasename)
         self.c_ext_module = mod
-        if self.symboltable:
-            self.symboltable.attach(mod)   # hopefully temporary hack
         return mod
 
     def isolated_import(self):
@@ -686,7 +679,7 @@ def gen_source_standalone(database, modulename, targetdir,
 
 
 def gen_source(database, modulename, targetdir, defines={}, exports={},
-               symboltable=None, libraries=[], extra_info={}):
+               libraries=[], extra_info={}):
     assert not database.standalone
     if isinstance(targetdir, str):
         targetdir = py.path.local(targetdir)
@@ -731,27 +724,6 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     sg = SourceGenerator(database, preimplementationlines)
     sg.set_strategy(targetdir)
     sg.gen_readable_parts_of_source(f)
-
-    #
-    # Debugging info
-    #
-    if symboltable:
-        print >> f
-        print >> f, '/*******************************************************/'
-        print >> f, '/***  Debugging info                                 ***/'
-        print >> f
-        print >> f, 'static int debuginfo_offsets[] = {'
-        for node in database.structdefnodes.values():
-            for expr in symboltable.generate_type_info(database, node):
-                print >> f, '\t%s,' % expr
-        print >> f, '\t0 };'
-        print >> f, 'static void *debuginfo_globals[] = {'
-        for node in database.globalcontainers():
-            if not isinstance(node, PyObjectNode):
-                result = symboltable.generate_global_info(database, node)
-                print >> f, '\t%s,' % (result,)
-        print >> f, '\tNULL };'
-        print >> f, '#include "src/debuginfo.h"'
 
     #
     # PyObject support (strange) code
