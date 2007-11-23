@@ -40,7 +40,8 @@ def getcompiled(func, view=conftest.option.view, use_boehm=False):
     backend_optimizations(t)
     if view:
         t.viewcg()
-    return getattr(cbuilder.import_module(), func.__name__)
+    cbuilder.import_module()
+    return cbuilder.get_entry_point()
 
 def example_int_long(arg=int):
     return long(arg+42)
