@@ -35,7 +35,6 @@ class CompilationTestCase:
         builder = genc.CExtModuleBuilder(t, func, config=t.config)
         builder.generate_source()
         builder.compile()
-        builder.import_module()
         return builder.get_entry_point()
 
     def getcompiled(self, func, argtypes=None, view=False):
