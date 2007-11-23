@@ -42,7 +42,6 @@ class PyObjMaker:
         self.import_hints = {} # I don't seem to need it any longer.
         # leaving the import support intact, doesn't hurt.
         self.name_for_meth = {} # get nicer wrapper names
-        self.is_method = {}
 
     def nameof(self, obj, debug=None):
         if debug:
@@ -221,8 +220,7 @@ class PyObjMaker:
 
         try:
             fwrapper = gen_wrapper(func, self.translator,
-                                   newname=self.name_for_meth.get(func, func.__name__),
-                                   as_method=func in self.is_method)
+                                   newname=self.name_for_meth.get(func, func.__name__))
         except NoStandardGraph:
             return self.skipped_function(func)
         pycfunctionobj = self.uniquename('gfunc_' + func.__name__)
@@ -611,8 +609,7 @@ class PyObjMaker:
 
     def nameof_graph(self, g):
         newname=self.name_for_meth.get(g, g.func.__name__)
-        fwrapper = gen_wrapper(g, self.translator, newname=newname,
-                               as_method=g in self.is_method)
+        fwrapper = gen_wrapper(g, self.translator, newname=newname)
         pycfunctionobj = self.uniquename('gfunc_' + newname)
         self.wrappers[pycfunctionobj] = g.func.__name__, self.db.get(fwrapper), g.func.__doc__
         return pycfunctionobj
