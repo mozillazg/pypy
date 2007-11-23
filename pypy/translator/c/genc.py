@@ -355,13 +355,6 @@ class CStandaloneBuilder(CBuilder):
         f.close()
 
 
-def translator2database(translator, entrypoint):
-    pf = lltype.pyobjectptr(entrypoint)
-    db = LowLevelDatabase(translator)
-    db.get(pf)
-    db.complete()
-    return db, pf
-
 # ____________________________________________________________
 
 SPLIT_CRITERIA = 65535 # support VC++ 7.2
