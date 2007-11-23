@@ -42,15 +42,14 @@ def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
     compiled_fn = t.compile_c()
     if conftest.option.view:
         t.view()
-    # XXX fish fish fish some more
-    module = t.driver.cbuilder.c_ext_module
+    malloc_counters = t.driver.cbuilder.get_malloc_counters()
     def checking_fn(*args, **kwds):
         if 'expected_extra_mallocs' in kwds:
             expected_extra_mallocs = kwds.pop('expected_extra_mallocs')
         else:
             expected_extra_mallocs = 0
         res = compiled_fn(*args, **kwds)
-        mallocs, frees = module.malloc_counters()
+        mallocs, frees = malloc_counters()
         if isinstance(expected_extra_mallocs, int):
             assert mallocs - frees == expected_extra_mallocs
         else:

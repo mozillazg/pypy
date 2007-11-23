@@ -5,6 +5,7 @@ from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.gensupp import uniquemodulename, NameManager
+from pypy.translator.tool.cbuild import so_ext
 from pypy.translator.tool.cbuild import compile_c_module
 from pypy.translator.tool.cbuild import build_executable, CCompiler, ProfOpt
 from pypy.translator.tool.cbuild import import_module_from_directory
@@ -26,6 +27,7 @@ class CBuilder(object):
                  gcpolicy=None):
         self.translator = translator
         self.entrypoint = entrypoint
+        self.entrypoint_name = self.entrypoint.func_name
         self.originalentrypoint = entrypoint
         self.gcpolicy = gcpolicy
         if gcpolicy is not None and gcpolicy.requires_stackless:
@@ -74,7 +76,8 @@ class CBuilder(object):
         # build entrypoint and eventually other things to expose
         pf = self.getentrypointptr()
         pfname = db.get(pf)
-        self.exports[self.entrypoint.func_name] = pf
+        self.exports[self.entrypoint_name] = pf
+        self.c_entrypoint_name = pfname
         db.complete()
 
         # add library dependencies
@@ -168,7 +171,7 @@ class CBuilder(object):
 
 class CExtModuleBuilder(CBuilder):
     standalone = False
-    c_ext_module = None 
+    _module = None 
 
     def getentrypointptr(self, obj=None):
         if obj is None:
@@ -186,30 +189,58 @@ class CExtModuleBuilder(CBuilder):
                          libraries=self.libraries)
         self._compiled = True
 
-    def import_module(self):
+    def _make_wrapper_module(self):
+        modfile = self.c_source_filename.new(ext=".py")
+        CODE = """
+import ctypes
+
+_lib = ctypes.PyDLL("%(so_name)s")
+
+_entry_point = getattr(_lib, "%(c_entrypoint_name)s")
+_entry_point.restype = ctypes.py_object
+_entry_point.argtypes = 3*(ctypes.py_object,)
+
+def %(entrypoint_name)s(*args, **kwds):
+    return _entry_point(None, args, kwds)
+
+_malloc_counters = _lib.malloc_counters
+_malloc_counters.restype = ctypes.py_object
+_malloc_counters.argtypes = 2*(ctypes.py_object,)
+
+def malloc_counters():
+    return _malloc_counters(None, None)
+""" % {'so_name': self.c_source_filename.new(ext=so_ext),
+       'entrypoint_name': self.entrypoint_name,
+       'c_entrypoint_name': self.c_entrypoint_name}
+        modfile.write(CODE)
+        self._module_path = modfile
+       
+    def _import_module(self, isolated=False):
+        if self._module is not None:
+            return self._module
         assert self._compiled
-        assert not self.c_ext_module
-        mod = import_module_from_directory(self.c_source_filename.dirpath(),
-                                           self.c_source_filename.purebasename)
-        self.c_ext_module = mod
+        assert not self._module
+        self._make_wrapper_module()
+        if not isolated:
+            mod = self._module_path.pyimport()
+        else:
+            mod = isolate.Isolate((str(self._module_path.dirpath()),
+                                   self._module_path.purebasename))
+        self._module = mod
         return mod
-
-    def isolated_import(self):
-        assert self._compiled
-        assert not self.c_ext_module
-        self.c_ext_module = isolate.Isolate((str(self.c_source_filename.dirpath()),
-                                             self.c_source_filename.purebasename))
-        return self.c_ext_module
         
-    def get_entry_point(self):
-        assert self.c_ext_module 
-        return getattr(self.c_ext_module, 
-                       self.entrypoint.func_name)
+    def get_entry_point(self, isolated=False):
+        self._import_module(isolated=isolated)
+        return getattr(self._module, self.entrypoint_name)
 
+    def get_malloc_counters(self, isolated=False):
+        self._import_module(isolated=isolated)
+        return self._module.malloc_counters
+                       
     def cleanup(self):
-        assert self.c_ext_module
-        if isinstance(self.c_ext_module, isolate.Isolate):
-            isolate.close_isolate(self.c_ext_module)
+        assert self._module
+        if isinstance(self._module, isolate.Isolate):
+            isolate.close_isolate(self._module)
 
 class CStandaloneBuilder(CBuilder):
     standalone = True
