@@ -13,7 +13,7 @@ from pypy.translator.backendopt.inline import simple_inline_function
 
 ALWAYS_INLINE = False
 
-def gen_wrapper(func, translator, newname=None, as_method=False):
+def gen_wrapper(func, translator, newname=None):
     """generate a wrapper function for 'func' that can be put in a
     PyCFunction object.  The wrapper has signature
 
@@ -63,9 +63,6 @@ def gen_wrapper(func, translator, newname=None, as_method=False):
     varguments = []
     varnames = func.func_code.co_varnames
     func_defaults = func.func_defaults or ()
-    if as_method:
-        nb_positional_args -= 1
-        varnames = varnames[1:]
     for i in range(nb_positional_args):
         # "argument_i = decode_arg(fname, i, name, vargs, vkwds)"  or
         # "argument_i = decode_arg_def(fname, i, name, vargs, vkwds, default)"
@@ -105,10 +102,6 @@ def gen_wrapper(func, translator, newname=None, as_method=False):
 
     # use the rtyper to produce the conversions
     inputargs = f._obj.graph.getargs()
-    if as_method:
-        varguments.insert(0, vself)
-        vlist = [vfname, vself]
-        newops.genop('check_self_nonzero', vlist, resulttype=Signed)
     for i in range(len(varguments)):
         if FUNCTYPE.ARGS[i] != PyObjPtr:
             # "argument_i = type_conversion_operations(argument_i)"
