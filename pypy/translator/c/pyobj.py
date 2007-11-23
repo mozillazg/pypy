@@ -43,7 +43,6 @@ class PyObjMaker:
         # leaving the import support intact, doesn't hurt.
         self.name_for_meth = {} # get nicer wrapper names
         self.is_method = {}
-        self.use_true_methods = False # may be overridden
 
     def nameof(self, obj, debug=None):
         if debug:
@@ -586,13 +585,8 @@ class PyObjMaker:
                         if ann.binding(graph.getargs()[0]).classdef is not clsdef:
                             value = new_method_graph(graph, clsdef, fname, self.translator)
                     self.name_for_meth[value] = fname
-                    if self.use_true_methods:
-                        self.is_method[value] = True
                 elif isinstance(value, property):
                     fget, fset, fdel, doc = value.fget, value.fset, value.fdel, value.__doc__
-                    for f in fget, fset, fdel:
-                        if f and self.use_true_methods:
-                            self.is_method[f] = True
                     stuff = [self.nameof(x) for x in fget, fset, fdel, doc]
                     yield '%s.%s = property(%s, %s, %s, %s)' % ((name, key) +
                                                                 tuple(stuff))
@@ -625,9 +619,6 @@ class PyObjMaker:
 
     def nameof_property(self, p):
         fget, fset, fdel, doc = p.fget, p.fset, p.fdel, p.__doc__
-        for f in fget, fset, fdel:
-            if f and self.use_true_methods:
-                self.is_method[f] = True
         stuff = [self.nameof(x) for x in fget, fset, fdel, doc]
         name = self.uniquename('gprop')
         expr = 'property(%s, %s, %s, %s)' % (tuple(stuff))
