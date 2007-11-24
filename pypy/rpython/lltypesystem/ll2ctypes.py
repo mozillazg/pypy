@@ -513,15 +513,6 @@ if ctypes:
 # ____________________________________________
 
 
-def compile_c_snippet(name, source):
-    from pypy.tool.udir import udir
-    cname = udir.join(name + '.c')
-    f = cname.open('w')
-    f.write(source)
-    f.write('\n')
-    f.close()
-    return cache_c_module([cname], name)
-    
 def get_ctypes_callable(funcptr, calling_conv):
     if not ctypes:
         raise ImportError("ctypes is needed to use ll2ctypes")
@@ -534,16 +525,12 @@ def get_ctypes_callable(funcptr, calling_conv):
         except AttributeError:
             pass
     
-    sources = getattr(funcptr._obj, 'sources', None)
-    if sources:
-        assert len(sources) == 1
-        dllname = compile_c_snippet(funcptr._obj._name, sources[0])
-        libraries = [dllname]
-    else:
-        libraries = getattr(funcptr._obj, 'libraries', None)
+    eci = funcptr._obj.compilation_info
+    libraries = list(eci.libraries)
+    funcname = funcptr._obj._name
+    eci = eci.make_shared_lib()
 
     FUNCTYPE = lltype.typeOf(funcptr).TO
-    funcname = funcptr._obj._name
     if not libraries:
         cfunc = get_on_lib(standard_c_lib, funcname)
         # XXX magic: on Windows try to load the function from 'kernel32' too

@@ -13,6 +13,7 @@ from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.translator import graphof
 from pypy.conftest import option
 from pypy.objspace.flow.model import summary
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 def test_basic():
     c_source = py.code.Source("""
@@ -21,7 +22,9 @@ def test_basic():
         return (x + 3);
     }
     """)
-    z = llexternal('z', [Signed], Signed, sources=[c_source])
+
+    eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+    z = llexternal('z', [Signed], Signed, eci)
 
     def f():
         return z(8)

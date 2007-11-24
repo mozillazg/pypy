@@ -8,6 +8,7 @@ import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("cbuild")
 py.log.setconsumer("cbuild", ansi_log)
+from pypy.tool.udir import udir
 
 debug = 0
 
@@ -16,6 +17,8 @@ class ExternalCompilationInfo(object):
     _ATTRIBUTES = ['pre_include_lines', 'includes', 'include_dirs',
                    'post_include_lines', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files']
+    _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
+                         'include_dirs', 'library_dirs']
 
     def __init__(self,
                  pre_include_lines       = [],
@@ -60,6 +63,54 @@ class ExternalCompilationInfo(object):
         # XXX custom hash and eq functions, they should be compared
         #     by contents
 
+    def merge(self, *others):
+        others = list(others)
+        attrs = {}
+        for name in self._ATTRIBUTES:
+            if name not in self._AVOID_DUPLICATES:
+                s = []
+                for i in [self] + others:
+                    s += getattr(i, name)
+                attrs[name] = s
+            else:
+                s = set()
+                attr = []
+                for one in [self] + others:
+                    for elem in getattr(one, name):
+                        if elem not in s:
+                            s.add(elem)
+                            attr.append(elem)
+                attrs[name] = attr
+        return ExternalCompilationInfo(**attrs)
+
+    def write_c_header(self, fileobj):
+        for line in self.pre_include_lines:
+            print >> fileobj, line
+        for path in self.includes:
+            print >> fileobj, '#include <%s>' % (path,)
+        for line in self.post_include_lines:
+            print >> fileobj, line
+
+    def convert_sources_to_files(self, cache_dir=None):
+        if cache_dir is None:
+            cache_dir = udir.join('module_cache').ensure(dir=1)
+        num = 0
+        files = []
+        for source in self.separate_module_sources:
+            while 1:
+                filename = cache_dir.join('module_%d.c' % num)
+                num += 1
+                if not filename.check():
+                    break
+            filename.write(source)
+            files.append(str(filename))
+        d = {}
+        for attr in self._ATTRIBUTES:
+            d[attr] = getattr(self, attr)
+        d['separate_module_sources'] = ()
+        d['separate_module_files'] += tuple(files)
+        return ExternalCompilationInfo(**d)
+
 if sys.platform == 'win32':
     so_ext = '.dll'
 else:
@@ -94,17 +145,24 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
-def compile_c_module(cfiles, modname, include_dirs=[], libraries=[],
-                     library_dirs=[]):
+def compile_c_module(cfiles, modname, eci):
     #try:
     #    from distutils.log import set_threshold
     #    set_threshold(10000)
     #except ImportError:
     #    print "ERROR IMPORTING"
     #    pass
-    include_dirs = list(include_dirs)
+    cfiles = [py.path.local(f) for f in cfiles]
+    tmpdir = udir.join("modcache").ensure(dir=1)
+    num = 0
+    for source in eci.separate_module_sources:
+        c_file = tmpdir.join('mod_%d.c' % num)
+        c_file.write(source)
+        cfiles.append(c_file)
+    cfiles += eci.separate_module_files
+    include_dirs = list(eci.include_dirs)
     include_dirs.append(py.path.local(pypydir).join('translator', 'c'))
-    library_dirs = list(library_dirs)
+    library_dirs = list(eci.library_dirs)
     if sys.platform == 'darwin':    # support Fink & Darwinports
         for s in ('/sw/', '/opt/local/'):
             if s + 'include' not in include_dirs and \
@@ -114,8 +172,9 @@ def compile_c_module(cfiles, modname, include_dirs=[], libraries=[],
                os.path.exists(s + 'lib'):
                 library_dirs.append(s + 'lib')
 
-    dirpath = cfiles[0].dirpath()
+    dirpath = py.path.local(modname).dirpath()
     lastdir = dirpath.chdir()
+    libraries = eci.libraries
     ensure_correct_math()
     try:
         if debug: print "modname", modname
@@ -195,9 +254,9 @@ def compile_c_module(cfiles, modname, include_dirs=[], libraries=[],
             raise
     finally:
         lastdir.chdir()
+    return modname + so_ext
 
-def cache_c_module(cfiles, modname, cache_dir=None,
-                   include_dirs=[], libraries=[]):
+def cache_c_module(cfiles, modname, eci, cache_dir=None):
     """ Same as build c module, but instead caches results.
     XXX currently there is no way to force a recompile, so this is pretty
     useless as soon as the sources (or headers they depend on) change :-/
@@ -210,14 +269,12 @@ def cache_c_module(cfiles, modname, cache_dir=None,
         cache_dir = py.path.local(cache_dir)
     assert cache_dir.check(dir=1)   # XXX
     modname = str(cache_dir.join(modname))
-    compile_c_module(cfiles, modname, include_dirs=include_dirs,
-                     libraries=libraries)
-    return modname + so_ext
+    return compile_c_module(cfiles, modname, eci)
 
-def make_module_from_c(cfile, include_dirs=None, libraries=[]):
+def make_module_from_c(cfile, eci):
     cfile = py.path.local(cfile)
     modname = cfile.purebasename
-    compile_c_module([cfile], modname, include_dirs, libraries)
+    compile_c_module([cfile], modname, eci)
     return import_module_from_directory(cfile.dirpath(), modname)
 
 def import_module_from_directory(dir, modname):
@@ -267,16 +324,15 @@ class ProfOpt(object):
             
 class CCompiler:
 
-    def __init__(self, cfilenames, outputfilename=None, include_dirs=[],
-                 libraries=[], library_dirs=[], compiler_exe=None,
-                 profbased=None):
+    def __init__(self, cfilenames, eci, outputfilename=None,
+                 compiler_exe=None, profbased=None):
         self.cfilenames = cfilenames
         ext = ''
         self.compile_extra = []
         self.link_extra = []
-        self.libraries = list(libraries)
-        self.include_dirs = list(include_dirs)
-        self.library_dirs = list(library_dirs)
+        self.libraries = list(eci.libraries)
+        self.include_dirs = list(eci.include_dirs)
+        self.library_dirs = list(eci.library_dirs)
         self.compiler_exe = compiler_exe
         self.profbased = profbased
         if not sys.platform in ('win32', 'darwin'): # xxx

@@ -1,7 +1,9 @@
 import py, sys
 
 from pypy.tool.udir import udir 
-from pypy.translator.tool.cbuild import build_executable, cache_c_module
+from pypy.translator.tool.cbuild import build_executable, cache_c_module,\
+     ExternalCompilationInfo
+from subprocess import Popen, PIPE, STDOUT
 
 def test_simple_executable(): 
     print udir
@@ -14,7 +16,8 @@ def test_simple_executable():
             return 0;
         }
 """)
-    testexec = build_executable([t])
+    eci = ExternalCompilationInfo()
+    testexec = build_executable([t], eci)
     out = py.process.cmdexec(testexec)
     assert out.startswith('hello world')
     
@@ -30,8 +33,81 @@ def test_compile_threads():
     csourcedir = pypydir.join('translator', 'c', 'src')
     include_dirs = [str(csourcedir.dirpath())]
     files = [csourcedir.join('thread.c')]
-    cache_c_module(files, '_thread', cache_dir=udir, include_dirs=include_dirs,
-                   libraries=['pthread'])
+    eci = ExternalCompilationInfo(
+        include_dirs=include_dirs,
+        libraries=['pthread']
+    )
+    cache_c_module(files, '_thread', eci, cache_dir=udir)
     cdll = ctypes.CDLL(str(udir.join('_thread.so')))
     assert hasattr(cdll, 'RPyThreadLockInit')
+
+
+class TestEci:
+    def setup_class(cls):
+        tmpdir = udir.ensure('testeci', dir=1)
+        c_file = tmpdir.join('module.c')
+        c_file.write(py.code.Source('''
+        int sum(int x, int y)
+        {
+            return x + y;
+        }
+        '''))
+        cls.modfile = c_file
+        cls.tmpdir = tmpdir
+
+    def test_standalone(self):
+        tmpdir = self.tmpdir
+        c_file = tmpdir.join('stand1.c')
+        c_file.write('''
+        #include <math.h>
+        #include <stdio.h>
+        
+        int main()
+        {
+            printf("%f\\n", pow(2.0, 2.0));
+        }''')
+        eci = ExternalCompilationInfo(
+            libraries = ['m'],
+        )
+        output = build_executable([c_file], eci)
+        p = Popen(output, stdout=PIPE, stderr=STDOUT)
+        p.wait()
+        assert p.stdout.readline().startswith('4.0')
+    
+    def test_merge(self):
+        e1 = ExternalCompilationInfo(
+            pre_include_lines  = ['1'],
+            includes           = ['x.h'],
+            post_include_lines = ['p1']
+        )
+        e2 = ExternalCompilationInfo(
+            pre_include_lines  = ['2'],
+            includes           = ['x.h', 'y.h'],
+            post_include_lines = ['p2'],
+        )
+        e3 = ExternalCompilationInfo(
+            pre_include_lines  = ['3'],
+            includes           = ['y.h', 'z.h'],
+            post_include_lines = ['p3']
+        )
+        e = e1.merge(e2, e3)
+        assert e.pre_include_lines == ('1', '2', '3')
+        assert e.includes == ('x.h', 'y.h', 'z.h')
+        assert e.post_include_lines == ('p1', 'p2', 'p3')
+
+    def test_convert_sources_to_c_files(self):
+        eci = ExternalCompilationInfo(
+            separate_module_sources = ['xxx'],
+            separate_module_files = ['x.c'],
+        )
+        cache_dir = udir.join('test_convert_sources').ensure(dir=1)
+        neweci = eci.convert_sources_to_files(cache_dir)
+        assert not neweci.separate_module_sources
+        res = neweci.separate_module_files
+        assert len(res) == 2
+        assert res[0] == 'x.c'
+        assert str(res[1]).startswith(str(cache_dir))
+
+    def test_compile_c_files_to_ofiles(self):
+        pass
 
