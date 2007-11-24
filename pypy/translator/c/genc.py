@@ -221,6 +221,9 @@ else:
 
     def malloc_counters():
         return _malloc_counters(None, None)
+
+_rpython_startup = _lib.RPython_StartupCode
+_rpython_startup()
 """ % {'so_name': self.c_source_filename.new(ext=so_ext),
        'entrypoint_name': self.entrypoint_name,
        'c_entrypoint_name': wrapped_entrypoint_c_name,
@@ -822,7 +825,6 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
 ##     print >> f, '/***********************************************************/'
 ##     print >> f, '/***  Module initialization function                     ***/'
 ##     print >> f
-##     gen_startupcode(f, database)
 ##     print >> f
 ##     print >> f, 'MODULE_INITFUNC(%s)' % modulename
 ##     print >> f, '{'
@@ -834,6 +836,7 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
 ##                                                             pyobjnode.name)
 ##     print >> f, '\tcall_postsetup(m);'
 ##    print >> f, '}'
+    gen_startupcode(f, database)
     f.close()
 
     #
