@@ -1,7 +1,7 @@
 import py
 from pypy import conftest
 from pypy.translator.translator import TranslationContext
-from pypy.translator.c.wrapper import new_wrapper
+from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.rpython.rmodel import PyObjPtr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype
