@@ -876,15 +876,30 @@ class PyObjectNode(ContainerNode):
         self.db = db
         self.T = T
         self.obj = obj
-        self.name = db.pyobjmaker.computenameof(obj.value)
+        value = obj.value
+        self.name = self._python_c_name(value)
         self.ptrname = self.name
         self.exported_name = self.name
         # a list of expressions giving places where this constant PyObject
         # must be copied.  Normally just in the global variable of the same
         # name, but see also StructNode.initializationexpr()  :-(
         self.where_to_copy_me = []
-        if self.name not in db.pyobjmaker.wrappers:
-            self.where_to_copy_me.append('&%s' % self.name)
+
+    def _python_c_name(self, value):
+        # just some minimal cases: None and builtin exceptions
+        if value is None:
+            return 'Py_None'
+        import types, py
+        if isinstance(value, (type, types.ClassType)):
+            if (issubclass(value, Exception) and
+                (value.__module__ == 'exceptions'
+                 or value is py.magic.AssertionError)):
+                return 'PyExc_' + value.__name__
+        raise Exception("don't know how to simply render py object: %r" %
+                        value)
+    
+    def forward_declaration(self):
+        return []
 
     def enum_dependencies(self):
         return []

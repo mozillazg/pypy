@@ -112,6 +112,7 @@ def test_multiply_passed_var():
     fn(0) == 3
 
 def test_pyobj():
+    py.test.skip("unsupported")    
     def f(x):
         if x:
             a = 1
