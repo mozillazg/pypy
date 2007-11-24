@@ -40,7 +40,7 @@ class CBuilder(object):
         self.libraries = libraries
         self.exports = {}
 
-    def build_database(self, pyobj_options=None):
+    def build_database(self):
         translator = self.translator
 
         gcpolicyclass = self.get_gcpolicyclass()
@@ -63,10 +63,6 @@ class CBuilder(object):
                               thread_enabled=self.config.translation.thread,
                               sandbox=self.config.translation.sandbox)
         self.db = db
-        # pass extra options into pyobjmaker
-        if pyobj_options:
-            for key, value in pyobj_options.items():
-                setattr(db.pyobjmaker, key, value)
 
         # we need a concrete gcpolicy to do this
         self.libraries += db.gcpolicy.gc_libraries()
@@ -765,77 +761,6 @@ def gen_source(database, modulename, targetdir, defines={}, exports={},
     sg.set_strategy(targetdir)
     sg.gen_readable_parts_of_source(f)
 
-##     #
-##     # PyObject support (strange) code
-##     #
-##     pyobjmaker = database.pyobjmaker
-##     print >> f
-##     print >> f, '/***********************************************************/'
-##     print >> f, '/***  Table of global PyObjects                          ***/'
-##     print >> f
-##     print >> f, 'static globalobjectdef_t globalobjectdefs[] = {'
-##     for node in database.containerlist:
-##         if isinstance(node, PyObjectNode):
-##             for target in node.where_to_copy_me:
-##                 print >> f, '\t{%s, "%s"},' % (target, node.exported_name)
-##     print >> f, '\t{ NULL, NULL }\t/* Sentinel */'
-##     print >> f, '};'
-##     print >> f
-##     print >> f, '/***********************************************************/'
-##     print >> f, '/***  Table of functions                                 ***/'
-##     print >> f
-##     print >> f, 'static globalfunctiondef_t globalfunctiondefs[] = {'
-##     wrappers = pyobjmaker.wrappers.items()
-##     wrappers.sort()
-##     for globalobject_name, (base_name, wrapper_name, func_doc) in wrappers:
-##         print >> f, ('\t{&%s, "%s", {"%s", (PyCFunction)%s, '
-##                      'METH_VARARGS|METH_KEYWORDS, %s}},' % (
-##             globalobject_name,
-##             globalobject_name,
-##             base_name,
-##             wrapper_name,
-##             func_doc and c_string_constant(func_doc) or 'NULL'))
-##     print >> f, '\t{ NULL }\t/* Sentinel */'
-##     print >> f, '};'
-##     print >> f, 'static globalfunctiondef_t *globalfunctiondefsptr = &globalfunctiondefs[0];'
-##     print >> f
-##     print >> f, '/***********************************************************/'
-##     print >> f, '/***  Frozen Python bytecode: the initialization code    ***/'
-##     print >> f
-##     print >> f, 'static char *frozen_initcode[] = {"\\'
-##     bytecode, originalsource = database.pyobjmaker.getfrozenbytecode()
-##     g = targetdir.join('frozen.py').open('w')
-##     g.write(originalsource)
-##     g.close()
-##     def char_repr(c):
-##         if c in '\\"': return '\\' + c
-##         if ' ' <= c < '\x7F': return c
-##         return '\\%03o' % ord(c)
-##     for i in range(0, len(bytecode), 32):
-##         print >> f, ''.join([char_repr(c) for c in bytecode[i:i+32]])+'\\'
-##         if (i+32) % 1024 == 0:
-##             print >> f, '", "\\'
-##     print >> f, '"};'
-##     print >> f, "#define FROZEN_INITCODE_SIZE %d" % len(bytecode)
-##     print >> f
-
-##     #
-##     # Module initialization function
-##     #
-##     print >> f, '/***********************************************************/'
-##     print >> f, '/***  Module initialization function                     ***/'
-##     print >> f
-##     print >> f
-##     print >> f, 'MODULE_INITFUNC(%s)' % modulename
-##     print >> f, '{'
-##     print >> f, '\tSETUP_MODULE(%s);' % modulename
-##     for publicname, pyobjptr in exports.items():
-##         # some fishing needed to find the name of the obj
-##         pyobjnode = database.containernodes[pyobjptr._obj]
-##         print >> f, '\tPyModule_AddObject(m, "%s", %s);' % (publicname,
-##                                                             pyobjnode.name)
-##     print >> f, '\tcall_postsetup(m);'
-##    print >> f, '}'
     gen_startupcode(f, database)
     f.close()
 
