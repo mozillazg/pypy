@@ -258,9 +258,7 @@ def new_wrapper(func, translator, newname=None):
     # that need to be specialized now
     translator.rtyper.specialize_more_blocks()
 
-    return functionptr(FuncType([PyObjPtr,
-                                 PyObjPtr,
-                                 PyObjPtr],
+    return functionptr(FuncType([PyObjPtr] * len(wrapper_inputargs),
                                 PyObjPtr),
                        wgraph.name,
                        graph = wgraph,

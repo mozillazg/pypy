@@ -3,7 +3,7 @@ from pypy import conftest
 from pypy.translator.translator import TranslationContext
 from pypy.translator.c.wrapper import new_wrapper
 from pypy.rpython.rmodel import PyObjPtr
-from pypy.rpython.llinterp import LLInterpreter, LLException, log
+from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype
 
 
@@ -23,7 +23,11 @@ class TestMakeWrapper:
         t.buildrtyper().specialize()
         wrapperptr = new_wrapper(func, t)
         wrappergraph = wrapperptr._obj.graph
-        for inputarg in wrappergraph.startblock.inputargs:
+        F = lltype.typeOf(wrapperptr).TO
+        assert F.ARGS == (PyObjPtr,) * len(wrappergraph.getargs())
+        assert F.RESULT == PyObjPtr
+
+        for inputarg in wrappergraph.getargs():
             assert inputarg.concretetype == PyObjPtr
         assert wrappergraph.getreturnvar().concretetype == PyObjPtr
         return t.graphs[0], wrappergraph, t
