@@ -4,7 +4,7 @@ import sys
 from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
-from pypy.translator.c.wrapper import new_wrapper
+from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import so_ext
 from pypy.translator.tool.cbuild import compile_c_module
