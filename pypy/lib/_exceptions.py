@@ -210,6 +210,12 @@ class EnvironmentError(StandardError):
 class OSError(EnvironmentError):
     """OS system call failed."""
 
+try:
+    WindowsError
+    class WindowsError(OSError):
+        """MS-Windows OS system call failed."""
+except NameError:pass
+
 class DeprecationWarning(Warning):
     """Base class for warnings about deprecated features."""
 
