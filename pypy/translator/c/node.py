@@ -896,7 +896,7 @@ class PyObjectNode(ContainerNode):
                  or value is py.magic.AssertionError)):
                 return 'PyExc_' + value.__name__
         raise Exception("don't know how to simply render py object: %r" %
-                        value)
+                        (value, ))
     
     def forward_declaration(self):
         return []

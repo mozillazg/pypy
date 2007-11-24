@@ -453,11 +453,13 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         def f(n):
             result = ()
             for cls in classes:
-                values = [getmin(cls), getmax(cls)]
                 for OP in operators:
-                    for x in values:
-                        res1 = OP(x, n)
-                        result += (res1,)
+                    x = getmin(cls)
+                    res1 = OP(x, n)
+                    result = result + (res1,)
+                    x = getmax(cls)
+                    res1 = OP(x, n)
+                    result = result + (res1,)
             return result
 
         def assert_eq(a, b):
