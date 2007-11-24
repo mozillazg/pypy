@@ -1,8 +1,8 @@
 import py, sys
 
 from pypy.tool.udir import udir 
-from pypy.translator.tool.cbuild import build_executable, cache_c_module,\
-     ExternalCompilationInfo
+from pypy.translator.tool.cbuild import build_executable, \
+     ExternalCompilationInfo, compile_c_module
 from subprocess import Popen, PIPE, STDOUT
 
 def test_simple_executable(): 
@@ -37,10 +37,9 @@ def test_compile_threads():
         include_dirs=include_dirs,
         libraries=['pthread']
     )
-    cache_c_module(files, '_thread', eci, cache_dir=udir)
-    cdll = ctypes.CDLL(str(udir.join('_thread.so')))
+    mod = compile_c_module(files, '_thread', eci)
+    cdll = ctypes.CDLL(mod)
     assert hasattr(cdll, 'RPyThreadLockInit')
-
 
 class TestEci:
     def setup_class(cls):
@@ -107,7 +106,23 @@ class TestEci:
         assert len(res) == 2
         assert res[0] == 'x.c'
         assert str(res[1]).startswith(str(cache_dir))
+        e = ExternalCompilationInfo()
+        assert e.convert_sources_to_files() is e
 
-    def test_compile_c_files_to_ofiles(self):
-        pass
-
+    def test_make_shared_lib(self):
+        eci = ExternalCompilationInfo(
+            separate_module_sources = ['''
+            int get()
+            {
+                return 42;
+            }''']
+        )
+        neweci = eci.compile_shared_lib()
+        assert len(neweci.libraries) == 1
+        try:
+            import ctypes
+        except ImportError:
+            py.test.skip("Need ctypes for that test")
+        assert ctypes.CDLL(neweci.libraries[0]).get() == 42
+        assert not neweci.separate_module_sources
+        assert not neweci.separate_module_files

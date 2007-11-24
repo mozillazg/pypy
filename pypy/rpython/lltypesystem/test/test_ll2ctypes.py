@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.tool.udir import udir
 
 class TestLL2Ctypes(object):
 
@@ -677,14 +678,19 @@ class TestLL2Ctypes(object):
         assert res == 42
 
     def test_prebuilt_constant(self):
-        source = py.code.Source("""
-        int x = 3;
-        char** z = NULL;
-        """)
-
-        eci = ExternalCompilationInfo(post_include_lines=source.lines)
+        header = py.code.Source("""
+        #include <stdlib.h>
         
-        get_x, set_x = rffi.CExternVariable(lltype.Signed, 'x', eci)
+        static int x = 3;
+        char **z = NULL;
+        """)
+        h_file = udir.join("some_h.h")
+        h_file.write(header)
+        
+        eci = ExternalCompilationInfo(includes=['stdio.h', str(h_file.basename)],
+                                      include_dirs=[str(udir)])
+        
+        get_x, set_x = rffi.CExternVariable(rffi.LONG, 'x', eci)
         get_z, set_z = rffi.CExternVariable(rffi.CCHARPP, 'z', eci)
 
         def f():
@@ -700,5 +706,6 @@ class TestLL2Ctypes(object):
             finally:
                 rffi.free_charpp(l)
 
-        assert f() == 16
+        res = f()
+        assert res == 16
         assert g() == "c"

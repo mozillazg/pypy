@@ -14,14 +14,13 @@ from pypy.tool.uid import fixid
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_singlefloat
 from pypy.annotation import model as annmodel
-from pypy.translator.tool.cbuild import cache_c_module
-
 
 def uaddressof(obj):
     return fixid(ctypes.addressof(obj))
 
 
 _ctypes_cache = {}
+_eci_cache = {}
 
 def _setup_ctypes_cache():
     from pypy.rpython.lltypesystem import rffi
@@ -525,10 +524,15 @@ def get_ctypes_callable(funcptr, calling_conv):
         except AttributeError:
             pass
     
-    eci = funcptr._obj.compilation_info
-    libraries = list(eci.libraries)
+    old_eci = funcptr._obj.compilation_info
     funcname = funcptr._obj._name
-    eci = eci.make_shared_lib()
+    try:
+        eci = _eci_cache[old_eci]
+    except KeyError:
+        eci = old_eci.compile_shared_lib()
+        _eci_cache[old_eci] = eci
+
+    libraries = list(eci.libraries)
 
     FUNCTYPE = lltype.typeOf(funcptr).TO
     if not libraries:

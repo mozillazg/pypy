@@ -250,6 +250,8 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
         c_type = 'char **'
     elif TYPE == CCHARP:
         c_type = 'char *'
+    elif TYPE == INT:
+        c_type = 'int'
     else:
         c_type = PrimitiveType[TYPE]
         assert c_type.endswith(' @')
@@ -261,6 +263,7 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     c_setter = "void %(setter_name)s (%(c_type)s v) { %(name)s = v; }" % locals()
 
     lines = ["#include <%s>" % i for i in eci.includes]
+    lines.append('extern %s %s;' % (c_type, name))
     lines.append(c_getter)
     lines.append(c_setter)
     sources = ('\n'.join(lines),)
