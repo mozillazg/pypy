@@ -81,6 +81,20 @@ def test_py_capi_exc():
     x = py.test.raises(Exception, f1, "world")
     assert not isinstance(x.value, EOFError) # EOFError === segfault
 
+def test_simple_lambda():
+    f = lambda x: x*2
+    t = TranslationContext()
+    t.buildannotator().build_types(f, [int])
+    t.buildrtyper().specialize()
+    
+    t.config.translation.countmallocs = True
+    builder = genc.CExtModuleBuilder(t, f, config=t.config)
+    builder.generate_source()
+    builder.compile()
+    f1 = builder.get_entry_point()
+
+    assert f1(5) == 10
+
 def test_rlist():
     def f(x):
         l = [x]
