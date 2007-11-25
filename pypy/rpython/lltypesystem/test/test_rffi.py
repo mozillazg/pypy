@@ -201,8 +201,12 @@ def test_extra_include_dirs():
         return (C);
     }
     """)
-    z = llexternal('fun', [], Signed, sources=[c_source], include_dirs=
-                   [str(udir.join("incl"))])
+    eci = ExternalCompilationInfo(
+        includes=['incl.h'],
+        include_dirs=[str(udir.join('incl'))],
+        separate_module_sources=[c_source]
+    )
+    z = llexternal('fun', [], Signed, compilation_info=eci)
 
     def f():
         return z()
@@ -243,11 +247,13 @@ def test_opaque_type():
     h_file.write(h_source)
 
     from pypy.rpython.tool import rffi_platform
-    STUFFP = COpaquePtr('struct stuff', includes=['opaque.h'],
-                     include_dirs=[str(udir)])
+    eci = ExternalCompilationInfo(
+        includes=['opaque.h'],
+        include_dirs=[str(udir)]
+    )
+    STUFFP = COpaquePtr('struct stuff', compilation_info=eci)
 
-    ll_get = llexternal('get', [STUFFP], lltype.Char, includes=['opaque.h'],
-                        include_dirs=[str(udir)])
+    ll_get = llexternal('get', [STUFFP], lltype.Char, compilation_info=eci)
 
     def f():
         ll_stuff = lltype.malloc(STUFFP.TO, flavor='raw')
@@ -307,9 +313,8 @@ def test_rffi_offsetof():
     assert offsetof(S, "c_c") == struct.calcsize("hii") - struct.calcsize("i")
 
 def test_prebuilt_constant():
+    py.test.skip("Think how to do it sane")
     h_source = py.code.Source("""
-    #ifndef _CONSTANTS
-    #define _CONSTANTS
     int x = 3;
     char** z = NULL;
     #endif
@@ -317,9 +322,12 @@ def test_prebuilt_constant():
     h_include = udir.join('constants.h')
     h_include.write(h_source)
 
-    kwds = {'includes':['constants.h'], 'include_dirs':[str(udir)]}
-    get_x, set_x = CExternVariable(lltype.Signed, 'x', **kwds)
-    get_z, set_z = CExternVariable(CCHARPP, 'z', **kwds)
+    eci = ExternalCompilationInfo(includes=['stdio.h',
+                                            str(h_include.basename)],
+                                  include_dirs=[str(udir)])
+
+    get_x, set_x = CExternVariable(lltype.Signed, 'x', eci)
+    get_z, set_z = CExternVariable(CCHARPP, 'z', eci)
 
     def f():
         one = get_x()
@@ -395,21 +403,15 @@ def test_implicit_cast():
     
 
 def test_stringpolicy1():
-    strlen = llexternal('strlen', [CCHARP], SIZE_T, includes=['string.h'])
+    eci = ExternalCompilationInfo(includes=['string.h'])
+    strlen = llexternal('strlen', [CCHARP], SIZE_T, compilation_info=eci)
     def f():
         return cast(LONG, strlen("Xxx"))
     assert interpret(f, [], backendopt=True) == 3
 
-def test_stringpolicy2():
-    py.test.skip("stringpolicy='autocast' no longer implemented")
-    def f():
-        return strlen("Xxx")        
-    strlen = llexternal('strlen', [CCHARP], INT,
-                        includes=['string.h'], stringpolicy='autocast')
-    py.test.raises(MallocMismatch, interpret, f, [], backendopt=True)
-
 def test_stringpolicy3():
-    strlen = llexternal('strlen', [CCHARP], INT, includes=['string.h'])
+    eci = ExternalCompilationInfo(includes=['string.h'])
+    strlen = llexternal('strlen', [CCHARP], INT, compilation_info=eci)
     def f():
         ll_str = str2charp("Xxx")
         res = strlen(ll_str)
@@ -419,8 +421,9 @@ def test_stringpolicy3():
     assert interpret(f, [], backendopt=True) == 3
 
 def test_stringpolicy_mixed():
+    eci = ExternalCompilationInfo(includes=['string.h'])
     strlen = llexternal('strlen', [CCHARP], SIZE_T,
-                        includes=['string.h'])
+                        compilation_info=eci)
     def f():
         res1 = strlen("abcd")
         ll_str = str2charp("Xxx")
