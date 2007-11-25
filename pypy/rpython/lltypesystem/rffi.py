@@ -45,6 +45,8 @@ def llexternal(name, args, result, _callable=None,
                 don't bother releasing the GIL.  An explicit True or False
                 overrides this logic.
     """
+    if _callable is not None:
+        assert callable(_callable)
     ext_type = lltype.FuncType(args, result)
     if _callable is None:
         _callable = ll2ctypes.LL2CtypesCallable(ext_type, calling_conv)

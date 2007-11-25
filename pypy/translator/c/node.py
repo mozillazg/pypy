@@ -692,8 +692,9 @@ class FuncNode(ContainerNode):
         self.db = db
         self.T = T
         self.obj = obj
-        if hasattr(obj, 'includes') and not db.need_sandboxing(obj):
-            self.includes = obj.includes
+        # XXX # what this obscure code is doing???
+        self.eci = getattr(obj, 'eci', ExternalCompilationInfo())
+        if self.eci.includes and not db.need_sandboxing(obj):
             self.name = forcename or self.basename()
         else:
             self.name = (forcename or
@@ -706,8 +707,6 @@ class FuncNode(ContainerNode):
         self.ptrname = self.name
 
     def make_funcgens(self):
-        if hasattr(self.obj, 'sources'):
-            self.sources = self.obj.sources
         self.funcgens = select_function_code_generators(self.obj, self.db, self.name)
         if self.funcgens:
             argnames = self.funcgens[0].argnames()  #Assume identical for all funcgens
@@ -827,6 +826,7 @@ def select_function_code_generators(fnobj, db, functionname):
     elif getattr(fnobj, 'external', None) == 'C':
         if sandbox:
             return sandbox_stub(fnobj, db)
+        # XXX broken
         if hasattr(fnobj, 'includes'):
             return []   # assume no wrapper needed
         else:
