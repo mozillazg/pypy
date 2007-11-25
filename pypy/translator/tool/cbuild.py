@@ -114,7 +114,7 @@ class ExternalCompilationInfo(object):
             d[attr] = getattr(self, attr)
         return d
 
-    def convert_sources_to_files(self, cache_dir=None):
+    def convert_sources_to_files(self, cache_dir=None, being_main=False):
         if not self.separate_module_sources:
             return self
         if cache_dir is None:
@@ -127,7 +127,11 @@ class ExternalCompilationInfo(object):
                 num += 1
                 if not filename.check():
                     break
-            filename.write(source)
+            f = filename.open("w")
+            if being_main:
+                f.write("#define PYPY_NOT_MAIN_FILE\n")
+            f.write(source)
+            f.close()
             files.append(str(filename))
         d = self._copy_attributes()
         d['separate_module_sources'] = ()
@@ -381,7 +385,8 @@ class CCompiler:
         if outputfilename is None:
             self.outputfilename = py.path.local(cfilenames[0]).new(ext=ext)
         else: 
-            self.outputfilename = py.path.local(outputfilename) 
+            self.outputfilename = py.path.local(outputfilename)
+        self.eci = eci
 
     def build(self, noerr=False):
         basename = self.outputfilename.new(ext='')
@@ -433,7 +438,7 @@ class CCompiler:
             old = cfile.dirpath().chdir() 
             try: 
                 res = compiler.compile([cfile.basename], 
-                                       include_dirs=self.include_dirs,
+                                       include_dirs=self.eci.include_dirs,
                                        extra_preargs=self.compile_extra)
                 assert len(res) == 1
                 cobjfile = py.path.local(res[0]) 
@@ -442,9 +447,9 @@ class CCompiler:
             finally: 
                 old.chdir() 
         compiler.link_executable(objects, str(self.outputfilename),
-                                 libraries=self.libraries,
+                                 libraries=self.eci.libraries,
                                  extra_preargs=self.link_extra,
-                                 library_dirs=self.library_dirs)
+                                 library_dirs=self.eci.library_dirs)
 
 def build_executable(*args, **kwds):
     noerr = kwds.pop('noerr', False)

@@ -692,9 +692,7 @@ class FuncNode(ContainerNode):
         self.db = db
         self.T = T
         self.obj = obj
-        # XXX # what this obscure code is doing???
-        self.eci = getattr(obj, 'eci', ExternalCompilationInfo())
-        if self.eci.includes and not db.need_sandboxing(obj):
+        if getattr(obj, 'external', None) == 'C' and not db.need_sandboxing(obj):
             self.name = forcename or self.basename()
         else:
             self.name = (forcename or
@@ -827,11 +825,12 @@ def select_function_code_generators(fnobj, db, functionname):
         if sandbox:
             return sandbox_stub(fnobj, db)
         # XXX broken
-        if hasattr(fnobj, 'includes'):
-            return []   # assume no wrapper needed
-        else:
-            # deprecated case
-            return [CExternalFunctionCodeGenerator(fnobj, db)]
+        return []
+        #if hasattr(fnobj, 'includes'):
+        #    return []   # assume no wrapper needed
+        #else:
+        #    # deprecated case
+        #    return [CExternalFunctionCodeGenerator(fnobj, db)]
     else:
         raise ValueError, "don't know how to generate code for %r" % (fnobj,)
 
