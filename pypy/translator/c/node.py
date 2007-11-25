@@ -821,16 +821,14 @@ def select_function_code_generators(fnobj, db, functionname):
         exception_policy = getattr(fnobj, 'exception_policy', None)
         return [FunctionCodeGenerator(fnobj.graph, db, exception_policy,
                                       functionname)]
-    elif getattr(fnobj, 'external', None) == 'C':
+    elif getattr(fnobj, 'external', None) is not None:
         if sandbox:
             return sandbox_stub(fnobj, db)
-        # XXX broken
-        return []
-        #if hasattr(fnobj, 'includes'):
-        #    return []   # assume no wrapper needed
-        #else:
-        #    # deprecated case
-        #    return [CExternalFunctionCodeGenerator(fnobj, db)]
+        elif fnobj.external == 'C':
+            return []
+        else:
+            assert fnobj.external == 'CPython'
+            return [CExternalFunctionCodeGenerator(fnobj, db)]
     else:
         raise ValueError, "don't know how to generate code for %r" % (fnobj,)
 

@@ -745,7 +745,7 @@ def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
     libraries = eci.libraries
     f.write(SETUP_PY % locals())
     f.close()
-    eci = eci.convert_sources_to_files()
+    eci = eci.convert_sources_to_files(being_main=True)
 
     return filename, sg.getextrafiles() + list(eci.separate_module_files)
 
