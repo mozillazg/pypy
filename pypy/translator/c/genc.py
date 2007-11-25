@@ -134,6 +134,14 @@ class CBuilder(object):
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
+            # explicitely include python.h and exceptions.h
+            # XXX for now, we always include Python.h
+            from distutils import sysconfig
+            python_inc = sysconfig.get_python_inc()
+            pypy_include_dir = autopath.this_dir
+            self.eci = self.eci.merge(ExternalCompilationInfo(
+                include_dirs=[python_inc, pypy_include_dir],
+            ))
             cfile, extra = gen_source_standalone(db, modulename, targetdir,
                                                  self.eci,
                                                  entrypointname = pfname,
@@ -252,10 +260,7 @@ class CStandaloneBuilder(CBuilder):
         bk = self.translator.annotator.bookkeeper
         return getfunctionptr(bk.getdesc(self.entrypoint).getuniquegraph())
 
-    def getccompiler(self, extra_includes):
-        # XXX for now, we always include Python.h
-        from distutils import sysconfig
-        python_inc = sysconfig.get_python_inc()
+    def getccompiler(self):            
         cc = self.config.translation.cc
         profbased = None
         if self.config.translation.instrumentctl is not None:
@@ -267,16 +272,14 @@ class CStandaloneBuilder(CBuilder):
 
         return CCompiler(
             [self.c_source_filename] + self.extrafiles,
-            include_dirs = [autopath.this_dir, python_inc] + extra_includes,
-            libraries    = self.libraries,
-            library_dirs = self.library_dirs,
-            compiler_exe = cc, profbased = profbased)
+            self.eci, compiler_exe = cc, profbased = profbased)
 
     def compile(self):
         assert self.c_source_filename
         assert not self._compiled
-        compiler = self.getccompiler(extra_includes=[str(self.targetdir)] +
-                                     self.include_dirs)
+        eci = self.eci.merge(ExternalCompilationInfo(includes=
+                                                     [str(self.targetdir)]))
+        compiler = self.getccompiler()
         if sys.platform == 'darwin':
             compiler.compile_extra.append('-mdynamic-no-pic')
         if self.config.translation.compilerflags:
@@ -302,7 +305,9 @@ class CStandaloneBuilder(CBuilder):
                     print >> f
                 prefix = ' ' * len(prefix)
 
-        compiler = self.getccompiler(extra_includes=['.', str(self.targetdir)] + self.include_dirs)
+        self.eci = self.eci.merge(ExternalCompilationInfo(
+            includes=['.', str(self.targetdir)]))
+        compiler = self.getccompiler()
         if sys.platform == 'darwin':
             compiler.compile_extra.append('-mdynamic-no-pic')
         if self.config.translation.compilerflags:
@@ -335,11 +340,11 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         write_list(ofiles, 'OBJECTS =')
         print >> f
-        args = ['-l'+libname for libname in compiler.libraries]
+        args = ['-l'+libname for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
-        args = ['-L'+path for path in compiler.library_dirs]
+        args = ['-L'+path for path in self.eci.library_dirs]
         print >> f, 'LIBDIRS =', ' '.join(args)
-        args = ['-I'+path for path in compiler.include_dirs]
+        args = ['-I'+path for path in self.eci.include_dirs]
         write_list(args, 'INCLUDEDIRS =')
         print >> f
         print >> f, 'CFLAGS  =', ' '.join(compiler.compile_extra)
@@ -648,15 +653,13 @@ def gen_source_standalone(database, modulename, targetdir, eci,
     for line in database.gcpolicy.pre_pre_gc_code():
         print >> fi, line
 
+    eci.write_c_header(fi)
+
     print >> fi, '#include "src/g_prerequisite.h"'
 
     for line in database.gcpolicy.pre_gc_code():
         print >> fi, line
 
-    for include in extra_info.get('includes', []):
-        print >> fi, '#include <%s>' % (include,)
-    for source in extra_info.get('sources', []):
-        print >> f, source
     fi.close()
 
     preimplementationlines = list(
@@ -683,7 +686,8 @@ def gen_source_standalone(database, modulename, targetdir, eci,
         print >>fi, "#define INSTRUMENT_NCOUNTER %d" % n
         fi.close()
 
-    return filename, sg.getextrafiles()
+    eci = eci.convert_sources_to_files(being_main=True)
+    return filename, sg.getextrafiles() + list(eci.separate_module_files)
 
 
 def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
@@ -713,7 +717,6 @@ def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
         print >> fi, line
 
     eci.write_c_header(fi)
-    eci = eci.convert_sources_to_files()
     fi.close()
 
     if database.translator is None or database.translator.rtyper is None:
@@ -743,6 +746,7 @@ def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
     libraries = eci.libraries
     f.write(SETUP_PY % locals())
     f.close()
+    eci = eci.convert_sources_to_files()
 
     return filename, sg.getextrafiles() + list(eci.separate_module_files)
 
