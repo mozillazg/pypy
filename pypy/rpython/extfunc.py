@@ -107,7 +107,7 @@ class BaseLazyRegistering(object):
         from pypy.rpython.lltypesystem import rffi
 
         if 'compilation_info' in kwds:
-            kwds['compilation_info'] = self._compilation_info_.merge(
+            kwds['compilation_info'] = self.compilation_info.merge(
                 kwds['compilation_info'])
         else:
             kwds['compilation_info'] = self.compilation_info
