@@ -10,7 +10,6 @@ from pypy.objspace.flow.model import Constant, Variable, SpaceOperation
 from pypy.objspace.flow.model import Block, Link, FunctionGraph
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import make_module_from_c
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.gensupp import uniquemodulename
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.interactive import Translation
@@ -62,6 +61,25 @@ def test_simple():
 
     py.test.raises(Exception, f1, "world")  # check that it's really typed
 
+def test_py_capi_exc():
+    def f(x):
+        if x:
+            l = None
+        else:
+            l = [2]
+        x = x*2
+        return l[0]
+    t = TranslationContext()
+    t.buildannotator().build_types(f, [int])
+    t.buildrtyper().specialize()
+
+    builder = genc.CExtModuleBuilder(t, f, config=t.config)
+    builder.generate_source()
+    builder.compile()
+    f1 = builder.get_entry_point(isolated=True)
+
+    x = py.test.raises(Exception, f1, "world")
+    assert not isinstance(x.value, EOFError) # EOFError === segfault
 
 def test_rlist():
     def f(x):
