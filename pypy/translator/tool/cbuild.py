@@ -18,7 +18,7 @@ class ExternalCompilationInfo(object):
                    'post_include_lines', 'libraries', 'library_dirs',
                    'separate_module_sources', 'separate_module_files']
     _AVOID_DUPLICATES = ['separate_module_files', 'libraries', 'includes',
-                         'include_dirs', 'library_dirs']
+                         'include_dirs', 'library_dirs', 'separate_module_sources']
 
     def __init__(self,
                  pre_include_lines       = [],

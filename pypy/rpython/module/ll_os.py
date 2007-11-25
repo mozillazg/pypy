@@ -18,6 +18,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rlib import rposix
 from pypy.tool.udir import udir
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 posix = __import__(os.name)
 
@@ -25,6 +26,15 @@ if sys.platform.startswith('win'):
     underscore_on_windows = '_'
 else:
     underscore_on_windows = ''
+
+includes = []
+if not sys.platform.startswith('win'):
+    # XXX many of these includes are not portable at all
+    includes += ['dirent.h', 'sys/stat.h',
+                 'sys/times.h', 'utime.h', 'sys/types.h', 'unistd.h',
+                 'signal.h', 'sys/wait.h']
+else:
+    includes += ['sys/utime.h']
 
 
 class CConfig:
@@ -38,13 +48,11 @@ class CConfig:
         register(function, [CLOCK_T], ...)
 
     """
-    _includes_ = []
-    if not sys.platform.startswith('win'):
-        # XXX many of these includes are not portable at all
-        _includes_ += ['dirent.h', 'sys/stat.h',
-                       'sys/times.h', 'utime.h', 'sys/types.h', 'unistd.h',
-                       'signal.h', 'sys/wait.h']
 
+    _compilation_info_ = ExternalCompilationInfo(
+        includes=includes
+    )
+    if not sys.platform.startswith('win'):
         CLOCK_T = platform.SimpleType('clock_t', rffi.INT)
 
         TMS = platform.Struct(
@@ -52,9 +60,6 @@ class CConfig:
                            ('tms_stime', rffi.INT),
                            ('tms_cutime', rffi.INT),
                            ('tms_cstime', rffi.INT)])
-    else:
-        _includes_ += ['sys/utime.h']
-    _include_dirs_ = [str(udir)]
 
     SEEK_SET = platform.DefinedConstantInteger('SEEK_SET')
     SEEK_CUR = platform.DefinedConstantInteger('SEEK_CUR')

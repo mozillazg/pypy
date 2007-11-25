@@ -261,6 +261,8 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
 
     getter_name = 'get_' + name
     setter_name = 'set_' + name
+    getter_prototype = "%(c_type)s %(getter_name)s ();" % locals()
+    setter_prototype = "void %(setter_name)s (%(c_type)s v);" % locals()
     c_getter = "%(c_type)s %(getter_name)s () { return %(name)s; }" % locals()
     c_setter = "void %(setter_name)s (%(c_type)s v) { %(name)s = v; }" % locals()
 
@@ -270,7 +272,8 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     lines.append(c_setter)
     sources = ('\n'.join(lines),)
     new_eci = eci.merge(ExternalCompilationInfo(
-        separate_module_sources = sources
+        separate_module_sources = sources,
+        post_include_lines = [getter_prototype, setter_prototype],
     ))
 
     getter = llexternal(getter_name, [], TYPE, compilation_info=new_eci,
