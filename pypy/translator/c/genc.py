@@ -171,12 +171,9 @@ class CExtModuleBuilder(CBuilder):
     def compile(self):
         assert self.c_source_filename 
         assert not self._compiled
-        extra_includes = self.include_dirs
         compile_c_module([self.c_source_filename] + self.extrafiles,
-                         self.c_source_filename.purebasename,
-                         include_dirs = [autopath.this_dir] + extra_includes,
-                         library_dirs = self.library_dirs,
-                         libraries=self.libraries)
+                         self.c_source_filename.purebasename, self.eci,
+                         tmpdir=self.c_source_filename.dirpath())
         self._compiled = True
 
     def _make_wrapper_module(self):
@@ -716,10 +713,8 @@ def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
         print >> fi, line
 
     eci.write_c_header(fi)
+    eci = eci.convert_sources_to_files()
     fi.close()
-
-    for source in extra_info.get('sources', []):
-        print >> f, source
 
     if database.translator is None or database.translator.rtyper is None:
         preimplementationlines = []
@@ -743,10 +738,13 @@ def gen_source(database, modulename, targetdir, eci, defines={}, exports={}):
     #
     pypy_include_dir = autopath.this_dir
     f = targetdir.join('setup.py').open('w')
+    include_dirs = eci.include_dirs
+    library_dirs = eci.library_dirs
+    libraries = eci.libraries
     f.write(SETUP_PY % locals())
     f.close()
 
-    return filename, sg.getextrafiles()
+    return filename, sg.getextrafiles() + list(eci.separate_module_files)
 
 
 SETUP_PY = '''

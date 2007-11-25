@@ -17,14 +17,15 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 def test_basic():
     c_source = py.code.Source("""
-    int z(int x)
+    int someexternalfunction(int x)
     {
         return (x + 3);
     }
     """)
 
     eci = ExternalCompilationInfo(separate_module_sources=[c_source])
-    z = llexternal('z', [Signed], Signed, eci)
+    z = llexternal('someexternalfunction', [Signed], Signed,
+                   compilation_info=eci)
 
     def f():
         return z(8)
@@ -33,14 +34,16 @@ def test_basic():
     assert xf() == 8+3
 
 def test_hashdefine():
-    c_source = """
+    h_source = """
     #define X(i) (i+3)
     """
 
-    c_file = udir.join("stuff.c")
-    c_file.write(c_source)
+    h_file = udir.join("stuff.h")
+    h_file.write(h_source)
 
-    z = llexternal('X', [Signed], Signed, includes=[str(c_file)])
+    eci = ExternalCompilationInfo(includes=['stuff.h'],
+                                  include_dirs=[udir])
+    z = llexternal('X', [Signed], Signed, compilation_info=eci)
 
     def f():
         return z(8)
@@ -49,7 +52,8 @@ def test_hashdefine():
     assert xf() == 8+3
 
 def test_string():
-    z = llexternal('strlen', [CCHARP], Signed, includes=['string.h'])
+    eci = ExternalCompilationInfo(includes=['string.h'])
+    z = llexternal('strlen', [CCHARP], Signed, compilation_info=eci)
 
     def f():
         s = str2charp("xxx")
@@ -72,7 +76,8 @@ def test_string_reverse():
         return ret;
     }
     """)
-    z = llexternal('f', [CCHARP], CCHARP, sources=[c_source])
+    eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+    z = llexternal('f', [CCHARP], CCHARP, compilation_info=eci)
 
     def f():
         s = str2charp("xxx")
@@ -99,7 +104,8 @@ def test_stringstar():
         return (l);
     }
     """
-    z = llexternal('f', [CCHARPP], Signed, sources=[c_source])
+    eci = ExternalCompilationInfo(separate_module_sources=[c_source])
+    z = llexternal('f', [CCHARPP], Signed, compilation_info=eci)
 
     def f():
         l = ["xxx", "x", "xxxx"]
@@ -113,16 +119,21 @@ def test_stringstar():
 
 def test_struct():
     h_source = """
+    #ifndef _MY_SOURCE_H
+    #define _MY_SOURCE_H
     struct xx {
        int one;
        char two;
        int three;
     };
+    #endif
     """
     h_file = udir.join("structxx.h")
     h_file.write(h_source)
     
     c_source = """
+    #include <structxx.h>
+    
     int f(struct xx* z)
     {
       return (z->one + z->three);
@@ -130,8 +141,12 @@ def test_struct():
     """
     TP = CStructPtr('xx', ('one', INT), ('two', Char), ('three', INT))
 
-    z = llexternal('f', [TP], INT, sources=[c_source],
-                   includes=[str(h_file)], include_dirs=[udir])
+    eci = ExternalCompilationInfo(
+        includes=['structxx.h'],
+        include_dirs=[udir],
+        separate_module_sources=[c_source]
+    )
+    z = llexternal('f', [TP], INT, compilation_info=eci)
 
     def f():
         struct = lltype.malloc(TP.TO, flavor='raw')

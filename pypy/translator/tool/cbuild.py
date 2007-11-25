@@ -179,7 +179,7 @@ def ensure_correct_math():
         opt += '/Op'
     gcv['OPT'] = opt
 
-def compile_c_module(cfiles, modbasename, eci):
+def compile_c_module(cfiles, modbasename, eci, tmpdir=None):
     #try:
     #    from distutils.log import set_threshold
     #    set_threshold(10000)
@@ -187,7 +187,8 @@ def compile_c_module(cfiles, modbasename, eci):
     #    print "ERROR IMPORTING"
     #    pass
     cfiles = [py.path.local(f) for f in cfiles]
-    tmpdir = udir.join("module_cache").ensure(dir=1)
+    if tmpdir is None:
+        tmpdir = udir.join("module_cache").ensure(dir=1)
     num = 0
     cfiles += eci.separate_module_files
     include_dirs = list(eci.include_dirs)

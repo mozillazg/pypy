@@ -3,7 +3,6 @@ import py
 from pypy.rpython.extfunc import BaseLazyRegistering, extdef, registering
 from pypy.rlib import rarithmetic
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.translator.tool.cbuild import cache_c_module
 from pypy.tool.autopath import pypydir
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib import rposix
