@@ -9,6 +9,7 @@ class StaticMethodWrapper(object):
 
     def __call__(self, *args):
         import clr
+        # now call the .NET static method  call_staticmethod in interp_cl 
         return clr.call_staticmethod(self.class_name, self.meth_name, args)
 
     def __repr__(self):
@@ -91,6 +92,20 @@ class CliClassWrapper(object):
     def __init__(self, *args):
         import clr
         self.__cliobj__ = clr._CliObject_internal(self.__cliclass__, args)
+#        self.index = self.__cliobj__.__len__(self)
+#        self.index = self.__cliobj__.call_method('Count',1)
+        print self.__cliobj__
+#        self.index = self.Count
+
+    def __iter__(self):
+        self.index = self.Count
+        return self 
+
+    def next(self):
+        if self.index == 0:
+            raise StopIteration
+        self.index = self.index - 1
+        return self.this[self.index] 
 
 
 def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers):
@@ -102,10 +117,18 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
     for name in methods:
         d[name] = MethodWrapper(name)
 
+    # check if there is GetEnumerator() method 
+    for method in methods:
+        if method == "GetEnumerator":
+            print "Enumerator found .. Hurray !!!!!"
+            # now add the __iter__ method to the class 
+#            d['__iter__'] = sampleIter().__iter__
+
     assert len(indexers) <= 1
     if indexers:
         name, getter, setter, is_static = indexers[0]
         assert not is_static
+        print " Indexers Tuple -----> (%s,%s,%s,%s) "%(name, getter, setter, is_static)
         if getter:
             d['__getitem__'] = d[getter]
         if setter:
@@ -115,6 +138,8 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
     # we must add properties *after* the class has been created
     # because we need to store UnboundMethods as getters and setters
     for (name, getter, setter, is_static) in properties:
+        print " Properties Tuple -----> (%s,%s,%s,%s) "%(name, getter, setter, is_static)
+
         fget = None
         fset = None
         if getter:
