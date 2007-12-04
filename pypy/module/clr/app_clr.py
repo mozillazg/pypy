@@ -86,27 +86,31 @@ class MetaCliClassWrapper(type):
         else:
             type.__setattr__(cls, name, value)
 
+#class Dummy(object):
+#    def __init__(self, iterObj):
+#        self.iterObj = iterObj
+#        self.index = 0 
+#
+#    def next(self):
+#        temp = self.index
+#        if self.index == self.iterObj.Count:
+#            raise StopIteration
+#        self.index = self.index + 1
+#        return self.iterObj.__getitem__(temp)
+
+
 class CliClassWrapper(object):
     __slots__ = ('__cliobj__',)
 
     def __init__(self, *args):
         import clr
         self.__cliobj__ = clr._CliObject_internal(self.__cliclass__, args)
-#        self.index = self.__cliobj__.__len__(self)
-#        self.index = self.__cliobj__.call_method('Count',1)
         print self.__cliobj__
-#        self.index = self.Count
+        print self.Count
 
-    def __iter__(self):
-        self.index = self.Count
-        return self 
-
-    def next(self):
-        if self.index == 0:
-            raise StopIteration
-        self.index = self.index - 1
-        return self.this[self.index] 
-
+#    def __iter__(self):
+#        return Dummy(self)
+#        return Dummy(self.Count, self.__getitem__(self.Count - 1))
 
 def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers):
     fullname = '%s.%s' % (namespace, classname)
@@ -122,7 +126,9 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
         if method == "GetEnumerator":
             print "Enumerator found .. Hurray !!!!!"
             # now add the __iter__ method to the class 
-#            d['__iter__'] = sampleIter().__iter__
+            d['__iter__'] = d['GetEnumerator']
+#            d['next'] = d['MoveNext']
+
 
     assert len(indexers) <= 1
     if indexers:
@@ -153,3 +159,8 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
         setattr(cls, name, prop)
 
     return cls
+
+
+
+
+

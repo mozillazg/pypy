@@ -148,3 +148,17 @@ class AppTestDotnet:
         assert Environment.CurrentDirectory == os.getcwd()
         Environment.CurrentDirectory == '/'
         assert Environment.CurrentDirectory == os.getcwd()
+
+    def test_GetEnumerator(self):
+        import clr
+        ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
+        x = ArrayList()
+        x.Add(1)
+        x.Add(6)
+        x.Add(31)
+        x.Add(2)
+        for i in x:
+           print i 
+
+
+
