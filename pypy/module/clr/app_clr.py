@@ -115,7 +115,7 @@ def wrapper_from_cliobj(cls, cliobj):
     obj.__cliobj__ = cliobj
     return obj
 
-def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers):
+def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers, hasIEnumerable):
     fullname = '%s.%s' % (namespace, classname)
     d = {'__cliclass__': fullname,
          '__module__': namespace}
@@ -124,12 +124,9 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
     for name in methods:
         d[name] = MethodWrapper(name)
 
-    # check if there is GetEnumerator() method
-    # XXX: use .NET Reflection for this, checking for method name is not safe
-    for method in methods:
-        if method == "GetEnumerator":
-            # now add the __iter__ method to the class 
-            d['__iter__'] = __iter__
+    # check if IEnumerable is implemented
+    if hasIEnumerable:
+        d['__iter__'] = __iter__
 
     assert len(indexers) <= 1
     if indexers:

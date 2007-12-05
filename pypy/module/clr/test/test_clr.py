@@ -158,6 +158,8 @@ class AppTestDotnet:
 
     def test_iteratrion(self):
         import clr
+
+        # test iteration in ArrayList
         ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
         x = ArrayList()
         x.Add(1)
@@ -168,4 +170,21 @@ class AppTestDotnet:
         for i in x:
            sum += i
         assert sum == 1+2+3+4
+
+        # test iteration in Stack
+        Stack = clr.load_cli_class('System.Collections', 'Stack')
+        obj = Stack()
+        obj.Push(1)
+        obj.Push(54)
+        obj.Push(21)
+        for i in obj:
+            sum += i
+        assert sum == 1+54+21
+
+
+
+
+
+
+
 
