@@ -153,12 +153,19 @@ class AppTestDotnet:
         import clr
         ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
         x = ArrayList()
+        enum = x.GetEnumerator()
+        assert enum.MoveNext() is False
+
+    def test_iteratrion(self):
+        import clr
+        ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
+        x = ArrayList()
         x.Add(1)
-        x.Add(6)
-        x.Add(31)
         x.Add(2)
+        x.Add(3)
+        x.Add(4)
+        sum = 0
         for i in x:
-           print i 
-
-
+           sum += i
+        assert sum == 1+2+3+4
 
