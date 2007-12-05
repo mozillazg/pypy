@@ -206,6 +206,15 @@ load_cli_class.unwrap_spec = [ObjSpace, str, str]
 
 def build_cli_class(space, namespace, classname, fullname):
     b_type = System.Type.GetType(fullname)
+    hasIEnumerable = 0      # flag 
+
+    # this is where we locate the interfaces inherited by the class
+    # set the flag hasIEnumerable if IEnumerable interface has been by the class
+    ifaces = b_type.GetInterfaces()
+    for interface in ifaces:
+        if interface.ToString() == "System.Collections.IEnumerable":
+            hasIEnumerable = 1 
+
     w_staticmethods, w_methods = get_methods(space, b_type)
     w_properties, w_indexers = get_properties(space, b_type)
     return build_wrapper(space,
@@ -214,7 +223,8 @@ def build_cli_class(space, namespace, classname, fullname):
                          w_staticmethods,
                          w_methods,
                          w_properties,
-                         w_indexers)
+                         w_indexers,
+                         space.wrap(hasIEnumerable))
 
 
 class W_CliObject(Wrappable):
