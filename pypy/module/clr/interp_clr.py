@@ -109,8 +109,16 @@ def cli2py(space, b_obj):
         strval = unbox(b_obj, ootype.String)
         return space.wrap(strval)
     else:
-        msg = "Can't convert object %s to Python" % str(b_obj.ToString())
-        raise OperationError(space.w_TypeError, space.wrap(msg))
+        namespace, classname = split_fullname(b_type.ToString())
+        w_cls = load_cli_class(space, namespace, classname)
+        cliobj = W_CliObject(space, b_obj)
+        return wrapper_from_cliobj(space, w_cls, cliobj)
+
+def split_fullname(name):
+    lastdot = name.rfind('.')
+    if lastdot == -1:
+        return '', name
+    return name[:lastdot], name[lastdot+1:]
 
 def wrap_list_of_tuples(space, lst):
     list_w = []
@@ -188,9 +196,6 @@ def load_cli_class(space, namespace, classname):
 
        - classname: the name of the class in the specified namespace
          (e.g. ``ArrayList``).    """
-    #import sys
-    #for module in sys.modules:
-    #    print "mod ----> %s"%module
     fullname = '%s.%s' % (namespace, classname)
     w_cls = CliClassCache.get(fullname)
     if w_cls is None:
@@ -246,3 +251,4 @@ app_clr = os.path.join(path, 'app_clr.py')
 app = ApplevelClass(file(app_clr).read())
 del path, app_clr
 build_wrapper = app.interphook("build_wrapper")
+wrapper_from_cliobj = app.interphook("wrapper_from_cliobj")

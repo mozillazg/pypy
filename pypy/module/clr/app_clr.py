@@ -9,7 +9,6 @@ class StaticMethodWrapper(object):
 
     def __call__(self, *args):
         import clr
-        # now call the .NET static method  call_staticmethod in interp_cl 
         return clr.call_staticmethod(self.class_name, self.meth_name, args)
 
     def __repr__(self):
@@ -67,8 +66,9 @@ class BoundMethod(object):
         return self.im_self.__cliobj__.call_method(self.im_name, args)
 
     def __repr__(self):
-        return '<bound CLI method %s.%s of %s>' % (self.im_self.__class__.__cliclass__, self.im_name, self.im_self)
-
+        return '<bound CLI method %s.%s of %s>' % (self.im_self.__class__.__cliclass__,
+                                                   self.im_name,
+                                                   self.im_self)
 
 class StaticProperty(object):
     def __init__(self, fget=None, fset=None):
@@ -86,31 +86,34 @@ class MetaCliClassWrapper(type):
         else:
             type.__setattr__(cls, name, value)
 
-#class Dummy(object):
-#    def __init__(self, iterObj):
-#        self.iterObj = iterObj
-#        self.index = 0 
-#
-#    def next(self):
-#        temp = self.index
-#        if self.index == self.iterObj.Count:
-#            raise StopIteration
-#        self.index = self.index + 1
-#        return self.iterObj.__getitem__(temp)
-
-
 class CliClassWrapper(object):
     __slots__ = ('__cliobj__',)
 
     def __init__(self, *args):
         import clr
         self.__cliobj__ = clr._CliObject_internal(self.__cliclass__, args)
-        print self.__cliobj__
-        print self.Count
 
-#    def __iter__(self):
-#        return Dummy(self)
-#        return Dummy(self.Count, self.__getitem__(self.Count - 1))
+
+class IEnumeratorWrapper(object):
+    def __init__(self, enumerator):
+        self.__enumerator__ = enumerator
+
+    def __iter__(self):
+        return self
+
+    def next(self):
+        if not self.__enumerator__.MoveNext():
+            raise StopIteration
+        return self.__enumerator__.Current
+
+# this method need to be attached only to classes that implements IEnumerable (see build_wrapper)
+def __iter__(self):
+    return IEnumeratorWrapper(self.GetEnumerator())
+
+def wrapper_from_cliobj(cls, cliobj):
+    obj = cls.__new__(cls)
+    obj.__cliobj__ = cliobj
+    return obj
 
 def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers):
     fullname = '%s.%s' % (namespace, classname)
@@ -121,20 +124,17 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
     for name in methods:
         d[name] = MethodWrapper(name)
 
-    # check if there is GetEnumerator() method 
+    # check if there is GetEnumerator() method
+    # XXX: use .NET Reflection for this, checking for method name is not safe
     for method in methods:
         if method == "GetEnumerator":
-            print "Enumerator found .. Hurray !!!!!"
             # now add the __iter__ method to the class 
-            d['__iter__'] = d['GetEnumerator']
-#            d['next'] = d['MoveNext']
-
+            d['__iter__'] = __iter__
 
     assert len(indexers) <= 1
     if indexers:
         name, getter, setter, is_static = indexers[0]
         assert not is_static
-        print " Indexers Tuple -----> (%s,%s,%s,%s) "%(name, getter, setter, is_static)
         if getter:
             d['__getitem__'] = d[getter]
         if setter:
@@ -144,8 +144,6 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
     # we must add properties *after* the class has been created
     # because we need to store UnboundMethods as getters and setters
     for (name, getter, setter, is_static) in properties:
-        print " Properties Tuple -----> (%s,%s,%s,%s) "%(name, getter, setter, is_static)
-
         fget = None
         fset = None
         if getter:
@@ -159,8 +157,3 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
         setattr(cls, name, prop)
 
     return cls
-
-
-
-
-

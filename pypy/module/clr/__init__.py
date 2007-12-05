@@ -16,8 +16,8 @@ class Module(MixedModule):
         'load_cli_class': 'interp_clr.load_cli_class',
     }
 
-    def setup_after_space_initialization(self):
-        self.space.appexec([self], """(clr_module):
-            import sys
-            sys.meta_path.append(clr_module.dotnetimporter())
-            """)
+##    def setup_after_space_initialization(self):
+##        self.space.appexec([self], """(clr_module):
+##            import sys
+##            sys.meta_path.append(clr_module.dotnetimporter())
+##            """)
