@@ -166,3 +166,28 @@ def test_find_initializing_stores_across_blocks():
     collect_analyzer = CollectAnalyzer(t)
     init_stores = find_initializing_stores(collect_analyzer, t.graphs[0])
     assert len(init_stores) == 5
+
+def test_immutable_to_old_promotion():
+    T_CHILD = lltype.Ptr(lltype.GcStruct('Childe', ('field', lltype.Signed)))
+    T_PARENT = lltype.Ptr(lltype.GcStruct('Parent', ('sub', T_CHILD)))
+    child = lltype.malloc(T_CHILD.TO)
+    parent = lltype.malloc(T_PARENT.TO)
+    parent.sub = child
+    child.field = 3
+    d = {'x' : parent}
+    d['y'] = lltype.malloc(T_PARENT.TO)
+    d['y'].sub = lltype.malloc(T_CHILD.TO)
+
+    def f(x, y):
+        t = d[y]
+        res = t.sub.field + x
+        del d[y]
+        return res
+
+    t = rtype(f, [int, str])
+    etrafo = ExceptionTransformer(t)
+    graphs = etrafo.transform_completely()
+    transformer = WriteBarrierTransformer(t)
+    transformer.finish()
+    graphof(t, f).show()
+    
