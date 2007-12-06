@@ -168,26 +168,26 @@ def test_find_initializing_stores_across_blocks():
     assert len(init_stores) == 5
 
 def test_immutable_to_old_promotion():
-    T_CHILD = lltype.Ptr(lltype.GcStruct('Childe', ('field', lltype.Signed)))
+    T_CHILD = lltype.Ptr(lltype.GcStruct('Child', ('field', lltype.Signed)))
     T_PARENT = lltype.Ptr(lltype.GcStruct('Parent', ('sub', T_CHILD)))
     child = lltype.malloc(T_CHILD.TO)
+    child2 = lltype.malloc(T_CHILD.TO)
     parent = lltype.malloc(T_PARENT.TO)
+    parent2 = lltype.malloc(T_PARENT.TO)
     parent.sub = child
     child.field = 3
-    d = {'x' : parent}
-    d['y'] = lltype.malloc(T_PARENT.TO)
-    d['y'].sub = lltype.malloc(T_CHILD.TO)
+    parent2.sub = child2
+    child2.field = 8
 
-    def f(x, y):
-        t = d[y]
-        res = t.sub.field + x
-        del d[y]
-        return res
+    T_ALL = lltype.Ptr(lltype.GcArray(T_PARENT))
+    all = lltype.malloc(T_ALL.TO, 2)
+    all[0] = parent
+    all[1] = parent2
 
-    t = rtype(f, [int, str])
-    etrafo = ExceptionTransformer(t)
-    graphs = etrafo.transform_completely()
-    transformer = WriteBarrierTransformer(t)
-    transformer.finish()
-    graphof(t, f).show()
+    def f(x):
+        res = all[x]
+        all[x] = lltype.nullptr(T_PARENT.TO)
+        return res.sub.field
+
+    t, transformer = rtype_and_transform(f, [int], WriteBarrierTransformer)
     
