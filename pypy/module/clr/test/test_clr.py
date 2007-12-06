@@ -17,6 +17,10 @@ class AppTestDotnet:
         ArrayList2 = clr.load_cli_class('System.Collections', 'ArrayList')
         assert ArrayList is ArrayList2
 
+    def test_load_fail(self):
+        import clr
+        raises(ImportError, clr.load_cli_class, 'Foo', 'Bar')
+        
     def test_ArrayList(self):
         import clr
         ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
@@ -180,11 +184,4 @@ class AppTestDotnet:
         for i in obj:
             sum += i
         assert sum == 1+54+21
-
-
-
-
-
-
-
 
