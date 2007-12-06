@@ -206,14 +206,15 @@ load_cli_class.unwrap_spec = [ObjSpace, str, str]
 
 def build_cli_class(space, namespace, classname, fullname):
     b_type = System.Type.GetType(fullname)
-    hasIEnumerable = 0      # flag 
+    if b_type is None:
+        raise OperationError(space.w_ImportError, space.wrap("Cannot load .NET type: %s" % fullname))
 
     # this is where we locate the interfaces inherited by the class
     # set the flag hasIEnumerable if IEnumerable interface has been by the class
-    ifaces = b_type.GetInterfaces()
-    for interface in ifaces:
+    hasIEnumerable = False
+    for interface in b_type.GetInterfaces(i):
         if interface.ToString() == "System.Collections.IEnumerable":
-            hasIEnumerable = 1 
+            hasIEnumerable = True
 
     w_staticmethods, w_methods = get_methods(space, b_type)
     w_properties, w_indexers = get_properties(space, b_type)
