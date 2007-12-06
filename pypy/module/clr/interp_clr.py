@@ -212,7 +212,7 @@ def build_cli_class(space, namespace, classname, fullname):
     # this is where we locate the interfaces inherited by the class
     # set the flag hasIEnumerable if IEnumerable interface has been by the class
     hasIEnumerable = False
-    for interface in b_type.GetInterfaces(i):
+    for interface in b_type.GetInterfaces():
         if interface.ToString() == "System.Collections.IEnumerable":
             hasIEnumerable = True
 
