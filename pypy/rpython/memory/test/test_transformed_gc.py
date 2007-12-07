@@ -862,6 +862,30 @@ class TestGenerationGC(GenericMovingGCTests):
         run = self.runner(f, nbargs=0)
         run([])
 
+    def test_immutable_to_old_promotion(self):
+        T_CHILD = lltype.Ptr(lltype.GcStruct('Child', ('field', lltype.Signed)))
+        T_PARENT = lltype.Ptr(lltype.GcStruct('Parent', ('sub', T_CHILD)))
+        child = lltype.malloc(T_CHILD.TO)
+        child2 = lltype.malloc(T_CHILD.TO)
+        parent = lltype.malloc(T_PARENT.TO)
+        parent2 = lltype.malloc(T_PARENT.TO)
+        parent.sub = child
+        child.field = 3
+        parent2.sub = child2
+        child2.field = 8
+
+        T_ALL = lltype.Ptr(lltype.GcArray(T_PARENT))
+        all = lltype.malloc(T_ALL.TO, 2)
+        all[0] = parent
+        all[1] = parent2
+
+        def f(x, y):
+            res = all[x]
+            all[x] = lltype.nullptr(T_PARENT.TO)
+            return res.sub.field
+
+        run = self.runner(f, nbargs=2)
+        run([1, 4])
 
 class TestGenerationalNoFullCollectGC(GCTest):
     # test that nursery is doing its job and that no full collection
