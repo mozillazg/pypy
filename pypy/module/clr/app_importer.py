@@ -6,14 +6,6 @@
 import imp
 import sys
 
-DotNetModuleList = ['System',
-                    'System.Collections',
-                    'System.Collections.ArrayList',
-                    'System.Collections.Stack',
-                    'System.Collections.Queue',
-                    'System.Math']
-
-
 class loader(object):
     '''
         This method returns the loaded module or raises an exception, ImportError
@@ -46,26 +38,18 @@ class loader(object):
 
         '''
         # If it is a call for a Class then return with the Class reference
-        code = 0 
-        if fullname == "System.Math":
-            code = 1
-            import clr
-            sys.modules[fullname] = clr.load_cli_class('System','Math')
-        if fullname == "System.Collections.Queue":
-            code = 1
-            import clr
-            sys.modules[fullname] = clr.load_cli_class('System.Collections','Queue')
-        if fullname == "System.Collections.Stack":
-            code = 1
-            import clr
-            sys.modules[fullname] = clr.load_cli_class('System.Collections','Stack')
-        if fullname == "System.Collections.ArrayList":
-            code = 1
-            import clr
-            sys.modules[fullname] = clr.load_cli_class('System.Collections','ArrayList')
+        import clr
+        if clr.isDotNetType(fullname):
+            ''' Task is to breakup System.Collections.ArrayList and call 
+                clr.load_cli_class('System.Collections','ArrayList')
+            '''
+            rindex = fullname.rfind('.')
+            if rindex != -1:
+                leftStr = fullname[:rindex]
+                rightStr= fullname[rindex+1:]
+                sys.modules[fullname] = clr.load_cli_class(leftStr, rightStr)
 
-        # if not a call for actual class assign an empty module for it. 
-        if not code:
+        else:  # if not a call for actual class (say for namespaces) assign an empty module 
             mod = imp.new_module(fullname)
             mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
             mod.__file__ = "<%s>" % self.__class__.__name__
@@ -92,11 +76,15 @@ class importer(object):
          been imported and added to sys.modules.
     '''
     def __init__(self):
+        import clr
+        # this might not be the correct place to load the valid NameSpaces
+        self.ValidNameSpaces = clr.load_valid_namespaces()
         self.loader = loader()
 
     def find_module(self, fullname, path = None):
-        #print "( fullname = %s )  + ( path = %s )"%(fullname, path)
-        if fullname in DotNetModuleList:
+        # check for true NAMESPACE or .NET TYPE 
+        import clr
+        if fullname in self.ValidNameSpaces or clr.isDotNetType(fullname): 
             # fullname is a  .Net Module
             if path != None:
                 __path__ = path

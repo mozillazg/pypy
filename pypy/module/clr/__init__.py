@@ -14,6 +14,9 @@ class Module(MixedModule):
         '_CliObject_internal': 'interp_clr.W_CliObject',
         'call_staticmethod': 'interp_clr.call_staticmethod',
         'load_cli_class': 'interp_clr.load_cli_class',
+        'load_valid_namespaces': 'interp_clr.load_valid_namespaces',
+        'isDotNetType': 'interp_clr.isDotNetType',
+        'load_assembly': 'interp_clr.load_assembly',
     }
 
     def setup_after_space_initialization(self):

@@ -184,6 +184,65 @@ class _CliClassCache:
         return self.cache.get(fullname, None)
 CliClassCache = _CliClassCache()
 
+def load_valid_namespaces(space):
+    """
+    We use this function to play with reflection
+    and then return useful data to the app_importer module
+
+    Parameters:
+
+    Return: List of Valid .NET namespaces
+    """
+
+    listOfNamespaces = []
+    currentDomain = System.AppDomain.get_CurrentDomain()
+    asEvidence = currentDomain.get_Evidence()
+
+#    assembly1 = System.Reflection.Assembly.LoadFile("System.Xml.dll")
+#    assembly2 = System.Reflection.Assembly.LoadFile("mscorlib.dll")
+#    assembly3 = System.Reflection.Assembly.LoadFile("/home/amit/clrModImprove/pypy/module/clr/System.Windows.Forms.dll")
+                                                            
+#    currentDomain.Load("System.Xml",asEvidence)
+#    currentDomain.Load("mscorlib",asEvidence)
+#    currentDomain.Load("System.Web",asEvidence)
+#    currentDomain.Load("System.Drawing",asEvidence)
+#    currentDomain.Load("System.Data",asEvidence)
+#    currentDomain.Load("System.Windows.Forms",asEvidence)
+
+    assems = currentDomain.GetAssemblies()
+    for assembly in assems:
+        typesInAssembly = assembly.GetTypes();
+        for type in typesInAssembly:
+            namespace = type.get_Namespace()
+            if namespace != None and namespace not in listOfNamespaces:
+                listOfNamespaces.append(namespace) 
+    w_listOfNamespaces = wrap_list_of_strings(space, listOfNamespaces)
+    return w_listOfNamespaces
+
+def isDotNetType(space, nameFromImporter):
+    """
+        determines if the string input is a DotNetType
+
+        Return:
+            Boolean
+    """
+    if System.Type.GetType(nameFromImporter) != None:
+        return space.wrap(True)
+    return space.wrap(False)
+
+isDotNetType.unwrap_spec = [ObjSpace, str]
+
+def load_assembly(space, assemblyName):
+    """
+    Load the given .NET assembly into the PyPy interpreter 
+
+    Parameters:
+
+       - assemblyName: the full name of the assembly 
+          (e.g., ``System.Xml.dll``).
+    """
+    pass
+
 def load_cli_class(space, namespace, classname):
     """
     Load the given .NET class into the PyPy interpreter and return a
