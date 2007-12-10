@@ -421,7 +421,7 @@ def NativeException(cliClass):
 def _create_NativeException(cliClass):
     from pypy.translator.cli.query import getattr_ex
     TYPE = cliClass._INSTANCE
-    if PythonNet.__name__ == 'CLR':
+    if PythonNet.__name__ in ('CLR', 'clr'):
         # we are using pythonnet -- use the .NET class
         name = '%s.%s' % (TYPE._namespace, TYPE._classname)
         res = getattr_ex(PythonNet, name)
