@@ -160,7 +160,7 @@ class AppTestDotnet:
         enum = x.GetEnumerator()
         assert enum.MoveNext() is False
 
-    def test_iteratrion(self):
+    def test_iteration(self):
         import clr
 
         # test iteration in ArrayList
@@ -181,6 +181,7 @@ class AppTestDotnet:
         obj.Push(1)
         obj.Push(54)
         obj.Push(21)
+        sum = 0
         for i in obj:
             sum += i
         assert sum == 1+54+21
