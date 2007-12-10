@@ -60,9 +60,6 @@ class Module(MixedModule):
         'buffer'        : 'app_buffer.buffer',
         'reload'        : 'app_misc.reload',
 
-        'set'           : 'app_sets.set',
-        'frozenset'     : 'app_sets.frozenset',
-
         '__filestub'    : 'app_file_stub.file',
     }
 
