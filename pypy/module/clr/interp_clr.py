@@ -193,25 +193,20 @@ def load_valid_namespaces(space):
 
     Return: List of Valid .NET namespaces
     """
-
     listOfNamespaces = []
-    currentDomain = System.AppDomain.get_CurrentDomain()
-    asEvidence = currentDomain.get_Evidence()
+    assembliesToScan = [ "/usr/lib/mono/1.0/mscorlib.dll",
+                         "/usr/lib/mono/1.0/System.dll",
+                         "/usr/lib/mono/1.0/System.Web.dll",
+                         "/usr/lib/mono/1.0/System.Data.dll",
+                         "/usr/lib/mono/1.0/System.Xml.dll",
+                         "/usr/lib/mono/1.0/System.Drawing.dll"
+                    ]
+    assems = []
+    for assemblyName in assembliesToScan:
+        assems.append(System.Reflection.Assembly.LoadFile(assemblyName))
 
-#    assembly1 = System.Reflection.Assembly.LoadFile("System.Xml.dll")
-#    assembly2 = System.Reflection.Assembly.LoadFile("mscorlib.dll")
-#    assembly3 = System.Reflection.Assembly.LoadFile("/home/amit/clrModImprove/pypy/module/clr/System.Windows.Forms.dll")
-                                                            
-#    currentDomain.Load("System.Xml",asEvidence)
-#    currentDomain.Load("mscorlib",asEvidence)
-#    currentDomain.Load("System.Web",asEvidence)
-#    currentDomain.Load("System.Drawing",asEvidence)
-#    currentDomain.Load("System.Data",asEvidence)
-#    currentDomain.Load("System.Windows.Forms",asEvidence)
-
-    assems = currentDomain.GetAssemblies()
-    for assembly in assems:
-        typesInAssembly = assembly.GetTypes();
+    for loadedAssembly in assems:
+        typesInAssembly = loadedAssembly.GetTypes()
         for type in typesInAssembly:
             namespace = type.get_Namespace()
             if namespace != None and namespace not in listOfNamespaces:
@@ -241,6 +236,9 @@ def load_assembly(space, assemblyName):
        - assemblyName: the full name of the assembly 
           (e.g., ``System.Xml.dll``).
     """
+    #    listOfNamespaces = []
+    #    currentDomain = System.AppDomain.get_CurrentDomain()
+    #    asEvidence = currentDomain.get_Evidence()
     pass
 
 def load_cli_class(space, namespace, classname):
