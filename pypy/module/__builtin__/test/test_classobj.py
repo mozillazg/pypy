@@ -15,6 +15,24 @@ class AppTestOldstyle(object):
         assert a.__class__ is A
         assert a.__dict__ == {'b': 2}
 
+    def test_mutate_class_special(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+        A.__name__ = 'B'
+        assert A.__name__ == 'B'
+        assert A.a == 1
+        A.__dict__ = {'a': 5}
+        assert A.a == 5
+        class B:
+            __metaclass__ = nclassobj
+            a = 17
+        class C(A):
+            pass
+        assert C.a == 5
+        C.__bases__ = (B, )
+        assert C.a == 17
+
     def test_init(self):
         class A:
             __metaclass__ = nclassobj
