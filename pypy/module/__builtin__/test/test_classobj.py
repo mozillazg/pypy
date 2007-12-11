@@ -161,3 +161,37 @@ class AppTestOldstyle(object):
         raises(AttributeError, "del a[5]")
         class A:
             __metaclass__ = nclassobj
+
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.list = [1, 2, 3, 4, 5]
+            def __len__(self):
+                return len(self.list)
+            def __getitem__(self, i):
+                return self.list[i]
+            def __setitem__(self, i, v):
+                self.list[i] = v
+            def __delitem__(self, i):
+                del self.list[i]
+
+        a = A()
+        assert len(a) == 5
+        del a[0]
+        assert len(a) == 4
+        assert a[0] == 2
+        a[0] = 5
+        assert a[0] == 5
+
+    def test_len_errors(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __len__(self):
+                return long(10)
+        raises(TypeError, len, A())
+        class A:
+            __metaclass__ = nclassobj
+            def __len__(self):
+                return -1
+        raises(ValueError, len, A())
+

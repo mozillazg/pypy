@@ -249,7 +249,7 @@ class W_InstanceObject(Wrappable):
     def descr_len(self, space):
         w_meth = self.getattr(space, space.wrap('__len__'))
         w_result = space.call_function(w_meth)
-        if space.is_true(space.isinstance(ret, space.w_int)):
+        if space.is_true(space.isinstance(w_result, space.w_int)):
             if space.is_true(space.le(w_result, space.wrap(0))):
                 raise OperationError(
                     space.w_ValueError,
@@ -257,7 +257,7 @@ class W_InstanceObject(Wrappable):
             return w_result
         else:
             raise OperationError(
-                space.w_ValueError,
+                space.w_TypeError,
                 space.wrap("__len__() should return an int"))
 
     def descr_getitem(self, space, w_key):
