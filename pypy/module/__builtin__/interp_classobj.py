@@ -95,7 +95,19 @@ class W_ClassObject(Wrappable):
                     return w_result
             return None
 
-    def descr_getattr(self, space, w_attr):
+    def descr_getattribute(self, space, w_attr):
+        try:
+            name = space.str_w(w_attr)
+        except OperationError, e:
+            if not e.match(space, space.w_TypeError):
+                raise
+        else:
+            if name == "__dict__":
+                return self.w_dict
+            elif name == "__name__":
+                return self.w_name
+            elif name == "__bases__":
+                return self.w_bases
         w_value = self.lookup(space, w_attr)
         if w_value is None:
             raise OperationError(
@@ -133,7 +145,7 @@ W_ClassObject.typedef = TypeDef("classobj",
                                W_ClassObject.fset_bases),
     __call__ = interp2app(W_ClassObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
-    __getattr__ = interp2app(W_ClassObject.descr_getattr,
+    __getattribute__ = interp2app(W_ClassObject.descr_getattribute,
                              unwrap_spec=['self', ObjSpace, W_Root]),
 )
 W_ClassObject.typedef.acceptable_as_base_class = False
