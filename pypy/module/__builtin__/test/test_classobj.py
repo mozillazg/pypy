@@ -141,3 +141,14 @@ class AppTestOldstyle(object):
         raises(TypeError, B.f, 1)
         raises(TypeError, B.f, A())
         assert B.f(B()) == 1
+
+    def test_len_getsetdelitem(self):
+        class A:
+            __metaclass__ = nclassobj
+        a = A()
+        raises(AttributeError, len, a)
+        raises(AttributeError, "a[5]")
+        raises(AttributeError, "a[5] = 5")
+        raises(AttributeError, "del a[5]")
+        class A:
+            __metaclass__ = nclassobj
