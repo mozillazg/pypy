@@ -23,4 +23,9 @@ class AppTestOldstyle(object):
                 self.a = a
         a = A(2)
         assert a.a == 2
+        class B:
+            __metaclass__ = nclassobj
+            def __init__(self, a):
+                return a
 
+        raises(TypeError, B, 2)
