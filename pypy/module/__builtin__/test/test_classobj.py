@@ -195,3 +195,15 @@ class AppTestOldstyle(object):
                 return -1
         raises(ValueError, len, A())
 
+    def test_call(self):
+        class A:
+            __metaclass__ = nclassobj
+        a = A()
+        raises(AttributeError, a)
+        class A:
+            __metaclass__ = nclassobj
+            def __call__(self, a, b):
+                return a + b
+        a = A()
+        assert a(1, 2) == 3
+

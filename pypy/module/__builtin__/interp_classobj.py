@@ -272,6 +272,9 @@ class W_InstanceObject(Wrappable):
         w_meth = self.getattr(space, space.wrap('__delitem__'))
         space.call_function(w_meth, w_key)
 
+    def descr_call(self, space, __args__):
+        w_meth = self.getattr(space, space.wrap('__call__'))
+        return space.call_args(w_meth, __args__)
 
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(W_InstanceObject.descr_new),
@@ -289,5 +292,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                              unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
     __delitem__ = interp2app(W_InstanceObject.descr_delitem,
                              unwrap_spec=['self', ObjSpace, W_Root]),
+    __call__ = interp2app(W_InstanceObject.descr_call,
+                          unwrap_spec=['self', ObjSpace, Arguments]),
 )
 
