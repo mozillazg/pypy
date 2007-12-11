@@ -247,3 +247,28 @@ class AppTestOldstyle(object):
         raises(ValueError, "assert a")
         a = A("hello")
         raises(TypeError, "assert a")
+
+    def test_repr(self):
+        class A:
+            __metaclass__ = nclassobj
+        a = A()
+        assert repr(a).startswith("<__builtin__.A instance at")
+        assert str(a).startswith("<__builtin__.A instance at")
+        A.__name__ = "Foo"
+        assert repr(a).startswith("<__builtin__.Foo instance at")
+        assert str(a).startswith("<__builtin__.Foo instance at")
+        class A:
+            __metaclass__ = nclassobj
+            def __repr__(self):
+                return "foo"
+        assert repr(A()) == "foo"
+        assert str(A()) == "foo"
+
+    def test_str(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __str__(self):
+                return "foo"
+        a = A()
+        assert repr(a).startswith("<__builtin__.A instance at")
+        assert str(a) == "foo"

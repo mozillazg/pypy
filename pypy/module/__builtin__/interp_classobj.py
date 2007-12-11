@@ -149,6 +149,17 @@ class W_ClassObject(Wrappable):
                     space.wrap("this constructor takes no arguments"))
         return w_inst
 
+    def get_module_string(self, space):
+        try:
+            w_mod = self.descr_getattribute(space, space.wrap("__module__"))
+        except OperationError, e:
+            if not e.match(space, space.w_AttributeError):
+                raise
+            return "?"
+        if space.is_true(space.isinstance(w_mod, space.w_str)):
+            return space.str_w(w_mod)
+        return "?"
+
 W_ClassObject.typedef = TypeDef("classobj",
     __new__ = interp2app(descr_classobj_new),
     __dict__ = GetSetProperty(W_ClassObject.fget_dict, W_ClassObject.fset_dict,
@@ -246,6 +257,20 @@ class W_InstanceObject(Wrappable):
         #import pdb; pdb.set_trace()
         return self.getattr(space, w_attr)
 
+    def descr_repr(self, space):
+        w_meth = self.getattr(space, space.wrap('__repr__'), False)
+        if w_meth is None:
+            w_class = self.w_class
+            mod = w_class.get_module_string(space)
+            return self.getrepr(space, "%s.%s instance" % (mod, w_class.name))
+        return space.call_function(w_meth)
+
+    def descr_str(self, space):
+        w_meth = self.getattr(space, space.wrap('__str__'), False)
+        if w_meth is None:
+            return self.descr_repr(space)
+        return space.call_function(w_meth)
+
     def descr_len(self, space):
         w_meth = self.getattr(space, space.wrap('__len__'))
         w_result = space.call_function(w_meth)
@@ -300,6 +325,10 @@ W_InstanceObject.typedef = TypeDef("instance",
                                W_InstanceObject.fset_class),
     __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
                                   unwrap_spec=['self', ObjSpace, W_Root]),
+    __repr__ = interp2app(W_InstanceObject.descr_repr,
+                          unwrap_spec=['self', ObjSpace]),
+    __str__ = interp2app(W_InstanceObject.descr_str,
+                         unwrap_spec=['self', ObjSpace]),
     __len__ = interp2app(W_InstanceObject.descr_len,
                          unwrap_spec=['self', ObjSpace]),
     __getitem__ = interp2app(W_InstanceObject.descr_getitem,
