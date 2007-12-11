@@ -79,6 +79,9 @@ class Module(MixedModule):
         # old-style classes dummy support
         '_classobj'     : 'space.w_classobj',
         '_instance'     : 'space.w_instance',
+        # new old-style classes implementation for testing
+        'nclassobj'     : 'interp_classobj.W_ClassObject',
+        'ninstance'     : 'interp_classobj.W_InstanceObject',
         # default __metaclass__
         '__metaclass__' : '(space.w_type)',
 
