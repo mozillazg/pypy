@@ -29,3 +29,12 @@ class AppTestOldstyle(object):
                 return a
 
         raises(TypeError, B, 2)
+
+    def test_method(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+            def f(self, a):
+                return self.a + a
+        a = A()
+        assert a.f(2) == 3
