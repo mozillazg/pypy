@@ -82,3 +82,16 @@ class AppTestOldstyle(object):
         assert B.af(b) == 3
         assert B.bf(b) == 2
         assert B.cf(b) == 4
+
+    def test_inheritance_unbound_method(self):
+        class A:
+            __metaclass__ = nclassobj
+            def f(self):
+                return 1
+        raises(TypeError, A.f, 1)
+        assert A.f(A()) == 1
+        class B(A):
+            pass
+        raises(TypeError, B.f, 1)
+        raises(TypeError, B.f, A())
+        assert B.f(B()) == 1
