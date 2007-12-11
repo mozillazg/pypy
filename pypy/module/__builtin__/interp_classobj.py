@@ -250,15 +250,14 @@ class W_InstanceObject(Wrappable):
         w_meth = self.getattr(space, space.wrap('__len__'))
         w_result = space.call_function(w_meth)
         if space.is_true(space.isinstance(w_result, space.w_int)):
-            if space.is_true(space.le(w_result, space.wrap(0))):
+            if space.is_true(space.lt(w_result, space.wrap(0))):
                 raise OperationError(
                     space.w_ValueError,
                     space.wrap("__len__() should return >= 0"))
             return w_result
-        else:
-            raise OperationError(
-                space.w_TypeError,
-                space.wrap("__len__() should return an int"))
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("__len__() should return an int"))
 
     def descr_getitem(self, space, w_key):
         w_meth = self.getattr(space, space.wrap('__getitem__'))
@@ -275,6 +274,23 @@ class W_InstanceObject(Wrappable):
     def descr_call(self, space, __args__):
         w_meth = self.getattr(space, space.wrap('__call__'))
         return space.call_args(w_meth, __args__)
+
+    def descr_nonzero(self, space):
+        w_func = self.getattr(space, space.wrap('__nonzero__'), False)
+        if w_func is None:
+            w_func = self.getattr(space, space.wrap('__len__'), False)
+            if w_func is None:
+                return space.w_True
+        w_result = space.call_function(w_func)
+        if space.is_true(space.isinstance(w_result, space.w_int)):
+            if space.is_true(space.lt(w_result, space.wrap(0))):
+                raise OperationError(
+                    space.w_ValueError,
+                    space.wrap("__nonzero__() should return >= 0"))
+            return w_result
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("__nonzero__() should return an int"))
 
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(W_InstanceObject.descr_new),
@@ -294,5 +310,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                              unwrap_spec=['self', ObjSpace, W_Root]),
     __call__ = interp2app(W_InstanceObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
+    __nonzero__ = interp2app(W_InstanceObject.descr_nonzero,
+                             unwrap_spec=['self', ObjSpace]),
 )
 

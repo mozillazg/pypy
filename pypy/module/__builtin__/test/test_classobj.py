@@ -182,6 +182,15 @@ class AppTestOldstyle(object):
         assert a[0] == 2
         a[0] = 5
         assert a[0] == 5
+        assert a
+        assert bool(a) == True
+        del a[0]
+        del a[0]
+        del a[0]
+        del a[0]
+        assert len(a) == 0
+        assert not a
+        assert bool(a) == False
 
     def test_len_errors(self):
         class A:
@@ -207,3 +216,34 @@ class AppTestOldstyle(object):
         a = A()
         assert a(1, 2) == 3
 
+    def test_nonzero(self):
+        class A:
+            __metaclass__ = nclassobj
+        a = A()
+        assert a
+        assert bool(a) == True
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self, truth):
+                self.truth = truth
+            def __nonzero__(self):
+                return self.truth
+        a = A(1)
+        assert a
+        assert bool(a) == True
+        a = A(42)
+        assert a
+        assert bool(a) == True
+        a = A(True)
+        assert a
+        assert bool(a) == True
+        a = A(False)
+        assert not a
+        assert bool(a) == False
+        a = A(0)
+        assert not a
+        assert bool(a) == False
+        a = A(-1)
+        raises(ValueError, "assert a")
+        a = A("hello")
+        raises(TypeError, "assert a")
