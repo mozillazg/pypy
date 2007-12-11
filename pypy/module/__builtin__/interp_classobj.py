@@ -24,8 +24,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
         
     for w_base in space.unpackiterable(w_bases):
         if not isinstance(w_base, W_ClassObject):
-            # XXX use space.type(w_base) instead of the next line
-            w_metaclass = space.call_function(space.w_type, w_base)
+            w_metaclass = space.type(w_base)
             if space.is_true(space.callable(w_metaclass)):
                 return space.call_function(w_metaclass, w_name,
                                            w_bases, w_dic)
@@ -36,11 +35,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 
 class W_ClassObject(Wrappable):
     def __init__(self, space, w_name, w_bases, w_dict):
-        # XXX shouldn't store both w_name and name
-        self.w_name = w_name
         self.name = space.str_w(w_name)
-        # XXX shouldn't store both w_bases and bases_w.  Probably bases_w only
-        self.w_bases = w_bases
         self.bases_w = space.unpackiterable(w_bases)
         self.w_dict = w_dict
 
@@ -60,23 +55,22 @@ class W_ClassObject(Wrappable):
         self.w_dict = w_dict
 
     def fget_name(space, self):
-        return self.w_name
+        return space.wrap(self.name)
 
     def fset_name(space, self, w_newname):
         if not space.is_true(space.isinstance(w_newname, space.w_str)):
             raise OperationError(
                     space.w_TypeError,
                     space.wrap("__name__ must be a string object"))
-        self.w_name = w_newname
         self.name = space.str_w(w_newname)
 
     def fget_bases(space, self):
-        return self.w_bases
+        return space.wrap(self.bases_w)
 
     def fset_bases(space, self, w_bases):
         # XXX in theory, this misses a check against inheritence cycles
         # although on pypy we don't get a segfault for infinite
-        # recursion anyway
+        # recursion anyway 
         if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
             raise OperationError(
                     space.w_TypeError,
@@ -86,7 +80,6 @@ class W_ClassObject(Wrappable):
             if not isinstance(w_base, W_ClassObject):
                 raise OperationError(space.w_TypeError,
                                      space.wrap("__bases__ items must be classes"))
-        self.w_bases = w_bases
         self.bases_w = bases_w
 
     # XXX missing del descriptors for __name__, __bases__, __dict__
@@ -117,9 +110,9 @@ class W_ClassObject(Wrappable):
             if name == "__dict__":
                 return self.w_dict
             elif name == "__name__":
-                return self.w_name
+                return space.wrap(self.name)
             elif name == "__bases__":
-                return self.w_bases
+                return space.newtuple(self.bases_w)
         w_value = self.lookup(space, w_attr)
         if w_value is None:
             raise OperationError(
@@ -219,16 +212,11 @@ class W_InstanceObject(Wrappable):
             return None
 
     def getattr(self, space, w_name, exc=True):
-        try:
-            name = space.str_w(w_name)
-        except OperationError, e:
-            if not e.match(space, space.w_TypeError):
-                raise
-        else:
-            if name == "__dict__":
-                return self.w_dict
-            elif name == "__class__":
-                return self.w_class
+        name = space.str_w(w_name)
+        if name == "__dict__":
+            return self.w_dict
+        elif name == "__class__":
+            return self.w_class
         w_result = self.retrieve(space, w_name, False)
         if w_result is not None:
             return w_result
@@ -238,7 +226,7 @@ class W_InstanceObject(Wrappable):
                 raise OperationError(
                     space.w_AttributeError,
                     space.wrap("%s instance has no attribute %s" % (
-                        space.str_w(self.w_class), space.str_w(space.str(name)))))
+                        self.w_class.name, name)))
             else:
                 return None
         w_descr_get = space.lookup(w_value, '__get__')
@@ -246,9 +234,35 @@ class W_InstanceObject(Wrappable):
             return w_value
         return space.call_function(w_descr_get, w_value, self, self.w_class)
 
-    def descr_getattr(self, space, w_attr):
+    def descr_getattribute(self, space, w_attr):
         #import pdb; pdb.set_trace()
         return self.getattr(space, w_attr)
+
+    def descr_len(self, space):
+        w_meth = self.getattr(space, space.wrap('__len__'))
+        w_result = space.call_function(w_meth)
+        if space.is_true(space.isinstance(ret, space.w_int)):
+            if space.is_true(space.le(w_result, space.wrap(0))):
+                raise OperationError(
+                    space.w_ValueError,
+                    space.wrap("__len__() should return >= 0"))
+            return w_result
+        else:
+            raise OperationError(
+                space.w_ValueError,
+                space.wrap("__len__() should return an int"))
+
+    def descr_getitem(self, space, w_key):
+        w_meth = self.getattr(space, space.wrap('__getitem__'))
+        return space.call_function(w_meth, w_key)
+
+    def descr_setitem(self, space, w_key, w_value):
+        w_meth = self.getattr(space, space.wrap('__setitem__'))
+        space.call_function(w_meth, w_key, w_value)
+
+    def descr_delitem(self, space, w_key):
+        w_meth = self.getattr(space, space.wrap('__delitem__'))
+        space.call_function(w_meth, w_key)
 
 
 W_InstanceObject.typedef = TypeDef("instance",
@@ -257,7 +271,15 @@ W_InstanceObject.typedef = TypeDef("instance",
                               W_InstanceObject.fset_dict),
     __class__ = GetSetProperty(W_InstanceObject.fget_class,
                                W_InstanceObject.fset_class),
-    # XXX there is no __getattr__ on this typedef in _classobj.py
-    __getattr__ = interp2app(W_InstanceObject.descr_getattr,
+    __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
+                                  unwrap_spec=['self', ObjSpace, W_Root]),
+    __len__ = interp2app(W_InstanceObject.descr_len,
+                         unwrap_spec=['self', ObjSpace]),
+    __getitem__ = interp2app(W_InstanceObject.descr_getitem,
+                             unwrap_spec=['self', ObjSpace, W_Root]),
+    __setitem__ = interp2app(W_InstanceObject.descr_setitem,
+                             unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
+    __delitem__ = interp2app(W_InstanceObject.descr_delitem,
                              unwrap_spec=['self', ObjSpace, W_Root]),
 )
+
