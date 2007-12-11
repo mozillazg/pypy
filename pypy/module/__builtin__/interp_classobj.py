@@ -8,10 +8,7 @@ from pypy.rlib.rarithmetic import r_uint, intmask
 
 
 def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
-    # XXX kill next two lines? no clue why they are there in _classobj either
-    if w_bases is None:
-        w_bases = space.newtuple([])
-    elif not space.is_true(space.isinstance(w_bases, space.w_tuple)):
+    if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
         raise_type_err(space, 'bases', 'tuple', w_bases)
     
     if not space.is_true(space.isinstance(w_dict, space.w_dict)):
@@ -54,6 +51,11 @@ class W_ClassObject(Wrappable):
                 space.wrap("__dict__ must be a dictionary object"))
         self.w_dict = w_dict
 
+    def fdel_dict(space, self):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("__dict__ must be a dictionary object"))
+
     def fget_name(space, self):
         return space.wrap(self.name)
 
@@ -63,6 +65,12 @@ class W_ClassObject(Wrappable):
                     space.w_TypeError,
                     space.wrap("__name__ must be a string object"))
         self.name = space.str_w(w_newname)
+
+    def fdel_name(space, self):
+        raise OperationError(
+                space.w_TypeError,
+                space.wrap("__name__ must be a string object"))
+
 
     def fget_bases(space, self):
         return space.wrap(self.bases_w)
@@ -82,8 +90,10 @@ class W_ClassObject(Wrappable):
                                      space.wrap("__bases__ items must be classes"))
         self.bases_w = bases_w
 
-    # XXX missing del descriptors for __name__, __bases__, __dict__
-
+    def fdel_bases(space, self):
+        raise OperationError(
+                space.w_TypeError,
+                space.wrap("__bases__ must be a tuple object"))
 
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
@@ -144,10 +154,13 @@ class W_ClassObject(Wrappable):
 
 W_ClassObject.typedef = TypeDef("classobj",
     __new__ = interp2app(descr_classobj_new),
-    __dict__ = GetSetProperty(W_ClassObject.fget_dict, W_ClassObject.fset_dict),
-    __name__ = GetSetProperty(W_ClassObject.fget_name, W_ClassObject.fset_name),
+    __dict__ = GetSetProperty(W_ClassObject.fget_dict, W_ClassObject.fset_dict,
+                              W_ClassObject.fdel_dict),
+    __name__ = GetSetProperty(W_ClassObject.fget_name, W_ClassObject.fset_name,
+                              W_ClassObject.fdel_name),
     __bases__ = GetSetProperty(W_ClassObject.fget_bases,
-                               W_ClassObject.fset_bases),
+                               W_ClassObject.fset_bases,
+                               W_ClassObject.fdel_bases),
     __call__ = interp2app(W_ClassObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __getattribute__ = interp2app(W_ClassObject.descr_getattribute,

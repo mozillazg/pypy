@@ -45,6 +45,15 @@ class AppTestOldstyle(object):
         assert C.b == 18
         assert C.c == 19
 
+    def test_del_error_class_special(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+        raises(TypeError, "del A.__name__")
+        raises(TypeError, "del A.__dict__")
+        raises(TypeError, "del A.__bases__")
+
+
     def test_mutate_instance_special(self):
         class A:
             __metaclass__ = nclassobj
