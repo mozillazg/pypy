@@ -115,7 +115,7 @@ class W_ClassObject(Wrappable):
         w_inst = W_InstanceObject(space, self)
         w_init = w_inst.getattr(space, space.wrap('__init__'), False)
         if w_init is not None:
-            w_result = space.call(w_init, __args__)
+            w_result = space.call_args(w_init, __args__)
             if not space.is_w(w_result, space.w_None):
                 raise OperationError(
                     space.w_TypeError,
