@@ -15,3 +15,12 @@ class AppTestOldstyle(object):
         assert a.__class__ is A
         assert a.__dict__ == {'b': 2}
 
+    def test_init(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+            def __init__(self, a):
+                self.a = a
+        a = A(2)
+        assert a.a == 2
+
