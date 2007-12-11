@@ -257,6 +257,15 @@ class AppTestOldstyle(object):
         A.__name__ = "Foo"
         assert repr(a).startswith("<__builtin__.Foo instance at")
         assert str(a).startswith("<__builtin__.Foo instance at")
+        A.__module__ = "bar"
+        assert repr(a).startswith("<bar.Foo instance at")
+        assert str(a).startswith("<bar.Foo instance at")
+        A.__module__ = None
+        assert repr(a).startswith("<?.Foo instance at")
+        assert str(a).startswith("<?.Foo instance at")
+        del A.__module__
+        assert repr(a).startswith("<?.Foo instance at")
+        assert str(a).startswith("<?.Foo instance at")
         class A:
             __metaclass__ = nclassobj
             def __repr__(self):
