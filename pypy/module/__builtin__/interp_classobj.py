@@ -97,18 +97,14 @@ class W_ClassObject(Wrappable):
 
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
-        try:
-            # XXX should use space.finditem(), which is more efficient
-            # with the stdobjspace
-            return space.getitem(self.w_dict, w_attr)
-        except OperationError, e:
-            if not e.match(space, space.w_KeyError):
-                raise
-            for base in self.bases_w:
-                w_result = base.lookup(space, w_attr)
-                if w_result is not None:
-                    return w_result
-            return None
+        w_result = space.finditem(self.w_dict, w_attr)
+        if w_result is not None:
+            return w_result
+        for base in self.bases_w:
+            w_result = base.lookup(space, w_attr)
+            if w_result is not None:
+                return w_result
+        return None
 
     def descr_getattribute(self, space, w_attr):
         try:
@@ -213,16 +209,13 @@ class W_InstanceObject(Wrappable):
         return W_InstanceObject(space, w_class, w_dict)
 
     def retrieve(self, space, w_attr, exc=True):
-        try:
-            # XXX use space.finditem()
-            return space.getitem(self.w_dict, w_attr)
-        except OperationError, e:
-            if not e.match(space, space.w_KeyError):
-                raise
-            if exc:
-                raise OperationError(
-                    space.w_AttributeError, w_attr)
-            return None
+        w_result = space.finditem(self.w_dict, w_attr)
+        if w_result is not None:
+            return w_result
+        if exc:
+            raise OperationError(
+                space.w_AttributeError, w_attr)
+        return None
 
     def getattr(self, space, w_name, exc=True):
         name = space.str_w(w_name)
