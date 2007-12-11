@@ -8,6 +8,7 @@ from pypy.rlib.rarithmetic import r_uint, intmask
 
 
 def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
+    # XXX kill next two lines? no clue why they are there in _classobj either
     if w_bases is None:
         w_bases = space.newtuple([])
     elif not space.is_true(space.isinstance(w_bases, space.w_tuple)):
@@ -19,11 +20,11 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
     if not space.is_true(space.contains(w_dict, space.wrap("__doc__"))):
         space.setitem(w_dict, space.wrap("__doc__"), space.w_None)
 
-    if not space.is_true(space.contains(w_dict, space.wrap("__doc__"))):
-        space.setitem(w_dict, space.wrap("__doc__"), space.w_None)
+    # XXX missing: lengthy and obscure logic about "__module__"
         
     for w_base in space.unpackiterable(w_bases):
         if not isinstance(w_base, W_ClassObject):
+            # XXX use space.type(w_base) instead of the next line
             w_metaclass = space.call_function(space.w_type, w_base)
             if space.is_true(space.callable(w_metaclass)):
                 return space.call_function(w_metaclass, w_name,
@@ -35,8 +36,10 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 
 class W_ClassObject(Wrappable):
     def __init__(self, space, w_name, w_bases, w_dict):
+        # XXX shouldn't store both w_name and name
         self.w_name = w_name
         self.name = space.str_w(w_name)
+        # XXX shouldn't store both w_bases and bases_w.  Probably bases_w only
         self.w_bases = w_bases
         self.bases_w = space.unpackiterable(w_bases)
         self.w_dict = w_dict
@@ -48,6 +51,8 @@ class W_ClassObject(Wrappable):
         return self.w_dict
 
     def fset_dict(space, self, w_dict):
+        # XXX maybe also implement the setdict() method and move this
+        # logic over there
         if not space.is_true(space.isinstance(w_dict, space.w_dict)):
             raise OperationError(
                 space.w_TypeError,
@@ -81,10 +86,14 @@ class W_ClassObject(Wrappable):
         self.w_bases = w_bases
         self.bases_w = bases_w
 
+    # XXX missing del descriptors for __name__, __bases__, __dict__
+
 
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
         try:
+            # XXX should use space.finditem(), which is more efficient
+            # with the stdobjspace
             return space.getitem(self.w_dict, w_attr)
         except OperationError, e:
             if not e.match(space, space.w_KeyError):
@@ -164,6 +173,8 @@ class W_InstanceObject(Wrappable):
         return self.w_dict
 
     def fset_dict(space, self, w_dict):
+        # XXX maybe also implement the setdict() method and move this
+        # logic over there
         if not space.is_true(space.isinstance(w_dict, space.w_dict)):
             raise OperationError(
                 space.w_TypeError,
@@ -194,6 +205,7 @@ class W_InstanceObject(Wrappable):
 
     def retrieve(self, space, w_attr, exc=True):
         try:
+            # XXX use space.finditem()
             return space.getitem(self.w_dict, w_attr)
         except OperationError, e:
             if not e.match(space, space.w_KeyError):
@@ -242,6 +254,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                               W_InstanceObject.fset_dict),
     __class__ = GetSetProperty(W_InstanceObject.fget_class,
                                W_InstanceObject.fset_class),
+    # XXX there is no __getattr__ on this typedef in _classobj.py
     __getattr__ = interp2app(W_InstanceObject.descr_getattr,
                              unwrap_spec=['self', ObjSpace, W_Root]),
 )
