@@ -38,15 +38,36 @@ class AppTestOldstyle(object):
                 return self.a + a
         a = A()
         assert a.f(2) == 3
+        assert A.f(a, 2) == 3
+        a.a = 5
+        assert A.f(a, 2) == 7
 
     def test_inheritance(self):
         class A:
             __metaclass__ = nclassobj
             a = 1
             b = 2
+            def af(self):
+                return 1
+            def bf(self):
+                return 2
+        assert A.a == 1
+        assert A.b == 2
+        a = A()
+        assert a.a == 1
+        assert a.b == 2
+        assert a.af() == 1
+        assert a.bf() == 2
+        assert A.af(a) == 1
+        assert A.bf(a) == 2
+
         class B(A):
             a = 3
             c = 4
+            def af(self):
+                return 3
+            def cf(self):
+                return 4
         assert B.__bases__ == (A, )
         assert B.a == 3
         assert B.b == 2
@@ -55,6 +76,9 @@ class AppTestOldstyle(object):
         assert b.a == 3
         assert b.b == 2
         assert b.c == 4
-
-
-            
+        assert b.af() == 3
+        assert b.bf() == 2
+        assert b.cf() == 4
+        assert B.af(b) == 3
+        assert B.bf(b) == 2
+        assert B.cf(b) == 4
