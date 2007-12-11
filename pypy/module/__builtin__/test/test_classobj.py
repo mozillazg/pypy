@@ -45,6 +45,32 @@ class AppTestOldstyle(object):
         assert C.b == 18
         assert C.c == 19
 
+    def test_class_repr(self):
+        class A:
+            __metaclass__ = nclassobj
+        assert repr(A).startswith("<class __builtin__.A at 0x")
+        A.__name__ = 'B'
+        assert repr(A).startswith("<class __builtin__.B at 0x")
+        A.__module__ = 'foo'
+        assert repr(A).startswith("<class foo.B at 0x")
+        A.__module__ = None
+        assert repr(A).startswith("<class ?.B at 0x")
+        del A.__module__
+        assert repr(A).startswith("<class ?.B at 0x")
+
+    def test_class_str(self):
+        class A:
+            __metaclass__ = nclassobj
+        assert str(A) == "__builtin__.A"
+        A.__name__ = 'B'
+        assert str(A) == "__builtin__.B"
+        A.__module__ = 'foo'
+        assert str(A) == "foo.B"
+        A.__module__ = None
+        assert str(A) == "B"
+        del A.__module__
+        assert str(A) == "B"
+
     def test_del_error_class_special(self):
         class A:
             __metaclass__ = nclassobj

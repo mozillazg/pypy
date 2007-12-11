@@ -132,8 +132,6 @@ class W_ClassObject(Wrappable):
             return w_value
         return space.call_function(w_descr_get, w_value, space.w_None, self)
         
-    # XXX missing: str, repr
-
     def descr_call(self, space, __args__):
         w_inst = W_InstanceObject(space, self)
         w_init = w_inst.getattr(space, space.wrap('__init__'), False)
@@ -148,6 +146,17 @@ class W_ClassObject(Wrappable):
                     space.w_TypeError,
                     space.wrap("this constructor takes no arguments"))
         return w_inst
+
+    def descr_repr(self, space):
+        mod = self.get_module_string(space)
+        return self.getrepr(space, "class %s.%s" % (mod, self.name))
+
+    def descr_str(self, space):
+        mod = self.get_module_string(space)
+        if mod == "?":
+            return space.wrap(self.name)
+        else:
+            return space.wrap("%s.%s" % (mod, self.name))
 
     def get_module_string(self, space):
         try:
@@ -169,6 +178,10 @@ W_ClassObject.typedef = TypeDef("classobj",
     __bases__ = GetSetProperty(W_ClassObject.fget_bases,
                                W_ClassObject.fset_bases,
                                W_ClassObject.fdel_bases),
+    __repr__ = interp2app(W_ClassObject.descr_repr,
+                          unwrap_spec=['self', ObjSpace]),
+    __str__ = interp2app(W_ClassObject.descr_str,
+                         unwrap_spec=['self', ObjSpace]),
     __call__ = interp2app(W_ClassObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __getattribute__ = interp2app(W_ClassObject.descr_getattribute,
