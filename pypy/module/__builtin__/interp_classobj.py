@@ -39,17 +39,18 @@ class W_ClassObject(Wrappable):
     def getdict(self):
         return self.w_dict
 
-    def fget_dict(space, self):
-        return self.w_dict
-
-    def fset_dict(space, self, w_dict):
-        # XXX maybe also implement the setdict() method and move this
-        # logic over there
+    def setdict(self, space, w_dict):
         if not space.is_true(space.isinstance(w_dict, space.w_dict)):
             raise OperationError(
                 space.w_TypeError,
                 space.wrap("__dict__ must be a dictionary object"))
         self.w_dict = w_dict
+
+    def fget_dict(space, self):
+        return self.w_dict
+
+    def fset_dict(space, self, w_dict):
+        self.setdict(self, space, w_dict)
 
     def fdel_dict(space, self):
         raise OperationError(
@@ -76,7 +77,7 @@ class W_ClassObject(Wrappable):
         return space.wrap(self.bases_w)
 
     def fset_bases(space, self, w_bases):
-        # XXX in theory, this misses a check against inheritence cycles
+        # XXX in theory, this misses a check against inheritance cycles
         # although on pypy we don't get a segfault for infinite
         # recursion anyway 
         if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
