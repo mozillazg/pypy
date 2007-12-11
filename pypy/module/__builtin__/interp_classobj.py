@@ -96,9 +96,8 @@ class W_ClassObject(Wrappable):
             return None
 
     def descr_getattr(self, space, w_attr):
-        import pdb; pdb.set_trace()
         w_value = self.lookup(space, w_attr)
-        if w_value is not None:
+        if w_value is None:
             raise OperationError(
                 space.w_AttributeError,
                 space.wrap("class %s has no attribute %s" % (
