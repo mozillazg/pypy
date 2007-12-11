@@ -74,6 +74,9 @@ class W_ClassObject(Wrappable):
         return self.w_bases
 
     def fset_bases(space, self, w_bases):
+        # XXX in theory, this misses a check against inheritence cycles
+        # although on pypy we don't get a segfault for infinite
+        # recursion anyway
         if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
             raise OperationError(
                     space.w_TypeError,
