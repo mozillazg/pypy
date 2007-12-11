@@ -45,6 +45,22 @@ class AppTestOldstyle(object):
         assert C.b == 18
         assert C.c == 19
 
+    def test_mutate_instance_special(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+        class B:
+            __metaclass__ = nclassobj
+            a = 17
+            b = 18
+        a = A()
+        assert isinstance(a, A)
+        a.__class__ = B
+        assert isinstance(a, B)
+        assert a.a == 17
+        assert a.b == 18
+
+
     def test_init(self):
         class A:
             __metaclass__ = nclassobj
