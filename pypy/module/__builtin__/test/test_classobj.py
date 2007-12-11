@@ -27,11 +27,23 @@ class AppTestOldstyle(object):
         class B:
             __metaclass__ = nclassobj
             a = 17
+            b = 18
         class C(A):
-            pass
+            c = 19
         assert C.a == 5
+        assert C.c == 19
         C.__bases__ = (B, )
         assert C.a == 17
+        assert C.b == 18
+        assert C.c == 19
+        C.__bases__ = (B, A)
+        assert C.a == 17
+        assert C.b == 18
+        assert C.c == 19
+        C.__bases__ = (A, B)
+        assert C.a == 5
+        assert C.b == 18
+        assert C.c == 19
 
     def test_init(self):
         class A:
