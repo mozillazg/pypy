@@ -200,26 +200,18 @@ class W_InstanceObject(Wrappable):
         return self.w_dict
 
     def setdict(self, space, w_dict):
-        if not space.is_true(space.isinstance(w_dict, space.w_dict)):
+        if (w_dict is None or
+            not space.is_true(space.isinstance(w_dict, space.w_dict))):
             raise OperationError(
                 space.w_TypeError,
                 space.wrap("__dict__ must be a dictionary object"))
         self.w_dict = w_dict
 
-    def fget_dict(space, self):
-        return self.w_dict
-
-    def fset_dict(space, self, w_dict):
-        self.setdict(space, w_dict)
-
-    def fget_class(space, self):
-        return self.w_class
-
-    def fset_class(space, self, w_class):
-        if not isinstance(w_class, W_ClassObject):
+    def setclass(self, space, w_class):
+        if w_class is None or not isinstance(w_class, W_ClassObject):
             raise OperationError(
                 space.w_TypeError,
-                space.wrap("instance() first arg must be class"))
+                space.wrap("__class__ must be set to a class"))
         self.w_class = w_class
 
     def descr_new(space, w_type, w_class, w_dict=None):
@@ -268,7 +260,43 @@ class W_InstanceObject(Wrappable):
 
     def descr_getattribute(self, space, w_attr):
         #import pdb; pdb.set_trace()
-        return self.getattr(space, w_attr)
+        try:
+            return self.getattr(space, w_attr)
+        except OperationError, e:
+            if not e.match(space, space.w_AttributeError):
+                raise
+            w_meth = self.getattr(space, space.wrap('__getattr__'), False)
+            if w_meth is not None:
+                return space.call_function(w_meth, w_attr)
+            raise
+
+    def descr_setattr(self, space, w_name, w_value):
+        name = space.str_w(w_name)
+        if name == '__dict__':
+            self.setdict(space, w_value)
+        elif name == '__class__':
+            self.setclass(space, w_value)
+        else:
+            w_meth = self.getattr(space, space.wrap('__setattr__'), False)
+            if w_meth is not None:
+                space.call_function(w_meth, w_name, w_value)
+            else:
+                self.setdictvalue(space, w_name, w_value)
+
+    def descr_delattr(self, space, w_name):
+        name = space.str_w(w_name)
+        if name == '__dict__':
+            # use setdict to raise the error
+            self.setdict(space, None)
+        elif name == '__class__':
+            # use setclass to raise the error
+            self.setclass(space, None)
+        else:
+            w_meth = self.getattr(space, space.wrap('__delattr__'), False)
+            if w_meth is not None:
+                space.call_function(w_meth, w_name)
+            else:
+                self.deldictvalue(space, w_name)
 
     def descr_repr(self, space):
         w_meth = self.getattr(space, space.wrap('__repr__'), False)
@@ -345,12 +373,12 @@ class W_InstanceObject(Wrappable):
 
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(W_InstanceObject.descr_new),
-    __dict__ = GetSetProperty(W_InstanceObject.fget_dict,
-                              W_InstanceObject.fset_dict),
-    __class__ = GetSetProperty(W_InstanceObject.fget_class,
-                               W_InstanceObject.fset_class),
     __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
                                   unwrap_spec=['self', ObjSpace, W_Root]),
+    __setattr__ = interp2app(W_InstanceObject.descr_setattr,
+                             unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
+    __delattr__ = interp2app(W_InstanceObject.descr_delattr,
+                             unwrap_spec=['self', ObjSpace, W_Root]),
     __repr__ = interp2app(W_InstanceObject.descr_repr,
                           unwrap_spec=['self', ObjSpace]),
     __str__ = interp2app(W_InstanceObject.descr_str,

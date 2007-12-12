@@ -326,3 +326,36 @@ class AppTestOldstyle(object):
                 return self.list[i]
         for i, element in enumerate(A()):
             assert i + 1 == element
+
+    def test_getsetdelattr(self):
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+            def __getattr__(self, attr):
+                return attr.upper()
+        a = A()
+        assert a.a == 1
+        a.__dict__['b'] = 4
+        assert a.b == 4
+        assert a.c == "C"
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+            def __setattr__(self, attr, value):
+                self.__dict__[attr.lower()] = value
+        a = A()
+        assert a.a == 1
+        a.A = 2
+        assert a.a == 2
+        class A:
+            __metaclass__ = nclassobj
+            a = 1
+            def __delattr__(self, attr):
+                del self.__dict__[attr.lower()]
+        a = A()
+        assert a.a == 1
+        a.a = 2
+        assert a.a == 2
+        del a.A
+        assert a.a == 1
+
