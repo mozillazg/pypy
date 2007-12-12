@@ -197,7 +197,7 @@ def make_unary_instance_method(name):
         return space.call_function(w_meth)
     return unaryop
 
-def make_richcmp_instance_method(name):
+def make_binary_returning_notimplemented_instance_method(name):
     def richcmp(self, space, w_other):
         w_meth = self.getattr(space, space.wrap(name), False)
         if w_meth is None:
@@ -393,12 +393,13 @@ for op in "neg pos abs invert int long float oct hex".split():
         meth,
         unwrap_spec=["self", ObjSpace])
 
-# rich comparison operations
-for op in 'eq ne gt lt ge le'.split():
+# binary operations that return NotImplemented if they fail
+# e.g. rich comparisons and coerce
+for op in 'eq ne gt lt ge le coerce'.split():
     specialname = "__%s__" % (op, )
     # fool the gateway logic by giving it a real unbound method
     meth = new.instancemethod(
-        make_richcmp_instance_method(specialname),
+        make_binary_returning_notimplemented_instance_method(specialname),
         None,
         W_InstanceObject)
     rawdict[specialname] = interp2app(

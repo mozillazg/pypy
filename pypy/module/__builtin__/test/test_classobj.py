@@ -389,3 +389,14 @@ class AppTestOldstyle(object):
         assert a < b
         assert b < a
         assert a < 1
+
+    def test_coerce(self):
+        class B:
+            __metaclass__ = nclassobj
+            def __coerce__(self, other):
+                return other, self
+        b = B()
+        assert coerce(b, 1) == (1, b)
+        class B:
+            __metaclass__ = nclassobj
+        raises(TypeError, coerce, B(), [])
