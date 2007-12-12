@@ -435,3 +435,18 @@ class AppTestOldstyle(object):
         raises(TypeError, "a + 1.1")
         assert l == [1, 1.1]
 
+    def test_iadd(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.l = []
+            def __iadd__(self, other):
+                 self.l.append(other)
+                 return self
+        a1 = a = A()
+        a += 1
+        assert a is a1
+        a += 2
+        assert a is a1
+        assert a.l == [1, 2]
+
