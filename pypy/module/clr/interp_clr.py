@@ -194,17 +194,8 @@ def load_valid_namespaces(space):
     Return: List of Valid .NET namespaces
     """
     listOfNamespaces = []
-    assembliesToScan = [ "/usr/lib/mono/1.0/mscorlib.dll",
-                         "/usr/lib/mono/1.0/System.dll",
-                         "/usr/lib/mono/1.0/System.Web.dll",
-                         "/usr/lib/mono/1.0/System.Data.dll",
-                         "/usr/lib/mono/1.0/System.Xml.dll",
-                         "/usr/lib/mono/1.0/System.Drawing.dll"
-                    ]
-    assems = []
-    for assemblyName in assembliesToScan:
-        assems.append(System.Reflection.Assembly.LoadFile(assemblyName))
-
+    currentDomain = System.AppDomain.get_CurrentDomain()
+    assems = currentDomain.GetAssemblies()
     for loadedAssembly in assems:
         typesInAssembly = loadedAssembly.GetTypes()
         for type in typesInAssembly:
@@ -227,19 +218,56 @@ def isDotNetType(space, nameFromImporter):
 
 isDotNetType.unwrap_spec = [ObjSpace, str]
 
-def load_assembly(space, assemblyName):
+def list_of_loadedAssemblies(space):
+    """
+    return a List of currently loaded .NET assembliesy
+
+    return:
+        list eg:  ['System.Xml','System.Data','mscorlib']
+    """
+    loadedAssemblies = []
+    currentDomain = System.AppDomain.get_CurrentDomain()
+    currentLoadedAssemblies = currentDomain.GetAssemblies()
+
+    for lAssembly in currentLoadedAssemblies:
+        strName = lAssembly.get_FullName()
+        rindexComma = strName.find(',')
+        if rindexComma != -1:
+            loadedAssemblies.append(strName[:rindexComma])
+    return space.wrap(loadedAssemblies)
+list_of_loadedAssemblies.unwrap_spec = [ObjSpace]
+
+def load_assembly(space, assemblyPath):
     """
     Load the given .NET assembly into the PyPy interpreter 
 
     Parameters:
 
-       - assemblyName: the full name of the assembly 
-          (e.g., ``System.Xml.dll``).
+       - assemblyPath: the full path of the assembly 
+          (e.g., /usr/lib/mono/2.0/System.Data.dll).
     """
-    #    listOfNamespaces = []
-    #    currentDomain = System.AppDomain.get_CurrentDomain()
-    #    asEvidence = currentDomain.get_Evidence()
-    pass
+    assemblyToLoad = ""
+    loadedAssemblies = space.unwrap(list_of_loadedAssemblies(space))
+
+    # split the name to pull out "System.Data.dll"
+    # then check if it has already been loaded.
+    rindexSlash = assemblyPath.rfind('/')
+    if rindexSlash != -1:
+        strAfterSlash = assemblyPath[rindexSlash +1 : ]
+        rindexDot = strAfterSlash.rfind('.')
+        if rindexDot != -1:
+            assemblyToLoad = strAfterSlash[: rindexDot]
+
+    if assemblyToLoad in loadedAssemblies:
+        print " won't reload loaded assembly " 
+        pass
+    else:
+        try:
+            System.Reflection.Assembly.LoadFile(assemblyPath)
+            print "Loaded %s"%assemblyPath
+        except:
+            print " can not load the assembly " 
+load_assembly.unwrap_spec = [ObjSpace, str]
 
 def load_cli_class(space, namespace, classname):
     """
