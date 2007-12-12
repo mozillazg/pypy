@@ -309,6 +309,17 @@ class W_InstanceObject(Wrappable):
         w_meth = self.getattr(space, space.wrap('__delitem__'))
         space.call_function(w_meth, w_key)
 
+    def descr_iter(self, space):
+        w_meth = self.getattr(space, space.wrap('__iter__'), False)
+        if w_meth is not None:
+            return space.call_function(w_meth)
+        w_meth = self.getattr(space, space.wrap('__getitem__'), False)
+        if w_meth is None:
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("iteration over non-sequence"))
+        return space.newseqiter(self)
+
     def descr_call(self, space, __args__):
         w_meth = self.getattr(space, space.wrap('__call__'))
         return space.call_args(w_meth, __args__)
@@ -350,6 +361,8 @@ W_InstanceObject.typedef = TypeDef("instance",
                              unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
     __delitem__ = interp2app(W_InstanceObject.descr_delitem,
                              unwrap_spec=['self', ObjSpace, W_Root]),
+    __iter__ = interp2app(W_InstanceObject.descr_iter,
+                          unwrap_spec=['self', ObjSpace]),
     __call__ = interp2app(W_InstanceObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __nonzero__ = interp2app(W_InstanceObject.descr_nonzero,
