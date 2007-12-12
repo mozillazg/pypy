@@ -457,9 +457,11 @@ class AppTestOldstyle(object):
                 return (1, 2)
         assert cmp(A(), 1) == -1
         class A:
+            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return 1
         class B:
+            __metaclass__ = nclassobj
             pass
 
         a = A()
@@ -468,13 +470,44 @@ class AppTestOldstyle(object):
         assert cmp(b, a) == -1
 
         class A:
+            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return 1L
         a = A()
         assert cmp(a, b) == 1
 
         class A:
+            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return "hello?"
         a = A()
         raises(TypeError, cmp, a, b)
+
+    def test_hash(self):
+        class A:
+            __metaclass__ = nclassobj
+            pass
+        hash(A()) # does not crash
+        class A:
+            def __hash__(self):
+                return "hello?"
+        a = A()
+        raises(TypeError, hash, a)
+        class A:
+            __metaclass__ = nclassobj
+            def __hash__(self):
+                return 1
+        a = A()
+        assert hash(a) == 1
+        class A:
+            __metaclass__ = nclassobj
+            def __cmp__(self, other):
+                return 1
+        a = A()
+        raises(TypeError, hash, a)
+        class A:
+            __metaclass__ = nclassobj
+            def __eq__(self, other):
+                return 1
+        a = A()
+        raises(TypeError, hash, a)
