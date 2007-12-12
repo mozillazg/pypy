@@ -378,3 +378,14 @@ class AppTestOldstyle(object):
                  return -1
         a = A()
         assert +a == -1
+
+    def test_cmp(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __lt__(self, other):
+                 return True
+        a = A()
+        b = A()
+        assert a < b
+        assert b < a
+        assert a < 1
