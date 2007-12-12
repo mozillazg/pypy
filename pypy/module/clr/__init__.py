@@ -17,6 +17,7 @@ class Module(MixedModule):
         'load_valid_namespaces': 'interp_clr.load_valid_namespaces',
         'isDotNetType': 'interp_clr.isDotNetType',
         'load_assembly': 'interp_clr.load_assembly',
+        'list_of_loadedAssemblies': 'interp_clr.list_of_loadedAssemblies',
     }
 
     def setup_after_space_initialization(self):
