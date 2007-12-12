@@ -359,3 +359,15 @@ class AppTestOldstyle(object):
         del a.A
         assert a.a == 1
 
+    def test_instance_override(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __str__(self):
+                return "foo"
+        def __str__():
+            return "bar"
+        a = A()
+        assert str(a) == "foo"
+        a.__str__ = __str__
+        assert str(a) == "bar"
+
