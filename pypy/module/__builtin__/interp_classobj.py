@@ -433,8 +433,8 @@ for op in "neg pos abs invert int long float oct hex".split():
         unwrap_spec=["self", ObjSpace])
 
 # binary operations that return NotImplemented if they fail
-# e.g. rich comparisons and coerce
-for op in 'eq ne gt lt ge le coerce'.split():
+# e.g. rich comparisons, coerce and inplace ops
+for op in 'eq ne gt lt ge le coerce imod iand ipow itruediv ilshift ixor irshift ifloordiv idiv isub imul iadd ior'.split():
     specialname = "__%s__" % (op, )
     # fool the gateway logic by giving it a real unbound method
     meth = new.instancemethod(
