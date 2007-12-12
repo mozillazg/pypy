@@ -198,13 +198,52 @@ def make_unary_instance_method(name):
     return unaryop
 
 def make_binary_returning_notimplemented_instance_method(name):
-    def richcmp(self, space, w_other):
+    def binaryop(self, space, w_other):
         w_meth = self.getattr(space, space.wrap(name), False)
         if w_meth is None:
             return space.w_NotImplemented
         return space.call_function(w_meth, w_other)
-    return richcmp
+    return binaryop
 
+def make_binary_instance_method(name):
+    specialname = "__%s__" % (name, )
+    rspecialname = "__r%s__" % (name, )
+    objspacename = name
+    if name in ['and', 'or']:
+        objspacename = name + '_'
+
+    def binaryop(self, space, w_other):
+        w_a, w_b = _coerce_helper(space, self, w_other)
+        if w_a is None:
+            w_a = self
+            w_b = w_other
+        if w_a is self:
+            w_meth = self.getattr(space, space.wrap(specialname), False)
+            if w_meth is None:
+                return space.w_NotImplemented
+            return space.call_function(w_meth, w_b)
+        else:
+            return getattr(space, objspacename)(w_a, w_b)
+
+    def rbinaryop(self, space, w_other):
+        w_a, w_b = _coerce_helper(space, self, w_other)
+        if w_a is None or w_a is self:
+            w_meth = self.getattr(space, space.wrap(rspecialname), False)
+            if w_meth is None:
+                return space.w_NotImplemented
+            return space.call_function(w_meth, w_other)
+        else:
+            return getattr(space, objspacename)(w_b, w_a)
+    return binaryop, rbinaryop
+
+def _coerce_helper(space, w_self, w_other):
+    try:
+        w_tup = space.coerce(w_self, w_other)
+    except OperationError, e:
+        if not e.match(space, space.w_TypeError):
+            raise
+        return (None, None)
+    return space.unpacktuple(w_tup, 2)
 
 class W_InstanceObject(Wrappable):
     def __init__(self, space, w_class, w_dict=None):
@@ -404,6 +443,20 @@ for op in 'eq ne gt lt ge le coerce'.split():
         W_InstanceObject)
     rawdict[specialname] = interp2app(
         meth,
+        unwrap_spec=["self", ObjSpace, W_Root])
+
+for op in "or and xor lshift rshift add sub mul div mod divmod floordiv truediv".split():
+    specialname = "__%s__" % (op, )
+    rspecialname = "__r%s__" % (op, )
+    func, rfunc = make_binary_instance_method(op)
+    # fool the gateway logic by giving it a real unbound method
+    meth = new.instancemethod(func, None, W_InstanceObject)
+    rawdict[specialname] = interp2app(
+        meth,
+        unwrap_spec=["self", ObjSpace, W_Root])
+    rmeth = new.instancemethod(rfunc, None, W_InstanceObject)
+    rawdict[rspecialname] = interp2app(
+        rmeth,
         unwrap_spec=["self", ObjSpace, W_Root])
 
 W_InstanceObject.typedef = TypeDef("instance",
