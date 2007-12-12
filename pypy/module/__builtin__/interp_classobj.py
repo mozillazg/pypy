@@ -319,6 +319,8 @@ class W_InstanceObject(Wrappable):
                 space.w_TypeError,
                 space.wrap("iteration over non-sequence"))
         return space.newseqiter(self)
+    #XXX do I really need a next method? the old implementation had one, but I
+    # don't see the point
 
     def descr_call(self, space, __args__):
         w_meth = self.getattr(space, space.wrap('__call__'))
