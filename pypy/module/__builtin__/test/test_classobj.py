@@ -79,7 +79,6 @@ class AppTestOldstyle(object):
         raises(TypeError, "del A.__dict__")
         raises(TypeError, "del A.__bases__")
 
-
     def test_mutate_instance_special(self):
         class A:
             __metaclass__ = nclassobj
@@ -307,3 +306,23 @@ class AppTestOldstyle(object):
         a = A()
         assert repr(a).startswith("<__builtin__.A instance at")
         assert str(a) == "foo"
+
+    def test_iter(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.list = [1, 2, 3, 4, 5]
+            def __iter__(self):
+                return iter(self.list)
+        for i, element in enumerate(A()):
+            assert i + 1 == element
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.list = [1, 2, 3, 4, 5]
+            def __len__(self):
+                return len(self.list)
+            def __getitem__(self, i):
+                return self.list[i]
+        for i, element in enumerate(A()):
+            assert i + 1 == element
