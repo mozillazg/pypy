@@ -522,3 +522,36 @@ class AppTestOldstyle(object):
         class A:
             __metaclass__ = nclassobj
         raises(TypeError, "l[A()]")
+
+    def test_contains(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __contains__(self, other):
+                return True
+        a = A()
+        assert 1 in a
+        assert None in a
+        class A:
+            __metaclass__ = nclassobj
+        a = A()
+        raises(TypeError, "1 in a")
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.list = [1, 2, 3, 4, 5]
+            def __iter__(self):
+                return iter(self.list)
+        a = A()
+        for i in range(1, 6):
+            assert i in a
+        class A:
+            __metaclass__ = nclassobj
+            def __init__(self):
+                self.list = [1, 2, 3, 4, 5]
+            def __len__(self):
+                return len(self.list)
+            def __getitem__(self, i):
+                return self.list[i]
+        a = A()
+        for i in range(1, 6):
+            assert i in a

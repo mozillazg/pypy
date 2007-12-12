@@ -488,6 +488,21 @@ class W_InstanceObject(Wrappable):
             space.w_TypeError,
             space.wrap("object cannot be interpreted as an index"))
 
+    def descr_contains(self, space, w_obj):
+        w_func = self.getattr(space, space.wrap('__contains__'), False)
+        if w_func is not None:
+            return space.wrap(space.is_true(space.call_function(w_func, w_obj)))
+        # now do it ourselves
+        w_iter = space.iter(self)
+        while 1:
+            try:
+                w_x = space.next(w_iter)
+            except OperationError, e:
+                if e.match(space, space.w_StopIteration):
+                    return space.w_False
+            if space.eq_w(w_x, w_obj):
+                return space.w_True
+
 
 rawdict = {}
 
@@ -562,6 +577,8 @@ W_InstanceObject.typedef = TypeDef("instance",
                           unwrap_spec=['self', ObjSpace]),
     __index__ = interp2app(W_InstanceObject.descr_index,
                            unwrap_spec=['self', ObjSpace]),
+    __contains__ = interp2app(W_InstanceObject.descr_contains,
+                         unwrap_spec=['self', ObjSpace, W_Root]),
     **rawdict
 )
 
