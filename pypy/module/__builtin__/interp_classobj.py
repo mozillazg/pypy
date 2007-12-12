@@ -480,6 +480,14 @@ class W_InstanceObject(Wrappable):
                 space.wrap("__hash__ must return int"))
         return w_ret
 
+    def descr_index(self, space):
+        w_func = self.getattr(space, space.wrap('__index__'), False)
+        if w_func is not None:
+            return space.call_function(w_func)
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("object cannot be interpreted as an index"))
+
 
 rawdict = {}
 
@@ -552,6 +560,8 @@ W_InstanceObject.typedef = TypeDef("instance",
                          unwrap_spec=['self', ObjSpace, W_Root]),
     __hash__ = interp2app(W_InstanceObject.descr_hash,
                           unwrap_spec=['self', ObjSpace]),
+    __index__ = interp2app(W_InstanceObject.descr_index,
+                           unwrap_spec=['self', ObjSpace]),
     **rawdict
 )
 
