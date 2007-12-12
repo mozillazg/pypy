@@ -226,22 +226,13 @@ class W_InstanceObject(Wrappable):
             raise TypeError("instance() second arg must be dictionary or None")
         return W_InstanceObject(space, w_class, w_dict)
 
-    def retrieve(self, space, w_attr, exc=True):
-        w_result = space.finditem(self.w_dict, w_attr)
-        if w_result is not None:
-            return w_result
-        if exc:
-            raise OperationError(
-                space.w_AttributeError, w_attr)
-        return None
-
     def getattr(self, space, w_name, exc=True):
         name = space.str_w(w_name)
         if name == "__dict__":
             return self.w_dict
         elif name == "__class__":
             return self.w_class
-        w_result = self.retrieve(space, w_name, False)
+        w_result = space.finditem(self.w_dict, w_name)
         if w_result is not None:
             return w_result
         w_value = self.w_class.lookup(space, w_name)
