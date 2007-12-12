@@ -462,6 +462,25 @@ class W_InstanceObject(Wrappable):
                     return space.wrap(-1)
                 return space.wrap(0)
         return space.w_NotImplemented
+
+    def descr_hash(self, space):
+        w_func = self.getattr(space, space.wrap('__hash__'), False)
+        if w_func is None:
+            w_eq =  self.getattr(space, space.wrap('__eq__'), False)
+            w_cmp =  self.getattr(space, space.wrap('__cmp__'), False)
+            if w_eq is not None or w_cmp is not None:
+                raise OperationError(space.w_TypeError,
+                                     space.wrap("unhashable instance"))
+            else:
+                return space.wrap(hash(self))
+        w_ret = space.call_function(w_func)
+        if not space.is_true(space.isinstance(w_ret, space.w_int)):
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("__hash__ must return int"))
+        return w_ret
+
+
 rawdict = {}
 
 # unary operations
@@ -531,6 +550,8 @@ W_InstanceObject.typedef = TypeDef("instance",
                              unwrap_spec=['self', ObjSpace]),
     __cmp__ = interp2app(W_InstanceObject.descr_cmp,
                          unwrap_spec=['self', ObjSpace, W_Root]),
+    __hash__ = interp2app(W_InstanceObject.descr_hash,
+                          unwrap_spec=['self', ObjSpace]),
     **rawdict
 )
 
