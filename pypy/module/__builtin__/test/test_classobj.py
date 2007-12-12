@@ -400,3 +400,38 @@ class AppTestOldstyle(object):
         class B:
             __metaclass__ = nclassobj
         raises(TypeError, coerce, B(), [])
+
+    def test_binaryop(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __add__(self, other):
+                return 1 + other
+        a = A()
+        assert a + 1 == 2
+        assert a + 1.1 == 2.1
+
+    def test_binaryop_coerces(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __add__(self, other):
+                return 1 + other
+            def __coerce__(self, other):
+                 return self, int(other)
+
+        a = A()
+        assert a + 1 == 2
+        assert a + 1.1 == 2
+
+
+    def test_binaryop_calls_coerce_always(self):
+        l = []
+        class A:
+            __metaclass__ = nclassobj
+            def __coerce__(self, other):
+                 l.append(other)
+
+        a = A()
+        raises(TypeError, "a + 1")
+        raises(TypeError, "a + 1.1")
+        assert l == [1, 1.1]
+
