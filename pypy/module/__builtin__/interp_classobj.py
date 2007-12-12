@@ -418,6 +418,50 @@ class W_InstanceObject(Wrappable):
             space.w_TypeError,
             space.wrap("__nonzero__() should return an int"))
 
+    def descr_cmp(self, space, w_other): # do all the work here like CPython
+        w_a, w_b = _coerce_helper(space, self, w_other)
+        if w_a is None:
+            w_a = self
+            w_b = w_other
+        else:
+            if (not isinstance(w_a, W_InstanceObject) and
+                not isinstance(w_b, W_InstanceObject)):
+                return space.cmp(w_a, w_b)
+        if isinstance(w_a, W_InstanceObject):
+            w_func = w_a.getattr(space, space.wrap('__cmp__'), False)
+            if w_func is not None:
+                w_res = space.call_function(w_func, w_b)
+                try:
+                    res = space.int_w(w_res)
+                except OperationError, e:
+                    if e.match(space, space.w_TypeError):
+                        raise OperationError(
+                            space.w_TypeError,
+                            space.wrap("__cmp__ must return int"))
+                    raise
+                if res > 0:
+                    return space.wrap(1)
+                if res < 0:
+                    return space.wrap(-1)
+                return space.wrap(0)
+        if isinstance(w_b, W_InstanceObject):
+            w_func = w_b.getattr(space, space.wrap('__cmp__'), False)
+            if w_func is not None:
+                w_res = space.call_function(w_func, w_a)
+                try:
+                    res = space.int_w(w_res)
+                except OperationError, e:
+                    if e.match(space, space.w_TypeError):
+                        raise OperationError(
+                            space.w_TypeError,
+                            space.wrap("__cmp__ must return int"))
+                    raise
+                if res < 0:
+                    return space.wrap(1)
+                if res > 0:
+                    return space.wrap(-1)
+                return space.wrap(0)
+        return space.w_NotImplemented
 rawdict = {}
 
 # unary operations
@@ -485,6 +529,8 @@ W_InstanceObject.typedef = TypeDef("instance",
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __nonzero__ = interp2app(W_InstanceObject.descr_nonzero,
                              unwrap_spec=['self', ObjSpace]),
+    __cmp__ = interp2app(W_InstanceObject.descr_cmp,
+                         unwrap_spec=['self', ObjSpace, W_Root]),
     **rawdict
 )
 
