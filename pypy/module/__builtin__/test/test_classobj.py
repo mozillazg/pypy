@@ -511,3 +511,14 @@ class AppTestOldstyle(object):
                 return 1
         a = A()
         raises(TypeError, hash, a)
+
+    def test_index(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __index__(self):
+                return 1
+        l = [1, 2, 3]
+        assert l[A()] == 2
+        class A:
+            __metaclass__ = nclassobj
+        raises(TypeError, "l[A()]")
