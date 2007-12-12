@@ -450,3 +450,31 @@ class AppTestOldstyle(object):
         assert a is a1
         assert a.l == [1, 2]
 
+    def test_cmp(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __coerce__(self, other):
+                return (1, 2)
+        assert cmp(A(), 1) == -1
+        class A:
+            def __cmp__(self, other):
+                return 1
+        class B:
+            pass
+
+        a = A()
+        b = B()
+        assert cmp(a, b) == 1
+        assert cmp(b, a) == -1
+
+        class A:
+            def __cmp__(self, other):
+                return 1L
+        a = A()
+        assert cmp(a, b) == 1
+
+        class A:
+            def __cmp__(self, other):
+                return "hello?"
+        a = A()
+        raises(TypeError, cmp, a, b)
