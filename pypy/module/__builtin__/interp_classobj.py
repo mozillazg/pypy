@@ -1,3 +1,4 @@
+import new
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, applevel
 from pypy.interpreter.gateway import interp2app, ObjSpace
@@ -189,6 +190,13 @@ W_ClassObject.typedef = TypeDef("classobj",
 )
 W_ClassObject.typedef.acceptable_as_base_class = False
 
+
+def make_unary_instance_method(name):
+    def unaryop(self, space):
+        w_meth = self.getattr(space, space.wrap(name), True)
+        return space.call_function(w_meth)
+    return unaryop
+
 class W_InstanceObject(Wrappable):
     def __init__(self, space, w_class, w_dict=None):
         if w_dict is None:
@@ -362,6 +370,18 @@ class W_InstanceObject(Wrappable):
             space.w_TypeError,
             space.wrap("__nonzero__() should return an int"))
 
+rawdict = {}
+for op in "neg pos abs invert int long float oct hex".split():
+    specialname = "__%s__" % (op, )
+    # fool the gateway logic by giving it a real unbound method
+    meth = new.instancemethod(
+        make_unary_instance_method(specialname),
+        None,
+        W_InstanceObject)
+    rawdict[specialname] = interp2app(
+        meth,
+        unwrap_spec=["self", ObjSpace])
+
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(W_InstanceObject.descr_new),
     __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
@@ -388,5 +408,6 @@ W_InstanceObject.typedef = TypeDef("instance",
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __nonzero__ = interp2app(W_InstanceObject.descr_nonzero,
                              unwrap_spec=['self', ObjSpace]),
+    **rawdict
 )
 

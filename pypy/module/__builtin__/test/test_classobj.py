@@ -371,3 +371,10 @@ class AppTestOldstyle(object):
         a.__str__ = __str__
         assert str(a) == "bar"
 
+    def test_unary_method(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __pos__(self):
+                 return -1
+        a = A()
+        assert +a == -1
