@@ -197,6 +197,15 @@ def make_unary_instance_method(name):
         return space.call_function(w_meth)
     return unaryop
 
+def make_richcmp_instance_method(name):
+    def richcmp(self, space, w_other):
+        w_meth = self.getattr(space, space.wrap(name), False)
+        if w_meth is None:
+            return space.w_NotImplemented
+        return space.call_function(w_meth, w_other)
+    return richcmp
+
+
 class W_InstanceObject(Wrappable):
     def __init__(self, space, w_class, w_dict=None):
         if w_dict is None:
@@ -371,6 +380,8 @@ class W_InstanceObject(Wrappable):
             space.wrap("__nonzero__() should return an int"))
 
 rawdict = {}
+
+# unary operations
 for op in "neg pos abs invert int long float oct hex".split():
     specialname = "__%s__" % (op, )
     # fool the gateway logic by giving it a real unbound method
@@ -381,6 +392,18 @@ for op in "neg pos abs invert int long float oct hex".split():
     rawdict[specialname] = interp2app(
         meth,
         unwrap_spec=["self", ObjSpace])
+
+# rich comparison operations
+for op in 'eq ne gt lt ge le'.split():
+    specialname = "__%s__" % (op, )
+    # fool the gateway logic by giving it a real unbound method
+    meth = new.instancemethod(
+        make_richcmp_instance_method(specialname),
+        None,
+        W_InstanceObject)
+    rawdict[specialname] = interp2app(
+        meth,
+        unwrap_spec=["self", ObjSpace, W_Root])
 
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(W_InstanceObject.descr_new),
