@@ -25,7 +25,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
             w_metaclass = space.type(w_base)
             if space.is_true(space.callable(w_metaclass)):
                 return space.call_function(w_metaclass, w_name,
-                                           w_bases, w_dic)
+                                           w_bases, w_dict)
             raise OperationError(space.w_TypeError,
                                  space.wrap("base must be class"))
 
