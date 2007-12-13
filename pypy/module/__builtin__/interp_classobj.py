@@ -397,6 +397,28 @@ class W_InstanceObject(Wrappable):
     #XXX do I really need a next method? the old implementation had one, but I
     # don't see the point
 
+    def descr_getslice(self, space, w_i, w_j):
+        w_meth = self.getattr(space, space.wrap('__getslice__'), False)
+        if w_meth is not None:
+            return space.call_function(w_meth, w_i, w_j)
+        else:
+            return space.getitem(self, space.newslice(w_i, w_j, space.w_None))
+
+    def descr_setslice(self, space, w_i, w_j, w_sequence):
+        w_meth = self.getattr(space, space.wrap('__setslice__'), False)
+        if w_meth is not None:
+            space.call_function(w_meth, w_i, w_j, w_sequence)
+        else:
+            space.setitem(self, space.newslice(w_i, w_j, space.w_None),
+                          w_sequence)
+
+    def descr_delslice(self, space, w_i, w_j):
+        w_meth = self.getattr(space, space.wrap('__delslice__'), False)
+        if w_meth is not None:
+            space.call_function(w_meth, w_i, w_j)
+        else:
+            return space.delitem(self, space.newslice(w_i, w_j, space.w_None))
+
     def descr_call(self, space, __args__):
         w_meth = self.getattr(space, space.wrap('__call__'))
         return space.call_args(w_meth, __args__)
@@ -608,6 +630,13 @@ W_InstanceObject.typedef = TypeDef("instance",
                              unwrap_spec=['self', ObjSpace, W_Root]),
     __iter__ = interp2app(W_InstanceObject.descr_iter,
                           unwrap_spec=['self', ObjSpace]),
+    __getslice__ = interp2app(W_InstanceObject.descr_getslice,
+                             unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
+    __setslice__ = interp2app(W_InstanceObject.descr_setslice,
+                             unwrap_spec=['self', ObjSpace, W_Root,
+                                          W_Root, W_Root]),
+    __delslice__ = interp2app(W_InstanceObject.descr_delslice,
+                             unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
     __call__ = interp2app(W_InstanceObject.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
     __nonzero__ = interp2app(W_InstanceObject.descr_nonzero,
