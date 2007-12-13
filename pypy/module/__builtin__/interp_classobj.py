@@ -255,6 +255,18 @@ def _coerce_helper(space, w_self, w_other):
         return [None, None]
     return space.unpacktuple(w_tup, 2)
 
+def descr_instance_new(space, w_type, w_class, w_dict=None):
+    # w_type is not used at all
+    if not isinstance(w_class, W_ClassObject):
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("instance() first arg must be class"))
+    if w_dict is None:
+        w_dict = space.newdict()
+    elif not space.is_true(space.isinstance(w_dict, space.w_dict)):
+        raise TypeError("instance() second arg must be dictionary or None")
+    return W_InstanceObject(space, w_class, w_dict)
+
 class W_InstanceObject(Wrappable):
     def __init__(self, space, w_class, w_dict=None):
         if w_dict is None:
@@ -281,17 +293,6 @@ class W_InstanceObject(Wrappable):
                 space.wrap("__class__ must be set to a class"))
         self.w_class = w_class
 
-    def descr_new(space, w_type, w_class, w_dict=None):
-        # typ is not used at all
-        if not isinstance(w_class, W_ClassObject):
-            raise OperationError(
-                space.w_TypeError,
-                space.wrap("instance() first arg must be class"))
-        if w_dict is None:
-            w_dict = space.newdict()
-        elif not space.is_true(space.isinstance(w_dict, space.w_dict)):
-            raise TypeError("instance() second arg must be dictionary or None")
-        return W_InstanceObject(space, w_class, w_dict)
 
     def getattr(self, space, w_name, exc=True):
         name = space.str_w(w_name)
@@ -621,7 +622,7 @@ for op in "or and xor lshift rshift add sub mul div mod divmod floordiv truediv"
         unwrap_spec=["self", ObjSpace, W_Root])
 
 W_InstanceObject.typedef = TypeDef("instance",
-    __new__ = interp2app(W_InstanceObject.descr_new),
+    __new__ = interp2app(descr_instance_new),
     __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
                                   unwrap_spec=['self', ObjSpace, W_Root]),
     __setattr__ = interp2app(W_InstanceObject.descr_setattr,

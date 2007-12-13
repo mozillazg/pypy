@@ -569,3 +569,11 @@ class AppTestOldstyle(object):
         raises(TypeError, "_classobj('abc', 1, {})")
         raises(TypeError, "_classobj('abc', (1, ), {})")
         raises(TypeError, "_classobj('abc', (), 3)")
+
+    def test_instance_new(self):
+        class A:
+            b = 1
+        a = A()
+        a = type(a).__new__(type(a), A, {'c': 2})
+        assert a.b == 1
+        assert a.c == 2
