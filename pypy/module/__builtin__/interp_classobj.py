@@ -8,6 +8,13 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.rlib.rarithmetic import r_uint, intmask
 
 
+def raise_type_err(space, argument, expected, w_obj):
+    type_name = space.type(w_obj).getname(space, '?')
+    w_error = space.wrap("argument %s must be %s, not %s" % (
+        argument, expected, type_name))
+    raise OperationError(space.w_TypeError,
+                         w_error)
+
 def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
     if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
         raise_type_err(space, 'bases', 'tuple', w_bases)

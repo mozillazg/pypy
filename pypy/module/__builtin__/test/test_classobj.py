@@ -612,3 +612,7 @@ class AppTestOldstyle(object):
 
     def test_class_instantiation_bug(self):
         raises(TypeError, "class A(1, 2): __metaclass__ = nclassobj")
+        raises(TypeError, "nclassobj(1, (), {})")
+        raises(TypeError, "nclassobj('abc', 1, {})")
+        raises(TypeError, "nclassobj('abc', (1, ), {})")
+        raises(TypeError, "nclassobj('abc', (), 3)")
