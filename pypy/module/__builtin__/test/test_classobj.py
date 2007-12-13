@@ -609,3 +609,6 @@ class AppTestOldstyle(object):
             def __iter__(self):
                 return self
         raises(TypeError, "1 in A()")
+
+    def test_class_instantiation_bug(self):
+        raises(TypeError, "class A(1, 2): __metaclass__ = nclassobj")
