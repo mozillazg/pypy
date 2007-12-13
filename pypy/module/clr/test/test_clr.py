@@ -186,3 +186,22 @@ class AppTestDotnet:
             sum += i
         assert sum == 1+54+21
 
+    def test_generic_class(self):
+        import clr
+        ListInt = clr.load_cli_class("System.Collections.Generic", "List`1[System.Int32]")
+        x = ListInt()
+        x.Add(42)
+        x.Add(4)
+        x.Add(4)
+        sum = 0
+        for i in x:
+           sum += i
+        assert sum == 42+4+4
+
+        genDictIntStr = clr.load_cli_class("System.Collections.Generic","Dictionary`2[System.Int32,System.String]")
+        x = genDictIntStr()
+        x[1] = "test"
+        x[2] = "rest"
+        assert x[1] == "test" 
+        assert x[2] == "rest" 
+
