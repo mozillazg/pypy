@@ -504,6 +504,47 @@ class W_InstanceObject(Wrappable):
                 return space.w_True
 
 
+    def descr_pow(self, space, w_other, w_modulo=None):
+        if space.is_w(w_modulo, space.w_None):
+            w_a, w_b = _coerce_helper(space, self, w_other)
+            if w_a is None:
+                w_a = self
+                w_b = w_other
+            if w_a is self:
+                w_func = self.getattr(space, space.wrap('__pow__'), False)
+                if w_func is not None:
+                    return space.call_function(w_func, w_other)
+                return space.w_NotImplemented
+            else:
+                return space.pow(w_a, w_b, space.w_None)
+        else:
+            # CPython also doesn't try coercion in this case
+            w_func = self.getattr(space, space.wrap('__pow__'), False)
+            if w_func is not None:
+                return space.call_function(w_func, w_other, w_modulo)
+            return space.w_NotImplemented
+
+    def descr_rpow(self, space, w_other, w_modulo=None):
+        if space.is_w(w_modulo, space.w_None):
+            w_a, w_b = _coerce_helper(space, self, w_other)
+            if w_a is None:
+                w_a = self
+                w_b = w_other
+            if w_a is self:
+                w_func = self.getattr(space, space.wrap('__rpow__'), False)
+                if w_func is not None:
+                    return space.call_function(w_func, w_other)
+                return space.w_NotImplemented
+            else:
+                return space.pow(w_b, w_a, space.w_None)
+        else:
+            # CPython also doesn't try coercion in this case
+            w_func = self.getattr(space, space.wrap('__rpow__'), False)
+            if w_func is not None:
+                return space.call_function(w_func, w_other, w_modulo)
+            return space.w_NotImplemented
+
+
 rawdict = {}
 
 # unary operations
@@ -579,6 +620,10 @@ W_InstanceObject.typedef = TypeDef("instance",
                            unwrap_spec=['self', ObjSpace]),
     __contains__ = interp2app(W_InstanceObject.descr_contains,
                          unwrap_spec=['self', ObjSpace, W_Root]),
+    __pow__ = interp2app(W_InstanceObject.descr_pow,
+                         unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
+    __rpow__ = interp2app(W_InstanceObject.descr_rpow,
+                         unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
     **rawdict
 )
 
