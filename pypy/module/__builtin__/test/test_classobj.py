@@ -216,6 +216,12 @@ class AppTestOldstyle(object):
         assert len(a) == 0
         assert not a
         assert bool(a) == False
+        a = A()
+        assert a[1:3] == [2, 3]
+        a[1:3] = [1, 2, 3]
+        assert a.list == [1, 1, 2, 3, 4, 5]
+        del a[1:4]
+        assert a.list == [1, 4, 5]
 
     def test_len_errors(self):
         class A:
