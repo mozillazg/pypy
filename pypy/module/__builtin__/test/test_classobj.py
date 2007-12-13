@@ -1,8 +1,11 @@
 
 class AppTestOldstyle(object):
+    def setup_class(cls):
+        from pypy.conftest import gettestobjspace
+        cls.space = gettestobjspace(**{"objspace.std.oldstyle": True})
+
     def test_simple(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
         assert A.__name__ == 'A'
         assert A.__bases__ == ()
@@ -17,7 +20,6 @@ class AppTestOldstyle(object):
 
     def test_mutate_class_special(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
         A.__name__ = 'B'
         assert A.__name__ == 'B'
@@ -25,7 +27,6 @@ class AppTestOldstyle(object):
         A.__dict__ = {'a': 5}
         assert A.a == 5
         class B:
-            __metaclass__ = nclassobj
             a = 17
             b = 18
         class C(A):
@@ -47,7 +48,7 @@ class AppTestOldstyle(object):
 
     def test_class_repr(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         assert repr(A).startswith("<class __builtin__.A at 0x")
         A.__name__ = 'B'
         assert repr(A).startswith("<class __builtin__.B at 0x")
@@ -60,7 +61,7 @@ class AppTestOldstyle(object):
 
     def test_class_str(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         assert str(A) == "__builtin__.A"
         A.__name__ = 'B'
         assert str(A) == "__builtin__.B"
@@ -73,7 +74,6 @@ class AppTestOldstyle(object):
 
     def test_del_error_class_special(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
         raises(TypeError, "del A.__name__")
         raises(TypeError, "del A.__dict__")
@@ -81,10 +81,8 @@ class AppTestOldstyle(object):
 
     def test_mutate_instance_special(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
         class B:
-            __metaclass__ = nclassobj
             a = 17
             b = 18
         a = A()
@@ -97,14 +95,12 @@ class AppTestOldstyle(object):
 
     def test_init(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
             def __init__(self, a):
                 self.a = a
         a = A(2)
         assert a.a == 2
         class B:
-            __metaclass__ = nclassobj
             def __init__(self, a):
                 return a
 
@@ -112,7 +108,6 @@ class AppTestOldstyle(object):
 
     def test_method(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
             def f(self, a):
                 return self.a + a
@@ -124,7 +119,6 @@ class AppTestOldstyle(object):
 
     def test_inheritance(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
             b = 2
             def af(self):
@@ -165,7 +159,6 @@ class AppTestOldstyle(object):
 
     def test_inheritance_unbound_method(self):
         class A:
-            __metaclass__ = nclassobj
             def f(self):
                 return 1
         raises(TypeError, A.f, 1)
@@ -178,17 +171,13 @@ class AppTestOldstyle(object):
 
     def test_len_getsetdelitem(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         a = A()
         raises(AttributeError, len, a)
         raises(AttributeError, "a[5]")
         raises(AttributeError, "a[5] = 5")
         raises(AttributeError, "del a[5]")
         class A:
-            __metaclass__ = nclassobj
-
-        class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.list = [1, 2, 3, 4, 5]
             def __len__(self):
@@ -225,23 +214,20 @@ class AppTestOldstyle(object):
 
     def test_len_errors(self):
         class A:
-            __metaclass__ = nclassobj
             def __len__(self):
                 return long(10)
         raises(TypeError, len, A())
         class A:
-            __metaclass__ = nclassobj
             def __len__(self):
                 return -1
         raises(ValueError, len, A())
 
     def test_call(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         a = A()
         raises(AttributeError, a)
         class A:
-            __metaclass__ = nclassobj
             def __call__(self, a, b):
                 return a + b
         a = A()
@@ -249,12 +235,11 @@ class AppTestOldstyle(object):
 
     def test_nonzero(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         a = A()
         assert a
         assert bool(a) == True
         class A:
-            __metaclass__ = nclassobj
             def __init__(self, truth):
                 self.truth = truth
             def __nonzero__(self):
@@ -281,7 +266,7 @@ class AppTestOldstyle(object):
 
     def test_repr(self):
         class A:
-            __metaclass__ = nclassobj
+            pass
         a = A()
         assert repr(a).startswith("<__builtin__.A instance at")
         assert str(a).startswith("<__builtin__.A instance at")
@@ -298,7 +283,6 @@ class AppTestOldstyle(object):
         assert repr(a).startswith("<?.Foo instance at")
         assert str(a).startswith("<?.Foo instance at")
         class A:
-            __metaclass__ = nclassobj
             def __repr__(self):
                 return "foo"
         assert repr(A()) == "foo"
@@ -306,7 +290,6 @@ class AppTestOldstyle(object):
 
     def test_str(self):
         class A:
-            __metaclass__ = nclassobj
             def __str__(self):
                 return "foo"
         a = A()
@@ -315,7 +298,6 @@ class AppTestOldstyle(object):
 
     def test_iter(self):
         class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.list = [1, 2, 3, 4, 5]
             def __iter__(self):
@@ -323,7 +305,6 @@ class AppTestOldstyle(object):
         for i, element in enumerate(A()):
             assert i + 1 == element
         class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.list = [1, 2, 3, 4, 5]
             def __len__(self):
@@ -335,7 +316,6 @@ class AppTestOldstyle(object):
 
     def test_getsetdelattr(self):
         class A:
-            __metaclass__ = nclassobj
             a = 1
             def __getattr__(self, attr):
                 return attr.upper()
@@ -345,7 +325,6 @@ class AppTestOldstyle(object):
         assert a.b == 4
         assert a.c == "C"
         class A:
-            __metaclass__ = nclassobj
             a = 1
             def __setattr__(self, attr, value):
                 self.__dict__[attr.lower()] = value
@@ -354,7 +333,6 @@ class AppTestOldstyle(object):
         a.A = 2
         assert a.a == 2
         class A:
-            __metaclass__ = nclassobj
             a = 1
             def __delattr__(self, attr):
                 del self.__dict__[attr.lower()]
@@ -367,7 +345,6 @@ class AppTestOldstyle(object):
 
     def test_instance_override(self):
         class A:
-            __metaclass__ = nclassobj
             def __str__(self):
                 return "foo"
         def __str__():
@@ -379,7 +356,6 @@ class AppTestOldstyle(object):
 
     def test_unary_method(self):
         class A:
-            __metaclass__ = nclassobj
             def __pos__(self):
                  return -1
         a = A()
@@ -387,7 +363,6 @@ class AppTestOldstyle(object):
 
     def test_cmp(self):
         class A:
-            __metaclass__ = nclassobj
             def __lt__(self, other):
                  return True
         a = A()
@@ -398,18 +373,16 @@ class AppTestOldstyle(object):
 
     def test_coerce(self):
         class B:
-            __metaclass__ = nclassobj
             def __coerce__(self, other):
                 return other, self
         b = B()
         assert coerce(b, 1) == (1, b)
         class B:
-            __metaclass__ = nclassobj
+            pass
         raises(TypeError, coerce, B(), [])
 
     def test_binaryop(self):
         class A:
-            __metaclass__ = nclassobj
             def __add__(self, other):
                 return 1 + other
         a = A()
@@ -418,7 +391,6 @@ class AppTestOldstyle(object):
 
     def test_binaryop_coerces(self):
         class A:
-            __metaclass__ = nclassobj
             def __add__(self, other):
                 return 1 + other
             def __coerce__(self, other):
@@ -432,7 +404,6 @@ class AppTestOldstyle(object):
     def test_binaryop_calls_coerce_always(self):
         l = []
         class A:
-            __metaclass__ = nclassobj
             def __coerce__(self, other):
                  l.append(other)
 
@@ -443,7 +414,6 @@ class AppTestOldstyle(object):
 
     def test_iadd(self):
         class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.l = []
             def __iadd__(self, other):
@@ -458,16 +428,13 @@ class AppTestOldstyle(object):
 
     def test_cmp(self):
         class A:
-            __metaclass__ = nclassobj
             def __coerce__(self, other):
                 return (1, 2)
         assert cmp(A(), 1) == -1
         class A:
-            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return 1
         class B:
-            __metaclass__ = nclassobj
             pass
 
         a = A()
@@ -476,14 +443,12 @@ class AppTestOldstyle(object):
         assert cmp(b, a) == -1
 
         class A:
-            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return 1L
         a = A()
         assert cmp(a, b) == 1
 
         class A:
-            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return "hello?"
         a = A()
@@ -491,7 +456,6 @@ class AppTestOldstyle(object):
 
     def test_hash(self):
         class A:
-            __metaclass__ = nclassobj
             pass
         hash(A()) # does not crash
         class A:
@@ -500,19 +464,16 @@ class AppTestOldstyle(object):
         a = A()
         raises(TypeError, hash, a)
         class A:
-            __metaclass__ = nclassobj
             def __hash__(self):
                 return 1
         a = A()
         assert hash(a) == 1
         class A:
-            __metaclass__ = nclassobj
             def __cmp__(self, other):
                 return 1
         a = A()
         raises(TypeError, hash, a)
         class A:
-            __metaclass__ = nclassobj
             def __eq__(self, other):
                 return 1
         a = A()
@@ -520,29 +481,26 @@ class AppTestOldstyle(object):
 
     def test_index(self):
         class A:
-            __metaclass__ = nclassobj
             def __index__(self):
                 return 1
         l = [1, 2, 3]
         assert l[A()] == 2
         class A:
-            __metaclass__ = nclassobj
+            pass
         raises(TypeError, "l[A()]")
 
     def test_contains(self):
         class A:
-            __metaclass__ = nclassobj
             def __contains__(self, other):
                 return True
         a = A()
         assert 1 in a
         assert None in a
         class A:
-            __metaclass__ = nclassobj
+            pass
         a = A()
         raises(TypeError, "1 in a")
         class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.list = [1, 2, 3, 4, 5]
             def __iter__(self):
@@ -551,7 +509,6 @@ class AppTestOldstyle(object):
         for i in range(1, 6):
             assert i in a
         class A:
-            __metaclass__ = nclassobj
             def __init__(self):
                 self.list = [1, 2, 3, 4, 5]
             def __len__(self):
@@ -564,7 +521,6 @@ class AppTestOldstyle(object):
 
     def test_pow(self):
         class A:
-            __metaclass__ = nclassobj
             def __pow__(self, other, mod=None):
                 if mod is None:
                     return 2 ** other
@@ -575,7 +531,6 @@ class AppTestOldstyle(object):
         assert pow(a, 4, 5) == 625
         raises(TypeError, "4 ** a")
         class A:
-            __metaclass__ = nclassobj
             def __rpow__(self, other, mod=None):
                 if mod is None:
                     return 2 ** other
@@ -589,7 +544,6 @@ class AppTestOldstyle(object):
     def test_getsetdelslice(self):
 
         class A:
-            __metaclass__ = nclassobj
             def __getslice__(self, i, j):
                 return i + j
             def __setslice__(self, i, j, seq):
@@ -605,14 +559,13 @@ class AppTestOldstyle(object):
 
     def test_contains_bug(self):
         class A:
-            __metaclass__ = nclassobj
             def __iter__(self):
                 return self
         raises(TypeError, "1 in A()")
 
     def test_class_instantiation_bug(self):
-        raises(TypeError, "class A(1, 2): __metaclass__ = nclassobj")
-        raises(TypeError, "nclassobj(1, (), {})")
-        raises(TypeError, "nclassobj('abc', 1, {})")
-        raises(TypeError, "nclassobj('abc', (1, ), {})")
-        raises(TypeError, "nclassobj('abc', (), 3)")
+        raises(TypeError, "class A(1, 2): pass")
+        raises(TypeError, "_classobj(1, (), {})")
+        raises(TypeError, "_classobj('abc', 1, {})")
+        raises(TypeError, "_classobj('abc', (1, ), {})")
+        raises(TypeError, "_classobj('abc', (), 3)")
