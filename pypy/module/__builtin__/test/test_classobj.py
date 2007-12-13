@@ -555,3 +555,27 @@ class AppTestOldstyle(object):
         a = A()
         for i in range(1, 6):
             assert i in a
+
+    def test_pow(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __pow__(self, other, mod=None):
+                if mod is None:
+                    return 2 ** other
+                return mod ** other
+        a = A()
+        assert a ** 4 == 16
+        assert pow(a, 4) == 16
+        assert pow(a, 4, 5) == 625
+        raises(TypeError, "4 ** a")
+        class A:
+            __metaclass__ = nclassobj
+            def __rpow__(self, other, mod=None):
+                if mod is None:
+                    return 2 ** other
+                return mod ** other
+        a = A()
+        assert 4 ** a == 16
+        assert pow(4, a) == 16
+        raises(TypeError, "a ** 4")
+        assert pow(4, a, 5) == 625
