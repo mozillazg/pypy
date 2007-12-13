@@ -249,7 +249,7 @@ def _coerce_helper(space, w_self, w_other):
     except OperationError, e:
         if not e.match(space, space.w_TypeError):
             raise
-        return (None, None)
+        return [None, None]
     return space.unpacktuple(w_tup, 2)
 
 class W_InstanceObject(Wrappable):
