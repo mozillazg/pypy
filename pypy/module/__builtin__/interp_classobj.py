@@ -27,6 +27,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 
     # XXX missing: lengthy and obscure logic about "__module__"
         
+    bases = []
     for w_base in space.unpackiterable(w_bases):
         if not isinstance(w_base, W_ClassObject):
             w_metaclass = space.type(w_base)
@@ -35,13 +36,14 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
                                            w_bases, w_dict)
             raise OperationError(space.w_TypeError,
                                  space.wrap("base must be class"))
+        bases.append(w_base)
 
-    return W_ClassObject(space, w_name, w_bases, w_dict)
+    return W_ClassObject(space, w_name, bases, w_dict)
 
 class W_ClassObject(Wrappable):
-    def __init__(self, space, w_name, w_bases, w_dict):
+    def __init__(self, space, w_name, bases, w_dict):
         self.name = space.str_w(w_name)
-        self.bases_w = space.unpackiterable(w_bases)
+        self.bases_w = bases
         self.w_dict = w_dict
 
     def getdict(self):
@@ -82,7 +84,7 @@ class W_ClassObject(Wrappable):
 
 
     def fget_bases(space, self):
-        return space.wrap(self.bases_w)
+        return space.newtuple(self.bases_w)
 
     def fset_bases(space, self, w_bases):
         # XXX in theory, this misses a check against inheritance cycles
@@ -93,11 +95,13 @@ class W_ClassObject(Wrappable):
                     space.w_TypeError,
                     space.wrap("__bases__ must be a tuple object"))
         bases_w = space.unpackiterable(w_bases)
+        bases = []
         for w_base in bases_w:
             if not isinstance(w_base, W_ClassObject):
                 raise OperationError(space.w_TypeError,
                                      space.wrap("__bases__ items must be classes"))
-        self.bases_w = bases_w
+            bases.append(w_base)
+        self.bases_w = bases
 
     def fdel_bases(space, self):
         raise OperationError(
