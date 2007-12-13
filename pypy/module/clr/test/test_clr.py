@@ -197,6 +197,7 @@ class AppTestDotnet:
         for i in x:
            sum += i
         assert sum == 42+4+4
+        raises(TypeError, x.Add, "test")
 
         genDictIntStr = clr.load_cli_class("System.Collections.Generic","Dictionary`2[System.Int32,System.String]")
         x = genDictIntStr()
@@ -204,4 +205,7 @@ class AppTestDotnet:
         x[2] = "rest"
         assert x[1] == "test" 
         assert x[2] == "rest" 
+        raises(TypeError, x.__setitem__, 3, 3)
+        raises(TypeError, x.__setitem__, 4, 4.453)
+        raises(TypeError, x.__setitem__, "test", 3)
 
