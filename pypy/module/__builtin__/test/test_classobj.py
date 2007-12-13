@@ -603,3 +603,9 @@ class AppTestOldstyle(object):
         del a[1:4]
         assert a.last == (1, 4, None)
 
+    def test_contains_bug(self):
+        class A:
+            __metaclass__ = nclassobj
+            def __iter__(self):
+                return self
+        raises(TypeError, "1 in A()")

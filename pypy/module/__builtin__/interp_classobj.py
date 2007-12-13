@@ -522,6 +522,7 @@ class W_InstanceObject(Wrappable):
             except OperationError, e:
                 if e.match(space, space.w_StopIteration):
                     return space.w_False
+                raise
             if space.eq_w(w_x, w_obj):
                 return space.w_True
 
