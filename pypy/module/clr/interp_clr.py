@@ -161,8 +161,9 @@ def get_properties(space, b_type):
             is_static = get_meth.get_IsStatic()
         if b_prop.get_CanWrite():
             set_meth = b_prop.GetSetMethod()
-            set_name = set_meth.get_Name()
-            is_static = set_meth.get_IsStatic()
+            if set_meth:
+                set_name = set_meth.get_Name()
+                is_static = set_meth.get_IsStatic()
         b_indexparams = b_prop.GetIndexParameters()
         if len(b_indexparams) == 0:
             properties.append((b_prop.get_Name(), get_name, set_name, is_static))
