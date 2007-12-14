@@ -294,9 +294,10 @@ class GenerationGC(SemiSpaceGC):
             self.remember_young_pointer(addr_struct, newvalue)
         if self.header(addr_struct).tid & GCFLAG_NEVER_SET:
             self.move_to_static_roots(addr_struct)
+            self.calls += 1
 
     def append_to_static_roots(self, pointer, arg):
-        os.write(2, "3\n")
+        os.write(2, str(self.calls) + "\n")
         self.get_roots.append_static_root(pointer)
 
     def move_to_static_roots(self, addr_struct):
