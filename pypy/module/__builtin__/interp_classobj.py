@@ -2,7 +2,7 @@ import new
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, applevel
 from pypy.interpreter.gateway import interp2app, ObjSpace
-from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.interpreter.typedef import TypeDef, GetSetProperty, make_weakref_descr
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.rlib.rarithmetic import r_uint, intmask
@@ -678,6 +678,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                          unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
     __rpow__ = interp2app(W_InstanceObject.descr_rpow,
                          unwrap_spec=['self', ObjSpace, W_Root, W_Root]),
+    __weakref__ = make_weakref_descr(W_InstanceObject),
     **rawdict
 )
 
