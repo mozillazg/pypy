@@ -175,7 +175,9 @@ class TypeLayoutBuilder(object):
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
             if gen_gc:
-                for a in mutable_gc_pointers_inside(value, adr):
+                import py
+                py.test.pdb()
+                for a in gc_pointers_inside(value, adr):
                     self.additional_roots_sources += 1
                 return
             else:
@@ -220,6 +222,27 @@ def weakpointer_offset(TYPE):
     if TYPE == WEAKREF:
         return llmemory.offsetof(WEAKREF, "weakptr")
     return -1
+
+def gc_pointers_inside(v, adr):
+    t = lltype.typeOf(v)
+    if isinstance(t, lltype.Struct):
+        for n, t2 in t._flds.iteritems():
+            if isinstance(t2, lltype.Ptr) and t2.TO._gckind == 'gc':
+                yield adr + llmemory.offsetof(t, n)
+            elif isinstance(t2, (lltype.Array, lltype.Struct)):
+                for a in gc_pointers_inside(getattr(v, n),
+                                            adr + llmemory.offsetof(t, n)):
+                    yield a
+    elif isinstance(t, lltype.Array):
+        if isinstance(t.OF, lltype.Ptr) and t.OF.TO._gckind == 'gc':
+            for i in range(len(v.items)):
+                yield adr + llmemory.itemoffsetof(t, i)
+        elif isinstance(t.OF, lltype.Struct):
+            for i in range(len(v.items)):
+                for a in gc_pointers_inside(v.items[i],
+                                            adr + llmemory.itemoffsetof(t, i)):
+                    yield a
+    
 
 def mutable_gc_pointers_inside(v, adr):
     t = lltype.typeOf(v)

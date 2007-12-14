@@ -1,4 +1,4 @@
-import sys
+import sys, os
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC, GCFLAGSHIFT, \
     GCFLAG_IMMORTAL
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
@@ -38,6 +38,7 @@ class GenerationGC(SemiSpaceGC):
                              max_space_size = max_space_size,
                              get_roots = get_roots)
         self.nursery_size = nursery_size
+        self.calls = 0
         assert nursery_size <= space_size // 2
 
     def setup(self):
@@ -295,10 +296,12 @@ class GenerationGC(SemiSpaceGC):
             self.move_to_static_roots(addr_struct)
 
     def append_to_static_roots(self, pointer, arg):
+        os.write(2, "3\n")
         self.get_roots.append_static_root(pointer)
 
     def move_to_static_roots(self, addr_struct):
-        self.header(addr_struct).tid &= ~GCFLAG_NEVER_SET
+        objhdr = self.header(addr_struct)
+        objhdr.tid &= ~GCFLAG_NEVER_SET
         self.trace(addr_struct, self.append_to_static_roots, None)
 
     def remember_young_pointer(self, addr_struct, addr):
