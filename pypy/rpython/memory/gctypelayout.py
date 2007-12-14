@@ -153,7 +153,6 @@ class TypeLayoutBuilder(object):
 
         # XXX hack, a lot of gengc details here
         from pypy.rpython.memory.gc.generation import GenerationGC
-        from pypy.rpython.memory.gc.generation import GCFLAG_NEVER_SET
         if isinstance(gc, GenerationGC):
             gen_gc = True
         else:
@@ -163,10 +162,7 @@ class TypeLayoutBuilder(object):
             typeid = self.get_type_id(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
             adr = llmemory.cast_ptr_to_adr(hdr)
-            flags = 0
-            if gen_gc:
-                flags = GCFLAG_NEVER_SET
-            gc.init_gc_object_immortal(adr, typeid, flags=flags)
+            gc.init_gc_object_immortal(adr, typeid)
 
         # The following collects the addresses of all the fields that have
         # a GC Pointer type, inside the current prebuilt object.  All such
