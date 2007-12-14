@@ -17,6 +17,8 @@ class TypeLayoutBuilder(object):
         self.addresses_of_static_ptrs = []
         # this lists contains pointers in raw Structs and Arrays
         self.addresses_of_static_ptrs_in_nongc = []
+        # dictionary address -> list of addresses
+        self.additional_roots_sources = 0
         self.finalizer_funcptrs = {}
 
     def get_type_id(self, TYPE):
@@ -149,11 +151,22 @@ class TypeLayoutBuilder(object):
             return
         self.seen_roots[id(value)] = True
 
+        # XXX hack, a lot of gengc details here
+        from pypy.rpython.memory.gc.generation import GenerationGC
+        from pypy.rpython.memory.gc.generation import GCFLAG_NEVER_SET
+        if isinstance(gc, GenerationGC):
+            gen_gc = True
+        else:
+            gen_gc = False
+
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
             typeid = self.get_type_id(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
             adr = llmemory.cast_ptr_to_adr(hdr)
-            gc.init_gc_object_immortal(adr, typeid)
+            flags = 0
+            if gen_gc:
+                flags = GCFLAG_NEVER_SET
+            gc.init_gc_object_immortal(adr, typeid, flags=flags)
 
         # The following collects the addresses of all the fields that have
         # a GC Pointer type, inside the current prebuilt object.  All such
@@ -161,7 +174,17 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            appendto = self.addresses_of_static_ptrs
+            if gen_gc:
+                # check if have any
+                gen = mutable_gc_pointers_inside(value, adr)
+                try:
+                    gen.next()
+                except StopIteration:
+                    return
+                self.additional_roots_sources += 1
+                return
+            else:
+                appendto = self.addresses_of_static_ptrs
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
         for a in mutable_gc_pointers_inside(value, adr):
