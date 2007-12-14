@@ -577,6 +577,7 @@ class AppTestOldstyle(object):
         a = type(a).__new__(type(a), A, {'c': 2})
         assert a.b == 1
         assert a.c == 2
+        raises(TypeError, type(a).__new__, type(a), A, 1)
 
     def test_del(self):
         import gc
@@ -608,3 +609,19 @@ class AppTestOldstyle(object):
 
         # does not crash
         E() == E()
+
+    def test_multiple_inheritance_more(self):
+        l = []
+        class A:    # classic class
+            def save(self):
+                l.append("A")
+        class B(A):
+            pass
+        class C(A):
+            def save(self):
+                l.append("C")
+        class D(B, C):
+            pass
+
+        D().save()
+        assert l == ['A']

@@ -267,7 +267,9 @@ def descr_instance_new(space, w_type, w_class, w_dict=None):
     if w_dict is None:
         w_dict = space.newdict()
     elif not space.is_true(space.isinstance(w_dict, space.w_dict)):
-        raise TypeError("instance() second arg must be dictionary or None")
+        raise OperationError(
+            space.w_TypeError,
+            space.wrap("instance() second arg must be dictionary or None"))
     return W_InstanceObject(space, w_class, w_dict)
 
 class W_InstanceObject(Wrappable):
