@@ -182,8 +182,10 @@ def main(backends=[]):
         backends = [backend.strip() for backend in """
             c
             c--stackless--_faassen
-            c--_faassen--_allworkingmodules
+            c--_faassen
             c--thread
+            c--_objspace=taint
+            c--_allworkingmodules
             c--gc=marksweep--_faassen
             c--gc=semispace--_faassen
             c--gc=generation--_faassen
