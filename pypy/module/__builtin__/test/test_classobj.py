@@ -577,3 +577,24 @@ class AppTestOldstyle(object):
         a = type(a).__new__(type(a), A, {'c': 2})
         assert a.b == 1
         assert a.c == 2
+
+    def test_del(self):
+        import gc
+        l = []
+        class A:
+            def __del__(self):
+                l.append(1)
+        a = A()
+        a = None
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert l == [1]
+        class B(A):
+            pass
+        b = B()
+        b = None
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert l == [1, 1]
