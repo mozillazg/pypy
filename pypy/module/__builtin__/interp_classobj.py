@@ -44,7 +44,7 @@ class W_ClassObject(Wrappable):
         self.name = space.str_w(w_name)
         self.bases_w = bases
         self.w_dict = w_dict
-
+ 
     def getdict(self):
         return self.w_dict
 
@@ -144,7 +144,10 @@ class W_ClassObject(Wrappable):
         return space.call_function(w_descr_get, w_value, space.w_None, self)
         
     def descr_call(self, space, __args__):
-        w_inst = W_InstanceObject(space, self)
+        if self.lookup(space, space.wrap('__del__')) is not None:
+            w_inst = W_InstanceObjectWithDel(space, self)
+        else:
+            w_inst = W_InstanceObject(space, self)
         w_init = w_inst.getattr(space, space.wrap('__init__'), False)
         if w_init is not None:
             w_result = space.call_args(w_init, __args__)
@@ -274,6 +277,7 @@ class W_InstanceObject(Wrappable):
         assert isinstance(w_class, W_ClassObject)
         self.w_class = w_class
         self.w_dict = w_dict
+        self.space = space
 
     def getdict(self):
         return self.w_dict
@@ -669,3 +673,28 @@ W_InstanceObject.typedef = TypeDef("instance",
     **rawdict
 )
 
+class W_InstanceObjectWithDel(W_InstanceObject):
+    # XXX this is code duplication from pypy.interpreter.typedef
+    # find a way to prevent this.
+    def __del__(self):
+        
+        lifeline = self.getweakref()
+        if lifeline is not None:
+            # Clear all weakrefs to this object before we call
+            # the app-level __del__.  We detach the lifeline
+            # first: if the app-level __del__ tries to use
+            # weakrefs again, they won't reuse the broken
+            # (already-cleared) ones from this lifeline.
+            self.setweakref(self.space, None)
+            lifeline.clear_all_weakrefs()
+        try:
+            self.descr_del()
+        except OperationError, e:
+            e.write_unraisable(self.space, 'method __del__ of ', self)
+            e.clear(self.space)   # break up reference cycles
+
+    def descr_del(self):
+        space = self.space
+        w_func = self.getattr(space, space.wrap('__del__'), False)
+        if w_func is not None:
+            space.call_function(w_func)
