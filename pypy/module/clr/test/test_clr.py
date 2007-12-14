@@ -160,7 +160,7 @@ class AppTestDotnet:
         enum = x.GetEnumerator()
         assert enum.MoveNext() is False
 
-    def test_iteration(self):
+    def test_iteration_arrayList(self):
         import clr
         ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
         x = ArrayList()
@@ -214,4 +214,19 @@ class AppTestDotnet:
         raises(TypeError, x.__setitem__, 3, 3)
         raises(TypeError, x.__setitem__, 4, 4.453)
         raises(TypeError, x.__setitem__, "test", 3)
+
+    def test_generic_class_with_single_import(self):
+        import clr
+        import System.Collections.Generic
+        import List
+        import System.Int32
+        l2 = List[System.Int32]()
+        l2.Add(3)
+        raises(TypeError, l2.Add, "test")
+
+        import Dictionary
+        import System.String
+        d1 = Dictionary[System.Int32,System.String]()
+        d1[1]="test"
+        raises(TypeError, d1.__setitem__, 3, 3)
 

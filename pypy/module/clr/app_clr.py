@@ -78,6 +78,46 @@ class StaticProperty(object):
     def __get__(self, obj, type_):
         return self.fget()
 
+class MetaGenericCliClassWrapper(type):
+    def __setattr__(cls, name, value):
+        obj = cls.__dict__.get(name, None)
+        if isinstance(obj, StaticProperty):
+            obj.fset(value)
+        else:
+            type.__setattr__(cls, name, value)
+
+    def __getitem__(cls,*args):
+        #cls.__cliclass__ ='System.Collections.Generic.Dictionary`2'
+        rightDot = cls.__cliclass__.rfind('.')
+        rightTilde = cls.__cliclass__.rfind('`')
+        load_cli_class_leftArg = cls.__cliclass__[:rightDot]
+        genClassName = cls.__cliclass__[rightDot+1: rightTilde] 
+        genClassNumArgs = int(cls.__cliclass__[rightTilde +1 :])
+        import clr
+        try:
+            ln = len(args[0])
+            # put a check for the number of arguments passed for the Generic class
+            if ln != genClassNumArgs:
+                raise "InvalidArgumentList"
+            else:
+                lindex = str(args[0][0]).find('\'')
+                rindex = str(args[0][0]).rfind('\'')
+                load_cli_class_rightArg = genClassName 
+                load_cli_class_rightArg += "`%s[%s"%(ln,str(args[0][0])[lindex+1:rindex])
+                for i in range(1,ln):
+                    lindex = str(args[0][i]).find('\'')
+                    rindex = str(args[0][i]).rfind('\'')
+                    load_cli_class_rightArg += ",%s"%str(args[0][i])[lindex+1:rindex]
+                load_cli_class_rightArg += "]"
+                return clr.load_cli_class(load_cli_class_leftArg,load_cli_class_rightArg)
+        except:
+            # it's a single arg passed
+            lindex = str(args[0]).find('\'')
+            rindex = str(args[0]).rfind('\'')
+            load_cli_class_rightArg = genClassName 
+            load_cli_class_rightArg += "`1[%s]"%(str(args[0])[lindex+1:rindex])
+            return clr.load_cli_class(load_cli_class_leftArg,load_cli_class_rightArg)
+
 class MetaCliClassWrapper(type):
     def __setattr__(cls, name, value):
         obj = cls.__dict__.get(name, None)
@@ -115,7 +155,7 @@ def wrapper_from_cliobj(cls, cliobj):
     obj.__cliobj__ = cliobj
     return obj
 
-def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers, hasIEnumerable):
+def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers, hasIEnumerable, isClassGeneric):
     fullname = '%s.%s' % (namespace, classname)
     d = {'__cliclass__': fullname,
          '__module__': namespace}
@@ -136,7 +176,10 @@ def build_wrapper(namespace, classname, staticmethods, methods, properties, inde
             d['__getitem__'] = d[getter]
         if setter:
             d['__setitem__'] = d[setter]
-    cls = MetaCliClassWrapper(classname, (CliClassWrapper,), d)
+    if isClassGeneric:
+        cls = MetaGenericCliClassWrapper(classname, (CliClassWrapper,), d)
+    else: 
+        cls = MetaCliClassWrapper(classname, (CliClassWrapper,), d)
 
     # we must add properties *after* the class has been created
     # because we need to store UnboundMethods as getters and setters

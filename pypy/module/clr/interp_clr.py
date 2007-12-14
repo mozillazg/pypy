@@ -185,7 +185,7 @@ class _CliClassCache:
         return self.cache.get(fullname, None)
 CliClassCache = _CliClassCache()
 
-def load_valid_namespaces(space):
+def list_of_valid_namespaces(space):
     """
     We use this function to play with reflection
     and then return useful data to the app_importer module
@@ -205,6 +205,36 @@ def load_valid_namespaces(space):
                 listOfNamespaces.append(namespace) 
     w_listOfNamespaces = wrap_list_of_strings(space, listOfNamespaces)
     return w_listOfNamespaces
+
+def list_of_generic_classes(space):
+    """
+    use reflection to get a list of generic classes 
+
+    Return: List of generic classes
+    e.g. [Dictionary`2 , List`1 , IEnumerator`1 , IEnumerable`1]
+    """
+    listOfGenericTypes = []
+    currentDomain = System.AppDomain.get_CurrentDomain()
+    assems = currentDomain.GetAssemblies()
+    for loadedAssembly in assems:
+        typesInAssembly = loadedAssembly.GetTypes()
+        for type in typesInAssembly:
+            namespace = type.get_Namespace()
+            type_str = type.ToString()
+            if namespace == "System.Collections.Generic":
+                rightDot = type_str.rfind('.')
+                rightTilde = type_str.rfind('`')
+                firstSqBracket = type_str.find('[')
+                firstPlus = type_str.find('+')
+                if rightDot != -1 and rightTilde != -1:
+                    if firstPlus == -1:
+                        nameToPush = type_str[rightDot+1 : firstSqBracket] 
+                    else:
+                        nameToPush = type_str[rightDot+1 : firstPlus] 
+                    if nameToPush not in listOfGenericTypes:
+                        listOfGenericTypes.append(nameToPush) 
+    w_listOfGenericTypes = wrap_list_of_strings(space, listOfGenericTypes)
+    return w_listOfGenericTypes
 
 def isDotNetType(space, nameFromImporter):
     """
@@ -302,6 +332,12 @@ def build_cli_class(space, namespace, classname, fullname):
         if interface.ToString() == "System.Collections.IEnumerable":
             hasIEnumerable = True
 
+    # this is where we test if the class is Generic 
+    # set the flag isClassGeneric 
+    isClassGeneric = False
+    if b_type.IsGenericType:
+        isClassGeneric = True
+
     w_staticmethods, w_methods = get_methods(space, b_type)
     w_properties, w_indexers = get_properties(space, b_type)
     return build_wrapper(space,
@@ -311,7 +347,8 @@ def build_cli_class(space, namespace, classname, fullname):
                          w_methods,
                          w_properties,
                          w_indexers,
-                         space.wrap(hasIEnumerable))
+                         space.wrap(hasIEnumerable),
+                         space.wrap(isClassGeneric))
 
 
 class W_CliObject(Wrappable):
