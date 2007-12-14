@@ -175,13 +175,8 @@ class TypeLayoutBuilder(object):
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
             if gen_gc:
-                # check if have any
-                gen = mutable_gc_pointers_inside(value, adr)
-                try:
-                    gen.next()
-                except StopIteration:
-                    return
-                self.additional_roots_sources += 1
+                for a in mutable_gc_pointers_inside(value, adr):
+                    self.additional_roots_sources += 1
                 return
             else:
                 appendto = self.addresses_of_static_ptrs
