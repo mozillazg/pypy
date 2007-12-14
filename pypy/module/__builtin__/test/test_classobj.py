@@ -625,3 +625,16 @@ class AppTestOldstyle(object):
 
         D().save()
         assert l == ['A']
+
+    def test_weakref(self):
+        import weakref, gc
+        class A:
+            pass
+        a = A()
+        ref = weakref.ref(a)
+        assert ref() is a
+        a = None
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert ref() is None
