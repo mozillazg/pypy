@@ -11,11 +11,11 @@ from pypy.rpython.lltypesystem.lloperation import llop
 # in the nursery.  It is initially set on all prebuilt and old objects,
 # and gets cleared by the write_barrier() when we write in them a
 # pointer to a young object.
-GCFLAG_NO_YOUNG_PTRS = 2 << GCFLAGSHIFT
+GCFLAG_NO_YOUNG_PTRS = 1 << (GCFLAGSHIFT+1)
 
 # The following flag is set for static roots which are not on the list
 # of static roots yet, but will appear with write barrier
-GCFLAG_NEVER_SET = 3 << GCFLAGSHIFT
+GCFLAG_NEVER_SET = 1 << (GCFLAGSHIFT+2)
 
 DEBUG_PRINT = False
 
@@ -293,9 +293,6 @@ class GenerationGC(SemiSpaceGC):
     def write_barrier(self, oldvalue, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
-            if self.header(addr_struct).tid & GCFLAG_NEVER_SET:
-                self.move_to_static_roots(addr_struct)
-                self.calls += 1
 
     def append_to_static_roots(self, pointer, arg):
         os.write(2, str(self.calls) + "\n")
@@ -309,9 +306,12 @@ class GenerationGC(SemiSpaceGC):
     def remember_young_pointer(self, addr_struct, addr):
         ll_assert(not self.is_in_nursery(addr_struct),
                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
+        oldhdr = self.header(addr_struct)
         if self.is_in_nursery(addr):
-            oldhdr = self.header(addr_struct)
             oldhdr.forw = self.old_objects_pointing_to_young
             self.old_objects_pointing_to_young = addr_struct
             oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        if oldhdr.tid & GCFLAG_NEVER_SET:
+            self.move_to_static_roots(addr_struct)
+            self.calls += 1
     remember_young_pointer.dont_inline = True
