@@ -140,7 +140,8 @@ class GenerationGC(SemiSpaceGC):
     def init_gc_object(self, addr, typeid, flags=GCFLAG_NO_YOUNG_PTRS):
         SemiSpaceGC.init_gc_object(self, addr, typeid, flags)
 
-    def init_gc_object_immortal(self, addr, typeid, flags=GCFLAG_NO_YOUNG_PTRS):
+    def init_gc_object_immortal(self, addr, typeid,
+                                flags=GCFLAG_NO_YOUNG_PTRS|GCFLAG_NEVER_SET):
         SemiSpaceGC.init_gc_object_immortal(self, addr, typeid, flags)
 
     def semispace_collect(self, size_changing=False):
@@ -292,9 +293,9 @@ class GenerationGC(SemiSpaceGC):
     def write_barrier(self, oldvalue, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
-        if self.header(addr_struct).tid & GCFLAG_NEVER_SET:
-            self.move_to_static_roots(addr_struct)
-            self.calls += 1
+            if self.header(addr_struct).tid & GCFLAG_NEVER_SET:
+                self.move_to_static_roots(addr_struct)
+                self.calls += 1
 
     def append_to_static_roots(self, pointer, arg):
         os.write(2, str(self.calls) + "\n")
