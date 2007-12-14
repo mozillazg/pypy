@@ -62,6 +62,13 @@ class loader(object):
             # add it to the modules list
             sys.modules[fullname] = mod
 
+            # treating System.Collections.Generic specially here.
+            # this treatment is done after the empty module insertion
+            if fullname == "System.Collections.Generic":
+                genericClassList = clr.list_of_generic_classes()
+                for genericClass in genericClassList:
+                    sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
+
         return sys.modules[fullname]
 
 class importer(object):
@@ -78,7 +85,7 @@ class importer(object):
     def __init__(self):
         import clr
         # this might not be the correct place to load the valid NameSpaces
-        self.ValidNameSpaces = clr.load_valid_namespaces()
+        self.ValidNameSpaces = clr.list_of_valid_namespaces()
         self.loader = loader()
 
     def find_module(self, fullname, path = None):
