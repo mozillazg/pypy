@@ -162,8 +162,6 @@ class AppTestDotnet:
 
     def test_iteration(self):
         import clr
-
-        # test iteration in ArrayList
         ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
         x = ArrayList()
         x.Add(1)
@@ -175,7 +173,8 @@ class AppTestDotnet:
            sum += i
         assert sum == 1+2+3+4
 
-        # test iteration in Stack
+    def test_iteration_stack(self):
+        import clr
         Stack = clr.load_cli_class('System.Collections', 'Stack')
         obj = Stack()
         obj.Push(1)
@@ -186,7 +185,7 @@ class AppTestDotnet:
             sum += i
         assert sum == 1+54+21
 
-    def test_generic_class(self):
+    def test_load_generic_class(self):
         import clr
         ListInt = clr.load_cli_class("System.Collections.Generic", "List`1[System.Int32]")
         x = ListInt()
@@ -197,8 +196,15 @@ class AppTestDotnet:
         for i in x:
            sum += i
         assert sum == 42+4+4
+
+    def test_generic_class_typeerror(self):
+        import clr
+        ListInt = clr.load_cli_class("System.Collections.Generic", "List`1[System.Int32]")
+        x = ListInt()
         raises(TypeError, x.Add, "test")
 
+    def test_generic_dict(self):
+        import clr
         genDictIntStr = clr.load_cli_class("System.Collections.Generic","Dictionary`2[System.Int32,System.String]")
         x = genDictIntStr()
         x[1] = "test"
