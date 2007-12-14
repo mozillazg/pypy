@@ -13,6 +13,10 @@ from pypy.rpython.lltypesystem.lloperation import llop
 # pointer to a young object.
 GCFLAG_NO_YOUNG_PTRS = 2 << GCFLAGSHIFT
 
+# The following flag is set for static roots which are not on the list
+# of static roots yet, but will appear with write barrier
+GCFLAG_NEVER_SET = 3 << GCFLAGSHIFT
+
 DEBUG_PRINT = False
 
 class GenerationGC(SemiSpaceGC):
@@ -287,6 +291,15 @@ class GenerationGC(SemiSpaceGC):
     def write_barrier(self, oldvalue, newvalue, addr_struct):
         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
+        if self.header(addr_struct).tid & GCFLAG_NEVER_SET:
+            self.move_to_static_roots(addr_struct)
+
+    def append_to_static_roots(self, pointer, arg):
+        self.get_roots.append_static_root(pointer)
+
+    def move_to_static_roots(self, addr_struct):
+        self.header(addr_struct).tid &= ~GCFLAG_NEVER_SET
+        self.trace(addr_struct, self.append_to_static_roots, None)
 
     def remember_young_pointer(self, addr_struct, addr):
         ll_assert(not self.is_in_nursery(addr_struct),

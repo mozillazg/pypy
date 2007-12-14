@@ -403,6 +403,7 @@ class FrameworkGCTransformer(GCTransformer):
         gcdata = self.gcdata
         sizeofaddr = llmemory.sizeof(llmemory.Address)
         rootstacksize = sizeofaddr * self.root_stack_depth
+        TP = lltype.Ptr(lltype.Array(llmemory.Address))
 
         class StackRootIterator:
             _alloc_flavor_ = 'raw'
@@ -421,6 +422,11 @@ class FrameworkGCTransformer(GCTransformer):
                 gcdata.root_stack_top = top + n*sizeofaddr
                 return top
             incr_stack = staticmethod(incr_stack)
+
+            def append_static_root(adr):
+                gcdata.static_root_end.address[0] = adr
+                gcdata.static_root_end += sizeofaddr
+            append_static_root = staticmethod(append_static_root)
             
             def decr_stack(n):
                 top = gcdata.root_stack_top - n*sizeofaddr
@@ -509,8 +515,11 @@ class FrameworkGCTransformer(GCTransformer):
             self.layoutbuilder.addresses_of_static_ptrs +
             self.layoutbuilder.addresses_of_static_ptrs_in_nongc)
         log.info("found %s static roots" % (len(addresses_of_static_ptrs), ))
+        additional_ptrs = self.layoutbuilder.additional_roots_sources
+        log.info("additional %d potential static roots" % additional_ptrs)
         ll_static_roots_inside = lltype.malloc(lltype.Array(llmemory.Address),
-                                               len(addresses_of_static_ptrs),
+                                               len(addresses_of_static_ptrs) +
+                                               additional_ptrs,
                                                immortal=True)
         for i in range(len(addresses_of_static_ptrs)):
             ll_static_roots_inside[i] = addresses_of_static_ptrs[i]
