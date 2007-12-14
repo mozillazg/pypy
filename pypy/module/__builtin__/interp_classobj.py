@@ -319,7 +319,13 @@ class W_InstanceObject(Wrappable):
         w_descr_get = space.lookup(w_value, '__get__')
         if w_descr_get is None:
             return w_value
-        return space.call_function(w_descr_get, w_value, self, self.w_class)
+        try:
+            return space.call_function(w_descr_get, w_value, self, self.w_class)
+        except OperationError, e:
+            if exc or not e.match(space, space.w_AttributeError):
+                raise
+            return None
+
 
     def descr_getattribute(self, space, w_attr):
         #import pdb; pdb.set_trace()
