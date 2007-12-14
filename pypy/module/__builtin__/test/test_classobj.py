@@ -598,3 +598,13 @@ class AppTestOldstyle(object):
         gc.collect()
         gc.collect()
         assert l == [1, 1]
+
+    def test_catch_attributeerror_of_descriptor(self):
+        def booh(self):
+            raise AttributeError, "booh"
+
+        class E:
+            __eq__ = property(booh)
+
+        # does not crash
+        E() == E()
