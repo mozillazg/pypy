@@ -175,8 +175,6 @@ class TypeLayoutBuilder(object):
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
             if gen_gc:
-                import py
-                py.test.pdb()
                 for a in gc_pointers_inside(value, adr):
                     self.additional_roots_sources += 1
                 return
