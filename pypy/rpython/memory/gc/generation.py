@@ -38,7 +38,6 @@ class GenerationGC(SemiSpaceGC):
                              max_space_size = max_space_size,
                              get_roots = get_roots)
         self.nursery_size = nursery_size
-        self.calls = 0
         assert nursery_size <= space_size // 2
 
     def setup(self):
@@ -295,7 +294,6 @@ class GenerationGC(SemiSpaceGC):
             self.remember_young_pointer(addr_struct, newvalue)
 
     def append_to_static_roots(self, pointer, arg):
-        os.write(2, str(self.calls) + "\n")
         self.get_roots.append_static_root(pointer)
 
     def move_to_static_roots(self, addr_struct):
@@ -313,5 +311,4 @@ class GenerationGC(SemiSpaceGC):
             oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
         if oldhdr.tid & GCFLAG_NEVER_SET:
             self.move_to_static_roots(addr_struct)
-            self.calls += 1
     remember_young_pointer.dont_inline = True
