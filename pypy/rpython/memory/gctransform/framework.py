@@ -91,8 +91,6 @@ def find_initializing_stores(collect_analyzer, graph):
         print "found %s initializing stores in %s" % (len(result), graph.name)
     return result
 
-ADDRESS_VOID_FUNC = lltype.FuncType([llmemory.Address], lltype.Void)
-
 class FrameworkGCTransformer(GCTransformer):
     use_stackless = False
     root_stack_depth = 163840
@@ -111,75 +109,21 @@ class FrameworkGCTransformer(GCTransformer):
             # for regular translation: pick the GC from the config
             GCClass, GC_PARAMS = choose_gc_from_config(translator.config)
 
-        self.FINALIZERTYPE = lltype.Ptr(ADDRESS_VOID_FUNC)
-        class GCData(object):
-            # types of the GC information tables
-            OFFSETS_TO_GC_PTR = lltype.Array(lltype.Signed)
-            TYPE_INFO = lltype.Struct("type_info",
-                ("isvarsize",   lltype.Bool),
-                ("gcptrinvarsize", lltype.Bool),
-                ("finalizer",   self.FINALIZERTYPE),
-                ("fixedsize",   lltype.Signed),
-                ("ofstoptrs",   lltype.Ptr(OFFSETS_TO_GC_PTR)),
-                ("varitemsize", lltype.Signed),
-                ("ofstovar",    lltype.Signed),
-                ("ofstolength", lltype.Signed),
-                ("varofstoptrs",lltype.Ptr(OFFSETS_TO_GC_PTR)),
-                ("weakptrofs",  lltype.Signed),
-                )
-            TYPE_INFO_TABLE = lltype.Array(TYPE_INFO)
-
-        def q_is_varsize(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].isvarsize
-
-        def q_has_gcptr_in_varsize(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].gcptrinvarsize
-
-        def q_finalizer(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].finalizer
-
-        def q_offsets_to_gc_pointers(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].ofstoptrs
-
-        def q_fixed_size(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].fixedsize
-
-        def q_varsize_item_sizes(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].varitemsize
-
-        def q_varsize_offset_to_variable_part(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].ofstovar
-
-        def q_varsize_offset_to_length(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].ofstolength
-
-        def q_varsize_offsets_to_gcpointers_in_var_part(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].varofstoptrs
-
-        def q_weakpointer_offset(typeid):
-            ll_assert(typeid > 0, "invalid type_id")
-            return gcdata.type_info_table[typeid].weakptrofs
-
         self.layoutbuilder = TransformerLayoutBuilder(self)
         self.get_type_id = self.layoutbuilder.get_type_id
 
-        gcdata = GCData()
         # set up dummy a table, to be overwritten with the real one in finish()
-        gcdata.type_info_table = lltype.malloc(GCData.TYPE_INFO_TABLE, 0,
-                                               immortal=True)
+        type_info_table = lltype._ptr(
+            lltype.Ptr(gctypelayout.GCData.TYPE_INFO_TABLE),
+            "delayed!type_info_table", solid=True)
+        gcdata = gctypelayout.GCData(type_info_table)
+
         # initialize the following two fields with a random non-NULL address,
         # to make the annotator happy.  The fields are patched in finish()
-        # to point to a real array (not 'static_roots', another one).
-        a_random_address = llmemory.cast_ptr_to_adr(gcdata.type_info_table)
+        # to point to a real array.
+        foo = lltype.malloc(lltype.FixedSizeArray(llmemory.Address, 1),
+                            immortal=True, zero=True)
+        a_random_address = llmemory.cast_ptr_to_adr(foo)
         gcdata.static_root_start = a_random_address      # patched in finish()
         gcdata.static_root_nongcstart = a_random_address # patched in finish()
         gcdata.static_root_end = a_random_address        # patched in finish()
@@ -190,6 +134,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         StackRootIterator = self.build_stack_root_iterator()
         gcdata.gc = GCClass(AddressLinkedList, get_roots=StackRootIterator, **GC_PARAMS)
+        gcdata.set_query_functions(gcdata.gc)
         self.num_pushs = 0
         self.write_barrier_calls = 0
 
@@ -197,29 +142,12 @@ class FrameworkGCTransformer(GCTransformer):
             # run-time initialization code
             StackRootIterator.setup_root_stack()
             gcdata.gc.setup()
-            gcdata.gc.set_query_functions(
-                q_is_varsize,
-                q_has_gcptr_in_varsize,
-                q_finalizer,
-                q_offsets_to_gc_pointers,
-                q_fixed_size,
-                q_varsize_item_sizes,
-                q_varsize_offset_to_variable_part,
-                q_varsize_offset_to_length,
-                q_varsize_offsets_to_gcpointers_in_var_part,
-                q_weakpointer_offset)
 
         bk = self.translator.annotator.bookkeeper
 
         # the point of this little dance is to not annotate
-        # self.gcdata.type_info_table as a constant.
-        data_classdef = bk.getuniqueclassdef(GCData)
-        data_classdef.generalize_attr(
-            'type_info_table',
-            annmodel.SomePtr(lltype.Ptr(GCData.TYPE_INFO_TABLE)))
-        data_classdef.generalize_attr(
-            'static_roots',
-            annmodel.SomePtr(lltype.Ptr(lltype.Array(llmemory.Address))))
+        # self.gcdata.static_root_xyz as constants. XXX is it still needed??
+        data_classdef = bk.getuniqueclassdef(gctypelayout.GCData)
         data_classdef.generalize_attr(
             'static_root_start',
             annmodel.SomeAddress())
@@ -496,9 +424,10 @@ class FrameworkGCTransformer(GCTransformer):
 
         # replace the type_info_table pointer in gcdata -- at this point,
         # the database is in principle complete, so it has already seen
-        # the old (empty) array.  We need to force it to consider the new
-        # array now.  It's a bit hackish as the old empty array will also
-        # be generated in the C source, but that's a rather minor problem.
+        # the delayed pointer.  We need to force it to consider the new
+        # array now.
+
+        self.gcdata.type_info_table._become(table)
 
         # XXX because we call inputconst already in replace_malloc, we can't
         # modify the instance, we have to modify the 'rtyped instance'
@@ -508,8 +437,6 @@ class FrameworkGCTransformer(GCTransformer):
             self.gcdata)
         r_gcdata = self.translator.rtyper.getrepr(s_gcdata)
         ll_instance = rmodel.inputconst(r_gcdata, self.gcdata).value
-        ll_instance.inst_type_info_table = table
-        #self.gcdata.type_info_table = table
 
         addresses_of_static_ptrs = (
             self.layoutbuilder.addresses_of_static_ptrs +
@@ -528,7 +455,7 @@ class FrameworkGCTransformer(GCTransformer):
         ll_instance.inst_static_root_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * (len(ll_static_roots_inside) - additional_ptrs)
 
         newgcdependencies = []
-        newgcdependencies.append(table)
+        newgcdependencies.append(self.gcdata.type_info_table)
         newgcdependencies.append(ll_static_roots_inside)
         self.write_typeid_list()
         return newgcdependencies
@@ -543,6 +470,7 @@ class FrameworkGCTransformer(GCTransformer):
         all.sort()
         for typeid, TYPE in all:
             f.write("%s %s\n" % (typeid, TYPE))
+        f.close()
 
     def transform_graph(self, graph):
         if self.write_barrier_ptr:
@@ -573,7 +501,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         c_type_id = rmodel.inputconst(lltype.Signed, type_id)
         info = self.layoutbuilder.type_info_list[type_id]
-        c_size = rmodel.inputconst(lltype.Signed, info["fixedsize"])
+        c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
         c_has_finalizer = rmodel.inputconst(lltype.Bool, has_finalizer)
 
@@ -592,8 +520,8 @@ class FrameworkGCTransformer(GCTransformer):
                     c_has_finalizer, rmodel.inputconst(lltype.Bool, False)]
         else:
             v_length = op.args[-1]
-            c_ofstolength = rmodel.inputconst(lltype.Signed, info['ofstolength'])
-            c_varitemsize = rmodel.inputconst(lltype.Signed, info['varitemsize'])
+            c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
+            c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
             malloc_ptr = self.malloc_varsize_clear_ptr
 ##             if op.opname.startswith('zero'):
 ##                 malloc_ptr = self.malloc_varsize_clear_ptr
@@ -624,7 +552,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         c_type_id = rmodel.inputconst(lltype.Signed, type_id)
         info = self.layoutbuilder.type_info_list[type_id]
-        c_size = rmodel.inputconst(lltype.Signed, info["fixedsize"])
+        c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
         assert not has_finalizer
 
@@ -635,8 +563,8 @@ class FrameworkGCTransformer(GCTransformer):
             args = [self.c_const_gc, v_coallocator, c_type_id, c_size]
         else:
             v_length = op.args[-1]
-            c_ofstolength = rmodel.inputconst(lltype.Signed, info['ofstolength'])
-            c_varitemsize = rmodel.inputconst(lltype.Signed, info['varitemsize'])
+            c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
+            c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
             malloc_ptr = self.coalloc_varsize_clear_ptr
             args = [self.c_const_gc, v_coallocator, c_type_id, v_length, c_size,
                     c_varitemsize, c_ofstolength]
@@ -698,7 +626,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         c_type_id = rmodel.inputconst(lltype.Signed, type_id)
         info = self.layoutbuilder.type_info_list[type_id]
-        c_size = rmodel.inputconst(lltype.Signed, info["fixedsize"])
+        c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         malloc_ptr = self.malloc_fixedsize_ptr
         c_has_finalizer = rmodel.inputconst(lltype.Bool, False)
         c_has_weakptr = c_can_collect = rmodel.inputconst(lltype.Bool, True)
@@ -856,30 +784,8 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
                                                     [llmemory.Address],
                                                     lltype.Void)
         else:
-            fptr = lltype.nullptr(ADDRESS_VOID_FUNC)
+            fptr = lltype.nullptr(gctypelayout.GCData.FINALIZERTYPE.TO)
         return fptr
-
-    def offsets2table(self, offsets, TYPE):
-        try:
-            return self.offsettable_cache[TYPE]
-        except KeyError:
-            gcdata = self.transformer.gcdata
-            cachedarray = lltype.malloc(gcdata.OFFSETS_TO_GC_PTR,
-                                        len(offsets), immortal=True)
-            for i, value in enumerate(offsets):
-                cachedarray[i] = value
-            self.offsettable_cache[TYPE] = cachedarray
-            return cachedarray
-
-    def flatten_table(self):
-        self.can_add_new_types = False
-        table = lltype.malloc(self.transformer.gcdata.TYPE_INFO_TABLE,
-                              len(self.type_info_list), immortal=True)
-        for tableentry, newcontent in zip(table, self.type_info_list):
-            for key, value in newcontent.items():
-                setattr(tableentry, key, value)
-        self.offsettable_cache = None
-        return table
 
 
 def gen_zero_gc_pointers(TYPE, v, llops, previous_steps=None):

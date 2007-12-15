@@ -164,9 +164,9 @@ class LowLevelDatabase(object):
             self.containerstats[kind] = self.containerstats.get(kind, 0) + 1
             self.containerlist.append(node)
             if self.completed:
-                assert not node.globalcontainer
-                # non-global containers are found very late, e.g. _subarrays
-                # via addresses introduced by the GC transformer
+                pass # we would like to fail here, but a few containers
+                     # are found very late, e.g. _subarrays via addresses
+                     # introduced by the GC transformer, or the type_info_table
         return node
 
     def get(self, obj):
@@ -195,11 +195,15 @@ class LowLevelDatabase(object):
                         n = len('delayed!')
                         if len(name) == n:
                             raise
-                        if id(obj) in self.delayedfunctionnames:
-                            return self.delayedfunctionnames[id(obj)][0]
-                        funcname = name[n:]
-                        funcname = self.namespace.uniquename('g_' + funcname)
-                        self.delayedfunctionnames[id(obj)] = funcname, obj
+                        if isinstance(lltype.typeOf(obj).TO, lltype.FuncType):
+                            if id(obj) in self.delayedfunctionnames:
+                                return self.delayedfunctionnames[id(obj)][0]
+                            funcname = name[n:]
+                            funcname = self.namespace.uniquename('g_'+funcname)
+                            self.delayedfunctionnames[id(obj)] = funcname, obj
+                        else:
+                            funcname = None      # can't use the name of a
+                                                 # delayed non-function ptr
                         self.delayedfunctionptrs.append(obj)
                         return funcname
                         # /hack hack hack
