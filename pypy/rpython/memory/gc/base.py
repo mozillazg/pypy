@@ -265,6 +265,12 @@ def choose_gc_from_config(config):
         GC_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
         from pypy.rpython.memory.gc.semispace import SemiSpaceGC
         return SemiSpaceGC, GC_PARAMS
+    elif config.translation.gc == "prefetch":
+        GC_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
+                     'prefetch_queue_size': 16} # XXX adjust
+        from pypy.rpython.memory.gc.prefetchsemispace import \
+             PrefetchSemiSpaceGC
+        return PrefetchSemiSpaceGC, GC_PARAMS
     elif config.translation.gc == "generation":
         GC_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
                      'nursery_size': 896*1024}
