@@ -406,3 +406,7 @@ class TestGenerationalGC(GCTest):
             return 0
         res = self.interpret(malloc_a_lot, [], backendopt=True, coalloc=True)
         assert res == 0
+
+class TestPrefetchSemiSpaceGC(GCTest):
+    from pypy.rpython.memory.gc.prefetchsemispace import PrefetchSemiSpaceGC
+    GCClass = PrefetchSemiSpaceGC

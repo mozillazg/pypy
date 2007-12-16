@@ -896,3 +896,13 @@ class TestGenerationalNoFullCollectGC(GCTest):
         run = self.runner(f, nbargs=0)
         res = run([])
         assert res == 40 * 5
+
+
+class TestPrefetchSemiSpaceGC(GenericMovingGCTests):
+    gcname = "prefetch"
+
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.prefetchsemispace import PrefetchSemiSpaceGC as GCClass
+            GC_PARAMS = {'space_size': 2048, 'prefetch_queue_size': 4}
+            root_stack_depth = 200
