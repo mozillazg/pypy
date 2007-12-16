@@ -378,16 +378,16 @@ class FrameworkGCTransformer(GCTransformer):
             def __init__(self, with_static=True):
                 self.stack_current = gcdata.root_stack_top
                 if with_static:
-                    self.static_current = gcdata.static_root_end - sizeofaddr
+                    self.static_current = gcdata.static_root_end
                 else:
-                    self.static_current = gcdata.static_root_nongcend - sizeofaddr
+                    self.static_current = gcdata.static_root_nongcend
 
             def pop(self):
                 while self.static_current != gcdata.static_root_start:
-                    result = self.static_current
                     self.static_current -= sizeofaddr
-                    if result.address[0].address[0] != llmemory.NULL:
-                        return result.address[0]
+                    result = self.static_current.address[0]
+                    if result.address[0] != llmemory.NULL:
+                        return result
                 while self.stack_current != gcdata.root_stack_base:
                     self.stack_current -= sizeofaddr
                     if self.stack_current.address[0] != llmemory.NULL:
@@ -451,7 +451,7 @@ class FrameworkGCTransformer(GCTransformer):
                                                immortal=True)
         for i in range(len(addresses_of_static_ptrs)):
             ll_static_roots_inside[i] = addresses_of_static_ptrs[i]
-        ll_instance.inst_static_root_start = llmemory.cast_ptr_to_adr(ll_static_roots_inside) + llmemory.ArrayItemsOffset(lltype.Array(llmemory.Address)) + llmemory.sizeof(llmemory.Address) * (-1)
+        ll_instance.inst_static_root_start = llmemory.cast_ptr_to_adr(ll_static_roots_inside) + llmemory.ArrayItemsOffset(lltype.Array(llmemory.Address))
         ll_instance.inst_static_root_nongcend = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(self.layoutbuilder.addresses_of_static_ptrs_in_nongc)
         ll_instance.inst_static_root_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(addresses_of_static_ptrs)
 
