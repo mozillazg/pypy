@@ -301,14 +301,14 @@ class TypeLayoutBuilder(object):
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
             if lazy_write_barrier:
-                for a in gc_pointers_inside(value, adr, mutable_only=False):
+                for a in gc_pointers_inside(value, adr):
                     self.additional_roots_sources += 1
                 return
             else:
                 appendto = self.addresses_of_static_ptrs
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
-        for a in gc_pointers_inside(value, adr):
+        for a in gc_pointers_inside(value, adr, mutable_only=True):
             appendto.append(a)
 
 # ____________________________________________________________
@@ -347,7 +347,7 @@ def weakpointer_offset(TYPE):
         return llmemory.offsetof(WEAKREF, "weakptr")
     return -1    
 
-def gc_pointers_inside(v, adr, mutable_only=True):
+def gc_pointers_inside(v, adr, mutable_only=False):
     t = lltype.typeOf(v)
     if isinstance(t, lltype.Struct):
         if mutable_only and t._hints.get('immutable'):
