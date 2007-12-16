@@ -22,7 +22,7 @@ __builtin_prefetch = rffi.llexternal(
     sandboxsafe=True, _nowrapper=True)
 
 def llimpl_prefetch(addr):
-    __builtin_prefetch(addr, 0, 0)
+    __builtin_prefetch(addr, 0, 3)
 register_external(prefetch, [llmemory.Address], lltype.Void,
                   'll_hack.builtin_prefetch',
                   llimpl=llimpl_prefetch,
