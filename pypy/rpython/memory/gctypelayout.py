@@ -286,8 +286,6 @@ class TypeLayoutBuilder(object):
             return
         self.seen_roots[id(value)] = True
 
-        lazy_write_barrier = gc.prebuilt_gc_objects_are_static_roots
-
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
             typeid = self.get_type_id(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
@@ -300,7 +298,7 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            if lazy_write_barrier:
+            if not gc.prebuilt_gc_objects_are_static_roots:
                 for a in gc_pointers_inside(value, adr):
                     self.additional_roots_sources += 1
                 return

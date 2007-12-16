@@ -27,7 +27,7 @@ class GenerationGC(SemiSpaceGC):
     """
     inline_simple_malloc = True
     needs_write_barrier = True
-    prebuilt_gc_objects_are_static_roots = True
+    prebuilt_gc_objects_are_static_roots = False
 
     def __init__(self, AddressLinkedList,
                  nursery_size=128,
