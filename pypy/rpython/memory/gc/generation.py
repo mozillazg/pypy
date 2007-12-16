@@ -15,7 +15,7 @@ GCFLAG_NO_YOUNG_PTRS = 1 << (GCFLAGSHIFT+1)
 
 # The following flag is set for static roots which are not on the list
 # of static roots yet, but will appear with write barrier
-GCFLAG_NEVER_SET = 1 << (GCFLAGSHIFT+2)
+GCFLAG_NO_HEAP_PTRS = 1 << (GCFLAGSHIFT+2)
 
 DEBUG_PRINT = False
 
@@ -27,6 +27,7 @@ class GenerationGC(SemiSpaceGC):
     """
     inline_simple_malloc = True
     needs_write_barrier = True
+    prebuilt_gc_objects_are_static_roots = True
 
     def __init__(self, AddressLinkedList,
                  nursery_size=128,
@@ -141,7 +142,7 @@ class GenerationGC(SemiSpaceGC):
         SemiSpaceGC.init_gc_object(self, addr, typeid, flags)
 
     def init_gc_object_immortal(self, addr, typeid,
-                                flags=GCFLAG_NO_YOUNG_PTRS|GCFLAG_NEVER_SET):
+                                flags=GCFLAG_NO_YOUNG_PTRS|GCFLAG_NO_HEAP_PTRS):
         SemiSpaceGC.init_gc_object_immortal(self, addr, typeid, flags)
 
     def semispace_collect(self, size_changing=False):
@@ -300,7 +301,7 @@ class GenerationGC(SemiSpaceGC):
 
     def move_to_static_roots(self, addr_struct):
         objhdr = self.header(addr_struct)
-        objhdr.tid &= ~GCFLAG_NEVER_SET
+        objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
         self.trace(addr_struct, self.append_to_static_roots, None)
 
     def remember_young_pointer(self, addr_struct, addr):
@@ -311,7 +312,6 @@ class GenerationGC(SemiSpaceGC):
             oldhdr.forw = self.old_objects_pointing_to_young
             self.old_objects_pointing_to_young = addr_struct
             oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if oldhdr.tid & GCFLAG_NEVER_SET:
+        if oldhdr.tid & GCFLAG_NO_HEAP_PTRS:
             self.move_to_static_roots(addr_struct)
-            llop.debug_print(lltype.Void, "new statc root", self.created)
     remember_young_pointer.dont_inline = True

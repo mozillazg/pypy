@@ -235,7 +235,6 @@ class SemiSpaceGC(MovingGCBase):
             if root == NULL:
                 break
             root.address[0] = self.copy(root.address[0])
-        llop.debug_print(lltype.Void, "collected: ", counter)
         free_non_gc_object(roots)
 
     def copy(self, obj):

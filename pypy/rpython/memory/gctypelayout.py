@@ -286,12 +286,7 @@ class TypeLayoutBuilder(object):
             return
         self.seen_roots[id(value)] = True
 
-        # XXX hack, a lot of gengc details here
-        from pypy.rpython.memory.gc.generation import GenerationGC
-        if isinstance(gc, GenerationGC):
-            gen_gc = True
-        else:
-            gen_gc = False
+        lazy_write_barrier = gc.prebuilt_gc_objects_are_static_roots
 
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
             typeid = self.get_type_id(TYPE)
@@ -305,15 +300,15 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            if gen_gc:
-                for a in gc_pointers_inside(value, adr):
+            if lazy_write_barrier:
+                for a in gc_pointers_inside(value, adr, mutable_only=False):
                     self.additional_roots_sources += 1
                 return
             else:
                 appendto = self.addresses_of_static_ptrs
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
-        for a in mutable_gc_pointers_inside(value, adr):
+        for a in gc_pointers_inside(value, adr):
             appendto.append(a)
 
 # ____________________________________________________________
@@ -350,51 +345,32 @@ def offsets_to_gc_pointers(TYPE):
 def weakpointer_offset(TYPE):
     if TYPE == WEAKREF:
         return llmemory.offsetof(WEAKREF, "weakptr")
-    return -1
+    return -1    
 
-def gc_pointers_inside(v, adr):
+def gc_pointers_inside(v, adr, mutable_only=True):
     t = lltype.typeOf(v)
     if isinstance(t, lltype.Struct):
+        if mutable_only and t._hints.get('immutable'):
+            return
         for n, t2 in t._flds.iteritems():
             if isinstance(t2, lltype.Ptr) and t2.TO._gckind == 'gc':
                 yield adr + llmemory.offsetof(t, n)
             elif isinstance(t2, (lltype.Array, lltype.Struct)):
                 for a in gc_pointers_inside(getattr(v, n),
-                                            adr + llmemory.offsetof(t, n)):
+                                            adr + llmemory.offsetof(t, n),
+                                            mutable_only):
                     yield a
     elif isinstance(t, lltype.Array):
+        if mutable_only and t._hints.get('immutable'):
+            return
         if isinstance(t.OF, lltype.Ptr) and t.OF.TO._gckind == 'gc':
             for i in range(len(v.items)):
                 yield adr + llmemory.itemoffsetof(t, i)
         elif isinstance(t.OF, lltype.Struct):
             for i in range(len(v.items)):
                 for a in gc_pointers_inside(v.items[i],
-                                            adr + llmemory.itemoffsetof(t, i)):
-                    yield a
-    
-
-def mutable_gc_pointers_inside(v, adr):
-    t = lltype.typeOf(v)
-    if isinstance(t, lltype.Struct):
-        if t._hints.get('immutable'):
-            return
-        for n, t2 in t._flds.iteritems():
-            if isinstance(t2, lltype.Ptr) and t2.TO._gckind == 'gc':
-                yield adr + llmemory.offsetof(t, n)
-            elif isinstance(t2, (lltype.Array, lltype.Struct)):
-                for a in mutable_gc_pointers_inside(getattr(v, n),
-                                                adr + llmemory.offsetof(t, n)):
-                    yield a
-    elif isinstance(t, lltype.Array):
-        if t._hints.get('immutable'):
-            return
-        if isinstance(t.OF, lltype.Ptr) and t.OF.TO._gckind == 'gc':
-            for i in range(len(v.items)):
-                yield adr + llmemory.itemoffsetof(t, i)
-        elif isinstance(t.OF, lltype.Struct):
-            for i in range(len(v.items)):
-                for a in mutable_gc_pointers_inside(v.items[i],
-                                            adr + llmemory.itemoffsetof(t, i)):
+                                            adr + llmemory.itemoffsetof(t, i),
+                                            mutable_only):
                     yield a
 
 def zero_gc_pointers(p):
