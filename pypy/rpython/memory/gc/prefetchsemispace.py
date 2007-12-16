@@ -52,25 +52,19 @@ class PrefetchSemiSpaceGC(SemiSpaceGC):
             self.prefetch_queue[i] = NULL
             i -= 1
         self.prefetch_queue_next = 0
+        # scan
         while True:
-            # scan
-            while scan < self.free:
-                curr = scan + self.size_gc_header()
-                self.trace_and_copy_lazy(curr)
-                scan += self.size_gc_header() + self.get_size(curr)
-            # if the prefetch queue is not empty, flush the next item
-            # (note that this is done by "popping" the most recently
-            # added item first, instead of in usual first-in first-out
-            # fashion, so that we know that the queue is completely
-            # empty as soon as we get a NULL)
-            i = self.prefetch_queue_next
-            i = (i - 1) & self.prefetch_queue_mask
-            self.prefetch_queue_next = i
-            pointer = self.prefetch_queue[i]
-            if pointer == NULL:
-                break      # empty queue => done
-            self.prefetch_queue[i] = NULL
-            pointer.address[0] = self.copy(pointer.address[0])
+            if scan == self.free:
+                # flush the remaining items in the prefetch queue
+                i = self.prefetch_queue_mask
+                while i >= 0:
+                    self.record_pointer_for_tracing(NULL)
+                    i -= 1
+                if scan == self.free:
+                    break     # finished
+            curr = scan + self.size_gc_header()
+            self.trace_and_copy_lazy(curr)
+            scan += self.size_gc_header() + self.get_size(curr)
         return scan
 
     def trace_and_copy_lazy(self, obj):
@@ -78,10 +72,10 @@ class PrefetchSemiSpaceGC(SemiSpaceGC):
 
     def _trace_copy_lazy(self, pointer, ignored):
         if pointer.address[0] != NULL:
+            prefetch(pointer.address[0])
             self.record_pointer_for_tracing(pointer)
 
     def record_pointer_for_tracing(self, pointer):
-        prefetch(pointer.address[0])
         i = self.prefetch_queue_next
         oldpointer = self.prefetch_queue[i]
         self.prefetch_queue[i] = pointer
