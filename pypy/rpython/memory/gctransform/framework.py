@@ -17,6 +17,7 @@ from pypy.rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF
 from pypy.rpython.memory.gctypelayout import convert_weakref_to, WEAKREFPTR
 from pypy.rpython.memory.gctransform.log import log
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rpython.lltypesystem.lloperation import llop
 import sys
 
 
@@ -127,6 +128,7 @@ class FrameworkGCTransformer(GCTransformer):
         gcdata.static_root_start = a_random_address      # patched in finish()
         gcdata.static_root_nongcstart = a_random_address # patched in finish()
         gcdata.static_root_end = a_random_address        # patched in finish()
+        gcdata.static_root_real_end = a_random_address
         self.gcdata = gcdata
         self.malloc_fnptr_cache = {}
 
@@ -156,6 +158,9 @@ class FrameworkGCTransformer(GCTransformer):
             annmodel.SomeAddress())
         data_classdef.generalize_attr(
             'static_root_end',
+            annmodel.SomeAddress())
+        data_classdef.generalize_attr(
+            'static_root_real_end',
             annmodel.SomeAddress())
 
         annhelper = annlowlevel.MixLevelHelperAnnotator(self.translator.rtyper)
@@ -380,13 +385,15 @@ class FrameworkGCTransformer(GCTransformer):
                     self.static_current = gcdata.static_root_start
                 else:
                     self.static_current = gcdata.static_root_nongcstart
+                self.with_static = with_static
 
             def pop(self):
-                while self.static_current != gcdata.static_root_end:
-                    result = self.static_current
-                    self.static_current += sizeofaddr
-                    if result.address[0].address[0] != llmemory.NULL:
-                        return result.address[0]
+                if self.with_static:
+                    while self.static_current != gcdata.static_root_end:
+                        result = self.static_current
+                        self.static_current += sizeofaddr
+                        if result.address[0].address[0] != llmemory.NULL:
+                            return result.address[0]
                 while self.stack_current != gcdata.root_stack_base:
                     self.stack_current -= sizeofaddr
                     if self.stack_current.address[0] != llmemory.NULL:
@@ -446,13 +453,14 @@ class FrameworkGCTransformer(GCTransformer):
         log.info("additional %d potential static roots" % additional_ptrs)
         ll_static_roots_inside = lltype.malloc(lltype.Array(llmemory.Address),
                                                len(addresses_of_static_ptrs) +
-                                               additional_ptrs,
+                                               int(additional_ptrs),
                                                immortal=True)
         for i in range(len(addresses_of_static_ptrs)):
             ll_static_roots_inside[i] = addresses_of_static_ptrs[i]
         ll_instance.inst_static_root_start = llmemory.cast_ptr_to_adr(ll_static_roots_inside) + llmemory.ArrayItemsOffset(lltype.Array(llmemory.Address))
         ll_instance.inst_static_root_nongcstart = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(self.layoutbuilder.addresses_of_static_ptrs)
         ll_instance.inst_static_root_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * (len(ll_static_roots_inside) - additional_ptrs)
+        ll_instance.inst_static_root_real_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(ll_static_roots_inside)
 
         newgcdependencies = []
         newgcdependencies.append(self.gcdata.type_info_table)
