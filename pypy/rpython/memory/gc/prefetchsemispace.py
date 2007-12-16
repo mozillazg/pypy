@@ -8,6 +8,11 @@ def prefetch(addr):
     data into a cache before it is accessed.  You can insert calls to
     it into code for which you know addresses of data in memory that
     is likely to be accessed soon.
+
+    XXX requires gcc.
+    XXX You also need to tweak the Makefile to set
+                       CFLAGS = -O2 -pthread -march=pentium3m
+    XXX and recompile.
     """
 
 __builtin_prefetch = rffi.llexternal(
