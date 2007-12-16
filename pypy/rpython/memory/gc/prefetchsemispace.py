@@ -64,12 +64,13 @@ class PrefetchSemiSpaceGC(SemiSpaceGC):
             # fashion, so that we know that the queue is completely
             # empty as soon as we get a NULL)
             i = self.prefetch_queue_next
+            i = (i - 1) & self.prefetch_queue_mask
+            self.prefetch_queue_next = i
             pointer = self.prefetch_queue[i]
             if pointer == NULL:
                 break      # empty queue => done
             self.prefetch_queue[i] = NULL
             pointer.address[0] = self.copy(pointer.address[0])
-            self.prefetch_queue_next = (i - 1) & self.prefetch_queue_mask
         return scan
 
     def trace_and_copy_lazy(self, obj):
