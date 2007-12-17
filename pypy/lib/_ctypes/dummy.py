@@ -17,15 +17,6 @@ class _Pointer(object):
     __metaclass__ = PointerType
 
 
-class SimpleType(type):
-    def __mul__(self, other):
-        pass
-
-class _SimpleCData(object):
-    __metaclass__ = SimpleType
-    def from_param(self, *args, **kwargs):
-        pass
-
 class CFuncPtrType(type):
     pass
 
