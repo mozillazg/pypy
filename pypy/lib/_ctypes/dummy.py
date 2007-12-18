@@ -17,14 +17,6 @@ class _Pointer(object):
     __metaclass__ = PointerType
 
 
-class CFuncPtrType(type):
-    pass
-
-class CFuncPtr(object):
-    __metaclass__ = CFuncPtrType
-    def __init__(self, func):
-        pass
-
 class ArgumentError(Exception):
     pass
 
@@ -32,7 +24,6 @@ class ArgumentError(Exception):
 def dummyfunc(*args, **kwargs):
     return None
 
-dlopen = dummyfunc
 sizeof = dummyfunc
 byref = dummyfunc
 addressof = dummyfunc
