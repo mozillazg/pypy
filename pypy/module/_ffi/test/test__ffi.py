@@ -258,9 +258,7 @@ class AppTestFfi:
         raises(ValueError, "lib.ptr('get_char', ['x'], None)")
         raises(ValueError, "lib.ptr('get_char', [], 'x')")
         raises(ValueError, "_ffi.Structure(['x1', 'xx'])")
-        S = _ffi.Structure([('x1', 'i')])
-        S.fields[0] = ('x1', 'xx')
-        raises(ValueError, "S()")
+        raises(ValueError, _ffi.Structure, [('x1', 'xx')])
         raises(ValueError, "_ffi.Array('xx')")
         A = _ffi.Array('i')
         A.of = 'xx'
@@ -305,3 +303,14 @@ class AppTestFfi:
               _ffi.CallbackPtr(compare, ['i', 'i'], 'i'))
         res = [ll_to_sort[i] for i in range(len(to_sort))]
         assert res == sorted(to_sort)
+
+    def test_setattr_struct(self):
+        import _ffi
+        X = _ffi.Structure([('value1', 'i'), ('value2', 'i')])
+        x = X(value1=1, value2=2)
+        assert x.value1 == 1
+        assert x.value2 == 2
+        x.value1 = 3
+        assert x.value1 == 3
+        raises(AttributeError, "x.foo")
+        raises(AttributeError, "x.foo = 1")
