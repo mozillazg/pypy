@@ -608,7 +608,7 @@ class OpWriter(object):
                              "@llvm.frameaddress", ['i32'], ['0'])
 
     def llvm_gcmapstart(self, opr):
-        self.codewriter.load(opr.retref, opr.rettype, '@__gcmapstart')
+        self.codewriter.cast(opr.retref, 'i8*', '@__gcmapstart', opr.rettype)
 
     def llvm_gcmapend(self, opr):
-        self.codewriter.load(opr.retref, opr.rettype, '@__gcmapend')
+        self.codewriter.cast(opr.retref, 'i8*', '@__gcmapend', opr.rettype)
