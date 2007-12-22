@@ -409,8 +409,9 @@ LL_OPERATIONS = {
     'gc_x_become':          LLOp(canraise=(RuntimeError,), canunwindgc=True),
 
     # for llvm.gcroot() support.  can change at any time
-    'llvm_frameaddress':    LLOp(),
-    'llvm_gcmap_table':     LLOp(),
+    'llvm_frameaddress':    LLOp(sideeffects=False),
+    'llvm_gcmapstart':      LLOp(sideeffects=False),
+    'llvm_gcmapend':        LLOp(sideeffects=False),
     'llvm_store_gcroot':    LLOp(),
     'llvm_load_gcroot':     LLOp(),
 
