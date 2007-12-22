@@ -93,6 +93,8 @@ class CBuilder(object):
             name = self.config.translation.gctransformer
             if self.config.translation.stacklessgc:
                 name = "%s+stacklessgc" % (name,)
+            if self.config.translation.llvmgcroot:
+                name = "%s+llvmgcroot" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
 

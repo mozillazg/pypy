@@ -732,9 +732,7 @@ class FrameworkGCTransformer(GCTransformer):
     def pop_alive_nopyobj(self, var, llops):
         pass
 
-    def push_roots(self, hop, keep_current_args=False):
-        if self.incr_stack_ptr is None:
-            return
+    def get_livevars_for_roots(self, hop, keep_current_args=False):
         if self.gcdata.gc.moving_gc and not keep_current_args:
             # moving GCs don't borrow, so the caller does not need to keep
             # the arguments alive
@@ -743,6 +741,12 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             livevars = hop.livevars_after_op() + hop.current_op_keeps_alive()
             livevars = [var for var in livevars if not var_ispyobj(var)]
+        return livevars
+
+    def push_roots(self, hop, keep_current_args=False):
+        if self.incr_stack_ptr is None:
+            return
+        livevars = self.get_livevars_for_roots(hop, keep_current_args)
         self.num_pushs += len(livevars)
         if not livevars:
             return []

@@ -408,6 +408,12 @@ LL_OPERATIONS = {
     # stackless:
     'gc_x_become':          LLOp(canraise=(RuntimeError,), canunwindgc=True),
 
+    # for llvm.gcroot() support.  can change at any time
+    'llvm_frameaddress':    LLOp(),
+    'llvm_gcmap_table':     LLOp(),
+    'llvm_store_gcroot':    LLOp(),
+    'llvm_load_gcroot':     LLOp(),
+
     # NOTE NOTE NOTE! don't forget *** canunwindgc=True *** for anything that
     # can go through a stack unwind, in particular anything that mallocs!
 
