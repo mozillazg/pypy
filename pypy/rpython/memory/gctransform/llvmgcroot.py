@@ -6,6 +6,14 @@ from pypy.rpython.rbuiltin import gen_cast
 from pypy.rlib.debug import ll_assert
 
 
+#
+#  This implements a StackRootWalker based on the data produced by
+#  the llvm GC plug-in found over there:
+#
+#     http://codespeak.net/svn/user/arigo/hack/pypy-hack/stackrootwalker
+#
+
+
 class LLVMGcRootFrameworkGCTransformer(FrameworkGCTransformer):
     # XXX this is completely specific to the llvm backend at the moment.
 
