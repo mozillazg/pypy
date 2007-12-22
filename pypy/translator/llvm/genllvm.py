@@ -105,6 +105,7 @@ class GenLLVM(object):
                 node.writeimpl(codewriter)
 
         self._debug(codewriter)
+        self.write_gcroot_table(codewriter)
         
         codewriter.comment("End of file")
         codewriter.close()
@@ -276,3 +277,29 @@ class GenLLVM(object):
             print "Start"
             print self.db.dump_pbcs()
             print "End"
+
+    def write_gcroot_table(self, codewriter):
+        # Special support for llvm.gcroot
+        if self.config.translation.llvmgcroot:
+            from pypy.translator.llvm.funcnode import FuncImplNode
+            entries = []
+            for node in self.db.getnodes():
+                if isinstance(node, FuncImplNode):
+                    ref = node.ref
+                    assert ref.startswith('@')
+                    entries.append('@__gcmap_' + ref[1:])
+
+            codewriter.header_comment("The global gcmap table")
+            data = []
+            for entry in entries:
+                codewriter._append('%s = extern_weak constant i32' % entry)
+                data.append('i32* %s' % entry)
+            codewriter._append(
+                '@__gcmaptable1 = internal constant [%d x i32*] [ %s ]' %
+                (len(data), ", ".join(data)))
+            codewriter._append(
+                '@__gcmaptable = internal constant '
+                'i8* bitcast([%d x i32*]* @__gcmaptable1 to i8*)'
+                % len(data))
+            codewriter._append(
+                '@__gcmaptablelen = internal constant i32 %d' % len(data))
