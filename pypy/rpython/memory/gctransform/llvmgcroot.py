@@ -84,19 +84,16 @@ class LLVMGcRootFrameworkGCTransformer(FrameworkGCTransformer):
 
             def walk_to_parent_frame(self):
                 #
-                # XXX assumes a 32-bit machine for simplicity.
+                # The gcmap table is a list of pairs of pointers:
+                #     void *SafePointAddress;
+                #     void *Shape;
                 #
-                # The gcmap table is a list of pointers to gcmap_t
-                # structures, where the shape of each gcmap_t is:
-                #     struct {
-                #       int32_t FrameSize;
-                #       int32_t PointCount;
-                #       struct {
-                #         void *SafePointAddress;
-                #         int32_t LiveCount;
-                #         int32_t LiveOffsets[LiveCount];
-                #       } Points[PointCount];
-                #     } gcmap_t;
+                # A "safe point" is the return address of a call.
+                # The "shape" of a safe point records the size of the
+                # frame of the function containing it, as well as a
+                # list of the variables that contain gc roots at that
+                # time.  Each variable is described by its offset in
+                # the frame.
                 #
                 callee_frame = self.stack_current
                 #
@@ -126,35 +123,31 @@ class LLVMGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                 # XXX this is just a linear scan for now, that's
                 # incredibly bad.
                 #
-                gcmaptbl = llop.llvm_gcmap_table(llmemory.Address)
-                i = 0
-                while True:
-                    gcmap = gcmaptbl.address[i]
-                    if not gcmap:              # function not found
-                        return False           # => assume end of stack
-                    framesize = gcmap.signed[0]
-                    pointcount = gcmap.signed[1]
-                    gcmap += 8
-                    j = 0
-                    while j < pointcount:
-                        safepointaddr = gcmap.address[0]
-                        livecount = gcmap.signed[1]
-                        if safepointaddr == retaddr:
-                            #
-                            # found!  Setup pointers allowing us to
-                            # parse the caller's frame structure...
-                            #
-                            caller_frame = callee_frame + 4 + framesize
-                            self.stack_current = caller_frame
-                            self.frame_data_base = callee_frame + 8
-                            self.remaining_roots_in_current_frame = livecount
-                            self.liveoffsets = gcmap + 8
-                            return True
+                gcmapstart = llop.llvm_gcmapstart(llmemory.Address)
+                gcmapend   = llop.llvm_gcmapend(llmemory.Address)
+                while gcmapstart != gcmapend:
+                    if gcmapstart.address[0] == retaddr:
+                        #
+                        # found!  Setup pointers allowing us to
+                        # parse the caller's frame structure...
+                        #
+                        shape = gcmapstart.address[1]
+                        # XXX assumes that .signed is 32-bit
+                        framesize = shape.signed[0]
+                        livecount = shape.signed[1]
+                        caller_frame = callee_frame + 4 + framesize
+                        self.stack_current = caller_frame
+                        self.frame_data_base = callee_frame + 8
+                        self.remaining_roots_in_current_frame = livecount
+                        self.liveoffsets = shape + 8
+                        return True
 
-                        # not found
-                        gcmap += 8 + livecount * 4
-                        j += 1
-                    i += 1
+                    gcmapstart += 2 * sizeofaddr
+
+                # retaddr not found.  Assume that this is the system function
+                # that called the original entry point, i.e. it's the end of
+                # the stack for us
+                return False
 
             def next_gcroot_from_current_frame(self):
                 i = self.remaining_roots_in_current_frame - 1
