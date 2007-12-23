@@ -1,8 +1,8 @@
 from pypy.rlib import rope
 
 class RopeString(object):
-    def __init__ (self, str):
-        self._node = rope.LiteralStringNode(str)
+    def __init__ (self, s):
+        self._node = rope.LiteralStringNode(s)
     
     def __len__ (self):
         return self._node.length()
@@ -10,8 +10,8 @@ class RopeString(object):
     def __getitem__ (self, index):
         return self._node.getchar(index)
     
-    def __eq__ (self, str):
-        return rope.eq (self._node, rope.LiteralStringNode(str))
+    def __eq__ (self, other):
+        return rope.eq (self._node, rope.LiteralStringNode(other))
 
 class RopeUnicode(object):
     pass
