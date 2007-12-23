@@ -25,6 +25,9 @@ class RopeString(object):
     def __rmul__(self, n):
         return self * n
 
+    def __hash__(self):
+        return rope.hash_rope(self._node)
+
 class RopeUnicode(object):
     def __init__(self, s):
         if isinstance(s, str):
@@ -51,3 +54,6 @@ class RopeUnicode(object):
     
     def __rmul__(self, n):
         return self * n
+    
+    def __hash__(self):
+        return rope.hash_rope(self._node)
