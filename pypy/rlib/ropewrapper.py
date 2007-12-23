@@ -28,8 +28,11 @@ class RopeString(object):
 class RopeUnicode(object):
     def __init__(self, s):
         if isinstance(s, str):
-            s = unicode(s)
-        self._node = rope.LiteralUnicodeNode(unicode(s))
+            self._node = rope.LiteralUnicodeNode(unicode(s))
+        if isinstance(s, unicode):
+            self._node = rope.LiteralUnicodeNode(s)
+        if isinstance(s, rope.LiteralUnicodeNode):
+            self._node = s
     
     def __len__(self):
         return self._node.length()
