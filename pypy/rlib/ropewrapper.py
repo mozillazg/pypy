@@ -42,3 +42,7 @@ class RopeUnicode(object):
     
     def __eq__(self, other):
         return rope.eq(self._node, rope.LiteralUnicodeNode(other))
+    
+    def __add__(self, other):
+        return RopeUnicode(self._node + other._node)
+
