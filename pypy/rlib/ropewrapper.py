@@ -45,4 +45,9 @@ class RopeUnicode(object):
     
     def __add__(self, other):
         return RopeUnicode(self._node + other._node)
-
+   
+    def __mul__(self, n):
+        return RopeUnicode(rope.multiply(self._node, n))
+    
+    def __rmul__(self, n):
+        return self * n
