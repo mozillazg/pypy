@@ -27,4 +27,16 @@ class RopeString(object):
         return self * n
 
 class RopeUnicode(object):
-    pass
+    def __init__ (self, s):
+        if isinstance (s, str):
+            s = unicode(s)
+        self._node = rope.LiteralUnicodeNode(unicode(s))
+    
+    def __len__ (self):
+        return self._node.length()
+    
+    def __getitem__ (self, index):
+        return self._node.getunichar(index)
+    
+    def __eq__ (self, other):
+        return rope.eq (self._node, rope.LiteralUnicodeNode(other))
