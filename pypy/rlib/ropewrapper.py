@@ -14,8 +14,9 @@ class RopeString(object):
         return rope.eq (self._node, rope.LiteralStringNode(other))
     
     def __add__ (self, other):
-        self._node = self._node + other._node
-	return self 
+        result = RopeString('')
+        result._node = self._node + other._node
+	return result
 
 class RopeUnicode(object):
     pass
