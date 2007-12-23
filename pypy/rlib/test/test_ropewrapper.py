@@ -30,7 +30,6 @@ class AbstractTest(object):
                 assert s[i * 3 + 2] == self.const("c")
 
     def test_slice(self):
-        import pdb; pdb.set_trace()
         s = self.const("abcd") * 100 + self.const("efghi") * 100
         assert s[1::1] == self.const("bcd" + "abcd" * 99 + "efghi" * 100)
         assert s[1:-1:1] == self.const("bcd" + "abcd" * 99 +
