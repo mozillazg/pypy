@@ -12,6 +12,10 @@ class RopeString(object):
     
     def __eq__ (self, other):
         return rope.eq (self._node, rope.LiteralStringNode(other))
+    
+    def __add__ (self, other):
+        self._node = self._node + other._node
+	return self 
 
 class RopeUnicode(object):
     pass
