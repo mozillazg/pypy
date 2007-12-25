@@ -19,6 +19,9 @@ class RopeBaseString(object):
     def __ne__(self, other):
         return not self == other
     
+    def __mul__(self, n):
+        return self.__class__(rope.multiply(self._node, n))
+    
 class RopeStringIterator(object):
     def __init__(self, node):
         self._iter = rope.ItemIterator(node)
@@ -43,9 +46,6 @@ class RopeString(RopeBaseString):
     
     def __add__(self, other):
         return RopeString(self._node + other._node)
-    
-    def __mul__(self, n):
-        return RopeString(rope.multiply(self._node, n))
     
     def __eq__(self, other):
         if isinstance(other, RopeBaseString):
@@ -87,8 +87,5 @@ class RopeUnicode(RopeBaseString):
     def __add__(self, other):
         return RopeUnicode(self._node + other._node)
    
-    def __mul__(self, n):
-        return RopeUnicode(rope.multiply(self._node, n))
-    
     def __iter__(self):
         return RopeUnicodeIterator(self._node)
