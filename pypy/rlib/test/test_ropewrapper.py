@@ -69,4 +69,21 @@ class TestUnicode(AbstractTest):
 class TestPythonUnicode(AbstractTest):
     const = unicode
 
+class AbstractTestCoercion(object):
+    def test_add_coercion(self):
+        s1 = self.conststr("abc")
+        s2 = self.constunicode("def")
+        s = s1 + s2
+        assert isinstance(s, self.constunicode)
+        assert s == self.constunicode("abcdef")
+        s = s2 + s1
+        assert isinstance(s, self.constunicode)
+        assert s == self.constunicode("defabc")
 
+class TestPythonCoercion(AbstractTestCoercion):
+    conststr = str
+    constunicode = unicode
+
+class TestRopesCoercion(AbstractTestCoercion):
+    conststr = RopeString
+    constunicode = RopeUnicode
