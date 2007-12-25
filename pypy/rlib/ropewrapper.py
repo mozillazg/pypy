@@ -33,9 +33,10 @@ class RopeString(RopeBaseString):
     def __init__(self, s):
         if isinstance(s, str):
             self._node = rope.LiteralStringNode(s)
-	if isinstance(s, rope.LiteralStringNode):
+	elif isinstance(s, rope.LiteralStringNode):
             self._node = s
-        raise NotImplemtedError("don't know about %s" % (s, ))
+        else:
+            raise NotImplementedError("don't know about %s" % (s, ))
     
     def __getitem__(self, index):
         return self._node.getchar(index)
