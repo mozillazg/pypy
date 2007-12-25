@@ -1,3 +1,4 @@
+import py
 from pypy.rlib.ropewrapper import RopeUnicode, RopeString
 
 class AbstractTest(object):
@@ -70,6 +71,28 @@ class TestPythonUnicode(AbstractTest):
     const = unicode
 
 class AbstractTestCoercion(object):
+    def test_encode(self):
+        u = self.constunicode(u"\uffff")
+        s = u.encode("utf-8")
+        assert s == self.conststr("\xef\xbf\xbf")
+        s = u.encode("utf-16")
+        assert s == self.conststr('\xff\xfe\xff\xff')
+        py.test.raises(UnicodeEncodeError, u.encode, "latin-1")
+        py.test.raises(UnicodeEncodeError, u.encode, "ascii")
+
+    def test_decode(self):
+        s = self.conststr("abc")
+        u = s.decode("utf-8")
+        assert s == self.constunicode(u"abc")
+        u = s.decode("latin-1")
+        assert s == self.constunicode(u"abc")
+        u = s.decode("ascii")
+        assert s == self.constunicode(u"abc")
+        u = self.conststr("\xff")
+        s = u.decode("latin-1")
+        assert s == self.constunicode(u"\xff")
+        py.test.raises(UnicodeEncodeError, s.decode, "ascii")
+
     def test_add_coercion(self):
         s1 = self.conststr("abc")
         s2 = self.constunicode("def")
