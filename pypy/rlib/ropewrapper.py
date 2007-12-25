@@ -39,10 +39,8 @@ class RopeString(RopeBaseString):
     def __init__(self, s):
         if isinstance(s, str):
             self._node = rope.LiteralStringNode(s)
-	elif isinstance(s, rope.LiteralStringNode):
+	elif isinstance(s, rope.StringNode):
             self._node = s
-        else:
-            raise NotImplementedError("don't know about %s" % (s, ))
     
     def __getitem__(self, index):
         return self._node.getchar(index)
@@ -72,7 +70,7 @@ class RopeUnicode(RopeBaseString):
             self._node = rope.LiteralUnicodeNode(unicode(s))
         if isinstance(s, unicode):
             self._node = rope.LiteralUnicodeNode(s)
-        if isinstance(s, rope.LiteralUnicodeNode):
+        if isinstance(s, rope.StringNode):
             self._node = s
     
     def __getitem__(self, index):
