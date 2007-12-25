@@ -12,6 +12,13 @@ class RopeBaseString(object):
     
     def __hash__(self):
         return rope.hash_rope(self._node)
+    
+    def __eq__(self):
+        pass
+    
+    def __ne__(self, other):
+        return not self == other
+    
 
 class RopeString(RopeBaseString):
     def __init__(self, s):
@@ -30,7 +37,10 @@ class RopeString(RopeBaseString):
         return RopeString(rope.multiply(self._node, n))
     
     def __eq__(self, other):
-        return rope.eq(self._node, rope.LiteralStringNode(other))    
+        if isinstance(other, RopeBaseString):
+            return (rope.eq(self._node, other._node))
+        else:
+            return rope.eq(self._node, rope.LiteralStringNode(other))    
 
 class RopeUnicode(RopeBaseString):
     def __init__(self, s):
@@ -45,7 +55,10 @@ class RopeUnicode(RopeBaseString):
         return self._node.getunichar(index)
     
     def __eq__(self, other):
-        return rope.eq(self._node, rope.LiteralUnicodeNode(other))
+        if isinstance (other, RopeBaseString):
+            return rope.eq(self._node, other._node)
+        else:
+            return rope.eq(self._node, rope.LiteralUnicodeNode(other))
     
     def __add__(self, other):
         return RopeUnicode(self._node + other._node)
