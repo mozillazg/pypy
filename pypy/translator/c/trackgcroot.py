@@ -5,10 +5,12 @@ import re, sys, os
 r_functionstart = re.compile(r"\t.type\s+(\w+),\s*[@]function\s*$")
 r_functionend   = re.compile(r"\t.size\s+\w+,\s*[.]-\w+\s*$")
 r_label         = re.compile(r"([.]?\w+)[:]\s*$")
+r_globl         = re.compile(r"\t[.]globl\t(\w+)\s*$")
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
 r_jump          = re.compile(r"\tj\w+\s+([.]?\w+)\s*$")
-OPERAND         =            r"[\w$%-+]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)]"
+OPERAND         =            r"[-\w$%+.:@]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)]"
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
+r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 r_gcroot_marker = re.compile(r"\t/[*](STORE|LOAD) GCROOT ")
 r_gcroot_op     = re.compile(r"\t/[*](STORE|LOAD) GCROOT (\d*)[(]%esp[)][*]/\s*$")
@@ -28,17 +30,22 @@ class GcRootTracker(object):
         shapes = {}
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
+        print >> output, '\t.globl\t__gcmapstart'
         print >> output, '__gcmapstart:'
         for label, state in self.gcmaptable:
             if state not in shapes:
                 lst = ['__gcmap_shape']
-                lst.extend(map(str, state))
+                for n in state:
+                    if n < 0:
+                        n = 'minus%d' % (-n,)
+                    lst.append(str(n))
                 shapes[state] = '_'.join(lst)
             print >> output, '\t.long\t%s' % (label,)
             print >> output, '\t.long\t%s' % (shapes[state],)
+        print >> output, '\t.globl\t__gcmapend'
         print >> output, '__gcmapend:'
-        print >> output, '\t.section\trodata'
-        print >> output, '\t.align\t4'
+        #print >> output, '\t.section\trodata'
+        #print >> output, '\t.align\t4'
         keys = shapes.keys()
         keys.sort()
         for state in keys:
@@ -48,7 +55,7 @@ class GcRootTracker(object):
             for p in state[1:]:
                 print >> output, '\t.long\t%d' % (p,)         # gcroots
 
-    def process(self, iterlines, newfile):
+    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
         functionlines = None
         for line in iterlines:
             if r_functionstart.match(line):
@@ -62,17 +69,29 @@ class GcRootTracker(object):
             if r_functionend.match(line):
                 assert functionlines is not None, (
                     "missed the start of the current function")
-                self.process_function(functionlines, newfile)
+                self.process_function(functionlines, newfile, entrypoint,
+                                      filename)
                 functionlines = None
 
-    def process_function(self, lines, newfile):
+    def process_function(self, lines, newfile, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
         if self.verbose:
-            print >> sys.stderr, tracker.funcname
+            print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
+                                                          tracker.funcname)
         table = tracker.computegcmaptable()
-        if self.verbose:
+        #if self.verbose:
+        #    for label, state in table:
+        #        print >> sys.stderr, label, '\t', state
+        if tracker.funcname == entrypoint:
             for label, state in table:
-                print >> sys.stderr, label, '\t', state
+                assert len(state) == 1, (
+                    "XXX for now the entry point should not have any gc roots")
+            table = [(label, (-1,)) for label, _ in table]
+            # ^^^ we set the framesize of the entry point to -1 as a marker
+        else:
+            assert not tracker.uses_frame_pointer, (
+                "Function %r uses the frame pointer %ebp.  FIXME: implement it"
+                % (tracker.funcname,))
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
@@ -87,6 +106,7 @@ class FunctionGcRootTracker(object):
 
     def computegcmaptable(self):
         self.findlabels()
+        self.uses_frame_pointer = False
         self.calls = {}         # {label_after_call: state}
         self.ignore_calls = {}
         self.missing_labels_after_call = []
@@ -116,6 +136,7 @@ class FunctionGcRootTracker(object):
         self.missing_labels_after_call.reverse()
         for linenum, label in self.missing_labels_after_call:
             self.lines.insert(linenum, '%s:\n' % (label,))
+            self.lines.insert(linenum, '\t.globl\t%s\n' % (label,))
 
     def follow_control_flow(self):
         # 'states' is a list [(framesize, gcroot0, gcroot1, gcroot2...)]
@@ -212,8 +233,9 @@ class FunctionGcRootTracker(object):
     def visit_(self, line):
         # fallback for all operations.  By default, ignore the operation,
         # unless it appears to do something with %esp
-        if r_esp_outside_paren.match(line):
-            raise UnrecognizedOperation(line)
+        if not self.uses_frame_pointer:
+            if r_esp_outside_paren.match(line):
+                raise UnrecognizedOperation(line)
 
     def visit_push(self, line):
         raise UnrecognizedOperation(line)
@@ -247,6 +269,17 @@ class FunctionGcRootTracker(object):
             self.framesize -= count
             assert self.framesize >= 0, "stack underflow"
 
+    def visit_movl(self, line):
+        match = r_binaryinsn.match(line)
+        if match.group(1) == '%esp':
+            # only for movl %esp, %ebp
+            if match.group(2) != '%ebp':
+                raise UnrecognizedOperation(line)
+            assert self.framesize == 4      # only %ebp should have been pushed
+            self.uses_frame_pointer = True
+        elif match.group(2) == '%esp':
+            raise UnrecognizedOperation(line)
+
     def visit_ret(self, line):
         raise LeaveBasicBlock
 
@@ -279,21 +312,36 @@ class FunctionGcRootTracker(object):
     visit_jae = conditional_jump
     visit_jb = conditional_jump
     visit_jbe = conditional_jump
+    visit_jp = conditional_jump
+    visit_jnp = conditional_jump
+    visit_js = conditional_jump
+    visit_jns = conditional_jump
+    visit_jo = conditional_jump
+    visit_jno = conditional_jump
 
     def visit_call(self, line):
         match = r_unaryinsn.match(line)
-        target = match.group(1)
-        if target == "abort":
-            self.ignore_calls[self.currentlinenum] = None
-            raise LeaveBasicBlock
-        # we need a label just after the call.  Reuse one if it is already
-        # there (e.g. from a previous run of this script); otherwise
-        # invent a name and schedule the line insertion.
-        nextline = self.lines[self.currentlinenum+1]
-        match = r_label.match(nextline)
-        if match and not match.group(1).startswith('.'):
-            label = match.group(1)
+        if match is None:
+            assert r_unaryinsn_star.match(line)   # indirect call
         else:
+            target = match.group(1)
+            if target in FUNCTIONS_NOT_RETURNING:
+                self.ignore_calls[self.currentlinenum] = None
+                raise LeaveBasicBlock
+        # we need a globally-declared label just after the call.
+        # Reuse one if it is already there (e.g. from a previous run of this
+        # script); otherwise invent a name and schedule the line insertion.
+        label = None
+        # this checks for a ".globl NAME" followed by "NAME:"
+        match = r_globl.match(self.lines[self.currentlinenum+1])
+        if match:
+            label1 = match.group(1)
+            match = r_label.match(self.lines[self.currentlinenum+2])
+            if match:
+                label2 = match.group(1)
+                if label1 == label2:
+                    label = label2
+        if label is None:
             k = 0
             while 1:
                 label = '__gcmap_IN_%s_%d' % (self.funcname, k)
@@ -305,12 +353,29 @@ class FunctionGcRootTracker(object):
                 (self.currentlinenum+1, label))
         self.calls[self.currentlinenum] = label, self.getstate()
 
+    def visit_pypygetframeaddress(self, line):
+        # this is a pseudo-instruction that is emitted to find the first
+        # frame address on the stack.  We cannot just use
+        # __builtin_frame_address(0) - apparently, gcc thinks it can
+        # return %ebp even if -fomit-frame-pointer is specified, which
+        # doesn't work.
+        match = r_unaryinsn.match(line)
+        reg = match.group(1)
+        newline = '\tleal\t%d(%%esp), %s\t/* pypygetframeaddress */\n' % (
+            self.framesize-4, reg)
+        self.lines[self.currentlinenum] = newline
+
 
 class LeaveBasicBlock(Exception):
     pass
 
 class UnrecognizedOperation(Exception):
     pass
+
+FUNCTIONS_NOT_RETURNING = {
+    'abort': None,
+    '__assert_fail': None,
+    }
 
 
 if __name__ == '__main__':
@@ -319,7 +384,7 @@ if __name__ == '__main__':
         tmpfn = fn + '.TMP'
         f = open(fn, 'r')
         g = open(tmpfn, 'w')
-        tracker.process(f, g)
+        tracker.process(f, g, filename=fn)
         f.close()
         g.close()
         os.unlink(fn)
