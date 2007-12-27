@@ -52,7 +52,7 @@ class FuncImplNode(FuncNode):
             # really SSA.  Fix them now.
             for block in graph.iterblocks():
                 rename = {}
-                for op in list(block.operations):
+                for op in block.operations:
                     if rename:
                         op.args = [rename.get(v, v) for v in op.args]
                     if op.opname == 'gc_reload_possibly_moved':
