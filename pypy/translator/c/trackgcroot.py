@@ -106,14 +106,18 @@ class FunctionGcRootTracker(object):
         match = r_functionstart.match(lines[0])
         self.funcname = match.group(1)
         self.lines = lines
+        self.inconsistent_state = {}
 
     def computegcmaptable(self):
         self.findlabels()
-        self.uses_frame_pointer = False
-        self.calls = {}         # {label_after_call: state}
-        self.ignore_calls = {}
-        self.missing_labels_after_call = []
-        self.follow_control_flow()
+        try:
+            self.uses_frame_pointer = False
+            self.calls = {}         # {label_after_call: state}
+            self.ignore_calls = {}
+            self.missing_labels_after_call = []
+            self.follow_control_flow()
+        except ReflowCompletely:
+            return self.computegcmaptable()
         table = self.gettable()
         self.extend_calls_with_labels()
         return table
@@ -154,8 +158,11 @@ class FunctionGcRootTracker(object):
         self.check_all_calls_seen()
 
     def getstate(self):
-        gcroots = self.gcroots.keys()
-        gcroots.sort()
+        if self.gcroots is Bogus:
+            gcroots = ()
+        else:
+            gcroots = self.gcroots.keys()
+            gcroots.sort()
         return (self.framesize,) + tuple(gcroots)
 
     def propagate_state_to(self, lin):
@@ -163,13 +170,19 @@ class FunctionGcRootTracker(object):
         if self.states[lin] is None:
             self.states[lin] = state
             self.pending.append(lin)
-        else:
-            assert self.states[lin] == state
+        elif self.states[lin] != state:
+            if lin not in self.inconsistent_state:
+                self.inconsistent_state[lin] = (self.states[lin], state)
+                raise ReflowCompletely
 
     def follow_basic_block(self, lin):
         state = self.states[lin]
         self.framesize = state[0]
         self.gcroots = dict.fromkeys(state[1:])
+        if lin in self.inconsistent_state:  # in case of inconsistent gcroots,
+            self.framesize = Bogus          # assume that we're about to leave
+        if self.framesize is Bogus:         # the function or fail an assert
+            self.gcroots = Bogus
         line = '?'
         self.in_APP = False
         while 1:
@@ -204,6 +217,8 @@ class FunctionGcRootTracker(object):
                 if self.in_APP:  # ignore strange ops inside #APP/#NO_APP
                     lin += 1
                     continue
+                raise
+            except ReflowCompletely:
                 raise
             except Exception, e:
                 print >> sys.stderr, '*'*60
@@ -321,6 +336,9 @@ class FunctionGcRootTracker(object):
                     self.propagate_state_to(targetlin)
                 tablelin += 1
             raise LeaveBasicBlock
+        if r_unaryinsn_star.match(line):
+            # that looks like an indirect tail-call.
+            raise LeaveBasicBlock
         try:
             self.conditional_jump(line)
         except KeyError:
@@ -410,6 +428,13 @@ class LeaveBasicBlock(Exception):
 
 class UnrecognizedOperation(Exception):
     pass
+
+class ReflowCompletely(Exception):
+    pass
+
+class BogusObject(object):
+    pass
+Bogus = BogusObject()
 
 FUNCTIONS_NOT_RETURNING = {
     'abort': None,
