@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 
-import re, sys
+import re, sys, os
 
 r_functionstart = re.compile(r"\t.type\s+(\w+),\s*[@]function\s*$")
 r_functionend   = re.compile(r"\t.size\s+\w+,\s*[.]-\w+\s*$")
@@ -26,7 +26,7 @@ class GcRootTracker(object):
     def dump(self, output):
         pass
 
-    def process(self, iterlines):
+    def process(self, iterlines, newfile):
         functionlines = None
         for line in iterlines:
             if r_functionstart.match(line):
@@ -35,16 +35,19 @@ class GcRootTracker(object):
                 functionlines = []
             if functionlines is not None:
                 functionlines.append(line)
+            else:
+                newfile.write(line)
             if r_functionend.match(line):
                 assert functionlines is not None, (
                     "missed the start of the current function")
-                self.process_function(functionlines)
+                self.process_function(functionlines, newfile)
                 functionlines = None
 
-    def process_function(self, lines):
+    def process_function(self, lines, newfile):
         tracker = FunctionGcRootTracker(lines)
         print >> sys.stderr, tracker.funcname
         self.gcmaptable.extend(tracker.computegcmaptable())
+        newfile.writelines(tracker.lines)
 
 
 class FunctionGcRootTracker(object):
@@ -57,11 +60,14 @@ class FunctionGcRootTracker(object):
 
     def computegcmaptable(self):
         self.findlabels()
-        self.calls = {}
+        self.calls = {}         # {label_after_call: state}
+        self.missing_labels_after_call = []
         self.follow_control_flow()
-        print self.calls
+        for label, state in self.calls.values():
+            print >> sys.stderr, label, '\t', state
         self.table = []
         #xxx
+        self.extend_calls_with_labels()
         return self.table
 
     def findlabels(self):
@@ -72,6 +78,12 @@ class FunctionGcRootTracker(object):
                 label = match.group(1)
                 assert label not in self.labels, "duplicate label"
                 self.labels[label] = i
+
+    def extend_calls_with_labels(self):
+        self.missing_labels_after_call.sort()
+        self.missing_labels_after_call.reverse()
+        for linenum, label in self.missing_labels_after_call:
+            self.lines.insert(linenum, '%s:\n' % (label,))
 
     def follow_control_flow(self):
         # 'states' is a list [(framesize, gcroot0, gcroot1, gcroot2...)]
@@ -203,7 +215,10 @@ class FunctionGcRootTracker(object):
         try:
             self.conditional_jump(line)
         except KeyError:
-            pass     # label not found: assume a tail-call turned into a jump
+            # label not found: check if it's a tail-call turned into a jump
+            match = r_unaryinsn.match(line)
+            target = match.group(1)
+            assert not target.startswith('.')
         raise LeaveBasicBlock
 
     def conditional_jump(self, line):
@@ -228,7 +243,21 @@ class FunctionGcRootTracker(object):
         target = match.group(1)
         if target == "abort":
             raise LeaveBasicBlock
-        self.calls[self.currentlinenum] = self.getstate()
+        nextline = self.lines[self.currentlinenum+1]
+        match = r_label.match(nextline)
+        if match and not match.group(1).startswith('.'):
+            label = match.group(1)
+        else:
+            k = 0
+            while 1:
+                label = '__gcmap_IN_%s_%d' % (self.funcname, k)
+                if label not in self.labels:
+                    break
+                k += 1
+            self.labels[label] = self.currentlinenum+1
+            self.missing_labels_after_call.append(
+                (self.currentlinenum+1, label))
+        self.calls[self.currentlinenum] = label, self.getstate()
 
 
 class LeaveBasicBlock(Exception):
@@ -241,7 +270,12 @@ class UnrecognizedOperation(Exception):
 if __name__ == '__main__':
     tracker = GcRootTracker()
     for fn in sys.argv[1:]:
+        tmpfn = fn + '.TMP'
         f = open(fn, 'r')
-        tracker.process(f)
+        g = open(tmpfn, 'w')
+        tracker.process(f, g)
         f.close()
+        g.close()
+        os.unlink(fn)
+        os.rename(tmpfn, fn)
     tracker.dump(sys.stdout)
