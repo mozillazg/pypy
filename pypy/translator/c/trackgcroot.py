@@ -61,14 +61,20 @@ class FunctionGcRootTracker(object):
     def computegcmaptable(self):
         self.findlabels()
         self.calls = {}         # {label_after_call: state}
+        self.ignore_calls = {}
         self.missing_labels_after_call = []
         self.follow_control_flow()
-        for label, state in self.calls.values():
-            print >> sys.stderr, label, '\t', state
-        self.table = []
-        #xxx
+        table = self.gettable()
         self.extend_calls_with_labels()
-        return self.table
+        return table
+
+    def gettable(self):
+        table = self.calls.items()
+        table.sort()   # by line number
+        table = [value for key, value in table]
+        for label, state in table:
+            print >> sys.stderr, label, '\t', state
+        return table
 
     def findlabels(self):
         self.labels = {}
@@ -95,6 +101,7 @@ class FunctionGcRootTracker(object):
         while self.pending:
             lin = self.pending.pop()
             self.follow_basic_block(lin)
+        self.check_all_calls_seen()
 
     def getstate(self):
         gcroots = self.gcroots.keys()
@@ -140,6 +147,15 @@ class FunctionGcRootTracker(object):
                 e.__class__.__name__,)
             print >> sys.stderr, line
             raise
+
+    def check_all_calls_seen(self):
+        for i, line in enumerate(self.lines):
+            match = r_insn.match(line)
+            if match:
+                insn = match.group(1)
+                if insn == 'call':
+                    assert i in self.calls or i in self.ignore_calls, (
+                        "unreachable call!" + line)
 
     def handle_gcroot_marker(self, line):
         match = r_gcroot_op.match(line)
@@ -242,7 +258,11 @@ class FunctionGcRootTracker(object):
         match = r_unaryinsn.match(line)
         target = match.group(1)
         if target == "abort":
+            self.ignore_calls[self.currentlinenum] = None
             raise LeaveBasicBlock
+        # we need a label just after the call.  Reuse one if it is already
+        # there (e.g. from a previous run of this script); otherwise
+        # invent a name and schedule the line insertion.
         nextline = self.lines[self.currentlinenum+1]
         match = r_label.match(nextline)
         if match and not match.group(1).startswith('.'):
