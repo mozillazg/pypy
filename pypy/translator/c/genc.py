@@ -315,7 +315,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.linkerflags:
             compiler.link_extra.append(self.config.translation.linkerflags)
         cfiles = []
-        ofiles = []
+        sfiles = []
         for fn in compiler.cfilenames:
             fn = py.path.local(fn)
             if fn.dirpath() == targetdir:
@@ -324,7 +324,7 @@ class CStandaloneBuilder(CBuilder):
                 assert fn.dirpath().dirpath() == udir
                 name = '../' + fn.relto(udir)
             cfiles.append(name)
-            ofiles.append(name[:-2] + '.o')
+            sfiles.append(name[:-2] + '.s')
 
         if self.config.translation.cc:
             cc = self.config.translation.cc
@@ -342,7 +342,7 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         write_list(cfiles, 'SOURCES =')
         print >> f
-        write_list(ofiles, 'OBJECTS =')
+        write_list(sfiles, 'ASMFILES =')
         print >> f
         args = ['-l'+libname for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
@@ -773,14 +773,14 @@ setup(name="%(modulename)s",
 
 MAKEFILE = '''
 
-$(TARGET): $(OBJECTS)
-\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
+$(TARGET): $(ASMFILES)
+\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(ASMFILES) $(LIBDIRS) $(LIBS)
 
-%.o: %.c
-\t$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)
+%.s: %.c
+\t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
 
 clean:
-\trm -f $(OBJECTS) $(TARGET)
+\trm -f $(ASMFILES) $(TARGET)
 
 debug:
 \t$(MAKE) CFLAGS="-g -DRPY_ASSERT"
@@ -803,6 +803,6 @@ profile:
 profopt:
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)"
 \t./$(TARGET) $(PROFOPT)
-\trm -f $(OBJECTS) $(TARGET)
+\trm -f $(ASMFILES) $(TARGET)
 \t$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)"
 '''
