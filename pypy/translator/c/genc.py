@@ -1,6 +1,6 @@
 import autopath
 import py
-import sys
+import sys, os
 from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
@@ -275,6 +275,10 @@ class CStandaloneBuilder(CBuilder):
             self.eci, compiler_exe = cc, profbased = profbased)
 
     def compile(self):
+        if self.config.translation.llvmgcroot:
+            raise Exception("Dunno how to compile with --llvmgcroot. "
+                            "Just go to the %s directory and type 'make'."
+                            % (self.targetdir,))
         assert self.c_source_filename
         assert not self._compiled
         eci = self.eci.merge(ExternalCompilationInfo(includes=
@@ -343,6 +347,9 @@ class CStandaloneBuilder(CBuilder):
         write_list(cfiles, 'SOURCES =')
         print >> f
         write_list(sfiles, 'ASMFILES =')
+        print >> f
+        print >> f, 'TRACKGCROOT = "%s"' % (os.path.join(autopath.this_dir,
+                                                         'trackgcroot.py'),)
         print >> f
         args = ['-l'+libname for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
@@ -773,14 +780,17 @@ setup(name="%(modulename)s",
 
 MAKEFILE = '''
 
-$(TARGET): $(ASMFILES)
-\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(ASMFILES) $(LIBDIRS) $(LIBS)
+$(TARGET): $(ASMFILES) gcmaptable.s
+\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(ASMFILES) gcmaptable.s $(LIBDIRS) $(LIBS)
 
 %.s: %.c
 \t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
 
+gcmaptable.s: $(ASMFILES)
+\t$(TRACKGCROOT) $(ASMFILES) > $@ || (rm -f $@ && exit 1)
+
 clean:
-\trm -f $(ASMFILES) $(TARGET)
+\trm -f $(ASMFILES) gcmaptable.s $(TARGET)
 
 debug:
 \t$(MAKE) CFLAGS="-g -DRPY_ASSERT"
@@ -803,6 +813,6 @@ profile:
 profopt:
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)"
 \t./$(TARGET) $(PROFOPT)
-\trm -f $(ASMFILES) $(TARGET)
+\trm -f $(ASMFILES) gcmaptable.s $(TARGET)
 \t$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)"
 '''

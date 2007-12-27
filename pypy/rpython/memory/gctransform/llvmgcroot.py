@@ -69,6 +69,15 @@ class LLVMGcRootFrameworkGCTransformer(FrameworkGCTransformer):
             def __init__(self, with_static=True):
                 self.stack_current = llop.llvm_frameaddress(llmemory.Address)
                 self.remaining_roots_in_current_frame = 0
+                # We must walk at least a couple of frames up the stack
+                # *now*, i.e. before we leave __init__, otherwise
+                # self.stack_current ends up pointing to a dead frame.
+                # We can walk until we find a real GC root; then we're
+                # definitely out of the GC code itself.
+                while self.remaining_roots_in_current_frame == 0:
+                    if not self.walk_to_parent_frame():
+                        break     # not a single GC root? unlikely but not
+                                  # impossible I guess
                 if with_static:
                     self.static_current = gcdata.static_root_end
                 else:
