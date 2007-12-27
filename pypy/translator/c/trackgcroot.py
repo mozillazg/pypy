@@ -20,11 +20,33 @@ r_esp_outside_paren = re.compile(r"(.+[)])?[^(]*[%]esp")
 
 class GcRootTracker(object):
 
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.gcmaptable = []
+        self.verbose = verbose
 
     def dump(self, output):
-        pass
+        shapes = {}
+        print >> output, '\t.data'
+        print >> output, '\t.align\t4'
+        print >> output, '__gcmapstart:'
+        for label, state in self.gcmaptable:
+            if state not in shapes:
+                lst = ['__gcmap_shape']
+                lst.extend(map(str, state))
+                shapes[state] = '_'.join(lst)
+            print >> output, '\t.long\t%s' % (label,)
+            print >> output, '\t.long\t%s' % (shapes[state],)
+        print >> output, '__gcmapend:'
+        print >> output, '\t.section\trodata'
+        print >> output, '\t.align\t4'
+        keys = shapes.keys()
+        keys.sort()
+        for state in keys:
+            print >> output, '%s:' % (shapes[state],)
+            print >> output, '\t.long\t%d' % (state[0],)      # frame size
+            print >> output, '\t.long\t%d' % (len(state)-1,)  # gcroot count
+            for p in state[1:]:
+                print >> output, '\t.long\t%d' % (p,)         # gcroots
 
     def process(self, iterlines, newfile):
         functionlines = None
@@ -45,8 +67,13 @@ class GcRootTracker(object):
 
     def process_function(self, lines, newfile):
         tracker = FunctionGcRootTracker(lines)
-        print >> sys.stderr, tracker.funcname
-        self.gcmaptable.extend(tracker.computegcmaptable())
+        if self.verbose:
+            print >> sys.stderr, tracker.funcname
+        table = tracker.computegcmaptable()
+        if self.verbose:
+            for label, state in table:
+                print >> sys.stderr, label, '\t', state
+        self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
 
@@ -69,11 +96,10 @@ class FunctionGcRootTracker(object):
         return table
 
     def gettable(self):
+        "Returns a list [(label_after_call, (framesize, gcroot0, gcroot1,..))]"
         table = self.calls.items()
         table.sort()   # by line number
         table = [value for key, value in table]
-        for label, state in table:
-            print >> sys.stderr, label, '\t', state
         return table
 
     def findlabels(self):
@@ -288,7 +314,7 @@ class UnrecognizedOperation(Exception):
 
 
 if __name__ == '__main__':
-    tracker = GcRootTracker()
+    tracker = GcRootTracker(verbose=True)
     for fn in sys.argv[1:]:
         tmpfn = fn + '.TMP'
         f = open(fn, 'r')
