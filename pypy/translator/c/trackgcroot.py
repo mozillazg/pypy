@@ -11,6 +11,9 @@ r_jump          = re.compile(r"\tj\w+\s+([.]?\w+)\s*$")
 OPERAND         =            r"[-\w$%+.:@]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)]"
 r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
+r_jmp_switch    = re.compile(r"\tjmp\t[*]([.]?\w+)[(]")
+r_jmptable_item = re.compile(r"\t.long\t([.]?\w+)\s*$")
+r_jmptable_end  = re.compile(r"\t.text\s*$")
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 r_gcroot_marker = re.compile(r"\t/[*](STORE|LOAD) GCROOT ")
 r_gcroot_op     = re.compile(r"\t/[*](STORE|LOAD) GCROOT (\d*)[(]%esp[)][*]/\s*$")
@@ -44,8 +47,8 @@ class GcRootTracker(object):
             print >> output, '\t.long\t%s' % (shapes[state],)
         print >> output, '\t.globl\t__gcmapend'
         print >> output, '__gcmapend:'
-        #print >> output, '\t.section\trodata'
-        #print >> output, '\t.align\t4'
+        print >> output, '\t.section\t.rodata'
+        print >> output, '\t.align\t4'
         keys = shapes.keys()
         keys.sort()
         for state in keys:
@@ -168,8 +171,9 @@ class FunctionGcRootTracker(object):
         self.framesize = state[0]
         self.gcroots = dict.fromkeys(state[1:])
         line = '?'
-        try:
-            while 1:
+        self.in_APP = False
+        while 1:
+            try:
                 self.currentlinenum = lin
                 line = self.lines[lin]
                 match = r_insn.match(line)
@@ -181,19 +185,32 @@ class FunctionGcRootTracker(object):
                         meth = self.find_visitor(insn)
                     meth(self, line)
                 elif r_label.match(line):
-                    self.propagate_state_to(lin+1)
+                    if not self.in_APP:    # ignore labels inside #APP/#NO_APP
+                        self.propagate_state_to(lin+1)
                     break
                 elif r_gcroot_marker.match(line):
                     self.handle_gcroot_marker(line)
+                elif line == '#APP\n':
+                    self.in_APP = True
+                elif line == '#NO_APP\n':
+                    self.in_APP = False
                 lin += 1
-        except LeaveBasicBlock:
-            pass
-        except Exception, e:
-            print >> sys.stderr, '*'*60
-            print >> sys.stderr, "%s while processing line:" % (
-                e.__class__.__name__,)
-            print >> sys.stderr, line
-            raise
+            except LeaveBasicBlock:
+                if self.in_APP:  # ignore control flow inside #APP/#NO_APP
+                    lin += 1
+                    continue
+                break
+            except UnrecognizedOperation:
+                if self.in_APP:  # ignore strange ops inside #APP/#NO_APP
+                    lin += 1
+                    continue
+                raise
+            except Exception, e:
+                print >> sys.stderr, '*'*60
+                print >> sys.stderr, "%s while processing line:" % (
+                    e.__class__.__name__,)
+                print >> sys.stderr, line
+                raise
 
     def check_all_calls_seen(self):
         for i, line in enumerate(self.lines):
@@ -287,6 +304,23 @@ class FunctionGcRootTracker(object):
         raise UnrecognizedOperation(line)
 
     def visit_jmp(self, line):
+        if self.in_APP:
+            return       # ignore jumps inside a #APP/#NO_APP block
+        match = r_jmp_switch.match(line)
+        if match:
+            # this is a jmp *Label(%index), used for table-based switches.
+            # Assume that the table is just a list of lines looking like
+            # .long LABEL or .long 0, ending in a .text.
+            tablelabel = match.group(1)
+            tablelin = self.labels[tablelabel] + 1
+            while not r_jmptable_end.match(self.lines[tablelin]):
+                match = r_jmptable_item.match(self.lines[tablelin])
+                label = match.group(1)
+                if label != '0':
+                    targetlin = self.labels[label]
+                    self.propagate_state_to(targetlin)
+                tablelin += 1
+            raise LeaveBasicBlock
         try:
             self.conditional_jump(line)
         except KeyError:
@@ -297,6 +331,8 @@ class FunctionGcRootTracker(object):
         raise LeaveBasicBlock
 
     def conditional_jump(self, line):
+        if self.in_APP:
+            return       # ignore jumps inside a #APP/#NO_APP block
         match = r_jump.match(line)
         label = match.group(1)
         targetlin = self.labels[label]
@@ -320,6 +356,9 @@ class FunctionGcRootTracker(object):
     visit_jno = conditional_jump
 
     def visit_call(self, line):
+        if self.in_APP:
+            self.ignore_calls[self.currentlinenum] = None
+            return       # ignore calls inside a #APP/#NO_APP block
         match = r_unaryinsn.match(line)
         if match is None:
             assert r_unaryinsn_star.match(line)   # indirect call
