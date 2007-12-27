@@ -78,6 +78,8 @@ class GcRootTracker(object):
 
     def process_function(self, lines, newfile, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
+        if tracker.funcname == entrypoint:
+            tracker.can_use_frame_pointer = True
         if self.verbose:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
@@ -85,16 +87,15 @@ class GcRootTracker(object):
         #if self.verbose:
         #    for label, state in table:
         #        print >> sys.stderr, label, '\t', state
-        if tracker.funcname == entrypoint:
+        if tracker.can_use_frame_pointer:
+            # XXX for now we have no logic to track the gc roots of
+            # functions using %ebp
             for label, state in table:
                 assert len(state) == 1, (
                     "XXX for now the entry point should not have any gc roots")
+        if tracker.funcname == entrypoint:
             table = [(label, (-1,)) for label, _ in table]
             # ^^^ we set the framesize of the entry point to -1 as a marker
-        else:
-            assert not tracker.uses_frame_pointer, (
-                "Function %r uses the frame pointer %ebp.  FIXME: implement it"
-                % (tracker.funcname,))
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
@@ -107,11 +108,11 @@ class FunctionGcRootTracker(object):
         self.funcname = match.group(1)
         self.lines = lines
         self.inconsistent_state = {}
+        self.can_use_frame_pointer = False      # unless changed by caller
 
     def computegcmaptable(self):
         self.findlabels()
         try:
-            self.uses_frame_pointer = False
             self.calls = {}         # {label_after_call: state}
             self.ignore_calls = {}
             self.missing_labels_after_call = []
@@ -265,7 +266,7 @@ class FunctionGcRootTracker(object):
     def visit_(self, line):
         # fallback for all operations.  By default, ignore the operation,
         # unless it appears to do something with %esp
-        if not self.uses_frame_pointer:
+        if not self.can_use_frame_pointer:
             if r_esp_outside_paren.match(line):
                 raise UnrecognizedOperation(line)
 
@@ -307,8 +308,8 @@ class FunctionGcRootTracker(object):
             # only for movl %esp, %ebp
             if match.group(2) != '%ebp':
                 raise UnrecognizedOperation(line)
+            assert self.can_use_frame_pointer # only if we can have a frame ptr
             assert self.framesize == 4      # only %ebp should have been pushed
-            self.uses_frame_pointer = True
         elif match.group(2) == '%esp':
             raise UnrecognizedOperation(line)
 
