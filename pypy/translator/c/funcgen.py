@@ -218,6 +218,15 @@ class FunctionCodeGenerator(object):
     def cfunction_body(self):
         graph = self.graph
 
+        gcrootscount = 0
+        for block in graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'llvm_store_gcroot':
+                    index = op.args[0].value
+                    gcrootscount = max(gcrootscount, index+1)
+        for i in range(gcrootscount):
+            yield 'void* gcroot%d;' % i
+
         # generate the body of each block
         for block in graph.iterblocks():
             self.currentblock = block
@@ -722,5 +731,17 @@ class FunctionCodeGenerator(object):
             
     def OP_IS_EARLY_CONSTANT(self, op):
         return self.expr(op.result)  + ' = 0;' # Allways false
-    
+
+    def OP_LLVM_STORE_GCROOT(self, op):
+        index = op.args[0].value
+        value = self.expr(op.args[1])
+        return ('gcroot%d = %s; ' % (index, value) +
+            'asm volatile ("/*STORE GCROOT %%0*/"::"m"(gcroot%d));' % (index,))
+
+    def OP_LLVM_LOAD_GCROOT(self, op):
+        index = op.args[0].value
+        result = self.expr(op.result)
+        return ('%s = gcroot%d; ' % (result, index) +
+            'asm volatile ("/*LOAD GCROOT %%0*/"::"m"(gcroot%d));' % (index,))
+
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)
