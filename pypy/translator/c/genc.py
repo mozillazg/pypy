@@ -319,7 +319,7 @@ class CStandaloneBuilder(CBuilder):
         if self.config.translation.linkerflags:
             compiler.link_extra.append(self.config.translation.linkerflags)
         cfiles = []
-        sfiles = []
+        ofiles = []
         for fn in compiler.cfilenames:
             fn = py.path.local(fn)
             if fn.dirpath() == targetdir:
@@ -328,7 +328,10 @@ class CStandaloneBuilder(CBuilder):
                 assert fn.dirpath().dirpath() == udir
                 name = '../' + fn.relto(udir)
             cfiles.append(name)
-            sfiles.append(name[:-2] + '.s')
+            if self.config.translation.llvmgcroot:
+                ofiles.append(name[:-2] + '.s')
+            else:
+                ofiles.append(name[:-2] + '.o')
 
         if self.config.translation.cc:
             cc = self.config.translation.cc
@@ -346,10 +349,15 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         write_list(cfiles, 'SOURCES =')
         print >> f
-        write_list(sfiles, 'ASMFILES =')
+        if self.config.translation.llvmgcroot:
+            write_list(ofiles, 'ASMFILES =')
+            print >> f, 'OBJECTS = $(ASMFILES) gcmaptable.s'
+        else:
+            write_list(ofiles, 'OBJECTS =')
         print >> f
-        print >> f, 'TRACKGCROOT = "%s"' % (os.path.join(autopath.this_dir,
-                                                         'trackgcroot.py'),)
+        if self.config.translation.llvmgcroot:
+            print >> f, 'TRACKGCROOT="%s"' % (os.path.join(autopath.this_dir,
+                                                           'trackgcroot.py'),)
         print >> f
         args = ['-l'+libname for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
@@ -780,8 +788,11 @@ setup(name="%(modulename)s",
 
 MAKEFILE = '''
 
-$(TARGET): $(ASMFILES) gcmaptable.s
-\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(ASMFILES) gcmaptable.s $(LIBDIRS) $(LIBS)
+$(TARGET): $(OBJECTS)
+\t$(CC) $(LDFLAGS) $(TFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS)
+
+%.o: %.c
+\t$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)
 
 %.s: %.c
 \t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
@@ -790,7 +801,7 @@ gcmaptable.s: $(ASMFILES)
 \t$(TRACKGCROOT) $(ASMFILES) > $@ || (rm -f $@ && exit 1)
 
 clean:
-\trm -f $(ASMFILES) gcmaptable.s $(TARGET)
+\trm -f $(OBJECTS) $(TARGET)
 
 debug:
 \t$(MAKE) CFLAGS="-g -DRPY_ASSERT"
@@ -813,6 +824,6 @@ profile:
 profopt:
 \t$(MAKE) CFLAGS="-fprofile-generate $(CFLAGS)" LDFLAGS="-fprofile-generate $(LDFLAGS)"
 \t./$(TARGET) $(PROFOPT)
-\trm -f $(ASMFILES) gcmaptable.s $(TARGET)
+\trm -f $(OBJECTS) $(TARGET)
 \t$(MAKE) CFLAGS="-fprofile-use $(CFLAGS)" LDFLAGS="-fprofile-use $(LDFLAGS)"
 '''
