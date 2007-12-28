@@ -3,7 +3,7 @@
 import re, sys, os
 
 r_functionstart = re.compile(r"\t.type\s+(\w+),\s*[@]function\s*$")
-r_functionend   = re.compile(r"\t.size\s+\w+,\s*[.]-\w+\s*$")
+r_functionend   = re.compile(r"\t.size\s+(\w+),\s*[.]-(\w+)\s*$")
 r_label         = re.compile(r"([.]?\w+)[:]\s*$")
 r_globl         = re.compile(r"\t[.]globl\t(\w+)\s*$")
 r_insn          = re.compile(r"\t([a-z]\w*)\s")
@@ -106,6 +106,9 @@ class FunctionGcRootTracker(object):
     def __init__(self, lines):
         match = r_functionstart.match(lines[0])
         self.funcname = match.group(1)
+        match = r_functionend.match(lines[-1])
+        assert self.funcname == match.group(1)
+        assert self.funcname == match.group(2)
         self.lines = lines
         self.inconsistent_state = {}
         self.can_use_frame_pointer = False      # unless changed by caller
