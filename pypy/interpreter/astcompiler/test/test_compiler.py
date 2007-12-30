@@ -78,7 +78,8 @@ class TestCompiler:
 
     def test_binary_operator(self):
         for operator in ['+', '-', '*', '**', '/', '&', '|', '^', '//',
-                         '<<', '>>', 'and', 'or']:
+                         '<<', '>>', 'and', 'or', '<', '>', '<=', '>=',
+                         'is', 'is not']:
             expected = eval("17 %s 5" % operator)
             yield self.simple_test, "x = 17 %s 5" % operator, "x", expected
             expected = eval("0 %s 11" % operator)
@@ -114,28 +115,38 @@ class TestCompiler:
             class A(object):
                 def __getitem__(self, x):
                     global got
-                    got = x.start, x.stop, x.step
+                    got = x
                 def __setitem__(self, x, y):
                     global set
-                    set = x.start, x.stop, x.step
+                    set = x
                 def __delitem__(self, x):
                     global deleted
-                    deleted = x.start, x.stop, x.step
+                    deleted = x
             a = A()
         """)
         decl = str(decl) + '\n'
-        yield self.st, decl + "a[:]", "got", (None, None, None)
-        yield self.st, decl + "a[2:]", "got", (2, None, None)
-        yield self.st, decl + "a[:2]", "got", (None, 2, None)
-        yield self.st, decl + "a[4:7]", "got", (4, 7, None)
-        yield self.st, decl + "a[::]", "got", (None, None, None)
-        yield self.st, decl + "a[2::]", "got", (2, None, None)
-        yield self.st, decl + "a[:2:]", "got", (None, 2, None)
-        yield self.st, decl + "a[4:7:]", "got", (4, 7, None)
-        yield self.st, decl + "a[::3]", "got", (None, None, 3)
-        yield self.st, decl + "a[2::3]", "got", (2, None, 3)
-        yield self.st, decl + "a[:2:3]", "got", (None, 2, 3)
-        yield self.st, decl + "a[4:7:3]", "got", (4, 7, 3)
+        testcases = ['[:]',    '[:,9]',    '[8,:]',
+                     '[2:]',   '[2:,9]',   '[8,2:]',
+                     '[:2]',   '[:2,9]',   '[8,:2]',
+                     '[4:7]',  '[4:7,9]',  '[8,4:7]',
+                     '[::]',   '[::,9]',   '[8,::]',
+                     '[2::]',  '[2::,9]',  '[8,2::]',
+                     '[:2:]',  '[:2:,9]',  '[8,:2:]',
+                     '[4:7:]', '[4:7:,9]', '[8,4:7:]',
+                     '[::3]',  '[::3,9]',  '[8,::3]',
+                     '[2::3]', '[2::3,9]', '[8,2::3]',
+                     '[:2:3]', '[:2:3,9]', '[8,:2:3]',
+                     '[4:7:3]','[4:7:3,9]','[8,4:7:3]',
+                     ]
+        class Checker(object):
+            def __getitem__(self, x):
+                self.got = x
+        checker = Checker()
+        for testcase in testcases:
+            exec "checker" + testcase
+            yield self.st, decl + "a" + testcase, "got", checker.got
+            yield self.st, decl + "a" + testcase + ' = 5', "set", checker.got
+            yield self.st, decl + "del a" + testcase, "deleted", checker.got
 
     def test_funccalls(self):
         decl = py.code.Source("""
@@ -160,3 +171,87 @@ class TestCompiler:
                "l",
                [(2, 0), (4, 0), (5, 3), (6, 0),
                 (7, 3), (8, 0), (8, 6), (9, 3)])
+
+    def test_genexprs(self):
+        yield (self.st,
+               "l = list((j, i) for j in range(10) for i in range(j)"
+               + " if (i+j)%2 == 0 and i%3 == 0)",
+               "l",
+               [(2, 0), (4, 0), (5, 3), (6, 0),
+                (7, 3), (8, 0), (8, 6), (9, 3)])
+
+    def test_comparisons(self):
+        yield self.st, "x = 3 in {3: 5}", "x", True
+        yield self.st, "x = 3 not in {3: 5}", "x", False
+        yield self.st, "t = True; x = t is True", "x", True
+        yield self.st, "t = True; x = t is False", "x", False
+        yield self.st, "t = True; x = t is None", "x", False
+        yield self.st, "n = None; x = n is True", "x", False
+        yield self.st, "n = None; x = n is False", "x", False
+        yield self.st, "n = None; x = n is None", "x", True
+
+    def test_multiexpr(self):
+        yield self.st, "z = 2+3; x = y = z", "x,y,z", (5,5,5)
+
+    def test_imports(self):
+        import os
+        yield self.st, "import sys", "sys.__name__", "sys"
+        yield self.st, "import sys as y", "y.__name__", "sys"
+        yield (self.st, "import sys, os",
+               "sys.__name__, os.__name__", ("sys", "os"))
+        yield (self.st, "import sys as x, os.path as y",
+               "x.__name__, y.__name__", ("sys", os.path.__name__))
+        yield self.st, 'import os.path', "os.path.__name__", os.path.__name__
+        yield (self.st, 'import os.path, sys',
+               "os.path.__name__, sys.__name__", (os.path.__name__, "sys"))
+        yield (self.st, 'import sys, os.path as osp',
+               "osp.__name__, sys.__name__", (os.path.__name__, "sys"))
+        yield (self.st, 'import os.path as osp',
+               "osp.__name__", os.path.__name__)
+        yield (self.st, 'from os import path',
+               "path.__name__", os.path.__name__)
+        yield (self.st, 'from os import path, sep',
+               "path.__name__, sep", (os.path.__name__, os.sep))
+        yield (self.st, 'from os import path as p',
+               "p.__name__", os.path.__name__)
+        yield (self.st, 'from os import *',
+               "path.__name__, sep", (os.path.__name__, os.sep))
+
+    def test_if_stmts(self):
+        yield self.st, "a = 42\nif a > 10: a += 2", "a", 44
+        yield self.st, "a=5\nif 0: a=7", "a", 5
+        yield self.st, "a=5\nif 1: a=7", "a", 7
+        yield self.st, "a=5\nif a and not not (a<10): a=7", "a", 7
+        yield self.st, """
+            lst = []
+            for a in range(10):
+                if a < 3:
+                    a += 20
+                elif a > 3 and a < 8:
+                    a += 30
+                else:
+                    a += 40
+                lst.append(a)
+            """, "lst", [20, 21, 22, 43, 34, 35, 36, 37, 48, 49]
+
+    def test_docstrings(self):
+        for source, expected in [
+            ('''def foo(): return 1''',      None),
+            ('''class foo: pass''',          None),
+            ('''class foo: "foo"''',         "foo"),
+            ('''def foo():
+                    """foo docstring"""
+                    return 1
+             ''',                            "foo docstring"),
+            ('''def foo():
+                    """foo docstring"""
+                    a = 1
+                    """bar"""
+                    return a
+             ''',                            "foo docstring"),
+            ('''def foo():
+                    """doc"""; print 1
+                    a=1
+             ''',                            "doc"),
+            ]:
+            yield self.simple_test, source, "foo.__doc__", expected
