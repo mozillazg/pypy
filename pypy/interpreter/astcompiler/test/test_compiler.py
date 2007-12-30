@@ -1,5 +1,5 @@
 import py
-from pypy.interpreter.astcompiler import misc, pycodegen
+from pypy.interpreter.astcompiler import misc, pycodegen, opt
 from pypy.interpreter.pyparser.test.test_astbuilder import source2ast
 from pypy.interpreter.pyparser.test import expressions
 from pypy.interpreter.pycode import PyCode
@@ -7,6 +7,7 @@ from pypy.interpreter.pycode import PyCode
 def compile_with_astcompiler(expr, mode, space):
     ast = source2ast(expr, mode, space)
     misc.set_filename('<testing>', ast)
+    ast = opt.optimize_ast_tree(space, ast)
     if mode == 'exec':
         Generator = pycodegen.ModuleCodeGenerator
     elif mode == 'single':
