@@ -5429,15 +5429,17 @@ class TryExcept(Node):
 
             if expr1 is not None:
 
-                newhandlers.append(expr1.mutate(visitor))
+                expr1 = expr1.mutate(visitor)
 
             if expr2 is not None:
 
-                newhandlers.append(expr2.mutate(visitor))
+                expr2 = expr2.mutate(visitor)
 
             if body is not None:
 
-                newhandlers.append(body.mutate(visitor))
+                body = body.mutate(visitor)
+
+            newhandlers.append((expr1, expr2, body))
 
         self.handlers[:] = newhandlers
 
