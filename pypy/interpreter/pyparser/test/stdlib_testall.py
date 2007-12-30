@@ -1,3 +1,4 @@
+# XXX this code needs to be updated
 import autopath
 import py
 from test_astcompiler import compile_with_astcompiler
