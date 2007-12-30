@@ -32,6 +32,7 @@ class TestCompiler:
         source = str(py.code.Source(source))
         space = self.space
         code = compile_with_astcompiler(source, 'exec', space)
+        code.dump()
         w_dict = space.newdict()
         code.exec_code(space, w_dict, w_dict)
         return w_dict
@@ -233,6 +234,28 @@ class TestCompiler:
                     a += 40
                 lst.append(a)
             """, "lst", [20, 21, 22, 43, 34, 35, 36, 37, 48, 49]
+        yield self.st, """
+            lst = []
+            for a in range(10):
+                b = (a & 7) ^ 1
+                if a or 1 or b: lst.append('A')
+                if a or 0 or b: lst.append('B')
+                if a and 1 and b: lst.append('C')
+                if a and 0 and b: lst.append('D')
+                if not (a or 1 or b): lst.append('-A')
+                if not (a or 0 or b): lst.append('-B')
+                if not (a and 1 and b): lst.append('-C')
+                if not (a and 0 and b): lst.append('-D')
+                if (not a) or (not 1) or (not b): lst.append('A')
+                if (not a) or (not 0) or (not b): lst.append('B')
+                if (not a) and (not 1) and (not b): lst.append('C')
+                if (not a) and (not 0) and (not b): lst.append('D')
+            """, "lst", ['A', 'B', '-C', '-D', 'A', 'B', 'A', 'B', '-C',
+                         '-D', 'A', 'B', 'A', 'B', 'C', '-D', 'B', 'A', 'B',
+                         'C', '-D', 'B', 'A', 'B', 'C', '-D', 'B', 'A', 'B',
+                         'C', '-D', 'B', 'A', 'B', 'C', '-D', 'B', 'A', 'B',
+                         'C', '-D', 'B', 'A', 'B', 'C', '-D', 'B', 'A', 'B',
+                         '-C', '-D', 'A', 'B']
 
     def test_docstrings(self):
         for source, expected in [
