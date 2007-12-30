@@ -4,7 +4,7 @@ PyCode instances have the same co_xxx arguments as CPython code objects.
 The bytecode interpreter itself is implemented by the PyFrame class.
 """
 
-import dis, imp, struct, types
+import dis, imp, struct, types, new
 
 from pypy.interpreter import eval
 from pypy.interpreter.error import OperationError
@@ -239,6 +239,34 @@ class PyCode(eval.Code):
         (for FlowObjSpace)"""
         # first approximation
         return dis.findlabels(self.co_code)
+
+    def _to_code(self):
+        """For debugging only."""
+        consts = []
+        for w in self.co_consts_w:
+            if isinstance(w, PyCode):
+                consts.append(w._to_code())
+            else:
+                consts.append(self.space.unwrap(w))
+        return new.code( self.co_argcount,
+                         self.co_nlocals,
+                         self.co_stacksize,
+                         self.co_flags,
+                         self.co_code,
+                         tuple(consts),
+                         tuple(self.co_names),
+                         tuple(self.co_varnames),
+                         self.co_filename,
+                         self.co_name,
+                         self.co_firstlineno,
+                         self.co_lnotab,
+                         tuple(self.co_freevars),
+                         tuple(self.co_cellvars) )
+
+    def dump(self):
+        """A dis.dis() dump of the code object."""
+        co = self._to_code()
+        dis.dis(co)
 
     def fget_co_consts(space, self):
         return space.newtuple(self.co_consts_w)

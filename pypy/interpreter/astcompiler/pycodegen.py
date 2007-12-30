@@ -13,6 +13,8 @@ from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
     CO_NEWLOCALS, CO_NESTED, CO_GENERATOR, CO_GENERATOR_ALLOWED, \
     CO_FUTURE_DIVISION, CO_FUTURE_WITH_STATEMENT
 from pypy.interpreter.pyparser.error import SyntaxError
+from pypy.interpreter.astcompiler.opt import is_constant_false
+from pypy.interpreter.astcompiler.opt import is_constant_true
 
 # drop VERSION dependency since it the ast transformer for 2.4 doesn't work with 2.3 anyway
 VERSION = 2
@@ -122,18 +124,6 @@ class Module(AbstractCompileMode):
         mtime = os.path.getmtime(self.filename)
         mtime = struct.pack('<i', mtime)
         return self.MAGIC + mtime
-
-def is_constant_false(space, node):
-    if isinstance(node, ast.Const):
-        if not space.is_true(node.value):
-            return 1
-    return 0
-
-def is_constant_true(space, node):
-    if isinstance(node, ast.Const):
-        if space.is_true(node.value):
-            return 1
-    return 0
 
 class CodeGenerator(ast.ASTVisitor):
     """Defines basic code generator for Python bytecode
@@ -389,13 +379,18 @@ class CodeGenerator(ast.ASTVisitor):
     def visitIf(self, node):
         end = self.newBlock()
         for test, suite in node.tests:
+            if is_constant_true(self.space, test):
+                # "if 1:"
+                suite.accept( self )
+                self.nextBlock(end)
+                return
             if is_constant_false(self.space, test):
-                # XXX will need to check generator stuff here
+                # "if 0:" XXX will need to check generator stuff here
                 continue
+            # normal case
             self.set_lineno(test)
-            test.accept( self )
             nextTest = self.newBlock()
-            self.emitop_block('JUMP_IF_FALSE', nextTest)
+            test.opt_accept_jump_if(self, False, nextTest)
             self.nextBlock()
             self.emit('POP_TOP')
             suite.accept( self )
@@ -408,6 +403,11 @@ class CodeGenerator(ast.ASTVisitor):
 
     def visitWhile(self, node):
         self.set_lineno(node)
+        if is_constant_false(self.space, node.test):
+            # "while 0:"
+            if node.else_:
+                node.else_.accept( self )
+            return
 
         loop = self.newBlock()
         else_ = self.newBlock()
@@ -420,11 +420,10 @@ class CodeGenerator(ast.ASTVisitor):
 
         self.set_lineno(node, force=True)
         if is_constant_true(self.space, node.test):
+            # "while 1:"
             self.nextBlock()
         else:
-            node.test.accept( self )
-            self.emitop_block('JUMP_IF_FALSE', else_ or after)
-
+            node.test.opt_accept_jump_if(self, False, else_)
             self.nextBlock()
             self.emit('POP_TOP')
         node.body.accept( self )
@@ -514,13 +513,10 @@ class CodeGenerator(ast.ASTVisitor):
         self._visitTest(node, 'JUMP_IF_TRUE')
 
     def visitCondExpr(self, node):
-        node.test.accept(self)
-
         end = self.newBlock()
         falseblock = self.newBlock()
 
-        self.emitop_block('JUMP_IF_FALSE', falseblock)
-
+        node.test.opt_accept_jump_if(self, False, falseblock)
         self.emit('POP_TOP')
         node.true_expr.accept(self)
         self.emitop_block('JUMP_FORWARD', end)
@@ -665,9 +661,7 @@ class CodeGenerator(ast.ASTVisitor):
     def visitListCompIf(self, node):
         branch = self.genexpr_cont_stack[-1]
         self.set_lineno(node, force=True)
-        node.test.accept( self )
-        self.emitop_block('JUMP_IF_FALSE', branch)
-        self.newBlock()
+        node.test.opt_accept_jump_if(self, False, branch)
         self.emit('POP_TOP')
 
     def visitGenExpr(self, node):
@@ -746,9 +740,7 @@ class CodeGenerator(ast.ASTVisitor):
     def visitGenExprIf(self, node ):
         branch = self.genexpr_cont_stack[-1]
         self.set_lineno(node, force=True)
-        node.test.accept( self )
-        self.emitop_block('JUMP_IF_FALSE', branch)
-        self.newBlock()
+        node.test.opt_accept_jump_if(self, False, branch)
         self.emit('POP_TOP')
 
     # exception related
@@ -763,8 +755,7 @@ class CodeGenerator(ast.ASTVisitor):
             # loaded as a global even if there is a local name.  I guess this
             # is a sort of renaming op.
             self.nextBlock()
-            node.test.accept( self )
-            self.emitop_block('JUMP_IF_TRUE', end)
+            node.test.opt_accept_jump_if(self, True, end)
             self.nextBlock()
             self.emit('POP_TOP')
             self.emitop('LOAD_GLOBAL', 'AssertionError')
