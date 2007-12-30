@@ -4,7 +4,6 @@ import marshal
 import struct
 import sys
 
-#from pypy.interpreter.astcompiler import ast, parse, walk, syntax
 from pypy.interpreter.astcompiler import ast
 from pypy.interpreter.astcompiler import pyassem, misc, future, symbols
 from pypy.interpreter.astcompiler.consts import SC_LOCAL, SC_GLOBAL, \
@@ -74,7 +73,7 @@ class AbstractCompileMode:
     def _get_tree(self):
         tree = parse(self.source, self.mode)
         misc.set_filename(self.filename, tree)
-        syntax.check(tree)
+        #syntax.check(tree)
         return tree
 
     def compile(self):
