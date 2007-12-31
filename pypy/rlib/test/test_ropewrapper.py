@@ -103,6 +103,11 @@ class AbstractTestCoercion(object):
         assert isinstance(s, self.constunicode)
         assert s == self.constunicode("defabc")
 
+    def test_add_coercion_decodes(self):
+        s1 = self.conststr("\xff")
+        s2 = self.constunicode("a")
+        py.test.raises(UnicodeDecodeError, "s1 + s2")
+
 class TestPythonCoercion(AbstractTestCoercion):
     conststr = str
     constunicode = unicode
