@@ -32,18 +32,10 @@ class RopeBaseString(object):
         if isinstance(index, int):
             return self.getchar(index)
         if isinstance(index, slice):
-            start, stop, step = index.start, index.stop, index.step
-            start = start or 0
-            stop = (stop and (stop < 0 and len(self) + stop or stop)) or len(self)
-            step = step or 1
+            start, stop, step = index.indices(self._node.length())
             return self.__class__(rope.getslice(self._node, start, stop, step))
-    
-    def getchar(self,index):
-        if isinstance(self, RopeString):
-            return self._node.getchar(index)
-        if isinstance(self, RopeUnicode):
-            return self._node.getunichar(index)
         raise NotImplementedError("Index type not known.")
+    
         
 class RopeStringIterator(object):
     def __init__(self, node):
@@ -80,6 +72,9 @@ class RopeString(RopeBaseString):
         if codepage == "ascii":
             #Need rewrite
             return RopeUnicode(rope.str_decode_ascii(self._node))
+
+    def getchar(self,index):
+        return self._node.getchar(index)
 
 class RopeUnicodeIterator(object):
     def __init__(self, node):
@@ -126,3 +121,6 @@ class RopeUnicode(RopeBaseString):
                 return RopeString(result)
             else:
                 raise NotImplementedError("Do i need implement such ascii encoding?")
+
+    def getchar(self,index):
+        return self._node.getunichar(index)
