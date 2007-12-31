@@ -80,18 +80,38 @@ class AbstractTestCoercion(object):
         py.test.raises(UnicodeEncodeError, u.encode, "latin-1")
         py.test.raises(UnicodeEncodeError, u.encode, "ascii")
 
+    def test_encode_errors(self):
+        u = self.constunicode(u"b\uffffa\xff")
+        s = u.encode("latin-1", "replace")
+        assert s == self.conststr('b?a\xff')
+        s = u.encode("latin-1", "ignore")
+        assert s == self.conststr('ba\xff')
+        s = u.encode("ascii", "replace")
+        assert s == self.conststr('b?a?')
+        s = u.encode("ascii", "ignore")
+        assert s == self.conststr('ba')
+
     def test_decode(self):
-        s = self.conststr("abc")
-        u = s.decode("utf-8")
-        assert s == self.constunicode(u"abc")
-        u = s.decode("latin-1")
-        assert s == self.constunicode(u"abc")
-        u = s.decode("ascii")
-        assert s == self.constunicode(u"abc")
-        u = self.conststr("\xff")
+        u = self.conststr("abc")
+        s = u.decode("utf-8")
+        assert u == self.constunicode(u"abc")
         s = u.decode("latin-1")
-        assert s == self.constunicode(u"\xff")
-        py.test.raises(UnicodeEncodeError, s.decode, "ascii")
+        assert u == self.constunicode(u"abc")
+        s = u.decode("ascii")
+        assert u == self.constunicode(u"abc")
+        s = self.conststr("\xff")
+        u = s.decode("latin-1")
+        assert u == self.constunicode(u"\xff")
+        py.test.raises(UnicodeDecodeError, u.decode, "ascii")
+
+    def test_decode_errors(self):
+        s = self.conststr("a\xffb")
+        u = s.decode("ascii", "replace")
+        assert u == self.constunicode(u"a\ufffdb")
+        u = s.decode("ascii", "ignore")
+        assert u == self.constunicode(u"ab")
+
+
 
     def test_add_coercion(self):
         s1 = self.conststr("abc")
