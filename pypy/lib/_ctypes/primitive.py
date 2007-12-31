@@ -1,48 +1,16 @@
+import _ffi
+
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
-# type converters
-def convert_intlike(val):
-    if not isinstance(val, (int, long)):
-        raise TypeError("int expected, got %s" % (type(val), ))
-    return val
-
-def convert_floatlike(val):
-    if not isinstance(val, (float, int, long)):
-        raise TypeError("float expected, got %s" % (type(val), ))
-    return float(val)
-
-def convert_char(val):
-    if not isinstance(val, str) or not len(val) == 1:
-        raise TypeError("one character string expected")
-    return val
-
-def convert_nothing(val):
-    return val
-
-
-TP_TO_CONVERTER = {
-        'c': convert_char,
-        'b': convert_intlike,
-        'B': convert_intlike,
-        'h': convert_intlike,
-        'H': convert_intlike,
-        'i': convert_intlike,
-        'I': convert_intlike,
-        'l': convert_intlike,
-        'L': convert_intlike,
-        'q': convert_intlike,
-        'Q': convert_intlike,
-        'f': convert_floatlike,
-        'd': convert_floatlike,
-        'P': convert_nothing, #XXX
-        # not part of struct
-        'O': convert_nothing,
-        'z': convert_nothing, #XXX
-}
- 
 
 class NULL(object):
     pass
 NULL = NULL()
+
+TP_TO_FFITP = {
+        'O': 'P',
+        'z': 's',
+}
+
 
 TP_TO_DEFAULT = {
         'c': '\x00',
@@ -74,14 +42,15 @@ class SimpleType(type):
             tp not in SIMPLE_TYPE_CHARS):
             raise ValueError('%s is not a type character' % (tp))
         default = TP_TO_DEFAULT[tp]
-        converter = TP_TO_CONVERTER[tp]
+        ffitp = TP_TO_FFITP.get(tp, tp)
+        ffistruct = _ffi.Structure([("value", ffitp)])
         def __init__(self, value=DEFAULT_VALUE):
-            self._value = default
+            self._struct = ffistruct()
             if value is not DEFAULT_VALUE:
-                self.value = value
+                self._struct.value = value
         dct['__init__'] = __init__
-        dct['_converter'] = staticmethod(TP_TO_CONVERTER[tp])
         result = type.__new__(self, name, bases, dct)
+        result._ffistruct = ffistruct
         return result
 
     def __mul__(self, other):
@@ -90,16 +59,17 @@ class SimpleType(type):
 class _SimpleCData(object):
     __metaclass__ = SimpleType
     _type_ = 'i'
-    def from_param(self, *args, **kwargs):
+    def from_param(cls, *args, **kwargs):
         pass
+    from_param = classmethod(from_param)
 
     def _getvalue(self):
-        return self._value
+        return self._struct.value
 
     def _setvalue(self, val):
-        self._value = self._converter(val)
+        self._struct.value = value
+    value = property(_getvalue, _setvalue)
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)
-    value = property(_getvalue, _setvalue)
 
