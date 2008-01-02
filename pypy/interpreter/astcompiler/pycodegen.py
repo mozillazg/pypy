@@ -604,13 +604,11 @@ class CodeGenerator(ast.ASTVisitor):
     def visitListComp(self, node):
         self.set_lineno(node)
         # setup list
-        append = "$append%d" % self.__list_count
+        tmpname = "$list%d" % self.__list_count
         self.__list_count = self.__list_count + 1
         self.emitop_int('BUILD_LIST', 0)
         self.emit('DUP_TOP')
-        self.emitop('LOAD_ATTR', 'append')
-        self._implicitNameOp('STORE', append)
-
+        self._implicitNameOp('STORE', tmpname)
 
         stack = []
         i = 0
@@ -626,10 +624,9 @@ class CodeGenerator(ast.ASTVisitor):
             self.genexpr_cont_stack.pop()
             i += 1
 
-        self._implicitNameOp('LOAD', append)
+        self._implicitNameOp('LOAD', tmpname)
         node.expr.accept( self )
-        self.emitop_int('CALL_FUNCTION', 1)
-        self.emit('POP_TOP')
+        self.emit('LIST_APPEND')
 
         for start, cont, anchor in stack:
             if cont:
@@ -640,7 +637,7 @@ class CodeGenerator(ast.ASTVisitor):
                 self.nextBlock(skip_one)
             self.emitop_block('JUMP_ABSOLUTE', start)
             self.startBlock(anchor)
-        self._implicitNameOp('DELETE', append)
+        self._implicitNameOp('DELETE', tmpname)
 
         self.__list_count = self.__list_count - 1
 
