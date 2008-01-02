@@ -95,6 +95,8 @@ class CBuilder(object):
                 name = "%s+stacklessgc" % (name,)
             if self.config.translation.llvmgcroot:
                 name = "%s+llvmgcroot" % (name,)
+            if self.config.translation.asmgcroot:
+                name = "%s+asmgcroot" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
 
@@ -275,8 +277,8 @@ class CStandaloneBuilder(CBuilder):
             self.eci, compiler_exe = cc, profbased = profbased)
 
     def compile(self):
-        if self.config.translation.llvmgcroot:
-            raise Exception("Dunno how to compile with --llvmgcroot. "
+        if self.config.translation.asmgcroot:
+            raise Exception("Dunno how to compile with --asmgcroot. "
                             "Just go to the %s directory and type 'make'."
                             % (self.targetdir,))
         assert self.c_source_filename
@@ -318,6 +320,7 @@ class CStandaloneBuilder(CBuilder):
             compiler.compile_extra.append(self.config.translation.compilerflags)
         if self.config.translation.linkerflags:
             compiler.link_extra.append(self.config.translation.linkerflags)
+        assert not self.config.translation.llvmgcroot
         cfiles = []
         ofiles = []
         for fn in compiler.cfilenames:
@@ -328,7 +331,7 @@ class CStandaloneBuilder(CBuilder):
                 assert fn.dirpath().dirpath() == udir
                 name = '../' + fn.relto(udir)
             cfiles.append(name)
-            if self.config.translation.llvmgcroot:
+            if self.config.translation.asmgcroot:
                 ofiles.append(name[:-2] + '.s')
             else:
                 ofiles.append(name[:-2] + '.o')
@@ -349,13 +352,13 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         write_list(cfiles, 'SOURCES =')
         print >> f
-        if self.config.translation.llvmgcroot:
+        if self.config.translation.asmgcroot:
             write_list(ofiles, 'ASMFILES =')
             print >> f, 'OBJECTS = $(ASMFILES) gcmaptable.s'
         else:
             write_list(ofiles, 'OBJECTS =')
         print >> f
-        if self.config.translation.llvmgcroot:
+        if self.config.translation.asmgcroot:
             print >> f, 'TRACKGCROOT="%s"' % (os.path.join(autopath.this_dir,
                                                            'trackgcroot.py'),)
         print >> f
