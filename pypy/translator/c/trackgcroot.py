@@ -96,6 +96,8 @@ class GcRootTracker(object):
         if tracker.funcname == entrypoint:
             table = [(label, (-1,)) for label, _ in table]
             # ^^^ we set the framesize of the entry point to -1 as a marker
+            # (the code in llvmgcroot.py actually takes any odd-valued number
+            # as marker.)
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
@@ -442,6 +444,7 @@ Bogus = BogusObject()
 
 FUNCTIONS_NOT_RETURNING = {
     'abort': None,
+    '_exit': None,
     '__assert_fail': None,
     }
 
