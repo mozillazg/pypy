@@ -104,12 +104,19 @@ else:
             return self._visitUnaryOp(node, _spacewrapper1('repr'))
         def visitInvert(self, node):
             return self._visitUnaryOp(node, _spacewrapper1('invert'))
-        def visitNot(self, node):
-            return self._visitUnaryOp(node, _spacewrapper1('not_'))
         def visitUnaryAdd(self, node):
             return self._visitUnaryOp(node, _spacewrapper1('pos'))
         def visitUnarySub(self, node):
             return self._visitUnaryOp(node, _spacewrapper1('neg'))
+        def visitNot(self, node):
+            expr = node.expr
+            if isinstance(expr, ast.Compare) and len(expr.ops) == 1:
+                op, subnode = expr.ops[0]
+                if op in opposite_cmp_op:
+                    # not (x in y) ===> x not in y   (resp: not in, is, etc.)
+                    expr.ops[0] = opposite_cmp_op[op], subnode
+                    return expr
+            return self._visitUnaryOp(node, _spacewrapper1('not_'))
 
         def _visitBinaryOp(self, node, constant_fold):
             left = node.left
@@ -273,6 +280,13 @@ else:
         dst.lineno = src.lineno
         dst.filename = src.filename
         dst.parent = src.parent
+
+    opposite_cmp_op = {
+        'in'     : 'not in',
+        'not in' : 'in',
+        'is'     : 'is not',
+        'is not' : 'is',
+        }
 
 
     def optimize_ast_tree(space, tree):

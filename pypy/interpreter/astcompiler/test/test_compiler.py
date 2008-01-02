@@ -218,6 +218,27 @@ class TestCompiler:
         yield self.st, "n = None; x = n is True", "x", False
         yield self.st, "n = None; x = n is False", "x", False
         yield self.st, "n = None; x = n is None", "x", True
+        yield self.st, "t = True; x = t is not True", "x", False
+        yield self.st, "t = True; x = t is not False", "x", True
+        yield self.st, "t = True; x = t is not None", "x", True
+        yield self.st, "n = None; x = n is not True", "x", True
+        yield self.st, "n = None; x = n is not False", "x", True
+        yield self.st, "n = None; x = n is not None", "x", False
+
+        yield self.st, "x = not (3 in {3: 5})", "x", False
+        yield self.st, "x = not (3 not in {3: 5})", "x", True
+        yield self.st, "t = True; x = not (t is True)", "x", False
+        yield self.st, "t = True; x = not (t is False)", "x", True
+        yield self.st, "t = True; x = not (t is None)", "x", True
+        yield self.st, "n = None; x = not (n is True)", "x", True
+        yield self.st, "n = None; x = not (n is False)", "x", True
+        yield self.st, "n = None; x = not (n is None)", "x", False
+        yield self.st, "t = True; x = not (t is not True)", "x", True
+        yield self.st, "t = True; x = not (t is not False)", "x", False
+        yield self.st, "t = True; x = not (t is not None)", "x", False
+        yield self.st, "n = None; x = not (n is not True)", "x", False
+        yield self.st, "n = None; x = not (n is not False)", "x", False
+        yield self.st, "n = None; x = not (n is not None)", "x", True
 
     def test_multiexpr(self):
         yield self.st, "z = 2+3; x = y = z", "x,y,z", (5,5,5)
