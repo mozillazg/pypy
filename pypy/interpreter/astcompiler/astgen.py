@@ -324,12 +324,8 @@ class NodeInfo:
                     print >> buf, "        if self.%s is not None:" % (argname,)
                     print >> buf, "            self.%s = self.%s.mutate(visitor)" % (argname,argname)
                 elif self.argprops[argname] == P_NESTED:
-                    print >> buf, "        newlist = []"
-                    print >> buf, "        for n in self.%s:"%(argname)
-                    print >> buf, "            item = n.mutate(visitor)"
-                    print >> buf, "            if item is not None:"
-                    print >> buf, "                newlist.append(item)"
-                    print >> buf, "        self.%s[:] = newlist"%(argname)
+                    print >> buf, "        visitor._mutate_list(self.%s)"%(
+                        argname,)
         print >> buf, "        return visitor.visit%s(self)" % self.name
 
     def _gen_fget_func(self, buf, attr, prop ):
@@ -602,6 +598,17 @@ class ASTVisitor(object):
     def default(self, node):
         for child in node.getChildNodes():
             child.accept(self)
+        return node
+
+    def _mutate_list(self, lst):
+        i = 0
+        while i < len(lst):
+            item = lst[i].mutate(self)
+            if item is not None:
+                lst[i] = item
+                i += 1
+            else:
+                del lst[i]
 
     def visitExpression(self, node):
         return self.default(node)
@@ -695,7 +702,7 @@ class Node(Wrappable):
     def accept(self, visitor):
         raise NotImplementedError
     def mutate(self, visitor):
-        return visitor.visitNode(self)
+        raise NotImplementedError
     def flatten(self):
         res = []
         nodes = self.getChildNodes()
