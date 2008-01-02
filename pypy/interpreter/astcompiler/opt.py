@@ -180,7 +180,23 @@ else:
         def visitBitxor(self, node):
             return self._visitBitOp(node, _spacewrapper2('xor'))
 
-        #def visitCompare(self, node): XXX
+        def _List2Tuple(self, node):
+            if isinstance(node, ast.List):
+                newnode = ast.Tuple(node.nodes)
+                copy_node_fields(node, newnode)
+                # if the resulting tuple contains only constants, we can
+                # completely constant-fold the tuple creation itself
+                return self.visitTuple(newnode)
+            else:
+                return node
+
+        def visitCompare(self, node):
+            # xxx could do some constant-folding too, even if it sounds
+            # a bit unlikely to be useful in practice
+            last_op_name, last_subnode = node.ops[-1]
+            if last_op_name == 'in' or last_op_name == 'not in':
+                node.ops[-1] = last_op_name, self._List2Tuple(last_subnode)
+            return node
 
         def _visitAbstractTest(self, node, is_and):
             # Logic for And nodes:
@@ -217,6 +233,18 @@ else:
                 consts_w.append(subnode.value)
             return ast.Const(self.space.newtuple(consts_w))
 
+        def visitFor(self, node):
+            node.list = self._List2Tuple(node.list)
+            return node
+
+        def visitListCompFor(self, node):
+            node.list = self._List2Tuple(node.list)
+            return node
+
+        def visitGenExprFor(self, node):
+            node.iter = self._List2Tuple(node.iter)
+            return node
+
 
     def _spacewrapper1(name):
         """Make a wrapper around the method: space.<name>(w_x)
@@ -240,6 +268,11 @@ else:
 
     def constant_fold_pow(space, w_x, w_y):
         return space.pow(w_x, w_y, space.w_None)
+
+    def copy_node_fields(src, dst):
+        dst.lineno = src.lineno
+        dst.filename = src.filename
+        dst.parent = src.parent
 
 
     def optimize_ast_tree(space, tree):

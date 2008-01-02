@@ -279,3 +279,38 @@ class TestCompiler:
              ''',                            "doc"),
             ]:
             yield self.simple_test, source, "foo.__doc__", expected
+
+    def test_in(self):
+        yield self.st, "n = 5; x = n in [3,4,5]", 'x', True
+        yield self.st, "n = 5; x = n in [3,4,6]", 'x', False
+        yield self.st, "n = 5; x = n in [3,4,n]", 'x', True
+        yield self.st, "n = 5; x = n in [3,4,n+1]", 'x', False
+        yield self.st, "n = 5; x = n in (3,4,5)", 'x', True
+        yield self.st, "n = 5; x = n in (3,4,6)", 'x', False
+        yield self.st, "n = 5; x = n in (3,4,n)", 'x', True
+        yield self.st, "n = 5; x = n in (3,4,n+1)", 'x', False
+
+    def test_for_loops(self):
+        yield self.st, """
+            total = 0
+            for i in [2, 7, 5]:
+                total += i
+        """, 'total', 2 + 7 + 5
+        yield self.st, """
+            total = 0
+            for i in (2, 7, 5):
+                total += i
+        """, 'total', 2 + 7 + 5
+        yield self.st, """
+            total = 0
+            for i in [2, 7, total+5]:
+                total += i
+        """, 'total', 2 + 7 + 5
+        yield self.st, "x = sum([n+2 for n in [6, 1, 2]])", 'x', 15
+        yield self.st, "x = sum([n+2 for n in (6, 1, 2)])", 'x', 15
+        yield self.st, "k=2; x = sum([n+2 for n in [6, 1, k]])", 'x', 15
+        yield self.st, "k=2; x = sum([n+2 for n in (6, 1, k)])", 'x', 15
+        yield self.st, "x = sum(n+2 for n in [6, 1, 2])", 'x', 15
+        yield self.st, "x = sum(n+2 for n in (6, 1, 2))", 'x', 15
+        yield self.st, "k=2; x = sum(n+2 for n in [6, 1, k])", 'x', 15
+        yield self.st, "k=2; x = sum(n+2 for n in (6, 1, k))", 'x', 15
