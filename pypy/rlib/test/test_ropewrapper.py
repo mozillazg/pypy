@@ -102,7 +102,7 @@ class AbstractTestCoercion(object):
         s = self.conststr("\xff")
         u = s.decode("latin-1")
         assert u == self.constunicode(u"\xff")
-        py.test.raises(UnicodeDecodeError, u.decode, "ascii")
+        py.test.raises(UnicodeDecodeError, s.decode, "ascii")
 
     def test_decode_errors(self):
         s = self.conststr("a\xffb")
