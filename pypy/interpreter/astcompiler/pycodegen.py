@@ -5,7 +5,7 @@ import struct
 import sys
 
 from pypy.interpreter.astcompiler import ast
-from pypy.interpreter.astcompiler import pyassem, misc, future, symbols
+from pypy.interpreter.astcompiler import pyassem, misc, future, symbols, opt
 from pypy.interpreter.astcompiler.consts import SC_LOCAL, SC_GLOBAL, \
     SC_FREE, SC_CELL, SC_DEFAULT, OP_APPLY, OP_ASSIGN, OP_DELETE, OP_NONE
 from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
@@ -14,6 +14,7 @@ from pypy.interpreter.astcompiler.consts import CO_VARARGS, CO_VARKEYWORDS, \
 from pypy.interpreter.pyparser.error import SyntaxError
 from pypy.interpreter.astcompiler.opt import is_constant_false
 from pypy.interpreter.astcompiler.opt import is_constant_true
+from pypy.interpreter.error import OperationError
 
 # drop VERSION dependency since it the ast transformer for 2.4 doesn't work with 2.3 anyway
 VERSION = 2
@@ -921,14 +922,82 @@ class CodeGenerator(ast.ASTVisitor):
 
     def visitAssign(self, node):
         self.set_lineno(node)
+        if opt.OPTIMIZE and self._visitTupleAssignment(node):
+            return
         node.expr.accept( self )
         dups = len(node.nodes) - 1
         for i in range(len(node.nodes)):
             elt = node.nodes[i]
             if i < dups:
                 self.emit('DUP_TOP')
-            if isinstance(elt, ast.Node):
-                elt.accept( self )
+            assert isinstance(elt, ast.Node)
+            elt.accept( self )
+
+    def _visitTupleAssignment(self, parentnode):
+        # look for the assignment pattern (...) = (...)
+        space = self.space
+        expr = parentnode.expr
+        if isinstance(expr, ast.Tuple):
+            srcnodes = expr.nodes
+        elif isinstance(expr, ast.List):
+            srcnodes = expr.nodes
+        elif isinstance(expr, ast.Const):
+            try:
+                values_w = space.unpackiterable(expr.value)
+            except OperationError:
+                return False
+            srcnodes = [ast.Const(w) for w in values_w]
+        else:
+            return False
+        if len(parentnode.nodes) != 1:
+            return False
+        target = parentnode.nodes[0]
+        if not isinstance(target, ast.AssSeq):
+            return False
+        targetnodes = target.nodes
+        if len(targetnodes) != len(srcnodes):
+            return False
+        # we can only optimize two (common) particular cases, because
+        # the order of evaluation of the expression *and* the order
+        # of assignment should both be kept, in principle.
+        # 1. if all targetnodes are simple names, the assignment order
+        #    *should* not really matter.
+        # 2. otherwise, if the tuple is of length <= 3, we can emit simple
+        #    bytecodes to reverse the items in the value stack.
+        for node in targetnodes:
+            if not isinstance(node, ast.AssName):
+                break    # not a simple name
+        else:
+            # all simple names, case 1.
+            for node in srcnodes:
+                node.accept(self)
+            # let's be careful about the same name appearing several times
+            seen = {}
+            for i in range(len(targetnodes)-1, -1, -1):
+                node = targetnodes[i]
+                assert isinstance(node, ast.AssName)
+                if node.name not in seen:
+                    seen[node.name] = True
+                    self.storeName(node.name, node.lineno)
+                else:
+                    self.emit('POP_TOP')
+            return True  # done
+
+        n = len(srcnodes)
+        if n > 3:
+            return False    # can't do it
+        else:
+            # case 2.
+            for node in srcnodes:
+                node.accept(self)
+            if n == 2:
+                self.emit('ROT_TWO')
+            elif n == 3:
+                self.emit('ROT_THREE')
+                self.emit('ROT_TWO')
+            for node in targetnodes:
+                node.accept(self)
+            return True     # done
 
     def visitAssName(self, node):
         if node.flags == OP_ASSIGN:

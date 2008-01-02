@@ -33,6 +33,7 @@ class TestCompiler:
         source = str(py.code.Source(source))
         space = self.space
         code = compile_with_astcompiler(source, 'exec', space)
+        print
         code.dump()
         w_dict = space.newdict()
         code.exec_code(space, w_dict, w_dict)
@@ -77,6 +78,32 @@ class TestCompiler:
         yield self.simple_test, "[x,y,z] = 1,2,3", "x,y,z", (1, 2, 3)
         yield self.simple_test, "[x,y,z,t] = [1,2,3,4]", "x,y,z,t", (1, 2, 3,4)
         yield self.simple_test, "[x,y,x,t] = 1,2,3,4", "x,y,t", (3, 2, 4)
+
+    def test_tuple_assign_order(self):
+        decl = py.code.Source("""
+            class A:
+                def __getattr__(self, name):
+                    global seen
+                    seen += name
+                    return name
+                def __setattr__(self, name, value):
+                    global seen
+                    seen += '%s=%s' % (name, value)
+            seen = ''
+            a = A()
+        """)
+        decl = str(decl) + '\n'
+        yield self.st, decl+"a.x,= a.a,", 'seen', 'ax=a'
+        yield self.st, decl+"a.x,a.y = a.a,a.b", 'seen', 'abx=ay=b'
+        yield self.st, decl+"a.x,a.y,a.z = a.a,a.b,a.c", 'seen', 'abcx=ay=bz=c'
+        yield self.st, decl+"a.x,a.y,a.x,a.t = a.a,a.b,a.c,a.d", 'seen', \
+            'abcdx=ay=bx=ct=d'
+        yield self.st, decl+"[a.x] = [a.a]", 'seen', 'ax=a'
+        yield self.st, decl+"[a.x,a.y] = a.a,a.b", 'seen', 'abx=ay=b'
+        yield self.st, decl+"[a.x,a.y,a.z] = [a.a,a.b,a.c]", 'seen', \
+            'abcx=ay=bz=c'
+        yield self.st, decl+"[a.x,a.y,a.x,a.t] = a.a,a.b,a.c,a.d", 'seen', \
+            'abcdx=ay=bx=ct=d'
 
     def test_binary_operator(self):
         for operator in ['+', '-', '*', '**', '/', '&', '|', '^', '//',
