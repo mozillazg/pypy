@@ -15,8 +15,10 @@ r_jmp_switch    = re.compile(r"\tjmp\t[*]([.]?\w+)[(]")
 r_jmptable_item = re.compile(r"\t.long\t([.]?\w+)\s*$")
 r_jmptable_end  = re.compile(r"\t.text\s*$")
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
-r_gcroot_marker = re.compile(r"\t/[*](STORE|LOAD) GCROOT ")
-r_gcroot_op     = re.compile(r"\t/[*](STORE|LOAD) GCROOT (\d*)[(]%esp[)][*]/\s*$")
+LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
+r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVAR+") [*]/")
+r_localvar      = re.compile(LOCALVAR)
+r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 
 # for sanity-checking, %esp should only appear as a way to access locals,
 # i.e. inside parenthesis, except if explicitly recognized otherwise
@@ -103,7 +105,6 @@ class GcRootTracker(object):
 
 
 class FunctionGcRootTracker(object):
-    VISIT_OPERATION = {}
 
     def __init__(self, lines):
         match = r_functionstart.match(lines[0])
@@ -117,13 +118,13 @@ class FunctionGcRootTracker(object):
 
     def computegcmaptable(self):
         self.findlabels()
-        try:
-            self.calls = {}         # {label_after_call: state}
-            self.ignore_calls = {}
-            self.missing_labels_after_call = []
-            self.follow_control_flow()
-        except ReflowCompletely:
-            return self.computegcmaptable()
+        self.parse_instructions()
+        self.findframesize()
+        self.fixlocalvars()
+        self.trackgcroots()
+        self.dump()
+        xxx
+        self.follow_control_flow()
         table = self.gettable()
         self.extend_calls_with_labels()
         return table
@@ -150,6 +151,106 @@ class FunctionGcRootTracker(object):
         for linenum, label in self.missing_labels_after_call:
             self.lines.insert(linenum, '%s:\n' % (label,))
             self.lines.insert(linenum, '\t.globl\t%s\n' % (label,))
+
+    def parse_instructions(self):
+        self.insns = [InsnFunctionStart()]
+        self.linenum = 0
+        in_APP = False
+        for lin in range(1, len(self.lines)):
+            self.linenum = lin
+            insn = no_op
+            line = self.lines[lin]
+            match = r_insn.match(line)
+            if match:
+                if not in_APP:
+                    insn = match.group(1)
+                    meth = getattr(self, 'visit_' + insn)
+                    insn = meth(line)
+            elif r_gcroot_marker.match(line):
+                insn = self.handle_gcroot_marker(line)
+            elif line == '#APP\n':
+                in_APP = True
+            elif line == '#NO_APP\n':
+                in_APP = False
+            self.insns.append(insn)
+        del self.linenum
+
+    def findframesize(self):
+        self.framesize = {0: 0}
+
+        def walker(lin, insn, size_delta):
+            check = deltas.setdefault(lin, size_delta)
+            assert check == size_delta, (
+                "inconsistent frame size at function line %d" % (lin,))
+            if isinstance(insn, InsnStackAdjust):
+                size_delta -= insn.delta
+            if lin not in self.framesize:
+                yield size_delta   # continue walking backwards
+
+        for lin, insn in enumerate(self.insns):
+            if insn.requestgcroots():
+                deltas = {}
+                self.walk_instructions_backwards(walker, lin, 0)
+                size_at_insn = []
+                for n in deltas:
+                    if n in self.framesize:
+                        size_at_insn.append(self.framesize[n] + deltas[n])
+                assert len(size_at_insn) > 0, (
+                    "cannot reach the start of the function??")
+                size_at_insn = size_at_insn[0]
+                for n in deltas:
+                    size_at_n = size_at_insn - deltas[n]
+                    check = self.framesize.setdefault(n, size_at_n)
+                    assert check == size_at_n, (
+                        "inconsistent frame size at function line %d" % (n,))
+
+    def fixlocalvars(self):
+        for lin, insn in enumerate(self.insns):
+            if lin in self.framesize:
+                for name in insn._locals_:
+                    localvar = getattr(insn, name)
+                    match = r_localvar_esp.match(localvar)
+                    if match:
+                        ofs_from_esp = int(match.group(1) or '0')
+                        localvar = ofs_from_esp - self.framesize[lin]
+                        assert localvar != 0    # that's the return address
+                        setattr(insn, name, localvar)
+
+    def trackgcroots(self):
+
+        def walker(lin, insn, loc):
+            source = insn.source_of(loc, tag)
+            if isinstance(source, Value):
+                pass   # done
+            else:
+                yield source
+
+        for lin, insn in enumerate(self.insns):
+            for loc, tag in insn.requestgcroots().items():
+                self.walk_instructions_backwards(walker, lin, loc)
+
+    def dump(self):
+        for n, insn in enumerate(self.insns):
+            try:
+                size = self.framesize[n]
+            except (AttributeError, KeyError):
+                size = '?'
+            print '%4s  %s' % (size, insn)
+
+    def walk_instructions_backwards(self, walker, initial_line, initial_state):
+        pending = []
+        seen = {}
+        def schedule(line, state):
+            assert 0 <= line < len(self.insns)
+            key = line, state
+            if key not in seen:
+                seen[key] = True
+                pending.append(key)
+        schedule(initial_line, initial_state)
+        while pending:
+            line, state = pending.pop()
+            for prevstate in walker(line, self.insns[line], state):
+                schedule(line - 1, prevstate)
 
     def follow_control_flow(self):
         # 'states' is a list [(framesize, gcroot0, gcroot1, gcroot2...)]
@@ -243,88 +344,44 @@ class FunctionGcRootTracker(object):
                         "unreachable call!" + line)
 
     def handle_gcroot_marker(self, line):
-        match = r_gcroot_op.match(line)
-        op = match.group(1)
-        position = int(match.group(2) or '0')
-        assert position % 4 == 0
-        if op == 'STORE':
-            assert position not in self.gcroots
-            self.gcroots[position] = None
-        elif op == 'LOAD':
-            assert position in self.gcroots
-            del self.gcroots[position]
+        match = r_gcroot_marker.match(line)
+        loc = match.group(1)
+        return InsnGCROOT(loc)
+
+    def visit_addl(self, line, sign=+1):
+        match = r_binaryinsn.match(line)
+        target = match.group(2)
+        if target == '%esp':
+            count = match.group(1)
+            assert count.startswith('$')
+            return InsnStackAdjust(sign * int(count[1:]))
+        elif r_localvar.match(target):
+            return InsnSetLocal(Value(), target)
         else:
             raise UnrecognizedOperation(line)
 
-    def find_visitor(self, insn):
-        opname = insn
-        while 1:
-            try:
-                meth = getattr(self.__class__, 'visit_' + opname)
-                break
-            except AttributeError:
-                assert opname
-                opname = opname[:-1]
-        self.VISIT_OPERATION[insn] = meth
-        return meth
-
-    def visit_(self, line):
-        # fallback for all operations.  By default, ignore the operation,
-        # unless it appears to do something with %esp
-        if not self.can_use_frame_pointer:
-            if r_esp_outside_paren.match(line):
-                raise UnrecognizedOperation(line)
-
-    def visit_push(self, line):
-        raise UnrecognizedOperation(line)
-
-    def visit_pushl(self, line):
-        self.framesize += 4
-
-    def visit_pop(self, line):
-        raise UnrecognizedOperation(line)
-
-    def visit_popl(self, line):
-        self.framesize -= 4
-        assert self.framesize >= 0, "stack underflow"
-
     def visit_subl(self, line):
-        match = r_binaryinsn.match(line)
-        if match.group(2) == '%esp':
-            count = match.group(1)
-            assert count.startswith('$')
-            count = int(count[1:])
-            assert count % 4 == 0
-            self.framesize += count
-
-    def visit_addl(self, line):
-        match = r_binaryinsn.match(line)
-        if match.group(2) == '%esp':
-            count = match.group(1)
-            assert count.startswith('$')
-            count = int(count[1:])
-            assert count % 4 == 0
-            self.framesize -= count
-            assert self.framesize >= 0, "stack underflow"
+        return self.visit_addl(line, sign=-1)
 
     def visit_movl(self, line):
         match = r_binaryinsn.match(line)
-        if match.group(1) == '%esp':
-            # only for movl %esp, %ebp
-            if match.group(2) != '%ebp':
-                raise UnrecognizedOperation(line)
-            assert self.can_use_frame_pointer # only if we can have a frame ptr
-            assert self.framesize == 4      # only %ebp should have been pushed
-        elif match.group(2) == '%esp':
-            raise UnrecognizedOperation(line)
+        source = match.group(1)
+        target = match.group(2)
+        if r_localvar.match(target):
+            if r_localvar.match(source):
+                return InsnCopyLocal(source, target)
+            else:
+                return InsnSetLocal(Value(), target)
+        elif target == '%esp':
+            raise UnrecognizedOperation
+        else:
+            return no_op
 
     def visit_ret(self, line):
-        raise LeaveBasicBlock
-
-    def visit_j(self, line):
-        raise UnrecognizedOperation(line)
+        return InsnRet()
 
     def visit_jmp(self, line):
+        xxx
         if self.in_APP:
             return       # ignore jumps inside a #APP/#NO_APP block
         match = r_jmp_switch.match(line)
@@ -355,6 +412,7 @@ class FunctionGcRootTracker(object):
         raise LeaveBasicBlock
 
     def conditional_jump(self, line):
+        xxx
         if self.in_APP:
             return       # ignore jumps inside a #APP/#NO_APP block
         match = r_jump.match(line)
@@ -380,43 +438,17 @@ class FunctionGcRootTracker(object):
     visit_jno = conditional_jump
 
     def visit_call(self, line):
-        if self.in_APP:
-            self.ignore_calls[self.currentlinenum] = None
-            return       # ignore calls inside a #APP/#NO_APP block
         match = r_unaryinsn.match(line)
         if match is None:
             assert r_unaryinsn_star.match(line)   # indirect call
         else:
             target = match.group(1)
             if target in FUNCTIONS_NOT_RETURNING:
-                self.ignore_calls[self.currentlinenum] = None
-                raise LeaveBasicBlock
-        # we need a globally-declared label just after the call.
-        # Reuse one if it is already there (e.g. from a previous run of this
-        # script); otherwise invent a name and schedule the line insertion.
-        label = None
-        # this checks for a ".globl NAME" followed by "NAME:"
-        match = r_globl.match(self.lines[self.currentlinenum+1])
-        if match:
-            label1 = match.group(1)
-            match = r_label.match(self.lines[self.currentlinenum+2])
-            if match:
-                label2 = match.group(1)
-                if label1 == label2:
-                    label = label2
-        if label is None:
-            k = 0
-            while 1:
-                label = '__gcmap_IN_%s_%d' % (self.funcname, k)
-                if label not in self.labels:
-                    break
-                k += 1
-            self.labels[label] = self.currentlinenum+1
-            self.missing_labels_after_call.append(
-                (self.currentlinenum+1, label))
-        self.calls[self.currentlinenum] = label, self.getstate()
+                return InsnStop()
+        return InsnCall()
 
     def visit_pypygetframeaddress(self, line):
+        xxx
         # this is a pseudo-instruction that is emitted to find the first
         # frame address on the stack.  We cannot just use
         # __builtin_frame_address(0) - apparently, gcc thinks it can
@@ -429,24 +461,129 @@ class FunctionGcRootTracker(object):
         self.lines[self.currentlinenum] = newline
 
 
-class LeaveBasicBlock(Exception):
-    pass
-
 class UnrecognizedOperation(Exception):
     pass
 
-class ReflowCompletely(Exception):
+
+class Value(object):
+    Count = 0
+    def __repr__(self):
+        try:
+            n = self.n
+        except AttributeError:
+            n = self.n = Value.Count
+            Value.Count += 1
+        return '<Value %d>' % n
+
+class Insn(object):
+    _args_ = []
+    _locals_ = []
+    def __repr__(self):
+        return '%s(%s)' % (self.__class__.__name__,
+                           ', '.join([str(getattr(self, name))
+                                      for name in self._args_]))
+    def requestgcroots(self):
+        return {}
+
+    def source_of(self, localvar, tag):
+        return localvar
+
+class InsnFunctionStart(Insn):
+    def __init__(self):
+        self.arguments = {}
+        for reg in CALLEE_SAVE_REGISTERS:
+            self.arguments[reg] = Value()
+    def source_of(self, localvar, tag):
+        if localvar not in self.arguments:
+            assert isinstance(localvar, int) and localvar > 0, (
+                "must come from an argument to the function, got %r" %
+                (localvar,))
+            self.arguments[localvar] = Value()
+        return self.arguments[localvar]
+
+class NoOp(Insn):
+    pass
+no_op = NoOp()
+
+class InsnSetLocal(Insn):
+    _args_ = ['value', 'target']
+    _locals_ = ['target']
+    def __init__(self, value, target):
+        assert value is None or isinstance(value, Value)
+        self.value = value
+        self.target = target
+    def source_of(self, localvar, tag):
+        if localvar == self.target:
+            return self.value
+        return localvar
+
+class InsnCopyLocal(Insn):
+    _args_ = ['source', 'target']
+    _locals_ = ['source', 'target']
+    def __init__(self, source, target):
+        self.source = source
+        self.target = target
+    def source_of(self, localvar, tag):
+        if localvar == self.target:
+            return self.source
+        return localvar
+
+class InsnStackAdjust(Insn):
+    _args_ = ['delta']
+    def __init__(self, delta):
+        assert delta % 4 == 0
+        self.delta = delta
+
+class InsnStop(Insn):
     pass
 
-class BogusObject(object):
-    pass
-Bogus = BogusObject()
+class InsnRet(InsnStop):
+    def requestgcroots(self):
+        return dict(zip(CALLEE_SAVE_REGISTERS, CALLEE_SAVE_REGISTERS))
+
+class InsnCall(Insn):
+    _args_ = ['gcroots']
+    def __init__(self):
+        # 'gcroots' is a dict built by side-effect during the call to
+        # FunctionGcRootTracker.trackgcroots().  Its meaning is as follows:
+        # the keys are the location that contain gc roots (either register
+        # names like '%esi', or negative integer offsets relative to the end
+        # of the function frame).  The value corresponding to a key is the
+        # "tag", which is None for a normal gc root, or else the name of a
+        # callee-saved register.  In the latter case it means that this is
+        # only a gc root if the corresponding register in the caller was
+        # really containing a gc pointer.  A typical example:
+        #
+        #     InsnCall({'%ebp': '%ebp', -8: '%ebx', '%esi': None})
+        #
+        # means that %esi is a gc root across this call; that %ebp is a
+        # gc root if it was in the caller (typically because %ebp is not
+        # modified at all in the current function); and that the word at 8
+        # bytes before the end of the current stack frame is a gc root if
+        # %ebx was a gc root in the caller (typically because the current
+        # function saves and restores %ebx from there in the prologue and
+        # epilogue).
+        #
+        self.gcroots = {}
+    def source_of(self, localvar, tag):
+        self.gcroots[localvar] = tag
+        return localvar
+
+class InsnGCROOT(Insn):
+    _args_ = ['loc']
+    def __init__(self, loc):
+        self.loc = loc
+    def requestgcroots(self):
+        return {self.loc: None}
+
 
 FUNCTIONS_NOT_RETURNING = {
     'abort': None,
     '_exit': None,
     '__assert_fail': None,
     }
+
+CALLEE_SAVE_REGISTERS = ['%ebx', '%esi', '%edi', '%ebp']
 
 
 if __name__ == '__main__':
