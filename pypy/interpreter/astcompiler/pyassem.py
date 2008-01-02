@@ -1064,6 +1064,7 @@ class StackDepthTracker:
         'FOR_ITER': 1,
         'WITH_CLEANUP': 3,
         'LOOKUP_METHOD': 1,
+        'LIST_APPEND': -2,
         }
     # use pattern match
     patterns = [
