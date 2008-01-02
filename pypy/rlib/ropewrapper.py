@@ -63,15 +63,10 @@ class RopeString(RopeBaseString):
     def __iter__(self):
         return RopeStringIterator(self._node)
     
-    def decode(self, codepage):
-        if codepage == "utf-8":
-            return RopeUnicode(rope.str_decode_utf8(self._node))
-        if codepage == "latin1":
-            #Need rewrite
-            return RopeUnicode(rope.str_decode_latin1(self._node))
-        if codepage == "ascii":
-            #Need rewrite
-            return RopeUnicode(rope.str_decode_ascii(self._node))
+    def decode(self, codepage, errors='strict'):
+        s = self._node.flatten_string()
+        result = s.decode(codepage, errors)
+        return RopeUnicode(result)
 
     def getchar(self,index):
         return self._node.getchar(index)
@@ -104,23 +99,10 @@ class RopeUnicode(RopeBaseString):
     def __iter__(self):
         return RopeUnicodeIterator(self._node)
     
-    def encode(self, codepage):
-        if codepage == "utf-8":
-            return RopeString(rope.unicode_encode_utf8(self._node))
-        if codepage == "utf-16":
-            raise NotImplemented("How i can encode utf-16 string?")
-        if codepage == "latin-1":
-            result = rope.unicode_encode_latin1(self._node)
-            if result:
-                return RopeString(result)
-            else:
-                raise NotImplementedError("Do i need implement such latin-1 encoding?")
-        if codepage == "ascii":
-            result = rope.unicode_encode_ascii(self._node)
-            if result:
-                return RopeString(result)
-            else:
-                raise NotImplementedError("Do i need implement such ascii encoding?")
-
+    def encode(self, encoding, errors = 'strict'):
+        s = self._node.flatten_unicode()
+        result = s.encode(encoding, errors)
+        return RopeString(result)
+    
     def getchar(self,index):
         return self._node.getunichar(index)
