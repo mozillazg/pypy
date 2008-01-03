@@ -219,7 +219,6 @@ class PythonAstCompiler(PyCodeCompiler):
         PyCodeCompiler.__init__(self, space)
         self.grammar_version = override_version or space.config.objspace.pyversion
         self.parser = make_pyparser(self.grammar_version)
-        self.additional_rules = {}
         if self.grammar_version >= '2.5':
             self.futureFlags = future.futureFlags_2_5
         else:
@@ -244,9 +243,6 @@ class PythonAstCompiler(PyCodeCompiler):
         space = self.space
         try:
             builder = AstBuilder(self.parser, self.grammar_version, space=space)
-            for rulename, buildfunc in self.additional_rules.iteritems():
-                assert isinstance(buildfunc, Function)
-                builder.user_build_rules[rulename] = buildfunc
             flags |= getFutures(self.futureFlags, source)
             self.parser.parse_source(source, mode, builder, flags)
             ast_tree = builder.rule_stack[-1]
@@ -291,27 +287,3 @@ def install_compiler_hook(space, w_callable):
 #           raise OperationError( space.w_TypeError( space.wrap( "must have a callable" ) )
     space.default_compiler.w_compile_hook = w_callable
 
-def insert_grammar_rule(space, w_rule, w_buildfuncs):
-    """inserts new grammar rules to the default compiler"""
-    from pypy.interpreter import function
-    rule = space.str_w(w_rule)
-    #buildfuncs_w = w_buildfuncs.content
-    buildfuncs = {}
-    #for w_name, w_func in buildfuncs_w.iteritems():
-    #    buildfuncs[space.str_w(w_name)] = space.unwrap(w_func)
-    w_iter = space.iter(w_buildfuncs)
-    while 1:
-        try:
-            w_key = space.next(w_iter)
-            w_func = space.getitem(w_buildfuncs, w_key)
-            buildfuncs[space.str_w(w_key)] = space.interp_w(function.Function, w_func)
-        except OperationError, e:
-            if not e.match(space, space.w_StopIteration):
-                raise
-            break
-    space.default_compiler.additional_rules = buildfuncs
-    space.default_compiler.parser.insert_rule(rule)
-
-# XXX cyclic import
-#from pypy.interpreter.baseobjspace import ObjSpace
-#insert_grammar_rule.unwrap_spec = [ObjSpace, str, dict]

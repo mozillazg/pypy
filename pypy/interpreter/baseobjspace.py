@@ -433,11 +433,9 @@ class ObjSpace(object):
         except AttributeError:
             if self.config.objspace.compiler == 'cpython':
                 compiler = CPythonCompiler(self)
-            elif self.config.objspace.compiler == 'ast':
-                compiler = PythonAstCompiler(self)
             else:
-                raise ValueError('unknown --compiler option value: %r' % (
-                    self.config.objspace.compiler,))
+                assert self.config.objspace.compiler == 'ast'
+                compiler = PythonAstCompiler(self)
             self.default_compiler = compiler
             return compiler
 
