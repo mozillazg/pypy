@@ -439,8 +439,10 @@ class FunctionGcRootTracker(object):
         target = match.group(2)
         if self.r_localvar.match(target):
             return InsnSetLocal(target)
-        else:
+        elif target == '%esp':
             raise UnrecognizedOperation(line)
+        else:
+            return []
 
     visit_xorl = binary_insn   # used in "xor reg, reg" to create a NULL GC ptr
     visit_orl = binary_insn
@@ -471,12 +473,6 @@ class FunctionGcRootTracker(object):
             return InsnEpilogue(framesize = 4 - ofs_from_ebp)
         else:
             return self.binary_insn(line)
-
-    def unary_or_binary_insn(self, line):
-        if r_binaryinsn.match(line):
-            return self.binary_insn(line)
-        else:
-            return self.unary_insn(line)
 
     def insns_for_copy(self, source, target):
         if source == '%esp' or target == '%esp':
