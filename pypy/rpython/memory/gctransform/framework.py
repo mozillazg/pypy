@@ -133,15 +133,16 @@ class FrameworkGCTransformer(GCTransformer):
 
         sizeofaddr = llmemory.sizeof(llmemory.Address)
 
-        StackRootIterator = self.build_stack_root_iterator()
-        gcdata.gc = GCClass(AddressLinkedList, get_roots=StackRootIterator, **GC_PARAMS)
+        gcdata.gc = GCClass(AddressLinkedList, **GC_PARAMS)
+        root_walker = self.build_root_walker()
         gcdata.set_query_functions(gcdata.gc)
+        gcdata.set_root_walker(gcdata.gc, root_walker)
         self.num_pushs = 0
         self.write_barrier_calls = 0
 
         def frameworkgc_setup():
             # run-time initialization code
-            StackRootIterator.setup_root_stack()
+            root_walker.setup_root_stack()
             gcdata.gc.setup()
 
         bk = self.translator.annotator.bookkeeper
@@ -172,19 +173,19 @@ class FrameworkGCTransformer(GCTransformer):
 
         self.frameworkgc_setup_ptr = getfn(frameworkgc_setup, [],
                                            annmodel.s_None)
-        if StackRootIterator.need_root_stack:
-            #self.pop_root_ptr = getfn(StackRootIterator.pop_root, [],
+        if RootWalker.need_root_stack:
+            #self.pop_root_ptr = getfn(RootWalker.pop_root, [],
             #                          annmodel.SomeAddress(),
             #                          inline = True)
-            #self.push_root_ptr = getfn(StackRootIterator.push_root,
+            #self.push_root_ptr = getfn(RootWalker.push_root,
             #                           [annmodel.SomeAddress()],
             #                           annmodel.s_None,
             #                           inline = True)
-            self.incr_stack_ptr = getfn(StackRootIterator.incr_stack,
+            self.incr_stack_ptr = getfn(RootWalker.incr_stack,
                                        [annmodel.SomeInteger()],
                                        annmodel.SomeAddress(),
                                        inline = True)
-            self.decr_stack_ptr = getfn(StackRootIterator.decr_stack,
+            self.decr_stack_ptr = getfn(RootWalker.decr_stack,
                                        [annmodel.SomeInteger()],
                                        annmodel.SomeAddress(),
                                        inline = True)
@@ -350,12 +351,12 @@ class FrameworkGCTransformer(GCTransformer):
             FLDTYPE = getattr(HDR, fldname)
             fields.append(('_' + fldname, FLDTYPE))
 
-    def build_stack_root_iterator(self):
+    def build_root_walker(self):
         gcdata = self.gcdata
         sizeofaddr = llmemory.sizeof(llmemory.Address)
         rootstacksize = sizeofaddr * self.root_stack_depth
 
-        class StackRootIterator:
+        class RootWalker:
             _alloc_flavor_ = 'raw'
             def setup_root_stack():
                 stackbase = llmemory.raw_malloc(rootstacksize)

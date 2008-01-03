@@ -28,13 +28,14 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
         for var in livevars:
             hop.genop("asm_gcroot", [var])
 
-    def build_stack_root_iterator(self):
+    def build_root_walker(self):
         gcdata = self.gcdata
+        gc = gcdata.gc
 
-        class StackRootIterator:
+        class RootWalker:
             _alloc_flavor_ = 'raw'
 
-            def setup_root_stack():
+            def setup_root_stack(self):
                 # The gcmap table is a list of pairs of pointers:
                 #     void *SafePointAddress;
                 #     void *Shape;
@@ -44,7 +45,6 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                 gcmapstart = llop.llvm_gcmapstart(llmemory.Address)
                 gcmapend   = llop.llvm_gcmapend(llmemory.Address)
                 insertion_sort(gcmapstart, gcmapend)
-            setup_root_stack = staticmethod(setup_root_stack)
 
             need_root_stack = False
 
@@ -52,8 +52,12 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                 gcdata.static_root_end.address[0] = adr
                 gcdata.static_root_end += sizeofaddr
             append_static_root = staticmethod(append_static_root)
-            
-            def __init__(self, with_static=True):
+
+            def walk_roots(self, collect_stack_root,
+                           collect_static_in_prebuilt_nongc,
+                           collect_static_in_prebuilt_gc,
+                           collect_finished):
+                ...
                 self.callee_data = lltype.malloc(ASM_STACKWALK, flavor="raw")
                 self.caller_data = lltype.malloc(ASM_STACKWALK, flavor="raw")
                 pypy_asm_stackwalk_init(self.caller_data)
@@ -186,10 +190,8 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                 ll_assert(i >= 0, "bad call to next_gcroot_from_current_frame")
                 liveoffset = self.liveoffsets.signed[i]
                 return self.callee_data[FRAME_PTR] + liveoffset
-            ...
 
-
-        return StackRootIterator
+        return RootWalker()
 
 
 sizeofaddr = llmemory.sizeof(llmemory.Address)
