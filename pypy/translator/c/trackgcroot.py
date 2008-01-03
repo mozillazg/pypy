@@ -20,18 +20,16 @@ r_gcroot_marker = re.compile(r"\t/[*] GCROOT ("+LOCALVAR+") [*]/")
 r_localvar      = re.compile(LOCALVAR)
 r_localvar_esp  = re.compile(r"(\d*)[(]%esp[)]")
 
-# for sanity-checking, %esp should only appear as a way to access locals,
-# i.e. inside parenthesis, except if explicitly recognized otherwise
-r_esp_outside_paren = re.compile(r"(.+[)])?[^(]*[%]esp")
-
 
 class GcRootTracker(object):
 
     def __init__(self, verbose=0):
         self.gcmaptable = []
         self.verbose = verbose
+        self.seen_main = False
 
     def dump(self, output):
+        assert self.seen_main
         shapes = {}
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
@@ -80,8 +78,6 @@ class GcRootTracker(object):
 
     def process_function(self, lines, newfile, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
-        if tracker.funcname == entrypoint:
-            tracker.can_use_frame_pointer = True
         if self.verbose:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
@@ -89,13 +85,9 @@ class GcRootTracker(object):
         if self.verbose > 1:
             for label, state in table:
                 print >> sys.stderr, label, '\t', state
-        if tracker.can_use_frame_pointer:
-            # XXX for now we have no logic to track the gc roots of
-            # functions using %ebp
-            for label, state in table:
-                assert len(state) == 1, (
-                    "XXX for now the entry point should not have any gc roots")
         if tracker.funcname == entrypoint:
+            self.seen_main = True
+            xxx
             table = [(label, (-1,)) for label, _ in table]
             # ^^^ we set the framesize of the entry point to -1 as a marker
             # (the code in asmgcroot.py actually takes any odd-valued number
@@ -113,28 +105,30 @@ class FunctionGcRootTracker(object):
         assert self.funcname == match.group(1)
         assert self.funcname == match.group(2)
         self.lines = lines
-        self.inconsistent_state = {}
-        self.can_use_frame_pointer = False      # unless changed by caller
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
         self.parse_instructions()
-        if not self.enumerate_call_insns():
-            return []
-        self.makeprevmap()
-        self.findframesize()
-        self.fixlocalvars()
-        self.trackgcroots()
-        self.extend_calls_with_labels()
-        if verbose > 2:
-            self.dump()
+        try:
+            if not self.list_call_insns():
+                return []
+            self.findprevinsns()
+            self.findframesize()
+            self.fixlocalvars()
+            self.trackgcroots()
+            self.extend_calls_with_labels()
+        finally:
+            if verbose > 2:
+                self.dump()
         return self.gettable()
 
     def gettable(self):
         "Returns a list [(label_after_call, (framesize, gcroot0, gcroot1,..))]"
         table = []
-        for i, insn in self.enumerate_call_insns():
-            info = [self.framesize[i]]
+        for insn in self.list_call_insns():
+            if not hasattr(insn, 'framesize'):
+                continue     # calls that never end up reaching a RET
+            info = [insn.framesize]
             # the first gcroots are always the ones corresponding to
             # the callee-saved registers
             for reg in CALLEE_SAVE_REGISTERS:
@@ -154,25 +148,20 @@ class FunctionGcRootTracker(object):
         return table
 
     def findlabels(self):
-        self.labels = {}      # {name: line number}
-        for i, line in enumerate(self.lines):
+        self.labels = {}      # {name: Label()}
+        for line in self.lines:
             match = r_label.match(line)
             if match:
                 label = match.group(1)
                 assert label not in self.labels, "duplicate label"
-                self.labels[label] = i
+                self.labels[label] = Label(label)
 
     def parse_instructions(self):
-        self.jumpsto = {}    # {label: [list-of-source-node-indices]}
-        for label in self.labels:
-            self.jumpsto[label] = []
         self.insns = [InsnFunctionStart()]
-        self.line2nodeindex = {0: 0}
         in_APP = False
-        for lin in range(1, len(self.lines)):
-            self.currentlineno = lin
+        for lineno, line in enumerate(self.lines):
+            self.currentlineno = lineno
             insn = []
-            line = self.lines[lin]
             match = r_insn.match(line)
             if match:
                 if not in_APP:
@@ -188,7 +177,10 @@ class FunctionGcRootTracker(object):
                 in_APP = True
             elif line == '#NO_APP\n':
                 in_APP = False
-            self.line2nodeindex.setdefault(lin, len(self.insns))
+            else:
+                match = r_label.match(line)
+                if match:
+                    insn = self.labels[match.group(1)]
             if isinstance(insn, list):
                 self.insns.extend(insn)
             else:
@@ -206,111 +198,107 @@ class FunctionGcRootTracker(object):
         setattr(FunctionGcRootTracker, 'visit_' + opname, visit_nop)
         return self.visit_nop
 
-    def makeprevmap(self):
-        # builds the prevmap, which only accounts for jumps.  Each insn node
-        # has an implicit previous node, which is (obviously) the previous
-        # one in self.insns -- unless the previous one is an InsnStop.
-        self.prevmap = {}   # {node-index: [list-of-previous-node-indices]}
-        for label, sourceindices in self.jumpsto.items():
-            line = self.labels[label]
-            while line not in self.line2nodeindex:
-                assert line < len(self.lines), (
-                    "no Insn found after label %r" % (label,))
-                line += 1
-            self.prevmap[self.line2nodeindex[line]] = sourceindices
+    def findprevinsns(self):
+        # builds the previous_insns of each Insn.  For Labels, all jumps
+        # to them are already registered; all that is left to do is to
+        # make each Insn point to the Insn just before it.
+        for i in range(len(self.insns)-1):
+            previnsn = self.insns[i]
+            nextinsn = self.insns[i+1]
+            try:
+                lst = nextinsn.previous_insns
+            except AttributeError:
+                lst = nextinsn.previous_insns = []
+            if not isinstance(previnsn, InsnStop):
+                lst.append(previnsn)
 
-    def enumerate_call_insns(self):
-        return [(i, insn) for (i, insn) in enumerate(self.insns)
-                          if isinstance(insn, InsnCall)]
+    def list_call_insns(self):
+        return [insn for insn in self.insns if isinstance(insn, InsnCall)]
 
     def findframesize(self):
-        self.framesize = {0: 0}
+        self.insns[0].framesize = 0
 
-        def walker(i, insn, size_delta):
-            check = deltas.setdefault(i, size_delta)
+        def walker(insn, size_delta):
+            check = deltas.setdefault(insn, size_delta)
             assert check == size_delta, (
-                "inconsistent frame size at instruction %d: %s" % (i, insn))
+                "inconsistent frame size at instruction %s" % (insn,))
             if isinstance(insn, InsnStackAdjust):
                 size_delta -= insn.delta
-            if i not in self.framesize:
+            if not hasattr(insn, 'framesize'):
                 yield size_delta   # continue walking backwards
 
-        for i, insn in enumerate(self.insns):
+        for insn in self.insns:
             if insn.requestgcroots():
                 deltas = {}
-                self.walk_instructions_backwards(walker, i, 0)
+                self.walk_instructions_backwards(walker, insn, 0)
                 size_at_insn = []
-                for n in deltas:
-                    if n in self.framesize:
-                        size_at_insn.append(self.framesize[n] + deltas[n])
+                for insn1, delta1 in deltas.items():
+                    if hasattr(insn1, 'framesize'):
+                        size_at_insn.append(insn1.framesize + delta1)
                 assert len(size_at_insn) > 0, (
                     "cannot reach the start of the function??")
                 size_at_insn = size_at_insn[0]
-                for n in deltas:
-                    size_at_n = size_at_insn - deltas[n]
-                    check = self.framesize.setdefault(n, size_at_n)
-                    assert check == size_at_n, (
-                        "inconsistent frame size at instruction %d: %s" % (
-                        n, self.insns[n]))
+                for insn1, delta1 in deltas.items():
+                    size_at_insn1 = size_at_insn - delta1
+                    if hasattr(insn1, 'framesize'):
+                        assert insn1.framesize == size_at_insn1, (
+                            "inconsistent frame size at instruction %s" %
+                            (insn1,))
+                    else:
+                        insn1.framesize = size_at_insn1
 
     def fixlocalvars(self):
-        for i, insn in enumerate(self.insns):
-            if i in self.framesize:
+        for insn in self.insns:
+            if hasattr(insn, 'framesize'):
                 for name in insn._locals_:
                     localvar = getattr(insn, name)
                     match = r_localvar_esp.match(localvar)
                     if match:
                         ofs_from_esp = int(match.group(1) or '0')
-                        localvar = ofs_from_esp - self.framesize[i]
+                        localvar = ofs_from_esp - insn.framesize
                         assert localvar != 0    # that's the return address
                         setattr(insn, name, localvar)
 
     def trackgcroots(self):
 
-        def walker(i, insn, loc):
+        def walker(insn, loc):
             source = insn.source_of(loc, tag)
             if source is somenewvalue:
                 pass   # done
             else:
                 yield source
 
-        for i, insn in enumerate(self.insns):
+        for insn in self.insns:
             for loc, tag in insn.requestgcroots().items():
-                self.walk_instructions_backwards(walker, i, loc)
+                self.walk_instructions_backwards(walker, insn, loc)
 
     def dump(self):
-        for n, insn in enumerate(self.insns):
-            try:
-                size = self.framesize[n]
-            except (AttributeError, KeyError):
-                size = '?'
+        for insn in self.insns:
+            size = getattr(insn, 'framesize', '?')
             print '%4s  %s' % (size, insn)
 
-    def walk_instructions_backwards(self, walker, initial_i, initial_state):
+    def walk_instructions_backwards(self, walker, initial_insn, initial_state):
         pending = []
         seen = {}
-        def schedule(i, state):
-            assert 0 <= i < len(self.insns)
-            key = i, state
+        def schedule(insn, state):
+            key = insn, state
             if key not in seen:
                 seen[key] = True
                 pending.append(key)
-        schedule(initial_i, initial_state)
+        schedule(initial_insn, initial_state)
         while pending:
-            i, state = pending.pop()
-            for prevstate in walker(i, self.insns[i], state):
-                if not isinstance(self.insns[i - 1], InsnStop):
-                    schedule(i - 1, prevstate)
-                if i in self.prevmap:
-                    for previndex in self.prevmap[i]:
-                        schedule(previndex, prevstate)
+            insn, state = pending.pop()
+            for prevstate in walker(insn, state):
+                for previnsn in insn.previous_insns:
+                    schedule(previnsn, prevstate)
 
     def extend_calls_with_labels(self):
         # walk backwards, because inserting the global labels in self.lines
         # is going to invalidate the lineno of all the InsnCall objects
         # after the current one.
-        for i, call in self.enumerate_call_insns()[::-1]:
-            self.create_global_label(call)
+        for call in self.list_call_insns()[::-1]:
+            if hasattr(call, 'framesize'):
+                self.create_global_label(call)
 
     def create_global_label(self, call):
         # we need a globally-declared label just after the call.
@@ -349,8 +337,15 @@ class FunctionGcRootTracker(object):
         return []
 
     IGNORE_OPS_WITH_PREFIXES = dict.fromkeys([
-        'cmp', 'test', 'set', 'sahf',
-        'f',   # floating-point operations
+        'cmp', 'test', 'set', 'sahf', 'cltd', 'cld', 'std',
+        'rep', 'movs',
+        # floating-point operations cannot produce GC pointers
+        'f',
+        # arithmetic operations should not produce GC pointers
+        'inc', 'dec', 'not', 'neg', 'or', 'and',
+        'shl', 'shr', 'sal', 'sar', 'mul', 'imul', 'div', 'idiv',
+        # zero-extending moves should not produce GC pointers
+        'movz',
         ])
 
     visit_movb = visit_nop
@@ -359,16 +354,8 @@ class FunctionGcRootTracker(object):
     visit_addw = visit_nop
     visit_subb = visit_nop
     visit_subw = visit_nop
-    visit_incb = visit_nop
-    visit_incw = visit_nop
-    visit_decb = visit_nop
-    visit_decw = visit_nop
     visit_xorb = visit_nop
     visit_xorw = visit_nop
-    visit_orb  = visit_nop
-    visit_orw  = visit_nop
-    visit_andb = visit_nop
-    visit_andw = visit_nop
 
     def visit_addl(self, line, sign=+1):
         match = r_binaryinsn.match(line)
@@ -380,7 +367,7 @@ class FunctionGcRootTracker(object):
         elif r_localvar.match(target):
             return InsnSetLocal(target)
         else:
-            raise UnrecognizedOperation(line)
+            return []
 
     def visit_subl(self, line):
         return self.visit_addl(line, sign=-1)
@@ -391,35 +378,50 @@ class FunctionGcRootTracker(object):
         if r_localvar.match(target):
             return InsnSetLocal(target)
         else:
-            raise UnrecognizedOperation(line)
+            return []
 
-    visit_incl = unary_insn
-    visit_decl = unary_insn
+##    visit_incl = unary_insn
+##    visit_decl = unary_insn
+##    visit_notl = unary_insn
+##    visit_negl = unary_insn
 
     def binary_insn(self, line):
         match = r_binaryinsn.match(line)
+        if not match:
+            raise UnrecognizedOperation(line)
         target = match.group(2)
         if r_localvar.match(target):
             return InsnSetLocal(target)
         else:
             raise UnrecognizedOperation(line)
 
-    visit_xorl = binary_insn
-    visit_orl = binary_insn
-    visit_andl = binary_insn
-    visit_movzbl = binary_insn
-    visit_movzwl = binary_insn
+    visit_xorl = binary_insn   # used in "xor reg, reg" to create a NULL GC ptr
+##    visit_orl = binary_insn
+##    visit_andl = binary_insn
+##    visit_movzbl = binary_insn
+##    visit_movzwl = binary_insn
     visit_leal = binary_insn
-    visit_imull = binary_insn
+
+    def unary_or_binary_insn(self, line):
+        if r_binaryinsn.match(line):
+            return self.binary_insn(line)
+        else:
+            return self.unary_insn(line)
+
+##    visit_shll = unary_or_binary_insn
+##    visit_shrl = unary_or_binary_insn
+##    visit_sall = unary_or_binary_insn
+##    visit_sarl = unary_or_binary_insn
+##    visit_imull = unary_or_binary_insn
 
     def insns_for_copy(self, source, target):
-        if r_localvar.match(target):
+        if source == '%esp' or target == '%esp':
+            raise UnrecognizedOperation('%s -> %s' % (source, target))
+        elif r_localvar.match(target):
             if r_localvar.match(source):
                 return [InsnCopyLocal(source, target)]
             else:
                 return [InsnSetLocal(target)]
-        elif target == '%esp':
-            raise UnrecognizedOperation
         else:
             return []
 
@@ -472,8 +474,7 @@ class FunctionGcRootTracker(object):
         return InsnStop()
 
     def register_jump_to(self, label):
-        currentpos = len(self.insns)
-        self.jumpsto[label].append(currentpos)
+        self.labels[label].previous_insns.append(self.insns[-1])
 
     def conditional_jump(self, line):
         match = r_jump.match(line)
@@ -506,7 +507,8 @@ class FunctionGcRootTracker(object):
             target = match.group(1)
             if target in FUNCTIONS_NOT_RETURNING:
                 return InsnStop()
-        return InsnCall(self.currentlineno)
+        return [InsnCall(self.currentlineno),
+                InsnSetLocal('%eax')]      # the result is there
 
     def visit_pypygetframeaddress(self, line):
         xxx
@@ -543,7 +545,14 @@ class Insn(object):
     def source_of(self, localvar, tag):
         return localvar
 
+class Label(Insn):
+    _args_ = ['label']
+    def __init__(self, label):
+        self.label = label
+        self.previous_insns = []   # all insns that jump (or fallthrough) here
+
 class InsnFunctionStart(Insn):
+    previous_insns = ()
     def __init__(self):
         self.arguments = {}
         for reg in CALLEE_SAVE_REGISTERS:
@@ -638,7 +647,12 @@ CALLEE_SAVE_REGISTERS = ['%ebx', '%esi', '%edi', '%ebp']
 
 
 if __name__ == '__main__':
-    tracker = GcRootTracker(verbose=sys.maxint)
+    if sys.argv and sys.argv[1] == '-v':
+        del sys.argv[1]
+        verbose = sys.maxint
+    else:
+        verbose = 1
+    tracker = GcRootTracker(verbose=verbose)
     for fn in sys.argv[1:]:
         tmpfn = fn + '.TMP'
         f = open(fn, 'r')
