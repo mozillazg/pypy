@@ -373,7 +373,7 @@ class FunctionGcRootTracker(object):
                 if label not in self.labels:
                     break
                 k += 1
-            self.labels[label] = call.lineno+1
+            self.labels[label] = None
             self.lines.insert(call.lineno+1, '%s:\n' % (label,))
             self.lines.insert(call.lineno+1, '\t.globl\t%s\n' % (label,))
         call.global_label = label
@@ -591,19 +591,6 @@ class FunctionGcRootTracker(object):
                 return InsnStop()
         return [InsnCall(self.currentlineno),
                 InsnSetLocal('%eax')]      # the result is there
-
-    def visit_pypygetframeaddress(self, line):
-        xxx
-        # this is a pseudo-instruction that is emitted to find the first
-        # frame address on the stack.  We cannot just use
-        # __builtin_frame_address(0) - apparently, gcc thinks it can
-        # return %ebp even if -fomit-frame-pointer is specified, which
-        # doesn't work.
-        match = r_unaryinsn.match(line)
-        reg = match.group(1)
-        newline = '\tleal\t%d(%%esp), %s\t/* pypygetframeaddress */\n' % (
-            self.framesize-4, reg)
-        self.lines[self.currentlinenum] = newline
 
 
 class UnrecognizedOperation(Exception):
