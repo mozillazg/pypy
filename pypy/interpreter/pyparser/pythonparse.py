@@ -131,33 +131,9 @@ class PythonParser(grammar.Parser):
             # return None
         return builder
 
-    def update_rules_references(self):
-        """update references to old rules"""
-        # brute force algorithm
-        for rule in self.all_rules:
-            for i in range(len(rule.args)):
-                arg = rule.args[i]
-                if arg.codename in self.root_rules:
-                    real_rule = self.root_rules[arg.codename]
-                    # This rule has been updated
-                    if real_rule is not rule.args[i]:
-                        rule.args[i] = real_rule
-
-
-    def insert_rule(self, ruledef):
-        """parses <ruledef> and inserts corresponding rules in the parser"""
-        # parse the ruledef(s)
-        source = GrammarSource(GRAMMAR_GRAMMAR, ruledef)
-        builder = ebnfparse.EBNFBuilder(GRAMMAR_GRAMMAR, dest_parser=self)
-        GRAMMAR_GRAMMAR.root_rules['grammar'].match(source, builder)
-        # remove proxy objects if any
-        builder.resolve_rules()
-        # update keywords
-        self.keywords.extend(builder.keywords)
-        # update old references in case an existing rule was modified
-        self.update_rules_references()
-        # recompute first sets
-        self.build_first_sets()
+# XXX kill?
+# GrammarProxy
+# resolve_rules
 
 
 def make_pyparser(version):
