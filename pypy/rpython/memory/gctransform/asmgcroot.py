@@ -153,7 +153,12 @@ class AsmStackRootWalker(BaseRootWalker):
         #
         shape = item.address[1]
         framesize = shape.signed[0]
-        caller.frame_address = callee.frame_address + framesize
+        if framesize == 0:
+            # frame size not known, use %ebp to find the frame address
+            caller_ebp = callee.regs_stored_at[INDEX_OF_EBP].address[0]
+            caller.frame_address = caller_ebp + 4
+        else:
+            caller.frame_address = callee.frame_address + framesize
         #
         # enumerate the GC roots in the caller frame
         #
@@ -171,8 +176,8 @@ class AsmStackRootWalker(BaseRootWalker):
         # track where the caller_frame saved the registers from its own
         # caller
         #
-        if shape.signed[1] == -1:     # a marker that means "I'm the frame
-            return False              # of the entry point, stop walking"
+        if framesize == 0:     # a marker that means "I'm the frame
+            return False       # of the entry point, stop walking"
         reg = 0
         while reg < CALLEE_SAVED_REGS:
             location = shape.signed[1+reg]
@@ -260,6 +265,7 @@ def insertion_sort(start, end):
 #                    that's the last word of the frame in memory)
 #
 CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
+INDEX_OF_EBP      = 3
 FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
 
 ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address],
