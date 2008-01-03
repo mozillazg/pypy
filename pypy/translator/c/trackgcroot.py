@@ -35,18 +35,26 @@ class GcRootTracker(object):
         assert self.seen_main
         shapes = {}
         print >> output, """\t.text
-        .globl pypy_asm_stackwalk_init
-            .type pypy_asm_stackwalk_init, @function
-        pypy_asm_stackwalk_init:
+        .globl pypy_asm_stackwalk
+            .type pypy_asm_stackwalk, @function
+        pypy_asm_stackwalk:
             /* See description in asmgcroot.py */
-            movl   4(%esp), %edx     /* argument */
-            movl   %ebx, (%edx)
-            movl   %esi, 4(%edx)
-            movl   %edi, 8(%edx)
-            movl   %ebp, 12(%edx)
-            movl   %esp, 16(%edx)
-            movl   (%esp), %eax
-            movl   %eax, 20(%edx)
+            movl   4(%esp), %edx     /* my argument, which is the callback */
+            movl   (%esp), %eax      /* my return address */
+            pushl  %eax              /* ASM_FRAMEDATA[4] */
+            pushl  %ebp              /* ASM_FRAMEDATA[3] */
+            pushl  %edi              /* ASM_FRAMEDATA[2] */
+            pushl  %esi              /* ASM_FRAMEDATA[1] */
+            pushl  %ebx              /* ASM_FRAMEDATA[0] */
+            movl   %esp, %eax        /* address of ASM_FRAMEDATA */
+            pushl  %eax
+            call   *%edx             /* invoke the callback */
+            popl   %eax
+            popl   %ebx              /* restore from ASM_FRAMEDATA[0] */
+            popl   %esi              /* restore from ASM_FRAMEDATA[1] */
+            popl   %edi              /* restore from ASM_FRAMEDATA[2] */
+            popl   %ebp              /* restore from ASM_FRAMEDATA[3] */
+            popl   %eax
             ret
         .size pypy_asm_stackwalk_init, .-pypy_asm_stackwalk_init
         """
