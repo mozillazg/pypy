@@ -195,12 +195,12 @@ class FunctionGcRootTracker(object):
 
     def findlabels(self):
         self.labels = {}      # {name: Label()}
-        for line in self.lines:
+        for lineno, line in enumerate(self.lines):
             match = r_label.match(line)
             if match:
                 label = match.group(1)
                 assert label not in self.labels, "duplicate label"
-                self.labels[label] = Label(label)
+                self.labels[label] = Label(label, lineno)
 
     def parse_instructions(self):
         self.insns = [InsnFunctionStart()]
@@ -394,7 +394,7 @@ class FunctionGcRootTracker(object):
         # floating-point operations cannot produce GC pointers
         'f',
         # arithmetic operations should not produce GC pointers
-        'inc', 'dec', 'not', 'neg', 'or', 'and',
+        'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
         'shl', 'shr', 'sal', 'sar', 'mul', 'imul', 'div', 'idiv',
         # zero-extending moves should not produce GC pointers
         'movz',
@@ -528,20 +528,18 @@ class FunctionGcRootTracker(object):
     def visit_jmp(self, line):
         match = r_jmp_switch.match(line)
         if match:
-            xxx
             # this is a jmp *Label(%index), used for table-based switches.
             # Assume that the table is just a list of lines looking like
             # .long LABEL or .long 0, ending in a .text.
             tablelabel = match.group(1)
-            tablelin = self.labels[tablelabel] + 1
+            tablelin = self.labels[tablelabel].lineno + 1
             while not r_jmptable_end.match(self.lines[tablelin]):
                 match = r_jmptable_item.match(self.lines[tablelin])
                 label = match.group(1)
                 if label != '0':
-                    targetlin = self.labels[label]
-                    self.propagate_state_to(targetlin)
+                    self.register_jump_to(label)
                 tablelin += 1
-            raise LeaveBasicBlock
+            return InsnStop()
         if r_unaryinsn_star.match(line):
             # that looks like an indirect tail-call.
             return InsnRet()    # tail-calls are equivalent to RET for us
@@ -615,9 +613,10 @@ class Insn(object):
         return localvar
 
 class Label(Insn):
-    _args_ = ['label']
-    def __init__(self, label):
+    _args_ = ['label', 'lineno']
+    def __init__(self, label, lineno):
         self.label = label
+        self.lineno = lineno
         self.previous_insns = []   # all insns that jump (or fallthrough) here
 
 class InsnFunctionStart(Insn):
