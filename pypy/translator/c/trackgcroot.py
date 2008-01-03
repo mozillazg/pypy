@@ -177,7 +177,10 @@ class FunctionGcRootTracker(object):
             if match:
                 if not in_APP:
                     opname = match.group(1)
-                    meth = getattr(self, 'visit_' + opname)
+                    try:
+                        meth = getattr(self, 'visit_' + opname)
+                    except AttributeError:
+                        meth = self.find_missing_visit_method(opname)
                     insn = meth(line)
             elif r_gcroot_marker.match(line):
                 insn = self._visit_gcroot_marker(line)
@@ -191,6 +194,17 @@ class FunctionGcRootTracker(object):
             else:
                 self.insns.append(insn)
             del self.currentlineno
+
+    def find_missing_visit_method(self, opname):
+        # only for operations that are no-ops as far as we are concerned
+        prefix = opname
+        while prefix not in self.IGNORE_OPS_WITH_PREFIXES:
+            prefix = prefix[:-1]
+            if not prefix:
+                raise UnrecognizedOperation(opname)
+        visit_nop = FunctionGcRootTracker.__dict__['visit_nop']
+        setattr(FunctionGcRootTracker, 'visit_' + opname, visit_nop)
+        return self.visit_nop
 
     def makeprevmap(self):
         # builds the prevmap, which only accounts for jumps.  Each insn node
@@ -255,7 +269,7 @@ class FunctionGcRootTracker(object):
 
         def walker(i, insn, loc):
             source = insn.source_of(loc, tag)
-            if isinstance(source, Value):
+            if source is somenewvalue:
                 pass   # done
             else:
                 yield source
@@ -334,9 +348,27 @@ class FunctionGcRootTracker(object):
     def visit_nop(self, line):
         return []
 
-    NOP_PREFIXES = dict.fromkeys(['cmp', 'test', 'set',
-                                  'f',   # floating-point operations
-                                  ])
+    IGNORE_OPS_WITH_PREFIXES = dict.fromkeys([
+        'cmp', 'test', 'set', 'sahf',
+        'f',   # floating-point operations
+        ])
+
+    visit_movb = visit_nop
+    visit_movw = visit_nop
+    visit_addb = visit_nop
+    visit_addw = visit_nop
+    visit_subb = visit_nop
+    visit_subw = visit_nop
+    visit_incb = visit_nop
+    visit_incw = visit_nop
+    visit_decb = visit_nop
+    visit_decw = visit_nop
+    visit_xorb = visit_nop
+    visit_xorw = visit_nop
+    visit_orb  = visit_nop
+    visit_orw  = visit_nop
+    visit_andb = visit_nop
+    visit_andw = visit_nop
 
     def visit_addl(self, line, sign=+1):
         match = r_binaryinsn.match(line)
@@ -346,7 +378,7 @@ class FunctionGcRootTracker(object):
             assert count.startswith('$')
             return InsnStackAdjust(sign * int(count[1:]))
         elif r_localvar.match(target):
-            return InsnSetLocal(Value(), target)
+            return InsnSetLocal(target)
         else:
             raise UnrecognizedOperation(line)
 
@@ -357,22 +389,26 @@ class FunctionGcRootTracker(object):
         match = r_unaryinsn.match(line)
         target = match.group(1)
         if r_localvar.match(target):
-            return InsnSetLocal(Value(), target)
+            return InsnSetLocal(target)
         else:
             raise UnrecognizedOperation(line)
 
     visit_incl = unary_insn
+    visit_decl = unary_insn
 
     def binary_insn(self, line):
         match = r_binaryinsn.match(line)
         target = match.group(2)
         if r_localvar.match(target):
-            return InsnSetLocal(Value(), target)
+            return InsnSetLocal(target)
         else:
             raise UnrecognizedOperation(line)
 
     visit_xorl = binary_insn
+    visit_orl = binary_insn
+    visit_andl = binary_insn
     visit_movzbl = binary_insn
+    visit_movzwl = binary_insn
     visit_leal = binary_insn
     visit_imull = binary_insn
 
@@ -381,7 +417,7 @@ class FunctionGcRootTracker(object):
             if r_localvar.match(source):
                 return [InsnCopyLocal(source, target)]
             else:
-                return [InsnSetLocal(Value(), target)]
+                return [InsnSetLocal(target)]
         elif target == '%esp':
             raise UnrecognizedOperation
         else:
@@ -489,16 +525,10 @@ class FunctionGcRootTracker(object):
 class UnrecognizedOperation(Exception):
     pass
 
+class SomeNewValue(object):
+    pass
+somenewvalue = SomeNewValue()
 
-class Value(object):
-    Count = 0
-    def __repr__(self):
-        try:
-            n = self.n
-        except AttributeError:
-            n = self.n = Value.Count
-            Value.Count += 1
-        return '<Value %d>' % n
 
 class Insn(object):
     _args_ = []
@@ -517,25 +547,23 @@ class InsnFunctionStart(Insn):
     def __init__(self):
         self.arguments = {}
         for reg in CALLEE_SAVE_REGISTERS:
-            self.arguments[reg] = Value()
+            self.arguments[reg] = somenewvalue
     def source_of(self, localvar, tag):
         if localvar not in self.arguments:
             assert isinstance(localvar, int) and localvar > 0, (
                 "must come from an argument to the function, got %r" %
                 (localvar,))
-            self.arguments[localvar] = Value()
+            self.arguments[localvar] = somenewvalue
         return self.arguments[localvar]
 
 class InsnSetLocal(Insn):
-    _args_ = ['value', 'target']
+    _args_ = ['target']
     _locals_ = ['target']
-    def __init__(self, value, target):
-        assert value is None or isinstance(value, Value)
-        self.value = value
+    def __init__(self, target):
         self.target = target
     def source_of(self, localvar, tag):
         if localvar == self.target:
-            return self.value
+            return somenewvalue
         return localvar
 
 class InsnCopyLocal(Insn):
