@@ -13,7 +13,7 @@ r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+OPERAND+")\s*$")
 r_unaryinsn_star= re.compile(r"\t[a-z]\w*\s+([*]"+OPERAND+")\s*$")
 r_jmp_switch    = re.compile(r"\tjmp\t[*]([.]?\w+)[(]")
 r_jmptable_item = re.compile(r"\t.long\t([.]?\w+)\s*$")
-r_jmptable_end  = re.compile(r"\t.text\s*$")
+r_jmptable_end  = re.compile(r"\t.text|\t.section\s+.text")
 r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+("+OPERAND+"),\s*("+OPERAND+")\s*$")
 LOCALVAR        = r"%eax|%edx|%ecx|%ebx|%esi|%edi|%ebp|\d*[(]%esp[)]"
 LOCALVARFP      = LOCALVAR + r"|-?\d*[(]%ebp[)]"
@@ -390,12 +390,12 @@ class FunctionGcRootTracker(object):
 
     IGNORE_OPS_WITH_PREFIXES = dict.fromkeys([
         'cmp', 'test', 'set', 'sahf', 'cltd', 'cld', 'std',
-        'rep', 'movs',
+        'rep', 'movs', 'lods', 'stos', 'scas',
         # floating-point operations cannot produce GC pointers
         'f',
         # arithmetic operations should not produce GC pointers
         'inc', 'dec', 'not', 'neg', 'or', 'and', 'sbb', 'adc',
-        'shl', 'shr', 'sal', 'sar', 'mul', 'imul', 'div', 'idiv',
+        'shl', 'shr', 'sal', 'sar', 'rol', 'ror', 'mul', 'imul', 'div', 'idiv',
         # zero-extending moves should not produce GC pointers
         'movz',
         ])
@@ -455,6 +455,7 @@ class FunctionGcRootTracker(object):
             # gcc should not use %esp-relative addressing in such a function
             # so we can just ignore it
             assert self.is_main
+            self.uses_frame_pointer = True
             return []
         else:
             return self.binary_insn(line)
@@ -467,10 +468,12 @@ class FunctionGcRootTracker(object):
             source = match.group(1)
             match = r_localvar_ebp.match(source)
             if not match:
-                raise UnrecognizedOperation(line)
-            ofs_from_ebp = int(match.group(1) or '0')
-            assert ofs_from_ebp < 0
-            return InsnEpilogue(framesize = 4 - ofs_from_ebp)
+                framesize = None    # strange instruction
+            else:
+                ofs_from_ebp = int(match.group(1) or '0')
+                assert ofs_from_ebp < 0
+                framesize = 4 - ofs_from_ebp
+            return InsnEpilogue(framesize)
         else:
             return self.binary_insn(line)
 
@@ -514,10 +517,10 @@ class FunctionGcRootTracker(object):
         self.r_localvar = r_localvarfp
         return [InsnPrologue()]
 
-    def _visit_epilogue(self, framesize=4):
+    def _visit_epilogue(self):
         if not self.uses_frame_pointer:
             raise UnrecognizedOperation('epilogue without prologue')
-        return [InsnEpilogue(framesize)]
+        return [InsnEpilogue(4)]
 
     def visit_leave(self, line):
         return self._visit_epilogue() + self._visit_pop('%ebp')
@@ -530,11 +533,13 @@ class FunctionGcRootTracker(object):
         if match:
             # this is a jmp *Label(%index), used for table-based switches.
             # Assume that the table is just a list of lines looking like
-            # .long LABEL or .long 0, ending in a .text.
+            # .long LABEL or .long 0, ending in a .text or .section .text.hot.
             tablelabel = match.group(1)
             tablelin = self.labels[tablelabel].lineno + 1
             while not r_jmptable_end.match(self.lines[tablelin]):
                 match = r_jmptable_item.match(self.lines[tablelin])
+                if not match:
+                    raise NoPatternMatch(self.lines[tablelin])
                 label = match.group(1)
                 if label != '0':
                     self.register_jump_to(label)
@@ -592,6 +597,9 @@ class FunctionGcRootTracker(object):
 
 
 class UnrecognizedOperation(Exception):
+    pass
+
+class NoPatternMatch(Exception):
     pass
 
 class SomeNewValue(object):
@@ -715,8 +723,9 @@ class InsnPrologue(Insn):
         Insn.__setattr__(self, attr, value)
 
 class InsnEpilogue(Insn):
-    def __init__(self, framesize=4):
-        self.framesize = framesize
+    def __init__(self, framesize=None):
+        if framesize is not None:
+            self.framesize = framesize
 
 
 FUNCTIONS_NOT_RETURNING = {
