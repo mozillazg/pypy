@@ -40,7 +40,7 @@ class GcRootTracker(object):
         pypy_asm_stackwalk:
             /* See description in asmgcroot.py */
             movl   4(%esp), %edx     /* my argument, which is the callback */
-            movl   (%esp), %eax      /* my return address */
+            movl   %esp, %eax        /* my frame top address */
             pushl  %eax              /* ASM_FRAMEDATA[4] */
             pushl  %ebp              /* ASM_FRAMEDATA[3] */
             pushl  %edi              /* ASM_FRAMEDATA[2] */
@@ -107,6 +107,7 @@ class GcRootTracker(object):
 
     def process_function(self, lines, newfile, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
+        tracker.is_main = tracker.funcname == entrypoint
         if self.verbose:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
@@ -114,24 +115,21 @@ class GcRootTracker(object):
         if self.verbose > 1:
             for label, state in table:
                 print >> sys.stderr, label, '\t', state
-        if tracker.funcname == entrypoint:
+        if tracker.is_main:
+            assert tracker.uses_frame_pointer
             table = self.fixup_entrypoint_table(table)
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
     def fixup_entrypoint_table(self, table):
         self.seen_main = True
-        # we don't need to track where the main() function saved its
-        # own caller's registers.  So as a marker, we set the
-        # corresponding entries in the shape to -1.  The code in
-        # asmgcroot recognizes these markers as meaning "stop walking
-        # the stack".
+        # the main() function contains strange code that aligns the stack
+        # pointer to a multiple of 16, which messes up our framesize
+        # computation.  So just for this function, and as an end marker,
+        # we use a frame size of 0.
         newtable = []
         for label, shape in table:
-            shape = list(shape)
-            for i in range(len(CALLEE_SAVE_REGISTERS)):
-                shape[1+i] = -1
-            newtable.append((label, tuple(shape)))
+            newtable.append((label, (0,) + shape[1:]))
         return newtable
 
 
@@ -146,6 +144,7 @@ class FunctionGcRootTracker(object):
         self.lines = lines
         self.uses_frame_pointer = False
         self.r_localvar = r_localvarnofp
+        self.is_main = False
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
@@ -274,7 +273,7 @@ class FunctionGcRootTracker(object):
                 yield size_delta   # continue walking backwards
 
         for insn in self.insns:
-            if insn.requestgcroots():
+            if isinstance(insn, (InsnRet, InsnEpilogue, InsnGCROOT)):
                 deltas = {}
                 self.walk_instructions_backwards(walker, insn, 0)
                 size_at_insn = []
@@ -433,11 +432,6 @@ class FunctionGcRootTracker(object):
         else:
             return []
 
-##    visit_incl = unary_insn
-##    visit_decl = unary_insn
-##    visit_notl = unary_insn
-##    visit_negl = unary_insn
-
     def binary_insn(self, line):
         match = r_binaryinsn.match(line)
         if not match:
@@ -449,23 +443,40 @@ class FunctionGcRootTracker(object):
             raise UnrecognizedOperation(line)
 
     visit_xorl = binary_insn   # used in "xor reg, reg" to create a NULL GC ptr
-##    visit_orl = binary_insn
-##    visit_andl = binary_insn
-##    visit_movzbl = binary_insn
-##    visit_movzwl = binary_insn
-    visit_leal = binary_insn
+    visit_orl = binary_insn
+
+    def visit_andl(self, line):
+        match = r_binaryinsn.match(line)
+        target = match.group(2)
+        if target == '%esp':
+            # only for  andl $-16, %esp  used to align the stack in main().
+            # gcc should not use %esp-relative addressing in such a function
+            # so we can just ignore it
+            assert self.is_main
+            return []
+        else:
+            return self.binary_insn(line)
+
+    def visit_leal(self, line):
+        match = r_binaryinsn.match(line)
+        target = match.group(2)
+        if target == '%esp':
+            # only for  leal -12(%ebp), %esp  in function epilogues
+            source = match.group(1)
+            match = r_localvar_ebp.match(source)
+            if not match:
+                raise UnrecognizedOperation(line)
+            ofs_from_ebp = int(match.group(1) or '0')
+            assert ofs_from_ebp < 0
+            return InsnEpilogue(framesize = 4 - ofs_from_ebp)
+        else:
+            return self.binary_insn(line)
 
     def unary_or_binary_insn(self, line):
         if r_binaryinsn.match(line):
             return self.binary_insn(line)
         else:
             return self.unary_insn(line)
-
-##    visit_shll = unary_or_binary_insn
-##    visit_shrl = unary_or_binary_insn
-##    visit_sall = unary_or_binary_insn
-##    visit_sarl = unary_or_binary_insn
-##    visit_imull = unary_or_binary_insn
 
     def insns_for_copy(self, source, target):
         if source == '%esp' or target == '%esp':
@@ -507,10 +518,10 @@ class FunctionGcRootTracker(object):
         self.r_localvar = r_localvarfp
         return [InsnPrologue()]
 
-    def _visit_epilogue(self):
+    def _visit_epilogue(self, framesize=4):
         if not self.uses_frame_pointer:
             raise UnrecognizedOperation('epilogue without prologue')
-        return [InsnEpilogue()]
+        return [InsnEpilogue(framesize)]
 
     def visit_leave(self, line):
         return self._visit_epilogue() + self._visit_pop('%ebp')
@@ -722,10 +733,8 @@ class InsnPrologue(Insn):
         Insn.__setattr__(self, attr, value)
 
 class InsnEpilogue(Insn):
-    framesize = 4
-    def requestgcroots(self):
-        return dict(zip(CALLEE_SAVE_REGISTERS_NOEBP,
-                        CALLEE_SAVE_REGISTERS_NOEBP))
+    def __init__(self, framesize=4):
+        self.framesize = framesize
 
 
 FUNCTIONS_NOT_RETURNING = {
