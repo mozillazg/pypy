@@ -788,15 +788,17 @@ class BaseRootWalker:
             addr = gcdata.static_root_start
             end = gcdata.static_root_nongcend
             while addr != end:
-                if addr.address[0] != llmemory.NULL:
-                    collect_static_in_prebuilt_nongc(gc, addr)
+                result = addr.address[0]
+                if result.address[0] != llmemory.NULL:
+                    collect_static_in_prebuilt_nongc(gc, result)
                 addr += sizeofaddr
         if collect_static_in_prebuilt_gc:
             addr = gcdata.static_root_nongcend
             end = gcdata.static_root_end
             while addr != end:
-                if addr.address[0] != llmemory.NULL:
-                    collect_static_in_prebuilt_gc(gc, addr)
+                result = addr.address[0]
+                if result.address[0] != llmemory.NULL:
+                    collect_static_in_prebuilt_gc(gc, result)
                 addr += sizeofaddr
         if collect_stack_root:
             self.walk_stack_roots(collect_stack_root)     # abstract
