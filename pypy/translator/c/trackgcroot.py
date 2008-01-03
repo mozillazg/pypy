@@ -34,6 +34,22 @@ class GcRootTracker(object):
     def dump(self, output):
         assert self.seen_main
         shapes = {}
+        print >> output, """\t.text
+        .globl pypy_asm_stackwalk_init
+            .type pypy_asm_stackwalk_init, @function
+        pypy_asm_stackwalk_init:
+            /* See description in asmgcroot.py */
+            movl   4(%esp), %edx     /* argument */
+            movl   %ebx, (%edx)
+            movl   %esi, 4(%edx)
+            movl   %edi, 8(%edx)
+            movl   %ebp, 12(%edx)
+            movl   %esp, 16(%edx)
+            movl   (%esp), %eax
+            movl   %eax, 20(%edx)
+            ret
+        .size pypy_asm_stackwalk_init, .-pypy_asm_stackwalk_init
+        """
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
         print >> output, '\t.globl\t__gcmapstart'
@@ -54,11 +70,13 @@ class GcRootTracker(object):
         print >> output, '\t.align\t4'
         keys = shapes.keys()
         keys.sort()
+        FIXED = 1 + len(CALLEE_SAVE_REGISTERS)
         for state in keys:
             print >> output, '%s:' % (shapes[state],)
-            print >> output, '\t.long\t%d' % (state[0],)      # frame size
-            print >> output, '\t.long\t%d' % (len(state)-1,)  # gcroot count
-            for p in state[1:]:
+            for i in range(FIXED):
+                print >> output, '\t.long\t%d' % (state[i],)
+            print >> output, '\t.long\t%d' % (len(state)-FIXED,)
+            for p in state[FIXED:]:
                 print >> output, '\t.long\t%d' % (p,)         # gcroots
 
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
@@ -89,13 +107,24 @@ class GcRootTracker(object):
             for label, state in table:
                 print >> sys.stderr, label, '\t', state
         if tracker.funcname == entrypoint:
-            self.seen_main = True
-            table = [(label, (-1,)+info[1:]) for label, info in table]
-            # ^^^ we set the framesize of the entry point to -1 as a marker
-            # (the code in asmgcroot.py actually takes any odd-valued number
-            # as marker.)
+            table = self.fixup_entrypoint_table(table)
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
+
+    def fixup_entrypoint_table(self, table):
+        self.seen_main = True
+        # we don't need to track where the main() function saved its
+        # own caller's registers.  So as a marker, we set the
+        # corresponding entries in the shape to -1.  The code in
+        # asmgcroot recognizes these markers as meaning "stop walking
+        # the stack".
+        newtable = []
+        for label, shape in table:
+            shape = list(shape)
+            for i in range(len(CALLEE_SAVE_REGISTERS)):
+                shape[1+i] = -1
+            newtable.append((label, tuple(shape)))
+        return newtable
 
 
 class FunctionGcRootTracker(object):
@@ -127,31 +156,34 @@ class FunctionGcRootTracker(object):
         return self.gettable()
 
     def gettable(self):
-        "Returns a list [(label_after_call, (framesize, gcroot0, gcroot1,..))]"
+        """Returns a list [(label_after_call, shape_tuple)]
+        where shape_tuple = (framesize, where_is_ebx_saved, ...
+                            ..., where_is_ebp_saved, gcroot0, gcroot1...)
+        """
         table = []
         for insn in self.list_call_insns():
             if not hasattr(insn, 'framesize'):
                 continue     # calls that never end up reaching a RET
-            info = [insn.framesize]
+            shape = [insn.framesize + 4]     # accounts for the return address
             # the first gcroots are always the ones corresponding to
             # the callee-saved registers
             for reg in CALLEE_SAVE_REGISTERS:
-                info.append(None)
+                shape.append(None)
             for loc, tag in insn.gcroots.items():
                 if not isinstance(loc, int):
                     # a special representation for a register location,
                     # as an odd-valued number
                     loc = CALLEE_SAVE_REGISTERS.index(loc) * 2 + 1
                 if tag is None:
-                    info.append(loc)
+                    shape.append(loc)
                 else:
                     regindex = CALLEE_SAVE_REGISTERS.index(tag)
-                    info[1 + regindex] = loc
-            if None in info:
-                reg = CALLEE_SAVE_REGISTERS[info.index(None) - 1]
+                    shape[1 + regindex] = loc
+            if None in shape:
+                reg = CALLEE_SAVE_REGISTERS[shape.index(None) - 1]
                 raise AssertionError("cannot track where register %s is saved"
                                      % (reg,))
-            table.append((insn.global_label, tuple(info)))
+            table.append((insn.global_label, tuple(shape)))
         return table
 
     def findlabels(self):

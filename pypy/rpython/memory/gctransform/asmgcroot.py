@@ -1,5 +1,5 @@
 from pypy.rpython.memory.gctransform.framework import FrameworkGCTransformer
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython import rmodel
 from pypy.rpython.rbuiltin import gen_cast
@@ -54,11 +54,13 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
             append_static_root = staticmethod(append_static_root)
             
             def __init__(self, with_static=True):
-                self.stack_current = llop.llvm_frameaddress(llmemory.Address)
+                self.callee_data = lltype.malloc(ASM_STACKWALK, flavor="raw")
+                self.caller_data = lltype.malloc(ASM_STACKWALK, flavor="raw")
+                pypy_asm_stackwalk_init(self.caller_data)
                 self.remaining_roots_in_current_frame = 0
                 # We must walk at least a couple of frames up the stack
                 # *now*, i.e. before we leave __init__, otherwise
-                # self.stack_current ends up pointing to a dead frame.
+                # the caller_data ends up pointing to a dead frame.
                 # We can walk until we find a real GC root; then we're
                 # definitely out of the GC code itself.
                 while self.remaining_roots_in_current_frame == 0:
@@ -86,77 +88,105 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                         return result
 
             def walk_to_parent_frame(self):
+                if not self.caller_data:
+                    return False
                 #
                 # The gcmap table is a list of pairs of pointers:
                 #     void *SafePointAddress;
                 #     void *Shape;
                 #
                 # A "safe point" is the return address of a call.
-                # The "shape" of a safe point records the size of the
-                # frame of the function containing it, as well as a
-                # list of the variables that contain gc roots at that
-                # time.  Each variable is described by its offset in
-                # the frame.
+                # The "shape" of a safe point is a list of integers
+                # as follows:
                 #
-                callee_frame = self.stack_current
-                if llmemory.cast_adr_to_int(callee_frame) & 1:
-                    return False   # odd bit set here when the callee_frame
-                                   # is the frame of main(), i.e. when there
-                                   # is nothing more for us in the stack.
+                #   * The size of the frame of the function containing the
+                #     call (in theory it can be different from call to call).
+                #     This size includes the return address (see picture
+                #     below).
+                #
+                #   * Four integers that specify where the function saves
+                #     each of the four callee-saved registers (%ebx, %esi,
+                #     %edi, %ebp).  This is a "location", see below.
+                #
+                #   * The number of live GC roots around the call.
+                #
+                #   * For each GC root, an integer that specify where the
+                #     GC pointer is stored.  This is a "location", see below.
+                #
+                # A "location" can be either in the stack or in a register.
+                # If it is in the stack, it is specified as an integer offset
+                # from the current frame (so it is typically < 0, as seen
+                # in the picture below, though it can also be > 0 if the
+                # location is an input argument to the current function and
+                # thus lives at the bottom of the caller's frame).
+                # A "location" can also be in a register; in our context it
+                # can only be a callee-saved register.  This is specified
+                # as a small odd-valued integer (1=%ebx, 3=%esi, etc.)
+
+                # In the code below, we walk the next older frame on the stack.
+                # The caller becomes the callee; we swap the two buffers and
+                # fill in the new caller's data.
+                callee = self.caller_data
+                caller = self.callee_data
+                self.caller_data = caller
+                self.callee_data = callee
                 #
                 # XXX the details are completely specific to X86!!!
                 # a picture of the stack may help:
                 #                                           ^ ^ ^
                 #     |     ...      |                 to older frames
                 #     +--------------+
-                #     |  first word  |  <------ caller_frame (addr of 1st word)
-                #     +              +
+                #     |   ret addr   |  <------ caller_frame (addr of retaddr)
+                #     |     ...      |
                 #     | caller frame |
                 #     |     ...      |
-                #     |  frame data  |  <------ frame_data_base
                 #     +--------------+
-                #     |   ret addr   |
-                #     +--------------+
-                #     |  first word  |  <------ callee_frame (addr of 1st word)
-                #     +              +
-                #     | callee frame |
+                #     |   ret addr   |  <------ callee_frame (addr of retaddr)
                 #     |     ...      |
-                #     |  frame data  |                 lower addresses
+                #     | callee frame |
+                #     |     ...      |                 lower addresses
                 #     +--------------+                      v v v
                 #
-                retaddr = callee_frame.address[1]
+                callee_frame = callee[FRAME_PTR]
+                retaddr = callee[RET_ADDR]
                 #
                 # try to locate the caller function based on retaddr.
                 #
                 gcmapstart = llop.llvm_gcmapstart(llmemory.Address)
                 gcmapend   = llop.llvm_gcmapend(llmemory.Address)
                 item = binary_search(gcmapstart, gcmapend, retaddr)
-                if item.address[0] == retaddr:
-                    #
-                    # found!  Setup pointers allowing us to
-                    # parse the caller's frame structure...
-                    #
-                    shape = item.address[1]
-                    # XXX assumes that .signed is 32-bit
-                    framesize = shape.signed[0]   # odd if it's main()
-                    livecount = shape.signed[1]
-                    caller_frame = callee_frame + 4 + framesize
-                    self.stack_current = caller_frame
-                    self.frame_data_base = callee_frame + 8
-                    self.remaining_roots_in_current_frame = livecount
-                    self.liveoffsets = shape + 8
-                    return True
+                if item.address[0] != retaddr:
+                    # retaddr not found!
+                    llop.debug_fatalerror(lltype.Void, "cannot find gc roots!")
+                    return False
 
-                # retaddr not found!
-                llop.debug_fatalerror(lltype.Void, "cannot find gc roots!")
-                return False
+                # found!  Now we can fill in 'caller'.
+                shape = item.address[1]
+                framesize = shape.signed[0]
+                caller[FRAME_PTR] = callee_frame + framesize
+                caller[RET_ADDR] = caller[FRAME_PTR].address[0]
+                reg = 0
+                while reg < CALLEE_SAVED_REGS:
+                    caller[reg] = self.read_from_location(shape.signed[1+reg])
+                    reg += 1
+                livecount = shape.signed[1+CALLEE_SAVED_REGS]
+                self.remaining_roots_in_current_frame = livecount
+                self.liveoffsets = shape + 4 * (1+CALLEE_SAVED_REGS+1)
+                return True
+
+            def finished(self):
+                lltype.free(self.stackwalkcur, flavor='raw')
+                self.stackwalkcur = lltype.nullptr(ASM_STACKWALK)
+                lltype.free(self.stackwalknext, flavor='raw')
+                self.stackwalknext = lltype.nullptr(ASM_STACKWALK)
 
             def next_gcroot_from_current_frame(self):
                 i = self.remaining_roots_in_current_frame - 1
                 self.remaining_roots_in_current_frame = i
                 ll_assert(i >= 0, "bad call to next_gcroot_from_current_frame")
                 liveoffset = self.liveoffsets.signed[i]
-                return self.frame_data_base + liveoffset
+                return self.callee_data[FRAME_PTR] + liveoffset
+            ...
 
 
         return StackRootIterator
@@ -206,3 +236,29 @@ def insertion_sort(start, end):
         scan.address[0] = addr1
         scan.address[1] = addr2
         next += arrayitemsize
+
+#
+# The special pypy_asm_stackwalk_init(), implemented directly in
+# assembler, initializes an ASM_STACKWALK array in order to bootstrap
+# the stack walking code.  An ASM_STACKWALK is an array of 6 values
+# that describe everything we need to know about a stack frame:
+#
+#   - the value that %ebx had when the current function started
+#   - the value that %esi had when the current function started
+#   - the value that %edi had when the current function started
+#   - the value that %ebp had when the current function started
+#   - frame address (actually the addr of the retaddr of the current function;
+#                    that's the last word of the frame in memory)
+#   - the return address for when the current function finishes
+#                   (which is usually just the word at "frame address")
+#
+CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
+FRAME_PTR      = CALLEE_SAVED_REGS
+RET_ADDR       = CALLEE_SAVED_REGS + 1
+ASM_STACKWALK  = lltype.FixedSizeArray(llmemory.Address, CALLEE_SAVED_REGS + 2)
+
+pypy_asm_stackwalk_init = rffi.llexternal('pypy_asm_stackwalk_init',
+                                          [lltype.Ptr(ASM_STACKWALK)],
+                                          lltype.Void,
+                                          sandboxsafe=True,
+                                          _nowrapper=True)
