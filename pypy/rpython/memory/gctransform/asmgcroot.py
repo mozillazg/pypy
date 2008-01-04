@@ -2,7 +2,9 @@ from pypy.rpython.memory.gctransform.framework import FrameworkGCTransformer
 from pypy.rpython.memory.gctransform.framework import BaseRootWalker
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.rbuiltin import gen_cast
 from pypy.rpython.annlowlevel import llhelper
+from pypy.objspace.flow.model import Constant
 from pypy.rlib.debug import ll_assert
 
 
@@ -26,7 +28,15 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
             return
         # mark the values as gc roots
         for var in livevars:
-            hop.genop("asm_gcroot", [var])
+            if 0:
+                # uses direct support in genc - more compact code,
+                # but it's probably not changing anything
+                hop.genop("asm_gcroot", [var])
+            else:
+                v_adr = gen_cast(hop.llops, llmemory.Address, var)
+                v_newaddr = hop.genop("direct_call", [c_asm_gcroot, v_adr],
+                                      resulttype=llmemory.Address)
+                hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
 
     def build_root_walker(self):
         return AsmStackRootWalker(self)
@@ -176,8 +186,8 @@ class AsmStackRootWalker(BaseRootWalker):
         # track where the caller_frame saved the registers from its own
         # caller
         #
-        if framesize == 0:     # a marker that means "I'm the frame
-            return False       # of the entry point, stop walking"
+        if shape.signed[1] == -1:     # a marker that means "I'm the frame
+            return False              # of the entry point, stop walking"
         reg = 0
         while reg < CALLEE_SAVED_REGS:
             location = shape.signed[1+reg]
@@ -284,3 +294,10 @@ pypy_asm_stackwalk = rffi.llexternal('pypy_asm_stackwalk',
                                      lltype.Void,
                                      sandboxsafe=True,
                                      _nowrapper=True)
+
+pypy_asm_gcroot = rffi.llexternal('pypy_asm_gcroot',
+                                  [llmemory.Address],
+                                  llmemory.Address,
+                                  sandboxsafe=True,
+                                  _nowrapper=True)
+c_asm_gcroot = Constant(pypy_asm_gcroot, lltype.typeOf(pypy_asm_gcroot))
