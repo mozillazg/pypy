@@ -13,6 +13,10 @@ extern char __gcmapend;
 extern char* __gcmap_frame_address(void);
 
 #define PYPY_GCROOT(p)  asm ("/* GCROOT %0 */" : "=g" (p) : "0" (p) : "memory")
+#define pypy_asm_gcroot(p) ({void*_r; \
+               asm ("/* GCROOT %0 */" : "=g" (_r) : "0" (p) : "memory"); \
+               _r; })
+
 #define OP_LLVM_GCMAPSTART(r)	r = &__gcmapstart
 #define OP_LLVM_GCMAPEND(r)	r = &__gcmapend
 #define OP_LLVM_FRAMEADDRESS(r)	asm ("pypygetframeaddress %0" : "=r" (r))

@@ -67,7 +67,7 @@ class GcRootTracker(object):
                 lst = ['__gcmap_shape']
                 for n in state:
                     if n < 0:
-                        n = 'minus%d' % (-n,)
+                        n = 'm%d' % (-n,)
                     lst.append(str(n))
                 shapes[state] = '_'.join(lst)
             print >> output, '\t.long\t%s' % (label,)
@@ -116,21 +116,31 @@ class GcRootTracker(object):
             for label, state in table:
                 print >> sys.stderr, label, '\t', state
         if tracker.is_main:
-            assert tracker.uses_frame_pointer
-            table = self.fixup_entrypoint_table(table)
+            fp = tracker.uses_frame_pointer
+            table = self.fixup_entrypoint_table(table, fp)
         self.gcmaptable.extend(table)
         newfile.writelines(tracker.lines)
 
-    def fixup_entrypoint_table(self, table):
+    def fixup_entrypoint_table(self, table, uses_frame_pointer):
         self.seen_main = True
-        # the main() function contains strange code that aligns the stack
-        # pointer to a multiple of 16, which messes up our framesize
-        # computation.  So just for this function, and as an end marker,
-        # we use a frame size of 0.
+        # as an end marker, set the CALLEE_SAVE_REGISTERS locations to -1.
+        # this info is not useful because we don't go to main()'s caller.
         newtable = []
+        MARKERS = (-1, -1, -1, -1)
         for label, shape in table:
-            newtable.append((label, (0,) + shape[1:]))
-        return newtable
+            newtable.append((label, shape[:1] + MARKERS + shape[5:]))
+        table = newtable
+
+        if uses_frame_pointer:
+            # the main() function may contain strange code that aligns the
+            # stack pointer to a multiple of 16, which messes up our framesize
+            # computation.  So just for this function, we use a frame size
+            # of 0 to ask asmgcroot to read %ebp to find the frame pointer.
+            newtable = []
+            for label, shape in table:
+                newtable.append((label, (0,) + shape[1:]))
+            table = newtable
+        return table
 
 
 class FunctionGcRootTracker(object):
@@ -452,10 +462,14 @@ class FunctionGcRootTracker(object):
         target = match.group(2)
         if target == '%esp':
             # only for  andl $-16, %esp  used to align the stack in main().
-            # gcc should not use %esp-relative addressing in such a function
-            # so we can just ignore it
+            # If gcc compiled main() with a frame pointer, then it should use
+            # %ebp-relative addressing and not %esp-relative addressing
+            # and asmgcroot will read %ebp to find the frame.  If main()
+            # is compiled without a frame pointer, the total frame size that
+            # we compute ends up being bogus but that's ok because gcc has
+            # to use %esp-relative addressing only and we don't need to walk
+            # to caller frames because it's main().
             assert self.is_main
-            self.uses_frame_pointer = True
             return []
         else:
             return self.binary_insn(line)
