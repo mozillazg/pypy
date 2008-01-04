@@ -144,7 +144,8 @@ class W_StructureInstance(Wrappable):
         return space.wrap(rffi.cast(rffi.INT, self.ll_buffer))
 
 def descr_new_structure_instance(space, w_type, w_shape, w_adr, w_fieldinits):
-    return W_StructureInstance(space, w_shape, w_adr, w_fieldinits)
+    fieldinits_w = space.unpackiterable(w_fieldinits)
+    return W_StructureInstance(space, w_shape, w_adr, fieldinits_w)
 
 W_StructureInstance.typedef = TypeDef(
     'StructureInstance',
