@@ -14,30 +14,18 @@ import pypy.interpreter.pyparser.pythonparse
 class Module(MixedModule):
     """Non-terminal symbols of Python grammar."""
     appleveldefs = {}
-    interpleveldefs = {}     # see below
+    interpleveldefs = {}
 
-    def __init__(self, space, w_name):
-        MixedModule.__init__(self, space, w_name)
-        _init_symbols(space.config.objspace.pyversion)
-
-
-# Export the values from our custom symbol module.
-# Skip negative values (the corresponding symbols are not visible in
-# pure Python).
-sym_name = {}
-
-def _init_symbols(grammar_version):
-    global sym_name
-
-    sym_name = {}
-    from pypy.interpreter.pyparser.pythonparse import make_pyparser
-    parser = make_pyparser(grammar_version)
-
-    for name, val in parser.symbols.items():
-        if val >= 0:
-            Module.interpleveldefs[name] = 'space.wrap(%d)' % val
-            sym_name[val] = name
-    Module.interpleveldefs['sym_name'] = 'space.wrap(%r)' % (sym_name,)
-
-# This is very evil
-_init_symbols('2.4')
+    def setup_after_space_initialization(self):
+        from pypy.interpreter.pyparser.pythonparse import make_pyparser
+        space = self.space
+        grammar_version = space.config.objspace.pyversion
+        parser = make_pyparser(grammar_version)
+        sym_name = {}
+        for name, val in parser.symbols.items():
+            # Skip negative values (the corresponding symbols are not visible in
+            # pure Python).
+            if val >= 0:
+                space.setattr(self, space.wrap(name), space.wrap(val))
+                sym_name[val] = name
+        space.setattr(self, space.wrap('sym_name'), space.wrap(sym_name))
