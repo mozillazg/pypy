@@ -76,8 +76,8 @@ class W_Structure(Wrappable):
                 raise OperationError(
                         space.w_TypeError,
                         space.wrap("Keyword arguments not allowed when passing address argument"))
-            return W_StructureInstance(space, self, args_w[0], None)
-        return W_StructureInstance(space, self, None, kwargs_w)
+            return space.wrap(W_StructureInstance(space, self, args_w[0], None))
+        return space.wrap(W_StructureInstance(space, self, None, kwargs_w))
 
 def descr_new_structure(space, w_type, w_fields):
     return W_Structure(space, w_fields)
@@ -143,13 +143,8 @@ class W_StructureInstance(Wrappable):
     def getbuffer(space, self):
         return space.wrap(rffi.cast(rffi.INT, self.ll_buffer))
 
-def descr_new_structure_instance(space, w_type, w_shape, w_adr, w_fieldinits):
-    fieldinits_w = space.unpackiterable(w_fieldinits)
-    return W_StructureInstance(space, w_shape, w_adr, fieldinits_w)
-
 W_StructureInstance.typedef = TypeDef(
     'StructureInstance',
-    __new__     = interp2app(descr_new_structure_instance),
     __getattr__ = interp2app(W_StructureInstance.getattr),
     __setattr__ = interp2app(W_StructureInstance.setattr),
     buffer      = GetSetProperty(W_StructureInstance.getbuffer),
