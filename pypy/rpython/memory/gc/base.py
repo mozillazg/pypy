@@ -6,6 +6,7 @@ class GCBase(object):
     moving_gc = False
     needs_write_barrier = False
     needs_zero_gc_pointers = True
+    prebuilt_gc_objects_are_static_roots = True
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
                             is_gcarrayofgcptr,
@@ -160,6 +161,12 @@ class MovingGCBase(GCBase):
         # more non-prebuild GC objects; this is fine because the
         # internal GC ptr in the prebuilt list or dict is found by
         # gctypelayout and listed in addresses_of_static_ptrs.
+
+        # XXX I'm not sure any more about the warning above.  The fields
+        # of 'self' are found by gctypelayout and added to
+        # addresses_of_static_ptrs_in_nongc, so in principle they could
+        # be mutated and still be found by collect().
+
         self.wr_to_objects_with_id = []
         self.object_id_dict = {}
         self.object_id_dict_ends_at = 0

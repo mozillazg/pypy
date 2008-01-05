@@ -111,6 +111,7 @@ class BaseGCTransformer(object):
             self.lltype_to_classdef = translator.rtyper.lltype_to_classdef_mapping()
         self.graphs_to_inline = {}
         self.graph_dependencies = {}
+        self.ll_finalizers_ptrs = []
         if self.MinimalGCTransformer:
             self.minimalgctransformer = self.MinimalGCTransformer(self)
         else:
@@ -279,24 +280,37 @@ class BaseGCTransformer(object):
         self.need_minimal_transform(graph)
         if inline:
             self.graphs_to_inline[graph] = True
-        return self.mixlevelannotator.graph2delayed(graph)
+        FUNCTYPE = lltype.FuncType(ll_args, ll_result)
+        return self.mixlevelannotator.graph2delayed(graph, FUNCTYPE=FUNCTYPE)
 
     def inittime_helper(self, ll_helper, ll_args, ll_result, inline=True):
         ptr = self.annotate_helper(ll_helper, ll_args, ll_result, inline=inline)
         return Constant(ptr, lltype.typeOf(ptr))
 
-    def finish_helpers(self):
+    def annotate_finalizer(self, ll_finalizer, ll_args, ll_result):
+        fptr = self.annotate_helper(ll_finalizer, ll_args, ll_result)
+        self.ll_finalizers_ptrs.append(fptr)
+        return fptr
+
+    def finish_helpers(self, backendopt=True):
         if self.translator is not None:
             self.mixlevelannotator.finish_annotate()
         self.finished_helpers = True
         if self.translator is not None:
             self.mixlevelannotator.finish_rtype()
+            if backendopt:
+                self.mixlevelannotator.backend_optimize()
+        # Make sure that the database also sees all finalizers now.
+        # XXX we need to think more about the interaction with stackless...
+        # It is likely that the finalizers need special support there
+        newgcdependencies = self.ll_finalizers_ptrs
+        return newgcdependencies
 
     def finish_tables(self):
         pass
 
-    def finish(self):
-        self.finish_helpers()
+    def finish(self, backendopt=True):
+        self.finish_helpers(backendopt=backendopt)
         self.finish_tables()
 
     def transform_generic_set(self, hop):
@@ -415,7 +429,7 @@ def mallocHelpers():
         except OverflowError:
             raise MemoryError()
         return tot_size
-    _ll_compute_size._inline_ = True
+    _ll_compute_size._always_inline_ = True
 
     def _ll_malloc_varsize_no_length(length, size, itemsize):
         tot_size = _ll_compute_size(length, size, itemsize)
