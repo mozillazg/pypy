@@ -257,7 +257,7 @@ def wrap_value(space, func, add_arg, argdesc, tp):
                 return space.wrap(func(add_arg, argdesc, ll_type))
             elif c == 'f' or c == 'd':
                 return space.wrap(float(func(add_arg, argdesc, ll_type)))
-            elif c == 'c' or c == 'b' or c == 'B':
+            elif c == 'c':
                 return space.wrap(chr(rffi.cast(rffi.INT, func(add_arg, argdesc,
                                                                ll_type))))
             elif c == 'h' or c == 'H':
