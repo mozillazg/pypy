@@ -38,8 +38,8 @@ TYPEMAP = {
 
 LL_TYPEMAP = {
     'c' : rffi.CHAR,
-    'b' : rffi.UCHAR,
-    'B' : rffi.CHAR,
+    'b' : rffi.SIGNEDCHAR,
+    'B' : rffi.UCHAR,
     'h' : rffi.SHORT,
     'H' : rffi.USHORT,
     'i' : rffi.INT,
