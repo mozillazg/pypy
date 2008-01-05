@@ -80,7 +80,7 @@ class W_Structure(Wrappable):
         return space.wrap(W_StructureInstance(space, self, None, kwargs_w))
 
 def descr_new_structure(space, w_type, w_fields):
-    return W_Structure(space, w_fields)
+    return space.wrap(W_Structure(space, w_fields))
 
 W_Structure.typedef = TypeDef(
     'Structure',
