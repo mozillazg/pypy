@@ -159,21 +159,14 @@ def encode_type_shape(builder, info, TYPE):
             ARRAY = TYPE._flds[TYPE._arrayfld]
             ofs1 = llmemory.offsetof(TYPE, TYPE._arrayfld)
             info.ofstolength = ofs1 + llmemory.ArrayLengthOffset(ARRAY)
-            if ARRAY.OF != lltype.Void:
-                info.ofstovar = ofs1 + llmemory.itemoffsetof(ARRAY, 0)
-            else:
-                info.fixedsize = ofs1 + llmemory.sizeof(lltype.Signed)
+            info.ofstovar = ofs1 + llmemory.itemoffsetof(ARRAY, 0)
             # XXX we probably don't need isrpystring any more
             if ARRAY._hints.get('isrpystring'):
                 info.fixedsize = llmemory.sizeof(TYPE, 1)
         else:
             ARRAY = TYPE
             info.ofstolength = llmemory.ArrayLengthOffset(ARRAY)
-            if ARRAY.OF != lltype.Void:
-                info.ofstovar = llmemory.itemoffsetof(TYPE, 0)
-            else:
-                info.fixedsize = (llmemory.ArrayLengthOffset(ARRAY) +
-                                  llmemory.sizeof(lltype.Signed))
+            info.ofstovar = llmemory.itemoffsetof(TYPE, 0)
         assert isinstance(ARRAY, lltype.Array)
         if ARRAY.OF != lltype.Void:
             offsets = offsets_to_gc_pointers(ARRAY.OF)
@@ -203,6 +196,10 @@ class TypeLayoutBuilder(object):
         self.addresses_of_static_ptrs = []
         # this lists contains pointers in raw Structs and Arrays
         self.addresses_of_static_ptrs_in_nongc = []
+        # if not gc.prebuilt_gc_objects_are_static_roots, then
+        # additional_roots_sources counts the number of locations
+        # within prebuilt GC objects that are of type Ptr(Gc)
+        self.additional_roots_sources = 0
         self.finalizer_funcptrs = {}
         self.offsettable_cache = {}
         self.next_typeid_cache = {}
@@ -272,7 +269,8 @@ class TypeLayoutBuilder(object):
         return fptr
 
     def make_finalizer_funcptr_for_type(self, TYPE):
-        return None   # must be overridden for proper finalizer support
+        # must be overridden for proper finalizer support
+        return lltype.nullptr(GCData.ADDRESS_VOID_FUNC)
 
     def initialize_gc_query_function(self, gc):
         return GCData(self.type_info_list).set_query_functions(gc)
@@ -296,10 +294,15 @@ class TypeLayoutBuilder(object):
         # they could be changed later to point to GC heap objects.
         adr = llmemory.cast_ptr_to_adr(value._as_ptr())
         if TYPE._gckind == "gc":
-            appendto = self.addresses_of_static_ptrs
+            if not gc.prebuilt_gc_objects_are_static_roots:
+                for a in gc_pointers_inside(value, adr):
+                    self.additional_roots_sources += 1
+                return
+            else:
+                appendto = self.addresses_of_static_ptrs
         else:
             appendto = self.addresses_of_static_ptrs_in_nongc
-        for a in mutable_gc_pointers_inside(value, adr):
+        for a in gc_pointers_inside(value, adr, mutable_only=True):
             appendto.append(a)
 
 # ____________________________________________________________
@@ -338,28 +341,30 @@ def weakpointer_offset(TYPE):
         return llmemory.offsetof(WEAKREF, "weakptr")
     return -1
 
-def mutable_gc_pointers_inside(v, adr):
+def gc_pointers_inside(v, adr, mutable_only=False):
     t = lltype.typeOf(v)
     if isinstance(t, lltype.Struct):
-        if t._hints.get('immutable'):
+        if mutable_only and t._hints.get('immutable'):
             return
         for n, t2 in t._flds.iteritems():
             if isinstance(t2, lltype.Ptr) and t2.TO._gckind == 'gc':
                 yield adr + llmemory.offsetof(t, n)
             elif isinstance(t2, (lltype.Array, lltype.Struct)):
-                for a in mutable_gc_pointers_inside(getattr(v, n),
-                                                adr + llmemory.offsetof(t, n)):
+                for a in gc_pointers_inside(getattr(v, n),
+                                            adr + llmemory.offsetof(t, n),
+                                            mutable_only):
                     yield a
     elif isinstance(t, lltype.Array):
-        if t._hints.get('immutable'):
+        if mutable_only and t._hints.get('immutable'):
             return
         if isinstance(t.OF, lltype.Ptr) and t.OF.TO._gckind == 'gc':
             for i in range(len(v.items)):
                 yield adr + llmemory.itemoffsetof(t, i)
         elif isinstance(t.OF, lltype.Struct):
             for i in range(len(v.items)):
-                for a in mutable_gc_pointers_inside(v.items[i],
-                                            adr + llmemory.itemoffsetof(t, i)):
+                for a in gc_pointers_inside(v.items[i],
+                                            adr + llmemory.itemoffsetof(t, i),
+                                            mutable_only):
                     yield a
 
 def zero_gc_pointers(p):

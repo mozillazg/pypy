@@ -115,8 +115,8 @@ class RefcountingGCTransformer(GCTransformer):
         self.dynamic_deallocator_funcptrs = {}
         self.queryptr2dynamic_deallocator_funcptr = {}
 
-    def finish_helpers(self):
-        GCTransformer.finish_helpers(self)
+    def finish_helpers(self, **kwds):
+        GCTransformer.finish_helpers(self, **kwds)
         from pypy.translator.backendopt.malloc import remove_mallocs
         seen = {}
         graphs = []
@@ -247,7 +247,7 @@ def ll_deallocator(addr):
              'HDRPTR':lltype.Ptr(self.HDR)}
         exec src in d
         this = d['ll_deallocator']
-        fptr = self.annotate_helper(this, [llmemory.Address], lltype.Void)
+        fptr = self.annotate_finalizer(this, [llmemory.Address], lltype.Void)
         self.static_deallocator_funcptrs[TYPE] = fptr
         for p in find_gc_ptrs_in_type(TYPE):
             self.static_deallocation_funcptr_for_type(p.TO)

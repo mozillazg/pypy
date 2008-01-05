@@ -37,7 +37,8 @@ class GCTest(object):
     gcpolicy = None
     stacklessgc = False
 
-    def runner(self, f, nbargs=0, statistics=False, **extraconfigopts):
+    def runner(self, f, nbargs=0, statistics=False, transformer=False,
+               **extraconfigopts):
         if nbargs == 2:
             def entrypoint(args):
                 x = args[0]
@@ -84,6 +85,8 @@ class GCTest(object):
             def statistics(index):
                 return llinterp.eval_graph(statisticsgraph, [ll_gc, index])
             return run, statistics
+        elif transformer:
+            return run, db.gctransformer
         else:
             return run
         
@@ -862,6 +865,42 @@ class TestGenerationGC(GenericMovingGCTests):
         run = self.runner(f, nbargs=0)
         run([])
 
+    def test_immutable_to_old_promotion(self):
+        T_CHILD = lltype.Ptr(lltype.GcStruct('Child', ('field', lltype.Signed)))
+        T_PARENT = lltype.Ptr(lltype.GcStruct('Parent', ('sub', T_CHILD)))
+        child = lltype.malloc(T_CHILD.TO)
+        child2 = lltype.malloc(T_CHILD.TO)
+        parent = lltype.malloc(T_PARENT.TO)
+        parent2 = lltype.malloc(T_PARENT.TO)
+        parent.sub = child
+        child.field = 3
+        parent2.sub = child2
+        child2.field = 8
+
+        T_ALL = lltype.Ptr(lltype.GcArray(T_PARENT))
+        all = lltype.malloc(T_ALL.TO, 2)
+        all[0] = parent
+        all[1] = parent2
+
+        def f(x, y):
+            res = all[x]
+            #all[x] = lltype.nullptr(T_PARENT.TO)
+            return res.sub.field
+
+        run, transformer = self.runner(f, nbargs=2, transformer=True)
+        run([1, 4])
+        assert len(transformer.layoutbuilder.addresses_of_static_ptrs) == 0
+        assert transformer.layoutbuilder.additional_roots_sources >= 4
+        # NB. Remember that additional_roots_sources does not count
+        # the number of prebuilt GC objects, but the number of locations
+        # within prebuilt GC objects that are of type Ptr(Gc).
+        # At the moment we get additional_roots_sources == 6:
+        #  * all[0]
+        #  * all[1]
+        #  * parent.sub
+        #  * parent2.sub
+        #  * the GcArray pointer from gc.wr_to_objects_with_id
+        #  * the GcArray pointer from gc.object_id_dict.
 
 class TestGenerationalNoFullCollectGC(GCTest):
     # test that nursery is doing its job and that no full collection

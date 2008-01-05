@@ -21,6 +21,7 @@ memoryError = MemoryError()
 class SemiSpaceGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
+    inline_simple_malloc_varsize = True
     needs_zero_gc_pointers = False
 
     HDR = lltype.Struct('header', ('forw', llmemory.Address),
@@ -107,7 +108,7 @@ class SemiSpaceGC(MovingGCBase):
         if not self.try_obtain_free_space(needed):
             raise memoryError
         return self.free
-    obtain_free_space.dont_inline = True
+    obtain_free_space._dont_inline_ = True
 
     def try_obtain_free_space(self, needed):
         # XXX for bonus points do big objects differently

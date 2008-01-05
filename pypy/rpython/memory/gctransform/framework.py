@@ -17,6 +17,7 @@ from pypy.rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF
 from pypy.rpython.memory.gctypelayout import convert_weakref_to, WEAKREFPTR
 from pypy.rpython.memory.gctransform.log import log
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rpython.lltypesystem.lloperation import llop
 import sys
 
 
@@ -87,8 +88,8 @@ def find_initializing_stores(collect_analyzer, graph):
         mallocvars = {target.inputargs[index]: True}
         mallocnum += 1
         find_in_block(target, mallocvars)
-    if result:
-        print "found %s initializing stores in %s" % (len(result), graph.name)
+    #if result:
+    #    print "found %s initializing stores in %s" % (len(result), graph.name)
     return result
 
 class FrameworkGCTransformer(GCTransformer):
@@ -113,16 +114,19 @@ class FrameworkGCTransformer(GCTransformer):
         self.get_type_id = self.layoutbuilder.get_type_id
 
         # set up dummy a table, to be overwritten with the real one in finish()
-        type_info_table = lltype.malloc(gctypelayout.GCData.TYPE_INFO_TABLE, 0,
-                                        immortal=True)
+        type_info_table = lltype._ptr(
+            lltype.Ptr(gctypelayout.GCData.TYPE_INFO_TABLE),
+            "delayed!type_info_table", solid=True)
         gcdata = gctypelayout.GCData(type_info_table)
 
         # initialize the following two fields with a random non-NULL address,
         # to make the annotator happy.  The fields are patched in finish()
-        # to point to a real array (not 'type_info_table', another one).
-        a_random_address = llmemory.cast_ptr_to_adr(type_info_table)
+        # to point to a real array.
+        foo = lltype.malloc(lltype.FixedSizeArray(llmemory.Address, 1),
+                            immortal=True, zero=True)
+        a_random_address = llmemory.cast_ptr_to_adr(foo)
         gcdata.static_root_start = a_random_address      # patched in finish()
-        gcdata.static_root_nongcstart = a_random_address # patched in finish()
+        gcdata.static_root_nongcend = a_random_address   # patched in finish()
         gcdata.static_root_end = a_random_address        # patched in finish()
         self.gcdata = gcdata
         self.malloc_fnptr_cache = {}
@@ -143,16 +147,13 @@ class FrameworkGCTransformer(GCTransformer):
         bk = self.translator.annotator.bookkeeper
 
         # the point of this little dance is to not annotate
-        # self.gcdata.type_info_table as a constant.
+        # self.gcdata.static_root_xyz as constants. XXX is it still needed??
         data_classdef = bk.getuniqueclassdef(gctypelayout.GCData)
-        data_classdef.generalize_attr(
-            'type_info_table',
-            annmodel.SomePtr(lltype.Ptr(gctypelayout.GCData.TYPE_INFO_TABLE)))
         data_classdef.generalize_attr(
             'static_root_start',
             annmodel.SomeAddress())
         data_classdef.generalize_attr(
-            'static_root_nongcstart',
+            'static_root_nongcend',
             annmodel.SomeAddress())
         data_classdef.generalize_attr(
             'static_root_end',
@@ -256,6 +257,28 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_fast_ptr = None
 
+        # in some GCs we can also inline the common case of
+        # malloc_varsize(typeid, length, (3 constant sizes), True, False)
+        if getattr(GCClass, 'inline_simple_malloc_varsize', False):
+            # make a copy of this function so that it gets annotated
+            # independently and the constants are folded inside
+            malloc_varsize_clear_fast = func_with_new_name(
+                GCClass.malloc_varsize_clear.im_func,
+                "malloc_varsize_clear_fast")
+            s_False = annmodel.SomeBool(); s_False.const = False
+            s_True  = annmodel.SomeBool(); s_True .const = True
+            self.malloc_varsize_clear_fast_ptr = getfn(
+                malloc_varsize_clear_fast,
+                [s_gc, annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomeInteger(nonneg=True),
+                 s_True, s_False], s_gcref,
+                inline = True)
+        else:
+            self.malloc_varsize_clear_fast_ptr = None
+
         if GCClass.moving_gc:
             self.id_ptr = getfn(GCClass.id.im_func,
                                 [s_gc, s_gcref], annmodel.SomeInteger(),
@@ -349,6 +372,11 @@ class FrameworkGCTransformer(GCTransformer):
                 gcdata.root_stack_top = top + n*sizeofaddr
                 return top
             incr_stack = staticmethod(incr_stack)
+
+            def append_static_root(adr):
+                gcdata.static_root_end.address[0] = adr
+                gcdata.static_root_end += sizeofaddr
+            append_static_root = staticmethod(append_static_root)
             
             def decr_stack(n):
                 top = gcdata.root_stack_top - n*sizeofaddr
@@ -371,16 +399,16 @@ class FrameworkGCTransformer(GCTransformer):
             def __init__(self, with_static=True):
                 self.stack_current = gcdata.root_stack_top
                 if with_static:
-                    self.static_current = gcdata.static_root_start
+                    self.static_current = gcdata.static_root_end
                 else:
-                    self.static_current = gcdata.static_root_nongcstart
+                    self.static_current = gcdata.static_root_nongcend
 
             def pop(self):
-                while self.static_current != gcdata.static_root_end:
-                    result = self.static_current
-                    self.static_current += sizeofaddr
-                    if result.address[0].address[0] != llmemory.NULL:
-                        return result.address[0]
+                while self.static_current != gcdata.static_root_start:
+                    self.static_current -= sizeofaddr
+                    result = self.static_current.address[0]
+                    if result.address[0] != llmemory.NULL:
+                        return result
                 while self.stack_current != gcdata.root_stack_base:
                     self.stack_current -= sizeofaddr
                     if self.stack_current.address[0] != llmemory.NULL:
@@ -418,9 +446,10 @@ class FrameworkGCTransformer(GCTransformer):
 
         # replace the type_info_table pointer in gcdata -- at this point,
         # the database is in principle complete, so it has already seen
-        # the old (empty) array.  We need to force it to consider the new
-        # array now.  It's a bit hackish as the old empty array will also
-        # be generated in the C source, but that's a rather minor problem.
+        # the delayed pointer.  We need to force it to consider the new
+        # array now.
+
+        self.gcdata.type_info_table._become(table)
 
         # XXX because we call inputconst already in replace_malloc, we can't
         # modify the instance, we have to modify the 'rtyped instance'
@@ -430,24 +459,24 @@ class FrameworkGCTransformer(GCTransformer):
             self.gcdata)
         r_gcdata = self.translator.rtyper.getrepr(s_gcdata)
         ll_instance = rmodel.inputconst(r_gcdata, self.gcdata).value
-        ll_instance.inst_type_info_table = table
-        #self.gcdata.type_info_table = table
 
         addresses_of_static_ptrs = (
-            self.layoutbuilder.addresses_of_static_ptrs +
-            self.layoutbuilder.addresses_of_static_ptrs_in_nongc)
+            self.layoutbuilder.addresses_of_static_ptrs_in_nongc +
+            self.layoutbuilder.addresses_of_static_ptrs)
         log.info("found %s static roots" % (len(addresses_of_static_ptrs), ))
+        additional_ptrs = self.layoutbuilder.additional_roots_sources
+        log.info("additional %d potential static roots" % additional_ptrs)
         ll_static_roots_inside = lltype.malloc(lltype.Array(llmemory.Address),
-                                               len(addresses_of_static_ptrs),
+                                               len(addresses_of_static_ptrs) +
+                                               additional_ptrs,
                                                immortal=True)
         for i in range(len(addresses_of_static_ptrs)):
             ll_static_roots_inside[i] = addresses_of_static_ptrs[i]
         ll_instance.inst_static_root_start = llmemory.cast_ptr_to_adr(ll_static_roots_inside) + llmemory.ArrayItemsOffset(lltype.Array(llmemory.Address))
-        ll_instance.inst_static_root_nongcstart = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(self.layoutbuilder.addresses_of_static_ptrs)
-        ll_instance.inst_static_root_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(ll_static_roots_inside)
+        ll_instance.inst_static_root_nongcend = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(self.layoutbuilder.addresses_of_static_ptrs_in_nongc)
+        ll_instance.inst_static_root_end = ll_instance.inst_static_root_start + llmemory.sizeof(llmemory.Address) * len(addresses_of_static_ptrs)
 
         newgcdependencies = []
-        newgcdependencies.append(table)
         newgcdependencies.append(ll_static_roots_inside)
         self.write_typeid_list()
         return newgcdependencies
@@ -514,11 +543,11 @@ class FrameworkGCTransformer(GCTransformer):
             v_length = op.args[-1]
             c_ofstolength = rmodel.inputconst(lltype.Signed, info.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed, info.varitemsize)
-            malloc_ptr = self.malloc_varsize_clear_ptr
-##             if op.opname.startswith('zero'):
-##                 malloc_ptr = self.malloc_varsize_clear_ptr
-##             else:
-##                 malloc_ptr = self.malloc_varsize_clear_ptr
+            if (self.malloc_varsize_clear_fast_ptr is not None and
+                c_can_collect.value and not c_has_finalizer.value):
+                malloc_ptr = self.malloc_varsize_clear_fast_ptr
+            else:
+                malloc_ptr = self.malloc_varsize_clear_ptr
             args = [self.c_const_gc, c_type_id, v_length, c_size,
                     c_varitemsize, c_ofstolength, c_can_collect,
                     c_has_finalizer]
@@ -772,9 +801,9 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
             def ll_finalizer(addr):
                 v = llmemory.cast_adr_to_ptr(addr, DESTR_ARG)
                 ll_call_destructor(destrptr, v)
-            fptr = self.transformer.annotate_helper(ll_finalizer,
-                                                    [llmemory.Address],
-                                                    lltype.Void)
+            fptr = self.transformer.annotate_finalizer(ll_finalizer,
+                                                       [llmemory.Address],
+                                                       lltype.Void)
         else:
             fptr = lltype.nullptr(gctypelayout.GCData.FINALIZERTYPE.TO)
         return fptr
