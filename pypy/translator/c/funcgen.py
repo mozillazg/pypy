@@ -1,6 +1,6 @@
 from __future__ import generators
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
-from pypy.translator.c.support import cdecl, ErrorValue
+from pypy.translator.c.support import cdecl
 from pypy.translator.c.support import llvalue_from_constant, gen_assignments
 from pypy.translator.c.support import c_string_constant, barebonearray
 from pypy.objspace.flow.model import Variable, Constant, Block
@@ -37,6 +37,7 @@ class FunctionCodeGenerator(object):
                        oldgraph""".split()
 
     def __init__(self, graph, db, exception_policy=None, functionname=None):
+        graph._seen_by_the_backend = True
         self.graph = graph
         self.db = db
         self.gcpolicy = db.gcpolicy
@@ -177,21 +178,6 @@ class FunctionCodeGenerator(object):
         else:
             raise TypeError, "expr(%r)" % (v,)
 
-    def error_return_value(self):
-        returnlltype = self.lltypemap(self.graph.getreturnvar())
-        return self.db.get(ErrorValue(returnlltype))
-
-    def return_with_error(self):
-        if self.exception_policy == "CPython":
-            assert self.lltypemap(self.graph.getreturnvar()) == PyObjPtr
-            v, exc_cleanup_ops = self.graph.exc_cleanup
-            vanishing_exc_value = self.expr(v)
-            yield 'RPyConvertExceptionToCPython(%s);' % vanishing_exc_value
-            for cleanupop in exc_cleanup_ops:
-                for line in self.gen_op(cleanupop):
-                    yield line
-        yield 'return %s; ' % self.error_return_value()
-
     # ____________________________________________________________
 
     def cfunction_declarations(self):
@@ -285,7 +271,7 @@ class FunctionCodeGenerator(object):
                         yield 'case %s:' % self.db.get(link.llexitcase)
                         for op in self.gen_link(link):
                             yield '\t' + op
-                        yield 'break;'
+                        # 'break;' not needed, as gen_link ends in a 'goto'
                         
                     # Emit default case
                     yield 'default:'
