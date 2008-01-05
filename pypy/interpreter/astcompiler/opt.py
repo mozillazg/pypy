@@ -84,6 +84,9 @@ else:
         def __init__(self, space):
             self.space = space
 
+        def default(self, node):
+            return node
+
         def _visitUnaryOp(self, node, constant_fold):
             expr = node.expr
             if isinstance(expr, ast.Const):

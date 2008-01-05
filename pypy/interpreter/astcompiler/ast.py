@@ -5915,9 +5915,12 @@ class ASTVisitor(object):
     """
 
     def default(self, node):
+        """This method is only suitable for when we use accept(visitor),
+        not mutate(visitor).  In the latter case it *must* be overridden
+        by the visitor, typically to just return an unmodified "node".
+        """
         for child in node.getChildNodes():
             child.accept(self)
-        return node
 
     def _mutate_list(self, lst):
         i = 0
