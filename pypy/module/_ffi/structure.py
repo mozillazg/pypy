@@ -114,8 +114,11 @@ class W_StructureInstance(Wrappable):
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, shape.size, flavor='raw',
                                            zero=True)
         if fieldinits_w:
+            self.fieldinits_w = fieldinits_w
             for field, w_value in fieldinits_w.iteritems():
                 self.setattr(space, field, w_value)
+        else:
+            self.fieldinits_w = None
 
     def getindex(self, space, attr):
         try:
