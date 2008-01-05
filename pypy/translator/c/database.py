@@ -7,11 +7,10 @@ from pypy.rpython.lltypesystem.llmemory import Address, WeakRef, _WeakRefType
 from pypy.rpython.lltypesystem.rffi import CConstant
 from pypy.tool.sourcetools import valid_identifier
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
-from pypy.translator.c.primitive import PrimitiveErrorValue
 from pypy.translator.c.node import StructDefNode, ArrayDefNode
 from pypy.translator.c.node import FixedSizeArrayDefNode, BareBoneArrayDefNode
 from pypy.translator.c.node import ContainerNodeFactory, ExtTypeOpaqueDefNode
-from pypy.translator.c.support import cdecl, CNameManager, ErrorValue
+from pypy.translator.c.support import cdecl, CNameManager
 from pypy.translator.c.support import log, barebonearray
 from pypy.translator.c.extfunc import do_the_getting
 from pypy import conftest
@@ -164,21 +163,14 @@ class LowLevelDatabase(object):
             self.containerstats[kind] = self.containerstats.get(kind, 0) + 1
             self.containerlist.append(node)
             if self.completed:
-                assert not node.globalcontainer
-                # non-global containers are found very late, e.g. _subarrays
-                # via addresses introduced by the GC transformer
+                pass # we would like to fail here, but a few containers
+                     # are found very late, e.g. _subarrays via addresses
+                     # introduced by the GC transformer, or the type_info_table
         return node
 
     def get(self, obj):
-        if isinstance(obj, ErrorValue):
-            T = obj.TYPE
-            if isinstance(T, Primitive):
-                return PrimitiveErrorValue[T]
-            elif isinstance(T, Ptr):
-                return 'NULL'
-            else:
-                raise Exception("don't know about %r" % (T,))
-        else:
+        # XXX extra indent is preserve svn blame - kind of important IMHO (rxe)
+        if 1:
             if isinstance(obj, CConstant):
                 return obj.c_name  # without further checks
             T = typeOf(obj)
@@ -195,11 +187,15 @@ class LowLevelDatabase(object):
                         n = len('delayed!')
                         if len(name) == n:
                             raise
-                        if id(obj) in self.delayedfunctionnames:
-                            return self.delayedfunctionnames[id(obj)][0]
-                        funcname = name[n:]
-                        funcname = self.namespace.uniquename('g_' + funcname)
-                        self.delayedfunctionnames[id(obj)] = funcname, obj
+                        if isinstance(lltype.typeOf(obj).TO, lltype.FuncType):
+                            if id(obj) in self.delayedfunctionnames:
+                                return self.delayedfunctionnames[id(obj)][0]
+                            funcname = name[n:]
+                            funcname = self.namespace.uniquename('g_'+funcname)
+                            self.delayedfunctionnames[id(obj)] = funcname, obj
+                        else:
+                            funcname = None      # can't use the name of a
+                                                 # delayed non-function ptr
                         self.delayedfunctionptrs.append(obj)
                         return funcname
                         # /hack hack hack
@@ -283,11 +279,14 @@ class LowLevelDatabase(object):
         # list:
         finish_callbacks = []
         if self.gctransformer:
-            finish_callbacks.append(self.gctransformer.finish_helpers)
+            finish_callbacks.append(('GC transformer: finished helpers',
+                                     self.gctransformer.finish_helpers))
         if self.stacklesstransformer:
-            finish_callbacks.append(self.stacklesstransformer.finish)
+            finish_callbacks.append(('Stackless transformer: finished',
+                                     self.stacklesstransformer.finish))
         if self.gctransformer:
-            finish_callbacks.append(self.gctransformer.finish_tables)
+            finish_callbacks.append(('GC transformer: finished tables',
+                                     self.gctransformer.finish_tables))
 
         def add_dependencies(newdependencies):
             for value in newdependencies:
@@ -331,8 +330,9 @@ class LowLevelDatabase(object):
                     continue   # progress - follow all dependencies again
 
             if finish_callbacks:
-                finish = finish_callbacks.pop(0)
+                logmsg, finish = finish_callbacks.pop(0)
                 newdependencies = finish()
+                log.database(logmsg)
                 if newdependencies:
                     add_dependencies(newdependencies)
                 continue       # progress - follow all dependencies again
@@ -343,6 +343,7 @@ class LowLevelDatabase(object):
         self.completed = True
         if show_progress:
             dump()
+        log.database("Completed")
 
     def globalcontainers(self):
         for node in self.containerlist:
