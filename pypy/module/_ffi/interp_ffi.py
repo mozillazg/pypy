@@ -124,14 +124,14 @@ W_CDLL.typedef = TypeDef(
     __new__     = interp2app(descr_new_cdll),
     ptr         = interp2app(W_CDLL.ptr),
     __doc__     = """ C Dynamically loaded library
-use CDLL(libname) to create handle to C library (argument is processed the
-same way as dlopen processes it). On such library call:
+use CDLL(libname) to create a handle to a C library (the argument is processed
+the same way as dlopen processes it). On such a library you can call:
 lib.ptr(func_name, argtype_list, restype)
 
 where argtype_list is a list of single characters and restype is a single
-character. Character meanings are more or less the same as in struct module,
-except that s has trailing \x00 added, while p is considered a raw buffer.
-"""
+character. The character meanings are more or less the same as in the struct
+module, except that s has trailing \x00 added, while p is considered a raw
+buffer."""
 )
 
 def pack_pointer(space, add_arg, argdesc, w_arg, push_func):
