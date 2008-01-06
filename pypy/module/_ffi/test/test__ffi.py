@@ -242,9 +242,11 @@ class AppTestFfi:
         assert get_array_elem(a, 7) == 1
         assert get_array_elem(a, 6) == 2
         assert a[3] == 0
+        a.free()
         a = A([1, 2, 3, 4])
         assert get_array_elem(a, 0) == 1
         assert a[3] == 4
+        a.free()
 
     def test_array_of_structure(self):
         import _ffi
@@ -260,6 +262,7 @@ class AppTestFfi:
         assert X(get_array_elem_s(a, 1)).x2 == 3
         assert get_array_elem_s(a, 1) == x.buffer
         x.free()
+        a.free()
 
     def test_bad_parameters(self):
         import _ffi
