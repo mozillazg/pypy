@@ -58,13 +58,19 @@ class AbstractTest(object):
         assert hash(s1) == hash(s2)
 
 
-class TestString(AbstractTest):
+class AbstractRopeTest(object):
+    def test_add_long(self):
+        s1 = self.const("a")
+        s2 = self.const("b") * (2 ** 30)
+        s3 = s1 + s2
+
+class TestString(AbstractTest, AbstractRopeTest):
     const = RopeString
 
 class TestPythonString(AbstractTest):
     const = str
 
-class TestUnicode(AbstractTest):
+class TestUnicode(AbstractTest, AbstractRopeTest):
     const = RopeUnicode
 
 class TestPythonUnicode(AbstractTest):
