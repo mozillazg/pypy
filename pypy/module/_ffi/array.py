@@ -87,9 +87,13 @@ class W_ArrayInstance(Wrappable):
     def getbuffer(space, self):
         return space.wrap(rffi.cast(rffi.INT, self.ll_array))
 
-    def __del__(self):
-        if self.ll_array:
-            lltype.free(self.ll_array, flavor='raw')
+    def free(self, space):
+        if not self.ll_array:
+            raise segfault_exception(space, "freeing NULL pointer")
+        lltype.free(self.ll_array, flavor='raw')
+        self.ll_array = lltype.nullptr(rffi.VOIDP.TO)
+    free.unwrap_spec = ['self', ObjSpace]
+
 
 def descr_new_array_instance(space, w_type, w_shape, w_size_or_iterable):
     w_shape = space.interp_w(W_Array, w_shape)
@@ -102,6 +106,7 @@ W_ArrayInstance.typedef = TypeDef(
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     buffer      = GetSetProperty(W_ArrayInstance.getbuffer),
+    free        = interp2app(W_ArrayInstance.free),
 )
 
 
