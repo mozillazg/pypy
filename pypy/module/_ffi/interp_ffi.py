@@ -315,7 +315,7 @@ def _create_new_accessor(func_name, name):
                 "Expecting string of length one"))
         tp_letter = tp_letter[0] # fool annotator
         try:
-            return space.wrap(getattr(TYPEMAP[tp_letter], name))
+            return space.wrap(intmask(getattr(TYPEMAP[tp_letter], name)))
         except KeyError:
             raise OperationError(space.w_ValueError, space.wrap(
                 "Unknown type specification %s" % tp_letter))
