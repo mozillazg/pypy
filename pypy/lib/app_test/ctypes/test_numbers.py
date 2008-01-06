@@ -1,5 +1,5 @@
+import py
 from ctypes import *
-import unittest
 import sys, struct
 
 def valid_ranges(*types):
@@ -81,6 +81,7 @@ class TestNumber:
 
     def test_byref(self):
         # calling byref returns also a PyCArgObject instance
+        py.test.skip("Works by accident")
         for t in signed_types + unsigned_types + float_types:
             parm = byref(t())
             assert ArgType == type(parm)
@@ -118,6 +119,7 @@ class TestNumber:
             assert (code, alignment(t())) == (code, align)
 
     def test_int_from_address(self):
+        py.test.skip("Unsupported")
         from array import array
         for t in signed_types + unsigned_types:
             # the array module doesn't suppport all format codes
@@ -139,6 +141,7 @@ class TestNumber:
 
 
     def test_float_from_address(self):
+        py.test.skip("Unsupported")
         from array import array
         for t in float_types:
             a = array(t._type_, [3.14])
@@ -150,6 +153,7 @@ class TestNumber:
             assert type(v) is t
 
     def test_char_from_address(self):
+        py.test.skip("Unsupported")
         from ctypes import c_char
         from array import array
 
