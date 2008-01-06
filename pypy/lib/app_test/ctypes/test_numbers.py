@@ -81,7 +81,6 @@ class TestNumber:
 
     def test_byref(self):
         # calling byref returns also a PyCArgObject instance
-        py.test.skip("Works by accident")
         for t in signed_types + unsigned_types + float_types:
             parm = byref(t())
             assert ArgType == type(parm)
