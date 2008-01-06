@@ -48,8 +48,6 @@ class AbstractTest(object):
         assert not s1 != s2
 
     def test_iteration(self):
-        # XXX rope iteration is working but should use a custom iterator
-        # e.g. define an __iter__ method
         s = self.const("abcdefghijkl")
         i = 0
         for c in s:
