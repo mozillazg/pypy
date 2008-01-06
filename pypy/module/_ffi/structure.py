@@ -103,6 +103,11 @@ def cast_pos(self, i, ll_t):
     return rffi.cast(TP, pos)[0]
 cast_pos._annspecialcase_ = 'specialize:arg(2)'
 
+def segfault_exception(space, reason):
+    w_mod = space.getbuiltinmodule("_ffi")
+    w_exception = space.getattr(w_mod, space.wrap("SegfaultException"))
+    return OperationError(w_exception, space.wrap(reason))
+
 class W_StructureInstance(Wrappable):
     def __init__(self, space, shape, w_address, fieldinits_w):
         self.free_afterwards = False
@@ -110,15 +115,12 @@ class W_StructureInstance(Wrappable):
         if w_address is not None:
             self.ll_buffer = rffi.cast(rffi.VOIDP, space.int_w(w_address))
         else:
-            self.free_afterwards = True
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, shape.size, flavor='raw',
                                            zero=True)
         if fieldinits_w:
-            self.fieldinits_w = fieldinits_w
             for field, w_value in fieldinits_w.iteritems():
                 self.setattr(space, field, w_value)
-        else:
-            self.fieldinits_w = None
+
 
     def getindex(self, space, attr):
         try:
@@ -128,29 +130,38 @@ class W_StructureInstance(Wrappable):
                 "C Structure has no attribute %s" % attr))
 
     def getattr(self, space, attr):
+        if not self.ll_buffer:
+            raise segfault_exception(space, "accessing NULL pointer")
         i = self.getindex(space, attr)
         _, c = self.shape.fields[i]
         return wrap_value(space, cast_pos, self, i, c)
     getattr.unwrap_spec = ['self', ObjSpace, str]
 
     def setattr(self, space, attr, w_value):
+        if not self.ll_buffer:
+            raise segfault_exception(space, "accessing NULL pointer")
         i = self.getindex(space, attr)
         _, c = self.shape.fields[i]
         unwrap_value(space, push_field, self, i, c, w_value, None)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
-    def __del__(self):
-        if self.free_afterwards:
-            lltype.free(self.ll_buffer, flavor='raw')
+    def free(self, space):
+        if not self.ll_buffer:
+            raise segfault_exception(space, "freeing NULL pointer")
+        lltype.free(self.ll_buffer, flavor='raw')
+        self.ll_buffer = lltype.nullptr(rffi.VOIDP.TO)
+    free.unwrap_spec = ['self', ObjSpace]
 
     def getbuffer(space, self):
         return space.wrap(rffi.cast(rffi.INT, self.ll_buffer))
+
 
 W_StructureInstance.typedef = TypeDef(
     'StructureInstance',
     __getattr__ = interp2app(W_StructureInstance.getattr),
     __setattr__ = interp2app(W_StructureInstance.setattr),
     buffer      = GetSetProperty(W_StructureInstance.getbuffer),
+    free        = interp2app(W_StructureInstance.free),
 )
 W_StructureInstance.typedef.acceptable_as_base_class = False
 
