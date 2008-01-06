@@ -40,7 +40,10 @@ class RopeBaseString(object):
     
     def __getitem__(self, index):
         if isinstance(index, int):
-            return self.getchar(index)
+            if index >= 0:
+                return self.getchar(index)
+            else:
+                return self.getchar(len(self) + index)
         if isinstance(index, slice):
             start, stop, step = index.indices(self._node.length())
             return self.__class__(rope.getslice(self._node, start, stop, step))
