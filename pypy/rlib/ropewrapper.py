@@ -79,8 +79,18 @@ class RopeString(RopeBaseString):
         return RopeString(result)
     
     def decode(self, codepage, errors='strict'):
-        s = self._node.flatten_string()
-        result = s.decode(codepage, errors)
+        result = None
+        
+        if codepage == 'utf-8':
+            result = rope.str_decode_utf8(self._node)
+        if codepage == 'latin1':
+            result = rope.str_decode_latin1(self._node)
+        if codepage == 'ascii':
+            result = rope.str_decode_ascii(self._node)
+        
+	if result == None:
+            s = self._node.flatten_string()
+            result = s.decode(codepage, errors)
         return RopeUnicode(result)
 
     def getchar(self,index):
