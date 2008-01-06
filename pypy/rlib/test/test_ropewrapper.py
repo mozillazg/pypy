@@ -59,6 +59,10 @@ class AbstractTest(object):
         s1 = self.const("abc")
         s2 = self.const("abc")
         assert hash(s1) == hash(s2)
+    
+    def test_str(self):
+        s1 = self.const("abc")
+        assert str(s1) == "abc"
 
 
 class AbstractRopeTest(object):
