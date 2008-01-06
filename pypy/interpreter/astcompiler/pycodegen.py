@@ -198,7 +198,7 @@ class CodeGenerator(ast.ASTVisitor):
         tree.accept(s)
 
     def get_module(self):
-        raise RuntimeError, "should be implemented by subclasses"
+        raise NotImplementedError("should be implemented by subclasses")
 
     # Next five methods handle name access
     def storeName(self, name, lineno):
@@ -239,8 +239,9 @@ class CodeGenerator(ast.ASTVisitor):
             else:
                 self.emitop(prefix + '_NAME', name)
         else:
-            raise RuntimeError, "unsupported scope for var %s in %s: %d" % \
-                  (name, self.scope.name, scope)
+            raise pyassem.InternalCompilerError(
+                  "unsupported scope for var %s in %s: %d" %
+                  (name, self.scope.name, scope))
 
     def _implicitNameOp(self, prefix, name):
         """Emit name ops for names generated implicitly by for loops
@@ -1567,7 +1568,7 @@ class AugLoadVisitor(ast.ASTVisitor):
         self.main = main_visitor
 
     def default(self, node):
-        raise RuntimeError("shouldn't arrive here!")
+        raise pyassem.InternalCompilerError("shouldn't arrive here!")
     
     def visitName(self, node ):
         self.main.loadName(node.varname, node.lineno)
@@ -1589,7 +1590,7 @@ class AugStoreVisitor(ast.ASTVisitor):
         self.main = main_visitor
         
     def default(self, node):
-        raise RuntimeError("shouldn't arrive here!")
+        raise pyassem.InternalCompilerError("shouldn't arrive here!")
     
     def visitName(self, node):
         self.main.storeName(node.varname, node.lineno)
