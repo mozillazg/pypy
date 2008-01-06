@@ -10,21 +10,12 @@ class Structure(type):
 class Array(type):
     pass
 
-class PointerType(type):
-    pass
-
-class _Pointer(object):
-    __metaclass__ = PointerType
-
-
 class ArgumentError(Exception):
     pass
-
 
 def dummyfunc(*args, **kwargs):
     return None
 
-byref = dummyfunc
 addressof = dummyfunc
 alignment = dummyfunc
 resize = dummyfunc
