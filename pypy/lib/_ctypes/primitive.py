@@ -11,7 +11,6 @@ TP_TO_FFITP = {
         'z': 's',
 }
 
-
 TP_TO_DEFAULT = {
         'c': 0,
         'b': 0,
@@ -78,3 +77,9 @@ def sizeof(tp):
 
 def alignment(tp):
     return _ffi.alignment(tp._type_)
+
+def byref(cdata):
+    from ctypes import pointer
+    if not isinstance(cdata, _SimpleCData):
+        raise TypeError("expected CData instance")
+    return pointer(cdata)
