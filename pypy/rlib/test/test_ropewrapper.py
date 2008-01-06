@@ -10,6 +10,11 @@ class AbstractTest(object):
         assert s[1] == self.const("b")
         assert s[2] == self.const("c")
 
+    def test_negative_index(self):
+        s = self.const("abc") * 10000
+        for i in range(len(s)):
+            assert s[-i - 1] == s[len(s) - 1 - i]
+
     def test_add(self):
         s1 = self.const("abc")
         s2 = self.const("def")
