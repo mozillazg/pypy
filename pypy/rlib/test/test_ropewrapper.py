@@ -63,6 +63,11 @@ class AbstractRopeTest(object):
         s1 = self.const("a")
         s2 = self.const("b") * (2 ** 30)
         s3 = s1 + s2
+        assert len(s3) == 2 ** 30 + 1
+        assert s3[0] == "a"
+        assert s3[1] == "b"
+        assert s3[5] == "b"
+        assert s3[-1] == "b"
 
 class TestString(AbstractTest, AbstractRopeTest):
     const = RopeString
@@ -142,3 +147,13 @@ class TestPythonCoercion(AbstractTestCoercion):
 class TestRopesCoercion(AbstractTestCoercion):
     conststr = RopeString
     constunicode = RopeUnicode
+
+    def test_add_coercion_long(self):
+        s1 = self.conststr("a")
+        s2 = self.constunicode("b") * (2 ** 30)
+        s3 = s1 + s2
+        assert len(s3) == 2 ** 30 + 1
+        assert s3[0] == "a"
+        assert s3[1] == "b"
+        assert s3[5] == "b"
+        assert s3[-1] == "b"
