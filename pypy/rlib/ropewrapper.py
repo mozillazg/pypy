@@ -34,7 +34,7 @@ class RopeBaseString(object):
                 result += other._node
             else:
                 result += other.decode('utf-8')._node
-	    return RopeUnicode(result)
+            return RopeUnicode(result)
         else:
             return RopeString(self._node + other._node)
     
@@ -64,7 +64,7 @@ class RopeString(RopeBaseString):
     def __init__(self, s):
         if isinstance(s, str):
             self._node = rope.LiteralStringNode(s)
-	elif isinstance(s, rope.StringNode):
+        elif isinstance(s, rope.StringNode):
             self._node = s
     
     def __eq__(self, other):
@@ -91,7 +91,7 @@ class RopeString(RopeBaseString):
         if codepage == 'ascii':
             result = rope.str_decode_ascii(self._node)
         
-	if result == None:
+        if result == None:
             s = self._node.flatten_string()
             result = s.decode(codepage, errors)
         return RopeUnicode(result)
@@ -136,7 +136,6 @@ class RopeUnicode(RopeBaseString):
             result = rope.unicode_encode_latin1(self._node)
         if encoding == 'ascii':
             result = rope.unicode_encode_ascii(self._node)
-	
         if result == None:
             s = self._node.flatten_unicode()
             result = s.encode(encoding, errors)
