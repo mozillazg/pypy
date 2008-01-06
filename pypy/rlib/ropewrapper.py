@@ -26,17 +26,17 @@ class RopeBaseString(object):
         
         if isinstance(self, RopeUnicode) or isinstance(other, RopeUnicode):
             if isinstance(self, RopeUnicode):
-                result = self._node.flatten_unicode()
+                result = self._node
             else:
-                result = self.decode('utf-8')._node.flatten_unicode()
+                result = self.decode('utf-8')._node
             
             if isinstance(other, RopeUnicode):
-                result += other._node.flatten_unicode()
+                result += other._node
             else:
-                result += other.decode('utf-8')._node.flatten_unicode()
+                result += other.decode('utf-8')._node
 	    return RopeUnicode(result)
         else:
-            return RopeString(self._node.flatten_string() + other._node.flatten_string())
+            return RopeString(self._node + other._node)
     
     def __getitem__(self, index):
         if isinstance(index, int):
