@@ -46,6 +46,12 @@ class AppTestFfi:
            x2->x2 = 3;
            return x1;
         }
+
+        void free_double_struct(struct x* x1)
+        {
+            free(x1->next);
+            free(x1);
+        }
         
         const char *static_str = "xxxxxx";
         
@@ -221,11 +227,12 @@ class AppTestFfi:
         assert X(x.next).x3 == 'x'
         x.free()
         next.free()
-        # XXX isn't that leaking memory?
         create_double_struct = lib.ptr("create_double_struct", [], 'P')
         x = create_double_struct()
         x = X(x)
         assert X(x.next).x2 == 3
+        free_double_struct = lib.ptr("free_double_struct", ['P'], None)
+        free_double_struct(x)
         
 
     def test_array(self):
