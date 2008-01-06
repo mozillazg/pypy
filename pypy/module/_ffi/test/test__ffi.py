@@ -263,9 +263,10 @@ class AppTestFfi:
         raises(ValueError, "_ffi.Structure(['x1', 'xx'])")
         raises(ValueError, _ffi.Structure, [('x1', 'xx')])
         raises(ValueError, "_ffi.Array('xx')")
-        A = _ffi.Array('i')
-        A.of = 'xx'
-        raises(ValueError, 'A(1)')
+        # XXX I don't think this should be allowed at all:
+        #A = _ffi.Array('i')
+        #A.of = 'xx'
+        #raises(ValueError, 'A(1)')
 
     def test_implicit_structure(self):
         skip("Does not work yet")
