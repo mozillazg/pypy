@@ -13,7 +13,7 @@ TP_TO_FFITP = {
 
 
 TP_TO_DEFAULT = {
-        'c': '\x00',
+        'c': 0,
         'b': 0,
         'B': 0,
         'h': 0,
@@ -73,3 +73,8 @@ class _SimpleCData(object):
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)
 
+def sizeof(tp):
+    return _ffi.sizeof(tp._type_)
+
+def alignment(tp):
+    return _ffi.alignment(tp._type_)

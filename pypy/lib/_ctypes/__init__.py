@@ -1,10 +1,10 @@
 from _ctypes.dummy import Union, Structure, Array, _Pointer
-from _ctypes.dummy import ArgumentError, sizeof, byref, addressof
-from _ctypes.dummy import alignment, resize
+from _ctypes.dummy import ArgumentError, byref, addressof
+from _ctypes.dummy import resize
 from _ctypes.dummy import _memmove_addr, _memset_addr, _string_at_addr
 from _ctypes.dummy import _cast_addr
 
-from _ctypes.primitive import _SimpleCData
+from _ctypes.primitive import _SimpleCData, sizeof, alignment
 from _ctypes.function import CFuncPtr
 from _ctypes.dll import dlopen
 

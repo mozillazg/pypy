@@ -24,7 +24,6 @@ class ArgumentError(Exception):
 def dummyfunc(*args, **kwargs):
     return None
 
-sizeof = dummyfunc
 byref = dummyfunc
 addressof = dummyfunc
 alignment = dummyfunc
