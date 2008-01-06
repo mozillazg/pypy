@@ -362,3 +362,93 @@ class TestCompiler:
         yield self.st, "x = sum(n+2 for n in (6, 1, 2))", 'x', 15
         yield self.st, "k=2; x = sum(n+2 for n in [6, 1, k])", 'x', 15
         yield self.st, "k=2; x = sum(n+2 for n in (6, 1, k))", 'x', 15
+
+    def test_pprint(self):
+        # a larger example that showed a bug with jumps
+        # over more than 256 bytes
+        decl = py.code.Source("""
+            def _safe_repr(object, context, maxlevels, level):
+                typ = _type(object)
+                if typ is str:
+                    if 'locale' not in _sys.modules:
+                        return repr(object), True, False
+                    if "'" in object and '"' not in object:
+                        closure = '"'
+                        quotes = {'"': '\\"'}
+                    else:
+                        closure = "'"
+                        quotes = {"'": "\\'"}
+                    qget = quotes.get
+                    sio = _StringIO()
+                    write = sio.write
+                    for char in object:
+                        if char.isalpha():
+                            write(char)
+                        else:
+                            write(qget(char, repr(char)[1:-1]))
+                    return ("%s%s%s" % (closure, sio.getvalue(), closure)), True, False
+
+                r = getattr(typ, "__repr__", None)
+                if issubclass(typ, dict) and r is dict.__repr__:
+                    if not object:
+                        return "{}", True, False
+                    objid = _id(object)
+                    if maxlevels and level > maxlevels:
+                        return "{...}", False, objid in context
+                    if objid in context:
+                        return _recursion(object), False, True
+                    context[objid] = 1
+                    readable = True
+                    recursive = False
+                    components = []
+                    append = components.append
+                    level += 1
+                    saferepr = _safe_repr
+                    for k, v in object.iteritems():
+                        krepr, kreadable, krecur = saferepr(k, context, maxlevels, level)
+                        vrepr, vreadable, vrecur = saferepr(v, context, maxlevels, level)
+                        append("%s: %s" % (krepr, vrepr))
+                        readable = readable and kreadable and vreadable
+                        if krecur or vrecur:
+                            recursive = True
+                    del context[objid]
+                    return "{%s}" % _commajoin(components), readable, recursive
+
+                if (issubclass(typ, list) and r is list.__repr__) or \
+                   (issubclass(typ, tuple) and r is tuple.__repr__):
+                    if issubclass(typ, list):
+                        if not object:
+                            return "[]", True, False
+                        format = "[%s]"
+                    elif _len(object) == 1:
+                        format = "(%s,)"
+                    else:
+                        if not object:
+                            return "()", True, False
+                        format = "(%s)"
+                    objid = _id(object)
+                    if maxlevels and level > maxlevels:
+                        return format % "...", False, objid in context
+                    if objid in context:
+                        return _recursion(object), False, True
+                    context[objid] = 1
+                    readable = True
+                    recursive = False
+                    components = []
+                    append = components.append
+                    level += 1
+                    for o in object:
+                        orepr, oreadable, orecur = _safe_repr(o, context, maxlevels, level)
+                        append(orepr)
+                        if not oreadable:
+                            readable = False
+                        if orecur:
+                            recursive = True
+                    del context[objid]
+                    return format % _commajoin(components), readable, recursive
+
+                rep = repr(object)
+                return rep, (rep and not rep.startswith('<')), False
+        """)
+        decl = str(decl) + '\n'
+        yield self.st, decl + 'x=_safe_repr([5], {}, 3, 0)', 'x', '[5]'

@@ -10,6 +10,10 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.tool import stdlib_opcode as pythonopcode
 from pypy.interpreter.error import OperationError
 
+class InternalCompilerError(Exception):
+    """Something went wrong in the ast compiler."""
+
+
 class BlockSet:
     """A Set implementation specific to Blocks
     it uses Block.bid as keys to underlying dict"""
@@ -285,6 +289,11 @@ class FlowGraph:
                         if index[c.bid] < i:
                             forward_p = 0
                             for inst in b.insts:
+                                # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+                                # other bytecodes need the same logic, but
+                                # trying to do that throws this function into
+                                # an infinite loop.  Sad sad sad.
+                                # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
                                 if inst.op == 'JUMP_FORWARD':
                                     assert isinstance(inst, InstrBlock)
                                     if inst.block == c:
@@ -494,7 +503,7 @@ class PyFlowGraph(FlowGraph):
             self.makeByteCode()
         if self.stage == DONE:
             return self.newCodeObject()
-        raise RuntimeError, "inconsistent PyFlowGraph state"
+        raise InternalCompilerError("inconsistent PyFlowGraph state")
 
     def dump(self, io=None):
         if io:
@@ -621,6 +630,8 @@ class PyFlowGraph(FlowGraph):
             abspos = begin[block]
             if opname in self.hasjrel:
                 offset = abspos - pc - 3
+                if offset < 0:
+                    raise InternalCompilerError("unexpected backward jump")
                 inst.intval = offset
             else:
                 inst.intval = abspos
@@ -872,6 +883,7 @@ def isJump(opname):
 def twobyte(val):
     """Convert an int argument into high and low bytes"""
     assert isinstance(val,int)
+    assert 0 <= val < 65536
     hi = val // 256
     lo = val % 256
     return hi, lo
