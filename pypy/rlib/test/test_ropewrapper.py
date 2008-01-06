@@ -127,6 +127,7 @@ class AbstractTestCoercion(object):
         s1 = self.conststr("\xff")
         s2 = self.constunicode("a")
         py.test.raises(UnicodeDecodeError, "s1 + s2")
+        py.test.raises(UnicodeDecodeError, "s2 + s1")
 
 class TestPythonCoercion(AbstractTestCoercion):
     conststr = str

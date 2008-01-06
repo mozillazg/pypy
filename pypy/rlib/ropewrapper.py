@@ -23,10 +23,20 @@ class RopeBaseString(object):
         return self.__class__(rope.multiply(self._node, n))
     
     def __add__(self, other):
+        
         if isinstance(self, RopeUnicode) or isinstance(other, RopeUnicode):
-            return RopeUnicode(self._node + other._node)
+            if isinstance(self, RopeUnicode):
+                result = self._node.flatten_unicode()
+            else:
+                result = self.decode('utf-8')._node.flatten_unicode()
+            
+            if isinstance(other, RopeUnicode):
+                result += other._node.flatten_unicode()
+            else:
+                result += other.decode('utf-8')._node.flatten_unicode()
+	    return RopeUnicode(result)
         else:
-            return self.__class__(self._node + other._node)
+            return RopeString(self._node.flatten_string() + other._node.flatten_string())
     
     def __getitem__(self, index):
         if isinstance(index, int):
@@ -66,7 +76,7 @@ class RopeString(RopeBaseString):
     def encode(self, encoding, errors='strict'):
         s = self._node.flatten_string()
         result = s.encode(encoding, errors)
-        return RopeUnicode(result)
+        return RopeString(result)
     
     def decode(self, codepage, errors='strict'):
         s = self._node.flatten_string()
