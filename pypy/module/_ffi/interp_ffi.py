@@ -11,6 +11,7 @@ from pypy.rlib.unroll import unrolling_iterable
 
 from pypy.module.struct.standardfmttable import min_max_acc_method
 from pypy.module.struct.nativefmttable import native_fmttable
+from pypy.tool.sourcetools import func_with_new_name
 
 class FfiValueError(Exception):
     def __init__(self, msg):
@@ -306,3 +307,20 @@ W_FuncPtr.typedef = TypeDef(
     'FuncPtr',
     __call__ = interp2app(W_FuncPtr.call)
 )
+
+def _create_new_accessor(func_name, name):
+    def accessor(space, tp_letter):
+        if len(tp_letter) != 1:
+            raise OperationError(space.w_ValueError, space.wrap(
+                "Expecting string of length one"))
+        tp_letter = tp_letter[0] # fool annotator
+        try:
+            return space.wrap(getattr(TYPEMAP[tp_letter], name))
+        except KeyError:
+            raise OperationError(space.w_ValueError, space.wrap(
+                "Unknown type specification %s" % tp_letter))
+    accessor.unwrap_spec = [ObjSpace, str]
+    return func_with_new_name(accessor, func_name)
+
+sizeof = _create_new_accessor('sizeof', 'c_size')
+alignment = _create_new_accessor('alignment', 'c_alignment')

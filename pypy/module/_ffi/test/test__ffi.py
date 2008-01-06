@@ -1,7 +1,9 @@
 
 
 from pypy.conftest import gettestobjspace
-from pypy.translator.tool.cbuild import compile_c_module, ExternalCompilationInfo
+from pypy.translator.tool.cbuild import compile_c_module, \
+     ExternalCompilationInfo
+from pypy.module._ffi.interp_ffi import TYPEMAP
 
 import os, sys, py
 
@@ -97,6 +99,8 @@ class AppTestFfi:
         space = gettestobjspace(usemodules=('_ffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
+        cls.w_sizes_and_alignments = space.wrap(dict(
+            [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
     def test_libload(self):
         import _ffi
@@ -313,3 +317,10 @@ class AppTestFfi:
         assert x.value1 == 3
         raises(AttributeError, "x.foo")
         raises(AttributeError, "x.foo = 1")
+
+    def test_sizes_and_alignments(self):
+        import _ffi
+        for k, (s, a) in self.sizes_and_alignments.iteritems():
+            assert _ffi.sizeof(k) == s
+            assert _ffi.alignment(k) == a
+
