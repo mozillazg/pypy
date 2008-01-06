@@ -187,6 +187,7 @@ class AppTestFfi:
         assert structure.tv_usec != struct2.tv_usec
         assert (structure.tv_sec == struct2.tv_sec) or (structure.tv_sec == struct2.tv_sec - 1)
         raises(AttributeError, "structure.xxx")
+        structure.free()
 
     def test_structreturn(self):
         import _ffi
@@ -208,17 +209,24 @@ class AppTestFfi:
         assert t.tm_year == 70
         assert t.tm_sec == 1
         assert t.tm_min == 2        
+        x.free()
 
     def test_nested_structures(self):
         import _ffi
         lib = _ffi.CDLL(self.lib_name)
         inner = lib.ptr("inner_struct_elem", ['P'], 'c')
         X = _ffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
-        x = X(next=X(next=None, x3='x'), x1=1, x2=2, x3='x')
+        next = X(next=None, x3='x')
+        x = X(next=next, x1=1, x2=2, x3='x')
         assert X(x.next).x3 == 'x'
+        x.free()
+        next.free()
+        # XXX isn't that leaking memory?
         create_double_struct = lib.ptr("create_double_struct", [], 'P')
         x = create_double_struct()
-        assert X(X(x).next).x2 == 3
+        x = X(x)
+        assert X(x.next).x2 == 3
+        
 
     def test_array(self):
         import _ffi
@@ -250,6 +258,8 @@ class AppTestFfi:
         ptr1 = get_array_elem_s(a, 0)
         assert ptr1 is None
         assert X(get_array_elem_s(a, 1)).x2 == 3
+        assert get_array_elem_s(a, 1) == x.buffer
+        x.free()
 
     def test_bad_parameters(self):
         import _ffi
@@ -263,10 +273,6 @@ class AppTestFfi:
         raises(ValueError, "_ffi.Structure(['x1', 'xx'])")
         raises(ValueError, _ffi.Structure, [('x1', 'xx')])
         raises(ValueError, "_ffi.Array('xx')")
-        # XXX I don't think this should be allowed at all:
-        #A = _ffi.Array('i')
-        #A.of = 'xx'
-        #raises(ValueError, 'A(1)')
 
     def test_implicit_structure(self):
         skip("Does not work yet")
@@ -318,6 +324,7 @@ class AppTestFfi:
         assert x.value1 == 3
         raises(AttributeError, "x.foo")
         raises(AttributeError, "x.foo = 1")
+        x.free()
 
     def test_sizes_and_alignments(self):
         import _ffi

@@ -23,4 +23,5 @@ class Module(MixedModule):
     }
 
     appleveldefs = {
+        'SegfaultException'  : 'error.SegfaultException',
     }
