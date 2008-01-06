@@ -83,7 +83,7 @@ class RopeString(RopeBaseString):
         
         if codepage == 'utf-8':
             result = rope.str_decode_utf8(self._node)
-        if codepage == 'latin1':
+        if codepage == 'latin-1':
             result = rope.str_decode_latin1(self._node)
         if codepage == 'ascii':
             result = rope.str_decode_ascii(self._node)
@@ -125,8 +125,18 @@ class RopeUnicode(RopeBaseString):
         return RopeUnicodeIterator(self._node)
     
     def encode(self, encoding, errors = 'strict'):
-        s = self._node.flatten_unicode()
-        result = s.encode(encoding, errors)
+        result = None
+        
+        if encoding == 'utf8':
+            result = rope.unicode_encode_utf8(self._node)
+        if encoding == 'latin-1':
+            result = rope.unicode_encode_latin1(self._node)
+        if encoding == 'ascii':
+            result = rope.unicode_encode_ascii(self._node)
+	
+        if result == None:
+            s = self._node.flatten_unicode()
+            result = s.encode(encoding, errors)
         return RopeString(result)
     
     def decode(self, codepage, errors = 'strict'):
