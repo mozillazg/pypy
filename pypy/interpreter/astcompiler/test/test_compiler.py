@@ -325,6 +325,11 @@ class TestCompiler:
                     """doc"""; print 1
                     a=1
              ''',                            "doc"),
+            ('''
+                class Foo(object): pass
+                foo = Foo()
+                exec "'moduledoc'" in foo.__dict__
+             ''',                            "moduledoc"),
             ]:
             yield self.simple_test, source, "foo.__doc__", expected
 

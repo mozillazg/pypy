@@ -19,7 +19,7 @@ class PyFlowGraph(object):
             argnames = []
         self.name = name
         self.filename = filename
-        self.docstring = space.w_None
+        self.w_docstring = space.w_None
         self.argcount = len(argnames)
         self.klass = klass
         self.flags = 0
@@ -46,8 +46,8 @@ class PyFlowGraph(object):
         # Pending label targets to fix: [(label, index-in-co_code-to-fix, abs)]
         self.pending_label_fixes = []
 
-    def setDocstring(self, doc):
-        self.docstring = doc
+    def setDocstring(self, w_docstring):
+        self.w_docstring = w_docstring
 
     def setFlag(self, flag):
         self.flags = self.flags | flag
@@ -97,6 +97,12 @@ class PyFlowGraph(object):
 
     def _lookupConst(self, w_obj, w_dict):
         space = self.space
+        # insert the docstring first, if necessary
+        if not space.is_true(w_dict):
+            w_obj_type = space.type(self.w_docstring)
+            w_key = space.newtuple([self.w_docstring, w_obj_type])
+            space.setitem(w_dict, w_key, space.wrap(0))
+        # normal logic follows
         w_obj_type = space.type(w_obj)
         w_key = space.newtuple([w_obj, w_obj_type])
         try:
@@ -350,6 +356,10 @@ class PyFlowGraph(object):
     def getConsts(self):
         """Return a tuple for the const slot of the code object
         """
+        # sanity-check
+        index = self._lookupConst(self.w_docstring, self.w_consts)
+        if index != 0:
+            raise InternalCompilerError("setDocstring() called too late")
         space = self.space
         keys_w = space.unpackiterable(self.w_consts)
         l_w = [None] * len(keys_w)

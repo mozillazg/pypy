@@ -313,8 +313,6 @@ class CodeGenerator(ast.ASTVisitor):
     def visitFunction(self, node):
         self._visitFuncOrLambda(node, isLambda=0)
         space = self.space
-        if not space.is_w(node.w_doc, space.w_None):
-            self.setDocstring(node.w_doc)
         self.storeName(node.name, node.lineno)
 
     def visitLambda(self, node):
@@ -1416,7 +1414,7 @@ class AbstractFunctionCode(CodeGenerator):
         CodeGenerator.__init__(self, space, graph)
         self.optimized = 1
 
-        if not isLambda and not space.is_w(func.w_doc, space.w_None):
+        if not isLambda:
             self.setDocstring(func.w_doc)
 
         if func.varargs:
@@ -1495,8 +1493,7 @@ class AbstractClassCode(CodeGenerator):
 
         CodeGenerator.__init__(self, space, graph)
         self.graph.setFlag(CO_NEWLOCALS)
-        if not space.is_w(klass.w_doc, space.w_None):
-            self.setDocstring(klass.w_doc)
+        self.setDocstring(klass.w_doc)
 
     def get_module(self):
         return self.module
