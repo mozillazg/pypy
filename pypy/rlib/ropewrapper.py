@@ -76,6 +76,9 @@ class RopeString(RopeBaseString):
     def __iter__(self):
         return RopeStringIterator(self._node)
     
+    def __str__(self):
+        return self._node.flatten_string()
+    
     def encode(self, encoding, errors='strict'):
         s = self._node.flatten_string()
         result = s.encode(encoding, errors)
@@ -126,6 +129,9 @@ class RopeUnicode(RopeBaseString):
    
     def __iter__(self):
         return RopeUnicodeIterator(self._node)
+    
+    def __str__(self):
+        return self._node.flatten_unicode()
     
     def encode(self, encoding, errors = 'strict'):
         result = None
