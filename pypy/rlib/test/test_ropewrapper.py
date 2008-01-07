@@ -63,7 +63,17 @@ class AbstractTest(object):
     def test_str(self):
         s1 = self.const("abc")
         assert str(s1) == "abc"
-
+    
+    def test_str_case(self):
+        s1 = self.const("hello python")
+        assert s1.capitalize() == self.const("Hello python")
+        assert s1.islower()
+        assert not s1.isupper()
+        s2 = s1.upper()
+        assert s2 == self.const("HELLO PYTHON")
+        assert s2.lower() == s1
+        s3 = self.const("Welcome to PyPy World")
+        assert s3.swapcase() == self.const("wELCOME TO pYpY wORLD")
 
 class AbstractRopeTest(object):
     def test_add_long(self):
