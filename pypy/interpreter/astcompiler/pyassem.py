@@ -45,6 +45,7 @@ class PyFlowGraph(object):
         self.co_code = []
         # Pending label targets to fix: [(label, index-in-co_code-to-fix, abs)]
         self.pending_label_fixes = []
+        self.lnotab = None
 
     def setDocstring(self, w_docstring):
         self.w_docstring = w_docstring
@@ -78,10 +79,18 @@ class PyFlowGraph(object):
         return intval & 0xFFFF
     emitop_extended_arg._dont_inline_ = True
 
+    def emitop_setlineno(self, lineno):
+        if self.lnotab is None:
+            self.lnotab = LineAddrTable(lineno)
+        else:
+            self.lnotab.nextLine(len(self.co_code), lineno)
+    emitop_setlineno._dont_inline_ = True
+
     def emitop_int(self, opname, intval):
         assert intval >= 0
         if opname == "SET_LINENO":
-            return  # XXX
+            self.emitop_setlineno(intval)
+            return
         if intval > 0xFFFF:
             intval = self.emitop_extended_arg(intval)
         self.emit(opname)
@@ -340,6 +349,12 @@ class PyFlowGraph(object):
         argcount = self.argcount
         if self.flags & CO_VARKEYWORDS:
             argcount = argcount - 1
+        if self.lnotab is None:    # obscure case
+            firstline = 0
+            lnotab = ""
+        else:
+            firstline = self.lnotab.firstline
+            lnotab = self.lnotab.getTable()
         return PyCode( self.space, argcount, nlocals,
                        self.stacksize, self.flags,
                        ''.join(self.co_code),
@@ -347,8 +362,8 @@ class PyFlowGraph(object):
                        self.names,
                        self.varnames,
                        self.filename, self.name,
-                       1,     # XXX! self.firstline,
-                       "",    # XXX! self.lnotab.getTable(),
+                       firstline,
+                       lnotab,
                        self.freevars,
                        self.cellvars
                        )
@@ -373,6 +388,61 @@ class PyFlowGraph(object):
 
 class Label(object):
     position = -1
+
+# ____________________________________________________________
+# Encoding the line numbers in lnotab
+
+class LineAddrTable:
+    """lnotab
+
+    This class builds the lnotab, which is documented in compile.c.
+    Here's a brief recap:
+
+    For each SET_LINENO instruction after the first one, two bytes are
+    added to lnotab.  (In some cases, multiple two-byte entries are
+    added.)  The first byte is the distance in bytes between the
+    instruction for the last SET_LINENO and the current SET_LINENO.
+    The second byte is offset in line numbers.  If either offset is
+    greater than 255, multiple two-byte entries are added -- see
+    compile.c for the delicate details.
+    """
+
+    def __init__(self, firstline):
+        self.firstline = firstline
+        self.lastline = firstline
+        self.lastoff = 0
+        self.lnotab = []     # list of characters
+
+    def nextLine(self, codeOffset, lineno):
+        # compute deltas
+        addr = codeOffset - self.lastoff
+        line = lineno - self.lastline
+        # Python assumes that lineno always increases with
+        # increasing bytecode address (lnotab is unsigned char).
+        # Depending on when SET_LINENO instructions are emitted
+        # this is not always true.  Consider the code:
+        #     a = (1,
+        #          b)
+        # In the bytecode stream, the assignment to "a" occurs
+        # after the loading of "b".  This works with the C Python
+        # compiler because it only generates a SET_LINENO instruction
+        # for the assignment.
+        if line >= 0:
+            push = self.lnotab.append
+            while addr > 255:
+                push(chr(255)); push(chr(0))
+                addr -= 255
+            while line > 255:
+                push(chr(addr)); push(chr(255))
+                line -= 255
+                addr = 0
+            if addr > 0 or line > 0:
+                push(chr(addr)); push(chr(line))
+            self.lastline = lineno
+            self.lastoff = codeOffset
+
+    def getTable(self):
+        return ''.join(self.lnotab)
 
 # ____________________________________________________________
 # Stack depth tracking
