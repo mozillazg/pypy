@@ -529,8 +529,6 @@ def setup_stack_depth_tracker():
         'LOAD_ATTR': 0, # unlike other loads
         'GET_ITER': 0,
         'FOR_ITER': 1,
-        'BREAK_LOOP': 0,
-        'CONTINUE_LOOP': 0,
         'POP_BLOCK': 0,
         'END_FINALLY': -3,
         'WITH_CLEANUP': -1,
