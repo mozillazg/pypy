@@ -325,6 +325,11 @@ class TestCompiler:
                     """doc"""; print 1
                     a=1
              ''',                            "doc"),
+            ('''
+                class Foo(object): pass
+                foo = Foo()
+                exec "'moduledoc'" in foo.__dict__
+             ''',                            "moduledoc"),
             ]:
             yield self.simple_test, source, "foo.__doc__", expected
 
@@ -363,12 +368,35 @@ class TestCompiler:
         yield self.st, "k=2; x = sum(n+2 for n in [6, 1, k])", 'x', 15
         yield self.st, "k=2; x = sum(n+2 for n in (6, 1, k))", 'x', 15
 
+    def test_closure(self):
+        decl = py.code.Source("""
+            def make_adder(n):
+                def add(m):
+                    return n + m
+                return add
+        """)
+        decl = str(decl) + "\n"
+        yield self.st, decl + "x = make_adder(40)(2)", 'x', 42
+
+    def test_try_except_finally(self):
+        yield self.simple_test, """
+            try:
+                x = 5
+                try:
+                    if x > 2:
+                        raise ValueError
+                finally:
+                    x += 1
+            except ValueError:
+                x *= 7
+        """, 'x', 42
+
     def test_pprint(self):
         # a larger example that showed a bug with jumps
         # over more than 256 bytes
         decl = py.code.Source("""
             def _safe_repr(object, context, maxlevels, level):
-                typ = _type(object)
+                typ = type(object)
                 if typ is str:
                     if 'locale' not in _sys.modules:
                         return repr(object), True, False
@@ -392,7 +420,7 @@ class TestCompiler:
                 if issubclass(typ, dict) and r is dict.__repr__:
                     if not object:
                         return "{}", True, False
-                    objid = _id(object)
+                    objid = id(object)
                     if maxlevels and level > maxlevels:
                         return "{...}", False, objid in context
                     if objid in context:
@@ -412,7 +440,7 @@ class TestCompiler:
                         if krecur or vrecur:
                             recursive = True
                     del context[objid]
-                    return "{%s}" % _commajoin(components), readable, recursive
+                    return "{%s}" % ', '.join(components), readable, recursive
 
                 if (issubclass(typ, list) and r is list.__repr__) or \
                    (issubclass(typ, tuple) and r is tuple.__repr__):
@@ -426,7 +454,7 @@ class TestCompiler:
                         if not object:
                             return "()", True, False
                         format = "(%s)"
-                    objid = _id(object)
+                    objid = id(object)
                     if maxlevels and level > maxlevels:
                         return format % "...", False, objid in context
                     if objid in context:
@@ -445,10 +473,13 @@ class TestCompiler:
                         if orecur:
                             recursive = True
                     del context[objid]
-                    return format % _commajoin(components), readable, recursive
+                    return format % ', '.join(components), readable, recursive
 
                 rep = repr(object)
                 return rep, (rep and not rep.startswith('<')), False
         """)
         decl = str(decl) + '\n'
-        yield self.st, decl + 'x=_safe_repr([5], {}, 3, 0)', 'x', '[5]'
+        g = {}
+        exec decl in g
+        expected = g['_safe_repr']([5], {}, 3, 0)
+        yield self.st, decl + 'x=_safe_repr([5], {}, 3, 0)', 'x', expected
