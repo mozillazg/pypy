@@ -391,6 +391,15 @@ class TestCompiler:
                 x *= 7
         """, 'x', 42
 
+    def test_while_loop(self):
+        yield self.simple_test, """
+            comments = [42]
+            comment = '# foo'
+            while comment[:1] == '#':
+                comments[:0] = [comment]
+                comment = ''
+        """, 'comments', ['# foo', 42]
+
     def test_pprint(self):
         # a larger example that showed a bug with jumps
         # over more than 256 bytes
