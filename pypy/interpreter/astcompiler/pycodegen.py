@@ -786,7 +786,6 @@ class CodeGenerator(ast.ASTVisitor):
         self.nextBlock(handlers)
 
         last = len(node.handlers) - 1
-        next = None
         for expr, target, body in node.handlers:
             if expr:
                 self.set_lineno(expr)
@@ -806,8 +805,8 @@ class CodeGenerator(ast.ASTVisitor):
             self.emit('POP_TOP')
             body.accept( self )
             self.emitop_block('JUMP_FORWARD', end)
-            self.nextBlock(next)
             if expr: # XXX
+                self.nextBlock(next)
                 self.emit('POP_TOP')
         self.emit('END_FINALLY')
         if node.else_:
