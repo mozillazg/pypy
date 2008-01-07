@@ -43,6 +43,8 @@ class PyFlowGraph(object):
         self.varnames = list(argnames)
         # The bytecode we are building, as a list of characters
         self.co_code = []
+        # Pending label targets to fix: [(label, index-in-co_code-to-fix, abs)]
+        self.pending_label_fixes = []
 
     def setDocstring(self, doc):
         self.docstring = doc
@@ -168,9 +170,66 @@ class PyFlowGraph(object):
     del name, obj, opname
 
     # ____________________________________________________________
+    # Labels and jumps
+
+    def newBlock(self):
+        """This really returns a new label, initially not pointing anywhere."""
+        return Label()
+
+    def nextBlock(self, label):
+        if label.position >= 0:
+            raise InternalCompilerError("Label target already seen")
+        label.position = len(self.co_code)
+
+    def emitop_block(self, opname, label):
+        absolute = opname in self.hasjabs
+        target = label.position
+        if target < 0:     # unknown yet
+            i = len(self.co_code)
+            self.pending_label_fixes.append((label, i, absolute))
+            target = 0xFFFF
+        else:
+            if not absolute:
+                # if the target was already seen, it must be backward,
+                # which is forbidden for these instructions
+                raise InternalCompilerError("%s cannot do a back jump" %
+                                            (opname,))
+        self.emitop_int(opname, target)
+
+    hasjabs = {}
+    for i in pythonopcode.hasjabs:
+        hasjabs[pythonopcode.opname[i]] = True
+    del i
+
+    # ____________________________________________________________
 
     def getCode(self):
+        self.computeStackDepth()
+        self.fixLabelTargets()
+        return self.newCodeObject()
+
+    def computeStackDepth(self):
         self.stacksize = 20  # XXX!
+
+    def fixLabelTargets(self):
+        for label, i, absolute in self.pending_label_fixes:
+            target = label.position
+            if target < 0:
+                raise InternalCompilerError("Label target not found")
+            if not absolute:
+                target = target - (i+3)   # relative jump
+                if target < 0:
+                    raise InternalCompilerError("Unexpected backward jump")
+            if target > 0xFFFF:
+                # CPython has the same limitation, for the same practical
+                # reason
+                msg = "function too large (bytecode would jump too far away)"
+                space = self.space
+                raise OperationError(space.w_SystemError, space.wrap(msg))
+            self.co_code[i+1] = chr(target & 0xFF)
+            self.co_code[i+2] = chr(target >> 8)
+
+    def newCodeObject(self):
         if (self.flags & CO_NEWLOCALS) == 0:
             nlocals = 0
         else:
@@ -202,3 +261,8 @@ class PyFlowGraph(object):
             w_v = space.unpacktuple(w_key)[0]
             l_w[index] = w_v
         return l_w
+
+# ____________________________________________________________
+
+class Label(object):
+    position = -1
