@@ -89,21 +89,25 @@ class PyCode(eval.Code):
                 argcount += 1
             if self.co_flags & CO_VARKEYWORDS:
                 argcount += 1
-            # the first few cell vars could shadow already-set arguments,
-            # in the same order as they appear in co_varnames
+            # Cell vars could shadow already-set arguments.
+            # astcompiler.pyassem used to be clever about the order of
+            # the variables in both co_varnames and co_cellvars, but
+            # it no longer is for the sake of simplicity.  Moreover
+            # code objects loaded from CPython don't necessarily follow
+            # an order, which could lead to strange bugs if .pyc files
+            # produced by CPython are loaded by PyPy.  Note that CPython
+            # contains the following bad-looking nested loops at *every*
+            # function call!
             argvars  = self.co_varnames
             cellvars = self.co_cellvars
-            next     = 0
-            nextname = cellvars[0]
-            for i in range(argcount):
-                if argvars[i] == nextname:
-                    # argument i has the same name as the next cell var
-                    self._args_as_cellvars.append(i)
-                    next += 1
-                    try:
-                        nextname = cellvars[next]
-                    except IndexError:
-                        break   # all cell vars initialized this way
+            for i in range(len(cellvars)):
+                cellname = cellvars[i]
+                for j in range(argcount):
+                    if cellname == argvars[j]:
+                        # argument j has the same name as the cell var i
+                        while len(self._args_as_cellvars) <= i:
+                            self._args_as_cellvars.append(-1)   # pad
+                        self._args_as_cellvars[i] = j
 
     co_names = property(lambda self: [self.space.unwrap(w_name) for w_name in self.co_names_w]) # for trace
 

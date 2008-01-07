@@ -35,11 +35,6 @@ class PyFlowGraph(object):
         # variables used only in nested scopes, are included here.
         self.freevars = []
         self.cellvars = []
-        # The closure list is used to track the order of cell
-        # variables and free variables in the resulting code object.
-        # The offsets used by LOAD_CLOSURE/LOAD_DEREF refer to both
-        # kinds of variables.
-        self.closure = []
         self.varnames = list(argnames)
         # The bytecode we are building, as a list of characters
         self.co_code = []
@@ -143,6 +138,21 @@ class PyFlowGraph(object):
         list.append(name)
         return end
 
+    def _lookupClosureName(self, name):
+        """Return index of name in (self.cellvars + self.freevars)
+        """
+        assert isinstance(name, str)
+        list = self.cellvars
+        for i in range(len(list)):
+            if list[i] == name:
+                return i
+        list = self.freevars
+        for i in range(len(list)):
+            if list[i] == name:
+                return len(self.cellvars) + i
+        raise InternalCompilerError("name '%s' not found in cell or free vars"
+                                    % name)
+
     def _convert_LOAD_FAST(self, arg):
         self._lookupName(arg, self.names)
         return self._lookupName(arg, self.varnames)
@@ -166,12 +176,12 @@ class PyFlowGraph(object):
 
     def _convert_DEREF(self, arg):
         self._lookupName(arg, self.names)
-        return self._lookupName(arg, self.closure)
+        return self._lookupClosureName(arg)
     _convert_LOAD_DEREF = _convert_DEREF
     _convert_STORE_DEREF = _convert_DEREF
 
     def _convert_LOAD_CLOSURE(self, arg):
-        return self._lookupName(arg, self.closure)
+        return self._lookupClosureName(arg)
 
     _cmp = list(pythonopcode.cmp_op)
     def _convert_COMPARE_OP(self, arg):
