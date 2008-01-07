@@ -363,6 +363,16 @@ class TestCompiler:
         yield self.st, "k=2; x = sum(n+2 for n in [6, 1, k])", 'x', 15
         yield self.st, "k=2; x = sum(n+2 for n in (6, 1, k))", 'x', 15
 
+    def test_closure(self):
+        decl = py.code.Source("""
+            def make_adder(n):
+                def add(m):
+                    return n + m
+                return add
+        """)
+        decl = str(decl) + "\n"
+        yield self.st, decl + "x = make_adder(40)(2)", 'x', 42
+
     def test_pprint(self):
         # a larger example that showed a bug with jumps
         # over more than 256 bytes
