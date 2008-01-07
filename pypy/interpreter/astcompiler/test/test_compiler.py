@@ -378,6 +378,21 @@ class TestCompiler:
         decl = str(decl) + "\n"
         yield self.st, decl + "x = make_adder(40)(2)", 'x', 42
 
+        decl = py.code.Source("""
+            def f(a, g, e, c):
+                def b(n, d):
+                    return (a, c, d, g, n)
+                def f(b, a):
+                    return (a, b, c, g)
+                return (a, g, e, c, b, f)
+            A, G, E, C, B, F = f(6, 2, 8, 5)
+            A1, C1, D1, G1, N1 = B(7, 3)
+            A2, B2, C2, G2 = F(1, 4)
+        """)
+        decl = str(decl) + "\n"
+        yield self.st, decl, 'A,A1,A2,B2,C,C1,C2,D1,E,G,G1,G2,N1', \
+                             (6,6 ,4 ,1 ,5,5 ,5 ,3 ,8,2,2 ,2 ,7 )
+
     def test_try_except_finally(self):
         yield self.simple_test, """
             try:
