@@ -28,9 +28,8 @@ class PyFlowGraph(object):
         if newlocals:
             self.flags |= CO_NEWLOCALS
 
-        # XXX we need to build app-level dict here, bleh
+        # we need to build an app-level dict here
         self.w_consts = space.newdict()
-        #self.const_list = []
         self.names = []
         # Free variables found by the symbol table scan, including
         # variables used only in nested scopes, are included here.
@@ -207,6 +206,16 @@ class PyFlowGraph(object):
 
     # ____________________________________________________________
 
+    def dump(self):
+        try:
+            self.fixLabelTargets()
+        except:
+            pass
+        if not hasattr(self, 'stacksize'):
+            self.stacksize = 99    # temporarily
+        co = self.newCodeObject()
+        co.dump()
+
     def getCode(self):
         self.fixLabelTargets()
         self.computeStackDepth()
@@ -233,6 +242,7 @@ class PyFlowGraph(object):
         self._stackdepths[0] = 0
         just_loaded_const = None
         consts_w = self.getConsts()
+        finally_targets = {}
         largestsize = 0
         i = 0
 
@@ -268,6 +278,8 @@ class PyFlowGraph(object):
                     target_i = i + oparg
                 effect = DEPTH_OP_EFFECT_ALONG_JUMP[opcode]
                 self._setdepth(target_i, curstackdepth + effect)
+                if opcode == pythonopcode.opmap['SETUP_FINALLY']:
+                    finally_targets[target_i] = None
 
             try:
                 tracker = DEPTH_OP_TRACKER[opcode]
@@ -284,7 +296,10 @@ class PyFlowGraph(object):
                     effect = - nfreevars - oparg
                 else:
                     effect = tracker(oparg)
-                self._setdepth(i, curstackdepth + effect)
+                curstackdepth += effect
+                if i in finally_targets:
+                    curstackdepth += 2  # see pyopcode.FinallyBlock.cleanup()
+                self._setdepth(i, curstackdepth)
 
             if opcode == pythonopcode.opmap['LOAD_CONST']:
                 just_loaded_const = consts_w[oparg]
