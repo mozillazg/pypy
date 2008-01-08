@@ -393,6 +393,16 @@ class TestCompiler:
         yield self.st, decl, 'A,A1,A2,B2,C,C1,C2,D1,E,G,G1,G2,N1', \
                              (6,6 ,4 ,1 ,5,5 ,5 ,3 ,8,2,2 ,2 ,7 )
 
+        decl = py.code.Source("""
+            def f((a, b)):
+                def g((c, d)):
+                    return (a, b, c, d)
+                return g
+            x = f((1, 2))((3, 4))
+        """)
+        decl = str(decl) + "\n"
+        yield self.st, decl, 'x', (1, 2, 3, 4)
+
     def test_try_except_finally(self):
         yield self.simple_test, """
             try:

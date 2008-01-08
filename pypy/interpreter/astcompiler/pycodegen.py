@@ -1375,7 +1375,10 @@ class InteractiveCodeGenerator(CodeGenerator):
         self.emit('PRINT_EXPR')
         
 class AbstractFunctionCode(CodeGenerator):
-    def __init__(self, space, func, isLambda, mod):
+    def __init__(self, space, scope, func, isLambda, mod):
+        assert scope is not None
+        self.scope = scope
+        self.localsfullyknown = self.scope.locals_fully_known()
         self.module = mod
         if isLambda:
             name = "<lambda>"
@@ -1413,6 +1416,9 @@ class AbstractFunctionCode(CodeGenerator):
         self.isLambda = isLambda
         CodeGenerator.__init__(self, space, graph)
         self.optimized = 1
+
+        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
+        self.graph.setCellVars(self.scope.get_cell_vars())
 
         if not isLambda:
             self.setDocstring(func.w_doc)
@@ -1459,13 +1465,8 @@ class AbstractFunctionCode(CodeGenerator):
 class FunctionCodeGenerator(AbstractFunctionCode):
 
     def __init__(self, space, func, isLambda, mod):
-        assert func.scope is not None
-        self.scope = func.scope
-        self.localsfullyknown = self.scope.locals_fully_known()
-        AbstractFunctionCode.__init__(self, space, func, isLambda, mod)
-        
-        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
-        self.graph.setCellVars(self.scope.get_cell_vars())
+        AbstractFunctionCode.__init__(self, space, func.scope,
+                                      func, isLambda, mod)
         if self.scope.generator:
             self.graph.setFlag(CO_GENERATOR)
             if self.scope.return_with_arg is not None:
@@ -1476,12 +1477,7 @@ class FunctionCodeGenerator(AbstractFunctionCode):
 class GenExprCodeGenerator(AbstractFunctionCode):
 
     def __init__(self, space, gexp, mod):
-        assert gexp.scope is not None
-        self.scope = gexp.scope
-        self.localsfullyknown = self.scope.locals_fully_known()
-        AbstractFunctionCode.__init__(self, space, gexp, 1, mod)
-        self.graph.setFreeVars(self.scope.get_free_vars_in_scope())
-        self.graph.setCellVars(self.scope.get_cell_vars())
+        AbstractFunctionCode.__init__(self, space, gexp.scope, gexp, 1, mod)
         self.graph.setFlag(CO_GENERATOR)
 
 class AbstractClassCode(CodeGenerator):
