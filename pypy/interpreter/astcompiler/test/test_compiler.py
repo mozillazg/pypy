@@ -507,3 +507,74 @@ class TestCompiler:
         exec decl in g
         expected = g['_safe_repr']([5], {}, 3, 0)
         yield self.st, decl + 'x=_safe_repr([5], {}, 3, 0)', 'x', expected
+
+    def test_mapping_test(self):
+        decl = py.code.Source("""
+            class X(object):
+                reference = {1:2, "key1":"value1", "key2":(1,2,3)}
+                key, value = reference.popitem()
+                other = {key:value}
+                key, value = reference.popitem()
+                inmapping = {key:value}
+                reference[key] = value
+                def _empty_mapping(self):
+                    return {}
+                _full_mapping = dict
+                def assertEqual(self, x, y):
+                    assert x == y
+                failUnlessRaises = staticmethod(raises)
+                def assert_(self, x):
+                    assert x
+                def failIf(self, x):
+                    assert not x
+
+            def test_read(self):
+                # Test for read only operations on mapping
+                p = self._empty_mapping()
+                p1 = dict(p) #workaround for singleton objects
+                d = self._full_mapping(self.reference)
+                if d is p:
+                    p = p1
+                #Indexing
+                for key, value in self.reference.items():
+                    self.assertEqual(d[key], value)
+                knownkey = self.other.keys()[0]
+                self.failUnlessRaises(KeyError, lambda:d[knownkey])
+                #len
+                self.assertEqual(len(p), 0)
+                self.assertEqual(len(d), len(self.reference))
+                #has_key
+                for k in self.reference:
+                    self.assert_(d.has_key(k))
+                    self.assert_(k in d)
+                for k in self.other:
+                    self.failIf(d.has_key(k))
+                    self.failIf(k in d)
+                #cmp
+                self.assertEqual(cmp(p,p), 0)
+                self.assertEqual(cmp(d,d), 0)
+                self.assertEqual(cmp(p,d), -1)
+                self.assertEqual(cmp(d,p), 1)
+                #__non__zero__
+                if p: self.fail("Empty mapping must compare to False")
+                if not d: self.fail("Full mapping must compare to True")
+                # keys(), items(), iterkeys() ...
+                def check_iterandlist(iter, lst, ref):
+                    self.assert_(hasattr(iter, 'next'))
+                    self.assert_(hasattr(iter, '__iter__'))
+                    x = list(iter)
+                    self.assert_(set(x)==set(lst)==set(ref))
+                check_iterandlist(d.iterkeys(), d.keys(), self.reference.keys())
+                check_iterandlist(iter(d), d.keys(), self.reference.keys())
+                check_iterandlist(d.itervalues(), d.values(), self.reference.values())
+                check_iterandlist(d.iteritems(), d.items(), self.reference.items())
+                #get
+                key, value = d.iteritems().next()
+                knownkey, knownvalue = self.other.iteritems().next()
+                self.assertEqual(d.get(key, knownvalue), value)
+                self.assertEqual(d.get(knownkey, knownvalue), knownvalue)
+                self.failIf(knownkey in d)
+                return 42
+        """)
+        decl = str(decl) + '\n'
+        yield self.simple_test, decl + 'r = test_read(X())', 'r', 42

@@ -77,7 +77,6 @@ class PyCode(eval.Code):
         self.co_lnotab = lnotab
         self.hidden_applevel = hidden_applevel
         self.magic = magic
-        self._compute_fastcall()
         self._signature = cpython_code_signature(self)
         # Precompute what arguments need to be copied into cellvars
         self._args_as_cellvars = []
@@ -108,6 +107,8 @@ class PyCode(eval.Code):
                         while len(self._args_as_cellvars) <= i:
                             self._args_as_cellvars.append(-1)   # pad
                         self._args_as_cellvars[i] = j
+
+        self._compute_fastcall()
 
     co_names = property(lambda self: [self.space.unwrap(w_name) for w_name in self.co_names_w]) # for trace
 
@@ -166,11 +167,8 @@ class PyCode(eval.Code):
             return
         if self.co_flags & (CO_VARARGS | CO_VARKEYWORDS):
             return
-        if self.co_cellvars:
-            first_cellvar = self.co_cellvars[0]
-            for i in range(self.co_argcount):
-                if first_cellvar == self.co_varnames[i]:
-                    return
+        if len(self._args_as_cellvars) > 0:
+            return
 
         self.do_fastcall = self.co_argcount
 
