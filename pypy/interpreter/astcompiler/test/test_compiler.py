@@ -425,6 +425,24 @@ class TestCompiler:
                 comment = ''
         """, 'comments', ['# foo', 42]
 
+    def test_return_lineno(self):
+        # the point of this test is to check that there is no code associated
+        # with any line greater than 4.  The implicit return should not have
+        # any line number - otherwise it would probably show up at line 5,
+        # which is confusing because it's in the wrong branch of the "if"
+        # in the case where a == b.
+        yield self.simple_test, """\
+            def ireturn_example():    # line 1
+                global b              # line 2
+                if a == b:            # line 3
+                    b = a+1           # line 4
+                else:                 # line 5
+                    if 1: pass        # line 6
+            import dis
+            co = ireturn_example.func_code
+            x = [lineno for addr, lineno in dis.findlinestarts(co)]
+        """, 'x', [3, 4]
+
     def test_pprint(self):
         # a larger example that showed a bug with jumps
         # over more than 256 bytes
