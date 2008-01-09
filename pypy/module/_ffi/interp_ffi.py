@@ -209,7 +209,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg, to_free):
             else:
                 raise OperationError(space.w_TypeError, w(
                     "Expected structure, array or simple type"))
-    if tp == "c":
+    elif tp == "c":
         s = space.str_w(w_arg)
         if len(s) != 1:
             raise OperationError(space.w_ValueError, w(
