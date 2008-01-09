@@ -68,16 +68,14 @@ class W_Structure(Wrappable):
     def descr_call(self, space, __args__):
         args_w, kwargs_w = __args__.unpack()
         if args_w:
-            if len(args_w) > 1:
-                raise OperationError(
-                        space.w_TypeError,
-                        space.wrap("Can give at most one non-keyword argument"))
-            if kwargs_w:
-                raise OperationError(
-                        space.w_TypeError,
-                        space.wrap("Keyword arguments not allowed when passing address argument"))
-            return space.wrap(W_StructureInstance(space, self, args_w[0], None))
-        return space.wrap(W_StructureInstance(space, self, None, kwargs_w))
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("Structure accepts only keyword arguments as field initializers"))
+        return space.wrap(W_StructureInstance(space, self, 0, kwargs_w))
+
+    def fromaddress(self, space, address):
+        return space.wrap(W_StructureInstance(space, self, address, None))
+    fromaddress.unwrap_spec = ['self', ObjSpace, int]
 
 def descr_new_structure(space, w_type, w_fields):
     return space.wrap(W_Structure(space, w_fields))
@@ -87,6 +85,7 @@ W_Structure.typedef = TypeDef(
     __new__     = interp2app(descr_new_structure),
     __call__ = interp2app(W_Structure.descr_call,
                           unwrap_spec=['self', ObjSpace, Arguments]),
+    fromaddress = interp2app(W_Structure.fromaddress)
 )
 W_Structure.typedef.acceptable_as_base_class = False
 
@@ -109,11 +108,11 @@ def segfault_exception(space, reason):
     return OperationError(w_exception, space.wrap(reason))
 
 class W_StructureInstance(Wrappable):
-    def __init__(self, space, shape, w_address, fieldinits_w):
+    def __init__(self, space, shape, address, fieldinits_w):
         self.free_afterwards = False
         self.shape = shape
-        if w_address is not None:
-            self.ll_buffer = rffi.cast(rffi.VOIDP, space.int_w(w_address))
+        if address != 0:
+            self.ll_buffer = rffi.cast(rffi.VOIDP, address)
         else:
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, shape.size, flavor='raw',
                                            zero=True)
