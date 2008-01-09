@@ -94,15 +94,8 @@ class W_ArrayInstance(Wrappable):
         self.ll_array = lltype.nullptr(rffi.VOIDP.TO)
     free.unwrap_spec = ['self', ObjSpace]
 
-
-def descr_new_array_instance(space, w_type, w_shape, w_size_or_iterable):
-    w_shape = space.interp_w(W_Array, w_shape)
-    return space.wrap(W_ArrayInstance(space, w_shape, w_size_or_iterable))
-descr_new_array_instance.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root]
-
 W_ArrayInstance.typedef = TypeDef(
     'ArrayInstance',
-    __new__     = interp2app(descr_new_array_instance),
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     buffer      = GetSetProperty(W_ArrayInstance.getbuffer),
