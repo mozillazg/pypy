@@ -860,7 +860,7 @@ class CodeGenerator(ast.ASTVisitor):
         self.loadName(node.varname, node.lineno)
 
     def visitPass(self, node):
-        self.set_lineno(node)
+        pass  # no self.set_lineno(node) unnecessarily! see test_return_lineno
 
     def visitImport(self, node):
         self.set_lineno(node)
