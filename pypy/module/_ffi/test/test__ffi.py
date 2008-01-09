@@ -97,6 +97,13 @@ class AppTestFfi:
            return x;
         }
 
+        int* allocate_array()
+        {
+            int *res = (int*)malloc(sizeof(int));
+            res[0] = 3;
+            return res;
+        }
+
         '''))
         return compile_c_module([c_file], 'x', ExternalCompilationInfo())
     prepare_c_example = staticmethod(prepare_c_example)
@@ -211,10 +218,10 @@ class AppTestFfi:
                              ("tm_isdst", 'i')])
         libc = _ffi.CDLL('libc.so.6')
         gmtime = libc.ptr('gmtime', ['P'], 'P')
-        t = Tm(gmtime(x))
+        t = Tm.fromaddress(gmtime(x))
         assert t.tm_year == 70
         assert t.tm_sec == 1
-        assert t.tm_min == 2        
+        assert t.tm_min == 2      
         x.free()
 
     def test_nested_structures(self):
@@ -224,13 +231,13 @@ class AppTestFfi:
         X = _ffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
         next = X(next=None, x3='x')
         x = X(next=next, x1=1, x2=2, x3='x')
-        assert X(x.next).x3 == 'x'
+        assert X.fromaddress(x.next).x3 == 'x'
         x.free()
         next.free()
         create_double_struct = lib.ptr("create_double_struct", [], 'P')
         x = create_double_struct()
-        x = X(x)
-        assert X(x.next).x2 == 3
+        x = X.fromaddress(x)
+        assert X.fromaddress(x.next).x2 == 3
         free_double_struct = lib.ptr("free_double_struct", ['P'], None)
         free_double_struct(x)
         
@@ -266,7 +273,7 @@ class AppTestFfi:
         get_array_elem_s = lib.ptr('get_array_elem_s', ['P', 'i'], 'P')
         ptr1 = get_array_elem_s(a, 0)
         assert ptr1 is None
-        assert X(get_array_elem_s(a, 1)).x2 == 3
+        assert X.fromaddress(get_array_elem_s(a, 1)).x2 == 3
         assert get_array_elem_s(a, 1) == x.buffer
         x.free()
         a.free()
@@ -342,3 +349,11 @@ class AppTestFfi:
             assert _ffi.sizeof(k) == s
             assert _ffi.alignment(k) == a
 
+    def test_array_addressof(self):
+        import _ffi
+        lib = _ffi.CDLL(self.lib_name)
+        alloc = lib.ptr('allocate_array', [], 'P')
+        A = _ffi.Array('i')
+        a = A.fromaddress(alloc(), 1)
+        assert a[0] == 3
+        # a.free() - don't free as ll2ctypes is complaining massively

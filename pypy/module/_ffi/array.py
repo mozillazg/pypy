@@ -43,6 +43,10 @@ class W_Array(Wrappable):
                              w_item, None)
             return space.wrap(result)
 
+    def fromaddress(self, space, address, length):
+        return space.wrap(W_ArrayInstance(space, self, length, address))
+    fromaddress.unwrap_spec = ['self', ObjSpace, int, int]
+
 def descr_new_array(space, w_type, of):
     _get_type(space, of)
     return space.wrap(W_Array(space, of))
@@ -52,20 +56,25 @@ W_Array.typedef = TypeDef(
     __new__  = interp2app(descr_new_array, unwrap_spec=[ObjSpace, W_Root, str]),
     __call__ = interp2app(W_Array.descr_call,
                           unwrap_spec=['self', ObjSpace, W_Root]),
+    fromaddress = interp2app(W_Array.fromaddress),
     of = interp_attrproperty('of', W_Array),
 )
 W_Array.typedef.acceptable_as_base_class = False
 
 
 class W_ArrayInstance(Wrappable):
-    def __init__(self, space, shape, length):
+    def __init__(self, space, shape, length, address=0):
         self.ll_array = lltype.nullptr(rffi.VOIDP.TO)
         self.alloced = False
-        self.shape = shape
         self.length = length
-        size = shape.itemsize * length
-        self.ll_array = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
-                                      zero=True)
+        self.shape = shape
+        if address > 0:
+            self.ll_array = rffi.cast(rffi.VOIDP, address)
+        else:
+            size = shape.itemsize * length
+            self.ll_array = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
+                                          zero=True)
+
 
     # XXX don't allow negative indexes, nor slices
 
