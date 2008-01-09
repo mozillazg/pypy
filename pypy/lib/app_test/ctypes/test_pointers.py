@@ -61,6 +61,7 @@ class TestPointers:
         assert i.value == 54345
 
     def test_callbacks_with_pointers(self):
+        py.test.skip("callbacks not supported")
         # a function type receiving a pointer
         PROTOTYPE = CFUNCTYPE(c_int, POINTER(c_int))
 
@@ -173,6 +174,3 @@ class TestPointers:
 
         py.test.raises(TypeError, c_void_p, 3.14) # make sure floats are NOT accepted
         py.test.raises(TypeError, c_void_p, object()) # nor other objects
-
-if __name__ == '__main__':
-    unittest.main()
