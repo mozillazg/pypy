@@ -9,7 +9,7 @@ from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, wrap_oserror
-from pypy.module._ffi.structure import native_fmttable
+from pypy.module._ffi.structure import native_fmttable, segfault_exception
 from pypy.module._ffi.interp_ffi import unwrap_value, wrap_value, _get_type
 
 def push_elem(ll_array, pos, value):
