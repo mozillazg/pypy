@@ -68,7 +68,7 @@ class W_ArrayInstance(Wrappable):
         self.alloced = False
         self.length = length
         self.shape = shape
-        if address > 0:
+        if address != 0:
             self.ll_array = rffi.cast(rffi.VOIDP, address)
         else:
             size = shape.itemsize * length
