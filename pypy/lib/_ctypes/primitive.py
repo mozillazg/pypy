@@ -2,6 +2,8 @@ import _ffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
+from _ctypes.basics import _CData
+
 class NULL(object):
     pass
 NULL = NULL()
@@ -42,20 +44,27 @@ class SimpleType(type):
             raise ValueError('%s is not a type character' % (tp))
         default = TP_TO_DEFAULT[tp]
         ffitp = TP_TO_FFITP.get(tp, tp)
-        ffistruct = _ffi.Structure([("value", ffitp)])
-        def __init__(self, value=DEFAULT_VALUE):
-            self._struct = ffistruct()
-            if value is not DEFAULT_VALUE:
-                self._struct.value = value
+        ffiarray = _ffi.Array(ffitp)
+        def __init__(self, value=DEFAULT_VALUE, address=DEFAULT_VALUE):
+            if address is not DEFAULT_VALUE:
+                self._array = ffiarray.fromaddress(address, 1)
+            else:
+                self._array = ffiarray(1)
+                if value is not DEFAULT_VALUE:
+                    self._array[0] = value
         dct['__init__'] = __init__
         result = type.__new__(self, name, bases, dct)
-        result._ffistruct = ffistruct
+        result._ffiarray = ffiarray
+        result._ffiletter = result._type_
         return result
+
+    def from_address(self, address):
+        return self(address=address)
 
     def __mul__(self, other):
         pass
 
-class _SimpleCData(object):
+class _SimpleCData(_CData):
     __metaclass__ = SimpleType
     _type_ = 'i'
     def from_param(cls, *args, **kwargs):
@@ -63,10 +72,10 @@ class _SimpleCData(object):
     from_param = classmethod(from_param)
 
     def _getvalue(self):
-        return self._struct.value
+        return self._array[0]
 
     def _setvalue(self, val):
-        self._struct.value = value
+        self._array[0] = value
     value = property(_getvalue, _setvalue)
 
     def __repr__(self):
