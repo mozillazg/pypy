@@ -1,6 +1,7 @@
 import _ffi
 
 class CFuncPtrType(type):
+    # XXX write down here defaults and such things
     pass
 
 class CFuncPtr(object):
@@ -21,21 +22,43 @@ class CFuncPtr(object):
             self.dll = None
 
     def __call__(self, *args):
-        assert self.argtypes is not None #XXX for now
-        assert self.restype is not None #XXX for now
-        if len(args) != len(self.argtypes):
-            raise TypeError("%s takes %s arguments, given %s" % (self.name,
-                len(self.argtypes), len(args)))
-        return self._getfuncptr()(*args)
+        import ctypes
+        if self.restype is None:
+            # XXX point to default instead
+            self.restype = ctypes.c_int
+        if self.argtypes is not None:
+            if len(args) != len(self.argtypes):
+                raise TypeError("%s takes %s arguments, given %s" %
+                                (self.name, len(self.argtypes), len(args)))
+        res = self._getfuncptr(args)(*[arg.value for arg in args])
+        if issubclass(self.restype, ctypes._SimpleCData):
+            return res
+        else:
+            # XXX pointers
+            return self.restype(address=res)
 
-    def _getfuncptr(self):
+    def _getfuncptr(self, args):
         if self._funcptr is not None:
             if (self.argtypes is self._argtypes
                 and self.restype is self._restype):
                 return self._funcptr
-        argtps = [argtype._type_ for argtype in self.argtypes]
-        restp = self.restype._type_
+        if self.argtypes is None:
+            argtypes = self._guess_magic_args(args)
+        else:
+            argtypes = self.argtypes
+        argtps = [argtype._ffiletter for argtype in argtypes]
+        restp = self.restype._ffiletter
         self._funcptr = funcptr = self.dll._handle.ptr(self.name, argtps, restp)
         self._argtypes = self.argtypes
         self._restype = self.restype
         return funcptr
+
+    def _guess_magic_args(self, args):
+        import _ctypes
+        res = []
+        for arg in args:
+            if isinstance(arg, _ctypes._CData):
+                res.append(type(arg))
+            else:
+                raise TypeError("Cannot convert %s" % arg)
+        return res
