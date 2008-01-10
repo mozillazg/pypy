@@ -14,5 +14,7 @@ class TestStdlib:
     def test_all(self):
         p = py.path.local(pypy.__file__).dirpath().dirpath('lib-python',
                                                            '2.4.1')
-        for s in p.listdir("*.py"):
+        files = p.listdir("*.py")
+        files.sort()
+        for s in files:
             yield self.check_file_compile, s
