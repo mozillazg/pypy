@@ -356,4 +356,5 @@ class AppTestFfi:
         A = _ffi.Array('i')
         a = A.fromaddress(alloc(), 1)
         assert a[0] == 3
+        assert A.fromaddress(a.buffer, 1)[0] == 3
         # a.free() - don't free as ll2ctypes is complaining massively
