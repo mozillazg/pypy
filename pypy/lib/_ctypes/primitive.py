@@ -3,6 +3,7 @@ import _ffi
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
 from _ctypes.basics import _CData
+from _ctypes.param import CArgObject
 
 class NULL(object):
     pass
@@ -54,22 +55,22 @@ class SimpleType(type):
                     self._array[0] = value
         dct['__init__'] = __init__
         result = type.__new__(self, name, bases, dct)
+        result._ffiletter = tp
         result._ffiarray = ffiarray
-        result._ffiletter = result._type_
         return result
 
     def from_address(self, address):
-        return self(address=address)
+        return self(address=address)        
 
     def __mul__(self, other):
         pass
 
+    def from_param(self, value):
+        return self(value)._as_ffi()
+
 class _SimpleCData(_CData):
     __metaclass__ = SimpleType
     _type_ = 'i'
-    def from_param(cls, *args, **kwargs):
-        pass
-    from_param = classmethod(from_param)
 
     def _getvalue(self):
         return self._array[0]
@@ -77,6 +78,9 @@ class _SimpleCData(_CData):
     def _setvalue(self, val):
         self._array[0] = value
     value = property(_getvalue, _setvalue)
+
+    def _as_ffi(self):        
+        return CArgObject(self._type_, self.value, type(self))
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)
@@ -91,4 +95,5 @@ def byref(cdata):
     from ctypes import pointer
     if not isinstance(cdata, _SimpleCData):
         raise TypeError("expected CData instance")
-    return pointer(cdata)
+    return pointer(cdata)._as_ffi()
+

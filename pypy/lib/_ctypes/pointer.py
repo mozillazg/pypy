@@ -1,6 +1,7 @@
 
 import _ffi
 from _ctypes.basics import _CData
+from _ctypes.param import CArgObject
 
 DEFAULT_VALUE = object()
 
@@ -34,6 +35,13 @@ class PointerType(type):
         obj.__init__ = __init__
         return obj
 
+    def from_param(self, param):
+        # XXX think deeper about that
+        if isinstance(param, CArgObject):
+            return param
+        else:
+            return self(address=param._array.buffer)._as_ffi()
+
 class _Pointer(_CData):
     __metaclass__ = PointerType
 
@@ -47,6 +55,9 @@ class _Pointer(_CData):
 
     def setcontents(self, value):
         self._array = self._ffiarray.fromaddress(value._array.buffer, 1)
+
+    def _as_ffi(self):
+        return CArgObject('P', self._array, type(self))
 
     def __getitem__(self, item):
         return self._array[item]
