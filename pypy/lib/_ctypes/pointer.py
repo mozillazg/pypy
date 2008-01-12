@@ -1,7 +1,6 @@
 
 import _ffi
-from _ctypes.basics import _CData
-from _ctypes.param import CArgObject
+from _ctypes.basics import _CData, CArgObject
 
 DEFAULT_VALUE = object()
 

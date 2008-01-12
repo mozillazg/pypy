@@ -1,5 +1,5 @@
 import _ffi
-from _ctypes.param import CArgObject
+from _ctypes.basics import CArgObject
 
 class CFuncPtrType(type):
     # XXX write down here defaults and such things
