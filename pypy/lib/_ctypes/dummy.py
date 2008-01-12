@@ -4,9 +4,6 @@ class UnionType(type):
 class Union(object):
     __metaclass__ = UnionType
 
-class Structure(type):
-    pass
-
 class Array(type):
     pass
 

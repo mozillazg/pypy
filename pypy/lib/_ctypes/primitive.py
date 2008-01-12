@@ -2,8 +2,7 @@ import _ffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
-from _ctypes.basics import _CData
-from _ctypes.param import CArgObject
+from _ctypes.basics import _CData, CArgObject
 
 class NULL(object):
     pass
@@ -84,16 +83,3 @@ class _SimpleCData(_CData):
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)
-
-def sizeof(tp):
-    return _ffi.sizeof(tp._type_)
-
-def alignment(tp):
-    return _ffi.alignment(tp._type_)
-
-def byref(cdata):
-    from ctypes import pointer
-    if not isinstance(cdata, _SimpleCData):
-        raise TypeError("expected CData instance")
-    return pointer(cdata)._as_ffi()
-
