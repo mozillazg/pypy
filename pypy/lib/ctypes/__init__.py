@@ -136,7 +136,6 @@ from _ctypes import _SimpleCData
 def _check_size(typ, typecode=None):
     # Check if sizeof(ctypes_type) against struct.calcsize.  This
     # should protect somewhat against a misconfigured libffi.
-    return # XXXXXXXXX
     from struct import calcsize
     if typecode is None:
         # Most _type_ codes are the same as used in struct
