@@ -1,10 +1,10 @@
 
 import _ffi
-from _ctypes.basics import _CData, CArgObject, cdata_from_address
+from _ctypes.basics import _CData, _CDataMeta, cdata_from_address
 
 DEFAULT_VALUE = object()
 
-class PointerType(type):
+class PointerType(_CDataMeta):
     def __new__(self, name, cls, typedict):
         d = dict(
             size       = _ffi.sizeof('P'),
@@ -31,13 +31,6 @@ class PointerType(type):
 
     from_address = cdata_from_address
 
-    def from_param(self, param):
-        # XXX think deeper about that
-        if isinstance(param, CArgObject):
-            return param
-        else:
-            return self.from_address(param._array.buffer)._as_ffi()
-
 class _Pointer(_CData):
     __metaclass__ = PointerType
 
@@ -54,10 +47,6 @@ class _Pointer(_CData):
             self._array[0] = value
         else:
             self._array[0] = value._array
-
-    def _as_ffi(self):
-        # XXX performance
-        return CArgObject('P', self._type_.from_address(self._array[0])._array, type(self))
 
     def __getitem__(self, item):
         assert item == 0

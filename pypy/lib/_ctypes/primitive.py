@@ -2,7 +2,7 @@ import _ffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
-from _ctypes.basics import _CData, CArgObject, cdata_from_address, TP_TO_FFITP
+from _ctypes.basics import _CData, _CDataMeta, cdata_from_address, TP_TO_FFITP
 from _ctypes.array import create_array_type
 
 class NULL(object):
@@ -31,7 +31,7 @@ TP_TO_DEFAULT = {
  
 DEFAULT_VALUE = object()
 
-class SimpleType(type):
+class SimpleType(_CDataMeta):
     def __new__(self, name, bases, dct):
         tp = dct['_type_']
         if (not isinstance(tp, str) or
@@ -52,16 +52,15 @@ class SimpleType(type):
         return create_array_type(self, other)
 
     def from_param(self, value):
-        return self(value)._as_ffi()
+        if not isinstance(value, _CData):
+            return self(value)
+        return super(SimpleType, self).from_param(value)
 
 class _SimpleCData(_CData):
     __metaclass__ = SimpleType
     _type_ = 'i'
 
     def __init__(self, value=DEFAULT_VALUE):
-        #if address is not DEFAULT_VALUE:
-        #    self._array = ffiarray.fromaddress(address, 1)
-        #else:
         self._array = self._ffiarray(1)
         if value is not DEFAULT_VALUE:
             self._array[0] = value
@@ -70,14 +69,15 @@ class _SimpleCData(_CData):
         return self._array[0]
 
     def _setvalue(self, value):
-        self._array[0] = value
+        # XXX
+        if isinstance(value, _SimpleCData):
+            self._array[0] = value.value
+        else:
+            self._array[0] = value
     value = property(_getvalue, _setvalue)
 
     def __ctypes_from_outparam__(self):
         return self._array[0]
-
-    def _as_ffi(self):        
-        return CArgObject(self._type_, self.value, type(self))
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)

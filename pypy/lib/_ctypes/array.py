@@ -1,9 +1,9 @@
 
 import _ffi
 
-from _ctypes.basics import _CData, cdata_from_address
+from _ctypes.basics import _CData, cdata_from_address, _CDataMeta
 
-class ArrayMeta(type):
+class ArrayMeta(_CDataMeta):
     def __new__(self, name, cls, typedict):
         res = type.__new__(self, name, cls, typedict)
         res._ffiletter = 'P'
@@ -19,14 +19,23 @@ class ArrayMeta(type):
                         i += 1
                     return "".join(res)
                 def setvalue(self, val):
-                    for i in range(min(len(val), self._length_)):
+                    # we don't want to have buffers here
+                    import ctypes
+                    if len(val) > self._length_:
+                        raise ValueError("%s too long" % (val,))
+                    for i in range(len(val)):
                         self[i] = val[i]
-                    self[len(val)] = '\x00'
+                    if len(val) < self._length_:
+                        self[len(val)] = '\x00'
                 res.value = property(getvalue, setvalue)
 
                 def getraw(self):
                     return "".join([self[i] for i in range(self._length_)])
-                res.raw = property(getraw)
+
+                def setraw(self, buffer):
+                    for i in range(len(buffer)):
+                        self[i] = buffer[i]
+                res.raw = property(getraw, setraw)
         else:
             res._ffiarray = None
         return res
@@ -65,12 +74,11 @@ class Array(_CData):
         return "".join([self[i] for i in range(start, stop)])
     
     def __setitem__(self, item, value):
+        from ctypes import _SimpleCData
         if isinstance(item, slice):
             self._slice_setitem(item, value)
-        # XXX
-        from ctypes import _SimpleCData
-        if isinstance(value, _SimpleCData):
-            value = value.value
+            return
+        value = self._type_.from_param(value).value
         item = self._fix_item(item)
         if self._type_._ffiletter == 'c' and len(value) > 1:
             raise TypeError("Expected strings of length 1")
