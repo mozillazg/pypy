@@ -15,7 +15,7 @@ class AppTestDotnet:
         Math = clr.load_cli_class('System', 'Math')
         assert Math is System.Math
 
-        import System.Collections.Stack
+        import System
         a = System.Collections.Stack()
         a.Push(3)
         a.Push(44)
@@ -40,6 +40,5 @@ class AppTestDotnet:
         assert s1 is System
 
     def test_lazy_import(self):
-        skip("not working yet")
         import System
         System.Xml.Schema # does not raise attribute error
