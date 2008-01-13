@@ -1,7 +1,7 @@
 
 import _ffi
 
-from _ctypes.basics import _CData
+from _ctypes.basics import _CData, cdata_from_address
 
 class ArrayMeta(type):
     def __new__(self, name, cls, typedict):
@@ -10,9 +10,28 @@ class ArrayMeta(type):
         if '_type_' in typedict:
             ffiarray = _ffi.Array(typedict['_type_']._ffiletter)
             res._ffiarray = ffiarray
+            if typedict['_type_']._type_ == 'c':
+                def getvalue(self):
+                    res = []
+                    i = 0
+                    while i < self._length_ and self[i] != '\x00':
+                        res.append(self[i])
+                        i += 1
+                    return "".join(res)
+                def setvalue(self, val):
+                    for i in range(min(len(val), self._length_)):
+                        self[i] = val[i]
+                    self[len(val)] = '\x00'
+                res.value = property(getvalue, setvalue)
+
+                def getraw(self):
+                    return "".join([self[i] for i in range(self._length_)])
+                res.raw = property(getraw)
         else:
             res._ffiarray = None
         return res
+
+    from_address = cdata_from_address
 
 class Array(_CData):
     __metaclass__ = ArrayMeta
@@ -22,11 +41,49 @@ class Array(_CData):
         for i, arg in enumerate(args):
             self[i] = arg
 
+    def _fix_item(self, item):
+        if item >= self._length_:
+            raise IndexError
+        if item < 0:
+            return self._length_ + item
+        return item
+
+    def _get_slice_params(self, item):
+        if item.step is not None:
+            raise TypeError("3 arg slices not supported (for no reason)")
+        start = item.start or 0
+        stop = item.stop or self._length_
+        return start, stop
+    
+    def _slice_setitem(self, item, value):
+        start, stop = self._get_slice_params(item)
+        for i in range(start, stop):
+            self[i] = value[i - start]
+
+    def _slice_getitem(self, item):
+        start, stop = self._get_slice_params(item)
+        return "".join([self[i] for i in range(start, stop)])
+    
     def __setitem__(self, item, value):
-        xxx
+        if isinstance(item, slice):
+            self._slice_setitem(item, value)
+        # XXX
+        from ctypes import _SimpleCData
+        if isinstance(value, _SimpleCData):
+            value = value.value
+        item = self._fix_item(item)
+        if self._type_._ffiletter == 'c' and len(value) > 1:
+            raise TypeError("Expected strings of length 1")
+        self._array[item] = value
 
     def __getitem__(self, item):
-        xxx
+        if isinstance(item, slice):
+            return self._slice_getitem(item)
+        item = self._fix_item(item)
+        return self._array[item]
+
+    def __len__(self):
+        return self._length_
 
 ARRAY_CACHE = {}
 

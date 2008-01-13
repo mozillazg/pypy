@@ -39,5 +39,10 @@ def byref(cdata):
 
 def cdata_from_address(self, address):
     instance = self.__new__(self)
-    instance._array = self._ffiarray.fromaddress(address, 1)
+    lgt = getattr(self, '_length_', 1)
+    instance._array = self._ffiarray.fromaddress(address, lgt)
     return instance
+
+def addressof(tp):
+    # XXX we should have a method on each..
+    return tp._array.buffer
