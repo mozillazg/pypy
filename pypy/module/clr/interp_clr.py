@@ -324,10 +324,7 @@ def build_cli_class(space, namespace, classname, fullname):
 
     # this is where we locate the interfaces inherited by the class
     # set the flag hasIEnumerable if IEnumerable interface has been by the class
-    hasIEnumerable = False
-    for interface in b_type.GetInterfaces():
-        if interface.ToString() == "System.Collections.IEnumerable":
-            hasIEnumerable = True
+    hasIEnumerable = b_type.GetInterface("System.Collections.IEnumerable") is not None
 
     # this is where we test if the class is Generic 
     # set the flag isClassGeneric 
