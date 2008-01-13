@@ -136,6 +136,8 @@ class AppTestFfi:
         assert get_char('dupa', 1) == 'u'
         raises(ValueError, "get_char('xxx', 2 ** 17)")
         raises(ValueError, "get_char('xxx', -1)")
+        get_char = lib.ptr('get_char', ['z', 'H'], 'c')
+        assert get_char('dupa', 2) == 'p'
 
     def test_returning_str(self):
         import _ffi
