@@ -7,10 +7,8 @@ python_types = [int, int, int, int, int, long,
                 int, long, long, long, float, float]
 
 def setup_module(mod):
-    f = py.magic.autopath().dirpath().join('_ctypes_test.so')
-    if not f.check():
-        raise Exception("Grab your _ctypes_test.so from your python lib directory and copy it here")
-    mod._ctypes_test = str(f)
+    import conftest
+    mod._ctypes_test = str(conftest.sofile)
 
 class TestPointers:
 
