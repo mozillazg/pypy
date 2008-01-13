@@ -4,7 +4,8 @@ import _ffi
 class _CData(object):
     """ The most basic object for all ctypes types
     """
-    pass
+    def __ctypes_from_outparam__(self):
+        return self
 
 class CArgObject(object):
     def __init__(self, letter, raw_value, _type):
@@ -36,3 +37,7 @@ def byref(cdata):
         raise TypeError("expected CData instance")
     return pointer(cdata)._as_ffi()
 
+def cdata_from_address(self, address):
+    instance = self.__new__(self)
+    instance._array = self._ffiarray.fromaddress(address, 1)
+    return instance

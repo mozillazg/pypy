@@ -4,9 +4,6 @@ class UnionType(type):
 class Union(object):
     __metaclass__ = UnionType
 
-class Array(type):
-    pass
-
 class ArgumentError(Exception):
     pass
 

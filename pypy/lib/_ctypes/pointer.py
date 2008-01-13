@@ -1,6 +1,6 @@
 
 import _ffi
-from _ctypes.basics import _CData, CArgObject
+from _ctypes.basics import _CData, CArgObject, cdata_from_address
 
 DEFAULT_VALUE = object()
 
@@ -18,15 +18,10 @@ class PointerType(type):
         for k, v in d.iteritems():
             setattr(obj, k, v)
         if '_type_' in typedict:
-            ffiarray = _ffi.Array(typedict['_type_']._ffiletter)
-            def __init__(self, value=0, address=DEFAULT_VALUE):
-                if address is not DEFAULT_VALUE:
-                    self._array = ffiarray.fromaddress(address, 1)
-                elif value == 0:
-                    # null pointer
-                    self._array = ffiarray.fromaddress(0, 1)
-                else:
-                    self._array = ffiarray.fromaddress(value._array.buffer, 1)
+            ffiarray = _ffi.Array('P')
+            def __init__(self, value=0):
+                self._array = ffiarray(1)
+                self.contents = value
             obj._ffiarray = ffiarray
         else:
             def __init__(self, value=0):
@@ -34,12 +29,14 @@ class PointerType(type):
         obj.__init__ = __init__
         return obj
 
+    from_address = cdata_from_address
+
     def from_param(self, param):
         # XXX think deeper about that
         if isinstance(param, CArgObject):
             return param
         else:
-            return self(address=param._array.buffer)._as_ffi()
+            return self.from_address(param._array.buffer)._as_ffi()
 
 class _Pointer(_CData):
     __metaclass__ = PointerType
@@ -50,18 +47,25 @@ class _Pointer(_CData):
     value = property(getvalue)
 
     def getcontents(self):
-        return self._type_.from_address(self._array.buffer)
+        return self._type_.from_address(self._array[0])
 
     def setcontents(self, value):
-        self._array = self._ffiarray.fromaddress(value._array.buffer, 1)
+        if isinstance(value, int):
+            self._array[0] = value
+        else:
+            self._array[0] = value._array
 
     def _as_ffi(self):
-        return CArgObject('P', self._array, type(self))
+        # XXX performance
+        return CArgObject('P', self._type_.from_address(self._array[0])._array, type(self))
 
     def __getitem__(self, item):
-        return self._array[item]
+        assert item == 0
+        return self._type_.from_address(self._array[0]).__ctypes_from_outparam__()
 
     def __setitem__(self, item, value):
-        self._array[item] = value
+        if item != 0:
+            raise IndexError
+        self._type_.from_address(self._array[item]).value = value
 
     contents = property(getcontents, setcontents)
