@@ -33,7 +33,13 @@ class AppTestDotnet:
             import non_existent_module
         raises(ImportError, fn)
 
+    def test_import_twice(self):
+        import System
+        s1 = System
+        import System
+        assert s1 is System
+
     def test_lazy_import(self):
-        py.test.skip("not working yet")
+        skip("not working yet")
         import System
         System.Xml.Schema # does not raise attribute error
