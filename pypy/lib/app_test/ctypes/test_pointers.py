@@ -102,6 +102,16 @@ class TestPointers:
 
             py.test.raises(TypeError, delitem, p, 0)
 
+    def test_pointer_to_pointer(self):
+        x = c_int(32)
+        y = c_int(42)
+        p1 = pointer(x)
+        p2 = pointer(p1)
+        assert p2.contents.contents.value == 32
+        p2.contents.contents = y
+        assert p2.contents.contents.value == 42
+        assert p1.contents.value == 42
+
     def test_from_address(self):
         py.test.skip("It cannot work")
         from array import array
