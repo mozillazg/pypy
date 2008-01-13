@@ -6,14 +6,32 @@
 import imp
 import sys
 
-class loader(object):
-    '''
-        This method returns the loaded module or raises an exception, ImportError
-        loader is ONLY calld for proper .NET modules (check done in Importer class
+class importer(object):
+    '''  
+         If the importer is installed on sys.meta_path, it will
+         receive a second argument, which is None for a top-level module, or
+         package.__path__ for submodules or subpackages
+
+         It should return a loader object if the module was found, or None if it wasn't.  
+         If find_module() raises an exception, the caller will abort the import.
+         When importer.find_module("spam.eggs.ham") is called, "spam.eggs" has already 
+         been imported and added to sys.modules.
     '''
     def __init__(self):
-        pass
+        import clr
+        # this might not be the correct place to load the valid NameSpaces
+        self.valid_name_spaces = set(clr.list_of_valid_namespaces())
 
+    def find_module(self, fullname, path=None):
+        # check for true NAMESPACE or .NET TYPE 
+        import clr
+        if fullname in self.valid_name_spaces or clr.isDotNetType(fullname): 
+            # fullname is a  .Net Module
+            return self
+        else:
+            # fullname is not a .Net Module
+            return None
+            
     def load_module(self, fullname):
         '''
             The load_module() must fulfill the following *before* it runs any code:
@@ -72,40 +90,3 @@ class loader(object):
                     sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
 
         return sys.modules[fullname]
-
-class importer(object):
-    '''  
-         If the importer is installed on sys.meta_path, it will
-         receive a second argument, which is None for a top-level module, or
-         package.__path__ for submodules or subpackages
-
-         It should return a loader object if the module was found, or None if it wasn't.  
-         If find_module() raises an exception, the caller will abort the import.
-         When importer.find_module("spam.eggs.ham") is called, "spam.eggs" has already 
-         been imported and added to sys.modules.
-    '''
-    def __init__(self):
-        import clr
-        # this might not be the correct place to load the valid NameSpaces
-        self.ValidNameSpaces = clr.list_of_valid_namespaces()
-        self.loader = loader()
-
-    def find_module(self, fullname, path = None):
-        # check for true NAMESPACE or .NET TYPE 
-        import clr
-        if fullname in self.ValidNameSpaces or clr.isDotNetType(fullname): 
-            # fullname is a  .Net Module
-            if path != None:
-                __path__ = path
-            try:
-                return sys.modules[fullname]
-            except KeyError:
-                pass
-
-            return self.loader
-        else:
-            # fullname is not a .Net Module
-            return None
-            
-
-
