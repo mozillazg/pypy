@@ -369,3 +369,21 @@ class AppTestFfi:
         s = S(v1=3)
         assert s.shape is S
         s.free()
+
+    def test_negative_pointers(self):
+        import _ffi
+        A = _ffi.Array('P')
+        a = A(1)
+        a[0] = -1234
+        a.free()
+        
+    def test_passing_raw_pointers(self):
+        import _ffi
+        lib = _ffi.CDLL(self.lib_name)
+        A = _ffi.Array('i')
+        get_array_elem = lib.ptr('get_array_elem', ['P', 'i'], 'i')
+        a = A(1)
+        a[0] = 3
+        res = get_array_elem(a.buffer, 0)
+        assert res == 3
+        a.free()

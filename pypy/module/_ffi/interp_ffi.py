@@ -189,6 +189,8 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg, to_free):
         # check for NULL ptr
         if space.is_w(w_arg, space.w_None):
             push_func(add_arg, argdesc, lltype.nullptr(rffi.VOIDP.TO))
+        elif space.is_true(space.isinstance(w_arg, space.w_int)):
+            push_func(add_arg, argdesc, rffi.cast(rffi.VOIDP, space.int_w(w_arg)))
         elif space.is_true(space.isinstance(w_arg, space.w_basestring)):
             if to_free is not None:
                 to_free.append(pack_pointer(space, add_arg, argdesc, w_arg, push_func))
