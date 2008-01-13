@@ -49,6 +49,8 @@ TYPEMAP = {
     'd' : ffi_type_double,
     's' : ffi_type_pointer,
     'P' : ffi_type_pointer,
+    'z' : ffi_type_pointer,
+    'O' : ffi_type_pointer,
 }
 
 LL_TYPEMAP = {
@@ -66,6 +68,8 @@ LL_TYPEMAP = {
     'f' : rffi.FLOAT,
     'd' : rffi.DOUBLE,
     's' : rffi.CCHARP,
+    'z' : rffi.CCHARP,
+    'O' : rffi.VOIDP,
     'P' : rffi.VOIDP,
     'v' : lltype.Void,
 }
@@ -194,12 +198,12 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg, to_free):
         else:
             push_func(add_arg, argdesc, rffi.cast(rffi.FLOAT,
                                                   space.float_w(w_arg)))
-    elif tp == "s":
+    elif tp == "s" or tp =="z":
         ll_str = rffi.str2charp(space.str_w(w_arg))
         if to_free is not None:
             to_free.append(ll_str)
         push_func(add_arg, argdesc, ll_str)
-    elif tp == "P":
+    elif tp == "P" or tp == "O":
         # check for NULL ptr
         if space.is_w(w_arg, space.w_None):
             push_func(add_arg, argdesc, lltype.nullptr(rffi.VOIDP.TO))
@@ -257,12 +261,12 @@ ll_typemap_iter = unrolling_iterable(LL_TYPEMAP.items())
 def wrap_value(space, func, add_arg, argdesc, tp):
     for c, ll_type in ll_typemap_iter:
         if tp == c:
-            if c == 's':
+            if c == 's' or c == 'z':
                 ptr = func(add_arg, argdesc, rffi.CCHARP)
                 if not ptr:
                     return space.w_None
                 return space.wrap(rffi.charp2str(ptr))
-            elif c == 'P':
+            elif c == 'P' or c == 'O':
                 res = func(add_arg, argdesc, rffi.VOIDP)
                 if not res:
                     return space.w_None

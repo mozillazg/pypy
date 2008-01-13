@@ -9,8 +9,10 @@ from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, wrap_oserror
-from pypy.module._ffi.structure import native_fmttable, segfault_exception
-from pypy.module._ffi.interp_ffi import unwrap_value, wrap_value, _get_type
+from pypy.module._ffi.structure import segfault_exception
+from pypy.module._ffi.interp_ffi import unwrap_value, wrap_value, _get_type,\
+     TYPEMAP
+from pypy.rlib.rarithmetic import intmask
 
 def push_elem(ll_array, pos, value):
     TP = lltype.typeOf(value)
@@ -27,7 +29,7 @@ class W_Array(Wrappable):
     def __init__(self, space, of):
         self.space = space
         self.of = of
-        self.itemsize = native_fmttable[of]['size']
+        self.itemsize = intmask(TYPEMAP[of].c_size)
 
     def descr_call(self, space, w_length_or_iterable):
         if space.is_true(space.isinstance(w_length_or_iterable, space.w_int)):
@@ -80,8 +82,7 @@ class W_ArrayInstance(Wrappable):
 
     def setitem(self, space, num, w_value):
         if num >= self.length or num < 0:
-            raise OperationError(space.w_ValueError, space.wrap(
-                "Setting element %d of array sized %d" % (num, self.length)))
+            raise OperationError(space.w_IndexError, space.w_None)
         unwrap_value(space, push_elem, self.ll_array, num, self.shape.of, w_value,
                    None)
     setitem.unwrap_spec = ['self', ObjSpace, int, W_Root]

@@ -10,16 +10,9 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, wrap_oserror
-# XXX we've got the very same info in two places - one is native_fmttable
-# the other one is in rlib/libffi, we should refactor it to reuse the same
-# logic, I'll not touch it by now, and refactor it later
-from pypy.module.struct.nativefmttable import native_fmttable as struct_native_fmttable
-from pypy.module._ffi.interp_ffi import wrap_value, unwrap_value, _get_type, TYPEMAP
-
-native_fmttable = {}
-for key, value in struct_native_fmttable.items():
-    native_fmttable[key] = {'size': value['size'],
-                            'alignment': value.get('alignment', value['size'])}
+from pypy.module._ffi.interp_ffi import wrap_value, unwrap_value, _get_type,\
+     TYPEMAP
+from pypy.rlib.rarithmetic import intmask
 
 def unpack_fields(space, w_fields):
     fields_w = space.unpackiterable(w_fields)
@@ -35,15 +28,15 @@ def unpack_fields(space, w_fields):
     return fields
 
 def size_and_pos(fields):
-    size = native_fmttable[fields[0][1]]['size']
+    size = intmask(TYPEMAP[fields[0][1]].c_size)
     pos = [0]
     for i in range(1, len(fields)):
-        field_desc = native_fmttable[fields[i][1]]
-        missing = size % field_desc.get('alignment', 1)
+        field_desc = TYPEMAP[fields[i][1]]
+        missing = size % intmask(field_desc.c_alignment)
         if missing:
-            size += field_desc['alignment'] - missing
+            size += intmask(field_desc.c_alignment) - missing
         pos.append(size)
-        size += field_desc['size']
+        size += intmask(field_desc.c_size)
     return size, pos
 
 
