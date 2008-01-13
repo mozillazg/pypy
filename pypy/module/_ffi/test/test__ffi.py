@@ -358,3 +358,14 @@ class AppTestFfi:
         assert a[0] == 3
         assert A.fromaddress(a.buffer, 1)[0] == 3
         # a.free() - don't free as ll2ctypes is complaining massively
+
+    def test_shape(self):
+        import _ffi
+        A = _ffi.Array('i')
+        a = A(1)
+        assert a.shape is A
+        a.free()
+        S = _ffi.Structure([('v1', 'i')])
+        s = S(v1=3)
+        assert s.shape is S
+        s.free()
