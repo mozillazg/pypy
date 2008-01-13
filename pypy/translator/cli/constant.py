@@ -351,7 +351,7 @@ class CLIListConst(CLIBaseConstMixin, ListConst):
     
     def create_pointer(self, gen):
         self.db.const_count.inc('List')
-        self.db.const_count.inc('List', self.value._TYPE._ITEMTYPE)
+        self.db.const_count.inc('List', self.value._TYPE.ITEM)
         self.db.const_count.inc('List', len(self.value._list))
         super(CLIListConst, self).create_pointer(gen)        
 

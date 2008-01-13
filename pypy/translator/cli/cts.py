@@ -242,7 +242,7 @@ class CTS(object):
             delegate = self.db.record_delegate(t)
             return CliClassType(None, delegate)
         elif isinstance(t, ootype.List):
-            item_type = self.lltype_to_cts(t._ITEMTYPE)
+            item_type = self.lltype_to_cts(t.ITEM)
             if item_type == types.void: # special case: List of Void
                 return types.list_of_void
             return types.list.specialize(item_type)

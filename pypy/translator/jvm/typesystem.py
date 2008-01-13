@@ -260,7 +260,7 @@ class Generifier(object):
         if hasattr(self.OOTYPE, 'SELFTYPE_T'):
             self.generics[self.OOTYPE.SELFTYPE_T] = (self.OOTYPE,self.OOTYPE)
             
-        for pname,pval in (('ITEMTYPE_T', '_ITEMTYPE'),
+        for pname,pval in (('ITEMTYPE_T', 'ITEM'),
                            ('KEYTYPE_T', '_KEYTYPE'),
                            ('VALUETYPE_T', '_VALUETYPE')):
             if hasattr(self.OOTYPE, pname):

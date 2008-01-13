@@ -578,7 +578,7 @@ class ListConst(AbstractConst):
         if not self.value:
             return
         for item in self.value._list:
-            self._record_const_if_complex(self.value._TYPE._ITEMTYPE, item)
+            self._record_const_if_complex(self.value._TYPE.ITEM, item)
 
     def create_pointer(self, gen):
         assert not self.is_null()
@@ -603,7 +603,7 @@ class ListConst(AbstractConst):
         can be overloaded by the backend if your conditions are wider.
         The default is not to initialize if the list is a list of
         Void. """
-        return self.value._TYPE._ITEMTYPE is ootype.Void
+        return self.value._TYPE.ITEM is ootype.Void
         try:
             return self.value._list == [0] * len(self.value._list)
         except:
@@ -612,7 +612,7 @@ class ListConst(AbstractConst):
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
         SELFTYPE = self.value._TYPE
-        ITEMTYPE = self.value._TYPE._ITEMTYPE
+        ITEM = self.value._TYPE.ITEM
 
         # check for special cases and avoid initialization
         if self._do_not_initialize():
@@ -623,8 +623,8 @@ class ListConst(AbstractConst):
             constgen._consider_split_current_function(gen)
             gen.dup(SELFTYPE)
             push_constant(self.db, ootype.Signed, idx, gen)
-            push_constant(self.db, ITEMTYPE, item, gen)
-            gen.prepare_generic_argument(ITEMTYPE)
+            push_constant(self.db, ITEM, item, gen)
+            gen.prepare_generic_argument(ITEM)
             gen.call_method(SELFTYPE, 'll_setitem_fast')
 
 # ______________________________________________________________________
