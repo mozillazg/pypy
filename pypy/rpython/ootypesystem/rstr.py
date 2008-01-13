@@ -170,7 +170,7 @@ class LLHelpers(AbstractLLHelpers):
         return buf.ll_build()
 
     def ll_join_chars(length_dummy, lst):
-        if typeOf(lst)._ITEMTYPE == Char:
+        if typeOf(lst).ITEM == Char:
             buf = ootype.new(ootype.StringBuilder)
         else:
             buf = ootype.new(ootype.UnicodeBuilder)
@@ -183,7 +183,7 @@ class LLHelpers(AbstractLLHelpers):
         return buf.ll_build()
 
     def ll_join_strs(length_dummy, lst):
-        if typeOf(lst)._ITEMTYPE == ootype.String:
+        if typeOf(lst).ITEM == ootype.String:
             buf = ootype.new(ootype.StringBuilder)
         else:
             buf = ootype.new(ootype.UnicodeBuilder)

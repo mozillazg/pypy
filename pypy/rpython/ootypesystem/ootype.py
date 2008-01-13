@@ -453,7 +453,7 @@ class List(BuiltinADTType):
     ITEMTYPE_T = object()
 
     def __init__(self, ITEMTYPE=None):
-        self._ITEMTYPE = ITEMTYPE
+        self.ITEM = ITEMTYPE
         self._null = _null_list(self)
         if ITEMTYPE is not None:
             self._init_methods()
@@ -464,13 +464,9 @@ class List(BuiltinADTType):
         # 'ITEMTYPE_T' is used as a placeholder for indicating
         # arguments that should have ITEMTYPE type. 'SELFTYPE_T' indicates 'self'
 
-        # XXX clean-up later! Rename _ITEMTYPE to ITEM.  For now they are
-        # just synonyms, please use ITEM in new code.
-        self.ITEM = self._ITEMTYPE
-
         generic_types = {
             self.SELFTYPE_T: self,
-            self.ITEMTYPE_T: self._ITEMTYPE,
+            self.ITEMTYPE_T: self.ITEM,
             }
 
         # the methods are named after the ADT methods of lltypesystem's lists
@@ -503,7 +499,7 @@ class List(BuiltinADTType):
             return True
         if not isinstance(other, List):
             return False
-        if self._ITEMTYPE is None or other._ITEMTYPE is None:
+        if self.ITEM is None or other.ITEM is None:
             raise TypeError("Can't compare uninitialized List type.")
         return BuiltinADTType.__eq__(self, other)
 
@@ -511,27 +507,105 @@ class List(BuiltinADTType):
         return not (self == other)
 
     def __hash__(self):
-        if self._ITEMTYPE is None:
+        if self.ITEM is None:
             raise TypeError("Can't hash uninitialized List type.")
         return BuiltinADTType.__hash__(self)    
 
     def __str__(self):
         return '%s(%s)' % (self.__class__.__name__,
-                saferecursive(str, "...")(self._ITEMTYPE))
+                saferecursive(str, "...")(self.ITEM))
 
     def _get_interp_class(self):
         return _list
 
     def _specialize(self, generic_types):
-        ITEMTYPE = self._specialize_type(self._ITEMTYPE, generic_types)
+        ITEMTYPE = self._specialize_type(self.ITEM, generic_types)
         return self.__class__(ITEMTYPE)
     
     def _defl(self):
         return self._null
 
     def _set_itemtype(self, ITEMTYPE):
-        self._ITEMTYPE = ITEMTYPE
+        self.ITEM = ITEMTYPE
         self._init_methods()
+
+
+class Array(BuiltinADTType):
+    # placeholders for types
+    # make sure that each derived class has his own SELFTYPE_T
+    # placeholder, because we want backends to distinguish that.
+    
+    SELFTYPE_T = object()
+    ITEMTYPE_T = object()
+
+    def __init__(self, ITEMTYPE=None):
+        self.ITEM = ITEMTYPE
+        self._null = _null_array(self)
+        if ITEMTYPE is not None:
+            self._init_methods()
+
+    def _init_methods(self):
+        # This defines the abstract list interface that backends will
+        # have to map to their native list implementations.
+        # 'ITEMTYPE_T' is used as a placeholder for indicating
+        # arguments that should have ITEMTYPE type. 'SELFTYPE_T' indicates 'self'
+
+        generic_types = {
+            self.SELFTYPE_T: self,
+            self.ITEMTYPE_T: self.ITEM,
+            }
+
+        # the methods are named after the ADT methods of lltypesystem's lists
+        self._GENERIC_METHODS = frozendict({
+            # "name": Meth([ARGUMENT1_TYPE, ARGUMENT2_TYPE, ...], RESULT_TYPE)
+            "ll_length": Meth([], Signed),
+            "ll_getitem_fast": Meth([Signed], self.ITEMTYPE_T),
+            "ll_setitem_fast": Meth([Signed, self.ITEMTYPE_T], Void),
+        })
+
+        self._setup_methods(generic_types)
+
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if not isinstance(other, Array):
+            return False
+        if self.ITEM is None or other.ITEM is None:
+            raise TypeError("Can't compare uninitialized List type.")
+        return BuiltinADTType.__eq__(self, other)
+
+    def __ne__(self, other):
+        return not (self == other)
+
+    def __hash__(self):
+        if self.ITEM is None:
+            raise TypeError("Can't hash uninitialized List type.")
+        return BuiltinADTType.__hash__(self)    
+
+    def __str__(self):
+        return '%s(%s)' % (self.__class__.__name__,
+                saferecursive(str, "...")(self.ITEM))
+
+    def _get_interp_class(self):
+        return _array
+
+    def _specialize(self, generic_types):
+        ITEMTYPE = self._specialize_type(self.ITEM, generic_types)
+        return self.__class__(ITEMTYPE)
+
+    def _defl(self):
+        return self._null
+
+    def _example(self):
+        return oonewarray(self, 1)
+
+    def _set_itemtype(self, ITEMTYPE):
+        self.ITEM = ITEMTYPE
+        self._init_methods()
+
+    def ll_newlist(self, length):
+        from pypy.rpython.ootypesystem import rlist
+        return rlist.ll_newarray(self, length)
 
 
 class Dict(BuiltinADTType):
@@ -1247,6 +1321,8 @@ class _null_weak_reference(_null_mixin(_weak_reference), _weak_reference):
     def __init__(self, WEAK_REFERENCE):
         self.__dict__["_TYPE"] = WEAK_REFERENCE
 
+
+
 class _list(_builtin_type):
     def __init__(self, LIST):
         self._TYPE = LIST
@@ -1264,7 +1340,7 @@ class _list(_builtin_type):
         # NOT_RPYTHON        
         if len(self._list) < length:
             diff = length - len(self._list)
-            self._list += [self._TYPE._ITEMTYPE._defl()] * diff
+            self._list += [self._TYPE.ITEM._defl()] * diff
         assert len(self._list) >= length
 
     def _ll_resize_le(self, length):
@@ -1289,7 +1365,7 @@ class _list(_builtin_type):
 
     def ll_setitem_fast(self, index, item):
         # NOT_RPYTHON
-        assert self._TYPE._ITEMTYPE is Void or typeOf(item) == self._TYPE._ITEMTYPE
+        assert self._TYPE.ITEM is Void or typeOf(item) == self._TYPE.ITEM
         assert typeOf(index) == Signed
         assert index >= 0
         self._list[index] = item
@@ -1298,6 +1374,33 @@ class _null_list(_null_mixin(_list), _list):
 
     def __init__(self, LIST):
         self.__dict__["_TYPE"] = LIST 
+
+class _array(_builtin_type):
+    def __init__(self, ARRAY, length):
+        self._TYPE = ARRAY
+        self._array = [ARRAY.ITEM._defl()] * length
+
+    def ll_length(self):
+        # NOT_RPYTHON
+        return len(self._array)
+
+    def ll_getitem_fast(self, index):
+        # NOT_RPYTHON
+        assert typeOf(index) == Signed
+        assert index >= 0
+        return self._array[index]
+
+    def ll_setitem_fast(self, index, item):
+        # NOT_RPYTHON
+        assert self._TYPE.ITEM is Void or typeOf(item) == self._TYPE.ITEM
+        assert typeOf(index) == Signed
+        assert index >= 0
+        self._array[index] = item
+
+class _null_array(_null_mixin(_array), _array):
+
+    def __init__(self, ARRAY):
+        self.__dict__["_TYPE"] = ARRAY 
 
 class _dict(_builtin_type):
     def __init__(self, DICT):
@@ -1466,9 +1569,14 @@ def new(TYPE):
         return TYPE._get_interp_class()(TYPE)
 
 def oonewcustomdict(DICT, ll_eq, ll_hash):
+    """NOT_RPYTHON"""
     d = new(DICT)
     d.ll_set_functions(ll_eq, ll_hash)
     return d
+
+def oonewarray(ARRAY, length):
+    """NOT_RPYTHON"""
+    return _array(ARRAY, length)
 
 def runtimenew(class_):
     assert isinstance(class_, _class)
@@ -1595,7 +1703,7 @@ def setItemType(LIST, ITEMTYPE):
     return LIST._set_itemtype(ITEMTYPE)
 
 def hasItemType(LIST):
-    return LIST._ITEMTYPE is not None
+    return LIST.ITEM is not None
 
 def setDictTypes(DICT, KEYTYPE, VALUETYPE):
     return DICT._set_types(KEYTYPE, VALUETYPE)
