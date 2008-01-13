@@ -13,7 +13,6 @@ class CFuncPtr(object):
     _restype = None
     def __init__(self, stuff):
         if isinstance(stuff, tuple):
-            print stuff
             name, dll = stuff
             self.name = name
             self.dll = dll
@@ -38,7 +37,7 @@ class CFuncPtr(object):
             return res
         else:
             # XXX pointers
-            return self.restype(address=res)
+            return self.restype(res)
 
     def _getfuncptr(self, args):
         if self._funcptr is not None:
