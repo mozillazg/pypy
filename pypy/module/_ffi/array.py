@@ -108,6 +108,7 @@ W_ArrayInstance.typedef = TypeDef(
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     buffer      = GetSetProperty(W_ArrayInstance.getbuffer),
+    shape       = interp_attrproperty('shape', W_ArrayInstance),
     free        = interp2app(W_ArrayInstance.free),
 )
 
