@@ -1,3 +1,4 @@
+"""NOT_RPYTHON"""
 
 #     Meta hooks are called at the start of Import Processing
 #     Meta hooks can override the sys.path, frozen modules , built-in modules
@@ -5,6 +6,7 @@
 
 import imp
 import sys
+import types
 
 class importer(object):
     '''  
@@ -64,12 +66,12 @@ class importer(object):
             rindex = fullname.rfind('.')
             if rindex != -1:
                 leftStr = fullname[:rindex]
-                rightStr= fullname[rindex+1:]
+                rightStr = fullname[rindex+1:]
                 sys.modules[fullname] = clr.load_cli_class(leftStr, rightStr)
 
         else:  # if not a call for actual class (say for namespaces) assign an empty module 
             if fullname not in sys.modules:
-                mod = imp.new_module(fullname)
+                mod = CLRModule(fullname)
                 mod.__file__ = "<%s>" % self.__class__.__name__
                 mod.__loader__ = self
                 mod.__name__ = fullname
@@ -90,3 +92,14 @@ class importer(object):
                     sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
 
         return sys.modules[fullname]
+
+class CLRModule(types.ModuleType):
+    def __getattr__(self, name):
+        if not name.startswith("__"):
+            try:
+                iname = self.__name__ + '.' + name
+                mod = __import__(iname)
+            except ImportError:
+                pass
+        return types.ModuleType.__getattribute__(self, name)
+
