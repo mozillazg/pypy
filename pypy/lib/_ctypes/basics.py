@@ -16,11 +16,19 @@ class CArgObject(object):
         return "<cparam '%s' %r>" % (self.ffiletter, self.raw_value)
 
 
+TP_TO_FFITP = {    # XXX this should die; interp_ffi should just accept them
+        'O': 'P',
+        'z': 's',
+}
+
+
 def sizeof(tp):
-    return _ffi.sizeof(tp._type_)
+    ffitp = tp._type_
+    return _ffi.sizeof(TP_TO_FFITP.get(ffitp, ffitp))
 
 def alignment(tp):
-    return _ffi.alignment(tp._type_)
+    ffitp = tp._type_
+    return _ffi.alignment(TP_TO_FFITP.get(ffitp, ffitp))
 
 def byref(cdata):
     from ctypes import pointer, _SimpleCData

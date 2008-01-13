@@ -2,16 +2,11 @@ import _ffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
-from _ctypes.basics import _CData, CArgObject
+from _ctypes.basics import _CData, CArgObject, TP_TO_FFITP
 
 class NULL(object):
     pass
 NULL = NULL()
-
-TP_TO_FFITP = {
-        'O': 'P',
-        'z': 's',
-}
 
 TP_TO_DEFAULT = {
         'c': 0,
