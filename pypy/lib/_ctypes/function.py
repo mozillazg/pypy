@@ -1,68 +1,59 @@
 import _ffi
-from _ctypes.basics import CArgObject
 
-class CFuncPtrType(type):
+from _ctypes.basics import _CData, _CDataMeta
+
+class CFuncPtrType(_CDataMeta):
     # XXX write down here defaults and such things
     pass
 
-class CFuncPtr(object):
+class CFuncPtr(_CData):
     __metaclass__ = CFuncPtrType
-    argtypes = None
-    _argtypes = None
-    restype = None
-    _restype = None
-    def __init__(self, stuff):
-        if isinstance(stuff, tuple):
-            name, dll = stuff
-            self.name = name
-            self.dll = dll
-            self._funcptr = None
+
+    _argtypes_ = None
+    _restype_ = None
+
+    def _getargtypes(self):
+        return self._argtypes_
+    def _setargtypes(self, argtypes):
+        self._argtypes_ = argtypes    
+    argtypes = property(_getargtypes, _setargtypes)
+
+    def _getrestype(self):
+        return self._restype_
+    def _setrestype(self, restype):
+        self._restype_ = restype    
+    restype = property(_getrestype, _setrestype)    
+
+    def __init__(self, address_or_name_and_dll):
+        if isinstance(address_or_name_and_dll, tuple):
+            self.name, self.dll = address_or_name_and_dll
         else:
             self.name = None
-            self.dll = None
 
     def __call__(self, *args):
-        import ctypes
-        if self.restype is None:
-            # XXX point to default instead
-            self.restype = ctypes.c_int
-        if self.argtypes is not None:
-            if len(args) != len(self.argtypes):
-                raise TypeError("%s takes %s arguments, given %s" %
-                                (self.name, len(self.argtypes), len(args)))
-        funcptr = self._getfuncptr(args)
-        argvalues = [tp.from_param(arg).raw_value for tp, arg in zip(self._argtypes, args)]
-        res = funcptr(*argvalues)
-        if issubclass(self.restype, ctypes._SimpleCData):
-            return res
-        else:
-            # XXX pointers
-            return self.restype(res)
+        if self.name is None:
+            raise NotImplementedError("Creation of function pointer to pure addresses is not implemented")
+        argtypes = self._argtypes_
+        if argtypes is None:
+            argtypes = self._guess_argtypes(args)
+        restype = self._restype_
+        funcptr = self._getfuncptr(argtypes, restype)
+        res = funcptr(*self._wrap_args(argtypes, args))
+        if restype is not None:
+            return restype(res).__ctypes_from_outparam__()
 
-    def _getfuncptr(self, args):
-        if self._funcptr is not None:
-            if (self.argtypes is self._argtypes
-                and self.restype is self._restype):
-                return self._funcptr
-        if self.argtypes is None:
-            argtypes = self._guess_magic_args(args)
-        else:
-            argtypes = self.argtypes
-        argtps = [argtype._ffiletter for argtype in argtypes]
-        restp = self.restype._ffiletter
-        self._funcptr = funcptr = self.dll._handle.ptr(self.name, argtps, restp)
-        self._argtypes = argtypes
-        self._restype = self.restype
-        return funcptr
+    def _getfuncptr(self, argtypes, restype):
+        argletters = [arg._ffiletter for arg in argtypes]
+        return self.dll._handle.ptr(self.name, argletters, restype._ffiletter)
 
-    def _guess_magic_args(self, args):
-        import _ctypes
+    def _guess_argtypes(self, args):
+        from _ctypes import _CData
         res = []
         for arg in args:
-            if isinstance(arg, _ctypes._CData):
-                res.append(type(arg))
-            elif isinstance(arg, CArgObject):
-                res.append(arg._type)
-            else:
-                raise TypeError("Cannot convert %s" % arg)
+            assert isinstance(arg, _CData)
+            res.append(type(arg))
         return res
+
+    def _wrap_args(self, argtypes, args):
+        return [argtype.from_param(arg)._array[0] for argtype, arg in
+                zip(argtypes, args)]

@@ -1,7 +1,7 @@
 
-from _ctypes.basics import _CData
+from _ctypes.basics import _CData, _CDataMeta
 
-class StructureMeta(type):
+class StructureMeta(_CDataMeta):
     def __new__(self, name, cls, typedict):
         return type.__new__(self, name, cls, typedict)
 

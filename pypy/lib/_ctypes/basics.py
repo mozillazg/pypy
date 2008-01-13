@@ -1,27 +1,34 @@
 
 import _ffi
 
+class _CDataMeta(type):
+    def from_param(self, value):
+        if isinstance(value, self):
+            return value
+        raise TypeError("Wrong type")    
+
 class _CData(object):
     """ The most basic object for all ctypes types
     """
+    __metaclass__ = _CDataMeta
+    
     def __ctypes_from_outparam__(self):
         return self
 
-class CArgObject(object):
-    def __init__(self, letter, raw_value, _type):
-        self.ffiletter = letter
-        self.raw_value = raw_value
-        self._type = _type
+#class CArgObject(object):
+#    def __init__(self, letter, raw_value, _type):
+#        self.ffiletter = letter
+#        self._array = raw_value
+#        self._type = _type
 
-    def __repr__(self):
-        return "<cparam '%s' %r>" % (self.ffiletter, self.raw_value)
+#    def __repr__(self):
+#        return "<cparam '%s' %r>" % (self.ffiletter, self._array[0])
 
 
 TP_TO_FFITP = {    # XXX this should die; interp_ffi should just accept them
         'O': 'P',
         'z': 's',
 }
-
 
 def sizeof(tp):
     ffitp = tp._type_
@@ -35,7 +42,7 @@ def byref(cdata):
     from ctypes import pointer, _SimpleCData
     if not isinstance(cdata, _SimpleCData):
         raise TypeError("expected CData instance")
-    return pointer(cdata)._as_ffi()
+    return pointer(cdata)
 
 def cdata_from_address(self, address):
     instance = self.__new__(self)
