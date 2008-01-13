@@ -43,6 +43,8 @@ class JTS(object):
             return self.escape_name(t._name)
         elif isinstance(t, ootype.List):
             return "Array"
+        elif isinstance(t, ootype.Array):
+            return "Array"
         elif isinstance(t, lltype.Primitive):
             return "var"
         elif isinstance(t, ootype.Record):
