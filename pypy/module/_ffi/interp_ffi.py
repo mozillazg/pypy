@@ -17,6 +17,19 @@ class FfiValueError(Exception):
     def __init__(self, msg):
         self.msg = msg
 
+
+def _signed_type_for(TYPE):
+    sz = rffi.sizeof(TYPE)
+    if sz == 4:   return ffi_type_sint32
+    elif sz == 8: return ffi_type_sint64
+    else: raise ValueError("unsupported type size for %r" % (TYPE,))
+
+def _unsigned_type_for(TYPE):
+    sz = rffi.sizeof(TYPE)
+    if sz == 4:   return ffi_type_uint32
+    elif sz == 8: return ffi_type_uint64
+    else: raise ValueError("unsupported type size for %r" % (TYPE,))
+
 TYPEMAP = {
     # XXX A mess with unsigned/signed/normal chars :-/
     'c' : ffi_type_uchar,
@@ -26,11 +39,12 @@ TYPEMAP = {
     'H' : ffi_type_ushort,
     'i' : ffi_type_sint,
     'I' : ffi_type_uint,
-    'l' : ffi_type_slong,
-    'L' : ffi_type_ulong,
-    # XXX I'm not sure what is long long here, let's assume it's 64 bit :-/
-    'q' : ffi_type_sint64,
-    'Q' : ffi_type_uint64,
+    # xxx don't use ffi_type_slong and ffi_type_ulong - their meaning
+    # changes from a libffi version to another :-((
+    'l' : _signed_type_for(rffi.LONG),
+    'L' : _unsigned_type_for(rffi.ULONG),
+    'q' : _signed_type_for(rffi.LONGLONG),
+    'Q' : _unsigned_type_for(rffi.ULONGLONG),
     'f' : ffi_type_float,
     'd' : ffi_type_double,
     's' : ffi_type_pointer,
