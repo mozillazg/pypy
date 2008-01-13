@@ -243,10 +243,7 @@ def isDotNetType(space, nameFromImporter):
         Return:
             Boolean
     """
-    if System.Type.GetType(nameFromImporter) != None:
-        return space.wrap(True)
-    return space.wrap(False)
-
+    return space.wrap(System.Type.GetType(nameFromImporter) is not None)
 isDotNetType.unwrap_spec = [ObjSpace, str]
 
 def list_of_loadedAssemblies(space):

@@ -50,17 +50,19 @@ class loader(object):
                 sys.modules[fullname] = clr.load_cli_class(leftStr, rightStr)
 
         else:  # if not a call for actual class (say for namespaces) assign an empty module 
-            mod = imp.new_module(fullname)
-            mod = sys.modules.setdefault(fullname, imp.new_module(fullname))
-            mod.__file__ = "<%s>" % self.__class__.__name__
-            mod.__loader__ = self
-            mod.__name__ = fullname
+            if fullname not in sys.modules:
+                mod = imp.new_module(fullname)
+                mod.__file__ = "<%s>" % self.__class__.__name__
+                mod.__loader__ = self
+                mod.__name__ = fullname
+                # add it to the modules dict
+                sys.modules[fullname] = mod
+            else:
+                mod = sys.modules[fullname]
 
             # if it is a PACKAGE then we are to initialize the __path__ for the module
             # we won't deal with Packages here
 
-            # add it to the modules list
-            sys.modules[fullname] = mod
 
             # treating System.Collections.Generic specially here.
             # this treatment is done after the empty module insertion
@@ -100,10 +102,7 @@ class importer(object):
             except KeyError:
                 pass
 
-            try:
-                return self.loader
-            except ImportError:
-                return None 
+            return self.loader
         else:
             # fullname is not a .Net Module
             return None
