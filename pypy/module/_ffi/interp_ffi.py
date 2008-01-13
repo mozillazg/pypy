@@ -232,7 +232,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg, to_free):
     elif tp == "c":
         s = space.str_w(w_arg)
         if len(s) != 1:
-            raise OperationError(space.w_ValueError, w(
+            raise OperationError(space.w_TypeError, w(
                 "Expected string of length one as character"))
         val = s[0]
         push_func(add_arg, argdesc, val)
