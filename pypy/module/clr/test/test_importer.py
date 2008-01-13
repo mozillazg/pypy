@@ -29,8 +29,11 @@ class AppTestDotnet:
         assert ArrayList is System.Collections.ArrayList
 
     def test_ImportError(self):
-        skip('Fixme!')
         def fn():
             import non_existent_module
-        raises(ImportError, fn())
-        
+        raises(ImportError, fn)
+
+    def test_lazy_import(self):
+        py.test.skip("not working yet")
+        import System
+        System.Xml.Schema # does not raise attribute error
