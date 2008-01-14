@@ -232,12 +232,17 @@ class JvmArrayType(JvmType):
         self.element_type = elemtype
     def lookup_field(self, fieldnm):
         raise KeyError(fieldnm)  # TODO adjust interface to permit opcode here
-    def lookup_method(self, methodnm): 
-        raise KeyError(methodnm) # Arrays have no methods
-    
+    def lookup_method(self, methodnm):
+        # Arrays don't have methods in Java, but they do in the ootype system
+        from pypy.translator.jvm.generator import ArrayMethod
+        return ArrayMethod(self, methodnm)
+        
 jByteArray = JvmArrayType(jByte)
 jObjectArray = JvmArrayType(jObject)
 jStringArray = JvmArrayType(jString)
+jDoubleArray = JvmArrayType(jDouble)
+jCharArray = JvmArrayType(jChar)
+jIntArray = JvmArrayType(jInt)
 
 class Generifier(object):
 
