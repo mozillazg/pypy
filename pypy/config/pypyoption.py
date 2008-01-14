@@ -35,6 +35,7 @@ if sys.platform == "win32":
 
 
 module_dependencies = {'_ffi': [("objspace.usemodules.struct", True)],
+                       '_rawffi': [("objspace.usemodules.struct", True)],
                        }
 if os.name == "posix":
     module_dependencies['rctime'] = [("objspace.usemodules.select", True),]
