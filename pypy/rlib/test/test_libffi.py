@@ -14,6 +14,11 @@ import time
 def setup_module(mod):
     if not sys.platform.startswith('linux'):
         py.test.skip("Fragile tests, linux only by now")
+    for name in type_names:
+        # XXX force this to be seen by ll2ctypes
+        # so that ALLOCATED.clear() clears it
+        ffistruct = globals()[name]
+        rffi.cast(rffi.VOIDP, ffistruct)
 
 class TestDLOperations:
     def setup_method(self, meth):
@@ -37,7 +42,7 @@ class TestDLOperations:
         py.test.raises(KeyError, lib.getpointer, 'xxxxxxxxxxxxxxx', [], ffi_type_void)
         del ptr
         del lib
-        assert len(ALLOCATED) == 1
+        assert not ALLOCATED
 
     def test_library_func_call(self):
         lib = self.get_libc()
@@ -52,7 +57,7 @@ class TestDLOperations:
         # not very hard check, but something :]
         del ptr
         del lib
-        assert len(ALLOCATED) == 1 # ffi_type_sint get allocated
+        assert not ALLOCATED
 
     def test_call_args(self):
         libm = CDLL('libm.so')
@@ -68,7 +73,7 @@ class TestDLOperations:
         assert res == 27.0
         del pow
         del libm
-        assert len(ALLOCATED) == 1
+        assert not ALLOCATED
 
     def test_wrong_args(self):
         libc = CDLL('libc.so.6')
@@ -101,7 +106,8 @@ class TestDLOperations:
         assert l_t[0] == t1
         lltype.free(l_t, flavor='raw')
         del ctime
-        assert len(ALLOCATED) == 1
+        del libc
+        assert not ALLOCATED
 
     def test_compile(self):
         import py
@@ -136,4 +142,4 @@ class TestDLOperations:
         lltype.free(buffer, flavor='raw')
         del pow
         del libm
-        assert len(ALLOCATED) == 1 # ffi_type_double get allocated
+        assert not ALLOCATED
