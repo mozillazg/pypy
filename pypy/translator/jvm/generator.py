@@ -160,7 +160,7 @@ class NewArrayOpcodeFamily(object):
         elif desc == '[B':
             s = "newarray byte"
         else:
-            s = "anewarray " + arraytype.element_type.descriptor
+            s = "anewarray " + arraytype.element_type.descriptor.int_class_name()
         self.cache[arraytype] = obj = Opcode(s)
         return obj
 
