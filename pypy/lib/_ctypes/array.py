@@ -16,9 +16,8 @@ class ArrayMeta(_CDataMeta):
                                                 self._length_)
                 def setvalue(self, val):
                     # we don't want to have buffers here
-                    import ctypes
                     if len(val) > self._length_:
-                        raise ValueError("%s too long" % (val,))
+                        raise ValueError("%r too long" % (val,))
                     for i in range(len(val)):
                         self[i] = val[i]
                     if len(val) < self._length_:
@@ -81,7 +80,6 @@ class Array(_CData):
         return self._ffiarray.fromaddress(address, 1)
 
     def __setitem__(self, index, value):
-        from ctypes import _SimpleCData
         if isinstance(index, slice):
             self._slice_setitem(index, value)
             return
