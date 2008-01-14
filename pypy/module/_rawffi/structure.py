@@ -10,6 +10,8 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, wrap_oserror
+from pypy.module._rawffi.interp_rawffi import segfault_exception
+from pypy.module._rawffi.interp_rawffi import W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value, _get_type,\
      TYPEMAP
 from pypy.rlib.rarithmetic import intmask
@@ -96,20 +98,10 @@ def cast_pos(self, i, ll_t):
     return rffi.cast(TP, pos)[0]
 cast_pos._annspecialcase_ = 'specialize:arg(2)'
 
-def segfault_exception(space, reason):
-    w_mod = space.getbuiltinmodule("_rawffi")
-    w_exception = space.getattr(w_mod, space.wrap("SegfaultException"))
-    return OperationError(w_exception, space.wrap(reason))
-
-class W_StructureInstance(Wrappable):
+class W_StructureInstance(W_DataInstance):
     def __init__(self, space, shape, address, fieldinits_w):
-        self.free_afterwards = False
+        W_DataInstance.__init__(self, space, shape.size, address)
         self.shape = shape
-        if address != 0:
-            self.ll_buffer = rffi.cast(rffi.VOIDP, address)
-        else:
-            self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, shape.size, flavor='raw',
-                                           zero=True)
         if fieldinits_w:
             for field, w_value in fieldinits_w.iteritems():
                 self.setattr(space, field, w_value)
@@ -138,16 +130,6 @@ class W_StructureInstance(Wrappable):
         unwrap_value(space, push_field, self, i, c, w_value, None)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
-    def free(self, space):
-        if not self.ll_buffer:
-            raise segfault_exception(space, "freeing NULL pointer")
-        lltype.free(self.ll_buffer, flavor='raw')
-        self.ll_buffer = lltype.nullptr(rffi.VOIDP.TO)
-    free.unwrap_spec = ['self', ObjSpace]
-
-    def getbuffer(space, self):
-        return space.wrap(rffi.cast(rffi.INT, self.ll_buffer))
-
 
 W_StructureInstance.typedef = TypeDef(
     'StructureInstance',
@@ -156,6 +138,7 @@ W_StructureInstance.typedef = TypeDef(
     buffer      = GetSetProperty(W_StructureInstance.getbuffer),
     free        = interp2app(W_StructureInstance.free),
     shape       = interp_attrproperty('shape', W_StructureInstance),
+    byptr       = interp2app(W_StructureInstance.byptr),
 )
 W_StructureInstance.typedef.acceptable_as_base_class = False
 
