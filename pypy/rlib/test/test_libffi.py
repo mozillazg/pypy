@@ -121,4 +121,19 @@ class TestDLOperations:
         res = fn(2.0, 4.0)
         assert res == 16.0
 
-        
+    def test_rawfuncptr(self):
+        libm = CDLL('libm.so')
+        pow = libm.getrawpointer('pow', [ffi_type_double, ffi_type_double],
+                                 ffi_type_double)
+        buffer = lltype.malloc(rffi.DOUBLEP.TO, 3, flavor='raw')
+        buffer[0] = 2.0
+        buffer[1] = 3.0
+        buffer[2] = 43.5
+        pow.call([rffi.cast(rffi.VOIDP, buffer),
+                  rffi.cast(rffi.VOIDP, rffi.ptradd(buffer, 1))],
+                 rffi.cast(rffi.VOIDP, rffi.ptradd(buffer, 2)))
+        assert buffer[2] == 8.0
+        lltype.free(buffer, flavor='raw')
+        del pow
+        del libm
+        assert len(ALLOCATED) == 1 # ffi_type_double get allocated
