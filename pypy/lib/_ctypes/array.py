@@ -1,23 +1,19 @@
 
-import _ffi
+import _rawffi
 
-from _ctypes.basics import _CData, cdata_from_address, _CDataMeta
+from _ctypes.basics import _CData, cdata_from_address, _CDataMeta, sizeof
 
 class ArrayMeta(_CDataMeta):
     def __new__(self, name, cls, typedict):
         res = type.__new__(self, name, cls, typedict)
         res._ffiletter = 'P'
         if '_type_' in typedict:
-            ffiarray = _ffi.Array(typedict['_type_']._ffiletter)
+            ffiarray = _rawffi.Array(typedict['_type_']._ffiletter)
             res._ffiarray = ffiarray
             if typedict['_type_']._type_ == 'c':
                 def getvalue(self):
-                    res = []
-                    i = 0
-                    while i < self._length_ and self[i] != '\x00':
-                        res.append(self[i])
-                        i += 1
-                    return "".join(res)
+                    return _rawffi.charp2string(self._array.buffer,
+                                                self._length_)
                 def setvalue(self, val):
                     # we don't want to have buffers here
                     import ctypes
@@ -40,6 +36,9 @@ class ArrayMeta(_CDataMeta):
             res._ffiarray = None
         return res
 
+    def _CData_input(self, value):
+        return self.from_param(value)._array.byptr()
+
     from_address = cdata_from_address
 
 class Array(_CData):
@@ -50,45 +49,51 @@ class Array(_CData):
         for i, arg in enumerate(args):
             self[i] = arg
 
-    def _fix_item(self, item):
-        if item >= self._length_:
+    def _fix_index(self, index):
+        if index < 0:
+            index += self._length_
+        if 0 <= index < self._length_:
+            return index
+        else:
             raise IndexError
-        if item < 0:
-            return self._length_ + item
-        return item
 
-    def _get_slice_params(self, item):
-        if item.step is not None:
+    def _get_slice_params(self, index):
+        if index.step is not None:
             raise TypeError("3 arg slices not supported (for no reason)")
-        start = item.start or 0
-        stop = item.stop or self._length_
+        start = index.start or 0
+        stop = index.stop or self._length_
         return start, stop
     
-    def _slice_setitem(self, item, value):
-        start, stop = self._get_slice_params(item)
+    def _slice_setitem(self, index, value):
+        start, stop = self._get_slice_params(index)
         for i in range(start, stop):
             self[i] = value[i - start]
 
-    def _slice_getitem(self, item):
-        start, stop = self._get_slice_params(item)
+    def _slice_getitem(self, index):
+        start, stop = self._get_slice_params(index)
         return "".join([self[i] for i in range(start, stop)])
-    
-    def __setitem__(self, item, value):
-        from ctypes import _SimpleCData
-        if isinstance(item, slice):
-            self._slice_setitem(item, value)
-            return
-        value = self._type_.from_param(value).value
-        item = self._fix_item(item)
-        if self._type_._ffiletter == 'c' and len(value) > 1:
-            raise TypeError("Expected strings of length 1")
-        self._array[item] = value
 
-    def __getitem__(self, item):
-        if isinstance(item, slice):
-            return self._slice_getitem(item)
-        item = self._fix_item(item)
-        return self._array[item]
+    def _subarray(self, index):
+        """Return an _array of length 1 whose address is the same as
+        the index'th item of self."""
+        address = self._array.buffer
+        address += index * sizeof(self._type_)
+        return self._ffiarray.fromaddress(address, 1)
+
+    def __setitem__(self, index, value):
+        from ctypes import _SimpleCData
+        if isinstance(index, slice):
+            self._slice_setitem(index, value)
+            return
+        value = self._type_._CData_input(value)
+        index = self._fix_index(index)
+        self._array[index] = value[0]
+
+    def __getitem__(self, index):
+        if isinstance(index, slice):
+            return self._slice_getitem(index)
+        index = self._fix_index(index)
+        return self._type_._CData_output(self._subarray(index))
 
     def __len__(self):
         return self._length_

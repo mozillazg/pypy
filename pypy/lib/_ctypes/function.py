@@ -1,4 +1,3 @@
-import _ffi
 
 from _ctypes.basics import _CData, _CDataMeta
 
@@ -38,9 +37,9 @@ class CFuncPtr(_CData):
             argtypes = self._guess_argtypes(args)
         restype = self._restype_
         funcptr = self._getfuncptr(argtypes, restype)
-        res = funcptr(*self._wrap_args(argtypes, args))
+        resarray = funcptr(*self._wrap_args(argtypes, args))
         if restype is not None:
-            return restype(res).__ctypes_from_outparam__()
+            return restype._CData_output(resarray)
 
     def _getfuncptr(self, argtypes, restype):
         argletters = [arg._ffiletter for arg in argtypes]
@@ -55,5 +54,5 @@ class CFuncPtr(_CData):
         return res
 
     def _wrap_args(self, argtypes, args):
-        return [argtype.from_param(arg)._array[0] for argtype, arg in
+        return [argtype._CData_input(arg) for argtype, arg in
                 zip(argtypes, args)]
