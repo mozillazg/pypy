@@ -48,18 +48,14 @@ class _CData(object):
 #        return "<cparam '%s' %r>" % (self.ffiletter, self._array[0])
 
 
-TP_TO_FFITP = {    # XXX this should die; interp_ffi should just accept them
-        'O': 'P',
-        'z': 's',
-}
-
 def sizeof(tp):
-    ffitp = tp._type_
-    return _rawffi.sizeof(TP_TO_FFITP.get(ffitp, ffitp))
+    if not isinstance(tp, _CDataMeta):
+        raise TypeError("ctypes type expected, got %r" % (type(tp).__name__,))
+    return tp._sizeofinstances()
 
 def alignment(tp):
     ffitp = tp._type_
-    return _rawffi.alignment(TP_TO_FFITP.get(ffitp, ffitp))
+    return _rawffi.alignment(ffitp)
 
 def byref(cdata):
     from ctypes import pointer

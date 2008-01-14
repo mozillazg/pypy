@@ -2,7 +2,7 @@ import _rawffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
-from _ctypes.basics import _CData, _CDataMeta, cdata_from_address, TP_TO_FFITP
+from _ctypes.basics import _CData, _CDataMeta, cdata_from_address
 from _ctypes.array import create_array_type
 
 class NULL(object):
@@ -39,8 +39,7 @@ class SimpleType(_CDataMeta):
             tp not in SIMPLE_TYPE_CHARS):
             raise ValueError('%s is not a type character' % (tp))
         default = TP_TO_DEFAULT[tp]
-        ffitp = TP_TO_FFITP.get(tp, tp)
-        ffiarray = _rawffi.Array(ffitp)
+        ffiarray = _rawffi.Array(tp)
         result = type.__new__(self, name, bases, dct)
         result._ffiletter = tp
         result._ffiarray = ffiarray
@@ -48,18 +47,14 @@ class SimpleType(_CDataMeta):
             # c_char_p special cases
             from _ctypes import Array, _Pointer
 
-            def __init__(self, value=DEFAULT_VALUE):
+            def _getvalue(self):
+                return _rawffi.charp2string(self._array[0])
+            def _setvalue(self, value):
                 if isinstance(value, str):
                     array = _rawffi.Array('c')(len(value)+1, value)
                     value = array.buffer
                     # XXX free 'array' later
-                _SimpleCData.__init__(self, value)
-            result.__init__ = __init__
-
-            def _getvalue(self):
-                return _rawffi.charp2string(self._array[0])
-            def _setvalue(self, value):
-                xxx
+                self._array[0] = value
             result.value = property(_getvalue, _setvalue)
 
             def from_param(self, value):
@@ -90,6 +85,9 @@ class SimpleType(_CDataMeta):
         except (TypeError, ValueError):
             return super(SimpleType, self).from_param(value)
 
+    def _sizeofinstances(self):
+        return _rawffi.sizeof(self._type_)
+
 class _SimpleCData(_CData):
     __metaclass__ = SimpleType
     _type_ = 'i'
@@ -97,13 +95,13 @@ class _SimpleCData(_CData):
     def __init__(self, value=DEFAULT_VALUE):
         self._array = self._ffiarray(1)
         if value is not DEFAULT_VALUE:
-            self._array[0] = value
+            self.value = value
 
     def _getvalue(self):
         return self._array[0]
 
     def _setvalue(self, value):
-        xxx
+        self._array[0] = value
     value = property(_getvalue, _setvalue)
     del _getvalue, _setvalue
 

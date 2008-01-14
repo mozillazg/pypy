@@ -44,6 +44,9 @@ class PointerType(_CDataMeta):
                 return value
         return _CDataMeta.from_param(self, value)
 
+    def _sizeofinstances(self):
+        return _rawffi.sizeof('P')
+
     from_address = cdata_from_address
 
 class _Pointer(_CData):
