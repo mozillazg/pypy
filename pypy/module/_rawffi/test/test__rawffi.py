@@ -3,7 +3,7 @@
 from pypy.conftest import gettestobjspace
 from pypy.translator.tool.cbuild import compile_c_module, \
      ExternalCompilationInfo
-from pypy.module._ffi.interp_ffi import TYPEMAP
+from pypy.module._rawffi.interp_rawffi import TYPEMAP
 
 import os, sys, py
 
@@ -14,7 +14,7 @@ def setup_module(mod):
 class AppTestFfi:
     def prepare_c_example():
         from pypy.tool.udir import udir
-        c_file = udir.join("xlib.c")
+        c_file = udir.ensure("test__rawffi", dir=1).join("xlib.c")
         c_file.write(py.code.Source('''
         #include <stdlib.h>
         #include <stdio.h>
@@ -109,28 +109,28 @@ class AppTestFfi:
     prepare_c_example = staticmethod(prepare_c_example)
     
     def setup_class(cls):
-        space = gettestobjspace(usemodules=('_ffi','struct'))
+        space = gettestobjspace(usemodules=('_rawffi','struct'))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.prepare_c_example())
         cls.w_sizes_and_alignments = space.wrap(dict(
             [(k, (v.c_size, v.c_alignment)) for k,v in TYPEMAP.iteritems()]))
 
     def test_libload(self):
-        import _ffi
-        _ffi.CDLL('libc.so.6')
+        import _rawffi
+        _rawffi.CDLL('libc.so.6')
 
     def test_getattr(self):
-        import _ffi
-        libc = _ffi.CDLL('libc.so.6')
+        import _rawffi
+        libc = _rawffi.CDLL('libc.so.6')
         func = libc.ptr('rand', [], 'i')
         assert libc.ptr('rand', [], 'i') is func # caching
         assert libc.ptr('rand', [], 'l') is not func
-        assert isinstance(func, _ffi.FuncPtr)
+        assert isinstance(func, _rawffi.FuncPtr)
         raises(AttributeError, "libc.xxxxxxxxxxxxxx")
 
     def test_getchar(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         get_char = lib.ptr('get_char', ['s', 'H'], 'c')
         assert get_char('dupa', 2) == 'p'
         assert get_char('dupa', 1) == 'u'
@@ -140,21 +140,21 @@ class AppTestFfi:
         assert get_char('dupa', 2) == 'p'
 
     def test_returning_str(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         char_check = lib.ptr('char_check', ['c', 'c'], 's')
         assert char_check('y', 'x') == 'xxxxxx'
         assert char_check('x', 'y') is None
 
     def test_short_addition(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         short_add = lib.ptr('add_shorts', ['h', 'h'], 'H')
         assert short_add(1, 2) == 3
 
     def test_rand(self):
-        import _ffi
-        libc = _ffi.CDLL('libc.so.6')
+        import _rawffi
+        libc = _rawffi.CDLL('libc.so.6')
         func = libc.ptr('rand', [], 'i')
         first = func()
         count = 0
@@ -165,8 +165,8 @@ class AppTestFfi:
         assert count != 100
 
     def test_pow(self):
-        import _ffi
-        libm = _ffi.CDLL('libm.so')
+        import _rawffi
+        libm = _rawffi.CDLL('libm.so')
         pow = libm.ptr('pow', ['d', 'd'], 'd')
         assert pow(2.0, 2.0) == 4.0
         assert pow(3.0, 3.0) == 27.0
@@ -174,8 +174,8 @@ class AppTestFfi:
         raises(TypeError, "pow('x', 2.0)")
 
     def test_strlen(self):
-        import _ffi
-        libc = _ffi.CDLL('libc.so.6')
+        import _rawffi
+        libc = _rawffi.CDLL('libc.so.6')
         strlen = libc.ptr('strlen', ['s'], 'i')
         assert strlen("dupa") == 4
         assert strlen("zupa") == 4
@@ -185,16 +185,16 @@ class AppTestFfi:
         assert strdup("xxx") == "xxx"
 
     def test_time(self):
-        import _ffi
-        libc = _ffi.CDLL('libc.so.6')
+        import _rawffi
+        libc = _rawffi.CDLL('libc.so.6')
         time = libc.ptr('time', ['P'], 'l')
         assert time(None) != 0
 
     def test_gettimeofday(self):
-        import _ffi
-        struct_type = _ffi.Structure([('tv_sec', 'l'), ('tv_usec', 'l')])
+        import _rawffi
+        struct_type = _rawffi.Structure([('tv_sec', 'l'), ('tv_usec', 'l')])
         structure = struct_type()
-        libc = _ffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL('libc.so.6')
         gettimeofday = libc.ptr('gettimeofday', ['P', 'P'], 'i')
         assert gettimeofday(structure, None) == 0
         struct2 = struct_type()
@@ -205,11 +205,11 @@ class AppTestFfi:
         structure.free()
 
     def test_structreturn(self):
-        import _ffi
-        X = _ffi.Structure([('x', 'l')])
+        import _rawffi
+        X = _rawffi.Structure([('x', 'l')])
         x = X()
         x.x = 121
-        Tm = _ffi.Structure([('tm_sec', 'i'),
+        Tm = _rawffi.Structure([('tm_sec', 'i'),
                              ('tm_min', 'i'),
                              ('tm_hour', 'i'),
                              ("tm_mday", 'i'),
@@ -218,7 +218,7 @@ class AppTestFfi:
                              ("tm_wday", 'i'),
                              ("tm_yday", 'i'),
                              ("tm_isdst", 'i')])
-        libc = _ffi.CDLL('libc.so.6')
+        libc = _rawffi.CDLL('libc.so.6')
         gmtime = libc.ptr('gmtime', ['P'], 'P')
         t = Tm.fromaddress(gmtime(x))
         assert t.tm_year == 70
@@ -227,10 +227,10 @@ class AppTestFfi:
         x.free()
 
     def test_nested_structures(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         inner = lib.ptr("inner_struct_elem", ['P'], 'c')
-        X = _ffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
+        X = _rawffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
         next = X(next=None, x3='x')
         x = X(next=next, x1=1, x2=2, x3='x')
         assert X.fromaddress(x.next).x3 == 'x'
@@ -245,9 +245,9 @@ class AppTestFfi:
         
 
     def test_array(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
-        A = _ffi.Array('i')
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        A = _rawffi.Array('i')
         get_array_elem = lib.ptr('get_array_elem', ['P', 'i'], 'i')
         a = A(10)
         a[8] = 3
@@ -265,10 +265,10 @@ class AppTestFfi:
         a.free()
 
     def test_array_of_structure(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
-        A = _ffi.Array('P')
-        X = _ffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        A = _rawffi.Array('P')
+        X = _rawffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
         x = X(x2=3)
         a = A(3)
         a[1] = x
@@ -281,23 +281,23 @@ class AppTestFfi:
         a.free()
 
     def test_bad_parameters(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         nothing = lib.ptr('nothing', [], None)
         assert nothing() is None
         raises(AttributeError, "lib.ptr('get_charx', [], None)")
         raises(ValueError, "lib.ptr('get_char', ['xx'], None)")
         raises(ValueError, "lib.ptr('get_char', ['x'], None)")
         raises(ValueError, "lib.ptr('get_char', [], 'x')")
-        raises(ValueError, "_ffi.Structure(['x1', 'xx'])")
-        raises(ValueError, _ffi.Structure, [('x1', 'xx')])
-        raises(ValueError, "_ffi.Array('xx')")
+        raises(ValueError, "_rawffi.Structure(['x1', 'xx'])")
+        raises(ValueError, _rawffi.Structure, [('x1', 'xx')])
+        raises(ValueError, "_rawffi.Array('xx')")
 
     def test_implicit_structure(self):
         skip("Does not work yet")
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
-        X = _ffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'self')])
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        X = _rawffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'self')])
         inner = lib.ptr("inner_struct_elem", [X], 'c')
         x = X(next=X(next=None, x3='x'), x1=1, x2=2, x3='x')
         assert x.next.x3 == 'x'
@@ -308,8 +308,8 @@ class AppTestFfi:
         
 
     def test_longs_ulongs(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         some_huge_value = lib.ptr('some_huge_value', [], 'q')
         assert some_huge_value() == 1<<42
         some_huge_uvalue = lib.ptr('some_huge_uvalue', [], 'Q')
@@ -321,21 +321,21 @@ class AppTestFfi:
     
     def test_callback(self):
         skip("Not working")
-        import _ffi
-        libc = _ffi.CDLL('libc.so.6')
+        import _rawffi
+        libc = _rawffi.CDLL('libc.so.6')
         to_sort = "kljhgfa"
-        ll_to_sort = _ffi.Array('c')(to_sort)
+        ll_to_sort = _rawffi.Array('c')(to_sort)
         qsort = libc.ptr('qsort', ['P', 'i', 'i', 'P'], None)
         def compare(a, b):
             return a < b
         qsort(ll_to_sort, len(to_sort), 1,
-              _ffi.CallbackPtr(compare, ['i', 'i'], 'i'))
+              _rawffi.CallbackPtr(compare, ['i', 'i'], 'i'))
         res = [ll_to_sort[i] for i in range(len(to_sort))]
         assert res == sorted(to_sort)
 
     def test_setattr_struct(self):
-        import _ffi
-        X = _ffi.Structure([('value1', 'i'), ('value2', 'i')])
+        import _rawffi
+        X = _rawffi.Structure([('value1', 'i'), ('value2', 'i')])
         x = X(value1=1, value2=2)
         assert x.value1 == 1
         assert x.value2 == 2
@@ -346,43 +346,43 @@ class AppTestFfi:
         x.free()
 
     def test_sizes_and_alignments(self):
-        import _ffi
+        import _rawffi
         for k, (s, a) in self.sizes_and_alignments.iteritems():
-            assert _ffi.sizeof(k) == s
-            assert _ffi.alignment(k) == a
+            assert _rawffi.sizeof(k) == s
+            assert _rawffi.alignment(k) == a
 
     def test_array_addressof(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
         alloc = lib.ptr('allocate_array', [], 'P')
-        A = _ffi.Array('i')
+        A = _rawffi.Array('i')
         a = A.fromaddress(alloc(), 1)
         assert a[0] == 3
         assert A.fromaddress(a.buffer, 1)[0] == 3
         # a.free() - don't free as ll2ctypes is complaining massively
 
     def test_shape(self):
-        import _ffi
-        A = _ffi.Array('i')
+        import _rawffi
+        A = _rawffi.Array('i')
         a = A(1)
         assert a.shape is A
         a.free()
-        S = _ffi.Structure([('v1', 'i')])
+        S = _rawffi.Structure([('v1', 'i')])
         s = S(v1=3)
         assert s.shape is S
         s.free()
 
     def test_negative_pointers(self):
-        import _ffi
-        A = _ffi.Array('P')
+        import _rawffi
+        A = _rawffi.Array('P')
         a = A(1)
         a[0] = -1234
         a.free()
         
     def test_passing_raw_pointers(self):
-        import _ffi
-        lib = _ffi.CDLL(self.lib_name)
-        A = _ffi.Array('i')
+        import _rawffi
+        lib = _rawffi.CDLL(self.lib_name)
+        A = _rawffi.Array('i')
         get_array_elem = lib.ptr('get_array_elem', ['P', 'i'], 'i')
         a = A(1)
         a[0] = 3
