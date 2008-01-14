@@ -127,7 +127,7 @@ class W_StructureInstance(W_DataInstance):
             raise segfault_exception(space, "accessing NULL pointer")
         i = self.getindex(space, attr)
         _, c = self.shape.fields[i]
-        unwrap_value(space, push_field, self, i, c, w_value, None)
+        unwrap_value(space, push_field, self, i, c, w_value)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
 

@@ -97,11 +97,11 @@ class AppTestFfi:
            return x;
         }
 
+        static int prebuilt_array1[] = {3};
+
         int* allocate_array()
         {
-            int *res = (int*)malloc(sizeof(int));
-            res[0] = 3;
-            return res;
+            return prebuilt_array1;
         }
 
         '''))
@@ -150,52 +150,64 @@ class AppTestFfi:
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
         char_check = lib.ptr('char_check', ['c', 'c'], 's')
-        assert char_check('y', 'x') == 'xxxxxx'
-        assert char_check('x', 'y') is None
+        A = _rawffi.Array('c')
+        arg1 = A(1)
+        arg2 = A(1)
+        arg1[0] = 'y'
+        arg2[0] = 'x'
+        res = char_check(arg1, arg2)
+        assert _rawffi.charp2string(res[0]) == 'xxxxxx'
+        res.free()
+        arg1[0] = 'x'
+        arg2[0] = 'y'
+        res = char_check(arg1, arg2)
+        assert res[0] == 0
+        assert _rawffi.charp2string(res[0]) is None
+        res.free()
+        arg1.free()
+        arg2.free()
 
     def test_short_addition(self):
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
         short_add = lib.ptr('add_shorts', ['h', 'h'], 'H')
-        assert short_add(1, 2) == 3
-
-    def test_rand(self):
-        import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
-        func = libc.ptr('rand', [], 'i')
-        first = func()
-        count = 0
-        for i in range(100):
-            res = func()
-            if res == first:
-                count += 1
-        assert count != 100
+        A = _rawffi.Array('h')
+        arg1 = A(1)
+        arg2 = A(1)
+        arg1[0] = 1
+        arg2[0] = 2
+        res = short_add(arg1, arg2)
+        assert res[0] == 3
+        res.free()
+        arg1.free()
+        arg2.free()
 
     def test_pow(self):
         import _rawffi
         libm = _rawffi.CDLL('libm.so')
         pow = libm.ptr('pow', ['d', 'd'], 'd')
-        assert pow(2.0, 2.0) == 4.0
-        assert pow(3.0, 3.0) == 27.0
-        assert pow(2, 2) == 4.0
-        raises(TypeError, "pow('x', 2.0)")
-
-    def test_strlen(self):
-        import _rawffi
-        libc = _rawffi.CDLL('libc.so.6')
-        strlen = libc.ptr('strlen', ['s'], 'i')
-        assert strlen("dupa") == 4
-        assert strlen("zupa") == 4
-        strlen = libc.ptr('strlen', ['P'], 'i')
-        assert strlen("ddd\x00") == 3
-        strdup = libc.ptr('strdup', ['s'], 's')
-        assert strdup("xxx") == "xxx"
+        A = _rawffi.Array('d')
+        arg1 = A(1)
+        arg2 = A(1)
+        raises(TypeError, "arg1[0] = 'x'")
+        arg1[0] = 3
+        arg2[0] = 2.0
+        res = pow(arg1, arg2)
+        assert res[0] == 9.0
+        res.free()
+        arg1.free()
+        arg2.free()
 
     def test_time(self):
         import _rawffi
         libc = _rawffi.CDLL('libc.so.6')
         time = libc.ptr('time', ['P'], 'l')
-        assert time(None) != 0
+        arg = _rawffi.Array('P')(1)
+        arg[0] = 0
+        res = time(arg)
+        assert res[0] != 0
+        res.free()
+        arg.free()
 
     def test_gettimeofday(self):
         import _rawffi
@@ -203,13 +215,26 @@ class AppTestFfi:
         structure = struct_type()
         libc = _rawffi.CDLL('libc.so.6')
         gettimeofday = libc.ptr('gettimeofday', ['P', 'P'], 'i')
-        assert gettimeofday(structure, None) == 0
+
+        arg1 = structure.byptr()
+        arg2 = _rawffi.Array('P')(1)
+        res = gettimeofday(arg1, arg2)
+        assert res[0] == 0
+        res.free()
+
         struct2 = struct_type()
-        assert gettimeofday(struct2, None) == 0
+        arg1[0] = struct2
+        res = gettimeofday(arg1, arg2)
+        assert res[0] == 0
+        res.free()
+
         assert structure.tv_usec != struct2.tv_usec
         assert (structure.tv_sec == struct2.tv_sec) or (structure.tv_sec == struct2.tv_sec - 1)
         raises(AttributeError, "structure.xxx")
         structure.free()
+        struct2.free()
+        arg1.free()
+        arg2.free()
 
     def test_structreturn(self):
         import _rawffi
@@ -217,17 +242,22 @@ class AppTestFfi:
         x = X()
         x.x = 121
         Tm = _rawffi.Structure([('tm_sec', 'i'),
-                             ('tm_min', 'i'),
-                             ('tm_hour', 'i'),
-                             ("tm_mday", 'i'),
-                             ("tm_mon", 'i'),
-                             ("tm_year", 'i'),
-                             ("tm_wday", 'i'),
-                             ("tm_yday", 'i'),
-                             ("tm_isdst", 'i')])
+                                ('tm_min', 'i'),
+                                ('tm_hour', 'i'),
+                                ("tm_mday", 'i'),
+                                ("tm_mon", 'i'),
+                                ("tm_year", 'i'),
+                                ("tm_wday", 'i'),
+                                ("tm_yday", 'i'),
+                                ("tm_isdst", 'i')])
         libc = _rawffi.CDLL('libc.so.6')
         gmtime = libc.ptr('gmtime', ['P'], 'P')
-        t = Tm.fromaddress(gmtime(x))
+
+        arg = x.byptr()
+        res = gmtime(arg)
+        t = Tm.fromaddress(res[0])
+        res.free()
+        arg.free()
         assert t.tm_year == 70
         assert t.tm_sec == 1
         assert t.tm_min == 2      
@@ -238,18 +268,18 @@ class AppTestFfi:
         lib = _rawffi.CDLL(self.lib_name)
         inner = lib.ptr("inner_struct_elem", ['P'], 'c')
         X = _rawffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'P')])
-        next = X(next=None, x3='x')
+        next = X(next=0, x3='x')
         x = X(next=next, x1=1, x2=2, x3='x')
         assert X.fromaddress(x.next).x3 == 'x'
         x.free()
         next.free()
         create_double_struct = lib.ptr("create_double_struct", [], 'P')
-        x = create_double_struct()
-        x = X.fromaddress(x)
+        res = create_double_struct()
+        x = X.fromaddress(res[0])
         assert X.fromaddress(x.next).x2 == 3
         free_double_struct = lib.ptr("free_double_struct", ['P'], None)
-        free_double_struct(x)
-        
+        free_double_struct(res)
+        res.free()
 
     def test_array(self):
         import _rawffi
@@ -260,15 +290,16 @@ class AppTestFfi:
         a[8] = 3
         a[7] = 1
         a[6] = 2
-        assert get_array_elem(a, 9) == 0
-        assert get_array_elem(a, 8) == 3
-        assert get_array_elem(a, 7) == 1
-        assert get_array_elem(a, 6) == 2
+        arg1 = a.byptr()
+        arg2 = A(1)
+        for i, expected in enumerate([0, 0, 0, 0, 0, 0, 2, 1, 3, 0]):
+            arg2[0] = i
+            res = get_array_elem(arg1, arg2)
+            assert res[0] == expected
+            res.free()
+        arg1.free()
+        arg2.free()
         assert a[3] == 0
-        a.free()
-        a = A([1, 2, 3, 4])
-        assert get_array_elem(a, 0) == 1
-        assert a[3] == 4
         a.free()
 
     def test_array_of_structure(self):
@@ -280,10 +311,18 @@ class AppTestFfi:
         a = A(3)
         a[1] = x
         get_array_elem_s = lib.ptr('get_array_elem_s', ['P', 'i'], 'P')
-        ptr1 = get_array_elem_s(a, 0)
-        assert ptr1 is None
-        assert X.fromaddress(get_array_elem_s(a, 1)).x2 == 3
-        assert get_array_elem_s(a, 1) == x.buffer
+        arg1 = a.byptr()
+        arg2 = _rawffi.Array('i')(1)
+        res = get_array_elem_s(arg1, arg2)
+        assert res[0] == 0
+        res.free()
+        arg2[0] = 1
+        res = get_array_elem_s(arg1, arg2)
+        assert X.fromaddress(res[0]).x2 == 3
+        assert res[0] == x.buffer
+        res.free()
+        arg1.free()
+        arg2.free()
         x.free()
         a.free()
 
@@ -300,31 +339,27 @@ class AppTestFfi:
         raises(ValueError, _rawffi.Structure, [('x1', 'xx')])
         raises(ValueError, "_rawffi.Array('xx')")
 
-    def test_implicit_structure(self):
-        skip("Does not work yet")
-        import _rawffi
-        lib = _rawffi.CDLL(self.lib_name)
-        X = _rawffi.Structure([('x1', 'i'), ('x2', 'h'), ('x3', 'c'), ('next', 'self')])
-        inner = lib.ptr("inner_struct_elem", [X], 'c')
-        x = X(next=X(next=None, x3='x'), x1=1, x2=2, x3='x')
-        assert x.next.x3 == 'x'
-        assert inner(x) == 'x'
-        create_double_struct = lib.ptr("create_double_struct", [], X)
-        x = create_double_struct()
-        assert x.next.x2 == 3
-        
-
     def test_longs_ulongs(self):
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
         some_huge_value = lib.ptr('some_huge_value', [], 'q')
-        assert some_huge_value() == 1<<42
+        res = some_huge_value()
+        assert res[0] == 1<<42
+        res.free()
         some_huge_uvalue = lib.ptr('some_huge_uvalue', [], 'Q')
-        assert some_huge_uvalue() == 1<<42
-        x = lib.ptr('some_huge_value', ['Q'], None)
-        raises(ValueError, "x(-1)")
+        res = some_huge_uvalue()
+        assert res[0] == 1<<42
+        res.free()
+        arg1 = _rawffi.Array('Q')(1)
+        raises(ValueError, "arg1[0] = -1")
+        arg1.free()
         pass_ll = lib.ptr('pass_ll', ['q'], 'q')
-        assert pass_ll(1<<42) == 1<<42
+        arg1 = _rawffi.Array('q')(1)
+        arg1[0] = 1<<42
+        res = pass_ll(arg1)
+        assert res[0] == 1<<42
+        res.free()
+        arg1.free()
     
     def test_callback(self):
         skip("Not working")
@@ -363,10 +398,11 @@ class AppTestFfi:
         lib = _rawffi.CDLL(self.lib_name)
         alloc = lib.ptr('allocate_array', [], 'P')
         A = _rawffi.Array('i')
-        a = A.fromaddress(alloc(), 1)
+        res = alloc()
+        a = A.fromaddress(res[0], 1)
+        res.free()
         assert a[0] == 3
         assert A.fromaddress(a.buffer, 1)[0] == 3
-        # a.free() - don't free as ll2ctypes is complaining massively
 
     def test_shape(self):
         import _rawffi
@@ -393,6 +429,12 @@ class AppTestFfi:
         get_array_elem = lib.ptr('get_array_elem', ['P', 'i'], 'i')
         a = A(1)
         a[0] = 3
-        res = get_array_elem(a.buffer, 0)
-        assert res == 3
+        arg1 = _rawffi.Array('P')(1)
+        arg1[0] = a.buffer
+        arg2 = _rawffi.Array('i')(1)
+        res = get_array_elem(arg1, arg2)
+        assert res[0] == 3
+        res.free()
+        arg1.free()
+        arg2.free()
         a.free()
