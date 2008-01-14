@@ -1,4 +1,4 @@
-
+import sys
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
 from pypy.interpreter.error import OperationError, wrap_oserror
@@ -80,7 +80,7 @@ def _get_type(space, key):
         return TYPEMAP[key]
     except KeyError:
         raise OperationError(space.w_ValueError, space.wrap(
-            "Uknown type letter %s" % (key,)))
+            "Unknown type letter %s" % (key,)))
     return lltype.nullptr(FFI_TYPE_P.TO)
 
 def _w_get_type(space, key):
@@ -154,14 +154,6 @@ module, except that s has trailing \x00 added, while p is considered a raw
 buffer."""
 )
 
-def pack_pointer(space, add_arg, argdesc, w_arg, push_func):
-    arg = space.str_w(w_arg)
-    ll_str = lltype.malloc(rffi.CCHARP.TO, len(arg), flavor='raw')
-    for i in range(len(arg)):
-        ll_str[i] = arg[i]
-    push_func(add_arg, argdesc, ll_str)
-    return ll_str
-
 def make_size_checker(format, size, signed):
     min, max, _ = min_max_acc_method(size, signed)
 
@@ -206,7 +198,7 @@ class W_DataInstance(Wrappable):
                                            zero=True)
 
     def getbuffer(space, self):
-        return space.wrap(rffi.cast(rffi.INT, self.ll_buffer))
+        return space.wrap(rffi.cast(lltype.Signed, self.ll_buffer))
 
     def byptr(self, space):
         from pypy.module._rawffi.array import get_array_cache
@@ -270,48 +262,33 @@ ll_typemap_iter = unrolling_iterable(LL_TYPEMAP.items())
 def wrap_value(space, func, add_arg, argdesc, tp):
     for c, ll_type in ll_typemap_iter:
         if tp == c:
-            if c == 's' or c == 'z':
-                ptr = func(add_arg, argdesc, rffi.CCHARP)
-                if not ptr:
-                    return space.w_None
-                return space.wrap(rffi.charp2str(ptr))
-            elif c == 'P' or c == 'O':
+            if c in TYPEMAP_PTR_LETTERS:
                 res = func(add_arg, argdesc, rffi.VOIDP)
-                if not res:
-                    return space.w_None
-                return space.wrap(rffi.cast(rffi.INT, res))
+                return space.wrap(rffi.cast(lltype.Signed, res))
             elif c == 'v':
                 func(add_arg, argdesc, ll_type)
                 return space.w_None
-            elif c == 'q' or c == 'Q' or c == 'L':
+            elif c == 'q' or c == 'Q' or c == 'L' or c == 'c':
                 return space.wrap(func(add_arg, argdesc, ll_type))
             elif c == 'f' or c == 'd':
                 return space.wrap(float(func(add_arg, argdesc, ll_type)))
-            elif c == 'c':
-                return space.wrap(chr(rffi.cast(rffi.INT, func(add_arg, argdesc,
-                                                               ll_type))))
             elif c == 'h' or c == 'H':
-                return space.wrap(rffi.cast(rffi.INT, func(add_arg, argdesc,
+                return space.wrap(rffi.cast(lltype.Signed, func(add_arg, argdesc,
                                                            ll_type)))
             else:
                 return space.wrap(intmask(func(add_arg, argdesc, ll_type)))
     return space.w_None
 wrap_value._annspecialcase_ = 'specialize:arg(1)'
 
-def ptr_call(ptr, some_arg, ll_type):
-    return ptr.call(ll_type)
-ptr_call._annspecialcase_ = 'specialize:arg(2)'
-
-def push(ptr, argdesc, value):
-    ptr.push_arg(value)
-push._annspecialcase_ = 'specialize:argtype(2)'
-
 class W_FuncPtr(Wrappable):
     def __init__(self, space, ptr, argtypes, restype):
         from pypy.module._rawffi.array import get_array_cache
         self.ptr = ptr
-        cache = get_array_cache(space)
-        self.resarray = cache.get_array_type(restype)
+        if restype != 'v':
+            cache = get_array_cache(space)
+            self.resarray = cache.get_array_type(restype)
+        else:
+            self.resarray = None
         self.argtypes = argtypes
 
     def call(self, space, args_w):
@@ -336,9 +313,13 @@ class W_FuncPtr(Wrappable):
                 raise OperationError(space.w_TypeError, space.wrap(msg))
             args_ll.append(arg.ll_buffer)
             # XXX we could avoid the intermediate list args_ll
-        result = self.resarray.allocate(space, 1)
-        self.ptr.call(args_ll, result.ll_buffer)
-        return space.wrap(result)
+        if self.resarray is not None:
+            result = self.resarray.allocate(space, 1)
+            self.ptr.call(args_ll, result.ll_buffer)
+            return space.wrap(result)
+        else:
+            self.ptr.call(args_ll, lltype.nullptr(rffi.VOIDP.TO))
+            return space.w_None
     call.unwrap_spec = ['self', ObjSpace, 'args_w']
 
 W_FuncPtr.typedef = TypeDef(
@@ -362,3 +343,10 @@ def _create_new_accessor(func_name, name):
 
 sizeof = _create_new_accessor('sizeof', 'c_size')
 alignment = _create_new_accessor('alignment', 'c_alignment')
+
+def charp2string(space, address, maxlength=sys.maxint):
+    if address == 0:
+        return space.w_None
+    s = rffi.charp2strn(rffi.cast(rffi.CCHARP, address), maxlength)
+    return space.wrap(s)
+charp2string.unwrap_spec = [ObjSpace, int, int]

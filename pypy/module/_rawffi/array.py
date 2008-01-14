@@ -104,8 +104,7 @@ class W_ArrayInstance(W_DataInstance):
 
     def getitem(self, space, num):
         if num >= self.length or num < 0:
-            raise OperationError(space.w_ValueError, space.wrap(
-                "Getting element %d of array sized %d" % (num, self.length)))
+            raise OperationError(space.w_IndexError, space.w_None)
         return wrap_value(space, get_elem, self.ll_buffer, num, self.shape.of)
     getitem.unwrap_spec = ['self', ObjSpace, int]
 
