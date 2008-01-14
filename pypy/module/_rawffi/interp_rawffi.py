@@ -213,7 +213,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg, to_free):
             if to_free is not None:
                 to_free.append(pack_pointer(space, add_arg, argdesc, w_arg, push_func))
         else:
-            mod = space.getbuiltinmodule('_ffi')
+            mod = space.getbuiltinmodule('_rawffi')
             w_StructureInstance = space.getattr(mod, w('StructureInstance'))
             w_ArrayInstance = space.getattr(mod, w('ArrayInstance'))
             #w_CallbackPtr = space.getattr(mod, w('CallbackPtr'))

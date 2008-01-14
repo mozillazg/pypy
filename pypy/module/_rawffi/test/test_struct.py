@@ -1,5 +1,5 @@
 
-from pypy.module._ffi.structure import size_and_pos
+from pypy.module._rawffi.structure import size_and_pos
 
 sizeof = lambda x : size_and_pos(x)[0]
 

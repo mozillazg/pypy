@@ -3,22 +3,22 @@
 """
 
 from pypy.interpreter.mixedmodule import MixedModule
-from pypy.module._ffi.interp_ffi import W_CDLL
+from pypy.module._rawffi.interp_rawffi import W_CDLL
 from pypy.rpython.lltypesystem import lltype, rffi
 
 class Module(MixedModule):
-    applevelname = '_ffi'
+    applevelname = '_rawffi'
 
     interpleveldefs = {
-        'CDLL'               : 'interp_ffi.W_CDLL',
-        'FuncPtr'            : 'interp_ffi.W_FuncPtr',
+        'CDLL'               : 'interp_rawffi.W_CDLL',
+        'FuncPtr'            : 'interp_rawffi.W_FuncPtr',
         'Structure'          : 'structure.W_Structure',
         'StructureInstance'  : 'structure.W_StructureInstance',
         'Array'              : 'array.W_Array',
         'ArrayInstance'      : 'array.W_ArrayInstance',
-        '_get_type'          : 'interp_ffi._w_get_type',
-        'sizeof'             : 'interp_ffi.sizeof',
-        'alignment'          : 'interp_ffi.alignment',
+        '_get_type'          : 'interp_rawffi._w_get_type',
+        'sizeof'             : 'interp_rawffi.sizeof',
+        'alignment'          : 'interp_rawffi.alignment',
         #'CallbackPtr'        : 'callback.W_CallbackPtr',
     }
 

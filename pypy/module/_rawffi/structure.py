@@ -10,7 +10,7 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError, wrap_oserror
-from pypy.module._ffi.interp_ffi import wrap_value, unwrap_value, _get_type,\
+from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value, _get_type,\
      TYPEMAP
 from pypy.rlib.rarithmetic import intmask
 
@@ -97,7 +97,7 @@ def cast_pos(self, i, ll_t):
 cast_pos._annspecialcase_ = 'specialize:arg(2)'
 
 def segfault_exception(space, reason):
-    w_mod = space.getbuiltinmodule("_ffi")
+    w_mod = space.getbuiltinmodule("_rawffi")
     w_exception = space.getattr(w_mod, space.wrap("SegfaultException"))
     return OperationError(w_exception, space.wrap(reason))
 
