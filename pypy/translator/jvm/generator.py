@@ -137,6 +137,32 @@ class ArrayOpcodeFamily(OpcodeFamily):
         if desc == 'Z':    return self._o("b")   # Boolean (access as bytes)
         return OpcodeFamily.for_type(self, argtype)
 
+class NewArrayOpcodeFamily(object):
+    def __init__(self):
+        self.cache = {}
+
+    def for_type(self, arraytype):
+        try:
+            return self.cache[arraytype]
+        except KeyError:
+            pass
+        desc = arraytype.descriptor
+        if desc == '[I':
+            s = "newarray int"
+        elif desc == '[D':
+            s = "newarray double"
+        elif desc == '[C':
+            s = "newarray char"
+        elif desc == '[B':
+            s = "newarray byte"
+        else:
+            s = "anewarray"
+        self.cache[arraytype] = obj = Opcode(s)
+        return obj
+
+NEWARRAY = NewArrayOpcodeFamily()
+ARRAYLENGTH = Opcode("arraylength")
+
 # Define the opcodes for IFNE, IFEQ, IFLT, IF_ICMPLT, etc.  The IFxx
 # variants compare a single integer arg against 0, and the IF_ICMPxx
 # variants compare 2 integer arguments against each other.
@@ -409,6 +435,47 @@ CUSTOMDICTMAKE =        Method.s(jPyPyCustomDict, 'make',
                                  (jPyPyEquals, jPyPyHashCode), jPyPyCustomDict)
 PYPYWEAKREFCREATE =     Method.s(jPyPyWeakRef, 'create', (jObject,), jPyPyWeakRef)
 PYPYWEAKREFGET =        Method.s(jPyPyWeakRef, 'll_get', (), jObject)
+
+
+# special methods for arrays that are not really methods in the JVM
+# XXX slightly hackish
+class ArrayMethod(Method):
+    def __init__(self, arraytype, methodname):
+        self.arraytype = arraytype
+        self.ootype_methodname = methodname
+        Method.__init__(self, "<dummy>", "<dummy>", self._argtypes(), self._rettype(),
+                        opcode=None)
+
+    def _argtypes(self):
+        if self.ootype_methodname == "ll_length":
+            return []
+        elif self.ootype_methodname == "ll_getitem_fast":
+            return [jInt]
+        elif self.ootype_methodname == "ll_setitem_fast":
+            return [jInt, self.arraytype.element_type]
+        else:
+            assert 0, "unknown array method"
+
+    def _rettype(self):
+        if self.ootype_methodname == "ll_length":
+            return jInt
+        elif self.ootype_methodname == "ll_getitem_fast":
+            return self.arraytype.element_type
+        elif self.ootype_methodname == "ll_setitem_fast":
+            return jVoid
+        else:
+            assert 0, "unknown array method"
+
+    def invoke(self, gen):
+        if self.ootype_methodname == "ll_length":
+            gen._instr(ARRAYLENGTH)
+        elif self.ootype_methodname == "ll_getitem_fast":
+            gen._instr(ARRLOAD.for_type(self.arraytype.element_type))
+        elif self.ootype_methodname == "ll_setitem_fast":
+            gen._instr(ARRSTORE.for_type(self.arraytype.element_type))
+        else:
+            assert 0, "unknown array method"
+        
 
 # ___________________________________________________________________________
 # Fields
@@ -1117,6 +1184,11 @@ class JVMGenerator(Generator):
         self.emit(DUP)
         self.emit(ctor)
         
+    def oonewarray(self, TYPE, length):
+        jtype = self.db.lltype_to_cts(TYPE)
+        self.load(length)
+        self.emit(NEWARRAY.for_type(jtype))
+
     def instantiate(self):
         self.emit(PYPYRUNTIMENEW)
 

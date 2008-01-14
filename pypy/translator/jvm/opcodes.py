@@ -6,7 +6,7 @@ come from the oosupport directory.
 """
 
 from pypy.translator.oosupport.metavm import \
-     PushArg, PushAllArgs, StoreResult, InstructionList, New, DoNothing, Call,\
+     PushArg, PushAllArgs, StoreResult, InstructionList, New, OONewArray, DoNothing, Call,\
      SetField, GetField, DownCast, RuntimeNew, OOString, OOUnicode, \
      CastTo, PushPrimitive
 from pypy.translator.jvm.metavm import \
@@ -63,6 +63,7 @@ Ignore = []
 opcodes = _proc_dict({
     # __________ object oriented operations __________
     'new':                      [New, StoreResult],
+    'oonewarray':               [OONewArray, StoreResult],
     'runtimenew':               [RuntimeNew, StoreResult],
     'oosetfield':               [SetField],
     'oogetfield':               [GetField, StoreResult],

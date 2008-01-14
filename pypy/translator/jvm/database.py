@@ -513,6 +513,8 @@ class Database(OODatabase):
             return jObject
         if OOT in self.ootype_to_builtin:
             return JvmBuiltInType(self, self.ootype_to_builtin[OOT], OOT)
+        if isinstance(OOT, ootype.Array):
+            return self._array_type(OOT.ITEM)
         if OOT.__class__ in self.ootype_to_builtin:
             return JvmBuiltInType(
                 self, self.ootype_to_builtin[OOT.__class__], OOT)
@@ -532,6 +534,20 @@ class Database(OODatabase):
             return JvmNativeClass(self, OOT)
         
         assert False, "Untranslatable type %s!" % OOT
+
+    ooitemtype_to_array = {
+        ootype.Signed   : jvmtype.jIntArray,
+        ootype.Unsigned : jvmtype.jIntArray,
+        ootype.Char     : jvmtype.jCharArray,
+        ootype.Bool     : jvmtype.jByteArray,
+        ootype.UniChar  : jvmtype.jCharArray,
+        ootype.String   : jvmtype.jStringArray,
+    }
+
+    def _array_type(self, ITEM):
+        if ITEM in self.ooitemtype_to_array:
+            return self.ooitemtype_to_array[ITEM]
+        return jvmtype.jObjectArray
 
     def annotation_to_cts(self, _tp):
         s_tp = annotation(_tp)
