@@ -99,9 +99,12 @@ class W_Root(object):
         raise NotImplementedError
 
     def descr_call_mismatch(self, space, opname, RequiredClass, args):
+        if RequiredClass is None:
+            classname = '?'
+        else:
+            classname = wrappable_class_name(RequiredClass)
         msg = "'%s' object expected, got '%s' instead" % (
-            wrappable_class_name(RequiredClass),
-            self.getclass(space).getname(space, '?'))
+            classname, self.getclass(space).getname(space, '?'))
         raise OperationError(space.w_TypeError, space.wrap(msg))
 
     # used by _weakref implemenation
@@ -574,6 +577,7 @@ class ObjSpace(object):
         Unwrap w_obj, checking that it is an instance of the required internal
         interpreter class (a subclass of Wrappable).
         """
+        assert RequiredClass is not None
         if can_be_None and self.is_w(w_obj, self.w_None):
             return None
         obj = self.interpclass_w(w_obj)
