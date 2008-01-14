@@ -670,7 +670,6 @@ class ArrayConst(AbstractConst):
             gen.dup(SELFTYPE)
             push_constant(self.db, ootype.Signed, idx, gen)
             push_constant(self.db, ITEM, item, gen)
-            gen.prepare_generic_argument(ITEM)
             gen.call_method(SELFTYPE, 'll_setitem_fast')
             print idx, item
 
