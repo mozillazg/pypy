@@ -326,6 +326,10 @@ class W_FuncPtr(Wrappable):
             argtype = self.argtypes[i]
             w_arg = args_w[i]
             arg = space.interp_w(W_ArrayInstance, w_arg)
+            if arg.length != 1:
+                msg = ("Argument %d should be an array of length 1, "
+                       "got length %d" % (i+1, arg.length))
+                raise OperationError(space.w_TypeError, space.wrap(msg))
             if arg.shape.of != argtype:
                 msg = "Argument %d should be typecode %s, got %s" % (
                     i+1, argtype, arg.shape.of)
