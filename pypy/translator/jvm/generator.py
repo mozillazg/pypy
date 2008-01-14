@@ -19,7 +19,8 @@ from pypy.translator.jvm.typesystem import \
      jObject, jByteArray, jPyPyExcWrap, jIntegerClass, jLongClass, \
      jDoubleClass, jCharClass, jStringBuilder, JvmScalarType, jArrayList, \
      jObjectArray, jPyPyInterlink, jPyPyCustomDict, jPyPyEquals, \
-     jPyPyHashCode, jMap, jPyPyWeakRef, jSystem, jll_os, jPyPyInterlink
+     jPyPyHashCode, jMap, jPyPyWeakRef, jSystem, jll_os, jPyPyInterlink, \
+     jVoidArray
 
 
 # ___________________________________________________________________________
@@ -139,7 +140,10 @@ class ArrayOpcodeFamily(OpcodeFamily):
 
 class NewArrayOpcodeFamily(object):
     def __init__(self):
-        self.cache = {}
+        # a void array is just an int, therefore oonewarray does not need to
+        # do anything, because it the new can just use the int argument that is
+        # already on the stack
+        self.cache = {jVoidArray: None}
 
     def for_type(self, arraytype):
         try:
@@ -475,7 +479,32 @@ class ArrayMethod(Method):
             gen._instr(ARRSTORE.for_type(self.arraytype.element_type))
         else:
             assert 0, "unknown array method"
-        
+
+class VoidArrayMethod(ArrayMethod):
+    def _argtypes(self):
+        if self.ootype_methodname == "ll_length":
+            return []
+        elif self.ootype_methodname == "ll_getitem_fast":
+            return [jInt]
+        elif self.ootype_methodname == "ll_setitem_fast":
+            return [jInt]
+        else:
+            assert 0, "unknown array method"
+
+    def _rettype(self):
+        if self.ootype_methodname == "ll_length":
+            return jInt
+        return jVoid
+
+    def invoke(self, gen):
+        if self.ootype_methodname == "ll_length":
+            pass
+        elif self.ootype_methodname == "ll_getitem_fast":
+            gen.emit(POP); gen.emit(POP)
+        elif self.ootype_methodname == "ll_setitem_fast":
+            gen.emit(POP); gen.emit(POP)
+        else:
+            assert 0, "unknown array method"
 
 # ___________________________________________________________________________
 # Fields
@@ -996,6 +1025,9 @@ class JVMGenerator(Generator):
         """ 'instr' in our case must be either a string, in which case
         it is the name of a method to invoke, or an Opcode/Method
         object (defined above)."""
+
+        if instr is None:
+            return
 
         if isinstance(instr, str):
             return getattr(self, instr)(*args)

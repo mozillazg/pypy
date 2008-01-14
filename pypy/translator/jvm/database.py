@@ -542,6 +542,7 @@ class Database(OODatabase):
         ootype.Bool     : jvmtype.jByteArray,
         ootype.UniChar  : jvmtype.jCharArray,
         ootype.String   : jvmtype.jStringArray,
+        ootype.Void     : jvmtype.jVoidArray,
     }
 
     def _array_type(self, ITEM):

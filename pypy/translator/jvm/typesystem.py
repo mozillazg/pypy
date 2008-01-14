@@ -239,6 +239,16 @@ class JvmArrayType(JvmType):
         # Arrays don't have methods in Java, but they do in the ootype system
         from pypy.translator.jvm.generator import ArrayMethod
         return ArrayMethod(self, methodnm)
+
+class JvmVoidArrayType(JvmArrayType):
+    def __init__(self):
+        JvmType.__init__(self, JvmTypeDescriptor("I"))
+        self.element_type = jVoid
+    def lookup_method(self, methodnm):
+        # Arrays don't have methods in Java, but they do in the ootype system
+        from pypy.translator.jvm.generator import VoidArrayMethod
+        return VoidArrayMethod(self, methodnm)
+
         
 jByteArray = JvmArrayType(jByte)
 jObjectArray = JvmArrayType(jObject)
@@ -246,6 +256,7 @@ jStringArray = JvmArrayType(jString)
 jDoubleArray = JvmArrayType(jDouble)
 jCharArray = JvmArrayType(jChar)
 jIntArray = JvmArrayType(jInt)
+jVoidArray = JvmVoidArrayType()
 
 class Generifier(object):
 
