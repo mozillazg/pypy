@@ -332,6 +332,10 @@ class TestLL2Ctypes(object):
         for i in range(10):
             assert e[i] == i*i
 
+        c = lltype.nullptr(rffi.VOIDP.TO)
+        addr = rffi.cast(lltype.Signed, c)
+        assert addr == 0
+
         lltype.free(a, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
