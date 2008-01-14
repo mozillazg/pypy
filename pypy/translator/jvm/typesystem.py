@@ -69,8 +69,11 @@ class JvmTypeDescriptor(str):
     def int_class_name(self):
         """ Converts a descriptor like Ljava/lang/Object; to
         internal class name java/lang/Object """
-        assert self[0] == 'L' and self[-1] == ';'
-        return self[1:-1]
+        if self[0] == 'L' and self[-1] == ';':
+            return self[1:-1]
+        else:
+            assert self.startswith('[')
+            return self
     def type_width(self):
         """ Returns number of JVM words this type takes up.  JVM words
         are a theoretically abstract quantity that basically
