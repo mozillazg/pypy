@@ -1,4 +1,4 @@
-import _ffi
+import _rawffi
 
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
@@ -40,10 +40,41 @@ class SimpleType(_CDataMeta):
             raise ValueError('%s is not a type character' % (tp))
         default = TP_TO_DEFAULT[tp]
         ffitp = TP_TO_FFITP.get(tp, tp)
-        ffiarray = _ffi.Array(ffitp)
+        ffiarray = _rawffi.Array(ffitp)
         result = type.__new__(self, name, bases, dct)
         result._ffiletter = tp
         result._ffiarray = ffiarray
+        if tp == 'z':
+            # c_char_p special cases
+            from _ctypes import Array, _Pointer
+
+            def __init__(self, value=DEFAULT_VALUE):
+                if isinstance(value, str):
+                    array = _rawffi.Array('c')(len(value)+1, value)
+                    value = array.buffer
+                    # XXX free 'array' later
+                _SimpleCData.__init__(self, value)
+            result.__init__ = __init__
+
+            def _getvalue(self):
+                return _rawffi.charp2string(self._array[0])
+            def _setvalue(self, value):
+                xxx
+            result.value = property(_getvalue, _setvalue)
+
+            def from_param(self, value):
+                if value is None:
+                    return None
+                if isinstance(value, basestring):
+                    return self(value)
+                if isinstance(value, self):
+                    return value
+                if isinstance(value, (Array, _Pointer)):
+                    if type(value)._type_ == 'c':
+                        return value
+                return _SimpleCData.from_param(self, value)
+            result.from_param = classmethod(from_param)
+
         return result
 
     from_address = cdata_from_address
@@ -52,9 +83,12 @@ class SimpleType(_CDataMeta):
         return create_array_type(self, other)
 
     def from_param(self, value):
-        if not isinstance(value, _CData):
+        if isinstance(value, self):
+            return value
+        try:
             return self(value)
-        return super(SimpleType, self).from_param(value)
+        except (TypeError, ValueError):
+            return super(SimpleType, self).from_param(value)
 
 class _SimpleCData(_CData):
     __metaclass__ = SimpleType
@@ -69,15 +103,12 @@ class _SimpleCData(_CData):
         return self._array[0]
 
     def _setvalue(self, value):
-        # XXX
-        if isinstance(value, _SimpleCData):
-            self._array[0] = value.value
-        else:
-            self._array[0] = value
+        xxx
     value = property(_getvalue, _setvalue)
+    del _getvalue, _setvalue
 
     def __ctypes_from_outparam__(self):
-        return self._array[0]
+        return self.value
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)

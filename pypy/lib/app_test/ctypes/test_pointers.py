@@ -124,6 +124,7 @@ class TestPointers:
 ##        print p.from_address(addr)[0][0]
 
     def test_other(self):
+        py.test.skip("in-progress")
         class Table(Structure):
             _fields_ = [("a", c_int),
                         ("b", c_int),
@@ -155,8 +156,60 @@ class TestPointers:
         argv = (c_char_p * 2)()
         argc = c_int( 2 )
         argv[0] = 'hello'
+        assert argv[0] == 'hello'
         argv[1] = 'world'
         result = func( byref(argc), argv )
+        assert result == 'world', result
+
+    def test_charpp2(self):
+        """Test that a character pointer-to-pointer is correctly passed"""
+        dll = CDLL(_ctypes_test)
+        func = dll._testfunc_c_p_p
+        func.restype = c_char_p
+        argv = (c_char_p * 2)()
+        argc = c_int( 2 )
+        argv[0] = 'hello'
+        argv[1] = 'world'
+        result = func( byref(argc), byref(argv) )
+        assert result == 'world', result
+
+    def test_charpp3(self):
+        """Test that a character pointer-to-pointer is correctly passed"""
+        dll = CDLL(_ctypes_test)
+        func = dll._testfunc_c_p_p
+        func.argtypes = (POINTER(c_int), c_char_p * 2)
+        func.restype = c_char_p
+        argv = (c_char_p * 2)()
+        argc = c_int( 2 )
+        argv[0] = 'hello'
+        argv[1] = 'world'
+        result = func( byref(argc), argv )
+        assert result == 'world', result
+
+    def test_charpp4(self):
+        """Test that a character pointer-to-pointer is correctly passed"""
+        dll = CDLL(_ctypes_test)
+        func = dll._testfunc_c_p_p
+        func.argtypes = (POINTER(c_int), POINTER(c_char_p * 2))
+        func.restype = c_char_p
+        argv = (c_char_p * 2)()
+        argc = c_int( 2 )
+        argv[0] = 'hello'
+        argv[1] = 'world'
+        result = func( byref(argc), argv )
+        assert result == 'world', result
+
+    def test_charpp5(self):
+        """Test that a character pointer-to-pointer is correctly passed"""
+        dll = CDLL(_ctypes_test)
+        func = dll._testfunc_c_p_p
+        func.argtypes = (POINTER(c_int), POINTER(c_char_p * 2))
+        func.restype = c_char_p
+        argv = (c_char_p * 2)()
+        argc = c_int( 2 )
+        argv[0] = 'hello'
+        argv[1] = 'world'
+        result = func( byref(argc), byref(argv) )
         assert result == 'world', result
 
     def test_bug_1467852(self):
