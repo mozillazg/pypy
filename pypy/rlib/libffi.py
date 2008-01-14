@@ -180,7 +180,6 @@ class AbstractFuncPtr(object):
         self.restype = restype
         self.funcsym = funcsym
         argnum = len(argtypes)
-        self.argnum = argnum
         self.ll_argtypes = lltype.malloc(FFI_TYPE_PP.TO, argnum, flavor='raw')
         for i in range(argnum):
             self.ll_argtypes[i] = argtypes[i]
@@ -202,11 +201,9 @@ class AbstractFuncPtr(object):
 class RawFuncPtr(AbstractFuncPtr):
 
     def call(self, args_ll, ll_result):
-        if len(args_ll) != self.argnum:
-            raise ValueError("wrong number of arguments in call to %s(): "
-                             "%d instead of %d" % (self.name,
-                                                   len(args_ll),
-                                                   self.argnum))
+        assert len(args_ll) == len(self.argtypes), (
+            "wrong number of arguments in call to %s(): "
+            "%d instead of %d" % (self.name, len(args_ll), len(self.argtypes)))
         ll_args = lltype.malloc(rffi.VOIDPP.TO, len(args_ll), flavor='raw')
         for i in range(len(args_ll)):
             ll_args[i] = args_ll[i]
@@ -221,6 +218,7 @@ class FuncPtr(AbstractFuncPtr):
     def __init__(self, name, argtypes, restype, funcsym):
         # initialize each one of pointers with null
         AbstractFuncPtr.__init__(self, name, argtypes, restype, funcsym)
+        self.argnum = len(self.argtypes)
         self.pushed_args = 0
         self.ll_args = lltype.malloc(rffi.VOIDPP.TO, self.argnum, flavor='raw')
         for i in range(self.argnum):
