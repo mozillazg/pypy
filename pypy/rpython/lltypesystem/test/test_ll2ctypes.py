@@ -758,3 +758,11 @@ class TestLL2Ctypes(object):
         qsort(rffi.cast(rffi.VOIDP, a), 5, rffi.sizeof(rffi.INT), compare)
         for i in range(5):
             assert a[i] == i + 1
+
+    def test_array_type_bug(self):
+        A = lltype.Array(lltype.Signed)
+        a1 = lltype.malloc(A, 0, flavor='raw')
+        a2 = lltype.malloc(A, 0, flavor='raw')
+        c1 = lltype2ctypes(a1)
+        c2 = lltype2ctypes(a2)
+        assert type(c1) is type(c2)
