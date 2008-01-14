@@ -131,13 +131,20 @@ class AppTestFfi:
     def test_getchar(self):
         import _rawffi
         lib = _rawffi.CDLL(self.lib_name)
-        get_char = lib.ptr('get_char', ['s', 'H'], 'c')
-        assert get_char('dupa', 2) == 'p'
-        assert get_char('dupa', 1) == 'u'
-        raises(ValueError, "get_char('xxx', 2 ** 17)")
-        raises(ValueError, "get_char('xxx', -1)")
-        get_char = lib.ptr('get_char', ['z', 'H'], 'c')
-        assert get_char('dupa', 2) == 'p'
+        get_char = lib.ptr('get_char', ['P', 'H'], 'c')
+        A = _rawffi.Array('c')
+        B = _rawffi.Array('H')
+        dupa = A(5, 'dupa')
+        dupaptr = dupa.byptr()
+        for i in range(4):
+            intptr = B(1)
+            intptr[0] = i
+            res = get_char(dupaptr, intptr)
+            assert res[0] == 'dupa'[i]
+            res.free()
+            intptr.free()
+        dupaptr.free()
+        dupa.free()
 
     def test_returning_str(self):
         import _rawffi
