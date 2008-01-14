@@ -100,7 +100,7 @@ class W_Root(object):
 
     def descr_call_mismatch(self, space, opname, RequiredClass, args):
         msg = "'%s' object expected, got '%s' instead" % (
-            RequiredClass.typedef.name,
+            wrappable_class_name(RequiredClass),
             self.getclass(space).getname(space, '?'))
         raise OperationError(space.w_TypeError, space.wrap(msg))
 
@@ -163,6 +163,15 @@ class UnpackValueError(ValueError):
 
 class DescrMismatch(Exception):
     pass
+
+def wrappable_class_name(Class):
+    try:
+        return Class.typedef.name
+    except AttributeError:
+        return 'internal subclass of %s' % (Class.__name__,)
+wrappable_class_name._annspecialcase_ = 'specialize:memo'
+
+# ____________________________________________________________
 
 class ObjSpace(object):
     """Base class for the interpreter-level implementations of object spaces.
@@ -570,8 +579,8 @@ class ObjSpace(object):
         obj = self.interpclass_w(w_obj)
         if not isinstance(obj, RequiredClass):   # or obj is None
             msg = "'%s' object expected, got '%s' instead" % (
-                RequiredClass.typedef.name,
-            w_obj.getclass(self).getname(self, '?'))
+                wrappable_class_name(RequiredClass),
+                w_obj.getclass(self).getname(self, '?'))
             raise OperationError(self.w_TypeError, self.wrap(msg))
         return obj
     interp_w._annspecialcase_ = 'specialize:arg(1)'
