@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Arrays;
 import java.util.Map;
 import java.text.DecimalFormat;
+import java.lang.reflect.Array;
 
 /**
  * Class with a number of utility routines.  One instance of this is
@@ -398,7 +399,16 @@ public class PyPy implements Constants {
             sb.append("]");
             return sb.toString();
         }
-        else if (o instanceof String) {
+        if (o.getClass().isArray()) {
+            StringBuffer sb = new StringBuffer();
+            sb.append("[");
+            for (int i = 0; i < Array.getLength(o); i++) {
+                sb.append(serializeObject(Array.get(o, i))).append(",");
+            }
+            sb.append("]");
+            return sb.toString();
+        }
+        if (o instanceof String) {
             return escaped_string((String)o);
         }
         return o.toString();
