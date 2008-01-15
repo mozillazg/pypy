@@ -1,10 +1,11 @@
 
-from pypy.module._rawffi.structure import size_alignment_pos, TYPEMAP
+from pypy.module._rawffi.structure import size_alignment_pos
+from pypy.module._rawffi.interp_rawffi import TYPEMAP, letter2tp
 
 sizeof = lambda x : size_alignment_pos(x)[0]
 
 def unpack(desc):
-    return [('x', i) for i in desc]
+    return [('x', letter2tp('space', i)) for i in desc]
 
 def test_sizeof():
     s_c = sizeof(unpack('c'))

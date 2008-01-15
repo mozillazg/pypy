@@ -16,7 +16,6 @@ class Module(MixedModule):
         'StructureInstance'  : 'structure.W_StructureInstance',
         'Array'              : 'array.W_Array',
         'ArrayInstance'      : 'array.W_ArrayInstance',
-        '_get_type'          : 'interp_rawffi._w_get_type',
         'sizeof'             : 'interp_rawffi.sizeof',
         'alignment'          : 'interp_rawffi.alignment',
         'charp2string'       : 'interp_rawffi.charp2string',
