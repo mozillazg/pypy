@@ -54,6 +54,12 @@ class W_Array(Wrappable):
         return space.wrap(W_ArrayInstance(space, self, length, address))
     fromaddress.unwrap_spec = ['self', ObjSpace, int, int]
 
+    def descr_gettypecode(self, space, length):
+        _, itemsize, alignment = self.itemtp
+        return space.newtuple([space.wrap(itemsize * length),
+                               space.wrap(alignment)])
+    descr_gettypecode.unwrap_spec = ['self', ObjSpace, int]
+
 class ArrayCache:
     def __init__(self, space):
         self.space = space
@@ -83,7 +89,7 @@ W_Array.typedef = TypeDef(
     __call__ = interp2app(W_Array.descr_call,
                           unwrap_spec=['self', ObjSpace, int, W_Root]),
     fromaddress = interp2app(W_Array.fromaddress),
-    of = interp_attrproperty('of', W_Array),
+    gettypecode = interp2app(W_Array.descr_gettypecode),
 )
 W_Array.typedef.acceptable_as_base_class = False
 
