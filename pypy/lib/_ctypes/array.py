@@ -37,6 +37,10 @@ class ArrayMeta(_CDataMeta):
 
     from_address = cdata_from_address
 
+    def _sizeofinstances(self):
+        size, alignment = self._ffiarray.gettypecode(self._length_)
+        return size
+
 class Array(_CData):
     __metaclass__ = ArrayMeta
 
