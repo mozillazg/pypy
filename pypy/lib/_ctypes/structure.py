@@ -28,9 +28,6 @@ class StructureMeta(_CDataMeta):
 
         return res
 
-    def _CData_input(self, value):
-        return self.from_param(value)._buffer.byptr()
-
     def from_address(self, address):
         instance = self.__new__(self)
         instance.__dict__['_buffer'] = self._ffistruct.fromaddress(address)
@@ -61,3 +58,6 @@ class Structure(_CData):
         except KeyError:
             raise AttributeError(name)
         return fieldtype._CData_output(self._subarray(fieldtype, name))
+
+    def _get_buffer_for_param(self):
+        return self._buffer.byptr()

@@ -19,7 +19,8 @@ class _CDataMeta(type):
         array of length 1 containing the same value according to the
         type 'self'.
         """
-        return self.from_param(value)._buffer
+        cobj = self.from_param(value)
+        return cobj._get_buffer_for_param()
 
     def _CData_output(self, resarray):
         """Used when data exits ctypes and goes into user code.
@@ -34,6 +35,9 @@ class _CDataMeta(type):
         from _ctypes.array import create_array_type
         return create_array_type(self, other)
 
+    def _is_pointer_like(self):
+        return False
+
 class _CData(object):
     """ The most basic object for all ctypes types
     """
@@ -44,6 +48,9 @@ class _CData(object):
 
     def __ctypes_from_outparam__(self):
         return self
+
+    def _get_buffer_for_param(self):
+        return self._buffer
 
 #class CArgObject(object):
 #    def __init__(self, letter, raw_value, _type):

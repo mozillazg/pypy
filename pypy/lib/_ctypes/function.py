@@ -1,4 +1,5 @@
 
+import types
 from _ctypes.basics import _CData, _CDataMeta
 
 class CFuncPtrType(_CDataMeta):
@@ -27,10 +28,15 @@ class CFuncPtr(_CData):
         if isinstance(address_or_name_and_dll, tuple):
             self.name, self.dll = address_or_name_and_dll
         else:
+            self.address = address_or_name_and_dll
             self.name = None
 
     def __call__(self, *args):
         if self.name is None:
+            if isinstance(self.address, types.FunctionType):
+                # special hack to support to way a few functions like
+                # ctypes.cast() are implemented in ctypes/__init__.py
+                return self.address(*args)
             raise NotImplementedError("Creation of function pointer to pure addresses is not implemented")
         argtypes = self._argtypes_
         if argtypes is None:
