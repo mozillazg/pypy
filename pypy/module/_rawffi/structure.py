@@ -78,6 +78,13 @@ class W_Structure(Wrappable):
         return space.wrap(W_StructureInstance(space, self, 0, kwargs_w))
     descr_call.unwrap_spec = ['self', ObjSpace, Arguments]
 
+    def descr_repr(self, space):
+        fieldnames = ' '.join(["'%s'" % name for name, _ in self.fields])
+        return space.wrap("<_rawffi.Structure %s (%d, %d)>" % (fieldnames,
+                                                               self.size,
+                                                               self.alignment))
+    descr_repr.unwrap_spec = ['self', ObjSpace]
+
     def fromaddress(self, space, address):
         return space.wrap(W_StructureInstance(space, self, address, None))
     fromaddress.unwrap_spec = ['self', ObjSpace, int]
@@ -99,6 +106,7 @@ W_Structure.typedef = TypeDef(
     'Structure',
     __new__     = interp2app(descr_new_structure),
     __call__    = interp2app(W_Structure.descr_call),
+    __repr__    = interp2app(W_Structure.descr_repr),
     fromaddress = interp2app(W_Structure.fromaddress),
     size        = interp_attrproperty('size', W_Structure),
     alignment   = interp_attrproperty('alignment', W_Structure),
@@ -128,6 +136,11 @@ class W_StructureInstance(W_DataInstance):
             for field, w_value in fieldinits_w.iteritems():
                 self.setattr(space, field, w_value)
 
+    def descr_repr(self, space):
+        addr = rffi.cast(lltype.Signed, self.ll_buffer)
+        return space.wrap("<_rawffi struct %d>" % (addr,))
+    descr_repr.unwrap_spec = ['self', ObjSpace]
+
     def getattr(self, space, attr):
         if not self.ll_buffer:
             raise segfault_exception(space, "accessing NULL pointer")
@@ -153,6 +166,7 @@ class W_StructureInstance(W_DataInstance):
 
 W_StructureInstance.typedef = TypeDef(
     'StructureInstance',
+    __repr__    = interp2app(W_StructureInstance.descr_repr),
     __getattr__ = interp2app(W_StructureInstance.getattr),
     __setattr__ = interp2app(W_StructureInstance.setattr),
     buffer      = GetSetProperty(W_StructureInstance.getbuffer),

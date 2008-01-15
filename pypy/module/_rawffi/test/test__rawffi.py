@@ -438,3 +438,20 @@ class AppTestFfi:
         arg1.free()
         arg2.free()
         a.free()
+
+    def test_repr(self):
+        import _rawffi, struct
+        s = struct.calcsize("i")
+        assert (repr(_rawffi.Array('i')) ==
+                "<_rawffi.Array 'i' (%d, %d)>" % (s, s))
+        assert repr(_rawffi.Array((18, 2))) == "<_rawffi.Array '?' (18, 2)>"
+        assert (repr(_rawffi.Structure([('x', 'i'), ('yz', 'i')])) ==
+                "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*s, s))
+
+        s = _rawffi.Structure([('x', 'i'), ('yz', 'i')])()
+        assert repr(s) == "<_rawffi struct %d>" % (s.buffer,)
+        s.free()
+        a = _rawffi.Array('i')(5)
+        assert repr(a) == "<_rawffi array %d of length %d>" % (a.buffer,
+                                                               len(a))
+        a.free()

@@ -50,6 +50,10 @@ class W_Array(Wrappable):
                              self.itemtp, w_item)
         return space.wrap(result)
 
+    def descr_repr(self, space):
+        return space.wrap("<_rawffi.Array '%s' (%d, %d)>" % self.itemtp)
+    descr_repr.unwrap_spec = ['self', ObjSpace]
+
     def fromaddress(self, space, address, length):
         return space.wrap(W_ArrayInstance(space, self, length, address))
     fromaddress.unwrap_spec = ['self', ObjSpace, int, int]
@@ -88,6 +92,7 @@ W_Array.typedef = TypeDef(
                           unwrap_spec=[ObjSpace, W_Root, W_Root]),
     __call__ = interp2app(W_Array.descr_call,
                           unwrap_spec=['self', ObjSpace, int, W_Root]),
+    __repr__ = interp2app(W_Array.descr_repr),
     fromaddress = interp2app(W_Array.fromaddress),
     gettypecode = interp2app(W_Array.descr_gettypecode),
 )
@@ -100,6 +105,12 @@ class W_ArrayInstance(W_DataInstance):
         W_DataInstance.__init__(self, space, itemsize * length, address)
         self.length = length
         self.shape = shape
+
+    def descr_repr(self, space):
+        addr = rffi.cast(lltype.Signed, self.ll_buffer)
+        return space.wrap("<_rawffi array %d of length %d>" % (addr,
+                                                               self.length))
+    descr_repr.unwrap_spec = ['self', ObjSpace]
 
     # XXX don't allow negative indexes, nor slices
 
@@ -129,6 +140,7 @@ class W_ArrayInstance(W_DataInstance):
 
 W_ArrayInstance.typedef = TypeDef(
     'ArrayInstance',
+    __repr__    = interp2app(W_ArrayInstance.descr_repr),
     __setitem__ = interp2app(W_ArrayInstance.setitem),
     __getitem__ = interp2app(W_ArrayInstance.getitem),
     __len__     = interp2app(W_ArrayInstance.getlength),
