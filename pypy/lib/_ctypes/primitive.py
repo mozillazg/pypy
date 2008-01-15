@@ -47,12 +47,18 @@ class SimpleType(_CDataMeta):
             from _ctypes import Array, _Pointer
 
             def _getvalue(self):
-                return _rawffi.charp2string(self._buffer[0])
+                addr = self._buffer[0]
+                if addr == 0:
+                    return None
+                else:
+                    return _rawffi.charp2string(addr)
             def _setvalue(self, value):
                 if isinstance(value, str):
                     array = _rawffi.Array('c')(len(value)+1, value)
                     value = array.buffer
                     # XXX free 'array' later
+                elif value is None:
+                    value = 0
                 self._buffer[0] = value
             result.value = property(_getvalue, _setvalue)
 
@@ -110,3 +116,6 @@ class _SimpleCData(_CData):
 
     def __repr__(self):
         return "%s(%s)" % (type(self).__name__, self.value)
+
+    def __nonzero__(self):
+        return self._buffer[0] not in (0, '\x00')
