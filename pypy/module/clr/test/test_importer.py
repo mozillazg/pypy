@@ -7,7 +7,7 @@ class AppTestDotnet:
 
     def test_list_of_valid_namespaces(self):
         import clr
-        ns = clr.list_of_valid_namespaces()
+        ns, gen = clr.get_extra_type_info()
         
         assert 'System' in ns
         assert 'System.Collections' in ns
@@ -51,3 +51,7 @@ class AppTestDotnet:
     def test_lazy_import(self):
         import System
         System.Runtime.InteropServices # does not raise attribute error
+
+    def test_generic_class_import(self):
+        import System.Collections.Generic.List
+
