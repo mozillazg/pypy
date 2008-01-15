@@ -19,7 +19,7 @@ class W_CallbackPtr(Wrappable):
     def getllfuncptr(space, self):
         TP = lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed)
         ptr = lltype.functionptr(TP, stuff)
-        return space.wrap(rffi.cast(rffi.INT, ptr))
+        return space.wrap(rffi.cast(rffi.Unsigned, ptr))
 
 def descr_new_callbackptr(space, w_type, w_callable, w_args, w_result):
     return W_CallbackPtr(space, w_callable, w_args, w_result)

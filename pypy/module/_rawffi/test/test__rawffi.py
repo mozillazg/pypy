@@ -454,7 +454,7 @@ class AppTestFfi:
         a.free()
 
     def test_truncate(self):
-        import _rawffi
+        import _rawffi, struct
         a = _rawffi.Array('b')(1)
         a[0] = -5
         assert a[0] == -5
@@ -503,4 +503,14 @@ class AppTestFfi:
         assert a[0] == 0xd042
         a[0] = -2
         assert a[0] == 65534
+        a.free()
+
+        maxptr = (256 ** struct.calcsize("P")) - 1
+        a = _rawffi.Array('P')(1)
+        a[0] = 123L
+        assert a[0] == 123
+        a[0] = 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeee817d042
+        assert a[0] == 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeee817d042 & maxptr
+        a[0] = -2
+        assert a[0] == maxptr - 1
         a.free()
