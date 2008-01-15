@@ -22,12 +22,14 @@ class importer(object):
     def __init__(self):
         import clr
         # this might not be the correct place to load the valid NameSpaces
-        self.valid_name_spaces = set(clr.list_of_valid_namespaces())
+        valid_namespaces, generic_mappings = clr.get_extra_type_info()
+        self.valid_namespaces = set(valid_namespaces)
+        self.generic_mappings = dict(generic_mappings)
 
     def find_module(self, fullname, path=None):
         # check for true NAMESPACE or .NET TYPE 
         import clr
-        if fullname in self.valid_name_spaces or clr.isDotNetType(fullname): 
+        if fullname in self.valid_namespaces or fullname in self.generic_mappings or clr.isDotNetType(fullname): 
             # fullname is a  .Net Module
             return self
         else:
@@ -59,16 +61,16 @@ class importer(object):
         '''
         # If it is a call for a Class then return with the Class reference
         import clr
-        if clr.isDotNetType(fullname):
+        if clr.isDotNetType(fullname) or fullname in self.generic_mappings:
             ''' Task is to breakup System.Collections.ArrayList and call 
                 clr.load_cli_class('System.Collections','ArrayList')
             '''
+            fullname = self.generic_mappings.get(fullname, fullname)
             rindex = fullname.rfind('.')
             if rindex != -1:
                 leftStr = fullname[:rindex]
                 rightStr = fullname[rindex+1:]
                 sys.modules[fullname] = clr.load_cli_class(leftStr, rightStr)
-
         else:  # if not a call for actual class (say for namespaces) assign an empty module 
             if fullname not in sys.modules:
                 mod = CLRModule(fullname)
@@ -86,10 +88,10 @@ class importer(object):
 
             # treating System.Collections.Generic specially here.
             # this treatment is done after the empty module insertion
-            if fullname == "System.Collections.Generic":
-                genericClassList = clr.list_of_generic_classes()
-                for genericClass in genericClassList:
-                    sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
+            #if fullname == "System.Collections.Generic":
+            #    genericClassList = clr.list_of_generic_classes()
+            #    for genericClass in genericClassList:
+            #        sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
 
         return sys.modules[fullname]
 

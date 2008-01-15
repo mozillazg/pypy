@@ -127,6 +127,13 @@ def wrap_list_of_tuples(space, lst):
         list_w.append(space.newtuple(items_w))
     return space.newlist(list_w)
 
+def wrap_list_of_pairs(space, lst):
+    list_w = []
+    for (a,b) in lst:
+        items_w = [space.wrap(a), space.wrap(b)]
+        list_w.append(space.newtuple(items_w))
+    return space.newlist(list_w)
+
 def wrap_list_of_strings(space, lst):
     list_w = [space.wrap(s) for s in lst]
     return space.newlist(list_w)
@@ -185,7 +192,7 @@ class _CliClassCache:
         return self.cache.get(fullname, None)
 CliClassCache = _CliClassCache()
 
-def list_of_valid_namespaces(space):
+def get_extra_type_info(space):
     """
     We use this function to play with reflection
     and then return useful data to the app_importer module
@@ -195,6 +202,7 @@ def list_of_valid_namespaces(space):
     Return: List of Valid .NET namespaces
     """
     namespaces = {}
+    generics = []
     currentDomain = System.AppDomain.get_CurrentDomain()
     assems = currentDomain.GetAssemblies()
     for loadedAssembly in assems:
@@ -208,38 +216,44 @@ def list_of_valid_namespaces(space):
                 for chunk in chunks[1:]:
                     temp_name += "."+chunk
                     namespaces[temp_name] = None
+            if type.get_IsGenericType():
+                fullname = type.get_FullName()
+                index = fullname.rfind("`")
+                assert index != -1
+                generics.append((fullname[0:index], fullname))
     w_listOfNamespaces = wrap_list_of_strings(space, namespaces.keys())
-    return w_listOfNamespaces
+    w_generic_mappings = wrap_list_of_pairs(space, generics)
+    return space.newtuple([w_listOfNamespaces, w_generic_mappings])
 
-def list_of_generic_classes(space):
-    """
-    use reflection to get a list of generic classes 
-
-    Return: List of generic classes
-    e.g. [Dictionary`2 , List`1 , IEnumerator`1 , IEnumerable`1]
-    """
-    listOfGenericTypes = []
-    currentDomain = System.AppDomain.get_CurrentDomain()
-    assems = currentDomain.GetAssemblies()
-    for loadedAssembly in assems:
-        typesInAssembly = loadedAssembly.GetTypes()
-        for type in typesInAssembly:
-            namespace = type.get_Namespace()
-            type_str = type.ToString()
-            if namespace == "System.Collections.Generic":
-                rightDot = type_str.rfind('.')
-                rightTilde = type_str.rfind('`')
-                firstSqBracket = type_str.find('[')
-                firstPlus = type_str.find('+')
-                if rightDot != -1 and rightTilde != -1:
-                    if firstPlus == -1:
-                        nameToPush = type_str[rightDot+1 : firstSqBracket] 
-                    else:
-                        nameToPush = type_str[rightDot+1 : firstPlus] 
-                    if nameToPush not in listOfGenericTypes:
-                        listOfGenericTypes.append(nameToPush) 
-    w_listOfGenericTypes = wrap_list_of_strings(space, listOfGenericTypes)
-    return w_listOfGenericTypes
+#def list_of_generic_classes(space):
+#    """
+#    use reflection to get a list of generic classes 
+#
+#    Return: List of generic classes
+#    e.g. [Dictionary`2 , List`1 , IEnumerator`1 , IEnumerable`1]
+#    """
+#    listOfGenericTypes = []
+#    currentDomain = System.AppDomain.get_CurrentDomain()
+#    assems = currentDomain.GetAssemblies()
+#    for loadedAssembly in assems:
+#        typesInAssembly = loadedAssembly.GetTypes()
+#        for type in typesInAssembly:
+#            namespace = type.get_Namespace()
+#            type_str = type.ToString()
+#            if namespace == "System.Collections.Generic":
+#                rightDot = type_str.rfind('.')
+#                rightTilde = type_str.rfind('`')
+#                firstSqBracket = type_str.find('[')
+#                firstPlus = type_str.find('+')
+#                if rightDot != -1 and rightTilde != -1:
+#                    if firstPlus == -1:
+#                        nameToPush = type_str[rightDot+1 : firstSqBracket] 
+#                    else:
+#                        nameToPush = type_str[rightDot+1 : firstPlus] 
+#                    if nameToPush not in listOfGenericTypes:
+#                        listOfGenericTypes.append(nameToPush) 
+#    w_listOfGenericTypes = wrap_list_of_strings(space, listOfGenericTypes)
+#    return w_listOfGenericTypes
 
 def isDotNetType(space, nameFromImporter):
     """
