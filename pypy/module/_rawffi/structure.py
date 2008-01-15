@@ -82,10 +82,10 @@ class W_Structure(Wrappable):
         return space.wrap(W_StructureInstance(space, self, address, None))
     fromaddress.unwrap_spec = ['self', ObjSpace, int]
 
-    def descr_getfieldoffset(self, space, attr):
+    def descr_fieldoffset(self, space, attr):
         index = self.getindex(space, attr)
         return space.wrap(self.ll_positions[index])
-    descr_getfieldoffset.unwrap_spec = ['self', ObjSpace, str]
+    descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
     def descr_gettypecode(self, space):
         return space.newtuple([space.wrap(self.size),
@@ -98,11 +98,11 @@ def descr_new_structure(space, w_type, w_fields):
 W_Structure.typedef = TypeDef(
     'Structure',
     __new__     = interp2app(descr_new_structure),
-    __call__ = interp2app(W_Structure.descr_call),
+    __call__    = interp2app(W_Structure.descr_call),
     fromaddress = interp2app(W_Structure.fromaddress),
     size        = interp_attrproperty('size', W_Structure),
     alignment   = interp_attrproperty('alignment', W_Structure),
-    getfieldoffset = interp2app(W_Structure.descr_getfieldoffset),
+    fieldoffset = interp2app(W_Structure.descr_fieldoffset),
     gettypecode = interp2app(W_Structure.descr_gettypecode),
 )
 W_Structure.typedef.acceptable_as_base_class = False
