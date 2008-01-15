@@ -12,7 +12,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.module.struct.standardfmttable import min_max_acc_method
 from pypy.module.struct.nativefmttable import native_fmttable
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 class FfiValueError(Exception):
     def __init__(self, msg):
@@ -178,15 +178,15 @@ def unpack_typecode(space, w_typecode):
 
 
 class W_DataInstance(Wrappable):
-    def __init__(self, space, size, address=0):
-        if address != 0:
+    def __init__(self, space, size, address=r_uint(0)):
+        if address:
             self.ll_buffer = rffi.cast(rffi.VOIDP, address)
         else:
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
                                            zero=True)
 
     def getbuffer(space, self):
-        return space.wrap(rffi.cast(lltype.Signed, self.ll_buffer))
+        return space.wrap(rffi.cast(lltype.Unsigned, self.ll_buffer))
 
     def byptr(self, space):
         from pypy.module._rawffi.array import get_array_cache
@@ -204,6 +204,13 @@ class W_DataInstance(Wrappable):
     free.unwrap_spec = ['self', ObjSpace]
 
 
+def unwrap_truncate_int(TP, space, w_arg):
+    if space.is_true(space.isinstance(w_arg, space.w_int)):
+        return rffi.cast(TP, space.int_w(w_arg))
+    else:
+        return rffi.cast(TP, space.bigint_w(w_arg).ulonglongmask())
+unwrap_truncate_int._annspecialcase_ = 'specialize:arg(0)'
+
 def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
     letter, _, _ = tp
     w = space.wrap
@@ -214,11 +221,12 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
                                               space.float_w(w_arg)))
     elif letter in TYPEMAP_PTR_LETTERS:
         # check for NULL ptr
-        if space.is_true(space.isinstance(w_arg, space.w_int)):
-            push_func(add_arg, argdesc, rffi.cast(rffi.VOIDP, space.int_w(w_arg)))
+        datainstance = space.interpclass_w(w_arg)
+        if isinstance(datainstance, W_DataInstance):
+            ptr = datainstance.ll_buffer
         else:
-            datainstance = space.interp_w(W_DataInstance, w_arg)
-            push_func(add_arg, argdesc, datainstance.ll_buffer)
+            ptr = unwrap_truncate_int(rffi.VOIDP, space, w_arg)
+        push_func(add_arg, argdesc, ptr)
     elif letter == "c":
         s = space.str_w(w_arg)
         if len(s) != 1:
@@ -230,10 +238,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
         for c in unroll_letters_for_numbers:
             if letter == c:
                 TP = LL_TYPEMAP[c]
-                if space.is_true(space.isinstance(w_arg, space.w_int)):
-                    val = rffi.cast(TP, space.int_w(w_arg))
-                else:
-                    val = rffi.cast(TP, space.bigint_w(w_arg).ulonglongmask())
+                val = unwrap_truncate_int(TP, space, w_arg)
                 push_func(add_arg, argdesc, val)
                 return
         else:
@@ -249,7 +254,7 @@ def wrap_value(space, func, add_arg, argdesc, tp):
         if letter == c:
             if c in TYPEMAP_PTR_LETTERS:
                 res = func(add_arg, argdesc, rffi.VOIDP)
-                return space.wrap(rffi.cast(lltype.Signed, res))
+                return space.wrap(rffi.cast(lltype.Unsigned, res))
             elif c == 'v':
                 func(add_arg, argdesc, ll_type)
                 return space.w_None
@@ -335,4 +340,4 @@ def charp2string(space, address, maxlength=sys.maxint):
         return space.w_None
     s = rffi.charp2strn(rffi.cast(rffi.CCHARP, address), maxlength)
     return space.wrap(s)
-charp2string.unwrap_spec = [ObjSpace, int, int]
+charp2string.unwrap_spec = [ObjSpace, r_uint, int]

@@ -13,7 +13,7 @@ from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataInstance
 from pypy.module._rawffi.interp_rawffi import unwrap_value, wrap_value
 from pypy.module._rawffi.interp_rawffi import unpack_typecode, letter2tp
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 def push_elem(ll_array, pos, value):
     TP = lltype.typeOf(value)
@@ -56,7 +56,7 @@ class W_Array(Wrappable):
 
     def fromaddress(self, space, address, length):
         return space.wrap(W_ArrayInstance(space, self, length, address))
-    fromaddress.unwrap_spec = ['self', ObjSpace, int, int]
+    fromaddress.unwrap_spec = ['self', ObjSpace, r_uint, int]
 
     def descr_gettypecode(self, space, length):
         _, itemsize, alignment = self.itemtp
@@ -100,15 +100,15 @@ W_Array.typedef.acceptable_as_base_class = False
 
 
 class W_ArrayInstance(W_DataInstance):
-    def __init__(self, space, shape, length, address=0):
+    def __init__(self, space, shape, length, address=r_uint(0)):
         _, itemsize, _ = shape.itemtp
         W_DataInstance.__init__(self, space, itemsize * length, address)
         self.length = length
         self.shape = shape
 
     def descr_repr(self, space):
-        addr = rffi.cast(lltype.Signed, self.ll_buffer)
-        return space.wrap("<_rawffi array %d of length %d>" % (addr,
+        addr = rffi.cast(lltype.Unsigned, self.ll_buffer)
+        return space.wrap("<_rawffi array %x of length %d>" % (addr,
                                                                self.length))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
@@ -135,7 +135,7 @@ class W_ArrayInstance(W_DataInstance):
     def descr_itemaddress(self, space, num):
         _, itemsize, _ = self.shape.itemtp
         ptr = rffi.ptradd(self.ll_buffer, itemsize * num)
-        return space.wrap(rffi.cast(lltype.Signed, ptr))
+        return space.wrap(rffi.cast(lltype.Unsigned, ptr))
     descr_itemaddress.unwrap_spec = ['self', ObjSpace, int]
 
 W_ArrayInstance.typedef = TypeDef(

@@ -14,7 +14,7 @@ from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
 from pypy.module._rawffi.interp_rawffi import unpack_typecode
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 def unpack_fields(space, w_fields):
     fields_w = space.unpackiterable(w_fields)
@@ -87,7 +87,7 @@ class W_Structure(Wrappable):
 
     def fromaddress(self, space, address):
         return space.wrap(W_StructureInstance(space, self, address, None))
-    fromaddress.unwrap_spec = ['self', ObjSpace, int]
+    fromaddress.unwrap_spec = ['self', ObjSpace, r_uint]
 
     def descr_fieldoffset(self, space, attr):
         index = self.getindex(space, attr)
@@ -137,8 +137,8 @@ class W_StructureInstance(W_DataInstance):
                 self.setattr(space, field, w_value)
 
     def descr_repr(self, space):
-        addr = rffi.cast(lltype.Signed, self.ll_buffer)
-        return space.wrap("<_rawffi struct %d>" % (addr,))
+        addr = rffi.cast(lltype.Unsigned, self.ll_buffer)
+        return space.wrap("<_rawffi struct %x>" % (addr,))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
     def getattr(self, space, attr):
@@ -160,7 +160,7 @@ class W_StructureInstance(W_DataInstance):
     def descr_fieldaddress(self, space, attr):
         i = self.shape.getindex(space, attr)
         ptr = rffi.ptradd(self.ll_buffer, self.shape.ll_positions[i])
-        return space.wrap(rffi.cast(lltype.Signed, ptr))
+        return space.wrap(rffi.cast(lltype.Unsigned, ptr))
     descr_fieldaddress.unwrap_spec = ['self', ObjSpace, str]
 
 
