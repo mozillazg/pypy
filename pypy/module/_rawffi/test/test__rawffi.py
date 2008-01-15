@@ -201,7 +201,7 @@ class AppTestFfi:
     def test_time(self):
         import _rawffi
         libc = _rawffi.CDLL('libc.so.6')
-        time = libc.ptr('time', ['P'], 'l')
+        time = libc.ptr('time', ['z'], 'l')  # 'z' instead of 'P' just for test
         arg = _rawffi.Array('P')(1)
         arg[0] = 0
         res = time(arg)

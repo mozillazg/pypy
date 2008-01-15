@@ -328,10 +328,13 @@ class W_FuncPtr(Wrappable):
                 msg = ("Argument %d should be an array of length 1, "
                        "got length %d" % (i+1, arg.length))
                 raise OperationError(space.w_TypeError, space.wrap(msg))
-            if arg.shape.itemtp[0] != argtype:
-                msg = "Argument %d should be typecode %s, got %s" % (
-                    i+1, argtype, arg.shape.itemtp[0])
-                raise OperationError(space.w_TypeError, space.wrap(msg))
+            letter = arg.shape.itemtp[0]
+            if letter != argtype:
+                if not (argtype in TYPEMAP_PTR_LETTERS and
+                        letter in TYPEMAP_PTR_LETTERS):
+                    msg = "Argument %d should be typecode %s, got %s" % (
+                        i+1, argtype, letter)
+                    raise OperationError(space.w_TypeError, space.wrap(msg))
             args_ll.append(arg.ll_buffer)
             # XXX we could avoid the intermediate list args_ll
         if self.resarray is not None:
