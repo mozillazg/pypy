@@ -24,7 +24,7 @@ class CFuncPtr(_CData):
         self._restype_ = restype    
     restype = property(_getrestype, _setrestype)    
 
-    def __init__(self, address_or_name_and_dll):
+    def __init__(self, address_or_name_and_dll=0):
         if isinstance(address_or_name_and_dll, tuple):
             self.name, self.dll = address_or_name_and_dll
         else:
