@@ -35,9 +35,6 @@ class ArrayMeta(_CDataMeta):
             res._ffiarray = None
         return res
 
-    def _CData_input(self, value):
-        return self.from_param(value)._buffer.byptr()
-
     from_address = cdata_from_address
 
 class Array(_CData):
@@ -94,6 +91,9 @@ class Array(_CData):
 
     def __len__(self):
         return self._length_
+
+    def _get_buffer_for_param(self):
+        return self._buffer.byptr()
 
 ARRAY_CACHE = {}
 

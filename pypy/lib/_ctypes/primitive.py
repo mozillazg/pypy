@@ -64,9 +64,10 @@ class SimpleType(_CDataMeta):
                 if isinstance(value, self):
                     return value
                 if isinstance(value, (Array, _Pointer)):
-                    if type(value)._type_ == 'c':
+                    from ctypes import c_char
+                    if type(value)._type_ == c_char:
                         return value
-                return _SimpleCData.from_param(self, value)
+                return SimpleType.from_param(self, value)
             result.from_param = classmethod(from_param)
 
         return result
@@ -83,6 +84,9 @@ class SimpleType(_CDataMeta):
 
     def _sizeofinstances(self):
         return _rawffi.sizeof(self._type_)
+
+    def _is_pointer_like(self):
+        return self._type_ in "sPzUZXO"
 
 class _SimpleCData(_CData):
     __metaclass__ = SimpleType

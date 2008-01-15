@@ -21,12 +21,12 @@ class PointerType(_CDataMeta):
             setattr(obj, k, v)
         if '_type_' in typedict:
             ffiarray = _rawffi.Array('P')
-            def __init__(self, value=0):
+            def __init__(self, value=None):
                 self._buffer = ffiarray(1)
                 self.contents = value
             obj._ffiarray = ffiarray
         else:
-            def __init__(self, value=0):
+            def __init__(self, value=None):
                 raise TypeError("%s has no type" % obj)
         obj.__init__ = __init__
         return obj
@@ -47,19 +47,30 @@ class PointerType(_CDataMeta):
     def _sizeofinstances(self):
         return _rawffi.sizeof('P')
 
+    def _is_pointer_like(self):
+        return True
+
     from_address = cdata_from_address
 
 class _Pointer(_CData):
     __metaclass__ = PointerType
 
     def getcontents(self):
-        return self._type_.from_address(self._buffer[0])
+        addr = self._buffer[0]
+        if addr == 0:
+            return None
+        else:
+            return self._type_.from_address(addr)
 
     def setcontents(self, value):
-        if not isinstance(value, self._type_):
-            raise TypeError("expected %s instead of %s" % (
-                self._type_.__name__, type(value).__name__))
-        self._buffer[0] = value._buffer
+        if value is not None:
+            if not isinstance(value, self._type_):
+                raise TypeError("expected %s instead of %s" % (
+                    self._type_.__name__, type(value).__name__))
+            value = value._buffer
+        else:
+            value = 0
+        self._buffer[0] = value
 
     def _subarray(self, index=0):
         """Return a _rawffi array of length 1 whose address is the same as
@@ -77,3 +88,15 @@ class _Pointer(_CData):
         self._subarray(index)[0] = self._type_._CData_input(value)[0]
 
     contents = property(getcontents, setcontents)
+
+
+def _cast_addr(obj, _, tp):
+    if not (isinstance(obj, _CData) and type(obj)._is_pointer_like()):
+        raise TypeError("cast() argument 1 must be a pointer, not %s"
+                        % (type(obj),))
+    if not (isinstance(tp, _CDataMeta) and tp._is_pointer_like()):
+        raise TypeError("cast() argument 2 must be a pointer type, not %s"
+                        % (tp,))
+    result = tp()
+    result._buffer[0] = obj._buffer[0]
+    return result
