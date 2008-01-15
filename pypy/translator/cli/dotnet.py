@@ -157,7 +157,7 @@ class OverloadingResolver(ootype.OverloadingResolver):
         elif TYPE is ootype.Char:
             return SomeChar()
         elif TYPE is ootype.String:
-            return SomeString()
+            return SomeString(can_be_None=True)
         else:
             return lltype_to_annotation(TYPE)
     lltype_to_annotation = classmethod(lltype_to_annotation)
