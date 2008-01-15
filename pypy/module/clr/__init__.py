@@ -15,7 +15,6 @@ class Module(MixedModule):
         'call_staticmethod': 'interp_clr.call_staticmethod',
         'load_cli_class': 'interp_clr.load_cli_class',
         'get_extra_type_info': 'interp_clr.get_extra_type_info',
-        #'list_of_generic_classes': 'interp_clr.list_of_generic_classes',
         'isDotNetType': 'interp_clr.isDotNetType',
         'load_assembly': 'interp_clr.load_assembly',
         'list_of_loadedAssemblies': 'interp_clr.list_of_loadedAssemblies',

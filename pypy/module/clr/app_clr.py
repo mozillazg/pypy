@@ -78,7 +78,24 @@ class StaticProperty(object):
     def __get__(self, obj, type_):
         return self.fget()
 
+def _qualify(t):
+    return '%s, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089' % t
+
 class MetaGenericCliClassWrapper(type):
+    _cli_types = {
+        int: _qualify('System.Int32'),
+        str: _qualify('System.String'),
+        bool: _qualify('System.Boolean'),
+        float: _qualify('System.Double'),
+        }
+    _System_Object = _qualify('System.Object')
+
+    def _cli_name(cls, ttype):
+        if isinstance(ttype, MetaCliClassWrapper):
+            return '[%s]' % ttype.__fullyqualifiedname__
+        else:
+            return '[%s]' % cls._cli_types.get(ttype, cls._System_Object)
+    
     def __setattr__(cls, name, value):
         obj = cls.__dict__.get(name, None)
         if isinstance(obj, StaticProperty):
@@ -86,37 +103,19 @@ class MetaGenericCliClassWrapper(type):
         else:
             type.__setattr__(cls, name, value)
 
-    def __getitem__(cls,*args):
-        #cls.__cliclass__ ='System.Collections.Generic.Dictionary`2'
-        rightDot = cls.__cliclass__.rfind('.')
-        rightTilde = cls.__cliclass__.rfind('`')
-        load_cli_class_leftArg = cls.__cliclass__[:rightDot]
-        genClassName = cls.__cliclass__[rightDot+1: rightTilde] 
-        genClassNumArgs = int(cls.__cliclass__[rightTilde +1 :])
+    def __getitem__(cls, type_or_tuple):
         import clr
+        if isinstance(type_or_tuple, tuple):
+            types = type_or_tuple
+        else:
+            types = (type_or_tuple,)
+        namespace, generic_class = cls.__cliclass__.rsplit('.', 1)
+        generic_params = [cls._cli_name(t) for t in types]        
+        instance_class = '%s[%s]' % (generic_class, ','.join(generic_params))
         try:
-            ln = len(args[0])
-            # put a check for the number of arguments passed for the Generic class
-            if ln != genClassNumArgs:
-                raise "InvalidArgumentList"
-            else:
-                lindex = str(args[0][0]).find('\'')
-                rindex = str(args[0][0]).rfind('\'')
-                load_cli_class_rightArg = genClassName 
-                load_cli_class_rightArg += "`%s[%s"%(ln,str(args[0][0])[lindex+1:rindex])
-                for i in range(1,ln):
-                    lindex = str(args[0][i]).find('\'')
-                    rindex = str(args[0][i]).rfind('\'')
-                    load_cli_class_rightArg += ",%s"%str(args[0][i])[lindex+1:rindex]
-                load_cli_class_rightArg += "]"
-                return clr.load_cli_class(load_cli_class_leftArg,load_cli_class_rightArg)
-        except:
-            # it's a single arg passed
-            lindex = str(args[0]).find('\'')
-            rindex = str(args[0]).rfind('\'')
-            load_cli_class_rightArg = genClassName 
-            load_cli_class_rightArg += "`1[%s]"%(str(args[0])[lindex+1:rindex])
-            return clr.load_cli_class(load_cli_class_leftArg,load_cli_class_rightArg)
+            return clr.load_cli_class(namespace, instance_class)
+        except ImportError:
+            raise TypeError, "Cannot load type %s.%s" % (namespace, instance_class)
 
 class MetaCliClassWrapper(type):
     def __setattr__(cls, name, value):
@@ -155,9 +154,12 @@ def wrapper_from_cliobj(cls, cliobj):
     obj.__cliobj__ = cliobj
     return obj
 
-def build_wrapper(namespace, classname, staticmethods, methods, properties, indexers, hasIEnumerable, isClassGeneric):
+def build_wrapper(namespace, classname, assembly_qualified_name,
+                  staticmethods, methods, properties, indexers,
+                  hasIEnumerable, isClassGeneric):
     fullname = '%s.%s' % (namespace, classname)
     d = {'__cliclass__': fullname,
+         '__fullyqualifiedname__': assembly_qualified_name,
          '__module__': namespace}
     for name in staticmethods:
         d[name] = StaticMethodWrapper(fullname, name)

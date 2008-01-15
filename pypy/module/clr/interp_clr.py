@@ -218,42 +218,15 @@ def get_extra_type_info(space):
                     namespaces[temp_name] = None
             if type.get_IsGenericType():
                 fullname = type.get_FullName()
-                index = fullname.rfind("`")
-                assert index != -1
-                generics.append((fullname[0:index], fullname))
+                if '+' not in fullname:
+                    # else it's a nested type, ignore it
+                    index = fullname.rfind("`")
+                    assert index != -1
+                    generics.append((fullname[0:index], fullname))
     w_listOfNamespaces = wrap_list_of_strings(space, namespaces.keys())
     w_generic_mappings = wrap_list_of_pairs(space, generics)
     return space.newtuple([w_listOfNamespaces, w_generic_mappings])
-
-#def list_of_generic_classes(space):
-#    """
-#    use reflection to get a list of generic classes 
-#
-#    Return: List of generic classes
-#    e.g. [Dictionary`2 , List`1 , IEnumerator`1 , IEnumerable`1]
-#    """
-#    listOfGenericTypes = []
-#    currentDomain = System.AppDomain.get_CurrentDomain()
-#    assems = currentDomain.GetAssemblies()
-#    for loadedAssembly in assems:
-#        typesInAssembly = loadedAssembly.GetTypes()
-#        for type in typesInAssembly:
-#            namespace = type.get_Namespace()
-#            type_str = type.ToString()
-#            if namespace == "System.Collections.Generic":
-#                rightDot = type_str.rfind('.')
-#                rightTilde = type_str.rfind('`')
-#                firstSqBracket = type_str.find('[')
-#                firstPlus = type_str.find('+')
-#                if rightDot != -1 and rightTilde != -1:
-#                    if firstPlus == -1:
-#                        nameToPush = type_str[rightDot+1 : firstSqBracket] 
-#                    else:
-#                        nameToPush = type_str[rightDot+1 : firstPlus] 
-#                    if nameToPush not in listOfGenericTypes:
-#                        listOfGenericTypes.append(nameToPush) 
-#    w_listOfGenericTypes = wrap_list_of_strings(space, listOfGenericTypes)
-#    return w_listOfGenericTypes
+get_extra_type_info.unwrap_spec = [ObjSpace]
 
 def isDotNetType(space, nameFromImporter):
     """
@@ -351,11 +324,13 @@ def build_cli_class(space, namespace, classname, fullname):
     if b_type.IsGenericType:
         isClassGeneric = True
 
+    assembly_qualified_name = b_type.get_AssemblyQualifiedName()
     w_staticmethods, w_methods = get_methods(space, b_type)
     w_properties, w_indexers = get_properties(space, b_type)
     return build_wrapper(space,
                          space.wrap(namespace),
                          space.wrap(classname),
+                         space.wrap(assembly_qualified_name),
                          w_staticmethods,
                          w_methods,
                          w_properties,
