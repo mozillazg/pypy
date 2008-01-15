@@ -63,3 +63,23 @@ class AppTestNested:
         assert rawbuf[1*S.size+ofs] == 'A'
         assert rawbuf[2*S.size+ofs] == 'Z'
         a.free()
+
+    def test_array_of_array(self):
+        import _rawffi, struct
+        B = _rawffi.Array('i')
+        sizeofint = struct.calcsize("i")
+        assert B.gettypecode(100) == (sizeofint * 100, sizeofint)
+        A = _rawffi.Array(B.gettypecode(4))
+        a = A(2)
+        b0 = B.fromaddress(a.itemaddress(0), 4)
+        b0[0] = 3
+        b0[3] = 7
+        b1 = B.fromaddress(a.itemaddress(1), 4)
+        b1[0] = 13
+        b1[3] = 17
+        rawbuf = _rawffi.Array('i').fromaddress(a.buffer, 2 * 4)
+        assert rawbuf[0] == 3
+        assert rawbuf[3] == 7
+        assert rawbuf[4] == 13
+        assert rawbuf[7] == 17
+        a.free()
