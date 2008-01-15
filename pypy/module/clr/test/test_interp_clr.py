@@ -7,3 +7,4 @@ def test_split_fullname():
     assert split('System.Foo.Bar') == ('System.Foo', 'Bar')
     assert split('System.Foo.A+B') == ('System.Foo', 'A+B')
     assert split('System.') == ('System', '')
+    

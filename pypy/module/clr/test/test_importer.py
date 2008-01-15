@@ -5,6 +5,15 @@ class AppTestDotnet:
         space = gettestobjspace(usemodules=('clr', ))
         cls.space = space
 
+    def test_list_of_valid_namespaces(self):
+        import clr
+        ns = clr.list_of_valid_namespaces()
+        
+        assert 'System' in ns
+        assert 'System.Collections' in ns
+        assert 'System.Runtime' in ns
+        assert 'System.Runtime.InteropServices' in ns
+
     def test_import_hook_simple(self):
         import clr
         import System.Math
@@ -41,4 +50,4 @@ class AppTestDotnet:
 
     def test_lazy_import(self):
         import System
-        System.Xml.Schema # does not raise attribute error
+        System.Runtime.InteropServices # does not raise attribute error

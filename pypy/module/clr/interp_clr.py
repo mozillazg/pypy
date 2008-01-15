@@ -194,16 +194,21 @@ def list_of_valid_namespaces(space):
 
     Return: List of Valid .NET namespaces
     """
-    listOfNamespaces = []
+    namespaces = {}
     currentDomain = System.AppDomain.get_CurrentDomain()
     assems = currentDomain.GetAssemblies()
     for loadedAssembly in assems:
         typesInAssembly = loadedAssembly.GetTypes()
         for type in typesInAssembly:
             namespace = type.get_Namespace()
-            if namespace != None and namespace not in listOfNamespaces:
-                listOfNamespaces.append(namespace) 
-    w_listOfNamespaces = wrap_list_of_strings(space, listOfNamespaces)
+            if namespace != None:
+                chunks = namespace.split(".")
+                temp_name = chunks[0]
+                namespaces[temp_name] = None
+                for chunk in chunks[1:]:
+                    temp_name += "."+chunk
+                    namespaces[temp_name] = None
+    w_listOfNamespaces = wrap_list_of_strings(space, namespaces.keys())
     return w_listOfNamespaces
 
 def list_of_generic_classes(space):

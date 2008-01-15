@@ -14,7 +14,7 @@ class importer(object):
          receive a second argument, which is None for a top-level module, or
          package.__path__ for submodules or subpackages
 
-         It should return a loader object if the module was found, or None if it wasn't.  
+         It should return a loader object if the module was found, or None if it wasn\'t.  
          If find_module() raises an exception, the caller will abort the import.
          When importer.find_module("spam.eggs.ham") is called, "spam.eggs" has already 
          been imported and added to sys.modules.
@@ -50,7 +50,7 @@ class importer(object):
           C  The __name__ attribute must be set.  If one uses
               imp.new_module() then the attribute is set automatically.
 
-          D  If it's a package, the __path__ variable must be set.  This must
+          D  If it\'s a package, the __path__ variable must be set.  This must
               be a list, but may be empty if __path__ has no further
               significance to the importer (more on this later).
 
