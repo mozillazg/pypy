@@ -20,7 +20,7 @@ class Module(MixedModule):
         #'list_of_loadedAssemblies': 'interp_clr.list_of_loadedAssemblies',
     }
 
-    def setup_after_space_initialization(self):
+    def startup(self, space):
         self.space.appexec([self], """(clr_module):
             import sys
             sys.meta_path.append(clr_module.dotnetimporter())
