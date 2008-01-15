@@ -90,6 +90,21 @@ def test_struct():
     assert s.x == 17
     assert s.p.contents.value == -33
 
+def test_ptr_array():
+    a = (POINTER(c_ushort) * 5)()
+    x = c_ushort(52)
+    y = c_ushort(1000)
+
+    a[2] = pointer(x)
+    assert a[2].contents.value == 52
+    a[2].contents.value += 1
+    assert x.value == 53
+
+    a[3].contents = y
+    assert a[3].contents.value == 1000
+    a[3].contents.value += 1
+    assert y.value == 1001
+
 def test_void_p():
     x = c_int(12)
     p1 = cast(pointer(x), c_void_p)
@@ -165,35 +180,6 @@ def test_truth_value():
 
     assert not c_void_p()
 
-def test_py_object():
-    class TAG:
-        pass
-    x = py_object(TAG)
-    assert x.value is TAG
-    x.value = 42
-    assert x.value == 42
-
-def test_pythonapi():
-    PyInt_AsLong = pythonapi.PyInt_AsLong
-    PyInt_AsLong.argtypes = [py_object]
-    PyInt_AsLong.restype = c_long
-    assert PyInt_AsLong(py_object(17L)) == 17
-    py.test.raises(TypeError, "PyInt_AsLong(py_object('hello'))")
-
-def test_py_object_subclass():
-    PyInt_FromLong = pythonapi.PyInt_FromLong
-    # automatic unwrapping of the py_object result
-    PyInt_FromLong.argtypes = [c_long]
-    PyInt_FromLong.restype = py_object
-    assert isinstance(PyInt_FromLong(17), int)
-
-    # but not if we subclass it...
-    class W_Object(py_object):
-        pass
-    PyInt_FromLong.argtypes = [c_long]
-    PyInt_FromLong.restype = W_Object
-    assert isinstance(PyInt_FromLong(17), W_Object)
-
 def test_sizeof():
     x = create_string_buffer(117)
     assert sizeof(x) == 117    # assumes that chars are one byte each
@@ -201,23 +187,26 @@ def test_sizeof():
     assert sizeof(x) == 42 * sizeof(c_int)
 
 def test_convert_pointers():
-    PyString_FromString = pythonapi.PyString_FromString
-    PyString_FromString.restype = py_object
+    import conftest
+    _ctypes_test = str(conftest.sofile)
+    dll = CDLL(_ctypes_test)
+    func = dll._testfunc_p_p
+    func.restype = c_char_p
 
     # automatic conversions to c_char_p
-    PyString_FromString.argtypes = [c_char_p]
-    assert PyString_FromString("hello") == "hello"
-    assert PyString_FromString(c_char_p("hello")) == "hello"
-    assert PyString_FromString((c_char * 6)(*"hello")) == "hello"
-    assert PyString_FromString(create_string_buffer("hello")) == "hello"
+    func.argtypes = [c_char_p]
+    assert func("hello") == "hello"
+    assert func(c_char_p("hello")) == "hello"
+    assert func((c_char * 6)(*"hello")) == "hello"
+    assert func(create_string_buffer("hello")) == "hello"
 
     # automatic conversions to c_void_p
-    PyString_FromString.argtypes = [c_void_p]
-    assert PyString_FromString("hello") == "hello"
-    assert PyString_FromString(c_char_p("hello")) == "hello"
-    assert PyString_FromString((c_char * 6)(*"hello")) == "hello"
-    assert PyString_FromString((c_byte * 6)(104,101,108,108,111)) =="hello"
-    assert PyString_FromString(create_string_buffer("hello")) == "hello"
+    func.argtypes = [c_void_p]
+    assert func("hello") == "hello"
+    assert func(c_char_p("hello")) == "hello"
+    assert func((c_char * 6)(*"hello")) == "hello"
+    assert func((c_byte * 6)(104,101,108,108,111)) =="hello"
+    assert func(create_string_buffer("hello")) == "hello"
 
 def test_varsize_cast():
     import struct

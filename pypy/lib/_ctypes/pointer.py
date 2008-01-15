@@ -25,10 +25,7 @@ class PointerType(_CDataMeta):
                 self._array = ffiarray(1)
                 self.contents = value
             obj._ffiarray = ffiarray
-        else:
-            def __init__(self, value=0):
-                raise TypeError("%s has no type" % obj)
-        obj.__init__ = __init__
+            obj.__init__ = __init__
         return obj
 
     def from_param(self, value):

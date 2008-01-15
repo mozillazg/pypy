@@ -124,7 +124,6 @@ class TestPointers:
 ##        print p.from_address(addr)[0][0]
 
     def test_other(self):
-        py.test.skip("in-progress")
         class Table(Structure):
             _fields_ = [("a", c_int),
                         ("b", c_int),
