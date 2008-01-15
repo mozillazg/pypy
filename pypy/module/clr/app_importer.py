@@ -20,15 +20,17 @@ class importer(object):
          been imported and added to sys.modules.
     '''
     def __init__(self):
-        import clr
-        # this might not be the correct place to load the valid NameSpaces
-        valid_namespaces, generic_mappings = clr.get_extra_type_info()
-        self.valid_namespaces = set(valid_namespaces)
-        self.generic_mappings = dict(generic_mappings)
+        self.valid_namespaces = None
+        self.generic_mappings = None
 
     def find_module(self, fullname, path=None):
-        # check for true NAMESPACE or .NET TYPE 
         import clr
+        if self.valid_namespaces is None:
+            # this might not be the correct place to load the valid NameSpaces
+            valid_namespaces, generic_mappings = clr.get_extra_type_info()
+            self.valid_namespaces = set(valid_namespaces)
+            self.generic_mappings = dict(generic_mappings)
+
         if fullname in self.valid_namespaces or fullname in self.generic_mappings or clr.isDotNetType(fullname): 
             # fullname is a  .Net Module
             return self
