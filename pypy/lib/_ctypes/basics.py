@@ -15,20 +15,24 @@ class _CDataMeta(type):
 
     def _CData_input(self, value):
         """Used when data enters into ctypes from user code.  'value' is
-        some user-specified Python object, which is converted into an
-        _array of length 1 containing the same value according to the
+        some user-specified Python object, which is converted into a _rawffi
+        array of length 1 containing the same value according to the
         type 'self'.
         """
-        return self.from_param(value)._array
+        return self.from_param(value)._buffer
 
     def _CData_output(self, resarray):
         """Used when data exits ctypes and goes into user code.
-        'resarray' is an _array of length 1 containing the value,
+        'resarray' is a _rawffi array of length 1 containing the value,
         and this returns a general Python object that corresponds.
         """
         res = self.__new__(self)
-        res._array = resarray
+        res._buffer = resarray
         return res.__ctypes_from_outparam__()
+
+    def __mul__(self, other):
+        from _ctypes.array import create_array_type
+        return create_array_type(self, other)
 
 class _CData(object):
     """ The most basic object for all ctypes types
@@ -53,7 +57,11 @@ class _CData(object):
 
 def sizeof(tp):
     if not isinstance(tp, _CDataMeta):
-        raise TypeError("ctypes type expected, got %r" % (type(tp).__name__,))
+        if isinstance(tp, _CData):
+            tp = type(tp)
+        else:
+            raise TypeError("ctypes type or instance expected, got %r" % (
+                type(tp).__name__,))
     return tp._sizeofinstances()
 
 def alignment(tp):
@@ -67,9 +75,8 @@ def byref(cdata):
 def cdata_from_address(self, address):
     instance = self.__new__(self)
     lgt = getattr(self, '_length_', 1)
-    instance._array = self._ffiarray.fromaddress(address, lgt)
+    instance._buffer = self._ffiarray.fromaddress(address, lgt)
     return instance
 
 def addressof(tp):
-    # XXX we should have a method on each..
-    return tp._array.buffer
+    return tp._buffer.buffer

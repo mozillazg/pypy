@@ -14,7 +14,7 @@ class StructureMeta(_CDataMeta):
             res._ffistruct = ffistruct
 
             def __init__(self, *args, **kwds):
-                self.__dict__['_struct'] = ffistruct()
+                self.__dict__['_buffer'] = ffistruct()
                 if len(args) > len(names):
                     raise TypeError("too many arguments")
                 for name, arg in zip(names, args):
@@ -29,16 +29,21 @@ class StructureMeta(_CDataMeta):
         return res
 
     def _CData_input(self, value):
-        return self.from_param(value)._struct.byptr()
+        return self.from_param(value)._buffer.byptr()
+
+    def from_address(self, address):
+        instance = self.__new__(self)
+        instance.__dict__['_buffer'] = self._ffistruct.fromaddress(address)
+        return instance
 
 
 class Structure(_CData):
     __metaclass__ = StructureMeta
 
     def _subarray(self, fieldtype, name):
-        """Return an _array of length 1 whose address is the same as
+        """Return a _rawffi array of length 1 whose address is the same as
         the address of the field 'name' of self."""
-        address = self._struct.fieldaddress(name)
+        address = self._buffer.fieldaddress(name)
         A = _rawffi.Array(fieldtype._ffiletter)
         return A.fromaddress(address, 1)
 
@@ -48,7 +53,7 @@ class Structure(_CData):
         except KeyError:
             raise AttributeError(name)
         value = fieldtype._CData_input(value)
-        self._struct.__setattr__(name, value[0])
+        self._buffer.__setattr__(name, value[0])
 
     def __getattr__(self, name):
         try:

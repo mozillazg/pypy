@@ -3,7 +3,6 @@ import _rawffi
 SIMPLE_TYPE_CHARS = "cbBhHiIlLdfuzZqQPXOv"
 
 from _ctypes.basics import _CData, _CDataMeta, cdata_from_address
-from _ctypes.array import create_array_type
 
 class NULL(object):
     pass
@@ -48,13 +47,13 @@ class SimpleType(_CDataMeta):
             from _ctypes import Array, _Pointer
 
             def _getvalue(self):
-                return _rawffi.charp2string(self._array[0])
+                return _rawffi.charp2string(self._buffer[0])
             def _setvalue(self, value):
                 if isinstance(value, str):
                     array = _rawffi.Array('c')(len(value)+1, value)
                     value = array.buffer
                     # XXX free 'array' later
-                self._array[0] = value
+                self._buffer[0] = value
             result.value = property(_getvalue, _setvalue)
 
             def from_param(self, value):
@@ -74,9 +73,6 @@ class SimpleType(_CDataMeta):
 
     from_address = cdata_from_address
 
-    def __mul__(self, other):
-        return create_array_type(self, other)
-
     def from_param(self, value):
         if isinstance(value, self):
             return value
@@ -93,15 +89,15 @@ class _SimpleCData(_CData):
     _type_ = 'i'
 
     def __init__(self, value=DEFAULT_VALUE):
-        self._array = self._ffiarray(1)
+        self._buffer = self._ffiarray(1)
         if value is not DEFAULT_VALUE:
             self.value = value
 
     def _getvalue(self):
-        return self._array[0]
+        return self._buffer[0]
 
     def _setvalue(self, value):
-        self._array[0] = value
+        self._buffer[0] = value
     value = property(_getvalue, _setvalue)
     del _getvalue, _setvalue
 
