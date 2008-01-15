@@ -75,8 +75,7 @@ class Array(_CData):
     def _subarray(self, index):
         """Return an _array of length 1 whose address is the same as
         the index'th item of self."""
-        address = self._array.buffer
-        address += index * sizeof(self._type_)
+        address = self._array.itemaddress(index)
         return self._ffiarray.fromaddress(address, 1)
 
     def __setitem__(self, index, value):
