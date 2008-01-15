@@ -13,6 +13,7 @@ AmbiguousMatchException = NativeException(CLR.System.Reflection.AmbiguousMatchEx
 
 System.Double  # force the type to be loaded, else the annotator could think that System has no Double attribute
 System.Boolean # the same
+System.AppDomain
 
 def get_method(space, b_type, name, b_paramtypes):
     try:
@@ -116,7 +117,7 @@ def cli2py(space, b_obj):
 
 def split_fullname(name):
     lastdot = name.rfind('.')
-    if lastdot == -1:
+    if lastdot < 0:
         return '', name
     return name[:lastdot], name[lastdot+1:]
 
@@ -205,23 +206,25 @@ def get_extra_type_info(space):
     generics = []
     currentDomain = System.AppDomain.get_CurrentDomain()
     assems = currentDomain.GetAssemblies()
-    for loadedAssembly in assems:
+    for i in range(len(assems)):
+        loadedAssembly = assems[i]
         typesInAssembly = loadedAssembly.GetTypes()
-        for type in typesInAssembly:
-            namespace = type.get_Namespace()
-            if namespace != None:
+        for i in range(len(typesInAssembly)):
+            ttype = typesInAssembly[i]
+            namespace = ttype.get_Namespace()
+            if namespace is not None:
                 chunks = namespace.split(".")
                 temp_name = chunks[0]
                 namespaces[temp_name] = None
                 for chunk in chunks[1:]:
                     temp_name += "."+chunk
                     namespaces[temp_name] = None
-            if type.get_IsGenericType():
-                fullname = type.get_FullName()
+            if ttype.get_IsGenericType():
+                fullname = ttype.get_FullName()
                 if '+' not in fullname:
                     # else it's a nested type, ignore it
                     index = fullname.rfind("`")
-                    assert index != -1
+                    assert index >= 0
                     generics.append((fullname[0:index], fullname))
     w_listOfNamespaces = wrap_list_of_strings(space, namespaces.keys())
     w_generic_mappings = wrap_list_of_pairs(space, generics)
@@ -238,56 +241,57 @@ def isDotNetType(space, nameFromImporter):
     return space.wrap(System.Type.GetType(nameFromImporter) is not None)
 isDotNetType.unwrap_spec = [ObjSpace, str]
 
-def list_of_loadedAssemblies(space):
-    """
-    return a List of currently loaded .NET assembliesy
+##def list_of_loadedAssemblies(space):
+##    """
+##    return a List of currently loaded .NET assembliesy
 
-    return:
-        list eg:  ['System.Xml','System.Data','mscorlib']
-    """
-    loadedAssemblies = []
-    currentDomain = System.AppDomain.get_CurrentDomain()
-    currentLoadedAssemblies = currentDomain.GetAssemblies()
+##    return:
+##        list eg:  ['System.Xml','System.Data','mscorlib']
+##    """
+##    loadedAssemblies = []
+##    currentDomain = System.AppDomain.get_CurrentDomain()
+##    currentLoadedAssemblies = currentDomain.GetAssemblies()
 
-    for lAssembly in currentLoadedAssemblies:
-        strName = lAssembly.get_FullName()
-        rindexComma = strName.find(',')
-        if rindexComma != -1:
-            loadedAssemblies.append(strName[:rindexComma])
-    return space.wrap(loadedAssemblies)
-list_of_loadedAssemblies.unwrap_spec = [ObjSpace]
+##    for i in range(len(currentLoadedAssemblies)):
+##        lAssembly = currentLoadedAssemblies[i]
+##        strName = lAssembly.get_FullName()
+##        rindexComma = strName.find(',')
+##        if rindexComma != -1:
+##            loadedAssemblies.append(strName[:rindexComma])
+##    return space.wrap(loadedAssemblies)
+##list_of_loadedAssemblies.unwrap_spec = [ObjSpace]
 
-def load_assembly(space, assemblyPath):
-    """
-    Load the given .NET assembly into the PyPy interpreter 
+##def load_assembly(space, assemblyPath):
+##    """
+##    Load the given .NET assembly into the PyPy interpreter 
 
-    Parameters:
+##    Parameters:
 
-       - assemblyPath: the full path of the assembly 
-          (e.g., /usr/lib/mono/2.0/System.Data.dll).
-    """
-    assemblyToLoad = ""
-    loadedAssemblies = space.unwrap(list_of_loadedAssemblies(space))
+##       - assemblyPath: the full path of the assembly 
+##          (e.g., /usr/lib/mono/2.0/System.Data.dll).
+##    """
+##    assemblyToLoad = ""
+##    loadedAssemblies = space.unwrap(list_of_loadedAssemblies(space))
 
-    # split the name to pull out "System.Data.dll"
-    # then check if it has already been loaded.
-    rindexSlash = assemblyPath.rfind('/')
-    if rindexSlash != -1:
-        strAfterSlash = assemblyPath[rindexSlash +1 : ]
-        rindexDot = strAfterSlash.rfind('.')
-        if rindexDot != -1:
-            assemblyToLoad = strAfterSlash[: rindexDot]
+##    # split the name to pull out "System.Data.dll"
+##    # then check if it has already been loaded.
+##    rindexSlash = assemblyPath.rfind('/')
+##    if rindexSlash != -1:
+##        strAfterSlash = assemblyPath[rindexSlash +1 : ]
+##        rindexDot = strAfterSlash.rfind('.')
+##        if rindexDot != -1:
+##            assemblyToLoad = strAfterSlash[: rindexDot]
 
-    if assemblyToLoad in loadedAssemblies:
-        print " won't reload loaded assembly " 
-        pass
-    else:
-        try:
-            System.Reflection.Assembly.LoadFile(assemblyPath)
-            print "Loaded %s"%assemblyPath
-        except:
-            print " can not load the assembly " 
-load_assembly.unwrap_spec = [ObjSpace, str]
+##    if assemblyToLoad in loadedAssemblies:
+##        print " won't reload loaded assembly " 
+##        pass
+##    else:
+##        try:
+##            System.Reflection.Assembly.LoadFile(assemblyPath)
+##            print "Loaded %s"%assemblyPath
+##        except:
+##            print " can not load the assembly " 
+##load_assembly.unwrap_spec = [ObjSpace, str]
 
 def load_cli_class(space, namespace, classname):
     """
@@ -321,7 +325,7 @@ def build_cli_class(space, namespace, classname, fullname):
     # this is where we test if the class is Generic 
     # set the flag isClassGeneric 
     isClassGeneric = False
-    if b_type.IsGenericType:
+    if b_type.get_IsGenericType():
         isClassGeneric = True
 
     assembly_qualified_name = b_type.get_AssemblyQualifiedName()
