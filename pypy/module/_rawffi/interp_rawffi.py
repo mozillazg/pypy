@@ -12,6 +12,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.module.struct.standardfmttable import min_max_acc_method
 from pypy.module.struct.nativefmttable import native_fmttable
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.rarithmetic import intmask
 
 class FfiValueError(Exception):
     def __init__(self, msg):
@@ -54,6 +55,11 @@ TYPEMAP = {
 }
 TYPEMAP_PTR_LETTERS = "POsz"
 
+UNPACKED_TYPECODES = dict([(code, (code,
+                                   intmask(field_desc.c_size),
+                                   intmask(field_desc.c_alignment)))
+                           for code, field_desc in TYPEMAP.items()])
+
 LL_TYPEMAP = {
     'c' : rffi.CHAR,
     'b' : rffi.SIGNEDCHAR,
@@ -75,18 +81,19 @@ LL_TYPEMAP = {
     'v' : lltype.Void,
 }
 
-def _get_type(space, key):
+def letter2tp(space, key):
+    try:
+        return UNPACKED_TYPECODES[key]
+    except KeyError:
+        raise OperationError(space.w_ValueError, space.wrap(
+            "Unknown type letter %s" % (key,)))
+
+def _get_type_(space, key):
     try:
         return TYPEMAP[key]
     except KeyError:
         raise OperationError(space.w_ValueError, space.wrap(
             "Unknown type letter %s" % (key,)))
-    return lltype.nullptr(FFI_TYPE_P.TO)
-
-def _w_get_type(space, key):
-    _get_type(space, key)
-    return space.w_None
-_w_get_type.unwrap_spec = [ObjSpace, str]
 
 class W_CDLL(Wrappable):
     def __init__(self, space, name):
@@ -97,7 +104,7 @@ class W_CDLL(Wrappable):
 
     def get_type(self, key):
         space = self.space
-        return _get_type(space, key)
+        return _get_type_(space, key)
 
     def ptr(self, space, name, w_argtypes, w_restype):
         """ Get a pointer for function name with provided argtypes
@@ -188,6 +195,14 @@ def segfault_exception(space, reason):
     w_exception = space.getattr(w_mod, space.wrap("SegfaultException"))
     return OperationError(w_exception, space.wrap(reason))
 
+def unpack_typecode(space, w_typecode):
+    if space.is_true(space.isinstance(w_typecode, space.w_str)):
+        letter = space.str_w(w_typecode)
+        return letter2tp(space, letter)
+    else:
+        w_size, w_align = space.unpacktuple(w_typecode, expected_length=2)
+        return ('?', space.int_w(w_size), space.int_w(w_align))
+
 
 class W_DataInstance(Wrappable):
     def __init__(self, space, size, address=0):
@@ -217,20 +232,21 @@ class W_DataInstance(Wrappable):
 
 
 def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
+    letter, _, _ = tp
     w = space.wrap
-    if tp == "d":
+    if letter == "d":
         push_func(add_arg, argdesc, space.float_w(w_arg))
-    elif tp == "f":
+    elif letter == "f":
         push_func(add_arg, argdesc, rffi.cast(rffi.FLOAT,
                                               space.float_w(w_arg)))
-    elif tp in TYPEMAP_PTR_LETTERS:
+    elif letter in TYPEMAP_PTR_LETTERS:
         # check for NULL ptr
         if space.is_true(space.isinstance(w_arg, space.w_int)):
             push_func(add_arg, argdesc, rffi.cast(rffi.VOIDP, space.int_w(w_arg)))
         else:
             datainstance = space.interp_w(W_DataInstance, w_arg)
             push_func(add_arg, argdesc, datainstance.ll_buffer)
-    elif tp == "c":
+    elif letter == "c":
         s = space.str_w(w_arg)
         if len(s) != 1:
             raise OperationError(space.w_TypeError, w(
@@ -239,7 +255,7 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
         push_func(add_arg, argdesc, val)
     else:
         for c, checker in unroll_size_checkers:
-            if tp == c:
+            if letter == c:
                 if c == "q":
                     val = space.r_longlong_w(w_arg)
                 elif c == "Q":
@@ -254,14 +270,18 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
                     raise OperationError(space.w_ValueError, w(e.msg))
                 TP = LL_TYPEMAP[c]
                 push_func(add_arg, argdesc, rffi.cast(TP, val))
-    
+                return
+        else:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("cannot directly write value"))
 unwrap_value._annspecialcase_ = 'specialize:arg(1)'
 
 ll_typemap_iter = unrolling_iterable(LL_TYPEMAP.items())
 
 def wrap_value(space, func, add_arg, argdesc, tp):
+    letter, _, _ = tp
     for c, ll_type in ll_typemap_iter:
-        if tp == c:
+        if letter == c:
             if c in TYPEMAP_PTR_LETTERS:
                 res = func(add_arg, argdesc, rffi.VOIDP)
                 return space.wrap(rffi.cast(lltype.Signed, res))
@@ -277,7 +297,8 @@ def wrap_value(space, func, add_arg, argdesc, tp):
                                                            ll_type)))
             else:
                 return space.wrap(intmask(func(add_arg, argdesc, ll_type)))
-    return space.w_None
+    raise OperationError(space.w_TypeError,
+                         space.wrap("cannot directly read value"))
 wrap_value._annspecialcase_ = 'specialize:arg(1)'
 
 class W_FuncPtr(Wrappable):
@@ -286,7 +307,7 @@ class W_FuncPtr(Wrappable):
         self.ptr = ptr
         if restype != 'v':
             cache = get_array_cache(space)
-            self.resarray = cache.get_array_type(restype)
+            self.resarray = cache.get_array_type(letter2tp(space, restype))
         else:
             self.resarray = None
         self.argtypes = argtypes
@@ -307,9 +328,9 @@ class W_FuncPtr(Wrappable):
                 msg = ("Argument %d should be an array of length 1, "
                        "got length %d" % (i+1, arg.length))
                 raise OperationError(space.w_TypeError, space.wrap(msg))
-            if arg.shape.of != argtype:
+            if arg.shape.itemtp[0] != argtype:
                 msg = "Argument %d should be typecode %s, got %s" % (
-                    i+1, argtype, arg.shape.of)
+                    i+1, argtype, arg.shape.itemtp[0])
                 raise OperationError(space.w_TypeError, space.wrap(msg))
             args_ll.append(arg.ll_buffer)
             # XXX we could avoid the intermediate list args_ll
