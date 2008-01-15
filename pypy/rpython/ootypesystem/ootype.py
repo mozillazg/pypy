@@ -353,7 +353,7 @@ class AbstractString(BuiltinADTType):
             "ll_upper": Meth([], self.SELFTYPE_T),
             "ll_lower": Meth([], self.SELFTYPE_T),
             "ll_substring": Meth([Signed, Signed], self.SELFTYPE_T), # ll_substring(start, count)
-            "ll_split_chr": Meth([self.CHAR], List(self.SELFTYPE_T)),
+            "ll_split_chr": Meth([self.CHAR], Array(self.SELFTYPE_T)),
             "ll_contains": Meth([self.CHAR], Bool),
             "ll_replace_chr_chr": Meth([self.CHAR, self.CHAR], self.SELFTYPE_T),
             })
@@ -529,6 +529,12 @@ class List(BuiltinADTType):
         self.ITEM = ITEMTYPE
         self._init_methods()
 
+    def ll_convert_from_array(self, array):
+        length = array.ll_length()
+        result = self.ll_newlist(length)
+        for n in range(length):
+            result.ll_setitem_fast(n, array.ll_getitem_fast(n))
+        return result
 
 class Array(BuiltinADTType):
     # placeholders for types
@@ -607,6 +613,8 @@ class Array(BuiltinADTType):
         from pypy.rpython.ootypesystem import rlist
         return rlist.ll_newarray(self, length)
 
+    def ll_convert_from_array(self, array):
+        return array
 
 class Dict(BuiltinADTType):
     # placeholders for types
@@ -1244,8 +1252,9 @@ class _string(_builtin_type):
 
     def ll_split_chr(self, ch):
         # NOT_RPYTHON
-        res = _list(List(self._TYPE))
-        res._list = [self.make_string(s) for s in self._str.split(ch)]
+        l = [self.make_string(s) for s in self._str.split(ch)]
+        res = _array(Array(self._TYPE), len(l))
+        res._array[:] = l
         return res
 
     def ll_contains(self, ch):

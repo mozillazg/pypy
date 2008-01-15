@@ -323,7 +323,7 @@ def ll_dict_setdefault(d, key, default):
 
 def ll_dict_kvi(d, LIST, func):
     length = d.ll_length()
-    result = ll_newlist(LIST, length)
+    result = LIST.ll_newlist(length)
     it = d.ll_get_items_iterator()
     i = 0
     while it.ll_go_next():
