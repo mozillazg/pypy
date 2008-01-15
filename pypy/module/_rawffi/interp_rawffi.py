@@ -161,34 +161,7 @@ module, except that s has trailing \x00 added, while p is considered a raw
 buffer."""
 )
 
-def make_size_checker(format, size, signed):
-    min, max, _ = min_max_acc_method(size, signed)
-
-    def checker(value):
-        if value < min:
-            raise FfiValueError("%d too small for format %s" % (value, format))
-        elif value > max:
-            raise FfiValueError("%d too large for format %s" % (value, format))
-    return checker
-
-_SIZE_CHECKERS = {
-    'b' : True,
-    'B' : False,
-    'h' : True,
-    'H' : False,
-    'i' : True,
-    'I' : False,
-    'l' : True,
-    'L' : False,
-    'q' : True,
-    'Q' : False,
-}
-
-# XXX check for single float as well
-SIZE_CHECKERS = {}
-for c, signed in _SIZE_CHECKERS.items():
-    SIZE_CHECKERS[c] = make_size_checker(c, native_fmttable[c]['size'], signed)
-unroll_size_checkers = unrolling_iterable(SIZE_CHECKERS.items())
+unroll_letters_for_numbers = unrolling_iterable("bBhHiIlLqQ")
 
 def segfault_exception(space, reason):
     w_mod = space.getbuiltinmodule("_rawffi")
@@ -254,22 +227,14 @@ def unwrap_value(space, push_func, add_arg, argdesc, tp, w_arg):
         val = s[0]
         push_func(add_arg, argdesc, val)
     else:
-        for c, checker in unroll_size_checkers:
+        for c in unroll_letters_for_numbers:
             if letter == c:
-                if c == "q":
-                    val = space.r_longlong_w(w_arg)
-                elif c == "Q":
-                    val = space.r_ulonglong_w(w_arg)
-                elif c == "I" or c == "L" or c =="B":
-                    val = space.uint_w(w_arg)
-                else:
-                    val = space.int_w(w_arg)
-                try:
-                    checker(val)
-                except FfiValueError, e:
-                    raise OperationError(space.w_ValueError, w(e.msg))
                 TP = LL_TYPEMAP[c]
-                push_func(add_arg, argdesc, rffi.cast(TP, val))
+                if space.is_true(space.isinstance(w_arg, space.w_int)):
+                    val = rffi.cast(TP, space.int_w(w_arg))
+                else:
+                    val = rffi.cast(TP, space.bigint_w(w_arg).ulonglongmask())
+                push_func(add_arg, argdesc, val)
                 return
         else:
             raise OperationError(space.w_TypeError,
@@ -292,9 +257,6 @@ def wrap_value(space, func, add_arg, argdesc, tp):
                 return space.wrap(func(add_arg, argdesc, ll_type))
             elif c == 'f' or c == 'd':
                 return space.wrap(float(func(add_arg, argdesc, ll_type)))
-            elif c == 'h' or c == 'H':
-                return space.wrap(rffi.cast(lltype.Signed, func(add_arg, argdesc,
-                                                           ll_type)))
             else:
                 return space.wrap(intmask(func(add_arg, argdesc, ll_type)))
     raise OperationError(space.w_TypeError,

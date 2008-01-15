@@ -350,9 +350,6 @@ class AppTestFfi:
         res = some_huge_uvalue()
         assert res[0] == 1<<42
         res.free()
-        arg1 = _rawffi.Array('Q')(1)
-        raises(ValueError, "arg1[0] = -1")
-        arg1.free()
         pass_ll = lib.ptr('pass_ll', ['q'], 'q')
         arg1 = _rawffi.Array('q')(1)
         arg1[0] = 1<<42
@@ -454,4 +451,56 @@ class AppTestFfi:
         a = _rawffi.Array('i')(5)
         assert repr(a) == "<_rawffi array %d of length %d>" % (a.buffer,
                                                                len(a))
+        a.free()
+
+    def test_truncate(self):
+        import _rawffi
+        a = _rawffi.Array('b')(1)
+        a[0] = -5
+        assert a[0] == -5
+        a[0] = 123L
+        assert a[0] == 123
+        a[0] = 0x97817182ab128111111111111171817d042
+        assert a[0] == 0x42
+        a[0] = 255
+        assert a[0] == -1
+        a[0] = -2
+        assert a[0] == -2
+        a[0] = -255
+        assert a[0] == 1
+        a.free()
+
+        a = _rawffi.Array('B')(1)
+        a[0] = 123L
+        assert a[0] == 123
+        a[0] = 0x18329b1718b97d89b7198db817d042
+        assert a[0] == 0x42
+        a[0] = 255
+        assert a[0] == 255
+        a[0] = -2
+        assert a[0] == 254
+        a[0] = -255
+        assert a[0] == 1
+        a.free()
+
+        a = _rawffi.Array('h')(1)
+        a[0] = 123L
+        assert a[0] == 123
+        a[0] = 0x9112cbc91bd91db19aaaaaaaaaaaaaa8170d42
+        assert a[0] == 0x0d42
+        a[0] = 65535
+        assert a[0] == -1
+        a[0] = -2
+        assert a[0] == -2
+        a[0] = -65535
+        assert a[0] == 1
+        a.free()
+
+        a = _rawffi.Array('H')(1)
+        a[0] = 123L
+        assert a[0] == 123
+        a[0] = 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeee817d042
+        assert a[0] == 0xd042
+        a[0] = -2
+        assert a[0] == 65534
         a.free()
