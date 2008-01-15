@@ -215,18 +215,46 @@ class AppTestDotnet:
         raises(TypeError, x.__setitem__, 4, 4.453)
         raises(TypeError, x.__setitem__, "test", 3)
 
-    def test_generic_class_with_single_import(self):
+    def test_generic_metaclass_list(self):
         import clr
-        import System.Collections.Generic
-        import List
+        from System.Collections.Generic import List
         import System.Int32
-        l2 = List[System.Int32]()
-        l2.Add(3)
-        raises(TypeError, l2.Add, "test")
+        lst = List[System.Int32]()
+        lst.Add(42)
+        assert lst[0] == 42
+        raises(TypeError, lst.Add, "test")
 
-        import Dictionary
+        lst = List[int]()
+        lst.Add(42)
+        assert lst[0] == 42
+        raises(TypeError, lst.Add, "test")        
+
+    def test_generic_metaclass_dict(self):
+        import clr
+        from System.Collections.Generic import Dictionary
+        import System.Int32
         import System.String
-        d1 = Dictionary[System.Int32,System.String]()
-        d1[1]="test"
-        raises(TypeError, d1.__setitem__, 3, 3)
+        d1 = Dictionary[System.Int32, System.String]()
+        d1[42]="test"
+        assert d1[42] == "test"
+        raises(TypeError, d1.__setitem__, 42, 42)
 
+        d1 = Dictionary[int, str]()
+        d1[42]="test"
+        assert d1[42] == "test"
+        raises(TypeError, d1.__setitem__, 42, 42)
+
+    def test_generic_metaclass_object(self):
+        import clr
+        from System.Collections.Generic import List
+        class Foo(object):
+            pass
+        lst = List[Foo]()
+        f = Foo()
+        lst.Add(f)
+        assert lst[0] is f
+
+    def test_generic_metaclass_typeerror(self):
+        import clr
+        from System.Collections.Generic import List
+        raises(TypeError, "List[int, int]")
