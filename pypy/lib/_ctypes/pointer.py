@@ -22,7 +22,7 @@ class PointerType(_CDataMeta):
         if '_type_' in typedict:
             ffiarray = _rawffi.Array('P')
             def __init__(self, value=0):
-                self._array = ffiarray(1)
+                self._buffer = ffiarray(1)
                 self.contents = value
             obj._ffiarray = ffiarray
         else:
@@ -52,24 +52,19 @@ class PointerType(_CDataMeta):
 class _Pointer(_CData):
     __metaclass__ = PointerType
 
-    def getvalue(self):
-        return self._array
-
-    value = property(getvalue)
-
     def getcontents(self):
-        return self._type_.from_address(self._array[0])
+        return self._type_.from_address(self._buffer[0])
 
     def setcontents(self, value):
-        if isinstance(value, int):
-            self._array[0] = value
-        else:
-            self._array[0] = value._array
+        if not isinstance(value, self._type_):
+            raise TypeError("expected %s instead of %s" % (
+                self._type_.__name__, type(value).__name__))
+        self._buffer[0] = value._buffer
 
     def _subarray(self, index=0):
-        """Return an _array of length 1 whose address is the same as
+        """Return a _rawffi array of length 1 whose address is the same as
         the index'th item to which self is pointing."""
-        address = self._array[0]
+        address = self._buffer[0]
         address += index * sizeof(self._type_)
         return self._type_._ffiarray.fromaddress(address, 1)
 

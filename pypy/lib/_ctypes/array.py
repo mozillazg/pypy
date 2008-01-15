@@ -12,7 +12,7 @@ class ArrayMeta(_CDataMeta):
             res._ffiarray = ffiarray
             if typedict['_type_']._type_ == 'c':
                 def getvalue(self):
-                    return _rawffi.charp2string(self._array.buffer,
+                    return _rawffi.charp2string(self._buffer.buffer,
                                                 self._length_)
                 def setvalue(self, val):
                     # we don't want to have buffers here
@@ -36,7 +36,7 @@ class ArrayMeta(_CDataMeta):
         return res
 
     def _CData_input(self, value):
-        return self.from_param(value)._array.byptr()
+        return self.from_param(value)._buffer.byptr()
 
     from_address = cdata_from_address
 
@@ -44,7 +44,7 @@ class Array(_CData):
     __metaclass__ = ArrayMeta
 
     def __init__(self, *args):
-        self._array = self._ffiarray(self._length_)
+        self._buffer = self._ffiarray(self._length_)
         for i, arg in enumerate(args):
             self[i] = arg
 
@@ -73,9 +73,9 @@ class Array(_CData):
         return "".join([self[i] for i in range(start, stop)])
 
     def _subarray(self, index):
-        """Return an _array of length 1 whose address is the same as
+        """Return a _rawffi array of length 1 whose address is the same as
         the index'th item of self."""
-        address = self._array.itemaddress(index)
+        address = self._buffer.itemaddress(index)
         return self._ffiarray.fromaddress(address, 1)
 
     def __setitem__(self, index, value):
@@ -84,7 +84,7 @@ class Array(_CData):
             return
         value = self._type_._CData_input(value)
         index = self._fix_index(index)
-        self._array[index] = value[0]
+        self._buffer[index] = value[0]
 
     def __getitem__(self, index):
         if isinstance(index, slice):
