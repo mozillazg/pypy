@@ -29,37 +29,49 @@ def unpack_fields(space, w_fields):
         fields.append((name, code))
     return fields
 
-def size_and_pos(fields):
-    size = intmask(TYPEMAP[fields[0][1]].c_size)
-    pos = [0]
-    for i in range(1, len(fields)):
+def round_up(size, alignment):
+    return (size + alignment - 1) & -alignment
+
+def size_alignment_pos(fields):
+    size = 0
+    alignment = 1
+    pos = []
+    for i in range(len(fields)):
         field_desc = TYPEMAP[fields[i][1]]
-        missing = size % intmask(field_desc.c_alignment)
-        if missing:
-            size += intmask(field_desc.c_alignment) - missing
+        size = round_up(size, intmask(field_desc.c_alignment))
+        alignment = max(alignment, intmask(field_desc.c_alignment))
         pos.append(size)
         size += intmask(field_desc.c_size)
-    return size, pos
+    size = round_up(size, alignment)
+    return size, alignment, pos
 
 
 class W_Structure(Wrappable):
     def __init__(self, space, w_fields):
         fields = unpack_fields(space, w_fields)
-        name_to_offset = {}
+        name_to_index = {}
         for i in range(len(fields)):
             name, letter = fields[i]
             if letter not in TYPEMAP:
                 raise OperationError(space.w_ValueError, space.wrap(
                     "Unkown type letter %s" % (letter,)))
-            if name in name_to_offset:
+            if name in name_to_index:
                 raise OperationError(space.w_ValueError, space.wrap(
                     "duplicate field name %s" % (name, )))
-            name_to_offset[name] = i
-        size, pos = size_and_pos(fields)
+            name_to_index[name] = i
+        size, alignment, pos = size_alignment_pos(fields)
         self.size = size
+        self.alignment = alignment
         self.ll_positions = pos
         self.fields = fields
-        self.name_to_offset = name_to_offset
+        self.name_to_index = name_to_index
+
+    def getindex(self, space, attr):
+        try:
+            return self.name_to_index[attr]
+        except KeyError:
+            raise OperationError(space.w_AttributeError, space.wrap(
+                "C Structure has no attribute %s" % attr))
 
     def descr_call(self, space, __args__):
         args_w, kwargs_w = __args__.unpack()
@@ -68,10 +80,16 @@ class W_Structure(Wrappable):
                 space.w_TypeError,
                 space.wrap("Structure accepts only keyword arguments as field initializers"))
         return space.wrap(W_StructureInstance(space, self, 0, kwargs_w))
+    descr_call.unwrap_spec = ['self', ObjSpace, Arguments]
 
     def fromaddress(self, space, address):
         return space.wrap(W_StructureInstance(space, self, address, None))
     fromaddress.unwrap_spec = ['self', ObjSpace, int]
+
+    def descr_getfieldoffset(self, space, attr):
+        index = self.getindex(space, attr)
+        return space.wrap(self.ll_positions[index])
+    descr_getfieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
 def descr_new_structure(space, w_type, w_fields):
     return space.wrap(W_Structure(space, w_fields))
@@ -79,9 +97,11 @@ def descr_new_structure(space, w_type, w_fields):
 W_Structure.typedef = TypeDef(
     'Structure',
     __new__     = interp2app(descr_new_structure),
-    __call__ = interp2app(W_Structure.descr_call,
-                          unwrap_spec=['self', ObjSpace, Arguments]),
-    fromaddress = interp2app(W_Structure.fromaddress)
+    __call__ = interp2app(W_Structure.descr_call),
+    fromaddress = interp2app(W_Structure.fromaddress),
+    size        = interp_attrproperty('size', W_Structure),
+    alignment   = interp_attrproperty('alignment', W_Structure),
+    getfieldoffset = interp2app(W_Structure.descr_getfieldoffset),
 )
 W_Structure.typedef.acceptable_as_base_class = False
 
@@ -106,18 +126,10 @@ class W_StructureInstance(W_DataInstance):
             for field, w_value in fieldinits_w.iteritems():
                 self.setattr(space, field, w_value)
 
-
-    def getindex(self, space, attr):
-        try:
-            return self.shape.name_to_offset[attr]
-        except KeyError:
-            raise OperationError(space.w_AttributeError, space.wrap(
-                "C Structure has no attribute %s" % attr))
-
     def getattr(self, space, attr):
         if not self.ll_buffer:
             raise segfault_exception(space, "accessing NULL pointer")
-        i = self.getindex(space, attr)
+        i = self.shape.getindex(space, attr)
         _, c = self.shape.fields[i]
         return wrap_value(space, cast_pos, self, i, c)
     getattr.unwrap_spec = ['self', ObjSpace, str]
@@ -125,7 +137,7 @@ class W_StructureInstance(W_DataInstance):
     def setattr(self, space, attr, w_value):
         if not self.ll_buffer:
             raise segfault_exception(space, "accessing NULL pointer")
-        i = self.getindex(space, attr)
+        i = self.shape.getindex(space, attr)
         _, c = self.shape.fields[i]
         unwrap_value(space, push_field, self, i, c, w_value)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
