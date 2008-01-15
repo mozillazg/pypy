@@ -23,7 +23,8 @@ class PointerType(_CDataMeta):
             ffiarray = _rawffi.Array('P')
             def __init__(self, value=None):
                 self._buffer = ffiarray(1)
-                self.contents = value
+                if value is not None:
+                    self.contents = value
             obj._ffiarray = ffiarray
         else:
             def __init__(self, value=None):
@@ -58,18 +59,14 @@ class _Pointer(_CData):
     def getcontents(self):
         addr = self._buffer[0]
         if addr == 0:
-            return None
-        else:
-            return self._type_.from_address(addr)
+            raise ValueError("NULL pointer access")
+        return self._type_.from_address(addr)
 
     def setcontents(self, value):
-        if value is not None:
-            if not isinstance(value, self._type_):
-                raise TypeError("expected %s instead of %s" % (
-                    self._type_.__name__, type(value).__name__))
-            value = value._buffer
-        else:
-            value = 0
+        if not isinstance(value, self._type_):
+            raise TypeError("expected %s instead of %s" % (
+                self._type_.__name__, type(value).__name__))
+        value = value._buffer
         self._buffer[0] = value
 
     def _subarray(self, index=0):
@@ -86,6 +83,9 @@ class _Pointer(_CData):
         if index != 0:
             raise IndexError
         self._subarray(index)[0] = self._type_._CData_input(value)[0]
+
+    def __nonzero__(self):
+        return self._buffer[0] != 0
 
     contents = property(getcontents, setcontents)
 
