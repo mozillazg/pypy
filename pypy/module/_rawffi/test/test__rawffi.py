@@ -446,10 +446,10 @@ class AppTestFfi:
                 "<_rawffi.Structure 'x' 'yz' (%d, %d)>" % (2*s, s))
 
         s = _rawffi.Structure([('x', 'i'), ('yz', 'i')])()
-        assert repr(s) == "<_rawffi struct %d>" % (s.buffer,)
+        assert repr(s) == "<_rawffi struct %x>" % (s.buffer,)
         s.free()
         a = _rawffi.Array('i')(5)
-        assert repr(a) == "<_rawffi array %d of length %d>" % (a.buffer,
+        assert repr(a) == "<_rawffi array %x of length %d>" % (a.buffer,
                                                                len(a))
         a.free()
 
