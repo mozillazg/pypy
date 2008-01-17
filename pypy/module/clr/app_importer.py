@@ -19,25 +19,16 @@ class importer(object):
          When importer.find_module("spam.eggs.ham") is called, "spam.eggs" has already 
          been imported and added to sys.modules.
     '''
-    def __init__(self):
-        self.valid_namespaces = None
-        self.generic_mappings = None
 
     def find_module(self, fullname, path=None):
         import clr
-        if self.valid_namespaces is None:
-            # this might not be the correct place to load the valid NameSpaces
-            valid_namespaces, generic_mappings = clr.get_extra_type_info()
-            self.valid_namespaces = set(valid_namespaces)
-            self.generic_mappings = dict(generic_mappings)
+        namespaces, generic_map = clr.get_assemblies_info()
 
-        if fullname in self.valid_namespaces or fullname in self.generic_mappings or clr.isDotNetType(fullname): 
-            # fullname is a  .Net Module
-            return self
+        if fullname in namespaces or fullname in generic_map or clr.isDotNetType(fullname): 
+            return self # fullname is a  .NET Module
         else:
-            # fullname is not a .Net Module
-            return None
-            
+            return None # fullname is not a .NET Module
+
     def load_module(self, fullname):
         '''
             The load_module() must fulfill the following *before* it runs any code:
@@ -63,11 +54,13 @@ class importer(object):
         '''
         # If it is a call for a Class then return with the Class reference
         import clr
-        if clr.isDotNetType(fullname) or fullname in self.generic_mappings:
+        namespaces, generic_map = clr.get_assemblies_info()
+
+        if clr.isDotNetType(fullname) or fullname in generic_map:
             ''' Task is to breakup System.Collections.ArrayList and call 
                 clr.load_cli_class('System.Collections','ArrayList')
             '''
-            fullname = self.generic_mappings.get(fullname, fullname)
+            fullname = generic_map.get(fullname, fullname)
             rindex = fullname.rfind('.')
             if rindex != -1:
                 leftStr = fullname[:rindex]
@@ -86,15 +79,6 @@ class importer(object):
 
             # if it is a PACKAGE then we are to initialize the __path__ for the module
             # we won't deal with Packages here
-
-
-            # treating System.Collections.Generic specially here.
-            # this treatment is done after the empty module insertion
-            #if fullname == "System.Collections.Generic":
-            #    genericClassList = clr.list_of_generic_classes()
-            #    for genericClass in genericClassList:
-            #        sys.modules[genericClass[: genericClass.find('`')]] = clr.load_cli_class("System.Collections.Generic", genericClass)
-
         return sys.modules[fullname]
 
 class CLRModule(types.ModuleType):

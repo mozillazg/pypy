@@ -193,43 +193,50 @@ class _CliClassCache:
         return self.cache.get(fullname, None)
 CliClassCache = _CliClassCache()
 
-def get_extra_type_info(space):
-    """
-    We use this function to play with reflection
-    and then return useful data to the app_importer module
+class _AssembliesInfo:
+    w_namespaces = None
+    w_generic_map = None
+    w_info = None # a tuple containing (w_namespaces, w_generic_map)
+AssembliesInfo = _AssembliesInfo()
 
-    Parameters:
+def save_info_for_assembly(space, b_assembly):
+    info = AssembliesInfo
+    b_types = b_assembly.GetTypes()
+    for i in range(len(b_types)):
+        b_type = b_types[i]
+        namespace = b_type.get_Namespace()
+        if namespace is not None:
+            # builds all possible sub-namespaces
+            # (e.g. 'System', 'System.Windows', 'System.Windows.Forms')
+            chunks = namespace.split(".")
+            temp_name = chunks[0]
+            space.setitem(info.w_namespaces, space.wrap(temp_name), space.w_None)
+            for chunk in chunks[1:]:
+                temp_name += "."+chunk
+                space.setitem(info.w_namespaces, space.wrap(temp_name), space.w_None)
+        if b_type.get_IsGenericType():
+            fullname = b_type.get_FullName()
+            if '+' not in fullname:
+                index = fullname.rfind("`")
+                assert index >= 0
+                pyName = fullname[0:index]
+                space.setitem(info.w_generic_map, space.wrap(pyName), space.wrap(fullname))
+    
+def save_info_for_all_assemblies(space):
+    b_currentDomain = System.AppDomain.get_CurrentDomain()
+    b_assems = b_currentDomain.GetAssemblies()
+    for i in range(len(b_assems)):
+        save_info_for_assembly(space, b_assems[i])
 
-    Return: List of Valid .NET namespaces
-    """
-    namespaces = {}
-    generics = []
-    currentDomain = System.AppDomain.get_CurrentDomain()
-    assems = currentDomain.GetAssemblies()
-    for i in range(len(assems)):
-        loadedAssembly = assems[i]
-        typesInAssembly = loadedAssembly.GetTypes()
-        for i in range(len(typesInAssembly)):
-            ttype = typesInAssembly[i]
-            namespace = ttype.get_Namespace()
-            if namespace is not None:
-                chunks = namespace.split(".")
-                temp_name = chunks[0]
-                namespaces[temp_name] = None
-                for chunk in chunks[1:]:
-                    temp_name += "."+chunk
-                    namespaces[temp_name] = None
-            if ttype.get_IsGenericType():
-                fullname = ttype.get_FullName()
-                if '+' not in fullname:
-                    # else it's a nested type, ignore it
-                    index = fullname.rfind("`")
-                    assert index >= 0
-                    generics.append((fullname[0:index], fullname))
-    w_listOfNamespaces = wrap_list_of_strings(space, namespaces.keys())
-    w_generic_mappings = wrap_list_of_pairs(space, generics)
-    return space.newtuple([w_listOfNamespaces, w_generic_mappings])
-get_extra_type_info.unwrap_spec = [ObjSpace]
+def get_assemblies_info(space):
+    info = AssembliesInfo
+    if info.w_info is None:
+        info.w_namespaces = space.newdict()
+        info.w_generic_map = space.newdict()
+        info.w_info = space.newtuple([info.w_namespaces, info.w_generic_map])
+        save_info_for_all_assemblies(space) # cache info for all standard assemblies
+    return info.w_info
+get_assemblies_info.unwrap_spec = [ObjSpace]
 
 def isDotNetType(space, nameFromImporter):
     """
@@ -241,57 +248,6 @@ def isDotNetType(space, nameFromImporter):
     return space.wrap(System.Type.GetType(nameFromImporter) is not None)
 isDotNetType.unwrap_spec = [ObjSpace, str]
 
-##def list_of_loadedAssemblies(space):
-##    """
-##    return a List of currently loaded .NET assembliesy
-
-##    return:
-##        list eg:  ['System.Xml','System.Data','mscorlib']
-##    """
-##    loadedAssemblies = []
-##    currentDomain = System.AppDomain.get_CurrentDomain()
-##    currentLoadedAssemblies = currentDomain.GetAssemblies()
-
-##    for i in range(len(currentLoadedAssemblies)):
-##        lAssembly = currentLoadedAssemblies[i]
-##        strName = lAssembly.get_FullName()
-##        rindexComma = strName.find(',')
-##        if rindexComma != -1:
-##            loadedAssemblies.append(strName[:rindexComma])
-##    return space.wrap(loadedAssemblies)
-##list_of_loadedAssemblies.unwrap_spec = [ObjSpace]
-
-##def load_assembly(space, assemblyPath):
-##    """
-##    Load the given .NET assembly into the PyPy interpreter 
-
-##    Parameters:
-
-##       - assemblyPath: the full path of the assembly 
-##          (e.g., /usr/lib/mono/2.0/System.Data.dll).
-##    """
-##    assemblyToLoad = ""
-##    loadedAssemblies = space.unwrap(list_of_loadedAssemblies(space))
-
-##    # split the name to pull out "System.Data.dll"
-##    # then check if it has already been loaded.
-##    rindexSlash = assemblyPath.rfind('/')
-##    if rindexSlash != -1:
-##        strAfterSlash = assemblyPath[rindexSlash +1 : ]
-##        rindexDot = strAfterSlash.rfind('.')
-##        if rindexDot != -1:
-##            assemblyToLoad = strAfterSlash[: rindexDot]
-
-##    if assemblyToLoad in loadedAssemblies:
-##        print " won't reload loaded assembly " 
-##        pass
-##    else:
-##        try:
-##            System.Reflection.Assembly.LoadFile(assemblyPath)
-##            print "Loaded %s"%assemblyPath
-##        except:
-##            print " can not load the assembly " 
-##load_assembly.unwrap_spec = [ObjSpace, str]
 
 def load_cli_class(space, namespace, classname):
     """

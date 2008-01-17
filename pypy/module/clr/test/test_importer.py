@@ -7,7 +7,7 @@ class AppTestDotnet:
 
     def test_list_of_valid_namespaces(self):
         import clr
-        ns, gen = clr.get_extra_type_info()
+        ns, gen = clr.get_assemblies_info()
         
         assert 'System' in ns
         assert 'System.Collections' in ns

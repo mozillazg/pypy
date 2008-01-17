@@ -14,10 +14,8 @@ class Module(MixedModule):
         '_CliObject_internal': 'interp_clr.W_CliObject',
         'call_staticmethod': 'interp_clr.call_staticmethod',
         'load_cli_class': 'interp_clr.load_cli_class',
-        'get_extra_type_info': 'interp_clr.get_extra_type_info',
+        'get_assemblies_info': 'interp_clr.get_assemblies_info',
         'isDotNetType': 'interp_clr.isDotNetType',
-        #'load_assembly': 'interp_clr.load_assembly',
-        #'list_of_loadedAssemblies': 'interp_clr.list_of_loadedAssemblies',
     }
 
     def startup(self, space):
