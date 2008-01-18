@@ -209,8 +209,8 @@ def save_info_for_assembly(space, b_assembly):
     w_assemblyName = space.wrap(b_assembly.get_FullName())
     for i in range(len(b_types)):
         b_type = b_types[i]
-        namespace = str(b_type.get_Namespace())
-        fullname = str(b_type.get_FullName())
+        namespace = b_type.get_Namespace()
+        fullname = b_type.get_FullName()
         if '+' in fullname:
             # it's an internal type, skip it
             continue
