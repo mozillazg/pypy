@@ -180,8 +180,6 @@ def get_properties(space, b_type):
             properties.append((b_prop.get_Name(), get_name, set_name, is_static))
         else:
             indexers.append((b_prop.get_Name(), get_name, set_name, is_static))
-    if len(indexers) > 1:
-        import pdb;pdb.set_trace()
     w_properties = wrap_list_of_tuples(space, properties)
     w_indexers = wrap_list_of_tuples(space, indexers)
     return w_properties, w_indexers
