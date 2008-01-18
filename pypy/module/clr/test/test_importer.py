@@ -5,23 +5,31 @@ class AppTestDotnet:
         space = gettestobjspace(usemodules=('clr', ))
         cls.space = space
 
-    def test_list_of_valid_namespaces(self):
+    def test_list_of_namespaces_and_classes(self):
         import clr
-        ns, gen = clr.get_assemblies_info()
+        ns, classes, generics = clr.get_assemblies_info()
         
         assert 'System' in ns
         assert 'System.Collections' in ns
         assert 'System.Runtime' in ns
         assert 'System.Runtime.InteropServices' in ns
 
+        assert 'System' not in classes
+        assert 'System.Math' in classes
+        assert 'System.Collections.ArrayList' in classes
+
+        assert 'System.Collections.Generic.List' in classes
+        assert generics['System.Collections.Generic.List'] == 'System.Collections.Generic.List`1'
+
     def test_import_hook_simple(self):
+        mscorlib = 'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
         import clr
         import System.Math
 
         assert System.Math.Abs(-5) == 5
         assert System.Math.Pow(2, 5) == 2**5
 
-        Math = clr.load_cli_class('System', 'Math')
+        Math = clr.load_cli_class(mscorlib, 'System', 'Math')
         assert Math is System.Math
 
         import System
@@ -34,7 +42,7 @@ class AppTestDotnet:
         assert sum == 3+44
 
         import System.Collections.ArrayList
-        ArrayList = clr.load_cli_class('System.Collections', 'ArrayList')
+        ArrayList = clr.load_cli_class(mscorlib, 'System.Collections', 'ArrayList')
         assert ArrayList is System.Collections.ArrayList
 
     def test_ImportError(self):
@@ -55,3 +63,13 @@ class AppTestDotnet:
     def test_generic_class_import(self):
         import System.Collections.Generic.List
 
+    def test_import_from(self):
+        from System.Collections import ArrayList
+
+    def test_AddReferenceByPartialName(self):
+        import clr
+        def fn():
+            import System.Xml.XmlWriter
+        raises(ImportError, fn)
+        clr.AddReferenceByPartialName('System.Xml')
+        fn() # does not raise
