@@ -15,7 +15,7 @@ class Module(MixedModule):
         'call_staticmethod': 'interp_clr.call_staticmethod',
         'load_cli_class': 'interp_clr.load_cli_class',
         'get_assemblies_info': 'interp_clr.get_assemblies_info',
-        'isDotNetType': 'interp_clr.isDotNetType',
+        'AddReferenceByPartialName': 'interp_clr.AddReferenceByPartialName',
     }
 
     def startup(self, space):

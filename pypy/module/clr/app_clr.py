@@ -79,7 +79,8 @@ class StaticProperty(object):
         return self.fget()
 
 def _qualify(t):
-    return '%s, mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089' % t
+    mscorlib = 'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+    return '%s, %s' % (t, mscorlib)
 
 class MetaGenericCliClassWrapper(type):
     _cli_types = {
@@ -113,7 +114,7 @@ class MetaGenericCliClassWrapper(type):
         generic_params = [cls._cli_name(t) for t in types]        
         instance_class = '%s[%s]' % (generic_class, ','.join(generic_params))
         try:
-            return clr.load_cli_class(namespace, instance_class)
+            return clr.load_cli_class(cls.__assemblyname__, namespace, instance_class)
         except ImportError:
             raise TypeError, "Cannot load type %s.%s" % (namespace, instance_class)
 
@@ -154,12 +155,14 @@ def wrapper_from_cliobj(cls, cliobj):
     obj.__cliobj__ = cliobj
     return obj
 
-def build_wrapper(namespace, classname, assembly_qualified_name,
+def build_wrapper(namespace, classname, assemblyname,
                   staticmethods, methods, properties, indexers,
                   hasIEnumerable, isClassGeneric):
     fullname = '%s.%s' % (namespace, classname)
+    assembly_qualified_name = '%s, %s' % (fullname, assemblyname)
     d = {'__cliclass__': fullname,
          '__fullyqualifiedname__': assembly_qualified_name,
+         '__assemblyname__': assemblyname,
          '__module__': namespace}
     for name in staticmethods:
         d[name] = StaticMethodWrapper(fullname, name)

@@ -22,9 +22,9 @@ class importer(object):
 
     def find_module(self, fullname, path=None):
         import clr
-        namespaces, generic_map = clr.get_assemblies_info()
+        namespaces, classes, generics = clr.get_assemblies_info()
 
-        if fullname in namespaces or fullname in generic_map or clr.isDotNetType(fullname): 
+        if fullname in namespaces or fullname in classes:
             return self # fullname is a  .NET Module
         else:
             return None # fullname is not a .NET Module
@@ -54,18 +54,13 @@ class importer(object):
         '''
         # If it is a call for a Class then return with the Class reference
         import clr
-        namespaces, generic_map = clr.get_assemblies_info()
+        namespaces, classes, generics = clr.get_assemblies_info()
 
-        if clr.isDotNetType(fullname) or fullname in generic_map:
-            ''' Task is to breakup System.Collections.ArrayList and call 
-                clr.load_cli_class('System.Collections','ArrayList')
-            '''
-            fullname = generic_map.get(fullname, fullname)
-            rindex = fullname.rfind('.')
-            if rindex != -1:
-                leftStr = fullname[:rindex]
-                rightStr = fullname[rindex+1:]
-                sys.modules[fullname] = clr.load_cli_class(leftStr, rightStr)
+        if fullname in classes:
+            assemblyname = classes[fullname]
+            fullname = generics.get(fullname, fullname)
+            ns, classname = fullname.rsplit('.', 1)
+            sys.modules[fullname] = clr.load_cli_class(assemblyname, ns, classname)
         else:  # if not a call for actual class (say for namespaces) assign an empty module 
             if fullname not in sys.modules:
                 mod = CLRModule(fullname)
