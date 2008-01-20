@@ -111,12 +111,10 @@ class GcRootTracker(object):
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
         for in_function, lines in self.enum_function(iterlines):
             if in_function:
-                self.process_function(functionlines, newfile, entrypoint,
-                                      filename)
-            else:
-                newfile.writelines(lines)    # unmodified
+                lines = self.process_function(lines, entrypoint, filename)
+            newfile.writelines(lines)
 
-    def process_function(self, lines, newfile, entrypoint, filename):
+    def process_function(self, lines, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
         tracker.is_main = tracker.funcname == entrypoint
         if self.verbose:
@@ -130,7 +128,7 @@ class GcRootTracker(object):
             fp = tracker.uses_frame_pointer
             table = self.fixup_entrypoint_table(table, fp)
         self.gcmaptable.extend(table)
-        newfile.writelines(tracker.lines)
+        return tracker.lines
 
     def fixup_entrypoint_table(self, table, uses_frame_pointer):
         self.seen_main = True
