@@ -109,7 +109,7 @@ class GcRootTracker(object):
         yield False, functionlines
 
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        for in_function, lines in self.enum_function(iterlines):
+        for in_function, lines in self.find_functions(iterlines):
             if in_function:
                 lines = self.process_function(lines, entrypoint, filename)
             newfile.writelines(lines)
