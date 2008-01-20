@@ -87,23 +87,34 @@ class GcRootTracker(object):
             for p in state[FIXED:]:
                 print >> output, '\t.long\t%d' % (p,)         # gcroots
 
-    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
-        functionlines = None
+    def find_functions(self, iterlines):
+        functionlines = []
+        in_function = False
         for line in iterlines:
             if r_functionstart.match(line):
-                assert functionlines is None, (
+                assert not in_function, (
                     "missed the end of the previous function")
+                yield False, functionlines
+                in_function = True
                 functionlines = []
-            if functionlines is not None:
-                functionlines.append(line)
-            else:
-                newfile.write(line)
+            functionlines.append(line)
             if r_functionend.match(line):
-                assert functionlines is not None, (
+                assert in_function, (
                     "missed the start of the current function")
+                yield True, functionlines
+                in_function = False
+                functionlines = []
+        assert not in_function, (
+            "missed the end of the previous function")
+        yield False, functionlines
+
+    def process(self, iterlines, newfile, entrypoint='main', filename='?'):
+        for in_function, lines in self.enum_function(iterlines):
+            if in_function:
                 self.process_function(functionlines, newfile, entrypoint,
                                       filename)
-                functionlines = None
+            else:
+                newfile.writelines(lines)    # unmodified
 
     def process_function(self, lines, newfile, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines)
