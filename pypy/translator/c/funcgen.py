@@ -34,6 +34,7 @@ class FunctionCodeGenerator(object):
                        functionname
                        currentblock
                        blocknum
+                       backlinks
                        oldgraph""".split()
 
     def __init__(self, graph, db, exception_policy=None, functionname=None):
@@ -112,14 +113,58 @@ class FunctionCodeGenerator(object):
             self.db.gctransformer.inline_helpers(graph)
         return graph
 
+    def order_blocks(self):
+        from pypy.tool.algo import graphlib
+        self.blocknum = {}
+        self.backlinks = {}
+        vertices = {}
+        edge_list = []
+        for index, block in enumerate(self.graph.iterblocks()):
+            self.blocknum[block] = index
+            vertices[block] = True
+            for link in block.exits:
+                edge_list.append(graphlib.Edge(block, link.target))
+        edges = graphlib.make_edge_dict(edge_list)
+        cycles = graphlib.all_cycles(self.graph.startblock, vertices, edges)
+        cycles.sort(key=len)
+        for cycle in cycles:
+            for edge in cycle:
+                if edge.source not in vertices:
+                    break    # cycle overlaps already-seen blocks
+            else:
+                # make this cycle a C-level loop
+                def edge2link(edge):
+                    for link in edge.source.exits:
+                        if link.target is edge.target:
+                            return link
+                    raise AssertionError("an edge's link has gone missing")
+
+                edges = []
+                for i, edge in enumerate(cycle):
+                    v = edge.source.exitswitch
+                    if isinstance(v, Variable) and len(edge.source.exits) == 2:
+                        TYPE = self.lltypemap(v)
+                        if TYPE in (Bool, PyObjPtr):
+                            edges.append((self.blocknum[edge.source], i))
+                if not edges:
+                    continue
+                _, i = min(edges)
+                backedge = cycle[i-1]
+                forwardedge = cycle[i]
+                headblock = backedge.target
+                assert headblock is forwardedge.source
+                self.backlinks[edge2link(backedge)] = None
+                exitcase = edge2link(forwardedge).exitcase
+                assert exitcase in (False, True)
+                self.backlinks[headblock] = exitcase
+                for edge in cycle:
+                    del vertices[edge.target]
+
     def implementation_begin(self):
         self.oldgraph = self.graph
         self.graph = self.patch_graph(copy_graph=True)
         SSI_to_SSA(self.graph)
         self.collect_var_and_types()
-        self.blocknum = {}
-        for block in self.graph.iterblocks():
-            self.blocknum[block] = len(self.blocknum)
         db = self.db
         lltypes = {}
         for v in self.vars:
@@ -127,6 +172,7 @@ class FunctionCodeGenerator(object):
             typename = db.gettype(T)
             lltypes[id(v)] = T, typename
         self.lltypes = lltypes
+        self.order_blocks()
 
     def graphs_to_patch(self):
         yield self.graph
@@ -135,6 +181,7 @@ class FunctionCodeGenerator(object):
         self.lltypes = None
         self.vars = None
         self.blocknum = None
+        self.backlinks = None
         self.currentblock = None
         self.graph = self.oldgraph
         del self.oldgraph
@@ -204,9 +251,10 @@ class FunctionCodeGenerator(object):
         graph = self.graph
 
         # generate the body of each block
-        for block in graph.iterblocks():
+        allblocks = [(num, block) for (block, num) in self.blocknum.items()]
+        allblocks.sort()
+        for myblocknum, block in allblocks:
             self.currentblock = block
-            myblocknum = self.blocknum[block]
             yield ''
             yield 'block%d:' % myblocknum
             for i, op in enumerate(block.operations):
@@ -230,6 +278,25 @@ class FunctionCodeGenerator(object):
                 # single-exit block
                 assert len(block.exits) == 1
                 for op in self.gen_link(block.exits[0]):
+                    yield op
+            elif block in self.backlinks:
+                looplink, exitlink = block.exits
+                if looplink.exitcase != self.backlinks[block]:
+                    looplink, exitlink = exitlink, looplink
+                assert looplink.exitcase == self.backlinks[block]
+                assert exitlink.exitcase == (not self.backlinks[block])
+                expr = self.expr(block.exitswitch)
+                if not looplink.exitcase:
+                    expr = '!' + expr
+                yield 'while (%s) {' % expr
+                for op in self.gen_link(looplink):
+                    yield '\t' + op
+                yield '\t  block%d_back:' % myblocknum
+                for i, op in enumerate(block.operations):
+                    for line in self.gen_op(op):
+                        yield '\t' + line
+                yield '}'
+                for op in self.gen_link(exitlink):
                     yield op
             else:
                 assert block.exitswitch != c_last_exception
@@ -303,7 +370,10 @@ class FunctionCodeGenerator(object):
             assignments.append((a2typename, dest, src))
         for line in gen_assignments(assignments):
             yield line
-        yield 'goto block%d;' % self.blocknum[link.target]
+        label = 'block%d' % self.blocknum[link.target]
+        if link in self.backlinks:
+            label += '_back'
+        yield 'goto %s;' % label
 
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
