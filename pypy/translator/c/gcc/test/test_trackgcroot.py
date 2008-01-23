@@ -1,8 +1,10 @@
 import py
-import sys
+import sys, re
 from pypy.translator.c.gcc.trackgcroot import GcRootTracker
 from pypy.translator.c.gcc.trackgcroot import FunctionGcRootTracker
 from StringIO import StringIO
+
+this_dir = py.path.local(__file__).dirpath()
 
 
 def test_find_functions():
@@ -28,3 +30,50 @@ def test_find_functions():
     assert parts[2] == (False, lines[5:8])
     assert parts[3] == (True,  lines[8:11])
     assert parts[4] == (False, lines[11:])
+
+
+def test_computegcmaptable():
+    tests = []
+    for path in this_dir.listdir("track*.s"):
+        n = path.purebasename[5:]
+        try:
+            n = int(n)
+        except ValueError:
+            pass
+        tests.append((n, path))
+    tests.sort()
+    for _, path in tests:
+        yield check_computegcmaptable, path
+
+r_globallabel = re.compile(r"([\w]+)[:]")
+r_expected = re.compile(r"\s*;;\s*expected\s*([(][-\d\s,+]+[)])")
+
+def check_computegcmaptable(path):
+    print
+    print path.basename
+    lines = path.readlines()
+    tracker = FunctionGcRootTracker(lines)
+    table = tracker.computegcmaptable(verbose=sys.maxint)
+    tabledict = {}
+    seen = {}
+    for entry in table:
+        print entry
+        tabledict[entry[0]] = entry[1]
+    # find the ";; expected" lines
+    prevline = ""
+    for line in lines:
+        match = r_expected.match(line)
+        if match:
+            expected = eval(match.group(1))
+            assert isinstance(expected, tuple)
+            prevmatch = r_globallabel.match(prevline)
+            assert prevmatch, "the computed table is not complete"
+            label = prevmatch.group(1)
+            assert label in tabledict
+            got = tabledict[label]
+            assert got == expected
+            seen[label] = True
+        prevline = line
+    assert len(seen) == len(tabledict), (
+        "computed table contains unexpected entries:\n%r" %
+        [key for key in tabledict if key not in seen])
