@@ -281,25 +281,25 @@ class CStandaloneBuilder(CBuilder):
             self.eci, compiler_exe = cc, profbased = profbased)
 
     def compile(self):
+        assert self.c_source_filename
+        assert not self._compiled
+        compiler = self.getccompiler()
         if self.config.translation.asmgcroot:
             # as we are gcc-only anyway, let's just use the Makefile.
             cmdline = "make -C '%s'" % (self.targetdir,)
             err = os.system(cmdline)
             if err != 0:
                 raise OSError("failed (see output): " + cmdline)
-            return str(self.getccompiler().outputfilename)
-        assert self.c_source_filename
-        assert not self._compiled
-        eci = self.eci.merge(ExternalCompilationInfo(includes=
-                                                     [str(self.targetdir)]))
-        compiler = self.getccompiler()
-        if sys.platform == 'darwin':
-            compiler.compile_extra.append('-mdynamic-no-pic')
-        if self.config.translation.compilerflags:
-            compiler.compile_extra.append(self.config.translation.compilerflags)
-        if self.config.translation.linkerflags:
-            compiler.link_extra.append(self.config.translation.linkerflags)
-        compiler.build()
+        else:
+            eci = self.eci.merge(ExternalCompilationInfo(includes=
+                                                         [str(self.targetdir)]))
+            if sys.platform == 'darwin':
+                compiler.compile_extra.append('-mdynamic-no-pic')
+            if self.config.translation.compilerflags:
+                compiler.compile_extra.append(self.config.translation.compilerflags)
+            if self.config.translation.linkerflags:
+                compiler.link_extra.append(self.config.translation.linkerflags)
+            compiler.build()
         self.executable_name = str(compiler.outputfilename)
         self._compiled = True
         return self.executable_name
