@@ -755,6 +755,8 @@ FUNCTIONS_NOT_RETURNING = {
     'abort': None,
     '_exit': None,
     '__assert_fail': None,
+    'RPyAbort': None,
+    'RPyAssertFailed': None,
     }
 
 CALLEE_SAVE_REGISTERS_NOEBP = ['%ebx', '%esi', '%edi']
