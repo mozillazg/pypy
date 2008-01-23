@@ -14,8 +14,12 @@ class AbstractTestAsmGCRoot:
 
     def getcompiled(self, func):
         def main(argv):
-            res = func()
-            print 'Result:', res
+            try:
+                res = func()
+            except MemoryError:
+                print 'Result: MemoryError'
+            else:
+                print 'Result:', res
             return 0
         from pypy.config.pypyoption import get_pypy_config
         config = get_pypy_config(translating=True)
@@ -37,17 +41,21 @@ class AbstractTestAsmGCRoot:
 
         def run():
             lines = []
-            print 'RUN: starting', exe_name
+            print >> sys.stderr, 'RUN: starting', exe_name
             g = os.popen("'%s'" % (exe_name,), 'r')
             for line in g:
-                print 'RUN:', line.rstrip()
+                print >> sys.stderr, 'RUN:', line.rstrip()
                 lines.append(line)
             g.close()
             if not lines:
                 py.test.fail("no output from subprocess")
             if not lines[-1].startswith('Result:'):
                 py.test.fail("unexpected output from subprocess")
-            return int(lines[-1][len('Result:'):].strip())
+            result = lines[-1][len('Result:'):].strip()
+            if result == 'MemoryError':
+                raise MemoryError("subprocess got an RPython MemoryError")
+            else:
+                return int(result)
         return run
 
 
