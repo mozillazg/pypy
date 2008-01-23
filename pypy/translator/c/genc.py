@@ -41,6 +41,10 @@ class CBuilder(object):
 
         gcpolicyclass = self.get_gcpolicyclass()
 
+        if self.config.translation.asmgcroot:
+            if not self.standalone:
+                raise NotImplementedError("--asmgcroot requires standalone")
+
         if self.config.translation.stackless:
             if not self.standalone:
                 raise Exception("stackless: only for stand-alone builds")
@@ -278,9 +282,12 @@ class CStandaloneBuilder(CBuilder):
 
     def compile(self):
         if self.config.translation.asmgcroot:
-            raise Exception("Dunno how to compile with --asmgcroot. "
-                            "Just go to the %s directory and type 'make'."
-                            % (self.targetdir,))
+            # as we are gcc-only anyway, let's just use the Makefile.
+            cmdline = "make -C '%s'" % (self.targetdir,)
+            err = os.system(cmdline)
+            if err != 0:
+                raise OSError("failed (see output): " + cmdline)
+            return str(self.getccompiler().outputfilename)
         assert self.c_source_filename
         assert not self._compiled
         eci = self.eci.merge(ExternalCompilationInfo(includes=
@@ -360,7 +367,7 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         if self.config.translation.asmgcroot:
             print >> f, 'TRACKGCROOT="%s"' % (os.path.join(autopath.this_dir,
-                                                           'trackgcroot.py'),)
+                                              'gcc', 'trackgcroot.py'),)
         print >> f
         args = ['-l'+libname for libname in self.eci.libraries]
         print >> f, 'LIBS =', ' '.join(args)
