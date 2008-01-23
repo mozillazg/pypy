@@ -53,6 +53,7 @@ def check_computegcmaptable(path):
     print path.basename
     lines = path.readlines()
     tracker = FunctionGcRootTracker(lines)
+    tracker.is_main = tracker.funcname == 'main'
     table = tracker.computegcmaptable(verbose=sys.maxint)
     tabledict = {}
     seen = {}
