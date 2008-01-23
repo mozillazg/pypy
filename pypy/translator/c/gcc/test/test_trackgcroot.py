@@ -1,6 +1,7 @@
 import py
 import sys
-from pypy.translator.c.trackgcroot import GcRootTracker, FunctionGcRootTracker
+from pypy.translator.c.gcc.trackgcroot import GcRootTracker
+from pypy.translator.c.gcc.trackgcroot import FunctionGcRootTracker
 from StringIO import StringIO
 
 
