@@ -24,7 +24,7 @@ class AbstractTestAsmGCRoot:
         from pypy.config.pypyoption import get_pypy_config
         config = get_pypy_config(translating=True)
         config.translation.gc = self.gcpolicy
-        config.translation.asmgcroot = True
+        config.translation.gcrootfinder = "asmgcc"
         t = TranslationContext(config=config)
         self.t = t
         a = t.buildannotator()

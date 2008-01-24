@@ -178,7 +178,7 @@ class CodeWriter(object):
     # Special support for llvm.gcroot
 
     def declare_gcroots(self, gcrootscount):
-        assert self.db.genllvm.config.translation.llvmgcroot
+        assert self.db.genllvm.config.translation.gcrootfinder == "llvmgc"
         for i in range(gcrootscount):
             self._indent("%%gcroot%d = alloca i8*" % i)
         for i in range(gcrootscount):
