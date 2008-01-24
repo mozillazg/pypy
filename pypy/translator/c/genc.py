@@ -41,9 +41,9 @@ class CBuilder(object):
 
         gcpolicyclass = self.get_gcpolicyclass()
 
-        if self.config.translation.asmgcroot:
+        if self.config.translation.gcrootfinder == "asmgcc":
             if not self.standalone:
-                raise NotImplementedError("--asmgcroot requires standalone")
+                raise NotImplementedError("--gcrootfinder=asmgcc requires standalone")
 
         if self.config.translation.stackless:
             if not self.standalone:
@@ -95,11 +95,11 @@ class CBuilder(object):
     def get_gcpolicyclass(self):
         if self.gcpolicy is None:
             name = self.config.translation.gctransformer
-            if self.config.translation.stacklessgc:
+            if self.config.translation.gcrootfinder == "stackless":
                 name = "%s+stacklessgc" % (name,)
-            if self.config.translation.llvmgcroot:
+            elif self.config.translation.gcrootfinder == "llvmgc":
                 name = "%s+llvmgcroot" % (name,)
-            if self.config.translation.asmgcroot:
+            elif self.config.translation.gcrootfinder == "asmgcc":
                 name = "%s+asmgcroot" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
@@ -284,7 +284,7 @@ class CStandaloneBuilder(CBuilder):
         assert self.c_source_filename
         assert not self._compiled
         compiler = self.getccompiler()
-        if self.config.translation.asmgcroot:
+        if self.config.translation.gcrootfinder == "asmgcc":
             # as we are gcc-only anyway, let's just use the Makefile.
             cmdline = "make -C '%s'" % (self.targetdir,)
             err = os.system(cmdline)
@@ -327,7 +327,7 @@ class CStandaloneBuilder(CBuilder):
             compiler.compile_extra.append(self.config.translation.compilerflags)
         if self.config.translation.linkerflags:
             compiler.link_extra.append(self.config.translation.linkerflags)
-        assert not self.config.translation.llvmgcroot
+        assert self.config.translation.gcrootfinder != "llvmgc"
         cfiles = []
         ofiles = []
         for fn in compiler.cfilenames:
@@ -338,7 +338,7 @@ class CStandaloneBuilder(CBuilder):
                 assert fn.dirpath().dirpath() == udir
                 name = '../' + fn.relto(udir)
             cfiles.append(name)
-            if self.config.translation.asmgcroot:
+            if self.config.translation.gcrootfinder == "asmgcc":
                 ofiles.append(name[:-2] + '.s')
             else:
                 ofiles.append(name[:-2] + '.o')
@@ -359,13 +359,13 @@ class CStandaloneBuilder(CBuilder):
         print >> f
         write_list(cfiles, 'SOURCES =')
         print >> f
-        if self.config.translation.asmgcroot:
+        if self.config.translation.gcrootfinder == "asmgcc":
             write_list(ofiles, 'ASMFILES =')
             print >> f, 'OBJECTS = $(ASMFILES) gcmaptable.s'
         else:
             write_list(ofiles, 'OBJECTS =')
         print >> f
-        if self.config.translation.asmgcroot:
+        if self.config.translation.gcrootfinder == "asmgcc":
             print >> f, 'TRACKGCROOT="%s"' % (os.path.join(autopath.this_dir,
                                               'gcc', 'trackgcroot.py'),)
         print >> f
