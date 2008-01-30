@@ -62,11 +62,39 @@ class AbstractSerializationTest:
                                     "make_new_greenvars", 0,
                                     "red_return", 0)
 
+    def test_switch(self):
+        def f(x, y, z):
+            if x:
+                return y
+            else:
+                return z
+        writer, jitcode = self.serialize(f, [int, int, int])
+        expected = code(writer.interpreter,
+                        "red_int_is_true", 0,
+                        "red_goto_iftrue", 3, tlabel("true"),
+                        "make_new_redvars", 1, 2,
+                        "make_new_greenvars", 0,
+                        label("return"),
+                        "red_return", 0,
+                        label("true"),
+                        "make_new_redvars", 1, 1,
+                        "make_new_greenvars", 0,
+                        "goto", tlabel("return"),
+                        )
+        assert jitcode.code == expected
 
 
+class label(object):
+    def __init__(self, name):
+        self.name = name
+
+class tlabel(object):
+    def __init__(self, name):
+        self.name = name
 
 def code(interpreter, *args):
     result = []
+    labelpos = {}
     def emit_2byte(index):
         result.append(chr((index >> 8) & 0xff))
         result.append(chr(index & 0xff))
@@ -75,8 +103,20 @@ def code(interpreter, *args):
             emit_2byte(interpreter.find_opcode(arg))
         elif isinstance(arg, int):
             emit_2byte(arg)
+        elif isinstance(arg, label):
+            labelpos[arg.name] = len(result)
+        elif isinstance(arg, tlabel):
+            result.extend((arg, None, None, None))
         else:
             XXX
+    for i in range(len(result)):
+        b = result[i]
+        if isinstance(b, tlabel):
+            index = labelpos[b.name]
+            result[i + 0] = chr((index >> 24) & 0xff)
+            result[i + 1] = chr((index >> 16) & 0xff)
+            result[i + 2] = chr((index >>  8) & 0xff)
+            result[i + 3] = chr(index & 0xff)
     return "".join(result)
 
 

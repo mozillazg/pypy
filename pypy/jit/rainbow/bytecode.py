@@ -87,10 +87,10 @@ class JitInterpreter(object):
     def opimpl_goto(self):
         XXX
 
-    def opimpl_goto_green_iftrue(self):
+    def opimpl_green_goto_iftrue(self):
         XXX
 
-    def opimpl_goto_red_iftrue(self):
+    def opimpl_red_goto_iftrue(self):
         XXX
 
     def opimpl_red_return(self):
@@ -124,6 +124,7 @@ class BytecodeWriter(object):
         self.constants = []
         self.const_positions = {}
         self.block_positions = {}
+        self.additional_positions = {}
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
         self.make_bytecode_block(graph.startblock)
@@ -156,26 +157,41 @@ class BytecodeWriter(object):
     def insert_exits(self, block):
         if block.exits == ():
             returnvar, = block.inputargs
-            if self.hannotator.binding(returnvar).is_green():
-                color = "green"
-            else:
-                color = "red"
+            color = self.varcolor(returnvar)
+            index = self.serialize_oparg(color, returnvar)
             self.emit_2byte(self.interpreter.find_opcode("%s_return" % color))
-            self.emit_2byte(self.serialize_oparg(color, returnvar))
+            self.emit_2byte(index)
         elif len(block.exits) == 1:
             link, = block.exits
             self.insert_renaming(link.args)
             self.make_bytecode_block(link.target, insert_goto=True)
+        elif len(block.exits) == 2:
+            linkfalse, linktrue = block.exits
+            if linkfalse.llexitcase == True:
+                linkfalse, linktrue = linktrue, linkfalse
+            color = self.varcolor(block.exitswitch)
+            index = self.serialize_oparg(color, block.exitswitch)
+            self.emit_2byte(self.interpreter.find_opcode("%s_goto_iftrue" % color))
+            self.emit_2byte(index)
+            self.emit_jumptarget(linktrue)
+            self.insert_renaming(linkfalse.args)
+            self.make_bytecode_block(linkfalse.target, insert_goto=True)
+            self.additional_positions[linktrue] = len(self.bytecode)
+            self.insert_renaming(linktrue.args)
+            self.emit_2byte(self.interpreter.find_opcode("goto"))
+            self.emit_jumptarget(linktrue.target)
         else:
             XXX
 
     def patch_jumps(self):
         for i in range(len(self.bytecode)):
+            byte = self.bytecode[i]
             if isinstance(self.bytecode[i], str):
                 continue
-            assert 0
-            # must be a block
-            index = self.block_positions[self.bytecode[i]]
+            if byte in self.block_positions:
+                index = self.block_positions[byte]
+            else:
+                index = self.additional_positions[byte]
             self.bytecode[i + 0] = chr((index >> 24) & 0xff)
             self.bytecode[i + 1] = chr((index >> 16) & 0xff)
             self.bytecode[i + 2] = chr((index >>  8) & 0xff)
@@ -245,6 +261,13 @@ class BytecodeWriter(object):
         if not self.hannotator.binding(op.result).is_green():
             return "red"
         return "green"
+
+    def varcolor(self, var):
+        if self.hannotator.binding(var).is_green():
+            color = "green"
+        else:
+            color = "red"
+        return color
         
     def redvar_position(self, arg):
         return self.redvar_positions.setdefault(
