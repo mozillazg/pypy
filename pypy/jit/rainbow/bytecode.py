@@ -117,6 +117,7 @@ class BytecodeWriter(object):
         self.hannotator = hintannotator
         self.interpreter = JitInterpreter()
         self.RGenOp = RGenOp
+        self.current_block = None
 
     def make_bytecode(self, graph):
         self.seen_blocks = {}
@@ -125,9 +126,14 @@ class BytecodeWriter(object):
         self.const_positions = {}
         self.seen_blocks = {}
         self.additional_positions = {}
+        self.redvar_positions = {}
+        self.free_red = {}
+        self.greenvar_positions = {}
+        self.free_green = {}
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
         self.make_bytecode_block(graph.startblock)
+        assert self.current_block is None
         return JitCode(assemble(self.interpreter, *self.assembler), self.constants)
 
     def make_bytecode_block(self, block, insert_goto=False):
@@ -138,21 +144,22 @@ class BytecodeWriter(object):
             return
         # inserting a goto not necessary, falling through
         self.seen_blocks[block] = True
+        oldblock = self.current_block
+        self.free_green[block] = 0
+        self.free_red[block] = 0
         self.current_block = block
-        self.redvar_positions = {}
-        self.greenvar_positions = {}
         self.emit(label(block))
         reds, greens = self.sort_by_color(block.inputargs)
-        # asign positions to the arguments
         for arg in reds:
-            self.redvar_position(arg)
+            self.register_redvar(arg)
         for arg in greens:
-            self.greenvar_positions(arg)
+            self.register_greenvar(arg)
         #self.insert_merges(block)
         for op in block.operations:
             self.serialize_op(op)
         #self.insert_splits(block)
         self.insert_exits(block)
+        self.current_block = oldblock
 
     def insert_exits(self, block):
         if block.exits == ():
@@ -194,6 +201,9 @@ class BytecodeWriter(object):
                 self.emit(index)
 
     def serialize_op(self, op):
+        specialcase = getattr(self, "serialize_op_%s" % (op.opname, ), None)
+        if specialcase is not None:
+            return specialcase(op)
         color = self.opcolor(op)
         args = []
         for arg in op.args:
@@ -202,9 +212,9 @@ class BytecodeWriter(object):
         for index in args:
             self.emit(index)
         if self.hannotator.binding(op.result).is_green():
-            self.green_position(op.result)
+            self.register_greenvar(op.result)
         else:
-            self.redvar_position(op.result)
+            self.register_redvar(op.result)
         
 
     def serialize_opcode(self, color, op):
@@ -221,17 +231,19 @@ class BytecodeWriter(object):
 
     def serialize_oparg(self, color, arg):
         if color == "red":
-            if self.hannotator.binding(arg).is_green():
+            if self.varcolor(arg) == "green":
                 return self.convert_to_red(arg)
             return self.redvar_position(arg)
-        XXX
+        elif color == "green":
+            return self.green_position(arg)
+        assert 0, "unknown color"
 
     def convert_to_red(self, arg):
         if arg in self.redvar_positions:
             # already converted
             return self.redvar_positions[arg]
         self.emit("make_redbox")
-        resultindex = self.redvar_positions[arg] = len(self.redvar_positions)
+        resultindex = self.register_redvar((arg, block))
         argindex = self.green_position(arg)
         self.emit(resultindex)
         self.emit(argindex)
@@ -252,14 +264,26 @@ class BytecodeWriter(object):
             color = "red"
         return color
         
+    def register_redvar(self, arg):
+        print "register_redvar", arg
+        assert arg not in self.redvar_positions
+        self.redvar_positions[arg] = result = self.free_red[self.current_block]
+        self.free_red[self.current_block] += 1
+
     def redvar_position(self, arg):
-        return self.redvar_positions.setdefault(
-                    arg, len(self.redvar_positions))
-        
+        return self.redvar_positions[arg]
+
+    def register_greenvar(self, arg, where=-1):
+        assert isinstance(arg, flowmodel.Variable)
+        if where == -1:
+            where = self.free_green[self.current_block]
+            self.free_green[self.current_block] += 1
+        self.greenvar_positions[arg] = where
+        return where
+
     def green_position(self, arg):
         if isinstance(arg, flowmodel.Variable):
-            return self.greenvar_positions.setdefault(
-                        arg, len(self.greenvar_positions))
+            return self.greenvar_positions[arg]
         return -self.const_positions(arg)
 
     def const_position(self, const):
@@ -284,15 +308,33 @@ class BytecodeWriter(object):
                 reds.append(v)
         return reds, greens
 
+    # operation special cases
+
+    def serialize_op_hint(self, op):
+        hints = op.args[1].value
+        arg = op.args[0]
+        result = op.result
+        if "concrete" in hints:
+            assert self.hannotator.binding(arg).is_green()
+            assert self.hannotator.binding(result).is_green()
+            self.register_greenvar(result, self.green_position(arg))
+            return
+        XXX
 
 
 class label(object):
     def __init__(self, name):
         self.name = name
 
+    def __repr__(self):
+        return "label(%r)" % (self.name, )
+
 class tlabel(object):
     def __init__(self, name):
         self.name = name
+
+    def __repr__(self):
+        return "tlabel(%r)" % (self.name, )
 
 def assemble(interpreter, *args):
     result = []
