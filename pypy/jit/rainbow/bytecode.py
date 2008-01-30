@@ -120,28 +120,28 @@ class BytecodeWriter(object):
 
     def make_bytecode(self, graph):
         self.seen_blocks = {}
-        self.bytecode = []
+        self.assembler = []
         self.constants = []
         self.const_positions = {}
-        self.block_positions = {}
+        self.seen_blocks = {}
         self.additional_positions = {}
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
         self.make_bytecode_block(graph.startblock)
-        self.patch_jumps()
-        return JitCode("".join(self.bytecode), self.constants)
+        return JitCode(assemble(self.interpreter, *self.assembler), self.constants)
 
     def make_bytecode_block(self, block, insert_goto=False):
-        if block in self.block_positions:
+        if block in self.seen_blocks:
             if insert_goto:
-                self.emit_2byte(self.interpreter.find_opcode("goto"))
-                self.emit_4byte(self.block_positions[block])
+                self.emit("goto")
+                self.emit(tlabel(block))
             return
         # inserting a goto not necessary, falling through
+        self.seen_blocks[block] = True
         self.current_block = block
         self.redvar_positions = {}
         self.greenvar_positions = {}
-        self.block_positions[block] = len(self.bytecode)
+        self.emit(label(block))
         reds, greens = self.sort_by_color(block.inputargs)
         # asign positions to the arguments
         for arg in reds:
@@ -159,8 +159,8 @@ class BytecodeWriter(object):
             returnvar, = block.inputargs
             color = self.varcolor(returnvar)
             index = self.serialize_oparg(color, returnvar)
-            self.emit_2byte(self.interpreter.find_opcode("%s_return" % color))
-            self.emit_2byte(index)
+            self.emit("%s_return" % color)
+            self.emit(index)
         elif len(block.exits) == 1:
             link, = block.exits
             self.insert_renaming(link.args)
@@ -171,31 +171,16 @@ class BytecodeWriter(object):
                 linkfalse, linktrue = linktrue, linkfalse
             color = self.varcolor(block.exitswitch)
             index = self.serialize_oparg(color, block.exitswitch)
-            self.emit_2byte(self.interpreter.find_opcode("%s_goto_iftrue" % color))
-            self.emit_2byte(index)
-            self.emit_jumptarget(linktrue)
+            self.emit("%s_goto_iftrue" % color)
+            self.emit(index)
+            self.emit(tlabel(linktrue))
             self.insert_renaming(linkfalse.args)
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
-            self.additional_positions[linktrue] = len(self.bytecode)
+            self.emit(label(linktrue))
             self.insert_renaming(linktrue.args)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
             XXX
-
-    def patch_jumps(self):
-        for i in range(len(self.bytecode)):
-            byte = self.bytecode[i]
-            if isinstance(self.bytecode[i], str):
-                continue
-            if byte in self.block_positions:
-                index = self.block_positions[byte]
-            else:
-                index = self.additional_positions[byte]
-            self.bytecode[i + 0] = chr((index >> 24) & 0xff)
-            self.bytecode[i + 1] = chr((index >> 16) & 0xff)
-            self.bytecode[i + 2] = chr((index >>  8) & 0xff)
-            self.bytecode[i + 3] = chr(index & 0xff)
-
 
     def insert_renaming(self, args):
         reds, greens = self.sort_by_color(args)
@@ -203,11 +188,10 @@ class BytecodeWriter(object):
             result = []
             for v in args:
                 result.append(self.serialize_oparg(color, v))
-            self.emit_2byte(self.interpreter.find_opcode(
-                "make_new_%svars" % (color, )))
-            self.emit_2byte(len(args))
+            self.emit("make_new_%svars" % (color, ))
+            self.emit(len(args))
             for index in result:
-                self.emit_2byte(index)
+                self.emit(index)
 
     def serialize_op(self, op):
         color = self.opcolor(op)
@@ -216,7 +200,7 @@ class BytecodeWriter(object):
             args.append(self.serialize_oparg(color, arg))
         self.serialize_opcode(color, op)
         for index in args:
-            self.emit_2byte(index)
+            self.emit(index)
         if self.hannotator.binding(op.result).is_green():
             self.green_position(op.result)
         else:
@@ -233,7 +217,7 @@ class BytecodeWriter(object):
                 self.hannotator.binding(op.result), self.RGenOp)
             opdesc = rtimeshift.make_opdesc(hop)
             index = self.interpreter.make_opcode_implementation(color, opdesc)
-        self.emit_2byte(index)
+        self.emit(name)
 
     def serialize_oparg(self, color, arg):
         if color == "red":
@@ -246,11 +230,11 @@ class BytecodeWriter(object):
         if arg in self.redvar_positions:
             # already converted
             return self.redvar_positions[arg]
-        self.emit_2byte(self.interpreter.find_opcode("make_redbox"))
+        self.emit("make_redbox")
         resultindex = self.redvar_positions[arg] = len(self.redvar_positions)
         argindex = self.green_position(arg)
-        self.emit_2byte(resultindex)
-        self.emit_2byte(argindex)
+        self.emit(resultindex)
+        self.emit(argindex)
         return resultindex
 
     def opcolor(self, op):
@@ -283,19 +267,8 @@ class BytecodeWriter(object):
             return self.const_position[const]
         XXX
         
-    def emit_2byte(self, index):
-        assert not index & 0xffff0000
-        self.bytecode.append(chr((index >> 8) & 0xff))
-        self.bytecode.append(chr(index & 0xff))
-
-    def emit_4byte(self, index):
-        self.bytecode.append(chr((index >> 24) & 0xff))
-        self.bytecode.append(chr((index >> 16) & 0xff))
-        self.bytecode.append(chr((index >>  8) & 0xff))
-        self.bytecode.append(chr(index & 0xff))
-
-    def emit_jumptarget(self, block):
-        self.bytecode.extend((block, None, None, None))
+    def emit(self, stuff):
+        self.assembler.append(stuff)
 
     def sort_by_color(self, vars, by_color_of_vars=None):
         reds = []
@@ -310,6 +283,45 @@ class BytecodeWriter(object):
             else:
                 reds.append(v)
         return reds, greens
+
+
+
+class label(object):
+    def __init__(self, name):
+        self.name = name
+
+class tlabel(object):
+    def __init__(self, name):
+        self.name = name
+
+def assemble(interpreter, *args):
+    result = []
+    labelpos = {}
+    def emit_2byte(index):
+        result.append(chr((index >> 8) & 0xff))
+        result.append(chr(index & 0xff))
+    for arg in args:
+        if isinstance(arg, str):
+            emit_2byte(interpreter.find_opcode(arg))
+        elif isinstance(arg, int):
+            emit_2byte(arg)
+        elif isinstance(arg, label):
+            labelpos[arg.name] = len(result)
+        elif isinstance(arg, tlabel):
+            result.extend((arg, None, None, None))
+        else:
+            XXX
+    for i in range(len(result)):
+        b = result[i]
+        if isinstance(b, tlabel):
+            index = labelpos[b.name]
+            result[i + 0] = chr((index >> 24) & 0xff)
+            result[i + 1] = chr((index >> 16) & 0xff)
+            result[i + 2] = chr((index >>  8) & 0xff)
+            result[i + 3] = chr(index & 0xff)
+    return "".join(result)
+
+
 
 # XXX too lazy to fix the interface of make_opdesc
 class PseudoHOP(object):
