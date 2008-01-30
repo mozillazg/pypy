@@ -85,17 +85,18 @@ class AbstractSerializationTest:
                             )
         assert jitcode.code == expected
 
-    def test_switch2(self):
+    def test_green_switch2(self):
         def f(x, y, z):
+            x = hint(x, concrete=True)
             if x:
                 return y + z
             else:
                 return y - z
         writer, jitcode = self.serialize(f, [int, int, int])
         expected = assemble(writer.interpreter,
-                            "red_int_is_true", 0,
-                            "red_goto_iftrue", 3, tlabel("true"),
-                            "make_new_redvars", 2, 1, 2,
+                            "green_int_is_true", 0,
+                            "green_goto_iftrue", 1, tlabel("true"),
+                            "make_new_redvars", 2, 0, 1,
                             "make_new_greenvars", 0,
                             label("sub"),
                             "red_int_sub", 0, 1,
@@ -104,7 +105,7 @@ class AbstractSerializationTest:
                             label("return"),
                             "red_return", 0,
                             label("true"),
-                            "make_new_redvars", 2, 1, 2,
+                            "make_new_redvars", 2, 0, 1,
                             "make_new_greenvars", 0,
                             label("add"),
                             "red_int_add", 0, 1,
