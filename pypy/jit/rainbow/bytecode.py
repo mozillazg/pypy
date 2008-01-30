@@ -178,8 +178,7 @@ class BytecodeWriter(object):
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
             self.additional_positions[linktrue] = len(self.bytecode)
             self.insert_renaming(linktrue.args)
-            self.emit_2byte(self.interpreter.find_opcode("goto"))
-            self.emit_jumptarget(linktrue.target)
+            self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
             XXX
 

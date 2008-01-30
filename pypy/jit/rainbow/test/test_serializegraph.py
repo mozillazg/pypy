@@ -4,6 +4,7 @@ from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.rainbow.bytecode import BytecodeWriter
 from pypy.jit.codegen.llgraph.rgenop import RGenOp
+from pypy.rlib.jit import hint
 from pypy import conftest
 
 
@@ -82,6 +83,36 @@ class AbstractSerializationTest:
                         "goto", tlabel("return"),
                         )
         assert jitcode.code == expected
+
+    def test_switch2(self):
+        def f(x, y, z):
+            if x:
+                return y + z
+            else:
+                return y - z
+        writer, jitcode = self.serialize(f, [int, int, int])
+        expected = code(writer.interpreter,
+                        "red_int_is_true", 0,
+                        "red_goto_iftrue", 3, tlabel("true"),
+                        "make_new_redvars", 2, 1, 2,
+                        "make_new_greenvars", 0,
+                        label("sub"),
+                        "red_int_sub", 0, 1,
+                        "make_new_redvars", 1, 2,
+                        "make_new_greenvars", 0,
+                        label("return"),
+                        "red_return", 0,
+                        label("true"),
+                        "make_new_redvars", 2, 1, 2,
+                        "make_new_greenvars", 0,
+                        label("add"),
+                        "red_int_add", 0, 1,
+                        "make_new_redvars", 1, 2,
+                        "make_new_greenvars", 0,
+                        "goto", tlabel("return"),
+                        )
+        assert jitcode.code == expected
+
 
 
 class label(object):
