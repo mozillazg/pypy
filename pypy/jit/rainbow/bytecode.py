@@ -239,13 +239,13 @@ class BytecodeWriter(object):
         assert 0, "unknown color"
 
     def convert_to_red(self, arg):
-        if arg in self.redvar_positions:
+        block = self.current_block
+        if (arg, block) in self.redvar_positions:
             # already converted
             return self.redvar_positions[arg]
         self.emit("make_redbox")
         resultindex = self.register_redvar((arg, block))
         argindex = self.green_position(arg)
-        self.emit(resultindex)
         self.emit(argindex)
         return resultindex
 
@@ -269,6 +269,7 @@ class BytecodeWriter(object):
         assert arg not in self.redvar_positions
         self.redvar_positions[arg] = result = self.free_red[self.current_block]
         self.free_red[self.current_block] += 1
+        return result
 
     def redvar_position(self, arg):
         return self.redvar_positions[arg]
@@ -284,14 +285,19 @@ class BytecodeWriter(object):
     def green_position(self, arg):
         if isinstance(arg, flowmodel.Variable):
             return self.greenvar_positions[arg]
-        return -self.const_positions(arg)
+        return -self.const_position(arg) - 1
 
     def const_position(self, const):
-        if const in self.const_position:
-            return self.const_position[const]
-        XXX
+        if const in self.const_positions:
+            return self.const_positions[const]
+        const = self.RGenOp.constPrebuiltGlobal(const.value)
+        result = len(self.constants)
+        self.constants.append(const)
+        self.const_positions[const] = result
+        return result
         
     def emit(self, stuff):
+        assert stuff is not None
         self.assembler.append(stuff)
 
     def sort_by_color(self, vars, by_color_of_vars=None):

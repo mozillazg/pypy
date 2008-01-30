@@ -62,6 +62,19 @@ class AbstractSerializationTest:
                                         "make_new_redvars", 1, 2,
                                         "make_new_greenvars", 0,
                                         "red_return", 0)
+        assert len(jitcode.constants) == 0
+
+    def test_constant(self):
+        def f(x):
+            return x + 1
+        writer, jitcode = self.serialize(f, [int])
+        assert jitcode.code == assemble(writer.interpreter,
+                                        "make_redbox", -1,
+                                        "red_int_add", 0, 1,
+                                        "make_new_redvars", 1, 2,
+                                        "make_new_greenvars", 0,
+                                        "red_return", 0)
+        assert len(jitcode.constants) == 1
  
     def test_green_switch(self):
         def f(x, y, z):
@@ -84,6 +97,7 @@ class AbstractSerializationTest:
                             "goto", tlabel("return"),
                             )
         assert jitcode.code == expected
+        assert len(jitcode.constants) == 0
 
     def test_green_switch2(self):
         def f(x, y, z):
@@ -114,6 +128,7 @@ class AbstractSerializationTest:
                             "goto", tlabel("return"),
                             )
         assert jitcode.code == expected
+        assert len(jitcode.constants) == 0
 
 
 
