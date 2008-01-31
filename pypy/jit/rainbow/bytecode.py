@@ -65,6 +65,9 @@ class JitInterpreter(object):
             else:
                 XXX
             def implementation(self):
+                XXX
+                # the following is nonsense: the green arguments are
+                # GenConsts, so there are revealconsts missing
                 args = (self.jitstate, )
                 for i in numargs:
                     args.append(self.get_redarg())
