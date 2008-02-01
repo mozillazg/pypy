@@ -59,53 +59,6 @@ class JitInterpreter(object):
             if result is STOP:
                 return
 
-    # construction-time interface
-
-    def _add_implemented_opcodes(self):
-        for name in dir(self):
-            if not name.startswith("opimpl_"):
-                continue
-            opname = name[len("opimpl_"):]
-            self.opname_to_index[opname] = len(self.opcode_implementations)
-            self.opcode_implementations.append(getattr(self, name).im_func)
-            self.opcode_descs.append(None)
-
-    def find_opcode(self, name):
-        return self.opname_to_index.get(name, -1)
-
-    def make_opcode_implementation(self, color, opdesc):
-        numargs = unrolling_iterable(range(opdesc.nb_args))
-        if color == "green":
-            def implementation(self):
-                args = ()
-                for i in numargs:
-                    genconst = self.get_greenarg()
-                    arg = self.jitstate.curbuilder.revealconst(opdesc.ARGS[i])
-                    args += (arg, )
-                result = opdesc.llop(*args)
-                self.green_result(result)
-        elif color == "red":
-            if opdesc.nb_args == 1:
-                impl = rtimeshift.ll_gen1
-            elif opdesc.nb_args == 2:
-                impl = rtimeshift.ll_gen2
-            else:
-                XXX
-            def implementation(self):
-                args = (opdesc, self.jitstate, )
-                for i in numargs:
-                    args += (self.get_redarg(), )
-                result = impl(*args)
-                self.red_result(result)
-        else:
-            assert 0, "unknown color"
-        implementation.func_name = "opimpl_%s_%s" % (color, opdesc.opname)
-        opname = "%s_%s" % (color, opdesc.opname)
-        index = self.opname_to_index[opname] = len(self.opcode_implementations)
-        self.opcode_implementations.append(implementation)
-        self.opcode_descs.append(opdesc)
-        return index
-            
 
     # operation helper functions
 
@@ -183,7 +136,53 @@ class JitInterpreter(object):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
 
+    # construction-time interface
 
+    def _add_implemented_opcodes(self):
+        for name in dir(self):
+            if not name.startswith("opimpl_"):
+                continue
+            opname = name[len("opimpl_"):]
+            self.opname_to_index[opname] = len(self.opcode_implementations)
+            self.opcode_implementations.append(getattr(self, name).im_func)
+            self.opcode_descs.append(None)
+
+    def find_opcode(self, name):
+        return self.opname_to_index.get(name, -1)
+
+    def make_opcode_implementation(self, color, opdesc):
+        numargs = unrolling_iterable(range(opdesc.nb_args))
+        if color == "green":
+            def implementation(self):
+                args = ()
+                for i in numargs:
+                    genconst = self.get_greenarg()
+                    arg = self.jitstate.curbuilder.revealconst(opdesc.ARGS[i])
+                    args += (arg, )
+                result = opdesc.llop(*args)
+                self.green_result(result)
+        elif color == "red":
+            if opdesc.nb_args == 1:
+                impl = rtimeshift.ll_gen1
+            elif opdesc.nb_args == 2:
+                impl = rtimeshift.ll_gen2
+            else:
+                XXX
+            def implementation(self):
+                args = (opdesc, self.jitstate, )
+                for i in numargs:
+                    args += (self.get_redarg(), )
+                result = impl(*args)
+                self.red_result(result)
+        else:
+            assert 0, "unknown color"
+        implementation.func_name = "opimpl_%s_%s" % (color, opdesc.opname)
+        opname = "%s_%s" % (color, opdesc.opname)
+        index = self.opname_to_index[opname] = len(self.opcode_implementations)
+        self.opcode_implementations.append(implementation)
+        self.opcode_descs.append(opdesc)
+        return index
+            
 
 
 class BytecodeWriter(object):
