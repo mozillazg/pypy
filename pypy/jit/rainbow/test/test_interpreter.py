@@ -156,5 +156,23 @@ class AbstractInterpretationTest(object):
         res = self.interpret(f, [0, 1, 2])
         assert res == -1
 
+    def test_arith_plus_minus(self):
+        def ll_plus_minus(encoded_insn, nb_insn, x, y):
+            acc = x
+            pc = 0
+            hint(nb_insn, concrete=True)
+            while pc < nb_insn:
+                op = (encoded_insn >> (pc*4)) & 0xF
+                op = hint(op, concrete=True)
+                if op == 0xA:
+                    acc += y
+                elif op == 0x5:
+                    acc -= y
+                pc += 1
+            return acc
+        assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
+        res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10])
+        assert res == 42
+
 class TestLLType(AbstractInterpretationTest):
     type_system = "lltype"
