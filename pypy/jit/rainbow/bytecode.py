@@ -102,7 +102,11 @@ class JitInterpreter(object):
         self.frame.pc = target
 
     def opimpl_green_goto_iftrue(self):
-        XXX
+        genconst = self.get_greenarg()
+        target = self.load_4byte()
+        arg = genconst.revealconst(lltype.Bool)
+        if arg:
+            self.frame.pc = target
 
     def opimpl_red_goto_iftrue(self):
         XXX
@@ -115,7 +119,10 @@ class JitInterpreter(object):
         return STOP
 
     def opimpl_green_return(self):
-        XXX
+        rtimeshift.save_return(self.jitstate)
+        newstate = rtimeshift.leave_graph_yellow(self.queue)
+        self.jitstate = newstate
+        return STOP
         return STOP # XXX wrong, of course
 
     def opimpl_make_new_redvars(self):
@@ -154,12 +161,13 @@ class JitInterpreter(object):
         numargs = unrolling_iterable(range(opdesc.nb_args))
         if color == "green":
             def implementation(self):
-                args = ()
+                args = (opdesc.RESULT, )
                 for i in numargs:
                     genconst = self.get_greenarg()
-                    arg = self.jitstate.curbuilder.revealconst(opdesc.ARGS[i])
+                    arg = genconst.revealconst(opdesc.ARGS[i])
                     args += (arg, )
-                result = opdesc.llop(*args)
+                rgenop = self.jitstate.curbuilder.rgenop
+                result = rgenop.genconst(opdesc.llop(*args))
                 self.green_result(result)
         elif color == "red":
             if opdesc.nb_args == 1:

@@ -11,6 +11,7 @@ from pypy.jit.timeshifter import rtimeshift, exception, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.annotation import model as annmodel
+from pypy.rlib.jit import hint
 from pypy import conftest
 
 def getargtypes(annotator, values):
@@ -79,7 +80,9 @@ class AbstractInterpretationTest(object):
         ARGS = []
         for var in self.graph.getargs():
             # XXX ignoring virtualizables for now
-            ARGS.append(originalconcretetype(self.hannotator.binding(var)))
+            binding = self.hannotator.binding(var)
+            if not binding.is_green():
+                ARGS.append(originalconcretetype(binding))
         FUNC = lltype.FuncType(ARGS, RESTYPE)
         sigtoken = rgenop.sigToken(FUNC)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
@@ -106,7 +109,7 @@ class AbstractInterpretationTest(object):
         i = 0
         for color, ll_val in zip(argcolors, values):
             if color == "green":
-                greenargs.append(writer.RGenOp.constPrebuiltGlobal(const.value))
+                greenargs.append(writer.RGenOp.constPrebuiltGlobal(ll_val))
             else:
                 TYPE = lltype.typeOf(ll_val)
                 kind = rgenop.kindToken(TYPE)
@@ -135,6 +138,17 @@ class AbstractInterpretationTest(object):
             return x + y
         res = self.interpret(f, [1, 2])
         assert res == 3
+
+    def test_green_switch(self):
+        def f(green, x, y):
+            green = hint(green, concrete=True)
+            if green:
+                return x + y
+            return x - y
+        res = self.interpret(f, [1, 1, 2])
+        assert res == 3
+        res = self.interpret(f, [0, 1, 2])
+        assert res == -1
 
 class TestLLType(AbstractInterpretationTest):
     type_system = "lltype"
