@@ -139,6 +139,12 @@ class AbstractInterpretationTest(object):
         res = self.interpret(f, [1, 2])
         assert res == 3
 
+    def test_convert_const_to_red(self):
+        def f(x):
+            return x + 1
+        res = self.interpret(f, [2])
+        assert res == 3
+
     def test_green_switch(self):
         def f(green, x, y):
             green = hint(green, concrete=True)

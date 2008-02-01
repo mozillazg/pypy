@@ -18,16 +18,20 @@ class JitCode(object):
     green consts are negative indexes
     """
 
-    def __init__(self, code, constants):
+    def __init__(self, code, constants, typekinds, redboxclasses):
         self.code = code
         self.constants = constants
+        self.typekinds = typekinds
+        self.redboxclasses = redboxclasses
 
     def _freeze_(self):
         return True
 
 SIGN_EXTEND2 = 1 << 15
 
-STOP = object()
+class STOP(object):
+    pass
+STOP = STOP()
 
 class JitInterpreter(object):
     def __init__(self):
@@ -58,6 +62,8 @@ class JitInterpreter(object):
             result = self.opcode_implementations[bytecode](self)
             if result is STOP:
                 return
+            else:
+                assert result is None
 
 
     # operation helper functions
@@ -95,7 +101,11 @@ class JitInterpreter(object):
 
     # operation implementations
     def opimpl_make_redbox(self):
-        XXX
+        genconst = self.get_greenarg()
+        typeindex = self.load_2byte()
+        kind = self.frame.bytecode.typekinds[typeindex]
+        redboxcls = self.frame.bytecode.redboxclasses[typeindex]
+        self.red_result(redboxcls(kind, genconst))
 
     def opimpl_goto(self):
         target = self.load_4byte()
@@ -123,7 +133,6 @@ class JitInterpreter(object):
         newstate = rtimeshift.leave_graph_yellow(self.queue)
         self.jitstate = newstate
         return STOP
-        return STOP # XXX wrong, of course
 
     def opimpl_make_new_redvars(self):
         # an opcode with a variable number of args
@@ -206,18 +215,29 @@ class BytecodeWriter(object):
         self.seen_blocks = {}
         self.assembler = []
         self.constants = []
+        self.typekinds = []
+        self.redboxclasses = []
+        # mapping constant -> index in constants
         self.const_positions = {}
+        # mapping blocks to True
         self.seen_blocks = {}
-        self.additional_positions = {}
         self.redvar_positions = {}
+        # mapping block to the free red index
         self.free_red = {}
         self.greenvar_positions = {}
+        # mapping block to the free green index
         self.free_green = {}
+        # mapping TYPE to index
+        self.type_positions = {}
+
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
         self.make_bytecode_block(graph.startblock)
         assert self.current_block is None
-        return JitCode(assemble(self.interpreter, *self.assembler), self.constants)
+        return JitCode(assemble(self.interpreter, *self.assembler),
+                       self.constants,
+                       self.typekinds,
+                       self.redboxclasses)
 
     def make_bytecode_block(self, block, insert_goto=False):
         if block in self.seen_blocks:
@@ -330,6 +350,7 @@ class BytecodeWriter(object):
         resultindex = self.register_redvar((arg, block))
         argindex = self.green_position(arg)
         self.emit(argindex)
+        self.emit(self.type_position(arg.concretetype))
         return resultindex
 
     def opcolor(self, op):
@@ -376,6 +397,15 @@ class BytecodeWriter(object):
         result = len(self.constants)
         self.constants.append(const)
         self.const_positions[const] = result
+        return result
+
+    def type_position(self, TYPE):
+        if TYPE in self.type_positions:
+            return self.type_positions[TYPE]
+        self.typekinds.append(self.RGenOp.kindToken(TYPE))
+        self.redboxclasses.append(rvalue.ll_redboxcls(TYPE))
+        result = len(self.type_positions)
+        self.type_positions[TYPE] = result
         return result
         
     def emit(self, stuff):
