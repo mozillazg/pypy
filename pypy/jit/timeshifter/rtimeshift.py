@@ -78,7 +78,7 @@ def make_opdesc(hop):
 def ll_gen1(opdesc, jitstate, argbox):
     ARG0 = opdesc.ARG0
     RESULT = opdesc.RESULT
-    opname = opdesc.name
+    opname = opdesc.opname
     if opdesc.tryfold and argbox.is_constant():
         arg = rvalue.ll_getvalue(argbox, ARG0)
         if not opdesc.canraise:
@@ -106,7 +106,7 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
     ARG0 = opdesc.ARG0
     ARG1 = opdesc.ARG1
     RESULT = opdesc.RESULT
-    opname = opdesc.name
+    opname = opdesc.opname
     if opdesc.tryfold and argbox0.is_constant() and argbox1.is_constant():
         # const propagate
         arg0 = rvalue.ll_getvalue(argbox0, ARG0)
@@ -991,6 +991,7 @@ class VirtualFrame(object):
         self.backframe = backframe
         self.dispatchqueue = dispatchqueue
         #self.local_boxes = ... set by callers
+        #self.local_green = ... set by callers
 
     def enter_block(self, incoming, memo):
         for box in self.local_boxes:

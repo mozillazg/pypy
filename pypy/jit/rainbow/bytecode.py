@@ -1,3 +1,4 @@
+from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
@@ -24,14 +25,39 @@ class JitCode(object):
     def _freeze_(self):
         return True
 
+SIGN_EXTEND2 = 1 << 15
+
+STOP = object()
+
 class JitInterpreter(object):
     def __init__(self):
         self.opcode_implementations = []
         self.opcode_descs = []
         self.opname_to_index = {}
         self.jitstate = None
+        self.queue = None
         self.bytecode = None
+        self.pc = -1
         self._add_implemented_opcodes()
+
+    def run(self, jitstate, bytecode, greenargs, redargs):
+        self.jitstate = jitstate
+        self.queue = rtimeshift.ensure_queue(jitstate,
+                                             rtimeshift.BaseDispatchQueue)
+        rtimeshift.enter_frame(self.jitstate, self.queue)
+        self.frame = self.jitstate.frame
+        self.frame.pc = 0
+        self.frame.bytecode = bytecode
+        self.frame.local_boxes = redargs
+        self.frame.local_green = greenargs
+        self.bytecode_loop()
+
+    def bytecode_loop(self):
+        while 1:
+            bytecode = self.load_2byte()
+            result = self.opcode_implementations[bytecode](self)
+            if result is STOP:
+                return
 
     # construction-time interface
 
@@ -44,7 +70,6 @@ class JitInterpreter(object):
             self.opcode_implementations.append(getattr(self, name).im_func)
             self.opcode_descs.append(None)
 
-
     def find_opcode(self, name):
         return self.opname_to_index.get(name, -1)
 
@@ -54,7 +79,9 @@ class JitInterpreter(object):
             def implementation(self):
                 args = ()
                 for i in numargs:
-                    args.append(self.get_greenarg())
+                    genconst = self.get_greenarg()
+                    arg = self.jitstate.curbuilder.revealconst(opdesc.ARGS[i])
+                    args += (arg, )
                 result = opdesc.llop(*args)
                 self.green_result(result)
         elif color == "red":
@@ -65,12 +92,9 @@ class JitInterpreter(object):
             else:
                 XXX
             def implementation(self):
-                XXX
-                # the following is nonsense: the green arguments are
-                # GenConsts, so there are revealconsts missing
-                args = (self.jitstate, )
+                args = (opdesc, self.jitstate, )
                 for i in numargs:
-                    args.append(self.get_redarg())
+                    args += (self.get_redarg(), )
                 result = impl(*args)
                 self.red_result(result)
         else:
@@ -83,12 +107,46 @@ class JitInterpreter(object):
         return index
             
 
-    # operation implemetations
+    # operation helper functions
+
+    def load_2byte(self):
+        pc = self.frame.pc
+        result = ((ord(self.frame.bytecode.code[pc]) << 8) |
+                   ord(self.frame.bytecode.code[pc + 1]))
+        self.frame.pc = pc + 2
+        return intmask((result ^ SIGN_EXTEND2) - SIGN_EXTEND2)
+
+    def load_4byte(self):
+        pc = self.frame.pc
+        result = ((ord(self.frame.bytecode.code[pc + 0]) << 24) |
+                  (ord(self.frame.bytecode.code[pc + 1]) << 16) |
+                  (ord(self.frame.bytecode.code[pc + 2]) <<  8) |
+                  (ord(self.frame.bytecode.code[pc + 3]) <<  0))
+        self.frame.pc = pc + 4
+        return intmask(result)
+
+    def get_greenarg(self):
+        i = self.load_2byte()
+        if i < 0:
+            return self.frame.bytecode.constants[~i]
+        return self.frame.local_green[i]
+
+    def get_redarg(self):
+        return self.frame.local_boxes[self.load_2byte()]
+
+    def red_result(self, box):
+        self.frame.local_boxes.append(box)
+
+    def green_result(self, gv):
+        self.frame.local_green.append(gv)
+
+    # operation implementations
     def opimpl_make_redbox(self):
         XXX
 
     def opimpl_goto(self):
-        XXX
+        target = self.load_4byte()
+        self.frame.pc = target
 
     def opimpl_green_goto_iftrue(self):
         XXX
@@ -97,20 +155,35 @@ class JitInterpreter(object):
         XXX
 
     def opimpl_red_return(self):
-        XXX
+        rtimeshift.save_return(self.jitstate)
+        # XXX for now
+        newstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
+        self.jitstate = newstate
+        return STOP
 
     def opimpl_green_return(self):
         XXX
+        return STOP # XXX wrong, of course
 
     def opimpl_make_new_redvars(self):
         # an opcode with a variable number of args
         # num_args arg_old_1 arg_new_1 ...
-        XXX
+        num = self.load_2byte()
+        newlocalboxes = []
+        for i in range(num):
+            newlocalboxes.append(self.get_redarg())
+        self.frame.local_boxes = newlocalboxes
 
     def opimpl_make_new_greenvars(self):
         # an opcode with a variable number of args
         # num_args arg_old_1 arg_new_1 ...
-        XXX
+        num = self.load_2byte()
+        newgreens = []
+        for i in range(num):
+            newgreens.append(self.get_greenarg())
+        self.frame.local_green = newgreens
+
+
 
 
 class BytecodeWriter(object):
@@ -268,7 +341,6 @@ class BytecodeWriter(object):
         return color
         
     def register_redvar(self, arg):
-        print "register_redvar", arg
         assert arg not in self.redvar_positions
         self.redvar_positions[arg] = result = self.free_red[self.current_block]
         self.free_red[self.current_block] += 1
@@ -288,7 +360,7 @@ class BytecodeWriter(object):
     def green_position(self, arg):
         if isinstance(arg, flowmodel.Variable):
             return self.greenvar_positions[arg]
-        return -self.const_position(arg) - 1
+        return ~self.const_position(arg)
 
     def const_position(self, const):
         if const in self.const_positions:
@@ -374,15 +446,15 @@ def assemble(interpreter, *args):
 
 
 
-# XXX too lazy to fix the interface of make_opdesc
+# XXX too lazy to fix the interface of make_opdesc, ExceptionDesc
 class PseudoHOP(object):
     def __init__(self, op, args_s, s_result, RGenOp):
         self.spaceop = op
         self.args_s = args_s
         self.s_result = s_result
-        self.rtyper = PseudoHRTyper(RGenOp)
+        self.rtyper = PseudoHRTyper(RGenOp=RGenOp)
 
 class PseudoHRTyper(object):
-    def __init__(self, RGenOp):
-        self.RGenOp = RGenOp
+    def __init__(self, **args):
+        self.__dict__.update(**args)
 
