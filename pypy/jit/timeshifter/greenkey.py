@@ -1,6 +1,7 @@
 from pypy.rpython.annlowlevel import cachedtype
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import r_dict
 from pypy.rpython.lltypesystem import lltype
 
 class KeyDesc(object):
@@ -69,4 +70,8 @@ def greenkey_eq(self, other):
 
 def greenkey_hash(self):
     return self.desc.hash(self, self.rgenop)
+
+def newgreendict():
+    return r_dict(greenkey_eq, greenkey_hash)
+
 
