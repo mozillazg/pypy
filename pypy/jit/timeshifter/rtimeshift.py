@@ -992,6 +992,8 @@ class VirtualFrame(object):
         self.dispatchqueue = dispatchqueue
         #self.local_boxes = ... set by callers
         #self.local_green = ... set by callers
+        #self.pc = ...          set by callers
+        #self.bytecode = ...    set by callers
 
     def enter_block(self, incoming, memo):
         for box in self.local_boxes:
@@ -1014,6 +1016,9 @@ class VirtualFrame(object):
             newbackframe = self.backframe.copy(memo)
         result = VirtualFrame(newbackframe, self.dispatchqueue)
         result.local_boxes = [box.copy(memo) for box in self.local_boxes]
+        result.pc = self.pc
+        result.bytecode = self.bytecode
+        result.local_green = self.local_green[:]
         return result
 
     def replace(self, memo):
