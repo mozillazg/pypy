@@ -4,7 +4,7 @@ from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.rainbow.bytecode import BytecodeWriter, label, tlabel, assemble
-from pypy.jit.codegen.llgraph.rgenop import RGenOp
+from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.rainbow import bytecode
 from pypy.jit.timeshifter import rtimeshift, exception, rvalue
@@ -32,7 +32,31 @@ P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
 
 class AbstractInterpretationTest(object):
 
+    RGenOp = LLRGenOp
+
+    def setup_class(cls):
+        from pypy.jit.timeshifter.test.conftest import option
+        cls.on_llgraph = cls.RGenOp is LLRGenOp
+        cls._cache = {}
+        cls._cache_order = []
+
+    def teardown_class(cls):
+        del cls._cache
+        del cls._cache_order
+
     def serialize(self, func, values, backendoptimize=False):
+        key = func, backendoptimize
+        try:
+            cache, argtypes = self._cache[key]
+        except KeyError:
+            pass
+        else:
+            self.__dict__.update(cache)
+            assert argtypes == getargtypes(self.rtyper.annotator, values)
+            return self.writer, self.jitcode, self.argcolors
+
+        if len(self._cache_order) >= 3:
+            del self._cache[self._cache_order.pop(0)]
         # build the normal ll graphs for ll_function
         t = TranslationContext()
         a = t.buildannotator()
@@ -58,12 +82,31 @@ class AbstractInterpretationTest(object):
             t.view()
         graph2 = graphof(t, func)
         self.graph = graph2
-        writer = BytecodeWriter(t, hannotator, RGenOp)
+        writer = BytecodeWriter(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
         argcolors = []
+
+        # make residual functype
+        ha = self.hannotator
+        RESTYPE = originalconcretetype(hannotator.binding(graph2.getreturnvar()))
+        ARGS = []
+        for var in graph2.getargs():
+            # XXX ignoring virtualizables for now
+            binding = hannotator.binding(var)
+            if not binding.is_green():
+                ARGS.append(originalconcretetype(binding))
+        self.RESIDUAL_FUNCTYPE = lltype.FuncType(ARGS, RESTYPE)
+
         for i, ll_val in enumerate(values):
             color = writer.varcolor(graph2.startblock.inputargs[i])
             argcolors.append(color)
+        self.writer = writer
+        self.jitcode = jitcode
+        self.argcolors = argcolors
+
+        cache = self.__dict__.copy()
+        self._cache[key] = cache, getargtypes(rtyper.annotator, values)
+        self._cache_order.append(key)
         return writer, jitcode, argcolors
 
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
@@ -74,20 +117,8 @@ class AbstractInterpretationTest(object):
                                          rtyper=writer.translator.annotator.base_translator.rtyper)
         edesc = exception.ExceptionDesc(hrtyper, False)
         rgenop = writer.RGenOp()
-        # make residual functype
-        FUNC = lltype.FuncType([lltype.Signed], lltype.Signed)
-        ha = self.hannotator
-        RESTYPE = originalconcretetype(self.hannotator.binding(self.graph.getreturnvar()))
-        ARGS = []
-        for var in self.graph.getargs():
-            # XXX ignoring virtualizables for now
-            binding = self.hannotator.binding(var)
-            if not binding.is_green():
-                ARGS.append(originalconcretetype(binding))
-        FUNC = lltype.FuncType(ARGS, RESTYPE)
-        sigtoken = rgenop.sigToken(FUNC)
+        sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
-        print builder, builder.rgenop, rgenop
         builder.start_writing()
         jitstate = rtimeshift.JITState(builder, None,
                                        edesc.null_exc_type_box,
@@ -122,7 +153,7 @@ class AbstractInterpretationTest(object):
         if jitstate is not None:
             ll_finish_jitstate(jitstate, edesc, sigtoken)
         builder.end()
-        generated = gv_generated.revealconst(lltype.Ptr(FUNC))
+        generated = gv_generated.revealconst(lltype.Ptr(self.RESIDUAL_FUNCTYPE))
         graph = generated._obj.graph
         self.residual_graph = graph
         if conftest.option.view:
