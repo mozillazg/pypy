@@ -418,7 +418,7 @@ class BytecodeWriter(object):
         block = self.current_block
         if (arg, block) in self.redvar_positions:
             # already converted
-            return self.redvar_positions[arg]
+            return self.redvar_positions[arg, block]
         self.emit("make_redbox")
         resultindex = self.register_redvar((arg, block))
         argindex = self.green_position(arg)
@@ -441,11 +441,13 @@ class BytecodeWriter(object):
             color = "red"
         return color
         
-    def register_redvar(self, arg):
+    def register_redvar(self, arg, where=-1):
         assert arg not in self.redvar_positions
-        self.redvar_positions[arg] = result = self.free_red[self.current_block]
-        self.free_red[self.current_block] += 1
-        return result
+        if where == -1:
+            where = self.free_red[self.current_block]
+            self.free_red[self.current_block] += 1
+        self.redvar_positions[arg] = where
+        return where
 
     def redvar_position(self, arg):
         return self.redvar_positions[arg]
@@ -509,6 +511,14 @@ class BytecodeWriter(object):
             assert self.hannotator.binding(arg).is_green()
             assert self.hannotator.binding(result).is_green()
             self.register_greenvar(result, self.green_position(arg))
+            return
+        if "variable" in hints:
+            assert not self.hannotator.binding(result).is_green()
+            if self.hannotator.binding(arg).is_green():
+                resultindex = self.convert_to_red(arg)
+                self.register_redvar(result, resultindex)
+            else:
+                self.register_redvar(result, self.redvar_position(arg))
             return
         XXX
 
