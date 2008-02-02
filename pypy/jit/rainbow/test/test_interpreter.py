@@ -11,6 +11,7 @@ from pypy.jit.timeshifter import rtimeshift, exception, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.annotation import model as annmodel
+from pypy.objspace.flow.model import summary
 from pypy.rlib.jit import hint
 from pypy import conftest
 
@@ -123,11 +124,19 @@ class AbstractInterpretationTest(object):
         builder.end()
         generated = gv_generated.revealconst(lltype.Ptr(FUNC))
         graph = generated._obj.graph
+        self.residual_graph = graph
         if conftest.option.view:
             graph.show()
         llinterp = LLInterpreter(self.rtyper)
         res = llinterp.eval_graph(graph, residualargs)
         return res
+
+    def check_insns(self, expected=None, **counts):
+        self.insns = summary(self.residual_graph)
+        if expected is not None:
+            assert self.insns == expected
+        for opname, count in counts.items():
+            assert self.insns.get(opname, 0) == count
 
     def Xtest_return_green(self):
         def f():
@@ -154,8 +163,10 @@ class AbstractInterpretationTest(object):
             return x - y
         res = self.interpret(f, [1, 1, 2])
         assert res == 3
+        self.check_insns({"int_add": 1})
         res = self.interpret(f, [0, 1, 2])
         assert res == -1
+        self.check_insns({"int_sub": 1})
 
     def test_arith_plus_minus(self):
         def ll_plus_minus(encoded_insn, nb_insn, x, y):
@@ -174,6 +185,7 @@ class AbstractInterpretationTest(object):
         assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
         res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10])
         assert res == 42
+        self.check_insns({'int_add': 2, 'int_sub': 1})
 
     def test_red_switch(self):
         def f(x, y):
