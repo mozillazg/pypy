@@ -322,7 +322,7 @@ class BytecodeWriter(object):
             self.emit(index)
         elif len(block.exits) == 1:
             link, = block.exits
-            self.insert_renaming(link.args)
+            self.insert_renaming(link)
             self.make_bytecode_block(link.target, insert_goto=True)
         elif len(block.exits) == 2:
             linkfalse, linktrue = block.exits
@@ -333,10 +333,10 @@ class BytecodeWriter(object):
             self.emit("%s_goto_iftrue" % color)
             self.emit(index)
             self.emit(tlabel(linktrue))
-            self.insert_renaming(linkfalse.args)
+            self.insert_renaming(linkfalse)
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
             self.emit(label(linktrue))
-            self.insert_renaming(linktrue.args)
+            self.insert_renaming(linktrue)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
             XXX
@@ -365,8 +365,8 @@ class BytecodeWriter(object):
         self.emit(num)
         self.emit(keyindex)
 
-    def insert_renaming(self, args):
-        reds, greens = self.sort_by_color(args)
+    def insert_renaming(self, link):
+        reds, greens = self.sort_by_color(link.args, link.target.inputargs)
         for color, args in [("red", reds), ("green", greens)]:
             result = []
             for v in args:
