@@ -1,3 +1,4 @@
+import py
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
@@ -138,17 +139,21 @@ class AbstractInterpretationTest(object):
         greenargs = []
         redargs = []
         residualargs = []
-        i = 0
-        for color, ll_val in zip(argcolors, values):
+        red_i = 0
+        for i, (color, ll_val) in enumerate(zip(argcolors, values)):
             if color == "green":
                 greenargs.append(writer.RGenOp.constPrebuiltGlobal(ll_val))
             else:
                 TYPE = lltype.typeOf(ll_val)
                 kind = rgenop.kindToken(TYPE)
                 boxcls = rvalue.ll_redboxcls(TYPE)
-                redargs.append(boxcls(kind, inputargs_gv[i]))
+                if i in opt_consts:
+                    gv_arg = rgenop.genconst(ll_val)
+                else:
+                    gv_arg = inputargs_gv[red_i]
+                redargs.append(boxcls(kind, gv_arg))
                 residualargs.append(ll_val)
-                i += 1
+                red_i += 1
         jitstate = writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
         if jitstate is not None:
             ll_finish_jitstate(jitstate, edesc, sigtoken)
@@ -169,22 +174,40 @@ class AbstractInterpretationTest(object):
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
 
-    def Xtest_return_green(self):
-        def f():
-            return 1
-        self.interpret(f, [])
+class SimpleTests(AbstractInterpretationTest):
+    def test_simple_fixed(self):
+        py.test.skip("green return not working")
+        def ll_function(x, y):
+            return hint(x + y, concrete=True)
+        res = self.interpret(ll_function, [5, 7])
+        assert res == 12
+        self.check_insns({})
 
     def test_very_simple(self):
         def f(x, y):
             return x + y
         res = self.interpret(f, [1, 2])
         assert res == 3
+        self.check_insns({"int_add": 1})
 
     def test_convert_const_to_red(self):
         def f(x):
             return x + 1
         res = self.interpret(f, [2])
         assert res == 3
+        self.check_insns({"int_add": 1})
+
+    def test_loop_convert_const_to_redbox(self):
+        def ll_function(x, y):
+            x = hint(x, concrete=True)
+            tot = 0
+            while x:    # conversion from green '0' to red 'tot'
+                tot += y
+                x -= 1
+            return tot
+        res = self.interpret(ll_function, [7, 2])
+        assert res == 14
+        self.check_insns({'int_add': 7})
 
     def test_green_switch(self):
         def f(green, x, y):
@@ -199,24 +222,31 @@ class AbstractInterpretationTest(object):
         assert res == -1
         self.check_insns({"int_sub": 1})
 
-    def test_arith_plus_minus(self):
-        def ll_plus_minus(encoded_insn, nb_insn, x, y):
-            acc = x
-            pc = 0
-            hint(nb_insn, concrete=True)
-            while pc < nb_insn:
-                op = (encoded_insn >> (pc*4)) & 0xF
-                op = hint(op, concrete=True)
-                if op == 0xA:
-                    acc += y
-                elif op == 0x5:
-                    acc -= y
-                pc += 1
-            return acc
-        assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
-        res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10])
-        assert res == 42
-        self.check_insns({'int_add': 2, 'int_sub': 1})
+    def test_simple_opt_const_propagation2(self):
+        def ll_function(x, y):
+            return x + y
+        res = self.interpret(ll_function, [5, 7], [0, 1])
+        assert res == 12
+        self.check_insns({})
+
+    def test_simple_opt_const_propagation1(self):
+        def ll_function(x):
+            return -x
+        res = self.interpret(ll_function, [5], [0])
+        assert res == -5
+        self.check_insns({})
+
+    def test_loop_folding(self):
+        def ll_function(x, y):
+            tot = 0
+            x = hint(x, concrete=True)    
+            while x:
+                tot += y
+                x -= 1
+            return tot
+        res = self.interpret(ll_function, [7, 2], [0, 1])
+        assert res == 14
+        self.check_insns({})
 
     def test_red_switch(self):
         def f(x, y):
@@ -243,8 +273,25 @@ class AbstractInterpretationTest(object):
                 tot += y
                 x -= 1
             return tot
-        res = self.interpret(ll_function, [7, 2])
+        res = self.interpret(ll_function, [7, 2], [])
         assert res == 14
+        self.check_insns(int_add = 2,
+                         int_is_true = 2)
+
+        res = self.interpret(ll_function, [7, 2], [0])
+        assert res == 14
+        self.check_insns(int_add = 2,
+                         int_is_true = 1)
+
+        res = self.interpret(ll_function, [7, 2], [1])
+        assert res == 14
+        self.check_insns(int_add = 1,
+                         int_is_true = 2)
+
+        res = self.interpret(ll_function, [7, 2], [0, 1])
+        assert res == 14
+        self.check_insns(int_add = 1,
+                         int_is_true = 1)
 
     def test_loop_merging2(self):
         def ll_function(x, y):
@@ -259,5 +306,106 @@ class AbstractInterpretationTest(object):
         res = self.interpret(ll_function, [7, 2])
         assert res == 0
 
-class TestLLType(AbstractInterpretationTest):
+    def test_two_loops_merging(self):
+        def ll_function(x, y):
+            tot = 0
+            while x:
+                tot += y
+                x -= 1
+            while y:
+                tot += y
+                y -= 1
+            return tot
+        res = self.interpret(ll_function, [7, 3], [])
+        assert res == 27
+        self.check_insns(int_add = 3,
+                         int_is_true = 3)
+
+    def test_convert_greenvar_to_redvar(self):
+        def ll_function(x, y):
+            hint(x, concrete=True)
+            return x - y
+        res = self.interpret(ll_function, [70, 4], [0])
+        assert res == 66
+        self.check_insns(int_sub = 1)
+        res = self.interpret(ll_function, [70, 4], [0, 1])
+        assert res == 66
+        self.check_insns({})
+
+    def test_green_across_split(self):
+        def ll_function(x, y):
+            hint(x, concrete=True)
+            if y > 2:
+                z = x - y
+            else:
+                z = x + y
+            return z
+        res = self.interpret(ll_function, [70, 4], [0])
+        assert res == 66
+        self.check_insns(int_add = 1,
+                         int_sub = 1)
+
+    def test_merge_const_before_return(self):
+        def ll_function(x):
+            if x > 0:
+                y = 17
+            else:
+                y = 22
+            x -= 1
+            y += 1
+            return y+x
+        res = self.interpret(ll_function, [-70], [])
+        assert res == 23-71
+        self.check_insns({'int_gt': 1, 'int_add': 2, 'int_sub': 2})
+
+    def test_merge_3_redconsts_before_return(self):
+        py.test.skip("XXX hint(variable=True) not implemented yet")
+        def ll_function(x):
+            if x > 2:
+                y = hint(54, variable=True)
+            elif x > 0:
+                y = hint(17, variable=True)
+            else:
+                y = hint(22, variable=True)
+            x -= 1
+            y += 1
+            return y+x
+        res = self.interpret(ll_function, [-70], [])
+        assert res == ll_function(-70)
+        res = self.interpret(ll_function, [1], [])
+        assert res == ll_function(1)
+        res = self.interpret(ll_function, [-70], [])
+        assert res == ll_function(-70)
+
+    def test_merge_const_at_return(self):
+        py.test.skip("green return")
+        def ll_function(x):
+            if x > 0:
+                return 17
+            else:
+                return 22
+        res = self.interpret(ll_function, [-70], [])
+        assert res == 22
+        self.check_insns({'int_gt': 1})
+
+    def test_arith_plus_minus(self):
+        def ll_plus_minus(encoded_insn, nb_insn, x, y):
+            acc = x
+            pc = 0
+            while pc < nb_insn:
+                op = (encoded_insn >> (pc*4)) & 0xF
+                op = hint(op, concrete=True)
+                if op == 0xA:
+                    acc += y
+                elif op == 0x5:
+                    acc -= y
+                pc += 1
+            return acc
+        assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
+        res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10], [0, 1])
+        assert res == 42
+        self.check_insns({'int_add': 2, 'int_sub': 1})
+
+
+class TestLLType(SimpleTests):
     type_system = "lltype"
