@@ -170,5 +170,34 @@ class AbstractSerializationTest:
         assert len(jitcode.constants) == 1
         assert len(jitcode.typekinds) == 1
 
+    def test_loop(self):
+        def f(x):
+            r = 0
+            while x:
+                r += x
+                x -= 1
+            return r
+        writer, jitcode = self.serialize(f, [int])
+        expected = assemble(writer.interpreter,
+                            "make_redbox", -1, 0,
+                            "make_new_redvars", 2, 0, 1,
+                            "make_new_greenvars", 0,
+                            label("while"),
+                            "merge", 0, -1, 
+                            "red_int_is_true", 0,
+                            "red_goto_iftrue", 2, tlabel("body"),
+                            "make_new_redvars", 1, 0,
+                            "make_new_greenvars", 0,
+                            "red_return", 0,
+                            label("body"),
+                            "make_new_redvars", 2, 0, 1,
+                            "make_new_greenvars", 0,
+                            "red_int_add", 1, 0,
+                            "make_redbox", -2, 0,
+                            "red_int_sub", 0, 3,
+                            "make_new_redvars", 2, 2, 4,
+                            "goto", tlabel("while"))
+
+
 class TestLLType(AbstractSerializationTest):
     type_system = "lltype"
