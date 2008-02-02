@@ -176,7 +176,7 @@ class AbstractInterpretationTest(object):
 
 class SimpleTests(AbstractInterpretationTest):
     def test_simple_fixed(self):
-        py.test.skip("green return not working")
+        py.test.skip("green return")
         def ll_function(x, y):
             return hint(x + y, concrete=True)
         res = self.interpret(ll_function, [5, 7])
@@ -359,7 +359,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({'int_gt': 1, 'int_add': 2, 'int_sub': 2})
 
     def test_merge_3_redconsts_before_return(self):
-        py.test.skip("XXX hint(variable=True) not implemented yet")
         def ll_function(x):
             if x > 2:
                 y = hint(54, variable=True)
