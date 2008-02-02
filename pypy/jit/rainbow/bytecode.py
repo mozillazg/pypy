@@ -55,6 +55,7 @@ class JitInterpreter(object):
         self.frame.local_boxes = redargs
         self.frame.local_green = greenargs
         self.bytecode_loop()
+        return self.jitstate
 
     def bytecode_loop(self):
         while 1:
@@ -70,6 +71,7 @@ class JitInterpreter(object):
 
     def load_2byte(self):
         pc = self.frame.pc
+        assert pc >= 0
         result = ((ord(self.frame.bytecode.code[pc]) << 8) |
                    ord(self.frame.bytecode.code[pc + 1]))
         self.frame.pc = pc + 2
@@ -77,6 +79,7 @@ class JitInterpreter(object):
 
     def load_4byte(self):
         pc = self.frame.pc
+        assert pc >= 0
         result = ((ord(self.frame.bytecode.code[pc + 0]) << 24) |
                   (ord(self.frame.bytecode.code[pc + 1]) << 16) |
                   (ord(self.frame.bytecode.code[pc + 2]) <<  8) |
@@ -99,6 +102,13 @@ class JitInterpreter(object):
     def green_result(self, gv):
         self.frame.local_green.append(gv)
 
+    def newjitstate(self, newjitstate):
+        self.jitstate = newjitstate
+        if newjitstate is not None:
+            self.frame = newjitstate.frame
+        else:
+            self.frame = None
+
     # operation implementations
     def opimpl_make_redbox(self):
         genconst = self.get_greenarg()
@@ -119,14 +129,24 @@ class JitInterpreter(object):
             self.frame.pc = target
 
     def opimpl_red_goto_iftrue(self):
-        XXX
+        switchbox = self.get_redarg()
+        target = self.load_4byte()
+        # XXX not sure about passing no green vars
+        descision = rtimeshift.split(self.jitstate, switchbox, self.frame.pc)
+        if descision:
+            self.frame.pc = target
 
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
-        # XXX for now
-        newstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
-        self.jitstate = newstate
-        return STOP
+        newjitstate = rtimeshift.dispatch_next(self.queue)
+        resumepoint = rtimeshift.getresumepoint(newjitstate)
+        if resumepoint == -1:
+            # XXX for now
+            newjitstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
+            self.newjitstate(newjitstate)
+            return STOP
+        self.newjitstate(newjitstate)
+        self.frame.pc = resumepoint
 
     def opimpl_green_return(self):
         rtimeshift.save_return(self.jitstate)

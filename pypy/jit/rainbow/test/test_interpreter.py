@@ -117,8 +117,9 @@ class AbstractInterpretationTest(object):
                 redargs.append(boxcls(kind, inputargs_gv[i]))
                 residualargs.append(ll_val)
                 i += 1
-        writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
-        ll_finish_jitstate(writer.interpreter.jitstate, edesc, sigtoken)
+        jitstate = writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
+        if jitstate is not None:
+            ll_finish_jitstate(jitstate, edesc, sigtoken)
         builder.end()
         generated = gv_generated.revealconst(lltype.Ptr(FUNC))
         graph = generated._obj.graph
@@ -173,6 +174,14 @@ class AbstractInterpretationTest(object):
         assert ll_plus_minus(0xA5A, 3, 32, 10) == 42
         res = self.interpret(ll_plus_minus, [0xA5A, 3, 32, 10])
         assert res == 42
+
+    def test_red_switch(self):
+        def f(x, y):
+            if x:
+                return x
+            return y
+        res = self.interpret(f, [1, 2])
+
 
 class TestLLType(AbstractInterpretationTest):
     type_system = "lltype"
