@@ -203,6 +203,18 @@ class AbstractInterpretationTest(object):
         res = self.interpret(ll_function, [7, 2])
         assert res == 14
 
+    def test_loop_merging2(self):
+        def ll_function(x, y):
+            tot = 0
+            while x:
+                if tot < 3:
+                    tot *= y
+                else:
+                    tot += y
+                x -= 1
+            return tot
+        res = self.interpret(ll_function, [7, 2])
+        assert res == 0
 
 class TestLLType(AbstractInterpretationTest):
     type_system = "lltype"
