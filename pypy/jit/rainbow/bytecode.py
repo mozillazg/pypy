@@ -1,9 +1,10 @@
 from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.unroll import unrolling_iterable
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rtimeshift, rvalue
-from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key, GreenKey
 
 class JitCode(object):
     """
@@ -18,11 +19,14 @@ class JitCode(object):
     green consts are negative indexes
     """
 
-    def __init__(self, code, constants, typekinds, redboxclasses):
+    def __init__(self, code, constants, typekinds, redboxclasses, keydescs,
+                 num_mergepoints):
         self.code = code
         self.constants = constants
         self.typekinds = typekinds
         self.redboxclasses = redboxclasses
+        self.keydescs = keydescs
+        self.num_mergepoints = num_mergepoints
 
     def _freeze_(self):
         return True
@@ -46,8 +50,7 @@ class JitInterpreter(object):
 
     def run(self, jitstate, bytecode, greenargs, redargs):
         self.jitstate = jitstate
-        self.queue = rtimeshift.ensure_queue(jitstate,
-                                             rtimeshift.BaseDispatchQueue)
+        self.queue = rtimeshift.DispatchQueue(bytecode.num_mergepoints)
         rtimeshift.enter_frame(self.jitstate, self.queue)
         self.frame = self.jitstate.frame
         self.frame.pc = 0
@@ -66,6 +69,17 @@ class JitInterpreter(object):
             else:
                 assert result is None
 
+    def dispatch(self):
+        newjitstate = rtimeshift.dispatch_next(self.queue)
+        resumepoint = rtimeshift.getresumepoint(newjitstate)
+        self.newjitstate(newjitstate)
+        if resumepoint == -1:
+            # XXX what about green returns?
+            newjitstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
+            self.newjitstate(newjitstate)
+            return STOP
+        else:
+            self.frame.pc = resumepoint
 
     # operation helper functions
 
@@ -138,21 +152,10 @@ class JitInterpreter(object):
 
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
-        newjitstate = rtimeshift.dispatch_next(self.queue)
-        resumepoint = rtimeshift.getresumepoint(newjitstate)
-        if resumepoint == -1:
-            # XXX for now
-            newjitstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
-            self.newjitstate(newjitstate)
-            return STOP
-        self.newjitstate(newjitstate)
-        self.frame.pc = resumepoint
+        return self.dispatch()
 
     def opimpl_green_return(self):
-        rtimeshift.save_return(self.jitstate)
-        newstate = rtimeshift.leave_graph_yellow(self.queue)
-        self.jitstate = newstate
-        return STOP
+        XXX
 
     def opimpl_make_new_redvars(self):
         # an opcode with a variable number of args
@@ -167,10 +170,27 @@ class JitInterpreter(object):
         # an opcode with a variable number of args
         # num_args arg_old_1 arg_new_1 ...
         num = self.load_2byte()
+        if num == 0 and len(self.frame.local_green) == 0:
+            # fast (very common) case
+            return
         newgreens = []
         for i in range(num):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
+
+    def opimpl_merge(self):
+        mergepointnum = self.load_2byte()
+        keydescnum = self.load_2byte()
+        if keydescnum == -1:
+            key = empty_key
+        else:
+            keydesc = self.frame.bytecode.keydescs[keydescnum]
+            key = GreenKey(self.frame.local_green[:keydesc.nb_vals], keydesc)
+        states_dic = self.queue.local_caches[mergepointnum]
+        done = rtimeshift.retrieve_jitstate_for_merge(states_dic, self.jitstate,
+                                                      key, None)
+        if done:
+            return self.dispatch()
 
     # construction-time interface
 
@@ -219,7 +239,8 @@ class JitInterpreter(object):
         self.opcode_implementations.append(implementation)
         self.opcode_descs.append(opdesc)
         return index
-            
+
+
 
 
 class BytecodeWriter(object):
@@ -237,6 +258,7 @@ class BytecodeWriter(object):
         self.constants = []
         self.typekinds = []
         self.redboxclasses = []
+        self.keydescs = []
         # mapping constant -> index in constants
         self.const_positions = {}
         # mapping blocks to True
@@ -249,6 +271,10 @@ class BytecodeWriter(object):
         self.free_green = {}
         # mapping TYPE to index
         self.type_positions = {}
+        # mapping tuple of green TYPES to index
+        self.keydesc_positions = {}
+
+        self.num_mergepoints = 0
 
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
@@ -257,7 +283,9 @@ class BytecodeWriter(object):
         return JitCode(assemble(self.interpreter, *self.assembler),
                        self.constants,
                        self.typekinds,
-                       self.redboxclasses)
+                       self.redboxclasses,
+                       self.keydescs,
+                       self.num_mergepoints)
 
     def make_bytecode_block(self, block, insert_goto=False):
         if block in self.seen_blocks:
@@ -271,16 +299,16 @@ class BytecodeWriter(object):
         self.free_green[block] = 0
         self.free_red[block] = 0
         self.current_block = block
+
         self.emit(label(block))
         reds, greens = self.sort_by_color(block.inputargs)
         for arg in reds:
             self.register_redvar(arg)
         for arg in greens:
             self.register_greenvar(arg)
-        #self.insert_merges(block)
+        self.insert_merges(block)
         for op in block.operations:
             self.serialize_op(op)
-        #self.insert_splits(block)
         self.insert_exits(block)
         self.current_block = oldblock
 
@@ -288,6 +316,7 @@ class BytecodeWriter(object):
         if block.exits == ():
             returnvar, = block.inputargs
             color = self.varcolor(returnvar)
+            assert color == "red" # XXX green return values not supported yet
             index = self.serialize_oparg(color, returnvar)
             self.emit("%s_return" % color)
             self.emit(index)
@@ -311,6 +340,30 @@ class BytecodeWriter(object):
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
             XXX
+
+    def insert_merges(self, block):
+        if block is self.graph.returnblock:
+            return
+        if len(self.entrymap[block]) <= 1:
+            return
+        num = self.num_mergepoints
+        self.num_mergepoints += 1
+        # make keydesc
+        key = ()
+        for arg in self.sort_by_color(block.inputargs)[1]:
+            TYPE = arg.concretetype
+            key += (TYPE, )
+        if not key:
+            keyindex = -1 # use prebuilt empty_key
+        elif key not in self.keydesc_positions:
+            keyindex = len(self.keydesc_positions)
+            self.keydesc_positions[key] = keyindex
+            self.keydescs.append(KeyDesc(self.RGenOp, *key))
+        else:
+            keyindex = self.keydesc_positions[key]
+        self.emit("merge")
+        self.emit(num)
+        self.emit(keyindex)
 
     def insert_renaming(self, args):
         reds, greens = self.sort_by_color(args)

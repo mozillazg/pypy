@@ -3,6 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue, rcontainer, rvirtualizable
+from pypy.jit.timeshifter.greenkey import newgreendict, empty_key
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
@@ -878,31 +879,26 @@ def promote(jitstate, promotebox, promotiondesc):
 
 # ____________________________________________________________
 
-class BaseDispatchQueue(object):
+class DispatchQueue(object):
     resuming = None
 
-    def __init__(self):
+    def __init__(self, num_local_caches=0):
         self.split_chain = None
         self.global_merge_chain = None
         self.return_chain = None
+        self.num_local_caches = num_local_caches
         self.clearlocalcaches()
 
     def clearlocalcaches(self):
         self.mergecounter = 0
+        self.local_caches = [newgreendict()
+                                 for i in range(self.num_local_caches)]
 
     def clear(self):
-        self.__init__()
+        self.__init__(self.num_local_caches)
 
 def build_dispatch_subclass(attrnames):
-    if len(attrnames) == 0:
-        return BaseDispatchQueue
-    attrnames = unrolling_iterable(attrnames)
-    class DispatchQueue(BaseDispatchQueue):
-        def clearlocalcaches(self):
-            BaseDispatchQueue.clearlocalcaches(self)
-            for name in attrnames:
-                setattr(self, name, {})     # the new dicts have various types!
-    return DispatchQueue
+    py.test.skip("no longer exists")
 
 
 class FrozenVirtualFrame(object):
@@ -1252,10 +1248,6 @@ def start_writing(jitstate=None, prevopen=None):
     return jitstate
 
 
-def ensure_queue(jitstate, DispatchQueueClass):
-    return DispatchQueueClass()
-ensure_queue._annspecialcase_ = 'specialize:arg(1)'
-
 def replayable_ensure_queue(jitstate, DispatchQueueClass):
     if jitstate.frame is None:    # common case
         return DispatchQueueClass()
@@ -1291,14 +1283,14 @@ def enter_frame(jitstate, dispatchqueue):
 
 def merge_returning_jitstates(dispatchqueue, force_merge=False):
     return_chain = dispatchqueue.return_chain
-    return_cache = {}
+    return_cache = newgreendict()
     still_pending = None
     opened = None
     while return_chain is not None:
         jitstate = return_chain
         return_chain = return_chain.next
         opened = start_writing(jitstate, opened)
-        res = retrieve_jitstate_for_merge(return_cache, jitstate, (),
+        res = retrieve_jitstate_for_merge(return_cache, jitstate, empty_key,
                                           return_marker,
                                           force_merge=force_merge)
         if res is False:    # not finished
@@ -1311,13 +1303,13 @@ def merge_returning_jitstates(dispatchqueue, force_merge=False):
     # more general one.
     return_chain = still_pending
     if return_chain is not None:
-        return_cache = {}
+        return_cache = newgreendict()
         still_pending = None
         while return_chain is not None:
             jitstate = return_chain
             return_chain = return_chain.next
             opened = start_writing(jitstate, opened)
-            res = retrieve_jitstate_for_merge(return_cache, jitstate, (),
+            res = retrieve_jitstate_for_merge(return_cache, jitstate, empty_key,
                                               return_marker,
                                               force_merge=force_merge)
             if res is False:    # not finished

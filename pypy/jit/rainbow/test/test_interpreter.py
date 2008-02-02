@@ -181,7 +181,17 @@ class AbstractInterpretationTest(object):
                 return x
             return y
         res = self.interpret(f, [1, 2])
+        assert res == 1
 
+    def test_merge(self):
+        def f(x, y, z):
+            if x:
+                a = y - z
+            else:
+                a = y + z
+            return 1 + a
+        res = self.interpret(f, [1, 2, 3])
+        assert res == 0
 
 class TestLLType(AbstractInterpretationTest):
     type_system = "lltype"
