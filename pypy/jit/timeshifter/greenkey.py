@@ -10,13 +10,16 @@ class KeyDesc(object):
     def __init__(self, RGenOp=None, *TYPES):
         self.RGenOp = RGenOp
         self.TYPES = TYPES
-        TARGETTYPES = []
+        self.nb_vals = len(TYPES)
+        if not TYPES:
+            assert RGenOp is None
 
         if RGenOp is None:
             assert len(TYPES) == 0
             self.hash = lambda self: 0
             self.compare = lambda self, other: True
 
+        TARGETTYPES = []
         for TYPE in TYPES:
             # XXX more cases?
             TARGET = lltype.Signed
@@ -53,6 +56,7 @@ class KeyDesc(object):
 
 class GreenKey(object):
     def __init__(self, values, desc):
+        assert len(values) == desc.nb_vals
         self.desc = desc
         self.values = values
 

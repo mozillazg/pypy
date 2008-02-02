@@ -135,6 +135,40 @@ class AbstractSerializationTest:
         assert len(jitcode.constants) == 0
         assert len(jitcode.typekinds) == 0
 
+    def test_merge(self):
+        def f(x, y, z):
+            if x:
+                a = y - z
+            else:
+                a = y + z
+            return 1 + a
+        writer, jitcode = self.serialize(f, [int, int, int])
+        expected = assemble(writer.interpreter,
+                            "red_int_is_true", 0,
+                            "red_goto_iftrue", 3, tlabel("add"),
+                            "make_new_redvars", 2, 1, 2,
+                            "make_new_greenvars", 0,
+                            "red_int_add", 0, 1,
+                            "make_new_redvars", 1, 2,
+                            "make_new_greenvars", 0,
+                            label("after"),
+                            "merge", 0, -1,
+                            "make_redbox", -1, 0,
+                            "red_int_add", 1, 0,
+                            "make_new_redvars", 1, 2,
+                            "make_new_greenvars", 0,
+                            "red_return", 0,
+                            label("add"),
+                            "make_new_redvars", 2, 1, 2,
+                            "make_new_greenvars", 0,
+                            "red_int_sub", 0, 1,
+                            "make_new_redvars", 1, 2,
+                            "make_new_greenvars", 0,
+                            "goto", tlabel("after"),
+                            )
+        assert jitcode.code == expected
+        assert len(jitcode.constants) == 1
+        assert len(jitcode.typekinds) == 1
 
 class TestLLType(AbstractSerializationTest):
     type_system = "lltype"
