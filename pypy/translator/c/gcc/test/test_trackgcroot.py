@@ -52,6 +52,7 @@ def check_computegcmaptable(path):
     print
     print path.basename
     lines = path.readlines()
+    expectedlines = lines[:]
     tracker = FunctionGcRootTracker(lines)
     tracker.is_main = tracker.funcname == 'main'
     table = tracker.computegcmaptable(verbose=sys.maxint)
@@ -62,7 +63,7 @@ def check_computegcmaptable(path):
         tabledict[entry[0]] = entry[1]
     # find the ";; expected" lines
     prevline = ""
-    for line in lines:
+    for i, line in enumerate(lines):
         match = r_expected.match(line)
         if match:
             expected = eval(match.group(1))
@@ -74,7 +75,10 @@ def check_computegcmaptable(path):
             got = tabledict[label]
             assert got == expected
             seen[label] = True
+            expectedlines.insert(i-2, '\t.globl\t%s\n' % (label,))
+            expectedlines.insert(i-1, '%s:\n' % (label,))
         prevline = line
     assert len(seen) == len(tabledict), (
         "computed table contains unexpected entries:\n%r" %
         [key for key in tabledict if key not in seen])
+    assert lines == expectedlines
