@@ -454,7 +454,6 @@ class SimpleTests(AbstractInterpretationTest):
                           'int_sub': 1, 'int_mul': 1})
 
     def test_void_call(self):
-        py.test.skip("calls are WIP")
         def ll_do_nothing(x):
             pass
         def ll_function(y):

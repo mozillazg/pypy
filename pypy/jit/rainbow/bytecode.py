@@ -21,7 +21,8 @@ class JitCode(object):
     """
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
-                 keydescs, called_bytecodes, num_mergepoints, is_portal):
+                 keydescs, called_bytecodes, num_mergepoints, graph_color,
+                 is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -30,6 +31,7 @@ class JitCode(object):
         self.keydescs = keydescs
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
+        self.graph_color = graph_color
         self.is_portal = is_portal
 
     def _freeze_(self):
@@ -75,12 +77,23 @@ class JitInterpreter(object):
 
     def dispatch(self):
         is_portal = self.frame.bytecode.is_portal
+        graph_color = self.frame.bytecode.graph_color
         newjitstate = rtimeshift.dispatch_next(self.queue)
         resumepoint = rtimeshift.getresumepoint(newjitstate)
         self.newjitstate(newjitstate)
         if resumepoint == -1:
-            newjitstate = rtimeshift.leave_graph_red(
-                    self.queue, is_portal)
+            if graph_color == "red":
+                newjitstate = rtimeshift.leave_graph_red(
+                        self.queue, is_portal)
+            elif graph_color == "green":
+                XXX
+            elif graph_color == "gray":
+                assert not is_portal
+                newjitstate = rtimeshift.leave_graph_gray(
+                        self.queue)
+            else:
+                assert 0, "unknown graph color %s" % (color, )
+
             self.newjitstate(newjitstate)
             if newjitstate is None or is_portal:
                 return STOP
@@ -157,6 +170,10 @@ class JitInterpreter(object):
             self.frame.pc = target
 
     def opimpl_red_return(self):
+        rtimeshift.save_return(self.jitstate)
+        return self.dispatch()
+
+    def opimpl_gray_return(self):
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
@@ -299,6 +316,7 @@ class BytecodeWriter(object):
         self.keydescs = []
         self.called_bytecodes = []
         self.num_mergepoints = 0
+        self.graph_color = self.graph_calling_color(graph)
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -330,6 +348,7 @@ class BytecodeWriter(object):
                           self.keydescs,
                           self.called_bytecodes,
                           self.num_mergepoints,
+                          self.graph_color,
                           self.is_portal)
         if is_portal:
             self.finish_all_graphs()
@@ -369,10 +388,14 @@ class BytecodeWriter(object):
         if block.exits == ():
             returnvar, = block.inputargs
             color = self.varcolor(returnvar)
-            assert color == "red" # XXX green return values not supported yet
-            index = self.serialize_oparg(color, returnvar)
-            self.emit("%s_return" % color)
-            self.emit(index)
+            if color == "red":
+                index = self.serialize_oparg(color, returnvar)
+                self.emit("red_return")
+                self.emit(index)
+            elif originalconcretetype(returnvar) == lltype.Void:
+                self.emit("gray_return")
+            else:
+                XXX
         elif len(block.exits) == 1:
             link, = block.exits
             self.insert_renaming(link)
@@ -593,7 +616,7 @@ class BytecodeWriter(object):
         assert len(targets) == 1
         targetgraph, = targets.values()
         kind, exc = self.guess_call_kind(op)
-        if kind == "red":
+        if kind == "red" or kind == "gray":
             graphindex = self.graph_position(targetgraph)
             args = targetgraph.getargs()
             reds, greens = self.sort_by_color(op.args[1:], args)
@@ -606,7 +629,8 @@ class BytecodeWriter(object):
             for index in result:
                 self.emit(index)
             self.emit(graphindex)
-            self.register_redvar(op.result)
+            if kind == "red":
+                self.register_redvar(op.result)
             self.emit("red_after_direct_call")
         else:
             XXX
