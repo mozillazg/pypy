@@ -236,8 +236,24 @@ class AbstractSerializationTest:
         assert not called_jitcode.is_portal
         assert len(called_jitcode.called_bytecodes) == 0
 
+    def test_green_call(self):
+        def ll_add_one(x):
+            return x+1
+        def ll_function(y):
+            z = ll_add_one(y)
+            z = hint(z, concrete=True)
+            return hint(z, variable=True)
 
-
+        writer, jitcode = self.serialize(ll_function, [int])
+        assert jitcode.code == assemble(writer.interpreter,
+                                        "green_direct_call", 1, 0, 0, 0,
+                                        "make_redbox", 1, 0,
+                                        "make_new_redvars", 1, 0,
+                                        "make_new_greenvars", 0,
+                                        "red_return", 0)
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
+        assert len(jitcode.nonrainbow_functions) == 1
 
 
 class TestLLType(AbstractSerializationTest):
