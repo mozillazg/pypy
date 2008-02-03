@@ -405,6 +405,91 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 42
         self.check_insns({'int_add': 2, 'int_sub': 1})
 
+    def test_call_simple(self):
+        def ll_add_one(x):
+            return x + 1
+        def ll_function(y):
+            return ll_add_one(y)
+        res = self.interpret(ll_function, [5], [])
+        assert res == 6
+        self.check_insns({'int_add': 1})
+
+    def test_call_2(self):
+        def ll_add_one(x):
+            return x + 1
+        def ll_function(y):
+            return ll_add_one(y) + y
+        res = self.interpret(ll_function, [5], [])
+        assert res == 11
+        self.check_insns({'int_add': 2})
+
+    def test_call_3(self):
+        def ll_add_one(x):
+            return x + 1
+        def ll_two(x):
+            return ll_add_one(ll_add_one(x)) - x
+        def ll_function(y):
+            return ll_two(y) * y
+        res = self.interpret(ll_function, [5], [])
+        assert res == 10
+        self.check_insns({'int_add': 2, 'int_sub': 1, 'int_mul': 1})
+
+    def test_call_4(self):
+        def ll_two(x):
+            if x > 0:
+                return x + 5
+            else:
+                return x - 4
+        def ll_function(y):
+            return ll_two(y) * y
+
+        res = self.interpret(ll_function, [3], [])
+        assert res == 24
+        self.check_insns({'int_gt': 1, 'int_add': 1,
+                          'int_sub': 1, 'int_mul': 1})
+
+        res = self.interpret(ll_function, [-3], [])
+        assert res == 21
+        self.check_insns({'int_gt': 1, 'int_add': 1,
+                          'int_sub': 1, 'int_mul': 1})
+
+    def test_void_call(self):
+        py.test.skip("calls are WIP")
+        def ll_do_nothing(x):
+            pass
+        def ll_function(y):
+            ll_do_nothing(y)
+            return y
+
+        res = self.interpret(ll_function, [3], [])
+        assert res == 3
+
+    def test_green_call(self):
+        py.test.skip("calls are WIP")
+        def ll_add_one(x):
+            return x+1
+        def ll_function(y):
+            z = ll_add_one(y)
+            z = hint(z, concrete=True)
+            return hint(z, variable=True)
+
+        res = self.interpret(ll_function, [3], [0])
+        assert res == 4
+        self.check_insns({})
+
+    def test_split_on_green_return(self):
+        py.test.skip("calls are WIP")
+        def ll_two(x):
+            if x > 0:
+                return 17
+            else:
+                return 22
+        def ll_function(x):
+            n = ll_two(x)
+            return hint(n+1, variable=True)
+        res = self.interpret(ll_function, [-70], [])
+        assert res == 23
+        self.check_insns({'int_gt': 1})
 
 class TestLLType(SimpleTests):
     type_system = "lltype"
