@@ -22,7 +22,7 @@ class JitCode(object):
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, called_bytecodes, num_mergepoints, graph_color,
-                 is_portal):
+                 nonrainbow_functions, is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -32,6 +32,7 @@ class JitCode(object):
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
+        self.nonrainbow_functions = nonrainbow_functions
         self.is_portal = is_portal
 
     def _freeze_(self):
@@ -126,6 +127,20 @@ class JitInterpreter(object):
             return self.frame.bytecode.constants[~i]
         return self.frame.local_green[i]
 
+    def get_green_varargs(self):
+        greenargs = []
+        num = self.load_2byte()
+        for i in range(num):
+            greenargs.append(self.get_greenarg())
+        return greenargs
+
+    def get_red_varargs(self):
+        redargs = []
+        num = self.load_2byte()
+        for i in range(num):
+            redargs.append(self.get_redarg())
+        return redargs
+
     def get_redarg(self):
         return self.frame.local_boxes[self.load_2byte()]
 
@@ -181,13 +196,7 @@ class JitInterpreter(object):
         XXX
 
     def opimpl_make_new_redvars(self):
-        # an opcode with a variable number of args
-        # num_args arg_old_1 arg_new_1 ...
-        num = self.load_2byte()
-        newlocalboxes = []
-        for i in range(num):
-            newlocalboxes.append(self.get_redarg())
-        self.frame.local_boxes = newlocalboxes
+        self.frame.local_boxes = self.get_red_varargs()
 
     def opimpl_make_new_greenvars(self):
         # an opcode with a variable number of args
@@ -216,14 +225,8 @@ class JitInterpreter(object):
             return self.dispatch()
 
     def opimpl_red_direct_call(self):
-        greenargs = []
-        num = self.load_2byte()
-        for i in range(num):
-            greenargs.append(self.get_greenarg())
-        redargs = []
-        num = self.load_2byte()
-        for i in range(num):
-            redargs.append(self.get_redarg())
+        greenargs = self.get_green_varargs()
+        redargs = self.get_red_varargs()
         bytecodenum = self.load_2byte()
         targetbytecode = self.frame.bytecode.called_bytecodes[bytecodenum]
         self.run(self.jitstate, targetbytecode, greenargs, redargs,
@@ -237,6 +240,12 @@ class JitInterpreter(object):
             self.frame.local_green)
         assert newjitstate is self.jitstate
 
+    def opimpl_green_direct_call(self):
+        greenargs = self.get_green_varargs()
+        redargs = self.get_red_varargs()
+        index = self.load_2byte()
+        function = self.frame.bytecode.nonrainbow_functions[index]
+        function(self, greenargs, redargs)
 
     # ____________________________________________________________
     # construction-time interface
@@ -317,6 +326,7 @@ class BytecodeWriter(object):
         self.called_bytecodes = []
         self.num_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
+        self.nonrainbow_functions = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -334,6 +344,8 @@ class BytecodeWriter(object):
         self.keydesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
+        # mapping fnobjs to index
+        self.nonrainbow_positions = {}
 
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
@@ -349,6 +361,7 @@ class BytecodeWriter(object):
                           self.called_bytecodes,
                           self.num_mergepoints,
                           self.graph_color,
+                          self.nonrainbow_functions,
                           self.is_portal)
         if is_portal:
             self.finish_all_graphs()
@@ -449,8 +462,7 @@ class BytecodeWriter(object):
                 result.append(self.serialize_oparg(color, v))
             self.emit("make_new_%svars" % (color, ))
             self.emit(len(args))
-            for index in result:
-                self.emit(index)
+            self.emit(result)
 
     def serialize_op(self, op):
         specialcase = getattr(self, "serialize_op_%s" % (op.opname, ), None)
@@ -461,8 +473,7 @@ class BytecodeWriter(object):
         for arg in op.args:
             args.append(self.serialize_oparg(color, arg))
         self.serialize_opcode(color, op)
-        for index in args:
-            self.emit(index)
+        self.emit(args)
         if self.hannotator.binding(op.result).is_green():
             self.register_greenvar(op.result)
         else:
@@ -570,10 +581,35 @@ class BytecodeWriter(object):
         self.unfinished_graphs.append(graph)
         return index
 
+    def nonrainbow_position(self, fnptr):
+        fn = fnptr._obj
+        if fn in self.nonrainbow_positions:
+            return self.nonrainbow_positions[fn]
+        FUNCTYPE = lltype.typeOf(fn)
+        argiter = unrolling_iterable(enumerate(FUNCTYPE.ARGS))
+        numargs = len(FUNCTYPE.ARGS)
+        def call_normal_function(interpreter, greenargs, redargs):
+            assert len(redargs) == 0
+            assert len(greenargs) == numargs
+            args = ()
+            for i, ARG in argiter:
+                genconst = greenargs[i]
+                arg = genconst.revealconst(ARG)
+                args += (arg, )
+            rgenop = interpreter.jitstate.curbuilder.rgenop
+            result = rgenop.genconst(fnptr(*args))
+            interpreter.green_result(result)
+        result = len(self.nonrainbow_functions)
+        self.nonrainbow_functions.append(call_normal_function)
+        self.nonrainbow_positions[fn] = result
+        return result
         
     def emit(self, stuff):
         assert stuff is not None
-        self.assembler.append(stuff)
+        if isinstance(stuff, list):
+            self.assembler.extend(stuff)
+        else:
+            self.assembler.append(stuff)
 
     def sort_by_color(self, vars, by_color_of_vars=None):
         reds = []
@@ -611,6 +647,16 @@ class BytecodeWriter(object):
             return
         XXX
 
+    def args_of_call(self, args, colored_as):
+        result = []
+        reds, greens = self.sort_by_color(args, colored_as)
+        result = []
+        for color, args in [("green", greens), ("red", reds)]:
+            result.append(len(args))
+            for v in args:
+                result.append(self.serialize_oparg(color, v))
+        return result
+
     def serialize_op_direct_call(self, op):
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
@@ -619,19 +665,21 @@ class BytecodeWriter(object):
         if kind == "red" or kind == "gray":
             graphindex = self.graph_position(targetgraph)
             args = targetgraph.getargs()
-            reds, greens = self.sort_by_color(op.args[1:], args)
-            result = []
-            for color, args in [("green", greens), ("red", reds)]:
-                result.append(len(args))
-                for v in args:
-                    result.append(self.serialize_oparg(color, v))
+            emitted_args = self.args_of_call(op.args[1:], args)
             self.emit("red_direct_call")
-            for index in result:
-                self.emit(index)
+            self.emit(emitted_args)
             self.emit(graphindex)
             if kind == "red":
                 self.register_redvar(op.result)
             self.emit("red_after_direct_call")
+        elif kind == "green":
+            pos = self.nonrainbow_position(op.args[0].value)
+            args = targetgraph.getargs()
+            emitted_args = self.args_of_call(op.args[1:], args)
+            self.emit("green_direct_call")
+            self.emit(emitted_args)
+            self.emit(pos)
+            self.register_greenvar(op.result)
         else:
             XXX
 

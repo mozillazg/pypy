@@ -464,7 +464,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 3
 
     def test_green_call(self):
-        py.test.skip("calls are WIP")
         def ll_add_one(x):
             return x+1
         def ll_function(y):
