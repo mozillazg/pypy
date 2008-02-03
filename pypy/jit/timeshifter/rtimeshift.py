@@ -453,11 +453,10 @@ def split_raisingop(jitstate, resumepoint, ll_evalue, *greens_gv):
     if gotexc:
         jitstate.residual_ll_exception(ll_evalue)
 
-def collect_split(jitstate_chain, resumepoint, *greens_gv):
+def collect_split(jitstate_chain, resumepoint, greens_gv):
     # YYY split to avoid over-specialization
     # assumes that the head of the jitstate_chain is ready for writing,
     # and all the other jitstates in the chain are paused
-    greens_gv = list(greens_gv)
     pending = jitstate_chain
     resuming = jitstate_chain.get_resuming()
     if resuming is not None and resuming.mergesleft == 0:
@@ -467,7 +466,7 @@ def collect_split(jitstate_chain, resumepoint, *greens_gv):
             pending = pending.next
         pending.greens.extend(greens_gv)
         if pending.returnbox is not None:
-            pending.frame.local_boxes.insert(0, getreturnbox(pending))
+            pending.frame.local_boxes.append(getreturnbox(pending))
         pending.next = None
         start_writing(pending, jitstate_chain)
         return pending
@@ -478,7 +477,7 @@ def collect_split(jitstate_chain, resumepoint, *greens_gv):
         pending = pending.next
         jitstate.greens.extend(greens_gv)   # item 0 is the return value
         if jitstate.returnbox is not None:
-            jitstate.frame.local_boxes.insert(0, getreturnbox(jitstate))
+            jitstate.frame.local_boxes.append(getreturnbox(jitstate))
         jitstate.resumepoint = resumepoint
         if resuming is None:
             node = jitstate.promotion_path

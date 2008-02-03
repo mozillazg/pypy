@@ -3,6 +3,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
+from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key, GreenKey
 
@@ -19,14 +20,17 @@ class JitCode(object):
     green consts are negative indexes
     """
 
-    def __init__(self, code, constants, typekinds, redboxclasses, keydescs,
-                 num_mergepoints):
+    def __init__(self, name, code, constants, typekinds, redboxclasses,
+                 keydescs, called_bytecodes, num_mergepoints, is_portal):
+        self.name = name
         self.code = code
         self.constants = constants
         self.typekinds = typekinds
         self.redboxclasses = redboxclasses
         self.keydescs = keydescs
+        self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
+        self.is_portal = is_portal
 
     def _freeze_(self):
         return True
@@ -44,11 +48,10 @@ class JitInterpreter(object):
         self.opname_to_index = {}
         self.jitstate = None
         self.queue = None
-        self.bytecode = None
-        self.pc = -1
         self._add_implemented_opcodes()
 
-    def run(self, jitstate, bytecode, greenargs, redargs):
+    def run(self, jitstate, bytecode, greenargs, redargs,
+            start_bytecode_loop=True):
         self.jitstate = jitstate
         self.queue = rtimeshift.DispatchQueue(bytecode.num_mergepoints)
         rtimeshift.enter_frame(self.jitstate, self.queue)
@@ -57,7 +60,8 @@ class JitInterpreter(object):
         self.frame.bytecode = bytecode
         self.frame.local_boxes = redargs
         self.frame.local_green = greenargs
-        self.bytecode_loop()
+        if start_bytecode_loop:
+            self.bytecode_loop()
         return self.jitstate
 
     def bytecode_loop(self):
@@ -70,14 +74,16 @@ class JitInterpreter(object):
                 assert result is None
 
     def dispatch(self):
+        is_portal = self.frame.bytecode.is_portal
         newjitstate = rtimeshift.dispatch_next(self.queue)
         resumepoint = rtimeshift.getresumepoint(newjitstate)
         self.newjitstate(newjitstate)
         if resumepoint == -1:
-            # XXX what about green returns?
-            newjitstate = rtimeshift.leave_graph_red(self.queue, is_portal=True)
+            newjitstate = rtimeshift.leave_graph_red(
+                    self.queue, is_portal)
             self.newjitstate(newjitstate)
-            return STOP
+            if newjitstate is None or is_portal:
+                return STOP
         else:
             self.frame.pc = resumepoint
 
@@ -192,6 +198,30 @@ class JitInterpreter(object):
         if done:
             return self.dispatch()
 
+    def opimpl_red_direct_call(self):
+        greenargs = []
+        num = self.load_2byte()
+        for i in range(num):
+            greenargs.append(self.get_greenarg())
+        redargs = []
+        num = self.load_2byte()
+        for i in range(num):
+            redargs.append(self.get_redarg())
+        bytecodenum = self.load_2byte()
+        targetbytecode = self.frame.bytecode.called_bytecodes[bytecodenum]
+        self.run(self.jitstate, targetbytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+        # this frame will be resumed later in the next bytecode, which is
+        # red_after_direct_call
+
+    def opimpl_red_after_direct_call(self):
+        newjitstate = rtimeshift.collect_split(
+            self.jitstate, self.frame.pc,
+            self.frame.local_green)
+        assert newjitstate is self.jitstate
+
+
+    # ____________________________________________________________
     # construction-time interface
 
     def _add_implemented_opcodes(self):
@@ -244,21 +274,32 @@ class JitInterpreter(object):
 
 
 class BytecodeWriter(object):
-    def __init__(self, t, hintannotator, RGenOp):
+    def __init__(self, t, hannotator, RGenOp):
         self.translator = t
         self.annotator = t.annotator
-        self.hannotator = hintannotator
+        self.hannotator = hannotator
         self.interpreter = JitInterpreter()
         self.RGenOp = RGenOp
         self.current_block = None
+        self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
+        self.all_graphs = {} # mapping graph to bytecode
+        self.unfinished_graphs = []
 
-    def make_bytecode(self, graph):
+    def can_raise(self, op):
+        return self.raise_analyzer.analyze(op)
+
+    def make_bytecode(self, graph, is_portal=True):
+        if is_portal:
+            self.all_graphs[graph] = JitCode.__new__(JitCode)
         self.seen_blocks = {}
         self.assembler = []
         self.constants = []
         self.typekinds = []
         self.redboxclasses = []
         self.keydescs = []
+        self.called_bytecodes = []
+        self.num_mergepoints = 0
+        self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
         # mapping blocks to True
@@ -273,19 +314,31 @@ class BytecodeWriter(object):
         self.type_positions = {}
         # mapping tuple of green TYPES to index
         self.keydesc_positions = {}
-
-        self.num_mergepoints = 0
+        # mapping graphs to index
+        self.graph_positions = {}
 
         self.graph = graph
         self.entrymap = flowmodel.mkentrymap(graph)
         self.make_bytecode_block(graph.startblock)
         assert self.current_block is None
-        return JitCode(assemble(self.interpreter, *self.assembler),
-                       self.constants,
-                       self.typekinds,
-                       self.redboxclasses,
-                       self.keydescs,
-                       self.num_mergepoints)
+        bytecode = self.all_graphs[graph]
+        bytecode.__init__(graph.name,
+                          assemble(self.interpreter, *self.assembler),
+                          self.constants,
+                          self.typekinds,
+                          self.redboxclasses,
+                          self.keydescs,
+                          self.called_bytecodes,
+                          self.num_mergepoints,
+                          self.is_portal)
+        if is_portal:
+            self.finish_all_graphs()
+            return bytecode
+
+    def finish_all_graphs(self):
+        while self.unfinished_graphs:
+            graph = self.unfinished_graphs.pop()
+            self.make_bytecode(graph, is_portal=False)
 
     def make_bytecode_block(self, block, insert_goto=False):
         if block in self.seen_blocks:
@@ -482,6 +535,18 @@ class BytecodeWriter(object):
         result = len(self.type_positions)
         self.type_positions[TYPE] = result
         return result
+
+    def graph_position(self, graph):
+        if graph in self.graph_positions:
+            return self.graph_positions[graph]
+        bytecode = JitCode.__new__(JitCode)
+        index = len(self.called_bytecodes)
+        self.called_bytecodes.append(bytecode)
+        self.all_graphs[graph] = bytecode
+        self.graph_positions[graph] = index
+        self.unfinished_graphs.append(graph)
+        return index
+
         
     def emit(self, stuff):
         assert stuff is not None
@@ -501,6 +566,7 @@ class BytecodeWriter(object):
                 reds.append(v)
         return reds, greens
 
+    # ____________________________________________________________
     # operation special cases
 
     def serialize_op_hint(self, op):
@@ -521,6 +587,108 @@ class BytecodeWriter(object):
                 self.register_redvar(result, self.redvar_position(arg))
             return
         XXX
+
+    def serialize_op_direct_call(self, op):
+        targets = dict(self.graphs_from(op))
+        assert len(targets) == 1
+        targetgraph, = targets.values()
+        kind, exc = self.guess_call_kind(op)
+        if kind == "red":
+            graphindex = self.graph_position(targetgraph)
+            args = targetgraph.getargs()
+            reds, greens = self.sort_by_color(op.args[1:], args)
+            result = []
+            for color, args in [("green", greens), ("red", reds)]:
+                result.append(len(args))
+                for v in args:
+                    result.append(self.serialize_oparg(color, v))
+            self.emit("red_direct_call")
+            for index in result:
+                self.emit(index)
+            self.emit(graphindex)
+            self.register_redvar(op.result)
+            self.emit("red_after_direct_call")
+        else:
+            XXX
+
+    def serialize_op_indirect_call(self, op):
+        XXX
+
+    # call handling
+
+    def graphs_from(self, spaceop):
+        if spaceop.opname == 'direct_call':
+            c_func = spaceop.args[0]
+            fnobj = c_func.value._obj
+            graphs = [fnobj.graph]
+            args_v = spaceop.args[1:]
+        elif spaceop.opname == 'indirect_call':
+            graphs = spaceop.args[-1].value
+            if graphs is None:
+                return       # cannot follow at all
+            args_v = spaceop.args[1:-1]
+        else:
+            raise AssertionError(spaceop.opname)
+        # if the graph - or all the called graphs - are marked as "don't
+        # follow", directly return None as a special case.  (This is only
+        # an optimization for the indirect_call case.)
+        for graph in graphs:
+            if self.hannotator.policy.look_inside_graph(graph):
+                break
+        else:
+            return
+        for graph in graphs:
+            tsgraph = self.specialized_graph_of(graph, args_v, spaceop.result)
+            yield graph, tsgraph
+
+    def guess_call_kind(self, spaceop):
+        if spaceop.opname == 'direct_call':
+            c_func = spaceop.args[0]
+            fnobj = c_func.value._obj
+            if hasattr(fnobj, 'jitcallkind'):
+                return fnobj.jitcallkind, None
+            if (hasattr(fnobj._callable, 'oopspec') and
+                self.hannotator.policy.oopspec):
+                if fnobj._callable.oopspec.startswith('vable.'):
+                    return 'vable', None
+                hs_result = self.hannotator.binding(spaceop.result)
+                if (hs_result.is_green() and
+                    hs_result.concretetype is not lltype.Void):
+                    return 'green', self.can_raise(spaceop)
+                return 'oopspec', self.can_raise(spaceop)
+        if self.hannotator.bookkeeper.is_green_call(spaceop):
+            return 'green', None
+        withexc = self.can_raise(spaceop)
+        colors = {}
+        for graph, tsgraph in self.graphs_from(spaceop):
+            color = self.graph_calling_color(tsgraph)
+            colors[color] = tsgraph
+        if not colors: # cannot follow this call
+            return 'residual', withexc
+        assert len(colors) == 1, colors   # buggy normalization?
+        return color, withexc
+
+    def specialized_graph_of(self, graph, args_v, v_result):
+        bk = self.hannotator.bookkeeper
+        args_hs = [self.hannotator.binding(v) for v in args_v]
+        hs_result = self.hannotator.binding(v_result)
+        if isinstance(hs_result, hintmodel.SomeLLAbstractConstant):
+            fixed = hs_result.is_fixed()
+        else:
+            fixed = False
+        specialization_key = bk.specialization_key(fixed, args_hs)
+        special_graph = bk.get_graph_by_key(graph, specialization_key)
+        return special_graph
+
+    def graph_calling_color(self, graph):
+        hs_res = self.hannotator.binding(graph.getreturnvar())
+        if originalconcretetype(hs_res) is lltype.Void:
+            c = 'gray'
+        elif hs_res.is_green():
+            c = 'yellow'
+        else:
+            c = 'red'
+        return c
 
 
 class label(object):

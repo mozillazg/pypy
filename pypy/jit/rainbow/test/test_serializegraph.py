@@ -64,6 +64,8 @@ class AbstractSerializationTest:
                                         "red_return", 0)
         assert len(jitcode.constants) == 0
         assert len(jitcode.typekinds) == 0
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
 
     def test_constant(self):
         def f(x):
@@ -78,6 +80,8 @@ class AbstractSerializationTest:
         assert len(jitcode.constants) == 1
         assert len(jitcode.typekinds) == 1
         assert len(jitcode.redboxclasses) == 1
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
  
     def test_green_switch(self):
         def f(x, y, z):
@@ -102,6 +106,8 @@ class AbstractSerializationTest:
         assert jitcode.code == expected
         assert len(jitcode.constants) == 0
         assert len(jitcode.typekinds) == 0
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
 
     def test_green_switch2(self):
         def f(x, y, z):
@@ -134,6 +140,8 @@ class AbstractSerializationTest:
         assert jitcode.code == expected
         assert len(jitcode.constants) == 0
         assert len(jitcode.typekinds) == 0
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
 
     def test_merge(self):
         def f(x, y, z):
@@ -169,6 +177,8 @@ class AbstractSerializationTest:
         assert jitcode.code == expected
         assert len(jitcode.constants) == 1
         assert len(jitcode.typekinds) == 1
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
 
     def test_loop(self):
         def f(x):
@@ -197,6 +207,37 @@ class AbstractSerializationTest:
                             "red_int_sub", 0, 3,
                             "make_new_redvars", 2, 2, 4,
                             "goto", tlabel("while"))
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 0
+
+    def test_call(self):
+        def g(x):
+            return x + 1
+        def f(x):
+            return g(x) * 2
+        writer, jitcode = self.serialize(f, [int])
+        assert jitcode.code == assemble(writer.interpreter,
+                                        "red_direct_call", 0, 1, 0, 0,
+                                        "red_after_direct_call",
+                                        "make_redbox", -1, 0,
+                                        "red_int_mul", 1, 2,
+                                        "make_new_redvars", 1, 3,
+                                        "make_new_greenvars", 0,
+                                        "red_return", 0)
+        assert jitcode.is_portal
+        assert len(jitcode.called_bytecodes) == 1
+        called_jitcode = jitcode.called_bytecodes[0]
+        assert called_jitcode.code == assemble(writer.interpreter,
+                                               "make_redbox", -1, 0,
+                                               "red_int_add", 0, 1,
+                                               "make_new_redvars", 1, 2,
+                                               "make_new_greenvars", 0,
+                                               "red_return", 0)
+        assert not called_jitcode.is_portal
+        assert len(called_jitcode.called_bytecodes) == 0
+
+
+
 
 
 class TestLLType(AbstractSerializationTest):
