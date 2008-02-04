@@ -42,7 +42,8 @@ class STOP(object):
 STOP = STOP()
 
 class JitInterpreter(object):
-    def __init__(self):
+    def __init__(self, exceptiondesc):
+        self.exceptiondesc = exceptiondesc
         self.opcode_implementations = []
         self.opcode_descs = []
         self.opname_to_index = {}

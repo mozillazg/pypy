@@ -3,7 +3,7 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
-from pypy.jit.timeshifter import rtimeshift, rvalue
+from pypy.jit.timeshifter import rtimeshift, rvalue, exception
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
@@ -16,7 +16,11 @@ class BytecodeWriter(object):
         self.translator = t
         self.annotator = t.annotator
         self.hannotator = hannotator
-        self.interpreter = JitInterpreter()
+        etrafo = hannotator.exceptiontransformer
+        type_system = hannotator.base_translator.rtyper.type_system.name
+        self.exceptiondesc = exception.ExceptionDesc(
+            RGenOp, etrafo, type_system, False)
+        self.interpreter = JitInterpreter(self.exceptiondesc)
         self.RGenOp = RGenOp
         self.current_block = None
         self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
@@ -410,6 +414,9 @@ class BytecodeWriter(object):
             XXX
 
     def serialize_op_indirect_call(self, op):
+        XXX
+
+    def serialize_op_getfield(self, op):
         XXX
 
     # call handling
