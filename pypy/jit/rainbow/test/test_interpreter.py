@@ -894,7 +894,6 @@ class SimpleTests(AbstractInterpretationTest):
 
 
     def test_green_with_side_effects(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('flag', lltype.Bool))
         s = lltype.malloc(S)
         s.flag = False
