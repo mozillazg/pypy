@@ -525,7 +525,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_simple_array(self):
-        py.test.skip("arrays and structs are not working")
         A = lltype.GcArray(lltype.Signed, 
                             hints={'immutable': True})
         def ll_function(a):
