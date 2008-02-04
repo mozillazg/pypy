@@ -868,7 +868,6 @@ class SimpleTests(AbstractInterpretationTest):
 
 
     def test_merge_structures(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', lltype.Ptr(S)), ('n', lltype.Signed))
 
@@ -886,10 +885,10 @@ class SimpleTests(AbstractInterpretationTest):
                 t.s = s
                 t.n = 6
             return t.n + t.s.n
-        res = self.interpret(ll_function, [0], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [0], [])
         assert res == 5 + 6
         self.check_insns({'int_is_true': 1, 'int_add': 1})
-        res = self.interpret(ll_function, [1], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [1], [])
         assert res == 1 + 2
         self.check_insns({'int_is_true': 1, 'int_add': 1})
 
