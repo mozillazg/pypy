@@ -364,6 +364,15 @@ class JitInterpreter(object):
         resbox = rtimeshift.gengetarrayitem(self.jitstate, deepfrozen, fielddesc,
                                         arraybox, indexbox)
         self.red_result(resbox)
+
+
+    def opimpl_red_setarrayitem(self):
+        destbox = self.get_redarg()
+        fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
+        indexbox = self.get_redarg()
+        valuebox = self.get_redarg()
+        resbox = rtimeshift.gensetarrayitem(self.jitstate, fielddesc, destbox,
+                indexbox, valuebox)
     # ____________________________________________________________
     # construction-time interface
 

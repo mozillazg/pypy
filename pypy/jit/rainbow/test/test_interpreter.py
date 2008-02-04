@@ -546,8 +546,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 24
         self.check_insns({})
 
-
-
     def test_simple_struct_malloc(self):
         py.test.skip("blue containers: to be reimplemented")
         S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),
@@ -711,7 +709,6 @@ class SimpleTests(AbstractInterpretationTest):
 
 
     def test_setarrayitem(self):
-        py.test.skip("arrays and structs are not working")
         A = lltype.GcArray(lltype.Signed)
         a = lltype.malloc(A, 2, immortal=True)
         def ll_function():
@@ -719,7 +716,7 @@ class SimpleTests(AbstractInterpretationTest):
             a[1] = 2
             return a[0]+a[1]
         
-        res = self.interpret(ll_function, [], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [], [])
         assert res == 3
 
     def test_red_array(self):
