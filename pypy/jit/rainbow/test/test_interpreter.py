@@ -113,10 +113,10 @@ class AbstractInterpretationTest(object):
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
         # XXX clean this mess up
         writer, jitcode, argcolors = self.serialize(ll_function, values)
-        hrtyper = bytecode.PseudoHRTyper(RGenOp=writer.RGenOp,
-                                         annotator=writer.translator.annotator,
-                                         rtyper=writer.translator.annotator.base_translator.rtyper)
-        edesc = exception.ExceptionDesc(hrtyper, False)
+        base_annotator = writer.translator.annotator
+        etrafo = base_annotator.exceptiontransformer
+        type_system = base_annotator.base_translator.rtyper.type_system.name
+        edesc = exception.ExceptionDesc(writer.RGenOp, etrafo, type_system, False)
         rgenop = writer.RGenOp()
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")

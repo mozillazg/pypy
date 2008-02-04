@@ -4,9 +4,8 @@ from pypy.jit.timeshifter import rvalue, rtimeshift
 
 class ExceptionDesc:
 
-    def __init__(self, hrtyper, lazy_exception_path):
-        RGenOp = hrtyper.RGenOp
-        self.etrafo = hrtyper.annotator.exceptiontransformer
+    def __init__(self, RGenOp, etrafo, type_system, lazy_exception_path):
+        self.etrafo = etrafo
         self.cexcdata = self.etrafo.cexcdata
         self.exc_data_ptr = self.cexcdata.value
         self.gv_excdata = RGenOp.constPrebuiltGlobal(self.exc_data_ptr)
@@ -24,7 +23,7 @@ class ExceptionDesc:
         self.gv_null_exc_type = RGenOp.constPrebuiltGlobal(null_exc_type)
         self.gv_null_exc_value = RGenOp.constPrebuiltGlobal(null_exc_value)
 
-        if hrtyper.rtyper.type_system.name == 'lltypesystem':
+        if type_system == 'lltypesystem':
             self.null_exc_type_box = rvalue.PtrRedBox(self.exc_type_kind,
                                                       self.gv_null_exc_type)
             self.null_exc_value_box = rvalue.PtrRedBox(self.exc_value_kind,

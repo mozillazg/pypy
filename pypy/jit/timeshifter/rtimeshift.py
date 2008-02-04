@@ -64,11 +64,10 @@ class OpDesc(object):
 
 _opdesc_cache = {}
 
-def make_opdesc(hop):
-    hrtyper = hop.rtyper
-    op_key = (hrtyper.RGenOp, hop.spaceop.opname,
-              tuple([originalconcretetype(s_arg) for s_arg in hop.args_s]),
-              originalconcretetype(hop.s_result))
+def make_opdesc(RGenOp, opname, args_s, s_result):
+    op_key = (RGenOp, opname,
+              tuple([originalconcretetype(s_arg) for s_arg in args_s]),
+              originalconcretetype(s_result))
     try:
         return _opdesc_cache[op_key]
     except KeyError:
@@ -133,10 +132,6 @@ def ll_gen2(opdesc, jitstate, argbox0, argbox1):
                                                               gv_arg0, gv_arg1)
         jitstate.greens.append(gv_raised)    # for split_raisingop()
     return opdesc.redboxcls(opdesc.result_kind, genvar)
-
-def ll_genmalloc_varsize(jitstate, contdesc, sizebox):
-    # the specialized by contdesc is not useful, unify paths
-    return genmalloc_varsize(jitstate, contdesc, sizebox)
 
 def genmalloc_varsize(jitstate, contdesc, sizebox):
     gv_size = sizebox.getgenvar(jitstate)
@@ -599,10 +594,6 @@ class CallDesc:
     def _freeze_(self):
         return True
 
-def ll_gen_residual_call(jitstate, calldesc, funcbox):
-    # specialization is not useful here, we can unify the calldescs
-    return gen_residual_call(jitstate, calldesc, funcbox)
-
 def gen_residual_call(jitstate, calldesc, funcbox):
     builder = jitstate.curbuilder
     gv_funcbox = funcbox.getgenvar(jitstate)
@@ -796,10 +787,6 @@ class PromotionDesc:
 
     def _freeze_(self):
         return True
-
-def ll_promote(jitstate, promotebox, promotiondesc):
-    # the specialization by promotiondesc is not useful here, so unify paths
-    return promote(jitstate, promotebox, promotiondesc)
 
 def promote(jitstate, promotebox, promotiondesc):
     builder = jitstate.curbuilder
