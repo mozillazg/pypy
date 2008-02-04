@@ -4,7 +4,7 @@ from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.jit.rainbow.bytecode import BytecodeWriter, label, tlabel, assemble
+from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.rainbow import bytecode

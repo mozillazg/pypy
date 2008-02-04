@@ -2,8 +2,8 @@ from pypy.translator.translator import TranslationContext, graphof
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
-from pypy.jit.rainbow.bytecode import BytecodeWriter, label, tlabel, assemble
 from pypy.jit.codegen.llgraph.rgenop import RGenOp
+from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
 from pypy.rlib.jit import hint
 from pypy import conftest
 
