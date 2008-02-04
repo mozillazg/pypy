@@ -144,15 +144,16 @@ class BytecodeWriter(object):
                 linkfalse, linktrue = linktrue, linkfalse
             color = self.varcolor(block.exitswitch)
             index = self.serialize_oparg(color, block.exitswitch)
-            srcopname, srcargs = self.trace_back_bool_var(
-                block, block.exitswitch)
-            if color == "red" and srcopname is not None:
-                if srcopname == 'ptr_nonzero':
-                    reverse = False
-                    split_extras = srcargs
-                elif srcopname == 'ptr_iszero':
-                    reverse = True
-                    split_extras = srcargs
+            reverse = None
+            if color == "red":
+                srcopname, srcargs = self.trace_back_bool_var(
+                    block, block.exitswitch)
+                if srcopname is not None:
+                    if srcopname == 'ptr_nonzero':
+                        reverse = False
+                    elif srcopname == 'ptr_iszero':
+                        reverse = True
+            if reverse is not None:
                 ptrindex = self.serialize_oparg("red", srcargs[0])
                 self.emit("red_goto_ifptrnonzero")
                 self.emit(reverse)
@@ -433,7 +434,7 @@ class BytecodeWriter(object):
             args = targetgraph.getargs()
             emitted_args = self.args_of_call(op.args[1:], args)
             self.emit("red_direct_call")
-            self.emit(emitted_args)
+            self.emit(*emitted_args)
             self.emit(graphindex)
             if kind == "red":
                 self.register_redvar(op.result)
@@ -443,7 +444,7 @@ class BytecodeWriter(object):
             args = targetgraph.getargs()
             emitted_args = self.args_of_call(op.args[1:], args)
             self.emit("green_direct_call")
-            self.emit(emitted_args)
+            self.emit(*emitted_args)
             self.emit(pos)
             self.register_greenvar(op.result)
         elif kind == "yellow":
@@ -451,7 +452,7 @@ class BytecodeWriter(object):
             args = targetgraph.getargs()
             emitted_args = self.args_of_call(op.args[1:], args)
             self.emit("yellow_direct_call")
-            self.emit(emitted_args)
+            self.emit(*emitted_args)
             self.emit(graphindex)
             self.emit("yellow_after_direct_call")
             self.emit("yellow_retrieve_result")
