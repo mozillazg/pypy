@@ -820,7 +820,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == "3"
 
     def test_red_propagate(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         def ll_function(n, k):
             s = lltype.malloc(S)
@@ -828,7 +827,7 @@ class SimpleTests(AbstractInterpretationTest):
             if k < 0:
                 return -123
             return s.n * k
-        res = self.interpret(ll_function, [3, 8], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [3, 8], [])
         assert res == 24
         self.check_insns({'int_lt': 1, 'int_mul': 1})
 
