@@ -123,6 +123,7 @@ class GcRootTracker(object):
 
     def process_function(self, lines, entrypoint, filename):
         tracker = FunctionGcRootTracker(lines, filetag = self.files_seen)
+        tracker.is_main = tracker.funcname == entrypoint
         if self.verbose:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
@@ -130,21 +131,9 @@ class GcRootTracker(object):
         if self.verbose > 1:
             for label, state in table:
                 print >> sys.stderr, label, '\t', format_callshape(state)
-        if tracker.funcname == entrypoint:
-            table = self.fixup_entrypoint_table(table)
         self.gcmaptable.extend(table)
+        self.seen_main |= tracker.is_main
         return tracker.lines
-
-    def fixup_entrypoint_table(self, table):
-        self.seen_main = True
-        # as an end marker, set all five initial entries of the callshapes
-        # to LOC_NOWHERE.  This info is not useful anyway because we don't
-        # go to main()'s caller.
-        newtable = []
-        MARKERS = (LOC_NOWHERE,) * 5
-        for label, shape in table:
-            newtable.append((label, MARKERS + shape[5:]))
-        return newtable
 
 
 class FunctionGcRootTracker(object):
@@ -159,6 +148,7 @@ class FunctionGcRootTracker(object):
         self.uses_frame_pointer = False
         self.r_localvar = r_localvarnofp
         self.filetag = filetag
+        self.is_main = False
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
@@ -184,7 +174,9 @@ class FunctionGcRootTracker(object):
         for insn in self.list_call_insns():
             if not hasattr(insn, 'framesize'):
                 continue     # calls that never end up reaching a RET
-            if self.uses_frame_pointer:
+            if self.is_main:
+                retaddr = LOC_NOWHERE     # end marker for asmgcroot.py
+            elif self.uses_frame_pointer:
                 retaddr = frameloc(LOC_EBP_BASED, 4)
             else:
                 retaddr = frameloc(LOC_ESP_BASED, insn.framesize)
@@ -192,7 +184,7 @@ class FunctionGcRootTracker(object):
             # the first gcroots are always the ones corresponding to
             # the callee-saved registers
             for reg in CALLEE_SAVE_REGISTERS:
-                shape.append(None)
+                shape.append(LOC_NOWHERE)
             gcroots = []
             for localvar, tag in insn.gcroots.items():
                 if isinstance(localvar, LocalVar):
@@ -207,8 +199,8 @@ class FunctionGcRootTracker(object):
                 else:
                     regindex = CALLEE_SAVE_REGISTERS.index(tag)
                     shape[1 + regindex] = loc
-            if None in shape:
-                reg = CALLEE_SAVE_REGISTERS[shape.index(None) - 1]
+            if LOC_NOWHERE in shape and not self.is_main:
+                reg = CALLEE_SAVE_REGISTERS[shape.index(LOC_NOWHERE) - 1]
                 raise AssertionError("cannot track where register %s is saved"
                                      % (reg,))
             gcroots.sort()
@@ -577,7 +569,7 @@ class FunctionGcRootTracker(object):
         return self._visit_epilogue() + self._visit_pop('%ebp')
 
     def visit_ret(self, line):
-        return InsnRet()
+        return InsnRet(self.is_main)
 
     def visit_jmp(self, line):
         match = r_jmp_switch.match(line)
@@ -598,7 +590,8 @@ class FunctionGcRootTracker(object):
             return InsnStop()
         if r_unaryinsn_star.match(line):
             # that looks like an indirect tail-call.
-            return InsnRet()    # tail-calls are equivalent to RET for us
+            # tail-calls are equivalent to RET for us
+            return InsnRet(self.is_main)
         try:
             self.conditional_jump(line)
         except KeyError:
@@ -606,7 +599,8 @@ class FunctionGcRootTracker(object):
             match = r_unaryinsn.match(line)
             target = match.group(1)
             assert not target.startswith('.')
-            return InsnRet()    # tail-calls are equivalent to RET for us
+            # tail-calls are equivalent to RET for us
+            return InsnRet(self.is_main)
         return InsnStop()
 
     def register_jump_to(self, label):
@@ -771,8 +765,13 @@ class InsnStop(Insn):
 
 class InsnRet(InsnStop):
     framesize = 0
+    def __init__(self, is_main):
+        self.is_main = is_main
     def requestgcroots(self):
-        return dict(zip(CALLEE_SAVE_REGISTERS, CALLEE_SAVE_REGISTERS))
+        if self.is_main:  # no need to track the value of these registers in
+            return {}     # the caller function if we are the main()
+        else:
+            return dict(zip(CALLEE_SAVE_REGISTERS, CALLEE_SAVE_REGISTERS))
 
 class InsnCall(Insn):
     _args_ = ['lineno', 'gcroots']
