@@ -92,7 +92,7 @@ class JitInterpreter(object):
             elif graph_color == "yellow":
                 newjitstate = rtimeshift.leave_graph_yellow(queue)
             elif graph_color == "green":
-                XXX
+                assert 0, "green graphs shouldn't be seen by the rainbow interp"
             elif graph_color == "gray":
                 assert not is_portal
                 newjitstate = rtimeshift.leave_graph_gray(queue)
@@ -433,15 +433,15 @@ class BytecodeWriter(object):
     def insert_exits(self, block):
         if block.exits == ():
             returnvar, = block.inputargs
-            color = self.varcolor(returnvar)
+            color = self.graph_calling_color(self.graph)
             if color == "red":
                 self.emit("red_return")
-            elif originalconcretetype(returnvar) == lltype.Void:
+            elif color == "gray":
                 self.emit("gray_return")
-            elif color == "green": # really a yellow call # XXX use graphcolor
+            elif color == "yellow":
                 self.emit("yellow_return")
             else:
-                XXX
+                assert 0, "unknown graph calling color %s" % (color, )
         elif len(block.exits) == 1:
             link, = block.exits
             self.insert_renaming(link)
@@ -841,7 +841,7 @@ def assemble(interpreter, *args):
         elif isinstance(arg, tlabel):
             result.extend((arg, None, None, None))
         else:
-            XXX
+            assert "don't know how to emit %r" % (arg, )
     for i in range(len(result)):
         b = result[i]
         if isinstance(b, tlabel):
