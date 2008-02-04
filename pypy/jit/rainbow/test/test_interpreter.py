@@ -584,7 +584,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_degenerated_before_return(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
 
@@ -603,7 +602,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 4 * 4
 
     def test_degenerated_before_return_2(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
 
@@ -656,7 +654,6 @@ class SimpleTests(AbstractInterpretationTest):
             assert parent.n == 3.25
 
     def test_degenerated_via_substructure(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
 
