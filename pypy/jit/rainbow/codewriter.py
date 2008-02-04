@@ -144,7 +144,21 @@ class BytecodeWriter(object):
                 linkfalse, linktrue = linktrue, linkfalse
             color = self.varcolor(block.exitswitch)
             index = self.serialize_oparg(color, block.exitswitch)
-            self.emit("%s_goto_iftrue" % color)
+            srcopname, srcargs = self.trace_back_bool_var(
+                block, block.exitswitch)
+            if color == "red" and srcopname is not None:
+                if srcopname == 'ptr_nonzero':
+                    reverse = False
+                    split_extras = srcargs
+                elif srcopname == 'ptr_iszero':
+                    reverse = True
+                    split_extras = srcargs
+                ptrindex = self.serialize_oparg("red", srcargs[0])
+                self.emit("red_goto_ifptrnonzero")
+                self.emit(reverse)
+                self.emit(ptrindex)
+            else:
+                self.emit("%s_goto_iftrue" % color)
             self.emit(index)
             self.emit(tlabel(linktrue))
             self.insert_renaming(linkfalse)
@@ -192,7 +206,10 @@ class BytecodeWriter(object):
     def serialize_op(self, op):
         specialcase = getattr(self, "serialize_op_%s" % (op.opname, ), None)
         if specialcase is not None:
-            return specialcase(op)
+            try:
+                return specialcase(op)
+            except NotImplementedError:
+                pass
         color = self.opcolor(op)
         args = []
         for arg in op.args:
@@ -445,6 +462,14 @@ class BytecodeWriter(object):
     def serialize_op_indirect_call(self, op):
         XXX
 
+    def serialize_op_malloc(self, op):
+        index = self.structtypedesc_position(op.args[0].value)
+        self.emit("red_malloc", index)
+        self.register_redvar(op.result)
+
+    def serialize_op_zero_gc_pointers_inside(self, op):
+        pass # XXX is that right?
+
     def serialize_op_getfield(self, op):
         assert self.opcolor(op) == "red"
         args = op.args
@@ -478,6 +503,33 @@ class BytecodeWriter(object):
         self.register_redvar(op.result)
 
 
+    def serialize_op_setfield(self, op):
+        args = op.args
+        PTRTYPE = args[0].concretetype
+        VALUETYPE = args[2].concretetype
+        if VALUETYPE is lltype.Void:
+            return
+        if args[0] == self.exceptiondesc.cexcdata:
+            # reading one of the exception boxes (exc_type or exc_value)
+            fieldname = args[1].value
+            val = self.serialize_oparg("red", args[2])
+            if fieldname == 'exc_type':
+                self.emit("write_exctype", val)
+            elif fieldname == 'exc_value':
+                self.emit("write_excvalue", val)
+            else:
+                raise Exception("getfield(exc_data, %r)" % (fieldname,))
+            return
+        # non virtual case                
+        destboxindex = self.serialize_oparg("red", args[0])
+        valboxindex = self.serialize_oparg("red", args[2])
+        fieldname = args[1].value
+        fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
+        if fielddescindex == -1:   # Void field
+            return
+        self.emit("red_setfield", destboxindex, fielddescindex, valboxindex)
+
+
     # call handling
 
     def graphs_from(self, spaceop):
@@ -504,6 +556,29 @@ class BytecodeWriter(object):
         for graph in graphs:
             tsgraph = self.specialized_graph_of(graph, args_v, spaceop.result)
             yield graph, tsgraph
+
+    def trace_back_bool_var(self, block, v):
+        """Return the (opname, arguments) that created the exitswitch of
+        the block.  The opname is None if not found.
+        """
+        inverted = False
+        for i in range(len(block.operations)-1, -1, -1):
+            op = block.operations[i]
+            if op.result is v:
+                if op.opname == 'bool_not':
+                    inverted = not inverted
+                    [v] = op.args
+                elif op.opname == 'same_as':
+                    [v] = op.args
+                else:
+                    opname = op.opname
+                    opargs = op.args
+                    if inverted:
+                        opname = {'ptr_nonzero': 'ptr_iszero',
+                                  'ptr_iszero' : 'ptr_nonzero'}.get(opname)
+                    return opname, opargs    # found
+        # not found, comes from earlier block - give up
+        return None, None
 
     def guess_call_kind(self, spaceop):
         if spaceop.opname == 'direct_call':

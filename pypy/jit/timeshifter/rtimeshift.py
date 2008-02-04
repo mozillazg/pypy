@@ -222,7 +222,7 @@ def ll_gengetinteriorarraysize(jitstate, interiordesc, argbox, *indexboxes):
     return interiordesc.gengetinteriorarraysize(jitstate, argbox, *indexboxes)
 
 
-def ll_genptrnonzero(jitstate, argbox, reverse):
+def genptrnonzero(jitstate, argbox, reverse):
     if argbox.is_constant():
         addr = rvalue.ll_getvalue(argbox, llmemory.Address)
         return rvalue.ll_fromvalue(jitstate, bool(addr) ^ reverse)
@@ -237,7 +237,7 @@ def ll_genptrnonzero(jitstate, argbox, reverse):
             gv_res = builder.genop_ptr_nonzero(argbox.kind, gv_addr)
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
 
-def ll_genptreq(jitstate, argbox0, argbox1, reverse):
+def genptreq(jitstate, argbox0, argbox1, reverse):
     builder = jitstate.curbuilder
     if argbox0.is_constant() and argbox1.is_constant():
         addr0 = rvalue.ll_getvalue(argbox0, llmemory.Address)

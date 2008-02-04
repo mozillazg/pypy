@@ -708,7 +708,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({'int_add': 2, 'int_sub': 1})
 
     def test_red_virtual_container(self):
-        py.test.skip("arrays and structs are not working")
         # this checks that red boxes are able to be virtualized dynamically by
         # the compiler (the P_NOVIRTUAL policy prevents the hint-annotator from
         # marking variables in blue)
@@ -717,7 +716,7 @@ class SimpleTests(AbstractInterpretationTest):
             s = lltype.malloc(S)
             s.n = n
             return s.n
-        res = self.interpret(ll_function, [42], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [42], [])
         assert res == 42
         self.check_insns({})
 

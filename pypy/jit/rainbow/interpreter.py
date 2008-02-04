@@ -1,6 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.timeshifter import rtimeshift
+from pypy.jit.timeshifter import rtimeshift, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
 from pypy.rpython.lltypesystem import lltype
 
@@ -201,6 +201,35 @@ class JitInterpreter(object):
         if descision:
             self.frame.pc = target
 
+    def opimpl_red_goto_ifptrnonzero(self):
+        reverse = self.load_bool()
+        ptrbox = self.get_redarg()
+        switchbox = self.get_redarg()
+        target = self.load_4byte()
+        # XXX not sure about passing no green vars
+        descision = rtimeshift.split_ptr_nonzero(self.jitstate, switchbox,
+                                                 self.frame.pc, ptrbox, reverse)
+        if descision:
+            self.frame.pc = target
+
+    def opimpl_red_ptr_nonzero(self, reverse=False):
+        ptrbox = self.get_redarg()
+        resultbox = rtimeshift.genptrnonzero(self.jitstate, ptrbox, reverse)
+        self.red_result(resultbox)
+
+    def opimpl_red_ptr_iszero(self):
+        self.opimpl_red_ptr_nonzero(reverse=True)
+
+    def opimpl_red_ptr_eq(self, reverse=False):
+        ptrbox1 = self.get_redarg()
+        ptrbox2 = self.get_redarg()
+        resultbox = rtimeshift.genptreq(self.jitstate, ptrbox1,
+                                        ptrbox2, reverse)
+        self.red_result(resultbox)
+
+    def opimpl_red_ptr_ne(self):
+        self.opimpl_red_ptr_eq(reverse=True)
+
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
@@ -296,7 +325,20 @@ class JitInterpreter(object):
     def opimpl_read_excvalue(self):
         XXX
 
+    def opimpl_write_exctype(self):
+        typebox = self.get_redarg()
+        rtimeshift.setexctypebox(self.jitstate, typebox)
+
+    def opimpl_write_excvalue(self):
+        valuebox = self.get_redarg()
+        rtimeshift.setexcvaluebox(self.jitstate, valuebox)
+
     # structs and arrays
+
+    def opimpl_red_malloc(self):
+        structtypedesc = self.frame.bytecode.structtypedescs[self.load_2byte()]
+        redbox = rcontainer.create(self.jitstate, structtypedesc)
+        self.red_result(redbox)
 
     def opimpl_red_getfield(self):
         structbox = self.get_redarg()
@@ -306,6 +348,12 @@ class JitInterpreter(object):
                                         structbox)
         self.red_result(resbox)
 
+    def opimpl_red_setfield(self):
+        destbox = self.get_redarg()
+        fielddesc = self.frame.bytecode.fielddescs[self.load_2byte()]
+        valuebox = self.get_redarg()
+        resbox = rtimeshift.gensetfield(self.jitstate, fielddesc, destbox,
+                valuebox)
 
     # ____________________________________________________________
     # construction-time interface
