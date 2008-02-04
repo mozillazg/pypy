@@ -6,6 +6,7 @@ from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.jit.timeshifter.greenkey import KeyDesc, empty_key, GreenKey
+from pypy.translator.backendopt.removenoops import remove_same_as
 
 class JitCode(object):
     """
@@ -70,6 +71,7 @@ class JitInterpreter(object):
     def bytecode_loop(self):
         while 1:
             bytecode = self.load_2byte()
+            assert bytecode >= 0
             result = self.opcode_implementations[bytecode](self)
             if result is STOP:
                 return
@@ -79,21 +81,23 @@ class JitInterpreter(object):
     def dispatch(self):
         is_portal = self.frame.bytecode.is_portal
         graph_color = self.frame.bytecode.graph_color
-        newjitstate = rtimeshift.dispatch_next(self.queue)
+        queue = self.queue
+        newjitstate = rtimeshift.dispatch_next(queue)
         resumepoint = rtimeshift.getresumepoint(newjitstate)
         self.newjitstate(newjitstate)
         if resumepoint == -1:
             if graph_color == "red":
                 newjitstate = rtimeshift.leave_graph_red(
-                        self.queue, is_portal)
+                        queue, is_portal)
+            elif graph_color == "yellow":
+                newjitstate = rtimeshift.leave_graph_yellow(queue)
             elif graph_color == "green":
                 XXX
             elif graph_color == "gray":
                 assert not is_portal
-                newjitstate = rtimeshift.leave_graph_gray(
-                        self.queue)
+                newjitstate = rtimeshift.leave_graph_gray(queue)
             else:
-                assert 0, "unknown graph color %s" % (color, )
+                assert 0, "unknown graph color %s" % (graph_color, )
 
             self.newjitstate(newjitstate)
             if newjitstate is None or is_portal:
@@ -152,8 +156,12 @@ class JitInterpreter(object):
 
     def newjitstate(self, newjitstate):
         self.jitstate = newjitstate
+        self.queue = None
         if newjitstate is not None:
-            self.frame = newjitstate.frame
+            frame = newjitstate.frame
+            self.frame = frame
+            if frame is not None:
+                self.queue = frame.dispatchqueue
         else:
             self.frame = None
 
@@ -192,8 +200,11 @@ class JitInterpreter(object):
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
-    def opimpl_green_return(self):
-        XXX
+    def opimpl_yellow_return(self):
+        # save the greens to make the return value findable by collect_split
+        rtimeshift.save_greens(self.jitstate, self.frame.local_green)
+        rtimeshift.save_return(self.jitstate)
+        return self.dispatch()
 
     def opimpl_make_new_redvars(self):
         self.frame.local_boxes = self.get_red_varargs()
@@ -246,6 +257,27 @@ class JitInterpreter(object):
         index = self.load_2byte()
         function = self.frame.bytecode.nonrainbow_functions[index]
         function(self, greenargs, redargs)
+
+    def opimpl_yellow_direct_call(self):
+        greenargs = self.get_green_varargs()
+        redargs = self.get_red_varargs()
+        bytecodenum = self.load_2byte()
+        targetbytecode = self.frame.bytecode.called_bytecodes[bytecodenum]
+        self.run(self.jitstate, targetbytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+        # this frame will be resumed later in the next bytecode, which is
+        # yellow_after_direct_call
+
+    def opimpl_yellow_after_direct_call(self):
+        newjitstate = rtimeshift.collect_split(
+            self.jitstate, self.frame.pc,
+            self.frame.local_green)
+        assert newjitstate is self.jitstate
+
+    def opimpl_yellow_retrieve_result(self):
+        # XXX all this jitstate.greens business is a bit messy
+        self.green_result(self.jitstate.greens[0])
+
 
     # ____________________________________________________________
     # construction-time interface
@@ -315,6 +347,7 @@ class BytecodeWriter(object):
         return self.raise_analyzer.analyze(op)
 
     def make_bytecode(self, graph, is_portal=True):
+        remove_same_as(graph)
         if is_portal:
             self.all_graphs[graph] = JitCode.__new__(JitCode)
         self.seen_blocks = {}
@@ -402,11 +435,11 @@ class BytecodeWriter(object):
             returnvar, = block.inputargs
             color = self.varcolor(returnvar)
             if color == "red":
-                index = self.serialize_oparg(color, returnvar)
                 self.emit("red_return")
-                self.emit(index)
             elif originalconcretetype(returnvar) == lltype.Void:
                 self.emit("gray_return")
+            elif color == "green": # really a yellow call # XXX use graphcolor
+                self.emit("yellow_return")
             else:
                 XXX
         elif len(block.exits) == 1:
@@ -680,6 +713,16 @@ class BytecodeWriter(object):
             self.emit(emitted_args)
             self.emit(pos)
             self.register_greenvar(op.result)
+        elif kind == "yellow":
+            graphindex = self.graph_position(targetgraph)
+            args = targetgraph.getargs()
+            emitted_args = self.args_of_call(op.args[1:], args)
+            self.emit("yellow_direct_call")
+            self.emit(emitted_args)
+            self.emit(graphindex)
+            self.emit("yellow_after_direct_call")
+            self.emit("yellow_retrieve_result")
+            self.register_greenvar(op.result)
         else:
             XXX
 
@@ -785,7 +828,9 @@ def assemble(interpreter, *args):
         result.append(chr(index & 0xff))
     for arg in args:
         if isinstance(arg, str):
-            emit_2byte(interpreter.find_opcode(arg))
+            opcode = interpreter.find_opcode(arg)
+            assert opcode >= 0, "unknown opcode %s" % (arg, )
+            emit_2byte(opcode)
         elif isinstance(arg, int):
             emit_2byte(arg)
         elif isinstance(arg, label):
@@ -797,6 +842,8 @@ def assemble(interpreter, *args):
     for i in range(len(result)):
         b = result[i]
         if isinstance(b, tlabel):
+            for j in range(1, 4):
+                assert result[i + j] is None
             index = labelpos[b.name]
             result[i + 0] = chr((index >> 24) & 0xff)
             result[i + 1] = chr((index >> 16) & 0xff)

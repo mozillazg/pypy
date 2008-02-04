@@ -476,7 +476,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_split_on_green_return(self):
-        py.test.skip("calls are WIP")
         def ll_two(x):
             if x > 0:
                 return 17

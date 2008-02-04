@@ -527,7 +527,7 @@ def save_locals(jitstate, *redboxes):
     assert None not in redboxes
     jitstate.frame.local_boxes = redboxes
 
-def save_greens(jitstate, *greens_gv):
+def save_greens(jitstate, greens_gv):
     jitstate.greens = list(greens_gv)
 
 def getlocalbox(jitstate, i):
