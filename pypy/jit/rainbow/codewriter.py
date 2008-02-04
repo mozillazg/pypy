@@ -471,6 +471,17 @@ class BytecodeWriter(object):
     def serialize_op_zero_gc_pointers_inside(self, op):
         pass # XXX is that right?
 
+    def serialize_op_cast_pointer(self, op):
+        color = self.varcolor(op.result)
+        assert color == self.varcolor(op.args[0])
+        if color == "green":
+            self.register_greenvar(op.result, self.green_position(op.args[0]))
+        else:
+            self.register_redvar(op.result, self.redvar_position(op.args[0]))
+
+    def serialize_op_keepalive(self, op):
+        pass
+
     def serialize_op_getfield(self, op):
         assert self.opcolor(op) == "red"
         args = op.args

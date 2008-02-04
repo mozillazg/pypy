@@ -14,6 +14,7 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import summary
 from pypy.rlib.jit import hint
+from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
 
 def getargtypes(annotator, values):
@@ -850,7 +851,6 @@ class SimpleTests(AbstractInterpretationTest):
 
 
     def test_red_subcontainer_cast(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         def ll_function(k):
@@ -862,7 +862,7 @@ class SimpleTests(AbstractInterpretationTest):
             result = s.n * (k-1)
             keepalive_until_here(t)
             return result
-        res = self.interpret(ll_function, [7], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [7], [])
         assert res == 42
         self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
 
