@@ -8,7 +8,7 @@ from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.rainbow import bytecode
-from pypy.jit.timeshifter import rtimeshift, exception, rvalue
+from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.annotation import model as annmodel
@@ -117,17 +117,13 @@ class AbstractInterpretationTest(object):
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
         # XXX clean this mess up
         writer, jitcode, argcolors = self.serialize(ll_function, values)
-        base_annotator = writer.translator.annotator
-        etrafo = base_annotator.exceptiontransformer
-        type_system = base_annotator.base_translator.rtyper.type_system.name
-        edesc = exception.ExceptionDesc(writer.RGenOp, etrafo, type_system, False)
         rgenop = writer.RGenOp()
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
         builder.start_writing()
         jitstate = rtimeshift.JITState(builder, None,
-                                       edesc.null_exc_type_box,
-                                       edesc.null_exc_value_box)
+                                       writer.exceptiondesc.null_exc_type_box,
+                                       writer.exceptiondesc.null_exc_value_box)
         def ll_finish_jitstate(jitstate, exceptiondesc, graphsigtoken):
             returnbox = rtimeshift.getreturnbox(jitstate)
             gv_ret = returnbox.getgenvar(jitstate)
@@ -160,7 +156,8 @@ class AbstractInterpretationTest(object):
                 red_i += 1
         jitstate = writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
         if jitstate is not None:
-            ll_finish_jitstate(jitstate, edesc, sigtoken)
+            ll_finish_jitstate(jitstate, writer.interpreter.exceptiondesc,
+                               sigtoken)
         builder.end()
         generated = gv_generated.revealconst(lltype.Ptr(self.RESIDUAL_FUNCTYPE))
         graph = generated._obj.graph
