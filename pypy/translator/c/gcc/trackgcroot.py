@@ -758,7 +758,7 @@ class InsnStackAdjust(Insn):
 
 class InsnCannotFollowEsp(InsnStackAdjust):
     def __init__(self):
-        self.delta = 7     # use an odd value as marker
+        self.delta = -7     # use an odd value as marker
 
 class InsnStop(Insn):
     pass
