@@ -677,7 +677,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 4 * 4
 
     def test_degenerate_with_voids(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('y', lltype.Void),
                                  ('x', lltype.Signed))
         def ll_function():
@@ -685,8 +684,8 @@ class SimpleTests(AbstractInterpretationTest):
             s.x = 123
             return s
         ll_function.convert_result = lambda s: str(s.x)
-        res = self.interpret(ll_function, [], [], policy=P_NOVIRTUAL)
-        assert res == "123"
+        res = self.interpret(ll_function, [], [])
+        assert res.x == 123
 
     def test_plus_minus_all_inlined(self):
         py.test.skip("arrays and structs are not working")
