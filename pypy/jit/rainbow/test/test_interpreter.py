@@ -622,7 +622,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 4 * 4
 
     def test_degenerated_at_return(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         class Result:
@@ -643,15 +642,9 @@ class SimpleTests(AbstractInterpretationTest):
         ll_function.convert_result = glob_result.convert
 
         res = self.interpret(ll_function, [0], [])
-        assert res == "4"
-        if self.__class__ in (TestLLType, TestOOType):
-            assert lltype.parentlink(glob_result.s._obj) == (None, None)
+        assert res.n == 4
         res = self.interpret(ll_function, [1], [])
-        assert res == "3"
-        if self.__class__ in (TestLLType, TestOOType):
-            parent, parentindex = lltype.parentlink(glob_result.s._obj)
-            assert parentindex == 's'
-            assert parent.n == 3.25
+        assert res.n == 3
 
     def test_degenerated_via_substructure(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
