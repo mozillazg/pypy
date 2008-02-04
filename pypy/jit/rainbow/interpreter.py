@@ -341,6 +341,20 @@ class JitInterpreter(object):
         redbox = rcontainer.create(self.jitstate, structtypedesc)
         self.red_result(redbox)
 
+    def opimpl_red_malloc_varsize_struct(self):
+        structtypedesc = self.frame.bytecode.structtypedescs[self.load_2byte()]
+        sizebox = self.get_redarg()
+        redbox = rcontainer.create_varsize(self.jitstate, structtypedesc,
+                                           sizebox)
+        self.red_result(redbox)
+
+    def opimpl_red_malloc_varsize_array(self):
+        arraytypedesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
+        sizebox = self.get_redarg()
+        redbox = rtimeshift.genmalloc_varsize(self.jitstate, arraytypedesc,
+                                              sizebox)
+        self.red_result(redbox)
+
     def opimpl_red_getfield(self):
         structbox = self.get_redarg()
         fielddesc = self.frame.bytecode.fielddescs[self.load_2byte()]
@@ -365,7 +379,6 @@ class JitInterpreter(object):
                                         arraybox, indexbox)
         self.red_result(resbox)
 
-
     def opimpl_red_setarrayitem(self):
         destbox = self.get_redarg()
         fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
@@ -373,6 +386,7 @@ class JitInterpreter(object):
         valuebox = self.get_redarg()
         resbox = rtimeshift.gensetarrayitem(self.jitstate, fielddesc, destbox,
                 indexbox, valuebox)
+
     # ____________________________________________________________
     # construction-time interface
 
