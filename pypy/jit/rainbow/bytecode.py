@@ -100,7 +100,7 @@ class JitInterpreter(object):
                 assert 0, "unknown graph color %s" % (graph_color, )
 
             self.newjitstate(newjitstate)
-            if newjitstate is None or is_portal:
+            if self.frame is None:
                 return STOP
         else:
             self.frame.pc = resumepoint
@@ -606,12 +606,15 @@ class BytecodeWriter(object):
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
-        bytecode = JitCode.__new__(JitCode)
+        if graph in self.all_graphs:
+            bytecode = self.all_graphs[graph]
+        else:
+            bytecode = JitCode.__new__(JitCode)
+            self.all_graphs[graph] = bytecode
+            self.unfinished_graphs.append(graph)
         index = len(self.called_bytecodes)
         self.called_bytecodes.append(bytecode)
-        self.all_graphs[graph] = bytecode
         self.graph_positions[graph] = index
-        self.unfinished_graphs.append(graph)
         return index
 
     def nonrainbow_position(self, fnptr):
