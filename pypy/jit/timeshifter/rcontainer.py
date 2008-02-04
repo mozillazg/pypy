@@ -70,14 +70,13 @@ class StructTypeDesc(object):
     firstsubstructdesc = None
     materialize = None
 
-    def __new__(cls, hrtyper, TYPE):
+    def __new__(cls, RGenOp, TYPE):
         if TYPE._hints.get('virtualizable', False):
             return object.__new__(VirtualizableStructTypeDesc)
         else:
             return object.__new__(StructTypeDesc)
             
-    def __init__(self, hrtyper, TYPE):
-        RGenOp = hrtyper.RGenOp
+    def __init__(self, RGenOp, TYPE):
         self.TYPE = TYPE
         self.PTRTYPE = lltype.Ptr(TYPE)
         self.ptrkind = RGenOp.kindToken(self.PTRTYPE)
@@ -93,7 +92,7 @@ class StructTypeDesc(object):
         self.null = self.PTRTYPE._defl()
         self.gv_null = RGenOp.constPrebuiltGlobal(self.null)
 
-        self._compute_fielddescs(hrtyper)
+        self._compute_fielddescs(RGenOp)
 
         if self.immutable and self.noidentity:
             self._define_materialize()
@@ -102,8 +101,7 @@ class StructTypeDesc(object):
             self._define_devirtualize()
 
         
-    def _compute_fielddescs(self, hrtyper):
-        RGenOp = hrtyper.RGenOp
+    def _compute_fielddescs(self, RGenOp):
         TYPE = self.TYPE
         innermostdesc = self
         fielddescs = []
@@ -112,10 +110,10 @@ class StructTypeDesc(object):
             FIELDTYPE = getattr(TYPE, name)
             if isinstance(FIELDTYPE, lltype.ContainerType):
                 if isinstance(FIELDTYPE, lltype.Array):
-                    self.arrayfielddesc = ArrayFieldDesc(hrtyper, FIELDTYPE)
+                    self.arrayfielddesc = ArrayFieldDesc(RGenOp, FIELDTYPE)
                     self.varsizealloctoken = RGenOp.varsizeAllocToken(TYPE)
                     continue
-                substructdesc = StructTypeDesc(hrtyper, FIELDTYPE)
+                substructdesc = StructTypeDesc(RGenOp, FIELDTYPE)
                 assert name == TYPE._names[0], (
                     "unsupported: inlined substructures not as first field")
                 fielddescs.extend(substructdesc.fielddescs)
@@ -126,7 +124,7 @@ class StructTypeDesc(object):
                 if FIELDTYPE is lltype.Void:
                     desc = None
                 else:
-                    desc = StructFieldDesc(hrtyper, self.PTRTYPE, name, index)
+                    desc = StructFieldDesc(RGenOp, self.PTRTYPE, name, index)
                     fielddescs.append(desc)
                 fielddesc_by_name[name] = desc
 
@@ -212,8 +210,8 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
                    get_rti set_rti
                 """.split()
 
-    def __init__(self, hrtyper, TYPE):
-        RGenOp = hrtyper.RGenOp
+    def __init__(self, RGenOp, TYPE):
+        XXX
         StructTypeDesc.__init__(self, hrtyper, TYPE)
         ACCESS = self.TYPE.ACCESS
         redirected_fields = ACCESS.redirected_fields
@@ -230,8 +228,6 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         self.access_desc = self.getfielddesc('vable_access')
         TOPPTR = self.access_desc.PTRTYPE
         self.s_structtype = annmodel.lltype_to_annotation(TOPPTR)
-
-        annhelper = hrtyper.annhelper
 
         self.my_redirected_getsetters_untouched = {}
         self.my_redirected_getsetters_touched = {}        
@@ -264,6 +260,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         pass
 
     def _define_getset_field_ptr(self, hrtyper, fielddesc, j):
+        XXX
         annhelper = hrtyper.annhelper
         s_lltype = annmodel.lltype_to_annotation(fielddesc.RESTYPE)
 
@@ -326,6 +323,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
 
     def _define_access_is_null(self, hrtyper):
+        XXX
         RGenOp = hrtyper.RGenOp
         annhelper = hrtyper.annhelper        
         def access_is_null(struc):
@@ -353,7 +351,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 class InteriorDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, hrtyper, TOPCONTAINER, path):
+    def __init__(self, RGenOp, TOPCONTAINER, path):
         self.TOPCONTAINER = TOPCONTAINER
         self.path = path
         PTRTYPE = lltype.Ptr(TOPCONTAINER)
@@ -362,10 +360,10 @@ class InteriorDesc(object):
         for offset in path:
             LASTCONTAINER = TYPE
             if offset is None:           # array substruct
-                fielddescs.append(ArrayFieldDesc(hrtyper, TYPE))
+                fielddescs.append(ArrayFieldDesc(RGenOp, TYPE))
                 TYPE = TYPE.OF
             else:
-                fielddescs.append(NamedFieldDesc(hrtyper, lltype.Ptr(TYPE),
+                fielddescs.append(NamedFieldDesc(RGenOp, lltype.Ptr(TYPE),
                                                  offset))
                 TYPE = getattr(TYPE, offset)
         unroll_path = unrolling_iterable(path)
@@ -426,7 +424,7 @@ class InteriorDesc(object):
 
         else:
             assert isinstance(TYPE, lltype.Array)
-            arrayfielddesc = ArrayFieldDesc(hrtyper, TYPE)
+            arrayfielddesc = ArrayFieldDesc(RGenOp, TYPE)
             getinterior_all = make_interior_getter(fielddescs)
 
             def gengetinteriorarraysize(jitstate, argbox, *indexboxes):
@@ -504,8 +502,7 @@ class FieldDesc(object):
     gcref = False
     fieldnonnull = False
 
-    def __init__(self, hrtyper, PTRTYPE, RESTYPE):
-        RGenOp = hrtyper.RGenOp
+    def __init__(self, RGenOp, PTRTYPE, RESTYPE):
         self.PTRTYPE = PTRTYPE
         T = None
         if isinstance(RESTYPE, lltype.ContainerType):
@@ -534,7 +531,7 @@ class FieldDesc(object):
             pass   # no redboxcls at all
         else:
             if self.virtualizable:
-                self.structdesc = StructTypeDesc(hrtyper, T)
+                self.structdesc = StructTypeDesc(RGenOp, T)
             self.redboxcls = rvalue.ll_redboxcls(RESTYPE)
             
         self.immutable = PTRTYPE.TO._hints.get('immutable', False)
@@ -561,11 +558,17 @@ class FieldDesc(object):
     
 class NamedFieldDesc(FieldDesc):
 
-    def __init__(self, hrtyper, PTRTYPE, name):
-        FieldDesc.__init__(self, hrtyper, PTRTYPE, getattr(PTRTYPE.TO, name))
+    def __init__(self, RGenOp, PTRTYPE, name):
+        FieldDesc.__init__(self, RGenOp, PTRTYPE, getattr(PTRTYPE.TO, name))
         T = self.PTRTYPE.TO
         self.fieldname = name
-        self.fieldtoken = hrtyper.RGenOp.fieldToken(T, name)
+        self.fieldtoken = RGenOp.fieldToken(T, name)
+        def getfield_if_non_null(jitstate, genvar):
+             ptr = genvar.revealconst(PTRTYPE)
+             if ptr:
+                 res = getattr(ptr, name)
+                 return rvalue.ll_gv_fromvalue(jitstate, res)
+        self.getfield_if_non_null = getfield_if_non_null
 
     def compact_repr(self): # goes in ll helper names
         return "Fld_%s_in_%s" % (self.fieldname, self.PTRTYPE._short_name())
@@ -586,17 +589,16 @@ class NamedFieldDesc(FieldDesc):
 
 class StructFieldDesc(NamedFieldDesc):
 
-    def __init__(self, hrtyper, PTRTYPE, name, index):
-        NamedFieldDesc.__init__(self, hrtyper, PTRTYPE, name)
+    def __init__(self, RGenOp, PTRTYPE, name, index):
+        NamedFieldDesc.__init__(self, RGenOp, PTRTYPE, name)
         self.fieldindex = index
 
 class ArrayFieldDesc(FieldDesc):
     allow_void = True
 
-    def __init__(self, hrtyper, TYPE):
+    def __init__(self, RGenOp, TYPE):
         assert isinstance(TYPE, lltype.Array)
-        FieldDesc.__init__(self, hrtyper, lltype.Ptr(TYPE), TYPE.OF)
-        RGenOp = hrtyper.RGenOp
+        FieldDesc.__init__(self, RGenOp, lltype.Ptr(TYPE), TYPE.OF)
         self.arraytoken = RGenOp.arrayToken(TYPE)
         self.varsizealloctoken = RGenOp.varsizeAllocToken(TYPE)
         self.indexkind = RGenOp.kindToken(lltype.Signed)

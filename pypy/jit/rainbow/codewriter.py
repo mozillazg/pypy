@@ -3,7 +3,7 @@ from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
-from pypy.jit.timeshifter import rtimeshift, rvalue, exception
+from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
@@ -40,6 +40,8 @@ class BytecodeWriter(object):
         self.typekinds = []
         self.redboxclasses = []
         self.keydescs = []
+        self.structtypedescs = []
+        self.fielddescs = []
         self.called_bytecodes = []
         self.num_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
@@ -57,8 +59,12 @@ class BytecodeWriter(object):
         self.free_green = {}
         # mapping TYPE to index
         self.type_positions = {}
-        # mapping tuple of green TYPES to index
+        # mapping tuples of green TYPES to index
         self.keydesc_positions = {}
+        # mapping STRUCTS to index
+        self.structtypedesc_positions = {}
+        # mapping tuples of STRUCT, name to index
+        self.fielddesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
@@ -75,6 +81,8 @@ class BytecodeWriter(object):
                           self.typekinds,
                           self.redboxclasses,
                           self.keydescs,
+                          self.structtypedescs,
+                          self.fielddescs,
                           self.called_bytecodes,
                           self.num_mergepoints,
                           self.graph_color,
@@ -179,7 +187,7 @@ class BytecodeWriter(object):
                 result.append(self.serialize_oparg(color, v))
             self.emit("make_new_%svars" % (color, ))
             self.emit(len(args))
-            self.emit(result)
+            self.emit(*result)
 
     def serialize_op(self, op):
         specialcase = getattr(self, "serialize_op_%s" % (op.opname, ), None)
@@ -190,7 +198,7 @@ class BytecodeWriter(object):
         for arg in op.args:
             args.append(self.serialize_oparg(color, arg))
         self.serialize_opcode(color, op)
-        self.emit(args)
+        self.emit(*args)
         if self.hannotator.binding(op.result).is_green():
             self.register_greenvar(op.result)
         else:
@@ -287,6 +295,28 @@ class BytecodeWriter(object):
         self.type_positions[TYPE] = result
         return result
 
+    def structtypedesc_position(self, TYPE):
+        if TYPE in self.structtypedesc_positions:
+            return self.structtypedesc_positions[TYPE]
+        self.structtypedescs.append(
+            rcontainer.StructTypeDesc(self.RGenOp, TYPE))
+        result = len(self.structtypedesc_positions)
+        self.structtypedesc_positions[TYPE] = result
+        return result
+
+    def fielddesc_position(self, TYPE, fieldname):
+        if (fieldname, TYPE) in self.fielddesc_positions:
+            return self.fielddesc_positions[fieldname, TYPE]
+        structtypedesc = rcontainer.StructTypeDesc(self.RGenOp, TYPE)
+        fielddesc = structtypedesc.getfielddesc(fieldname)
+        if fielddesc is None:
+            self.fielddesc_positions[fieldname, TYPE] = -1
+            return -1
+        result = len(self.fielddescs)
+        self.fielddescs.append(fielddesc)
+        self.fielddesc_positions[fieldname, TYPE] = result
+        return result
+
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
@@ -324,12 +354,11 @@ class BytecodeWriter(object):
         self.nonrainbow_positions[fn] = result
         return result
         
-    def emit(self, stuff):
+    def emit(self, *stuff):
         assert stuff is not None
-        if isinstance(stuff, list):
-            self.assembler.extend(stuff)
-        else:
-            self.assembler.append(stuff)
+        for x in stuff:
+            assert not isinstance(x, list)
+            self.assembler.append(x)
 
     def sort_by_color(self, vars, by_color_of_vars=None):
         reds = []
@@ -417,7 +446,37 @@ class BytecodeWriter(object):
         XXX
 
     def serialize_op_getfield(self, op):
-        XXX
+        assert self.opcolor(op) == "red"
+        args = op.args
+        if args[0] == self.exceptiondesc.cexcdata:
+            # reading one of the exception boxes (exc_type or exc_value)
+            fieldname = args[1].value
+            if fieldname == 'exc_type':
+                self.emit("read_exctype")
+            elif fieldname == 'exc_value':
+                self.emit("read_excvalue")
+            else:
+                raise Exception("getfield(exc_data, %r)" % (fieldname,))
+            self.register_redvar(op.result)
+            return
+
+        # virtualizable access read
+        PTRTYPE = args[0].concretetype
+        if PTRTYPE.TO._hints.get('virtualizable', False):
+            XXX
+
+        # non virtual case                
+        index = self.serialize_oparg("red", args[0])
+        fieldname = args[1].value
+        s_struct = self.hannotator.binding(args[0])
+        deepfrozen = s_struct.deepfrozen
+        
+        fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
+        if fielddescindex == -1:   # Void field
+            return
+        self.emit("red_getfield", index, fielddescindex, deepfrozen)
+        self.register_redvar(op.result)
+
 
     # call handling
 
@@ -521,6 +580,8 @@ def assemble(interpreter, *args):
             opcode = interpreter.find_opcode(arg)
             assert opcode >= 0, "unknown opcode %s" % (arg, )
             emit_2byte(opcode)
+        elif isinstance(arg, bool):
+            result.append(chr(int(arg)))
         elif isinstance(arg, int):
             emit_2byte(arg)
         elif isinstance(arg, label):
