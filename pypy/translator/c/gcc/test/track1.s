@@ -14,7 +14,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	$0, 4(%esp)
 	movl	$pypy_g_array_16, (%esp)
 	call	open
-        ;; expected (80, 1, 3, 5, -4)
+        ;; expected {4(%ebp) | %ebx, %esi, %edi, (%ebp) | }
 	movl	%eax, -12(%ebp)
 	.loc 2 1522 0
 	cmpl	$-1, -12(%ebp)
@@ -55,7 +55,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	-8(%ebp), %eax
 	movl	%eax, (%esp)
 	call	memset
-        ;; expected (80, 1, 3, 5, -4)
+        ;; expected {4(%ebp) | %ebx, %esi, %edi, (%ebp) | }
 	.loc 2 1545 0
 	jmp	.L542
 .L545:
@@ -73,7 +73,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	-12(%ebp), %eax
 	movl	%eax, (%esp)
 	call	close
-        ;; expected (80, 1, 3, 5, -4)
+        ;; expected {4(%ebp) | %ebx, %esi, %edi, (%ebp) | }
 	movl	%eax, -36(%ebp)
 	.loc 2 1556 0
 	movl	-16(%ebp), %eax
@@ -111,7 +111,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	-12(%ebp), %eax
 	movl	%eax, (%esp)
 	call	read
-        ;; expected (80, 1, 3, 5, -4)
+        ;; expected {4(%ebp) | %ebx, %esi, %edi, (%ebp) | }
 	movl	%eax, -48(%ebp)
 	.loc 2 1575 0
 	movl	-48(%ebp), %eax

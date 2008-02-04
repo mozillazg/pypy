@@ -15,11 +15,11 @@ pypy_g_SemiSpaceGC_scan_copied:
 	movl	%esi, 8(%esp)
 	movl	%esi, (%esp)
 	call	pypy_g_trace___trace_copy
-	;; expected (32, -8, -4, 5, 7)
+	;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | }
 	movl	%ebx, 4(%esp)
 	movl	%esi, (%esp)
 	call	pypy_g_SemiSpaceGC_get_size
-	;; expected (32, -8, -4, 5, 7)
+	;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | }
 	addl	%eax, %ebx
 .L1216:
 	cmpl	12(%esi), %ebx
@@ -36,15 +36,15 @@ pypy_g_SemiSpaceGC_scan_copied:
 	movl	%esi, 8(%esp)
 	movl	%esi, (%esp)
 	call	pypy_g_trace___trace_copy
-	;; expected (32, -8, -4, 5, 7)
+	;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | }
 	movl	%ebx, 4(%esp)
 	movl	%esi, (%esp)
 	call	pypy_g_SemiSpaceGC_get_size
-	;; expected (32, -8, -4, 5, 7)
+	;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | }
 	addl	%eax, %ebx
 .L1227:
 	call	RPyAbort
-	;; expected (32, -8, -4, 5, 7)
+	;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | }
 	cmpl	12(%esi), %ebx
 	jb	.L1229
 	addl	$20, %esp

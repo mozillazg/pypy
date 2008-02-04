@@ -7,11 +7,11 @@ main:
 	movl	%esp, %ebp
 	pushl	%edi
 	subl	$8, %esp
-	andl	$-15, %esp
+	andl	$-16, %esp
 	movl	%ebx, -8(%ebp)
 	movl	8(%ebp), %edi
 	call	foobar
-	;; expected (20, -12, 3, -8, -4, 5)
+	;; expected {4(%ebp) | -8(%ebp), %esi, -4(%ebp), (%ebp) | %edi}
 .L1:
 	cmpl	$0, %eax
 	je	.L3
@@ -26,7 +26,7 @@ main:
 	movl	%esi, %ebx
 	movl	$nonsense, %esi
 	call	foobar
-	;; expected (36, -12, 1, -8, -4, -28, -16)
+	;; expected {4(%ebp) | -8(%ebp), %ebx, -4(%ebp), (%ebp) | -12(%ebp), 4(%esp)}
 	addl	%edi, %eax
 	movl	4(%esp), %eax
 	movl	%ebx, %esi
@@ -39,7 +39,7 @@ main:
 	;; end of inlined function
 .L3:
 	call	foobar
-	;; expected (20, -12, 3, -8, -4, 5)
+	;; expected {4(%ebp) | -8(%ebp), %esi, -4(%ebp), (%ebp) | %edi}
 #APP
 	/* GCROOT %edi */
 #NO_APP
