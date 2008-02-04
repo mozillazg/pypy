@@ -567,6 +567,22 @@ class BytecodeWriter(object):
                   deepfrozen)
         self.register_redvar(op.result)
 
+    def serialize_op_setarrayitem(self, op):
+        args = op.args
+        PTRTYPE = args[0].concretetype
+        VALUETYPE = PTRTYPE.TO.OF
+        if VALUETYPE is lltype.Void:
+            return
+        destboxindex = self.serialize_oparg("red", args[0])
+        indexboxindex = self.serialize_oparg("red", args[1])
+        valboxindex = self.serialize_oparg("red", args[2])
+        fieldname = args[1].value
+        fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
+        if fielddescindex == -1:   # Void field
+            return
+        self.emit("red_setarrayitem", destboxindex, fielddescindex,
+                  indexboxindex, valboxindex)
+
     # call handling
 
     def graphs_from(self, spaceop):
