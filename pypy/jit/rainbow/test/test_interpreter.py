@@ -833,7 +833,6 @@ class SimpleTests(AbstractInterpretationTest):
         self.check_insns({'int_lt': 1, 'int_mul': 1})
 
     def test_red_subcontainer(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         def ll_function(k):
@@ -845,7 +844,7 @@ class SimpleTests(AbstractInterpretationTest):
             result = s.n * (k-1)
             keepalive_until_here(t)
             return result
-        res = self.interpret(ll_function, [7], [], policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [7], [])
         assert res == 42
         self.check_insns({'int_lt': 1, 'int_mul': 1, 'int_sub': 1})
 
