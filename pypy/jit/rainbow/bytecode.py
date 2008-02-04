@@ -518,10 +518,10 @@ class BytecodeWriter(object):
         name = "%s_%s" % (color, opname)
         index = self.interpreter.find_opcode(name)
         if index == -1:
-            hop = PseudoHOP(
-                op, [self.hannotator.binding(arg) for arg in op.args],
-                self.hannotator.binding(op.result), self.RGenOp)
-            opdesc = rtimeshift.make_opdesc(hop)
+            opdesc = rtimeshift.make_opdesc(
+                self.RGenOp, opname,
+                [self.hannotator.binding(arg) for arg in op.args],
+                self.hannotator.binding(op.result), )
             index = self.interpreter.make_opcode_implementation(color, opdesc)
         self.emit(name)
 
@@ -853,18 +853,3 @@ def assemble(interpreter, *args):
             result[i + 2] = chr((index >>  8) & 0xff)
             result[i + 3] = chr(index & 0xff)
     return "".join(result)
-
-
-
-# XXX too lazy to fix the interface of make_opdesc, ExceptionDesc
-class PseudoHOP(object):
-    def __init__(self, op, args_s, s_result, RGenOp):
-        self.spaceop = op
-        self.args_s = args_s
-        self.s_result = s_result
-        self.rtyper = PseudoHRTyper(RGenOp=RGenOp)
-
-class PseudoHRTyper(object):
-    def __init__(self, **args):
-        self.__dict__.update(**args)
-
