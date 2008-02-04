@@ -704,10 +704,18 @@ class InsnFunctionStart(Insn):
             self.arguments[reg] = somenewvalue
     def source_of(self, localvar, tag):
         if localvar not in self.arguments:
-            assert (isinstance(localvar, LocalVar) and
-                    localvar.ofs_from_frame_end > 0), (
-                "must come from an argument to the function, got %r" %
-                (localvar,))
+            if localvar in ('%eax', '%edx', '%ecx'):
+                # xxx this might show a bug in trackgcroot.py failing to
+                # figure out which instruction stored a value in these
+                # registers.  However, this case also occurs when the
+                # the function's calling convention was optimized by gcc:
+                # the 3 registers above are then used to pass arguments
+                pass
+            else:
+                assert (isinstance(localvar, LocalVar) and
+                        localvar.ofs_from_frame_end > 0), (
+                    "must come from an argument to the function, got %r" %
+                    (localvar,))
             self.arguments[localvar] = somenewvalue
         return self.arguments[localvar]
 
