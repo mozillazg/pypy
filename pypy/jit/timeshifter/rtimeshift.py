@@ -140,15 +140,15 @@ def genmalloc_varsize(jitstate, contdesc, sizebox):
     # XXX MemoryError handling
     return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
 
-def ll_gengetfield(jitstate, deepfrozen, fielddesc, argbox):
+def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
-        ptr = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        if ptr:    # else don't constant-fold the segfault...
-            res = getattr(ptr, fielddesc.fieldname)
-            return rvalue.ll_fromvalue(jitstate, res)
+        resgv = fielddesc.getfield_if_non_null(
+                jitstate, argbox.getgenvar(jitstate))
+        if resgv is not None:
+            return fielddesc.makebox(jitstate, resgv)
     return argbox.op_getfield(jitstate, fielddesc)
 
-def ll_gensetfield(jitstate, fielddesc, destbox, valuebox):
+def gensetfield(jitstate, fielddesc, destbox, valuebox):
     destbox.op_setfield(jitstate, fielddesc, valuebox)
 
 def ll_gengetsubstruct(jitstate, fielddesc, argbox):

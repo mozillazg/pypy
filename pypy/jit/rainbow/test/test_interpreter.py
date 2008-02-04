@@ -46,10 +46,6 @@ class AbstractInterpretationTest(object):
         del cls._cache_order
 
     def serialize(self, func, values, backendoptimize=False):
-        if hasattr(func, 'convert_arguments'):
-            assert len(func.convert_arguments) == len(values)
-            values = [decoder(value) for decoder, value in zip(
-                                        func.convert_arguments, values)]
         key = func, backendoptimize
         try:
             cache, argtypes = self._cache[key]
@@ -115,7 +111,10 @@ class AbstractInterpretationTest(object):
         return writer, jitcode, argcolors
 
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
-        # XXX clean this mess up
+        if hasattr(ll_function, 'convert_arguments'):
+            assert len(ll_function.convert_arguments) == len(values)
+            values = [decoder(value) for decoder, value in zip(
+                                        ll_function.convert_arguments, values)]
         writer, jitcode, argcolors = self.serialize(ll_function, values)
         rgenop = writer.RGenOp()
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
@@ -501,7 +500,6 @@ class SimpleTests(AbstractInterpretationTest):
         
 
     def test_simple_struct(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),
                                           ('world', lltype.Signed),
                             hints={'immutable': True})

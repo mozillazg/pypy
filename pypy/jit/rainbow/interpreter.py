@@ -18,7 +18,8 @@ class JitCode(object):
     """
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
-                 keydescs, called_bytecodes, num_mergepoints, graph_color,
+                 keydescs, structtypedescs, fielddescs, called_bytecodes,
+                 num_mergepoints, graph_color,
                  nonrainbow_functions, is_portal):
         self.name = name
         self.code = code
@@ -26,6 +27,8 @@ class JitCode(object):
         self.typekinds = typekinds
         self.redboxclasses = redboxclasses
         self.keydescs = keydescs
+        self.structtypedescs = structtypedescs
+        self.fielddescs = fielddescs
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
@@ -103,6 +106,12 @@ class JitInterpreter(object):
             self.frame.pc = resumepoint
 
     # operation helper functions
+    def load_byte(self):
+        pc = self.frame.pc
+        assert pc >= 0
+        result = ord(self.frame.bytecode.code[pc])
+        self.frame.pc = pc + 1
+        return result
 
     def load_2byte(self):
         pc = self.frame.pc
@@ -121,6 +130,9 @@ class JitInterpreter(object):
                   (ord(self.frame.bytecode.code[pc + 3]) <<  0))
         self.frame.pc = pc + 4
         return intmask(result)
+
+    def load_bool(self):
+        return bool(self.load_byte())
 
     def get_greenarg(self):
         i = self.load_2byte()
@@ -274,6 +286,25 @@ class JitInterpreter(object):
     def opimpl_yellow_retrieve_result(self):
         # XXX all this jitstate.greens business is a bit messy
         self.green_result(self.jitstate.greens[0])
+
+
+    # exceptions
+
+    def opimpl_read_exctype(self):
+        XXX
+
+    def opimpl_read_excvalue(self):
+        XXX
+
+    # structs and arrays
+
+    def opimpl_red_getfield(self):
+        structbox = self.get_redarg()
+        fielddesc = self.frame.bytecode.fielddescs[self.load_2byte()]
+        deepfrozen = self.load_bool()
+        resbox = rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
+                                        structbox)
+        self.red_result(resbox)
 
 
     # ____________________________________________________________
