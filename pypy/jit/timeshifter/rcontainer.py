@@ -603,6 +603,13 @@ class ArrayFieldDesc(FieldDesc):
         self.varsizealloctoken = RGenOp.varsizeAllocToken(TYPE)
         self.indexkind = RGenOp.kindToken(lltype.Signed)
 
+        def getarrayitem_if_non_null(jitstate, genvar, gv_index):
+            array = genvar.revealconst(self.PTRTYPE)
+            index = gv_index.revealconst(lltype.Signed)
+            if array and 0 <= index < len(array):  # else don't constant-fold
+                res = array[index]
+                return rvalue.ll_gv_fromvalue(jitstate, res)
+        self.getarrayitem_if_non_null = getarrayitem_if_non_null
 # ____________________________________________________________
 
 class FrozenVirtualStruct(FrozenContainer):

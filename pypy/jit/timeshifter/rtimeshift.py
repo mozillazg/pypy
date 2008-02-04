@@ -159,14 +159,14 @@ def ll_gengetsubstruct(jitstate, fielddesc, argbox):
             return rvalue.ll_fromvalue(jitstate, res)
     return argbox.op_getsubstruct(jitstate, fielddesc)
 
-def ll_gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
+def gengetarrayitem(jitstate, deepfrozen, fielddesc, argbox, indexbox):
     if ((fielddesc.immutable or deepfrozen) and argbox.is_constant()
                                             and indexbox.is_constant()):
-        array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        index = rvalue.ll_getvalue(indexbox, lltype.Signed)
-        if array and 0 <= index < len(array):  # else don't constant-fold
-            res = array[index]
-            return rvalue.ll_fromvalue(jitstate, res)
+        resgv = fielddesc.getarrayitem_if_non_null(
+                jitstate, argbox.getgenvar(jitstate),
+                indexbox.getgenvar(jitstate))
+        if resgv is not None:
+            return fielddesc.makebox(jitstate, resgv)
     genvar = jitstate.curbuilder.genop_getarrayitem(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate),
@@ -197,7 +197,7 @@ def ll_gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
         valuebox.getgenvar(jitstate)
         )
 
-def ll_gengetarraysize(jitstate, fielddesc, argbox):
+def gengetarraysize(jitstate, fielddesc, argbox):
     if argbox.is_constant():
         array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
         if array:    # else don't constant-fold the segfault...

@@ -42,6 +42,7 @@ class BytecodeWriter(object):
         self.keydescs = []
         self.structtypedescs = []
         self.fielddescs = []
+        self.arrayfielddescs = []
         self.called_bytecodes = []
         self.num_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
@@ -65,6 +66,8 @@ class BytecodeWriter(object):
         self.structtypedesc_positions = {}
         # mapping tuples of STRUCT, name to index
         self.fielddesc_positions = {}
+        # mapping ARRAYS to index
+        self.arrayfielddesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
@@ -83,6 +86,7 @@ class BytecodeWriter(object):
                           self.keydescs,
                           self.structtypedescs,
                           self.fielddescs,
+                          self.arrayfielddescs,
                           self.called_bytecodes,
                           self.num_mergepoints,
                           self.graph_color,
@@ -335,6 +339,15 @@ class BytecodeWriter(object):
         self.fielddesc_positions[fieldname, TYPE] = result
         return result
 
+    def arrayfielddesc_position(self, TYPE):
+        if TYPE in self.fielddesc_positions:
+            return self.fielddesc_positions[TYPE]
+        arrayfielddesc = rcontainer.ArrayFieldDesc(self.RGenOp, TYPE)
+        result = len(self.arrayfielddescs)
+        self.arrayfielddescs.append(arrayfielddesc)
+        self.arrayfielddesc_positions[TYPE] = result
+        return result
+
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
@@ -541,6 +554,18 @@ class BytecodeWriter(object):
             return
         self.emit("red_setfield", destboxindex, fielddescindex, valboxindex)
 
+    def serialize_op_getarrayitem(self, op):
+        arrayvar, indexvar = op.args
+        PTRTYPE = arrayvar.concretetype
+        if PTRTYPE.TO.OF is lltype.Void:
+            return
+        deepfrozen = self.hannotator.binding(arrayvar).deepfrozen
+        fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
+        arrayindex = self.serialize_oparg("red", arrayvar)
+        index = self.serialize_oparg("red", indexvar)
+        self.emit("red_getarrayitem", arrayindex, fielddescindex, index,
+                  deepfrozen)
+        self.register_redvar(op.result)
 
     # call handling
 
