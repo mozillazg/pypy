@@ -189,7 +189,7 @@ def ll_gengetarraysubstruct(jitstate, fielddesc, argbox, indexbox):
     return fielddesc.makebox(jitstate, genvar)
 
 
-def ll_gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
+def gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
     genvar = jitstate.curbuilder.genop_setarrayitem(
         fielddesc.arraytoken,
         destbox.getgenvar(jitstate),

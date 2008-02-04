@@ -481,6 +481,21 @@ class BytecodeWriter(object):
         self.emit("red_malloc", index)
         self.register_redvar(op.result)
 
+    def serialize_op_malloc_varsize(self, op):
+
+        PTRTYPE = op.result.concretetype
+        TYPE = PTRTYPE.TO
+        v_size = op.args[2]
+        sizeindex = self.serialize_oparg("red", v_size)
+        if isinstance(TYPE, lltype.Struct):
+            index = self.structtypedesc_position(op.args[0].value)
+            self.emit("red_malloc_varsize_struct")
+        else:
+            index = self.arrayfielddesc_position(TYPE)
+            self.emit("red_malloc_varsize_array")
+        self.emit(index, sizeindex)
+        self.register_redvar(op.result)
+
     def serialize_op_zero_gc_pointers_inside(self, op):
         pass # XXX is that right?
 

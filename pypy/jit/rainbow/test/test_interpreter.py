@@ -791,7 +791,6 @@ class SimpleTests(AbstractInterpretationTest):
                          getinteriorarraysize=1)
 
     def test_array_of_voids(self):
-        py.test.skip("arrays and structs are not working")
         A = lltype.GcArray(lltype.Void)
         def ll_function(n):
             a = lltype.malloc(A, 3)
@@ -800,10 +799,9 @@ class SimpleTests(AbstractInterpretationTest):
             res = a, b
             keepalive_until_here(b)      # to keep getarrayitem around
             return res
-        ll_function.convert_result = lambda x: str(len(x.item0))
 
-        res = self.interpret(ll_function, [2], [], policy=P_NOVIRTUAL)
-        assert res == "3"
+        res = self.interpret(ll_function, [2], [])
+        assert len(res.item0) == 3
 
     def test_red_propagate(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
