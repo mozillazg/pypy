@@ -46,6 +46,10 @@ class AbstractInterpretationTest(object):
         del cls._cache_order
 
     def serialize(self, func, values, backendoptimize=False):
+        if hasattr(func, 'convert_arguments'):
+            assert len(func.convert_arguments) == len(values)
+            values = [decoder(value) for decoder, value in zip(
+                                        func.convert_arguments, values)]
         key = func, backendoptimize
         try:
             cache, argtypes = self._cache[key]
@@ -504,7 +508,7 @@ class SimpleTests(AbstractInterpretationTest):
         S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),
                                           ('world', lltype.Signed),
                             hints={'immutable': True})
-
+        
         def ll_function(s):
             return s.hello * s.world
 
@@ -624,6 +628,7 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 4 * 4
 
     def test_degenerated_at_return(self):
+        py.test.skip("arrays and structs are not working")
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
         class Result:
@@ -736,74 +741,74 @@ class SimpleTests(AbstractInterpretationTest):
 
     def test_red_array(self):
         py.test.skip("arrays and structs are not working")
-         A = lltype.GcArray(lltype.Signed)
-         def ll_function(x, y, n):
-             a = lltype.malloc(A, 2)
-             a[0] = x
-             a[1] = y
-             return a[n]*len(a)
+        A = lltype.GcArray(lltype.Signed)
+        def ll_function(x, y, n):
+            a = lltype.malloc(A, 2)
+            a[0] = x
+            a[1] = y
+            return a[n]*len(a)
 
-         res = self.interpret(ll_function, [21, -21, 0], [],
-                              policy=P_NOVIRTUAL)
-         assert res == 42
-         self.check_insns({'malloc_varsize': 1,
-                           'setarrayitem': 2, 'getarrayitem': 1,
-                           'getarraysize': 1, 'int_mul': 1})
+        res = self.interpret(ll_function, [21, -21, 0], [],
+                             policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns({'malloc_varsize': 1,
+                          'setarrayitem': 2, 'getarrayitem': 1,
+                          'getarraysize': 1, 'int_mul': 1})
 
-         res = self.interpret(ll_function, [21, -21, 1], [],
-                              policy=P_NOVIRTUAL)
-         assert res == -42
-         self.check_insns({'malloc_varsize': 1,
-                           'setarrayitem': 2, 'getarrayitem': 1,
-                           'getarraysize': 1, 'int_mul': 1})
+        res = self.interpret(ll_function, [21, -21, 1], [],
+                             policy=P_NOVIRTUAL)
+        assert res == -42
+        self.check_insns({'malloc_varsize': 1,
+                          'setarrayitem': 2, 'getarrayitem': 1,
+                          'getarraysize': 1, 'int_mul': 1})
 
     def test_red_struct_array(self):
         py.test.skip("arrays and structs are not working")
-         S = lltype.Struct('s', ('x', lltype.Signed))
-         A = lltype.GcArray(S)
-         def ll_function(x, y, n):
-             a = lltype.malloc(A, 2)
-             a[0].x = x
-             a[1].x = y
-             return a[n].x*len(a)
+        S = lltype.Struct('s', ('x', lltype.Signed))
+        A = lltype.GcArray(S)
+        def ll_function(x, y, n):
+            a = lltype.malloc(A, 2)
+            a[0].x = x
+            a[1].x = y
+            return a[n].x*len(a)
 
-         res = self.interpret(ll_function, [21, -21, 0], [],
-                              policy=P_NOVIRTUAL)
-         assert res == 42
-         self.check_insns({'malloc_varsize': 1,
-                           'setinteriorfield': 2, 'getinteriorfield': 1,
-                           'getarraysize': 1, 'int_mul': 1})
+        res = self.interpret(ll_function, [21, -21, 0], [],
+                             policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns({'malloc_varsize': 1,
+                          'setinteriorfield': 2, 'getinteriorfield': 1,
+                          'getarraysize': 1, 'int_mul': 1})
 
-         res = self.interpret(ll_function, [21, -21, 1], [],
-                              policy=P_NOVIRTUAL)
-         assert res == -42
-         self.check_insns({'malloc_varsize': 1,
-                           'setinteriorfield': 2, 'getinteriorfield': 1,
-                           'getarraysize': 1, 'int_mul': 1})
+        res = self.interpret(ll_function, [21, -21, 1], [],
+                             policy=P_NOVIRTUAL)
+        assert res == -42
+        self.check_insns({'malloc_varsize': 1,
+                          'setinteriorfield': 2, 'getinteriorfield': 1,
+                          'getarraysize': 1, 'int_mul': 1})
 
 
     def test_red_varsized_struct(self):
         py.test.skip("arrays and structs are not working")
-         A = lltype.Array(lltype.Signed)
-         S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
-         def ll_function(x, y, n):
-             s = lltype.malloc(S, 3)
-             s.foo = len(s.a)-1
-             s.a[0] = x
-             s.a[1] = y
-             return s.a[n]*s.foo
+        A = lltype.Array(lltype.Signed)
+        S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
+        def ll_function(x, y, n):
+            s = lltype.malloc(S, 3)
+            s.foo = len(s.a)-1
+            s.a[0] = x
+            s.a[1] = y
+            return s.a[n]*s.foo
 
-         res = self.interpret(ll_function, [21, -21, 0], [],
-                              policy=P_NOVIRTUAL)
-         assert res == 42
-         self.check_insns(malloc_varsize=1,
-                          getinteriorarraysize=1)
+        res = self.interpret(ll_function, [21, -21, 0], [],
+                             policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns(malloc_varsize=1,
+                         getinteriorarraysize=1)
 
-         res = self.interpret(ll_function, [21, -21, 1], [],
-                              policy=P_NOVIRTUAL)
-         assert res == -42
-         self.check_insns(malloc_varsize=1,
-                          getinteriorarraysize=1)
+        res = self.interpret(ll_function, [21, -21, 1], [],
+                             policy=P_NOVIRTUAL)
+        assert res == -42
+        self.check_insns(malloc_varsize=1,
+                         getinteriorarraysize=1)
 
     def test_array_of_voids(self):
         py.test.skip("arrays and structs are not working")
