@@ -14,7 +14,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	%ebp, %ebx
 	movl	$pypy_g_array_16, (%esp)
 	call	open
-        ;; expected (32, -16, -12, -8, -4)
+        ;; expected {28(%esp) | 12(%esp), 16(%esp), 20(%esp), 24(%esp) | }
 	cmpl	$-1, %eax
 	movl	%eax, %edi
 	movl	32(%esp), %esi
@@ -26,7 +26,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	%esi, 4(%esp)
 	movl	%edi, (%esp)
 	call	read
-        ;; expected (32, -16, -12, -8, -4)
+        ;; expected {28(%esp) | 12(%esp), 16(%esp), 20(%esp), 24(%esp) | }
 	testl	%eax, %eax
 	jle	.L280
 .L285:
@@ -46,13 +46,13 @@ pypy_g_clear_large_memory_chunk:
 	movl	%eax, 8(%esp)
 	movl	%edi, (%esp)
 	call	read
-        ;; expected (32, -16, -12, -8, -4)
+        ;; expected {28(%esp) | 12(%esp), 16(%esp), 20(%esp), 24(%esp) | }
 	testl	%eax, %eax
 	jg	.L288
 .L280:
 	movl	%edi, (%esp)
 	call	close
-        ;; expected (32, -16, -12, -8, -4)
+        ;; expected {28(%esp) | 12(%esp), 16(%esp), 20(%esp), 24(%esp) | }
 	movl	%ebx, %eax
 .L286:
 .L274:
@@ -65,7 +65,7 @@ pypy_g_clear_large_memory_chunk:
 	movl	%ecx, 4(%esp)
 	movl	%esi, (%esp)
 	call	memset
-        ;; expected (32, -16, -12, -8, -4)
+        ;; expected {28(%esp) | 12(%esp), 16(%esp), 20(%esp), 24(%esp) | }
 .L270:
 	addl	$12, %esp
 	popl	%ebx

@@ -104,31 +104,24 @@ class AsmStackRootWalker(BaseRootWalker):
         #
         # A "safe point" is the return address of a call.
         # The "shape" of a safe point is a list of integers
-        # as follows:
+        # that represent "locations".  A "location" can be
+        # either in the stack or in a register.  See
+        # getlocation() for the decoding of this integer.
+        # The locations stored in a "shape" are as follows:
         #
-        #   * The size of the frame of the function containing the
-        #     call (in theory it can be different from call to call).
-        #     This size includes the return address (see picture
+        #   * The "location" of the return address.  This is just
+        #     after the end of the frame of 'callee'; it is the
+        #     first word of the frame of 'caller' (see picture
         #     below).
         #
-        #   * Four integers that specify where the function saves
+        #   * Four "locations" that specify where the function saves
         #     each of the four callee-saved registers (%ebx, %esi,
-        #     %edi, %ebp).  This is a "location", see below.
+        #     %edi, %ebp).
         #
         #   * The number of live GC roots around the call.
         #
         #   * For each GC root, an integer that specify where the
-        #     GC pointer is stored.  This is a "location", see below.
-        #
-        # A "location" can be either in the stack or in a register.
-        # If it is in the stack, it is specified as an integer offset
-        # from the current frame (so it is typically < 0, as seen
-        # in the picture below, though it can also be > 0 if the
-        # location is an input argument to the current function and
-        # thus lives at the bottom of the caller's frame).
-        # A "location" can also be in a register; in our context it
-        # can only be a callee-saved register.  This is specified
-        # as a small odd-valued integer (1=%ebx, 3=%esi, etc.)
+        #     GC pointer is stored.  This is a "location" too.
         #
         # XXX the details are completely specific to X86!!!
         # a picture of the stack may help:
@@ -159,19 +152,9 @@ class AsmStackRootWalker(BaseRootWalker):
             llop.debug_fatalerror(lltype.Void, "cannot find gc roots!")
             return False
         #
-        # found!  Now we can go to the caller_frame.
+        # found!  Enumerate the GC roots in the caller frame
         #
         shape = item.address[1]
-        framesize = shape.signed[0]
-        if framesize == 0:
-            # frame size not known, use %ebp to find the frame address
-            caller_ebp = callee.regs_stored_at[INDEX_OF_EBP].address[0]
-            caller.frame_address = caller_ebp + 4
-        else:
-            caller.frame_address = callee.frame_address + framesize
-        #
-        # enumerate the GC roots in the caller frame
-        #
         collect_stack_root = self.gcdata._gc_collect_stack_root
         gc = self.gc
         LIVELOCS = 1 + CALLEE_SAVED_REGS + 1  # index of the first gc root loc
@@ -179,37 +162,53 @@ class AsmStackRootWalker(BaseRootWalker):
         while livecount > 0:
             livecount -= 1
             location = shape.signed[LIVELOCS + livecount]
-            addr = self.getlocation(callee, caller, location)
+            addr = self.getlocation(callee, location)
             if addr.address[0] != llmemory.NULL:
                 collect_stack_root(gc, addr)
         #
         # track where the caller_frame saved the registers from its own
         # caller
         #
-        if shape.signed[1] == -1:     # a marker that means "I'm the frame
-            return False              # of the entry point, stop walking"
+        location = shape.signed[0]
+        caller.frame_address = self.getlocation(callee, location)
+        if not caller.frame_address:   # marker that means "I'm the frame
+            return False               # of the entry point, stop walking"
         reg = 0
         while reg < CALLEE_SAVED_REGS:
             location = shape.signed[1+reg]
-            addr = self.getlocation(callee, caller, location)
+            addr = self.getlocation(callee, location)
             caller.regs_stored_at[reg] = addr
             reg += 1
         return True
 
-    def getlocation(self, callee, caller, location):
+    def getlocation(self, callee, location):
         """Get the location in the 'caller' frame of a variable, based
-        on the integer 'location' that describes it.  The 'callee' is
-        only used if the location is in a register that was saved in the
-        callee.
+        on the integer 'location' that describes it.  All locations are
+        computed based on information saved by the 'callee'.
         """
-        if location & 1:     # register
-            reg = location >> 1
+        kind = location & LOC_MASK
+        if kind == LOC_REG:   # register
+            reg = location >> 2
             ll_assert(0 <= reg < CALLEE_SAVED_REGS, "bad register location")
             return callee.regs_stored_at[reg]
+        elif kind == LOC_ESP_BASED:   # in the caller stack frame at N(%esp)
+            offset = location & ~ LOC_MASK
+            ll_assert(offset >= 0, "bad %esp-based location")
+            esp_in_caller = callee.frame_address + 4
+            return esp_in_caller + offset
+        elif kind == LOC_EBP_BASED:   # in the caller stack frame at N(%ebp)
+            offset = location & ~ LOC_MASK
+            ebp_in_caller = callee.regs_stored_at[INDEX_OF_EBP].address[0]
+            return ebp_in_caller + offset
         else:
-            # in the stack frame
-            return caller.frame_address + location
+            return llmemory.NULL
 
+
+LOC_NOWHERE   = 0
+LOC_REG       = 1
+LOC_EBP_BASED = 2
+LOC_ESP_BASED = 3
+LOC_MASK      = 0x03
 
 # ____________________________________________________________
 

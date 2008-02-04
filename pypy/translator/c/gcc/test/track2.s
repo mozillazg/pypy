@@ -54,7 +54,7 @@ pypy_g_populate:
 	movl	%edx, 4(%esp)
 	movl	%esi, (%esp)
 	call	pypy_g_populate
-        ;; expected (32, -8, -4, 5, 7, 1)
+        ;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | %ebx}
 	movl	%ebx, %eax
 #APP
 	/* GCROOT %eax */
@@ -73,7 +73,7 @@ pypy_g_populate:
 .L1351:
 .L1352:
 	call	LL_stack_too_big
-        ;; expected (32, -8, -4, 5, 7, 1)
+        ;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | %ebx}
 	testl	%eax, %eax
 	jne	.L1418
 .L1361:
@@ -100,7 +100,7 @@ pypy_g_populate:
 	movl	$24, %edx
 	movl	%edx, 4(%esp)
 	call	pypy_g_SemiSpaceGC_try_obtain_free_space
-        ;; expected (32, -8, -4, 5, 7, 1)
+        ;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | %ebx}
 	movl	pypy_g_ExcData, %edx
 	xorl	%ecx, %ecx
 	testl	%edx, %edx
@@ -121,7 +121,7 @@ pypy_g_populate:
 	movl	$24, %ecx
 	movl	%ecx, 4(%esp)
 	call	pypy_g_SemiSpaceGC_try_obtain_free_space
-        ;; expected (32, -8, -4, 5, 7, 1)
+        ;; expected {28(%esp) | 20(%esp), 24(%esp), %edi, %ebp | %ebx}
 	movl	pypy_g_ExcData, %edx
 	xorl	%ecx, %ecx
 	testl	%edx, %edx

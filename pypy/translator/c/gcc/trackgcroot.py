@@ -30,6 +30,7 @@ class GcRootTracker(object):
         self.gcmaptable = []
         self.verbose = verbose
         self.seen_main = False
+        self.files_seen = 0
 
     def dump(self, output):
         assert self.seen_main
@@ -58,6 +59,11 @@ class GcRootTracker(object):
             ret
         .size pypy_asm_stackwalk_init, .-pypy_asm_stackwalk_init
         """
+        # XXX the two gcmap tables are a bit largish.  They could easily
+        # be compressed by a factor of 4 or more.  I suspect they also
+        # produce large linker tables which could be seriously reduced
+        # as well.  A key observation is that in practice most functions
+        # seem to use exactly the same call shape for each call they contain.
         print >> output, '\t.data'
         print >> output, '\t.align\t4'
         print >> output, '\t.globl\t__gcmapstart'
@@ -113,48 +119,37 @@ class GcRootTracker(object):
             if in_function:
                 lines = self.process_function(lines, entrypoint, filename)
             newfile.writelines(lines)
+        self.files_seen += 1
 
     def process_function(self, lines, entrypoint, filename):
-        tracker = FunctionGcRootTracker(lines)
-        tracker.is_main = tracker.funcname == entrypoint
+        tracker = FunctionGcRootTracker(lines, filetag = self.files_seen)
         if self.verbose:
             print >> sys.stderr, '[trackgcroot:%s] %s' % (filename,
                                                           tracker.funcname)
         table = tracker.computegcmaptable(self.verbose)
         if self.verbose > 1:
             for label, state in table:
-                print >> sys.stderr, label, '\t', state
-        if tracker.is_main:
-            fp = tracker.uses_frame_pointer
-            table = self.fixup_entrypoint_table(table, fp)
+                print >> sys.stderr, label, '\t', format_callshape(state)
+        if tracker.funcname == entrypoint:
+            table = self.fixup_entrypoint_table(table)
         self.gcmaptable.extend(table)
         return tracker.lines
 
-    def fixup_entrypoint_table(self, table, uses_frame_pointer):
+    def fixup_entrypoint_table(self, table):
         self.seen_main = True
-        # as an end marker, set the CALLEE_SAVE_REGISTERS locations to -1.
-        # this info is not useful because we don't go to main()'s caller.
+        # as an end marker, set all five initial entries of the callshapes
+        # to LOC_NOWHERE.  This info is not useful anyway because we don't
+        # go to main()'s caller.
         newtable = []
-        MARKERS = (-1, -1, -1, -1)
+        MARKERS = (LOC_NOWHERE,) * 5
         for label, shape in table:
-            newtable.append((label, shape[:1] + MARKERS + shape[5:]))
-        table = newtable
-
-        if uses_frame_pointer:
-            # the main() function may contain strange code that aligns the
-            # stack pointer to a multiple of 16, which messes up our framesize
-            # computation.  So just for this function, we use a frame size
-            # of 0 to ask asmgcroot to read %ebp to find the frame pointer.
-            newtable = []
-            for label, shape in table:
-                newtable.append((label, (0,) + shape[1:]))
-            table = newtable
-        return table
+            newtable.append((label, MARKERS + shape[5:]))
+        return newtable
 
 
 class FunctionGcRootTracker(object):
 
-    def __init__(self, lines):
+    def __init__(self, lines, filetag=0):
         match = r_functionstart.match(lines[0])
         self.funcname = match.group(1)
         match = r_functionend.match(lines[-1])
@@ -163,7 +158,7 @@ class FunctionGcRootTracker(object):
         self.lines = lines
         self.uses_frame_pointer = False
         self.r_localvar = r_localvarnofp
-        self.is_main = False
+        self.filetag = filetag
 
     def computegcmaptable(self, verbose=0):
         self.findlabels()
@@ -182,26 +177,33 @@ class FunctionGcRootTracker(object):
         return self.gettable()
 
     def gettable(self):
-        """Returns a list [(label_after_call, shape_tuple)]
-        where shape_tuple = (framesize, where_is_ebx_saved, ...
-                            ..., where_is_ebp_saved, gcroot0, gcroot1...)
+        """Returns a list [(label_after_call, callshape_tuple)]
+        See format_callshape() for more details about callshape_tuple.
         """
         table = []
         for insn in self.list_call_insns():
             if not hasattr(insn, 'framesize'):
                 continue     # calls that never end up reaching a RET
-            shape = [insn.framesize + 4]     # accounts for the return address
+            if self.uses_frame_pointer:
+                retaddr = frameloc(LOC_EBP_BASED, 4)
+            else:
+                retaddr = frameloc(LOC_ESP_BASED, insn.framesize)
+            shape = [retaddr]
             # the first gcroots are always the ones corresponding to
             # the callee-saved registers
             for reg in CALLEE_SAVE_REGISTERS:
                 shape.append(None)
-            for loc, tag in insn.gcroots.items():
-                if not isinstance(loc, int):
-                    # a special representation for a register location,
-                    # as an odd-valued number
-                    loc = CALLEE_SAVE_REGISTERS.index(loc) * 2 + 1
+            gcroots = []
+            for localvar, tag in insn.gcroots.items():
+                if isinstance(localvar, LocalVar):
+                    loc = localvar.getlocation(insn.framesize,
+                                               self.uses_frame_pointer)
+                else:
+                    assert localvar in REG2LOC
+                    loc = REG2LOC[localvar]
+                assert isinstance(loc, int)
                 if tag is None:
-                    shape.append(loc)
+                    gcroots.append(loc)
                 else:
                     regindex = CALLEE_SAVE_REGISTERS.index(tag)
                     shape[1 + regindex] = loc
@@ -209,6 +211,8 @@ class FunctionGcRootTracker(object):
                 reg = CALLEE_SAVE_REGISTERS[shape.index(None) - 1]
                 raise AssertionError("cannot track where register %s is saved"
                                      % (reg,))
+            gcroots.sort()
+            shape.extend(gcroots)
             table.append((insn.global_label, tuple(shape)))
         return table
 
@@ -281,6 +285,11 @@ class FunctionGcRootTracker(object):
         return [insn for insn in self.insns if isinstance(insn, InsnCall)]
 
     def findframesize(self):
+        # the 'framesize' attached to an instruction is the number of bytes
+        # in the frame at this point.  This doesn't count the return address
+        # which is the word immediately following the frame in memory.
+        # The 'framesize' is set to an odd value if it is only an estimate
+        # (see visit_andl()).
 
         def walker(insn, size_delta):
             check = deltas.setdefault(insn, size_delta)
@@ -318,17 +327,21 @@ class FunctionGcRootTracker(object):
                     localvar = getattr(insn, name)
                     match = r_localvar_esp.match(localvar)
                     if match:
+                        if localvar == '0(%esp)': # for pushl and popl, by
+                            hint = None           # default ebp addressing is
+                        else:                     # a bit nicer
+                            hint = 'esp'
                         ofs_from_esp = int(match.group(1) or '0')
                         localvar = ofs_from_esp - insn.framesize
                         assert localvar != 0    # that's the return address
-                        setattr(insn, name, localvar)
+                        setattr(insn, name, LocalVar(localvar, hint=hint))
                     elif self.uses_frame_pointer:
                         match = r_localvar_ebp.match(localvar)
                         if match:
                             ofs_from_ebp = int(match.group(1) or '0')
                             localvar = ofs_from_ebp - 4
                             assert localvar != 0    # that's the return address
-                            setattr(insn, name, localvar)
+                            setattr(insn, name, LocalVar(localvar, hint='ebp'))
 
     def trackgcroots(self):
 
@@ -346,7 +359,7 @@ class FunctionGcRootTracker(object):
     def dump(self):
         for insn in self.insns:
             size = getattr(insn, 'framesize', '?')
-            print '%4s  %s' % (size, insn)
+            print >> sys.stderr, '%4s  %s' % (size, insn)
 
     def walk_instructions_backwards(self, walker, initial_insn, initial_state):
         pending = []
@@ -388,7 +401,7 @@ class FunctionGcRootTracker(object):
         if label is None:
             k = call.lineno
             while 1:
-                label = '__gcmap_IN_%s_%d' % (self.funcname, k)
+                label = '__gcmap_IN%d_%s_%d' % (self.filetag, self.funcname, k)
                 if label not in self.labels:
                     break
                 k += 1
@@ -433,7 +446,9 @@ class FunctionGcRootTracker(object):
         target = match.group(2)
         if target == '%esp':
             count = match.group(1)
-            assert count.startswith('$')
+            if not count.startswith('$'):
+                # strange instruction - I've seen 'subl %eax, %esp'
+                return InsnCannotFollowEsp()
             return InsnStackAdjust(sign * int(count[1:]))
         elif self.r_localvar.match(target):
             return InsnSetLocal(target)
@@ -471,15 +486,10 @@ class FunctionGcRootTracker(object):
         target = match.group(2)
         if target == '%esp':
             # only for  andl $-16, %esp  used to align the stack in main().
-            # If gcc compiled main() with a frame pointer, then it should use
-            # %ebp-relative addressing and not %esp-relative addressing
-            # and asmgcroot will read %ebp to find the frame.  If main()
-            # is compiled without a frame pointer, the total frame size that
-            # we compute ends up being bogus but that's ok because gcc has
-            # to use %esp-relative addressing only and we don't need to walk
-            # to caller frames because it's main().
-            assert self.is_main
-            return []
+            # The exact amount of adjutment is not known yet, so we use
+            # an odd-valued estimate to make sure the real value is not used
+            # elsewhere by the FunctionGcRootTracker.
+            return InsnCannotFollowEsp()
         else:
             return self.binary_insn(line)
 
@@ -493,8 +503,10 @@ class FunctionGcRootTracker(object):
             if not match:
                 framesize = None    # strange instruction
             else:
+                if not self.uses_frame_pointer:
+                    raise UnrecognizedOperation('epilogue without prologue')
                 ofs_from_ebp = int(match.group(1) or '0')
-                assert ofs_from_ebp < 0
+                assert ofs_from_ebp <= 0
                 framesize = 4 - ofs_from_ebp
             return InsnEpilogue(framesize)
         else:
@@ -524,10 +536,10 @@ class FunctionGcRootTracker(object):
     def visit_pushl(self, line):
         match = r_unaryinsn.match(line)
         source = match.group(1)
-        return [InsnStackAdjust(-4)] + self.insns_for_copy(source, '(%esp)')
+        return [InsnStackAdjust(-4)] + self.insns_for_copy(source, '0(%esp)')
 
     def _visit_pop(self, target):
-        return self.insns_for_copy('(%esp)', target) + [InsnStackAdjust(+4)]
+        return self.insns_for_copy('0(%esp)', target) + [InsnStackAdjust(+4)]
 
     def visit_popl(self, line):
         match = r_unaryinsn.match(line)
@@ -629,6 +641,39 @@ class SomeNewValue(object):
     pass
 somenewvalue = SomeNewValue()
 
+class LocalVar(object):
+    # A local variable location at position 'ofs_from_frame_end',
+    # which is counted from the end of the stack frame (so it is always
+    # negative, unless it refers to arguments of the current function).
+    def __init__(self, ofs_from_frame_end, hint=None):
+        self.ofs_from_frame_end = ofs_from_frame_end
+        self.hint = hint
+
+    def __repr__(self):
+        return '<%+d;%s>' % (self.ofs_from_frame_end, self.hint or 'e*p')
+
+    def __hash__(self):
+        return hash(self.ofs_from_frame_end)
+
+    def __cmp__(self, other):
+        if isinstance(other, LocalVar):
+            return cmp(self.ofs_from_frame_end, other.ofs_from_frame_end)
+        else:
+            return 1
+
+    def getlocation(self, framesize, uses_frame_pointer):
+        if (self.hint == 'esp' or not uses_frame_pointer
+            or self.ofs_from_frame_end % 2 != 0):
+            # try to use esp-relative addressing
+            ofs_from_esp = framesize + self.ofs_from_frame_end
+            if ofs_from_esp % 2 == 0:
+                return frameloc(LOC_ESP_BASED, ofs_from_esp)
+            # we can get an odd value if the framesize is marked as bogus
+            # by visit_andl()
+        assert uses_frame_pointer
+        ofs_from_ebp = self.ofs_from_frame_end + 4
+        return frameloc(LOC_EBP_BASED, ofs_from_ebp)
+
 
 class Insn(object):
     _args_ = []
@@ -659,7 +704,8 @@ class InsnFunctionStart(Insn):
             self.arguments[reg] = somenewvalue
     def source_of(self, localvar, tag):
         if localvar not in self.arguments:
-            assert isinstance(localvar, int) and localvar > 0, (
+            assert (isinstance(localvar, LocalVar) and
+                    localvar.ofs_from_frame_end > 0), (
                 "must come from an argument to the function, got %r" %
                 (localvar,))
             self.arguments[localvar] = somenewvalue
@@ -692,6 +738,10 @@ class InsnStackAdjust(Insn):
         assert delta % 4 == 0
         self.delta = delta
 
+class InsnCannotFollowEsp(InsnStackAdjust):
+    def __init__(self):
+        self.delta = 7     # use an odd value as marker
+
 class InsnStop(Insn):
     pass
 
@@ -704,30 +754,34 @@ class InsnCall(Insn):
     _args_ = ['lineno', 'gcroots']
     def __init__(self, lineno):
         # 'gcroots' is a dict built by side-effect during the call to
-        # FunctionGcRootTracker.trackgcroots().  Its meaning is as follows:
-        # the keys are the location that contain gc roots (either register
-        # names like '%esi', or negative integer offsets relative to the end
-        # of the function frame).  The value corresponding to a key is the
-        # "tag", which is None for a normal gc root, or else the name of a
-        # callee-saved register.  In the latter case it means that this is
-        # only a gc root if the corresponding register in the caller was
-        # really containing a gc pointer.  A typical example:
+        # FunctionGcRootTracker.trackgcroots().  Its meaning is as
+        # follows: the keys are the locations that contain gc roots
+        # (register names or LocalVar instances).  The value
+        # corresponding to a key is the "tag", which is None for a
+        # normal gc root, or else the name of a callee-saved register.
+        # In the latter case it means that this is only a gc root if the
+        # corresponding register in the caller was really containing a
+        # gc pointer.  A typical example:
         #
-        #     InsnCall({'%ebp': '%ebp', -8: '%ebx', '%esi': None})
+        #   InsnCall({LocalVar(-8)': None,
+        #             '%esi': '%esi',
+        #             LocalVar(-12)': '%ebx'})
         #
-        # means that %esi is a gc root across this call; that %ebp is a
-        # gc root if it was in the caller (typically because %ebp is not
-        # modified at all in the current function); and that the word at 8
-        # bytes before the end of the current stack frame is a gc root if
-        # %ebx was a gc root in the caller (typically because the current
-        # function saves and restores %ebx from there in the prologue and
-        # epilogue).
-        #
+        # means that the value at -8 from the frame end is a gc root
+        # across this call; that %esi is a gc root if it was in the
+        # caller (typically because %esi is not modified at all in the
+        # current function); and that the value at -12 from the frame
+        # end is a gc root if %ebx was a gc root in the caller
+        # (typically because the current function saves and restores
+        # %ebx from there in the prologue and epilogue).
         self.gcroots = {}
         self.lineno = lineno
 
     def source_of(self, localvar, tag):
-        self.gcroots[localvar] = tag
+        tag1 = self.gcroots.setdefault(localvar, tag)
+        assert tag1 == tag, (
+            "conflicting entries for InsnCall.gcroots[%s]:\n%r and %r" % (
+            localvar, tag1, tag))
         return localvar
 
 class InsnGCROOT(Insn):
@@ -759,6 +813,66 @@ FUNCTIONS_NOT_RETURNING = {
 
 CALLEE_SAVE_REGISTERS_NOEBP = ['%ebx', '%esi', '%edi']
 CALLEE_SAVE_REGISTERS = CALLEE_SAVE_REGISTERS_NOEBP + ['%ebp']
+
+LOC_NOWHERE   = 0
+LOC_REG       = 1
+LOC_EBP_BASED = 2
+LOC_ESP_BASED = 3
+LOC_MASK      = 0x03
+
+REG2LOC = {}
+for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS):
+    REG2LOC[_reg] = LOC_REG | (_i<<2)
+
+def frameloc(base, offset):
+    assert base in (LOC_EBP_BASED, LOC_ESP_BASED)
+    assert offset % 4 == 0
+    return base | offset
+
+# __________ debugging output __________
+
+def format_location(loc):
+    # A 'location' is a single number describing where a value is stored
+    # across a call.  It can be in one of the CALLEE_SAVE_REGISTERS, or
+    # in the stack frame at an address relative to either %esp or %ebp.
+    # The last two bits of the location number are used to tell the cases
+    # apart; see format_location().
+    kind = loc & LOC_MASK
+    if kind == LOC_NOWHERE:
+        return '?'
+    elif kind == LOC_REG:
+        reg = loc >> 2
+        assert 0 <= reg <= 3
+        return CALLEE_SAVE_REGISTERS[reg]
+    else:
+        if kind == LOC_EBP_BASED:
+            result = '(%ebp)'
+        else:
+            result = '(%esp)'
+        offset = loc & ~ LOC_MASK
+        if offset != 0:
+            result = str(offset) + result
+        return result
+
+def format_callshape(shape):
+    # A 'call shape' is a tuple of locations in the sense of format_location().
+    # They describe where in a function frame interesting values are stored,
+    # when this function executes a 'call' instruction.
+    #
+    #   shape[0] is the location that stores the fn's own return address
+    #            (not the return address for the currently executing 'call')
+    #   shape[1] is where the fn saved its own caller's %ebx value
+    #   shape[2] is where the fn saved its own caller's %esi value
+    #   shape[3] is where the fn saved its own caller's %edi value
+    #   shape[4] is where the fn saved its own caller's %ebp value
+    #   shape[>=5] are GC roots: where the fn has put its local GCPTR vars
+    #
+    assert isinstance(shape, tuple)
+    assert len(shape) >= 5
+    result = [format_location(loc) for loc in shape]
+    return '{%s | %s | %s}' % (result[0],
+                               ', '.join(result[1:5]),
+                               ', '.join(result[5:]))
 
 
 if __name__ == '__main__':
