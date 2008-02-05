@@ -81,6 +81,9 @@ class AbstractTest(object):
         assert s1.find("Py") == 11
         assert s1.find("dd") == -1
         assert s1.find("py") == -1
+        assert s1.find("Welcome to PyPy world") == 0
+        assert s1.find(s1) == 0
+        py.test.raises(TypeError, s1.find, 4)
     
 class AbstractRopeTest(object):
     def test_add_long(self):
