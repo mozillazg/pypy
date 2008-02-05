@@ -394,6 +394,37 @@ class JitInterpreter(object):
         resbox = rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
         self.red_result(resbox)
 
+    def opimpl_red_getinteriorfield(self):
+        structbox = self.get_redarg()
+        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
+        deepfrozen = self.load_bool()
+        indexboxes = self.get_red_varargs()
+        resultbox = interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
+                                                     structbox, indexboxes)
+        self.red_result(resultbox)
+
+    def opimpl_red_setinteriorfield(self):
+        destbox = self.get_redarg()
+        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
+        indexboxes = self.get_red_varargs()
+        valuebox = self.get_redarg()
+        interiordesc.gensetinteriorfield(self.jitstate, destbox, valuebox, indexboxes)
+
+    def opimpl_red_getinteriorarraysize(self):
+        arraybox = self.get_redarg()
+        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
+        indexboxes = self.get_red_varargs()
+        resultbox = interiordesc.gengetinteriorarraysize(
+            self.jitstate, arraybox, indexboxes)
+        self.red_result(resultbox)
+
+    def opimpl_green_getinteriorarraysize(self):
+        arraygenconst = self.get_greenarg()
+        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
+        indexgenconsts = self.get_green_varargs()
+        resultbox = interiordesc.gengetinteriorarraysize(
+            self.jitstate, arraybox, indexboxes)
+        self.red_result(resultbox)
     # ____________________________________________________________
     # construction-time interface
 
