@@ -546,6 +546,28 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 24
         self.check_insns({})
 
+    def test_arraysize(self):
+        A = lltype.GcArray(lltype.Signed)
+        def ll_function(a):
+            return len(a)
+
+        def int_array(string):
+            items = [int(x) for x in string.split(',')]
+            n = len(items)
+            a1 = lltype.malloc(A, n)
+            for i in range(n):
+                a1[i] = items[i]
+            return a1
+        ll_function.convert_arguments = [int_array]
+
+        res = self.interpret(ll_function, ["6,7"], [])
+        assert res == 2
+        self.check_insns({'getarraysize': 1})
+        res = self.interpret(ll_function, ["8,3,3,4,5"], [0])
+        assert res == 5
+        self.check_insns({})
+
+
     def test_simple_struct_malloc(self):
         py.test.skip("blue containers: to be reimplemented")
         S = lltype.GcStruct('helloworld', ('hello', lltype.Signed),

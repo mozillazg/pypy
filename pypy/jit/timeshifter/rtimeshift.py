@@ -199,10 +199,10 @@ def gensetarrayitem(jitstate, fielddesc, destbox, indexbox, valuebox):
 
 def gengetarraysize(jitstate, fielddesc, argbox):
     if argbox.is_constant():
-        array = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
-        if array:    # else don't constant-fold the segfault...
-            res = len(array)
-            return rvalue.ll_fromvalue(jitstate, res)
+        resgv = fielddesc.getarraysize_if_non_null(
+                jitstate, argbox.getgenvar(jitstate))
+        if resgv is not None:
+            return fielddesc.makebox(jitstate, resgv)
     genvar = jitstate.curbuilder.genop_getarraysize(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate))
