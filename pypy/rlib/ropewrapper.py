@@ -49,6 +49,13 @@ class RopeBaseString(object):
             return self.__class__(rope.getslice(self._node, start, stop, step))
         raise NotImplementedError("Index type not known.")
     
+    def find(self, sub):
+        if isinstance(sub, str):
+            data = RopeString(sub)
+        if isinstance(sub, unicode):
+            data = RopeUnicode(sub)
+        
+        return rope.find(self._node, data._node)
         
 class RopeStringIterator(object):
     def __init__(self, node):
@@ -101,9 +108,6 @@ class RopeString(RopeBaseString):
 
     def getchar(self,index):
         return self._node.getchar(index)
-    
-    def find(self, sub):
-        return -1
     
 class RopeUnicodeIterator(object):
     def __init__(self, node):
