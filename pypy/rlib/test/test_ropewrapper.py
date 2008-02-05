@@ -74,7 +74,14 @@ class AbstractTest(object):
         assert s2.lower() == s1
         s3 = self.const("Welcome to PyPy World")
         assert s3.swapcase() == self.const("wELCOME TO pYpY wORLD")
+        assert s1.title() == self.const("Hello Python")
 
+    def test_str_find(self):
+        s1 = self.const("Welcome to PyPy world")
+        assert s1.find("Py") == 11
+        assert s1.find("dd") == -1
+        assert s1.find("py") == -1
+    
 class AbstractRopeTest(object):
     def test_add_long(self):
         s1 = self.const("a")
