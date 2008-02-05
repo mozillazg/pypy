@@ -375,7 +375,7 @@ class InteriorDesc(object):
             immutable = LASTCONTAINER._hints.get('immutable', False)
             getinterior_initial = make_interior_getter(fielddescs[:-1])
 
-            def gengetinteriorfield(jitstate, deepfrozen, argbox, *indexboxes):
+            def gengetinteriorfield(jitstate, deepfrozen, argbox, indexboxes):
                 if (immutable or deepfrozen) and argbox.is_constant():
                     ptr = rvalue.ll_getvalue(argbox, PTRTYPE)
                     if ptr:    # else don't constant-fold the segfault...
@@ -395,7 +395,7 @@ class InteriorDesc(object):
                             # constant-folding: success
                             assert i == len(indexboxes)
                             return rvalue.ll_fromvalue(jitstate, ptr)
-                argbox = getinterior_initial(jitstate, argbox, *indexboxes)
+                argbox = getinterior_initial(jitstate, argbox, indexboxes)
                 if lastoffset is None:      # getarrayitem
                     indexbox = indexboxes[-1]
                     genvar = jitstate.curbuilder.genop_getarrayitem(
@@ -406,8 +406,8 @@ class InteriorDesc(object):
                 else:  # getfield
                     return argbox.op_getfield(jitstate, lastfielddesc)
 
-            def gensetinteriorfield(jitstate, destbox, valuebox, *indexboxes):
-                destbox = getinterior_initial(jitstate, destbox, *indexboxes)
+            def gensetinteriorfield(jitstate, destbox, valuebox, indexboxes):
+                destbox = getinterior_initial(jitstate, destbox, indexboxes)
                 if lastoffset is None:      # setarrayitem
                     indexbox = indexboxes[-1]
                     genvar = jitstate.curbuilder.genop_setarrayitem(
@@ -427,7 +427,7 @@ class InteriorDesc(object):
             arrayfielddesc = ArrayFieldDesc(RGenOp, TYPE)
             getinterior_all = make_interior_getter(fielddescs)
 
-            def gengetinteriorarraysize(jitstate, argbox, *indexboxes):
+            def gengetinteriorarraysize(jitstate, argbox, indexboxes):
                 if argbox.is_constant():
                     ptr = rvalue.ll_getvalue(argbox, PTRTYPE)
                     if ptr:    # else don't constant-fold the segfault...
@@ -447,7 +447,7 @@ class InteriorDesc(object):
                             # constant-folding: success
                             assert i == len(indexboxes)
                             return rvalue.ll_fromvalue(jitstate, len(ptr))
-                argbox = getinterior_all(jitstate, argbox, *indexboxes)
+                argbox = getinterior_all(jitstate, argbox, indexboxes)
                 genvar = jitstate.curbuilder.genop_getarraysize(
                     arrayfielddesc.arraytoken,
                     argbox.getgenvar(jitstate))
@@ -460,7 +460,7 @@ class InteriorDesc(object):
 
 
 def make_interior_getter(fielddescs, _cache={}):
-    # returns a 'getinterior(jitstate, argbox, *indexboxes)' function
+    # returns a 'getinterior(jitstate, argbox, indexboxes)' function
     key = tuple(fielddescs)
     try:
         return _cache[key]
@@ -469,7 +469,7 @@ def make_interior_getter(fielddescs, _cache={}):
             (fielddesc, isinstance(fielddesc, ArrayFieldDesc))
             for fielddesc in fielddescs])
 
-        def getinterior(jitstate, argbox, *indexboxes):
+        def getinterior(jitstate, argbox, indexboxes):
             i = 0
             for fielddesc, is_array in unroll_fielddescs:
                 if is_array:    # array substruct

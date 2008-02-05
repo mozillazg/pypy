@@ -209,17 +209,6 @@ def gengetarraysize(jitstate, fielddesc, argbox):
     return rvalue.IntRedBox(fielddesc.indexkind, genvar)
 
 
-def ll_gengetinteriorfield(jitstate, deepfrozen, interiordesc,
-                           argbox, *indexboxes):
-    return interiordesc.gengetinteriorfield(jitstate, deepfrozen,
-                                            argbox, *indexboxes)
-
-def ll_gensetinteriorfield(jitstate, interiordesc, destbox,
-                           valuebox, *indexboxes):
-    interiordesc.gensetinteriorfield(jitstate, destbox, valuebox, *indexboxes)
-
-def ll_gengetinteriorarraysize(jitstate, interiordesc, argbox, *indexboxes):
-    return interiordesc.gengetinteriorarraysize(jitstate, argbox, *indexboxes)
 
 
 def genptrnonzero(jitstate, argbox, reverse):

@@ -69,6 +69,8 @@ class BytecodeWriter(object):
         self.fielddesc_positions = {}
         # mapping ARRAYS to index
         self.arrayfielddesc_positions = {}
+        # mapping (TYPE, path) to index
+        self.interiordesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
@@ -409,7 +411,7 @@ class BytecodeWriter(object):
             key = (PTRTYPE.TO, tuple(path))
             if key in self.interiordesc_positions:
                 return self.interiordesc_positions[key]
-            desc = rcontainer.InteriorDesc(self.RGenOp, PTRTYPE.TO, tuple(path)),
+            desc = rcontainer.InteriorDesc(self.RGenOp, PTRTYPE.TO, tuple(path))
             result = len(self.interiordescs)
             self.interiordescs.append(desc)
             return (result, indices_v)
@@ -465,6 +467,9 @@ class BytecodeWriter(object):
             for v in args:
                 result.append(self.serialize_oparg(color, v))
         return result
+
+    def serialize_op_debug_assert(self, op):
+        pass
 
     def serialize_op_direct_call(self, op):
         targets = dict(self.graphs_from(op))
@@ -635,6 +640,67 @@ class BytecodeWriter(object):
         arrayindex = self.serialize_oparg("red", arrayvar)
         self.emit("red_getarraysize", arrayindex, fielddescindex)
         self.register_redvar(op.result)
+
+    def serialize_op_getinteriorfield(self, op):
+        structvar = op.args[0]
+        PTRTYPE = structvar.concretetype
+        # no virtualizable access read here
+        assert not PTRTYPE.TO._hints.get('virtualizable', False)
+
+        # non virtual case
+        interiordescindex, indices_v = self.interiordesc(
+                op, PTRTYPE, len(op.args) - 1)
+        if interiordescindex == -1:    # Void field
+            return None
+        structindex = self.serialize_oparg("red", structvar)
+        deepfrozen = self.hannotator.binding(structvar).deepfrozen
+        indexes = []
+        for arg in indices_v:
+            indexes.append(self.serialize_oparg("red", arg))
+        self.emit("red_getinteriorfield", structindex, interiordescindex,
+                  deepfrozen)
+        self.emit(len(indexes))
+        self.emit(*indexes)
+        self.register_redvar(op.result)
+
+    def serialize_op_setinteriorfield(self, op):
+        structvar = op.args[0]
+        valuevar = op.args[-1]
+        PTRTYPE = structvar.concretetype
+        # non virtual case
+        interiordescindex, indices_v = self.interiordesc(
+                op, PTRTYPE, len(op.args) - 2)
+        structindex = self.serialize_oparg("red", structvar)
+        indexes = []
+        for arg in indices_v:
+            indexes.append(self.serialize_oparg("red", arg))
+        valueindex = self.serialize_oparg("red", valuevar)
+        self.emit("red_setinteriorfield", structindex, interiordescindex)
+        self.emit(len(indexes))
+        self.emit(*indexes)
+        self.emit(valueindex)
+
+    def serialize_op_getinteriorarraysize(self, op):
+        structvar = op.args[0]
+        PTRTYPE = structvar.concretetype
+        color = self.opcolor(op)
+        # non virtual case
+        interiordescindex, indices_v = self.interiordesc(
+                op, PTRTYPE, len(op.args) - 1)
+        assert interiordescindex != -1
+        structindex = self.serialize_oparg(color, structvar)
+        indexes = []
+        for arg in indices_v:
+            indexes.append(self.serialize_oparg(color, arg))
+        self.emit("%s_getinteriorarraysize" % color, structindex,
+                  interiordescindex)
+        self.emit(len(indexes))
+        self.emit(*indexes)
+        if color == "red":
+            self.register_redvar(op.result)
+        else:
+            self.register_greenvar(op.result)
+
 
     # call handling
 

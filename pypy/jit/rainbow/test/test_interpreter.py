@@ -11,6 +11,7 @@ from pypy.jit.rainbow import bytecode
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import summary
 from pypy.rlib.jit import hint
@@ -712,7 +713,7 @@ class SimpleTests(AbstractInterpretationTest):
                 pc += 1
             return acc
         ll_plus_minus.convert_arguments = [LLSupport.to_rstr, int, int]
-        res = self.interpret(ll_plus_minus, ["+-+", 0, 2], [0], inline=100000)
+        res = self.interpret(ll_plus_minus, ["+-+", 0, 2], [0])
         assert res == ll_plus_minus("+-+", 0, 2)
         self.check_insns({'int_add': 2, 'int_sub': 1})
 
@@ -742,7 +743,6 @@ class SimpleTests(AbstractInterpretationTest):
         assert res == 3
 
     def test_red_array(self):
-        py.test.skip("arrays and structs are not working")
         A = lltype.GcArray(lltype.Signed)
         def ll_function(x, y, n):
             a = lltype.malloc(A, 2)
@@ -750,22 +750,19 @@ class SimpleTests(AbstractInterpretationTest):
             a[1] = y
             return a[n]*len(a)
 
-        res = self.interpret(ll_function, [21, -21, 0], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 0], [])
         assert res == 42
         self.check_insns({'malloc_varsize': 1,
                           'setarrayitem': 2, 'getarrayitem': 1,
                           'getarraysize': 1, 'int_mul': 1})
 
-        res = self.interpret(ll_function, [21, -21, 1], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 1], [])
         assert res == -42
         self.check_insns({'malloc_varsize': 1,
                           'setarrayitem': 2, 'getarrayitem': 1,
                           'getarraysize': 1, 'int_mul': 1})
 
     def test_red_struct_array(self):
-        py.test.skip("arrays and structs are not working")
         S = lltype.Struct('s', ('x', lltype.Signed))
         A = lltype.GcArray(S)
         def ll_function(x, y, n):
@@ -774,15 +771,13 @@ class SimpleTests(AbstractInterpretationTest):
             a[1].x = y
             return a[n].x*len(a)
 
-        res = self.interpret(ll_function, [21, -21, 0], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 0], [])
         assert res == 42
         self.check_insns({'malloc_varsize': 1,
                           'setinteriorfield': 2, 'getinteriorfield': 1,
                           'getarraysize': 1, 'int_mul': 1})
 
-        res = self.interpret(ll_function, [21, -21, 1], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 1], [])
         assert res == -42
         self.check_insns({'malloc_varsize': 1,
                           'setinteriorfield': 2, 'getinteriorfield': 1,
@@ -790,7 +785,6 @@ class SimpleTests(AbstractInterpretationTest):
 
 
     def test_red_varsized_struct(self):
-        py.test.skip("arrays and structs are not working")
         A = lltype.Array(lltype.Signed)
         S = lltype.GcStruct('S', ('foo', lltype.Signed), ('a', A))
         def ll_function(x, y, n):
@@ -800,14 +794,12 @@ class SimpleTests(AbstractInterpretationTest):
             s.a[1] = y
             return s.a[n]*s.foo
 
-        res = self.interpret(ll_function, [21, -21, 0], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 0], [])
         assert res == 42
         self.check_insns(malloc_varsize=1,
                          getinteriorarraysize=1)
 
-        res = self.interpret(ll_function, [21, -21, 1], [],
-                             policy=P_NOVIRTUAL)
+        res = self.interpret(ll_function, [21, -21, 1], [])
         assert res == -42
         self.check_insns(malloc_varsize=1,
                          getinteriorarraysize=1)
