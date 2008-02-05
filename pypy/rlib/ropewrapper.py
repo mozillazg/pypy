@@ -101,7 +101,10 @@ class RopeString(RopeBaseString):
 
     def getchar(self,index):
         return self._node.getchar(index)
-
+    
+    def find(self, sub):
+        return -1
+    
 class RopeUnicodeIterator(object):
     def __init__(self, node):
         self._iter = rope.ItemIterator(node)
