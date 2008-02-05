@@ -19,7 +19,7 @@ class JitCode(object):
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
-                 called_bytecodes, num_mergepoints, graph_color,
+                 interiordescs, called_bytecodes, num_mergepoints, graph_color,
                  nonrainbow_functions, is_portal):
         self.name = name
         self.code = code
@@ -30,6 +30,7 @@ class JitCode(object):
         self.structtypedescs = structtypedescs
         self.fielddescs = fielddescs
         self.arrayfielddescs = arrayfielddescs
+        self.interiordescs = interiordescs
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
@@ -386,6 +387,12 @@ class JitInterpreter(object):
         valuebox = self.get_redarg()
         resbox = rtimeshift.gensetarrayitem(self.jitstate, fielddesc, destbox,
                 indexbox, valuebox)
+
+    def opimpl_red_getarraysize(self):
+        arraybox = self.get_redarg()
+        fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
+        resbox = rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
+        self.red_result(resbox)
 
     # ____________________________________________________________
     # construction-time interface

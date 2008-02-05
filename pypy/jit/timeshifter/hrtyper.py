@@ -880,27 +880,6 @@ class HintRTyper(RPythonTyper):
             ts.s_RedBox)
 
 
-    def _getinteriordesc(self, hop, PTRTYPE, nb_offsets):
-        path = []
-        CONTAINER = PTRTYPE.TO
-        indices_v = []
-        for i in range(1, 1 + nb_offsets):
-            T = originalconcretetype(hop.args_s[i])
-            if T is lltype.Void:
-                fieldname = hop.args_v[i].value
-                CONTAINER = getattr(CONTAINER, fieldname)
-                path.append(fieldname)
-            else:
-                assert T is lltype.Signed
-                CONTAINER = CONTAINER.OF
-                path.append(None)    # placeholder for 'array index'
-                v_index = hop.inputarg(self.getredrepr(lltype.Signed), arg=i)
-                indices_v.append(v_index)
-        if CONTAINER is lltype.Void:     # Void field
-            return None, None
-        else:
-            return (rcontainer.InteriorDesc(self, PTRTYPE.TO, tuple(path)),
-                    indices_v)
 
     def translate_op_getinteriorfield(self, hop):
         ts = self

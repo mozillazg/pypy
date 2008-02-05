@@ -610,6 +610,12 @@ class ArrayFieldDesc(FieldDesc):
                 res = array[index]
                 return rvalue.ll_gv_fromvalue(jitstate, res)
         self.getarrayitem_if_non_null = getarrayitem_if_non_null
+        def getarraysize_if_non_null(jitstate, genvar):
+            array = genvar.revealconst(self.PTRTYPE)
+            if array:  # else don't constant-fold
+                res = len(array)
+                return rvalue.ll_gv_fromvalue(jitstate, res)
+        self.getarraysize_if_non_null = getarraysize_if_non_null
 # ____________________________________________________________
 
 class FrozenVirtualStruct(FrozenContainer):

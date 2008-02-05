@@ -43,6 +43,7 @@ class BytecodeWriter(object):
         self.structtypedescs = []
         self.fielddescs = []
         self.arrayfielddescs = []
+        self.interiordescs = []
         self.called_bytecodes = []
         self.num_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
@@ -87,6 +88,7 @@ class BytecodeWriter(object):
                           self.structtypedescs,
                           self.fielddescs,
                           self.arrayfielddescs,
+                          self.interiordescs,
                           self.called_bytecodes,
                           self.num_mergepoints,
                           self.graph_color,
@@ -384,6 +386,33 @@ class BytecodeWriter(object):
         self.nonrainbow_functions.append(call_normal_function)
         self.nonrainbow_positions[fn] = result
         return result
+
+    def interiordesc(self, op, PTRTYPE, nb_offsets):
+        path = []
+        CONTAINER = PTRTYPE.TO
+        indices_v = []
+        for i in range(1, 1 + nb_offsets):
+            varg = op.args[i]
+            T = varg.concretetype
+            if T is lltype.Void:
+                fieldname = varg.value
+                CONTAINER = getattr(CONTAINER, fieldname)
+                path.append(fieldname)
+            else:
+                assert T is lltype.Signed
+                CONTAINER = CONTAINER.OF
+                path.append(None)    # placeholder for 'array index'
+                indices_v.append(varg)
+        if CONTAINER is lltype.Void:     # Void field
+            return -1, None
+        else:
+            key = (PTRTYPE.TO, tuple(path))
+            if key in self.interiordesc_positions:
+                return self.interiordesc_positions[key]
+            desc = rcontainer.InteriorDesc(self.RGenOp, PTRTYPE.TO, tuple(path)),
+            result = len(self.interiordescs)
+            self.interiordescs.append(desc)
+            return (result, indices_v)
         
     def emit(self, *stuff):
         assert stuff is not None
@@ -482,7 +511,6 @@ class BytecodeWriter(object):
         self.register_redvar(op.result)
 
     def serialize_op_malloc_varsize(self, op):
-
         PTRTYPE = op.result.concretetype
         TYPE = PTRTYPE.TO
         v_size = op.args[2]
@@ -597,6 +625,16 @@ class BytecodeWriter(object):
             return
         self.emit("red_setarrayitem", destboxindex, fielddescindex,
                   indexboxindex, valboxindex)
+
+    def serialize_op_getarraysize(self, op):
+        arrayvar, = op.args
+        PTRTYPE = arrayvar.concretetype
+        if PTRTYPE.TO.OF is lltype.Void:
+            return
+        fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
+        arrayindex = self.serialize_oparg("red", arrayvar)
+        self.emit("red_getarraysize", arrayindex, fielddescindex)
+        self.register_redvar(op.result)
 
     # call handling
 
