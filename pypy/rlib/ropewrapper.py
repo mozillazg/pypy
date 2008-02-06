@@ -50,12 +50,19 @@ class RopeBaseString(object):
         raise NotImplementedError("Index type not known.")
     
     def find(self, sub):
+        data = None
+	
         if isinstance(sub, str):
             data = RopeString(sub)
         if isinstance(sub, unicode):
             data = RopeUnicode(sub)
-        
-        return rope.find(self._node, data._node)
+	if isinstance(sub, RopeBaseString):
+            data = sub
+	
+	if data:
+            return rope.find(self._node, data._node)
+	else:
+            raise TypeError("expected a character buffer object")
         
 class RopeStringIterator(object):
     def __init__(self, node):
