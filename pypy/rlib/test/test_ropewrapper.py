@@ -84,6 +84,8 @@ class AbstractTest(object):
         assert s1.find("Welcome to PyPy world") == 0
         assert s1.find(s1) == 0
         py.test.raises(TypeError, s1.find, 4)
+	assert s1.find("o", 5, 10) == 9
+	assert s1.find("o", 10) == 17
     
     def test_str_index(self):
         s1 = self.const("Welcome to PyPy world")
@@ -93,6 +95,8 @@ class AbstractTest(object):
         assert s1.index("Welcome to PyPy world") == 0
         assert s1.index(s1) == 0
         py.test.raises(TypeError, s1.index, 4)
+	assert s1.index("o", 5, 10) == 9
+	assert s1.index("o", 10) == 17
 
 class AbstractRopeTest(object):
     def test_add_long(self):
