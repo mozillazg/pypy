@@ -64,6 +64,25 @@ class RopeBaseString(object):
 	else:
             raise TypeError("expected a character buffer object")
         
+    def index(self, sub, start=None, stop=None):
+        data = None
+	
+        if isinstance(sub, str):
+            data = RopeString(sub)
+        if isinstance(sub, unicode):
+            data = RopeUnicode(sub)
+	if isinstance(sub, RopeBaseString):
+            data = sub
+	
+	if data:
+            result = rope.find(self._node, data._node)
+	    if result >= 0:
+                return result
+            else:
+                raise ValueError("substring not found")
+	else:
+            raise TypeError("expected a character buffer object")
+
 class RopeStringIterator(object):
     def __init__(self, node):
         self._iter = rope.ItemIterator(node)
