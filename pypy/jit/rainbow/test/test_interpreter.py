@@ -18,6 +18,8 @@ from pypy.rlib.jit import hint
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
 
+P_NOVIRTUAL = HintAnnotatorPolicy(novirtualcontainer=True)
+
 def getargtypes(annotator, values):
     return [annotation(annotator, x) for x in values]
 
@@ -47,7 +49,8 @@ class AbstractInterpretationTest(object):
         del cls._cache
         del cls._cache_order
 
-    def serialize(self, func, values, backendoptimize=False):
+    def serialize(self, func, values, policy=None,
+                  inline=None, backendoptimize=False):
         key = func, backendoptimize
         try:
             cache, argtypes = self._cache[key]
@@ -68,13 +71,18 @@ class AbstractInterpretationTest(object):
         rtyper = t.buildrtyper(type_system = self.type_system)
         rtyper.specialize()
         self.rtyper = rtyper
+        if inline:
+            from pypy.translator.backendopt.inline import auto_inlining
+            auto_inlining(t, threshold=inline)
         if backendoptimize:
             from pypy.translator.backendopt.all import backend_optimizations
             backend_optimizations(t)
         graph1 = graphof(t, func)
 
         # build hint annotator types
-        hannotator = HintAnnotator(base_translator=t, policy=P_OOPSPEC_NOVIRTUAL)
+        if policy is None:
+            policy = P_OOPSPEC_NOVIRTUAL
+        hannotator = HintAnnotator(base_translator=t, policy=policy)
         hs = hannotator.build_types(graph1, [SomeLLAbstractConstant(v.concretetype,
                                                                     {OriginFlags(): True})
                                              for v in graph1.getargs()])
@@ -117,7 +125,8 @@ class AbstractInterpretationTest(object):
             assert len(ll_function.convert_arguments) == len(values)
             values = [decoder(value) for decoder, value in zip(
                                         ll_function.convert_arguments, values)]
-        writer, jitcode, argcolors = self.serialize(ll_function, values)
+        writer, jitcode, argcolors = self.serialize(ll_function, values,
+                                                    **kwds)
         rgenop = writer.RGenOp()
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
@@ -697,8 +706,7 @@ class SimpleTests(AbstractInterpretationTest):
         res = self.interpret(ll_function, [], [])
         assert res.x == 123
 
-    def test_plus_minus_all_inlined(self):
-        py.test.skip("arrays and structs are not working")
+    def test_plus_minus(self):
         def ll_plus_minus(s, x, y):
             acc = x
             n = len(s)
@@ -902,6 +910,170 @@ class SimpleTests(AbstractInterpretationTest):
         res = self.interpret(ll_function, [], [])
         assert res == True
         self.check_insns({'setfield': 2, 'getfield': 1})
+
+    def test_deepfrozen_interior(self):
+        T = lltype.Struct('T', ('x', lltype.Signed))
+        A = lltype.Array(T)
+        S = lltype.GcStruct('S', ('a', A))
+        s = lltype.malloc(S, 3, zero=True)
+        s.a[2].x = 42
+        def f(n):
+            s1 = hint(s, variable=True)
+            s1 = hint(s1, deepfreeze=True)
+            return s1.a[n].x
+
+        # malloc-remove the interior ptr
+        res = self.interpret(f, [2], [0], backendoptimize=True)
+        assert res == 42
+        self.check_insns({})
+
+    def test_compile_time_const_tuple(self):
+        py.test.skip("no clue what's wrong")
+        d = {(4, 5): 42, (6, 7): 12}
+        def f(a, b):
+            d1 = hint(d, deepfreeze=True)
+            return d1[a, b]
+
+        # malloc-remove the interior ptr
+        res = self.interpret(f, [4, 5], [0, 1],
+                             backendoptimize=True)
+        assert res == 42
+        self.check_insns({})
+
+    def test_residual_red_call(self):
+        py.test.skip("needs promote")
+        def g(x):
+            return x+1
+
+        def f(x):
+            return 2*g(x)
+
+        res = self.interpret(f, [20], [], policy=StopAtXPolicy(g))
+        assert res == 42
+        self.check_insns(int_add=0)
+
+    def test_residual_red_call_with_exc(self):
+        py.test.skip("needs promote")
+        def h(x):
+            if x > 0:
+                return x+1
+            else:
+                raise ValueError
+
+        def g(x):
+            return 2*h(x)
+
+        def f(x):
+            try:
+                return g(x)
+            except ValueError:
+                return 7
+
+        stop_at_h = StopAtXPolicy(h)
+        res = self.interpret(f, [20], [], policy=stop_at_h)
+        assert res == 42
+        self.check_insns(int_add=0)
+
+        res = self.interpret(f, [-20], [], policy=stop_at_h)
+        assert res == 7
+        self.check_insns(int_add=0)
+
+    def test_red_call_ignored_result(self):
+        def g(n):
+            return n * 7
+        def f(n, m):
+            g(n)   # ignore the result
+            return m
+
+        res = self.interpret(f, [4, 212], [], policy=P_NOVIRTUAL)
+        assert res == 212
+
+    def test_simple_meth(self):
+        py.test.skip("needs promote")
+        class Base(object):
+            def m(self):
+                raise NotImplementedError
+            pass  # for inspect.getsource() bugs
+
+        class Concrete(Base):
+            def m(self):
+                return 42
+            pass  # for inspect.getsource() bugs
+
+        def f(flag):
+            if flag:
+                o = Base()
+            else:
+                o = Concrete()
+            return o.m()
+
+        res = self.interpret(f, [0], [0], policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns({})
+
+        res = self.interpret(f, [0], [], policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns(indirect_call=0)
+
+    def test_simple_red_meth(self):
+        py.test.skip("needs promote")
+        class Base(object):
+            def m(self, n):
+                raise NotImplementedError
+            pass  # for inspect.getsource() bugs
+
+        class Concrete(Base):
+            def m(self, n):
+                return 21*n
+            pass  # for inspect.getsource() bugs
+
+        def f(flag, x):
+            if flag:
+                o = Base()
+            else:
+                o = Concrete()
+            return o.m(x)
+
+        res = self.interpret(f, [0, 2], [0], policy=P_NOVIRTUAL)
+        assert res == 42
+        self.check_insns({'int_mul': 1})
+
+    def test_simple_red_meth_vars_around(self):
+        py.test.skip("needs promote")
+        class Base(object):
+            def m(self, n):
+                raise NotImplementedError
+            pass  # for inspect.getsource() bugs
+
+        class Concrete(Base):
+            def m(self, n):
+                return 21*n
+            pass  # for inspect.getsource() bugs
+
+        def f(flag, x, y, z):
+            if flag:
+                o = Base()
+            else:
+                o = Concrete()
+            return (o.m(x)+y)-z
+
+        res = self.interpret(f, [0, 2, 7, 5], [0], policy=P_NOVIRTUAL)
+        assert res == 44
+        self.check_insns({'int_mul': 1, 'int_add': 1, 'int_sub': 1})
+
+    def test_green_red_mismatch_in_call(self):
+        #py.test.skip("WIP")
+        def add(a,b, u):
+            return a+b
+
+        def f(x, y, u):
+            r = add(x+1,y+1, u)
+            z = x+y
+            z = hint(z, concrete=True) + r   # this checks that 'r' is green
+            return hint(z, variable=True)
+
+        res = self.interpret(f, [4, 5, 0], [], policy=P_NOVIRTUAL)
+        assert res == 20
 
 class TestLLType(SimpleTests):
     type_system = "lltype"
