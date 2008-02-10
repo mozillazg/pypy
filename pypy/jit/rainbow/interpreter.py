@@ -163,6 +163,7 @@ class JitInterpreter(object):
         self.frame.local_boxes.append(box)
 
     def green_result(self, gv):
+        assert gv.is_const
         self.frame.local_green.append(gv)
 
     def newjitstate(self, newjitstate):
@@ -403,6 +404,16 @@ class JitInterpreter(object):
                                                      structbox, indexboxes)
         self.red_result(resultbox)
 
+    def opimpl_green_getinteriorfield(self):
+        structbox = self.get_redarg()
+        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
+        deepfrozen = self.load_bool()
+        indexboxes = self.get_red_varargs()
+        resultbox = interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
+                                                     structbox, indexboxes)
+        assert resultbox.is_constant()
+        self.green_result(resultbox.getgenvar(self.jitstate))
+
     def opimpl_red_setinteriorfield(self):
         destbox = self.get_redarg()
         interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
@@ -419,12 +430,15 @@ class JitInterpreter(object):
         self.red_result(resultbox)
 
     def opimpl_green_getinteriorarraysize(self):
-        arraygenconst = self.get_greenarg()
+        # XXX make a green version that does not use the constant folding of
+        # the red one
+        arraybox = self.get_redarg()
         interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        indexgenconsts = self.get_green_varargs()
+        indexboxes = self.get_red_varargs()
         resultbox = interiordesc.gengetinteriorarraysize(
             self.jitstate, arraybox, indexboxes)
-        self.red_result(resultbox)
+        assert resultbox.is_constant()
+        self.green_result(resultbox.getgenvar(self.jitstate))
     # ____________________________________________________________
     # construction-time interface
 

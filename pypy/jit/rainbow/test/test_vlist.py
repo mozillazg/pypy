@@ -1,18 +1,21 @@
+import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
-from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
+from pypy.jit.rainbow.test.test_interpreter import AbstractInterpretationTest
 from pypy.rlib.jit import hint
 
 P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer=True, oopspec=True)
+py.test.skip("implement me")
 
 
-class TestVList(TimeshiftingTests):
+class TestVList(AbstractInterpretationTest):
+    type_system = "lltype"
 
     def test_vlist(self):
         def ll_function():
             lst = []
             lst.append(12)
             return lst[0]
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
         assert res == 12
         self.check_insns({})
 
@@ -25,10 +28,10 @@ class TestVList(TimeshiftingTests):
                 return lst[0]
             else:
                 return lst[1]
-        res = self.timeshift(ll_function, [6], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [6], [], policy=P_OOPSPEC)
         assert res == 6
         self.check_insns({'int_is_true': 1})
-        res = self.timeshift(ll_function, [0], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == 131
         self.check_insns({'int_is_true': 1})
 
@@ -40,10 +43,10 @@ class TestVList(TimeshiftingTests):
             else:
                 lst.append(131)
             return lst[-1]
-        res = self.timeshift(ll_function, [6], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [6], [], policy=P_OOPSPEC)
         assert res == 6
         self.check_insns({'int_is_true': 1})
-        res = self.timeshift(ll_function, [0], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == 131
         self.check_insns({'int_is_true': 1})
 
@@ -55,10 +58,10 @@ class TestVList(TimeshiftingTests):
             else:
                 lst.append(131)
             return lst[-1]
-        res = self.timeshift(ll_function, [6], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [6], [], policy=P_OOPSPEC)
         assert res == 12
         self.check_insns({'int_is_true': 1})
-        res = self.timeshift(ll_function, [0], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == 131
         self.check_insns({'int_is_true': 1})
 
@@ -69,9 +72,9 @@ class TestVList(TimeshiftingTests):
             if n:
                 lst.append(12)
             return lst[-1]
-        res = self.timeshift(ll_function, [6], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [6], [], policy=P_OOPSPEC)
         assert res == 12
-        res = self.timeshift(ll_function, [0], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [0], [], policy=P_OOPSPEC)
         assert res == 0
 
     def test_oop_vlist(self):
@@ -99,7 +102,7 @@ class TestVList(TimeshiftingTests):
                     seven     *       10 +
                     nine      *        1)
         assert ll_function() == 30185379
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
         assert res == 30185379
         self.check_insns({})
 
@@ -107,7 +110,7 @@ class TestVList(TimeshiftingTests):
         def ll_function():
             lst = [0] * 9
             return len(lst)
-        res = self.timeshift(ll_function, [], [], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [], [], policy=P_OOPSPEC)
         assert res == 9
         self.check_insns({})
         
@@ -126,7 +129,7 @@ class TestVList(TimeshiftingTests):
             res = hint(res, variable=True)
             return res
         
-        res = self.timeshift(ll_function, [3, 4], [0, 1], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [3, 4], [0, 1], policy=P_OOPSPEC)
         assert res == 5
         self.check_insns({})
 
@@ -138,7 +141,7 @@ class TestVList(TimeshiftingTests):
             hint(z, concrete=True)
             return z
 
-        res = self.timeshift(ll_function, [1], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [1], policy=P_OOPSPEC)
         assert res == 7
         self.check_insns({})
 
@@ -153,7 +156,7 @@ class TestVList(TimeshiftingTests):
             hint(z, concrete=True)
             return z
 
-        res = self.timeshift(ll_function, [4], policy=P_OOPSPEC)
+        res = self.interpret(ll_function, [4], policy=P_OOPSPEC)
         assert res == -42
         self.check_insns({})
 
@@ -183,5 +186,5 @@ class TestVList(TimeshiftingTests):
             y.flag = n < 2
             return g(h(2), y, n)
 
-        res = self.timeshift(f, [2], [0], policy=P_OOPSPEC)
+        res = self.interpret(f, [2], [0], policy=P_OOPSPEC)
         assert res == -7
