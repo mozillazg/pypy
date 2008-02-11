@@ -246,7 +246,7 @@ class AbstractSerializationTest:
 
         writer, jitcode = self.serialize(ll_function, [int])
         assert jitcode.code == assemble(writer.interpreter,
-                                        "green_direct_call", 1, 0, 0, 0,
+                                        "green_direct_call", 1, 0, 0,
                                         "make_redbox", 1, 0,
                                         "make_new_redvars", 1, 0,
                                         "make_new_greenvars", 0,

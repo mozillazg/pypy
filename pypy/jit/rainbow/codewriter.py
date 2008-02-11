@@ -1,4 +1,5 @@
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
@@ -8,8 +9,6 @@ from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
-
-
 
 
 class BytecodeWriter(object):
@@ -295,9 +294,9 @@ class BytecodeWriter(object):
     def redvar_position(self, arg):
         return self.redvar_positions[arg]
 
-    def register_greenvar(self, arg, where=-1):
+    def register_greenvar(self, arg, where=None):
         assert isinstance(arg, flowmodel.Variable)
-        if where == -1:
+        if where is None:
             where = self.free_green[self.current_block]
             self.free_green[self.current_block] += 1
         self.greenvar_positions[arg] = where
@@ -382,27 +381,41 @@ class BytecodeWriter(object):
         self.graph_positions[graph] = index
         return index
 
-    def nonrainbow_position(self, fnptr):
+    def nonrainbow_position(self, fnptr, *voidargs):
         fn = fnptr._obj
-        if fn in self.nonrainbow_positions:
-            return self.nonrainbow_positions[fn]
+        key = fn, voidargs
+        if key in self.nonrainbow_positions:
+            return self.nonrainbow_positions[key]
         FUNCTYPE = lltype.typeOf(fn)
-        argiter = unrolling_iterable(enumerate(FUNCTYPE.ARGS))
+        argiter = unrolling_iterable(FUNCTYPE.ARGS)
         numargs = len(FUNCTYPE.ARGS)
-        def call_normal_function(interpreter, greenargs, redargs):
-            assert len(redargs) == 0
-            assert len(greenargs) == numargs
+        def call_normal_function(interpreter, greenargs):
+            assert len(greenargs) + len(voidargs) == numargs 
             args = ()
-            for i, ARG in argiter:
-                genconst = greenargs[i]
-                arg = genconst.revealconst(ARG)
-                args += (arg, )
+            j = 0
+            k = 0
+            for ARG in argiter:
+                if ARG == lltype.Void:
+                    # XXX terrible hack
+                    arg = voidargs[k]
+                    if not we_are_translated():
+                        arg._TYPE = lltype.Void
+                    args += (arg, )
+                    k += 1
+                else:
+                    genconst = greenargs[j]
+                    arg = genconst.revealconst(ARG)
+                    args += (arg, )
+                    j += 1
             rgenop = interpreter.jitstate.curbuilder.rgenop
-            result = rgenop.genconst(fnptr(*args))
+            try:
+                result = rgenop.genconst(fnptr(*args))
+            except Exception, e:
+                XXX # need to create a default result and set exception
             interpreter.green_result(result)
         result = len(self.nonrainbow_functions)
         self.nonrainbow_functions.append(call_normal_function)
-        self.nonrainbow_positions[fn] = result
+        self.nonrainbow_positions[key] = result
         return result
 
     def interiordesc(self, op, PTRTYPE, nb_offsets):
@@ -533,6 +546,20 @@ class BytecodeWriter(object):
             self.emit(*args)
             self.register_redvar(op.result)
             return
+        elif kind == "green":
+            voidargs = [const.value for const in op.args[1:]
+                            if const.concretetype == lltype.Void]
+            pos = self.nonrainbow_position(op.args[0].value, *voidargs)
+            emitted_args = []
+            for v in op.args[1:]:
+                if v.concretetype != lltype.Void:
+                    emitted_args.append(self.serialize_oparg("green", v))
+            self.emit("green_direct_call")
+            self.emit(len(emitted_args))
+            self.emit(*emitted_args)
+            self.emit(pos)
+            self.register_greenvar(op.result)
+            return
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
         targetgraph, = targets.values()
@@ -546,14 +573,6 @@ class BytecodeWriter(object):
             if kind == "red":
                 self.register_redvar(op.result)
             self.emit("red_after_direct_call")
-        elif kind == "green":
-            pos = self.nonrainbow_position(op.args[0].value)
-            args = targetgraph.getargs()
-            emitted_args = self.args_of_call(op.args[1:], args)
-            self.emit("green_direct_call")
-            self.emit(*emitted_args)
-            self.emit(pos)
-            self.register_greenvar(op.result)
         elif kind == "yellow":
             graphindex = self.graph_position(targetgraph)
             args = targetgraph.getargs()

@@ -299,10 +299,9 @@ class JitInterpreter(object):
 
     def opimpl_green_direct_call(self):
         greenargs = self.get_green_varargs()
-        redargs = self.get_red_varargs()
         index = self.load_2byte()
         function = self.frame.bytecode.nonrainbow_functions[index]
-        function(self, greenargs, redargs)
+        function(self, greenargs)
 
     def opimpl_yellow_direct_call(self):
         greenargs = self.get_green_varargs()
