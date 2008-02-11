@@ -269,7 +269,7 @@ class AbstractVirtualDict(VirtualContainer):
 def oop_newdict(jitstate, oopspecdesc):
     return oopspecdesc.typedesc.factory()
 
-def oop_dict_setitem(jitstate, oopspecdesc, selfbox, keybox, valuebox):
+def oop_dict_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox, valuebox):
     content = selfbox.content
     if isinstance(content, AbstractVirtualDict) and keybox.is_constant():
         content.setitem(keybox, valuebox)

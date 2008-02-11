@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
+from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
@@ -14,10 +15,10 @@ from pypy.translator.backendopt.removenoops import remove_same_as
 class BytecodeWriter(object):
     def __init__(self, t, hannotator, RGenOp):
         self.translator = t
-        self.annotator = t.annotator
+        self.rtyper = hannotator.base_translator.rtyper
         self.hannotator = hannotator
         etrafo = hannotator.exceptiontransformer
-        type_system = hannotator.base_translator.rtyper.type_system.name
+        type_system = self.rtyper.type_system.name
         self.exceptiondesc = exception.ExceptionDesc(
             RGenOp, etrafo, type_system, False)
         self.interpreter = JitInterpreter(self.exceptiondesc)
@@ -44,6 +45,7 @@ class BytecodeWriter(object):
         self.fielddescs = []
         self.arrayfielddescs = []
         self.interiordescs = []
+        self.oopspecdescs = []
         self.called_bytecodes = []
         self.num_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
@@ -71,6 +73,8 @@ class BytecodeWriter(object):
         self.arrayfielddesc_positions = {}
         # mapping (TYPE, path) to index
         self.interiordesc_positions = {}
+        # mapping (fnobj, can_raise) to index
+        self.oopspecdesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
@@ -91,6 +95,7 @@ class BytecodeWriter(object):
                           self.fielddescs,
                           self.arrayfielddescs,
                           self.interiordescs,
+                          self.oopspecdescs,
                           self.called_bytecodes,
                           self.num_mergepoints,
                           self.graph_color,
@@ -352,6 +357,17 @@ class BytecodeWriter(object):
         self.arrayfielddesc_positions[TYPE] = result
         return result
 
+    def oopspecdesc_position(self, fnobj, canraise):
+        key = fnobj, canraise
+        if key in self.oopspecdesc_positions:
+            return self.oopspecdesc_positions[key]
+        oopspecdesc = oop.OopSpecDesc(self.RGenOp, self.rtyper,
+                                      fnobj, canraise)
+        result = len(self.oopspecdescs)
+        self.oopspecdescs.append(oopspecdesc)
+        self.oopspecdesc_positions[key] = result
+        return result
+
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
@@ -478,6 +494,45 @@ class BytecodeWriter(object):
 
     def serialize_op_direct_call(self, op):
         kind, exc = self.guess_call_kind(op)
+        print op, kind, exc
+        if kind == "oopspec":
+            from pypy.jit.timeshifter.oop import Index
+            fnobj = op.args[0].value._obj
+            oopspecdescindex = self.oopspecdesc_position(fnobj, exc)
+            oopspecdesc = self.oopspecdescs[oopspecdescindex]
+            opargs = op.args[1:]
+            args_v = []
+            args = []
+            for obj in oopspecdesc.argtuple:
+                if isinstance(obj, Index):
+                    v = opargs[obj.n]
+                else:
+                    v = flowmodel.Constant(obj, lltype.typeOf(obj))
+                args_v.append(v)
+                args.append(self.serialize_oparg("red", v))
+
+            ll_handler = oopspecdesc.ll_handler
+            couldfold = oopspecdesc.couldfold
+            missing_args = ((ll_handler.func_code.co_argcount - 3) -
+                            len(oopspecdesc.argtuple))
+            assert missing_args >= 0
+            if missing_args > 0:
+                assert (ll_handler.func_defaults[-missing_args:] ==
+                        (None,) * missing_args)
+
+            if oopspecdesc.is_method:
+                hs_self = self.hannotator.binding(
+                    opargs[oopspecdesc.argtuple[0].n])
+                deepfrozen = hs_self.deepfrozen
+            else:
+                deepfrozen = False
+
+            self.emit("red_oopspec_call_%s" % (len(args), ))
+            self.emit(oopspecdescindex)
+            self.emit(deepfrozen)
+            self.emit(*args)
+            self.register_redvar(op.result)
+            return
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
         targetgraph, = targets.values()

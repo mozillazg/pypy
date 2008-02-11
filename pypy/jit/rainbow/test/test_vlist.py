@@ -4,7 +4,6 @@ from pypy.jit.rainbow.test.test_interpreter import AbstractInterpretationTest
 from pypy.rlib.jit import hint
 
 P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer=True, oopspec=True)
-py.test.skip("implement me")
 
 
 class TestVList(AbstractInterpretationTest):
@@ -66,6 +65,7 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({'int_is_true': 1})
 
     def test_force(self):
+        py.test.skip("implement me")
         def ll_function(n):
             lst = []
             lst.append(n)
@@ -134,6 +134,7 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_frozen_list(self):
+        py.test.skip("implement me")
         lst = [5, 7, 9]
         def ll_function(x):
             mylist = hint(lst, deepfreeze=True)
@@ -146,6 +147,7 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_frozen_list_indexerror(self):
+        py.test.skip("implement me")
         lst = [5, 7, 9]
         def ll_function(x):
             mylist = hint(lst, deepfreeze=True)
@@ -161,6 +163,7 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_bogus_index_while_compiling(self):
+        py.test.skip("implement me")
         class Y:
             pass
 

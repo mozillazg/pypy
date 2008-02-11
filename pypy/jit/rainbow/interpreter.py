@@ -19,8 +19,8 @@ class JitCode(object):
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
-                 interiordescs, called_bytecodes, num_mergepoints, graph_color,
-                 nonrainbow_functions, is_portal):
+                 interiordescs, oopspecdescs, called_bytecodes, num_mergepoints,
+                 graph_color, nonrainbow_functions, is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -31,6 +31,7 @@ class JitCode(object):
         self.fielddescs = fielddescs
         self.arrayfielddescs = arrayfielddescs
         self.interiordescs = interiordescs
+        self.oopspecdescs = oopspecdescs
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
@@ -165,6 +166,10 @@ class JitInterpreter(object):
     def green_result(self, gv):
         assert gv.is_const
         self.frame.local_green.append(gv)
+
+    def green_result_from_red(self, box):
+        assert box.is_constant()
+        self.green_result(box.getgenvar(self.jitstate))
 
     def newjitstate(self, newjitstate):
         self.jitstate = newjitstate
@@ -319,14 +324,43 @@ class JitInterpreter(object):
         # XXX all this jitstate.greens business is a bit messy
         self.green_result(self.jitstate.greens[0])
 
+    def opimpl_red_oopspec_call_1(self):
+        oopspecindex = self.load_2byte()
+        deepfrozen = self.load_bool()
+        arg1 = self.get_redarg()
+        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1)
+        self.red_result(result)
+
+    def opimpl_red_oopspec_call_2(self):
+        oopspecindex = self.load_2byte()
+        deepfrozen = self.load_bool()
+        arg1 = self.get_redarg()
+        arg2 = self.get_redarg()
+        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2)
+        self.red_result(result)
+
+    def opimpl_red_oopspec_call_3(self):
+        oopspecindex = self.load_2byte()
+        deepfrozen = self.load_bool()
+        arg1 = self.get_redarg()
+        arg2 = self.get_redarg()
+        arg3 = self.get_redarg()
+        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
+        self.red_result(result)
+
 
     # exceptions
 
     def opimpl_read_exctype(self):
-        XXX
+        box = rtimeshift.getexctypebox(self.jitstate)
+        self.red_result(box)
 
     def opimpl_read_excvalue(self):
-        XXX
+        box = rtimeshift.getexcvaluebox(self.jitstate)
+        self.red_result(box)
 
     def opimpl_write_exctype(self):
         typebox = self.get_redarg()
@@ -411,8 +445,7 @@ class JitInterpreter(object):
         indexboxes = self.get_red_varargs()
         resultbox = interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
                                                      structbox, indexboxes)
-        assert resultbox.is_constant()
-        self.green_result(resultbox.getgenvar(self.jitstate))
+        self.green_result_from_red(resultbox)
 
     def opimpl_red_setinteriorfield(self):
         destbox = self.get_redarg()
@@ -437,8 +470,8 @@ class JitInterpreter(object):
         indexboxes = self.get_red_varargs()
         resultbox = interiordesc.gengetinteriorarraysize(
             self.jitstate, arraybox, indexboxes)
-        assert resultbox.is_constant()
-        self.green_result(resultbox.getgenvar(self.jitstate))
+        self.green_result_from_red(resultbox)
+
     # ____________________________________________________________
     # construction-time interface
 
