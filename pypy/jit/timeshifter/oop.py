@@ -20,7 +20,7 @@ class OopSpecDesc:
 
     do_call = None
 
-    def __init__(self, hrtyper, fnobj, can_raise):
+    def __init__(self, RGenOp, rtyper, fnobj, can_raise):
         ll_func = fnobj._callable
         FUNCTYPE = lltype.typeOf(fnobj)
         nb_args = len(FUNCTYPE.ARGS)
@@ -34,8 +34,8 @@ class OopSpecDesc:
         if args.strip() == ',':
             args = '()'
         argnames = ll_func.func_code.co_varnames[:nb_args]
-        d = dict(zip(argnames, [Index(n) for n in range(nb_args)]))
-        self.argtuple = eval(args, d)
+        argname2index = dict(zip(argnames, [Index(n) for n in range(nb_args)]))
+        self.argtuple = eval(args, argname2index)
         # end of rather XXX'edly hackish parsing
 
         OOPARGTYPES = []
@@ -54,7 +54,6 @@ class OopSpecDesc:
             if ARGTYPE is not lltype.Void:
                 self.residualargsources.append(arg_llsig_to_oopsig[i])
 
-        RGenOp = hrtyper.RGenOp
         self.args_gv = [None] * nb_args
         fnptr = fnobj._as_ptr()
         self.gv_fnptr = RGenOp.constPrebuiltGlobal(fnptr)
@@ -86,7 +85,7 @@ class OopSpecDesc:
 
         vmodule = __import__('pypy.jit.timeshifter.v%s' % (typename,),
                              None, None, [method])
-        self.typedesc = vmodule.TypeDesc(hrtyper, SELFTYPE)
+        self.typedesc = vmodule.TypeDesc(RGenOp, rtyper, SELFTYPE)
         self.ll_handler = getattr(vmodule, method)
         self.couldfold = getattr(self.ll_handler, 'couldfold', False)
 

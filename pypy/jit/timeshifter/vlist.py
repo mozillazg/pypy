@@ -27,9 +27,7 @@ class ItemDesc(object):
 class ListTypeDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, hrtyper, LIST):
-        RGenOp = hrtyper.RGenOp
-        rtyper = hrtyper.rtyper
+    def __init__(self, RGenOp, rtyper, LIST):
         self.LIST = LIST
         self.LISTPTR = lltype.Ptr(LIST)
         self.ptrkind = RGenOp.kindToken(self.LISTPTR)
@@ -269,13 +267,13 @@ class VirtualList(VirtualContainer):
                 content.reshape(jitstate, shapemask, memo)
 
 
-def oop_newlist(jitstate, oopspecdesc, lengthbox, itembox=None):
+def oop_newlist(jitstate, oopspecdesc, deepfrozen, lengthbox, itembox=None):
     if lengthbox.is_constant():
         length = rvalue.ll_getvalue(lengthbox, lltype.Signed)
         return oopspecdesc.typedesc.factory(length, itembox)
     return oopspecdesc.residual_call(jitstate, [lengthbox, itembox])
 
-def oop_list_copy(jitstate, oopspecdesc, selfbox):
+def oop_list_copy(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         copybox = oopspecdesc.typedesc.factory(0, None)
@@ -304,14 +302,14 @@ def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
                                          deepfrozen=deepfrozen)
 oop_list_nonzero.couldfold = True
 
-def oop_list_append(jitstate, oopspecdesc, selfbox, itembox):
+def oop_list_append(jitstate, oopspecdesc, deepfrozen, selfbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.append(itembox)
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, itembox])
 
-def oop_list_insert(jitstate, oopspecdesc, selfbox, indexbox, itembox):
+def oop_list_insert(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -321,7 +319,7 @@ def oop_list_insert(jitstate, oopspecdesc, selfbox, indexbox, itembox):
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
-def oop_list_concat(jitstate, oopspecdesc, selfbox, otherbox):
+def oop_list_concat(jitstate, oopspecdesc, deepfrozen, selfbox, otherbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         assert isinstance(otherbox, rvalue.PtrRedBox)
@@ -335,7 +333,7 @@ def oop_list_concat(jitstate, oopspecdesc, selfbox, otherbox):
             return newbox
     return oopspecdesc.residual_call(jitstate, [selfbox, otherbox])
 
-def oop_list_pop(jitstate, oopspecdesc, selfbox, indexbox=None):
+def oop_list_pop(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox=None):
     content = selfbox.content
     if indexbox is None:
         if isinstance(content, VirtualList):
@@ -355,7 +353,7 @@ def oop_list_pop(jitstate, oopspecdesc, selfbox, indexbox=None):
             return oopspecdesc.residual_exception(jitstate, IndexError)
     return oopspecdesc.residual_call(jitstate, [selfbox, indexbox])
 
-def oop_list_reverse(jitstate, oopspecdesc, selfbox):
+def oop_list_reverse(jitstate, oopspecdesc, deepfrozen, selfbox):
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.reverse()
@@ -375,7 +373,7 @@ def oop_list_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
                                          deepfrozen=deepfrozen)
 oop_list_getitem.couldfold = True
 
-def oop_list_setitem(jitstate, oopspecdesc, selfbox, indexbox, itembox):
+def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -386,7 +384,7 @@ def oop_list_setitem(jitstate, oopspecdesc, selfbox, indexbox, itembox):
     else:
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
-def oop_list_delitem(jitstate, oopspecdesc, selfbox, indexbox):
+def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
