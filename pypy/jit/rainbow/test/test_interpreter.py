@@ -95,6 +95,7 @@ class AbstractInterpretationTest(object):
         self.graph = graph2
         writer = BytecodeWriter(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
+        rtyper.specialize_more_blocks()
         argcolors = []
 
         # make residual functype

@@ -65,7 +65,6 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({'int_is_true': 1})
 
     def test_force(self):
-        py.test.skip("implement me")
         def ll_function(n):
             lst = []
             lst.append(n)
@@ -134,7 +133,6 @@ class TestVList(AbstractInterpretationTest):
         self.check_insns({})
 
     def test_frozen_list(self):
-        py.test.skip("implement me")
         lst = [5, 7, 9]
         def ll_function(x):
             mylist = hint(lst, deepfreeze=True)
