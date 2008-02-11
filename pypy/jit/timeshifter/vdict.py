@@ -95,9 +95,7 @@ class LLEqDesc(object):
 class DictTypeDesc(object):
     __metaclass__ = cachedtype
 
-    def __init__(self, hrtyper, DICT):
-        RGenOp = hrtyper.RGenOp
-        rtyper = hrtyper.rtyper
+    def __init__(self, RGenOp, rtyper, DICT):
         bk = rtyper.annotator.bookkeeper
         self.DICT = DICT
         self.DICTPTR = lltype.Ptr(DICT)
@@ -266,7 +264,7 @@ class AbstractVirtualDict(VirtualContainer):
         raise NotImplementedError
 
 
-def oop_newdict(jitstate, oopspecdesc):
+def oop_newdict(jitstate, oopspecdesc, deepfrozen):
     return oopspecdesc.typedesc.factory()
 
 def oop_dict_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox, valuebox):
