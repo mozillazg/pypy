@@ -5,7 +5,6 @@ from pypy.rlib.jit import hint
 
 P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer = True,
                                 oopspec = True)
-py.test.skip("implement me")
 
 
 class TestVDict(AbstractInterpretationTest):

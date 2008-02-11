@@ -324,6 +324,13 @@ class JitInterpreter(object):
         # XXX all this jitstate.greens business is a bit messy
         self.green_result(self.jitstate.greens[0])
 
+    def opimpl_red_oopspec_call_0(self):
+        oopspecindex = self.load_2byte()
+        deepfrozen = self.load_bool()
+        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen)
+        self.red_result(result)
+
     def opimpl_red_oopspec_call_1(self):
         oopspecindex = self.load_2byte()
         deepfrozen = self.load_bool()
