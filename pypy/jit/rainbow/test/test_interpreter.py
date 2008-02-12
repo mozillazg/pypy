@@ -7,7 +7,6 @@ from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
 from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
-from pypy.jit.rainbow import bytecode
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
