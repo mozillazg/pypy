@@ -75,7 +75,7 @@ def create_classtable():
 create_classtable()
 
 def copy_in_globals_classes_known_to_the_vm():
-    for name in constants.classes_in_special_object_table:
+    for name in constants.classes_needed_boot_vm:
         name = 'w_' + name
         globals()[name] = classtable[name]
 

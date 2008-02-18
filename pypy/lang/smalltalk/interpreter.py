@@ -29,6 +29,7 @@ class Interpreter:
     
     def __init__(self):
         self.w_active_context = None
+        self.cnt = 0
 
     def interpret(self):
         try:

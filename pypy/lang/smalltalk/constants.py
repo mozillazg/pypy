@@ -13,7 +13,20 @@ STREAM_WRITE_LIMIT_INDEX = 3
 CLASS_SUPERCLASS_INDEX = 0
 CLASS_METHODDICT_INDEX = 1
 CLASS_FORMAT_INDEX = 2
-CLASS_NAME_INDEX = 6             # in the mini.image, at least
+CLASS_NAME_INDEX = 6                # in the mini.image, at least
+
+NEXT_LINK_INDEX = 0                 # "
+
+PROCESS_SUSPENDED_CONTEXT_INDEX = 1 # "
+PROCESS_PRIORITY_INDEX = 2          # "
+PROCESS_MY_LIST_INDEX = 3           # "
+
+FIRST_LINK_INDEX = 0                # "
+LAST_LINK_INDEX = 1                 # "
+EXCESS_SIGNALS_INDEX = 2            # "
+
+SCHEDULER_PROCESS_LISTS_INDEX = 0   # "
+SCHEDULER_ACTIVE_PROCESS_INDEX = 1  # "
 
 METHODDICT_TALLY_INDEX = 0
 METHODDICT_VALUES_INDEX = 1
@@ -99,23 +112,52 @@ SO_TRANSLATEDMETHOD_CLASS = 40
 SO_FINALIZATION_SEMPAHORE = 41
 SO_LARGENEGATIVEINTEGER_CLASS = 42
 
+classes_needed_boot_vm = [
+    "SmallInteger",
+    "String",
+    "Array",
+    "Float",
+    "MethodContext",
+    "BlockContext",
+    "CompiledMethod",
+    "Character",
+    "ByteArray",
+]
+
 # XXX more missing?
 classes_in_special_object_table = {
-    "SmallInteger": SO_SMALLINTEGER_CLASS,
-    "Array": SO_ARRAY_CLASS,
-    "String": SO_STRING_CLASS,
-    "Float": SO_FLOAT_CLASS,
-    "BlockContext": SO_BLOCKCONTEXT_CLASS,
-    "MethodContext": SO_METHODCONTEXT_CLASS,
-    "Character": SO_CHARACTER_CLASS,
-    "ByteArray": SO_BYTEARRAY_CLASS,
-    "CompiledMethod": SO_COMPILEDMETHOD_CLASS,
+    "Bitmap" : SO_BITMAP_CLASS,
+    "SmallInteger" : SO_SMALLINTEGER_CLASS,
+    "String" : SO_STRING_CLASS,
+    "Array" : SO_ARRAY_CLASS,
+    "Float" : SO_FLOAT_CLASS,
+    "MethodContext" : SO_METHODCONTEXT_CLASS,
+    "BlockContext" : SO_BLOCKCONTEXT_CLASS,
+    "Point" : SO_POINT_CLASS,
+    "LargePositiveInteger" : SO_LARGEPOSITIVEINTEGER_CLASS,
+    "Display" : SO_DISPLAY_CLASS,
+    "Message" : SO_MESSAGE_CLASS,
+    "CompiledMethod" : SO_COMPILEDMETHOD_CLASS,
+    "Semaphore" : SO_SEMAPHORE_CLASS,
+    "Character" : SO_CHARACTER_CLASS,
+    "ByteArray" : SO_BYTEARRAY_CLASS,
+    "Process" : SO_PROCESS_CLASS,
+    "PseudoContext" : SO_PSEUDOCONTEXT_CLASS,
+    "TranslatedMethod" : SO_TRANSLATEDMETHOD_CLASS,
+    # "LargeNegativeInteger" : SO_LARGENEGATIVEINTEGER_CLASS, # Not available in mini.image
 }
+
+objects_needed_boot_vm = [
+    "nil",
+    "true",
+    "false",
+]
 
 objects_in_special_object_table = {
     "nil": SO_NIL,
     "true": SO_TRUE,
     "false": SO_FALSE,
+    "schedulerassociationpointer" : SO_SCHEDULERASSOCIATIONPOINTER,
 }
 
 TAGGED_MAXINT = 2 ** (LONG_BIT - 2) - 1

@@ -30,5 +30,5 @@ w_nil.w_class = classtable.classtable['w_UndefinedObject']
 
 objtable = {}
 
-for name in constants.objects_in_special_object_table:
+for name in constants.objects_needed_boot_vm:
     objtable["w_" + name] = globals()["w_" + name]
