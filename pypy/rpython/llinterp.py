@@ -764,12 +764,6 @@ class LLFrame(object):
     def op_gc_restore_exception(self, exc):
         raise NotImplementedError("gc_restore_exception")
 
-    def op_gc_call_rtti_destructor(self, rtti, addr):
-        if hasattr(rtti._obj, 'destructor_funcptr'):
-            d = rtti._obj.destructor_funcptr
-            obptr = addr.ref()
-            return self.op_direct_call(d, obptr)
-
     def op_gc_deallocate(self, TYPE, addr):
         raise NotImplementedError("gc_deallocate")
 

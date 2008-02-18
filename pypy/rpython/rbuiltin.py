@@ -476,7 +476,7 @@ def rtype_cast_int_to_ptr(hop):
 def rtype_runtime_type_info(hop):
     assert isinstance(hop.args_r[0], rptr.PtrRepr)
     vlist = hop.inputargs(hop.args_r[0])
-    return hop.genop('runtime_type_info', vlist,
+    return hop.genop('gc_runtime_type_info', vlist,
                      resulttype = hop.r_result.lowleveltype)
 
 BUILTIN_TYPER[lltype.malloc] = rtype_malloc
@@ -484,6 +484,7 @@ BUILTIN_TYPER[lltype.free] = rtype_free
 BUILTIN_TYPER[lltype.cast_primitive] = rtype_cast_primitive
 BUILTIN_TYPER[lltype.cast_pointer] = rtype_cast_pointer
 BUILTIN_TYPER[lltype.cast_opaque_ptr] = rtype_cast_opaque_ptr
+BUILTIN_TYPER[lltype.runtime_type_info] = rtype_runtime_type_info
 BUILTIN_TYPER[lltype.direct_fieldptr] = rtype_direct_fieldptr
 BUILTIN_TYPER[lltype.direct_arrayitems] = rtype_direct_arrayitems
 BUILTIN_TYPER[lltype.direct_ptradd] = rtype_direct_ptradd
@@ -491,9 +492,7 @@ BUILTIN_TYPER[lltype.cast_ptr_to_int] = rtype_cast_ptr_to_int
 BUILTIN_TYPER[lltype.cast_int_to_ptr] = rtype_cast_int_to_ptr
 BUILTIN_TYPER[lltype.typeOf] = rtype_const_result
 BUILTIN_TYPER[lltype.nullptr] = rtype_const_result
-BUILTIN_TYPER[lltype.getRuntimeTypeInfo] = rtype_const_result
 BUILTIN_TYPER[lltype.Ptr] = rtype_const_result
-BUILTIN_TYPER[lltype.runtime_type_info] = rtype_runtime_type_info
 BUILTIN_TYPER[rarithmetic.intmask] = rtype_intmask
 BUILTIN_TYPER[objectmodel.we_are_translated] = rtype_we_are_translated
 

@@ -12,8 +12,7 @@ from pypy.rpython.rclass import AbstractClassRepr,\
 from pypy.rpython.lltypesystem.lltype import \
      Ptr, Struct, GcStruct, malloc, \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
-     RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
-     Array, Char, Void, attachRuntimeTypeInfo, \
+     typeOf, Array, Char, Void, \
      FuncType, Bool, Signed, functionptr, FuncType, PyObject
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
@@ -27,8 +26,7 @@ from pypy.rlib.rarithmetic import intmask
 #  A root class "object" has:
 #
 #      struct object_vtable {
-#          // struct object_vtable* parenttypeptr;  not used any more
-#          RuntimeTypeInfo * rtti;
+#          RuntimeTypeInfo rtti;      //GC-specific information
 #          Signed subclassrange_min;  //this is also the id of the class itself
 #          Signed subclassrange_max;
 #          array { char } * name;
@@ -45,7 +43,7 @@ from pypy.rlib.rarithmetic import intmask
 # The type of the instances is:
 #
 #     struct object {       // for the root class
-#         struct object_vtable* typeptr;
+#         some GC-specific fields including a ptr to the vtable
 #     }
 #
 #     struct X {
@@ -55,22 +53,32 @@ from pypy.rlib.rarithmetic import intmask
 #
 # there's also a nongcobject 
 
-OBJECT_VTABLE = lltype.ForwardReference()
-CLASSTYPE = Ptr(OBJECT_VTABLE)
-OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
-                  hints = {'immutable': True, 'shouldntbenull': True})
+def ll_gettypeptr(p):
+    rtti = lltype.runtime_type_info(p)
+    return cast_pointer(CLASSTYPE, rtti)
+
+def ll_gettypeptr_nongc(p):
+    return p.typeptr
+
+OBJECT = lltype.GcForwardReference()
 OBJECTPTR = Ptr(OBJECT)
-OBJECT_VTABLE.become(Struct('object_vtable',
-                            #('parenttypeptr', CLASSTYPE),
+OBJECT_VTABLE = Struct('object_vtable',
+                            ('rtti', lltype.RuntimeTypeInfo),
                             ('subclassrange_min', Signed),
                             ('subclassrange_max', Signed),
-                            ('rtti', Ptr(RuntimeTypeInfo)),
                             ('name', Ptr(Array(Char))),
                             ('instantiate', Ptr(FuncType([], OBJECTPTR))),
-                            hints = {'immutable': True}))
+                            hints = {'immutable': True})
+CLASSTYPE = Ptr(OBJECT_VTABLE)
+OBJECT.become(GcStruct('object',
+                       runtime_type_info = malloc(OBJECT_VTABLE,
+                                                  immortal=True),
+                       adtmeths = {'gettypeptr': ll_gettypeptr}))
+
 # non-gc case
-NONGCOBJECT = Struct('nongcobject', ('typeptr', CLASSTYPE))
-NONGCOBJECTPTR = Ptr(OBJECT)
+NONGCOBJECT = Struct('nongcobject', ('typeptr', CLASSTYPE),
+                     adtmeths = {'gettypeptr': ll_gettypeptr_nongc})
+NONGCOBJECTPTR = Ptr(NONGCOBJECT)
 
 OBJECT_BY_FLAVOR = {'gc': OBJECT,
                     'raw': NONGCOBJECT}
@@ -79,12 +87,6 @@ LLFLAVOR = {'gc'   : 'gc',
             'raw'  : 'raw',
             'stack': 'raw',
             }
-
-def cast_vtable_to_typeptr(vtable):
-    while typeOf(vtable).TO != OBJECT_VTABLE:
-        vtable = vtable.super
-    return vtable
-
 
 class ClassRepr(AbstractClassRepr):
     def __init__(self, rtyper, classdef):
@@ -140,32 +142,15 @@ class ClassRepr(AbstractClassRepr):
         self.clsfields = clsfields
         self.pbcfields = pbcfields
         self.allmethods = allmethods
-        self.vtable = None
+        self.vtable = malloc(self.vtable_type, immortal=True)
+        self.vtable_filled = False
 
-#    def convert_const(self, value):
-#        if not isinstance(value, (type, types.ClassType)):
-#            raise TyperError("not a class: %r" % (value,))
-#        try:
-#            subclassdef = self.rtyper.annotator.getuserclasses()[value]
-#        except KeyError:
-#            raise TyperError("no classdef: %r" % (value,))
-#        if self.classdef is not None:
-#            if self.classdef.commonbase(subclassdef) != self.classdef:
-#                raise TyperError("not a subclass of %r: %r" % (
-#                    self.classdef.cls, value))
-#        #
-#        return getclassrepr(self.rtyper, subclassdef).getvtable()
-
-    def getvtable(self, cast_to_typeptr=True):
+    def getvtable(self):
         """Return a ptr to the vtable of this type."""
-        if self.vtable is None:
-            self.vtable = malloc(self.vtable_type, immortal=True)
+        if not self.vtable_filled:
             self.setup_vtable(self.vtable, self)
-        #
-        vtable = self.vtable
-        if cast_to_typeptr:
-            vtable = cast_vtable_to_typeptr(vtable)
-        return vtable
+            self.vtable_filled = True
+        return cast_pointer(CLASSTYPE, self.vtable)
     getruntime = getvtable
 
     def setup_vtable(self, vtable, rsubcls):
@@ -174,7 +159,6 @@ class ClassRepr(AbstractClassRepr):
         if self.classdef is None:
             # initialize the 'subclassrange_*' and 'name' fields
             if rsubcls.classdef is not None:
-                #vtable.parenttypeptr = rsubcls.rbase.getvtable()
                 vtable.subclassrange_min = rsubcls.classdef.minid
                 vtable.subclassrange_max = rsubcls.classdef.maxid
             else: #for the root class
@@ -182,8 +166,6 @@ class ClassRepr(AbstractClassRepr):
                 vtable.subclassrange_max = sys.maxint
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
-            if rinstance.gcflavor == 'gc':
-                vtable.rtti = getRuntimeTypeInfo(rinstance.object_type)
             if rsubcls.classdef is None:
                 name = 'object'
             else:
@@ -232,7 +214,9 @@ class ClassRepr(AbstractClassRepr):
     #    to self's vtable type."""
 
     def fromtypeptr(self, vcls, llops):
-        """Return the type pointer cast to self's vtable type."""
+        """Return a RuntimeTypeInfo or Ptr(OBJECT_VTABLE) cast
+        to self's vtable type.
+        """
         self.setup()
         castable(self.lowleveltype, vcls.concretetype) # sanity check
         return llops.genop('cast_pointer', [vcls],
@@ -296,15 +280,15 @@ class ClassRepr(AbstractClassRepr):
 class InstanceRepr(AbstractInstanceRepr):
     def __init__(self, rtyper, classdef, gcflavor='gc'):
         AbstractInstanceRepr.__init__(self, rtyper, classdef)
+        self.gcflavor = gcflavor
         if classdef is None:
-            self.object_type = OBJECT_BY_FLAVOR[LLFLAVOR[gcflavor]]
+            self.object_type = self.get_base_object_type()
         else:
             ForwardRef = lltype.FORWARDREF_BY_FLAVOR[LLFLAVOR[gcflavor]]
             self.object_type = ForwardRef()
             
         self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
         self.lowleveltype = Ptr(self.object_type)
-        self.gcflavor = gcflavor
 
     def _setup_repr(self, llfields=None, hints=None, adtmeths=None):
         # NOTE: don't store mutable objects like the dicts below on 'self'
@@ -315,7 +299,7 @@ class InstanceRepr(AbstractInstanceRepr):
         fields = {}
         allinstancefields = {}
         if self.classdef is None:
-            fields['__class__'] = 'typeptr', get_type_repr(self.rtyper)
+            pass
         else:
             # instance attributes
             if llfields is None:
@@ -347,18 +331,18 @@ class InstanceRepr(AbstractInstanceRepr):
             if '_immutable_' in self.classdef.classdesc.classdict:
                 hints = hints.copy()
                 hints['immutable'] = True
+            kwds = {'hints': hints,
+                    'adtmeths': adtmeths}
+            if self.gcflavor == 'gc':
+                kwds['runtime_type_info'] = self.rclass.vtable
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
-                                   hints=hints,
-                                   adtmeths=adtmeths,
-                                   *llfields)
+                                   *llfields, **kwds)
             self.object_type.become(object_type)
             allinstancefields.update(self.rbase.allinstancefields)
         allinstancefields.update(fields)
         self.fields = fields
         self.allinstancefields = allinstancefields
-        if self.gcflavor == 'gc':
-            attachRuntimeTypeInfo(self.object_type)
 
     def _setup_repr_final(self):
         if self.gcflavor == 'gc':
@@ -375,12 +359,14 @@ class InstanceRepr(AbstractInstanceRepr):
                 destrptr = functionptr(FUNCTYPE, graph.name,
                                        graph=graph,
                                        _callable=graph.func)
-            else:
-                destrptr = None
-            OBJECT = OBJECT_BY_FLAVOR[LLFLAVOR[self.gcflavor]]
-            self.rtyper.attachRuntimeTypeInfoFunc(self.object_type,
-                                                  ll_runtime_type_info,
-                                                  OBJECT, destrptr)
+                rtti = lltype.getRuntimeTypeInfo(self.object_type)
+                rtti = cast_pointer(Ptr(lltype.RuntimeTypeInfo), rtti)
+                rtti.destructor_funcptr = destrptr
+
+    def get_base_object_type(self):
+        return OBJECT_BY_FLAVOR[LLFLAVOR[self.gcflavor]]
+    get_base_object_type._annspecialcase_ = 'specialize:memo'
+
     def common_repr(self): # -> object or nongcobject reprs
         return getinstancerepr(self.rtyper, None, self.gcflavor)
 
@@ -391,6 +377,7 @@ class InstanceRepr(AbstractInstanceRepr):
         return cast_pointer(self.lowleveltype, result)
 
     def create_instance(self):
+        self.rclass.getvtable()     # force it to be filled
         return malloc(self.object_type, flavor=self.gcflavor)
 
     def get_ll_hash_function(self):
@@ -434,9 +421,23 @@ class InstanceRepr(AbstractInstanceRepr):
                         llattrvalue = r.convert_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
         else:
-            # OBJECT part
-            rclass = getclassrepr(self.rtyper, classdef)
-            result.typeptr = rclass.getvtable()
+            # OBJECT part: nothing to fill, unless we are a non-GC instance
+            if self.gcflavor != 'gc':
+                rclass = getclassrepr(self.rtyper, classdef)
+                result.typeptr = rclass.getvtable()
+
+    def gettypeptr(self, vinst, llops):
+        if self.gcflavor == 'gc':
+            v_rtti = llops.genop('gc_runtime_type_info', [vinst],
+                                 resulttype = Ptr(lltype.RuntimeTypeInfo))
+            return llops.genop('cast_pointer', [v_rtti],
+                               resulttype = CLASSTYPE)
+        else:
+            v_base = llops.genop('cast_pointer', [vinst],
+                                 resulttype = NONGCOBJECTPTR)
+            c_typeptr = inputconst(Void, 'typeptr')
+            return llops.genop('getfield', [v_base, c_typeptr],
+                               resulttype = CLASSTYPE)
 
     def getfieldrepr(self, attr):
         """Return the repr used for the given attribute."""
@@ -458,13 +459,16 @@ class InstanceRepr(AbstractInstanceRepr):
             return llops.genop('getfield', [vinst, cname], resulttype=r)
         else:
             if self.classdef is None:
-                raise MissingRTypeAttribute(attr)
+                if attr == '__class__':
+                    return self.gettypeptr(vinst, llops)
+                else:
+                    raise MissingRTypeAttribute(attr)
             return self.rbase.getfield(vinst, attr, llops, force_cast=True,
                                        flags=flags)
 
     def setfield(self, vinst, attr, vvalue, llops, force_cast=False,
                  flags={}):
-        """Write the given attribute (or __class__ for the type) of 'vinst'."""
+        """Write the given attribute of 'vinst'."""
         if attr in self.fields:
             mangled_name, r = self.fields[attr]
             cname = inputconst(Void, mangled_name)
@@ -484,17 +488,14 @@ class InstanceRepr(AbstractInstanceRepr):
         ctype = inputconst(Void, self.object_type)
         cflags = inputconst(Void, flags)
         vlist = [ctype, cflags]
+        self.rclass.getvtable()     # force it to be filled
         vptr = llops.genop('malloc', vlist,
                            resulttype = Ptr(self.object_type))
-        ctypeptr = inputconst(CLASSTYPE, self.rclass.getvtable())
-        self.setfield(vptr, '__class__', ctypeptr, llops)
         # initialize instance attributes from their defaults from the class
         if self.classdef is not None:
             flds = self.allinstancefields.keys()
             flds.sort()
             for fldname in flds:
-                if fldname == '__class__':
-                    continue
                 mangled_name, r = self.allinstancefields[fldname]
                 if r.lowleveltype is Void:
                     continue
@@ -522,10 +523,13 @@ class InstanceRepr(AbstractInstanceRepr):
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         vinst, vattr = hop.inputargs(self, Void)
-        if attr == '__class__' and hop.r_result.lowleveltype is Void:
-            # special case for when the result of '.__class__' is a constant
-            [desc] = hop.s_result.descriptions
-            return hop.inputconst(Void, desc.pyobj)
+        if attr == '__class__':
+            if hop.r_result.lowleveltype is Void:
+                # special case for when the result of '.__class__' is a const
+                [desc] = hop.s_result.descriptions
+                return hop.inputconst(Void, desc.pyobj)
+            else:
+                return self.getfield(vinst, '__class__', hop.llops)
         if attr in self.allinstancefields:
             return self.getfield(vinst, attr, hop.llops,
                                  flags=hop.args_s[0].flags)
@@ -549,19 +553,21 @@ class InstanceRepr(AbstractInstanceRepr):
         vinst, = hop.inputargs(self)
         return hop.genop('ptr_nonzero', [vinst], resulttype=Bool)
 
-    def ll_str(self, i): # doesn't work for non-gc classes!
+    def ll_str(self, i):
         from pypy.rpython.lltypesystem import rstr
         from pypy.rpython.lltypesystem.ll_str import ll_int2hex
         from pypy.rlib.rarithmetic import r_uint
         if not i:
             return rstr.null_str
-        instance = cast_pointer(OBJECTPTR, i)
+        BASEPTR = Ptr(self.get_base_object_type())
+        instance = cast_pointer(BASEPTR, i)
+        vtable = instance.gettypeptr()
         uid = r_uint(cast_ptr_to_int(i))
-        nameLen = len(instance.typeptr.name)
+        nameLen = len(vtable.name)
         nameString = rstr.mallocstr(nameLen-1)
         i = 0
         while i < nameLen - 1:
-            nameString.chars[i] = instance.typeptr.name[i]
+            nameString.chars[i] = vtable.name[i]
             i += 1
         res =                        rstr.instance_str_prefix
         res = rstr.ll_strconcat(res, nameString)
@@ -667,7 +673,7 @@ def ll_cast_to_object(obj):
 
 # doesn't work for non-gc stuff!
 def ll_type(obj):
-    return cast_pointer(OBJECTPTR, obj).typeptr
+    return cast_pointer(OBJECTPTR, obj).gettypeptr()
 
 def ll_issubclass(subcls, cls):
     return cls.subclassrange_min <= subcls.subclassrange_min <= cls.subclassrange_max
@@ -679,22 +685,19 @@ def ll_issubclass_const(subcls, minid, maxid):
 def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT
     if not obj:
         return False
-    obj_cls = obj.typeptr
+    obj_cls = obj.gettypeptr()
     return ll_issubclass(obj_cls, cls)
 
 def ll_isinstance_const(obj, minid, maxid):
     if not obj:
         return False
-    return ll_issubclass_const(obj.typeptr, minid, maxid)
+    return ll_issubclass_const(obj.gettypeptr(), minid, maxid)
 
 def ll_isinstance_exact(obj, cls):
     if not obj:
         return False
-    obj_cls = obj.typeptr
+    obj_cls = obj.gettypeptr()
     return obj_cls == cls
-
-def ll_runtime_type_info(obj):
-    return obj.typeptr.rtti
 
 def ll_inst_hash(ins):
     if not ins:
@@ -710,10 +713,10 @@ def ll_inst_hash(ins):
 
 def ll_inst_type(obj):
     if obj:
-        return obj.typeptr
+        return obj.gettypeptr()
     else:
         # type(None) -> NULL  (for now)
-        return nullptr(typeOf(obj).TO.typeptr.TO)
+        return nullptr(CLASSTYPE.TO)
 
 def ll_both_none(ins1, ins2):
     return not ins1 and not ins2

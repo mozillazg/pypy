@@ -53,11 +53,8 @@ class ExceptionData(AbstractExceptionData):
                 #else:
                 #    assert cls.__module__ != 'exceptions', (
                 #        "built-in exceptions should not grow attributes")
-        r_inst = rclass.getinstancerepr(rtyper, None)
-        r_inst.setup()
         default_excinst = malloc(self.lltype_of_exception_value.TO,
                                  immortal=True)
-        default_excinst.typeptr = r_inst.rclass.getvtable()
 
         # build the table in order base classes first, subclasses last
         sortedtable = []
