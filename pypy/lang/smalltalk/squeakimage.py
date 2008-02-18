@@ -123,15 +123,25 @@ class ImageReader(object):
         for chunk in self.chunks.itervalues():
             chunk.g_object.init_w_object()
 
+    def class_indxs(self):
+        from pypy.lang.smalltalk import constants
+        return map(lambda key: (key, constants.classes_in_special_object_table[key]),
+                                     constants.classes_needed_boot_vm)
+
+    def object_indxs(self):
+        from pypy.lang.smalltalk import constants
+        return map(lambda key: (key, constants.objects_in_special_object_table[key]),
+                                     constants.objects_needed_boot_vm)
+
     def assign_prebuilt_constants(self):
         from pypy.lang.smalltalk import classtable, constants, objtable
         # assign w_objects for objects that are already in classtable
-        for name, so_index in constants.classes_in_special_object_table.items():
+        for name, so_index in self.class_indxs():
             # w_object = getattr(classtable, "w_" + name)
             w_object = classtable.classtable["w_" + name]
             self.special_object(so_index).w_object = w_object
         # assign w_objects for objects that are already in objtable
-        for name, so_index in constants.objects_in_special_object_table.items():
+        for name, so_index in self.object_indxs():
             # w_object = getattr(objtable, "w_" + name)
             w_object = objtable.objtable["w_" + name]
             self.special_object(so_index).w_object = w_object
@@ -197,10 +207,18 @@ class ImageReader(object):
 class SqueakImage(object):
 
     def from_reader(self, reader):
+        from pypy.lang.smalltalk import constants, classtable
         self.special_objects = [g_object.w_object for g_object in
                                 reader.chunks[reader.specialobjectspointer]
                                 .g_object.pointers]
+        # After loading we know of more classes than before. Copy back.
+        for name, so_index in constants.classes_in_special_object_table.items():
+            classtable.classtable["w_" + name] = self.special(so_index)
+
+        # After loading we know of more objects than before. Copy back.
         self.objects = [chunk.g_object.w_object for chunk in reader.chunklist]
+        for name, so_index in constants.objects_in_special_object_table.items():
+            objtable.objtable["w_" + name] = self.special(so_index)
 
     def special(self, index):
         return self.special_objects[index]

@@ -125,7 +125,8 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return "<%s %s>" % (self.__class__.__name__, self)
 
     def __str__(self):
-        if isinstance(self, W_PointersObject) and self._shadow is not None:
+        from pypy.lang.smalltalk.shadow import ClassShadow
+        if isinstance(self, W_PointersObject) and isinstance(self._shadow,ClassShadow):
             return "%s class" % (self.as_class_get_shadow().name or '?',)
         else:
             return "a %s" % (self.shadow_of_my_class().name or '?',)
@@ -180,14 +181,43 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self._vars, list))
 
-    def as_class_get_shadow(self):
-        from pypy.lang.smalltalk.shadow import ClassShadow
+    def as_special_get_shadow(self, TheClass):
         shadow = self._shadow
         if shadow is None:
-            self._shadow = shadow = ClassShadow(self)
-        assert isinstance(shadow, ClassShadow)      # for now, the only kind
+            self._shadow = shadow = TheClass(self)
+        assert isinstance(shadow, TheClass)
+        return shadow
+
+    def as_class_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import ClassShadow
+        shadow = self.as_special_get_shadow(ClassShadow)
         shadow.check_for_updates()
         return shadow
+
+    def as_semaphore_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import SemaphoreShadow
+        from pypy.lang.smalltalk import classtable
+        assert self.getclass() == classtable.classtable["w_Semaphore"]
+        return self.as_special_get_shadow(SemaphoreShadow)
+
+    def as_linkedlist_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import LinkedListShadow
+        from pypy.lang.smalltalk import classtable
+        return self.as_special_get_shadow(LinkedListShadow)
+
+    def as_process_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import ProcessShadow
+        from pypy.lang.smalltalk import classtable
+        assert self.getclass() == classtable.classtable["w_Process"]
+        return self.as_special_get_shadow(ProcessShadow)
+
+    def as_scheduler_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import SchedulerShadow
+        return self.as_special_get_shadow(SchedulerShadow)
+
+    def as_association_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import AssociationShadow
+        return self.as_special_get_shadow(AssociationShadow)
 
     def equals(self, other):
         if not isinstance(other, W_PointersObject):
@@ -398,14 +428,23 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def at0(self, index0):
         from pypy.lang.smalltalk import utility
+        # XXX Not tested
+        index0 -= self.headersize()
         if index0 < self.getliteralsize():
             self.literalat0(index0)
         else:
             index0 = index0 - self.getliteralsize()
+            if index0 > len(self.bytes):
+                print "ERROR"
+                print self.getliteralsize()
+                print len(self.bytes)
+                print self.bytes
             return utility.wrap_int(ord(self.bytes[index0]))
         
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
+        # XXX Not tested
+        index0 -= self.headersize()
         if index0 < self.getliteralsize():
             self.literalatput0(index0, w_value)
         else:
@@ -452,8 +491,19 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         # Invalid!
         raise IndexError
 
-    def store(self, index, value):
-        raise NotImplementedError
+    def store(self, index, w_value):
+        # XXX Untested code...
+
+        from pypy.lang.smalltalk import utility, objtable
+        if index == constants.CTXPART_SENDER_INDEX:
+            self.w_sender = w_value
+        elif index == constants.CTXPART_PC_INDEX:
+            self.pc = utility.unwrap_int(w_value)
+        elif index == constants.CTXPART_STACKP_INDEX:
+            self.stack = [objtable.w_nil] * utility.unwrap_int(w_value)
+        else:
+            # Invalid!
+            raise IndexError
 
     # ______________________________________________________________________
     # Method that contains the bytecode for this method/block context
@@ -593,6 +643,27 @@ class W_MethodContext(W_ContextPart):
             return self.stack[stack_index]
         else:
             return W_ContextPart.fetch(self, index)
+
+    def store(self, index, w_object):
+        if index == constants.MTHDCTX_METHOD:
+            self._w_method = w_object
+        elif index == constants.MTHDCTX_RECEIVER_MAP: # what is this thing?
+            pass
+        elif index == constants.MTHDCTX_RECEIVER:
+            self.w_receiver = w_object
+        elif index >= constants.MTHDCTX_TEMP_FRAME_START:
+            # First set of indices are temporary variables:
+            offset = index - constants.MTHDCTX_TEMP_FRAME_START
+            if offset < len(self.temps):
+                self.temps[offset] = w_object
+
+            # After that comes the stack:
+            offset -= len(self.temps)
+            stack_index = len(self.stack) - offset - 1
+            self.stack[stack_index] = w_object
+        else:
+            W_ContextPart.store(self, index, w_object)
+
 
 # Use black magic to create w_nil without running the constructor,
 # thus allowing it to be used even in the constructor of its own

@@ -15,7 +15,7 @@ def assert_bounds(n0, minimum, maximum):
         raise PrimitiveFailedError()
 
 def assert_valid_index(n0, w_obj):
-    if not 0 <= n0 < w_obj.size():
+    if not 0 <= n0 < w_obj.primsize():
         raise PrimitiveFailedError()
     # return the index, since from here on the annotator knows that
     # n0 cannot be negative
@@ -276,6 +276,10 @@ def func(interp, f):
     w_res = utility.wrap_float(math.exp(f))
     return w_res
 
+# ___________________________________________________________________________
+# Failure
+
+FAIL = 18
 
 # ___________________________________________________________________________
 # Subscript and Stream Primitives
@@ -380,7 +384,8 @@ def func(interp, w_rcvr, n0):
     s_class = w_rcvr.shadow_of_my_class()
     assert_bounds(n0, 0, s_class.instsize())
     # only pointers have non-0 size
-    assert isinstance(w_rcvr, model.W_PointersObject)
+    # XXX Now MethodContext is still own format, leave
+    #assert isinstance(w_rcvr, model.W_PointersObject)
     return w_rcvr.fetch(n0)
 
 @expose_primitive(INST_VAR_AT_PUT, unwrap_spec=[object, index1_0, object])
@@ -389,7 +394,8 @@ def func(interp, w_rcvr, n0, w_value):
     s_class = w_rcvr.shadow_of_my_class()
     assert_bounds(n0, 0, s_class.instsize())
     # only pointers have non-0 size    
-    assert isinstance(w_rcvr, model.W_PointersObject)
+    # XXX Now MethodContext is still own format, leave
+    #assert isinstance(w_rcvr, model.W_PointersObject)
     w_rcvr.store(n0, w_value)
     return w_value
 
@@ -694,9 +700,13 @@ def func(interp, w_rcvr, sel, w_args):
     w_frame.w_sender = interp.w_active_context
     interp.w_active_context = w_frame
 
+
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    raise PrimitiveNotYetWrittenError()
+    if w_rcvr.getclass() != classtable.classtable['w_Semaphore']:
+        raise PrimitiveFailedError()
+    w_rcvr.as_semaphore_get_shadow().synchronous_signal(interp)
+    return w_rcvr
     
 @expose_primitive(PRIMITIVE_WAIT, unwrap_spec=[object])
 def func(interp, w_rcvr):
@@ -712,7 +722,9 @@ def func(interp, w_rcvr):
 
 @expose_primitive(PRIMITIVE_FLUSH_CACHE, unwrap_spec=[object])
 def func(interp, w_rcvr):
-    raise PrimitiveNotYetWrittenError()
+    # XXX we currently don't care about bad flushes :) XXX
+    # raise PrimitiveNotYetWrittenError()
+    return w_rcvr
 
 # ___________________________________________________________________________
 # PrimitiveLoadInstVar
