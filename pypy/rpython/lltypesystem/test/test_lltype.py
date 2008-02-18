@@ -373,8 +373,8 @@ def test_runtime_type_info():
     t2.v = 33
     S2 = GcStruct('S2', ('parent', S1), ('y', Signed), runtime_type_info=t2)
 
-    assert getRuntimeTypeInfo(S1) == t1
-    assert getRuntimeTypeInfo(S2) == t2
+    assert getRuntimeTypeInfo(S1) == t1.base
+    assert getRuntimeTypeInfo(S2) == t2.base.base
 
     x1 = malloc(S1)
     x2 = malloc(S2)
@@ -388,7 +388,7 @@ def test_runtime_type_info():
     py.test.raises(TypeError, getRuntimeTypeInfo, S1bis)
 
     cache = {}
-    assert getRuntimeTypeInfo(S1, cache=cache) == t1
+    assert getRuntimeTypeInfo(S1, cache=cache) == t1.base
     t1bis = getRuntimeTypeInfo(S1bis, cache=cache)
     assert t1bis != t1.base
     assert getRuntimeTypeInfo(S1bis, cache=cache) == t1bis
@@ -402,9 +402,16 @@ def test_getRuntimeTypeInfo_destrpointer():
                      "destructor_funcptr", 
                      _callable=f)
     pinf = getRuntimeTypeInfo(S)
-    assert pinf._obj.destructor_funcptr == nullptr(FuncType([Ptr(S)], Void))
-    pinf._obj.destructor_funcptr = dp
-    assert pinf._obj.destructor_funcptr == dp
+    assert pinf.destructor_funcptr is None
+    pinf.destructor_funcptr = dp
+    assert pinf.destructor_funcptr == dp
+
+    S1 = GcStruct('s1', ('super', S),
+                  runtime_type_info=malloc(RuntimeTypeInfo, immortal=True))
+    pinf1 = getRuntimeTypeInfo(S1)
+    assert pinf1.destructor_funcptr is None
+    pinf1.destructor_funcptr = dp
+    assert pinf1.destructor_funcptr == dp
 
 def test_flavor_malloc():
     def isweak(p, T):

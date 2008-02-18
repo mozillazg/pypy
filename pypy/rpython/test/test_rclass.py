@@ -650,8 +650,7 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         graph = graphof(t, f)
         TYPE = graph.startblock.operations[0].args[0].value
         RTTI = getRuntimeTypeInfo(TYPE)
-        queryptr = RTTI._obj.query_funcptr # should not raise
-        destrptr = RTTI._obj.destructor_funcptr
+        destrptr = RTTI.destructor_funcptr
         assert destrptr is not None
     
     def test_del_inheritance(self):
@@ -681,19 +680,18 @@ class TestLltype(BaseTestRclass, LLRtypeMixin):
         t = TranslationContext()
         t.buildannotator().build_types(f, [])
         t.buildrtyper().specialize()
-        graph = graphof(t, f)
-        TYPEA = graph.startblock.operations[0].args[0].value
+
+        from pypy.rpython.rclass import getinstancerepr
+        getcdef = t.annotator.bookkeeper.getuniqueclassdef
+        TYPEA = getinstancerepr(t.rtyper, getcdef(A)).lowleveltype.TO
         RTTIA = getRuntimeTypeInfo(TYPEA)
-        TYPEB = graph.startblock.operations[3].args[0].value
+        TYPEB = getinstancerepr(t.rtyper, getcdef(B)).lowleveltype.TO
         RTTIB = getRuntimeTypeInfo(TYPEB)
-        TYPEC = graph.startblock.operations[6].args[0].value
+        TYPEC = getinstancerepr(t.rtyper, getcdef(C)).lowleveltype.TO
         RTTIC = getRuntimeTypeInfo(TYPEC)
-        queryptra = RTTIA._obj.query_funcptr # should not raise
-        queryptrb = RTTIB._obj.query_funcptr # should not raise
-        queryptrc = RTTIC._obj.query_funcptr # should not raise
-        destrptra = RTTIA._obj.destructor_funcptr
-        destrptrb = RTTIB._obj.destructor_funcptr
-        destrptrc = RTTIC._obj.destructor_funcptr
+        destrptra = RTTIA.destructor_funcptr
+        destrptrb = RTTIB.destructor_funcptr
+        destrptrc = RTTIC.destructor_funcptr
         assert destrptra == destrptrc
         assert typeOf(destrptra).TO.ARGS[0] != typeOf(destrptrb).TO.ARGS[0]
         assert destrptra is not None

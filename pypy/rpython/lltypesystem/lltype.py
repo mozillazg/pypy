@@ -988,6 +988,8 @@ class _abstract_ptr(object):
                     return adtmeth
                 else:
                     return getter(self)
+        if self._T == RuntimeTypeInfo:
+            return self._obj._getattr(field_name)
         raise AttributeError("%r instance has no field %r" % (self._T,
                                                               field_name))
 
@@ -1003,6 +1005,9 @@ class _abstract_ptr(object):
                                     "expects %r\n"
                                     "    got %r" % (self._T, field_name, T1, T2))
                 return
+        if self._T == RuntimeTypeInfo:
+            self._obj._setattr(field_name, val)
+            return
         raise AttributeError("%r instance has no field %r" % (self._T,
                                                               field_name))
 
@@ -1644,6 +1649,7 @@ class _func(_container):
 
 class _rtti(_parentable):
     _kind = "rtti"
+    destructor_funcptr = None
 
     def __init__(self, initialization=None, parent=None, parentindex=None):
         _parentable.__init__(self, RuntimeTypeInfo)
@@ -1656,7 +1662,23 @@ class _rtti(_parentable):
         if GCTYPE._gckind != 'gc':
             raise TypeError("non-GC type %r cannot have an rtti" % (GCTYPE,))
         self._GCTYPE = GCTYPE
-        self.destructor_funcptr = nullptr(FuncType([Ptr(GCTYPE)], Void))
+
+    def _getattr(self, name):
+        if name == 'destructor_funcptr':
+            return self.destructor_funcptr
+        else:
+            raise AttributeError(name)
+
+    def _setattr(self, name, value):
+        if name == 'destructor_funcptr':
+            T = typeOf(value).TO
+            if (not isinstance(T, FuncType) or len(T.ARGS) != 1
+                or T.RESULT != Void or not isinstance(T.ARGS[0], Ptr)
+                or castable(T.ARGS[0], Ptr(self._GCTYPE)) < 0):
+                raise TypeError("bad type for destructor: %r" % (T,))
+            self.destructor_funcptr = value
+        else:
+            raise AttributeError(name)
 
 
 class _opaque(_parentable):
@@ -1782,16 +1804,15 @@ def cast_int_to_ptr(PTRTYPE, oddint):
     return _ptr(PTRTYPE, oddint, solid=True)
 
 def getRuntimeTypeInfo(TYPE, cache=None):
-    """Return the runtime_type_info attached to the GcStruct TYPE.
-    This is typically of type != Ptr(RuntimeTypeInfo) but castable
-    to Ptr(RuntimeTypeInfo).  This raises TypeError if the TYPE has
+    """Return the runtime_type_info attached to the GcStruct TYPE,
+    as a Ptr(RuntimeTypeInfo).  This raises TypeError if the TYPE has
     no runtime_type_info, unless 'cache' is specified; in that case,
     TYPE can be any GC type and a runtime_type_info is created for
     it if it has none and stored in the cache to avoid mutating
     the TYPE.
     """
     if isinstance(TYPE, GcStruct) and hasattr(TYPE, '_rtti'):
-        return top_container(TYPE._rtti)._as_ptr()
+        return TYPE._rtti._as_ptr()
     if cache is None:
         raise TypeError("%r has no runtime_type_info" % (TYPE,))
     try:
@@ -1801,6 +1822,7 @@ def getRuntimeTypeInfo(TYPE, cache=None):
         rttiptr._obj._set_gctype(TYPE)
         cache[TYPE] = rttiptr
         return rttiptr
+getRuntimeTypeInfo._annspecialcase_ = 'specialize:memo'
 
 def _install_rtti(STRUCT, runtime_type_info):
     if not isinstance(STRUCT, GcStruct):

@@ -21,8 +21,8 @@ from pypy.objspace.flow.model import SpaceOperation, c_last_exception
 from pypy.rpython.lltypesystem.lltype import \
      Signed, Unsigned, Float, Char, Bool, Void, \
      LowLevelType, Ptr, ContainerType, \
-     FuncType, functionptr, typeOf, RuntimeTypeInfo, \
-     attachRuntimeTypeInfo, Primitive, Number
+     FuncType, functionptr, typeOf, \
+     Primitive, Number
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.unsimplify import insert_empty_block
 from pypy.rpython.error import TyperError
@@ -647,21 +647,6 @@ class RPythonTyper(object):
         """
         graph = self.annotate_helper(ll_function, argtypes)
         return self.getcallable(graph)
-
-    def attachRuntimeTypeInfoFunc(self, GCSTRUCT, func, ARG_GCSTRUCT=None,
-                                  destrptr=None):
-        self.call_all_setups()  # compute ForwardReferences now
-        if ARG_GCSTRUCT is None:
-            ARG_GCSTRUCT = GCSTRUCT
-        args_s = [annmodel.SomePtr(Ptr(ARG_GCSTRUCT))]
-        graph = self.annotate_helper(func, args_s)
-        s = self.annotator.binding(graph.getreturnvar())
-        if (not isinstance(s, annmodel.SomePtr) or
-            s.ll_ptrtype != Ptr(RuntimeTypeInfo)):
-            raise TyperError("runtime type info function %r returns %r, "
-                             "excepted Ptr(RuntimeTypeInfo)" % (func, s))
-        funcptr = self.getcallable(graph)
-        attachRuntimeTypeInfo(GCSTRUCT, funcptr, destrptr)
 
 # register operations from annotation model
 RPythonTyper._registeroperations(annmodel)

@@ -313,6 +313,9 @@ def op_cast_int_to_adr(int):
 ##    assert type(x) is int
 ##    return llmemory.cast_int_to_adr(x)
 
+def op_gc_runtime_type_info(gcptr):
+    return lltype.runtime_type_info(gcptr)
+
 
 def op_unichar_eq(x, y):
     assert isinstance(x, unicode) and len(x) == 1

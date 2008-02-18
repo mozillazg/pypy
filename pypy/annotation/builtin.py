@@ -455,6 +455,12 @@ def cast_opaque_ptr(PtrT, s_p):
     cast_p = lltype.cast_opaque_ptr(PtrT.const, s_p.ll_ptrtype._defl())
     return SomePtr(ll_ptrtype=lltype.typeOf(cast_p))
 
+def runtime_type_info(s_p):
+    assert isinstance(s_p, SomePtr), ("runtime_type_info of non-pointer: %r" %
+                                      s_p)
+    res_p = lltype.runtime_type_info(s_p.ll_ptrtype._example())
+    return SomePtr(ll_ptrtype=lltype.typeOf(res_p))
+
 def direct_fieldptr(s_p, s_fieldname):
     assert isinstance(s_p, SomePtr), "direct_* of non-pointer: %r" % s_p
     assert s_fieldname.is_constant()
@@ -479,14 +485,6 @@ def cast_int_to_ptr(PtrT, s_int):
     assert PtrT.is_constant()
     return SomePtr(ll_ptrtype=PtrT.const)
 
-def getRuntimeTypeInfo(T):
-    assert T.is_constant()
-    return immutablevalue(lltype.getRuntimeTypeInfo(T.const))
-
-def runtime_type_info(s_p):
-    assert isinstance(s_p, SomePtr), "runtime_type_info of non-pointer: %r" % s_p
-    return SomePtr(lltype.typeOf(lltype.runtime_type_info(s_p.ll_ptrtype._example())))
-
 def constPtr(T):
     assert T.is_constant()
     return immutablevalue(lltype.Ptr(T.const))
@@ -498,13 +496,12 @@ BUILTIN_ANALYZERS[lltype.cast_primitive] = cast_primitive
 BUILTIN_ANALYZERS[lltype.nullptr] = nullptr
 BUILTIN_ANALYZERS[lltype.cast_pointer] = cast_pointer
 BUILTIN_ANALYZERS[lltype.cast_opaque_ptr] = cast_opaque_ptr
+BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
 BUILTIN_ANALYZERS[lltype.direct_fieldptr] = direct_fieldptr
 BUILTIN_ANALYZERS[lltype.direct_arrayitems] = direct_arrayitems
 BUILTIN_ANALYZERS[lltype.direct_ptradd] = direct_ptradd
 BUILTIN_ANALYZERS[lltype.cast_ptr_to_int] = cast_ptr_to_int
 BUILTIN_ANALYZERS[lltype.cast_int_to_ptr] = cast_int_to_ptr
-BUILTIN_ANALYZERS[lltype.getRuntimeTypeInfo] = getRuntimeTypeInfo
-BUILTIN_ANALYZERS[lltype.runtime_type_info] = runtime_type_info
 BUILTIN_ANALYZERS[lltype.Ptr] = constPtr
 
 # ootype
