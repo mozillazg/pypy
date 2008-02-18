@@ -147,9 +147,11 @@ class ContainerType(LowLevelType):
     def _inline_is_varsize(self, last):
         raise TypeError, "%r cannot be inlined in structure" % self
 
-    def _install_extras(self, adtmeths={}, hints={}):
+    def _install_extras(self, adtmeths={}, hints={}, runtime_type_info=None):
         self._adtmeths = frozendict(adtmeths)
         self._hints = frozendict(hints)
+        if runtime_type_info is not None:
+            _install_rtti(self, runtime_type_info)
 
     def __getattr__(self, name):
         adtmeth = self._adtmeths.get(name, NFOUND)
@@ -207,7 +209,7 @@ class Struct(ContainerType):
         if self._names:
             first = self._names[0]
             FIRSTTYPE = self._flds[first]
-            if (isinstance(FIRSTTYPE, (Struct, PyObjectType)) and
+            if (isinstance(FIRSTTYPE, FirstStructTypes) and
                 self._gckind == FIRSTTYPE._gckind):
                 return first, FIRSTTYPE
         return None, None
@@ -281,34 +283,7 @@ class Struct(ContainerType):
             n = 1
         return _struct(self, n, initialization='example')
 
-class RttiStruct(Struct):
-    _runtime_type_info = None
-
-    def _attach_runtime_type_info_funcptr(self, funcptr, destrptr):
-        if self._runtime_type_info is None:
-            self._runtime_type_info = opaqueptr(RuntimeTypeInfo, name=self._name, about=self)._obj
-        if funcptr is not None:
-            T = typeOf(funcptr)
-            if (not isinstance(T, Ptr) or
-                not isinstance(T.TO, FuncType) or
-                len(T.TO.ARGS) != 1 or
-                T.TO.RESULT != Ptr(RuntimeTypeInfo) or
-                castable(T.TO.ARGS[0], Ptr(self)) < 0):
-                raise TypeError("expected a runtime type info function "
-                                "implementation, got: %s" % funcptr)
-            self._runtime_type_info.query_funcptr = funcptr
-        if destrptr is not None :
-            T = typeOf(destrptr)
-            if (not isinstance(T, Ptr) or
-                not isinstance(T.TO, FuncType) or
-                len(T.TO.ARGS) != 1 or
-                T.TO.RESULT != Void or
-                castable(T.TO.ARGS[0], Ptr(self)) < 0):
-                raise TypeError("expected a destructor function "
-                                "implementation, got: %s" % destrptr)
-            self._runtime_type_info.destructor_funcptr = destrptr
-
-class GcStruct(RttiStruct):
+class GcStruct(Struct):
     _gckind = 'gc'
 
 STRUCT_BY_FLAVOR = {'raw': Struct,
@@ -441,6 +416,19 @@ class FuncType(ContainerType):
         return [arg for arg in self.ARGS if arg is not Void]
 
 
+class RuntimeTypeInfoType(ContainerType):
+    _gckind = 'raw'
+
+    def _inline_is_varsize(self, last):
+        return False
+
+    def _allocate(self, initialization, parent=None, parentindex=None):
+        return _rtti(initialization=initialization,
+                     parent=parent, parentindex=parentindex)
+
+RuntimeTypeInfo = RuntimeTypeInfoType()
+
+
 class OpaqueType(ContainerType):
     _gckind = 'raw'
     
@@ -466,8 +454,6 @@ class OpaqueType(ContainerType):
     def _allocate(self, initialization, parent=None, parentindex=None):
         return self._defl(parent=parent, parentindex=parentindex)
 
-RuntimeTypeInfo = OpaqueType("RuntimeTypeInfo")
-
 class GcOpaqueType(OpaqueType):
     _gckind = 'gc'
 
@@ -490,6 +476,8 @@ class PyObjectType(ContainerType):
         return self._defl(parent=parent, parentindex=parentindex)
 
 PyObject = PyObjectType()
+
+FirstStructTypes = (Struct, PyObjectType, RuntimeTypeInfoType)
 
 class ForwardReference(ContainerType):
     _gckind = 'raw'
@@ -768,8 +756,8 @@ def castable(PTRTYPE, CURTYPE):
                         % (CURTYPE, PTRTYPE))
     if CURTYPE == PTRTYPE:
         return 0
-    if (not isinstance(CURTYPE.TO, (Struct, PyObjectType)) or
-        not isinstance(PTRTYPE.TO, (Struct, PyObjectType))):
+    if (not isinstance(CURTYPE.TO, FirstStructTypes) or
+        not isinstance(PTRTYPE.TO, FirstStructTypes)):
         raise InvalidCast(CURTYPE, PTRTYPE)
     CURSTRUC = CURTYPE.TO
     PTRSTRUC = PTRTYPE.TO
@@ -1653,6 +1641,24 @@ class _func(_container):
     def __setattr__(self, attr, value):
         raise AttributeError("cannot change the attributes of %r" % (self,))
 
+
+class _rtti(_parentable):
+    _kind = "rtti"
+
+    def __init__(self, initialization=None, parent=None, parentindex=None):
+        _parentable.__init__(self, RuntimeTypeInfo)
+        if parent is not None:
+            self._setparentstructure(parent, parentindex)
+
+    def _set_gctype(self, GCTYPE):
+        if hasattr(self, 'GCTYPE'):
+            raise TypeError("cannot use the same _rtti for several GC types")
+        if GCTYPE._gckind != 'gc':
+            raise TypeError("non-GC type %r cannot have an rtti" % (GCTYPE,))
+        self._GCTYPE = GCTYPE
+        self.destructor_funcptr = nullptr(FuncType([Ptr(GCTYPE)], Void))
+
+
 class _opaque(_parentable):
     def __init__(self, TYPE, parent=None, parentindex=None, **attrs):
         _parentable.__init__(self, TYPE)
@@ -1726,6 +1732,8 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False):
     elif isinstance(T, OpaqueType):
         assert n is None
         o = _opaque(T, initialization=initialization)
+    elif T == RuntimeTypeInfo:
+        o = _rtti(initialization=initialization)
     else:
         raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
@@ -1773,37 +1781,58 @@ def cast_int_to_ptr(PTRTYPE, oddint):
     assert oddint & 1, "only odd integers can be cast back to ptr"
     return _ptr(PTRTYPE, oddint, solid=True)
 
-def attachRuntimeTypeInfo(GCSTRUCT, funcptr=None, destrptr=None):
-    if not isinstance(GCSTRUCT, RttiStruct):
-        raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
-    GCSTRUCT._attach_runtime_type_info_funcptr(funcptr, destrptr)
-    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
+def getRuntimeTypeInfo(TYPE, cache=None):
+    """Return the runtime_type_info attached to the GcStruct TYPE.
+    This is typically of type != Ptr(RuntimeTypeInfo) but castable
+    to Ptr(RuntimeTypeInfo).  This raises TypeError if the TYPE has
+    no runtime_type_info, unless 'cache' is specified; in that case,
+    TYPE can be any GC type and a runtime_type_info is created for
+    it if it has none and stored in the cache to avoid mutating
+    the TYPE.
+    """
+    if isinstance(TYPE, GcStruct) and hasattr(TYPE, '_rtti'):
+        return top_container(TYPE._rtti)._as_ptr()
+    if cache is None:
+        raise TypeError("%r has no runtime_type_info" % (TYPE,))
+    try:
+        return cache[TYPE]
+    except KeyError:
+        rttiptr = malloc(RuntimeTypeInfo, immortal=True)
+        rttiptr._obj._set_gctype(TYPE)
+        cache[TYPE] = rttiptr
+        return rttiptr
 
-def getRuntimeTypeInfo(GCSTRUCT):
-    if not isinstance(GCSTRUCT, RttiStruct):
-        raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
-    if GCSTRUCT._runtime_type_info is None:
-        raise ValueError, ("no attached runtime type info for GcStruct %s" % 
-                           GCSTRUCT._name)
-    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
+def _install_rtti(STRUCT, runtime_type_info):
+    if not isinstance(STRUCT, GcStruct):
+        raise TypeError("can only attach a runtime_type_info to a GcStruct")
+    if runtime_type_info is None:
+        runtime_type_info = malloc(RuntimeTypeInfo, immortal=True)
+    rttiptr = cast_pointer(Ptr(RuntimeTypeInfo), runtime_type_info)
+    # check that the attached info is compatible with the inlined parent
+    # structure type's attached info
+    name, SUBSTRUCT = STRUCT._first_struct()
+    if SUBSTRUCT is not None:
+        if not hasattr(SUBSTRUCT, '_rtti'):
+            raise TypeError("first inlined GcStruct has no runtime_type_info")
+        PARENT = typeOf(top_container(SUBSTRUCT._rtti))
+        cast_pointer(Ptr(PARENT), runtime_type_info)     # for checking
+    # ready
+    assert not hasattr(STRUCT, '_rtti')
+    STRUCT._rtti = rttiptr._obj
+    rttiptr._obj._set_gctype(STRUCT)
 
 def runtime_type_info(p):
-    T = typeOf(p)
-    if not isinstance(T, Ptr) or not isinstance(T.TO, RttiStruct):
-        raise TypeError, "runtime_type_info on non-RttiStruct pointer: %s" % p
-    struct = p._obj
-    top_parent = top_container(struct)
-    result = getRuntimeTypeInfo(top_parent._TYPE)
-    static_info = getRuntimeTypeInfo(T.TO)
-    query_funcptr = getattr(static_info._obj, 'query_funcptr', None)
-    if query_funcptr is not None:
-        T = typeOf(query_funcptr).TO.ARGS[0]
-        result2 = query_funcptr(cast_pointer(T, p))
-        if result != result2:
-            raise RuntimeError, ("runtime type-info function for %s:\n"
-                                 "        returned: %s,\n"
-                                 "should have been: %s" % (p, result2, result))
-    return result
+    """This is a run-time operation that returns the exact type of 'p',
+    as a Ptr(RuntimeTypeInfo).
+    """
+    # This might assume that 'p' points to a GcStruct with an explicitly
+    # specified runtime_type_info; it is unclear for now if all GCs will
+    # support this operation for other kinds of GC types.
+    GCTYPE = typeOf(p).TO
+    assert isinstance(GCTYPE, GcStruct), "XXX for now"
+    assert hasattr(GCTYPE, '_rtti'),     "XXX for now"
+    EXACTTYPE = typeOf(top_container(p._obj))
+    return EXACTTYPE._rtti._as_ptr()
 
 def isCompatibleType(TYPE1, TYPE2):
     return TYPE1._is_compatible(TYPE2)

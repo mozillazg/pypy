@@ -357,76 +357,55 @@ def test_immortal_parent():
     p = cast_pointer(Ptr(S), p1)
     assert p.s1.x == 5
 
-def test_getRuntimeTypeInfo():
-    S = GcStruct('s', ('x', Signed))
-    py.test.raises(ValueError, "getRuntimeTypeInfo(S)")
-    pinf0 = attachRuntimeTypeInfo(S)
-    assert pinf0._obj.about == S
-    pinf = getRuntimeTypeInfo(S)
-    assert pinf == pinf0
-    pinf1 = getRuntimeTypeInfo(S)
-    assert pinf == pinf1
-    Z = GcStruct('z', ('x', Unsigned))
-    attachRuntimeTypeInfo(Z)
-    assert getRuntimeTypeInfo(Z) != pinf0
-    Sbis = GcStruct('s', ('x', Signed))
-    attachRuntimeTypeInfo(Sbis)
-    assert getRuntimeTypeInfo(Sbis) != pinf0
-    assert Sbis != S # the attached runtime type info distinguishes them
+def test_runtime_type_info():
+    T1 = Struct('T1', ('base', RuntimeTypeInfo), ('u', Signed))
+    t1 = malloc(T1, immortal=True)
+    t1.u = 21
+    S1 = GcStruct('S1', ('x', Signed), runtime_type_info=t1)
+
+    T2bogus = Struct('T2bogus', ('foobar', Signed))
+    t2bogus = malloc(T2bogus, immortal=True)
+    py.test.raises(TypeError, "GcStruct('S2', runtime_type_info=t2bogus)")
+
+    T2 = Struct('T2', ('base', T1), ('v', Signed))
+    t2 = malloc(T2, immortal=True)
+    t2.base.u = 22
+    t2.v = 33
+    S2 = GcStruct('S2', ('parent', S1), ('y', Signed), runtime_type_info=t2)
+
+    assert getRuntimeTypeInfo(S1) == t1
+    assert getRuntimeTypeInfo(S2) == t2
+
+    x1 = malloc(S1)
+    x2 = malloc(S2)
+    p2 = x2.parent
+    assert runtime_type_info(x1) == t1.base
+    assert runtime_type_info(x2) == t2.base.base
+    assert runtime_type_info(p2) == t2.base.base
+
+    S1bis = GcStruct('S1', ('x', Signed))
+    assert S1bis != S1   # attached runtime type info distinguishes them
+    py.test.raises(TypeError, getRuntimeTypeInfo, S1bis)
+
+    cache = {}
+    assert getRuntimeTypeInfo(S1, cache=cache) == t1
+    t1bis = getRuntimeTypeInfo(S1bis, cache=cache)
+    assert t1bis != t1.base
+    assert getRuntimeTypeInfo(S1bis, cache=cache) == t1bis
 
 def test_getRuntimeTypeInfo_destrpointer():
-    S = GcStruct('s', ('x', Signed))
+    S = GcStruct('s', ('x', Signed),
+                 runtime_type_info=malloc(RuntimeTypeInfo, immortal=True))
     def f(s):
         s.x = 1
-    def type_info_S(p):
-        return getRuntimeTypeInfo(S)
-    qp = functionptr(FuncType([Ptr(S)], Ptr(RuntimeTypeInfo)), 
-                     "type_info_S", 
-                     _callable=type_info_S)
     dp = functionptr(FuncType([Ptr(S)], Void), 
                      "destructor_funcptr", 
                      _callable=f)
-    pinf0 = attachRuntimeTypeInfo(S, qp, destrptr=dp)
-    assert pinf0._obj.about == S
     pinf = getRuntimeTypeInfo(S)
-    assert pinf == pinf0
-    pinf1 = getRuntimeTypeInfo(S)
-    assert pinf == pinf1
+    assert pinf._obj.destructor_funcptr == nullptr(FuncType([Ptr(S)], Void))
+    pinf._obj.destructor_funcptr = dp
     assert pinf._obj.destructor_funcptr == dp
-    assert pinf._obj.query_funcptr == qp
 
-def test_runtime_type_info():
-    S = GcStruct('s', ('x', Signed))
-    attachRuntimeTypeInfo(S)
-    s = malloc(S)
-    s.x = 0
-    assert runtime_type_info(s) == getRuntimeTypeInfo(S)
-    S1 = GcStruct('s1', ('sub', S), ('x', Signed))
-    attachRuntimeTypeInfo(S1)
-    s1 = malloc(S1)
-    s1.sub.x = 0
-    s1.x = 0
-    assert runtime_type_info(s1) == getRuntimeTypeInfo(S1)
-    assert runtime_type_info(s1.sub) == getRuntimeTypeInfo(S1)
-    assert runtime_type_info(cast_pointer(Ptr(S), s1)) == getRuntimeTypeInfo(S1)
-    def dynamic_type_info_S(p):
-        if p.x == 0:
-            return getRuntimeTypeInfo(S)
-        else:
-            return getRuntimeTypeInfo(S1)
-    fp = functionptr(FuncType([Ptr(S)], Ptr(RuntimeTypeInfo)), 
-                     "dynamic_type_info_S", 
-                     _callable=dynamic_type_info_S)
-    attachRuntimeTypeInfo(S, fp)
-    assert s.x == 0
-    assert runtime_type_info(s) == getRuntimeTypeInfo(S)
-    s.x = 1
-    py.test.raises(RuntimeError, "runtime_type_info(s)")
-    assert s1.sub.x == 0
-    py.test.raises(RuntimeError, "runtime_type_info(s1.sub)")
-    s1.sub.x = 1
-    assert runtime_type_info(s1.sub) == getRuntimeTypeInfo(S1)
-    
 def test_flavor_malloc():
     def isweak(p, T):
         return p._weak and typeOf(p).TO == T
