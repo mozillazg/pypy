@@ -152,6 +152,7 @@ class fakearenaaddress(llmemory.fakeaddress):
         return True
 
     def compare_with_fakeaddr(self, other):
+        other = other._fixup()
         if not other:
             return None, None
         obj = other.ptr._obj
