@@ -313,3 +313,25 @@ def test_interior_ptr_with_setitem():
     res = interpret(f, [])
     assert res == 1
  
+def test_hash_gc_object():
+    T = GcStruct('T', ('x', Signed))
+    t1 = malloc(T)
+    t2 = malloc(T)
+    hash1 = hash_gc_object(t1)
+    def gethash(p): # indirection to prevent constant-folding by the flow space
+        return hash_gc_object(p)
+    def f():
+        t3 = malloc(T)
+        hash1 = gethash(t1)
+        hash2 = gethash(t2)
+        hash3 = gethash(t3)
+        assert hash1 == gethash(t1)
+        assert hash2 == gethash(t2)
+        assert hash3 == gethash(t3)
+        assert hash1 == hash_gc_object(t1)
+        assert hash2 == hash_gc_object(t2)
+        assert hash3 == hash_gc_object(t3)
+        return hash1
+
+    res = interpret(f, [])
+    assert res == hash1

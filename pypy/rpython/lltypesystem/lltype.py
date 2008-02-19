@@ -143,6 +143,7 @@ NFOUND = object()
 
 class ContainerType(LowLevelType):
     _adtmeths = {}
+    _hash_cache = False
 
     def _inline_is_varsize(self, last):
         raise TypeError, "%r cannot be inlined in structure" % self
@@ -310,7 +311,6 @@ class RttiStruct(Struct):
 
 class GcStruct(RttiStruct):
     _gckind = 'gc'
-    _hash_cache = False
 
     def _install_extras(self, hash_cache=False, **extras):
         RttiStruct._install_extras(self, **extras)
@@ -1859,7 +1859,7 @@ def hash_gc_object(p):
     try:
         return container._hash_cache_
     except AttributeError:
-        result = container._hash_cache_ = intmask(id(container))
+        result = container._hash_cache_ = cast_ptr_to_int(p)
         return result
 
 def init_hash_gc_object(p, value):

@@ -403,10 +403,8 @@ class BaseTestRclass(BaseRtypingTest):
 
         res = self.interpret(f, [])
         # xxx this is too precise, checking the exact implementation
-        if isinstance(self, OORtypeMixin):
-            assert res.item0 == res.item1
-        else:
-            assert res.item0 == ~res.item1
+        # but it works on top of lltype.py and ootype.py
+        assert res.item0 == res.item1
         # the following property is essential on top of the lltypesystem
         # otherwise prebuilt dictionaries are broken.  It's not that
         # relevant on top of the ootypesystem though.
