@@ -363,9 +363,10 @@ class SemiSpaceGC(MovingGCBase):
 
     def get_type_id(self, addr):
         tid = self.header(addr).tid
-        ll_assert(tid & GCFLAG_FORWARDED == 0, "get_type_id on forwarded obj")
-        # Forwarded objects are overwritten with a FORWARDSTUB.  Although
-        # calling get_type_id() on a forwarded object works by itself,
+        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_IMMORTAL) != GCFLAG_FORWARDED,
+                  "get_type_id on forwarded obj")
+        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
+        # Although calling get_type_id() on a forwarded object works by itself,
         # we catch it as an error because it's likely that what is then
         # done with the typeid is bogus.
         return tid & TYPEID_MASK
