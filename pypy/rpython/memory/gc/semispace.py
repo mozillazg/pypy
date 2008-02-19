@@ -44,9 +44,6 @@ class SemiSpaceGC(MovingGCBase):
         self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
         self.AddressStack = get_address_stack(chunk_size)
         self.AddressDeque = get_address_deque(chunk_size)
-        self.objects_with_finalizers = self.AddressDeque()
-        self.run_finalizers = self.AddressDeque()
-        self.objects_with_weakrefs = self.AddressStack()
         self.finalizer_lock_count = 0
         self.red_zone = 0
 
@@ -60,6 +57,9 @@ class SemiSpaceGC(MovingGCBase):
         self.fromspace = llarena.arena_malloc(self.space_size, True)
         ll_assert(bool(self.fromspace), "couldn't allocate fromspace")
         self.free = self.tospace
+        self.objects_with_finalizers = self.AddressDeque()
+        self.run_finalizers = self.AddressDeque()
+        self.objects_with_weakrefs = self.AddressStack()
 
     def disable_finalizers(self):
         self.finalizer_lock_count += 1
