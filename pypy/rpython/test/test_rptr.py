@@ -314,7 +314,7 @@ def test_interior_ptr_with_setitem():
     assert res == 1
  
 def test_hash_gc_object():
-    T = GcStruct('T', ('x', Signed))
+    T = GcStruct('T', ('x', Signed), hash_cache=True)
     t1 = malloc(T)
     t2 = malloc(T)
     hash1 = hash_gc_object(t1)
