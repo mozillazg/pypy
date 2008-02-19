@@ -310,6 +310,24 @@ class RttiStruct(Struct):
 
 class GcStruct(RttiStruct):
     _gckind = 'gc'
+    _hash_cache = False
+
+    def _install_extras(self, hash_cache=False, **extras):
+        RttiStruct._install_extras(self, **extras)
+        if hash_cache:
+            if self._hash_cache_level() is not None:
+                raise TypeError("in %r, parent structure %r has already got "
+                                "a hash_cache" % (self,
+                                                  self._hash_cache_level()))
+            self._hash_cache = True
+
+    def _hash_cache_level(self):
+        TYPE = self
+        while not TYPE._hash_cache:
+            _, TYPE = TYPE._first_struct()
+            if TYPE is None:
+                return None
+        return TYPE
 
 STRUCT_BY_FLAVOR = {'raw': Struct,
                     'gc':  GcStruct}
@@ -1358,8 +1376,10 @@ class _parentable(_container):
             container = parent
         return container
 
-def _struct_variety(flds, cache={}):
-    flds = list(flds)
+def _struct_variety(TYPE, cache={}):
+    flds = list(TYPE._names)
+    if TYPE._hash_cache:
+        flds.append('_hash_cache_')
     flds.sort()
     tag = tuple(flds)
     try:
@@ -1369,11 +1389,6 @@ def _struct_variety(flds, cache={}):
             __slots__ = flds
         cache[tag] = _struct1
         return _struct1
- 
-#for pickling support:
-def _get_empty_instance_of_struct_variety(flds):
-    cls = _struct_variety(flds)
-    return object.__new__(cls)
 
 class _struct(_parentable):
     _kind = "structure"
@@ -1381,7 +1396,7 @@ class _struct(_parentable):
     __slots__ = ()
 
     def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
-        my_variety = _struct_variety(TYPE._names)
+        my_variety = _struct_variety(TYPE)
         return object.__new__(my_variety)
 
     def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
@@ -1824,6 +1839,37 @@ def runtime_type_info(p):
                                  "        returned: %s,\n"
                                  "should have been: %s" % (p, result2, result))
     return result
+
+def _ptr2hashcontainer(p):
+    T = typeOf(p)
+    if not isinstance(T, Ptr) or not isinstance(T.TO, GcStruct):
+        raise TypeError, "Ptr(GcStruct) expected, got %r" % (T,)
+    TYPE = T.TO._hash_cache_level()
+    if TYPE is None:
+        raise TypeError, "hash_gc_object: %r has no hash_cache" % (T.TO,)
+    if not p:
+        return None
+    container = cast_pointer(Ptr(TYPE), p)._obj
+    return container
+
+def hash_gc_object(p):
+    container = _ptr2hashcontainer(p)
+    if container is None:
+        return 0      # hash(NULL)
+    try:
+        return container._hash_cache_
+    except AttributeError:
+        result = container._hash_cache_ = intmask(id(container))
+        return result
+
+def init_hash_gc_object(p, value):
+    """For a prebuilt object p, initialize its hash value to 'value'."""
+    container = _ptr2hashcontainer(p)
+    if container is None:
+        raise ValueError("cannot change hash(NULL)!")
+    if hasattr(container, '_hash_cache_'):
+        raise ValueError("the hash of %r was already computed" % (p,))
+    container._hash_cache_ = intmask(value)
 
 def isCompatibleType(TYPE1, TYPE2):
     return TYPE1._is_compatible(TYPE2)

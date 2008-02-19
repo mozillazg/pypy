@@ -727,3 +727,22 @@ def test_name_clash():
         setattr(s, word, i)
     for i, word in enumerate(words):
         assert getattr(s, word) == i
+
+def test_hash_gc_object():
+    S = GcStruct('S', ('x', Signed), hash_cache=False)
+    S2 = GcStruct('S2', ('super', S), hash_cache=True)
+    S3 = GcStruct('S3', ('super', S2))
+    py.test.raises(TypeError, "GcStruct('S4', ('super', S3), hash_cache=True)")
+
+    s3 = malloc(S3)
+    hash3 = hash_gc_object(s3)
+    assert hash3 == hash_gc_object(s3)
+    assert hash3 == hash_gc_object(s3.super)
+    py.test.raises(TypeError, hash_gc_object, s3.super.super)
+    py.test.raises(ValueError, init_hash_gc_object, s3, -123)
+
+    s3 = malloc(S3)
+    init_hash_gc_object(s3, -123)
+    assert -123 == hash_gc_object(s3)
+    assert -123 == hash_gc_object(s3.super)
+    py.test.raises(TypeError, hash_gc_object, s3.super.super)
