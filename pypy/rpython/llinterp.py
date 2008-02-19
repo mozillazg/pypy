@@ -791,6 +791,9 @@ class LLFrame(object):
     def op_gc_id(self, v_ptr):
         return self.heap.gc_id(v_ptr)
 
+    def op_gc_hash(self, v_ptr):
+        return self.heap.gc_hash(v_ptr)
+
     def op_gc_set_max_heap_size(self, maxsize):
         raise NotImplementedError("gc_set_max_heap_size")
 

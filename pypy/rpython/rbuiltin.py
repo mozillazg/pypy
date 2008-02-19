@@ -479,6 +479,12 @@ def rtype_runtime_type_info(hop):
     return hop.genop('runtime_type_info', vlist,
                      resulttype = hop.r_result.lowleveltype)
 
+def rtype_hash_gc_object(hop):
+    assert isinstance(hop.args_r[0], rptr.PtrRepr)
+    vlist = hop.inputargs(hop.args_r[0])
+    return hop.genop('gc_hash', vlist,
+                     resulttype = lltype.Signed)
+
 BUILTIN_TYPER[lltype.malloc] = rtype_malloc
 BUILTIN_TYPER[lltype.free] = rtype_free
 BUILTIN_TYPER[lltype.cast_primitive] = rtype_cast_primitive
@@ -494,6 +500,7 @@ BUILTIN_TYPER[lltype.nullptr] = rtype_const_result
 BUILTIN_TYPER[lltype.getRuntimeTypeInfo] = rtype_const_result
 BUILTIN_TYPER[lltype.Ptr] = rtype_const_result
 BUILTIN_TYPER[lltype.runtime_type_info] = rtype_runtime_type_info
+BUILTIN_TYPER[lltype.hash_gc_object] = rtype_hash_gc_object
 BUILTIN_TYPER[rarithmetic.intmask] = rtype_intmask
 BUILTIN_TYPER[objectmodel.we_are_translated] = rtype_we_are_translated
 

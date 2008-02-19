@@ -330,10 +330,7 @@ class InstanceRepr(AbstractInstanceRepr):
                     llfields.append((mangled_name, r.lowleveltype))
             #
             # hash() support
-            if self.rtyper.needs_hash_support(self.classdef):
-                from pypy.rpython import rint
-                fields['_hash_cache_'] = 'hash_cache', rint.signed_repr
-                llfields.append(('hash_cache', Signed))
+            hash_cache = self.rtyper.needs_hash_support(self.classdef)
 
             self.rbase = getinstancerepr(self.rtyper, self.classdef.basedef,
                                          self.gcflavor)
@@ -351,6 +348,7 @@ class InstanceRepr(AbstractInstanceRepr):
                                    ('super', self.rbase.object_type),
                                    hints=hints,
                                    adtmeths=adtmeths,
+                                   hash_cache=hash_cache,
                                    *llfields)
             self.object_type.become(object_type)
             allinstancefields.update(self.rbase.allinstancefields)
@@ -402,7 +400,7 @@ class InstanceRepr(AbstractInstanceRepr):
             except AttributeError:
                 INSPTR = self.lowleveltype
                 def _ll_hash_function(ins):
-                    return ll_inst_hash(cast_pointer(INSPTR, ins))
+                    return lltype.hash_gc_object(cast_pointer(INSPTR, ins))
                 self._ll_hash_function = _ll_hash_function
                 return _ll_hash_function
         else:
@@ -417,8 +415,6 @@ class InstanceRepr(AbstractInstanceRepr):
             for name, (mangled_name, r) in self.fields.items():
                 if r.lowleveltype is Void:
                     llattrvalue = None
-                elif name == '_hash_cache_': # hash() support
-                    llattrvalue = hash(value)
                 else:
                     try:
                         attrvalue = getattr(value, name)
@@ -433,6 +429,10 @@ class InstanceRepr(AbstractInstanceRepr):
                     else:
                         llattrvalue = r.convert_const(attrvalue)
                 setattr(result, mangled_name, llattrvalue)
+            # hash support
+            if self.rtyper.needs_hash_support(self.classdef):
+                llhashvalue = hash(value)
+                lltype.init_hash_gc_object(result, llhashvalue)
         else:
             # OBJECT part
             rclass = getclassrepr(self.rtyper, classdef)
@@ -498,10 +498,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 mangled_name, r = self.allinstancefields[fldname]
                 if r.lowleveltype is Void:
                     continue
-                if fldname == '_hash_cache_':
-                    value = Constant(0, Signed)
-                else:
-                    value = self.classdef.classdesc.read_attribute(fldname, None)
+                value = self.classdef.classdesc.read_attribute(fldname, None)
                 if value is not None:
                     cvalue = inputconst(r.lowleveltype,
                                         r.convert_desc_or_const(value))
@@ -695,18 +692,6 @@ def ll_isinstance_exact(obj, cls):
 
 def ll_runtime_type_info(obj):
     return obj.typeptr.rtti
-
-def ll_inst_hash(ins):
-    if not ins:
-        return 0    # for None
-    cached = ins.hash_cache
-    if cached == 0:
-        # XXX this should ideally be done in a GC-dependent way: we only
-        # need a hash_cache for moving GCs, and we only need the '~' to
-        # avoid Boehm keeping the object alive if the value is passed
-        # around
-       cached = ins.hash_cache = ~cast_ptr_to_int(ins)
-    return cached
 
 def ll_inst_type(obj):
     if obj:
