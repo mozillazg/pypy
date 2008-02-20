@@ -589,7 +589,7 @@ class TestTypedTestCase(CompilationTestCase):
         res = f()
 
         # xxx this is too precise, checking the exact implementation
-        assert res[0] == ~res[1]
+        assert res[0] == res[1]
         assert res[2] == hash(c)
         assert res[3] == hash(d)
 

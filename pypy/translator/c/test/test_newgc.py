@@ -282,12 +282,6 @@ class TestUsingFramework(AbstractGCTestClass):
     gcpolicy = "marksweep"
     should_be_moving = False
 
-    # interface for snippet.py
-    large_tests_ok = True
-    def run(self, func):
-        fn = self.getcompiled(func)
-        return fn()
-
     def test_empty_collect(self):
         def f():
             llop.gc__collect(lltype.Void)

@@ -1,7 +1,44 @@
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
 
-class SemiSpaceGCTests:
+class AnyGCTests(object):
+
+    def test_hash(self):
+        class A(object):
+            pass
+        class B(A):
+            pass
+        class C(B):
+            pass
+        c1 = C()
+        hashc1 = hash(c1)
+        def gethash(x):     # indirection to prevent constant-folding
+            return hash(x)
+        def f():
+            error = 0
+            b1 = B()
+            c2 = C()
+            hashb1 = hash(b1)
+            hashc2 = hash(c2)
+            if hashb1 != hash(b1): error += 1
+            if hashc1 != hash(c1): error += 2
+            if hashc2 != hash(c2): error += 4
+            if hashb1 != gethash(b1): error += 10
+            if hashc1 != gethash(c1): error += 20
+            if hashc2 != gethash(c2): error += 40
+            llop.gc__collect(lltype.Void)
+            if hashb1 != hash(b1): error += 100
+            if hashc1 != hash(c1): error += 200
+            if hashc2 != hash(c2): error += 400
+            if hashb1 != gethash(b1): error += 1000
+            if hashc1 != gethash(c1): error += 2000
+            if hashc2 != gethash(c2): error += 4000
+            return error
+        res = self.run(f)
+        assert res == 0
+
+
+class SemiSpaceGCTests(AnyGCTests):
     large_tests_ok = False
 
     def test_finalizer_order(self):
