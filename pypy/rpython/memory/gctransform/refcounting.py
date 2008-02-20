@@ -174,14 +174,12 @@ class RefcountingGCTransformer(GCTransformer):
             lltype.typeOf(dealloc_fptr), dealloc_fptr)
         hop.genop("direct_call", [cdealloc_fptr, v_addr])
 
-    def consider_constant(self, TYPE, value):
-        if value is not lltype.top_container(value):
-                return
-        if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
-            p = value._as_ptr()
-            if not self.gcheaderbuilder.get_header(p):
-                hdr = self.gcheaderbuilder.new_header(p)
-                hdr.refcount = sys.maxint // 2
+    def build_gc_header(self, p):
+        hdr = self.gcheaderbuilder.get_header(p)
+        if not hdr:
+            hdr = self.gcheaderbuilder.new_header(p)
+            hdr.refcount = sys.maxint // 2
+        return hdr
 
     def static_deallocation_funcptr_for_type(self, TYPE):
         if TYPE in self.static_deallocator_funcptrs:

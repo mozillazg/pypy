@@ -103,7 +103,7 @@ class ItemOffset(AddressOffset):
         while True:
             src = cast_adr_to_ptr(srcadr, PTR)
             dst = cast_adr_to_ptr(dstadr, PTR)
-            _reccopy(src, dst)
+            reccopy(src, dst)
             repeat -= 1
             if repeat <= 0:
                 break
@@ -162,7 +162,7 @@ class FieldOffset(AddressOffset):
         PTR = lltype.Ptr(self.TYPE)
         src = cast_adr_to_ptr(srcadr, PTR)
         dst = cast_adr_to_ptr(dstadr, PTR)
-        _reccopy(src, dst)
+        reccopy(src, dst)
 
 
 class CompositeOffset(AddressOffset):
@@ -285,7 +285,7 @@ class GCHeaderOffset(AddressOffset):
         return cast_ptr_to_adr(headerptr)
 
     def raw_memcopy(self, srcadr, dstadr):
-        _reccopy(srcadr.ptr, dstadr.ptr)
+        reccopy(srcadr.ptr, dstadr.ptr)
 
 class GCHeaderAntiOffset(AddressOffset):
     def __init__(self, gcheaderbuilder):
@@ -698,7 +698,7 @@ def cast_any_ptr(EXPECTED_TYPE, ptr):
         return lltype.cast_pointer(EXPECTED_TYPE, ptr)
 
 
-def _reccopy(source, dest):
+def reccopy(source, dest):
     # copy recursively a structure or array onto another.
     T = lltype.typeOf(source).TO
     assert T == lltype.typeOf(dest).TO
@@ -709,7 +709,7 @@ def _reccopy(source, dest):
             if isinstance(ITEMTYPE, lltype.ContainerType):
                 subsrc = source._obj.getitem(i)._as_ptr()
                 subdst = dest._obj.getitem(i)._as_ptr()
-                _reccopy(subsrc, subdst)
+                reccopy(subsrc, subdst)
             else:
                 # this is a hack XXX de-hack this
                 llvalue = source._obj.getitem(i, uninitialized_ok=True)
@@ -720,7 +720,7 @@ def _reccopy(source, dest):
             if isinstance(FIELDTYPE, lltype.ContainerType):
                 subsrc = source._obj._getattr(name)._as_ptr()
                 subdst = dest._obj._getattr(name)._as_ptr()
-                _reccopy(subsrc, subdst)
+                reccopy(subsrc, subdst)
             else:
                 # this is a hack XXX de-hack this
                 llvalue = source._obj._getattr(name, uninitialized_ok=True)

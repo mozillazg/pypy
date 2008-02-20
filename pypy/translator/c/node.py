@@ -1,7 +1,7 @@
 from __future__ import generators
 from pypy.rpython.lltypesystem.lltype import \
      Struct, Array, FixedSizeArray, FuncType, PyObjectType, typeOf, \
-     GcStruct, GcArray, RttiStruct, ContainerType, \
+     ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
 from pypy.rpython.lltypesystem import llmemory
@@ -15,29 +15,11 @@ from pypy.rlib.rarithmetic import isinf, isnan
 from pypy.translator.c import extfunc
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
-def needs_gcheader(T):
-    if not isinstance(T, ContainerType):
-        return False
-    if T._gckind != 'gc':
-        return False
-    if isinstance(T, GcStruct):
-        if T._first_struct() != (None, None):
-            return False   # gcheader already in the first field
-    return True
-
-class defaultproperty(object):
-    def __init__(self, fget):
-        self.fget = fget
-    def __get__(self, obj, cls=None):
-        if obj is None:
-            return self
-        else:
-            return self.fget(obj)
-
 
 class StructDefNode:
     typetag = 'struct'
     def __init__(self, db, STRUCT, varlength=1):
+        assert STRUCT._gckind == 'raw'
         self.db = db
         self.STRUCT = STRUCT
         self.LLTYPE = STRUCT
@@ -51,7 +33,6 @@ class StructDefNode:
             with_number = False
         if STRUCT._hints.get('union'):
             self.typetag = 'union'
-            assert STRUCT._gckind == 'raw'   # not supported: "GcUnion"
         if STRUCT._hints.get('typedef'):
             self.typetag = ''
             assert STRUCT._hints.get('external')
@@ -77,9 +58,6 @@ class StructDefNode:
         db = self.db
         STRUCT = self.STRUCT
         varlength = self.varlength
-        if needs_gcheader(self.STRUCT):
-            for fname, T in db.gcpolicy.struct_gcheader_definition(self):
-                self.fields.append((fname, db.gettype(T, who_asks=self)))
         for name in STRUCT._names:
             T = self.c_struct_field_type(name)
             if name == STRUCT._arrayfld:
@@ -88,22 +66,6 @@ class StructDefNode:
             else:
                 typename = db.gettype(T, who_asks=self)
             self.fields.append((self.c_struct_field_name(name), typename))
-        self.gcinfo  # force it to be computed
-
-    def computegcinfo(self):
-        # let the gcpolicy do its own setup
-        self.gcinfo = None   # unless overwritten below
-        rtti = None
-        STRUCT = self.STRUCT
-        if isinstance(STRUCT, RttiStruct):
-            try:
-                rtti = getRuntimeTypeInfo(STRUCT)
-            except ValueError:
-                pass
-        if self.varlength == 1:
-            self.db.gcpolicy.struct_setup(self, rtti)
-        return self.gcinfo
-    gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
         return '%s %s @' % (self.typetag, self.name)
@@ -162,8 +124,6 @@ class StructDefNode:
         if is_empty:
             yield '\t' + 'char _dummy; /* this struct is empty */'
         yield '};'
-        for line in self.db.gcpolicy.struct_after_definition(self):
-            yield line
 
     def visitor_lines(self, prefix, on_field):
         STRUCT = self.STRUCT
@@ -195,12 +155,12 @@ class ArrayDefNode:
     typetag = 'struct'
 
     def __init__(self, db, ARRAY, varlength=1):
+        assert ARRAY._gckind == 'raw'
         self.db = db
         self.ARRAY = ARRAY
         self.LLTYPE = ARRAY
         original_varlength = varlength
-        self.gcfields = []
-        
+
         if ARRAY._hints.get('isrpystring'):
             varlength += 1   # for the NUL char terminator at the end of the string
         self.varlength = varlength
@@ -221,19 +181,7 @@ class ArrayDefNode:
             return      # setup() was already called, likely by __init__
         db = self.db
         ARRAY = self.ARRAY
-        self.gcinfo    # force it to be computed
-        if needs_gcheader(ARRAY):
-            for fname, T in db.gcpolicy.array_gcheader_definition(self):
-                self.gcfields.append((fname, db.gettype(T, who_asks=self)))
         self.itemtypename = db.gettype(ARRAY.OF, who_asks=self)
-
-    def computegcinfo(self):
-        # let the gcpolicy do its own setup
-        self.gcinfo = None   # unless overwritten below
-        if self.varlength == 1:
-            self.db.gcpolicy.array_setup(self)
-        return self.gcinfo
-    gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
         return '%s %s @' % (self.typetag, self.name)
@@ -256,10 +204,7 @@ class ArrayDefNode:
             return 'RPyItem(%s, %s)' % (baseexpr, indexexpr)
 
     def definition(self):
-        gcpolicy = self.db.gcpolicy
         yield 'struct %s {' % self.name
-        for fname, typename in self.gcfields:
-            yield '\t' + cdecl(typename, fname) + ';'
         if not self.ARRAY._hints.get('nolength', False):
             yield '\tlong length;'
         line = '%s;' % cdecl(self.itemtypename, 'items[%d]'% self.varlength)
@@ -312,7 +257,6 @@ class BareBoneArrayDefNode:
     Implemented directly as a C array instead of a struct with an items field.
     rffi kind of expects such arrays to be 'bare' C arrays.
     """
-    gcinfo = None
     name = None
     forward_decl = None
 
@@ -359,7 +303,6 @@ class BareBoneArrayDefNode:
 
 
 class FixedSizeArrayDefNode:
-    gcinfo = None
     name = None
     typetag = 'struct'
 
@@ -530,10 +473,6 @@ class StructNode(ContainerNode):
 
         data = []
 
-        if needs_gcheader(self.T):
-            for i, thing in enumerate(self.db.gcpolicy.struct_gcheader_initdata(self)):
-                data.append(('gcheader%d'%i, thing))
-        
         for name in self.T._names:
             data.append((name, getattr(self.obj, name)))
         
@@ -581,13 +520,6 @@ class ArrayNode(ContainerNode):
     def initializationexpr(self, decoration=''):
         defnode = self.db.gettypedefnode(self.T)
         yield '{'
-        if needs_gcheader(self.T):
-            for i, thing in enumerate(self.db.gcpolicy.array_gcheader_initdata(self)):
-                lines = generic_initializationexpr(self.db, thing,
-                                                   'gcheader%d'%i,
-                                                   '%sgcheader%d' % (decoration, i))
-                for line in lines:
-                    yield line
         if self.T._hints.get('nolength', False):
             length = ''
         else:
@@ -903,23 +835,12 @@ class PyObjectNode(ContainerNode):
     def implementation(self):
         return []
 
-def weakrefnode_factory(db, T, obj):
-    assert isinstance(obj, llmemory._wref)
-    ptarget = obj._dereference()
-    wrapper = db.gcpolicy.convert_weakref_to(ptarget)
-    container = wrapper._obj
-    obj._converted_weakref = container     # hack for genllvm :-/
-    return db.getcontainernode(container, _dont_write_c_code=False)
-
 
 ContainerNodeFactory = {
     Struct:       StructNode,
-    GcStruct:     StructNode,
     Array:        ArrayNode,
-    GcArray:      ArrayNode,
     FixedSizeArray: FixedSizeArrayNode,
     FuncType:     FuncNode,
     OpaqueType:   opaquenode_factory,
     PyObjectType: PyObjectNode,
-    llmemory._WeakRefType: weakrefnode_factory,
     }

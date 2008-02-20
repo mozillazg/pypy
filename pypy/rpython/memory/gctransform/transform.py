@@ -486,6 +486,9 @@ class GCTransformer(BaseGCTransformer):
             self.stack_malloc_fixedsize_ptr = self.inittime_helper(
                 ll_stack_malloc_fixedsize, [lltype.Signed], llmemory.Address)
 
+        self.raw_type_cache = {}
+        self.raw_obj_cache = {}
+
     def gct_malloc(self, hop):
         TYPE = hop.spaceop.result.concretetype.TO
         assert not TYPE._is_varsize()
@@ -611,3 +614,119 @@ class GCTransformer(BaseGCTransformer):
             hop.genop('raw_free', [v])
         else:
             assert False, "%s has no support for free with flavor %r" % (self, flavor)           
+
+    # __________ data types and prebuilt objects __________
+    #
+    # The logic below converts GC types to non-GC types, and prebuilt GC
+    # objects to corresponding prebuilt non-GC objects.  It is not recursive
+    # in the sense that if a GcStruct contains a GC pointer, its convertion
+    # as a raw Struct still contains a GC pointer.
+
+    def needs_gcheader(self, T):
+        assert isinstance(T, lltype.ContainerType) and T._gckind == 'gc'
+        if isinstance(T, lltype.GcStruct):
+            if T._first_struct() != (None, None):
+                return False   # gcheader already in the first field
+        return True
+
+    def get_raw_type_for_gc_type(self, T):
+        """For a 'gc'-kind type T, returns a corresponding 'raw'-kind type
+        which should be used by the backends.
+        """
+        try:
+            return self.raw_type_cache[T]
+        except KeyError:
+            if isinstance(T, (lltype.GcStruct, lltype.GcArray)):
+                # default logic: insert a header of type self.HDR
+                rawfields = []
+                if self.needs_gcheader(T):
+                    rawfields.append(('gc__hdr', self.HDR))  # xxx name clash?
+                if isinstance(T, lltype.GcStruct):
+                    for name in T._names:
+                        FIELD = T._flds[name]
+                        if (isinstance(FIELD, lltype.ContainerType)
+                            and FIELD._gckind == 'gc'):
+                            FIELD = self.get_raw_type_for_gc_type(FIELD)
+                        rawfields.append((name, FIELD))
+                else:
+                    rawfields.append(('array', lltype.Array(T.OF)))
+                kwds = {'hints': {'raw_for_gc': True}}
+                RAWT = lltype.Struct(T._name, *rawfields, **kwds)
+            else:
+                raise TypeError("not supported by %s: %r" % (
+                    self.__class__.__name__, T))
+            self.raw_type_cache[T] = RAWT
+            return RAWT
+
+    def transform_prebuilt_gc_object(self, container):
+        try:
+            return self.raw_obj_cache[container]
+        except KeyError:
+            pass
+        # if 'container' is inlined in a larger object, convert that
+        # and get a reference to the corresponding part in the convertion
+        parent, parentindex = lltype.parentlink(container)
+        if parent is not None:
+            rawparent = self.transform_prebuilt_gc_object(parent)
+            if isinstance(parentindex, str):
+                result = rawparent._getattr(parentindex)
+            else:
+                result = rawparent.getitem(parentindex)
+        else:
+            T = lltype.typeOf(container)
+            if isinstance(T, (lltype.GcStruct, lltype.GcArray)):
+                # allocate the equivalent raw structure
+                RAWT = self.get_raw_type_for_gc_type(T)
+                if T._is_varsize():
+                    length = container.getlength()
+                else:
+                    length = None
+                result = lltype.malloc(RAWT, length, immortal=True)._as_obj()
+                # copy the header and structure fields or array items in place
+                self._copy_fields_from_gc_to_raw(container, result)
+            else:
+                raise TypeError("not supported by %s: %r" % (
+                    self.__class__.__name__, T))
+        self.raw_obj_cache[container] = result
+        return result
+
+    def _copy_fields_from_gc_to_raw(self, container, raw):
+        T = lltype.typeOf(container)
+        if self.needs_gcheader(T):
+            hdr = self.build_gc_header(lltype.top_container(container))
+            llmemory.reccopy(hdr, raw.gc__hdr._as_ptr())
+        if isinstance(T, lltype.GcStruct):
+            for name in T._names:
+                FIELD = T._flds[name]
+                src = container._getattr(name)
+                if isinstance(FIELD, lltype.ContainerType):
+                    dst = raw._getattr(name)
+                    if FIELD._gckind == 'gc':
+                        # an inlined GC substructure: recursively convert it
+                        self._copy_fields_from_gc_to_raw(src, dst)
+                    else:
+                        # an inlined raw substructure: copy it over
+                        llmemory.reccopy(src._as_ptr(), dst._as_ptr())
+                else:
+                    # a non-container value
+                    setattr(raw, name, src)
+        else:
+            assert isinstance(T, lltype.GcArray)
+            dst = raw.array
+            assert dst.getlength() == container.getlength()
+            if isinstance(T.OF, lltype.ContainerType):
+                # array of containers - reccopy each item
+                for i in range(container.getlength()):
+                    llmemory.reccopy(container.getitem(i)._as_ptr(),
+                                     dst.getitem(i)._as_ptr())
+            else:
+                # array of non-containers - copy each item
+                for i in range(container.getlength()):
+                    dst.setitem(i, container.getitem(i))
+
+    def consider_constant(self, T, container):
+        if not T._hints.get('raw_for_gc', False):
+            self.consider_constant_nongc(T, container)
+
+    def consider_constant_nongc(self, T, container):
+        "To be overridden."
