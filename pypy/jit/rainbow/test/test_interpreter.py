@@ -34,6 +34,37 @@ P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
                                           novirtualcontainer=True,
                                           entrypoint_returns_red=False)
 
+
+def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
+              portal=None, type_system="lltype"):
+    # build the normal ll graphs for ll_function
+    t = TranslationContext()
+    a = t.buildannotator()
+    argtypes = getargtypes(a, values)
+    a.build_types(func, argtypes)
+    rtyper = t.buildrtyper(type_system = type_system)
+    rtyper.specialize()
+    if inline:
+        auto_inlining(t, threshold=inline)
+    if backendoptimize:
+        from pypy.translator.backendopt.all import backend_optimizations
+        backend_optimizations(t, inline_threshold=inline or 0)
+    if portal is None:
+        portal = func
+
+    if hasattr(policy, "seetranslator"):
+        policy.seetranslator(t)
+    graph1 = graphof(t, portal)
+    # build hint annotator types
+    hannotator = HintAnnotator(base_translator=t, policy=policy)
+    hs = hannotator.build_types(graph1, [SomeLLAbstractConstant(v.concretetype,
+                                                                {OriginFlags(): True})
+                                         for v in graph1.getargs()])
+    hannotator.simplify()
+    if conftest.option.view:
+        hannotator.translator.view()
+    return hs, hannotator, rtyper
+
 class AbstractInterpretationTest(object):
 
     RGenOp = LLRGenOp
@@ -47,6 +78,7 @@ class AbstractInterpretationTest(object):
     def teardown_class(cls):
         del cls._cache
         del cls._cache_order
+
 
     def serialize(self, func, values, policy=None,
                   inline=None, backendoptimize=False):
@@ -63,33 +95,14 @@ class AbstractInterpretationTest(object):
         if len(self._cache_order) >= 3:
             del self._cache[self._cache_order.pop(0)]
         # build the normal ll graphs for ll_function
-        t = TranslationContext()
-        a = t.buildannotator()
-        argtypes = getargtypes(a, values)
-        a.build_types(func, argtypes)
-        rtyper = t.buildrtyper(type_system = self.type_system)
-        rtyper.specialize()
-        self.rtyper = rtyper
-        if inline:
-            from pypy.translator.backendopt.inline import auto_inlining
-            auto_inlining(t, threshold=inline)
-        if backendoptimize:
-            from pypy.translator.backendopt.all import backend_optimizations
-            backend_optimizations(t)
-        graph1 = graphof(t, func)
-
-        # build hint annotator types
         if policy is None:
             policy = P_OOPSPEC_NOVIRTUAL
-        hannotator = HintAnnotator(base_translator=t, policy=policy)
-        hs = hannotator.build_types(graph1, [SomeLLAbstractConstant(v.concretetype,
-                                                                    {OriginFlags(): True})
-                                             for v in graph1.getargs()])
-        hannotator.simplify()
-        t = hannotator.translator
+        hs, hannotator, rtyper = hannotate(func, values, policy, inline,
+                                           backendoptimize,
+                                           type_system=self.type_system)
+        self.rtyper = rtyper
         self.hannotator = hannotator
-        if conftest.option.view:
-            t.view()
+        t = hannotator.translator
         graph2 = graphof(t, func)
         self.graph = graph2
         writer = BytecodeWriter(t, hannotator, self.RGenOp)
