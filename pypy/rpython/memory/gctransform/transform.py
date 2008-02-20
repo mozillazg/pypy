@@ -648,10 +648,12 @@ class GCTransformer(BaseGCTransformer):
                             and FIELD._gckind == 'gc'):
                             FIELD = self.get_raw_type_for_gc_type(FIELD)
                         rawfields.append((name, FIELD))
+                    rawname = T._name
                 else:
                     rawfields.append(('array', lltype.Array(T.OF)))
+                    rawname = 'gcarray'
                 kwds = {'hints': {'raw_for_gc': True}}
-                RAWT = lltype.Struct(T._name, *rawfields, **kwds)
+                RAWT = lltype.Struct(rawname, *rawfields, **kwds)
             else:
                 raise TypeError("not supported by %s: %r" % (
                     self.__class__.__name__, T))
@@ -678,7 +680,11 @@ class GCTransformer(BaseGCTransformer):
                 # allocate the equivalent raw structure
                 RAWT = self.get_raw_type_for_gc_type(T)
                 if T._is_varsize():
-                    length = container.getlength()
+                    if isinstance(T, lltype.Struct):
+                        array = container._getattr(T._arrayfld)
+                    else:
+                        array = container
+                    length = array.getlength()
                 else:
                     length = None
                 result = lltype.malloc(RAWT, length, immortal=True)._as_obj()
