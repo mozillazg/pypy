@@ -112,12 +112,15 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, evaluate, [3, 2])
         assert res == 5
+        self.check_insns({"int_add": 1})
 
         res = self.timeshift_from_portal(main, evaluate, [3, 5])
         assert res == 8
+        self.check_insns({"int_add": 1})
 
         res = self.timeshift_from_portal(main, evaluate, [4, 7])
         assert res == 11
+        self.check_insns({"int_add": 1})
     
     def test_main_as_portal(self):
         def main(x):
@@ -125,6 +128,7 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, main, [42])
         assert res == 42
+        self.check_insns({})
 
     def test_multiple_portal_calls(self):
         py.test.skip("promote not implemented")
