@@ -156,17 +156,6 @@ class InterpretationTest(object):
         jitstate = rtimeshift.JITState(builder, None,
                                        writer.exceptiondesc.null_exc_type_box,
                                        writer.exceptiondesc.null_exc_value_box)
-        def ll_finish_jitstate(jitstate, exceptiondesc, graphsigtoken):
-            returnbox = rtimeshift.getreturnbox(jitstate)
-            gv_ret = returnbox.getgenvar(jitstate)
-            builder = jitstate.curbuilder
-            for virtualizable_box in jitstate.virtualizables:
-                assert isinstance(virtualizable_box, rvalue.PtrRedBox)
-                content = virtualizable_box.content
-                assert isinstance(content, rcontainer.VirtualizableStruct)
-                content.store_back(jitstate)        
-            exceptiondesc.store_global_excdata(jitstate)
-            jitstate.curbuilder.finish_and_return(graphsigtoken, gv_ret)
         # build arguments
         greenargs = []
         redargs = []
@@ -188,8 +177,7 @@ class InterpretationTest(object):
                 red_i += 1
         jitstate = writer.interpreter.run(jitstate, jitcode, greenargs, redargs)
         if jitstate is not None:
-            ll_finish_jitstate(jitstate, writer.interpreter.exceptiondesc,
-                               sigtoken)
+            writer.interpreter.finish_jitstate(sigtoken)
         builder.end()
         generated = gv_generated.revealconst(lltype.Ptr(self.RESIDUAL_FUNCTYPE))
         graph = generated._obj.graph
