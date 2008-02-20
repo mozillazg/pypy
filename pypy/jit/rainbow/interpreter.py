@@ -71,6 +71,20 @@ class JitInterpreter(object):
             self.bytecode_loop()
         return self.jitstate
 
+    def finish_jitstate(self, graphsigtoken):
+        jitstate = self.jitstate
+        exceptiondesc = self.exceptiondesc
+        returnbox = rtimeshift.getreturnbox(jitstate)
+        gv_ret = returnbox.getgenvar(jitstate)
+        builder = jitstate.curbuilder
+        for virtualizable_box in jitstate.virtualizables:
+            assert isinstance(virtualizable_box, rvalue.PtrRedBox)
+            content = virtualizable_box.content
+            assert isinstance(content, rcontainer.VirtualizableStruct)
+            content.store_back(jitstate)        
+        exceptiondesc.store_global_excdata(jitstate)
+        jitstate.curbuilder.finish_and_return(graphsigtoken, gv_ret)
+
     def bytecode_loop(self):
         while 1:
             bytecode = self.load_2byte()
