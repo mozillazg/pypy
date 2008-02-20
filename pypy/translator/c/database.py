@@ -75,6 +75,9 @@ class LowLevelDatabase(object):
             RAWT = self.gctransformer.get_raw_type_for_gc_type(T)
             assert RAWT._gckind == 'raw'
             node = self.gettypedefnode(RAWT, varlength)
+            # the next line is hopefully temporary, pending the
+            # unified-rtti branch
+            self.gcpolicy.fixup_rawtype_rtti(T, node)
         else:
             if isinstance(T, Struct):
                 if isinstance(T, FixedSizeArray):
@@ -145,7 +148,7 @@ class LowLevelDatabase(object):
         else:
             raise Exception("don't know about type %r" % (T,))
 
-    def getcontainernode(self, container): #, **buildkwds):
+    def getcontainernode(self, container, **buildkwds):
         try:
             node = self.containernodes[container]
         except KeyError:
@@ -161,7 +164,7 @@ class LowLevelDatabase(object):
                 self.gctransformer.consider_constant(T, container)
 
             nodefactory = ContainerNodeFactory[T.__class__]
-            node = nodefactory(self, T, container) #, **buildkwds)
+            node = nodefactory(self, T, container, **buildkwds)
             self.containernodes[container] = node
             kind = getattr(node, 'nodekind', '?')
             self.containerstats[kind] = self.containerstats.get(kind, 0) + 1

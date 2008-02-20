@@ -54,6 +54,16 @@ class BasicGcPolicy(object):
     def rtti_type(self):
         return ''
 
+    def fixup_rawtype_rtti(self, GCTYPE, rawdefnode):
+        # hopefully temporary, pending the unified-rtti branch
+        rawdefnode.gcinfo = None
+        if isinstance(GCTYPE, lltype.RttiStruct):
+            try:
+                rtti = lltype.getRuntimeTypeInfo(GCTYPE)
+            except ValueError:
+                rtti = None
+            self.struct_setup(rawdefnode, rtti)
+
     def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
         if expr == 'NULL':
