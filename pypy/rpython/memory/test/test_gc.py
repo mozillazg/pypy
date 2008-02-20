@@ -19,7 +19,7 @@ def stdout_ignore_ll_functions(msg):
     print >>sys.stdout, strmsg
 
 
-class GCTest(object):
+class GCTest(snippet.AnyGCTests):
     GC_PARAMS = {}
 
     def setup_class(cls):

@@ -1,6 +1,7 @@
 import py
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.memory.test import snippet
 from pypy.translator.tool.cbuild import check_boehm_presence
 from pypy.translator.c.genc import CExtModuleBuilder
 from pypy import conftest
@@ -9,7 +10,7 @@ def setup_module(mod):
     if not check_boehm_presence():
         py.test.skip("Boehm GC not present")
 
-class AbstractGCTestClass(object):
+class AbstractGCTestClass(snippet.AnyGCTests):
     gcpolicy = "boehm"
     stacklessgc = False
    
@@ -45,6 +46,12 @@ class AbstractGCTestClass(object):
             self._cleanups.append(cbuilder.cleanup) # schedule cleanup after test
             return cbuilder.get_entry_point(isolated=True)
         return compile()
+
+    # interface for snippet.py
+    large_tests_ok = True
+    def run(self, func):
+        fn = self.getcompiled(func)
+        return fn()
 
 
 class TestUsingBoehm(AbstractGCTestClass):
