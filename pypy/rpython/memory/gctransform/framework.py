@@ -332,11 +332,7 @@ class FrameworkGCTransformer(GCTransformer):
         self.c_const_gc = rmodel.inputconst(r_gc, self.gcdata.gc)
         self.needs_zero_gc_pointers = GCClass.needs_zero_gc_pointers
 
-        HDR = self._gc_HDR = self.gcdata.gc.gcheaderbuilder.HDR
-        self._gc_fields = fields = []
-        for fldname in HDR._names:
-            FLDTYPE = getattr(HDR, fldname)
-            fields.append(('_' + fldname, FLDTYPE))
+        self.HDR = self.gcdata.gc.gcheaderbuilder.HDR
 
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
@@ -351,12 +347,9 @@ class FrameworkGCTransformer(GCTransformer):
     def finalizer_funcptr_for_type(self, TYPE):
         return self.layoutbuilder.finalizer_funcptr_for_type(TYPE)
 
-    def gc_fields(self):
-        return self._gc_fields
-
     def gc_field_values_for(self, obj):
         hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
-        HDR = self._gc_HDR
+        HDR = self.HDR
         return [getattr(hdr, fldname) for fldname in HDR._names]
 
     def finish_tables(self):

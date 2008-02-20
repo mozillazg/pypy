@@ -33,9 +33,6 @@ class BasicGcPolicy(object):
     def array_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
 
-    def struct_after_definition(self, defnode):
-        return []
-
     def gc_libraries(self):
         return []
 

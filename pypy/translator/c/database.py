@@ -22,9 +22,8 @@ class NoCorrespondingNode(Exception):
 # ____________________________________________________________
 
 class LowLevelDatabase(object):
-    gctransformer = None
 
-    def __init__(self, translator=None, standalone=False,
+    def __init__(self, translator, standalone=False,
                  gcpolicyclass=None,
                  stacklesstransformer=None,
                  thread_enabled=False,
@@ -54,12 +53,8 @@ class LowLevelDatabase(object):
         self.late_initializations = []
         self.namespace = CNameManager()
 
-        if translator is None or translator.rtyper is None:
-            self.exctransformer = None
-        else:
-            self.exctransformer = translator.getexceptiontransformer()
-        if translator is not None:
-            self.gctransformer = self.gcpolicy.transformerclass(translator)
+        self.exctransformer = translator.getexceptiontransformer()
+        self.gctransformer = self.gcpolicy.transformerclass(translator)
         self.completed = False
 
         self.instrument_ncounter = 0
@@ -71,8 +66,16 @@ class LowLevelDatabase(object):
         else:
             key = T, varlength
         try:
-            node = self.structdefnodes[key]
+            return self.structdefnodes[key]
         except KeyError:
+            pass
+        if not isinstance(T, ContainerType):
+            raise TypeError("ContainerType expected, got %r" % (T,))
+        if T._gckind == 'gc':
+            RAWT = self.gctransformer.get_raw_type_for_gc_type(T)
+            assert RAWT._gckind == 'raw'
+            node = self.gettypedefnode(RAWT, varlength)
+        else:
             if isinstance(T, Struct):
                 if isinstance(T, FixedSizeArray):
                     node = FixedSizeArrayDefNode(self, T)
@@ -83,15 +86,13 @@ class LowLevelDatabase(object):
                     node = BareBoneArrayDefNode(self, T, varlength)
                 else:
                     node = ArrayDefNode(self, T, varlength)
-            elif isinstance(T, OpaqueType) and T.hints.get("render_structure", False):
+            elif (isinstance(T, OpaqueType) and
+                  T.hints.get("render_structure", False)):
                 node = ExtTypeOpaqueDefNode(self, T)
-            elif T == WeakRef:
-                REALT = self.gcpolicy.get_real_weakref_type()
-                node = self.gettypedefnode(REALT)
             else:
                 raise NoCorrespondingNode("don't know about %r" % (T,))
-            self.structdefnodes[key] = node
             self.pendingsetupnodes.append(node)
+        self.structdefnodes[key] = node
         return node
 
     def gettype(self, T, varlength=1, who_asks=None, argnames=[]):
@@ -144,21 +145,24 @@ class LowLevelDatabase(object):
         else:
             raise Exception("don't know about type %r" % (T,))
 
-    def getcontainernode(self, container, _dont_write_c_code=True, **buildkwds):
+    def getcontainernode(self, container): #, **buildkwds):
         try:
             node = self.containernodes[container]
         except KeyError:
             T = typeOf(container)
-            if isinstance(T, (lltype.Array, lltype.Struct)):
-                if hasattr(self.gctransformer, 'consider_constant'):
-                    self.gctransformer.consider_constant(T, container)
-            nodefactory = ContainerNodeFactory[T.__class__]
-            node = nodefactory(self, T, container, **buildkwds)
-            self.containernodes[container] = node
-            # _dont_write_c_code should only be False for a hack in
-            # weakrefnode_factory()
-            if not _dont_write_c_code:
+            if T._gckind == 'gc':
+                gct = self.gctransformer
+                rawcontainer = gct.transform_prebuilt_gc_object(container)
+                node = self.getcontainernode(rawcontainer)
+                self.containernodes[container] = node
                 return node
+
+            if isinstance(T, (lltype.Array, lltype.Struct)):
+                self.gctransformer.consider_constant(T, container)
+
+            nodefactory = ContainerNodeFactory[T.__class__]
+            node = nodefactory(self, T, container) #, **buildkwds)
+            self.containernodes[container] = node
             kind = getattr(node, 'nodekind', '?')
             self.containerstats[kind] = self.containerstats.get(kind, 0) + 1
             self.containerlist.append(node)
@@ -278,15 +282,13 @@ class LowLevelDatabase(object):
         # steps with calls to the next 'finish' function from the following
         # list:
         finish_callbacks = []
-        if self.gctransformer:
-            finish_callbacks.append(('GC transformer: finished helpers',
-                                     self.gctransformer.finish_helpers))
+        finish_callbacks.append(('GC transformer: finished helpers',
+                                 self.gctransformer.finish_helpers))
         if self.stacklesstransformer:
             finish_callbacks.append(('Stackless transformer: finished',
                                      self.stacklesstransformer.finish))
-        if self.gctransformer:
-            finish_callbacks.append(('GC transformer: finished tables',
-                                     self.gctransformer.finish_tables))
+        finish_callbacks.append(('GC transformer: finished tables',
+                                 self.gctransformer.finish_tables))
 
         def add_dependencies(newdependencies):
             for value in newdependencies:

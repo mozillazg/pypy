@@ -47,11 +47,9 @@ class FunctionCodeGenerator(object):
         if db.stacklesstransformer:
             db.stacklesstransformer.transform_graph(graph)
         # apply the exception transformation
-        if self.db.exctransformer:
-            self.db.exctransformer.create_exception_handling(self.graph)
+        self.db.exctransformer.create_exception_handling(self.graph)
         # apply the gc transformation
-        if self.db.gctransformer:
-            self.db.gctransformer.transform_graph(self.graph)
+        self.db.gctransformer.transform_graph(self.graph)
         #self.graph.show()
         self.collect_var_and_types()
 
