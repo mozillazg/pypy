@@ -1,13 +1,10 @@
 import py
 from pypy.jit.hintannotator.policy import HintAnnotatorPolicy
-from pypy.jit.rainbow.test.test_interpreter import AbstractInterpretationTest
+from pypy.jit.rainbow.test.test_interpreter import InterpretationTest, P_OOPSPEC
 from pypy.rlib.jit import hint
 
-P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer = True,
-                                oopspec = True)
 
-
-class TestVDict(AbstractInterpretationTest):
+class TestVDict(InterpretationTest):
     type_system = "lltype"
 
     def test_vdict(self):
