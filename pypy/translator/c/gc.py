@@ -15,24 +15,6 @@ class BasicGcPolicy(object):
         self.db = db
         self.thread_enabled = thread_enabled
 
-    def common_gcheader_definition(self, defnode):
-        return []
-
-    def common_gcheader_initdata(self, defnode):
-        return []
-
-    def struct_gcheader_definition(self, defnode):
-        return self.common_gcheader_definition(defnode)
-
-    def struct_gcheader_initdata(self, defnode):
-        return self.common_gcheader_initdata(defnode)
-
-    def array_gcheader_definition(self, defnode):
-        return self.common_gcheader_definition(defnode)
-
-    def array_gcheader_initdata(self, defnode):
-        return self.common_gcheader_initdata(defnode)
-
     def gc_libraries(self):
         return []
 
@@ -46,9 +28,6 @@ class BasicGcPolicy(object):
         return []
 
     def struct_setup(self, structdefnode, rtti):
-        return None
-
-    def array_setup(self, arraydefnode):
         return None
 
     def rtti_type(self):
@@ -86,22 +65,6 @@ from pypy.rlib.objectmodel import CDefinedIntSymbolic
 class RefcountingGcPolicy(BasicGcPolicy):
     transformerclass = refcounting.RefcountingGCTransformer
 
-    def common_gcheader_definition(self, defnode):
-        if defnode.db.gctransformer is not None:
-            HDR = defnode.db.gctransformer.HDR
-            return [(name, HDR._flds[name]) for name in HDR._names]
-        else:
-            return []
-
-    def common_gcheader_initdata(self, defnode):
-        if defnode.db.gctransformer is not None:
-            gct = defnode.db.gctransformer
-            hdr = gct.gcheaderbuilder.header_of_object(top_container(defnode.obj))
-            HDR = gct.HDR
-            return [getattr(hdr, fldname) for fldname in HDR._names]
-        else:
-            return []
-
     # for structs
 
     def struct_setup(self, structdefnode, rtti):
@@ -111,11 +74,6 @@ class RefcountingGcPolicy(BasicGcPolicy):
                 structdefnode.STRUCT)
             structdefnode.gcinfo = RefcountingInfo()
             structdefnode.gcinfo.static_deallocator = structdefnode.db.get(fptr)
-
-    # for arrays
-
-    def array_setup(self, arraydefnode):
-        pass
 
     # for rtti node
 
@@ -170,9 +128,6 @@ class BoehmInfo:
 
 class BoehmGcPolicy(BasicGcPolicy):
     transformerclass = boehm.BoehmGCTransformer
-
-    def array_setup(self, arraydefnode):
-        pass
 
     def struct_setup(self, structdefnode, rtti):
         pass
@@ -274,9 +229,6 @@ class FrameworkGcPolicy(BasicGcPolicy):
             gctransf = self.db.gctransformer
             fptr = gctransf.finalizer_funcptr_for_type(structdefnode.STRUCT)
             self.db.get(fptr)
-
-    def array_setup(self, arraydefnode):
-        pass
 
     def rtti_type(self):
         return FrameworkGcRuntimeTypeInfo_OpaqueNode.typename
