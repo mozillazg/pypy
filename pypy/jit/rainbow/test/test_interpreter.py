@@ -18,6 +18,10 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
 
 P_NOVIRTUAL = HintAnnotatorPolicy(novirtualcontainer=True)
+P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer=True, oopspec=True)
+P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
+                                          novirtualcontainer=True,
+                                          entrypoint_returns_red=False)
 
 def getargtypes(annotator, values):
     return [annotation(annotator, x) for x in values]
@@ -30,9 +34,6 @@ def annotation(a, x):
         t = annmodel.lltype_to_annotation(T)
     return a.typeannotation(t)
 
-P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
-                                          novirtualcontainer=True,
-                                          entrypoint_returns_red=False)
 
 
 def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
@@ -65,12 +66,11 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
         hannotator.translator.view()
     return hs, hannotator, rtyper
 
-class AbstractInterpretationTest(object):
+class InterpretationTest(object):
 
     RGenOp = LLRGenOp
 
     def setup_class(cls):
-        from pypy.jit.timeshifter.test.conftest import option
         cls.on_llgraph = cls.RGenOp is LLRGenOp
         cls._cache = {}
         cls._cache_order = []
@@ -80,38 +80,31 @@ class AbstractInterpretationTest(object):
         del cls._cache_order
 
 
-    def serialize(self, func, values, policy=None,
-                  inline=None, backendoptimize=False):
-        key = func, backendoptimize
-        try:
-            cache, argtypes = self._cache[key]
-        except KeyError:
-            pass
-        else:
-            self.__dict__.update(cache)
-            assert argtypes == getargtypes(self.rtyper.annotator, values)
-            return self.writer, self.jitcode, self.argcolors
-
+    def _serialize(self, func, values, policy=None,
+                  inline=None, backendoptimize=False,
+                  portal=None):
         if len(self._cache_order) >= 3:
             del self._cache[self._cache_order.pop(0)]
         # build the normal ll graphs for ll_function
         if policy is None:
             policy = P_OOPSPEC_NOVIRTUAL
+        if portal is None:
+            portal = func
         hs, hannotator, rtyper = hannotate(func, values, policy, inline,
-                                           backendoptimize,
+                                           backendoptimize, portal,
                                            type_system=self.type_system)
         self.rtyper = rtyper
-        self.hannotator = hannotator
+        self.hintannotator = hannotator
         t = hannotator.translator
-        graph2 = graphof(t, func)
+        graph2 = graphof(t, portal)
         self.graph = graph2
         writer = BytecodeWriter(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
-        rtyper.specialize_more_blocks()
+        # the bytecode writer can ask for llhelpers about lists and dicts
+        rtyper.specialize_more_blocks() 
         argcolors = []
 
         # make residual functype
-        ha = self.hannotator
         RESTYPE = originalconcretetype(hannotator.binding(graph2.getreturnvar()))
         ARGS = []
         for var in graph2.getargs():
@@ -128,10 +121,26 @@ class AbstractInterpretationTest(object):
         self.jitcode = jitcode
         self.argcolors = argcolors
 
+
+    def serialize(self, func, values, policy=None,
+                  inline=None, backendoptimize=False,
+                  portal=None):
+        key = func, backendoptimize
+        try:
+            cache, argtypes = self._cache[key]
+        except KeyError:
+            pass
+        else:
+            self.__dict__.update(cache)
+            assert argtypes == getargtypes(self.rtyper.annotator, values)
+            return self.writer, self.jitcode, self.argcolors
+        if len(self._cache_order) >= 3:
+            del self._cache[self._cache_order.pop(0)]
+        self._serialize(func, values, policy, inline, backendoptimize, portal)
         cache = self.__dict__.copy()
-        self._cache[key] = cache, getargtypes(rtyper.annotator, values)
+        self._cache[key] = cache, getargtypes(self.rtyper.annotator, values)
         self._cache_order.append(key)
-        return writer, jitcode, argcolors
+        return self.writer, self.jitcode, self.argcolors
 
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
         if hasattr(ll_function, 'convert_arguments'):
@@ -191,14 +200,18 @@ class AbstractInterpretationTest(object):
         res = llinterp.eval_graph(graph, residualargs)
         return res
 
+    def get_residual_graph(self):
+        return self.residual_graph
+
     def check_insns(self, expected=None, **counts):
-        self.insns = summary(self.residual_graph)
+        self.insns = summary(self.get_residual_graph())
         if expected is not None:
             assert self.insns == expected
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
 
-class SimpleTests(AbstractInterpretationTest):
+
+class SimpleTests(InterpretationTest):
     def test_simple_fixed(self):
         py.test.skip("green return")
         def ll_function(x, y):
