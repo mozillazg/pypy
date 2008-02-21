@@ -158,12 +158,6 @@ class FrameworkGcPolicy(BasicGcPolicy):
         args = [funcgen.expr(v) for v in op.args]
         return '%s = %s; /* for moving GCs */' % (args[1], args[0])
 
-    def common_gcheader_definition(self, defnode):
-        return defnode.db.gctransformer.gc_fields()
-
-    def common_gcheader_initdata(self, defnode):
-        o = top_container(defnode.obj)
-        return defnode.db.gctransformer.gc_field_values_for(o)
 
 class StacklessFrameworkGcPolicy(FrameworkGcPolicy):
     transformerclass = stacklessframework.StacklessFrameworkGCTransformer
