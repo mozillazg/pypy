@@ -153,9 +153,8 @@ class InterpretationTest(object):
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
         builder.start_writing()
-        jitstate = rtimeshift.JITState(builder, None,
-                                       writer.exceptiondesc.null_exc_type_box,
-                                       writer.exceptiondesc.null_exc_value_box)
+        jitstate = writer.interpreter.fresh_jitstate(builder)
+        
         # build arguments
         greenargs = []
         redargs = []
