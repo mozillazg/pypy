@@ -200,15 +200,15 @@ def test_lookup_abs_in_integer(int=10):
     w_method = s_class.lookup("abs")
 
     assert w_method
-    w_frame = w_method.create_frame(w_object, [])
-    interp.w_active_context = w_frame
+    s_frame = w_method.create_frame(w_object, [])
+    interp.s_active_context = s_frame
 
     print w_method
 
     while True:
         try:
             interp.step()
-            print interp.w_active_context.stack
+            print interp.s_active_context.stack
         except interpreter.ReturnFromTopLevel, e:
             assert e.object.value == abs(int)
             return
@@ -258,12 +258,12 @@ def perform(w_receiver, selector, *arguments_w):
     s_class = w_receiver.shadow_of_my_class()
     w_method = s_class.lookup(selector)
     assert w_method
-    w_frame = w_method.create_frame(w_receiver, list(arguments_w))
-    interp.w_active_context = w_frame
+    s_frame = w_method.create_frame(w_receiver, list(arguments_w))
+    interp.s_active_context = s_frame
     while True:
         try:
             interp.step()
-            #print interp.w_active_context.stack
+            #print interp.s_active_context.stack
         except interpreter.ReturnFromTopLevel, e:
             return e.object.value
         

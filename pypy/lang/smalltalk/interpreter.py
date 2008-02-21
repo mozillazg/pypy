@@ -25,10 +25,10 @@ class Interpreter:
     ONE = objtable.w_one
     TWO = objtable.w_two
 
-    _w_last_active_context = None
+    _s_last_active_context = None
     
     def __init__(self):
-        self.w_active_context = None
+        self.s_active_context = None
         self.cnt = 0
 
     def interpret(self):
@@ -42,30 +42,30 @@ class Interpreter:
         return (not objectmodel.we_are_translated()) and option.bc_trace
 
     def step(self):
-        next = self.w_active_context.getNextBytecode()
+        next = self.s_active_context.getNextBytecode()
         # we_are_translated returns false on top of CPython and true when
         # translating the interpreter
         if not objectmodel.we_are_translated():
             bytecodeimpl = BYTECODE_TABLE[next]
-            if self._w_last_active_context != self.w_active_context:
+            if self._s_last_active_context != self.s_active_context:
                 cnt = 0
-                p = self.w_active_context
+                p = self.s_active_context
                 # AK make method
                 while p is not None:
                     cnt += 1
-                    p = p.w_sender
+                    p = p.s_sender()
                 self._last_indent = "  " * cnt
-                self._w_last_active_context = self.w_active_context
+                self._s_last_active_context = self.s_active_context
             if self.should_trace():
                 
                 print "%sStack=%s" % (
                     self._last_indent,
-                    repr(self.w_active_context.stack),)
+                    repr(self.s_active_context.stack),)
                 print "%sBytecode at %d (%d:%s):" % (
                     self._last_indent,
-                    self.w_active_context.pc,
+                    self.s_active_context.pc(),
                     next, bytecodeimpl.__name__,)
-            bytecodeimpl(self.w_active_context, self)
+            bytecodeimpl(self.s_active_context, self)
         else:
             # this is a performance optimization: when translating the
             # interpreter, the bytecode dispatching is not implemented as a
@@ -73,7 +73,7 @@ class Interpreter:
             # below produces the switch (by being unrolled).
             for code, bytecodeimpl in unrolling_bytecode_table:
                 if code == next:
-                    bytecodeimpl(self.w_active_context, self)
+                    bytecodeimpl(self.s_active_context, self)
                     break
 
         
@@ -91,7 +91,7 @@ class __extend__(W_ContextPart):
     # push bytecodes
     def pushReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 15
-        self.push(self.receiver().fetch(index))
+        self.push(self.w_receiver().fetch(index))
 
     def pushTemporaryVariableBytecode(self, interp):
         index = self.currentBytecode & 15
@@ -113,7 +113,7 @@ class __extend__(W_ContextPart):
 
     def storeAndPopReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 7
-        self.receiver().store(index, self.pop())
+        self.w_receiver().store(index, self.pop())
 
     def storeAndPopTemporaryVariableBytecode(self, interp):
         index = self.currentBytecode & 7
@@ -121,7 +121,7 @@ class __extend__(W_ContextPart):
 
     # push bytecodes
     def pushReceiverBytecode(self, interp):
-        self.push(self.receiver())
+        self.push(self.w_receiver())
 
     def pushConstantTrueBytecode(self, interp):
         self.push(interp.TRUE)
@@ -163,7 +163,7 @@ class __extend__(W_ContextPart):
 
     def _sendSuperSelector(self, selector, argcount, interp):
         s_compiledin = self.w_method().compiledin().as_class_get_shadow()
-        self._sendSelector(selector, argcount, interp, self.receiver(),
+        self._sendSelector(selector, argcount, interp, self.w_receiver(),
                            s_compiledin.s_superclass)
 
     def _sendSelector(self, selector, argcount, interp,
@@ -203,33 +203,33 @@ class __extend__(W_ContextPart):
         start = len(self.stack) - argcount
         assert start >= 0  # XXX check in the Blue Book what to do in this case
         arguments = self.stack[start:]
-        interp.w_active_context = method.create_frame(receiver, arguments, self) 
+        interp.s_active_context = method.create_frame(receiver, arguments, self) 
         self.pop_n(argcount + 1) 
 
-    def _return(self, object, interp, w_return_to):
+    def _return(self, object, interp, s_return_to):
         # for tests, when returning from the top-level context
-        if w_return_to is None:
+        if s_return_to is None:
             raise ReturnFromTopLevel(object)
-        w_return_to.push(object)
-        interp.w_active_context = w_return_to
+        s_return_to.push(object)
+        interp.s_active_context = s_return_to
 
     def returnReceiver(self, interp):
-        self._return(self.receiver(), interp, self.w_home.w_sender)
+        self._return(self.w_receiver(), interp, self.s_home().s_sender())
 
     def returnTrue(self, interp):
-        self._return(interp.TRUE, interp, self.w_home.w_sender)
+        self._return(interp.TRUE, interp, self.s_home().s_sender())
 
     def returnFalse(self, interp):
-        self._return(interp.FALSE, interp, self.w_home.w_sender)
+        self._return(interp.FALSE, interp, self.s_home().s_sender())
 
     def returnNil(self, interp):
-        self._return(interp.NIL, interp, self.w_home.w_sender)
+        self._return(interp.NIL, interp, self.s_home().s_sender())
 
     def returnTopFromMethod(self, interp):
-        self._return(self.top(), interp, self.w_home.w_sender)
+        self._return(self.top(), interp, self.s_home().s_sender())
 
     def returnTopFromBlock(self, interp):
-        self._return(self.top(), interp, self.w_sender)
+        self._return(self.top(), interp, self.s_sender())
 
     def unknownBytecode(self, interp):
         raise MissingBytecode("unknownBytecode")
@@ -242,7 +242,7 @@ class __extend__(W_ContextPart):
     def extendedPushBytecode(self, interp):
         variableType, variableIndex = self.extendedVariableTypeAndIndex()
         if variableType == 0:
-            self.push(self.receiver().fetch(variableIndex))
+            self.push(self.w_receiver().fetch(variableIndex))
         elif variableType == 1:
             self.push(self.gettemp(variableIndex))
         elif variableType == 2:
@@ -257,7 +257,7 @@ class __extend__(W_ContextPart):
     def extendedStoreBytecode(self, interp):
         variableType, variableIndex = self.extendedVariableTypeAndIndex()
         if variableType == 0:
-            self.receiver().store(variableIndex, self.top())
+            self.w_receiver().store(variableIndex, self.top())
         elif variableType == 1:
             self.settemp(variableIndex, self.top())
         elif variableType == 2:
@@ -294,7 +294,7 @@ class __extend__(W_ContextPart):
                                     second & 31, interp)
         elif opType == 2:
             # pushReceiver
-            self.push(self.receiver().fetch(third))
+            self.push(self.w_receiver().fetch(third))
         elif opType == 3:
             # pushLiteralConstant
             self.push(self.w_method().getliteral(third))
@@ -304,9 +304,9 @@ class __extend__(W_ContextPart):
             assert isinstance(association, model.W_PointersObject)
             self.push(association.fetch(constants.ASSOCIATION_VALUE_INDEX))
         elif opType == 5:
-            self.receiver().store(third, self.top())
+            self.w_receiver().store(third, self.top())
         elif opType == 6:
-            self.receiver().store(third, self.pop())
+            self.w_receiver().store(third, self.pop())
         elif opType == 7:
             association = self.w_method().getliteral(third)
             assert isinstance(association, model.W_PointersObject)
@@ -329,7 +329,7 @@ class __extend__(W_ContextPart):
         raise MissingBytecode("experimentalBytecode")
 
     def jump(self,offset):
-        self.pc = self.pc + offset
+        self.store_pc(self.pc() + offset)
 
     def jumpConditional(self,bool,position):
         if self.top() == bool:

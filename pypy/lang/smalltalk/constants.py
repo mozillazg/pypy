@@ -112,46 +112,28 @@ SO_TRANSLATEDMETHOD_CLASS = 40
 SO_FINALIZATION_SEMPAHORE = 41
 SO_LARGENEGATIVEINTEGER_CLASS = 42
 
-classes_needed_boot_vm = [
-    "SmallInteger",
-    "String",
-    "Array",
-    "Float",
-    "MethodContext",
-    "BlockContext",
-    "CompiledMethod",
-    "Character",
-    "ByteArray",
-]
-
 # XXX more missing?
 classes_in_special_object_table = {
-    "Bitmap" : SO_BITMAP_CLASS,
+#    "Bitmap" : SO_BITMAP_CLASS,
     "SmallInteger" : SO_SMALLINTEGER_CLASS,
     "String" : SO_STRING_CLASS,
     "Array" : SO_ARRAY_CLASS,
     "Float" : SO_FLOAT_CLASS,
     "MethodContext" : SO_METHODCONTEXT_CLASS,
     "BlockContext" : SO_BLOCKCONTEXT_CLASS,
-    "Point" : SO_POINT_CLASS,
-    "LargePositiveInteger" : SO_LARGEPOSITIVEINTEGER_CLASS,
-    "Display" : SO_DISPLAY_CLASS,
-    "Message" : SO_MESSAGE_CLASS,
+#    "Point" : SO_POINT_CLASS,
+#    "LargePositiveInteger" : SO_LARGEPOSITIVEINTEGER_CLASS,
+#    "Display" : SO_DISPLAY_CLASS,
+#    "Message" : SO_MESSAGE_CLASS,
     "CompiledMethod" : SO_COMPILEDMETHOD_CLASS,
-    "Semaphore" : SO_SEMAPHORE_CLASS,
+#    "Semaphore" : SO_SEMAPHORE_CLASS,
     "Character" : SO_CHARACTER_CLASS,
     "ByteArray" : SO_BYTEARRAY_CLASS,
-    "Process" : SO_PROCESS_CLASS,
-    "PseudoContext" : SO_PSEUDOCONTEXT_CLASS,
-    "TranslatedMethod" : SO_TRANSLATEDMETHOD_CLASS,
+#    "Process" : SO_PROCESS_CLASS,
+#    "PseudoContext" : SO_PSEUDOCONTEXT_CLASS,
+#    "TranslatedMethod" : SO_TRANSLATEDMETHOD_CLASS,
     # "LargeNegativeInteger" : SO_LARGENEGATIVEINTEGER_CLASS, # Not available in mini.image
 }
-
-objects_needed_boot_vm = [
-    "nil",
-    "true",
-    "false",
-]
 
 objects_in_special_object_table = {
     "nil": SO_NIL,
