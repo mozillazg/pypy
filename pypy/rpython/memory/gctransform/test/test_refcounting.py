@@ -143,7 +143,7 @@ def test_deallocator_simple():
         ops.extend([op for op in block.operations if op.opname != 'same_as']) # XXX
     assert len(ops) == 1
     op = ops[0]
-    assert op.opname == 'gc_free'
+    assert op.opname == 'raw_free'
 
 def test_deallocator_less_simple():
     TPtr = lltype.Ptr(lltype.GcStruct("T", ('a', lltype.Signed)))
@@ -157,7 +157,7 @@ def test_deallocator_less_simple():
     ops = getops(dgraph)
     assert len(ops['direct_call']) == 2
     assert len(ops['getfield']) == 2
-    assert len(ops['gc_free']) == 1
+    assert len(ops['raw_free']) == 1
 
 def test_deallocator_array():
     TPtr = lltype.Ptr(lltype.GcStruct("T", ('a', lltype.Signed)))
@@ -172,7 +172,7 @@ def test_deallocator_array():
     assert len(ops['getfield']) == 2
     assert len(ops['getinteriorfield']) == 2
     assert len(ops['getinteriorarraysize']) == 1
-    assert len(ops['gc_free']) == 1
+    assert len(ops['raw_free']) == 1
 
 def test_deallocator_with_destructor():
     S = lltype.GcStruct("S", ('x', lltype.Signed))
