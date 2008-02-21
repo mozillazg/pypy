@@ -40,36 +40,28 @@ def test_boehm_finalizer_pyobj():
     assert f is not None
 
 def test_boehm_finalizer___del__():
-    S = lltype.GcStruct("S", ('x', lltype.Signed))
+    pinf = lltype.malloc(lltype.RuntimeTypeInfo, immortal=True)
+    S = lltype.GcStruct("S", ('x', lltype.Signed), runtime_type_info=pinf)
     def f(s):
         s.x = 1
-    def type_info_S(p):
-        return lltype.getRuntimeTypeInfo(S)
-    qp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Ptr(lltype.RuntimeTypeInfo)),
-                            "type_info_S",
-                            _callable=type_info_S)
     dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
                                             lltype.Void),
                             "destructor_funcptr",
                             _callable=f)
-    pinf = lltype.attachRuntimeTypeInfo(S, qp, destrptr=dp)
+    pinf.destructor_funcptr = dp
     f, t = make_boehm_finalizer(S)
     assert f is not None
 
 def test_boehm_finalizer_nomix___del___and_pyobj():
-    S = lltype.GcStruct("S", ('x', lltype.Signed), ('y', lltype.Ptr(lltype.PyObject)))
+    pinf = lltype.malloc(lltype.RuntimeTypeInfo, immortal=True)
+    S = lltype.GcStruct("S", ('x', lltype.Signed),
+                             ('y', lltype.Ptr(lltype.PyObject)),
+                        runtime_type_info=pinf)
     def f(s):
         s.x = 1
-    def type_info_S(p):
-        return lltype.getRuntimeTypeInfo(S)
-    qp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Ptr(lltype.RuntimeTypeInfo)),
-                            "type_info_S",
-                            _callable=type_info_S)
     dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
                                             lltype.Void),
                             "destructor_funcptr",
                             _callable=f)
-    pinf = lltype.attachRuntimeTypeInfo(S, qp, destrptr=dp)
+    pinf.destructor_funcptr = dp
     py.test.raises(Exception, "make_boehm_finalizer(S)")
