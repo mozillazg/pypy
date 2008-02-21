@@ -503,7 +503,6 @@ class SourceGenerator:
         # All declarations
         #
         database = self.database
-        structdeflist = database.getstructdeflist()
         name = 'structdef.h'
         fi = self.makefile(name)
         print >> f, '#include "%s"' % name
