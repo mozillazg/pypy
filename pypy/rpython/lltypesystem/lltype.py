@@ -1827,7 +1827,7 @@ getRuntimeTypeInfo._annspecialcase_ = 'specialize:memo'
 def getGcTypeForRtti(rttiptr):
     assert typeOf(rttiptr) == Ptr(RuntimeTypeInfo)
     if not hasattr(rttiptr._obj, '_GCTYPE'):
-        raise TypeError("rtti object %r is not attached to any type" % (
+        raise ValueError("rtti object %r is not attached to any type" % (
             rttiptr,))
     return rttiptr._obj._GCTYPE
 

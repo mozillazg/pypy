@@ -287,7 +287,13 @@ def ll_deallocator(addr):
         try:
             return self.gcheaderbuilder.typeinfo_from_rtti(rtti)
         except KeyError:
-            TYPE = lltype.getGcTypeForRtti(rtti)
             typeinfo = self.gcheaderbuilder.new_typeinfo(rtti)
-            typeinfo.dealloc = self.static_deallocation_funcptr_for_type(TYPE)
+            try:
+                TYPE = lltype.getGcTypeForRtti(rtti)
+            except ValueError:
+                pass      # ignore rtti's not attached anywhere, e.g. in the
+                          # vtable of raw-flavored RPython classes
+            else:
+                fn = self.static_deallocation_funcptr_for_type(TYPE)
+                typeinfo.dealloc = fn
             return typeinfo
