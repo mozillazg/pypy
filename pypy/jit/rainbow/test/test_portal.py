@@ -45,14 +45,17 @@ class PortalTest(InterpretationTest):
 
         # rewire the original portal
 
-        rewriter = PortalRewriter(self.hintannotator, self.rtyper, self.RGenOp)
+        rewriter = PortalRewriter(self.hintannotator, self.rtyper, self.RGenOp,
+                                  self.writer)
+        self.rewriter = rewriter
         origportalgraph = graphof(t, portal)
+        portalgraph = graphof(self.hintannotator.translator, portal)
         rewriter.rewrite(origportalgraph=origportalgraph,
+                         portalgraph=portalgraph,
                          view = conftest.option.view and self.small)
 
         if conftest.option.view and self.small:
             t.view()
-        self.readportalgraph = rewriter.readportalgraph
 
         # Populate the cache
         if len(self._cache_order) >= 3:
@@ -77,13 +80,13 @@ class PortalTest(InterpretationTest):
 
     def get_residual_graph(self):
         llinterp = LLInterpreter(self.rtyper)
+        portalstate = self.rewriter.state
         if self.main_is_portal:
-            residual_graph = llinterp.eval_graph(self.readportalgraph,
-                                                 self.main_args)._obj.graph
+            residual_graph = portalstate.readportal(*self.main_args)._obj.graph
         else:
-            residual_graphs = llinterp.eval_graph(self.readallportalsgraph, [])
-            assert residual_graphs.ll_length() == 1
-            residual_graph = residual_graphs.ll_getitem_fast(0)._obj.graph
+            residual_graphs = portalstate.readallportals()
+            assert len(residual_graphs) == 1
+            residual_graph = residual_graphs[0]._obj.graph
         return residual_graph
             
     def count_direct_calls(self):
@@ -120,7 +123,6 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(main, evaluate, [4, 7])
         assert res == 11
-        self.check_insns({"int_add": 1})
     
     def test_main_as_portal(self):
         def main(x):
