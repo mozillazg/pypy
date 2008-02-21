@@ -16,6 +16,7 @@ class BoehmGCTransformer(GCTransformer):
 
     def __init__(self, translator, inline=False):
         super(BoehmGCTransformer, self).__init__(translator, inline=inline)
+        self.newgcheaderbuilder(self.HDR, self.TYPEINFO)
         self.finalizer_funcptrs = {}
 
         atomic_mh = mallocHelpers()
