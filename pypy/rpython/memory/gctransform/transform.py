@@ -19,6 +19,7 @@ from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.debug import ll_assert
 import sets, os, sys
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.simplify import join_blocks, cleanup_graph
@@ -479,7 +480,9 @@ def GCHelpers(gcheaderbuilder):
         # NB. this assumes that the HDR contains a typeptr field.
         # A bit of manual inlining...
         hdraddr = objaddr - gc_header_offset
-        return llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        rtti = llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        ll_assert(bool(rtti), "NULL rtti")
+        return rtti
     gh.gc_runtime_type_info = gc_runtime_type_info
 
     def typeof(objaddr):
@@ -488,6 +491,7 @@ def GCHelpers(gcheaderbuilder):
         # A bit of manual inlining...
         hdraddr = objaddr - gc_header_offset
         rtti = llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        ll_assert(bool(rtti), "NULL rtti")
         return gcheaderbuilder.cast_rtti_to_typeinfo(rtti)
     gh.typeof = typeof
 
