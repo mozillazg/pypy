@@ -25,24 +25,24 @@ def mock(stack):
     mapped_stack = [wrap(x) for x in stack]
     frame = MockFrame(mapped_stack)
     interp = interpreter.Interpreter()
-    interp.w_active_context = frame
+    interp.s_active_context = frame
     return (interp, len(stack))
 
 def prim(code, stack):
     interp, argument_count = mock(stack)
     prim_table[code](interp, argument_count-1)
-    res = interp.w_active_context.pop()
-    assert not len(interp.w_active_context.stack) # check args are consumed
+    res = interp.s_active_context.pop()
+    assert not len(interp.s_active_context.stack) # check args are consumed
     return res
 
 def prim_fails(code, stack):
     interp, argument_count = mock(stack)
-    orig_stack = list(interp.w_active_context.stack)
+    orig_stack = list(interp.s_active_context.stack)
     try:
         prim_table[code](interp, argument_count-1)
         py.test.fail("Expected PrimitiveFailedError")
     except PrimitiveFailedError:
-        assert interp.w_active_context.stack == orig_stack
+        assert interp.s_active_context.stack == orig_stack
         
 # smallinteger tests
 def test_small_int_add():
