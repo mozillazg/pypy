@@ -20,7 +20,7 @@ class BytecodeWriter(object):
         type_system = self.rtyper.type_system.name
         self.exceptiondesc = exception.ExceptionDesc(
             RGenOp, etrafo, type_system, False)
-        self.interpreter = JitInterpreter(self.exceptiondesc)
+        self.interpreter = JitInterpreter(self.exceptiondesc, RGenOp)
         self.RGenOp = RGenOp
         self.current_block = None
         self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer

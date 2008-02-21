@@ -163,7 +163,7 @@ class InterpretationTest(object):
         red_i = 0
         for i, (color, ll_val) in enumerate(zip(argcolors, values)):
             if color == "green":
-                greenargs.append(writer.RGenOp.constPrebuiltGlobal(ll_val))
+                greenargs.append(rgenop.genconst(ll_val))
             else:
                 TYPE = lltype.typeOf(ll_val)
                 kind = rgenop.kindToken(TYPE)
