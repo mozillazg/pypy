@@ -48,13 +48,14 @@ class STOP(object):
 STOP = STOP()
 
 class JitInterpreter(object):
-    def __init__(self, exceptiondesc):
+    def __init__(self, exceptiondesc, RGenOp):
         self.exceptiondesc = exceptiondesc
         self.opcode_implementations = []
         self.opcode_descs = []
         self.opname_to_index = {}
         self.jitstate = None
         self.queue = None
+        self.rgenop = RGenOp()
         self._add_implemented_opcodes()
 
     def run(self, jitstate, bytecode, greenargs, redargs,
@@ -516,8 +517,7 @@ class JitInterpreter(object):
                     genconst = self.get_greenarg()
                     arg = genconst.revealconst(opdesc.ARGS[i])
                     args += (arg, )
-                rgenop = self.jitstate.curbuilder.rgenop
-                result = rgenop.genconst(opdesc.llop(*args))
+                result = self.rgenop.genconst(opdesc.llop(*args))
                 self.green_result(result)
         elif color == "red":
             if opdesc.nb_args == 1:
