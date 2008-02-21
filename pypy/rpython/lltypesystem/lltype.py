@@ -1824,6 +1824,13 @@ def getRuntimeTypeInfo(TYPE, cache=None):
         return rttiptr
 getRuntimeTypeInfo._annspecialcase_ = 'specialize:memo'
 
+def getGcTypeForRtti(rttiptr):
+    assert typeOf(rttiptr) == Ptr(RuntimeTypeInfo)
+    if not hasattr(rttiptr._obj, '_GCTYPE'):
+        raise TypeError("rtti object %r is not attached to any type" % (
+            rttiptr,))
+    return rttiptr._obj._GCTYPE
+
 def _install_rtti(STRUCT, runtime_type_info):
     if not isinstance(STRUCT, GcStruct):
         raise TypeError("can only attach a runtime_type_info to a GcStruct")

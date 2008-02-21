@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem.lltype import \
-     Primitive, Ptr, typeOf, RuntimeTypeInfo, \
+     Primitive, Ptr, typeOf, RuntimeTypeInfo, RuntimeTypeInfoType, \
      Struct, Array, FuncType, PyObject, Void, \
      ContainerType, OpaqueType, FixedSizeArray, _uninitialized
 from pypy.rpython.lltypesystem import lltype
@@ -88,6 +88,9 @@ class LowLevelDatabase(object):
             elif T == WeakRef:
                 REALT = self.gcpolicy.get_real_weakref_type()
                 node = self.gettypedefnode(REALT)
+            elif T == RuntimeTypeInfo:
+                REALT = self.gcpolicy.get_real_rtti_type()
+                node = self.gettypedefnode(REALT)
             else:
                 raise NoCorrespondingNode("don't know about %r" % (T,))
             self.structdefnodes[key] = node
@@ -107,7 +110,7 @@ class LowLevelDatabase(object):
                     return node.getptrtype()   # special-casing because of C
             typename = self.gettype(T.TO)   # who_asks not propagated
             return typename.replace('@', '*@')
-        elif isinstance(T, (Struct, Array, _WeakRefType)):
+        elif isinstance(T, (Struct, Array, _WeakRefType, RuntimeTypeInfoType)):
             node = self.gettypedefnode(T, varlength=varlength)
             if who_asks is not None:
                 who_asks.dependencies[node] = True

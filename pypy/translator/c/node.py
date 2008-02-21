@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem.lltype import \
      GcStruct, GcArray, ContainerType, \
      parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
-from pypy.rpython.lltypesystem import llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.c.funcgen import FunctionCodeGenerator
 from pypy.translator.c.external import CExternalFunctionCodeGenerator
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
@@ -24,15 +24,6 @@ def needs_gcheader(T):
         if T._first_struct() != (None, None):
             return False   # gcheader already in the first field
     return True
-
-class defaultproperty(object):
-    def __init__(self, fget):
-        self.fget = fget
-    def __get__(self, obj, cls=None):
-        if obj is None:
-            return self
-        else:
-            return self.fget(obj)
 
 
 class StructDefNode:
@@ -88,23 +79,6 @@ class StructDefNode:
             else:
                 typename = db.gettype(T, who_asks=self)
             self.fields.append((self.c_struct_field_name(name), typename))
-        self.gcinfo  # force it to be computed
-
-    def computegcinfo(self):
-        # let the gcpolicy do its own setup
-        self.gcinfo = None   # unless overwritten below
-        rtti = None
-        STRUCT = self.STRUCT
-        if isinstance(STRUCT, GcStruct):
-            XXX
-            try:
-                rtti = getRuntimeTypeInfo(STRUCT)
-            except ValueError:
-                pass
-        if self.varlength == 1:
-            self.db.gcpolicy.struct_setup(self, rtti)
-        return self.gcinfo
-    gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
         return '%s %s @' % (self.typetag, self.name)
@@ -222,19 +196,10 @@ class ArrayDefNode:
             return      # setup() was already called, likely by __init__
         db = self.db
         ARRAY = self.ARRAY
-        self.gcinfo    # force it to be computed
         if needs_gcheader(ARRAY):
             for fname, T in db.gcpolicy.array_gcheader_definition(self):
                 self.gcfields.append((fname, db.gettype(T, who_asks=self)))
         self.itemtypename = db.gettype(ARRAY.OF, who_asks=self)
-
-    def computegcinfo(self):
-        # let the gcpolicy do its own setup
-        self.gcinfo = None   # unless overwritten below
-        if self.varlength == 1:
-            self.db.gcpolicy.array_setup(self)
-        return self.gcinfo
-    gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
         return '%s %s @' % (self.typetag, self.name)
@@ -313,7 +278,6 @@ class BareBoneArrayDefNode:
     Implemented directly as a C array instead of a struct with an items field.
     rffi kind of expects such arrays to be 'bare' C arrays.
     """
-    gcinfo = None
     name = None
     forward_decl = None
 
@@ -360,7 +324,6 @@ class BareBoneArrayDefNode:
 
 
 class FixedSizeArrayDefNode:
-    gcinfo = None
     name = None
     typetag = 'struct'
 
@@ -912,6 +875,13 @@ def weakrefnode_factory(db, T, obj):
     obj._converted_weakref = container     # hack for genllvm :-/
     return db.getcontainernode(container, _dont_write_c_code=False)
 
+def rttinode_factory(db, T, obj):
+    assert isinstance(obj, lltype._rtti)
+    wrapper = db.gcpolicy.convert_rtti(obj)
+    container = wrapper._obj
+    #obj._converted_rtti = container     # hack for genllvm :-/
+    return db.getcontainernode(container, _dont_write_c_code=False)
+
 
 ContainerNodeFactory = {
     Struct:       StructNode,
@@ -923,4 +893,5 @@ ContainerNodeFactory = {
     OpaqueType:   opaquenode_factory,
     PyObjectType: PyObjectNode,
     llmemory._WeakRefType: weakrefnode_factory,
+    lltype.RuntimeTypeInfoType: rttinode_factory,
     }

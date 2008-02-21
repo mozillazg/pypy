@@ -175,6 +175,23 @@ class RefcountingGCTransformer(GCTransformer):
                                resulttype=llmemory.Address)
         return v_raw
 
+    def gct_gc_runtime_type_info(self, hop):
+        # generate inline code equivalent to:
+        #   gcheader = llmemory.cast_adr_to_ptr(adr - gc_header_offset, HDRPTR)
+        #   return gcheader.typeptr
+        [v_ptr] = hop.spaceop.args
+        v_adr = hop.genop("cast_ptr_to_adr", [v_ptr],
+                          resulttype=llmemory.Address)
+        c_gc_header_offset = rmodel.inputconst(lltype.Signed,
+                                         self.gcheaderbuilder.size_gc_header)
+        v_adr = hop.genop("adr_sub", [v_adr, c_gc_header_offset],
+                          resulttype=llmemory.Address)
+        v_hdr = hop.genop("cast_adr_to_ptr", [v_adr],
+                          resulttype=lltype.Ptr(self.HDR))
+        c_typeptr = rmodel.inputconst(lltype.Void, "typeptr")
+        hop.genop("getfield", [v_hdr, c_typeptr],
+                  resultvar=hop.spaceop.result)
+
     def consider_constant(self, TYPE, value):
         if value is not lltype.top_container(value):
                 return
@@ -260,3 +277,13 @@ def ll_deallocator(addr):
         for p in find_gc_ptrs_in_type(TYPE):
             self.static_deallocation_funcptr_for_type(p.TO)
         return fptr
+
+    def convert_rtti(self, rtti):
+        rtti = rtti._as_ptr()
+        try:
+            return self.gcheaderbuilder.typeinfo_from_rtti(rtti)
+        except KeyError:
+            TYPE = lltype.getGcTypeForRtti(rtti)
+            typeinfo = self.gcheaderbuilder.new_typeinfo(rtti)
+            typeinfo.dealloc = self.static_deallocation_funcptr_for_type(TYPE)
+            return typeinfo
