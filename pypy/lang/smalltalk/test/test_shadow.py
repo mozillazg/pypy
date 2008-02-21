@@ -127,17 +127,36 @@ def test_methodcontext():
     assert s_object.pop() == 'f'
     assert s_object.stackpointer() == s_object.stackstart()
 
-def test_process(priority=utility.wrap_int(3)):
-    w_context = methodcontext()
+def process(w_context=methodcontext(), priority=utility.wrap_int(3)):
     w_object = model.W_PointersObject(None, 4)
     w_object.store(constants.NEXT_LINK_INDEX, 'foo')
     w_object.store(constants.PROCESS_SUSPENDED_CONTEXT_INDEX, w_context)
     w_object.store(constants.PROCESS_PRIORITY_INDEX, priority)
     w_object.store(constants.PROCESS_MY_LIST_INDEX, 'mli')
+    return w_object
+
+def test_process():
+    w_context = methodcontext()
+    w_object = process(w_context)
     s_object = w_object.as_process_get_shadow()
     assert s_object.next() == 'foo'
     assert s_object.priority() == 3
     assert s_object.my_list() == 'mli'
     assert s_object.s_suspended_context() == w_context.as_context_get_shadow()
 
+def test_association():
+    w_object = model.W_PointersObject(None, 2)
+    w_object.store(constants.ASSOCIATION_KEY_INDEX, 'key')
+    w_object.store(constants.ASSOCIATION_VALUE_INDEX, 'value')
+    s_object = w_object.as_association_get_shadow()
+    assert s_object.key() == 'key'
+    assert s_object.value() == 'value'
 
+def test_scheduler():
+    w_process = process()
+    w_object = model.W_PointersObject(None, 2)
+    w_object.store(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_process)
+    w_object.store(constants.SCHEDULER_PROCESS_LISTS_INDEX, 'pl')
+    s_object = w_object.as_scheduler_get_shadow()
+    assert s_object.active_process() == w_process.as_process_get_shadow()
+    assert s_object.process_lists() == 'pl'
