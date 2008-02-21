@@ -15,8 +15,9 @@ class GCData(object):
     ADDRESS_VOID_FUNC = lltype.FuncType([llmemory.Address], lltype.Void)
     FINALIZERTYPE = lltype.Ptr(ADDRESS_VOID_FUNC)
 
-    # structure describing the layout of a typeid
+    # structure describing the layout of a type
     TYPE_INFO = lltype.Struct("type_info",
+        ("flags",          lltype.Signed),    # T_... flags, see below
         ("finalizer",      FINALIZERTYPE),
         ("fixedsize",      lltype.Signed),
         ("ofstoptrs",      lltype.Ptr(OFFSETS_TO_GC_PTR)),
@@ -26,58 +27,39 @@ class GCData(object):
         ("varofstoptrs",   lltype.Ptr(OFFSETS_TO_GC_PTR)),
         ("weakptrofs",     lltype.Signed),
         )
-    TYPE_INFO_TABLE = lltype.Array(TYPE_INFO)
 
-    def __init__(self, type_info_table):
-        self.type_info_table = type_info_table
-        # 'type_info_table' is a list of TYPE_INFO structures when
-        # running with gcwrapper, or a real TYPE_INFO_TABLE after
-        # the gctransformer.
+    def q_is_varsize(self, typeinfo):
+        return (typeinfo.flags & T_IS_VARSIZE) != 0
 
-    def q_is_varsize(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return (typeid & T_IS_FIXSIZE) == 0
+    def q_has_gcptr_in_varsize(self, typeinfo):
+        return (typeinfo.flags & T_HAS_GCPTR_IN_VARSIZE) != 0
 
-    def q_has_gcptr_in_varsize(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return (typeid & (T_IS_FIXSIZE|T_NO_GCPTR_IN_VARSIZE)) == 0
+    def q_is_gcarrayofgcptr(self, typeinfo):
+        return (typeinfo.flags & T_IS_GCARRAYOFGCPTR) != 0
 
-    def q_is_gcarrayofgcptr(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return (typeid &
-                (T_IS_FIXSIZE|T_NO_GCPTR_IN_VARSIZE|T_NOT_SIMPLE_GCARRAY)) == 0
+    def q_finalizer(self, typeinfo):
+        return typeinfo.finalizer
 
-    def q_finalizer(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].finalizer
+    def q_offsets_to_gc_pointers(self, typeinfo):
+        return typeinfo.ofstoptrs
 
-    def q_offsets_to_gc_pointers(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].ofstoptrs
+    def q_fixed_size(self, typeinfo):
+        return typeinfo.fixedsize
 
-    def q_fixed_size(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].fixedsize
+    def q_varsize_item_sizes(self, typeinfo):
+        return typeinfo.varitemsize
 
-    def q_varsize_item_sizes(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].varitemsize
+    def q_varsize_offset_to_variable_part(self, typeinfo):
+        return typeinfo.ofstovar
 
-    def q_varsize_offset_to_variable_part(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].ofstovar
+    def q_varsize_offset_to_length(self, typeinfo):
+        return typeinfo.ofstolength
 
-    def q_varsize_offset_to_length(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].ofstolength
+    def q_varsize_offsets_to_gcpointers_in_var_part(self, typeinfo):
+        return typeinfo.varofstoptrs
 
-    def q_varsize_offsets_to_gcpointers_in_var_part(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].varofstoptrs
-
-    def q_weakpointer_offset(self, typeid):
-        ll_assert(typeid > 0, "invalid type_id")
-        return self.type_info_table[typeid].weakptrofs
+    def q_weakpointer_offset(self, typeinfo):
+        return typeinfo.weakptrofs
 
     def set_query_functions(self, gc):
         gc.set_query_functions(
@@ -93,34 +75,27 @@ class GCData(object):
             self.q_varsize_offsets_to_gcpointers_in_var_part,
             self.q_weakpointer_offset)
 
-# For the q_xxx functions that return flags, we use bit patterns
-# in the typeid instead of entries in the type_info_table.  The
-# following flag combinations are used (the idea being that it's
-# very fast on CPUs to check if all flags in a set are all zero):
+# For the q_xxx functions that return flags, we use bits in the 'flags'
+# field.  The idea is that at some point, some GCs could copy these bits
+# into the header of each object to allow for an indirection-free decoding.
+# (Not all combinations of the 3 flags are meaningful; in fact, only 4 are)
 
-#   * if T_IS_FIXSIZE is set, the gc object is not var-sized
-#   * if T_IS_FIXSIZE and T_NO_GCPTR_IN_VARSIZE are both cleared,
-#           there are gc ptrs in the var-sized part
-#   * if T_IS_FIXSIZE, T_NO_GCPTR_IN_VARSIZE and T_NOT_SIMPLE_GCARRAY
-#           are all cleared, the shape is just like GcArray(gcptr)
+T_IS_VARSIZE           = 0x1
+T_HAS_GCPTR_IN_VARSIZE = 0x2
+T_IS_GCARRAYOFGCPTR    = 0x4
+T_first_unused_bit     = 0x8
 
-T_IS_FIXSIZE          = 0x4
-T_NO_GCPTR_IN_VARSIZE = 0x2
-T_NOT_SIMPLE_GCARRAY  = 0x1
-
-def get_typeid_bitmask(TYPE):
-    """Return the bits that we would like to be set or cleared in the type_id
-    corresponding to TYPE.  This returns (mask, expected_value), where
-    the condition is that 'type_id & mask == expected_value'.
+def get_type_flags(TYPE):
+    """Compute the 'flags' for the type.
     """
     if not TYPE._is_varsize():
-        return (T_IS_FIXSIZE, T_IS_FIXSIZE)     # not var-sized
+        return 0     # not var-sized
 
     if (isinstance(TYPE, lltype.GcArray)
         and isinstance(TYPE.OF, lltype.Ptr)
         and TYPE.OF.TO._gckind == 'gc'):
         # a simple GcArray(gcptr)
-        return (T_IS_FIXSIZE|T_NO_GCPTR_IN_VARSIZE|T_NOT_SIMPLE_GCARRAY, 0)
+        return T_IS_VARSIZE | T_HAS_GCPTR_IN_VARSIZE | T_IS_GCARRAYOFGCPTR
 
     if isinstance(TYPE, lltype.Struct):
         ARRAY = TYPE._flds[TYPE._arrayfld]
@@ -129,22 +104,20 @@ def get_typeid_bitmask(TYPE):
     assert isinstance(ARRAY, lltype.Array)
     if ARRAY.OF != lltype.Void and len(offsets_to_gc_pointers(ARRAY.OF)) > 0:
         # var-sized, with gc pointers in the variable part
-        return (T_IS_FIXSIZE|T_NO_GCPTR_IN_VARSIZE|T_NOT_SIMPLE_GCARRAY,
-                T_NOT_SIMPLE_GCARRAY)
+        return T_IS_VARSIZE | T_HAS_GCPTR_IN_VARSIZE
     else:
         # var-sized, but no gc pointer in the variable part
-        return (T_IS_FIXSIZE|T_NO_GCPTR_IN_VARSIZE, T_NO_GCPTR_IN_VARSIZE)
+        return T_IS_VARSIZE
 
 
 def encode_type_shape(builder, info, TYPE):
     """Encode the shape of the TYPE into the TYPE_INFO structure 'info'."""
     offsets = offsets_to_gc_pointers(TYPE)
+    info.flags = get_type_flags(TYPE)
     info.ofstoptrs = builder.offsets2table(offsets, TYPE)
     info.finalizer = builder.make_finalizer_funcptr_for_type(TYPE)
     info.weakptrofs = weakpointer_offset(TYPE)
     if not TYPE._is_varsize():
-        #info.isvarsize = False
-        #info.gcptrinvarsize = False
         info.fixedsize = llarena.round_up_for_allocation(
             llmemory.sizeof(TYPE))
         info.ofstolength = -1
@@ -153,7 +126,6 @@ def encode_type_shape(builder, info, TYPE):
         # varsize ones, the GC must anyway compute the size at run-time
         # and round up that result.
     else:
-        #info.isvarsize = True
         info.fixedsize = llmemory.sizeof(TYPE, 0)
         if isinstance(TYPE, lltype.Struct):
             ARRAY = TYPE._flds[TYPE._arrayfld]
@@ -174,20 +146,14 @@ def encode_type_shape(builder, info, TYPE):
             offsets = ()
         info.varofstoptrs = builder.offsets2table(offsets, ARRAY.OF)
         info.varitemsize = llmemory.sizeof(ARRAY.OF)
-        #info.gcptrinvarsize = len(offsets) > 0
-    #info.gcarrayofgcptr = (isinstance(TYPE, lltype.GcArray)
-    #                       and isinstance(TYPE.OF, lltype.Ptr)
-    #                       and TYPE.OF.TO._gckind == 'gc')
 
 # ____________________________________________________________
 
 
 class TypeLayoutBuilder(object):
-    can_add_new_types = True
 
     def __init__(self):
-        self.type_info_list = [None]   # don't use typeid 0, helps debugging
-        self.id_of_type = {}      # {LLTYPE: type_id}
+        self.typeinfos = {}      # {LLTYPE: TYPE_INFO}
         self.seen_roots = {}
         # the following are lists of addresses of gc pointers living inside the
         # prebuilt structures.  It should list all the locations that could
@@ -202,38 +168,17 @@ class TypeLayoutBuilder(object):
         self.additional_roots_sources = 0
         self.finalizer_funcptrs = {}
         self.offsettable_cache = {}
-        self.next_typeid_cache = {}
 
-    def get_type_id(self, TYPE):
+    def get_type_info(self, TYPE):
         try:
-            return self.id_of_type[TYPE]
+            return self.typeinfos[TYPE]
         except KeyError:
-            assert self.can_add_new_types
             assert isinstance(TYPE, (lltype.GcStruct, lltype.GcArray))
-            # Record the new type_id description as a TYPE_INFO structure.
-            # It goes into a list for now, which will be turned into a
-            # TYPE_INFO_TABLE in flatten_table() by the gc transformer.
-
-            # pick the next type_id with the correct bits set or cleared
-            mask, expected = get_typeid_bitmask(TYPE)
-            type_id = self.next_typeid_cache.get((mask, expected), 1)
-            while True:
-                if type_id == len(self.type_info_list):
-                    self.type_info_list.append(None)
-                if (self.type_info_list[type_id] is None and
-                    (type_id & mask) == expected):
-                    break         # can use this type_id
-                else:
-                    type_id += 1  # continue searching
-            self.next_typeid_cache[mask, expected] = type_id + 1
-            assert type_id & 0xffff == type_id # make sure it fits into 2 bytes
-
-            # build the TYPE_INFO structure
+            # Record the new type description as a TYPE_INFO structure.
             info = lltype.malloc(GCData.TYPE_INFO, immortal=True, zero=True)
             encode_type_shape(self, info, TYPE)
-            self.type_info_list[type_id] = info
-            self.id_of_type[TYPE] = type_id
-            return type_id
+            self.typeinfos[TYPE] = info
+            return info
 
     def offsets2table(self, offsets, TYPE):
         try:
@@ -245,21 +190,6 @@ class TypeLayoutBuilder(object):
                 cachedarray[i] = value
             self.offsettable_cache[TYPE] = cachedarray
             return cachedarray
-
-    def flatten_table(self):
-        self.can_add_new_types = False
-        self.offsettable_cache = None
-        table = lltype.malloc(GCData.TYPE_INFO_TABLE, len(self.type_info_list),
-                              immortal=True)
-        fieldnames = GCData.TYPE_INFO._names
-        for tableentry, newcontent in zip(table, self.type_info_list):
-            if newcontent is None:    # empty entry
-                tableentry.weakptrofs = -1
-                tableentry.ofstolength = -1
-            else:
-                for name in fieldnames:
-                    setattr(tableentry, name, getattr(newcontent, name))
-        return table
 
     def finalizer_funcptr_for_type(self, TYPE):
         if TYPE in self.finalizer_funcptrs:
@@ -283,10 +213,10 @@ class TypeLayoutBuilder(object):
         self.seen_roots[id(value)] = True
 
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
-            typeid = self.get_type_id(TYPE)
+            typeinfo = self.get_type_info(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
             adr = llmemory.cast_ptr_to_adr(hdr)
-            gc.init_gc_object_immortal(adr, typeid)
+            gc.init_gc_object_immortal(adr, typeinfo)
 
         # The following collects the addresses of all the fields that have
         # a GC Pointer type, inside the current prebuilt object.  All such

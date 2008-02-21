@@ -5,7 +5,6 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython import rmodel
 from pypy.rpython.memory import gctypelayout
 from pypy.rpython.memory.gc import marksweep
-from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.debug import ll_assert
 from pypy.translator.backendopt import graphanalyze
@@ -332,12 +331,6 @@ class FrameworkGCTransformer(GCTransformer):
         self.c_const_gc = rmodel.inputconst(r_gc, self.gcdata.gc)
         self.needs_zero_gc_pointers = GCClass.needs_zero_gc_pointers
 
-        HDR = self._gc_HDR = self.gcdata.gc.gcheaderbuilder.HDR
-        self._gc_fields = fields = []
-        for fldname in HDR._names:
-            FLDTYPE = getattr(HDR, fldname)
-            fields.append(('_' + fldname, FLDTYPE))
-
     def build_root_walker(self):
         return ShadowStackRootWalker(self)
 
@@ -350,14 +343,6 @@ class FrameworkGCTransformer(GCTransformer):
 
     def finalizer_funcptr_for_type(self, TYPE):
         return self.layoutbuilder.finalizer_funcptr_for_type(TYPE)
-
-    def gc_fields(self):
-        return self._gc_fields
-
-    def gc_field_values_for(self, obj):
-        hdr = self.gcdata.gc.gcheaderbuilder.header_of_object(obj)
-        HDR = self._gc_HDR
-        return [getattr(hdr, fldname) for fldname in HDR._names]
 
     def finish_tables(self):
         table = self.layoutbuilder.flatten_table()
