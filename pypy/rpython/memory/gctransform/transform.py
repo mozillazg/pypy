@@ -13,6 +13,7 @@ from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.annotation import model as annmodel
 from pypy.rpython import rmodel, annlowlevel
 from pypy.rpython.memory import gc
+from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
@@ -23,6 +24,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.simplify import join_blocks, cleanup_graph
 
 PyObjPtr = lltype.Ptr(lltype.PyObject)
+RTTIPTR = lltype.Ptr(lltype.RuntimeTypeInfo)
 
 class GcHighLevelOp(object):
     def __init__(self, gct, op, index, llops):
@@ -457,10 +459,51 @@ def mallocHelpers():
 
     return mh
 
+def GCHelpers(gcheaderbuilder):
+    class _GcHelpers(object):
+        def _freeze_(self):
+            return True
+    gh = _GcHelpers()
+
+    gc_header_offset = gh.gc_header_offset = gcheaderbuilder.size_gc_header
+    HDRPTR = lltype.Ptr(gcheaderbuilder.HDR)
+
+    def header(objaddr):
+        "Get the header of an object identified by its address."
+        hdraddr = objaddr - gc_header_offset
+        return llmemory.cast_adr_to_ptr(hdraddr, HDRPTR)
+    gh.header = header
+
+    def gc_runtime_type_info(objaddr):
+        "Implementation of the gc_runtime_type_info operation."
+        # NB. this assumes that the HDR contains a typeptr field.
+        # A bit of manual inlining...
+        hdraddr = objaddr - gc_header_offset
+        return llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+    gh.gc_runtime_type_info = gc_runtime_type_info
+
+    def typeof(objaddr):
+        "Get the typeinfo describing the type of the object at 'objaddr'."
+        # NB. this assumes that the HDR contains a typeptr field
+        # A bit of manual inlining...
+        hdraddr = objaddr - gc_header_offset
+        rtti = llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        return gcheaderbuilder.cast_rtti_to_typeinfo(rtti)
+    gh.typeof = typeof
+
+    return gh
+
+
 class GCTransformer(BaseGCTransformer):
 
     def __init__(self, translator, inline=False):
         super(GCTransformer, self).__init__(translator, inline=inline)
+        # at the moment, all GC transformers define a HDR structure that
+        # is added in front of all GC objects, and a TYPEINFO structure
+        # that works as RuntimeTypeInfo
+        self.gcheaderbuilder = GCHeaderBuilder(self.HDR, self.TYPEINFO)
+        self.gchelpers = GCHelpers(self.gcheaderbuilder)
+        self.rtticache = {}
 
         mh = mallocHelpers()
         mh.allocate = llmemory.raw_malloc
@@ -485,6 +528,10 @@ class GCTransformer(BaseGCTransformer):
 
             self.stack_malloc_fixedsize_ptr = self.inittime_helper(
                 ll_stack_malloc_fixedsize, [lltype.Signed], llmemory.Address)
+
+            self.gc_runtime_type_info_ptr = self.inittime_helper(
+                self.gchelpers.gc_runtime_type_info, [llmemory.Address],
+                RTTIPTR)
 
     def gct_malloc(self, hop):
         TYPE = hop.spaceop.result.concretetype.TO
@@ -611,3 +658,41 @@ class GCTransformer(BaseGCTransformer):
             hop.genop('raw_free', [v])
         else:
             assert False, "%s has no support for free with flavor %r" % (self, flavor)           
+
+    def gct_gc_runtime_type_info(self, hop):
+        [v_ptr] = hop.spaceop.args
+        v_adr = hop.genop("cast_ptr_to_adr", [v_ptr],
+                          resulttype=llmemory.Address)
+        v_result = hop.spaceop.result
+        assert v_result.concretetype == RTTIPTR
+        hop.genop("direct_call",
+                  [self.gc_runtime_type_info_ptr, v_adr],
+                  resultvar = v_result)
+
+    def consider_constant(self, TYPE, value):
+        if value is not lltype.top_container(value):
+            return
+        if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
+            p = value._as_ptr()
+            if not self.gcheaderbuilder.get_header(p):
+                hdr = self.gcheaderbuilder.new_header(p)
+                hdr.typeptr = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+                self.initialize_constant_header(hdr, TYPE, value)
+
+    def initialize_constant_header(self, hdr, TYPE, value):
+        pass
+
+    def convert_rtti(self, rtti):
+        rtti = rtti._as_ptr()
+        try:
+            return self.gcheaderbuilder.typeinfo_from_rtti(rtti)
+        except KeyError:
+            typeinfo = self.gcheaderbuilder.new_typeinfo(rtti)
+            try:
+                TYPE = lltype.getGcTypeForRtti(rtti)
+            except ValueError:
+                pass      # ignore rtti's not attached anywhere, e.g. in the
+                          # vtable of raw-flavored RPython classes
+            else:
+                self.initialize_typeinfo(typeinfo, rtti, TYPE)
+            return typeinfo

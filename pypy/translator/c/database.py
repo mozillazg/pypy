@@ -153,7 +153,7 @@ class LowLevelDatabase(object):
         except KeyError:
             T = typeOf(container)
             if isinstance(T, (lltype.Array, lltype.Struct)):
-                if hasattr(self.gctransformer, 'consider_constant'):
+                if self.gctransformer is not None:
                     self.gctransformer.consider_constant(T, container)
             nodefactory = ContainerNodeFactory[T.__class__]
             node = nodefactory(self, T, container, **buildkwds)
