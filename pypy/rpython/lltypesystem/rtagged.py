@@ -17,7 +17,6 @@ class TaggedInstanceRepr(InstanceRepr):
     def _setup_repr(self):
         InstanceRepr._setup_repr(self)
         flds = self.allinstancefields.keys()
-        flds.remove('__class__')
         if self.is_parent:
             if flds:
                 raise TyperError("%r is a base class of an UnboxedValue,"
@@ -67,7 +66,7 @@ class TaggedInstanceRepr(InstanceRepr):
         cunboxedcls = inputconst(CLASSTYPE, unboxedclass_repr.getvtable())
         if self.is_parent:
             # If the lltype of vinst shows that it cannot be a tagged value,
-            # we can directly read the typeptr.  Otherwise, call a helper that
+            # we can fall back to gettypeptr().  Otherwise, call a helper that
             # checks if the tag bit is set in the pointer.
             unboxedinstance_repr = getinstancerepr(self.rtyper,
                                                    self.unboxedclassdef)
@@ -75,18 +74,14 @@ class TaggedInstanceRepr(InstanceRepr):
                 lltype.castable(unboxedinstance_repr.lowleveltype,
                                 vinst.concretetype)
             except lltype.InvalidCast:
-                can_be_tagged = False
+                # cannot be tagged
+                return self.gettypeptr(vinst, llops)
             else:
-                can_be_tagged = True
-            vinst = llops.genop('cast_pointer', [vinst],
-                                resulttype=self.common_repr())
-            if can_be_tagged:
+                # normal case: must check
+                vinst = llops.genop('cast_pointer', [vinst],
+                                    resulttype=self.common_repr())
                 return llops.gendirectcall(ll_unboxed_getclass, vinst,
                                            cunboxedcls)
-            else:
-                ctypeptr = inputconst(lltype.Void, 'typeptr')
-                return llops.genop('getfield', [vinst, ctypeptr],
-                                   resulttype = CLASSTYPE)
         else:
             return cunboxedcls
 
@@ -145,7 +140,7 @@ def ll_unboxed_getclass(instance, class_if_unboxed):
     if lltype.cast_ptr_to_int(instance) & 1:
         return class_if_unboxed
     else:
-        return instance.typeptr
+        return instance.gettypeptr()
 
 def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
     if not obj:
@@ -153,4 +148,4 @@ def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
     if lltype.cast_ptr_to_int(obj) & 1:
         return answer_if_unboxed
     else:
-        return ll_issubclass_const(obj.typeptr, minid, maxid)
+        return ll_issubclass_const(obj.gettypeptr(), minid, maxid)

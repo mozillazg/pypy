@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.memory.gctransform.transform import GCTransformer, mallocHelpers
 from pypy.rpython.memory.gctransform.support import find_gc_ptrs_in_type, \
-     get_rtti, _static_deallocator_body_for_type, LLTransformerOp, ll_call_destructor
+     _static_deallocator_body_for_type, LLTransformerOp, ll_call_destructor
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.backendopt.support import var_needsgc
@@ -31,10 +31,14 @@ counts = {}
 ##         print ' '*i, a, repr(b)[:100-i-len(a)], id(b)
 
 ADDRESS_VOID_FUNC = lltype.FuncType([llmemory.Address], lltype.Void)
+RTTIPTR = lltype.Ptr(lltype.RuntimeTypeInfo)
 
 class RefcountingGCTransformer(GCTransformer):
 
-    HDR = lltype.Struct("header", ("refcount", lltype.Signed))
+    # xxx not all objects need a typeptr, but refcounting is a bit
+    # deprecated now, being not efficient at all
+    HDR = lltype.Struct("header", ("refcount", lltype.Signed),
+                                  ("typeptr", RTTIPTR))
 
     def __init__(self, translator):
         super(RefcountingGCTransformer, self).__init__(translator, inline=True)
@@ -51,21 +55,13 @@ class RefcountingGCTransformer(GCTransformer):
             if adr:
                 gcheader = llmemory.cast_adr_to_ptr(adr - gc_header_offset, HDRPTR)
                 gcheader.refcount = gcheader.refcount + 1
-        def ll_decref(adr, dealloc):
+        def ll_decref(adr):
             if adr:
                 gcheader = llmemory.cast_adr_to_ptr(adr - gc_header_offset, HDRPTR)
                 refcount = gcheader.refcount - 1
                 gcheader.refcount = refcount
                 if refcount == 0:
-                    dealloc(adr)
-        def ll_decref_simple(adr):
-            if adr:
-                gcheader = llmemory.cast_adr_to_ptr(adr - gc_header_offset, HDRPTR)
-                refcount = gcheader.refcount - 1
-                if refcount == 0:
-                    llop.gc_free(lltype.Void, adr)
-                else:
-                    gcheader.refcount = refcount
+                    gcheader.typeptr.xxx(adr)
         def ll_no_pointer_dealloc(adr):
             llop.gc_free(lltype.Void, adr)
 
@@ -259,7 +255,7 @@ def ll_deallocator(addr):
             return self.dynamic_deallocator_funcptrs[TYPE]
         #print_call_chain(self)
 
-        rtti = get_rtti(TYPE)
+        rtti = lltype.getRuntimeTypeInfo(TYPE)
         if rtti is None:
             p = self.static_deallocation_funcptr_for_type(TYPE)
             self.dynamic_deallocator_funcptrs[TYPE] = p

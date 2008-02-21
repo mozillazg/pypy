@@ -73,7 +73,7 @@ class LLRtypeMixin(object):
         return fnptr._obj._callable
 
     def class_name(self, value):
-        return "".join(value.super.typeptr.name)[:-1]
+        return "".join(value.super.gettypeptr().name)[:-1]
 
     def read_attr(self, value, attr_name):
         value = value._obj
