@@ -51,6 +51,15 @@ class GCHeaderBuilder(object):
                                       rttiptr)
         return self.rtti2typeinfo[rttiptr._obj]
 
+    def new_typeinfo(self, rttiptr):
+        rttiptr = lltype.cast_pointer(lltype.Ptr(lltype.RuntimeTypeInfo),
+                                      rttiptr)
+        rtti = rttiptr._obj
+        assert rtti not in self.rtti2typeinfo
+        typeinfo = lltype.malloc(self.TYPEINFO, immortal=True)
+        self.rtti2typeinfo[rtti] = typeinfo
+        return typeinfo
+
     def cast_rtti_to_typeinfo(self, rttiptr):
         # this is RPython
         addr = llmemory.cast_ptr_to_adr(rttiptr)

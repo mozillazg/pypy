@@ -2,8 +2,7 @@ import sys
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Ptr, ContainerType, \
-     RuntimeTypeInfo, getRuntimeTypeInfo, top_container
+     typeOf, Ptr, ContainerType, top_container
 from pypy.rpython.memory.gctransform import \
      refcounting, boehm, framework, stacklessframework, llvmgcroot, asmgcroot
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -48,14 +47,12 @@ class BasicGcPolicy(object):
     def gc_startup_code(self):
         return []
 
-    def struct_setup(self, structdefnode, rtti):
-        return None
+    # for rtti node
+    def get_real_rtti_type(self):
+        return self.transformerclass.TYPEINFO
 
-    def array_setup(self, arraydefnode):
-        return None
-
-    def rtti_type(self):
-        return ''
+    def convert_rtti(self, obj):
+        return self.db.gctransformer.convert_rtti(obj)
 
     def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
@@ -70,11 +67,6 @@ class BasicGcPolicy(object):
     def OP_GC_SET_MAX_HEAP_SIZE(self, funcgen, op):
         return ''
 
-
-class RefcountingInfo:
-    static_deallocator = None
-
-from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 class RefcountingGcPolicy(BasicGcPolicy):
     transformerclass = refcounting.RefcountingGCTransformer
@@ -95,29 +87,6 @@ class RefcountingGcPolicy(BasicGcPolicy):
         else:
             return []
 
-    # for structs
-
-    def struct_setup(self, structdefnode, rtti):
-        if rtti is not None:
-            transformer = structdefnode.db.gctransformer
-            fptr = transformer.static_deallocation_funcptr_for_type(
-                structdefnode.STRUCT)
-            structdefnode.gcinfo = RefcountingInfo()
-            structdefnode.gcinfo.static_deallocator = structdefnode.db.get(fptr)
-
-    # for arrays
-
-    def array_setup(self, arraydefnode):
-        pass
-
-    # for rtti node
-
-    def rtti_type(self):
-        return 'void (@)(void *)'   # void dealloc_xx(struct xx *)
-
-    def rtti_node_factory(self):
-        return RefcountingRuntimeTypeInfo_OpaqueNode
-
     # zero malloc impl
 
     def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op):
@@ -129,48 +98,8 @@ class RefcountingGcPolicy(BasicGcPolicy):
         return ''
 
 
-class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
-    nodekind = 'refcnt rtti'
-    globalcontainer = True
-    typename = 'void (@)(void *)'
-
-    def __init__(self, db, T, obj):
-        assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, GcStruct)
-        self.db = db
-        self.T = T
-        self.obj = obj
-        defnode = db.gettypedefnode(obj.about)
-        self.implementationtypename = 'void (@)(void *)'
-        self.name = defnode.gcinfo.static_deallocator
-        self.ptrname = '((void (*)(void *)) %s)' % (self.name,)
-
-    def enum_dependencies(self):
-        return []
-
-    def implementation(self):
-        return []
-
-
-
-class BoehmInfo:
-    finalizer = None
-
-
 class BoehmGcPolicy(BasicGcPolicy):
     transformerclass = boehm.BoehmGCTransformer
-
-    def array_setup(self, arraydefnode):
-        pass
-
-    def struct_setup(self, structdefnode, rtti):
-        pass
-
-    def rtti_type(self):
-        return BoehmGcRuntimeTypeInfo_OpaqueNode.typename
-
-    def rtti_node_factory(self):
-        return BoehmGcRuntimeTypeInfo_OpaqueNode
 
     def gc_libraries(self):
         if sys.platform == 'win32':
@@ -210,31 +139,6 @@ class BoehmGcPolicy(BasicGcPolicy):
         nbytes = funcgen.expr(op.args[0])
         return 'GC_set_max_heap_size(%s);' % (nbytes,)
 
-class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
-    nodekind = 'boehm rtti'
-    globalcontainer = True
-    typename = 'char @'
-
-    def __init__(self, db, T, obj):
-        assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, GcStruct)
-        self.db = db
-        self.T = T
-        self.obj = obj
-        defnode = db.gettypedefnode(obj.about)
-        self.implementationtypename = self.typename
-        self.name = self.db.namespace.uniquename('g_rtti_v_'+ defnode.barename)
-        self.ptrname = '(&%s)' % (self.name,)
-
-    def enum_dependencies(self):
-        return []
-
-    def implementation(self):
-        yield 'char %s  /* uninitialized */;' % self.name
-
-class FrameworkGcRuntimeTypeInfo_OpaqueNode(BoehmGcRuntimeTypeInfo_OpaqueNode):
-    nodekind = 'framework rtti'
-
 
 # to get an idea how it looks like with no refcount/gc at all
 
@@ -249,29 +153,6 @@ class NoneGcPolicy(BoehmGcPolicy):
 
 class FrameworkGcPolicy(BasicGcPolicy):
     transformerclass = framework.FrameworkGCTransformer
-
-    def struct_setup(self, structdefnode, rtti):
-        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
-            destrptr = rtti._obj.destructor_funcptr
-            # make sure this is seen by the database early, i.e. before
-            # finish_helpers() on the gctransformer
-            self.db.get(destrptr)
-            # the following, on the other hand, will only discover ll_finalizer
-            # helpers.  The get() sees and records a delayed pointer.  It is
-            # still important to see it so that it can be followed as soon as
-            # the mixlevelannotator resolves it.
-            gctransf = self.db.gctransformer
-            fptr = gctransf.finalizer_funcptr_for_type(structdefnode.STRUCT)
-            self.db.get(fptr)
-
-    def array_setup(self, arraydefnode):
-        pass
-
-    def rtti_type(self):
-        return FrameworkGcRuntimeTypeInfo_OpaqueNode.typename
-
-    def rtti_node_factory(self):
-        return FrameworkGcRuntimeTypeInfo_OpaqueNode
 
     def pre_pre_gc_code(self):
         yield '#define USING_FRAMEWORK_GC'

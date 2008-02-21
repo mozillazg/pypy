@@ -39,7 +39,7 @@ void RPyDebugReturnShowException(const char *msg, const char *filename,
                                  long lineno, const char *functionname)
 {
   fprintf(stderr, "%s %s: %s:%ld %s\n", msg,
-          RPyFetchExceptionType()->ov_name->items,
+          RPyFetchExceptionType()->ov_name,
           filename, lineno, functionname);
 }
 #endif
@@ -98,7 +98,7 @@ void RPyConvertExceptionToCPython(void)
 	PyObject *pycls, *v, *tb;
 	assert(RPyExceptionOccurred());
 	assert(!PyErr_Occurred());
-	clsname = RPyFetchExceptionType()->ov_name->items;
+	clsname = RPyFetchExceptionType()->ov_name;
 	pycls = PyDict_GetItemString(PyEval_GetBuiltins(), clsname);
 	if (pycls != NULL && PyExceptionClass_Check(pycls) &&
 	    PyObject_IsSubclass(pycls, PyExc_Exception)) {
