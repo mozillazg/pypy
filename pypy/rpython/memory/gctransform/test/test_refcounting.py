@@ -175,95 +175,16 @@ def test_deallocator_array():
     assert len(ops['raw_free']) == 1
 
 def test_deallocator_with_destructor():
-    S = lltype.GcStruct("S", ('x', lltype.Signed))
+    pinf = lltype.malloc(lltype.RuntimeTypeInfo, immortal=True)
+    S = lltype.GcStruct("S", ('x', lltype.Signed), runtime_type_info=pinf)
     def f(s):
         s.x = 1
-    def type_info_S(p):
-        return lltype.getRuntimeTypeInfo(S)
-    qp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Ptr(lltype.RuntimeTypeInfo)),
-                            "type_info_S",
-                            _callable=type_info_S)
     dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
                                             lltype.Void),
                             "destructor_funcptr",
                             _callable=f)
-    pinf = lltype.attachRuntimeTypeInfo(S, qp, destrptr=dp)
+    pinf.destructor_funcptr = dp
     graph, t = make_deallocator(S)
-
-def test_caching_dynamic_deallocator():
-    S = lltype.GcStruct("S", ('x', lltype.Signed))
-    S1 = lltype.GcStruct("S1", ('s', S), ('y', lltype.Signed))
-    T = lltype.GcStruct("T", ('x', lltype.Signed))
-    def f_S(s):
-        s.x = 1
-    def f_S1(s1):
-        s1.s.x = 1
-        s1.y = 2
-    def f_T(s):
-        s.x = 1
-    def type_info_S(p):
-        return lltype.getRuntimeTypeInfo(S)
-    def type_info_T(p):
-        return lltype.getRuntimeTypeInfo(T)
-    qp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Ptr(lltype.RuntimeTypeInfo)),
-                            "type_info_S",
-                            _callable=type_info_S)
-    dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Void),
-                            "destructor_funcptr",
-                            _callable=f_S)
-    pinf = lltype.attachRuntimeTypeInfo(S, qp, destrptr=dp)
-    dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(S)],
-                                            lltype.Void),
-                            "destructor_funcptr",
-                            _callable=f_S1)
-    pinf = lltype.attachRuntimeTypeInfo(S1, qp, destrptr=dp)
-    qp = lltype.functionptr(lltype.FuncType([lltype.Ptr(T)],
-                                            lltype.Ptr(lltype.RuntimeTypeInfo)),
-                            "type_info_S",
-                            _callable=type_info_T)
-    dp = lltype.functionptr(lltype.FuncType([lltype.Ptr(T)],
-                                            lltype.Void),
-                            "destructor_funcptr",
-                            _callable=f_T)
-    pinf = lltype.attachRuntimeTypeInfo(T, qp, destrptr=dp)
-    def f():
-        pass
-    t = TranslationContext()
-    t.buildannotator().build_types(f, [])
-    t.buildrtyper().specialize()
-    transformer = RefcountingGCTransformer(t)
-    p_S = transformer.dynamic_deallocation_funcptr_for_type(S)
-    p_S1 = transformer.dynamic_deallocation_funcptr_for_type(S1)
-    p_T = transformer.dynamic_deallocation_funcptr_for_type(T)
-    assert p_S is not p_T
-    assert p_S is p_S1
-
-def test_dynamic_deallocator():
-    class A(object):
-        pass
-    class B(A):
-        pass
-    def f(x):
-        a = A()
-        a.x = 1
-        b = B()
-        b.x = 2
-        b.y = 3
-        if x:
-            c = a
-        else:
-            c = b
-        return c.x
-    t, transformer = rtype_and_transform(
-        f, [int], RefcountingGCTransformer, check=False)
-    fgraph = graphof(t, f)
-    s_instance = t.annotator.bookkeeper.valueoftype(A)
-    TYPE = t.rtyper.getrepr(s_instance).lowleveltype.TO
-    p = transformer.dynamic_deallocation_funcptr_for_type(TYPE)
-    t.rtyper.specialize_more_blocks()
 
 def test_recursive_structure():
     F = lltype.GcForwardReference()
