@@ -149,7 +149,7 @@ class InterpretationTest(object):
                                         ll_function.convert_arguments, values)]
         writer, jitcode, argcolors = self.serialize(ll_function, values,
                                                     **kwds)
-        rgenop = writer.RGenOp()
+        rgenop = writer.interpreter.rgenop
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
         builder.start_writing()
