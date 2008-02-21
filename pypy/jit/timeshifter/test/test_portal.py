@@ -142,52 +142,6 @@ class PortalTest(object):
         
 class TestPortal(PortalTest):
             
-    def test_simple(self):
-
-        def main(code, x):
-            return evaluate(code, x)
-
-        def evaluate(y, x):
-            hint(y, concrete=True)
-            z = y+x
-            return z
-
-        res = self.timeshift_from_portal(main, evaluate, [3, 2])
-        assert res == 5
-
-        res = self.timeshift_from_portal(main, evaluate, [3, 5])
-        assert res == 8
-
-        res = self.timeshift_from_portal(main, evaluate, [4, 7])
-        assert res == 11
-    
-    def test_main_as_portal(self):
-        def main(x):
-            return x
-
-        res = self.timeshift_from_portal(main, main, [42])
-        assert res == 42
-
-    def test_multiple_portal_calls(self):
-        def ll_function(n):
-            hint(None, global_merge_point=True)
-            k = n
-            if k > 5:
-                k //= 2
-            k = hint(k, promote=True)
-            k *= 17
-            return hint(k, variable=True)
-
-        res = self.timeshift_from_portal(ll_function, ll_function, [4],
-                                         policy=P_NOVIRTUAL)
-        assert res == 68
-        self.check_insns(int_floordiv=1, int_mul=0)
-
-        res = self.timeshift_from_portal(ll_function, ll_function, [4],
-                                         policy=P_NOVIRTUAL)
-        assert res == 68
-        self.check_insns(int_floordiv=1, int_mul=0)
-
     def test_dfa_compile(self):
         from pypy.lang.automata.dfa import getautomaton, convertdfa, recognizetable
         a = getautomaton()
