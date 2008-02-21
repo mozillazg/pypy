@@ -72,6 +72,11 @@ class JitInterpreter(object):
             self.bytecode_loop()
         return self.jitstate
 
+    def fresh_jitstate(self, builder):
+        return rtimeshift.JITState(builder, None,
+                                   self.exceptiondesc.null_exc_type_box,
+                                   self.exceptiondesc.null_exc_value_box)
+
     def finish_jitstate(self, graphsigtoken):
         jitstate = self.jitstate
         exceptiondesc = self.exceptiondesc
