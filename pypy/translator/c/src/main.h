@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
         /* fish for the exception type, at least */
 #ifndef AVR
         fprintf(stderr, "Fatal RPython error: %s\n",
-                RPyFetchExceptionType()->ov_name->items);
+                RPyFetchExceptionType()->ov_name);
 #endif
         exitcode = 1;
     }
