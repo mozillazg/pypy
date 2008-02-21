@@ -34,7 +34,7 @@ class VirtualizableInstanceRepr(InstanceRepr):
         rbase = self.rbase
         accessors = []
         if self.top_of_virtualizable_hierarchy:
-            if len(rbase.allinstancefields) != 1:
+            if len(rbase.allinstancefields) != 0:
                 raise TyperError("virtulizable class cannot have"
                                  " non-virtualizable base class with instance"
                                  " fields: %r" % self.classdef)
@@ -140,7 +140,7 @@ class VirtualizableInstanceRepr(InstanceRepr):
 
     def setfield(self, vinst, attr, vvalue, llops, force_cast=False,
                  flags={}):
-        """Write the given attribute (or __class__ for the type) of 'vinst'."""
+        """Write the given attribute of 'vinst'."""
         if (attr in self.my_redirected_fields
             and not flags.get('access_directly')):
             mangled_name, r = self.fields[attr]
