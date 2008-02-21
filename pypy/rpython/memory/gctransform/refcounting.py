@@ -8,7 +8,6 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.backendopt.support import var_needsgc
 from pypy.rpython import rmodel
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rlib.debug import ll_assert
 from pypy.rpython.rbuiltin import gen_cast
 import sys
 
