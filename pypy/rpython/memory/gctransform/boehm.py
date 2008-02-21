@@ -1,4 +1,5 @@
-from pypy.rpython.memory.gctransform.transform import GCTransformer, mallocHelpers
+from pypy.rpython.memory.gctransform.transform import GCTransformer
+from pypy.rpython.memory.gctransform.transform import mallocHelpers, RTTIPTR
 from pypy.rpython.memory.gctransform.support import type_contains_pyobjs, \
      _static_deallocator_body_for_type, LLTransformerOp, ll_call_destructor
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -9,12 +10,13 @@ from pypy.rpython.lltypesystem.lloperation import llop
 
 class BoehmGCTransformer(GCTransformer):
     FINALIZER_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+    # XXX not all objects need a typeptr
+    HDR = lltype.Struct("header", ("typeptr", RTTIPTR))
     TYPEINFO = lltype.Struct('typeinfo')   # empty
 
     def __init__(self, translator, inline=False):
         super(BoehmGCTransformer, self).__init__(translator, inline=inline)
         self.finalizer_funcptrs = {}
-        self.rtticache = {}
 
         atomic_mh = mallocHelpers()
         atomic_mh.allocate = lambda size: llop.boehm_malloc_atomic(llmemory.Address, size)
@@ -45,9 +47,8 @@ class BoehmGCTransformer(GCTransformer):
             self.mixlevelannotator.finish()   # for now
             self.mixlevelannotator.backend_optimize()
 
-    def convert_rtti(self, rtti):
-        # no information in the TYPEINFO
-        return lltype.malloc(self.TYPEINFO, immortal=True)
+    def initialize_typeinfo(self, typeinfo, rtti, TYPE):
+        pass    # typeinfo is empty
 
     def push_alive_nopyobj(self, var, llops):
         pass
