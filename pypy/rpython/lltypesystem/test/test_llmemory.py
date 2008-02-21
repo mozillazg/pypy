@@ -349,7 +349,7 @@ def test_raw_malloc_array():
 def test_raw_malloc_gcstruct():
     from pypy.rpython.memory import gcheader
     HDR = lltype.Struct('header', ('a', lltype.Signed))
-    builder = gcheader.GCHeaderBuilder(HDR)
+    builder = gcheader.GCHeaderBuilder(HDR, None)
     gchdr = builder.size_gc_header
     S = lltype.GcStruct('S', ('x', lltype.Signed))
 
@@ -433,7 +433,7 @@ def test_raw_free_with_hdr():
     from pypy.rpython.memory.gcheader import GCHeaderBuilder
     
     HDR = lltype.Struct('h', ('t', lltype.Signed))
-    gh = GCHeaderBuilder(HDR).size_gc_header
+    gh = GCHeaderBuilder(HDR, None).size_gc_header
     
     A = lltype.GcArray(lltype.Signed)
     adr = raw_malloc(gh+sizeof(A, 10))
