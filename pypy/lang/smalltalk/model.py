@@ -194,6 +194,10 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         shadow.check_for_updates()
         return shadow
 
+    def as_link_get_shadow(self):
+        from pypy.lang.smalltalk.shadow import LinkShadow
+        return self.as_special_get_shadow(LinkShadow)
+    
     def as_semaphore_get_shadow(self):
         from pypy.lang.smalltalk.shadow import SemaphoreShadow
         return self.as_special_get_shadow(SemaphoreShadow)
@@ -225,9 +229,9 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
     def as_context_get_shadow(self):
         from pypy.lang.smalltalk import classtable
         if self.getclass() == classtable.w_MethodContext:
-            self.as_methodcontext_get_shadow()
+            return self.as_methodcontext_get_shadow()
         elif self.getclass() == classtable.w_BlockContext:
-            self.as_blockcontext_get_shadow()
+            return self.as_blockcontext_get_shadow()
         else:
             # Should not happen...
             raise Exception()
@@ -524,7 +528,7 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         elif index == constants.CTXPART_PC_INDEX:
             return utility.wrap_int(self.pc())
         elif index == constants.CTXPART_STACKP_INDEX:
-            return utility.wrap_int(len(self.stack))
+            return utility.wrap_int(len(self.stack)+self.stackstart())
         
         # Invalid!
         raise IndexError

@@ -69,3 +69,75 @@ def test_methoddict():
     w_class = build_smalltalk_class("Demo", 0x90, methods=methods)
     classshadow = w_class.as_class_get_shadow()
     assert classshadow.methoddict == methods
+
+def test_link():
+    w_object = model.W_PointersObject(None, 1)
+    w_object.store(constants.NEXT_LINK_INDEX, 'foo')
+    assert w_object.as_link_get_shadow().next() == 'foo'
+
+def method(tempsize=3,argsize=2, bytes="abcde"):
+    w_m = model.W_CompiledMethod()
+    w_m.bytes = bytes
+    w_m.tempsize = tempsize
+    w_m.argsize = argsize
+    return w_m
+
+def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
+                  method=method()):
+    stackstart = method.argsize + method.tempsize + 7
+    w_object = model.W_PointersObject(classtable.w_MethodContext, stackstart+stacksize)
+    w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
+    w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))
+    w_object.store(constants.CTXPART_STACKP_INDEX, utility.wrap_int(stackstart+stackpointer))
+    w_object.store(constants.MTHDCTX_METHOD, method)
+    # XXX
+    w_object.store(constants.MTHDCTX_RECEIVER_MAP, '???')
+    w_object.store(constants.MTHDCTX_RECEIVER, 'receiver')
+    w_object.store(constants.MTHDCTX_TEMP_FRAME_START,
+                   utility.wrap_int(constants.MTHDCTX_TEMP_FRAME_START))
+    return w_object
+
+def test_methodcontext():
+    w_m = method()
+    w_object = methodcontext(stackpointer=2, method=w_m)
+    w_object2 = methodcontext(w_sender=w_object)
+    s_object = w_object.as_methodcontext_get_shadow()
+    s_object2 = w_object2.as_methodcontext_get_shadow()
+    assert w_object2.fetch(constants.CTXPART_SENDER_INDEX) == w_object
+    assert s_object.w_self() == w_object
+    assert s_object2.w_self() == w_object2
+    assert s_object.s_sender() == None
+    assert s_object2.s_sender() == s_object
+    assert s_object.w_receiver() == 'receiver'
+    s_object2.settemp(0, 'a')
+    s_object2.settemp(1, 'b')
+    assert s_object2.gettemp(0) == 'a'
+    assert s_object2.gettemp(1) == 'b'
+    assert s_object.w_method() == w_m
+    idx = s_object.stackstart()
+    w_object.store(idx + 1, 'f')
+    w_object.store(idx + 2, 'g')
+    w_object.store(idx + 3, 'h')
+    assert s_object.top() == 'h'
+    s_object.push('i')
+    assert s_object.top() == 'i'
+    assert s_object.peek(1) == 'h'
+    assert s_object.pop() == 'i'
+    assert s_object.pop_and_return_n(2) == ['g', 'h']
+    assert s_object.pop() == 'f'
+    assert s_object.stackpointer() == s_object.stackstart()
+
+def test_process(priority=utility.wrap_int(3)):
+    w_context = methodcontext()
+    w_object = model.W_PointersObject(None, 4)
+    w_object.store(constants.NEXT_LINK_INDEX, 'foo')
+    w_object.store(constants.PROCESS_SUSPENDED_CONTEXT_INDEX, w_context)
+    w_object.store(constants.PROCESS_PRIORITY_INDEX, priority)
+    w_object.store(constants.PROCESS_MY_LIST_INDEX, 'mli')
+    s_object = w_object.as_process_get_shadow()
+    assert s_object.next() == 'foo'
+    assert s_object.priority() == 3
+    assert s_object.my_list() == 'mli'
+    assert s_object.s_suspended_context() == w_context.as_context_get_shadow()
+
+

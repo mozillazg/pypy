@@ -222,13 +222,13 @@ class LinkedListShadow(AbstractShadow):
         self._w_self = w_self
 
     def firstlink(self):
-        return self._w_self.at0(constants.FIRST_LINK_INDEX)
+        return self._w_self.fetch(constants.FIRST_LINK_INDEX)
 
     def store_firstlink(self, w_object):
         return self._w_self.atput0(constants.FIRST_LINK_INDEX, w_object)
 
     def lastlink(self):
-        return self._w_self.at0(constants.LAST_LINK_INDEX)
+        return self._w_self.fetch(constants.LAST_LINK_INDEX)
 
     def store_lastlink(self, w_object):
         return self._w_self.atput0(constants.LAST_LINK_INDEX, w_object)
@@ -266,9 +266,9 @@ class SemaphoreShadow(LinkedListShadow):
 
     def put_to_sleep(self, s_process):
         priority = s_process.priority()
-        s_scheduler = self.scheduler()
+        s_scheduler = self.s_scheduler()
         w_process_lists = s_scheduler.process_lists()
-        w_process_list = w_process_lists.at0(priority)
+        w_process_list = w_process_lists.fetch(priority)
         w_process_list.as_linkedlist_get_shadow().add_last_link(s_process._w_self)
         s_process.store_my_list(w_process_list)
         
@@ -282,7 +282,7 @@ class SemaphoreShadow(LinkedListShadow):
         s_process.store_w_suspended_context(objtable.w_nil)
         #reclaimableContextCount := 0
 
-    def scheduler(self):
+    def s_scheduler(self):
         from pypy.lang.smalltalk import objtable
         w_association = objtable.objtable["w_schedulerassociationpointer"]
         w_scheduler = w_association.as_association_get_shadow().value()
@@ -290,7 +290,7 @@ class SemaphoreShadow(LinkedListShadow):
 
     def resume(self, w_process, interp):
         s_process = w_process.as_process_get_shadow()
-        s_scheduler = self.scheduler()
+        s_scheduler = self.s_scheduler()
         s_active_process = s_scheduler.active_process()
         active_priority = s_active_process.priority()
         new_priority = s_process.priority()
@@ -303,7 +303,7 @@ class SemaphoreShadow(LinkedListShadow):
     def synchronous_signal(self, interp):
         print "SYNCHRONOUS SIGNAL"
         if self.is_empty_list():
-            w_value = self._w_self.at0(constants.EXCESS_SIGNALS_INDEX)
+            w_value = self._w_self.fetch(constants.EXCESS_SIGNALS_INDEX)
             w_value = utility.wrap_int(utility.unwrap_int(w_value) + 1)
             self._w_self.atput0(constants.EXCESS_SIGNALS_INDEX, w_value)
         else:
@@ -311,10 +311,10 @@ class SemaphoreShadow(LinkedListShadow):
 
 class LinkShadow(AbstractShadow):
     def __init__(self, w_self):
-        self._w_self = self
+        self._w_self = w_self
 
     def next(self):
-        return self._w_self.at0(constants.NEXT_LINK_INDEX)
+        return self._w_self.fetch(constants.NEXT_LINK_INDEX)
 
     def store_next(self, w_object):
         self._w_self.atput0(constants.NEXT_LINK_INDEX, w_object)
@@ -326,10 +326,10 @@ class ProcessShadow(LinkShadow):
         self._w_self = w_self
 
     def priority(self):
-        return utility.unwrap_int(self._w_self.at0(constants.PROCESS_PRIORITY_INDEX))
+        return utility.unwrap_int(self._w_self.fetch(constants.PROCESS_PRIORITY_INDEX))
 
     def my_list(self):
-        return self._w_self.at0(constants.PROCESS_MY_LIST_INDEX)
+        return self._w_self.fetch(constants.PROCESS_MY_LIST_INDEX)
 
     def store_my_list(self, w_object):
         self._w_self.atput0(constants.PROCESS_MY_LIST_INDEX, w_object)
@@ -345,23 +345,23 @@ class AssociationShadow(AbstractShadow):
         self._w_self = w_self
 
     def key(self):
-        return self._w_self.at0(constants.ASSOCIATION_KEY_INDEX)
+        return self._w_self.fetch(constants.ASSOCIATION_KEY_INDEX)
 
     def value(self):
-        return self._w_self.at0(constants.ASSOCIATION_VALUE_INDEX)
+        return self._w_self.fetch(constants.ASSOCIATION_VALUE_INDEX)
 
 class SchedulerShadow(AbstractShadow):
     def __init__(self, w_self):
         self._w_self = w_self
 
     def active_process(self):
-        return self._w_self.at0(constants.SCHEDULER_ACTIVE_PROCESS_INDEX).as_process_get_shadow()
+        return self._w_self.fetch(constants.SCHEDULER_ACTIVE_PROCESS_INDEX).as_process_get_shadow()
 
     def store_active_process(self, w_object):
         self._w_self.atput0(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_object)
     
     def process_lists(self):
-        return self._w_self.at0(constants.SCHEDULER_PROCESS_LISTS_INDEX)
+        return self._w_self.fetch(constants.SCHEDULER_PROCESS_LISTS_INDEX)
 
 class ContextPartShadow(AbstractShadow):
 
@@ -378,10 +378,16 @@ class ContextPartShadow(AbstractShadow):
         return self.s_home().w_receiver()
 
     def s_sender(self):
-        return self._w_self.fetch(constants.CTXPART_SENDER_INDEX).as_context_get_shadow()
+        # XXX XXX
+        from pypy.lang.smalltalk import objtable
+        w_sender = self.w_self().fetch(constants.CTXPART_SENDER_INDEX)
+        if w_sender == objtable.w_nil:
+            return None
+        else:
+            return w_sender.as_context_get_shadow()
 
     def store_s_sender(self, s_sender):
-        self._w_self.store(constants.CTXPART_SENDER_INDEX, s_sender._w_self())
+        self._w_self.store(constants.CTXPART_SENDER_INDEX, s_sender.w_self())
 
     def pc(self):
         return utility.unwrap_int(self._w_self.fetch(constants.CTXPART_PC_INDEX))
@@ -390,10 +396,10 @@ class ContextPartShadow(AbstractShadow):
         self._w_self.store(constants.CTXPART_PC_INDEX, utility.wrap_int(newpc))
 
     def stackpointer(self):
-        return utility.unwrap_int(self._w_self.fetch(constants.CTXPART_SENDER_STACKP_INDEX))
+        return utility.unwrap_int(self._w_self.fetch(constants.CTXPART_STACKP_INDEX))
 
     def store_stackpointer(self, pointer):
-        self._w_self.store(constants.CTXPART_SENDER_STACKP_INDEX,
+        self._w_self.store(constants.CTXPART_STACKP_INDEX,
                           utility.wrap_int(pointer))
 
     # ______________________________________________________________________
@@ -428,13 +434,13 @@ class ContextPartShadow(AbstractShadow):
     # Stack Manipulation
     def pop(self):
         idx = self.stackpointer()
-        w_v = self._w_self.fetch(idx)
+        w_v = self.w_self().fetch(idx)
         self.store_stackpointer(idx - 1)
         return w_v
 
     def push(self, w_v):
         idx = self.stackpointer() + 1
-        self._w_self.store(idx, w_v)
+        self.w_self().store(idx, w_v)
         self.store_stackpointer(idx)
 
     def push_all(self, lst):
@@ -445,17 +451,17 @@ class ContextPartShadow(AbstractShadow):
         return self.peek(0)
         
     def peek(self, idx):
-        return self._w_self.fetch(self.stackpointer()-idx)
+        return self.w_self().fetch(self.stackpointer()-idx)
 
     def pop_n(self, n):
         assert n >= 0
-        assert n > (self.stackpointer() - self.stackstart())
+        assert n <= self.stackpointer() + 1
         self.store_stackpointer(self.stackpointer() - n)
 
     def pop_and_return_n(self, n):
         self.pop_n(n)
         start = self.stackpointer() + 1
-        return [self._w_self.fetch(i) for i in range(start, start+n)]
+        return [self.w_self().fetch(i) for i in range(start, start+n)]
     
 class BlockContextShadow(ContextPartShadow):
 
