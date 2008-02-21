@@ -886,7 +886,8 @@ class RttiNode(ContainerNode):
         assert isinstance(obj, lltype._rtti)
         wrapper = db.gcpolicy.convert_rtti(obj)
         self.realobj = wrapper._obj
-        self.realnode = db.getcontainernode(self.realobj)
+        self.realnode = db.getcontainernode(self.realobj,
+                                            _dont_write_c_code=False)
         ContainerNode.__init__(self, db, T, obj)
 
     def basename(self):
