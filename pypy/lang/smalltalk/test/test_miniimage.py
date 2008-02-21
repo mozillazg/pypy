@@ -226,6 +226,11 @@ def test_map_mirrors_to_classtable():
     w_false = image.special(constants.SO_FALSE)
     assert w_false is objtable.w_false
     
+def test_scheduler():
+    from pypy.lang.smalltalk.shadow import SemaphoreShadow
+    s_semaphore = SemaphoreShadow(None)
+    s_scheduler = s_semaphore.s_scheduler()
+    
 def test_compile_method():
     # py.test.skip("Not working yet.")
     sourcecode = """fib 

@@ -203,6 +203,9 @@ class SqueakImage(object):
                                 .g_object.pointers]
 
         self.objects = [chunk.g_object.w_object for chunk in reader.chunklist]
+        from pypy.lang.smalltalk import constants, objtable
+        for name, idx in constants.objects_in_special_object_table.items():
+            objtable.objtable["w_" + name] = self.objects[idx]
 
     def special(self, index):
         return self.special_objects[index]
