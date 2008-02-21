@@ -477,6 +477,9 @@ class StructNode(ContainerNode):
         return self.T._name
 
     def enum_dependencies(self):
+        if needs_gcheader(self.T):
+            for thing in self.db.gcpolicy.struct_gcheader_initdata(self):
+                yield thing
         for name in self.T._names:
             yield getattr(self.obj, name)
 
@@ -537,7 +540,10 @@ class ArrayNode(ContainerNode):
         return 'array'
 
     def enum_dependencies(self):
-        return self.obj.items
+        result = self.obj.items
+        if needs_gcheader(self.T):
+            result = result + self.db.gcpolicy.array_gcheader_initdata(self)
+        return result
 
     def getlength(self):
         return len(self.obj.items)
@@ -818,8 +824,6 @@ class ExtType_OpaqueNode(ContainerNode):
 
 
 def opaquenode_factory(db, T, obj):
-    if T == RuntimeTypeInfo:
-        return db.gcpolicy.rtti_node_factory()(db, T, obj)
     if T.hints.get("render_structure", False):
         return ExtType_OpaqueNode(db, T, obj)
     raise Exception("don't know about %r" % (T,))
@@ -875,12 +879,24 @@ def weakrefnode_factory(db, T, obj):
     obj._converted_weakref = container     # hack for genllvm :-/
     return db.getcontainernode(container, _dont_write_c_code=False)
 
-def rttinode_factory(db, T, obj):
-    assert isinstance(obj, lltype._rtti)
-    wrapper = db.gcpolicy.convert_rtti(obj)
-    container = wrapper._obj
-    #obj._converted_rtti = container     # hack for genllvm :-/
-    return db.getcontainernode(container, _dont_write_c_code=False)
+class RttiNode(ContainerNode):
+    nodekind = 'rtti'
+
+    def __init__(self, db, T, obj):
+        assert isinstance(obj, lltype._rtti)
+        wrapper = db.gcpolicy.convert_rtti(obj)
+        self.realobj = wrapper._obj
+        self.realnode = db.getcontainernode(self.realobj)
+        ContainerNode.__init__(self, db, T, obj)
+
+    def basename(self):
+        return self.realnode.basename()
+
+    def enum_dependencies(self):
+        return self.realnode.enum_dependencies()
+
+    def initializationexpr(self, decoration=''):
+        return self.realnode.initializationexpr(decoration)
 
 
 ContainerNodeFactory = {
@@ -893,5 +909,5 @@ ContainerNodeFactory = {
     OpaqueType:   opaquenode_factory,
     PyObjectType: PyObjectNode,
     llmemory._WeakRefType: weakrefnode_factory,
-    lltype.RuntimeTypeInfoType: rttinode_factory,
+    lltype.RuntimeTypeInfoType: RttiNode,
     }
