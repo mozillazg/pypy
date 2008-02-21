@@ -9,10 +9,12 @@ from pypy.rpython.lltypesystem.lloperation import llop
 
 class BoehmGCTransformer(GCTransformer):
     FINALIZER_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+    TYPEINFO = lltype.Struct('typeinfo')   # empty
 
     def __init__(self, translator, inline=False):
         super(BoehmGCTransformer, self).__init__(translator, inline=inline)
         self.finalizer_funcptrs = {}
+        self.rtticache = {}
 
         atomic_mh = mallocHelpers()
         atomic_mh.allocate = lambda size: llop.boehm_malloc_atomic(llmemory.Address, size)
@@ -42,6 +44,10 @@ class BoehmGCTransformer(GCTransformer):
                 ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
             self.mixlevelannotator.finish()   # for now
             self.mixlevelannotator.backend_optimize()
+
+    def convert_rtti(self, rtti):
+        # no information in the TYPEINFO
+        return lltype.malloc(self.TYPEINFO, immortal=True)
 
     def push_alive_nopyobj(self, var, llops):
         pass
@@ -84,12 +90,11 @@ class BoehmGCTransformer(GCTransformer):
         if TYPE in self.finalizer_funcptrs:
             return self.finalizer_funcptrs[TYPE]
 
-        rtti = get_rtti(TYPE)
-        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
-            destrptr = rtti._obj.destructor_funcptr
+        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        destrptr = rtti.destructor_funcptr
+        if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
         else:
-            destrptr = None
             DESTR_ARG = None
 
         if type_contains_pyobjs(TYPE):
