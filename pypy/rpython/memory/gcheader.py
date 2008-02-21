@@ -1,5 +1,6 @@
 import weakref
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rlib.debug import ll_assert
 
 
 # this is global because a header cannot be a header of more than one GcObj
@@ -62,6 +63,7 @@ class GCHeaderBuilder(object):
 
     def cast_rtti_to_typeinfo(self, rttiptr):
         # this is RPython
+        ll_assert(bool(rttiptr), "NULL rtti pointer")
         addr = llmemory.cast_ptr_to_adr(rttiptr)
         addr += self.size_gc_typeinfo
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.TYPEINFO))
