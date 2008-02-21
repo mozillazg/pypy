@@ -387,11 +387,9 @@ LL_OPERATIONS = {
     # __________ GC operations __________
 
     'gc__collect':          LLOp(canunwindgc=True),
-    'gc_free':              LLOp(),
     'gc_fetch_exception':   LLOp(),
     'gc_restore_exception': LLOp(),
     'gc_runtime_type_info': LLOp(canfold=True),
-    'gc_deallocate':        LLOp(),
     'gc_push_alive_pyobj':  LLOp(),
     'gc_pop_alive_pyobj':   LLOp(),
     'gc_reload_possibly_moved': LLOp(),

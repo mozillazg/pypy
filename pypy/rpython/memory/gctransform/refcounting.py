@@ -40,11 +40,16 @@ class RefcountingGCTransformer(GCTransformer):
     HDR = lltype.Struct("header", ("refcount", lltype.Signed),
                                   ("typeptr", RTTIPTR))
 
+    TYPEINFO = lltype.Struct("typeinfo",
+                             ("dealloc", lltype.Ptr(ADDRESS_VOID_FUNC)))
+
     def __init__(self, translator):
         super(RefcountingGCTransformer, self).__init__(translator, inline=True)
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
+        gchdrbuilder = GCHeaderBuilder(self.HDR, self.TYPEINFO)
+        self.gcheaderbuilder = gchdrbuilder
         gc_header_offset = self.gcheaderbuilder.size_gc_header
         self.deallocator_graphs_needing_transforming = []
+        self.rtticache = {}
 
         # create incref, etc  graph
 
@@ -61,9 +66,11 @@ class RefcountingGCTransformer(GCTransformer):
                 refcount = gcheader.refcount - 1
                 gcheader.refcount = refcount
                 if refcount == 0:
-                    gcheader.typeptr.xxx(adr)
+                    rtti = gcheader.typeptr
+                    typeinfo = gchdrbuilder.cast_rtti_to_typeinfo(rtti)
+                    typeinfo.dealloc(adr)
         def ll_no_pointer_dealloc(adr):
-            llop.gc_free(lltype.Void, adr)
+            llmemory.raw_free(adr)
 
         mh = mallocHelpers()
         mh.allocate = llmemory.raw_malloc
@@ -73,7 +80,14 @@ class RefcountingGCTransformer(GCTransformer):
             llmemory.raw_memclear(result, size)
             result += gc_header_offset
             return result
-        def ll_malloc_varsize_no_length(length, size, itemsize):
+        def ll_malloc_fixedsize_rtti(size, rtti):
+            size = gc_header_offset + size
+            result = mh._ll_malloc_fixedsize(size)
+            llmemory.raw_memclear(result, size)
+            llmemory.cast_adr_to_ptr(result, HDRPTR).typeptr = rtti
+            result += gc_header_offset
+            return result
+        def ll_malloc_varsize_no_length_rtti(length, size, itemsize, rtti):
             try:
                 fixsize = gc_header_offset + size
                 varsize = ovfcheck(itemsize * length)
@@ -82,34 +96,35 @@ class RefcountingGCTransformer(GCTransformer):
                 raise MemoryError()
             result = mh._ll_malloc_fixedsize(tot_size)
             llmemory.raw_memclear(result, tot_size)
+            llmemory.cast_adr_to_ptr(result, HDRPTR).typeptr = rtti
             result += gc_header_offset
             return result
-        mh.ll_malloc_varsize_no_length = ll_malloc_varsize_no_length
-        ll_malloc_varsize = mh.ll_malloc_varsize
+        def ll_malloc_varsize_rtti(length, size, itemsize, lengthoffset, rtti):
+            result = ll_malloc_varsize_no_length_rtti(length, size,
+                                                      itemsize, rtti)
+            (result + lengthoffset).signed[0] = length
+            return result
 
         if self.translator:
             self.increfptr = self.inittime_helper(
                 ll_incref, [llmemory.Address], lltype.Void)
-            self.decref_ptr = self.inittime_helper(
-                ll_decref, [llmemory.Address, lltype.Ptr(ADDRESS_VOID_FUNC)],
-                lltype.Void)
-            self.decref_simple_ptr = self.inittime_helper(
-                ll_decref_simple, [llmemory.Address], lltype.Void)
+            self.decrefptr = self.inittime_helper(
+                ll_decref, [llmemory.Address], lltype.Void)
             self.no_pointer_dealloc_ptr = self.inittime_helper(
                 ll_no_pointer_dealloc, [llmemory.Address], lltype.Void)
             self.malloc_fixedsize_ptr = self.inittime_helper(
-                ll_malloc_fixedsize, [lltype.Signed], llmemory.Address)
+                ll_malloc_fixedsize_rtti, [lltype.Signed, RTTIPTR],
+                llmemory.Address)
             self.malloc_varsize_no_length_ptr = self.inittime_helper(
-                ll_malloc_varsize_no_length, [lltype.Signed]*3, llmemory.Address)
+                ll_malloc_varsize_no_length_rtti, [lltype.Signed]*3+[RTTIPTR],
+                llmemory.Address)
             self.malloc_varsize_ptr = self.inittime_helper(
-                ll_malloc_varsize, [lltype.Signed]*4, llmemory.Address)
+                ll_malloc_varsize_rtti, [lltype.Signed]*4+[RTTIPTR],
+                llmemory.Address)
             self.mixlevelannotator.finish()
             self.mixlevelannotator.backend_optimize()
         # cache graphs:
-        self.decref_funcptrs = {}
         self.static_deallocator_funcptrs = {}
-        self.dynamic_deallocator_funcptrs = {}
-        self.queryptr2dynamic_deallocator_funcptr = {}
 
     def finish_helpers(self, **kwds):
         GCTransformer.finish_helpers(self, **kwds)
@@ -132,44 +147,33 @@ class RefcountingGCTransformer(GCTransformer):
         llops.genop("direct_call", [self.increfptr, v_adr])
 
     def pop_alive_nopyobj(self, var, llops):
-        PTRTYPE = var.concretetype
         v_adr = gen_cast(llops, llmemory.Address, var)
-
-        dealloc_fptr = self.dynamic_deallocation_funcptr_for_type(PTRTYPE.TO)
-        if dealloc_fptr is self.no_pointer_dealloc_ptr.value:
-            # simple case
-            llops.genop("direct_call", [self.decref_simple_ptr, v_adr])
-        else:
-            cdealloc_fptr = rmodel.inputconst(
-                lltype.typeOf(dealloc_fptr), dealloc_fptr)
-            llops.genop("direct_call", [self.decref_ptr, v_adr, cdealloc_fptr])
+        llops.genop("direct_call", [self.decrefptr, v_adr])
 
     def gct_fv_gc_malloc(self, hop, flags, TYPE, c_size):
-        v_raw = hop.genop("direct_call", [self.malloc_fixedsize_ptr, c_size],
+        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        c_rtti = rmodel.inputconst(RTTIPTR, rtti)
+        v_raw = hop.genop("direct_call",
+                          [self.malloc_fixedsize_ptr, c_size, c_rtti],
                           resulttype=llmemory.Address)
         return v_raw
 
     def gct_fv_gc_malloc_varsize(self, hop, flags, TYPE, v_length, c_const_size, c_item_size,
                                                                    c_offset_to_length):
+        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        c_rtti = rmodel.inputconst(RTTIPTR, rtti)
         if c_offset_to_length is None:
             v_raw = hop.genop("direct_call",
                                [self.malloc_varsize_no_length_ptr, v_length,
-                                c_const_size, c_item_size],
+                                c_const_size, c_item_size, c_rtti],
                                resulttype=llmemory.Address)
         else:
             v_raw = hop.genop("direct_call",
                                [self.malloc_varsize_ptr, v_length,
-                                c_const_size, c_item_size, c_offset_to_length],
+                                c_const_size, c_item_size, c_offset_to_length,
+                                c_rtti],
                                resulttype=llmemory.Address)
         return v_raw
-
-    def gct_gc_deallocate(self, hop):
-        TYPE = hop.spaceop.args[0].value
-        v_addr = hop.spaceop.args[1]
-        dealloc_fptr = self.dynamic_deallocation_funcptr_for_type(TYPE)
-        cdealloc_fptr = rmodel.inputconst(
-            lltype.typeOf(dealloc_fptr), dealloc_fptr)
-        hop.genop("direct_call", [cdealloc_fptr, v_addr])
 
     def consider_constant(self, TYPE, value):
         if value is not lltype.top_container(value):
@@ -181,18 +185,25 @@ class RefcountingGCTransformer(GCTransformer):
                 hdr.refcount = sys.maxint // 2
 
     def static_deallocation_funcptr_for_type(self, TYPE):
+        """The 'static deallocator' for a type is the function that can
+        free a pointer that we know points exactly to a TYPE structure
+        (and not to a larger structure that starts with TYPE).  This
+        function is the one that ends up in the 'dealloc' field of
+        TYPEINFO.
+        """
         if TYPE in self.static_deallocator_funcptrs:
             return self.static_deallocator_funcptrs[TYPE]
         #print_call_chain(self)
 
         if TYPE._gckind == 'cpy':
             return # you don't really have an RPython deallocator for PyObjects
-        rtti = get_rtti(TYPE) 
-        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
-            destrptr = rtti._obj.destructor_funcptr
+        assert TYPE._gckind == 'gc'
+
+        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        destrptr = rtti.destructor_funcptr
+        if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
         else:
-            destrptr = None
             DESTR_ARG = None
 
         if destrptr is None and not find_gc_ptrs_in_type(TYPE):
@@ -206,36 +217,37 @@ class RefcountingGCTransformer(GCTransformer):
 def ll_deallocator(addr):
     exc_instance = llop.gc_fetch_exception(EXC_INSTANCE_TYPE)
     try:
-        v = cast_adr_to_ptr(addr, PTR_TYPE)
-        gcheader = cast_adr_to_ptr(addr - gc_header_offset, HDRPTR)
+        v = llmemory.cast_adr_to_ptr(addr, PTR_TYPE)
+        gcheader = llmemory.cast_adr_to_ptr(addr - gc_header_offset, HDRPTR)
         # refcount is at zero, temporarily bump it to 1:
         gcheader.refcount = 1
-        destr_v = cast_pointer(DESTR_ARG, v)
+        destr_v = lltype.cast_pointer(DESTR_ARG, v)
         ll_call_destructor(destrptr, destr_v)
         refcount = gcheader.refcount - 1
         gcheader.refcount = refcount
         if refcount == 0:
 %s
-            llop.%s_free(lltype.Void, addr)
+            llmemory.raw_free(addr)
     except:
         pass
     llop.gc_restore_exception(lltype.Void, exc_instance)
     pop_alive(exc_instance)
     # XXX layering of exceptiontransform versus gcpolicy
 
-""" % (body, TYPE._gckind)
+""" % (body,)
         else:
             call_del = None
             body = '\n'.join(_static_deallocator_body_for_type('v', TYPE))
-            src = ('def ll_deallocator(addr):\n    v = cast_adr_to_ptr(addr, PTR_TYPE)\n' +
-                   body + '\n    llop.%s_free(lltype.Void, addr)\n' % (TYPE._gckind,))
+            src = ('def ll_deallocator(addr):\n' +
+                   '    v = llmemory.cast_adr_to_ptr(addr, PTR_TYPE)\n' +
+                   body + '\n' +
+                   '    llmemory.raw_free(addr)\n')
         d = {'pop_alive': LLTransformerOp(self.pop_alive),
              'llop': llop,
              'lltype': lltype,
              'destrptr': destrptr,
              'gc_header_offset': self.gcheaderbuilder.size_gc_header,
-             'cast_adr_to_ptr': llmemory.cast_adr_to_ptr,
-             'cast_pointer': lltype.cast_pointer,
+             'llmemory': llmemory,
              'PTR_TYPE': lltype.Ptr(TYPE),
              'DESTR_ARG': DESTR_ARG,
              'EXC_INSTANCE_TYPE': self.translator.rtyper.exceptiondata.lltype_of_exception_value,
@@ -248,38 +260,3 @@ def ll_deallocator(addr):
         for p in find_gc_ptrs_in_type(TYPE):
             self.static_deallocation_funcptr_for_type(p.TO)
         return fptr
-
-    def dynamic_deallocation_funcptr_for_type(self, TYPE):
-        assert TYPE._gckind != 'cpy'
-        if TYPE in self.dynamic_deallocator_funcptrs:
-            return self.dynamic_deallocator_funcptrs[TYPE]
-        #print_call_chain(self)
-
-        rtti = lltype.getRuntimeTypeInfo(TYPE)
-        if rtti is None:
-            p = self.static_deallocation_funcptr_for_type(TYPE)
-            self.dynamic_deallocator_funcptrs[TYPE] = p
-            return p
-
-        queryptr = rtti._obj.query_funcptr
-        if queryptr._obj in self.queryptr2dynamic_deallocator_funcptr:
-            return self.queryptr2dynamic_deallocator_funcptr[queryptr._obj]
-
-        RTTI_PTR = lltype.Ptr(lltype.RuntimeTypeInfo)
-        QUERY_ARG_TYPE = lltype.typeOf(queryptr).TO.ARGS[0]
-        gc_header_offset = self.gcheaderbuilder.size_gc_header
-        HDRPTR = lltype.Ptr(self.HDR)
-        def ll_dealloc(addr):
-            # bump refcount to 1
-            gcheader = llmemory.cast_adr_to_ptr(addr - gc_header_offset, HDRPTR)
-            gcheader.refcount = 1
-            v = llmemory.cast_adr_to_ptr(addr, QUERY_ARG_TYPE)
-            rtti = queryptr(v)
-            gcheader.refcount = 0
-            llop.gc_call_rtti_destructor(lltype.Void, rtti, addr)
-        fptr = self.annotate_helper(ll_dealloc, [llmemory.Address], lltype.Void)
-        self.dynamic_deallocator_funcptrs[TYPE] = fptr
-        self.queryptr2dynamic_deallocator_funcptr[queryptr._obj] = fptr
-        return fptr
-
-
