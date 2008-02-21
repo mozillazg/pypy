@@ -13,7 +13,6 @@ from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.annotation import model as annmodel
 from pypy.rpython import rmodel, annlowlevel
 from pypy.rpython.memory import gc
-from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
@@ -502,12 +501,6 @@ class GCTransformer(BaseGCTransformer):
 
     def __init__(self, translator, inline=False):
         super(GCTransformer, self).__init__(translator, inline=inline)
-        # at the moment, all GC transformers define a HDR structure that
-        # is added in front of all GC objects, and a TYPEINFO structure
-        # that works as RuntimeTypeInfo
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR, self.TYPEINFO)
-        self.gchelpers = GCHelpers(self.gcheaderbuilder)
-        self.rtticache = {}
 
         mh = mallocHelpers()
         mh.allocate = llmemory.raw_malloc
@@ -533,6 +526,16 @@ class GCTransformer(BaseGCTransformer):
             self.stack_malloc_fixedsize_ptr = self.inittime_helper(
                 ll_stack_malloc_fixedsize, [lltype.Signed], llmemory.Address)
 
+    def newgcheaderbuilder(self, HDR, TYPEINFO):
+        from pypy.rpython.memory.gcheader import GCHeaderBuilder
+        self.setgcheaderbuilder(GCHeaderBuilder(HDR, TYPEINFO))
+
+    def setgcheaderbuilder(self, gcheaderbuilder):
+        # at the moment, all GC transformers are based on a GCHeaderBuilder.
+        self.gcheaderbuilder = gcheaderbuilder
+        self.gchelpers = GCHelpers(gcheaderbuilder)
+        self.rtticache = {}
+        if self.translator:
             self.gc_runtime_type_info_ptr = self.inittime_helper(
                 self.gchelpers.gc_runtime_type_info, [llmemory.Address],
                 RTTIPTR)
