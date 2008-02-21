@@ -15,10 +15,20 @@ class BasicGcPolicy(object):
         self.thread_enabled = thread_enabled
 
     def common_gcheader_definition(self, defnode):
-        return []
+        if defnode.db.gctransformer is not None:
+            HDR = defnode.db.gctransformer.HDR
+            return [(name, HDR._flds[name]) for name in HDR._names]
+        else:
+            return []
 
     def common_gcheader_initdata(self, defnode):
-        return []
+        if defnode.db.gctransformer is not None:
+            gct = defnode.db.gctransformer
+            hdr = gct.gcheaderbuilder.header_of_object(top_container(defnode.obj))
+            HDR = gct.HDR
+            return [getattr(hdr, fldname) for fldname in HDR._names]
+        else:
+            return []
 
     def struct_gcheader_definition(self, defnode):
         return self.common_gcheader_definition(defnode)
@@ -70,29 +80,6 @@ class BasicGcPolicy(object):
 
 class RefcountingGcPolicy(BasicGcPolicy):
     transformerclass = refcounting.RefcountingGCTransformer
-
-    def common_gcheader_definition(self, defnode):
-        if defnode.db.gctransformer is not None:
-            HDR = defnode.db.gctransformer.HDR
-            return [(name, HDR._flds[name]) for name in HDR._names]
-        else:
-            return []
-
-    def common_gcheader_initdata(self, defnode):
-        if defnode.db.gctransformer is not None:
-            gct = defnode.db.gctransformer
-            hdr = gct.gcheaderbuilder.header_of_object(top_container(defnode.obj))
-            HDR = gct.HDR
-            return [getattr(hdr, fldname) for fldname in HDR._names]
-        else:
-            return []
-
-    # zero malloc impl
-
-    def OP_GC_CALL_RTTI_DESTRUCTOR(self, funcgen, op):
-        args = [funcgen.expr(v) for v in op.args]
-        line = '%s(%s);' % (args[0], ', '.join(args[1:]))
-        return line     
 
     def OP_GC__COLLECT(self, funcgen, op):
         return ''
