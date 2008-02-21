@@ -753,19 +753,11 @@ class LLFrame(object):
     def op_gc__collect(self):
         self.heap.collect()
 
-    def op_gc_free(self, addr):
-        # what can you do?
-        pass
-        #raise NotImplementedError("gc_free")
-
     def op_gc_fetch_exception(self):
         raise NotImplementedError("gc_fetch_exception")
 
     def op_gc_restore_exception(self, exc):
         raise NotImplementedError("gc_restore_exception")
-
-    def op_gc_deallocate(self, TYPE, addr):
-        raise NotImplementedError("gc_deallocate")
 
     def op_gc_push_alive_pyobj(self, pyobj):
         raise NotImplementedError("gc_push_alive_pyobj")

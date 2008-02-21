@@ -263,6 +263,15 @@ class ArrayLengthOffset(AddressOffset):
 
 
 class GCHeaderOffset(AddressOffset):
+    """Hack: this 'offset' is really 0, but it is used symbolically to
+    go from a GcStruct instance to its header (by subtraction, as if the
+    header was before the GcStruct).  The GCHeaderOffset internally
+    holds a reference to a GCHeaderBuilder, which maps between GcStructs
+    and their headers.  The point of this is to *not* have a global
+    mapping from GcStructs to their headers -- indeed, the same prebuilt
+    GcStruct instance could be reused by several translations, each with
+    their own different GCs.
+    """
     def __init__(self, gcheaderbuilder):
         self.gcheaderbuilder = gcheaderbuilder
 
@@ -305,6 +314,30 @@ class GCHeaderAntiOffset(AddressOffset):
         assert len(rest) >= 2
         assert isinstance(rest[0], GCHeaderOffset)
         return rest[1]._raw_malloc(rest[2:], zero=zero)
+
+class GCTypeInfoOffset(AddressOffset):
+    """Hack: this 'offset' is really 0, but it is used symbolically to
+    go from a Ptr(RuntimeTypeInfo) to the real GC-specific structure
+    that contains the information.  The GCTypeInfoOffset internally
+    holds a reference to a GCHeaderBuilder, which maps between
+    RuntimeTypeInfos and their GC-specific equivalents.  The point of
+    this is to *not* have a global mapping -- indeed, the same
+    RuntimeTypeInfo could be seen in several translations, each with
+    their own different GCs.
+    """
+    def __init__(self, gcheaderbuilder):
+        self.gcheaderbuilder = gcheaderbuilder
+
+    def __repr__(self):
+        return '< GCTypeInfoOffset >'
+
+    def __neg__(self):
+        raise NotImplementedError("XXX for now, cannot cast from a GC-specific"
+                                  " type info to Ptr(RuntimeTypeInfo)")
+
+    def ref(self, rttiptr):
+        typeinfoptr = self.gcheaderbuilder.typeinfo_from_rtti(rttiptr)
+        return typeinfoptr
 
 # ____________________________________________________________
 

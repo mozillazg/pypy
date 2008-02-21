@@ -8,11 +8,14 @@ header2obj = weakref.WeakKeyDictionary()
 
 class GCHeaderBuilder(object):
 
-    def __init__(self, HDR):
+    def __init__(self, HDR, TYPEINFO):
         """NOT_RPYTHON"""
         self.HDR = HDR
+        self.TYPEINFO = TYPEINFO
         self.obj2header = weakref.WeakKeyDictionary()
+        self.rtti2typeinfo = weakref.WeakKeyDictionary()
         self.size_gc_header = llmemory.GCHeaderOffset(self)
+        self.size_gc_typeinfo = llmemory.GCTypeInfoOffset(self)
 
     def header_of_object(self, gcptr):
         # XXX hackhackhack
@@ -42,6 +45,17 @@ class GCHeaderBuilder(object):
         headerptr = lltype.malloc(self.HDR, immortal=True)
         self.attach_header(gcptr, headerptr)
         return headerptr
+
+    def typeinfo_from_rtti(self, rttiptr):
+        rttiptr = lltype.cast_pointer(lltype.Ptr(lltype.RuntimeTypeInfo),
+                                      rttiptr)
+        return self.rtti2typeinfo[rttiptr._obj]
+
+    def cast_rtti_to_typeinfo(self, rttiptr):
+        # this is RPython
+        addr = llmemory.cast_ptr_to_adr(rttiptr)
+        addr += self.size_gc_typeinfo
+        return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.TYPEINFO))
 
     def _freeze_(self):
         return True     # for reads of size_gc_header
