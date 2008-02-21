@@ -14,7 +14,7 @@ from pypy.rpython.lltypesystem.lltype import \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
      typeOf, Array, Char, Void, \
      FuncType, Bool, Signed, functionptr, FuncType, PyObject
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
@@ -29,7 +29,7 @@ from pypy.rlib.rarithmetic import intmask
 #          RuntimeTypeInfo rtti;      //GC-specific information
 #          Signed subclassrange_min;  //this is also the id of the class itself
 #          Signed subclassrange_max;
-#          array { char } * name;
+#          char * name;
 #          struct object * instantiate();
 #      }
 #
@@ -66,13 +66,17 @@ OBJECT_VTABLE = Struct('object_vtable',
                             ('rtti', lltype.RuntimeTypeInfo),
                             ('subclassrange_min', Signed),
                             ('subclassrange_max', Signed),
-                            ('name', Ptr(Array(Char))),
+                            ('name', rffi.CCHARP),
                             ('instantiate', Ptr(FuncType([], OBJECTPTR))),
                             hints = {'immutable': True})
 CLASSTYPE = Ptr(OBJECT_VTABLE)
+root_object_vtable = malloc(OBJECT_VTABLE, immortal=True, zero=True)
+root_object_vtable.subclassrange_min = 0
+root_object_vtable.subclassrange_max = sys.maxint
+root_object_vtable.name = rffi.str2charp("object")
+
 OBJECT.become(GcStruct('object',
-                       runtime_type_info = malloc(OBJECT_VTABLE,
-                                                  immortal=True),
+                       runtime_type_info = root_object_vtable,
                        adtmeths = {'gettypeptr': ll_gettypeptr}))
 
 # non-gc case
@@ -94,6 +98,8 @@ class ClassRepr(AbstractClassRepr):
         if classdef is None:
             # 'object' root type
             self.vtable_type = OBJECT_VTABLE
+            self.vtable = root_object_vtable
+            self.vtable_filled = True
         else:
             self.vtable_type = lltype.ForwardReference()
         self.lowleveltype = Ptr(self.vtable_type)
@@ -139,11 +145,11 @@ class ClassRepr(AbstractClassRepr):
                                  *llfields, **kwds)
             self.vtable_type.become(vtable_type)
             allmethods.update(self.rbase.allmethods)
+            self.vtable = malloc(self.vtable_type, immortal=True)
+            self.vtable_filled = False
         self.clsfields = clsfields
         self.pbcfields = pbcfields
         self.allmethods = allmethods
-        self.vtable = malloc(self.vtable_type, immortal=True)
-        self.vtable_filled = False
 
     def getvtable(self):
         """Return a ptr to the vtable of this type."""
@@ -158,22 +164,12 @@ class ClassRepr(AbstractClassRepr):
         given subclass."""
         if self.classdef is None:
             # initialize the 'subclassrange_*' and 'name' fields
-            if rsubcls.classdef is not None:
-                vtable.subclassrange_min = rsubcls.classdef.minid
-                vtable.subclassrange_max = rsubcls.classdef.maxid
-            else: #for the root class
-                vtable.subclassrange_min = 0
-                vtable.subclassrange_max = sys.maxint
+            assert rsubcls.classdef is not None
+            vtable.subclassrange_min = rsubcls.classdef.minid
+            vtable.subclassrange_max = rsubcls.classdef.maxid
             rinstance = getinstancerepr(self.rtyper, rsubcls.classdef)
             rinstance.setup()
-            if rsubcls.classdef is None:
-                name = 'object'
-            else:
-                name = rsubcls.classdef.shortname
-            vtable.name = malloc(Array(Char), len(name)+1, immortal=True)
-            for i in range(len(name)):
-                vtable.name[i] = name[i]
-            vtable.name[len(name)] = '\x00'
+            vtable.name = rffi.str2charp(rsubcls.classdef.shortname)
             if hasattr(rsubcls.classdef, 'my_instantiate_graph'):
                 graph = rsubcls.classdef.my_instantiate_graph
                 vtable.instantiate = self.rtyper.getcallable(graph)
@@ -488,9 +484,17 @@ class InstanceRepr(AbstractInstanceRepr):
         ctype = inputconst(Void, self.object_type)
         cflags = inputconst(Void, flags)
         vlist = [ctype, cflags]
-        self.rclass.getvtable()     # force it to be filled
+        vtable = self.rclass.getvtable()   # don't remove this line,
+                                           # it forces the vtable to be filled
         vptr = llops.genop('malloc', vlist,
                            resulttype = Ptr(self.object_type))
+        if self.gcflavor != 'gc':
+            # fill in 'typeptr'
+            vbase = llops.genop('cast_pointer', [vptr],
+                                resulttype=NONGCOBJECTPTR)
+            ctypeptr = inputconst(Void, 'typeptr')
+            cvalue = inputconst(CLASSTYPE, vtable)
+            llops.genop('setfield', [vbase, ctypeptr, cvalue])
         # initialize instance attributes from their defaults from the class
         if self.classdef is not None:
             flds = self.allinstancefields.keys()
@@ -562,13 +566,15 @@ class InstanceRepr(AbstractInstanceRepr):
         BASEPTR = Ptr(self.get_base_object_type())
         instance = cast_pointer(BASEPTR, i)
         vtable = instance.gettypeptr()
+        nameLen = 0
+        while vtable.name[nameLen] != '\x00':
+            nameLen += 1
+        nameString = rstr.mallocstr(nameLen)
+        j = 0
+        while j < nameLen:
+            nameString.chars[j] = vtable.name[j]
+            j += 1
         uid = r_uint(cast_ptr_to_int(i))
-        nameLen = len(vtable.name)
-        nameString = rstr.mallocstr(nameLen-1)
-        i = 0
-        while i < nameLen - 1:
-            nameString.chars[i] = vtable.name[i]
-            i += 1
         res =                        rstr.instance_str_prefix
         res = rstr.ll_strconcat(res, nameString)
         res = rstr.ll_strconcat(res, rstr.instance_str_infix)

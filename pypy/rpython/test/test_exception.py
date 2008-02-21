@@ -40,21 +40,22 @@ def test_exception_data():
 
     excdata = t.rtyper.getexceptiondata()
     getcdef = t.annotator.bookkeeper.getuniqueclassdef
+    class_reprs = t.rtyper.class_reprs
 
     #t.view()
     ovferr_inst = excdata.fn_pyexcclass2exc(pyobjectptr(OverflowError))
     classdef = getcdef(OverflowError)
-    assert ovferr_inst.typeptr == t.rtyper.class_reprs[classdef].getvtable()
+    assert ovferr_inst.gettypeptr() == class_reprs[classdef].getvtable()
 
     taberr_inst = excdata.fn_pyexcclass2exc(pyobjectptr(TabError))
     classdef = getcdef(StandardError) # most precise class seen
-    assert taberr_inst.typeptr == t.rtyper.class_reprs[classdef].getvtable()
+    assert taberr_inst.gettypeptr() == class_reprs[classdef].getvtable()
 
     myerr_inst = excdata.fn_pyexcclass2exc(pyobjectptr(MyException))
-    assert myerr_inst.typeptr == t.rtyper.class_reprs[None].getvtable()
+    assert myerr_inst.gettypeptr() == class_reprs[None].getvtable()
 
     strgerr_inst = excdata.fn_pyexcclass2exc(pyobjectptr(MyStrangeException))
-    assert strgerr_inst.typeptr == t.rtyper.class_reprs[None].getvtable()
+    assert strgerr_inst.gettypeptr() == class_reprs[None].getvtable()
 
 class BaseTestException(BaseRtypingTest):
     def test_exception_with_arg(self):

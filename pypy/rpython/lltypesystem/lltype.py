@@ -1805,7 +1805,7 @@ def cast_int_to_ptr(PTRTYPE, oddint):
 
 def getRuntimeTypeInfo(TYPE, cache=None):
     """Return the runtime_type_info attached to the GcStruct TYPE,
-    as a Ptr(RuntimeTypeInfo).  This raises TypeError if the TYPE has
+    as a Ptr(RuntimeTypeInfo).  This returns None if the TYPE has
     no runtime_type_info, unless 'cache' is specified; in that case,
     TYPE can be any GC type and a runtime_type_info is created for
     it if it has none and stored in the cache to avoid mutating
@@ -1814,7 +1814,7 @@ def getRuntimeTypeInfo(TYPE, cache=None):
     if isinstance(TYPE, GcStruct) and hasattr(TYPE, '_rtti'):
         return TYPE._rtti._as_ptr()
     if cache is None:
-        raise TypeError("%r has no runtime_type_info" % (TYPE,))
+        return None
     try:
         return cache[TYPE]
     except KeyError:

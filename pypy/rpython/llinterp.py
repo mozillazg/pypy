@@ -507,7 +507,7 @@ class LLFrame(object):
         if ll_exc is None:
             raise LLFatalError(msg)
         else:
-            ll_exc_type = lltype.cast_pointer(rclass.OBJECTPTR, ll_exc).typeptr
+            ll_exc_type = rclass.ll_type(ll_exc)
             raise LLFatalError(msg, LLException(ll_exc_type, ll_exc))
 
     def op_debug_llinterpcall(self, pythonfunction, *args_ll):

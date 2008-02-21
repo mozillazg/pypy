@@ -496,8 +496,6 @@ class BaseTestRlist(BaseRtypingTest):
                 return None
         res = self.interpret(f, [1])
         assert self.class_name(res) == 'A'
-        #''.join(res.super.typeptr.name) == 'A\00'
-        
 
     def test_reverse(self):
         def dummyfn():

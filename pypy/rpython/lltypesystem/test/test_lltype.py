@@ -385,7 +385,7 @@ def test_runtime_type_info():
 
     S1bis = GcStruct('S1', ('x', Signed))
     assert S1bis != S1   # attached runtime type info distinguishes them
-    py.test.raises(TypeError, getRuntimeTypeInfo, S1bis)
+    assert getRuntimeTypeInfo(S1bis) is None
 
     cache = {}
     assert getRuntimeTypeInfo(S1, cache=cache) == t1.base

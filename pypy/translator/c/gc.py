@@ -2,7 +2,7 @@ import sys
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Ptr, ContainerType, RttiStruct, \
+     typeOf, Ptr, ContainerType, \
      RuntimeTypeInfo, getRuntimeTypeInfo, top_container
 from pypy.rpython.memory.gctransform import \
      refcounting, boehm, framework, stacklessframework, llvmgcroot, asmgcroot
@@ -140,7 +140,7 @@ class RefcountingRuntimeTypeInfo_OpaqueNode(ContainerNode):
 
     def __init__(self, db, T, obj):
         assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, RttiStruct)
+        assert isinstance(obj.about, GcStruct)
         self.db = db
         self.T = T
         self.obj = obj
@@ -221,7 +221,7 @@ class BoehmGcRuntimeTypeInfo_OpaqueNode(ContainerNode):
 
     def __init__(self, db, T, obj):
         assert T == RuntimeTypeInfo
-        assert isinstance(obj.about, RttiStruct)
+        assert isinstance(obj.about, GcStruct)
         self.db = db
         self.T = T
         self.obj = obj

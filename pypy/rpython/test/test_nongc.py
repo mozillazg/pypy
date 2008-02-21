@@ -66,17 +66,15 @@ def test_alloc_flavor_subclassing():
     assert (Bdef, 'raw') in rtyper.instance_reprs
     assert (Bdef, 'gc') not in rtyper.instance_reprs        
 
-def test_unsupported():
-    class A:
+def test_nongc_str():
+    class AFooBar:
         _alloc_flavor_ = "raw"
     def f():
-        return str(A())
-    a = RPythonAnnotator()
-    #does not raise:
-    s = a.build_types(f, [])
-    assert s.knowntype == str
-    rtyper = RPythonTyper(a)
-    py.test.raises(TypeError,rtyper.specialize) # results in an invalid cast
+        return str(AFooBar())
+    res = interpret(f, [])
+    res = ''.join(res.chars)
+    print res
+    assert 'AFooBar' in res
 
 def test_isinstance():
     class A:

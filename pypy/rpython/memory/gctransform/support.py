@@ -47,14 +47,6 @@ def type_contains_pyobjs(TYPE):
     else:
         return False
 
-def get_rtti(TYPE):
-    if isinstance(TYPE, lltype.RttiStruct):
-        try:
-            return lltype.getRuntimeTypeInfo(TYPE)
-        except ValueError:
-            pass
-    return None
-
 def _static_deallocator_body_for_type(v, TYPE, depth=1):
     if isinstance(TYPE, lltype.Array):
         inner = list(_static_deallocator_body_for_type('v_%i'%depth, TYPE.OF, depth+1))

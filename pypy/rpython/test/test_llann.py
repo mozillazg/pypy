@@ -341,18 +341,18 @@ class TestLowLevelAnnotateTestCase:
         assert s.items[1].const == 3
 
     def test_getRuntimeTypeInfo(self):
-        S = GcStruct('s', ('x', Signed))
-        attachRuntimeTypeInfo(S)
+        rtti = malloc(RuntimeTypeInfo, immortal=True)
+        S = GcStruct('s', ('x', Signed), runtime_type_info = rtti)
         def llf():
             return getRuntimeTypeInfo(S)
         s = self.annotate(llf, [])
         assert isinstance(s, annmodel.SomePtr)
         assert s.ll_ptrtype == Ptr(RuntimeTypeInfo)
-        assert s.const == getRuntimeTypeInfo(S)
+        assert s.const == getRuntimeTypeInfo(S) == rtti
 
     def test_runtime_type_info(self):
-        S = GcStruct('s', ('x', Signed))
-        attachRuntimeTypeInfo(S)
+        rtti = malloc(RuntimeTypeInfo, immortal=True)
+        S = GcStruct('s', ('x', Signed), runtime_type_info = rtti)
         def llf(p):
             return runtime_type_info(p)
         s = self.annotate(llf, [annmodel.SomePtr(Ptr(S))])
