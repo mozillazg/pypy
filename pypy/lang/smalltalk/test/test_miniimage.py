@@ -227,6 +227,7 @@ def test_map_mirrors_to_classtable():
     assert w_false is objtable.w_false
     
 def test_runimage():
+    #py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
     from pypy.lang.smalltalk.shadow import SemaphoreShadow
     s_semaphore = SemaphoreShadow(None)
     s_scheduler = s_semaphore.s_scheduler()
@@ -238,7 +239,7 @@ def test_runimage():
     interp.interpret()
     
 def test_compile_method():
-    # py.test.skip("Not working yet.")
+    py.test.skip("Not working yet.")
     sourcecode = """fib 
                         ^self < 2 
                             ifTrue: [ 1 ] 

@@ -88,7 +88,7 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
 
 def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
                   method=method()):
-    stackstart = method.argsize + method.tempsize + 7
+    stackstart = 7 # (len notation, not idx notation)
     w_object = model.W_PointersObject(classtable.w_MethodContext, stackstart+stacksize)
     w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
     w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))

@@ -406,7 +406,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
                 self.primitive is not None)       
 
     def size(self):
-        return self.getliteralsize() + len(self.bytes) + self.headersize()
+        return self.headersize() + self.getliteralsize() + len(self.bytes) 
 
     def getliteralsize(self):
         return self.literalsize * constants.BYTES_PER_WORD
@@ -453,7 +453,6 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def fetchbyte(self, index1):
         index0 = index1 - 1
-        index0 -= self.headersize()
         index0 -= self.getliteralsize()
         assert index0 < len(self.bytes)
         return self.bytes[index0]
@@ -493,7 +492,7 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
     __metaclass__ = extendabletype
     
     def __init__(self, s_home, s_sender):
-        self.stack = []
+        self._stack = []
         self._pc = 0
         #assert isinstance(s_home, W_MethodContext)
         self._s_home = s_home
@@ -510,6 +509,9 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
 
     def pc(self):
         return self._pc
+
+    def stack(self):
+        return self._stack
 
     def store_pc(self, pc):
         self._pc = pc
@@ -529,45 +531,44 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         self._s_sender = s_sender
 
     def stackpointer(self):
-        return len(self.stack) + self.stackstart()
+        return len(self.stack()) + self.stackstart() - 1
     # ______________________________________________________________________
     # Imitate the primitive accessors
     
-    #def fetch(self, index):
-    #    from pypy.lang.smalltalk import utility, objtable
-    #    if index == constants.CTXPART_SENDER_INDEX:
-    #        sender = self.s_sender()
-    #        if sender is None:
-    #            return objtable.w_nil
-    #        else:
-    #            return sender.w_self()
-    #    elif index == constants.CTXPART_PC_INDEX:
-    #        return utility.wrap_int(self.pc())
-    #    elif index == constants.CTXPART_STACKP_INDEX:
-    #        return utility.wrap_int(self.stackpointer())
-    #    
-    #    # Invalid!
-    #    raise IndexError
+    def fetch(self, index):
+        from pypy.lang.smalltalk import utility, objtable
+        if index == constants.CTXPART_SENDER_INDEX:
+            sender = self.s_sender()
+            if sender is None:
+                return objtable.w_nil
+            else:
+                return sender.w_self()
+        elif index == constants.CTXPART_PC_INDEX:
+            return utility.wrap_int(self.pc())
+        elif index == constants.CTXPART_STACKP_INDEX:
+            return utility.wrap_int(self.stackpointer())
+        
+        # Invalid!
+        raise IndexError
 
-    #def store(self, index, w_value):
-    #    # XXX Untested code...
-    #
-    #    from pypy.lang.smalltalk import utility, objtable
-    #    if index == constants.CTXPART_SENDER_INDEX:
-    #        if w_value != objtable.w_nil:
-    #            self._s_sender = w_value.as_context_get_shadow()
-    #    elif index == constants.CTXPART_PC_INDEX:
-    #        self._pc = utility.unwrap_int(w_value)
-    #    elif index == constants.CTXPART_STACKP_INDEX:
-    #        size = utility.unwrap_int(w_value)
-    #        size = size - self.stackstart()
-    #        self.stack = [objtable.w_nil] * size
-    #    else:
-    #        # Invalid!
-    #        raise IndexError
+    def store(self, index, w_value):
+        # XXX Untested code...
+        from pypy.lang.smalltalk import utility, objtable
+        if index == constants.CTXPART_SENDER_INDEX:
+            if w_value != objtable.w_nil:
+                self._s_sender = w_value.as_context_get_shadow()
+        elif index == constants.CTXPART_PC_INDEX:
+            self._pc = utility.unwrap_int(w_value)
+        elif index == constants.CTXPART_STACKP_INDEX:
+            size = utility.unwrap_int(w_value)
+            size = 1 + size - self.stackstart()
+            self._stack = [objtable.w_nil] * size
+        else:
+            # Invalid!
+            raise IndexError
 
     def stackstart(self):
-        return self.w_method().argsize + self.w_method().tempsize + constants.MTHDCTX_TEMP_FRAME_START
+        return constants.MTHDCTX_TEMP_FRAME_START
 
     # ______________________________________________________________________
     # Method that contains the bytecode for this method/block context
@@ -601,35 +602,35 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
     # Stack Manipulation
 
     def pop(self):
-        return self.stack.pop()
+        return self.stack().pop()
 
     def push(self, w_v):
         assert w_v
-        self.stack.append(w_v)
+        self.stack().append(w_v)
 
     def push_all(self, lst):
         " Equivalent to 'for x in lst: self.push(x)' where x is a lst "
         assert None not in lst
-        self.stack += lst
+        self._stack += lst
 
     def top(self):
         return self.peek(0)
         
     def peek(self, idx):
-        return self.stack[-(idx+1)]
+        return self.stack()[-(idx+1)]
 
     def pop_n(self, n):
         assert n >= 0
-        start = len(self.stack) - n
+        start = len(self.stack()) - n
         assert start >= 0          # XXX what if this fails?
-        del self.stack[start:]
+        del self.stack()[start:]
 
     def pop_and_return_n(self, n):
         assert n >= 0
-        start = len(self.stack) - n
+        start = len(self.stack()) - n
         assert start >= 0          # XXX what if this fails?
-        res = self.stack[start:]
-        del self.stack[start:]
+        res = self.stack()[start:]
+        del self.stack()[start:]
         return res
     
 class W_BlockContext(W_ContextPart):
@@ -662,8 +663,8 @@ class W_BlockContext(W_ContextPart):
         elif index == constants.BLKCTX_HOME_INDEX:
             return self.s_home()
         elif index >= constants.BLKCTX_TEMP_FRAME_START:
-            stack_index = len(self.stack) - index - 1
-            return self.stack[stack_index]
+            stack_index = len(self.stack()) - index - 1
+            return self.stack()[stack_index]
         else:
             return W_ContextPart.fetch(self, index)
 
@@ -678,10 +679,13 @@ class W_BlockContext(W_ContextPart):
         elif index == constants.BLKCTX_HOME_INDEX:
             self._s_home = value.as_methodcontext_get_shadow()
         elif index >= constants.BLKCTX_TEMP_FRAME_START:
-            stack_index = len(self.stack) - index - 1
-            self.stack[stack_index] = value
+            stack_index = len(self.stack()) - index - 1
+            self.stack()[stack_index] = value
         else:
             W_ContextPart.store(self, index, value)
+
+    def stackstart(self):
+        return constants.BLKCTX_TEMP_FRAME_START
 
 class W_MethodContext(W_ContextPart):
     def __init__(self, w_method, w_receiver,
@@ -720,8 +724,8 @@ class W_MethodContext(W_ContextPart):
 
             # After that comes the stack:
             offset -= len(self.temps)
-            stack_index = len(self.stack) - offset - 1
-            return self.stack[stack_index]
+            stack_index = len(self.stack()) - offset - 1
+            return self.stack()[stack_index]
         else:
             return W_ContextPart.fetch(self, index)
 
@@ -740,8 +744,8 @@ class W_MethodContext(W_ContextPart):
 
             # After that comes the stack:
             offset -= len(self.temps)
-            stack_index = len(self.stack) - offset - 1
-            self.stack[stack_index] = w_object
+            stack_index = len(self.stack()) - offset - 1
+            self.stack()[stack_index] = w_object
         else:
             W_ContextPart.store(self, index, w_object)
 

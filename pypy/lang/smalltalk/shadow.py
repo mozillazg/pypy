@@ -473,6 +473,9 @@ class ContextPartShadow(model.W_ContextPart):
         assert n <= self.stackpointer() + 1
         self.store_stackpointer(self.stackpointer() - n)
 
+    def stack(self):
+        return [self.w_self().fetch(i) for i in range(self.stackstart(), self.stackpointer() + 1)]
+
     def pop_and_return_n(self, n):
         self.pop_n(n)
         start = self.stackpointer() + 1
@@ -522,4 +525,4 @@ class MethodContextShadow(ContextPartShadow):
         return self
 
     def stackstart(self):
-        return self.w_method().argsize + self.w_method().tempsize + constants.MTHDCTX_TEMP_FRAME_START
+        return constants.MTHDCTX_TEMP_FRAME_START
