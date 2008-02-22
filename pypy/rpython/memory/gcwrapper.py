@@ -15,7 +15,8 @@ class GCManagedHeap(object):
         self.gc.setup()
 
     def prepare_graphs(self, flowgraphs):
-        layoutbuilder = DirectRunLayoutBuilder(self.llinterp)
+        layoutbuilder = DirectRunLayoutBuilder(self.gc.gcheaderbuilder,
+                                               self.llinterp)
         self.get_type_id = layoutbuilder.get_type_id
         layoutbuilder.initialize_gc_query_function(self.gc)
 
@@ -85,8 +86,8 @@ class GCManagedHeap(object):
         # we have to be lazy in reading the llinterp variable containing
         # the 'obj' pointer, because the gc.malloc() call below could
         # move it around
-        type_id = self.get_type_id(gctypelayout.WEAKREF)
-        addr = self.gc.malloc(type_id, None, zero=False)
+        type_info = self.get_type_info(gctypelayout.WEAKREF)
+        addr = self.gc.malloc(type_info, None, zero=False)
         result = llmemory.cast_adr_to_ptr(addr, gctypelayout.WEAKREFPTR)
         result.weakptr = llmemory.cast_ptr_to_adr(objgetter())
         return llmemory.cast_ptr_to_weakrefptr(result)
@@ -132,16 +133,16 @@ class LLInterpRootWalker:
 
 class DirectRunLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
-    def __init__(self, llinterp):
+    def __init__(self, gcheaderbuilder, llinterp):
         self.llinterp = llinterp
-        super(DirectRunLayoutBuilder, self).__init__()
+        super(DirectRunLayoutBuilder, self).__init__(gcheaderbuilder)
 
     def make_finalizer_funcptr_for_type(self, TYPE):
-        from pypy.rpython.memory.gctransform.support import get_rtti, \
+        from pypy.rpython.memory.gctransform.support import \
                 type_contains_pyobjs
-        rtti = get_rtti(TYPE)
-        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
-            destrptr = rtti._obj.destructor_funcptr
+        rtti = self.gcheaderbuilder.getRtti(TYPE)
+        destrptr = rtti.destructor_funcptr
+        if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
             destrgraph = destrptr._obj.graph
         else:

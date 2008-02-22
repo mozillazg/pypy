@@ -1,4 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.memory import gcheader, gctypelayout
 from pypy.rlib.debug import ll_assert
 
 class GCBase(object):
@@ -7,6 +8,10 @@ class GCBase(object):
     needs_write_barrier = False
     needs_zero_gc_pointers = True
     prebuilt_gc_objects_are_static_roots = True
+
+    def __init__(self):
+        TYPE_INFO = gctypelayout.GCData.TYPE_INFO
+        self.gcheaderbuilder = gcheader.GCHeaderBuilder(self.HDR, TYPE_INFO)
 
     def set_query_functions(self, is_varsize, has_gcptr_in_varsize,
                             is_gcarrayofgcptr,

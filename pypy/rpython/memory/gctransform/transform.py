@@ -534,7 +534,6 @@ class GCTransformer(BaseGCTransformer):
         # at the moment, all GC transformers are based on a GCHeaderBuilder.
         self.gcheaderbuilder = gcheaderbuilder
         self.gchelpers = GCHelpers(gcheaderbuilder)
-        self.rtticache = {}
         if self.translator:
             self.gc_runtime_type_info_ptr = self.inittime_helper(
                 self.gchelpers.gc_runtime_type_info, [llmemory.Address],
@@ -683,7 +682,7 @@ class GCTransformer(BaseGCTransformer):
             p = value._as_ptr()
             if not self.gcheaderbuilder.get_header(p):
                 hdr = self.gcheaderbuilder.new_header(p)
-                hdr.typeptr = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+                hdr.typeptr = self.gcheaderbuilder.getTypeInfo(TYPE)
                 self.initialize_constant_header(hdr, TYPE, value)
 
     def initialize_constant_header(self, hdr, TYPE, value):
