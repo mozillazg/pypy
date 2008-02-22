@@ -79,7 +79,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 argument_count = argument_count_m1 + 1 # to account for the rcvr
                 frame = interp.s_active_context
                 assert argument_count == len_unwrap_spec
-                if len(frame.stack) < len_unwrap_spec:
+                if frame.stackpointer() - frame.stackstart() < len_unwrap_spec:
                     raise PrimitiveFailedError()
                 args = ()
                 for i, spec in unrolling_unwrap_spec:

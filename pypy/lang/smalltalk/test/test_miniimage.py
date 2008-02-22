@@ -226,10 +226,16 @@ def test_map_mirrors_to_classtable():
     w_false = image.special(constants.SO_FALSE)
     assert w_false is objtable.w_false
     
-def test_scheduler():
+def test_runimage():
     from pypy.lang.smalltalk.shadow import SemaphoreShadow
     s_semaphore = SemaphoreShadow(None)
     s_scheduler = s_semaphore.s_scheduler()
+    s_ap = s_scheduler.s_active_process()
+    s_ctx = s_ap.s_suspended_context()
+    s_ap.store_w_suspended_context(objtable.w_nil)
+    interp = interpreter.Interpreter()
+    interp.s_active_context = s_ctx
+    interp.interpret()
     
 def test_compile_method():
     # py.test.skip("Not working yet.")
