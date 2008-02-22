@@ -2,6 +2,7 @@ import py
 from pypy.lang.smalltalk import model, constants, primitives
 from pypy.lang.smalltalk import objtable
 from pypy.lang.smalltalk.model import W_ContextPart
+from pypy.lang.smalltalk.shadow import ContextPartShadow
 from pypy.lang.smalltalk.conftest import option
 from pypy.rlib import objectmodel, unroll
 
@@ -106,10 +107,9 @@ class __extend__(W_ContextPart):
         # which is an object with two named vars, and fetches the second
         # named var (the value).
         index = self.currentBytecode & 31
-        association = self.w_method().getliteral(index)
-        assert isinstance(association, model.W_PointersObject)
-        assert association.size() == 2
-        self.push(association.fetch(constants.ASSOCIATION_VALUE_INDEX))
+        w_association = self.w_method().getliteral(index)
+        s_association = w_association.as_association_get_shadow()
+        self.push(s_association.value())
 
     def storeAndPopReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 7
@@ -200,11 +200,9 @@ class __extend__(W_ContextPart):
                     if interp.should_trace():
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
-        start = len(self.stack) - argcount
-        assert start >= 0  # XXX check in the Blue Book what to do in this case
-        arguments = self.stack[start:]
+        arguments = self.pop_and_return_n(argcount)
         interp.s_active_context = method.create_frame(receiver, arguments, self) 
-        self.pop_n(argcount + 1) 
+        self.pop()
 
     def _return(self, object, interp, s_return_to):
         # for tests, when returning from the top-level context
@@ -248,9 +246,9 @@ class __extend__(W_ContextPart):
         elif variableType == 2:
             self.push(self.w_method().getliteral(variableIndex))
         elif variableType == 3:
-            association = self.w_method().getliteral(variableIndex)
-            assert isinstance(association, model.W_PointersObject)
-            self.push(association.fetch(constants.ASSOCIATION_VALUE_INDEX))
+            w_association = self.w_method().getliteral(variableIndex)
+            s_association = w_association.as_association_get_shadow()
+            self.push(s_association.value())
         else:
             assert 0
         
@@ -263,9 +261,9 @@ class __extend__(W_ContextPart):
         elif variableType == 2:
             raise IllegalStoreError
         elif variableType == 3:
-            association = self.w_method().getliteral(variableIndex)
-            assert isinstance(association, model.W_PointersObject)
-            association.store(constants.ASSOCIATION_VALUE_INDEX, self.top())
+            w_association = self.w_method().getliteral(variableIndex)
+            s_association = w_association.as_association_get_shadow()
+            s_association.store_value(self.top())
 
     def extendedStoreAndPopBytecode(self, interp):
         self.extendedStoreBytecode(interp)
@@ -300,17 +298,17 @@ class __extend__(W_ContextPart):
             self.push(self.w_method().getliteral(third))
         elif opType == 4:
             # pushLiteralVariable
-            association = self.w_method().getliteral(third)
-            assert isinstance(association, model.W_PointersObject)
-            self.push(association.fetch(constants.ASSOCIATION_VALUE_INDEX))
+            w_association = self.w_method().getliteral(third)
+            s_association = w_association.as_association_get_shadow()
+            self.push(s_association.value())
         elif opType == 5:
             self.w_receiver().store(third, self.top())
         elif opType == 6:
             self.w_receiver().store(third, self.pop())
         elif opType == 7:
-            association = self.w_method().getliteral(third)
-            assert isinstance(association, model.W_PointersObject)
-            association.store(constants.ASSOCIATION_VALUE_INDEX, self.top())
+            w_association = self.w_method().getliteral(third)
+            s_association = w_association.as_association_get_shadow()
+            s_association.store_value(self.top())
 
     def singleExtendedSuperBytecode(self, interp):
         selector, argcount = self.getExtendedSelectorArgcount()

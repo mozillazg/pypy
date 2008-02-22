@@ -364,9 +364,9 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
             # (Blue book, p 607) All CompiledMethods that contain extended-super bytecodes have the clain which they are found as their last literal variable.   
             # Last of the literals is an association with compiledin
             # as a class
-            association = self.literals[-1]
-            assert isinstance(association, W_PointersObject)
-            self.w_compiledin = association.fetch(constants.ASSOCIATION_VALUE_INDEX)
+            w_association = self.literals[-1]
+            s_association = w_association.as_association_get_shadow()
+            self.w_compiledin = s_association.value()
         return self.w_compiledin
 
     def getclass(self):
@@ -451,6 +451,16 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         else:
             self.literals[index0-1] = w_value
 
+    def fetchbyte(self, index1):
+        index0 = index1 - 1
+        index0 -= self.headersize()
+        index0 -= self.getliteralsize()
+        assert index0 < len(self.bytes)
+        return self.bytes[index0]
+
+    def store(self, index0, w_v):
+        self.atput0(index0, w_v)
+
     def at0(self, index0):
         from pypy.lang.smalltalk import utility
         # XXX Not tested
@@ -459,11 +469,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
             self.literalat0(index0)
         else:
             index0 = index0 - self.getliteralsize()
-            if index0 > len(self.bytes):
-                print "ERROR"
-                print self.getliteralsize()
-                print len(self.bytes)
-                print self.bytes
+            assert index0 < len(self.bytes)
             return utility.wrap_int(ord(self.bytes[index0]))
         
     def atput0(self, index0, w_value):
@@ -522,41 +528,43 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
     def store_s_sender(self, s_sender):
         self._s_sender = s_sender
 
+    def stackpointer(self):
+        return len(self.stack) + self.stackstart()
     # ______________________________________________________________________
     # Imitate the primitive accessors
     
-    def fetch(self, index):
-        from pypy.lang.smalltalk import utility, objtable
-        if index == constants.CTXPART_SENDER_INDEX:
-            sender = self.s_sender()
-            if sender is None:
-                return objtable.w_nil
-            else:
-                return sender.w_self()
-        elif index == constants.CTXPART_PC_INDEX:
-            return utility.wrap_int(self.pc())
-        elif index == constants.CTXPART_STACKP_INDEX:
-            return utility.wrap_int(len(self.stack)+self.stackstart())
-        
-        # Invalid!
-        raise IndexError
+    #def fetch(self, index):
+    #    from pypy.lang.smalltalk import utility, objtable
+    #    if index == constants.CTXPART_SENDER_INDEX:
+    #        sender = self.s_sender()
+    #        if sender is None:
+    #            return objtable.w_nil
+    #        else:
+    #            return sender.w_self()
+    #    elif index == constants.CTXPART_PC_INDEX:
+    #        return utility.wrap_int(self.pc())
+    #    elif index == constants.CTXPART_STACKP_INDEX:
+    #        return utility.wrap_int(self.stackpointer())
+    #    
+    #    # Invalid!
+    #    raise IndexError
 
-    def store(self, index, w_value):
-        # XXX Untested code...
-
-        from pypy.lang.smalltalk import utility, objtable
-        if index == constants.CTXPART_SENDER_INDEX:
-            if w_value != objtable.w_nil:
-                self._s_sender = w_value.as_context_get_shadow()
-        elif index == constants.CTXPART_PC_INDEX:
-            self._pc = utility.unwrap_int(w_value)
-        elif index == constants.CTXPART_STACKP_INDEX:
-            size = utility.unwrap_int(w_value)
-            size = size - self.stackstart()
-            self.stack = [objtable.w_nil] * size
-        else:
-            # Invalid!
-            raise IndexError
+    #def store(self, index, w_value):
+    #    # XXX Untested code...
+    #
+    #    from pypy.lang.smalltalk import utility, objtable
+    #    if index == constants.CTXPART_SENDER_INDEX:
+    #        if w_value != objtable.w_nil:
+    #            self._s_sender = w_value.as_context_get_shadow()
+    #    elif index == constants.CTXPART_PC_INDEX:
+    #        self._pc = utility.unwrap_int(w_value)
+    #    elif index == constants.CTXPART_STACKP_INDEX:
+    #        size = utility.unwrap_int(w_value)
+    #        size = size - self.stackstart()
+    #        self.stack = [objtable.w_nil] * size
+    #    else:
+    #        # Invalid!
+    #        raise IndexError
 
     def stackstart(self):
         return self.w_method().argsize + self.w_method().tempsize + constants.MTHDCTX_TEMP_FRAME_START
