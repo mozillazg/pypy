@@ -60,6 +60,44 @@ def test_pointer_arithmetic_inplace():
     res = fc(10, "c")
     assert res == "c"
 
+def test_flags_in_low_bits():
+    S = lltype.GcStruct('S', ('x', lltype.Signed))
+    def fn():
+        s = lltype.malloc(S)
+        a = cast_ptr_to_adr(s)
+        assert cast_adr_to_int(a) & 3 == 0
+        assert cast_adr_to_int(a | 0) & 3 == 0
+        assert cast_adr_to_int(a | 1) & 3 == 1
+        assert cast_adr_to_int(a | 2) & 3 == 2
+        assert cast_adr_to_int(a | 3) & 3 == 3
+        assert cast_adr_to_int(a & ~0) & 3 == 0
+        assert cast_adr_to_int(a & ~1) & 3 == 0
+        assert cast_adr_to_int(a & ~2) & 3 == 0
+        assert cast_adr_to_int(a & ~3) & 3 == 0
+        assert cast_adr_to_int((a | 1) & ~0) & 3 == 1
+        assert cast_adr_to_int((a | 1) & ~1) & 3 == 0
+        assert cast_adr_to_int((a | 1) & ~2) & 3 == 1
+        assert cast_adr_to_int((a | 1) & ~3) & 3 == 0
+        assert cast_adr_to_int((a | 2) & ~0) & 3 == 2
+        assert cast_adr_to_int((a | 2) & ~1) & 3 == 2
+        assert cast_adr_to_int((a | 2) & ~2) & 3 == 0
+        assert cast_adr_to_int((a | 2) & ~3) & 3 == 0
+        assert cast_adr_to_int((a | 3) & ~0) & 3 == 3
+        assert cast_adr_to_int((a | 3) & ~1) & 3 == 2
+        assert cast_adr_to_int((a | 3) & ~2) & 3 == 1
+        assert cast_adr_to_int((a | 3) & ~3) & 3 == 0
+        a |= 1
+        assert a != cast_ptr_to_adr(s)
+        a |= 2
+        assert a != cast_ptr_to_adr(s)
+        a &= ~1
+        assert a != cast_ptr_to_adr(s)
+        a &= ~2
+        assert a == cast_ptr_to_adr(s)
+        assert cast_adr_to_ptr(a, lltype.Ptr(S)) == s
+    fc = compile(fn, [])
+    fc()
+
 def test_raw_memcopy():
     def f():
         addr = raw_malloc(100)
