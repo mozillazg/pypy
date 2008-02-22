@@ -31,13 +31,15 @@ class GenerationGC(SemiSpaceGC):
     prebuilt_gc_objects_are_static_roots = False
     first_unused_gcflag = SemiSpaceGC.first_unused_gcflag << 2
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE,
+    def __init__(self, gcheaderbuilder,
+                 chunk_size=DEFAULT_CHUNK_SIZE,
                  nursery_size=128,
                  min_nursery_size=128,
                  auto_nursery_size=False,
                  space_size=4096,
                  max_space_size=sys.maxint//2+1):
-        SemiSpaceGC.__init__(self, chunk_size = chunk_size,
+        SemiSpaceGC.__init__(self, gcheaderbuilder,
+                             chunk_size = chunk_size,
                              space_size = space_size,
                              max_space_size = max_space_size)
         assert min_nursery_size <= nursery_size <= space_size // 2
@@ -196,9 +198,9 @@ class GenerationGC(SemiSpaceGC):
     def init_gc_object(self, addr, typeid, flags=GCFLAG_NO_YOUNG_PTRS):
         SemiSpaceGC.init_gc_object(self, addr, typeid, flags)
 
-    def init_gc_object_immortal(self, addr, typeid,
+    def init_gc_object_immortal(self, hdr, typeid,
                                 flags=GCFLAG_NO_YOUNG_PTRS|GCFLAG_NO_HEAP_PTRS):
-        SemiSpaceGC.init_gc_object_immortal(self, addr, typeid, flags)
+        SemiSpaceGC.init_gc_object_immortal(self, hdr, typeid, flags)
 
     def semispace_collect(self, size_changing=False):
         self.reset_young_gcflags() # we are doing a full collection anyway
@@ -214,7 +216,7 @@ class GenerationGC(SemiSpaceGC):
     def trace_and_copy(self, obj):
         # during a full collect, all objects copied might come from the nursery and
         # so must have this flag set:
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
+        self.header(obj).flags |= GCFLAG_NO_YOUNG_PTRS
         SemiSpaceGC.trace_and_copy(self, obj)
         # history: this was missing and caused an object to become old but without the
         # flag set.  Such an object is bogus in the sense that the write_barrier doesn't
@@ -227,7 +229,7 @@ class GenerationGC(SemiSpaceGC):
         while oldlist.non_empty():
             obj = oldlist.pop()
             hdr = self.header(obj)
-            hdr.tid |= GCFLAG_NO_YOUNG_PTRS
+            hdr.flags |= GCFLAG_NO_YOUNG_PTRS
 
     def weakrefs_grow_older(self):
         while self.young_objects_with_weakrefs.non_empty():
@@ -308,7 +310,7 @@ class GenerationGC(SemiSpaceGC):
         """obj must not be in the nursery.  This copies all the
         young objects it references out of the nursery.
         """
-        self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
+        self.header(obj).flags |= GCFLAG_NO_YOUNG_PTRS
         self.trace(obj, self._trace_drag_out, None)
 
     def _trace_drag_out(self, pointer, ignored):
@@ -336,7 +338,7 @@ class GenerationGC(SemiSpaceGC):
             self.objects_with_weakrefs.append(obj)
 
     def write_barrier(self, oldvalue, newvalue, addr_struct):
-        if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
+        if self.header(addr_struct).flags & GCFLAG_NO_YOUNG_PTRS:
             self.remember_young_pointer(addr_struct, newvalue)
 
     def append_to_static_roots(self, pointer, arg):
@@ -344,7 +346,7 @@ class GenerationGC(SemiSpaceGC):
 
     def move_to_static_roots(self, addr_struct):
         objhdr = self.header(addr_struct)
-        objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+        objhdr.flags &= ~GCFLAG_NO_HEAP_PTRS
         self.trace(addr_struct, self.append_to_static_roots, None)
 
     def remember_young_pointer(self, addr_struct, addr):
@@ -353,8 +355,8 @@ class GenerationGC(SemiSpaceGC):
         oldhdr = self.header(addr_struct)
         if self.is_in_nursery(addr):
             self.old_objects_pointing_to_young.append(addr_struct)
-            oldhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
-        if oldhdr.tid & GCFLAG_NO_HEAP_PTRS:
+            oldhdr.flags &= ~GCFLAG_NO_YOUNG_PTRS
+        if oldhdr.flags & GCFLAG_NO_HEAP_PTRS:
             self.move_to_static_roots(addr_struct)
     remember_young_pointer._dont_inline_ = True
 

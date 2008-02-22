@@ -2,20 +2,23 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llheap
 from pypy.rpython import llinterp
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.memory import gctypelayout
+from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.objspace.flow.model import Constant
 
 
 class GCManagedHeap(object):
 
     def __init__(self, llinterp, flowgraphs, gc_class, GC_PARAMS={}):
-        self.gc = gc_class(chunk_size = 10, **GC_PARAMS)
+        TYPEINFO = gctypelayout.GCData.TYPE_INFO
+        self.gcheaderbuilder = GCHeaderBuilder(gc_class.HDR, TYPEINFO)
+        self.gc = gc_class(self.gcheaderbuilder, chunk_size = 10, **GC_PARAMS)
         self.gc.set_root_walker(LLInterpRootWalker(self))
         self.llinterp = llinterp
         self.prepare_graphs(flowgraphs)
         self.gc.setup()
 
     def prepare_graphs(self, flowgraphs):
-        layoutbuilder = DirectRunLayoutBuilder(self.gc.gcheaderbuilder,
+        layoutbuilder = DirectRunLayoutBuilder(self.gcheaderbuilder,
                                                self.llinterp)
         self.get_type_id = layoutbuilder.get_type_id
         layoutbuilder.initialize_gc_query_function(self.gc)

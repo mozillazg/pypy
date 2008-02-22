@@ -95,9 +95,10 @@ class FrameworkGCTransformer(GCTransformer):
     use_stackless = False
     root_stack_depth = 163840
 
+    TYPEINFO = gctypelayout.GCData.TYPE_INFO
+
     def __init__(self, translator):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
-        super(FrameworkGCTransformer, self).__init__(translator, inline=True)
         if hasattr(self, 'GC_PARAMS'):
             # for tests: the GC choice can be specified as class attributes
             from pypy.rpython.memory.gc.marksweep import MarkSweepGC
@@ -107,13 +108,14 @@ class FrameworkGCTransformer(GCTransformer):
             # for regular translation: pick the GC from the config
             GCClass, GC_PARAMS = choose_gc_from_config(translator.config)
 
-        gc = GCClass(**GC_PARAMS)
-        self.setgcheaderbuilder(gc.gcheaderbuilder)
+        self.HDR = GCClass.HDR
+        super(FrameworkGCTransformer, self).__init__(translator, inline=True)
+
         self.layoutbuilder = TransformerLayoutBuilder(self)
         self.get_type_id = self.layoutbuilder.get_type_id
 
         gcdata = gctypelayout.GCData(self.gcheaderbuilder)
-        gcdata.gc = gc
+        gcdata.gc = GCClass(self.gcheaderbuilder, **GC_PARAMS)
 
         # initialize the following two fields with a random non-NULL address,
         # to make the annotator happy.  The fields are patched in finish()
