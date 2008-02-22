@@ -570,3 +570,41 @@ def test_generic_gcarray_of_ptr():
     adr += gcarrayofptr_itemsoffset + 2 * gcarrayofptr_singleitemoffset
     adr = adr.address[0]    # => s2[1][2]
     assert (adr + FieldOffset(S1, 'x')).signed[0] == -33
+
+def test_flags_in_low_bits():
+    S = lltype.GcStruct('S', ('x', lltype.Signed))
+    s = lltype.malloc(S)
+    a = cast_ptr_to_adr(s)
+    assert cast_adr_to_int(a) & 3 == 0
+    assert cast_adr_to_int(a | 0) & 3 == 0
+    assert cast_adr_to_int(a | 1) & 3 == 1
+    assert cast_adr_to_int(a | 2) & 3 == 2
+    assert cast_adr_to_int(a | 3) & 3 == 3
+    assert cast_adr_to_int(a & ~0) & 3 == 0
+    assert cast_adr_to_int(a & ~1) & 3 == 0
+    assert cast_adr_to_int(a & ~2) & 3 == 0
+    assert cast_adr_to_int(a & ~3) & 3 == 0
+    assert cast_adr_to_int((a | 1) & ~0) & 3 == 1
+    assert cast_adr_to_int((a | 1) & ~1) & 3 == 0
+    assert cast_adr_to_int((a | 1) & ~2) & 3 == 1
+    assert cast_adr_to_int((a | 1) & ~3) & 3 == 0
+    assert cast_adr_to_int((a | 2) & ~0) & 3 == 2
+    assert cast_adr_to_int((a | 2) & ~1) & 3 == 2
+    assert cast_adr_to_int((a | 2) & ~2) & 3 == 0
+    assert cast_adr_to_int((a | 2) & ~3) & 3 == 0
+    assert cast_adr_to_int((a | 3) & ~0) & 3 == 3
+    assert cast_adr_to_int((a | 3) & ~1) & 3 == 2
+    assert cast_adr_to_int((a | 3) & ~2) & 3 == 1
+    assert cast_adr_to_int((a | 3) & ~3) & 3 == 0
+    a |= 1
+    assert a != cast_ptr_to_adr(s)
+    py.test.raises(ValueError, cast_adr_to_ptr, a, lltype.Ptr(S))
+    a |= 2
+    assert a != cast_ptr_to_adr(s)
+    py.test.raises(ValueError, cast_adr_to_ptr, a, lltype.Ptr(S))
+    a &= ~1
+    assert a != cast_ptr_to_adr(s)
+    py.test.raises(ValueError, cast_adr_to_ptr, a, lltype.Ptr(S))
+    a &= ~2
+    assert a == cast_ptr_to_adr(s)
+    assert cast_adr_to_ptr(a, lltype.Ptr(S)) == s
