@@ -1019,6 +1019,12 @@ class __extend__(pairtype(SomeAddress, SomeInteger)):
     def sub((s_addr, s_int)):
         return SomeAddress(is_null=False)
 
+    def or_((s_addr, s_int)):
+        return SomeAddress()
+
+    def and_((s_addr, s_int)):
+        return SomeAddress()
+
 class __extend__(pairtype(SomeAddress, SomeImpossibleValue)):
     # need to override this specifically to hide the 'raise UnionError'
     # of pairtype(SomeAddress, SomeObject).
