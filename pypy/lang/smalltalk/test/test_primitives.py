@@ -11,7 +11,7 @@ mockclass = classtable.bootstrap_class
 
 class MockFrame(model.W_MethodContext):
     def __init__(self, stack):
-        self.stack = stack
+        self._stack = stack
 
 def wrap(x):
     if isinstance(x, int): return utility.wrap_int(x)
@@ -32,17 +32,17 @@ def prim(code, stack):
     interp, argument_count = mock(stack)
     prim_table[code](interp, argument_count-1)
     res = interp.s_active_context.pop()
-    assert not len(interp.s_active_context.stack) # check args are consumed
+    assert not len(interp.s_active_context.stack()) # check args are consumed
     return res
 
 def prim_fails(code, stack):
     interp, argument_count = mock(stack)
-    orig_stack = list(interp.s_active_context.stack)
+    orig_stack = list(interp.s_active_context.stack())
     try:
         prim_table[code](interp, argument_count-1)
         py.test.fail("Expected PrimitiveFailedError")
     except PrimitiveFailedError:
-        assert interp.s_active_context.stack == orig_stack
+        assert interp.s_active_context.stack() == orig_stack
         
 # smallinteger tests
 def test_small_int_add():

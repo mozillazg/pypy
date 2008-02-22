@@ -61,7 +61,7 @@ class Interpreter:
                 
                 print "%sStack=%s" % (
                     self._last_indent,
-                    repr(self.s_active_context.stack),)
+                    repr(self.s_active_context.stack()),)
                 print "%sBytecode at %d (%d:%s):" % (
                     self._last_indent,
                     self.s_active_context.pc(),
@@ -171,7 +171,7 @@ class __extend__(W_ContextPart):
         if interp.should_trace():
             print "%sSending selector %r to %r with: %r" % (
                 interp._last_indent, selector, receiver,
-                [self.stack[i-argcount] for i in range(argcount)])
+                [self.peek(argcount-1-i) for i in range(argcount)])
             pass
         assert argcount >= 0
         method = receiverclassshadow.lookup(selector)
