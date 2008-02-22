@@ -2,7 +2,7 @@
 from pypy.tool.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.llmemory import NULL, Address, \
-     cast_adr_to_int, fakeaddress
+     cast_adr_to_int, fakeaddress, fakeaddresswithflags
 from pypy.rpython.rmodel import Repr, IntegerRepr
 from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype
@@ -28,7 +28,8 @@ class AddressRepr(Repr):
     def convert_const(self, value):
         # note that llarena.fakearenaaddress is not supported as a constant
         # in graphs
-        assert type(value) is fakeaddress
+        assert (type(value) is fakeaddress or
+                type(value) is fakeaddresswithflags)
         return value
 
     def ll_str(self, a):

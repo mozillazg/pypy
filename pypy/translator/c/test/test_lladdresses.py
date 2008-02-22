@@ -62,9 +62,17 @@ def test_pointer_arithmetic_inplace():
 
 def test_flags_in_low_bits():
     S = lltype.GcStruct('S', ('x', lltype.Signed))
-    def fn():
+    s1 = lltype.malloc(S)
+    s1.x = 42
+    a1 = cast_ptr_to_adr(s1) | 1
+    def fn(flag):
         s = lltype.malloc(S)
+        s.x = 6161
         a = cast_ptr_to_adr(s)
+        if flag:
+            a2 = a1
+        else:
+            a2 = a | 1
         assert cast_adr_to_int(a) & 3 == 0
         assert cast_adr_to_int(a | 0) & 3 == 0
         assert cast_adr_to_int(a | 1) & 3 == 1
@@ -95,8 +103,15 @@ def test_flags_in_low_bits():
         a &= ~2
         assert a == cast_ptr_to_adr(s)
         assert cast_adr_to_ptr(a, lltype.Ptr(S)) == s
-    fc = compile(fn, [])
-    fc()
+        s1bis = cast_adr_to_ptr(a1 & ~1, lltype.Ptr(S))
+        assert s1bis.x == 42
+        ster = cast_adr_to_ptr(a2 & ~1, lltype.Ptr(S))
+        return ster.x
+    fc = compile(fn, [int])
+    res = fc(1)
+    assert res == 42
+    res = fc(0)
+    assert res == 6161
 
 def test_raw_memcopy():
     def f():

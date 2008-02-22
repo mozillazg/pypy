@@ -20,5 +20,8 @@
 #define OP_CAST_INT_TO_ADR(x, r)     r = ((void *)(x))
 
 /* XXX assumes that addresses fit in a long */
-#define OP_ADR_OR(x,y,r)    r = (char *)((long)(x) | (y))
-#define OP_ADR_AND(x,y,r)   r = (char *)((long)(x) & (y))
+#define ADR_OR(x,y)      ((char *)((long)(x) | (y)))
+#define ADR_AND(x,y)     ((char *)((long)(x) & (y)))
+
+#define OP_ADR_OR(x,y,r)    r = ADR_OR(x,y)
+#define OP_ADR_AND(x,y,r)   r = ADR_AND(x,y)

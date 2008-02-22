@@ -407,7 +407,8 @@ class Bookkeeper:
             result = entry.compute_annotation_bk(self)
         elif isinstance(x, lltype._ptr):
             result = SomePtr(lltype.typeOf(x))
-        elif isinstance(x, llmemory.fakeaddress):
+        elif isinstance(x, (llmemory.fakeaddress,
+                            llmemory.fakeaddresswithflags)):
             result = SomeAddress(is_null=not x)
         elif isinstance(x, ootype._static_meth):
             result = SomeOOStaticMeth(ootype.typeOf(x))

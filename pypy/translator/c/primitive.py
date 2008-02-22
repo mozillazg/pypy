@@ -7,7 +7,8 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem.llmemory import Address, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
      CompositeOffset, ArrayLengthOffset, \
-     GCHeaderOffset, GCTypeInfoOffset
+     GCHeaderOffset, GCTypeInfoOffset, \
+     fakeaddress, fakeaddresswithflags
 from pypy.rpython.lltypesystem.llarena import RoundedUpForAllocation
 from pypy.translator.c.support import cdecl, barebonearray
 
@@ -126,7 +127,13 @@ def name_unichar(value, db):
 
 def name_address(value, db):
     if value:
-        return db.get(value.ref())
+        if type(value) is fakeaddress:
+            return db.get(value.ref())
+        elif type(value) is fakeaddresswithflags:
+            return 'ADR_OR(%s, %d)' % (name_address(value.adr, db),
+                                       value.flags)
+        else:
+            raise TypeError("not supported: name_address(%r)" % (value,))
     else:
         return 'NULL'
 
