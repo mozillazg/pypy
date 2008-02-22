@@ -99,6 +99,22 @@ class __extend__(pairtype(AddressRepr, IntegerRepr)):
         return NotImplemented
     rtype_inplace_sub = rtype_sub
 
+    def rtype_or_((r_addr, r_int), hop):
+        if r_int.lowleveltype == lltype.Signed:
+            v_addr, v_flags = hop.inputargs(Address, lltype.Signed)
+            return hop.genop('adr_or', [v_addr, v_flags], resulttype=Address)
+
+        return NotImplemented
+    rtype_inplace_or = rtype_or_
+
+    def rtype_and_((r_addr, r_int), hop):
+        if r_int.lowleveltype == lltype.Signed:
+            v_addr, v_flags = hop.inputargs(Address, lltype.Signed)
+            return hop.genop('adr_and', [v_addr, v_flags], resulttype=Address)
+
+        return NotImplemented
+    rtype_inplace_and = rtype_and_
+
 
 class __extend__(pairtype(AddressRepr, AddressRepr)):
 

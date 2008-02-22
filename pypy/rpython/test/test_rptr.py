@@ -162,6 +162,43 @@ def test_address():
     res = interpret(fn, [5])
     assert res is True
 
+def test_flags_in_low_bits():
+    S = GcStruct('S', ('x', Signed))
+    def fn():
+        s = malloc(S)
+        a = llmemory.cast_ptr_to_adr(s)
+        assert llmemory.cast_adr_to_int(a) & 3 == 0
+        assert llmemory.cast_adr_to_int(a | 0) & 3 == 0
+        assert llmemory.cast_adr_to_int(a | 1) & 3 == 1
+        assert llmemory.cast_adr_to_int(a | 2) & 3 == 2
+        assert llmemory.cast_adr_to_int(a | 3) & 3 == 3
+        assert llmemory.cast_adr_to_int(a & ~0) & 3 == 0
+        assert llmemory.cast_adr_to_int(a & ~1) & 3 == 0
+        assert llmemory.cast_adr_to_int(a & ~2) & 3 == 0
+        assert llmemory.cast_adr_to_int(a & ~3) & 3 == 0
+        assert llmemory.cast_adr_to_int((a | 1) & ~0) & 3 == 1
+        assert llmemory.cast_adr_to_int((a | 1) & ~1) & 3 == 0
+        assert llmemory.cast_adr_to_int((a | 1) & ~2) & 3 == 1
+        assert llmemory.cast_adr_to_int((a | 1) & ~3) & 3 == 0
+        assert llmemory.cast_adr_to_int((a | 2) & ~0) & 3 == 2
+        assert llmemory.cast_adr_to_int((a | 2) & ~1) & 3 == 2
+        assert llmemory.cast_adr_to_int((a | 2) & ~2) & 3 == 0
+        assert llmemory.cast_adr_to_int((a | 2) & ~3) & 3 == 0
+        assert llmemory.cast_adr_to_int((a | 3) & ~0) & 3 == 3
+        assert llmemory.cast_adr_to_int((a | 3) & ~1) & 3 == 2
+        assert llmemory.cast_adr_to_int((a | 3) & ~2) & 3 == 1
+        assert llmemory.cast_adr_to_int((a | 3) & ~3) & 3 == 0
+        a |= 1
+        assert a != llmemory.cast_ptr_to_adr(s)
+        a |= 2
+        assert a != llmemory.cast_ptr_to_adr(s)
+        a &= ~1
+        assert a != llmemory.cast_ptr_to_adr(s)
+        a &= ~2
+        assert a == llmemory.cast_ptr_to_adr(s)
+        assert llmemory.cast_adr_to_ptr(a, Ptr(S)) == s
+    interpret(fn, [])
+
 def test_flavored_malloc():
     T = GcStruct('T', ('y', Signed))
     def fn(n):

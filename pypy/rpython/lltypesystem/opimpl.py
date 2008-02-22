@@ -368,6 +368,16 @@ def op_adr_sub(addr, offset):
     assert lltype.typeOf(offset) is lltype.Signed
     return addr - offset
 
+def op_adr_or(addr, flags):
+    checkadr(addr)
+    assert lltype.typeOf(flags) is lltype.Signed
+    return addr | flags
+
+def op_adr_and(addr, flags):
+    checkadr(addr)
+    assert lltype.typeOf(flags) is lltype.Signed
+    return addr & flags
+
 def op_adr_delta(addr1, addr2):
     checkadr(addr1)
     checkadr(addr2)
