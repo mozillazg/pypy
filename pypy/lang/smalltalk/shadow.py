@@ -10,6 +10,9 @@ class AbstractShadow(object):
         self._w_self = w_self
         self.invalidate()
 
+    def getname(self):
+        return repr(self)
+
     def invalidate(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
@@ -55,6 +58,9 @@ class ClassShadow(AbstractShadow):
         self.methoddict = {}
         self.s_superclass = None     # the ClassShadow of the super class
         self.name = None
+
+    def getname(self):
+        return "%s class" % (self.name or '?',)
 
     def update_shadow(self):
         from pypy.lang.smalltalk import objtable
@@ -408,6 +414,10 @@ class ContextPartShadow(model.W_ContextPart):
     # XXX XXX Remove function when fixing superclass to AbstractShadow
     def update_shadow(self):
         pass
+
+    # XXX XXX Remove function when fixing superclass to AbstractShadow
+    def getname(self):
+        return repr(self)
 
     def w_receiver(self):
         " Return self of the method, or the method that contains the block "

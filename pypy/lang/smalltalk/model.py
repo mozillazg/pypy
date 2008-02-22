@@ -125,9 +125,8 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return "<%s %s>" % (self.__class__.__name__, self)
 
     def __str__(self):
-        from pypy.lang.smalltalk.shadow import ClassShadow
-        if isinstance(self, W_PointersObject) and isinstance(self._shadow,ClassShadow):
-            return "%s class" % (self.as_class_get_shadow().name or '?',)
+        if isinstance(self, W_PointersObject) and self._shadow is not None:
+            return self._shadow.getname()
         else:
             return "a %s" % (self.shadow_of_my_class().name or '?',)
 
@@ -202,9 +201,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return shadow
 
     def as_link_get_shadow(self):
-        from pypy.lang.smalltalk import classtable
-        if self.getclass() == classtable.w_Process:
-            return self.as_process_get_shadow()
         from pypy.lang.smalltalk.shadow import LinkShadow
         return self.as_special_get_shadow(LinkShadow)
     
@@ -213,9 +209,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return self.as_special_get_shadow(SemaphoreShadow)
 
     def as_linkedlist_get_shadow(self):
-        from pypy.lang.smalltalk import classtable
-        if self.getclass() == classtable.w_Semaphore:
-            return self.as_semaphore_get_shadow()
         from pypy.lang.smalltalk.shadow import LinkedListShadow
         return self.as_special_get_shadow(LinkedListShadow)
 
@@ -240,14 +233,8 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return self.as_special_get_shadow(MethodContextShadow)
 
     def as_context_get_shadow(self):
-        from pypy.lang.smalltalk import classtable
-        if self.getclass() == classtable.w_MethodContext:
-            return self.as_methodcontext_get_shadow()
-        elif self.getclass() == classtable.w_BlockContext:
-            return self.as_blockcontext_get_shadow()
-        else:
-            # Should not happen...
-            raise Exception()
+        from pypy.lang.smalltalk.shadow import ContextPartShadow
+        return self.as_special_get_shadow(ContextPartShadow)
 
     def equals(self, other):
         if not isinstance(other, W_PointersObject):

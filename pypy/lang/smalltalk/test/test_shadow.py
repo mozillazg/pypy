@@ -205,3 +205,22 @@ def test_linkedlist():
     s_object.add_last_link(w_last)
     assert s_object.w_firstlink() == w_first
     assert s_object.w_lastlink() == w_last
+
+def test_shadowchanges():
+    w_object = model.W_PointersObject(None, 2)
+    w_o1 = link('a')
+    w_o2 = link('b')
+    w_object.store(0, w_o1)
+    w_object.store(1, w_o2)
+    s_object = w_object.as_linkedlist_get_shadow()
+    assert s_object.w_firstlink() == w_o1
+    assert s_object.w_lastlink() == w_o2
+    assert w_object._shadow == s_object
+    s_object2 = w_object.as_association_get_shadow()
+    assert s_object2.key() == w_o1
+    assert s_object2.value() == w_o2
+    assert w_object._shadow == s_object2
+    s_object.check_for_updates()
+    assert s_object.w_firstlink() == w_o1
+    assert s_object.w_lastlink() == w_o2
+    assert w_object._shadow == s_object
