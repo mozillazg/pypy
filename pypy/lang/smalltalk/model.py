@@ -468,6 +468,8 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
+        print index0
+        print self.getliteralsize()
         if index0 <= self.getliteralsize():
             self.literalatput0(index0/constants.BYTES_PER_WORD, w_value)
         else:
