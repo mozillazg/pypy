@@ -682,7 +682,7 @@ class GCTransformer(BaseGCTransformer):
             p = value._as_ptr()
             if not self.gcheaderbuilder.get_header(p):
                 hdr = self.gcheaderbuilder.new_header(p)
-                hdr.typeptr = self.gcheaderbuilder.getTypeInfo(TYPE)
+                hdr.typeptr = self.gcheaderbuilder.getRtti(TYPE)
                 self.initialize_constant_header(hdr, TYPE, value)
 
     def initialize_constant_header(self, hdr, TYPE, value):
