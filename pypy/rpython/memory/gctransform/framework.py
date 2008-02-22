@@ -327,6 +327,10 @@ class FrameworkGCTransformer(GCTransformer):
     def consider_constant(self, TYPE, value):
         self.layoutbuilder.consider_constant(TYPE, value, self.gcdata.gc)
 
+    def initialize_typeinfo(self, typeinfo, rtti, TYPE):
+        raise Exception("for now, the layoutbuilder should have found "
+                        "all possible GC types - got %r" % (TYPE,))
+
     #def get_type_id(self, TYPE):
     #    this method is attached to the instance and redirects to
     #    layoutbuilder.get_type_id().
