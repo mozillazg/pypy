@@ -15,43 +15,53 @@ CLASS_METHODDICT_INDEX = 1
 CLASS_FORMAT_INDEX = 2
 CLASS_NAME_INDEX = 6                # in the mini.image, at least
 
-NEXT_LINK_INDEX = 0                 # "
+# Link
+NEXT_LINK_INDEX = 0                 
 
-PROCESS_SUSPENDED_CONTEXT_INDEX = 1 # "
-PROCESS_PRIORITY_INDEX = 2          # "
-PROCESS_MY_LIST_INDEX = 3           # "
+# Process < Link
+PROCESS_SUSPENDED_CONTEXT_INDEX = 1 
+PROCESS_PRIORITY_INDEX = 2          
+PROCESS_MY_LIST_INDEX = 3           
 
-FIRST_LINK_INDEX = 0                # "
-LAST_LINK_INDEX = 1                 # "
-EXCESS_SIGNALS_INDEX = 2            # "
+# LinkedList
+FIRST_LINK_INDEX = 0                
+LAST_LINK_INDEX = 1                 
 
-SCHEDULER_PROCESS_LISTS_INDEX = 0   # "
-SCHEDULER_ACTIVE_PROCESS_INDEX = 1  # "
+# Semaphore < LinkedList
+EXCESS_SIGNALS_INDEX = 2            
 
+# Scheduler
+SCHEDULER_PROCESS_LISTS_INDEX = 0   
+SCHEDULER_ACTIVE_PROCESS_INDEX = 1  
+
+# MethodDict
 METHODDICT_TALLY_INDEX = 0
 METHODDICT_VALUES_INDEX = 1
 METHODDICT_NAMES_INDEX  = 2
 
+# Message
 MESSAGE_SELECTOR_INDEX = 0
 MESSAGE_ARGUMENTS_INDEX = 1
 MESSAGE_LOOKUP_CLASS_INDEX = 2
 
+# Association
 ASSOCIATION_KEY_INDEX = 0
 ASSOCIATION_VALUE_INDEX = 1
 
+# ContextPart
 CTXPART_SENDER_INDEX = 0
 CTXPART_PC_INDEX = 1
 CTXPART_STACKP_INDEX = 2
 
 METHOD_HEADER_INDEX = 0
 
-# Extends CTXPART_*
+# BlockContext < ContextPart
 BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX = 3
 BLKCTX_INITIAL_IP_INDEX = 4
 BLKCTX_HOME_INDEX = 5
 BLKCTX_TEMP_FRAME_START = 6
 
-# Extends CTXPART_*
+# MethodContext < ContextPart
 MTHDCTX_METHOD = 3
 MTHDCTX_RECEIVER_MAP = 4
 MTHDCTX_RECEIVER = 5
@@ -126,10 +136,10 @@ classes_in_special_object_table = {
 #    "Display" : SO_DISPLAY_CLASS,
 #    "Message" : SO_MESSAGE_CLASS,
     "CompiledMethod" : SO_COMPILEDMETHOD_CLASS,
-#    "Semaphore" : SO_SEMAPHORE_CLASS,
+    "Semaphore" : SO_SEMAPHORE_CLASS,
     "Character" : SO_CHARACTER_CLASS,
     "ByteArray" : SO_BYTEARRAY_CLASS,
-#    "Process" : SO_PROCESS_CLASS,
+    "Process" : SO_PROCESS_CLASS,
 #    "PseudoContext" : SO_PSEUDOCONTEXT_CLASS,
 #    "TranslatedMethod" : SO_TRANSLATEDMETHOD_CLASS,
     # "LargeNegativeInteger" : SO_LARGENEGATIVEINTEGER_CLASS, # Not available in mini.image

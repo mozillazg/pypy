@@ -181,6 +181,8 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self._vars, list))
 
+    # XXX XXX
+    # Need to find better way of handling overloading of shadows!!!
     def as_special_get_shadow(self, TheClass):
         shadow = self._shadow
         if shadow is None:
@@ -195,6 +197,9 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return shadow
 
     def as_link_get_shadow(self):
+        from pypy.lang.smalltalk import classtable
+        if self.getclass() == classtable.w_Process:
+            return self.as_process_get_shadow()
         from pypy.lang.smalltalk.shadow import LinkShadow
         return self.as_special_get_shadow(LinkShadow)
     
@@ -203,6 +208,9 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         return self.as_special_get_shadow(SemaphoreShadow)
 
     def as_linkedlist_get_shadow(self):
+        from pypy.lang.smalltalk import classtable
+        if self.getclass() == classtable.w_Semaphore:
+            return self.as_semaphore_get_shadow()
         from pypy.lang.smalltalk.shadow import LinkedListShadow
         return self.as_special_get_shadow(LinkedListShadow)
 
