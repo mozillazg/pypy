@@ -3,6 +3,13 @@ from pypy.lang.smalltalk import model, shadow, objtable
 from pypy.lang.smalltalk.shadow import MethodNotFound
 from pypy.lang.smalltalk import classtable, utility
 
+def joinbits(values, lengths):
+    result = 0
+    for each, length in reversed(zip(values, lengths)):
+        result = result << length
+        result += each
+    return result   
+
 mockclass = classtable.bootstrap_class
 
 def test_new():
@@ -101,6 +108,24 @@ def test_compiledmethod_at0():
     w_method.literals = [ 'lit1', 'lit2' ]
     w_method.literalsize = 2
     assert utility.unwrap_int(w_method.at0(0)) == 100
+    assert w_method.at0(4) == 'lit1'
+    assert w_method.at0(8) == 'lit2'
+    assert utility.unwrap_int(w_method.at0(12)) == ord('a')
+    assert utility.unwrap_int(w_method.at0(13)) == ord('b')
+    assert utility.unwrap_int(w_method.at0(14)) == ord('c')
+
+def test_compiledmethod_atput0():
+    w_method = model.W_CompiledMethod(3)
+    newheader = joinbits([0,2,0,0,0,0],[9,8,1,6,4,1])
+    assert w_method.getliteralsize() == 0
+    w_method.atput0(0, utility.wrap_int(newheader))
+    assert w_method.getliteralsize() == 8 # 2 from new header * BYTES_PER_WORD (= 4)
+    w_method.atput0(4, 'lit1')
+    w_method.atput0(8, 'lit2')
+    w_method.atput0(12, utility.wrap_int(ord('a')))
+    w_method.atput0(13, utility.wrap_int(ord('b')))
+    w_method.atput0(14, utility.wrap_int(ord('c')))
+    assert utility.unwrap_int(w_method.at0(0)) == newheader
     assert w_method.at0(4) == 'lit1'
     assert w_method.at0(8) == 'lit2'
     assert utility.unwrap_int(w_method.at0(12)) == ord('a')
