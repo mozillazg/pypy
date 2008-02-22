@@ -24,7 +24,6 @@ def build_methoddict(methods):
         w_selector = utility.wrap_string(selector)
         w_methoddict.store(constants.METHODDICT_NAMES_INDEX+pos, w_selector)
         w_array.store(pos, w_compiledmethod)
-    #print w_methoddict._vars
     return w_methoddict
 
 def build_smalltalk_class(name, format, w_superclass=w_Object,

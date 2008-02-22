@@ -183,17 +183,22 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
 
     # XXX XXX
     # Need to find better way of handling overloading of shadows!!!
+    def setshadow(self, shadow):
+        self._shadow = shadow
+
     def as_special_get_shadow(self, TheClass):
         shadow = self._shadow
         if shadow is None:
-            self._shadow = shadow = TheClass(self)
-        assert isinstance(shadow, TheClass)
+            shadow = TheClass(self)
+        elif not isinstance(shadow, TheClass):
+            shadow.invalidate()
+            shadow = TheClass(self)
+        shadow.check_for_updates()
         return shadow
 
     def as_class_get_shadow(self):
         from pypy.lang.smalltalk.shadow import ClassShadow
         shadow = self.as_special_get_shadow(ClassShadow)
-        shadow.check_for_updates()
         return shadow
 
     def as_link_get_shadow(self):

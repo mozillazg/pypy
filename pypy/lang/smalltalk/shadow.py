@@ -6,12 +6,27 @@ class AbstractShadow(object):
     """A shadow is an optional extra bit of information that
     can be attached at run-time to any Smalltalk object.
     """
+    def __init__(self, w_self):
+        self._w_self = w_self
+        self.invalidate()
+
     def invalidate(self):
         """XXX This should get called whenever the base Smalltalk
         object changes."""
+        self.invalid = True
 
     def w_self(self):
         return self._w_self
+
+    def check_for_updates(self):
+        if self.invalid:
+            self.w_self().setshadow(self)
+            self.update_shadow()
+
+    # XXX XXX Remove function when fixing superclass to AbstractShadow
+    def update_shadow(self):
+        pass
+
 
 # ____________________________________________________________ 
 
@@ -33,18 +48,13 @@ class ClassShadow(AbstractShadow):
     (i.e. used as the class of another Smalltalk object).
     """
     def __init__(self, w_self):
-        self._w_self = w_self
-        self.invalidate()
+        AbstractShadow.__init__(self, w_self)
 
     def invalidate(self):
+        AbstractShadow.invalidate(self)
         self.methoddict = {}
         self.s_superclass = None     # the ClassShadow of the super class
         self.name = None
-        self.invalid = True
-
-    def check_for_updates(self):
-        if self.invalid:
-            self.update_shadow()
 
     def update_shadow(self):
         from pypy.lang.smalltalk import objtable
@@ -220,7 +230,7 @@ class ClassShadow(AbstractShadow):
 
 class LinkedListShadow(AbstractShadow):
     def __init__(self, w_self):
-        self._w_self = w_self
+        AbstractShadow.__init__(self, w_self)
 
     def w_firstlink(self):
         return self.w_self().fetch(constants.FIRST_LINK_INDEX)
@@ -263,7 +273,7 @@ class SemaphoreShadow(LinkedListShadow):
     """A shadow for Smalltalk objects that are semaphores
     """
     def __init__(self, w_self):
-        self._w_self = w_self
+        LinkedListShadow.__init__(self, w_self)
 
     def put_to_sleep(self, s_process):
         priority = s_process.priority()
@@ -311,7 +321,7 @@ class SemaphoreShadow(LinkedListShadow):
 
 class LinkShadow(AbstractShadow):
     def __init__(self, w_self):
-        self._w_self = w_self
+        AbstractShadow.__init__(self, w_self)
 
     def next(self):
         return self.w_self().fetch(constants.NEXT_LINK_INDEX)
@@ -323,7 +333,7 @@ class ProcessShadow(LinkShadow):
     """A shadow for Smalltalk objects that are processes
     """
     def __init__(self, w_self):
-        self._w_self = w_self
+        LinkShadow.__init__(self, w_self)
 
     def priority(self):
         return utility.unwrap_int(self.w_self().fetch(constants.PROCESS_PRIORITY_INDEX))
@@ -342,7 +352,7 @@ class ProcessShadow(LinkShadow):
 
 class AssociationShadow(AbstractShadow):
     def __init__(self, w_self):
-        self._w_self = w_self
+        AbstractShadow.__init__(self, w_self)
 
     def key(self):
         return self.w_self().fetch(constants.ASSOCIATION_KEY_INDEX)
@@ -355,7 +365,7 @@ class AssociationShadow(AbstractShadow):
 
 class SchedulerShadow(AbstractShadow):
     def __init__(self, w_self):
-        self._w_self = w_self
+        AbstractShadow.__init__(self, w_self)
 
     def s_active_process(self):
         return self.w_self().fetch(constants.SCHEDULER_ACTIVE_PROCESS_INDEX).as_process_get_shadow()
@@ -376,6 +386,7 @@ class ContextPartShadow(model.W_ContextPart):
     
     def __init__(self, w_self):
         self._w_self = w_self
+        self.invalidate()
 
     def s_home(self):
         raise NotImplementedError()
@@ -386,6 +397,16 @@ class ContextPartShadow(model.W_ContextPart):
 
     # XXX XXX Remove function when fixing superclass to AbstractShadow
     def invalidate(self):
+        self.invalid = True
+
+    # XXX XXX Remove function when fixing superclass to AbstractShadow
+    def check_for_updates(self):
+        if self.invalid:
+            self.w_self().setshadow(self)
+            self.update_shadow()
+
+    # XXX XXX Remove function when fixing superclass to AbstractShadow
+    def update_shadow(self):
         pass
 
     def w_receiver(self):
@@ -484,7 +505,7 @@ class ContextPartShadow(model.W_ContextPart):
 class BlockContextShadow(ContextPartShadow):
 
     def __init__(self, w_self):
-        self._w_self = w_self
+        ContextPartShadow.__init__(self, w_self)
 
     def expected_argument_count(self):
         return utility.unwrap_int(self.w_self().fetch(constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX))
@@ -504,7 +525,7 @@ class BlockContextShadow(ContextPartShadow):
 
 class MethodContextShadow(ContextPartShadow):
     def __init__(self, w_self):
-        self._w_self = w_self
+        ContextPartShadow.__init__(self, w_self)
 
     def w_method(self):
         return self.w_self().fetch(constants.MTHDCTX_METHOD)
