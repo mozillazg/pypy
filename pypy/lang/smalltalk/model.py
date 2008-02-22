@@ -454,24 +454,26 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
 
     def at0(self, index0):
         from pypy.lang.smalltalk import utility
-        # XXX Not tested
-        index0 -= self.headersize()
-        if index0 < self.getliteralsize():
-            self.literalat0(index0)
+        if index0 <= self.getliteralsize():
+            return self.literalat0(index0/constants.BYTES_PER_WORD)
         else:
-            index0 = index0 - self.getliteralsize()
+            # From blue book:
+            # The literal count indicates the size of the
+            # CompiledMethod's literal frame.
+            # This, in turn, indicates where the 
+            # CompiledMethod's bytecodes start. 
+            index0 = index0 - self.getliteralsize() - self.headersize()
             assert index0 < len(self.bytes)
             return utility.wrap_int(ord(self.bytes[index0]))
         
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
-        # XXX Not tested
-        index0 -= self.headersize()
-        if index0 < self.getliteralsize():
-            self.literalatput0(index0, w_value)
+        if index0 <= self.getliteralsize():
+            self.literalatput0(index0/constants.BYTES_PER_WORD, w_value)
         else:
             # XXX use to-be-written unwrap_char
-            index0 = index0 - self.getliteralsize()
+            index0 = index0 - self.getliteralsize() - self.headersize()
+            assert index0 < len(self.bytes)
             self.setchar(index0, chr(utility.unwrap_int(w_value)))
 
     def setchar(self, index0, character):

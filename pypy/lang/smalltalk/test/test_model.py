@@ -1,7 +1,7 @@
 import py
 from pypy.lang.smalltalk import model, shadow, objtable
 from pypy.lang.smalltalk.shadow import MethodNotFound
-from pypy.lang.smalltalk import classtable
+from pypy.lang.smalltalk import classtable, utility
 
 mockclass = classtable.bootstrap_class
 
@@ -85,3 +85,24 @@ def test_hashes():
     h2 = w_inst.gethash()
     assert h1 == h2
     assert h1 == w_inst.hash
+
+def test_compiledmethod_fetchbyte():
+    w_method = model.W_CompiledMethod()
+    w_method.bytes = "abc"
+    w_method.literalsize = 2
+    w_method.fetchbyte(9) == ord('a')
+    w_method.fetchbyte(10) == ord('b')
+    w_method.fetchbyte(11) == ord('c')
+
+def test_compiledmethod_at0():
+    w_method = model.W_CompiledMethod()
+    w_method.bytes = "abc"
+    w_method.header = 100
+    w_method.literals = [ 'lit1', 'lit2' ]
+    w_method.literalsize = 2
+    assert utility.unwrap_int(w_method.at0(0)) == 100
+    assert w_method.at0(4) == 'lit1'
+    assert w_method.at0(8) == 'lit2'
+    assert utility.unwrap_int(w_method.at0(12)) == ord('a')
+    assert utility.unwrap_int(w_method.at0(13)) == ord('b')
+    assert utility.unwrap_int(w_method.at0(14)) == ord('c')

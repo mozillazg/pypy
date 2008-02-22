@@ -91,6 +91,7 @@ def test_float_class_name():
     
 def test_str_w_object():
     w_float_class = get_float_class()
+    w_float_class.as_class_get_shadow()
     assert str(w_float_class) == "Float class"
     assert str(w_float_class.getclass()) == "a Metaclass" #yes, with article
     assert str(w_float_class.getclass().getclass()) == "Metaclass class"
@@ -227,7 +228,7 @@ def test_map_mirrors_to_classtable():
     assert w_false is objtable.w_false
     
 def test_runimage():
-    #py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
+    py.test.skip("This method actually runs an image. Fails since no graphical primitives yet")
     from pypy.lang.smalltalk.shadow import SemaphoreShadow
     s_semaphore = SemaphoreShadow(None)
     s_scheduler = s_semaphore.s_scheduler()
@@ -239,7 +240,7 @@ def test_runimage():
     interp.interpret()
     
 def test_compile_method():
-    py.test.skip("Not working yet.")
+    #py.test.skip("Not working yet.")
     sourcecode = """fib 
                         ^self < 2 
                             ifTrue: [ 1 ] 

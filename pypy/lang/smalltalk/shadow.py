@@ -351,7 +351,9 @@ class ProcessShadow(LinkShadow):
         self.w_self().store(constants.PROCESS_MY_LIST_INDEX, w_object)
 
     def s_suspended_context(self):
-        return self.w_self().fetch(constants.PROCESS_SUSPENDED_CONTEXT_INDEX).as_context_get_shadow()
+        # XXX Can currently only restart context if it is a method context...
+        # XXX Depends on typechecking ...
+        return self.w_self().fetch(constants.PROCESS_SUSPENDED_CONTEXT_INDEX).as_methodcontext_get_shadow()
 
     def store_w_suspended_context(self, w_object):
         self.w_self().store(constants.PROCESS_SUSPENDED_CONTEXT_INDEX, w_object)
