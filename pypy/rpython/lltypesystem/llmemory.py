@@ -439,6 +439,11 @@ class fakeaddress(object):
     def __ge__(self, other):
         return not (self < other)
 
+    def __or__(self, other):
+        return _or_flags(self, 0, other)
+    def __and__(self, other):
+        return _and_flags(self, 0, other)
+
     def ref(self):
         if not self:
             raise NullAddressError
@@ -455,6 +460,75 @@ class fakeaddress(object):
             return self.ptr._cast_to_int()
         else:
             return 0
+
+# ____________________________________________________________
+
+class fakeaddresswithflags(object):
+    MASK = 3
+
+    def __init__(self, adr, flags):
+        assert isinstance(adr, fakeaddress)
+        assert flags != 0
+        if adr._cast_to_int() & self.MASK != 0:
+            raise ValueError("'addr | flag': the base address seems to be at "
+                             "a non-aligned memory location")
+        self.adr = adr
+        self.flags = flags
+
+    def __repr__(self):
+        return '<%r | 0x%x>' % (self.adr, self.flags)
+
+    def __eq__(self, other):
+        if isinstance(other, fakeaddresswithflags):
+            return self.adr == other.adr and self.flags == other.flags
+        if isinstance(other, fakeaddress):
+            return False
+        return NotImplemented
+
+    def __ne__(self, other):
+        if isinstance(other, fakeaddresswithflags):
+            return not (self.adr == other.adr and self.flags == other.flags)
+        if isinstance(other, fakeaddress):
+            return True
+        return NotImplemented
+
+    def __or__(self, other):
+        return _or_flags(self.adr, self.flags, other)
+
+    def __and__(self, other):
+        return _and_flags(self.adr, self.flags, other)
+
+    def _cast_to_ptr(self, EXPECTED_TYPE):
+        raise ValueError("cannot cast %r")
+
+    def _cast_to_int(self):
+        value = self.adr._cast_to_int()
+        assert value & self.MASK == 0
+        return value | self.flags
+
+def _or_flags(adr, flags1, flags2):
+    if not isinstance(flags2, int):
+        return NotImplemented
+    if not (0 <= flags2 <= fakeaddresswithflags.MASK):
+        raise ValueError("'addr | flag': can only set the lower bits, "
+                         "got flag=0x%x" % (flags2,))
+    flags = flags1 | flags2
+    if flags == 0:
+        return adr
+    else:
+        return fakeaddresswithflags(adr, flags)
+
+def _and_flags(adr, flags1, flags2):
+    if not isinstance(flags2, int):
+        return NotImplemented
+    if not (0 <= ~flags2 <= fakeaddresswithflags.MASK):
+        raise ValueError("'addr & flag': can only clear the lower bits, "
+                         "got flag=0x%x" % (flags2,))
+    flags = flags1 & flags2
+    if flags == 0:
+        return adr
+    else:
+        return fakeaddresswithflags(adr, flags)
 
 # ____________________________________________________________
 
@@ -550,6 +624,7 @@ fakeaddress.signed = property(_signed_fakeaccessor)
 fakeaddress.char = property(_char_fakeaccessor)
 fakeaddress.address = property(_address_fakeaccessor)
 fakeaddress._TYPE = Address
+fakeaddresswithflags._TYPE = Address
 
 # the obtained address will not keep the object alive. e.g. if the object is
 # only reachable through an address, it might get collected
