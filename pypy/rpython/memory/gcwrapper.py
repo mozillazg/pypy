@@ -86,8 +86,8 @@ class GCManagedHeap(object):
         # we have to be lazy in reading the llinterp variable containing
         # the 'obj' pointer, because the gc.malloc() call below could
         # move it around
-        type_info = self.get_type_info(gctypelayout.WEAKREF)
-        addr = self.gc.malloc(type_info, None, zero=False)
+        typeid = self.get_type_id(gctypelayout.WEAKREF)
+        addr = self.gc.malloc(typeid, None, zero=False)
         result = llmemory.cast_adr_to_ptr(addr, gctypelayout.WEAKREFPTR)
         result.weakptr = llmemory.cast_ptr_to_adr(objgetter())
         return llmemory.cast_ptr_to_weakrefptr(result)

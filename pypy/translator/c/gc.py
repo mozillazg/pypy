@@ -16,7 +16,7 @@ class BasicGcPolicy(object):
 
     def common_gcheader_definition(self, defnode):
         if defnode.db.gctransformer is not None:
-            HDR = defnode.db.gctransformer.HDR
+            HDR = defnode.db.gctransformer.gcheaderbuilder.HDR
             return [(name, HDR._flds[name]) for name in HDR._names]
         else:
             return []
@@ -25,7 +25,7 @@ class BasicGcPolicy(object):
         if defnode.db.gctransformer is not None:
             gct = defnode.db.gctransformer
             hdr = gct.gcheaderbuilder.header_of_object(top_container(defnode.obj))
-            HDR = gct.HDR
+            HDR = gct.gcheaderbuilder.HDR
             return [getattr(hdr, fldname) for fldname in HDR._names]
         else:
             return []
@@ -59,7 +59,7 @@ class BasicGcPolicy(object):
 
     # for rtti node
     def get_real_rtti_type(self):
-        return self.transformerclass.TYPEINFO
+        return self.db.gctransformer.gcheaderbuilder.TYPEINFO
 
     def convert_rtti(self, obj):
         return self.db.gctransformer.convert_rtti(obj)

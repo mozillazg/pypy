@@ -129,6 +129,10 @@ def encode_type_shape(builder, info, TYPE):
     """Encode the shape of the TYPE into the TYPE_INFO structure 'info'."""
     offsets = offsets_to_gc_pointers(TYPE)
     info.flags = get_type_flags(TYPE)
+    # for debugging, we also encode a unique non-zero identifier in the .flags
+    builder.idcount += 1
+    info.flags += T_first_unused_bit * builder.idcount
+
     info.ofstoptrs = builder.offsets2table(offsets, TYPE)
     info.finalizer = builder.make_finalizer_funcptr_for_type(TYPE)
     info.weakptrofs = weakpointer_offset(TYPE)
@@ -169,6 +173,7 @@ class TypeLayoutBuilder(object):
 
     def __init__(self, gcheaderbuilder):
         self.id_of_type = {}      # {LLTYPE: fully-initialized-RTTIPTR}
+        self.idcount = 0
         self.seen_roots = {}
         # the following are lists of addresses of gc pointers living inside the
         # prebuilt structures.  It should list all the locations that could

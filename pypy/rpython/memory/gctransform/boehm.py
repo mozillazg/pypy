@@ -92,7 +92,7 @@ class BoehmGCTransformer(GCTransformer):
         if TYPE in self.finalizer_funcptrs:
             return self.finalizer_funcptrs[TYPE]
 
-        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        rtti = self.gcheaderbuilder.getRtti(TYPE)
         destrptr = rtti.destructor_funcptr
         if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]

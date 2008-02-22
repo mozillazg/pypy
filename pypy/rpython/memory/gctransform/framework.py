@@ -1,4 +1,4 @@
-from pypy.rpython.memory.gctransform.transform import GCTransformer
+from pypy.rpython.memory.gctransform.transform import GCTransformer, RTTIPTR
 from pypy.rpython.memory.gctransform.support import find_gc_ptrs_in_type, \
      ll_call_destructor, type_contains_pyobjs, var_ispyobj
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -107,14 +107,13 @@ class FrameworkGCTransformer(GCTransformer):
             # for regular translation: pick the GC from the config
             GCClass, GC_PARAMS = choose_gc_from_config(translator.config)
 
+        gc = GCClass(**GC_PARAMS)
+        self.setgcheaderbuilder(gc.gcheaderbuilder)
         self.layoutbuilder = TransformerLayoutBuilder(self)
         self.get_type_id = self.layoutbuilder.get_type_id
 
-        # set up dummy a table, to be overwritten with the real one in finish()
-        type_info_table = lltype._ptr(
-            lltype.Ptr(gctypelayout.GCData.TYPE_INFO_TABLE),
-            "delayed!type_info_table", solid=True)
-        gcdata = gctypelayout.GCData(type_info_table)
+        gcdata = gctypelayout.GCData(self.gcheaderbuilder)
+        gcdata.gc = gc
 
         # initialize the following two fields with a random non-NULL address,
         # to make the annotator happy.  The fields are patched in finish()
@@ -128,7 +127,6 @@ class FrameworkGCTransformer(GCTransformer):
         self.gcdata = gcdata
         self.malloc_fnptr_cache = {}
 
-        gcdata.gc = GCClass(**GC_PARAMS)
         root_walker = self.build_root_walker()
         gcdata.set_query_functions(gcdata.gc)
         gcdata.gc.set_root_walker(root_walker)
@@ -190,7 +188,7 @@ class FrameworkGCTransformer(GCTransformer):
         malloc_fixedsize_clear_meth = GCClass.malloc_fixedsize_clear.im_func
         self.malloc_fixedsize_clear_ptr = getfn(
             malloc_fixedsize_clear_meth,
-            [s_gc, annmodel.SomeInteger(nonneg=True),
+            [s_gc, annmodel.SomePtr(RTTIPTR),
              annmodel.SomeInteger(nonneg=True),
              annmodel.SomeBool(), annmodel.SomeBool(),
              annmodel.SomeBool()], s_gcref,
@@ -199,7 +197,7 @@ class FrameworkGCTransformer(GCTransformer):
             malloc_fixedsize_meth = GCClass.malloc_fixedsize.im_func
             self.malloc_fixedsize_ptr = getfn(
                 malloc_fixedsize_meth,
-                [s_gc, annmodel.SomeInteger(nonneg=True),
+                [s_gc, annmodel.SomePtr(RTTIPTR),
                  annmodel.SomeInteger(nonneg=True),
                  annmodel.SomeBool(), annmodel.SomeBool(),
                  annmodel.SomeBool()], s_gcref,
@@ -207,13 +205,10 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             malloc_fixedsize_meth = None
             self.malloc_fixedsize_ptr = self.malloc_fixedsize_clear_ptr
-##         self.malloc_varsize_ptr = getfn(
-##             GCClass.malloc_varsize.im_func,
-##             [s_gc] + [annmodel.SomeInteger(nonneg=True) for i in range(5)]
-##             + [annmodel.SomeBool(), annmodel.SomeBool()], s_gcref)
         self.malloc_varsize_clear_ptr = getfn(
             GCClass.malloc_varsize_clear.im_func,
-            [s_gc] + [annmodel.SomeInteger(nonneg=True) for i in range(5)]
+            [s_gc, annmodel.SomePtr(RTTIPTR)]
+            + [annmodel.SomeInteger(nonneg=True) for i in range(4)]
             + [annmodel.SomeBool(), annmodel.SomeBool()], s_gcref)
         self.collect_ptr = getfn(GCClass.collect.im_func,
             [s_gc], annmodel.s_None)
@@ -256,7 +251,7 @@ class FrameworkGCTransformer(GCTransformer):
             s_True  = annmodel.SomeBool(); s_True .const = True
             self.malloc_varsize_clear_fast_ptr = getfn(
                 malloc_varsize_clear_fast,
-                [s_gc, annmodel.SomeInteger(nonneg=True),
+                [s_gc, annmodel.SomePtr(RTTIPTR),
                  annmodel.SomeInteger(nonneg=True),
                  annmodel.SomeInteger(nonneg=True),
                  annmodel.SomeInteger(nonneg=True),
@@ -340,20 +335,13 @@ class FrameworkGCTransformer(GCTransformer):
         return self.layoutbuilder.finalizer_funcptr_for_type(TYPE)
 
     def finish_tables(self):
-        table = self.layoutbuilder.flatten_table()
+        table = self.layoutbuilder.id_of_type
         log.info("assigned %s typeids" % (len(table), ))
         log.info("added %s push/pop stack root instructions" % (
                      self.num_pushs, ))
         if self.write_barrier_ptr:
             log.info("inserted %s write barrier calls" % (
                          self.write_barrier_calls, ))
-
-        # replace the type_info_table pointer in gcdata -- at this point,
-        # the database is in principle complete, so it has already seen
-        # the delayed pointer.  We need to force it to consider the new
-        # array now.
-
-        self.gcdata.type_info_table._become(table)
 
         # XXX because we call inputconst already in replace_malloc, we can't
         # modify the instance, we have to modify the 'rtyped instance'
@@ -388,13 +376,15 @@ class FrameworkGCTransformer(GCTransformer):
     def write_typeid_list(self):
         """write out the list of type ids together with some info"""
         from pypy.tool.udir import udir
+        # for debugging, we put unique numbers in typeinfo.flags
+        lines = []
+        for TYPE, typeid in self.layoutbuilder.id_of_type.iteritems():
+            typeinfo = self.gcheaderbuilder.cast_rtti_to_typeinfo(typeid)
+            lines.append("%6d  %s\n" % (typeinfo.flags, TYPE))
+        lines.sort()
         # XXX not ideal since it is not per compilation, but per run
         f = udir.join("typeids.txt").open("w")
-        all = [(typeid, TYPE)
-               for TYPE, typeid in self.layoutbuilder.id_of_type.iteritems()]
-        all.sort()
-        for typeid, TYPE in all:
-            f.write("%s %s\n" % (typeid, TYPE))
+        f.writelines(lines)
         f.close()
 
     def transform_graph(self, graph):
@@ -424,8 +414,8 @@ class FrameworkGCTransformer(GCTransformer):
         assert PTRTYPE.TO == TYPE
         type_id = self.get_type_id(TYPE)
 
-        c_type_id = rmodel.inputconst(lltype.Signed, type_id)
-        info = self.layoutbuilder.type_info_list[type_id]
+        c_type_id = rmodel.inputconst(RTTIPTR, type_id)
+        info = self.gcheaderbuilder.cast_rtti_to_typeinfo(type_id)
         c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
         c_has_finalizer = rmodel.inputconst(lltype.Bool, has_finalizer)
@@ -475,8 +465,8 @@ class FrameworkGCTransformer(GCTransformer):
         assert PTRTYPE.TO == TYPE
         type_id = self.get_type_id(TYPE)
 
-        c_type_id = rmodel.inputconst(lltype.Signed, type_id)
-        info = self.layoutbuilder.type_info_list[type_id]
+        c_type_id = rmodel.inputconst(RTTIPTR, type_id)
+        info = self.gcheaderbuilder.cast_rtti_to_typeinfo(type_id)
         c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         has_finalizer = bool(self.finalizer_funcptr_for_type(TYPE))
         assert not has_finalizer
@@ -540,8 +530,8 @@ class FrameworkGCTransformer(GCTransformer):
 
         type_id = self.get_type_id(WEAKREF)
 
-        c_type_id = rmodel.inputconst(lltype.Signed, type_id)
-        info = self.layoutbuilder.type_info_list[type_id]
+        c_type_id = rmodel.inputconst(RTTIPTR, type_id)
+        info = self.gcheaderbuilder.cast_rtti_to_typeinfo(type_id)
         c_size = rmodel.inputconst(lltype.Signed, info.fixedsize)
         malloc_ptr = self.malloc_fixedsize_ptr
         c_has_finalizer = rmodel.inputconst(lltype.Bool, False)
@@ -682,17 +672,17 @@ class FrameworkGCTransformer(GCTransformer):
 class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
 
     def __init__(self, transformer):
-        super(TransformerLayoutBuilder, self).__init__()
+        self.gcheaderbuilder = transformer.gcheaderbuilder
+        super(TransformerLayoutBuilder, self).__init__(self.gcheaderbuilder)
         self.transformer = transformer
         self.offsettable_cache = {}
 
     def make_finalizer_funcptr_for_type(self, TYPE):
-        rtti = get_rtti(TYPE)
-        if rtti is not None and hasattr(rtti._obj, 'destructor_funcptr'):
-            destrptr = rtti._obj.destructor_funcptr
+        rtti = self.gcheaderbuilder.getRtti(TYPE)
+        destrptr = rtti.destructor_funcptr
+        if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]
         else:
-            destrptr = None
             DESTR_ARG = None
 
         assert not type_contains_pyobjs(TYPE), "not implemented"
