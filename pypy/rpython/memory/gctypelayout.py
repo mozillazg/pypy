@@ -28,37 +28,52 @@ class GCData(object):
         ("weakptrofs",     lltype.Signed),
         )
 
-    def q_is_varsize(self, typeinfo):
+    def __init__(self, gcheaderbuilder):
+        self.gcheaderbuilder = gcheaderbuilder
+        self.cast_rtti_to_typeinfo = gcheaderbuilder.cast_rtti_to_typeinfo
+
+    def q_is_varsize(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return (typeinfo.flags & T_IS_VARSIZE) != 0
 
-    def q_has_gcptr_in_varsize(self, typeinfo):
+    def q_has_gcptr_in_varsize(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return (typeinfo.flags & T_HAS_GCPTR_IN_VARSIZE) != 0
 
-    def q_is_gcarrayofgcptr(self, typeinfo):
+    def q_is_gcarrayofgcptr(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return (typeinfo.flags & T_IS_GCARRAYOFGCPTR) != 0
 
-    def q_finalizer(self, typeinfo):
+    def q_finalizer(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.finalizer
 
-    def q_offsets_to_gc_pointers(self, typeinfo):
+    def q_offsets_to_gc_pointers(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.ofstoptrs
 
-    def q_fixed_size(self, typeinfo):
+    def q_fixed_size(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.fixedsize
 
-    def q_varsize_item_sizes(self, typeinfo):
+    def q_varsize_item_sizes(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.varitemsize
 
-    def q_varsize_offset_to_variable_part(self, typeinfo):
+    def q_varsize_offset_to_variable_part(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.ofstovar
 
-    def q_varsize_offset_to_length(self, typeinfo):
+    def q_varsize_offset_to_length(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.ofstolength
 
-    def q_varsize_offsets_to_gcpointers_in_var_part(self, typeinfo):
+    def q_varsize_offsets_to_gcpointers_in_var_part(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.varofstoptrs
 
-    def q_weakpointer_offset(self, typeinfo):
+    def q_weakpointer_offset(self, typeid):
+        typeinfo = self.cast_rtti_to_typeinfo(typeid)
         return typeinfo.weakptrofs
 
     def set_query_functions(self, gc):
@@ -152,8 +167,8 @@ def encode_type_shape(builder, info, TYPE):
 
 class TypeLayoutBuilder(object):
 
-    def __init__(self):
-        self.typeinfos = {}      # {LLTYPE: TYPE_INFO}
+    def __init__(self, gcheaderbuilder):
+        self.id_of_type = {}      # {LLTYPE: fully-initialized-RTTIPTR}
         self.seen_roots = {}
         # the following are lists of addresses of gc pointers living inside the
         # prebuilt structures.  It should list all the locations that could
@@ -168,17 +183,25 @@ class TypeLayoutBuilder(object):
         self.additional_roots_sources = 0
         self.finalizer_funcptrs = {}
         self.offsettable_cache = {}
+        self.gcheaderbuilder = gcheaderbuilder
+        assert gcheaderbuilder.TYPEINFO == GCData.TYPE_INFO
 
-    def get_type_info(self, TYPE):
+    def get_type_id(self, TYPE):
+        """The 'typeid' of a TYPE is an opaque RTTIPTR; this is the
+        same pointer as the 'type info', but the latter is not opaque.
+        """
         try:
-            return self.typeinfos[TYPE]
+            return self.id_of_type[TYPE]
         except KeyError:
-            assert isinstance(TYPE, (lltype.GcStruct, lltype.GcArray))
             # Record the new type description as a TYPE_INFO structure.
-            info = lltype.malloc(GCData.TYPE_INFO, immortal=True, zero=True)
-            encode_type_shape(self, info, TYPE)
-            self.typeinfos[TYPE] = info
-            return info
+            rtti = self.gcheaderbuilder.getRtti(TYPE)
+            try:
+                self.gcheaderbuilder.typeinfo_from_rtti(rtti)
+            except KeyError:
+                typeinfo = self.gcheaderbuilder.new_typeinfo(rtti)
+                encode_type_shape(self, typeinfo, TYPE)
+            self.id_of_type[TYPE] = rtti
+            return rtti
 
     def offsets2table(self, offsets, TYPE):
         try:
@@ -203,7 +226,7 @@ class TypeLayoutBuilder(object):
         return lltype.nullptr(GCData.ADDRESS_VOID_FUNC)
 
     def initialize_gc_query_function(self, gc):
-        return GCData(self.type_info_list).set_query_functions(gc)
+        return GCData(self.gcheaderbuilder).set_query_functions(gc)
 
     def consider_constant(self, TYPE, value, gc):
         if value is not lltype.top_container(value):
@@ -213,10 +236,9 @@ class TypeLayoutBuilder(object):
         self.seen_roots[id(value)] = True
 
         if isinstance(TYPE, (lltype.GcStruct, lltype.GcArray)):
-            typeinfo = self.get_type_info(TYPE)
+            typeid = self.get_type_id(TYPE)
             hdr = gc.gcheaderbuilder.new_header(value)
-            adr = llmemory.cast_ptr_to_adr(hdr)
-            gc.init_gc_object_immortal(adr, typeinfo)
+            gc.init_gc_object_immortal(hdr, typeid)
 
         # The following collects the addresses of all the fields that have
         # a GC Pointer type, inside the current prebuilt object.  All such

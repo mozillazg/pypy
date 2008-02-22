@@ -17,6 +17,7 @@ class GCHeaderBuilder(object):
         self.rtti2typeinfo = weakref.WeakKeyDictionary()
         self.size_gc_header = llmemory.GCHeaderOffset(self)
         self.size_gc_typeinfo = llmemory.GCTypeInfoOffset(self)
+        self.rtticache = {}
 
     def header_of_object(self, gcptr):
         # XXX hackhackhack
@@ -67,6 +68,9 @@ class GCHeaderBuilder(object):
         addr = llmemory.cast_ptr_to_adr(rttiptr)
         addr += self.size_gc_typeinfo
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.TYPEINFO))
+
+    def getRtti(self, TYPE):
+        return lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
 
     def _freeze_(self):
         return True     # for reads of size_gc_header

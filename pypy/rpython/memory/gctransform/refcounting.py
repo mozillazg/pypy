@@ -148,7 +148,7 @@ class RefcountingGCTransformer(GCTransformer):
         llops.genop("direct_call", [self.decrefptr, v_adr])
 
     def gct_fv_gc_malloc(self, hop, flags, TYPE, c_size):
-        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        rtti = self.gcheaderbuilder.getTypeInfo(TYPE)
         c_rtti = rmodel.inputconst(RTTIPTR, rtti)
         v_raw = hop.genop("direct_call",
                           [self.malloc_fixedsize_ptr, c_size, c_rtti],
@@ -157,7 +157,7 @@ class RefcountingGCTransformer(GCTransformer):
 
     def gct_fv_gc_malloc_varsize(self, hop, flags, TYPE, v_length, c_const_size, c_item_size,
                                                                    c_offset_to_length):
-        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        rtti = self.gcheaderbuilder.getTypeInfo(TYPE)
         c_rtti = rmodel.inputconst(RTTIPTR, rtti)
         if c_offset_to_length is None:
             v_raw = hop.genop("direct_call",
@@ -187,7 +187,7 @@ class RefcountingGCTransformer(GCTransformer):
             return # you don't really have an RPython deallocator for PyObjects
         assert TYPE._gckind == 'gc'
 
-        rtti = lltype.getRuntimeTypeInfo(TYPE, self.rtticache)
+        rtti = self.gcheaderbuilder.getTypeInfo(TYPE)
         destrptr = rtti.destructor_funcptr
         if destrptr is not None:
             DESTR_ARG = lltype.typeOf(destrptr).TO.ARGS[0]

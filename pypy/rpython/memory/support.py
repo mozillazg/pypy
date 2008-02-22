@@ -2,6 +2,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import free_non_gc_object, we_are_translated
 from pypy.rlib.debug import ll_assert
 
+RTTIPTR = lltype.Ptr(lltype.RuntimeTypeInfo)
 DEFAULT_CHUNK_SIZE = 1019
 
 
