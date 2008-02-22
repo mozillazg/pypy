@@ -83,6 +83,7 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
     w_m.bytes = bytes
     w_m.tempsize = tempsize
     w_m.argsize = argsize
+    w_m.literalsize = 2
     return w_m
 
 def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
@@ -108,7 +109,7 @@ def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
     w_object.store(constants.MTHDCTX_TEMP_FRAME_START, 'el')
     return w_object
 
-def test_methodcontext():
+def test_context():
     w_m = method()
     w_object = methodcontext(stackpointer=2, method=w_m)
     w_object2 = methodcontext(w_sender=w_object)
@@ -122,8 +123,8 @@ def test_methodcontext():
     assert s_object.w_receiver() == 'receiver'
     s_object2.settemp(0, 'a')
     s_object2.settemp(1, 'b')
-    assert s_object2.gettemp(0) == 'a'
     assert s_object2.gettemp(1) == 'b'
+    assert s_object2.gettemp(0) == 'a'
     assert s_object.w_method() == w_m
     idx = s_object.stackstart()
     w_object.store(idx + 1, 'f')
@@ -138,6 +139,18 @@ def test_methodcontext():
     assert s_object.pop_and_return_n(2) == ['g', 'h']
     assert s_object.pop() == 'f'
     assert s_object.stackpointer() == s_object.stackstart()
+
+def test_methodcontext():
+    w_m = method()
+                              # Point over 2 literals of size 4
+    w_object = methodcontext(pc=9,method=w_m)
+    s_object = w_object.as_methodcontext_get_shadow()
+    assert s_object.getbytecode() == 97
+    assert s_object.getbytecode() == 98
+    assert s_object.getbytecode() == 99
+    assert s_object.getbytecode() == 100
+    assert s_object.getbytecode() == 101
+    assert s_object.s_home() == s_object
 
 def process(w_context=methodcontext(), priority=utility.wrap_int(3)):
     w_object = model.W_PointersObject(None, 4)
