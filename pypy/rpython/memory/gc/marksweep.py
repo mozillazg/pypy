@@ -74,8 +74,9 @@ class MarkSweepGC(GCBase):
     POOLNODE.become(lltype.Struct('gc_pool_node', ('linkedlisthdr', HDR),
                                                   ('nextnode', POOLNODEPTR)))
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, start_heap_size=4096):
-        GCBase.__init__(self)
+    def __init__(self, gcheaderbuilder,
+                 chunk_size=DEFAULT_CHUNK_SIZE, start_heap_size=4096):
+        self.gcheaderbuilder = gcheaderbuilder
         self.heap_usage = 0          # at the end of the latest collection
         self.bytes_malloced = 0      # since the latest collection
         self.bytes_malloced_threshold = start_heap_size

@@ -48,7 +48,6 @@ class RefcountingGCTransformer(GCTransformer):
 
         # create incref, etc  graph
 
-        self.newgcheaderbuilder(self.HDR, self.TYPEINFO)
         gchelpers = self.gchelpers
         gc_header_offset = gchelpers.gc_header_offset
         HDRPTR = lltype.Ptr(self.HDR)

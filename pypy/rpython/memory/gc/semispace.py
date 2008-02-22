@@ -1,9 +1,8 @@
 from pypy.rpython.lltypesystem.llmemory import raw_malloc, raw_free
 from pypy.rpython.lltypesystem.llmemory import raw_memcopy, raw_memclear
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
-from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
+from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE, RTTIPTR
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
-from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
@@ -14,7 +13,7 @@ from pypy.rpython.memory.gc.base import MovingGCBase
 import sys, os
 
 TYPEID_MASK = 0xffff
-first_gcflag = 1 << 16
+first_gcflag = 1
 GCFLAG_FORWARDED = first_gcflag
 GCFLAG_IMMORTAL = first_gcflag << 1
 GCFLAG_FINALIZATION_ORDERING = first_gcflag << 2
@@ -31,17 +30,21 @@ class SemiSpaceGC(MovingGCBase):
     total_collection_time = 0.0
     total_collection_count = 0
 
-    HDR = lltype.Struct('header', ('tid', lltype.Signed))
-    FORWARDSTUB = lltype.GcStruct('forwarding_stub',
-                                  ('forw', llmemory.Address))
-    FORWARDSTUBPTR = lltype.Ptr(FORWARDSTUB)
+    # header structure:
+    #
+    #   * typeptr: normally a RTTIPTR, but if the object is forwarded,
+    #              this is used to hold the forwarding address
+    #   * flags: for GCFLAG_XXX
+    #
+    HDR = lltype.Struct('header', ('typeptr', llmemory.Address),
+                                  ('flags', lltype.Signed))
 
-    def __init__(self, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
-                 max_space_size=sys.maxint//2+1):
+    def __init__(self, gcheaderbuilder, chunk_size=DEFAULT_CHUNK_SIZE,
+                 space_size=4096, max_space_size=sys.maxint//2+1):
         MovingGCBase.__init__(self)
+        self.gcheaderbuilder = gcheaderbuilder
         self.space_size = space_size
         self.max_space_size = max_space_size
-        self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
         self.AddressStack = get_address_stack(chunk_size)
         self.AddressDeque = get_address_deque(chunk_size)
         self.finalizer_lock_count = 0
@@ -293,9 +296,10 @@ class SemiSpaceGC(MovingGCBase):
 
     def copy(self, obj):
         if self.is_forwarded(obj):
-            #llop.debug_print(lltype.Void, obj, "already copied to", self.get_forwarding_address(obj))
+            # 'obj' already copied to 'self.get_forwarding_address(obj)'
             return self.get_forwarding_address(obj)
         else:
+            # copying 'obj' to 'newobj'
             newaddr = self.free
             objsize = self.get_size(obj)
             totalsize = self.size_gc_header() + objsize
@@ -303,9 +307,6 @@ class SemiSpaceGC(MovingGCBase):
             raw_memcopy(obj - self.size_gc_header(), newaddr, totalsize)
             self.free += totalsize
             newobj = newaddr + self.size_gc_header()
-            #llop.debug_print(lltype.Void, obj, "copied to", newobj,
-            #                 "tid", self.header(obj).tid,
-            #                 "size", totalsize)
             self.set_forwarding_address(obj, newobj, objsize)
             return newobj
 
@@ -317,35 +318,26 @@ class SemiSpaceGC(MovingGCBase):
             pointer.address[0] = self.copy(pointer.address[0])
 
     def is_forwarded(self, obj):
-        return self.header(obj).tid & GCFLAG_FORWARDED != 0
+        return self.header(obj).flags & GCFLAG_FORWARDED != 0
         # note: all prebuilt objects also have this flag set
 
     def get_forwarding_address(self, obj):
-        tid = self.header(obj).tid
-        if tid & GCFLAG_IMMORTAL:
+        hdr = self.header(obj)
+        flags = hdr.flags
+        ll_assert(flags & GCFLAG_FORWARDED != 0, "object not forwarded!")
+        if flags & GCFLAG_IMMORTAL:
             return obj      # prebuilt objects are "forwarded" to themselves
         else:
-            stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
-            return stub.forw
+            return hdr.typeptr     # holds the forwarding address
 
     def set_forwarding_address(self, obj, newobj, objsize):
-        # To mark an object as forwarded, we set the GCFLAG_FORWARDED and
-        # overwrite the object with a FORWARDSTUB.  Doing so is a bit
-        # long-winded on llarena, but it all melts down to two memory
-        # writes after translation to C.
-        size_gc_header = self.size_gc_header()
-        stubsize = llmemory.sizeof(self.FORWARDSTUB)
-        tid = self.header(obj).tid
-        ll_assert(tid & GCFLAG_IMMORTAL == 0,  "unexpected GCFLAG_IMMORTAL")
-        ll_assert(tid & GCFLAG_FORWARDED == 0, "unexpected GCFLAG_FORWARDED")
-        # replace the object at 'obj' with a FORWARDSTUB.
-        hdraddr = obj - size_gc_header
-        llarena.arena_reset(hdraddr, size_gc_header + objsize, False)
-        llarena.arena_reserve(hdraddr, size_gc_header + stubsize)
-        hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(self.HDR))
-        hdr.tid = tid | GCFLAG_FORWARDED
-        stub = llmemory.cast_adr_to_ptr(obj, self.FORWARDSTUBPTR)
-        stub.forw = newobj
+        # To mark an object as forwarded, we set the GCFLAG_FORWARDED bit.
+        hdr = self.header(obj)
+        flags = hdr.flags
+        ll_assert(flags & GCFLAG_IMMORTAL == 0,  "unexpected GCFLAG_IMMORTAL")
+        ll_assert(flags & GCFLAG_FORWARDED == 0, "unexpected GCFLAG_FORWARDED")
+        hdr.flags = flags | GCFLAG_FORWARDED
+        hdr.typeptr = newobj
 
     def get_size(self, obj):
         typeid = self.get_type_id(obj)
@@ -362,22 +354,22 @@ class SemiSpaceGC(MovingGCBase):
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
 
     def get_type_id(self, addr):
-        tid = self.header(addr).tid
-        ll_assert(tid & (GCFLAG_FORWARDED|GCFLAG_IMMORTAL) != GCFLAG_FORWARDED,
-                  "get_type_id on forwarded obj")
-        # Non-prebuilt forwarded objects are overwritten with a FORWARDSTUB.
-        # Although calling get_type_id() on a forwarded object works by itself,
-        # we catch it as an error because it's likely that what is then
-        # done with the typeid is bogus.
-        return tid & TYPEID_MASK
+        hdr = self.header(addr)
+        # In non-prebuilt forwarded objects, the typeptr is used to hold
+        # the forwaring address.  So far, we don't need to do get_type_id()
+        # on forwarded objects, so we just assert that nobody tries to.
+        ll_assert(hdr.flags & (GCFLAG_FORWARDED|GCFLAG_IMMORTAL)
+                  != GCFLAG_FORWARDED, "get_type_id on forwarded obj")
+        return llmemory.cast_adr_to_ptr(hdr.typeptr, RTTIPTR)
 
     def init_gc_object(self, addr, typeid, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags
+        hdr.typeptr = llmemory.cast_ptr_to_adr(typeid)
+        hdr.flags = flags
 
-    def init_gc_object_immortal(self, addr, typeid, flags=0):
-        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = typeid | flags | GCFLAG_IMMORTAL | GCFLAG_FORWARDED
+    def init_gc_object_immortal(self, hdr, typeid, flags=0):
+        hdr.typeptr = llmemory.cast_ptr_to_adr(typeid)
+        hdr.flags = flags | GCFLAG_IMMORTAL | GCFLAG_FORWARDED
         # immortal objects always have GCFLAG_FORWARDED set;
         # see get_forwarding_address().
 
@@ -442,13 +434,13 @@ class SemiSpaceGC(MovingGCBase):
         if self.is_forwarded(obj):
             newobj = self.get_forwarding_address(obj)
             hdr = self.header(newobj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.flags & GCFLAG_FINALIZATION_ORDERING:
                 return 2
             else:
                 return 3
         else:
             hdr = self.header(obj)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:
+            if hdr.flags & GCFLAG_FINALIZATION_ORDERING:
                 return 1
             else:
                 return 0
@@ -457,7 +449,7 @@ class SemiSpaceGC(MovingGCBase):
         ll_assert(self._finalization_state(obj) == 0,
                   "unexpected finalization state != 0")
         hdr = self.header(obj)
-        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
+        hdr.flags |= GCFLAG_FINALIZATION_ORDERING
 
     def _recursively_bump_finalization_state_from_2_to_3(self, obj):
         ll_assert(self._finalization_state(obj) == 2,
@@ -469,8 +461,8 @@ class SemiSpaceGC(MovingGCBase):
         while pending.non_empty():
             y = pending.pop()
             hdr = self.header(y)
-            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
-                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
+            if hdr.flags & GCFLAG_FINALIZATION_ORDERING:    # state 2 ?
+                hdr.flags &= ~GCFLAG_FINALIZATION_ORDERING  # change to state 3
                 self.trace(y, self._append_if_nonnull, pending)
 
     def _recursively_bump_finalization_state_from_1_to_2(self, obj, scan):

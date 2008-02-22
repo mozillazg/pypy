@@ -30,7 +30,7 @@ def get_layout(TYPE):
         for name in TYPE._names:
             layout[name] = curr
             curr += get_fixed_size(TYPE._flds[name])
-        layout["_size"] = curr
+        layout["_size"] = curr or 1    # sizeof(empty struct) == 1, as in C
         return layout
     elif isinstance(TYPE, lltype.Array):
         return (get_fixed_size(lltype.Signed), get_fixed_size(TYPE.OF))

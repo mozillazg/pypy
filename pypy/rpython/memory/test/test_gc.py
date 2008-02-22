@@ -43,6 +43,22 @@ class GCTest(object):
             res = ''.join(res.chars)
         return res
 
+    def test_empty_class(self):
+        class A(object):
+            pass
+        def func():
+            a1 = A()
+            a2 = A()
+            a3 = A()
+            assert a1 is not a2
+            assert a1 is not a3
+            assert a2 is not a3
+            llop.gc__collect(lltype.Void)
+            assert a1 is not a2
+            assert a1 is not a3
+            assert a2 is not a3
+        self.interpret(func, [])
+
     def test_llinterp_lists(self):
         #curr = simulator.current_size
         def malloc_a_lot():
