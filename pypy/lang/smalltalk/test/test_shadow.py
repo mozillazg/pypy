@@ -70,9 +70,13 @@ def test_methoddict():
     classshadow = w_class.as_class_get_shadow()
     assert classshadow.methoddict == methods
 
-def test_link():
+def link(w_next='foo'):
     w_object = model.W_PointersObject(None, 1)
-    w_object.store(constants.NEXT_LINK_INDEX, 'foo')
+    w_object.store(constants.NEXT_LINK_INDEX, w_next)
+    return w_object
+
+def test_link():
+    w_object = link()
     assert w_object.as_link_get_shadow().next() == 'foo'
 
 def method(tempsize=3,argsize=2, bytes="abcde"):
@@ -158,5 +162,39 @@ def test_scheduler():
     w_object.store(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_process)
     w_object.store(constants.SCHEDULER_PROCESS_LISTS_INDEX, 'pl')
     s_object = w_object.as_scheduler_get_shadow()
-    assert s_object.active_process() == w_process.as_process_get_shadow()
+    assert s_object.s_active_process() == w_process.as_process_get_shadow()
     assert s_object.process_lists() == 'pl'
+    w_process2 = process()
+    s_object.store_w_active_process(w_process2)
+    assert s_object.process_lists() == 'pl'
+    assert s_object.s_active_process() != w_process.as_process_get_shadow()
+    assert s_object.s_active_process() == w_process2.as_process_get_shadow()
+
+def test_linkedlist():
+    w_object = model.W_PointersObject(None,2)
+    w_last = link(objtable.w_nil)
+    w_lb1 = link(w_last)
+    w_lb2 = link(w_lb1)
+    w_lb3 = link(w_lb2)
+    w_lb4 = link(w_lb3)
+    w_first = link(w_lb4)
+    w_object.store(constants.FIRST_LINK_INDEX, w_first)
+    w_object.store(constants.LAST_LINK_INDEX, w_last)
+    s_object = w_object.as_linkedlist_get_shadow()
+    assert w_first == s_object.w_firstlink()
+    assert w_last == s_object.w_lastlink()
+    assert s_object.remove_first_link_of_list() == w_first
+    assert s_object.remove_first_link_of_list() == w_lb4
+    assert s_object.remove_first_link_of_list() == w_lb3
+    assert not s_object.is_empty_list()
+    assert s_object.remove_first_link_of_list() == w_lb2
+    assert s_object.remove_first_link_of_list() == w_lb1
+    assert s_object.remove_first_link_of_list() == w_last
+    assert s_object.is_empty_list()
+    s_object.add_last_link(w_first)
+    assert s_object.w_firstlink() == w_first
+    assert s_object.w_lastlink() == w_first
+    s_object.add_last_link(w_last)
+    assert s_object.w_firstlink() == w_first
+    assert s_object.w_lastlink() == w_last
+    

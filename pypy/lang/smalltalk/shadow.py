@@ -221,40 +221,40 @@ class LinkedListShadow(AbstractShadow):
     def __init__(self, w_self):
         self._w_self = w_self
 
-    def firstlink(self):
+    def w_firstlink(self):
         return self._w_self.fetch(constants.FIRST_LINK_INDEX)
 
-    def store_firstlink(self, w_object):
+    def store_w_firstlink(self, w_object):
         return self._w_self.atput0(constants.FIRST_LINK_INDEX, w_object)
 
-    def lastlink(self):
+    def w_lastlink(self):
         return self._w_self.fetch(constants.LAST_LINK_INDEX)
 
-    def store_lastlink(self, w_object):
+    def store_w_lastlink(self, w_object):
         return self._w_self.atput0(constants.LAST_LINK_INDEX, w_object)
 
     def is_empty_list(self):
         from pypy.lang.smalltalk import objtable
-        return self.firstlink() == objtable.w_nil
+        return self.w_firstlink() == objtable.w_nil
 
     def add_last_link(self, w_object):
         if self.is_empty_list():
-            self.store_firstlink(w_object)
+            self.store_w_firstlink(w_object)
         else:
-            self.lastlink().store_next(w_object)
+            self.w_lastlink().as_link_get_shadow().store_next(w_object)
         # XXX Slang version stores list in process here...
-        self.store_lastlink(w_object)
+        self.store_w_lastlink(w_object)
 
     def remove_first_link_of_list(self):
         from pypy.lang.smalltalk import objtable
-        first = self.firstlink()
-        last = self.lastlink()
+        first = self.w_firstlink()
+        last = self.w_lastlink()
         if first == last:
-            self.store_firstlink(objtable.w_nil)
-            self.store_lastlink(objtable.w_nil)
+            self.store_w_firstlink(objtable.w_nil)
+            self.store_w_lastlink(objtable.w_nil)
         else:
             next = first.as_process_get_shadow().next()
-            self.store_firstlink(next)
+            self.store_w_firstlink(next)
         first.as_process_get_shadow().store_next(objtable.w_nil)
         return first
 
@@ -275,8 +275,8 @@ class SemaphoreShadow(LinkedListShadow):
     def transfer_to(self, s_process, interp):
         from pypy.lang.smalltalk import objtable
         s_scheduler = self.scheduler()
-        s_old_process = s_scheduler.active_process()
-        s_scheduler.store_active_process(s_process)
+        s_old_process = s_scheduler.s_active_process()
+        s_scheduler.store_w_active_process(s_process.w_self())
         s_old_process.store_w_suspended_context(interp.s_active_context.w_self())
         interp.s_active_context = s_process.s_suspended_context()
         s_process.store_w_suspended_context(objtable.w_nil)
@@ -291,7 +291,7 @@ class SemaphoreShadow(LinkedListShadow):
     def resume(self, w_process, interp):
         s_process = w_process.as_process_get_shadow()
         s_scheduler = self.s_scheduler()
-        s_active_process = s_scheduler.active_process()
+        s_active_process = s_scheduler.s_active_process()
         active_priority = s_active_process.priority()
         new_priority = s_process.priority()
         if new_priority > active_priority:
@@ -354,11 +354,11 @@ class SchedulerShadow(AbstractShadow):
     def __init__(self, w_self):
         self._w_self = w_self
 
-    def active_process(self):
+    def s_active_process(self):
         return self._w_self.fetch(constants.SCHEDULER_ACTIVE_PROCESS_INDEX).as_process_get_shadow()
 
-    def store_active_process(self, w_object):
-        self._w_self.atput0(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_object)
+    def store_w_active_process(self, w_object):
+        self._w_self.store(constants.SCHEDULER_ACTIVE_PROCESS_INDEX, w_object)
     
     def process_lists(self):
         return self._w_self.fetch(constants.SCHEDULER_PROCESS_LISTS_INDEX)
