@@ -21,7 +21,7 @@ X_CLONE_PTR = lltype.Ptr(X_CLONE)
 
 def ll_getnext(hdr):
     "Return the 'next' header by reading the 'next_and_flags' fields"
-    next = hdr.next_and_flags & ~1
+    next = hdr.next_and_flags & ~3
     return llmemory.cast_adr_to_ptr(next, MarkSweepGC.HDRPTR)
 
 def ll_setnext_clear(hdr, next):
@@ -35,6 +35,15 @@ def ll_setmark(hdr):
 
 def ll_clearmark(hdr):
     hdr.next_and_flags &= ~1
+
+def ll_ismarked2(hdr):
+    return (llmemory.cast_adr_to_int(hdr.next_and_flags) & 2) != 0
+
+def ll_setmark2(hdr):
+    hdr.next_and_flags |= 2
+
+def ll_clearmark2(hdr):
+    hdr.next_and_flags &= ~2
 
 
 DEBUG_PRINT = False
@@ -52,7 +61,10 @@ class MarkSweepGC(GCBase):
                                        'setnext_clear': ll_setnext_clear,
                                        'ismarked': ll_ismarked,
                                        'setmark': ll_setmark,
-                                       'clearmark': ll_clearmark}))
+                                       'clearmark': ll_clearmark,
+                                       'ismarked2': ll_ismarked2,
+                                       'setmark2': ll_setmark2,
+                                       'clearmark2': ll_clearmark2}))
 
     POOL = lltype.GcStruct('gc_pool')
     POOLPTR = lltype.Ptr(POOL)
@@ -605,9 +617,9 @@ class MarkSweepGC(GCBase):
         while hdr:
             next = hdr.getnext()
             # 'hdr.next' is abused to point to the copy
-            ll_assert(not hdr.ismarked(), "x_clone: object already marked")
+            ll_assert(not hdr.ismarked2(), "x_clone: object already marked")
             hdr.setnext_clear(lltype.nullptr(self.HDR))
-            hdr.setmark()      # mark all objects from malloced_list
+            hdr.setmark2()      # mark all objects from malloced_list
             oldobjects.append(llmemory.cast_ptr_to_adr(hdr))
             hdr = next
 
@@ -623,7 +635,7 @@ class MarkSweepGC(GCBase):
                 continue   # pointer is NULL
             oldhdr = llmemory.cast_adr_to_ptr(oldobj_addr - size_gc_header,
                                               self.HDRPTR)
-            if not oldhdr.ismarked():
+            if not oldhdr.ismarked2():
                 continue   # ignore objects that were not in the malloced_list
             newhdr = oldhdr.getnext()      # abused to point to the copy
             if not newhdr:
@@ -683,7 +695,7 @@ class MarkSweepGC(GCBase):
                         i += 1
 
                 oldhdr.setnext_clear(newhdr)
-                oldhdr.setmark()
+                oldhdr.setmark2()
             newobj_addr = llmemory.cast_ptr_to_adr(newhdr) + size_gc_header
             gcptr_addr.address[0] = newobj_addr
         stack.delete()
@@ -692,7 +704,7 @@ class MarkSweepGC(GCBase):
         next = lltype.nullptr(self.HDR)
         while oldobjects.non_empty():
             hdr = llmemory.cast_adr_to_ptr(oldobjects.pop(), self.HDRPTR)
-            hdr.setnext_clear(next)       # this also resets the mark
+            hdr.setnext_clear(next)       # this also resets the mark2
             next = hdr
         oldobjects.delete()
 
