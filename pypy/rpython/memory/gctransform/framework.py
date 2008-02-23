@@ -13,7 +13,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython import annlowlevel
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF
-from pypy.rpython.memory.gctypelayout import convert_weakref_to, WEAKREFPTR
+from pypy.rpython.memory.gctypelayout import WEAKREFPTR
 from pypy.rpython.memory.gctransform.log import log
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -96,6 +96,9 @@ class FrameworkGCTransformer(GCTransformer):
     root_stack_depth = 163840
 
     TYPEINFO = gctypelayout.GCData.TYPE_INFO
+
+    WEAKREFTYPE = WEAKREF
+    convert_weakref_to = staticmethod(gctypelayout.convert_weakref_to)
 
     def __init__(self, translator):
         from pypy.rpython.memory.gc.base import choose_gc_from_config

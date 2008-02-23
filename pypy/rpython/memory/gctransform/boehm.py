@@ -182,3 +182,7 @@ def convert_weakref_to(targetptr):
         plink = lltype.malloc(WEAKLINK, immortal=True)
         plink[0] = llmemory.cast_ptr_to_adr(targetptr)
         return plink
+
+BoehmGCTransformer.WEAKREFTYPE = WEAKLINK
+BoehmGCTransformer.convert_weakref_to = staticmethod(convert_weakref_to)
+

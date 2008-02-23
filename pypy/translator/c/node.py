@@ -875,34 +875,6 @@ class PyObjectNode(ContainerNode):
     def implementation(self):
         return []
 
-def weakrefnode_factory(db, T, obj):
-    assert isinstance(obj, llmemory._wref)
-    ptarget = obj._dereference()
-    wrapper = db.gcpolicy.convert_weakref_to(ptarget)
-    container = wrapper._obj
-    obj._converted_weakref = container     # hack for genllvm :-/
-    return db.getcontainernode(container, _dont_write_c_code=False)
-
-class RttiNode(ContainerNode):
-    nodekind = 'rtti'
-
-    def __init__(self, db, T, obj):
-        assert isinstance(obj, lltype._rtti)
-        wrapper = db.gcpolicy.convert_rtti(obj)
-        self.realobj = wrapper._obj
-        self.realnode = db.getcontainernode(self.realobj,
-                                            _dont_write_c_code=False)
-        ContainerNode.__init__(self, db, T, obj)
-
-    def basename(self):
-        return self.realnode.basename()
-
-    def enum_dependencies(self):
-        return self.realnode.enum_dependencies()
-
-    def initializationexpr(self, decoration=''):
-        return self.realnode.initializationexpr(decoration)
-
 
 ContainerNodeFactory = {
     Struct:       StructNode,
@@ -913,6 +885,4 @@ ContainerNodeFactory = {
     FuncType:     FuncNode,
     OpaqueType:   opaquenode_factory,
     PyObjectType: PyObjectNode,
-    llmemory._WeakRefType: weakrefnode_factory,
-    lltype.RuntimeTypeInfoType: RttiNode,
     }

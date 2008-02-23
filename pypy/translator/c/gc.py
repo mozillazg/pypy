@@ -74,12 +74,24 @@ class BasicGcPolicy(object):
     def gc_startup_code(self):
         return []
 
-    # for rtti node
-    def get_real_rtti_type(self):
-        return self.db.gctransformer.gcheaderbuilder.TYPEINFO
+    # support for mapping weakref and rtti objects and types
 
-    def convert_rtti(self, obj):
-        return self.db.gctransformer.convert_rtti(obj)
+    def convert_type(self, TYPE):
+        if TYPE == lltype.RuntimeTypeInfo:
+            return self.db.gctransformer.gcheaderbuilder.TYPEINFO
+        elif TYPE == llmemory.WeakRef:
+            return self.db.gctransformer.WEAKREFTYPE
+        else:
+            return TYPE
+
+    def convert_prebuilt_object(self, obj):
+        if isinstance(obj, lltype._rtti):
+            return self.db.gctransformer.convert_rtti(obj)._obj
+        elif isinstance(obj, llmemory._wref):
+            ptarget = obj._dereference()
+            return self.db.gctransformer.convert_weakref_to(ptarget)._obj
+        else:
+            return obj
 
     def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
@@ -130,12 +142,6 @@ class BoehmGcPolicy(BasicGcPolicy):
             yield 'GC_all_interior_pointers = 0;'
         yield 'boehm_gc_startup_code();'
 
-    def get_real_weakref_type(self):
-        return boehm.WEAKLINK
-
-    def convert_weakref_to(self, ptarget):
-        return boehm.convert_weakref_to(ptarget)
-
     def OP_GC__COLLECT(self, funcgen, op):
         return 'GC_gcollect();'
 
@@ -164,12 +170,6 @@ class FrameworkGcPolicy(BasicGcPolicy):
     def gc_startup_code(self):
         fnptr = self.db.gctransformer.frameworkgc_setup_ptr.value
         yield '%s();' % (self.db.get(fnptr),)
-
-    def get_real_weakref_type(self):
-        return framework.WEAKREF
-
-    def convert_weakref_to(self, ptarget):
-        return framework.convert_weakref_to(ptarget)
 
     def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
         args = [funcgen.expr(v) for v in op.args]

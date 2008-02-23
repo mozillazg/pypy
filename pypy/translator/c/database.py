@@ -1,9 +1,9 @@
 from pypy.rpython.lltypesystem.lltype import \
-     Primitive, Ptr, typeOf, RuntimeTypeInfo, RuntimeTypeInfoType, \
+     Primitive, Ptr, typeOf, RuntimeTypeInfoType, \
      Struct, Array, FuncType, PyObject, Void, \
      ContainerType, OpaqueType, FixedSizeArray, _uninitialized
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.lltypesystem.llmemory import Address, WeakRef, _WeakRefType
+from pypy.rpython.lltypesystem.llmemory import Address, _WeakRefType
 from pypy.rpython.lltypesystem.rffi import CConstant
 from pypy.tool.sourcetools import valid_identifier
 from pypy.translator.c.primitive import PrimitiveName, PrimitiveType
@@ -85,14 +85,12 @@ class LowLevelDatabase(object):
                     node = ArrayDefNode(self, T, varlength)
             elif isinstance(T, OpaqueType) and T.hints.get("render_structure", False):
                 node = ExtTypeOpaqueDefNode(self, T)
-            elif T == WeakRef:
-                REALT = self.gcpolicy.get_real_weakref_type()
-                node = self.gettypedefnode(REALT)
-            elif T == RuntimeTypeInfo:
-                REALT = self.gcpolicy.get_real_rtti_type()
-                node = self.gettypedefnode(REALT)
             else:
-                raise NoCorrespondingNode("don't know about %r" % (T,))
+                REALT = self.gcpolicy.convert_type(T)
+                if REALT != T:
+                    node = self.gettypedefnode(REALT)
+                else:
+                    raise NoCorrespondingNode("don't know about %r" % (T,))
             self.structdefnodes[key] = node
             self.pendingsetupnodes.append(node)
         return node
@@ -131,9 +129,7 @@ class LowLevelDatabase(object):
             argtypes = ', '.join(argtypes) or 'void'
             return resulttype.replace('@', '(@)(%s)' % argtypes)
         elif isinstance(T, OpaqueType):
-            if T == RuntimeTypeInfo:
-                return  self.gcpolicy.rtti_type()
-            elif T.hints.get("render_structure", False):
+            if T.hints.get("render_structure", False):
                 node = self.gettypedefnode(T, varlength=varlength)
                 if who_asks is not None:
                     who_asks.dependencies[node] = True
@@ -147,10 +143,12 @@ class LowLevelDatabase(object):
         else:
             raise Exception("don't know about type %r" % (T,))
 
-    def getcontainernode(self, container, _dont_write_c_code=True, **buildkwds):
+    def getcontainernode(self, container, **buildkwds):
         try:
             node = self.containernodes[container]
         except KeyError:
+            originalcontainer = container
+            container = self.gcpolicy.convert_prebuilt_object(container)
             T = typeOf(container)
             if isinstance(T, (lltype.Array, lltype.Struct)):
                 if self.gctransformer is not None:
@@ -158,10 +156,7 @@ class LowLevelDatabase(object):
             nodefactory = ContainerNodeFactory[T.__class__]
             node = nodefactory(self, T, container, **buildkwds)
             self.containernodes[container] = node
-            # _dont_write_c_code should only be False for a hack in
-            # weakrefnode_factory()
-            if not _dont_write_c_code:
-                return node
+            self.containernodes[originalcontainer] = node
             kind = getattr(node, 'nodekind', '?')
             self.containerstats[kind] = self.containerstats.get(kind, 0) + 1
             self.containerlist.append(node)
