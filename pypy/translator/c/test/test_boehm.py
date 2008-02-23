@@ -63,6 +63,19 @@ class TestUsingBoehm(AbstractGCTestClass):
         fn = self.getcompiled(malloc_a_lot)
         fn()
 
+    def test_classattribute(self):
+        from pypy.translator.test import snippet
+        def classattr():
+            ok1 = snippet.classattribute(1) == 123
+            ok2 = snippet.classattribute(2) == 456
+            ok3 = snippet.classattribute(3) == 789
+            ok4 = snippet.classattribute(4) == 789
+            ok5 = snippet.classattribute(5) == 101112
+            return (ok1 + ok2*10 + ok3*100 + ok4*1000 + ok5*10000)
+        fn = self.getcompiled(classattr)
+        res = fn()
+        assert res == 11111
+
     def test__del__(self):
         from pypy.rpython.lltypesystem.lloperation import llop
         class State:
