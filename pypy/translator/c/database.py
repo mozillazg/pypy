@@ -154,7 +154,8 @@ class LowLevelDatabase(object):
                 if self.gctransformer is not None:
                     self.gctransformer.consider_constant(T, container)
             nodefactory = ContainerNodeFactory[T.__class__]
-            node = nodefactory(self, T, container, **buildkwds)
+            parentlink = lltype.parentlink(originalcontainer)  # typeinfo/rtti
+            node = nodefactory(self, T, container, parentlink, **buildkwds)
             self.containernodes[container] = node
             self.containernodes[originalcontainer] = node
             kind = getattr(node, 'nodekind', '?')
