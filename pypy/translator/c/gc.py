@@ -42,22 +42,14 @@ class BasicGcPolicy(object):
     def array_gcheader_initdata(self, defnode):
         return self.common_gcheader_initdata(defnode)
 
-    def enum_gcheader_dependencies(self, TYPE):
-        if TYPE._gckind != 'gc':
-            return []
-        # make sure that the rtti object of the TYPE is seen by the
-        # database early, i.e. before finish_helpers() on the
-        # gctransformer.  In particular, this should follow the
-        # ll_finalizer helper function stored in the typeinfo.
-        gct = self.db.gctransformer
-        rtti = gct.gcheaderbuilder.getRtti(TYPE)
-        result = [rtti]
-        # The ll_finalizer helpers are delayed func pointers computed
-        # only in finish_helpers().  But we need to follow the regular
-        # destructor before finish_helpers(), in case it uses new types.
-        if rtti is not None and rtti.destructor_funcptr is not None:
-            result.append(rtti.destructor_funcptr)
-        return result
+    def follow_rtti_dependencies(self, rtti):
+        # Issue: the typeinfo corresponding to the rtti contains, as
+        # destructor, a pointer to some ll_finalizer helper.  However it
+        # is a delayed func pointer computed only in finish_helpers().
+        # But we need to follow the regular destructor before
+        # finish_helpers(), in case it uses new types.
+        if rtti.destructor_funcptr is not None:
+            self.db.get(rtti.destructor_funcptr)
 
     def struct_after_definition(self, defnode):
         return []
@@ -86,6 +78,7 @@ class BasicGcPolicy(object):
 
     def convert_prebuilt_object(self, obj):
         if isinstance(obj, lltype._rtti):
+            self.follow_rtti_dependencies(obj)
             return self.db.gctransformer.convert_rtti(obj)._obj
         elif isinstance(obj, llmemory._wref):
             ptarget = obj._dereference()
