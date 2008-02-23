@@ -623,6 +623,7 @@ class MarkSweepGC(GCBase):
             hdr.setmark2()      # mark all objects from malloced_list
             oldobjects.append(llmemory.cast_ptr_to_adr(hdr))
             hdr = next
+        del hdr
 
         # a stack of addresses of places that still points to old objects
         # and that must possibly be fixed to point to a new copy
@@ -640,7 +641,7 @@ class MarkSweepGC(GCBase):
                 continue   # ignore objects that were not in the malloced_list
             newhdr = oldhdr.getnext()      # abused to point to the copy
             if not newhdr:
-                typeid = hdr.typeptr
+                typeid = oldhdr.typeptr
                 size = self.fixed_size(typeid)
                 # XXX! collect() at the beginning if the free heap is low
                 if self.is_varsize(typeid):
