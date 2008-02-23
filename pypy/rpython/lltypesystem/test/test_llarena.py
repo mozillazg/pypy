@@ -213,9 +213,10 @@ def test_address_eq_as_int():
 def test_replace_object_with_stub():
     from pypy.rpython.memory.gcheader import GCHeaderBuilder
     HDR = lltype.Struct('HDR', ('x', lltype.Signed))
+    TYPEINFO = lltype.Struct('TYPEINFO')
     S = lltype.GcStruct('S', ('y', lltype.Signed), ('z', lltype.Signed))
     STUB = lltype.GcStruct('STUB', ('t', lltype.Char))
-    gcheaderbuilder = GCHeaderBuilder(HDR)
+    gcheaderbuilder = GCHeaderBuilder(HDR, TYPEINFO)
     size_gc_header = gcheaderbuilder.size_gc_header
 
     a = arena_malloc(50, True)

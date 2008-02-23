@@ -138,41 +138,18 @@ def test_rptr_array():
 
 
 def test_runtime_type_info():
-    S = GcStruct('s', ('is_actually_s1', Bool))
-    S1 = GcStruct('s1', ('sub', S))
-    attachRuntimeTypeInfo(S)
-    attachRuntimeTypeInfo(S1)
-    def rtti_S(p):
-        if p.is_actually_s1:
-            return getRuntimeTypeInfo(S1)
-        else:
-            return getRuntimeTypeInfo(S)
-    def rtti_S1(p):
-        return getRuntimeTypeInfo(S1)
+    rtti = malloc(RuntimeTypeInfo, immortal=True)
+    rtti1 = malloc(RuntimeTypeInfo, immortal=True)
+    S = GcStruct('s', runtime_type_info=rtti)
+    S1 = GcStruct('s1', ('sub', S), runtime_type_info=rtti1)
     def does_stuff():
         p = malloc(S)
-        p.is_actually_s1 = False
         p1 = malloc(S1)
-        p1.sub.is_actually_s1 = True
         # and no crash when p and p1 are decref'ed
         return None
-    t = TranslationContext()
-    t.buildannotator().build_types(does_stuff, [])
-    rtyper = t.buildrtyper()
-    rtyper.attachRuntimeTypeInfoFunc(S,  rtti_S)
-    rtyper.attachRuntimeTypeInfoFunc(S1, rtti_S1)
-    rtyper.specialize()
-    #t.view()
 
-    from pypy.translator.c import genc
-    t.config.translation.countmallocs = True
-    builder = genc.CExtModuleBuilder(t, does_stuff, config=t.config)
-    builder.generate_source()
-    builder.compile()
-    f1 = builder.get_entry_point()
+    f1 = compile(does_stuff, [])
     f1()
-    mallocs, frees = builder.get_malloc_counters()()
-    assert mallocs == frees
 
 
 def test_str():
