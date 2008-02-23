@@ -233,7 +233,7 @@ class FrameworkGCTransformer(GCTransformer):
             s_True  = annmodel.SomeBool(); s_True .const = True
             self.malloc_fast_ptr = getfn(
                 malloc_fast,
-                [s_gc, annmodel.SomeInteger(nonneg=True),
+                [s_gc, annmodel.SomePtr(RTTIPTR),
                  annmodel.SomeInteger(nonneg=True),
                  s_True, s_False,
                  s_False], s_gcref,
@@ -284,13 +284,13 @@ class FrameworkGCTransformer(GCTransformer):
             self.coalloc_clear_ptr = getfn(
                 GCClass.coalloc_fixedsize_clear.im_func,
                 [s_gc, annmodel.SomeAddress(),
-                 annmodel.SomeInteger(nonneg=True),
+                 annmodel.SomePtr(RTTIPTR),
                  annmodel.SomeInteger(nonneg=True)],
                 s_gcref, inline=True)
             self.coalloc_varsize_clear_ptr = getfn(
                 GCClass.coalloc_varsize_clear.im_func,
-                [s_gc, annmodel.SomeAddress()] +
-                [annmodel.SomeInteger(nonneg=True) for i in range(5)],
+                [s_gc, annmodel.SomeAddress(), annmodel.SomePtr(RTTIPTR)] +
+                [annmodel.SomeInteger(nonneg=True) for i in range(4)],
                 s_gcref, inline=True)
         else:
             self.coalloc_clear_ptr = self.coalloc_varsize_clear_ptr = None
@@ -329,9 +329,23 @@ class FrameworkGCTransformer(GCTransformer):
     def consider_constant(self, TYPE, value):
         self.layoutbuilder.consider_constant(TYPE, value, self.gcdata.gc)
 
-    def initialize_typeinfo(self, typeinfo, rtti, TYPE):
-        raise Exception("for now, the layoutbuilder should have found "
-                        "all possible GC types - got %r" % (TYPE,))
+    def convert_rtti(self, rtti):
+        # xxx a bit indirect
+        rtti = rtti._as_ptr()
+        try:
+            return self.gcheaderbuilder.typeinfo_from_rtti(rtti)
+        except KeyError:
+            try:
+                TYPE = lltype.getGcTypeForRtti(rtti)
+            except ValueError:
+                # ignore rtti's not attached anywhere, e.g. in the
+                # vtable of raw-flavored RPython classes
+                typeinfo = self.gcheaderbuilder.new_typeinfo(rtti)
+            else:
+                rtti1 = self.layoutbuilder.get_type_id(TYPE)
+                assert rtti1 == rtti
+                typeinfo = self.gcheaderbuilder.typeinfo_from_rtti(rtti)
+            return typeinfo
 
     #def get_type_id(self, TYPE):
     #    this method is attached to the instance and redirects to

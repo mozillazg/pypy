@@ -481,6 +481,8 @@ def GCHelpers(gcheaderbuilder):
         # A bit of manual inlining...
         hdraddr = objaddr - gc_header_offset
         rtti = llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        if lltype.typeOf(rtti) is llmemory.Address:
+            rtti = llmemory.cast_adr_to_ptr(rtti, RTTIPTR)
         ll_assert(bool(rtti), "NULL rtti")
         return rtti
     gh.gc_runtime_type_info = gc_runtime_type_info
@@ -491,6 +493,8 @@ def GCHelpers(gcheaderbuilder):
         # A bit of manual inlining...
         hdraddr = objaddr - gc_header_offset
         rtti = llmemory.cast_adr_to_ptr(hdraddr, HDRPTR).typeptr
+        if lltype.typeOf(rtti) is llmemory.Address:
+            rtti = llmemory.cast_adr_to_ptr(rtti, RTTIPTR)
         ll_assert(bool(rtti), "NULL rtti")
         return gcheaderbuilder.cast_rtti_to_typeinfo(rtti)
     gh.typeof = typeof
@@ -679,7 +683,10 @@ class GCTransformer(BaseGCTransformer):
             p = value._as_ptr()
             if not self.gcheaderbuilder.get_header(p):
                 hdr = self.gcheaderbuilder.new_header(p)
-                hdr.typeptr = self.gcheaderbuilder.getRtti(TYPE)
+                rtti = self.gcheaderbuilder.getRtti(TYPE)
+                if lltype.typeOf(hdr).TO.typeptr is llmemory.Address:
+                    rtti = llmemory.cast_ptr_to_adr(rtti)
+                hdr.typeptr = rtti
                 self.initialize_constant_header(hdr, TYPE, value)
 
     def initialize_constant_header(self, hdr, TYPE, value):
