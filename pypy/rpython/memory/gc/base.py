@@ -224,8 +224,9 @@ class MovingGCBase(GCBase):
             if not target:
                 freeentry = i
             else:
-                ll_assert(self.get_type_id(llmemory.cast_ptr_to_adr(target))
-                             > 0, "bogus weakref in compute_id()")
+                targetadr = llmemory.cast_ptr_to_adr(target)
+                ll_assert(bool(self.get_type_id(targetadr)),
+                          "bogus weakref in compute_id()")
                 # record this entry in the dict
                 adr = llmemory.cast_ptr_to_adr(target)
                 self.object_id_dict[adr] = i
