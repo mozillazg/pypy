@@ -68,8 +68,6 @@ class StructDefNode:
         db = self.db
         STRUCT = self.STRUCT
         varlength = self.varlength
-        for ptr in db.gcpolicy.enum_gcheader_dependencies(STRUCT):
-            db.get(ptr)
         if needs_gcheader(self.STRUCT):
             for fname, T in db.gcpolicy.struct_gcheader_definition(self):
                 self.fields.append((fname, db.gettype(T, who_asks=self)))
@@ -198,8 +196,6 @@ class ArrayDefNode:
             return      # setup() was already called, likely by __init__
         db = self.db
         ARRAY = self.ARRAY
-        for ptr in db.gcpolicy.enum_gcheader_dependencies(ARRAY):
-            db.get(ptr)
         if needs_gcheader(ARRAY):
             for fname, T in db.gcpolicy.array_gcheader_definition(self):
                 self.gcfields.append((fname, db.gettype(T, who_asks=self)))
