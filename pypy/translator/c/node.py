@@ -2,7 +2,7 @@ from __future__ import generators
 from pypy.rpython.lltypesystem.lltype import \
      Struct, Array, FixedSizeArray, FuncType, PyObjectType, typeOf, \
      GcStruct, GcArray, ContainerType, \
-     parentlink, Ptr, PyObject, Void, OpaqueType, Float, \
+     Ptr, PyObject, Void, OpaqueType, Float, \
      RuntimeTypeInfo, getRuntimeTypeInfo, Char, _subarray
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.c.funcgen import FunctionCodeGenerator
@@ -426,14 +426,14 @@ class ContainerNode(object):
                         name ptrname
                         globalcontainer""".split()
 
-    def __init__(self, db, T, obj):
+    def __init__(self, db, T, obj, parentlink):
         self.db = db
         self.T = T
         self.obj = obj
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
         self.implementationtypename = db.gettype(T, varlength=self.getlength())
-        parent, parentindex = parentlink(obj)
+        parent, parentindex = parentlink
         if parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
             self.globalcontainer = True
@@ -535,8 +535,8 @@ class ArrayNode(ContainerNode):
     if USESLOTS:
         __slots__ = ()
 
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
+    def __init__(self, db, T, obj, parentlink):
+        ContainerNode.__init__(self, db, T, obj, parentlink)
         if barebonearray(T):
             self.ptrname = self.name
 
@@ -598,8 +598,8 @@ class FixedSizeArrayNode(ContainerNode):
     if USESLOTS:
         __slots__ = ()
 
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
+    def __init__(self, db, T, obj, parentlink):
+        ContainerNode.__init__(self, db, T, obj, parentlink)
         if not isinstance(obj, _subarray):   # XXX hackish
             self.ptrname = self.name
 
@@ -661,7 +661,7 @@ class FuncNode(ContainerNode):
     # there not so many node of this kind, slots should not
     # be necessary
 
-    def __init__(self, db, T, obj, forcename=None):
+    def __init__(self, db, T, obj, parentlink, forcename=None):
         self.globalcontainer = True
         self.db = db
         self.T = T
@@ -839,7 +839,7 @@ class PyObjectNode(ContainerNode):
     typename = 'PyObject @'
     implementationtypename = 'PyObject *@'
 
-    def __init__(self, db, T, obj):
+    def __init__(self, db, T, obj, parentlink):
         # obj is a _pyobject here; obj.value is the underlying CPython object
         self.db = db
         self.T = T
