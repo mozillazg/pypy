@@ -147,9 +147,8 @@ def test_write_barrier():
 
 def test_del_basic():
     for gcpolicy in ["ref"]: #, "framework"]:
-        S = lltype.GcStruct('S', ('x', lltype.Signed))
-        TRASH = lltype.GcStruct('TRASH', ('x', lltype.Signed))
-        lltype.attachRuntimeTypeInfo(S)
+        rtti = lltype.malloc(lltype.RuntimeTypeInfo, immortal=True)
+        S = lltype.GcStruct('S', ('x', lltype.Signed), runtime_type_info=rtti)
         GLOBAL = lltype.Struct('GLOBAL', ('x', lltype.Signed))
         glob = lltype.malloc(GLOBAL, immortal=True)
         def destructor(s):
@@ -170,7 +169,7 @@ def test_del_basic():
         t.buildannotator().build_types(entrypoint, [int])
         rtyper = t.buildrtyper()
         destrptr = rtyper.annotate_helper_fn(destructor, [lltype.Ptr(S)])
-        rtyper.attachRuntimeTypeInfoFunc(S, type_info_S, destrptr=destrptr)
+        rtti.destructor_funcptr = destrptr
         rtyper.specialize()
         fn = compile_func(entrypoint, None, t, gcpolicy=gcpolicy)
 
