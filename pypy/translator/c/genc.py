@@ -835,7 +835,7 @@ $(TARGET): $(OBJECTS)
 \t$(CC) $(CFLAGS) -o $@ -S $< $(INCLUDEDIRS)
 
 gcmaptable.s: $(ASMFILES)
-\t$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(ASMFILES) > $@ || (rm -f $@ && exit 1)
+\tpython $(PYPYDIR)/translator/c/gcc/trackgcroot.py $(ASMFILES) > $@ || (rm -f $@ && exit 1)
 
 clean:
 \trm -f $(OBJECTS) $(TARGET)
