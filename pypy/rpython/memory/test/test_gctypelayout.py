@@ -1,5 +1,6 @@
 from pypy.rpython.memory.gctypelayout import TypeLayoutBuilder, GCData
 from pypy.rpython.memory.gctypelayout import offsets_to_gc_pointers
+from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.lltypesystem import lltype
 
 def getname(T):
@@ -32,11 +33,14 @@ def test_struct():
 
 def test_layout_builder():
     # XXX a very minimal test
-    layoutbuilder = TypeLayoutBuilder()
+    HDR = lltype.Struct("HDR")
+    TYPEINFO = GCData.TYPE_INFO
+    gcheaderbuilder = GCHeaderBuilder(HDR, TYPEINFO)
+    layoutbuilder = TypeLayoutBuilder(gcheaderbuilder)
     for T1, T2 in [(GC_A, GC_S), (GC_A2, GC_S2), (GC_S3, GC_S2)]:
         tid1 = layoutbuilder.get_type_id(T1)
         tid2 = layoutbuilder.get_type_id(T2)
-        gcdata = GCData(layoutbuilder.type_info_list)
+        gcdata = GCData(gcheaderbuilder)
         lst1 = gcdata.q_varsize_offsets_to_gcpointers_in_var_part(tid1)
         lst2 = gcdata.q_offsets_to_gc_pointers(tid2)
         assert len(lst1) == len(lst2)
