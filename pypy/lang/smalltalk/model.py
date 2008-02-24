@@ -42,11 +42,11 @@ class W_Object(object):
     def shadow_of_my_class(self):
         return self.getclass().as_class_get_shadow()
 
-    def shallow_equals(self,other):
+    def pointer_equals(self,other):
         return self == other
 
     def equals(self, other):
-        return self.shallow_equals(other)
+        return self.pointer_equals(other)
 
 class W_SmallInteger(W_Object):
     __slots__ = ('value',)     # the only allowed slot here
@@ -67,7 +67,7 @@ class W_SmallInteger(W_Object):
     def __repr__(self):
         return "W_SmallInteger(%d)" % self.value
 
-    def shallow_equals(self, other):
+    def equals(self, other):
         if not isinstance(other, W_SmallInteger):
             return False
         return self.value == other.value
@@ -89,7 +89,7 @@ class W_Float(W_Object):
     def __repr__(self):
         return "W_Float(%f)" % self.value
 
-    def shallow_equals(self, other):
+    def equals(self, other):
         if not isinstance(other, W_Float):
             return False
         return self.value == other.value
@@ -236,18 +236,6 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         return self.as_special_get_shadow(ContextPartShadow)
 
-    def equals(self, other):
-        if not isinstance(other, W_PointersObject):
-            return False
-        if not other.getclass() == self.getclass():
-            return False
-        if not other.size() == self.size():
-            return False
-        for i in range(self.size()):
-            if not other.fetch(i).shallow_equals(self.fetch(i)):
-                return False
-        return True
-
 class W_BytesObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
@@ -288,11 +276,6 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
                 return False
         return True
 
-    def shallow_equals(self, other):
-        if not isinstance(other,W_BytesObject):
-            return False
-        return self.bytes == other.bytes
-
 class W_WordsObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
@@ -318,11 +301,6 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
     def invariant(self):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self.words, list))
-
-    def shallow_equals(self, other):
-        if not isinstance(other,W_WordsObject):
-            return False
-        return self.words == other.words
 
 class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
     """My instances are methods suitable for interpretation by the virtual machine.  This is the only class in the system whose instances intermix both indexable pointer fields and indexable integer fields.
