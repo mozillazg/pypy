@@ -638,6 +638,8 @@ class BytecodeWriter(object):
             self.emit(pos)
             self.register_greenvar(op.result)
             return
+        elif kind == "residual":
+            XXX
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
         targetgraph, = targets.values()

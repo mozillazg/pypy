@@ -13,7 +13,7 @@ from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
-from pypy.objspace.flow.model import summary
+from pypy.objspace.flow.model import summary, Variable
 from pypy.rlib.jit import hint
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
@@ -212,6 +212,28 @@ class InterpretationTest(object):
         for opname, count in counts.items():
             assert self.insns.get(opname, 0) == count
 
+    def check_oops(self, expected=None, **counts):
+        if not self.on_llgraph:
+            return
+        oops = {}
+        for block in self.residual_graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'direct_call':
+                    f = getattr(op.args[0].value._obj, "_callable", None)
+                    if hasattr(f, 'oopspec'):
+                        name, _ = f.oopspec.split('(', 1)
+                        oops[name] = oops.get(name, 0) + 1
+        if expected is not None:
+            assert oops == expected
+        for name, count in counts.items():
+            assert oops.get(name, 0) == count
+    def check_flexswitches(self, expected_count):
+        count = 0
+        for block in self.residual_graph.iterblocks():
+            if (isinstance(block.exitswitch, Variable) and
+                block.exitswitch.concretetype is lltype.Signed):
+                count += 1
+        assert count == expected_count
 
 class SimpleTests(InterpretationTest):
     def test_simple_fixed(self):
