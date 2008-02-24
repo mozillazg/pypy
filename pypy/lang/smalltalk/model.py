@@ -165,10 +165,12 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         self._vars = [w_nil] * size
 
     def at0(self, index0):
-        return self.fetch(index0)
+        # To test, at0 = in varsize part
+        return self.fetch(index0+self.instsize())
 
     def atput0(self, index0, w_value):
-        self.store(index0, w_value)
+        # To test, at0 = in varsize part
+        self.store(index0+self.instsize(), w_value)
 
     def fetch(self, n0):
         return self._vars[n0]
