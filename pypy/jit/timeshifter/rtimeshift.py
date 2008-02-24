@@ -4,10 +4,11 @@ from pypy.rpython.lltypesystem import lltype, lloperation, llmemory
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.timeshifter import rvalue, rcontainer, rvirtualizable
 from pypy.jit.timeshifter.greenkey import newgreendict, empty_key
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
-from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llhelper
 
 FOLDABLE_GREEN_OPS = dict.fromkeys(lloperation.enum_foldable_ops())
 FOLDABLE_GREEN_OPS['getfield'] = None
@@ -263,8 +264,11 @@ def enter_next_block(jitstate, incoming):
         incoming[i].genvar = linkargs[i]
     return newblock
 
-def return_marker(jitstate, resuming):
-    raise AssertionError("shouldn't get here")
+class Resumer(object):
+    def resume(self, jitstate, resumepoint):
+        raise NotImplementedError("abstract base class")
+
+return_marker = Resumer()
 
 def start_new_block(states_dic, jitstate, key, global_resumer, index=-1):
     memo = rvalue.freeze_memo()
@@ -293,10 +297,10 @@ def start_new_block(states_dic, jitstate, key, global_resumer, index=-1):
         dispatchqueue.clearlocalcaches()
         jitstate.promotion_path = PromotionPathMergesToSee(node, 0)
         #debug_print(lltype.Void, "PROMOTION ROOT")
-start_new_block._annspecialcase_ = "specialize:arglltype(2)"
 
 def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
                                 force_merge=False):
+    # global_resumer is always None, just not for global merge points
     if jitstate.virtualizables:
         jitstate.enter_block_sweep_virtualizables()
     if key not in states_dic:
@@ -663,6 +667,10 @@ class PromotionPoint(object):
         self.incoming_gv = incoming_gv
         self.promotion_path = promotion_path
 
+    # hack for testing: make the llinterpreter believe this is a Ptr to base
+    # instance
+    _TYPE = base_ptr_lltype()
+
 class AbstractPromotionPath(object):
     cut_limit = False
 
@@ -692,7 +700,7 @@ class PromotionPathRoot(AbstractPromotionPath):
         jitstate.greens = self.greens_gv
         assert jitstate.frame.backframe is None
         resuminginfo.merges_to_see()
-        self.global_resumer(jitstate, resuminginfo)
+        self.global_resumer.resume(jitstate, resuminginfo)
         builder.show_incremental_progress()
 
 class PromotionPathNode(AbstractPromotionPath):
@@ -742,37 +750,47 @@ class PromotionPathMergesToSee(PromotionPathNode):
 MC_IGNORE_UNTIL_RETURN = -1
 MC_CALL_NOT_TAKEN      = -2
 
+# for testing purposes
+def _cast_base_ptr_to_promotion_point(ptr):
+    if we_are_translated():
+        return cast_base_ptr_to_instance(PromotionPoint, ptr)
+    else:
+        return ptr
+
+def _cast_promotion_point_to_base_ptr(instance):
+    assert isinstance(instance, PromotionPoint)
+    if we_are_translated():
+        return cast_instance_to_base_ptr(instance)
+    else:
+        return instance
+
 
 class PromotionDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, ERASED, hrtyper):
-        state = hrtyper.portalstate
+    def __init__(self, ERASED, interpreter):
+        self.exceptiondesc = interpreter.exceptiondesc
 
         def ll_continue_compilation(promotion_point_ptr, value):
             try:
-                promotion_point = cast_base_ptr_to_instance(
-                    PromotionPoint, promotion_point_ptr)
+                promotion_point = _cast_base_ptr_to_promotion_point(
+                    promotion_point_ptr)
                 path = [None]
                 root = promotion_point.promotion_path.follow_path(path)
                 gv_value = root.rgenop.genconst(value)
                 resuminginfo = ResumingInfo(promotion_point, gv_value, path)
                 root.continue_compilation(resuminginfo)
-                state.compile_more_functions()
+                interpreter.portalstate.compile_more_functions()
             except Exception, e:
+                if not we_are_translated():
+                    import pdb; pdb.set_trace()
                 lloperation.llop.debug_fatalerror(
                     lltype.Void, "compilation-time error %s" % e)
+        self.ll_continue_compilation = ll_continue_compilation
 
-        fnptr = hrtyper.annhelper.delayedfunction(
-            ll_continue_compilation,
-            [annmodel.SomePtr(base_ptr_lltype()),
-             annmodel.lltype_to_annotation(ERASED)],
-            annmodel.s_None, needtype=True)
-        RGenOp = hrtyper.RGenOp
-        self.exceptiondesc = hrtyper.exceptiondesc
-        self.gv_continue_compilation = RGenOp.constPrebuiltGlobal(fnptr)
-        self.sigtoken = RGenOp.sigToken(lltype.typeOf(fnptr).TO)
-##        self.PROMOTION_POINT = r_PromotionPoint.lowleveltype
+        FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED], lltype.Void)
+        self.FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
+        self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
 
     def _freeze_(self):
         return True
@@ -796,7 +814,7 @@ def promote(jitstate, promotebox, promotiondesc):
             pm = PromotionPoint(flexswitch, incoming_gv,
                                 jitstate.promotion_path)
             #debug_print(lltype.Void, "PROMOTE")
-            ll_pm = cast_instance_to_base_ptr(pm)
+            ll_pm = _cast_promotion_point_to_base_ptr(pm)
             gv_pm = default_builder.rgenop.genconst(ll_pm)
             gv_switchvar = promotebox.genvar
             exceptiondesc = promotiondesc.exceptiondesc
@@ -806,9 +824,12 @@ def promote(jitstate, promotebox, promotiondesc):
                                               exceptiondesc.gv_null_exc_type )
             exceptiondesc.genop_set_exc_value(default_builder,
                                               exceptiondesc.gv_null_exc_value)
+            fnptr = llhelper(promotiondesc.FUNCPTRTYPE,
+                             promotiondesc.ll_continue_compilation)
+            gv_continue_compilation = default_builder.rgenop.genconst(fnptr)
             default_builder.genop_call(promotiondesc.sigtoken,
-                               promotiondesc.gv_continue_compilation,
-                               [gv_pm, gv_switchvar])
+                                       gv_continue_compilation,
+                                       [gv_pm, gv_switchvar])
             exceptiondesc.genop_set_exc_type (default_builder, gv_exc_type )
             exceptiondesc.genop_set_exc_value(default_builder, gv_exc_value)
             linkargs = []
