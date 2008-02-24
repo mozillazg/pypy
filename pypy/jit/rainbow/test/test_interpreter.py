@@ -1,11 +1,12 @@
 import py
 from pypy.translator.translator import TranslationContext, graphof
+from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
 from pypy.jit.hintannotator.model import SomeLLAbstractConstant, OriginFlags
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.rainbow.codewriter import BytecodeWriter, label, tlabel, assemble
-from pypy.jit.codegen.llgraph.rgenop import RGenOp as LLRGenOp
+from pypy.jit.rainbow.portal import PortalRewriter
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
@@ -98,6 +99,7 @@ class InterpretationTest(object):
         t = hannotator.translator
         graph2 = graphof(t, portal)
         self.graph = graph2
+        self.maingraph = graphof(rtyper.annotator.translator, func)
         writer = BytecodeWriter(t, hannotator, self.RGenOp)
         jitcode = writer.make_bytecode(graph2)
         # the bytecode writer can ask for llhelpers about lists and dicts
@@ -117,6 +119,19 @@ class InterpretationTest(object):
         for i, ll_val in enumerate(values):
             color = writer.varcolor(graph2.startblock.inputargs[i])
             argcolors.append(color)
+
+
+        # rewire the original portal
+
+        rewriter = PortalRewriter(self.hintannotator, self.rtyper, self.RGenOp,
+                                  writer)
+        self.rewriter = rewriter
+        origportalgraph = graphof(self.rtyper.annotator.translator, portal)
+        portalgraph = graphof(t, portal)
+        rewriter.rewrite(origportalgraph=origportalgraph,
+                         portalgraph=portalgraph,
+                         view = conftest.option.view and self.small)
+
         self.writer = writer
         self.jitcode = jitcode
         self.argcolors = argcolors

@@ -26,6 +26,7 @@ class BytecodeWriter(object):
         self.raise_analyzer = hannotator.exceptiontransformer.raise_analyzer
         self.all_graphs = {} # mapping graph to bytecode
         self.unfinished_graphs = []
+        self.num_global_mergepoints = 0
 
     def can_raise(self, op):
         return self.raise_analyzer.analyze(op)
@@ -45,8 +46,9 @@ class BytecodeWriter(object):
         self.arrayfielddescs = []
         self.interiordescs = []
         self.oopspecdescs = []
+        self.promotiondescs = []
         self.called_bytecodes = []
-        self.num_mergepoints = 0
+        self.num_local_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
         self.nonrainbow_functions = []
         self.is_portal = is_portal
@@ -74,13 +76,17 @@ class BytecodeWriter(object):
         self.interiordesc_positions = {}
         # mapping (fnobj, can_raise) to index
         self.oopspecdesc_positions = {}
+        # mapping (fnobj, can_raise) to index
+        self.promotiondesc_positions = {}
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
         self.nonrainbow_positions = {}
 
         self.graph = graph
-        self.entrymap = flowmodel.mkentrymap(graph)
+        self.mergepoint_set = {}
+        self.compute_merge_points()
+
         self.make_bytecode_block(graph.startblock)
         assert self.current_block is None
         bytecode = self.all_graphs[graph]
@@ -95,19 +101,59 @@ class BytecodeWriter(object):
                           self.arrayfielddescs,
                           self.interiordescs,
                           self.oopspecdescs,
+                          self.promotiondescs,
                           self.called_bytecodes,
-                          self.num_mergepoints,
+                          self.num_local_mergepoints,
                           self.graph_color,
                           self.nonrainbow_functions,
                           self.is_portal)
         if is_portal:
             self.finish_all_graphs()
+            self.interpreter.set_num_global_mergepoints(
+                self.num_global_mergepoints)
             return bytecode
 
     def finish_all_graphs(self):
         while self.unfinished_graphs:
             graph = self.unfinished_graphs.pop()
             self.make_bytecode(graph, is_portal=False)
+
+    def compute_merge_points(self):
+        entrymap = flowmodel.mkentrymap(self.graph)
+        startblock = self.graph.startblock
+        global_merge_blocks = {}
+        for block in self.graph.iterblocks():
+            if not block.operations:
+                continue
+            op = block.operations[0]
+            hashint = False
+            cand = 0
+            if (op.opname == 'hint' and
+                op.args[1].value == {'global_merge_point': True}):
+                hashint = True
+                if block is startblock or len(entrymap[block]) > 1:
+                    global_merge_blocks[block] = True
+                    cand += 1
+                else:
+                    prevblock = entrymap[block][0].prevblock
+                    if len(entrymap[prevblock]) > 1:
+                        global_merge_blocks[prevblock] = True
+                        cand += 1
+            assert not hashint or cand==1, (
+                "ambigous global merge point hint: %r" % block)
+            for op in block.operations[1:]:
+                assert not (op.opname == 'hint' and
+                    op.args[1].value == {'global_merge_point': True}), (
+                    "stranded global merge point hint: %r" % block)
+                
+        for block, links in entrymap.items():
+            if len(links) > 1 and block is not self.graph.returnblock:
+                if block in global_merge_blocks:
+                    self.mergepoint_set[block] = 'global'
+                else:
+                    self.mergepoint_set[block] = 'local'
+        if startblock in global_merge_blocks:
+            self.mergepoint_set[startblock] = 'global'
 
     def make_bytecode_block(self, block, insert_goto=False):
         if block in self.seen_blocks:
@@ -185,10 +231,8 @@ class BytecodeWriter(object):
     def insert_merges(self, block):
         if block is self.graph.returnblock:
             return
-        if len(self.entrymap[block]) <= 1:
+        if block not in self.mergepoint_set:
             return
-        num = self.num_mergepoints
-        self.num_mergepoints += 1
         # make keydesc
         key = ()
         for arg in self.sort_by_color(block.inputargs)[1]:
@@ -202,7 +246,16 @@ class BytecodeWriter(object):
             self.keydescs.append(KeyDesc(self.RGenOp, *key))
         else:
             keyindex = self.keydesc_positions[key]
-        self.emit("merge")
+
+        kind = self.mergepoint_set[block]
+        if kind == "global":
+            self.emit("guard_global_merge")
+            num = self.num_global_mergepoints
+            self.num_global_mergepoints += 1
+        else:
+            num = self.num_local_mergepoints
+            self.num_local_mergepoints += 1
+        self.emit("%s_merge" % kind)
         self.emit(num)
         self.emit(keyindex)
 
@@ -367,6 +420,16 @@ class BytecodeWriter(object):
         self.oopspecdesc_positions[key] = result
         return result
 
+    def promotiondesc_position(self, TYPE):
+        ERASED = self.RGenOp.erasedType(TYPE)
+        if ERASED in self.promotiondesc_positions:
+            return self.promotiondesc_positions[ERASED]
+        promotiondesc = rtimeshift.PromotionDesc(ERASED, self.interpreter)
+        result = len(self.promotiondescs)
+        self.promotiondescs.append(promotiondesc)
+        self.promotiondesc_positions[ERASED] = result
+        return result
+
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
@@ -491,6 +554,18 @@ class BytecodeWriter(object):
             else:
                 self.register_greenvar(result, self.green_position(arg))
             return
+        if "promote" in hints:
+            if self.varcolor(arg) == "green":
+                self.register_greenvar(result, self.green_position(arg))
+                return
+            self.emit("promote")
+            self.emit(self.serialize_oparg("red", arg))
+            self.emit(self.promotiondesc_position(arg.concretetype))
+            self.register_greenvar(result)
+            return
+        if "global_merge_point" in hints:
+            return # the compute_merge_points function already cared
+        XXX
 
     def args_of_call(self, args, colored_as):
         result = []

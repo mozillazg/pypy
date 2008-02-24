@@ -54,11 +54,13 @@ class PortalRewriter(object):
         self.sigtoken = self.RGenOp.sigToken(self.RESIDUAL_FUNCTYPE)
 
     def make_state_instance(self):
-        state = self.PortalState(self.interpreter)
+        portalbytecode = self.codewriter.all_graphs[self.portalgraph]
+        state = self.PortalState(self.interpreter, portalbytecode)
         def portal_entry(*args):
             return state.portal_entry(*args)
         self.state = state
         self.portal_entry = portal_entry
+        self.interpreter.set_portalstate(state)
 
     def mutate_origportalgraph(self):
         # XXX
@@ -90,7 +92,7 @@ class PortalRewriter(object):
                 if lowleveltype.TO._hints.get('virtualizable', False):
                     redportargdesccls = RedVirtualizableStructPortalArgDesc
                 else:
-                    redportargdesccls = RedStructPortalArgDesc
+                    redportargdesccls = RedPortalArgDesc
         return redportargdesccls(lowleveltype, self.RGenOp)
 
 
@@ -98,10 +100,12 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
                      portal_jitcode, rtyper):
     args_specification = unrolling_iterable(args_specification)
     class PortalState(object):
-        def __init__(self, interpreter):
+        def __init__(self, interpreter, portalbytecode):
             self.cache = {}
             self.graph_compilation_queue = []
             self.interpreter = interpreter
+            self.portalbytecode = portalbytecode
+            self.sigtoken = sigtoken
 
         def compile_more_functions(self):
             while self.graph_compilation_queue:
@@ -184,6 +188,17 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             self.graph_compilation_queue.append((top_jitstate, greenargs, redargs))
             self.compile_more_functions()
             return gv_generated
+
+        
+        def make_dummy_args(self):
+            redargs = ()
+            greenargs = ()
+            for color, _, make_arg_redbox in args_specification:
+                if color == "green":
+                    greenargs += (None, )
+                else:
+                    redargs += (None, )
+            return list(greenargs), list(redargs)
 
         # debug helpers
         def readportal(self, *args):

@@ -1,7 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.timeshifter import rtimeshift, rcontainer
-from pypy.jit.timeshifter.greenkey import empty_key, GreenKey
+from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.rpython.lltypesystem import lltype
 
 class JitCode(object):
@@ -19,7 +19,8 @@ class JitCode(object):
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
-                 interiordescs, oopspecdescs, called_bytecodes, num_mergepoints,
+                 interiordescs, oopspecdescs, promotiondescs,
+                 called_bytecodes, num_mergepoints,
                  graph_color, nonrainbow_functions, is_portal):
         self.name = name
         self.code = code
@@ -32,6 +33,7 @@ class JitCode(object):
         self.arrayfielddescs = arrayfielddescs
         self.interiordescs = interiordescs
         self.oopspecdescs = oopspecdescs
+        self.promotiondescs = promotiondescs
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
@@ -47,6 +49,29 @@ class STOP(object):
     pass
 STOP = STOP()
 
+
+class RainbowResumer(rtimeshift.Resumer):
+    def __init__(self, interpreter, frame):
+        self.interpreter = interpreter
+        self.bytecode = frame.bytecode
+        self.pc = frame.pc
+
+    def resume(self, jitstate, resuming):
+        interpreter = self.interpreter
+        dispatchqueue = rtimeshift.DispatchQueue(self.bytecode.num_mergepoints)
+        dispatchqueue.resuming = resuming
+        jitstate.frame.dispatchqueue = dispatchqueue
+        interpreter.newjitstate(jitstate)
+        interpreter.frame.pc = self.pc
+        interpreter.frame.bytecode = self.bytecode
+        interpreter.frame.local_green = jitstate.greens
+        jitstate.frame.dispatchqueue = dispatchqueue
+        interpreter.bytecode_loop()
+        finaljitstate = interpreter.jitstate
+        if finaljitstate is not None:
+            interpreter.finish_jitstate(interpreter.portalstate.sigtoken)
+
+
 class JitInterpreter(object):
     def __init__(self, exceptiondesc, RGenOp):
         self.exceptiondesc = exceptiondesc
@@ -56,7 +81,20 @@ class JitInterpreter(object):
         self.jitstate = None
         self.queue = None
         self.rgenop = RGenOp()
+        self.portalstate = None
+        self.num_global_mergepoints = -1
+        self.global_state_dicts = None
         self._add_implemented_opcodes()
+
+    def set_portalstate(self, portalstate):
+        assert self.portalstate is None
+        self.portalstate = portalstate
+
+    def set_num_global_mergepoints(self, num_global_mergepoints):
+        assert self.num_global_mergepoints == -1
+        self.num_global_mergepoints = num_global_mergepoints
+        dicts = [newgreendict() for i in range(self.num_global_mergepoints)]
+        self.global_state_dicts = dicts
 
     def run(self, jitstate, bytecode, greenargs, redargs,
             start_bytecode_loop=True):
@@ -70,6 +108,14 @@ class JitInterpreter(object):
         self.frame.local_green = greenargs
         if start_bytecode_loop:
             self.bytecode_loop()
+        return self.jitstate
+
+    def resume(self, jitstate, greenargs, redargs):
+        self.newjitstate(jitstate)
+        self.frame.local_boxes = redargs
+        self.frame.local_green = greenargs
+        self.frame.gc = rtimeshift.getresumepoint(jitstate)
+        self.bytecode_loop()
         return self.jitstate
 
     def fresh_jitstate(self, builder):
@@ -180,6 +226,15 @@ class JitInterpreter(object):
     def get_redarg(self):
         return self.frame.local_boxes[self.load_2byte()]
 
+
+    def get_greenkey(self):
+        keydescnum = self.load_2byte()
+        if keydescnum == -1:
+            return empty_key
+        else:
+            keydesc = self.frame.bytecode.keydescs[keydescnum]
+            return GreenKey(self.frame.local_green[:keydesc.nb_vals], keydesc)
+
     def red_result(self, box):
         self.frame.local_boxes.append(box)
 
@@ -287,19 +342,39 @@ class JitInterpreter(object):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
 
-    def opimpl_merge(self):
+    def opimpl_local_merge(self):
         mergepointnum = self.load_2byte()
-        keydescnum = self.load_2byte()
-        if keydescnum == -1:
-            key = empty_key
-        else:
-            keydesc = self.frame.bytecode.keydescs[keydescnum]
-            key = GreenKey(self.frame.local_green[:keydesc.nb_vals], keydesc)
+        key = self.get_greenkey()
         states_dic = self.queue.local_caches[mergepointnum]
         done = rtimeshift.retrieve_jitstate_for_merge(states_dic, self.jitstate,
                                                       key, None)
         if done:
             return self.dispatch()
+
+    def opimpl_global_merge(self):
+        mergepointnum = self.load_2byte()
+        key = self.get_greenkey()
+        states_dic = self.global_state_dicts[mergepointnum]
+        global_resumer = RainbowResumer(self, self.frame)
+        done = rtimeshift.retrieve_jitstate_for_merge(states_dic, self.jitstate,
+                                                      key, global_resumer)
+        if done:
+            return self.dispatch()
+
+    def opimpl_guard_global_merge(self):
+        rtimeshift.guard_global_merge(self.jitstate, self.frame.pc)
+        return self.dispatch()
+
+    def opimpl_promote(self):
+        promotebox = self.get_redarg()
+        promotiondescnum = self.load_2byte()
+        promotiondesc = self.frame.bytecode.promotiondescs[promotiondescnum]
+        done = rtimeshift.promote(self.jitstate, promotebox, promotiondesc)
+        if done:
+            return self.dispatch()
+        gv_switchvar = promotebox.getgenvar(self.jitstate)
+        assert gv_switchvar.is_const
+        self.green_result(gv_switchvar)
 
     def opimpl_red_direct_call(self):
         greenargs = self.get_green_varargs()

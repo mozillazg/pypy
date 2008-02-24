@@ -40,22 +40,8 @@ class PortalTest(InterpretationTest):
                         policy=policy, inline=inline,
                         backendoptimize=backendoptimize)
 
-        t = self.rtyper.annotator.translator
-        self.maingraph = graphof(t, main)
-
-        # rewire the original portal
-
-        rewriter = PortalRewriter(self.hintannotator, self.rtyper, self.RGenOp,
-                                  self.writer)
-        self.rewriter = rewriter
-        origportalgraph = graphof(t, portal)
-        portalgraph = graphof(self.hintannotator.translator, portal)
-        rewriter.rewrite(origportalgraph=origportalgraph,
-                         portalgraph=portalgraph,
-                         view = conftest.option.view and self.small)
-
         if conftest.option.view and self.small:
-            t.view()
+            self.rtyper.annotator.translator.view()
 
         # Populate the cache
         if len(self._cache_order) >= 3:
