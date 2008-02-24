@@ -64,7 +64,7 @@ class RainbowResumer(rtimeshift.Resumer):
         interpreter.newjitstate(jitstate)
         interpreter.frame.pc = self.pc
         interpreter.frame.bytecode = self.bytecode
-        interpreter.frame.local_green = jitstate.greens
+        interpreter.frame.local_green = []
         jitstate.frame.dispatchqueue = dispatchqueue
         interpreter.bytecode_loop()
         finaljitstate = interpreter.jitstate
@@ -225,7 +225,6 @@ class JitInterpreter(object):
 
     def get_redarg(self):
         return self.frame.local_boxes[self.load_2byte()]
-
 
     def get_greenkey(self):
         keydescnum = self.load_2byte()
