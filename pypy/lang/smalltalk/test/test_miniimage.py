@@ -246,7 +246,7 @@ def test_compile_method():
                             ifTrue: [ 1 ] 
                             ifFalse: [ (self - 1) fib + (self - 2) fib ]"""
     perform(w(10).getclass(), "compile:classified:notifying:", w(sourcecode), w('pypy'), w(None))
-    assert perform(w(10), "fib") == w(89)
+    assert perform(w(10), "fib").equals(w(89))
 
 def w(any): 
     if any is None:
@@ -278,5 +278,5 @@ def perform(w_receiver, selector, *arguments_w):
             interp.step()
             #print interp.s_active_context.stack
         except interpreter.ReturnFromTopLevel, e:
-            return e.object.value
+            return e.object
         
