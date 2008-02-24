@@ -145,7 +145,7 @@ class __extend__(W_ContextPart):
         self.push(interp.TWO)
 
     def pushActiveContextBytecode(self, interp):
-        self.push(self)
+        self.push(self.w_self())
 
     def duplicateTopBytecode(self, interp):
         self.push(self.top())

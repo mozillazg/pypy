@@ -10,6 +10,8 @@ def unwrap_int(w_value):
         return w_value.value
     raise UnwrappingError("expected a W_SmallInteger, got %s" % (w_value,))
 
+# XXX maybe chars are stored in char-table for uniqueness? This would solve
+# the equal problem...
 def unwrap_char(w_char):
     from pypy.lang.smalltalk import classtable, objtable, constants
     w_class = w_char.getclass()
