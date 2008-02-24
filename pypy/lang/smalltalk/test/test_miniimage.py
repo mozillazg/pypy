@@ -57,7 +57,7 @@ def test_read_all_header():
       
 def test_number_of_objects():
     image = get_image()
-    objects = image.objects
+    objects = objtable.objects
     assert len(objects) > 0
     assert 15000 < len(objects) < 16000 
     
@@ -76,7 +76,7 @@ def test_there_are_31_compact_classes():
     
 def test_invariant():
     image = get_image()
-    for each in image.objects:
+    for each in objtable.objects:
         each.invariant()
     
 def test_float_class_size():

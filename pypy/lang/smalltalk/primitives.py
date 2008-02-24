@@ -490,8 +490,15 @@ def func(interp, w_arg, w_rcvr):
 
 # ___________________________________________________________________________
 # Squeak Miscellaneous Primitives (128-149)
+BECOME = 128
 FULL_GC = 130
 INC_GC = 131
+
+@expose_primitive(BECOME, unwrap_spec=[object, object])
+def func(interp, w_rcvr, w_new):
+    for w_object in objtable.objects:
+        w_object.become(w_rcvr, w_new)
+    return w_rcvr
 
 def fake_bytes_left():
     return utility.wrap_int(2**20) # XXX we don't know how to do this :-(

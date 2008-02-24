@@ -48,6 +48,9 @@ class W_Object(object):
     def equals(self, other):
         return self.pointer_equals(other)
 
+    def become(self, w_old, w_new):
+        pass
+
 class W_SmallInteger(W_Object):
     __slots__ = ('value',)     # the only allowed slot here
 
@@ -122,7 +125,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return self.w_class
 
     def __repr__(self):
-        return "<%s %s>" % (self.__class__.__name__, self)
+        return "<%s %s at %r>" % (self.__class__.__name__, self, self.gethash())
 
     def __str__(self):
         if isinstance(self, W_PointersObject) and self._shadow is not None:
@@ -137,6 +140,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
     def equals(self, w_other):
         # Special case:
         # Chars are not compared by pointer but by char-value.
+        # XXX Check comment at utility.unwrap_char ... is related.
         from pypy.lang.smalltalk.classtable import w_Character
         from pypy.lang.smalltalk import utility
         if self.getclass() == w_Character:
@@ -146,6 +150,10 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
                 return utility.unwrap_char(self) == utility.unwrap_char(w_other)
         else:
             return self.pointer_equals(w_other)
+
+    def become(self, w_old, w_new):
+        if self.w_class == w_old:
+            self.w_class = w_new
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
     """ The normal object """
@@ -248,6 +256,12 @@ class W_PointersObject(W_AbstractObjectWithClassReference):
         from pypy.lang.smalltalk.shadow import ContextPartShadow
         return self.as_special_get_shadow(ContextPartShadow)
 
+    def become(self, w_old, w_new):
+        W_AbstractObjectWithClassReference.become(self, w_old, w_new)
+        for i in range(len(self._vars)):
+            if self.fetch(i) == w_old:
+                self.store(i, w_new)
+
 class W_BytesObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
         W_AbstractObjectWithClassReference.__init__(self, w_class)
@@ -319,6 +333,8 @@ class W_WordsObject(W_AbstractObjectWithClassReference):
         return (W_AbstractObjectWithClassReference.invariant(self) and
                 isinstance(self.words, list))
 
+# XXX Shouldn't compiledmethod have class reference for subclassed compiled
+# methods?
 class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
     """My instances are methods suitable for interpretation by the virtual machine.  This is the only class in the system whose instances intermix both indexable pointer fields and indexable integer fields.
 
@@ -370,8 +386,11 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         return w_literal.as_string()    # XXX performance issue here
 
     def create_frame(self, receiver, arguments, sender = None):
+        from pypy.lang.smalltalk import objtable
         assert len(arguments) == self.argsize
-        return W_MethodContext(self, receiver, arguments, sender)
+        w_new = W_MethodContext(self, receiver, arguments, sender)
+        objtable.objects += [w_new]
+        return w_new
 
     def __str__(self):
         from pypy.lang.smalltalk.interpreter import BYTECODE_TABLE
@@ -463,8 +482,6 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         
     def atput0(self, index0, w_value):
         from pypy.lang.smalltalk import utility
-        print index0
-        print self.getliteralsize()
         if index0 <= self.getliteralsize():
             self.literalatput0(index0/constants.BYTES_PER_WORD, w_value)
         else:
@@ -558,6 +575,15 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
             # Invalid!
             raise IndexError
 
+    def become(self, w_old, w_new):
+        if self._s_sender is not None and self._s_sender.w_self() == w_old:
+            self._s_sender = w_new.as_context_get_shadow()
+        for i in range(len(self._stack)):
+            if self._stack[i] == w_old:
+                self._stack[i] = w_new
+        if self._s_home is not None and self._s_home.w_self() == w_old:
+            self._s_home = w_new.as_context_get_shadow()
+
     def stackstart(self):
         return constants.MTHDCTX_TEMP_FRAME_START
 
@@ -623,7 +649,7 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         res = self.stack()[start:]
         del self.stack()[start:]
         return res
-    
+
 class W_BlockContext(W_ContextPart):
 
     def __init__(self, s_home, s_sender, argcnt, initialip):
@@ -652,7 +678,7 @@ class W_BlockContext(W_ContextPart):
         elif index == constants.BLKCTX_INITIAL_IP_INDEX:
             return utility.wrap_int(self.initialip)
         elif index == constants.BLKCTX_HOME_INDEX:
-            return self.s_home()
+            return self.s_home().w_self()
         elif index >= constants.BLKCTX_TEMP_FRAME_START:
             stack_index = len(self.stack()) - index - 1
             return self.stack()[stack_index]
@@ -699,6 +725,26 @@ class W_MethodContext(W_ContextPart):
 
     def store_w_receiver(self, w_receiver):
         self._w_receiver = w_receiver
+
+    def become(self, w_old, w_new):
+        W_ContextPart.become(self, w_old, w_new)
+        for i in range(len(self.temps)):
+            if self.temps[i] == w_old:
+                self.temps[i] = w_new
+        if w_old == self._w_receiver:
+            self._w_receiver = w_new
+        if w_old == self._w_method:
+            self._w_method = w_new
+
+    def at0(self, index0):
+        # XXX to test
+        # Fetches in temppart (variable size)
+        return self.fetch(index0+constants.MTHDCTX_TEMP_FRAME_START)
+
+    def atput0(self, index0, w_v):
+        # XXX to test
+        # Stores in temppart (variable size)
+        return self.store(index0+constants.MTHDCTX_TEMP_FRAME_START, w_v)
 
     def fetch(self, index):
         if index == constants.MTHDCTX_METHOD:
@@ -749,6 +795,8 @@ class W_MethodContext(W_ContextPart):
     def w_method(self):
         return self._w_method
 
+    def size(self):
+        return len(self.temps) + len(self.stack())
 
 # Use black magic to create w_nil without running the constructor,
 # thus allowing it to be used even in the constructor of its own

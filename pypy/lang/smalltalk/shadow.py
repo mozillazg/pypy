@@ -144,12 +144,15 @@ class ClassShadow(AbstractShadow):
         else:
             self.s_superclass = w_superclass.as_class_get_shadow()
 
-    def new(self, extrasize=0):
+    # XXX check better way to store objects
+    # XXX storing is necessary for "become" which loops over all pointers
+    # XXX and replaces old pointers with new pointers
+    def new(self, extrasize=0, store=True):
         from pypy.lang.smalltalk import classtable
         w_cls = self.w_self()
         
         if w_cls == classtable.w_BlockContext:
-            return model.W_BlockContext(None, None, 0, 0)
+            w_new = model.W_BlockContext(None, None, 0, 0)
         elif w_cls == classtable.w_MethodContext:
             # From slang: Contexts must only be created with newForMethod:
             # raise error.PrimitiveFailedError
@@ -160,18 +163,22 @@ class ClassShadow(AbstractShadow):
             # The mini.image -however- doesn't overwrite this method, and as
             # far as I was able to trace it back, it -does- call this method.
             from pypy.rlib.objectmodel import instantiate
-            return instantiate(model.W_MethodContext)
+            w_new = instantiate(model.W_MethodContext)
             
         if self.instance_kind == POINTERS:
-            return model.W_PointersObject(w_cls, self.instance_size+extrasize)
+            w_new = model.W_PointersObject(w_cls, self.instance_size+extrasize)
         elif self.instance_kind == WORDS:
-            return model.W_WordsObject(w_cls, extrasize)
+            w_new = model.W_WordsObject(w_cls, extrasize)
         elif self.instance_kind == BYTES:
-            return model.W_BytesObject(w_cls, extrasize)
+            w_new = model.W_BytesObject(w_cls, extrasize)
         elif self.instance_kind == COMPILED_METHOD:
-            return model.W_CompiledMethod(extrasize)
+            w_new = model.W_CompiledMethod(extrasize)
         else:
             raise NotImplementedError(self.instance_kind)
+        if store:
+            from pypy.lang.smalltalk import objtable
+            objtable.objects += [w_new]
+        return w_new
 
     # _______________________________________________________________
     # Methods for querying the format word, taken from the blue book:
