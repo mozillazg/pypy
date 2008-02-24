@@ -52,7 +52,11 @@ def wrap_string(string):
 
 def wrap_char(c):
     from pypy.lang.smalltalk.objtable import CharacterTable
-    return CharacterTable[ord(c)]
+    try:
+        return CharacterTable.fetch(ord(c))
+    except Exception:
+        # XXX For now fall back to old version of charactertable
+        return CharacterTable[ord(c)]
 
 def wrap_bool(bool):
     from pypy.lang.smalltalk import objtable

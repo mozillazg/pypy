@@ -149,6 +149,7 @@ objects_in_special_object_table = {
     "nil": SO_NIL,
     "true": SO_TRUE,
     "false": SO_FALSE,
+    "charactertable": SO_CHARACTER_TABLE_ARRAY,
     "schedulerassociationpointer" : SO_SCHEDULERASSOCIATIONPOINTER,
 }
 
