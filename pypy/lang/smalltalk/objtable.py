@@ -12,7 +12,10 @@ def wrap_char_table():
         w_cinst.store(constants.CHARACTER_VALUE_INDEX,
                       model.W_SmallInteger(i))
         return w_cinst
-    CharacterTable = [bld_char(i) for i in range(256)]
+    CharacterTable = model.W_PointersObject(classtable.classtable['w_Array'], 256)
+    for i in range(256):
+        CharacterTable.atput0(i, bld_char(i))
+
 wrap_char_table()
 
 w_true  = classtable.classtable['w_True'].as_class_get_shadow().new(store=False)
