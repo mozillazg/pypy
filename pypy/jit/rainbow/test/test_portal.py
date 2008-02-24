@@ -119,7 +119,6 @@ class TestPortal(PortalTest):
         self.check_insns({})
 
     def test_multiple_portal_calls(self):
-        py.test.skip("promote not implemented")
         def ll_function(n):
             hint(None, global_merge_point=True)
             k = n

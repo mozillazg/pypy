@@ -565,6 +565,9 @@ class BytecodeWriter(object):
             return
         if "global_merge_point" in hints:
             return # the compute_merge_points function already cared
+        if "reverse_split_queue" in hints:
+            self.emit("reverse_split_queue")
+            return
         XXX
 
     def args_of_call(self, args, colored_as):
