@@ -134,6 +134,18 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return (W_AbstractObjectWithIdentityHash.invariant(self) and
                 isinstance(self.w_class, W_PointersObject))
 
+    def equals(self, w_other):
+        # Special case:
+        # Chars are not compared by pointer but by char-value.
+        from pypy.lang.smalltalk.classtable import w_Character
+        from pypy.lang.smalltalk import utility
+        if self.getclass() == w_Character:
+            if w_other.getclass() != w_Character:
+                return False
+            else:
+                return utility.unwrap_char(self) == utility.unwrap_char(w_other)
+        else:
+            return self.pointer_equals(w_other)
 
 class W_PointersObject(W_AbstractObjectWithClassReference):
     """ The normal object """
@@ -275,6 +287,11 @@ class W_BytesObject(W_AbstractObjectWithClassReference):
             if not isinstance(c, str) or len(c) != 1:
                 return False
         return True
+
+    def equals(self, other):
+        if not isinstance(other, W_BytesObject):
+            return False
+        return self.bytes == other.bytes
 
 class W_WordsObject(W_AbstractObjectWithClassReference):
     def __init__(self, w_class, size):
