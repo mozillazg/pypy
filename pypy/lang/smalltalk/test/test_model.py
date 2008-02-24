@@ -158,3 +158,12 @@ def test_intfloat_notequals():
     test_not_equals(model.W_Float(100), model.W_SmallInteger(100))
     test_not_equals(model.W_Float(1.100), model.W_Float(1.200))
     test_not_equals(model.W_SmallInteger(101), model.W_SmallInteger(100))
+
+def test_charequals():
+    test_equals(utility.wrap_char('a'), utility.wrap_char('a'))
+    test_equals(utility.wrap_char('d'), utility.wrap_char('d'))
+
+def test_not_charequals():
+    test_not_equals(utility.wrap_char('a'), utility.wrap_char('d'))
+    test_not_equals(utility.wrap_char('d'), utility.wrap_int(3))
+    test_not_equals(utility.wrap_char('d'), utility.wrap_float(3.0))
