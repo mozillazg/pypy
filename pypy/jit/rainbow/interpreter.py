@@ -376,6 +376,9 @@ class JitInterpreter(object):
         assert gv_switchvar.is_const
         self.green_result(gv_switchvar)
 
+    def opimpl_reverse_split_queue(self):
+        rtimeshift.reverse_split_queue(self.frame.dispatchqueue)
+
     def opimpl_red_direct_call(self):
         greenargs = self.get_green_varargs()
         redargs = self.get_red_varargs()

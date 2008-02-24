@@ -190,16 +190,6 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             return gv_generated
 
         
-        def make_dummy_args(self):
-            redargs = ()
-            greenargs = ()
-            for color, _, make_arg_redbox in args_specification:
-                if color == "green":
-                    greenargs += (None, )
-                else:
-                    redargs += (None, )
-            return list(greenargs), list(redargs)
-
         # debug helpers
         def readportal(self, *args):
             i = 0
