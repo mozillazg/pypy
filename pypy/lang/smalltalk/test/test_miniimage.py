@@ -240,7 +240,6 @@ def test_runimage():
     interp.interpret()
     
 def test_compile_method():
-    #py.test.skip("Not working yet.")
     sourcecode = """fib 
                         ^self < 2 
                             ifTrue: [ 1 ] 

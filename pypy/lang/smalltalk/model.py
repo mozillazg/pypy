@@ -138,18 +138,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
                 isinstance(self.w_class, W_PointersObject))
 
     def equals(self, w_other):
-        # Special case:
-        # Chars are not compared by pointer but by char-value.
-        # XXX Check comment at utility.unwrap_char ... is related.
-        from pypy.lang.smalltalk.classtable import w_Character
-        from pypy.lang.smalltalk import utility
-        if self.getclass() == w_Character:
-            if w_other.getclass() != w_Character:
-                return False
-            else:
-                return utility.unwrap_char(self) == utility.unwrap_char(w_other)
-        else:
-            return self.pointer_equals(w_other)
+        return self.pointer_equals(w_other)
 
     def become(self, w_old, w_new):
         if self.w_class == w_old:

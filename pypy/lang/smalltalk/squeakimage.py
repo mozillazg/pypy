@@ -207,6 +207,8 @@ class SqueakImage(object):
         for name, idx in constants.objects_in_special_object_table.items():
             objtable.objtable["w_" + name] = self.special_objects[idx]
 
+        objtable.CharacterTable = objtable.objtable["w_charactertable"]
+
     def special(self, index):
         return self.special_objects[index]
 
