@@ -1066,7 +1066,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns(indirect_call=0)
 
     def test_simple_red_meth(self):
-        py.test.skip("needs promote")
         class Base(object):
             def m(self, n):
                 raise NotImplementedError
@@ -1089,7 +1088,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({'int_mul': 1})
 
     def test_simple_red_meth_vars_around(self):
-        py.test.skip("needs promote")
         class Base(object):
             def m(self, n):
                 raise NotImplementedError
