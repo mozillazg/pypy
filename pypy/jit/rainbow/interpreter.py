@@ -21,7 +21,7 @@ class JitCode(object):
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
                  interiordescs, oopspecdescs, promotiondescs,
                  called_bytecodes, num_mergepoints,
-                 graph_color, nonrainbow_functions, is_portal):
+                 graph_color, calldescs, is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -37,7 +37,7 @@ class JitCode(object):
         self.called_bytecodes = called_bytecodes
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
-        self.nonrainbow_functions = nonrainbow_functions
+        self.calldescs = calldescs
         self.is_portal = is_portal
 
     def _freeze_(self):
@@ -70,7 +70,6 @@ class RainbowResumer(rtimeshift.Resumer):
         finaljitstate = interpreter.jitstate
         if finaljitstate is not None:
             interpreter.finish_jitstate(interpreter.portalstate.sigtoken)
-
 
 def arguments(*argtypes, **kwargs):
     result = kwargs.pop("returns", None)
@@ -107,9 +106,9 @@ def arguments(*argtypes, **kwargs):
                 elif argspec == "bytecode":
                     bytecodenum = self.load_2byte()
                     args += (self.frame.bytecode.called_bytecodes[bytecodenum], )
-                elif argspec == "nonrainbow_function":
+                elif argspec == "calldesc":
                     index = self.load_2byte()
-                    function = self.frame.bytecode.nonrainbow_functions[index]
+                    function = self.frame.bytecode.calldescs[index]
                     args += (function, )
                 elif argspec == "oopspec":
                     oopspecindex = self.load_2byte()
@@ -455,9 +454,9 @@ class JitInterpreter(object):
             self.frame.local_green)
         assert newjitstate is self.jitstate
 
-    @arguments("green_varargs", "nonrainbow_function")
-    def opimpl_green_direct_call(self, greenargs, function):
-        function(self, greenargs)
+    @arguments("green", "calldesc", "green_varargs")
+    def opimpl_green_direct_call(self, fnptr_gv, calldesc, greenargs):
+        calldesc.green_call(self, fnptr_gv, greenargs)
 
     @arguments("green_varargs", "red_varargs", "bytecode")
     def opimpl_yellow_direct_call(self, greenargs, redargs, targetbytecode):
@@ -493,6 +492,24 @@ class JitInterpreter(object):
     def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
         return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
 
+    @arguments("red", "calldesc", "bool", "red_varargs")
+    def opimpl_red_residual_direct_call(self, funcbox, calldesc, withexc, redargs):
+        result = rtimeshift.gen_residual_call(self.jitstate, calldesc,
+                                              funcbox, redargs)
+        self.red_result(result)
+        if withexc:
+            exceptiondesc = self.exceptiondesc
+        else:
+            exceptiondesc = None
+        flagbox = rtimeshift.after_residual_call(self.jitstate,
+                                                 exceptiondesc, True)
+        self.red_result(flagbox)
+
+    @arguments("bool", "red")
+    def opimpl_residual_fetch(self, check_forced, flagbox):
+        rtimeshift.residual_fetch(self.jitstate, self.exceptiondesc,
+                                  check_forced, flagbox)
+
 
     # exceptions
 
@@ -512,6 +529,10 @@ class JitInterpreter(object):
     @arguments("red")
     def opimpl_write_excvalue(self, valuebox):
         rtimeshift.setexcvaluebox(self.jitstate, valuebox)
+
+    @arguments("red", "red")
+    def opimpl_setexception(self, typebox, valuebox):
+        rtimeshift.setexception(self.jitstate, typebox, valuebox)
 
     # structs and arrays
 
@@ -533,6 +554,11 @@ class JitInterpreter(object):
 
     @arguments("red", "fielddesc", "bool", returns="red")
     def opimpl_red_getfield(self, structbox, fielddesc, deepfrozen):
+        return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
+                                      structbox)
+
+    @arguments("red", "fielddesc", "bool", returns="green_from_red")
+    def opimpl_green_getfield(self, structbox, fielddesc, deepfrozen):
         return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
                                       structbox)
 

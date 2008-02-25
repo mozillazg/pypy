@@ -566,37 +566,16 @@ def ll_learn_nonzeroness(jitstate, ptrbox, nonzeroness):
 ##def ll_gvar_from_constant(jitstate, ll_value):
 ##    return jitstate.curbuilder.rgenop.genconst(ll_value)
 
-class CallDesc:
-    __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, FUNCTYPE):
-        self.sigtoken = RGenOp.sigToken(FUNCTYPE)
-        self.result_kind = RGenOp.kindToken(FUNCTYPE.RESULT)
-        # xxx what if the result is virtualizable?
-        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.RESULT)
-        whatever_return_value = FUNCTYPE.RESULT._defl()
-        def green_call(jitstate, fnptr, *args):
-            try:
-                result = fnptr(*args)
-            except Exception, e:
-                jitstate.residual_exception(e)
-                result = whatever_return_value
-            return result
-        self.green_call = green_call
-
-    def _freeze_(self):
-        return True
-
-def gen_residual_call(jitstate, calldesc, funcbox):
+def gen_residual_call(jitstate, calldesc, funcbox, argboxes):
     builder = jitstate.curbuilder
     gv_funcbox = funcbox.getgenvar(jitstate)
-    argboxes = jitstate.frame.local_boxes
     args_gv = [argbox.getgenvar(jitstate) for argbox in argboxes]
     jitstate.prepare_for_residual_call()
     gv_result = builder.genop_call(calldesc.sigtoken, gv_funcbox, args_gv)
     return calldesc.redboxbuilder(calldesc.result_kind, gv_result)
 
-def ll_after_residual_call(jitstate, exceptiondesc, check_forced):
+def after_residual_call(jitstate, exceptiondesc, check_forced):
     builder = jitstate.curbuilder
     if check_forced:
         gv_flags = jitstate.check_forced_after_residual_call()

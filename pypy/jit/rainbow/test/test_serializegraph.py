@@ -246,14 +246,15 @@ class AbstractSerializationTest:
 
         writer, jitcode = self.serialize(ll_function, [int])
         assert jitcode.code == assemble(writer.interpreter,
-                                        "green_direct_call", 1, 0, 0,
+                                        "green_direct_call", -1, 0, 1, 0,
                                         "make_redbox", 1, 0,
                                         "make_new_redvars", 1, 0,
                                         "make_new_greenvars", 0,
                                         "red_return")
         assert jitcode.is_portal
         assert len(jitcode.called_bytecodes) == 0
-        assert len(jitcode.nonrainbow_functions) == 1
+        assert len(jitcode.calldescs) == 1
+        assert len(jitcode.constants) == 1
 
     def test_yellow_call(self):
         def ll_two(x):

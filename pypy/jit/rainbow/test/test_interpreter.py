@@ -198,7 +198,8 @@ class InterpretationTest(object):
         self.residual_graph = graph
         if conftest.option.view:
             graph.show()
-        llinterp = LLInterpreter(self.rtyper)
+        llinterp = LLInterpreter(
+            self.rtyper, exc_data_ptr=writer.exceptiondesc.exc_data_ptr)
         res = llinterp.eval_graph(graph, residualargs)
         return res
 
@@ -236,6 +237,8 @@ class InterpretationTest(object):
         assert count == expected_count
 
 class SimpleTests(InterpretationTest):
+    small = True
+
     def test_simple_fixed(self):
         py.test.skip("green return")
         def ll_function(x, y):
@@ -991,7 +994,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({})
 
     def test_residual_red_call(self):
-        py.test.skip("needs promote")
         def g(x):
             return x+1
 
@@ -1003,7 +1005,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns(int_add=0)
 
     def test_residual_red_call_with_exc(self):
-        py.test.skip("needs promote")
         def h(x):
             if x > 0:
                 return x+1
