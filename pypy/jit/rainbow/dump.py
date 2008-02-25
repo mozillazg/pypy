@@ -129,6 +129,10 @@ def dump_bytecode(jitcode, file=None):
                     index = src.load_2byte()
                     function = jitcode.calldescs[index]
                     args.append(function)
+                elif argspec == "indirectcalldesc":
+                    index = src.load_2byte()
+                    function = jitcode.indirectcalldescs[index]
+                    args.append(function)
                 elif argspec == "oopspec":
                     oopspecindex = src.load_2byte()
                     oopspec = jitcode.oopspecdescs[oopspecindex]

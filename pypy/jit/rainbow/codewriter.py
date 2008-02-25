@@ -2,7 +2,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.annlowlevel import cachedtype
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
 from pypy.jit.timeshifter import rtimeshift, rvalue, rcontainer, exception
@@ -54,6 +54,30 @@ class CallDesc:
     def _freeze_(self):
         return True
 
+class IndirectCallsetDesc(object):
+    __metaclass__ = cachedtype
+    
+    def __init__(self, graph2tsgraph, codewriter):
+
+        keys = []
+        values = []
+        common_args_r = None
+        for graph, tsgraph in graph2tsgraph:
+            fnptr    = codewriter.rtyper.getcallable(graph)
+            keys.append(llmemory.cast_ptr_to_adr(fnptr))
+            values.append(codewriter.get_jitcode(tsgraph))
+
+        def bytecode_for_address(fnaddress):
+            # XXX optimize
+            for i in range(len(keys)):
+                if keys[i] == fnaddress:
+                    return values[i]
+
+        self.bytecode_for_address = bytecode_for_address
+
+        self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
+        self.jitcodes = values
+
 
 class BytecodeWriter(object):
     def __init__(self, t, hannotator, RGenOp):
@@ -71,6 +95,7 @@ class BytecodeWriter(object):
         self.all_graphs = {} # mapping graph to bytecode
         self.unfinished_graphs = []
         self.num_global_mergepoints = 0
+        self.ptr_to_jitcode = {}
 
     def can_raise(self, op):
         return self.raise_analyzer.analyze(op)
@@ -95,6 +120,7 @@ class BytecodeWriter(object):
         self.num_local_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
         self.calldescs = []
+        self.indirectcalldescs = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -126,6 +152,8 @@ class BytecodeWriter(object):
         self.graph_positions = {}
         # mapping fnobjs to index
         self.calldesc_positions = {}
+        # mapping fnobjs to index
+        self.indirectcalldesc_positions = {}
 
         self.graph = graph
         self.mergepoint_set = {}
@@ -152,6 +180,7 @@ class BytecodeWriter(object):
                           self.num_local_mergepoints,
                           self.graph_color,
                           self.calldescs,
+                          self.indirectcalldescs,
                           self.is_portal)
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
@@ -162,6 +191,14 @@ class BytecodeWriter(object):
             self.interpreter.set_num_global_mergepoints(
                 self.num_global_mergepoints)
             return bytecode
+
+    def get_jitcode(self, graph):
+        if graph in self.all_graphs:
+            return self.all_graphs[graph]
+        bytecode = JitCode.__new__(JitCode)
+        self.all_graphs[graph] = bytecode
+        self.unfinished_graphs.append(graph)
+        return bytecode
 
     def finish_all_graphs(self):
         while self.unfinished_graphs:
@@ -487,12 +524,7 @@ class BytecodeWriter(object):
     def graph_position(self, graph):
         if graph in self.graph_positions:
             return self.graph_positions[graph]
-        if graph in self.all_graphs:
-            bytecode = self.all_graphs[graph]
-        else:
-            bytecode = JitCode.__new__(JitCode)
-            self.all_graphs[graph] = bytecode
-            self.unfinished_graphs.append(graph)
+        bytecode = self.get_jitcode(graph)
         index = len(self.called_bytecodes)
         self.called_bytecodes.append(bytecode)
         self.graph_positions[graph] = index
@@ -506,6 +538,27 @@ class BytecodeWriter(object):
         self.calldescs.append(
             CallDesc(self.RGenOp, FUNCTYPE, voidargs))
         self.calldesc_positions[key] = result
+        return result
+
+    def indirectcalldesc_position(self, graph2code):
+        key = graph2code.items()
+        key.sort()
+        key = tuple(key)
+        if key in self.indirectcalldesc_positions:
+            return self.indirectcalldesc_positions[key]
+        callset = IndirectCallsetDesc(key, self)
+        for i in range(len(key) + 1, 0, -1):
+            subkey = key[:i]
+            if subkey in self.indirectcalldesc_positions:
+                result = self.indirectcalldesc_positions[subkey]
+                self.indirectcalldescs[result] = callset
+                break
+        else:
+            result = len(self.indirectcalldescs)
+            self.indirectcalldescs.append(callset)
+        for i in range(len(key) + 1, 0, -1):
+            subkey = key[:i]
+            self.indirectcalldesc_positions[subkey] = result
         return result
 
     def interiordesc(self, op, PTRTYPE, nb_offsets):
@@ -620,6 +673,41 @@ class BytecodeWriter(object):
         print op, kind, withexc
         return handler(op, withexc)
 
+    def serialize_op_indirect_call(self, op):
+        kind, withexc = self.guess_call_kind(op)
+        if kind == "red":
+            XXX
+        if kind == "yellow":
+            targets = dict(self.graphs_from(op))
+            fnptrindex = self.serialize_oparg("red", op.args[0])
+            self.emit("goto_if_constant", fnptrindex, tlabel(("direct call", op)))
+            emitted_args = []
+            for v in op.args[1:-1]:
+                emitted_args.append(self.serialize_oparg("red", v))
+            self.emit("red_residual_call")
+            calldescindex = self.calldesc_position(op.args[0].concretetype)
+            self.emit(fnptrindex, calldescindex, withexc)
+            self.emit(len(emitted_args), *emitted_args)
+            self.emit(self.promotiondesc_position(lltype.Signed))
+            self.emit("goto", tlabel(("after indirect call", op)))
+
+            self.emit(label(("direct call", op)))
+            args = targets.values()[0].getargs()
+            emitted_args = self.args_of_call(op.args[1:-1], args)
+            self.emit("indirect_call_const")
+            self.emit(*emitted_args)
+            setdescindex = self.indirectcalldesc_position(targets)
+            self.emit(fnptrindex, setdescindex)
+            self.emit("yellow_after_direct_call")
+            self.emit("yellow_retrieve_result_as_red")
+            self.emit(self.type_position(op.result.concretetype))
+             
+
+            self.emit(label(("after indirect call", op)))
+            self.register_redvar(op.result)
+            return
+        XXX
+
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
         fnobj = op.args[0].value._obj
@@ -683,13 +771,8 @@ class BytecodeWriter(object):
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_direct_call")
         self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
-        self.register_redvar(op.result)
-        pos = self.register_redvar(("residual_flags_red", op.args[0]))
-        self.emit("promote")
-        self.emit(pos)
         self.emit(self.promotiondesc_position(lltype.Signed))
-        self.register_greenvar(("residual_flags_green", op.args[0]), check=False)
-        self.emit("residual_fetch", True, pos)
+        self.register_redvar(op.result)
 
     def handle_rpyexc_raise_call(self, op, withexc):
         emitted_args = []
@@ -728,8 +811,6 @@ class BytecodeWriter(object):
         self.emit("yellow_retrieve_result")
         self.register_greenvar(op.result)
 
-    def serialize_op_indirect_call(self, op):
-        XXX
 
     def serialize_op_malloc(self, op):
         index = self.structtypedesc_position(op.args[0].value)

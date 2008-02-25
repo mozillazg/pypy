@@ -2,7 +2,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.timeshifter import rtimeshift, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 class JitCode(object):
     """
@@ -21,7 +21,7 @@ class JitCode(object):
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
                  interiordescs, oopspecdescs, promotiondescs,
                  called_bytecodes, num_mergepoints,
-                 graph_color, calldescs, is_portal):
+                 graph_color, calldescs, indirectcalldescs, is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -38,6 +38,7 @@ class JitCode(object):
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
         self.calldescs = calldescs
+        self.indirectcalldescs = indirectcalldescs
         self.is_portal = is_portal
 
     def _freeze_(self):
@@ -113,6 +114,10 @@ def arguments(*argtypes, **kwargs):
                 elif argspec == "calldesc":
                     index = self.load_2byte()
                     function = self.frame.bytecode.calldescs[index]
+                    args += (function, )
+                elif argspec == "indirectcalldesc":
+                    index = self.load_2byte()
+                    function = self.frame.bytecode.indirectcalldescs[index]
                     args += (function, )
                 elif argspec == "oopspec":
                     oopspecindex = self.load_2byte()
@@ -367,6 +372,11 @@ class JitInterpreter(object):
         if descision:
             self.frame.pc = target
 
+    @arguments("red", "jumptarget")
+    def opimpl_goto_if_constant(self, valuebox, target):
+        if valuebox.is_constant():
+            self.frame.pc = target
+
     @arguments("red", returns="red")
     def opimpl_red_ptr_nonzero(self, ptrbox):
         return rtimeshift.genptrnonzero(self.jitstate, ptrbox, False)
@@ -480,6 +490,15 @@ class JitInterpreter(object):
         # this frame will be resumed later in the next bytecode, which is
         # yellow_after_direct_call
 
+    @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
+    def opimpl_indirect_call_const(self, greenargs, redargs,
+                                      funcptrbox, callset):
+        gv = funcptrbox.getgenvar(self.jitstate)
+        addr = gv.revealconst(llmemory.Address)
+        bytecode = callset.bytecode_for_address(addr)
+        self.run(self.jitstate, bytecode, greenargs, redargs,
+                 start_bytecode_loop=False)
+
     @arguments()
     def opimpl_yellow_after_direct_call(self):
         newjitstate = rtimeshift.collect_split(
@@ -491,6 +510,13 @@ class JitInterpreter(object):
     def opimpl_yellow_retrieve_result(self):
         # XXX all this jitstate.greens business is a bit messy
         return self.jitstate.greens[0]
+
+    @arguments("2byte", returns="red")
+    def opimpl_yellow_retrieve_result_as_red(self, typeid):
+        # XXX all this jitstate.greens business is a bit messy
+        redboxcls = self.frame.bytecode.redboxclasses[typeid]
+        kind = self.frame.bytecode.typekinds[typeid]
+        return redboxcls(kind, self.jitstate.greens[0])
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
@@ -508,8 +534,9 @@ class JitInterpreter(object):
     def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
         return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
 
-    @arguments("red", "calldesc", "bool", "red_varargs")
-    def opimpl_red_residual_direct_call(self, funcbox, calldesc, withexc, redargs):
+    @arguments("red", "calldesc", "bool", "red_varargs", "promotiondesc")
+    def opimpl_red_residual_call(self, funcbox, calldesc, withexc,
+                                        redargs, promotiondesc):
         result = rtimeshift.gen_residual_call(self.jitstate, calldesc,
                                               funcbox, redargs)
         self.red_result(result)
@@ -519,13 +546,13 @@ class JitInterpreter(object):
             exceptiondesc = None
         flagbox = rtimeshift.after_residual_call(self.jitstate,
                                                  exceptiondesc, True)
-        self.red_result(flagbox)
-
-    @arguments("bool", "red")
-    def opimpl_residual_fetch(self, check_forced, flagbox):
+        done = rtimeshift.promote(self.jitstate, flagbox, promotiondesc)
+        if done:
+            return self.dispatch()
+        gv_flag = flagbox.getgenvar(self.jitstate)
+        assert gv_flag.is_const
         rtimeshift.residual_fetch(self.jitstate, self.exceptiondesc,
-                                  check_forced, flagbox)
-
+                                  True, flagbox)
 
     # exceptions
 
