@@ -762,7 +762,9 @@ class PromotionDesc:
                 interpreter.portalstate.compile_more_functions()
             except Exception, e:
                 if not we_are_translated():
-                    import pdb; pdb.set_trace()
+                    import sys, pdb
+                    print >> sys.stderr, "\n*** Error in ll_continue_compilation ***"
+                    pdb.post_mortem(sys.exc_info()[2])
                 lloperation.llop.debug_fatalerror(
                     lltype.Void, "compilation-time error %s" % e)
         self.ll_continue_compilation = ll_continue_compilation
