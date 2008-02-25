@@ -742,7 +742,6 @@ def test_bc_primBytecodeAtPut_string():
 
 def test_bc_primBytecodeAt_with_instvars():
     #   ^ self at: 1
-    py.test.skip("Broken, fix me")
     w_fakeclass = mockclass(1, name='fakeclass', varsized=True)
     w_fakeinst = w_fakeclass.as_class_get_shadow().new(1)
     w_fakeinst.store(0, wrap_char("a")) # static slot 0: instance variable
@@ -758,7 +757,6 @@ def test_bc_primBytecodeAt_with_instvars():
 
 def test_bc_primBytecodeAtPut_with_instvars():
     #   ^ self at: 1 put: #b
-    py.test.skip("Broken, fix me")
     w_fakeclass = mockclass(1, name='fakeclass', varsized=True)
     w_fakeinst = w_fakeclass.as_class_get_shadow().new(1)
     w_fakeinst.store(0, wrap_char("a")) # static slot 0: instance variable
@@ -779,15 +777,13 @@ def test_bc_objectAtAndAtPut():
     #   ^ self objectAt: 2.          yields the first literal (22)
     #   ^ self objectAt: 2 put: 3.   changes the first literal to 3
     #   ^ self objectAt: 2.          yields the new first literal (3)
-    py.test.skip("Broken, fix me")
-    prim_meth = model.W_CompiledMethod(0)
+    prim_meth = model.W_CompiledMethod(header=1024)
     prim_meth.literals = fakeliterals(22)
-    mhs = fakesymbol("methodheader")
     oal = fakeliterals("objectAt:")
     oalp = fakeliterals("objectAt:put:", 3)
     def test():
         assert interpret_bc(
-            [112, 118, 224, 124], oal, receiver=prim_meth) == mhs
+            [112, 118, 224, 124], oal, receiver=prim_meth).value == 1024
         assert interpret_bc(
             [112, 119, 224, 124], oal, receiver=prim_meth).value == 22
         assert interpret_bc(
