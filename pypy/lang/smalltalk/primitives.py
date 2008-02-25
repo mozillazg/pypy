@@ -68,7 +68,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 w_result = func(interp, argument_count_m1)
                 if not no_result:
                     assert w_result is not None
-                    interp.s_active_context.push(w_result)
+                    interp.w_active_context.as_context_get_shadow().push(w_result)
                 return w_result
         else:
             len_unwrap_spec = len(unwrap_spec)
@@ -77,14 +77,15 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
             unrolling_unwrap_spec = unrolling_iterable(enumerate(unwrap_spec))
             def wrapped(interp, argument_count_m1):
                 argument_count = argument_count_m1 + 1 # to account for the rcvr
-                frame = interp.s_active_context
+                frame = interp.w_active_context
+                s_frame = frame.as_context_get_shadow()
                 assert argument_count == len_unwrap_spec
-                if frame.stackpointer() - frame.stackstart() + 1 < len_unwrap_spec:
+                if s_frame.stackpointer() - s_frame.stackstart() + 1 < len_unwrap_spec:
                     raise PrimitiveFailedError()
                 args = ()
                 for i, spec in unrolling_unwrap_spec:
                     index = len_unwrap_spec - 1 - i
-                    w_arg = frame.peek(index)
+                    w_arg = s_frame.peek(index)
                     if spec is int:
                         args += (utility.unwrap_int(w_arg), )
                     elif spec is index1_0:
@@ -101,10 +102,13 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                         raise NotImplementedError(
                             "unknown unwrap_spec %s" % (spec, ))
                 w_result = func(interp, *args)
-                frame.pop_n(len_unwrap_spec)   # only if no exception occurs!
+                # After calling primitive, reload context-shadow in case it
+                # needs to be updated
+                new_s_frame = interp.w_active_context.as_context_get_shadow()
+                frame.as_context_get_shadow().pop_n(len_unwrap_spec)   # only if no exception occurs!
                 if not no_result:
                     assert w_result is not None
-                    interp.s_active_context.push(w_result)
+                    new_s_frame.push(w_result)
         wrapped.func_name = "wrap_prim_" + name
         prim_table[code] = wrapped
         prim_table_implemented_only.append((code, wrapped))
@@ -618,7 +622,7 @@ PRIMITIVE_FLUSH_CACHE = 89
 
 @expose_primitive(PRIMITIVE_BLOCK_COPY, unwrap_spec=[object, int])
 def func(interp, w_context, argcnt):
-    frame = interp.s_active_context
+    frame = interp.w_active_context.as_context_get_shadow()
 
     # From B.B.: If receiver is a MethodContext, then it becomes
     # the new BlockContext's home context.  Otherwise, the home
@@ -626,20 +630,20 @@ def func(interp, w_context, argcnt):
     # Note that in our impl, MethodContext.w_home == self
     if not isinstance(w_context, model.W_ContextPart):
         raise PrimitiveFailedError()
-    s_method_context = w_context.as_context_get_shadow().s_home()
+    w_method_context = w_context.as_context_get_shadow().w_home()
 
     # The block bytecodes are stored inline: so we skip past the
     # byteodes to invoke this primitive to find them (hence +2)
     initialip = frame.pc() + 2
-    s_new_context = model.W_BlockContext(
-        s_method_context, None, argcnt, initialip)
-    return s_new_context.w_self()
+    w_new_context = model.W_BlockContext(
+        w_method_context, None, argcnt, initialip)
+    return w_new_context
 
 def finalize_block_ctx(interp, s_block_ctx, frame):
     # Set some fields
     s_block_ctx.store_pc(s_block_ctx.initialip())
-    s_block_ctx.store_s_sender(frame)
-    interp.s_active_context = s_block_ctx
+    s_block_ctx.store_w_sender(frame)
+    interp.w_active_context = s_block_ctx.w_self()
     
 @expose_primitive(PRIMITIVE_VALUE, no_result=True)
 def func(interp, argument_count):
@@ -649,7 +653,7 @@ def func(interp, argument_count):
     #  Rcvr | Arg 0 | Arg1 | Arg 2
     #
     
-    frame = interp.s_active_context
+    frame = interp.w_active_context.as_context_get_shadow()
     
     # Validate that we have a block on the stack and that it received
     # the proper number of arguments:
@@ -667,7 +671,7 @@ def func(interp, argument_count):
     s_block_ctx.push_all(block_args)
 
     frame.pop()
-    finalize_block_ctx(interp, s_block_ctx, frame)
+    finalize_block_ctx(interp, s_block_ctx, frame.w_self())
     
 @expose_primitive(PRIMITIVE_VALUE_WITH_ARGS, unwrap_spec=[object, object],
                   no_result=True)
@@ -687,8 +691,7 @@ def func(interp, w_block_ctx, w_args):
 
     # XXX Check original logic. Image does not test this anyway
     # because falls back to value + internal implementation
-
-    finalize_block_ctx(interp, s_block_ctx, interp.s_active_context)
+    finalize_block_ctx(interp, s_block_ctx, interp.w_active_context)
 
 @expose_primitive(PRIMITIVE_PERFORM)
 def func(interp, argcount):
@@ -701,11 +704,11 @@ def func(interp, w_rcvr, sel, w_args):
     w_method = w_rcvr.shadow_of_my_class().lookup(sel)
     assert w_method
 
-    s_frame = w_method.create_frame(w_rcvr,
+    w_frame = w_method.create_frame(w_rcvr,
         [w_args.fetch(i) for i in range(w_args.size())])
 
-    s_frame.store_s_sender(interp.s_active_context)
-    interp.s_active_context = s_frame
+    w_frame.as_context_get_shadow().store_w_sender(interp.w_active_context)
+    interp.w_active_context = w_frame
 
 
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])

@@ -490,13 +490,13 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
 
     __metaclass__ = extendabletype
     
-    def __init__(self, s_home, s_sender):
+    def __init__(self, w_home, w_sender):
         self._stack = []
         self._pc = 0
         #assert isinstance(s_home, W_MethodContext)
-        self._s_home = s_home
+        self._w_home = w_home
         #assert w_sender is None or isinstance(w_sender, W_ContextPart)
-        self._s_sender = s_sender
+        self._w_sender = w_sender
 
     def as_context_get_shadow(self):
         # Backward compatibility
@@ -519,15 +519,24 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         " Return self of the method, or the method that contains the block "
         return self.s_home().w_receiver()
 
+    def w_home(self):
+        return self._w_home
+
     def s_home(self):
-        return self._s_home
+        return self.w_home().as_methodcontext_get_shadow()
 
-    def s_sender(self):
-        if self._s_sender:
-            return self._s_sender    
+    def store_w_home(self, w_home):
+        self._w_home = w_home
 
-    def store_s_sender(self, s_sender):
-        self._s_sender = s_sender
+    def w_sender(self):
+        if self._w_sender is not None:
+            return self._w_sender    
+        else:    
+            from pypy.lang.smalltalk import objtable
+            return objtable.w_nil
+
+    def store_w_sender(self, w_sender):
+        self._w_sender = w_sender
 
     def stackpointer(self):
         return len(self.stack()) + self.stackstart() - 1
@@ -537,11 +546,7 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
     def fetch(self, index):
         from pypy.lang.smalltalk import utility, objtable
         if index == constants.CTXPART_SENDER_INDEX:
-            sender = self.s_sender()
-            if sender is None:
-                return objtable.w_nil
-            else:
-                return sender.w_self()
+            return self.w_sender()
         elif index == constants.CTXPART_PC_INDEX:
             return utility.wrap_int(self.pc())
         elif index == constants.CTXPART_STACKP_INDEX:
@@ -555,7 +560,7 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
         from pypy.lang.smalltalk import utility, objtable
         if index == constants.CTXPART_SENDER_INDEX:
             if w_value != objtable.w_nil:
-                self._s_sender = w_value.as_context_get_shadow()
+                self.store_w_sender(w_value)
         elif index == constants.CTXPART_PC_INDEX:
             self._pc = utility.unwrap_int(w_value)
         elif index == constants.CTXPART_STACKP_INDEX:
@@ -567,13 +572,13 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
             raise IndexError
 
     def become(self, w_old, w_new):
-        if self._s_sender is not None and self._s_sender.w_self() == w_old:
-            self._s_sender = w_new.as_context_get_shadow()
+        if self.w_sender() == w_old:
+            self.store_w_sender(w_new)
         for i in range(len(self._stack)):
             if self._stack[i] == w_old:
                 self._stack[i] = w_new
-        if self._s_home is not None and self._s_home.w_self() == w_old:
-            self._s_home = w_new.as_context_get_shadow()
+        if self.w_home() == w_old:
+            self.store_w_home(w_new)
 
     def stackstart(self):
         return constants.MTHDCTX_TEMP_FRAME_START
@@ -643,8 +648,8 @@ class W_ContextPart(W_AbstractObjectWithIdentityHash):
 
 class W_BlockContext(W_ContextPart):
 
-    def __init__(self, s_home, s_sender, argcnt, initialip):
-        W_ContextPart.__init__(self, s_home, s_sender)
+    def __init__(self, w_home, w_sender, argcnt, initialip):
+        W_ContextPart.__init__(self, w_home, w_sender)
         self.argcnt = argcnt
         self._initialip = initialip
 
@@ -669,7 +674,7 @@ class W_BlockContext(W_ContextPart):
         elif index == constants.BLKCTX_INITIAL_IP_INDEX:
             return utility.wrap_int(self.initialip)
         elif index == constants.BLKCTX_HOME_INDEX:
-            return self.s_home().w_self()
+            return self.w_home()
         elif index >= constants.BLKCTX_TEMP_FRAME_START:
             stack_index = len(self.stack()) - index - 1
             return self.stack()[stack_index]
@@ -685,7 +690,7 @@ class W_BlockContext(W_ContextPart):
         elif index == constants.BLKCTX_INITIAL_IP_INDEX:
             self.pc = utility.unwrap_int(value)
         elif index == constants.BLKCTX_HOME_INDEX:
-            self._s_home = value.as_methodcontext_get_shadow()
+            self.store_w_home(value)
         elif index >= constants.BLKCTX_TEMP_FRAME_START:
             stack_index = len(self.stack()) - index - 1
             self.stack()[stack_index] = value
@@ -697,8 +702,8 @@ class W_BlockContext(W_ContextPart):
 
 class W_MethodContext(W_ContextPart):
     def __init__(self, w_method, w_receiver,
-                 arguments, s_sender=None):
-        W_ContextPart.__init__(self, self, s_sender)
+                 arguments, w_sender=None):
+        W_ContextPart.__init__(self, self, w_sender)
         self._w_method = w_method
         self._w_receiver = w_receiver
         self.temps = arguments + [w_nil] * w_method.tempsize
@@ -743,7 +748,7 @@ class W_MethodContext(W_ContextPart):
         elif index == constants.MTHDCTX_RECEIVER_MAP: # what is this thing?
             return w_nil
         elif index == constants.MTHDCTX_RECEIVER:
-            return self._w_receiver
+            return self.w_receiver()
         elif index >= constants.MTHDCTX_TEMP_FRAME_START:
             # First set of indices are temporary variables:
             offset = index - constants.MTHDCTX_TEMP_FRAME_START
@@ -763,7 +768,7 @@ class W_MethodContext(W_ContextPart):
         elif index == constants.MTHDCTX_RECEIVER_MAP: # what is this thing?
             pass
         elif index == constants.MTHDCTX_RECEIVER:
-            self._w_receiver = w_object
+            self.store_w_receiver(w_object)
         elif index >= constants.MTHDCTX_TEMP_FRAME_START:
             # First set of indices are temporary variables:
             offset = index - constants.MTHDCTX_TEMP_FRAME_START
