@@ -432,17 +432,19 @@ class ContextPartShadow(model.W_ContextPart):
         " Return self of the method, or the method that contains the block "
         return self.s_home().w_receiver()
 
+    def w_sender(self):
+        return self.w_self().fetch(constants.CTXPART_SENDER_INDEX)
+
     def s_sender(self):
-        # XXX XXX
         from pypy.lang.smalltalk import objtable
-        w_sender = self.w_self().fetch(constants.CTXPART_SENDER_INDEX)
+        w_sender = self.w_sender()
         if w_sender == objtable.w_nil:
             return None
         else:
             return w_sender.as_context_get_shadow()
 
-    def store_s_sender(self, s_sender):
-        self.w_self().store(constants.CTXPART_SENDER_INDEX, s_sender.w_self())
+    def store_w_sender(self, s_sender):
+        self.w_self().store(constants.CTXPART_SENDER_INDEX, w_sender)
 
     def pc(self):
         return utility.unwrap_int(self.w_self().fetch(constants.CTXPART_PC_INDEX))
@@ -536,9 +538,12 @@ class BlockContextShadow(ContextPartShadow):
     def initialip(self):
         return utility.unwrap_int(self.w_self().fetch(constants.BLKCTX_INITIAL_IP_INDEX))
         
-    def s_home(self):
-        return self.w_self().fetch(constants.BLKCTX_HOME_INDEX).as_methodcontext_get_shadow()
+    def w_home(self):
+        return self.w_self().fetch(constants.BLKCTX_HOME_INDEX)
 
+    def s_home(self):
+        return self.w_home().as_methodcontext_get_shadow()
+        
     def stackstart(self):
         return constants.BLKCTX_TEMP_FRAME_START
 
@@ -560,6 +565,9 @@ class MethodContextShadow(ContextPartShadow):
 
     def settemp(self, index, w_value):
         self.w_self().store(constants.MTHDCTX_TEMP_FRAME_START + index, w_value) 
+
+    def w_home(self):
+        return self.w_self()
 
     def s_home(self):
         return self

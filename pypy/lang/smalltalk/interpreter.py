@@ -26,11 +26,14 @@ class Interpreter:
     ONE = objtable.w_one
     TWO = objtable.w_two
 
-    _s_last_active_context = None
+    _w_last_active_context = None
     
     def __init__(self):
-        self.s_active_context = None
+        self.w_active_context = None
         self.cnt = 0
+
+    def s_active_context(self):
+        return self.w_active_context.as_context_get_shadow()
 
     def interpret(self):
         try:
@@ -43,30 +46,29 @@ class Interpreter:
         return (not objectmodel.we_are_translated()) and option.bc_trace
 
     def step(self):
-        next = self.s_active_context.getNextBytecode()
+        next = self.s_active_context().getNextBytecode()
         # we_are_translated returns false on top of CPython and true when
         # translating the interpreter
         if not objectmodel.we_are_translated():
             bytecodeimpl = BYTECODE_TABLE[next]
-            if self._s_last_active_context != self.s_active_context:
+            if self._w_last_active_context != self.w_active_context:
                 cnt = 0
-                p = self.s_active_context
+                p = self.w_active_context
                 # AK make method
-                while p is not None:
+                while p is not objtable.w_nil:
                     cnt += 1
-                    p = p.s_sender()
+                    p = p.as_context_get_shadow().w_sender()
                 self._last_indent = "  " * cnt
-                self._s_last_active_context = self.s_active_context
+                self._w_last_active_context = self.w_active_context
             if self.should_trace():
-                
                 print "%sStack=%s" % (
                     self._last_indent,
-                    repr(self.s_active_context.stack()),)
+                    repr(self.s_active_context().stack()),)
                 print "%sBytecode at %d (%d:%s):" % (
                     self._last_indent,
-                    self.s_active_context.pc(),
+                    self.s_active_context().pc(),
                     next, bytecodeimpl.__name__,)
-            bytecodeimpl(self.s_active_context, self)
+            bytecodeimpl(self.w_active_context, self)
         else:
             # this is a performance optimization: when translating the
             # interpreter, the bytecode dispatching is not implemented as a
@@ -74,7 +76,7 @@ class Interpreter:
             # below produces the switch (by being unrolled).
             for code, bytecodeimpl in unrolling_bytecode_table:
                 if code == next:
-                    bytecodeimpl(self.s_active_context, self)
+                    bytecodeimpl(self.w_active_context, self)
                     break
 
         
@@ -201,33 +203,33 @@ class __extend__(W_ContextPart):
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
         arguments = self.pop_and_return_n(argcount)
-        interp.s_active_context = method.create_frame(receiver, arguments, self) 
+        interp.w_active_context = method.create_frame(receiver, arguments, self) 
         self.pop()
 
-    def _return(self, object, interp, s_return_to):
+    def _return(self, object, interp, w_return_to):
         # for tests, when returning from the top-level context
-        if s_return_to is None:
+        if w_return_to is objtable.w_nil:
             raise ReturnFromTopLevel(object)
-        s_return_to.push(object)
-        interp.s_active_context = s_return_to
+        w_return_to.as_context_get_shadow().push(object)
+        interp.w_active_context = w_return_to
 
     def returnReceiver(self, interp):
-        self._return(self.w_receiver(), interp, self.s_home().s_sender())
+        self._return(self.w_receiver(), interp, self.s_home().w_sender())
 
     def returnTrue(self, interp):
-        self._return(interp.TRUE, interp, self.s_home().s_sender())
+        self._return(interp.TRUE, interp, self.s_home().w_sender())
 
     def returnFalse(self, interp):
-        self._return(interp.FALSE, interp, self.s_home().s_sender())
+        self._return(interp.FALSE, interp, self.s_home().w_sender())
 
     def returnNil(self, interp):
-        self._return(interp.NIL, interp, self.s_home().s_sender())
+        self._return(interp.NIL, interp, self.s_home().w_sender())
 
     def returnTopFromMethod(self, interp):
-        self._return(self.top(), interp, self.s_home().s_sender())
+        self._return(self.top(), interp, self.s_home().w_sender())
 
     def returnTopFromBlock(self, interp):
-        self._return(self.top(), interp, self.s_sender())
+        self._return(self.top(), interp, self.w_sender())
 
     def unknownBytecode(self, interp):
         raise MissingBytecode("unknownBytecode")
