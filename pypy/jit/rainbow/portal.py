@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.annlowlevel import llhelper, cachedtype
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 # graph transformations for transforming the portal graph(s)
 class PortalRewriter(object):

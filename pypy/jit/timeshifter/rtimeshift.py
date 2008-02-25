@@ -203,7 +203,7 @@ def gengetarraysize(jitstate, fielddesc, argbox):
         resgv = fielddesc.getarraysize_if_non_null(
                 jitstate, argbox.getgenvar(jitstate))
         if resgv is not None:
-            return fielddesc.makebox(jitstate, resgv)
+            return rvalue.redboxbuilder_int(fielddesc.indexkind, resgv)
     genvar = jitstate.curbuilder.genop_getarraysize(
         fielddesc.arraytoken,
         argbox.getgenvar(jitstate))

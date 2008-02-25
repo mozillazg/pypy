@@ -142,61 +142,6 @@ class PortalTest(object):
         
 class TestPortal(PortalTest):
             
-    def test_dfa_compile(self):
-        from pypy.lang.automata.dfa import getautomaton, convertdfa, recognizetable
-        a = getautomaton()
-        dfatable, final_states = convertdfa(a)
-        def main(gets):
-            s = ["aaaaaaaaaab", "aaaa"][gets]
-            return recognizetable(dfatable, s, final_states)
-
-        # must backendoptimize to remove the mallocs related
-        # to the interior ptrs
-        res = self.timeshift_from_portal(main, recognizetable, [0],
-                                         policy=P_NOVIRTUAL,
-                                         backendoptimize=True)
-        assert res
-
-        res = self.timeshift_from_portal(main, recognizetable, [1],
-                                         policy=P_NOVIRTUAL,
-                                         backendoptimize=True)
-        assert not res
-
-    def test_dfa_compile2(self):
-        from pypy.lang.automata.dfa import getautomaton, convertagain, recognizeparts
-        more = [convertagain(getautomaton()), convertagain(getautomaton())]
-        def main(gets, gets2):
-            alltrans, final_states = more[gets2]
-            s = ["aaaaaaaaaab", "aaaa"][gets]
-            return recognizeparts(alltrans, final_states, s)
-
-        # must backendoptimize to remove the mallocs related
-        # to the interior ptrs
-        res = self.timeshift_from_portal(main, recognizeparts, [0, 0],
-                                         policy=P_NOVIRTUAL,
-                                         backendoptimize=True)
-        assert res
-
-        # XXX unfortunately we have to create a new version each time - because of pbc
-        res = self.timeshift_from_portal(main, recognizeparts, [1, 0],
-                                         policy=P_NOVIRTUAL,
-                                         backendoptimize=True)
-        assert not res
-
-    def test_dfa_compile3(self):
-        from pypy.lang.automata.dfa import getautomaton, recognize3
-        def main(gets):
-            auto = getautomaton()
-            s = ["aaaaaaaaaab", "aaaa"][gets]
-            return recognize3(auto, s)
-
-        res = self.timeshift_from_portal(main, recognize3, [0],
-                                         policy=P_OOPSPEC)
-        assert res
-
-        res = self.timeshift_from_portal(main, recognize3, [1],
-                                         policy=P_OOPSPEC)
-        assert not res
 
 
     def test_virt_obj_method_call_promote(self):

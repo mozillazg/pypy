@@ -936,14 +936,18 @@ class BytecodeWriter(object):
                   indexboxindex, valboxindex)
 
     def serialize_op_getarraysize(self, op):
+        color = self.opcolor(op)
         arrayvar, = op.args
         PTRTYPE = arrayvar.concretetype
         if PTRTYPE.TO.OF is lltype.Void:
             return
         fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
         arrayindex = self.serialize_oparg("red", arrayvar)
-        self.emit("red_getarraysize", arrayindex, fielddescindex)
-        self.register_redvar(op.result)
+        self.emit("%s_getarraysize" % (color, ), arrayindex, fielddescindex)
+        if color == "red":
+            self.register_redvar(op.result)
+        else:
+            self.register_greenvar(op.result)
 
     def serialize_op_getinteriorfield(self, op):
         color = self.opcolor(op)
