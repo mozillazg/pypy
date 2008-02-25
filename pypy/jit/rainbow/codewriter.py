@@ -769,7 +769,7 @@ class BytecodeWriter(object):
         emitted_args = []
         for v in op.args[1:]:
             emitted_args.append(self.serialize_oparg("red", v))
-        self.emit("red_residual_direct_call")
+        self.emit("red_residual_call")
         self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
         self.emit(self.promotiondesc_position(lltype.Signed))
         self.register_redvar(op.result)
