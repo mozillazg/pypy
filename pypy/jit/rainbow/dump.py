@@ -66,7 +66,7 @@ class SourceIterator:
 
     def load_jumptarget(self):
         tlbl = self.get(codewriter.tlabel, 4)
-        return self.labelpos[tlbl.name]
+        return 'pc: %d' % self.labelpos[tlbl.name]
 
 
 class CustomRepr:
@@ -94,7 +94,6 @@ def dump_bytecode(jitcode, file=None):
             opcode = interpreter.find_opcode(opname)
             opimpl = interpreter.opcode_implementations[opcode]
             argtypes = opimpl.argspec
-            resulttype = opimpl.resultspec
             args = []
 
             for argspec in argtypes:
@@ -150,9 +149,19 @@ def dump_bytecode(jitcode, file=None):
                     assert 0, "unknown argtype declaration"
 
             args = map(str, args)
-            # XXX we should print the result from resultspec too,
-            # but it's not obvious how to do that
-            line = '%5d |  %-20s %s' % (startpc, opname, ', '.join(args))
+
+            comments = []
+            while (not src.finished() and isinstance(src.peek(), str)
+                   and src.peek().startswith('#')):
+                # comment, used to tell where the result of the previous
+                # operation goes
+                comments.append(src.get(str, 0)[1:].strip())
+
+            if startpc == 0:
+                startpc = 'pc: 0'
+            line = '%5s |  %-20s %-16s %s' % (startpc, opname,
+                                              ', '.join(args),
+                                              ', '.join(comments))
             print >> file, line.rstrip()
         elif isinstance(arg, codewriter.label):
             if src.pc not in noblankline:    # no duplicate blank lines
