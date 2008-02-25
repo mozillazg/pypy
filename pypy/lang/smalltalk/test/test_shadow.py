@@ -88,7 +88,7 @@ def method(tempsize=3,argsize=2, bytes="abcde"):
 
 def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
                   method=method()):
-    stackstart = 7 # (len notation, not idx notation)
+    stackstart = 6+method.argsize+method.tempsize # (len notation, not idx notation)
     w_object = model.W_PointersObject(classtable.w_MethodContext, stackstart+stacksize)
     w_object.store(constants.CTXPART_SENDER_INDEX, w_sender)
     w_object.store(constants.CTXPART_PC_INDEX, utility.wrap_int(pc))
@@ -98,20 +98,12 @@ def methodcontext(w_sender=objtable.w_nil, pc=1, stackpointer=0, stacksize=5,
     w_object.store(constants.MTHDCTX_RECEIVER_MAP, '???')
     w_object.store(constants.MTHDCTX_RECEIVER, 'receiver')
 
-    # XXX Might want to check the realness of the next assumption,
-    # XXX made by hooking into the suspended thread of the image.
-    # XXX it seems the only possibility, and using this assumption
-    # XXX it actually runs...
-    # Weirdly enough, undependant from the size of the tempsize and
-    # argsize, the stackpointer can point to anything starting from
-    # the temp_frame_start. That's why stacks always print all elements
-    # including possible "temps or args"
     w_object.store(constants.MTHDCTX_TEMP_FRAME_START, 'el')
     return w_object
 
 def test_context():
     w_m = method()
-    w_object = methodcontext(stackpointer=2, method=w_m)
+    w_object = methodcontext(stackpointer=3, method=w_m)
     w_object2 = methodcontext(w_sender=w_object)
     s_object = w_object.as_methodcontext_get_shadow()
     s_object2 = w_object2.as_methodcontext_get_shadow()
@@ -131,7 +123,7 @@ def test_context():
     w_object.store(idx + 2, 'g')
     w_object.store(idx + 3, 'h')
     assert s_object.top() == 'h'
-    assert s_object.stack() == ['el', 'f', 'g', 'h' ]
+    assert s_object.stack() == ['f', 'g', 'h' ]
     s_object.push('i')
     assert s_object.top() == 'i'
     assert s_object.peek(1) == 'h'

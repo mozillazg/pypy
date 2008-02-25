@@ -69,9 +69,10 @@ def fakeliterals(*literals):
 def new_interpreter(bytes, receiver=objtable.w_nil):
     assert isinstance(bytes, str)
     w_method = model.W_CompiledMethod(len(bytes))
+    w_method.islarge = 1
     w_method.bytes = bytes
     w_method.argsize=2
-    w_method.tempsize=1
+    w_method.tempsize=8
     w_frame = w_method.create_frame(receiver, ["foo", "bar"])
     interp = interpreter.Interpreter()
     interp.w_active_context = w_frame
@@ -80,18 +81,20 @@ def new_interpreter(bytes, receiver=objtable.w_nil):
 def test_create_frame():
     w_method = model.W_CompiledMethod(len("hello"))
     w_method.bytes="hello"
+    w_method.islarge = 1
     w_method.argsize=2
-    w_method.tempsize=1
+    w_method.tempsize=8
     w_frame = w_method.create_frame("receiver", ["foo", "bar"])
-    assert w_frame.w_receiver() == "receiver"
-    assert w_frame.gettemp(0) == "foo"
-    assert w_frame.gettemp(1) == "bar"
-    assert w_frame.gettemp(2) is objtable.w_nil
-    w_frame.settemp(2, "spam")
-    assert w_frame.gettemp(2) == "spam"
-    assert w_frame.getNextBytecode() == ord("h")
-    assert w_frame.getNextBytecode() == ord("e")
-    assert w_frame.getNextBytecode() == ord("l")
+    s_frame = w_frame.as_context_get_shadow()
+    assert s_frame.w_receiver() == "receiver"
+    assert s_frame.gettemp(0) == "foo"
+    assert s_frame.gettemp(1) == "bar"
+    assert s_frame.gettemp(2) is objtable.w_nil
+    s_frame.settemp(2, "spam")
+    assert s_frame.gettemp(2) == "spam"
+    assert s_frame.getNextBytecode() == ord("h")
+    assert s_frame.getNextBytecode() == ord("e")
+    assert s_frame.getNextBytecode() == ord("l")
 
 def test_push_pop():
     interp = new_interpreter("")
@@ -185,15 +188,17 @@ def test_storeAndPopReceiverVariableBytecode(bytecode=storeAndPopReceiverVariabl
 def test_storeAndPopTemporaryVariableBytecode(bytecode=storeAndPopTemporaryVariableBytecode):
     for index in range(8):
         interp = new_interpreter(pushConstantTrueBytecode + bytecode(index))
-        interp.w_active_context.as_methodcontext_get_shadow().temps = [None] * 8
+        #interp.w_active_context.as_methodcontext_get_shadow().temps = [None] * 8
         interp.step()
         interp.step()
         assert interp.s_active_context().stack() == []
+        interp.w_active_context.as_methodcontext_get_shadow()
         for test_index in range(8):
+            print interp.w_active_context._vars
             if test_index == index:
-                assert interp.w_active_context.as_methodcontext_get_shadow().temps[test_index] == interp.TRUE
+                assert interp.s_active_context().gettemp(test_index) == interp.TRUE
             else:
-                assert interp.w_active_context.as_methodcontext_get_shadow().temps[test_index] == None
+                assert interp.s_active_context().gettemp(test_index) != interp.TRUE
 
 def test_pushConstantTrueBytecode():
     interp = new_interpreter(pushConstantTrueBytecode)
@@ -398,7 +403,7 @@ def sendBytecodesTest(w_class, w_object, bytecodes):
         assert interp.s_active_context().stack() == []
         assert interp.w_active_context.as_methodcontext_get_shadow().w_receiver() == w_object
         assert interp.w_active_context.as_methodcontext_get_shadow().w_method() == shadow.methoddict["foo"]
-        assert callerContext.stack() == []
+        assert callerContext.as_context_get_shadow().stack() == []
         interp.step()
         interp.step()
         assert interp.w_active_context == callerContext
@@ -448,7 +453,7 @@ def test_send_to_primitive():
 def test_longJumpIfTrue():
     interp = new_interpreter(longJumpIfTrue(0) + chr(15) + longJumpIfTrue(0) + chr(15))
     interp.s_active_context().push(interp.FALSE)
-    pc = interp.w_active_context.pc() + 2
+    pc = interp.s_active_context().pc() + 2
     interp.step()
     assert interp.s_active_context().pc() == pc
     interp.s_active_context().push(interp.TRUE)
@@ -605,7 +610,7 @@ def test_singleExtendedSuperBytecode(bytecode=singleExtendedSuperBytecode + chr(
         assert interp.w_active_context.as_methodcontext_get_shadow().w_receiver() == w_object
         meth = w_specificclass.as_class_get_shadow().methoddict["foo"]
         assert interp.w_active_context.as_methodcontext_get_shadow().w_method() == meth
-        assert callerContext.stack() == []
+        assert callerContext.as_context_get_shadow().stack() == []
 
 def test_secondExtendedSendBytecode():
     w_class = mockclass(0)

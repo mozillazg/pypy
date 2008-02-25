@@ -1,7 +1,6 @@
 import py
 from pypy.lang.smalltalk import model, constants, primitives
 from pypy.lang.smalltalk import objtable
-from pypy.lang.smalltalk.model import W_ContextPart
 from pypy.lang.smalltalk.shadow import ContextPartShadow
 from pypy.lang.smalltalk.conftest import option
 from pypy.rlib import objectmodel, unroll
@@ -68,7 +67,7 @@ class Interpreter:
                     self._last_indent,
                     self.s_active_context().pc(),
                     next, bytecodeimpl.__name__,)
-            bytecodeimpl(self.w_active_context, self)
+            bytecodeimpl(self.s_active_context(), self)
         else:
             # this is a performance optimization: when translating the
             # interpreter, the bytecode dispatching is not implemented as a
@@ -76,7 +75,7 @@ class Interpreter:
             # below produces the switch (by being unrolled).
             for code, bytecodeimpl in unrolling_bytecode_table:
                 if code == next:
-                    bytecodeimpl(self.w_active_context, self)
+                    bytecodeimpl(self.s_active_context(), self)
                     break
 
         
@@ -87,10 +86,10 @@ class ReturnFromTopLevel(Exception):
 # ___________________________________________________________________________
 # Bytecode Implementations:
 #
-# "self" is always a W_ContextPart instance.  
+# "self" is always a ContextPartShadow instance.  
 
-# __extend__ adds new methods to the W_ContextPart class
-class __extend__(W_ContextPart):
+# __extend__ adds new methods to the ContextPartShadow class
+class __extend__(ContextPartShadow):
     # push bytecodes
     def pushReceiverVariableBytecode(self, interp):
         index = self.currentBytecode & 15
@@ -203,7 +202,7 @@ class __extend__(W_ContextPart):
                         print "PRIMITIVE FAILED: %d %s" % (method.primitive, selector,)
                     pass # ignore this error and fall back to the Smalltalk version
         arguments = self.pop_and_return_n(argcount)
-        interp.w_active_context = method.create_frame(receiver, arguments, self) 
+        interp.w_active_context = method.create_frame(receiver, arguments, self.w_self()) 
         self.pop()
 
     def _return(self, object, interp, w_return_to):
@@ -513,77 +512,77 @@ class __extend__(W_ContextPart):
 
 
 BYTECODE_RANGES = [
-            (  0,  15, W_ContextPart.pushReceiverVariableBytecode),
-            ( 16,  31, W_ContextPart.pushTemporaryVariableBytecode),
-            ( 32,  63, W_ContextPart.pushLiteralConstantBytecode),
-            ( 64,  95, W_ContextPart.pushLiteralVariableBytecode),
-            ( 96, 103, W_ContextPart.storeAndPopReceiverVariableBytecode),
-            (104, 111, W_ContextPart.storeAndPopTemporaryVariableBytecode),
-            (112, W_ContextPart.pushReceiverBytecode),
-            (113, W_ContextPart.pushConstantTrueBytecode),
-            (114, W_ContextPart.pushConstantFalseBytecode),
-            (115, W_ContextPart.pushConstantNilBytecode),
-            (116, W_ContextPart.pushConstantMinusOneBytecode),
-            (117, W_ContextPart.pushConstantZeroBytecode),
-            (118, W_ContextPart.pushConstantOneBytecode),
-            (119, W_ContextPart.pushConstantTwoBytecode),
-            (120, W_ContextPart.returnReceiver),
-            (121, W_ContextPart.returnTrue),
-            (122, W_ContextPart.returnFalse),
-            (123, W_ContextPart.returnNil),
-            (124, W_ContextPart.returnTopFromMethod),
-            (125, W_ContextPart.returnTopFromBlock),
-            (126, W_ContextPart.unknownBytecode),
-            (127, W_ContextPart.unknownBytecode),
-            (128, W_ContextPart.extendedPushBytecode),
-            (129, W_ContextPart.extendedStoreBytecode),
-            (130, W_ContextPart.extendedStoreAndPopBytecode),
-            (131, W_ContextPart.singleExtendedSendBytecode),
-            (132, W_ContextPart.doubleExtendedDoAnythingBytecode),
-            (133, W_ContextPart.singleExtendedSuperBytecode),
-            (134, W_ContextPart.secondExtendedSendBytecode),
-            (135, W_ContextPart.popStackBytecode),
-            (136, W_ContextPart.duplicateTopBytecode),
-            (137, W_ContextPart.pushActiveContextBytecode),
-            (138, 143, W_ContextPart.experimentalBytecode),
-            (144, 151, W_ContextPart.shortUnconditionalJump),
-            (152, 159, W_ContextPart.shortConditionalJump),
-            (160, 167, W_ContextPart.longUnconditionalJump),
-            (168, 171, W_ContextPart.longJumpIfTrue),
-            (172, 175, W_ContextPart.longJumpIfFalse),
-            (176, W_ContextPart.bytecodePrimAdd),
-            (177, W_ContextPart.bytecodePrimSubtract),
-            (178, W_ContextPart.bytecodePrimLessThan),
-            (179, W_ContextPart.bytecodePrimGreaterThan),
-            (180, W_ContextPart.bytecodePrimLessOrEqual),
-            (181, W_ContextPart.bytecodePrimGreaterOrEqual),
-            (182, W_ContextPart.bytecodePrimEqual),
-            (183, W_ContextPart.bytecodePrimNotEqual),
-            (184, W_ContextPart.bytecodePrimMultiply),
-            (185, W_ContextPart.bytecodePrimDivide),
-            (186, W_ContextPart.bytecodePrimMod),
-            (187, W_ContextPart.bytecodePrimMakePoint),
-            (188, W_ContextPart.bytecodePrimBitShift),
-            (189, W_ContextPart.bytecodePrimDiv),
-            (190, W_ContextPart.bytecodePrimBitAnd),
-            (191, W_ContextPart.bytecodePrimBitOr),
-            (192, W_ContextPart.bytecodePrimAt),
-            (193, W_ContextPart.bytecodePrimAtPut),
-            (194, W_ContextPart.bytecodePrimSize),
-            (195, W_ContextPart.bytecodePrimNext),
-            (196, W_ContextPart.bytecodePrimNextPut),
-            (197, W_ContextPart.bytecodePrimAtEnd),
-            (198, W_ContextPart.bytecodePrimEquivalent),
-            (199, W_ContextPart.bytecodePrimClass),
-            (200, W_ContextPart.bytecodePrimBlockCopy),
-            (201, W_ContextPart.bytecodePrimValue),
-            (202, W_ContextPart.bytecodePrimValueWithArg),
-            (203, W_ContextPart.bytecodePrimDo),
-            (204, W_ContextPart.bytecodePrimNew),
-            (205, W_ContextPart.bytecodePrimNewWithArg),
-            (206, W_ContextPart.bytecodePrimPointX),
-            (207, W_ContextPart.bytecodePrimPointY),
-            (208, 255, W_ContextPart.sendLiteralSelectorBytecode),
+            (  0,  15, ContextPartShadow.pushReceiverVariableBytecode),
+            ( 16,  31, ContextPartShadow.pushTemporaryVariableBytecode),
+            ( 32,  63, ContextPartShadow.pushLiteralConstantBytecode),
+            ( 64,  95, ContextPartShadow.pushLiteralVariableBytecode),
+            ( 96, 103, ContextPartShadow.storeAndPopReceiverVariableBytecode),
+            (104, 111, ContextPartShadow.storeAndPopTemporaryVariableBytecode),
+            (112, ContextPartShadow.pushReceiverBytecode),
+            (113, ContextPartShadow.pushConstantTrueBytecode),
+            (114, ContextPartShadow.pushConstantFalseBytecode),
+            (115, ContextPartShadow.pushConstantNilBytecode),
+            (116, ContextPartShadow.pushConstantMinusOneBytecode),
+            (117, ContextPartShadow.pushConstantZeroBytecode),
+            (118, ContextPartShadow.pushConstantOneBytecode),
+            (119, ContextPartShadow.pushConstantTwoBytecode),
+            (120, ContextPartShadow.returnReceiver),
+            (121, ContextPartShadow.returnTrue),
+            (122, ContextPartShadow.returnFalse),
+            (123, ContextPartShadow.returnNil),
+            (124, ContextPartShadow.returnTopFromMethod),
+            (125, ContextPartShadow.returnTopFromBlock),
+            (126, ContextPartShadow.unknownBytecode),
+            (127, ContextPartShadow.unknownBytecode),
+            (128, ContextPartShadow.extendedPushBytecode),
+            (129, ContextPartShadow.extendedStoreBytecode),
+            (130, ContextPartShadow.extendedStoreAndPopBytecode),
+            (131, ContextPartShadow.singleExtendedSendBytecode),
+            (132, ContextPartShadow.doubleExtendedDoAnythingBytecode),
+            (133, ContextPartShadow.singleExtendedSuperBytecode),
+            (134, ContextPartShadow.secondExtendedSendBytecode),
+            (135, ContextPartShadow.popStackBytecode),
+            (136, ContextPartShadow.duplicateTopBytecode),
+            (137, ContextPartShadow.pushActiveContextBytecode),
+            (138, 143, ContextPartShadow.experimentalBytecode),
+            (144, 151, ContextPartShadow.shortUnconditionalJump),
+            (152, 159, ContextPartShadow.shortConditionalJump),
+            (160, 167, ContextPartShadow.longUnconditionalJump),
+            (168, 171, ContextPartShadow.longJumpIfTrue),
+            (172, 175, ContextPartShadow.longJumpIfFalse),
+            (176, ContextPartShadow.bytecodePrimAdd),
+            (177, ContextPartShadow.bytecodePrimSubtract),
+            (178, ContextPartShadow.bytecodePrimLessThan),
+            (179, ContextPartShadow.bytecodePrimGreaterThan),
+            (180, ContextPartShadow.bytecodePrimLessOrEqual),
+            (181, ContextPartShadow.bytecodePrimGreaterOrEqual),
+            (182, ContextPartShadow.bytecodePrimEqual),
+            (183, ContextPartShadow.bytecodePrimNotEqual),
+            (184, ContextPartShadow.bytecodePrimMultiply),
+            (185, ContextPartShadow.bytecodePrimDivide),
+            (186, ContextPartShadow.bytecodePrimMod),
+            (187, ContextPartShadow.bytecodePrimMakePoint),
+            (188, ContextPartShadow.bytecodePrimBitShift),
+            (189, ContextPartShadow.bytecodePrimDiv),
+            (190, ContextPartShadow.bytecodePrimBitAnd),
+            (191, ContextPartShadow.bytecodePrimBitOr),
+            (192, ContextPartShadow.bytecodePrimAt),
+            (193, ContextPartShadow.bytecodePrimAtPut),
+            (194, ContextPartShadow.bytecodePrimSize),
+            (195, ContextPartShadow.bytecodePrimNext),
+            (196, ContextPartShadow.bytecodePrimNextPut),
+            (197, ContextPartShadow.bytecodePrimAtEnd),
+            (198, ContextPartShadow.bytecodePrimEquivalent),
+            (199, ContextPartShadow.bytecodePrimClass),
+            (200, ContextPartShadow.bytecodePrimBlockCopy),
+            (201, ContextPartShadow.bytecodePrimValue),
+            (202, ContextPartShadow.bytecodePrimValueWithArg),
+            (203, ContextPartShadow.bytecodePrimDo),
+            (204, ContextPartShadow.bytecodePrimNew),
+            (205, ContextPartShadow.bytecodePrimNewWithArg),
+            (206, ContextPartShadow.bytecodePrimPointX),
+            (207, ContextPartShadow.bytecodePrimPointY),
+            (208, 255, ContextPartShadow.sendLiteralSelectorBytecode),
             ]
 
 
