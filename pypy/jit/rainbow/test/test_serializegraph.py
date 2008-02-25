@@ -1,3 +1,4 @@
+import py
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.jit.hintannotator.annotator import HintAnnotator
 from pypy.jit.hintannotator.policy import StopAtXPolicy, HintAnnotatorPolicy
@@ -209,6 +210,48 @@ class AbstractSerializationTest:
                             "goto", tlabel("while"))
         assert jitcode.is_portal
         assert len(jitcode.called_bytecodes) == 0
+
+    def test_dump_loop(self):
+        def f(x):
+            r = 0
+            while x:
+                r += x
+                x -= 1
+            return r
+        writer, jitcode = self.serialize(f, [int])
+        import StringIO
+        output = StringIO.StringIO()
+        jitcode.dump(file=output)
+        result = output.getvalue().rstrip()
+        print '-' * 40
+        print result
+        print '-' * 40
+        # xxx slightly fragile test, it will break whenever we tweak dump.py
+        expected = """\
+JITCODE 'f'
+    0 |  make_redbox          (0), 0
+    6 |  make_new_redvars     [r0, r1]
+   14 |  make_new_greenvars   []
+      |
+   18 |  local_merge          0, None
+   24 |  red_int_is_true      r0
+   28 |  red_goto_iftrue      r2, 48
+   36 |  make_new_redvars     [r1]
+   42 |  make_new_greenvars   []
+      |
+   46 |  red_return
+      |
+   48 |  make_new_redvars     [r0, r1]
+   56 |  make_new_greenvars   []
+      |
+   60 |  red_int_add          r1, r0
+   66 |  make_redbox          (1), 0
+   72 |  red_int_sub          r0, r3
+   78 |  make_new_redvars     [r4, r2]
+   86 |  make_new_greenvars   []
+   90 |  goto                 18
+        """.rstrip()
+        assert result == expected
 
     def test_call(self):
         def g(x):

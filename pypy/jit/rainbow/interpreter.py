@@ -43,6 +43,10 @@ class JitCode(object):
     def _freeze_(self):
         return True
 
+    def dump(self, file=None):
+        from pypy.jit.rainbow import dump
+        dump.dump_bytecode(self, file=file)
+
 SIGN_EXTEND2 = 1 << 15
 
 class STOP(object):
@@ -141,6 +145,8 @@ def arguments(*argtypes, **kwargs):
                 return
             return val
         wrapped.func_name = "wrap_" + func.func_name
+        wrapped.argspec = argtypes
+        wrapped.resultspec = result
         return wrapped
     return decorator
 
@@ -379,22 +385,26 @@ class JitInterpreter(object):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, True)
 
+    @arguments()
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
+    @arguments()
     def opimpl_gray_return(self):
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
+    @arguments()
     def opimpl_yellow_return(self):
         # save the greens to make the return value findable by collect_split
         rtimeshift.save_greens(self.jitstate, self.frame.local_green)
         rtimeshift.save_return(self.jitstate)
         return self.dispatch()
 
-    def opimpl_make_new_redvars(self):
-        self.frame.local_boxes = self.get_red_varargs()
+    @arguments("red_varargs")
+    def opimpl_make_new_redvars(self, local_boxes):
+        self.frame.local_boxes = local_boxes
 
     def opimpl_make_new_greenvars(self):
         # an opcode with a variable number of args
@@ -407,6 +417,8 @@ class JitInterpreter(object):
         for i in range(num):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
+    opimpl_make_new_greenvars.argspec = ("green_varargs",)  # for dump.py
+    opimpl_make_new_greenvars.resultspec = None
 
     @arguments("2byte", "greenkey")
     def opimpl_local_merge(self, mergepointnum, key):
@@ -425,6 +437,7 @@ class JitInterpreter(object):
         if done:
             return self.dispatch()
 
+    @arguments()
     def opimpl_guard_global_merge(self):
         rtimeshift.guard_global_merge(self.jitstate, self.frame.pc)
         return self.dispatch()
@@ -438,6 +451,7 @@ class JitInterpreter(object):
         assert gv_switchvar.is_const
         self.green_result(gv_switchvar)
 
+    @arguments()
     def opimpl_reverse_split_queue(self):
         rtimeshift.reverse_split_queue(self.frame.dispatchqueue)
 
@@ -448,6 +462,7 @@ class JitInterpreter(object):
         # this frame will be resumed later in the next bytecode, which is
         # red_after_direct_call
 
+    @arguments()
     def opimpl_red_after_direct_call(self):
         newjitstate = rtimeshift.collect_split(
             self.jitstate, self.frame.pc,
@@ -465,6 +480,7 @@ class JitInterpreter(object):
         # this frame will be resumed later in the next bytecode, which is
         # yellow_after_direct_call
 
+    @arguments()
     def opimpl_yellow_after_direct_call(self):
         newjitstate = rtimeshift.collect_split(
             self.jitstate, self.frame.pc,
@@ -640,6 +656,8 @@ class JitInterpreter(object):
                     args += (arg, )
                 result = self.rgenop.genconst(opdesc.llop(*args))
                 self.green_result(result)
+            implementation.argspec = ("green",) * len(list(numargs))
+            implementation.resultspec = "green"
         elif color == "red":
             if opdesc.nb_args == 1:
                 impl = rtimeshift.ll_gen1
@@ -653,6 +671,8 @@ class JitInterpreter(object):
                     args += (self.get_redarg(), )
                 result = impl(*args)
                 self.red_result(result)
+            implementation.argspec = ("red",) * len(list(numargs))
+            implementation.resultspec = "red"
         else:
             assert 0, "unknown color"
         implementation.func_name = "opimpl_%s_%s" % (color, opdesc.opname)

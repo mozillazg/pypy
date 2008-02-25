@@ -134,8 +134,10 @@ class BytecodeWriter(object):
         self.make_bytecode_block(graph.startblock)
         assert self.current_block is None
         bytecode = self.all_graphs[graph]
+        labelpos = {}
+        code = assemble_labelpos(labelpos, self.interpreter, *self.assembler)
         bytecode.__init__(graph.name,
-                          assemble(self.interpreter, *self.assembler),
+                          code,
                           self.constants,
                           self.typekinds,
                           self.redboxclasses,
@@ -151,6 +153,9 @@ class BytecodeWriter(object):
                           self.graph_color,
                           self.calldescs,
                           self.is_portal)
+        bytecode._source = self.assembler
+        bytecode._interpreter = self.interpreter
+        bytecode._labelpos = labelpos
         if is_portal:
             self.finish_all_graphs()
             self.interpreter.set_num_global_mergepoints(
@@ -1033,9 +1038,8 @@ class tlabel(object):
     def __repr__(self):
         return "tlabel(%r)" % (self.name, )
 
-def assemble(interpreter, *args):
+def assemble_labelpos(labelpos, interpreter, *args):
     result = []
-    labelpos = {}
     def emit_2byte(index):
         result.append(chr((index >> 8) & 0xff))
         result.append(chr(index & 0xff))
@@ -1065,3 +1069,6 @@ def assemble(interpreter, *args):
             result[i + 2] = chr((index >>  8) & 0xff)
             result[i + 3] = chr(index & 0xff)
     return "".join(result)
+
+def assemble(interpreter, *args):
+    return assemble_labelpos({}, interpreter, *args)
