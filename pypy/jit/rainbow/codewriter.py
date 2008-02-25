@@ -552,40 +552,44 @@ class BytecodeWriter(object):
         hints = op.args[1].value
         arg = op.args[0]
         result = op.result
-        if "concrete" in hints:
-            assert self.hannotator.binding(arg).is_green()
-            assert self.hannotator.binding(result).is_green()
+        assert len(hints) == 1
+        hint = hints.keys()[0]
+        handler = getattr(self, "handle_%s_hint" % (hint, ))
+        return handler(op, arg, result)
+
+    def handle_concrete_hint(self, op, arg, result):
+        assert self.hannotator.binding(arg).is_green()
+        assert self.hannotator.binding(result).is_green()
+        self.register_greenvar(result, self.green_position(arg))
+
+    def handle_variable_hint(self, op, arg, result):
+        assert not self.hannotator.binding(result).is_green()
+        if self.hannotator.binding(arg).is_green():
+            resultindex = self.convert_to_red(arg)
+            self.register_redvar(result, resultindex)
+        else:
+            self.register_redvar(result, self.redvar_position(arg))
+
+    def handle_deepfreeze_hint(self, op, arg, result):
+        if self.varcolor(result) == "red":
+            self.register_redvar(result, self.redvar_position(arg))
+        else:
+            self.register_greenvar(result, self.green_position(arg))
+
+    def handle_promote_hint(self, op, arg, result):
+        if self.varcolor(arg) == "green":
             self.register_greenvar(result, self.green_position(arg))
             return
-        if "variable" in hints:
-            assert not self.hannotator.binding(result).is_green()
-            if self.hannotator.binding(arg).is_green():
-                resultindex = self.convert_to_red(arg)
-                self.register_redvar(result, resultindex)
-            else:
-                self.register_redvar(result, self.redvar_position(arg))
-            return
-        if "deepfreeze" in hints:
-            if self.varcolor(result) == "red":
-                self.register_redvar(result, self.redvar_position(arg))
-            else:
-                self.register_greenvar(result, self.green_position(arg))
-            return
-        if "promote" in hints:
-            if self.varcolor(arg) == "green":
-                self.register_greenvar(result, self.green_position(arg))
-                return
-            self.emit("promote")
-            self.emit(self.serialize_oparg("red", arg))
-            self.emit(self.promotiondesc_position(arg.concretetype))
-            self.register_greenvar(result)
-            return
-        if "global_merge_point" in hints:
-            return # the compute_merge_points function already cared
-        if "reverse_split_queue" in hints:
-            self.emit("reverse_split_queue")
-            return
-        XXX
+        self.emit("promote")
+        self.emit(self.serialize_oparg("red", arg))
+        self.emit(self.promotiondesc_position(arg.concretetype))
+        self.register_greenvar(result)
+
+    def handle_global_merge_point_hint(self, op, arg, result):
+        return # the compute_merge_points function already cared
+
+    def handle_reverse_split_queue_hint(self, op, arg, result):
+        self.emit("reverse_split_queue")
 
     def args_of_call(self, args, colored_as):
         result = []
