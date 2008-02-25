@@ -407,8 +407,8 @@ class JitInterpreter(object):
         self.frame.local_boxes = local_boxes
 
     def opimpl_make_new_greenvars(self):
-        # an opcode with a variable number of args
-        # num_args arg_old_1 arg_new_1 ...
+        # this uses a "green_varargs" argument, but we do the decoding
+        # manually for the fast case
         num = self.load_2byte()
         if num == 0 and len(self.frame.local_green) == 0:
             # fast (very common) case
