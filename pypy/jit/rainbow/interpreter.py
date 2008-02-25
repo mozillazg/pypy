@@ -624,6 +624,10 @@ class JitInterpreter(object):
     def opimpl_red_getarraysize(self, arraybox, fielddesc):
         return rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
 
+    @arguments("red", "arraydesc", returns="green_from_red")
+    def opimpl_green_getarraysize(self, arraybox, fielddesc):
+        return rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
+
     @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
     def opimpl_red_getinteriorfield(self, structbox, interiordesc, deepfrozen,
                                     indexboxes):
