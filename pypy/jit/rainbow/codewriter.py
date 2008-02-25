@@ -220,9 +220,9 @@ class BytecodeWriter(object):
         self.emit(label(block))
         reds, greens = self.sort_by_color(block.inputargs)
         for arg in reds:
-            self.register_redvar(arg)
+            self.register_redvar(arg, verbose=False)
         for arg in greens:
-            self.register_greenvar(arg)
+            self.register_greenvar(arg, verbose=False)
         self.insert_merges(block)
         for op in block.operations:
             self.serialize_op(op)
@@ -364,10 +364,10 @@ class BytecodeWriter(object):
             # already converted
             return self.redvar_positions[arg, block]
         self.emit("make_redbox")
-        resultindex = self.register_redvar((arg, block))
         argindex = self.green_position(arg)
         self.emit(argindex)
         self.emit(self.type_position(arg.concretetype))
+        resultindex = self.register_redvar((arg, block))
         return resultindex
 
     def opcolor(self, op):
@@ -385,22 +385,26 @@ class BytecodeWriter(object):
             color = "red"
         return color
         
-    def register_redvar(self, arg, where=-1):
+    def register_redvar(self, arg, where=-1, verbose=True):
         assert arg not in self.redvar_positions
         if where == -1:
             where = self.free_red[self.current_block]
             self.free_red[self.current_block] += 1
+            if verbose:
+                self.emit('# => r%d' % (where,))
         self.redvar_positions[arg] = where
         return where
 
     def redvar_position(self, arg):
         return self.redvar_positions[arg]
 
-    def register_greenvar(self, arg, where=None, check=True):
+    def register_greenvar(self, arg, where=None, check=True, verbose=True):
         assert isinstance(arg, flowmodel.Variable) or not check
         if where is None:
             where = self.free_green[self.current_block]
             self.free_green[self.current_block] += 1
+            if verbose:
+                self.emit('# => g%d' % (where,))
         self.greenvar_positions[arg] = where
         return where
 
@@ -1045,6 +1049,8 @@ def assemble_labelpos(labelpos, interpreter, *args):
         result.append(chr(index & 0xff))
     for arg in args:
         if isinstance(arg, str):
+            if arg.startswith('#'):     # skip comments
+                continue
             opcode = interpreter.find_opcode(arg)
             assert opcode >= 0, "unknown opcode %s" % (arg, )
             emit_2byte(opcode)

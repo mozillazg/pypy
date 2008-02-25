@@ -229,13 +229,13 @@ class AbstractSerializationTest:
         # xxx slightly fragile test, it will break whenever we tweak dump.py
         expected = """\
 JITCODE 'f'
-    0 |  make_redbox          (0), 0
+pc: 0 |  make_redbox          (0), 0           => r1
     6 |  make_new_redvars     [r0, r1]
    14 |  make_new_greenvars   []
       |
    18 |  local_merge          0, None
-   24 |  red_int_is_true      r0
-   28 |  red_goto_iftrue      r2, 48
+   24 |  red_int_is_true      r0               => r2
+   28 |  red_goto_iftrue      r2, pc: 48
    36 |  make_new_redvars     [r1]
    42 |  make_new_greenvars   []
       |
@@ -244,12 +244,12 @@ JITCODE 'f'
    48 |  make_new_redvars     [r0, r1]
    56 |  make_new_greenvars   []
       |
-   60 |  red_int_add          r1, r0
-   66 |  make_redbox          (1), 0
-   72 |  red_int_sub          r0, r3
+   60 |  red_int_add          r1, r0           => r2
+   66 |  make_redbox          (1), 0           => r3
+   72 |  red_int_sub          r0, r3           => r4
    78 |  make_new_redvars     [r4, r2]
    86 |  make_new_greenvars   []
-   90 |  goto                 18
+   90 |  goto                 pc: 18
         """.rstrip()
         assert result == expected
 

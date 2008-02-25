@@ -145,7 +145,7 @@ def arguments(*argtypes, **kwargs):
                 return
             return val
         wrapped.func_name = "wrap_" + func.func_name
-        wrapped.argspec = argtypes
+        wrapped.argspec = tuple(argtypes)
         wrapped.resultspec = result
         return wrapped
     return decorator
