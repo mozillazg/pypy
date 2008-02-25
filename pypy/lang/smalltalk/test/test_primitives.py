@@ -9,9 +9,12 @@ from pypy.lang.smalltalk import primitives
 
 mockclass = classtable.bootstrap_class
 
-class MockFrame(model.W_MethodContext):
+class MockFrame(model.W_PointersObject):
     def __init__(self, stack):
-        self._stack = stack
+        self._vars = [None] * 6 + stack
+        s_self = self.as_blockcontext_get_shadow()
+        s_self.store_expected_argument_count(0)
+        s_self.store_stackpointer(s_self.stackstart()+len(stack)-1) 
 
 def wrap(x):
     if isinstance(x, int): return utility.wrap_int(x)

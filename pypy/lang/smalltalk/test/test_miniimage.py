@@ -204,12 +204,9 @@ def test_lookup_abs_in_integer(int=10):
     w_frame = w_method.create_frame(w_object, [])
     interp.w_active_context = w_frame
 
-    print w_method
-
     while True:
         try:
             interp.step()
-            print interp.s_active_context().stack()
         except interpreter.ReturnFromTopLevel, e:
             assert e.object.value == abs(int)
             return

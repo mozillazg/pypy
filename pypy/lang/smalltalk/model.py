@@ -125,7 +125,7 @@ class W_AbstractObjectWithClassReference(W_AbstractObjectWithIdentityHash):
         return self.w_class
 
     def __repr__(self):
-        return "<%s %s at %r>" % (self.__class__.__name__, self, self.gethash())
+        return "<%s %s>" % (self.__class__.__name__, self)
 
     def __str__(self):
         if isinstance(self, W_PointersObject) and self._shadow is not None:
@@ -380,7 +380,6 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         from pypy.lang.smalltalk import objtable
         assert len(arguments) == self.argsize
         w_new = W_MethodContext(self, receiver, arguments, sender)
-        objtable.objects += [w_new]
         return w_new
 
     def __str__(self):
@@ -432,6 +431,7 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         self.tempsize = tempsize
         self.primitive = primitive
         self.w_compiledin = None
+        self.islarge = islarge
 
     def literalat0(self, index0):
         if index0 == 0:
@@ -486,313 +486,33 @@ class W_CompiledMethod(W_AbstractObjectWithIdentityHash):
         self.bytes = (self.bytes[:index0] + character +
                       self.bytes[index0 + 1:])
 
-class W_ContextPart(W_AbstractObjectWithIdentityHash):
+def W_BlockContext(w_home, w_sender, argcnt, initialip):
+    from pypy.lang.smalltalk.classtable import w_BlockContext
+    w_result = W_PointersObject(w_BlockContext, w_home.size())
+    s_result = w_result.as_blockcontext_get_shadow()
+    s_result.store_expected_argument_count(argcnt)
+    s_result.store_initialip(initialip)
+    s_result.store_w_home(w_home)
+    s_result.store_stackpointer(s_result.stackstart())
+    return w_result
 
-    __metaclass__ = extendabletype
-    
-    def __init__(self, w_home, w_sender):
-        self._stack = []
-        self._pc = 0
-        #assert isinstance(s_home, W_MethodContext)
-        self._w_home = w_home
-        #assert w_sender is None or isinstance(w_sender, W_ContextPart)
-        self._w_sender = w_sender
-
-    def as_context_get_shadow(self):
-        # Backward compatibility
-        return self
-
-    def w_self(self):
-        # Backward compatibility
-        return self
-
-    def pc(self):
-        return self._pc
-
-    def stack(self):
-        return self._stack
-
-    def store_pc(self, pc):
-        self._pc = pc
-
-    def w_receiver(self):
-        " Return self of the method, or the method that contains the block "
-        return self.s_home().w_receiver()
-
-    def w_home(self):
-        return self._w_home
-
-    def s_home(self):
-        return self.w_home().as_methodcontext_get_shadow()
-
-    def store_w_home(self, w_home):
-        self._w_home = w_home
-
-    def w_sender(self):
-        if self._w_sender is not None:
-            return self._w_sender    
-        else:    
-            from pypy.lang.smalltalk import objtable
-            return objtable.w_nil
-
-    def store_w_sender(self, w_sender):
-        self._w_sender = w_sender
-
-    def stackpointer(self):
-        return len(self.stack()) + self.stackstart() - 1
-    # ______________________________________________________________________
-    # Imitate the primitive accessors
-    
-    def fetch(self, index):
-        from pypy.lang.smalltalk import utility, objtable
-        if index == constants.CTXPART_SENDER_INDEX:
-            return self.w_sender()
-        elif index == constants.CTXPART_PC_INDEX:
-            return utility.wrap_int(self.pc())
-        elif index == constants.CTXPART_STACKP_INDEX:
-            return utility.wrap_int(self.stackpointer())
-        
-        # Invalid!
-        raise IndexError
-
-    def store(self, index, w_value):
-        # XXX Untested code...
-        from pypy.lang.smalltalk import utility, objtable
-        if index == constants.CTXPART_SENDER_INDEX:
-            if w_value != objtable.w_nil:
-                self.store_w_sender(w_value)
-        elif index == constants.CTXPART_PC_INDEX:
-            self._pc = utility.unwrap_int(w_value)
-        elif index == constants.CTXPART_STACKP_INDEX:
-            size = utility.unwrap_int(w_value)
-            size = 1 + size - self.stackstart()
-            self._stack = [objtable.w_nil] * size
-        else:
-            # Invalid!
-            raise IndexError
-
-    def become(self, w_old, w_new):
-        if self.w_sender() == w_old:
-            self.store_w_sender(w_new)
-        for i in range(len(self._stack)):
-            if self._stack[i] == w_old:
-                self._stack[i] = w_new
-        if self.w_home() == w_old:
-            self.store_w_home(w_new)
-
-    def stackstart(self):
-        return constants.MTHDCTX_TEMP_FRAME_START
-
-    # ______________________________________________________________________
-    # Method that contains the bytecode for this method/block context
-
-    def w_method(self):
-        return self.s_home().w_method()
-
-    def getbytecode(self):
-        pc = self.pc()
-        bytecode = self.w_method().bytes[pc]
-        currentBytecode = ord(bytecode)
-        self.store_pc(pc + 1)
-        return currentBytecode
-
-    def getNextBytecode(self):
-        self.currentBytecode = self.getbytecode()
-        return self.currentBytecode
-
-    # ______________________________________________________________________
-    # Temporary Variables
-    #
-    # Are always fetched relative to the home method context.
-    
-    def gettemp(self, index):
-        return self.s_home().gettemp(index)
-
-    def settemp(self, index, w_value):
-        self.s_home().settemp(index, w_value)
-
-    # ______________________________________________________________________
-    # Stack Manipulation
-
-    def pop(self):
-        return self.stack().pop()
-
-    def push(self, w_v):
-        assert w_v
-        self.stack().append(w_v)
-
-    def push_all(self, lst):
-        " Equivalent to 'for x in lst: self.push(x)' where x is a lst "
-        assert None not in lst
-        self._stack += lst
-
-    def top(self):
-        return self.peek(0)
-        
-    def peek(self, idx):
-        return self.stack()[-(idx+1)]
-
-    def pop_n(self, n):
-        assert n >= 0
-        start = len(self.stack()) - n
-        assert start >= 0          # XXX what if this fails?
-        del self.stack()[start:]
-
-    def pop_and_return_n(self, n):
-        assert n >= 0
-        start = len(self.stack()) - n
-        assert start >= 0          # XXX what if this fails?
-        res = self.stack()[start:]
-        del self.stack()[start:]
-        return res
-
-class W_BlockContext(W_ContextPart):
-
-    def __init__(self, w_home, w_sender, argcnt, initialip):
-        W_ContextPart.__init__(self, w_home, w_sender)
-        self.argcnt = argcnt
-        self._initialip = initialip
-
-    def initialip(self):
-        return self._initialip
-
-    def expected_argument_count(self):
-        return self.argcnt
-        
-    def getclass(self):
-        from pypy.lang.smalltalk.classtable import w_BlockContext
-        return w_BlockContext
-
-    def as_blockcontext_get_shadow(self):
-        # Backwards compatibility
-        return self
-    
-    def fetch(self, index):
-        from pypy.lang.smalltalk import utility
-        if index == constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX:
-            return utility.wrap_int(self.argcnt)
-        elif index == constants.BLKCTX_INITIAL_IP_INDEX:
-            return utility.wrap_int(self.initialip)
-        elif index == constants.BLKCTX_HOME_INDEX:
-            return self.w_home()
-        elif index >= constants.BLKCTX_TEMP_FRAME_START:
-            stack_index = len(self.stack()) - index - 1
-            return self.stack()[stack_index]
-        else:
-            return W_ContextPart.fetch(self, index)
-
-    def store(self, index, value):
-        # THIS IS ALL UNTESTED CODE and we're a bit unhappy about it
-        # because it crashd the translation N+4 times :-(
-        from pypy.lang.smalltalk import utility
-        if index == constants.BLKCTX_BLOCK_ARGUMENT_COUNT_INDEX:
-            self.argcnt = utility.unwrap_int(value)
-        elif index == constants.BLKCTX_INITIAL_IP_INDEX:
-            self.pc = utility.unwrap_int(value)
-        elif index == constants.BLKCTX_HOME_INDEX:
-            self.store_w_home(value)
-        elif index >= constants.BLKCTX_TEMP_FRAME_START:
-            stack_index = len(self.stack()) - index - 1
-            self.stack()[stack_index] = value
-        else:
-            W_ContextPart.store(self, index, value)
-
-    def stackstart(self):
-        return constants.BLKCTX_TEMP_FRAME_START
-
-class W_MethodContext(W_ContextPart):
-    def __init__(self, w_method, w_receiver,
-                 arguments, w_sender=None):
-        W_ContextPart.__init__(self, self, w_sender)
-        self._w_method = w_method
-        self._w_receiver = w_receiver
-        self.temps = arguments + [w_nil] * w_method.tempsize
-
-    def as_methodcontext_get_shadow(self):
-        # Backwards compatibility
-        return self
-
-    def getclass(self):
-        from pypy.lang.smalltalk.classtable import w_MethodContext
-        return w_MethodContext
-
-    def w_receiver(self):
-        return self._w_receiver
-
-    def store_w_receiver(self, w_receiver):
-        self._w_receiver = w_receiver
-
-    def become(self, w_old, w_new):
-        W_ContextPart.become(self, w_old, w_new)
-        for i in range(len(self.temps)):
-            if self.temps[i] == w_old:
-                self.temps[i] = w_new
-        if w_old == self._w_receiver:
-            self._w_receiver = w_new
-        if w_old == self._w_method:
-            self._w_method = w_new
-
-    def at0(self, index0):
-        # XXX to test
-        # Fetches in temppart (variable size)
-        return self.fetch(index0+constants.MTHDCTX_TEMP_FRAME_START)
-
-    def atput0(self, index0, w_v):
-        # XXX to test
-        # Stores in temppart (variable size)
-        return self.store(index0+constants.MTHDCTX_TEMP_FRAME_START, w_v)
-
-    def fetch(self, index):
-        if index == constants.MTHDCTX_METHOD:
-            return self.w_method()
-        elif index == constants.MTHDCTX_RECEIVER_MAP: # what is this thing?
-            return w_nil
-        elif index == constants.MTHDCTX_RECEIVER:
-            return self.w_receiver()
-        elif index >= constants.MTHDCTX_TEMP_FRAME_START:
-            # First set of indices are temporary variables:
-            offset = index - constants.MTHDCTX_TEMP_FRAME_START
-            if offset < len(self.temps):
-                return self.temps[offset]
-
-            # After that comes the stack:
-            offset -= len(self.temps)
-            stack_index = len(self.stack()) - offset - 1
-            return self.stack()[stack_index]
-        else:
-            return W_ContextPart.fetch(self, index)
-
-    def store(self, index, w_object):
-        if index == constants.MTHDCTX_METHOD:
-            self._w_method = w_object
-        elif index == constants.MTHDCTX_RECEIVER_MAP: # what is this thing?
-            pass
-        elif index == constants.MTHDCTX_RECEIVER:
-            self.store_w_receiver(w_object)
-        elif index >= constants.MTHDCTX_TEMP_FRAME_START:
-            # First set of indices are temporary variables:
-            offset = index - constants.MTHDCTX_TEMP_FRAME_START
-            if offset < len(self.temps):
-                self.temps[offset] = w_object
-
-            # After that comes the stack:
-            offset -= len(self.temps)
-            stack_index = len(self.stack()) - offset - 1
-            self.stack()[stack_index] = w_object
-        else:
-            W_ContextPart.store(self, index, w_object)
-
-    def gettemp(self, idx):
-        return self.temps[idx]
-
-    def settemp(self, idx, w_value):
-        self.temps[idx] = w_value
-
-    def w_method(self):
-        return self._w_method
-
-    def size(self):
-        return len(self.temps) + len(self.stack())
+def W_MethodContext(w_method, w_receiver,
+                    arguments, w_sender=None):
+    from pypy.lang.smalltalk.classtable import w_MethodContext
+    # From blue book: normal mc have place for 12 temps+maxstack
+    # mc for methods with islarge flag turned on 32
+    size = 12 + w_method.islarge * 20 + w_method.argsize
+    w_result = w_MethodContext.as_class_get_shadow().new(size)
+    s_result = w_result.as_methodcontext_get_shadow()
+    s_result.store_w_method(w_method)
+    if w_sender:
+        s_result.store_w_sender(w_sender)
+    s_result.store_w_receiver(w_receiver)
+    s_result.store_pc(w_method.getliteralsize()+1)
+    for i in range(len(arguments)):
+        s_result.settemp(i, arguments[i])
+    s_result.store_stackpointer(s_result.stackstart())
+    return w_result
 
 # Use black magic to create w_nil without running the constructor,
 # thus allowing it to be used even in the constructor of its own

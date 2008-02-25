@@ -68,7 +68,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 w_result = func(interp, argument_count_m1)
                 if not no_result:
                     assert w_result is not None
-                    interp.w_active_context.as_context_get_shadow().push(w_result)
+                    interp.s_active_context().push(w_result)
                 return w_result
         else:
             len_unwrap_spec = len(unwrap_spec)
@@ -104,7 +104,7 @@ def expose_primitive(code, unwrap_spec=None, no_result=False):
                 w_result = func(interp, *args)
                 # After calling primitive, reload context-shadow in case it
                 # needs to be updated
-                new_s_frame = interp.w_active_context.as_context_get_shadow()
+                new_s_frame = interp.s_active_context()
                 frame.as_context_get_shadow().pop_n(len_unwrap_spec)   # only if no exception occurs!
                 if not no_result:
                     assert w_result is not None
@@ -397,7 +397,6 @@ def func(interp, w_rcvr, n0, w_value):
     "Stores a value into a fixed field from the object, and fails otherwise"
     s_class = w_rcvr.shadow_of_my_class()
     assert_bounds(n0, 0, s_class.instsize())
-    # only pointers have non-0 size    
     # XXX Now MethodContext is still own format, leave
     #assert isinstance(w_rcvr, model.W_PointersObject)
     w_rcvr.store(n0, w_value)
@@ -622,21 +621,19 @@ PRIMITIVE_FLUSH_CACHE = 89
 
 @expose_primitive(PRIMITIVE_BLOCK_COPY, unwrap_spec=[object, int])
 def func(interp, w_context, argcnt):
-    frame = interp.w_active_context.as_context_get_shadow()
+    frame = interp.s_active_context()
 
     # From B.B.: If receiver is a MethodContext, then it becomes
     # the new BlockContext's home context.  Otherwise, the home
     # context of the receiver is used for the new BlockContext.
     # Note that in our impl, MethodContext.w_home == self
-    if not isinstance(w_context, model.W_ContextPart):
-        raise PrimitiveFailedError()
     w_method_context = w_context.as_context_get_shadow().w_home()
 
     # The block bytecodes are stored inline: so we skip past the
     # byteodes to invoke this primitive to find them (hence +2)
     initialip = frame.pc() + 2
     w_new_context = model.W_BlockContext(
-        w_method_context, None, argcnt, initialip)
+        w_method_context, objtable.w_nil, argcnt, initialip)
     return w_new_context
 
 def finalize_block_ctx(interp, s_block_ctx, frame):
@@ -653,14 +650,16 @@ def func(interp, argument_count):
     #  Rcvr | Arg 0 | Arg1 | Arg 2
     #
     
-    frame = interp.w_active_context.as_context_get_shadow()
+    frame = interp.s_active_context()
     
     # Validate that we have a block on the stack and that it received
     # the proper number of arguments:
     w_block_ctx = frame.peek(argument_count)
     if w_block_ctx.getclass() != classtable.w_BlockContext:
         raise PrimitiveFailedError()
+
     s_block_ctx = w_block_ctx.as_blockcontext_get_shadow()
+
     exp_arg_cnt = s_block_ctx.expected_argument_count()
     if argument_count != exp_arg_cnt: # exp_arg_cnt doesn't count self
         raise PrimitiveFailedError()
@@ -668,6 +667,9 @@ def func(interp, argument_count):
     # Initialize the block stack with the arguments that were
     # pushed.  Also pop the receiver.
     block_args = frame.pop_and_return_n(exp_arg_cnt)
+
+    # Reset stack of blockcontext to []
+    s_block_ctx.store_stackpointer(s_block_ctx.stackstart())
     s_block_ctx.push_all(block_args)
 
     frame.pop()
@@ -709,7 +711,6 @@ def func(interp, w_rcvr, sel, w_args):
 
     w_frame.as_context_get_shadow().store_w_sender(interp.w_active_context)
     interp.w_active_context = w_frame
-
 
 @expose_primitive(PRIMITIVE_SIGNAL, unwrap_spec=[object])
 def func(interp, w_rcvr):

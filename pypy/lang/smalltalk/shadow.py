@@ -150,21 +150,6 @@ class ClassShadow(AbstractShadow):
     def new(self, extrasize=0, store=True):
         from pypy.lang.smalltalk import classtable
         w_cls = self.w_self()
-        
-        if w_cls == classtable.w_BlockContext:
-            w_new = model.W_BlockContext(None, None, 0, 0)
-        elif w_cls == classtable.w_MethodContext:
-            # From slang: Contexts must only be created with newForMethod:
-            # raise error.PrimitiveFailedError
-            # XXX XXX XXX XXX
-            # The above text is bogous. This does not come from slang but a
-            # method implementation of ContextPart in Squeak3.9 which
-            # overwrites the default compiledmethod to give this error.
-            # The mini.image -however- doesn't overwrite this method, and as
-            # far as I was able to trace it back, it -does- call this method.
-            from pypy.rlib.objectmodel import instantiate
-            w_new = instantiate(model.W_MethodContext)
-            
         if self.instance_kind == POINTERS:
             w_new = model.W_PointersObject(w_cls, self.instance_size+extrasize)
         elif self.instance_kind == WORDS:
@@ -391,42 +376,15 @@ class SchedulerShadow(AbstractShadow):
     def process_lists(self):
         return self.w_self().fetch(constants.SCHEDULER_PROCESS_LISTS_INDEX)
 
-# XXX This should be changed once everything works using contextshadows
-# current hack to make the class extension-system for bytecode lookup happy...
-# Should be AbstractShadow
-# XXX XXX
-class ContextPartShadow(model.W_ContextPart):
+class ContextPartShadow(AbstractShadow):
 
-    #__metaclass__ = extendabletype
+    __metaclass__ = extendabletype
     
     def __init__(self, w_self):
-        self._w_self = w_self
-        self.invalidate()
+        AbstractShadow.__init__(self, w_self)
 
     def s_home(self):
         raise NotImplementedError()
-
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
-    def w_self(self):
-        return self._w_self
-
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
-    def invalidate(self):
-        self.invalid = True
-
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
-    def check_for_updates(self):
-        if self.invalid:
-            self.w_self().setshadow(self)
-            self.update_shadow()
-
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
-    def update_shadow(self):
-        pass
-
-    # XXX XXX Remove function when fixing superclass to AbstractShadow
-    def getname(self):
-        return repr(self)
 
     def w_receiver(self):
         " Return self of the method, or the method that contains the block "
@@ -443,7 +401,7 @@ class ContextPartShadow(model.W_ContextPart):
         else:
             return w_sender.as_context_get_shadow()
 
-    def store_w_sender(self, s_sender):
+    def store_w_sender(self, w_sender):
         self.w_self().store(constants.CTXPART_SENDER_INDEX, w_sender)
 
     def pc(self):
@@ -516,7 +474,8 @@ class ContextPartShadow(model.W_ContextPart):
         self.store_stackpointer(self.stackpointer() - n)
 
     def stack(self):
-        return [self.w_self().fetch(i) for i in range(self.stackstart(), self.stackpointer() + 1)]
+                                                      # fetch = 1-based
+        return [self.w_self().fetch(i) for i in range(self.stackstart() + 1, self.stackpointer() + 1)]
 
     def pop_and_return_n(self, n):
         self.pop_n(n)
@@ -538,6 +497,13 @@ class BlockContextShadow(ContextPartShadow):
     def initialip(self):
         return utility.unwrap_int(self.w_self().fetch(constants.BLKCTX_INITIAL_IP_INDEX))
         
+    def store_initialip(self, initialip):
+        self.w_self().store(constants.BLKCTX_INITIAL_IP_INDEX,
+                            utility.wrap_int(initialip))
+        
+    def store_w_home(self, w_home):
+        self.w_self().store(constants.BLKCTX_HOME_INDEX, w_home)
+
     def w_home(self):
         return self.w_self().fetch(constants.BLKCTX_HOME_INDEX)
 
@@ -545,7 +511,8 @@ class BlockContextShadow(ContextPartShadow):
         return self.w_home().as_methodcontext_get_shadow()
         
     def stackstart(self):
-        return constants.BLKCTX_TEMP_FRAME_START
+        return (constants.BLKCTX_TEMP_FRAME_START +
+                self.expected_argument_count())
 
 class MethodContextShadow(ContextPartShadow):
     def __init__(self, w_self):
@@ -553,6 +520,9 @@ class MethodContextShadow(ContextPartShadow):
 
     def w_method(self):
         return self.w_self().fetch(constants.MTHDCTX_METHOD)
+
+    def store_w_method(self, w_method):
+        return self.w_self().store(constants.MTHDCTX_METHOD, w_method)
 
     def w_receiver(self):
         return self.w_self().fetch(constants.MTHDCTX_RECEIVER)
@@ -573,4 +543,6 @@ class MethodContextShadow(ContextPartShadow):
         return self
 
     def stackstart(self):
-        return constants.MTHDCTX_TEMP_FRAME_START
+        return (constants.MTHDCTX_TEMP_FRAME_START +
+                self.w_method().argsize +
+                self.w_method().tempsize)
