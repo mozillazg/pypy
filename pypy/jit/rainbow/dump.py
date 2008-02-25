@@ -124,7 +124,7 @@ def dump_bytecode(jitcode, file=None):
                 elif argspec == "bytecode":
                     bytecodenum = src.load_2byte()
                     called_bytecode = jitcode.called_bytecodes[bytecodenum]
-                    args.append(called_bytecode.name)
+                    args.append(getattr(called_bytecode, 'name', '?'))
                 elif argspec == "calldesc":
                     index = src.load_2byte()
                     function = jitcode.calldescs[index]

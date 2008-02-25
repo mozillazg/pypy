@@ -156,6 +156,7 @@ class BytecodeWriter(object):
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
         bytecode._labelpos = labelpos
+        #bytecode.dump()
         if is_portal:
             self.finish_all_graphs()
             self.interpreter.set_num_global_mergepoints(
