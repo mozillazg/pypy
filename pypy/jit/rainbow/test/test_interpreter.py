@@ -1040,7 +1040,6 @@ class SimpleTests(InterpretationTest):
         assert res == 212
 
     def test_simple_meth(self):
-        py.test.skip("needs promote")
         class Base(object):
             def m(self):
                 raise NotImplementedError
