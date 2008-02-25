@@ -606,109 +606,117 @@ class BytecodeWriter(object):
 
     def serialize_op_direct_call(self, op):
         kind, withexc = self.guess_call_kind(op)
+        handler = getattr(self, "handle_%s_call" % (kind, ))
         print op, kind, withexc
-        if kind == "oopspec":
-            from pypy.jit.timeshifter.oop import Index
-            fnobj = op.args[0].value._obj
-            oopspecdescindex = self.oopspecdesc_position(fnobj, withexc)
-            oopspecdesc = self.oopspecdescs[oopspecdescindex]
-            opargs = op.args[1:]
-            args_v = []
-            args = []
-            for obj in oopspecdesc.argtuple:
-                if isinstance(obj, Index):
-                    v = opargs[obj.n]
-                else:
-                    v = flowmodel.Constant(obj, lltype.typeOf(obj))
-                args_v.append(v)
-                args.append(self.serialize_oparg("red", v))
+        return handler(op, withexc)
 
-            ll_handler = oopspecdesc.ll_handler
-            couldfold = oopspecdesc.couldfold
-            missing_args = ((ll_handler.func_code.co_argcount - 3) -
-                            len(oopspecdesc.argtuple))
-            assert missing_args >= 0
-            if missing_args > 0:
-                assert (ll_handler.func_defaults[-missing_args:] ==
-                        (None,) * missing_args)
-
-            if oopspecdesc.is_method:
-                hs_self = self.hannotator.binding(
-                    opargs[oopspecdesc.argtuple[0].n])
-                deepfrozen = hs_self.deepfrozen
+    def handle_oopspec_call(self, op, withexc):
+        from pypy.jit.timeshifter.oop import Index
+        fnobj = op.args[0].value._obj
+        oopspecdescindex = self.oopspecdesc_position(fnobj, withexc)
+        oopspecdesc = self.oopspecdescs[oopspecdescindex]
+        opargs = op.args[1:]
+        args_v = []
+        args = []
+        for obj in oopspecdesc.argtuple:
+            if isinstance(obj, Index):
+                v = opargs[obj.n]
             else:
-                deepfrozen = False
+                v = flowmodel.Constant(obj, lltype.typeOf(obj))
+            args_v.append(v)
+            args.append(self.serialize_oparg("red", v))
 
-            self.emit("red_oopspec_call_%s" % (len(args), ))
-            self.emit(oopspecdescindex)
-            self.emit(deepfrozen)
-            self.emit(*args)
-            self.register_redvar(op.result)
-            return
-        elif kind == "green":
-            voidargs = [const.value for const in op.args[1:]
-                            if const.concretetype == lltype.Void]
-            fnptr = op.args[0]
-            pos = self.calldesc_position(lltype.typeOf(fnptr.value), *voidargs)
-            func = self.serialize_oparg("green", fnptr)
-            emitted_args = []
-            for v in op.args[1:]:
-                if v.concretetype != lltype.Void:
-                    emitted_args.append(self.serialize_oparg("green", v))
-            self.emit("green_direct_call")
-            self.emit(func, pos)
-            self.emit(len(emitted_args))
-            self.emit(*emitted_args)
-            self.register_greenvar(op.result)
-            return
-        elif kind == "residual":
-            fnptr = op.args[0]
-            pos = self.calldesc_position(lltype.typeOf(fnptr.value))
-            func = self.serialize_oparg("red", fnptr)
-            emitted_args = []
-            for v in op.args[1:]:
-                emitted_args.append(self.serialize_oparg("red", v))
-            self.emit("red_residual_direct_call")
-            self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
-            self.register_redvar(op.result)
-            pos = self.register_redvar(("residual_flags_red", op.args[0]))
-            self.emit("promote")
-            self.emit(pos)
-            self.emit(self.promotiondesc_position(lltype.Signed))
-            self.register_greenvar(("residual_flags_green", op.args[0]), check=False)
-            self.emit("residual_fetch", True, pos)
-            return
-        elif kind == "rpyexc_raise":
-            emitted_args = []
-            for v in op.args[1:]:
-                emitted_args.append(self.serialize_oparg("red", v))
-            self.emit("setexception", *emitted_args)
-            return
+        ll_handler = oopspecdesc.ll_handler
+        couldfold = oopspecdesc.couldfold
+        missing_args = ((ll_handler.func_code.co_argcount - 3) -
+                        len(oopspecdesc.argtuple))
+        assert missing_args >= 0
+        if missing_args > 0:
+            assert (ll_handler.func_defaults[-missing_args:] ==
+                    (None,) * missing_args)
+
+        if oopspecdesc.is_method:
+            hs_self = self.hannotator.binding(
+                opargs[oopspecdesc.argtuple[0].n])
+            deepfrozen = hs_self.deepfrozen
+        else:
+            deepfrozen = False
+
+        self.emit("red_oopspec_call_%s" % (len(args), ))
+        self.emit(oopspecdescindex)
+        self.emit(deepfrozen)
+        self.emit(*args)
+        self.register_redvar(op.result)
+
+    def handle_green_call(self, op, withexc):
+        voidargs = [const.value for const in op.args[1:]
+                        if const.concretetype == lltype.Void]
+        fnptr = op.args[0]
+        pos = self.calldesc_position(lltype.typeOf(fnptr.value), *voidargs)
+        func = self.serialize_oparg("green", fnptr)
+        emitted_args = []
+        for v in op.args[1:]:
+            if v.concretetype != lltype.Void:
+                emitted_args.append(self.serialize_oparg("green", v))
+        self.emit("green_direct_call")
+        self.emit(func, pos)
+        self.emit(len(emitted_args))
+        self.emit(*emitted_args)
+        self.register_greenvar(op.result)
+
+    def handle_residual_call(self, op, withexc):
+        fnptr = op.args[0]
+        pos = self.calldesc_position(lltype.typeOf(fnptr.value))
+        func = self.serialize_oparg("red", fnptr)
+        emitted_args = []
+        for v in op.args[1:]:
+            emitted_args.append(self.serialize_oparg("red", v))
+        self.emit("red_residual_direct_call")
+        self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
+        self.register_redvar(op.result)
+        pos = self.register_redvar(("residual_flags_red", op.args[0]))
+        self.emit("promote")
+        self.emit(pos)
+        self.emit(self.promotiondesc_position(lltype.Signed))
+        self.register_greenvar(("residual_flags_green", op.args[0]), check=False)
+        self.emit("residual_fetch", True, pos)
+
+    def handle_rpyexc_raise_call(self, op, withexc):
+        emitted_args = []
+        for v in op.args[1:]:
+            emitted_args.append(self.serialize_oparg("red", v))
+        self.emit("setexception", *emitted_args)
+
+    def handle_red_call(self, op, withexc, kind="red"):
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
         targetgraph, = targets.values()
-        if kind == "red" or kind == "gray":
-            graphindex = self.graph_position(targetgraph)
-            args = targetgraph.getargs()
-            emitted_args = self.args_of_call(op.args[1:], args)
-            self.emit("red_direct_call")
-            self.emit(*emitted_args)
-            self.emit(graphindex)
-            if kind == "red":
-                self.register_redvar(op.result)
-            self.emit("red_after_direct_call")
-        elif kind == "yellow":
-            graphindex = self.graph_position(targetgraph)
-            args = targetgraph.getargs()
-            emitted_args = self.args_of_call(op.args[1:], args)
-            self.emit("yellow_direct_call")
-            self.emit(*emitted_args)
-            self.emit(graphindex)
-            self.emit("yellow_after_direct_call")
-            self.emit("yellow_retrieve_result")
-            self.register_greenvar(op.result)
-        else:
-            XXX
+        graphindex = self.graph_position(targetgraph)
+        args = targetgraph.getargs()
+        emitted_args = self.args_of_call(op.args[1:], args)
+        self.emit("red_direct_call")
+        self.emit(*emitted_args)
+        self.emit(graphindex)
+        if kind == "red":
+            self.register_redvar(op.result)
+        self.emit("red_after_direct_call")
+    
+    def handle_gray_call(self, op, withexc):
+        return self.handle_red_call(op, withexc, "gray")
+
+    def handle_yellow_call(self, op, withexc):
+        targets = dict(self.graphs_from(op))
+        assert len(targets) == 1
+        targetgraph, = targets.values()
+        graphindex = self.graph_position(targetgraph)
+        args = targetgraph.getargs()
+        emitted_args = self.args_of_call(op.args[1:], args)
+        self.emit("yellow_direct_call")
+        self.emit(*emitted_args)
+        self.emit(graphindex)
+        self.emit("yellow_after_direct_call")
+        self.emit("yellow_retrieve_result")
+        self.register_greenvar(op.result)
 
     def serialize_op_indirect_call(self, op):
         XXX
