@@ -705,8 +705,8 @@ class BytecodeWriter(object):
         else:
             XXX
 
-        self.emit(label(("after indirect call", op)))
         self.register_redvar(op.result)
+        self.emit(label(("after indirect call", op)))
 
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
