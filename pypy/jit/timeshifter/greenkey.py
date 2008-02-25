@@ -19,15 +19,17 @@ class KeyDesc(object):
             self.hash = lambda self: 0
             self.compare = lambda self, other: True
 
-        TARGETTYPES = []
-        for TYPE in TYPES:
+        index_TYPE = []
+        for i, TYPE in enumerate(TYPES):
             # XXX more cases?
             TARGET = lltype.Signed
-            if TYPE == lltype.Float:
+            if TYPE == lltype.Void:
+                continue
+            elif TYPE == lltype.Float:
                 TARGET = TYPE
-            TARGETTYPES.append(TARGET)
+            index_TYPE.append((i, TARGET))
 
-        iterator = unrolling_iterable(enumerate(TARGETTYPES))
+        iterator = unrolling_iterable(index_TYPE)
         length = len(TYPES)
         def greenhash(self):
             retval = 0x345678

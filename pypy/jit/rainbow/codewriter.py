@@ -1,6 +1,7 @@
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow import model as flowmodel
+from pypy.rpython.annlowlevel import cachedtype
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.hintannotator.model import originalconcretetype
 from pypy.jit.hintannotator import model as hintmodel
@@ -9,6 +10,49 @@ from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
+
+
+class CallDesc:
+    __metaclass__ = cachedtype
+
+    def __init__(self, RGenOp, FUNCTYPE, voidargs=()):
+        self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
+        self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
+        # xxx what if the result is virtualizable?
+        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
+        whatever_return_value = FUNCTYPE.TO.RESULT._defl()
+        numargs = len(FUNCTYPE.TO.ARGS)
+        argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
+        def green_call(interpreter, fnptr_gv, greenargs):
+            fnptr = fnptr_gv.revealconst(FUNCTYPE)
+            assert len(greenargs) + len(voidargs) == numargs 
+            args = ()
+            j = 0
+            k = 0
+            for ARG in argiter:
+                if ARG == lltype.Void:
+                    arg = voidargs[k]
+                    # XXX terrible hack
+                    if not we_are_translated():
+                        arg._TYPE = lltype.Void
+                    args += (arg, )
+                    k += 1
+                else:
+                    genconst = greenargs[j]
+                    arg = genconst.revealconst(ARG)
+                    args += (arg, )
+                    j += 1
+            rgenop = interpreter.jitstate.curbuilder.rgenop
+            try:
+                result = rgenop.genconst(fnptr(*args))
+            except Exception, e:
+                XXX # set exception
+                return rgenop.genconst(whatever_return_value)
+            interpreter.green_result(result)
+        self.green_call = green_call
+
+    def _freeze_(self):
+        return True
 
 
 class BytecodeWriter(object):
@@ -50,7 +94,7 @@ class BytecodeWriter(object):
         self.called_bytecodes = []
         self.num_local_mergepoints = 0
         self.graph_color = self.graph_calling_color(graph)
-        self.nonrainbow_functions = []
+        self.calldescs = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -81,7 +125,7 @@ class BytecodeWriter(object):
         # mapping graphs to index
         self.graph_positions = {}
         # mapping fnobjs to index
-        self.nonrainbow_positions = {}
+        self.calldesc_positions = {}
 
         self.graph = graph
         self.mergepoint_set = {}
@@ -105,7 +149,7 @@ class BytecodeWriter(object):
                           self.called_bytecodes,
                           self.num_local_mergepoints,
                           self.graph_color,
-                          self.nonrainbow_functions,
+                          self.calldescs,
                           self.is_portal)
         if is_portal:
             self.finish_all_graphs()
@@ -347,8 +391,8 @@ class BytecodeWriter(object):
     def redvar_position(self, arg):
         return self.redvar_positions[arg]
 
-    def register_greenvar(self, arg, where=None):
-        assert isinstance(arg, flowmodel.Variable)
+    def register_greenvar(self, arg, where=None, check=True):
+        assert isinstance(arg, flowmodel.Variable) or not check
         if where is None:
             where = self.free_green[self.current_block]
             self.free_green[self.current_block] += 1
@@ -444,41 +488,14 @@ class BytecodeWriter(object):
         self.graph_positions[graph] = index
         return index
 
-    def nonrainbow_position(self, fnptr, *voidargs):
-        fn = fnptr._obj
-        key = fn, voidargs
-        if key in self.nonrainbow_positions:
-            return self.nonrainbow_positions[key]
-        FUNCTYPE = lltype.typeOf(fn)
-        argiter = unrolling_iterable(FUNCTYPE.ARGS)
-        numargs = len(FUNCTYPE.ARGS)
-        def call_normal_function(interpreter, greenargs):
-            assert len(greenargs) + len(voidargs) == numargs 
-            args = ()
-            j = 0
-            k = 0
-            for ARG in argiter:
-                if ARG == lltype.Void:
-                    arg = voidargs[k]
-                    # XXX terrible hack
-                    if not we_are_translated():
-                        arg._TYPE = lltype.Void
-                    args += (arg, )
-                    k += 1
-                else:
-                    genconst = greenargs[j]
-                    arg = genconst.revealconst(ARG)
-                    args += (arg, )
-                    j += 1
-            rgenop = interpreter.jitstate.curbuilder.rgenop
-            try:
-                result = rgenop.genconst(fnptr(*args))
-            except Exception, e:
-                XXX # need to create a default result and set exception
-            interpreter.green_result(result)
-        result = len(self.nonrainbow_functions)
-        self.nonrainbow_functions.append(call_normal_function)
-        self.nonrainbow_positions[key] = result
+    def calldesc_position(self, FUNCTYPE, *voidargs):
+        key = FUNCTYPE, voidargs
+        if key in self.calldesc_positions:
+            return self.calldesc_positions[key]
+        result = len(self.calldescs)
+        self.calldescs.append(
+            CallDesc(self.RGenOp, FUNCTYPE, voidargs))
+        self.calldesc_positions[key] = result
         return result
 
     def interiordesc(self, op, PTRTYPE, nb_offsets):
@@ -584,12 +601,12 @@ class BytecodeWriter(object):
         pass
 
     def serialize_op_direct_call(self, op):
-        kind, exc = self.guess_call_kind(op)
-        print op, kind, exc
+        kind, withexc = self.guess_call_kind(op)
+        print op, kind, withexc
         if kind == "oopspec":
             from pypy.jit.timeshifter.oop import Index
             fnobj = op.args[0].value._obj
-            oopspecdescindex = self.oopspecdesc_position(fnobj, exc)
+            oopspecdescindex = self.oopspecdesc_position(fnobj, withexc)
             oopspecdesc = self.oopspecdescs[oopspecdescindex]
             opargs = op.args[1:]
             args_v = []
@@ -627,19 +644,42 @@ class BytecodeWriter(object):
         elif kind == "green":
             voidargs = [const.value for const in op.args[1:]
                             if const.concretetype == lltype.Void]
-            pos = self.nonrainbow_position(op.args[0].value, *voidargs)
+            fnptr = op.args[0]
+            pos = self.calldesc_position(lltype.typeOf(fnptr.value), *voidargs)
+            func = self.serialize_oparg("green", fnptr)
             emitted_args = []
             for v in op.args[1:]:
                 if v.concretetype != lltype.Void:
                     emitted_args.append(self.serialize_oparg("green", v))
             self.emit("green_direct_call")
+            self.emit(func, pos)
             self.emit(len(emitted_args))
             self.emit(*emitted_args)
-            self.emit(pos)
             self.register_greenvar(op.result)
             return
         elif kind == "residual":
-            XXX
+            fnptr = op.args[0]
+            pos = self.calldesc_position(lltype.typeOf(fnptr.value))
+            func = self.serialize_oparg("red", fnptr)
+            emitted_args = []
+            for v in op.args[1:]:
+                emitted_args.append(self.serialize_oparg("red", v))
+            self.emit("red_residual_direct_call")
+            self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
+            self.register_redvar(op.result)
+            pos = self.register_redvar(("residual_flags_red", op.args[0]))
+            self.emit("promote")
+            self.emit(pos)
+            self.emit(self.promotiondesc_position(lltype.Signed))
+            self.register_greenvar(("residual_flags_green", op.args[0]), check=False)
+            self.emit("residual_fetch", True, pos)
+            return
+        elif kind == "rpyexc_raise":
+            emitted_args = []
+            for v in op.args[1:]:
+                emitted_args.append(self.serialize_oparg("red", v))
+            self.emit("setexception", *emitted_args)
+            return
         targets = dict(self.graphs_from(op))
         assert len(targets) == 1
         targetgraph, = targets.values()
@@ -703,7 +743,7 @@ class BytecodeWriter(object):
         pass
 
     def serialize_op_getfield(self, op):
-        assert self.opcolor(op) == "red"
+        color = self.opcolor(op)
         args = op.args
         if args[0] == self.exceptiondesc.cexcdata:
             # reading one of the exception boxes (exc_type or exc_value)
@@ -731,9 +771,11 @@ class BytecodeWriter(object):
         fielddescindex = self.fielddesc_position(PTRTYPE.TO, fieldname)
         if fielddescindex == -1:   # Void field
             return
-        self.emit("red_getfield", index, fielddescindex, deepfrozen)
-        self.register_redvar(op.result)
-
+        self.emit("%s_getfield" % (color, ), index, fielddescindex, deepfrozen)
+        if color == "red":
+            self.register_redvar(op.result)
+        else:
+            self.register_greenvar(op.result)
 
     def serialize_op_setfield(self, op):
         args = op.args
