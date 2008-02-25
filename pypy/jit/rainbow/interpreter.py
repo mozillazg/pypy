@@ -72,6 +72,80 @@ class RainbowResumer(rtimeshift.Resumer):
             interpreter.finish_jitstate(interpreter.portalstate.sigtoken)
 
 
+def arguments(*argtypes, **kwargs):
+    result = kwargs.pop("returns", None)
+    assert not kwargs
+    argtypes = unrolling_iterable(argtypes)
+    def decorator(func):
+        def wrapped(self):
+            args = (self, )
+            for argspec in argtypes:
+                if argspec == "red":
+                    args += (self.get_redarg(), )
+                elif argspec == "green":
+                    args += (self.get_greenarg(), )
+                elif argspec == "kind":
+                    args += (self.frame.bytecode.typekinds[self.load_2byte()], )
+                elif argspec == "jumptarget":
+                    args += (self.load_4byte(), )
+                elif argspec == "bool":
+                    args += (self.load_bool(), )
+                elif argspec == "redboxcls":
+                    args += (self.frame.bytecode.redboxclasses[self.load_2byte()], )
+                elif argspec == "2byte":
+                    args += (self.load_2byte(), )
+                elif argspec == "greenkey":
+                    args += (self.get_greenkey(), )
+                elif argspec == "promotiondesc":
+                    promotiondescnum = self.load_2byte()
+                    promotiondesc = self.frame.bytecode.promotiondescs[promotiondescnum]
+                    args += (promotiondesc, )
+                elif argspec == "green_varargs":
+                    args += (self.get_green_varargs(), )
+                elif argspec == "red_varargs":
+                    args += (self.get_red_varargs(), )
+                elif argspec == "bytecode":
+                    bytecodenum = self.load_2byte()
+                    args += (self.frame.bytecode.called_bytecodes[bytecodenum], )
+                elif argspec == "nonrainbow_function":
+                    index = self.load_2byte()
+                    function = self.frame.bytecode.nonrainbow_functions[index]
+                    args += (function, )
+                elif argspec == "oopspec":
+                    oopspecindex = self.load_2byte()
+                    oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
+                    args += (oopspec, )
+                elif argspec == "structtypedesc":
+                    td = self.frame.bytecode.structtypedescs[self.load_2byte()]
+                    args += (td, )
+                elif argspec == "arraydesc":
+                    td = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
+                    args += (td, )
+                elif argspec == "fielddesc":
+                    d = self.frame.bytecode.fielddescs[self.load_2byte()]
+                    args += (d, )
+                elif argspec == "interiordesc":
+                    d = self.frame.bytecode.interiordescs[self.load_2byte()]
+                    args += (d, )
+                else:
+                    assert 0, "unknown argtype declaration"
+            val = func(*args)
+            if result is not None:
+                if result == "red":
+                    self.red_result(val)
+                elif result == "green":
+                    self.green_result(val)
+                elif result == "green_from_red":
+                    self.green_result_from_red(val)
+                else:
+                    assert 0, "unknown result declaration"
+                return
+            return val
+        wrapped.func_name = "wrap_" + func.func_name
+        return wrapped
+    return decorator
+
+
 class JitInterpreter(object):
     def __init__(self, exceptiondesc, RGenOp):
         self.exceptiondesc = exceptiondesc
@@ -257,60 +331,54 @@ class JitInterpreter(object):
             self.frame = None
 
     # operation implementations
-    def opimpl_make_redbox(self):
-        genconst = self.get_greenarg()
-        typeindex = self.load_2byte()
-        kind = self.frame.bytecode.typekinds[typeindex]
-        redboxcls = self.frame.bytecode.redboxclasses[typeindex]
-        self.red_result(redboxcls(kind, genconst))
+    @arguments("green", "2byte", returns="red")
+    def opimpl_make_redbox(self, genconst, typeid):
+        redboxcls = self.frame.bytecode.redboxclasses[typeid]
+        kind = self.frame.bytecode.typekinds[typeid]
+        return redboxcls(kind, genconst)
 
-    def opimpl_goto(self):
-        target = self.load_4byte()
+    @arguments("jumptarget")
+    def opimpl_goto(self, target):
         self.frame.pc = target
 
-    def opimpl_green_goto_iftrue(self):
-        genconst = self.get_greenarg()
-        target = self.load_4byte()
+    @arguments("green", "jumptarget")
+    def opimpl_green_goto_iftrue(self, genconst, target):
         arg = genconst.revealconst(lltype.Bool)
         if arg:
             self.frame.pc = target
 
-    def opimpl_red_goto_iftrue(self):
-        switchbox = self.get_redarg()
-        target = self.load_4byte()
+    @arguments("red", "jumptarget")
+    def opimpl_red_goto_iftrue(self, switchbox, target):
         # XXX not sure about passing no green vars
         descision = rtimeshift.split(self.jitstate, switchbox, self.frame.pc)
         if descision:
             self.frame.pc = target
 
-    def opimpl_red_goto_ifptrnonzero(self):
-        reverse = self.load_bool()
-        ptrbox = self.get_redarg()
-        switchbox = self.get_redarg()
-        target = self.load_4byte()
+    @arguments("bool", "red", "red", "jumptarget")
+    def opimpl_red_goto_ifptrnonzero(self, reverse, ptrbox, switchbox, target):
         # XXX not sure about passing no green vars
         descision = rtimeshift.split_ptr_nonzero(self.jitstate, switchbox,
                                                  self.frame.pc, ptrbox, reverse)
         if descision:
             self.frame.pc = target
 
-    def opimpl_red_ptr_nonzero(self, reverse=False):
-        ptrbox = self.get_redarg()
-        resultbox = rtimeshift.genptrnonzero(self.jitstate, ptrbox, reverse)
-        self.red_result(resultbox)
+    @arguments("red", returns="red")
+    def opimpl_red_ptr_nonzero(self, ptrbox):
+        return rtimeshift.genptrnonzero(self.jitstate, ptrbox, False)
 
-    def opimpl_red_ptr_iszero(self):
-        self.opimpl_red_ptr_nonzero(reverse=True)
+    @arguments("red", returns="red")
+    def opimpl_red_ptr_iszero(self, ptrbox):
+        return rtimeshift.genptrnonzero(self.jitstate, ptrbox, True)
 
-    def opimpl_red_ptr_eq(self, reverse=False):
-        ptrbox1 = self.get_redarg()
-        ptrbox2 = self.get_redarg()
-        resultbox = rtimeshift.genptreq(self.jitstate, ptrbox1,
-                                        ptrbox2, reverse)
-        self.red_result(resultbox)
+    @arguments("red", "red", returns="red")
+    def opimpl_red_ptr_eq(self, ptrbox1, ptrbox2):
+        return rtimeshift.genptreq(self.jitstate, ptrbox1,
+                                   ptrbox2, False)
 
-    def opimpl_red_ptr_ne(self):
-        self.opimpl_red_ptr_eq(reverse=True)
+    @arguments("red", "red", returns="red")
+    def opimpl_red_ptr_ne(self, ptrbox1, ptrbox2):
+        return rtimeshift.genptreq(self.jitstate, ptrbox1,
+                                   ptrbox2, True)
 
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
@@ -341,18 +409,16 @@ class JitInterpreter(object):
             newgreens.append(self.get_greenarg())
         self.frame.local_green = newgreens
 
-    def opimpl_local_merge(self):
-        mergepointnum = self.load_2byte()
-        key = self.get_greenkey()
+    @arguments("2byte", "greenkey")
+    def opimpl_local_merge(self, mergepointnum, key):
         states_dic = self.queue.local_caches[mergepointnum]
         done = rtimeshift.retrieve_jitstate_for_merge(states_dic, self.jitstate,
                                                       key, None)
         if done:
             return self.dispatch()
 
-    def opimpl_global_merge(self):
-        mergepointnum = self.load_2byte()
-        key = self.get_greenkey()
+    @arguments("2byte", "greenkey")
+    def opimpl_global_merge(self, mergepointnum, key):
         states_dic = self.global_state_dicts[mergepointnum]
         global_resumer = RainbowResumer(self, self.frame)
         done = rtimeshift.retrieve_jitstate_for_merge(states_dic, self.jitstate,
@@ -364,10 +430,8 @@ class JitInterpreter(object):
         rtimeshift.guard_global_merge(self.jitstate, self.frame.pc)
         return self.dispatch()
 
-    def opimpl_promote(self):
-        promotebox = self.get_redarg()
-        promotiondescnum = self.load_2byte()
-        promotiondesc = self.frame.bytecode.promotiondescs[promotiondescnum]
+    @arguments("red", "promotiondesc")
+    def opimpl_promote(self, promotebox, promotiondesc):
         done = rtimeshift.promote(self.jitstate, promotebox, promotiondesc)
         if done:
             return self.dispatch()
@@ -378,11 +442,8 @@ class JitInterpreter(object):
     def opimpl_reverse_split_queue(self):
         rtimeshift.reverse_split_queue(self.frame.dispatchqueue)
 
-    def opimpl_red_direct_call(self):
-        greenargs = self.get_green_varargs()
-        redargs = self.get_red_varargs()
-        bytecodenum = self.load_2byte()
-        targetbytecode = self.frame.bytecode.called_bytecodes[bytecodenum]
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
         self.run(self.jitstate, targetbytecode, greenargs, redargs,
                  start_bytecode_loop=False)
         # this frame will be resumed later in the next bytecode, which is
@@ -394,17 +455,12 @@ class JitInterpreter(object):
             self.frame.local_green)
         assert newjitstate is self.jitstate
 
-    def opimpl_green_direct_call(self):
-        greenargs = self.get_green_varargs()
-        index = self.load_2byte()
-        function = self.frame.bytecode.nonrainbow_functions[index]
+    @arguments("green_varargs", "nonrainbow_function")
+    def opimpl_green_direct_call(self, greenargs, function):
         function(self, greenargs)
 
-    def opimpl_yellow_direct_call(self):
-        greenargs = self.get_green_varargs()
-        redargs = self.get_red_varargs()
-        bytecodenum = self.load_2byte()
-        targetbytecode = self.frame.bytecode.called_bytecodes[bytecodenum]
+    @arguments("green_varargs", "red_varargs", "bytecode")
+    def opimpl_yellow_direct_call(self, greenargs, redargs, targetbytecode):
         self.run(self.jitstate, targetbytecode, greenargs, redargs,
                  start_bytecode_loop=False)
         # this frame will be resumed later in the next bytecode, which is
@@ -416,164 +472,121 @@ class JitInterpreter(object):
             self.frame.local_green)
         assert newjitstate is self.jitstate
 
+    @arguments(returns="green")
     def opimpl_yellow_retrieve_result(self):
         # XXX all this jitstate.greens business is a bit messy
-        self.green_result(self.jitstate.greens[0])
+        return self.jitstate.greens[0]
 
-    def opimpl_red_oopspec_call_0(self):
-        oopspecindex = self.load_2byte()
-        deepfrozen = self.load_bool()
-        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
-        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen)
-        self.red_result(result)
+    @arguments("oopspec", "bool", returns="red")
+    def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen)
 
-    def opimpl_red_oopspec_call_1(self):
-        oopspecindex = self.load_2byte()
-        deepfrozen = self.load_bool()
-        arg1 = self.get_redarg()
-        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
-        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1)
-        self.red_result(result)
+    @arguments("oopspec", "bool", "red", returns="red")
+    def opimpl_red_oopspec_call_1(self, oopspec, deepfrozen, arg1):
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1)
 
-    def opimpl_red_oopspec_call_2(self):
-        oopspecindex = self.load_2byte()
-        deepfrozen = self.load_bool()
-        arg1 = self.get_redarg()
-        arg2 = self.get_redarg()
-        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
-        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2)
-        self.red_result(result)
+    @arguments("oopspec", "bool", "red", "red", returns="red")
+    def opimpl_red_oopspec_call_2(self, oopspec, deepfrozen, arg1, arg2):
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2)
 
-    def opimpl_red_oopspec_call_3(self):
-        oopspecindex = self.load_2byte()
-        deepfrozen = self.load_bool()
-        arg1 = self.get_redarg()
-        arg2 = self.get_redarg()
-        arg3 = self.get_redarg()
-        oopspec = self.frame.bytecode.oopspecdescs[oopspecindex]
-        result = oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
-        self.red_result(result)
+    @arguments("oopspec", "bool", "red", "red", "red", returns="red")
+    def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
 
 
     # exceptions
 
+    @arguments(returns="red")
     def opimpl_read_exctype(self):
-        box = rtimeshift.getexctypebox(self.jitstate)
-        self.red_result(box)
+        return rtimeshift.getexctypebox(self.jitstate)
 
+    @arguments(returns="red")
     def opimpl_read_excvalue(self):
-        box = rtimeshift.getexcvaluebox(self.jitstate)
+        return rtimeshift.getexcvaluebox(self.jitstate)
         self.red_result(box)
 
-    def opimpl_write_exctype(self):
-        typebox = self.get_redarg()
+    @arguments("red")
+    def opimpl_write_exctype(self, typebox):
         rtimeshift.setexctypebox(self.jitstate, typebox)
 
-    def opimpl_write_excvalue(self):
-        valuebox = self.get_redarg()
+    @arguments("red")
+    def opimpl_write_excvalue(self, valuebox):
         rtimeshift.setexcvaluebox(self.jitstate, valuebox)
 
     # structs and arrays
 
-    def opimpl_red_malloc(self):
-        structtypedesc = self.frame.bytecode.structtypedescs[self.load_2byte()]
+    @arguments("structtypedesc", returns="red")
+    def opimpl_red_malloc(self, structtypedesc):
         redbox = rcontainer.create(self.jitstate, structtypedesc)
-        self.red_result(redbox)
+        return redbox
 
-    def opimpl_red_malloc_varsize_struct(self):
-        structtypedesc = self.frame.bytecode.structtypedescs[self.load_2byte()]
-        sizebox = self.get_redarg()
+    @arguments("structtypedesc", "red", returns="red")
+    def opimpl_red_malloc_varsize_struct(self, structtypedesc, sizebox):
         redbox = rcontainer.create_varsize(self.jitstate, structtypedesc,
                                            sizebox)
-        self.red_result(redbox)
+        return redbox
 
-    def opimpl_red_malloc_varsize_array(self):
-        arraytypedesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
-        sizebox = self.get_redarg()
-        redbox = rtimeshift.genmalloc_varsize(self.jitstate, arraytypedesc,
-                                              sizebox)
-        self.red_result(redbox)
+    @arguments("arraydesc", "red", returns="red")
+    def opimpl_red_malloc_varsize_array(self, arraytypedesc, sizebox):
+        return rtimeshift.genmalloc_varsize(self.jitstate, arraytypedesc,
+                                            sizebox)
 
-    def opimpl_red_getfield(self):
-        structbox = self.get_redarg()
-        fielddesc = self.frame.bytecode.fielddescs[self.load_2byte()]
-        deepfrozen = self.load_bool()
-        resbox = rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
-                                        structbox)
-        self.red_result(resbox)
+    @arguments("red", "fielddesc", "bool", returns="red")
+    def opimpl_red_getfield(self, structbox, fielddesc, deepfrozen):
+        return rtimeshift.gengetfield(self.jitstate, deepfrozen, fielddesc,
+                                      structbox)
 
-    def opimpl_red_setfield(self):
-        destbox = self.get_redarg()
-        fielddesc = self.frame.bytecode.fielddescs[self.load_2byte()]
-        valuebox = self.get_redarg()
-        resbox = rtimeshift.gensetfield(self.jitstate, fielddesc, destbox,
-                valuebox)
+    @arguments("red", "fielddesc", "red")
+    def opimpl_red_setfield(self, destbox, fielddesc, valuebox):
+        rtimeshift.gensetfield(self.jitstate, fielddesc, destbox,
+                               valuebox)
 
-    def opimpl_red_getarrayitem(self):
-        arraybox = self.get_redarg()
-        fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
-        indexbox = self.get_redarg()
-        deepfrozen = self.load_bool()
-        resbox = rtimeshift.gengetarrayitem(self.jitstate, deepfrozen, fielddesc,
-                                        arraybox, indexbox)
-        self.red_result(resbox)
+    @arguments("red", "arraydesc", "red", "bool", returns="red")
+    def opimpl_red_getarrayitem(self, arraybox, fielddesc, indexbox, deepfrozen):
+        return rtimeshift.gengetarrayitem(self.jitstate, deepfrozen, fielddesc,
+                                          arraybox, indexbox)
 
-    def opimpl_red_setarrayitem(self):
-        destbox = self.get_redarg()
-        fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
-        indexbox = self.get_redarg()
-        valuebox = self.get_redarg()
-        resbox = rtimeshift.gensetarrayitem(self.jitstate, fielddesc, destbox,
-                indexbox, valuebox)
+    @arguments("red", "arraydesc", "red", "red")
+    def opimpl_red_setarrayitem(self, destbox, fielddesc, indexbox, valuebox):
+        rtimeshift.gensetarrayitem(self.jitstate, fielddesc, destbox,
+                                   indexbox, valuebox)
 
-    def opimpl_red_getarraysize(self):
-        arraybox = self.get_redarg()
-        fielddesc = self.frame.bytecode.arrayfielddescs[self.load_2byte()]
-        resbox = rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
-        self.red_result(resbox)
+    @arguments("red", "arraydesc", returns="red")
+    def opimpl_red_getarraysize(self, arraybox, fielddesc):
+        return rtimeshift.gengetarraysize(self.jitstate, fielddesc, arraybox)
 
-    def opimpl_red_getinteriorfield(self):
-        structbox = self.get_redarg()
-        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        deepfrozen = self.load_bool()
-        indexboxes = self.get_red_varargs()
-        resultbox = interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
-                                                     structbox, indexboxes)
-        self.red_result(resultbox)
+    @arguments("red", "interiordesc", "bool", "red_varargs", returns="red")
+    def opimpl_red_getinteriorfield(self, structbox, interiordesc, deepfrozen,
+                                    indexboxes):
+        return interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
+                                                structbox, indexboxes)
 
-    def opimpl_green_getinteriorfield(self):
-        structbox = self.get_redarg()
-        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        deepfrozen = self.load_bool()
-        indexboxes = self.get_red_varargs()
-        resultbox = interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
-                                                     structbox, indexboxes)
-        self.green_result_from_red(resultbox)
-
-    def opimpl_red_setinteriorfield(self):
-        destbox = self.get_redarg()
-        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        indexboxes = self.get_red_varargs()
-        valuebox = self.get_redarg()
-        interiordesc.gensetinteriorfield(self.jitstate, destbox, valuebox, indexboxes)
-
-    def opimpl_red_getinteriorarraysize(self):
-        arraybox = self.get_redarg()
-        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        indexboxes = self.get_red_varargs()
-        resultbox = interiordesc.gengetinteriorarraysize(
-            self.jitstate, arraybox, indexboxes)
-        self.red_result(resultbox)
-
-    def opimpl_green_getinteriorarraysize(self):
+    @arguments("red", "interiordesc", "bool", "red_varargs",
+               returns="green_from_red")
+    def opimpl_green_getinteriorfield(self, structbox, interiordesc, deepfrozen,
+                                      indexboxes):
         # XXX make a green version that does not use the constant folding of
         # the red one
-        arraybox = self.get_redarg()
-        interiordesc = self.frame.bytecode.interiordescs[self.load_2byte()]
-        indexboxes = self.get_red_varargs()
-        resultbox = interiordesc.gengetinteriorarraysize(
+        return interiordesc.gengetinteriorfield(self.jitstate, deepfrozen,
+                                                structbox, indexboxes)
+
+    @arguments("red", "interiordesc", "red_varargs", "red")
+    def opimpl_red_setinteriorfield(self, destbox, interiordesc, indexboxes,
+                                    valuebox):
+        interiordesc.gensetinteriorfield(self.jitstate, destbox, valuebox, indexboxes)
+
+    @arguments("red", "interiordesc", "red_varargs", returns="red")
+    def opimpl_red_getinteriorarraysize(self, arraybox, interiordesc, indexboxes):
+        return interiordesc.gengetinteriorarraysize(
             self.jitstate, arraybox, indexboxes)
-        self.green_result_from_red(resultbox)
+
+    @arguments("red", "interiordesc", "red_varargs", returns="green_from_red")
+    def opimpl_green_getinteriorarraysize(self, arraybox, interiordesc,
+                                          indexboxes):
+        # XXX make a green version that does not use the constant folding of
+        # the red one
+        return interiordesc.gengetinteriorarraysize(
+            self.jitstate, arraybox, indexboxes)
 
     # ____________________________________________________________
     # construction-time interface

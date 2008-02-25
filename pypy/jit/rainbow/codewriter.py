@@ -459,8 +459,8 @@ class BytecodeWriter(object):
             k = 0
             for ARG in argiter:
                 if ARG == lltype.Void:
-                    # XXX terrible hack
                     arg = voidargs[k]
+                    # XXX terrible hack
                     if not we_are_translated():
                         arg._TYPE = lltype.Void
                     args += (arg, )
