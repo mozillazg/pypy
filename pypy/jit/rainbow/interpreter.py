@@ -69,7 +69,7 @@ class RainbowResumer(rtimeshift.Resumer):
         interpreter.newjitstate(jitstate)
         interpreter.frame.pc = self.pc
         interpreter.frame.bytecode = self.bytecode
-        interpreter.frame.local_green = []
+        interpreter.frame.local_green = jitstate.greens[:]
         jitstate.frame.dispatchqueue = dispatchqueue
         interpreter.bytecode_loop()
         finaljitstate = interpreter.jitstate
@@ -449,6 +449,7 @@ class JitInterpreter(object):
 
     @arguments()
     def opimpl_guard_global_merge(self):
+        rtimeshift.save_greens(self.jitstate, self.frame.local_green)
         rtimeshift.guard_global_merge(self.jitstate, self.frame.pc)
         return self.dispatch()
 

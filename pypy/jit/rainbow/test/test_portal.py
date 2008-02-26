@@ -138,7 +138,6 @@ class TestPortal(PortalTest):
         self.check_insns(int_floordiv=1, int_mul=0)
 
     def test_dfa_compile(self):
-        py.test.skip("not working yet")
         from pypy.lang.automata.dfa import getautomaton, convertdfa, recognizetable
         a = getautomaton()
         dfatable, final_states = convertdfa(a)
