@@ -1,5 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
 from pypy.jit.timeshifter import rtimeshift, rcontainer
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -686,6 +687,11 @@ class JitInterpreter(object):
                     genconst = self.get_greenarg()
                     arg = genconst.revealconst(opdesc.ARGS[i])
                     args += (arg, )
+                if not we_are_translated():
+                    if opdesc.opname == "int_is_true":
+                        # special case for tests, as in llinterp.py
+                        if type(args[1]) is CDefinedIntSymbolic:
+                            args = (args[0], args[1].default)
                 result = self.rgenop.genconst(opdesc.llop(*args))
                 self.green_result(result)
             implementation.argspec = ("green",) * len(list(numargs))
