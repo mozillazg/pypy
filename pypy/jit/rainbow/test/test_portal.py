@@ -233,7 +233,6 @@ class TestPortal(PortalTest):
         self.check_insns(indirect_call=2)
 
     def test_method_call_promote(self):
-        py.test.skip("not working yet")
         class Base(object):
             pass
         class Int(Base):
