@@ -306,7 +306,6 @@ class TestPromotion(InterpretationTest):
         assert res == 22
 
     def test_raise_result_mixup(self):
-        py.test.skip("residual calls not supported")
         def w(x):
             pass
         class E(Exception):
@@ -341,7 +340,6 @@ class TestPromotion(InterpretationTest):
         res == 1
 
     def test_raise_result_mixup_some_more(self):
-        py.test.skip("residual calls not supported")
         def w(x):
             if x > 1000:
                 return None
