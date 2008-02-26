@@ -180,7 +180,6 @@ class TestPortal(PortalTest):
         assert not res
 
     def test_dfa_compile3(self):
-        py.test.skip("not working yet")
         from pypy.lang.automata.dfa import getautomaton, recognize3
         def main(gets):
             auto = getautomaton()
