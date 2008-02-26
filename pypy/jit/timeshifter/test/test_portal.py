@@ -254,61 +254,6 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(main, evaluate, [4, 7])
         assert res == 11
     
-    def test_isinstance(self):
-        class Base(object):
-            pass
-        class Int(Base):
-            def __init__(self, n):
-                self.n = n
-        class Str(Base):
-            def __init__(self, s):
-                self.s = s
-
-        def ll_main(n):
-            if n > 0:
-                o = Int(n)
-            else:
-                o = Str('123')
-            return ll_function(o)
-
-        def ll_function(o):
-            hint(o, deepfreeze=True)
-            hint(o, concrete=True)
-            x = isinstance(o, Str)
-            return x
-            
-
-        res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
-        assert not res
-
-    def test_greenmethod_call_nonpromote(self):
-        class Base(object):
-            pass
-        class Int(Base):
-            def __init__(self, n):
-                self.n = n
-            def tag(self):
-                return 123
-        class Str(Base):
-            def __init__(self, s):
-                self.s = s
-            def tag(self):
-                return 456
-
-        def ll_main(n):
-            if n > 0:
-                o = Int(n)
-            else:
-                o = Str('123')
-            return ll_function(o)
-
-        def ll_function(o):
-            hint(None, global_merge_point=True)
-            return o.tag()
-
-        res = self.timeshift_from_portal(ll_main, ll_function, [5], policy=P_NOVIRTUAL)
-        assert res == 123
-        self.check_insns(indirect_call=1)
 
     def test_residual_red_call_with_promoted_exc(self):
         def h(x):
