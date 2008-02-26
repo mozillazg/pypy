@@ -144,45 +144,6 @@ class TestPortal(PortalTest):
             
 
 
-    def test_virt_obj_method_call_promote(self):
-        class Base(object):
-            pass
-        class Int(Base):
-            def __init__(self, n):
-                self.n = n
-            def double(self):
-                return Int(self.n * 2)
-            def get(self):
-                return self.n
-        class Str(Base):
-            def __init__(self, s):
-                self.s = s
-            def double(self):
-                return Str(self.s + self.s)
-            def get(self):
-                return ord(self.s[4])
-
-        def ll_make(n):
-            if n > 0:
-                return Int(n)
-            else:
-                return Str('123')
-
-        def ll_function(n):
-            hint(None, global_merge_point=True)
-            o = ll_make(n)
-            hint(o.__class__, promote=True)
-            return o.double().get()
-
-        res = self.timeshift_from_portal(ll_function, ll_function, [5],
-                                         policy=StopAtXPolicy(ll_make))
-        assert res == 10
-        self.check_insns(indirect_call=0, malloc=0)
-
-        res = self.timeshift_from_portal(ll_function, ll_function, [0],
-                                         policy=StopAtXPolicy(ll_make))
-        assert res == ord('2')
-        self.check_insns(indirect_call=0, malloc=0)
 
     def test_simple_recursive_portal_call(self):
 
@@ -300,17 +261,6 @@ class TestPortal(PortalTest):
 
         res = self.timeshift_from_portal(f, f, [15], policy=P_OOPSPEC)
         assert res == 15
-
-    def test_cast_ptr_to_int(self):
-        GCS1 = lltype.GcStruct('s1', ('x', lltype.Signed))
-        def g(p):
-            return lltype.cast_ptr_to_int(p)
-        def f():
-            p = lltype.malloc(GCS1)
-            return g(p) - lltype.cast_ptr_to_int(p)
-
-        res = self.timeshift_from_portal(f, g, [], policy=P_NOVIRTUAL)
-        assert res == 0
 
     def test_portal_returns_none(self):
         py.test.skip("portal returning None is not supported")
