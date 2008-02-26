@@ -20,25 +20,44 @@ class BoehmGCTransformer(GCTransformer):
 
         atomic_mh = mallocHelpers()
         atomic_mh.allocate = lambda size: llop.boehm_malloc_atomic(llmemory.Address, size)
-        ll_malloc_fixedsize_atomic = atomic_mh._ll_malloc_fixedsize
-
         mh = mallocHelpers()
         mh.allocate = lambda size: llop.boehm_malloc(llmemory.Address, size)
-        ll_malloc_fixedsize = mh._ll_malloc_fixedsize
+        HDRPTR = lltype.Ptr(self.HDR)
+
+        def ll_malloc_fixedsize_rtti(size, rtti):
+            raw = mh._ll_malloc_fixedsize(size)
+            llmemory.cast_adr_to_ptr(raw, HDRPTR).typeptr = rtti
+            return raw
+
+        def ll_malloc_fixedsize_atomic_rtti(size, rtti):
+            raw = atomic_mh._ll_malloc_fixedsize(size)
+            llmemory.cast_adr_to_ptr(raw, HDRPTR).typeptr = rtti
+            return raw
 
         # XXX, do we need/want an atomic version of this function?
-        ll_malloc_varsize_no_length = mh.ll_malloc_varsize_no_length
-        ll_malloc_varsize = mh.ll_malloc_varsize
+        def ll_malloc_varsize_no_length_rtti(length, size, itemsize, rtti):
+            raw = mh.ll_malloc_varsize_no_length(length, size, itemsize)
+            llmemory.cast_adr_to_ptr(raw, HDRPTR).typeptr = rtti
+            return raw
+
+        def ll_malloc_varsize_rtti(length, size, itemsize, lengthoffset, rtti):
+            raw = mh.ll_malloc_varsize(length, size, itemsize, lengthoffset)
+            llmemory.cast_adr_to_ptr(raw, HDRPTR).typeptr = rtti
+            return raw
 
         if self.translator:
             self.malloc_fixedsize_ptr = self.inittime_helper(
-                ll_malloc_fixedsize, [lltype.Signed], llmemory.Address)
+                ll_malloc_fixedsize_rtti,
+                [lltype.Signed, RTTIPTR], llmemory.Address)
             self.malloc_fixedsize_atomic_ptr = self.inittime_helper(
-                ll_malloc_fixedsize_atomic, [lltype.Signed], llmemory.Address)
+                ll_malloc_fixedsize_atomic_rtti,
+                [lltype.Signed, RTTIPTR], llmemory.Address)
             self.malloc_varsize_no_length_ptr = self.inittime_helper(
-                ll_malloc_varsize_no_length, [lltype.Signed]*3, llmemory.Address, inline=False)
+                ll_malloc_varsize_no_length_rtti,
+                [lltype.Signed]*3 + [RTTIPTR], llmemory.Address, inline=False)
             self.malloc_varsize_ptr = self.inittime_helper(
-                ll_malloc_varsize, [lltype.Signed]*4, llmemory.Address, inline=False)
+                ll_malloc_varsize_rtti,
+                [lltype.Signed]*4 + [RTTIPTR], llmemory.Address, inline=False)
             self.weakref_create_ptr = self.inittime_helper(
                 ll_weakref_create, [llmemory.Address], llmemory.WeakRefPtr,
                 inline=False)
@@ -62,8 +81,9 @@ class BoehmGCTransformer(GCTransformer):
             funcptr = self.malloc_fixedsize_atomic_ptr
         else:
             funcptr = self.malloc_fixedsize_ptr
+        c_rtti = rmodel.inputconst(RTTIPTR, self.gcheaderbuilder.getRtti(TYPE))
         v_raw = hop.genop("direct_call",
-                          [funcptr, c_size],
+                          [funcptr, c_size, c_rtti],
                           resulttype=llmemory.Address)
         finalizer_ptr = self.finalizer_funcptr_for_type(TYPE)
         if finalizer_ptr:
@@ -75,15 +95,17 @@ class BoehmGCTransformer(GCTransformer):
     def gct_fv_gc_malloc_varsize(self, hop, flags, TYPE, v_length, c_const_size, c_item_size,
                                                                    c_offset_to_length):
         # XXX same behavior for zero=True: in theory that's wrong        
+        c_rtti = rmodel.inputconst(RTTIPTR, self.gcheaderbuilder.getRtti(TYPE))
         if c_offset_to_length is None:
             v_raw = hop.genop("direct_call",
                                [self.malloc_varsize_no_length_ptr, v_length,
-                                c_const_size, c_item_size],
+                                c_const_size, c_item_size, c_rtti],
                                resulttype=llmemory.Address)
         else:
             v_raw = hop.genop("direct_call",
                                [self.malloc_varsize_ptr, v_length,
-                                c_const_size, c_item_size, c_offset_to_length],
+                                c_const_size, c_item_size, c_offset_to_length,
+                                c_rtti],
                                resulttype=llmemory.Address)
         return v_raw
 
