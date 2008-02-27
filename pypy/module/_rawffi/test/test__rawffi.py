@@ -644,7 +644,7 @@ class AppTestFfi:
         X_Y = _rawffi.Structure([('x', 'l'), ('y', 'l')])
         x_y = X_Y()
         lib = _rawffi.CDLL(self.lib_name)
-        sum_x_y = lib.ptr('sum_x_y', [X_Y.gettypecode()], 'l')
+        sum_x_y = lib.ptr('sum_x_y', [(X_Y, 1)], 'l')
         x_y.x = 200
         x_y.y = 220
         res = sum_x_y(x_y)
@@ -657,7 +657,7 @@ class AppTestFfi:
         S2H = _rawffi.Structure([('x', 'h'), ('y', 'h')])
         s2h = S2H()
         lib = _rawffi.CDLL(self.lib_name)
-        give = lib.ptr('give', ['h', 'h'], S2H)
+        give = lib.ptr('give', ['h', 'h'], (S2H, 1))
         a1 = _rawffi.Array('h')(1)
         a2 = _rawffi.Array('h')(1)
         a1[0] = 13
@@ -673,7 +673,7 @@ class AppTestFfi:
 
         s2h.x = 7
         s2h.y = 11
-        perturb = lib.ptr('perturb', [S2H.gettypecode()], S2H)
+        perturb = lib.ptr('perturb', [(S2H, 1)], (S2H, 1))
         res = perturb(s2h)
         assert isinstance(res, _rawffi.StructureInstance)
         assert res.shape is S2H
