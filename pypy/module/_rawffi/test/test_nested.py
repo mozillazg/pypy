@@ -83,3 +83,5 @@ class AppTestNested:
         assert rawbuf[4] == 13
         assert rawbuf[7] == 17
         a.free()
+
+    # xxx missing array in structure
