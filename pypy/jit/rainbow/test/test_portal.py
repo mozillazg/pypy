@@ -158,7 +158,6 @@ class TestPortal(PortalTest):
         assert not res
 
     def test_dfa_compile2(self):
-        py.test.skip("not working yet")
         from pypy.lang.automata.dfa import getautomaton, convertagain, recognizeparts
         more = [convertagain(getautomaton()), convertagain(getautomaton())]
         def main(gets, gets2):
