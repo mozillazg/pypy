@@ -604,8 +604,9 @@ def _find_and_set_return_block(graph):
     for block in graph.iterblocks():
         if block.exits == () and len(block.inputargs) == 1:
             returnblocks[block] = None
-    assert len(returnblocks) == 1, "ambiguous return block"
-    graph.returnblock = iter(returnblocks).next()
+    if returnblocks:
+        assert len(returnblocks) == 1, "ambiguous return block"
+        graph.returnblock = iter(returnblocks).next()
        
 
 def _buildgraph(graph):
