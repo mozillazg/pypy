@@ -59,12 +59,13 @@ class PortalTest(InterpretationTest):
                                                 backendoptimize=backendoptimize)
         self.main_args = main_args
         self.main_is_portal = main is portal
-        llinterp = LLInterpreter(self.rtyper)
+        llinterp = LLInterpreter(self.rtyper,
+                                 exc_data_ptr=
+                                     self.writer.exceptiondesc.exc_data_ptr)
         res = llinterp.eval_graph(self.maingraph, main_args)
         return res
 
     def get_residual_graph(self):
-        llinterp = LLInterpreter(self.rtyper)
         portalstate = self.rewriter.state
         if self.main_is_portal:
             residual_graph = portalstate.readportal(*self.main_args)._obj.graph
@@ -375,3 +376,52 @@ class TestPortal(PortalTest):
                                          policy=StopAtXPolicy(ll_make))
         assert res == ord('2')
         self.check_insns(indirect_call=0, malloc=0)
+
+
+    def test_residual_red_call_with_promoted_exc(self):
+        def h(x):
+            if x > 0:
+                return x+1
+            else:
+                raise ValueError
+
+        def g(x):
+            return 2*h(x)
+
+        def f(x):
+            hint(None, global_merge_point=True)
+            try:
+                return g(x)
+            except ValueError:
+                return 7
+
+        stop_at_h = StopAtXPolicy(h)
+        res = self.timeshift_from_portal(f, f, [20], policy=stop_at_h)
+        assert res == 42
+        self.check_insns(int_add=0)
+
+        res = self.timeshift_from_portal(f, f, [-20], policy=stop_at_h)
+        assert res == 7
+        self.check_insns(int_add=0)
+
+    def test_residual_oop_raising(self):
+        py.test.skip("not working yet")
+        def g(x):
+            lst = []
+            if x > 10:
+                lst.append(x)
+            return lst
+        def f(x):
+            hint(None, global_merge_point=True)
+            lst = g(x)
+            try:
+                return lst[0]
+            except IndexError:
+                return -42
+
+        res = self.timeshift_from_portal(f, f, [5], policy=P_OOPSPEC)
+        assert res == -42
+
+        res = self.timeshift_from_portal(f, f, [15], policy=P_OOPSPEC)
+        assert res == 15
+
