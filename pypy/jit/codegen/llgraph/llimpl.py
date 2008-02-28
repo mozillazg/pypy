@@ -599,11 +599,26 @@ def fixduplicatevars(graph):
             block.renamevariables(mapping)
             done[block] = True
 
+def _find_and_set_return_block(graph):
+    returnblocks = {}
+    for block in graph.iterblocks():
+        if block.exits == () and len(block.inputargs) == 1:
+            returnblocks[block] = None
+    assert len(returnblocks) == 1, "ambiguous return block"
+    graph.returnblock = iter(returnblocks).next()
+       
+
 def _buildgraph(graph):
     assert graph.startblock.operations[0].opname == 'debug_assert'
     del graph.startblock.operations[0]
     # rgenop makes graphs that use the same variable in several blocks,
     fixduplicatevars(graph)                             # fix this now
+    # through caching it is possible that parts of another graph are reused
+    # make a copy of the whole graph to no longer share data
+    newgraph = flowmodel.copygraph(graph)
+    graph.__dict__.update(newgraph.__dict__)
+    _find_and_set_return_block(graph)
+    
     flowmodel.checkgraph(graph)
     eliminate_empty_blocks(graph)
     # we cannot call join_blocks(graph) here!  It has a subtle problem:
