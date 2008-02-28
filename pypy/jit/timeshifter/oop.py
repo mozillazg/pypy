@@ -86,8 +86,11 @@ class OopSpecDesc:
         vmodule = __import__('pypy.jit.timeshifter.v%s' % (typename,),
                              None, None, [method])
         self.typedesc = vmodule.TypeDesc(RGenOp, rtyper, SELFTYPE)
-        self.ll_handler = getattr(vmodule, method)
-        self.couldfold = getattr(self.ll_handler, 'couldfold', False)
+        handler = getattr(vmodule, method)
+        setattr(self, "ll_handler_%s" % (len(OOPARGTYPES), ), handler)
+
+        self.ll_handler = handler
+        self.couldfold = getattr(handler, 'couldfold', False)
 
         if self.couldfold:
             oopargcheck = ll_func.oopargcheck    # required if couldfold=True
