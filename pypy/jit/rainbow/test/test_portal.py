@@ -405,7 +405,6 @@ class TestPortal(PortalTest):
         self.check_insns(int_add=0)
 
     def test_residual_oop_raising(self):
-        py.test.skip("not working yet")
         def g(x):
             lst = []
             if x > 10:

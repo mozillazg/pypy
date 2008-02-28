@@ -185,7 +185,7 @@ class BytecodeWriter(object):
         bytecode._source = self.assembler
         bytecode._interpreter = self.interpreter
         bytecode._labelpos = labelpos
-        #bytecode.dump()
+        bytecode.dump()
         if is_portal:
             self.finish_all_graphs()
             self.interpreter.set_num_global_mergepoints(
@@ -740,11 +740,21 @@ class BytecodeWriter(object):
         else:
             deepfrozen = False
 
-        self.emit("red_oopspec_call_%s" % (len(args), ))
+        hasresult = op.result.concretetype != lltype.Void
+        self.emit("red_oopspec_call%s_%s" % ("_noresult" * (not hasresult),
+                                             len(args)))
         self.emit(oopspecdescindex)
         self.emit(deepfrozen)
         self.emit(*args)
-        self.register_redvar(op.result)
+        if hasresult:
+            self.register_redvar(op.result)
+
+        if withexc:
+            self.emit("goto_if_oopcall_was_virtual", tlabel(("oop_call", op)))
+            self.emit("after_oop_residual_call")
+            self.emit(self.promotiondesc_position(lltype.Signed))
+
+            self.emit(label(("oop_call", op)))
 
     def handle_green_call(self, op, withexc):
         voidargs = [const.value for const in op.args[1:]
