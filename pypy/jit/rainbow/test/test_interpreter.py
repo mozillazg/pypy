@@ -70,6 +70,7 @@ def hannotate(func, values, policy=None, inline=None, backendoptimize=False,
 class InterpretationTest(object):
 
     RGenOp = LLRGenOp
+    small = False
 
     def setup_class(cls):
         cls.on_llgraph = cls.RGenOp is LLRGenOp
