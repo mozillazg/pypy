@@ -141,10 +141,6 @@ class PortalTest(object):
         return calls
         
 class TestPortal(PortalTest):
-            
-
-
-
     def test_simple_recursive_portal_call(self):
 
         def main(code, x):
@@ -215,52 +211,6 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(main, evaluate, [4, 7])
         assert res == 11
     
-
-    def test_residual_red_call_with_promoted_exc(self):
-        def h(x):
-            if x > 0:
-                return x+1
-            else:
-                raise ValueError
-
-        def g(x):
-            return 2*h(x)
-
-        def f(x):
-            hint(None, global_merge_point=True)
-            try:
-                return g(x)
-            except ValueError:
-                return 7
-
-        stop_at_h = StopAtXPolicy(h)
-        res = self.timeshift_from_portal(f, f, [20], policy=stop_at_h)
-        assert res == 42
-        self.check_insns(int_add=0)
-
-        res = self.timeshift_from_portal(f, f, [-20], policy=stop_at_h)
-        assert res == 7
-        self.check_insns(int_add=0)
-
-    def test_residual_oop_raising(self):
-        def g(x):
-            lst = []
-            if x > 10:
-                lst.append(x)
-            return lst
-        def f(x):
-            hint(None, global_merge_point=True)
-            lst = g(x)
-            try:
-                return lst[0]
-            except IndexError:
-                return -42
-
-        res = self.timeshift_from_portal(f, f, [5], policy=P_OOPSPEC)
-        assert res == -42
-
-        res = self.timeshift_from_portal(f, f, [15], policy=P_OOPSPEC)
-        assert res == 15
 
     def test_portal_returns_none(self):
         py.test.skip("portal returning None is not supported")

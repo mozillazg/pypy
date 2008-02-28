@@ -25,7 +25,8 @@ class PortalRewriter(object):
         self.PortalState = make_state_class(
             self.args_specification, self.RESIDUAL_FUNCTYPE, self.sigtoken,
             self.codewriter.all_graphs[self.portalgraph],
-            self.rtyper)
+            self.rtyper,
+            self.codewriter)
         self.make_state_instance()
         self.mutate_origportalgraph()
 
@@ -97,7 +98,7 @@ class PortalRewriter(object):
 
 
 def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
-                     portal_jitcode, rtyper):
+                     portal_jitcode, rtyper, codewriter):
     args_specification = unrolling_iterable(args_specification)
     class PortalState(object):
         def __init__(self, interpreter, portalbytecode):
@@ -154,7 +155,8 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             fn = gv_generated.revealconst(lltype.Ptr(RESIDUAL_FUNCTYPE))
             if not we_are_translated():
                 # run the generated code on top of the llinterp for testing
-                llinterp = LLInterpreter(rtyper)
+                exc_data_ptr = codewriter.exceptiondesc.exc_data_ptr
+                llinterp = LLInterpreter(rtyper, exc_data_ptr=exc_data_ptr)
                 res = llinterp.eval_graph(fn._obj.graph, residualargs)
                 return res
             else:
