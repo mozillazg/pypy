@@ -1121,12 +1121,14 @@ class SimpleTests(InterpretationTest):
 
     def test_recursive_with_red_termination_condition(self):
         py.test.skip('Does not terminate')
+        def indirection(n):
+            return ll_factorial
         def ll_factorial(n):
             if n <= 0:
                 return 1
             return n * ll_factorial(n - 1)
 
-        res = self.interpret(ll_factorial, [5], [])
+        res = self.interpret(indirection, [5], [])
         assert res == 120
         
     def test_simple_indirect_call(self):
