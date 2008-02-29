@@ -685,39 +685,46 @@ class BytecodeWriter(object):
         kind, withexc = self.guess_call_kind(op)
         targets = dict(self.graphs_from(op))
         fnptrindex = self.serialize_oparg("red", op.args[0])
-        self.emit("goto_if_constant", fnptrindex, tlabel(("direct call", op)))
+        has_result = (self.varcolor(op.result) != "gray" and
+                      op.result.concretetype != lltype.Void)
+        if targets:
+            self.emit("goto_if_constant", fnptrindex, tlabel(("direct call", op)))
+
         emitted_args = []
         for v in op.args[1:-1]:
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_call")
         calldescindex = self.calldesc_position(op.args[0].concretetype)
-        self.emit(fnptrindex, calldescindex, withexc, kind != "gray")
+        self.emit(fnptrindex, calldescindex, withexc, has_result)
         self.emit(len(emitted_args), *emitted_args)
         self.emit(self.promotiondesc_position(lltype.Signed))
-        self.emit("goto", tlabel(("after indirect call", op)))
 
-        self.emit(label(("direct call", op)))
-        args = targets.values()[0].getargs()
-        emitted_args = self.args_of_call(op.args[1:-1], args)
-        self.emit("indirect_call_const")
-        self.emit(*emitted_args)
-        setdescindex = self.indirectcalldesc_position(targets)
-        self.emit(fnptrindex, setdescindex)
-
-        if kind == "red":
-            self.emit("red_after_direct_call")
+        if has_result:
             self.register_redvar(op.result)
-        elif kind == "yellow":
-            self.emit("yellow_after_direct_call")
-            self.emit("yellow_retrieve_result_as_red")
-            self.emit(self.type_position(op.result.concretetype))
-            self.register_redvar(op.result)
-        elif kind == "gray":
-            self.emit("red_after_direct_call")
-        else:
-            XXX
 
-        self.emit(label(("after indirect call", op)))
+        if targets:
+            self.emit("goto", tlabel(("after indirect call", op)))
+
+            self.emit(label(("direct call", op)))
+            args = targets.values()[0].getargs()
+            emitted_args = self.args_of_call(op.args[1:-1], args)
+            self.emit("indirect_call_const")
+            self.emit(*emitted_args)
+            setdescindex = self.indirectcalldesc_position(targets)
+            self.emit(fnptrindex, setdescindex)
+
+            if kind == "red":
+                self.emit("red_after_direct_call")
+            elif kind == "yellow":
+                self.emit("yellow_after_direct_call")
+                self.emit("yellow_retrieve_result_as_red")
+                self.emit(self.type_position(op.result.concretetype))
+            elif kind == "gray":
+                self.emit("red_after_direct_call")
+            else:
+                XXX
+
+            self.emit(label(("after indirect call", op)))
 
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
