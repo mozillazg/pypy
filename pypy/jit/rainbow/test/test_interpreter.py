@@ -554,12 +554,14 @@ class SimpleTests(InterpretationTest):
         self.check_insns({'int_gt': 1})
 
     def test_recursive_call(self):
+        def indirection(n, fudge):
+            return ll_pseudo_factorial(n, fudge)
         def ll_pseudo_factorial(n, fudge):
             k = hint(n, concrete=True)
             if n <= 0:
                 return 1
             return n * ll_pseudo_factorial(n - 1, fudge + n) - fudge
-        res = self.interpret(ll_pseudo_factorial, [4, 2], [0])
+        res = self.interpret(indirection, [4, 2], [0])
         expected = ll_pseudo_factorial(4, 2)
         assert res == expected
         

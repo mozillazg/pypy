@@ -103,7 +103,9 @@ class BytecodeWriter(object):
     def make_bytecode(self, graph, is_portal=True):
         remove_same_as(graph)
         if is_portal:
-            self.all_graphs[graph] = JitCode.__new__(JitCode)
+            bytecode = JitCode.__new__(JitCode)
+            bytecode.is_portal = True
+            self.all_graphs[graph] = bytecode
         self.seen_blocks = {}
         self.assembler = []
         self.constants = []
@@ -795,11 +797,17 @@ class BytecodeWriter(object):
         assert len(targets) == 1
         targetgraph, = targets.values()
         graphindex = self.graph_position(targetgraph)
+        bytecode = self.all_graphs[targetgraph]
         args = targetgraph.getargs()
         emitted_args = self.args_of_call(op.args[1:], args)
-        self.emit("red_direct_call")
-        self.emit(*emitted_args)
-        self.emit(graphindex)
+
+        if bytecode.is_portal:
+            self.emit("portal_call", *emitted_args)
+        else:
+            self.emit("red_direct_call")
+            self.emit(*emitted_args)
+            self.emit(graphindex)
+
         if kind == "red":
             self.register_redvar(op.result)
         self.emit("red_after_direct_call")
