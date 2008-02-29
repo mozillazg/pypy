@@ -228,8 +228,8 @@ class JitInterpreter(object):
             bytecode = self.load_2byte()
             assert bytecode >= 0
             result = self.opcode_implementations[bytecode](self)
-            #assert (self.frame is None or not self.frame.local_boxes or
-            #        self.frame.local_boxes[-1] is not None)
+            assert (self.frame is None or not self.frame.local_boxes or
+                    self.frame.local_boxes[-1] is not None)
             if result is STOP:
                 return
             else:
