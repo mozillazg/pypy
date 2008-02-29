@@ -228,7 +228,8 @@ class JitInterpreter(object):
             bytecode = self.load_2byte()
             assert bytecode >= 0
             result = self.opcode_implementations[bytecode](self)
-            #assert self.frame.local_boxes[-1] is not None
+            #assert (self.frame is None or not self.frame.local_boxes or
+            #        self.frame.local_boxes[-1] is not None)
             if result is STOP:
                 return
             else:
@@ -581,12 +582,14 @@ class JitInterpreter(object):
         rtimeshift.residual_fetch(self.jitstate, self.exceptiondesc,
                                   check_forced, flagbox)
 
-    @arguments("red", "calldesc", "bool", "red_varargs", "promotiondesc")
-    def opimpl_red_residual_call(self, funcbox, calldesc, withexc,
-                                        redargs, promotiondesc):
+    @arguments("red", "calldesc", "bool", "bool", "red_varargs",
+               "promotiondesc")
+    def opimpl_red_residual_call(self, funcbox, calldesc, withexc, has_result,
+                                 redargs, promotiondesc):
         result = rtimeshift.gen_residual_call(self.jitstate, calldesc,
                                               funcbox, redargs)
-        self.red_result(result)
+        if has_result:
+            self.red_result(result)
         if withexc:
             exceptiondesc = self.exceptiondesc
         else:

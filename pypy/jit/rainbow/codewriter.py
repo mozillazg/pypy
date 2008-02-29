@@ -691,7 +691,7 @@ class BytecodeWriter(object):
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_call")
         calldescindex = self.calldesc_position(op.args[0].concretetype)
-        self.emit(fnptrindex, calldescindex, withexc)
+        self.emit(fnptrindex, calldescindex, withexc, kind != "gray")
         self.emit(len(emitted_args), *emitted_args)
         self.emit(self.promotiondesc_position(lltype.Signed))
         self.emit("goto", tlabel(("after indirect call", op)))
@@ -706,14 +706,17 @@ class BytecodeWriter(object):
 
         if kind == "red":
             self.emit("red_after_direct_call")
+            self.register_redvar(op.result)
         elif kind == "yellow":
             self.emit("yellow_after_direct_call")
             self.emit("yellow_retrieve_result_as_red")
             self.emit(self.type_position(op.result.concretetype))
+            self.register_redvar(op.result)
+        elif kind == "gray":
+            self.emit("red_after_direct_call")
         else:
             XXX
 
-        self.register_redvar(op.result)
         self.emit(label(("after indirect call", op)))
 
     def handle_oopspec_call(self, op, withexc):
@@ -783,12 +786,14 @@ class BytecodeWriter(object):
     def handle_residual_call(self, op, withexc):
         fnptr = op.args[0]
         pos = self.calldesc_position(lltype.typeOf(fnptr.value))
+        has_result = self.varcolor(op.result) != "gray"
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
         for v in op.args[1:]:
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_call")
-        self.emit(func, pos, withexc, len(emitted_args), *emitted_args)
+        self.emit(func, pos, withexc, has_result, len(emitted_args))
+        self.emit(*emitted_args)
         self.emit(self.promotiondesc_position(lltype.Signed))
         self.register_redvar(op.result)
 
