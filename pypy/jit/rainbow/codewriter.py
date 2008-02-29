@@ -283,7 +283,7 @@ class BytecodeWriter(object):
                 assert 0, "unknown graph calling color %s" % (color, )
         elif len(block.exits) == 1:
             link, = block.exits
-            self.insert_renaming(link)
+            self.emit(*self.insert_renaming(link))
             self.make_bytecode_block(link.target, insert_goto=True)
         elif len(block.exits) == 2:
             linkfalse, linktrue = block.exits
@@ -300,6 +300,9 @@ class BytecodeWriter(object):
                         reverse = False
                     elif srcopname == 'ptr_iszero':
                         reverse = True
+
+            falserenaming = self.insert_renaming(linkfalse)
+            truerenaming = self.insert_renaming(linktrue)
             if reverse is not None:
                 ptrindex = self.serialize_oparg("red", srcargs[0])
                 self.emit("red_goto_ifptrnonzero")
@@ -309,10 +312,10 @@ class BytecodeWriter(object):
                 self.emit("%s_goto_iftrue" % color)
             self.emit(index)
             self.emit(tlabel(linktrue))
-            self.insert_renaming(linkfalse)
+            self.emit(*falserenaming)
             self.make_bytecode_block(linkfalse.target, insert_goto=True)
             self.emit(label(linktrue))
-            self.insert_renaming(linktrue)
+            self.emit(*truerenaming)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
             XXX
@@ -350,13 +353,12 @@ class BytecodeWriter(object):
 
     def insert_renaming(self, link):
         reds, greens = self.sort_by_color(link.args, link.target.inputargs)
+        result = []
         for color, args in [("red", reds), ("green", greens)]:
-            result = []
+            result += ["make_new_%svars" % (color, ), len(args)]
             for v in args:
                 result.append(self.serialize_oparg(color, v))
-            self.emit("make_new_%svars" % (color, ))
-            self.emit(len(args))
-            self.emit(*result)
+        return result
 
     def serialize_op(self, op):
         specialcase = getattr(self, "serialize_op_%s" % (op.opname, ), None)

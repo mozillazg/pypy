@@ -1172,7 +1172,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({})
 
     def test_normalize_indirect_call_more(self):
-        py.test.skip("not working yet")
         def g1(v):
             if v >= 0:
                 return -17
