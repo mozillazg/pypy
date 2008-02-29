@@ -14,6 +14,7 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import summary, Variable
+from pypy.rlib.debug import ll_assert
 from pypy.rlib.jit import hint
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy import conftest
@@ -1299,7 +1300,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns(int_mul=1, int_add=0)
 
     def test_debug_assert_ptr_nonzero(self):
-        py.test.skip("not working yet")
         S = lltype.GcStruct('s', ('x', lltype.Signed))
         def h():
             s = lltype.malloc(S)
