@@ -1367,7 +1367,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns(indirect_call=1)
 
     def test_indirect_gray_call(self):
-        py.test.skip("not working yet")
         def h1(w, n):
             w[0] =  n*2
         def h2(w, n):
