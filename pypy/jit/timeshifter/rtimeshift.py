@@ -344,8 +344,6 @@ def retrieve_jitstate_for_merge(states_dic, jitstate, key, global_resumer,
     start_new_block(states_dic, jitstate, key, global_resumer)
     return False   
 
-retrieve_jitstate_for_merge._annspecialcase_ = "specialize:arglltype(2)"
-
 def cleanup_partial_data(partialdatamatch):
     # remove entries from PartialDataStruct unless they matched
     # their frozen equivalent
@@ -1224,16 +1222,6 @@ def start_writing(jitstate=None, prevopen=None):
         jitstate.curbuilder.start_writing()
     return jitstate
 
-
-def replayable_ensure_queue(jitstate, DispatchQueueClass):
-    if jitstate.frame is None:    # common case
-        return DispatchQueueClass()
-    else:
-        # replaying
-        dispatchqueue = jitstate.frame.dispatchqueue
-        assert isinstance(dispatchqueue, DispatchQueueClass)
-        return dispatchqueue
-replayable_ensure_queue._annspecialcase_ = 'specialize:arg(1)'
 
 def enter_frame(jitstate, dispatchqueue):
     if jitstate.frame:
