@@ -42,11 +42,11 @@ class PortalRewriter(object):
             concretetype = originalconcretetype(binding)
             if binding.is_green():
                 ORIGARGS.append(concretetype)
-                arg_spec = "green", None, None
+                arg_spec = "green", None, None, concretetype
             else:
                 argdesc = self.getportalargdesc(concretetype)
                 arg_spec = ("red", argdesc.residual_args_collector(),
-                            argdesc.arg_redbox_maker())
+                            argdesc.arg_redbox_maker(), concretetype)
                 ARGS.extend(argdesc.residual_argtypes())
             args_specification.append(arg_spec)
         self.args_specification = args_specification
@@ -124,7 +124,7 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
         def make_key(self, *args):
             key = ()
             i = 0
-            for color, collect_residual_args, _ in args_specification:
+            for color, collect_residual_args, _, _ in args_specification:
                 if color == "green":
                     x = args[i]
                     if isinstance(lltype.typeOf(x), lltype.Ptr): 
@@ -133,10 +133,26 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
                 i = i + 1
             return key
 
+        def make_key_from_genconsts(self, green_gv):
+            key = ()
+            i = 0
+            j = 0
+            for color, collect_residual_args, _, TYPE in args_specification:
+                if color == "green":
+                    genconst = green_gv[j]
+                    x = genconst.revealconst(TYPE)
+                    if isinstance(TYPE, lltype.Ptr): 
+                        x = llmemory.cast_ptr_to_adr(x)
+                    key = key + (x,)
+                    j += 1
+                i = i + 1
+            return key
+
+
         def make_residualargs(self, *args):
             residualargs = ()
             i = 0
-            for color, collect_residual_args, _ in args_specification:
+            for color, collect_residual_args, _, _ in args_specification:
                 if color != "green":
                     residualargs = residualargs + collect_residual_args(args[i])
                 i = i + 1
@@ -162,6 +178,48 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             else:
                 return fn(*residualargs)
 
+        def portal_reentry(self, greenargs, redargs):
+            jitstate = self.interpreter.jitstate
+            curbuilder = jitstate.curbuilder
+            rgenop = self.interpreter.rgenop
+            i = 0
+            cache = self.cache
+            key = self.make_key_from_genconsts(greenargs)
+            try:
+                gv_generated = cache[key]
+            except KeyError:
+                builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken,
+                                                                      "generated")
+                self.cache[key] = gv_generated
+                top_jitstate = self.interpreter.fresh_jitstate(builder)
+                newredargs = ()
+                red_i = 0
+                for color, _, make_arg_redbox, _ in args_specification:
+                    if color == "red":
+                        box = make_arg_redbox(top_jitstate, inputargs_gv, red_i)
+                        red_i += make_arg_redbox.consumes
+                        newredargs += (box,)
+                newredargs = list(newredargs)
+
+                self.graph_compilation_queue.append(
+                    (top_jitstate, greenargs, newredargs))
+            residualargs_gv = [box.getgenvar(jitstate) for box in redargs]
+
+            gv_res = curbuilder.genop_call(sigtoken, gv_generated,
+                                           residualargs_gv)
+            self.interpreter.exceptiondesc.fetch_global_excdata(jitstate)
+
+            RESTYPE = RESIDUAL_FUNCTYPE.RESULT
+            reskind = rgenop.kindToken(RESTYPE)
+            boxbuilder = rvalue.ll_redboxbuilder(RESTYPE)
+
+            if RESTYPE == lltype.Void:
+                retbox = None
+            else:
+                retbox = boxbuilder(reskind, gv_res)
+            jitstate.returnbox = retbox
+            assert jitstate.next is None
+
 
         def compile(self, key, *args):
             portal_ts_args = ()
@@ -173,14 +231,12 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
             greenargs = ()
             redargs = ()
             red_i = 0
-            for color, _, make_arg_redbox in args_specification:
+            for color, _, make_arg_redbox, _ in args_specification:
+                llvalue = args[0]
+                args = args[1:]
                 if color == "green":
-                    llvalue = args[0]
-                    args = args[1:]
                     greenargs += (rgenop.genconst(llvalue),)
                 else:
-                    llvalue = args[0]
-                    args = args[1:]
                     box = make_arg_redbox(top_jitstate, inputargs_gv, red_i)
                     red_i += make_arg_redbox.consumes
                     redargs += (box,)
@@ -196,7 +252,7 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
         def readportal(self, *args):
             i = 0
             key = ()
-            for color, _, _ in args_specification:
+            for color, _, _, _ in args_specification:
                 if color == "green":
                     x = args[i]
                     if isinstance(lltype.typeOf(x), lltype.Ptr): 

@@ -17,6 +17,7 @@ class JitCode(object):
     green vars are positive indexes
     green consts are negative indexes
     """
+    is_portal = False
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
@@ -486,6 +487,10 @@ class JitInterpreter(object):
             self.jitstate, self.frame.pc,
             self.frame.local_green)
         assert newjitstate is self.jitstate
+
+    @arguments("green_varargs", "red_varargs")
+    def opimpl_portal_call(self, greenargs, redargs):
+        self.portalstate.portal_reentry(greenargs, redargs)
 
     @arguments("green", "calldesc", "green_varargs")
     def opimpl_green_direct_call(self, fnptr_gv, calldesc, greenargs):
