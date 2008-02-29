@@ -17,7 +17,10 @@ from pypy.objspace.flow.model import summary, Variable
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.jit import hint
 from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rlib.rarithmetic import ovfcheck
 from pypy import conftest
+
+import sys
 
 P_NOVIRTUAL = HintAnnotatorPolicy(novirtualcontainer=True)
 P_OOPSPEC = HintAnnotatorPolicy(novirtualcontainer=True, oopspec=True)
@@ -1383,7 +1386,6 @@ class SimpleTests(InterpretationTest):
         assert res == f(7,3)
 
     def test_indirect_residual_red_call(self):
-        py.test.skip("not working yet")
         def h1(n):
             return n*2
         def h2(n):
@@ -1464,39 +1466,31 @@ class SimpleTests(InterpretationTest):
         self.check_insns({})
 
     def test_manual_marking_of_pure_functions(self):
-        py.test.skip("not working yet")
-        class A(object):
-            pass
-        class B(object):
-            pass
-        a1 = A()
-        a2 = A()
         d = {}
-        def h1(b, s):
+        def h1(s):
             try:
                 return d[s]
             except KeyError:
-                d[s] = r = A()
+                d[s] = r = s * 15
                 return r
         h1._pure_function_ = True
-        b = B()
         def f(n):
             hint(None, global_merge_point=True)
             hint(n, concrete=True)
             if n == 0:
-                s = "abc"
+                s = 123
             else:
-                s = "123"
-            a = h1(b, s)
-            return hint(n, variable=True)
+                s = 567
+            a = h1(s)
+            return hint(a, variable=True)
 
         P = StopAtXPolicy(h1)
         P.oopspec = True
         res = self.interpret(f, [0], [], policy=P)
-        assert res == 0
+        assert res == 123 * 15
         self.check_insns({})
         res = self.interpret(f, [4], [], policy=P)
-        assert res == 4
+        assert res == 567 * 15
         self.check_insns({})
 
 
