@@ -786,7 +786,8 @@ class BytecodeWriter(object):
     def handle_residual_call(self, op, withexc):
         fnptr = op.args[0]
         pos = self.calldesc_position(lltype.typeOf(fnptr.value))
-        has_result = self.varcolor(op.result) != "gray"
+        has_result = (self.varcolor(op.result) != "gray" and
+                      op.result.concretetype != lltype.Void)
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
         for v in op.args[1:]:
@@ -795,7 +796,8 @@ class BytecodeWriter(object):
         self.emit(func, pos, withexc, has_result, len(emitted_args))
         self.emit(*emitted_args)
         self.emit(self.promotiondesc_position(lltype.Signed))
-        self.register_redvar(op.result)
+        if has_result:
+            self.register_redvar(op.result)
 
     def handle_rpyexc_raise_call(self, op, withexc):
         emitted_args = []
