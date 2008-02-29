@@ -669,7 +669,11 @@ class BytecodeWriter(object):
         return result
 
     def serialize_op_debug_assert(self, op):
-        pass
+        v = op.args[0]
+        srcopname, srcargs = self.trace_back_bool_var(self.current_block, v)
+        if srcopname in ('ptr_iszero', 'ptr_nonzero'):
+            arg = self.serialize_oparg("red", srcargs[0])
+            self.emit("learn_nonzeroness", arg, srcopname == "ptr_nonzero")
 
     def serialize_op_direct_call(self, op):
         kind, withexc = self.guess_call_kind(op)

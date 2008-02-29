@@ -403,6 +403,10 @@ class JitInterpreter(object):
         return rtimeshift.genptreq(self.jitstate, ptrbox1,
                                    ptrbox2, True)
 
+    @arguments("red", "bool")
+    def opimpl_learn_nonzeroness(self, ptrbox, nonzero):
+        rtimeshift.learn_nonzeroness(self.jitstate, ptrbox, nonzero)
+
     @arguments()
     def opimpl_red_return(self):
         rtimeshift.save_return(self.jitstate)
