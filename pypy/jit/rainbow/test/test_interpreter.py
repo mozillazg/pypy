@@ -709,11 +709,6 @@ class SimpleTests(InterpretationTest):
     def test_degenerated_at_return(self):
         S = lltype.GcStruct('S', ('n', lltype.Signed))
         T = lltype.GcStruct('T', ('s', S), ('n', lltype.Float))
-        class Result:
-            def convert(self, s):
-                self.s = s
-                return str(s.n)
-        glob_result = Result()
 
         def ll_function(flag):
             t = lltype.malloc(T)
@@ -724,7 +719,6 @@ class SimpleTests(InterpretationTest):
             if flag:
                 s = t.s
             return s
-        ll_function.convert_result = glob_result.convert
 
         res = self.interpret(ll_function, [0], [])
         assert res.n == 4
@@ -758,7 +752,6 @@ class SimpleTests(InterpretationTest):
             s = lltype.malloc(S)
             s.x = 123
             return s
-        ll_function.convert_result = lambda s: str(s.x)
         res = self.interpret(ll_function, [], [])
         assert res.x == 123
 
@@ -1229,7 +1222,6 @@ class SimpleTests(InterpretationTest):
         assert res == 1
 
     def test_self_referential_structures(self):
-        py.test.skip("not working yet")
         S = lltype.GcForwardReference()
         S.become(lltype.GcStruct('s',
                                  ('ps', lltype.Ptr(S))))
@@ -1244,12 +1236,10 @@ class SimpleTests(InterpretationTest):
             while s:
                 x += 1
                 s = s.ps
-            return str(x)
+            return x
         
-        f.convert_result = count_depth
-
         res = self.interpret(f, [3], [], policy=P_NOVIRTUAL)
-        assert res == '2'
+        assert count_depth(res) == 2
 
     def test_known_nonzero(self):
         S = lltype.GcStruct('s', ('x', lltype.Signed))
