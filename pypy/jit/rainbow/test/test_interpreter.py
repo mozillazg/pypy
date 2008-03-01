@@ -981,7 +981,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({})
 
     def test_compile_time_const_tuple(self):
-        py.test.skip("no clue what's wrong")
         d = {(4, 5): 42, (6, 7): 12}
         def f(a, b):
             d1 = hint(d, deepfreeze=True)
