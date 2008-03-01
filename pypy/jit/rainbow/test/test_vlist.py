@@ -144,7 +144,6 @@ class TestVList(InterpretationTest):
         self.check_insns({})
 
     def test_frozen_list_indexerror(self):
-        py.test.skip("implement me")
         lst = [5, 7, 9]
         def ll_function(x):
             mylist = hint(lst, deepfreeze=True)
