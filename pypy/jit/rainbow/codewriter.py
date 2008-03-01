@@ -90,7 +90,7 @@ class BytecodeWriter(object):
         etrafo = hannotator.exceptiontransformer
         type_system = self.rtyper.type_system.name
         self.exceptiondesc = exception.ExceptionDesc(
-            RGenOp, etrafo, type_system, False)
+            RGenOp, etrafo, type_system, True)
         self.interpreter = JitInterpreter(self.exceptiondesc, RGenOp)
         self.RGenOp = RGenOp
         self.current_block = None
@@ -821,7 +821,6 @@ class BytecodeWriter(object):
             self.emit("goto_if_oopcall_was_virtual", tlabel(("oop_call", op)))
             self.emit("after_oop_residual_call")
             self.emit(self.promotiondesc_position(lltype.Signed))
-
             self.emit(label(("oop_call", op)))
 
     def handle_green_call(self, op, withexc):
