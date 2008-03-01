@@ -2,7 +2,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.jit.timeshifter.test.support import FakeJITState, FakeGenVar
 from pypy.jit.timeshifter.test.support import FakeGenConst
-from pypy.jit.timeshifter.test.support import fakehrtyper, signed_kind
+from pypy.jit.timeshifter.test.support import signed_kind
 from pypy.jit.timeshifter.test.support import vmalloc, makebox
 from pypy.jit.timeshifter.test.support import getfielddesc
 
