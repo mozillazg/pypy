@@ -116,6 +116,7 @@ class BytecodeWriter(object):
         self.fielddescs = []
         self.arrayfielddescs = []
         self.interiordescs = []
+        self.exceptioninstances = []
         self.oopspecdescs = []
         self.promotiondescs = []
         self.called_bytecodes = []
@@ -146,6 +147,8 @@ class BytecodeWriter(object):
         self.arrayfielddesc_positions = {}
         # mapping (TYPE, path) to index
         self.interiordesc_positions = {}
+        # mapping exception class to index
+        self.exceptioninstance_positions = {}
         # mapping (fnobj, can_raise) to index
         self.oopspecdesc_positions = {}
         # mapping (fnobj, can_raise) to index
@@ -176,6 +179,7 @@ class BytecodeWriter(object):
                           self.fielddescs,
                           self.arrayfielddescs,
                           self.interiordescs,
+                          self.exceptioninstances,
                           self.oopspecdescs,
                           self.promotiondescs,
                           self.called_bytecodes,
@@ -371,13 +375,17 @@ class BytecodeWriter(object):
         args = []
         for arg in op.args:
             args.append(self.serialize_oparg(color, arg))
-        self.serialize_opcode(color, op)
+        opdesc = self.serialize_opcode(color, op)
         self.emit(*args)
         if self.hannotator.binding(op.result).is_green():
             self.register_greenvar(op.result)
         else:
             self.register_redvar(op.result)
-        
+        if (opdesc is not None and 
+            opdesc.tryfold and not opdesc.canfold and opdesc.canraise):
+            exc_class = opdesc.llop.canraise[0]
+            self.emit("split_raisingop",
+                      self.exceptioninstance_position(exc_class))
 
     def serialize_opcode(self, color, op):
         opname = op.opname
@@ -390,6 +398,7 @@ class BytecodeWriter(object):
                 self.hannotator.binding(op.result), )
             index = self.interpreter.make_opcode_implementation(color, opdesc)
         self.emit(name)
+        return self.interpreter.opcode_descs[index]
 
     def serialize_oparg(self, color, arg):
         if color == "red":
@@ -502,6 +511,18 @@ class BytecodeWriter(object):
         result = len(self.arrayfielddescs)
         self.arrayfielddescs.append(arrayfielddesc)
         self.arrayfielddesc_positions[TYPE] = result
+        return result
+
+    def exceptioninstance_position(self, exc_class):
+        if exc_class in self.exceptioninstance_positions:
+            return self.exceptioninstance_positions[exc_class]
+        bk = self.rtyper.annotator.bookkeeper
+        exc_classdef = bk.getuniqueclassdef(exc_class)
+        ll_exc = self.rtyper.exceptiondata.get_standard_ll_exc_instance(
+            self.rtyper, exc_classdef)
+        result = len(self.exceptioninstances)
+        self.exceptioninstances.append(ll_exc)
+        self.exceptioninstance_positions[exc_class] = result
         return result
 
     def oopspecdesc_position(self, fnobj, canraise):

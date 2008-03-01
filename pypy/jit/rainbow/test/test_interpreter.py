@@ -1495,7 +1495,6 @@ class SimpleTests(InterpretationTest):
 
 
     def test_red_int_add_ovf(self):
-        py.test.skip("not working yet")
         def f(n, m):
             try:
                 return ovfcheck(n + m)
