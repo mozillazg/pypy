@@ -722,6 +722,14 @@ class BytecodeWriter(object):
     def handle_reverse_split_queue_hint(self, op, arg, result):
         self.emit("reverse_split_queue")
 
+    def handle_forget_hint(self, op, arg, result):
+        # a hint for testing only
+        assert self.varcolor(result) == "green"
+        assert self.varcolor(arg) != "green"
+        self.emit("revealconst")
+        self.emit(self.serialize_oparg("red", arg))
+        self.register_greenvar(result)
+
     def args_of_call(self, args, colored_as):
         result = []
         reds, greens = self.sort_by_color(args, colored_as)
@@ -1036,7 +1044,6 @@ class BytecodeWriter(object):
         destboxindex = self.serialize_oparg("red", args[0])
         indexboxindex = self.serialize_oparg("red", args[1])
         valboxindex = self.serialize_oparg("red", args[2])
-        fieldname = args[1].value
         fielddescindex = self.arrayfielddesc_position(PTRTYPE.TO)
         if fielddescindex == -1:   # Void field
             return
