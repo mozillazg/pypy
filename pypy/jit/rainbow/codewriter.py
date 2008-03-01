@@ -80,6 +80,7 @@ class IndirectCallsetDesc(object):
 
         self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
         self.jitcodes = values
+        self.calldesc = CallDesc(codewriter.RGenOp, lltype.typeOf(fnptr))
 
 
 class BytecodeWriter(object):
@@ -733,6 +734,8 @@ class BytecodeWriter(object):
 
     def serialize_op_indirect_call(self, op):
         kind, withexc = self.guess_call_kind(op)
+        if kind == "green":
+            return self.handle_green_call(op, withexc, exclude_last=True)
         targets = dict(self.graphs_from(op))
         fnptrindex = self.serialize_oparg("red", op.args[0])
         has_result = (self.varcolor(op.result) != "gray" and
@@ -772,9 +775,10 @@ class BytecodeWriter(object):
             elif kind == "gray":
                 self.emit("red_after_direct_call")
             else:
-                XXX
+                assert 0, "unknown call kind %s" % (kind, )
 
             self.emit(label(("after indirect call", op)))
+
 
     def handle_oopspec_call(self, op, withexc):
         from pypy.jit.timeshifter.oop import Index
@@ -823,17 +827,21 @@ class BytecodeWriter(object):
             self.emit(self.promotiondesc_position(lltype.Signed))
             self.emit(label(("oop_call", op)))
 
-    def handle_green_call(self, op, withexc):
-        voidargs = [const.value for const in op.args[1:]
+    def handle_green_call(self, op, withexc, exclude_last=False):
+        if exclude_last:
+            args = op.args[1:-1]
+        else:
+            args = op.args[1:]
+        voidargs = [const.value for const in args
                         if const.concretetype == lltype.Void]
         fnptr = op.args[0]
-        pos = self.calldesc_position(lltype.typeOf(fnptr.value), *voidargs)
+        pos = self.calldesc_position(fnptr.concretetype, *voidargs)
         func = self.serialize_oparg("green", fnptr)
         emitted_args = []
         for v in op.args[1:]:
             if v.concretetype != lltype.Void:
                 emitted_args.append(self.serialize_oparg("green", v))
-        self.emit("green_direct_call")
+        self.emit("green_call")
         self.emit(func, pos)
         self.emit(len(emitted_args))
         self.emit(*emitted_args)

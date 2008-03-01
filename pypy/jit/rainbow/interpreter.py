@@ -525,7 +525,7 @@ class JitInterpreter(object):
         self.portalstate.portal_reentry(greenargs, redargs)
 
     @arguments("green", "calldesc", "green_varargs")
-    def opimpl_green_direct_call(self, fnptr_gv, calldesc, greenargs):
+    def opimpl_green_call(self, fnptr_gv, calldesc, greenargs):
         calldesc.green_call(self, fnptr_gv, greenargs)
 
     @arguments("green_varargs", "red_varargs", "bytecode")

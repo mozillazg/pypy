@@ -1445,7 +1445,6 @@ class SimpleTests(InterpretationTest):
         self.check_insns({'direct_call': 1})
 
     def test_indirect_sometimes_residual_pure_but_fixed_red_call(self):
-        py.test.skip("not working yet")
         def h1(x):
             return x-2
         def h2(x):
