@@ -1,7 +1,8 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
-from pypy.rpython.annlowlevel import cachedtype
+from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 
 debug_print = lloperation.llop.debug_print
@@ -13,7 +14,8 @@ def define_touch_update(TOPPTR, redirected_fielddescs, access_touched):
     def touch_update(strucref):
         struc = lltype.cast_opaque_ptr(TOPPTR, strucref)
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         vable_rti.touch(struc.vable_base)
         vable_base = struc.vable_base
 
@@ -37,7 +39,8 @@ def define_getset_field_ptrs(fielddesc, j):
         T = fielddesc.RESTYPE
         if fielddesc.canbevirtual and fielddesc.gcref:
             vable_rti = struc.vable_rti
-            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+            if we_are_translated():
+                vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
             vable_rti.touched_ptr_field(struc.vable_base, j)
         struc = lltype.cast_pointer(fielddesc.PTRTYPE, struc)
         setattr(struc, fielddesc.fieldname, value)
@@ -47,7 +50,8 @@ def define_getset_field_ptrs(fielddesc, j):
         tgt = lltype.cast_pointer(fielddesc.PTRTYPE, struc)
         if fielddesc.canbevirtual and fielddesc.gcref:
             vable_rti = struc.vable_rti
-            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+            if we_are_translated():
+                vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
             vable_base = struc.vable_base
             if vable_rti.is_field_virtual(vable_base, j):
                 # this will force
@@ -58,13 +62,15 @@ def define_getset_field_ptrs(fielddesc, j):
         
     def set_field_untouched(struc, value):
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         vable_rti.touch_update(lltype.cast_opaque_ptr(llmemory.GCREF, struc))
         set_field_touched(struc, value)
 
     def get_field_untouched(struc):
         vable_rti = struc.vable_rti
-        vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
+        if we_are_translated():
+            vable_rti = cast_base_ptr_to_instance(VirtualizableRTI, vable_rti)
         return vable_rti.read_field(fielddesc, struc.vable_base, j)
         
     return ((get_field_untouched, set_field_untouched),
@@ -94,6 +100,9 @@ class RTI(object):
         return vrti._get_forced(vablerti, fielddesc, base)
     _read_field._annspecialcase_ = "specialize:arg(2)"
 
+    # hack for testing: make the llinterpreter believe this is a Ptr to base
+    # instance
+    _TYPE = base_ptr_lltype()
 
 class VirtualizableRTI(RTI):
     _attrs_ = "frameinfo touch_update shape_place".split()

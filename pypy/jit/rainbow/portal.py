@@ -1,5 +1,5 @@
 from pypy.jit.hintannotator.model import originalconcretetype
-from pypy.jit.timeshifter import rvalue
+from pypy.jit.timeshifter import rvalue, rcontainer
 from pypy.objspace.flow import model as flowmodel
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -315,7 +315,6 @@ class RedVirtualizableStructPortalArgDesc(RedPortalArgDesc):
 
     def gettypedesc(self):
         if self.typedesc is None:
-            hrtyper = self.hrtyper
             T = self.original_concretetype.TO
             self.typedesc = rcontainer.StructTypeDesc(self.RGenOp, T)
         return self.typedesc
@@ -325,7 +324,7 @@ class RedVirtualizableStructPortalArgDesc(RedPortalArgDesc):
         redirected_fielddescs = unrolling_iterable(
                                     typedesc.redirected_fielddescs)
         TYPE = self.original_concretetype
-        kind = self.hrtyper.RGenOp.kindToken(TYPE)
+        kind = self.RGenOp.kindToken(TYPE)
 
         def make_arg_redbox(jitstate, inputargs_gv, i):
             box = typedesc.factory()
@@ -348,7 +347,6 @@ class RedVirtualizableStructPortalArgDesc(RedPortalArgDesc):
 
     def residual_argtypes(self):
         argtypes = [self.original_concretetype]
-        getredrepr = self.hrtyper.getredrepr
         typedesc = self.gettypedesc()
         for fielddesc, _ in typedesc.redirected_fielddescs:
             FIELDTYPE = fielddesc.RESTYPE

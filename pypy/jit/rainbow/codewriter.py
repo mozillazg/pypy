@@ -927,6 +927,21 @@ class BytecodeWriter(object):
         self.emit("yellow_retrieve_result")
         self.register_greenvar(op.result)
 
+    def handle_vable_call(self, op, withexc):
+        assert op.opname == 'direct_call'
+        oopspec = op.args[0].value._obj._callable.oopspec
+        name, _ = oopspec.split('(')
+        kind, name = name.split('_', 1)
+
+        if kind == 'vable.get':
+            opname = 'getfield'
+        else:
+            assert kind == 'vable.set'
+            opname = 'setfield'
+        args = op.args[1:]
+        args.insert(1, flowmodel.Constant(name, lltype.Void))
+        newop = flowmodel.SpaceOperation(opname, args, op.result)
+        self.serialize_op(newop)
 
     def serialize_op_malloc(self, op):
         index = self.structtypedesc_position(op.args[0].value)
@@ -979,7 +994,7 @@ class BytecodeWriter(object):
         # virtualizable access read
         PTRTYPE = args[0].concretetype
         if PTRTYPE.TO._hints.get('virtualizable', False):
-            XXX
+            assert op.args[1].value != 'vable_access'
 
         # non virtual case                
         index = self.serialize_oparg("red", args[0])

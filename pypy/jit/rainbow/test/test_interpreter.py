@@ -109,21 +109,7 @@ class InterpretationTest(object):
         jitcode = writer.make_bytecode(graph2)
         # the bytecode writer can ask for llhelpers about lists and dicts
         rtyper.specialize_more_blocks() 
-        argcolors = []
 
-        # make residual functype
-        RESTYPE = originalconcretetype(hannotator.binding(graph2.getreturnvar()))
-        ARGS = []
-        for var in graph2.getargs():
-            # XXX ignoring virtualizables for now
-            binding = hannotator.binding(var)
-            if not binding.is_green():
-                ARGS.append(originalconcretetype(binding))
-        self.RESIDUAL_FUNCTYPE = lltype.FuncType(ARGS, RESTYPE)
-
-        for i, ll_val in enumerate(values):
-            color = writer.varcolor(graph2.startblock.inputargs[i])
-            argcolors.append(color)
 
 
         # rewire the original portal
@@ -136,10 +122,10 @@ class InterpretationTest(object):
         rewriter.rewrite(origportalgraph=origportalgraph,
                          portalgraph=portalgraph,
                          view = conftest.option.view and self.small)
+        self.RESIDUAL_FUNCTYPE = rewriter.RESIDUAL_FUNCTYPE
 
         self.writer = writer
         self.jitcode = jitcode
-        self.argcolors = argcolors
 
 
     def serialize(self, func, values, policy=None,
@@ -153,22 +139,25 @@ class InterpretationTest(object):
         else:
             self.__dict__.update(cache)
             assert argtypes == getargtypes(self.rtyper.annotator, values)
-            return self.writer, self.jitcode, self.argcolors
+            return self.writer, self.jitcode
         if len(self._cache_order) >= 3:
             del self._cache[self._cache_order.pop(0)]
         self._serialize(func, values, policy, inline, backendoptimize, portal)
         cache = self.__dict__.copy()
         self._cache[key] = cache, getargtypes(self.rtyper.annotator, values)
         self._cache_order.append(key)
-        return self.writer, self.jitcode, self.argcolors
+        return self.writer, self.jitcode
 
     def interpret(self, ll_function, values, opt_consts=[], *args, **kwds):
         if hasattr(ll_function, 'convert_arguments'):
             assert len(ll_function.convert_arguments) == len(values)
             values = [decoder(value) for decoder, value in zip(
                                         ll_function.convert_arguments, values)]
-        writer, jitcode, argcolors = self.serialize(ll_function, values,
-                                                    **kwds)
+        writer, jitcode= self.serialize(ll_function, values, **kwds)
+        argcolors = []
+        for i, ll_val in enumerate(values):
+            color = writer.varcolor(self.graph.startblock.inputargs[i])
+            argcolors.append(color)
         rgenop = writer.interpreter.rgenop
         sigtoken = rgenop.sigToken(self.RESIDUAL_FUNCTYPE)
         builder, gv_generated, inputargs_gv = rgenop.newgraph(sigtoken, "generated")
