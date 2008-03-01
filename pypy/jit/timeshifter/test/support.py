@@ -57,11 +57,6 @@ class FakeBuilder(object):
             raise AttributeError, name
 
 
-class FakeHRTyper(object):
-    RGenOp = FakeRGenOp
-
-fakehrtyper = FakeHRTyper()
-
 class FakeGenVar(GenVar):
     def __init__(self, count=0):
         self.count=count
@@ -87,7 +82,7 @@ signed_kind = FakeRGenOp.kindToken(lltype.Signed)
 def vmalloc(TYPE, *boxes):
     jitstate = FakeJITState()
     assert isinstance(TYPE, lltype.Struct)   # for now
-    structdesc = rcontainer.StructTypeDesc(fakehrtyper, TYPE)
+    structdesc = rcontainer.StructTypeDesc(FakeRGenOp, TYPE)
     box = structdesc.factory()
     for fielddesc, valuebox in zip(structdesc.fielddescs, boxes):
         if valuebox is None:
@@ -104,5 +99,5 @@ def makebox(value):
 
 def getfielddesc(STRUCT, name):
     assert isinstance(STRUCT, lltype.Struct)
-    structdesc = rcontainer.StructTypeDesc(fakehrtyper, STRUCT)
+    structdesc = rcontainer.StructTypeDesc(FakeRGenOp, STRUCT)
     return structdesc.fielddesc_by_name[name]

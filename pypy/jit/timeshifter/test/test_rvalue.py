@@ -60,7 +60,7 @@ def test_box_get_set_field():
     V0 = FakeGenVar()
     box = rvalue.PtrRedBox("dummy pointer", V0)
     STRUCT = lltype.Struct("dummy", ("foo", lltype.Signed))
-    desc = rcontainer.StructFieldDesc(FakeHRTyper(), lltype.Ptr(STRUCT), "foo", 0)
+    desc = rcontainer.StructFieldDesc(FakeRGenOp, lltype.Ptr(STRUCT), "foo", 0)
     box2 = box.op_getfield(jitstate, desc)
     V1 = box2.genvar
     assert box.known_nonzero
