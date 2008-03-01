@@ -1639,11 +1639,6 @@ class SimpleTests(InterpretationTest):
         py.test.skip("not working yet")
 
         class MetaG:
-            __metaclass__ = cachedtype
-
-            def __init__(self, hrtyper):
-                pass
-
             def _freeze_(self):
                 return True
 
@@ -1699,7 +1694,6 @@ class SimpleTests(InterpretationTest):
         assert res == f(0)
 
     def test_misplaced_global_merge_point(self):
-        py.test.skip("not working yet")
         def g(n):
             hint(None, global_merge_point=True)
             return n+1
