@@ -1,7 +1,7 @@
 import py
 from pypy.rpython.module.support import LLSupport
-from pypy.jit.timeshifter.test.test_portal import PortalTest
-from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
+from pypy.jit.rainbow.test.test_portal import PortalTest
+from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.conftest import Benchmark
 
@@ -22,6 +22,7 @@ tlc_interp_without_call.convert_arguments = [build_bytecode, int, int]
 
 class TestTLC(PortalTest):
     small = False
+    type_system = "lltype"
 
     def test_factorial(self):
         code = tlc.compile(FACTORIAL_SOURCE)

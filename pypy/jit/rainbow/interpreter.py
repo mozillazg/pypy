@@ -358,6 +358,10 @@ class JitInterpreter(object):
         kind = self.frame.bytecode.typekinds[typeid]
         return redboxcls(kind, genconst)
 
+    @arguments("red", returns="green_from_red")
+    def opimpl_revealconst(self, box):
+        return box
+
     @arguments("jumptarget")
     def opimpl_goto(self, target):
         self.frame.pc = target
