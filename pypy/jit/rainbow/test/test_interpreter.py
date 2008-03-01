@@ -10,7 +10,7 @@ from pypy.jit.rainbow.portal import PortalRewriter
 from pypy.jit.rainbow.test.test_serializegraph import AbstractSerializationTest
 from pypy.jit.timeshifter import rtimeshift, rvalue
 from pypy.rpython.lltypesystem import lltype, rstr
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.module.support import LLSupport
 from pypy.annotation import model as annmodel
 from pypy.objspace.flow.model import summary, Variable
@@ -144,7 +144,7 @@ class InterpretationTest(object):
 
     def serialize(self, func, values, policy=None,
                   inline=None, backendoptimize=False,
-                  portal=None):
+                  portal=None, **kwds):
         key = func, backendoptimize
         try:
             cache, argtypes = self._cache[key]
@@ -205,8 +205,25 @@ class InterpretationTest(object):
             graph.show()
         llinterp = LLInterpreter(
             self.rtyper, exc_data_ptr=writer.exceptiondesc.exc_data_ptr)
-        res = llinterp.eval_graph(graph, residualargs)
+
+        if 'check_raises' not in kwds:
+            res = llinterp.eval_graph(graph, residualargs)
+        else:
+            try:
+                llinterp.eval_graph(graph, residualargs)
+            except LLException, e:
+                exc = kwds['check_raises']
+                assert llinterp.find_exception(e) is exc, (
+                    "wrong exception type")
+            else:
+                raise AssertionError("DID NOT RAISE")
+            return True
         return res
+
+    def interpret_raises(self, ExcCls, ll_function, values, opt_consts=[],
+                         *args, **kwds):
+        kwds['check_raises'] = ExcCls
+        return self.interpret(ll_function, values, opt_consts, *args, **kwds)
 
     def get_residual_graph(self):
         return self.residual_graph
