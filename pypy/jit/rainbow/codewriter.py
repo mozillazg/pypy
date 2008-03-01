@@ -1,3 +1,4 @@
+import py
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow import model as flowmodel
@@ -10,6 +11,8 @@ from pypy.jit.timeshifter import oop
 from pypy.jit.timeshifter.greenkey import KeyDesc
 from pypy.jit.rainbow.interpreter import JitCode, JitInterpreter
 from pypy.translator.backendopt.removenoops import remove_same_as
+from pypy.translator.backendopt.ssa import SSA_to_SSI
+from pypy.translator.unsimplify import varoftype
 
 
 class CallDesc:
@@ -96,12 +99,14 @@ class BytecodeWriter(object):
         self.unfinished_graphs = []
         self.num_global_mergepoints = 0
         self.ptr_to_jitcode = {}
+        self.transformer = GraphTransformer(hannotator)
 
     def can_raise(self, op):
         return self.raise_analyzer.analyze(op)
 
     def make_bytecode(self, graph, is_portal=True):
-        remove_same_as(graph)
+        self.transformer.transform_graph(graph)
+        #graph.show()
         if is_portal:
             bytecode = JitCode.__new__(JitCode)
             bytecode.is_portal = True
@@ -323,7 +328,30 @@ class BytecodeWriter(object):
             self.emit(*truerenaming)
             self.make_bytecode_block(linktrue.target, insert_goto=True)
         else:
-            XXX
+            assert self.varcolor(block.exitswitch) == "green"
+            for link in block.exits:
+                if link.exitcase == 'default':
+                    defaultlink = link
+            switchlinks = [link for link in block.exits
+                               if link is not defaultlink]
+            
+            renamings = [self.insert_renaming(link) for link in switchlinks]
+            defaultrenaming = self.insert_renaming(defaultlink)
+            cases = [flowmodel.Constant(link.exitcase,
+                                        block.exitswitch.concretetype)
+                         for link in switchlinks]
+            cases = [self.serialize_oparg("green", case) for case in cases]
+            targets = [tlabel(link) for link in switchlinks]
+            self.emit("green_switch")
+            self.emit(self.serialize_oparg("green", block.exitswitch))
+            self.emit(len(cases), *cases)
+            self.emit(len(targets), *targets)
+            self.emit(*defaultrenaming)
+            self.make_bytecode_block(defaultlink.target, insert_goto=True)
+            for renaming, link in zip(renamings, switchlinks):
+                self.emit(label(link))
+                self.emit(*renaming)
+                self.make_bytecode_block(link.target, insert_goto=True)
 
     def insert_merges(self, block):
         if block is self.graph.returnblock:
@@ -1173,6 +1201,158 @@ class BytecodeWriter(object):
             c = 'red'
         return c
 
+
+class GraphTransformer(object):
+    def __init__(self, hannotator):
+        self.hannotator = hannotator
+
+    def transform_graph(self, graph):
+        self.graph = graph
+        remove_same_as(graph)
+        self.insert_splits()
+
+    def insert_splits(self):
+        hannotator = self.hannotator
+        for block in list(self.graph.iterblocks()):
+            if block.exitswitch is not None:
+                assert isinstance(block.exitswitch, flowmodel.Variable)
+                hs_switch = hannotator.binding(block.exitswitch)
+                if not hs_switch.is_green():
+                    if block.exitswitch.concretetype is not lltype.Bool:
+                        self.insert_switch_handling(block)
+
+    def insert_switch_handling(self, block):
+        v_redswitch = block.exitswitch
+        T = v_redswitch.concretetype
+        range_start = -py.std.sys.maxint-1
+        range_stop  = py.std.sys.maxint+1
+        if T is not lltype.Signed:
+            if T is lltype.Char:
+                opcast = 'cast_char_to_int'
+                range_start = 0
+                range_stop = 256
+            elif T is lltype.UniChar:
+                opcast = 'cast_unichar_to_int'
+                range_start = 0
+            elif T is lltype.Unsigned:
+                opcast = 'cast_uint_to_int'
+            else:
+                raise AssertionError(T)
+            v_redswitch = self.genop(block, opcast, [v_redswitch],
+                                     resulttype=lltype.Signed, red=True)
+            block.exitswitch = v_redswitch
+        # for now, we always turn the switch back into a chain of tests
+        # that perform a binary search
+        blockset = {block: True}   # reachable from outside
+        cases = {}
+        defaultlink = None
+        for link in block.exits:
+            if link.exitcase == 'default':
+                defaultlink = link
+                blockset[link.target] = False   # not reachable from outside
+            else:
+                assert lltype.typeOf(link.exitcase) == T
+                intval = lltype.cast_primitive(lltype.Signed, link.exitcase)
+                cases[intval] = link
+                link.exitcase = None
+                link.llexitcase = None
+        self.insert_integer_search(block, cases, defaultlink, blockset,
+                                   range_start, range_stop)
+        SSA_to_SSI(blockset, self.hannotator)
+
+    def insert_integer_search(self, block, cases, defaultlink, blockset,
+                              range_start, range_stop):
+        # fix the exit of the 'block' to check for the given remaining
+        # 'cases', knowing that if we get there then the value must
+        # be contained in range(range_start, range_stop).
+        if not cases:
+            assert defaultlink is not None
+            block.exitswitch = None
+            block.recloseblock(flowmodel.Link(defaultlink.args, defaultlink.target))
+        elif len(cases) == 1 and (defaultlink is None or
+                                  range_start == range_stop-1):
+            block.exitswitch = None
+            block.recloseblock(cases.values()[0])
+        else:
+            intvalues = cases.keys()
+            intvalues.sort()
+            if len(intvalues) <= 3:
+                # not much point in being clever with no more than 3 cases
+                intval = intvalues[-1]
+                remainingcases = cases.copy()
+                link = remainingcases.pop(intval)
+                c_intval = flowmodel.Constant(intval, lltype.Signed)
+                v = self.genop(block, 'int_eq', [block.exitswitch, c_intval],
+                               resulttype=lltype.Bool, red=True)
+                link.exitcase = True
+                link.llexitcase = True
+                falseblock = flowmodel.Block([])
+                falseblock.exitswitch = block.exitswitch
+                blockset[falseblock] = False
+                falselink = flowmodel.Link([], falseblock)
+                falselink.exitcase = False
+                falselink.llexitcase = False
+                block.exitswitch = v
+                block.recloseblock(falselink, link)
+                if defaultlink is None or intval == range_stop-1:
+                    range_stop = intval
+                self.insert_integer_search(falseblock, remainingcases,
+                                           defaultlink, blockset,
+                                           range_start, range_stop)
+            else:
+                intval = intvalues[len(intvalues) // 2]
+                c_intval = flowmodel.Constant(intval, lltype.Signed)
+                v = self.genop(block, 'int_ge', [block.exitswitch, c_intval],
+                               resulttype=lltype.Bool, red=True)
+                falseblock = flowmodel.Block([])
+                falseblock.exitswitch = block.exitswitch
+                trueblock  = flowmodel.Block([])
+                trueblock.exitswitch = block.exitswitch
+                blockset[falseblock] = False
+                blockset[trueblock]  = False
+                falselink = flowmodel.Link([], falseblock)
+                falselink.exitcase = False
+                falselink.llexitcase = False
+                truelink = flowmodel.Link([], trueblock)
+                truelink.exitcase = True
+                truelink.llexitcase = True
+                block.exitswitch = v
+                block.recloseblock(falselink, truelink)
+                falsecases = {}
+                truecases = {}
+                for intval1, link1 in cases.items():
+                    if intval1 < intval:
+                        falsecases[intval1] = link1
+                    else:
+                        truecases[intval1] = link1
+                self.insert_integer_search(falseblock, falsecases,
+                                           defaultlink, blockset,
+                                           range_start, intval)
+                self.insert_integer_search(trueblock, truecases,
+                                           defaultlink, blockset,
+                                           intval, range_stop)
+
+    def genop(self, block, opname, args, resulttype=None, result_like=None, red=False):
+        # 'result_like' can be a template variable whose hintannotation is
+        # copied
+        if resulttype is not None:
+            v_res = varoftype(resulttype)
+            if red:
+                hs = hintmodel.SomeLLAbstractVariable(resulttype)
+            else:
+                hs = hintmodel.SomeLLAbstractConstant(resulttype, {})
+            self.hannotator.setbinding(v_res, hs)
+        elif result_like is not None:
+            v_res = copyvar(self.hannotator, result_like)
+        else:
+            v_res = self.new_void_var()
+
+        spaceop = flowmodel.SpaceOperation(opname, args, v_res)
+        if isinstance(block, list):
+            block.append(spaceop)
+        else:
+            block.operations.append(spaceop)
+        return v_res
 
 class label(object):
     def __init__(self, name):

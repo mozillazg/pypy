@@ -1588,21 +1588,20 @@ class SimpleTests(InterpretationTest):
         assert res == -7
 
     def test_switch(self):
-        py.test.skip("not working yet")
-        def g(n):
+        def g(n, x):
             if n == 0:
-                return 12
+                return 12 + x
             elif n == 1:
-                return 34
+                return 34 + x
             elif n == 3:
-                return 56
+                return 56 + x
             elif n == 7:
-                return 78
+                return 78 + x
             else:
-                return 90
+                return 90 + x
         def f(n, m):
-            x = g(n)   # gives a red switch
-            y = g(hint(m, concrete=True))   # gives a green switch
+            x = g(n, n)   # gives a red switch
+            y = g(hint(m, concrete=True), n)   # gives a green switch
             return x - y
 
         res = self.interpret(f, [7, 2], backendoptimize=True)
@@ -1611,22 +1610,21 @@ class SimpleTests(InterpretationTest):
         assert res == 90 - 34
 
     def test_switch_char(self):
-        py.test.skip("not working yet")
-        def g(n):
+        def g(n, x):
             n = chr(n)
             if n == '\x00':
-                return 12
+                return 12 + x
             elif n == '\x01':
-                return 34
+                return 34 + x
             elif n == '\x02':
-                return 56
+                return 56 + x
             elif n == '\x03':
-                return 78
+                return 78 + x
             else:
-                return 90
+                return 90 + x
         def f(n, m):
-            x = g(n)   # gives a red switch
-            y = g(hint(m, concrete=True))   # gives a green switch
+            x = g(n, n)   # gives a red switch
+            y = g(hint(m, concrete=True), n)   # gives a green switch
             return x - y
 
         res = self.interpret(f, [3, 0], backendoptimize=True)
