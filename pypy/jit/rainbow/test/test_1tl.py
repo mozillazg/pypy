@@ -1,6 +1,6 @@
 from pypy.rpython.module.support import LLSupport
-from pypy.jit.timeshifter.test.test_timeshift import TimeshiftingTests
-from pypy.jit.timeshifter.test.test_vlist import P_OOPSPEC
+from pypy.jit.rainbow.test.test_interpreter import InterpretationTest
+from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.conftest import Benchmark
 
@@ -8,7 +8,8 @@ from pypy.jit.tl import tl
 from pypy.jit.tl.test.test_tl import FACTORIAL_SOURCE
 
 
-class TestTL(TimeshiftingTests):
+class TestTL(InterpretationTest):
+    type_system = "lltype"
 
     def test_tl(self):
         code = tl.compile(FACTORIAL_SOURCE)
@@ -27,6 +28,6 @@ class TestTL(TimeshiftingTests):
         else:
             n = 5
             expected = 120
-        res = self.timeshift(tl_interp_without_call, [bytecode, 0, n],
+        res = self.interpret(tl_interp_without_call, [bytecode, 0, n],
                              [0, 1], policy=P_OOPSPEC)
         assert res == expected
