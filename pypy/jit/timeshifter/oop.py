@@ -158,7 +158,7 @@ class OopSpecDesc:
             ll_evalue = get_ll_instance_for_exccls(ExcCls)
             jitstate.residual_ll_exception(ll_evalue)
         else:
-            residual_exception_nontranslated(jitstate, ExcClass(), self.rtyper)
+            residual_exception_nontranslated(jitstate, ExcCls(), self.rtyper)
         return self.errorbox
     residual_exception._annspecialcase_ = 'specialize:arg(2)'
 
