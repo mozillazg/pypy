@@ -14,6 +14,15 @@ from pypy.translator.backendopt.removenoops import remove_same_as
 from pypy.translator.backendopt.ssa import SSA_to_SSI
 from pypy.translator.unsimplify import varoftype
 
+def residual_exception_nontranslated(jitstate, e, rtyper):
+    # since we have a normal exception instance here
+    # we need to turn it into a low level one
+    assert not we_are_translated()
+    bk = rtyper.annotator.bookkeeper
+    exc_classdef = bk.getuniqueclassdef(type(e))
+    ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
+        rtyper, exc_classdef)
+    jitstate.residual_ll_exception(ll_exc)
 
 class CallDesc:
     __metaclass__ = cachedtype
@@ -50,15 +59,9 @@ class CallDesc:
                 result = rgenop.genconst(fnptr(*args))
             except Exception, e:
                 if not we_are_translated():
-                    # since we have a normal exception instance here
-                    # we need to turn it into a low level one
-                    bk = rtyper.annotator.bookkeeper
-                    exc_classdef = bk.getuniqueclassdef(type(e))
-                    ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
-                        rtyper, exc_classdef)
-                    interpreter.jitstate.residual_ll_exception(ll_exc)
+                    residual_exception_nontranslated(interpreter.jitstate, e, rtyper)
                 else:
-                    interpreter.jitstate.residual_exception(ll_exc)
+                    interpreter.jitstate.residual_exception(e)
                 result = rgenop.genconst(whatever_return_value)
             interpreter.green_result(result)
         self.green_call = green_call

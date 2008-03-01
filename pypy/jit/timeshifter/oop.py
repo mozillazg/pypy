@@ -1,10 +1,11 @@
-from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.jit.timeshifter.rcontainer import cachedtype
 from pypy.jit.timeshifter import rvalue, rtimeshift
-from pypy.translator import exceptiontransform
+from pypy.jit.timeshifter.rcontainer import cachedtype
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.translator import exceptiontransform
 
 
 class SegfaultException(Exception):
@@ -21,6 +22,7 @@ class OopSpecDesc:
     do_call = None
 
     def __init__(self, RGenOp, rtyper, fnobj, can_raise):
+        self.rtyper = rtyper
         ll_func = fnobj._callable
         FUNCTYPE = lltype.typeOf(fnobj)
         nb_args = len(FUNCTYPE.ARGS)
@@ -151,8 +153,12 @@ class OopSpecDesc:
         return self.redboxbuilder(self.result_kind, gv_result)
 
     def residual_exception(self, jitstate, ExcCls):
-        ll_evalue = get_ll_instance_for_exccls(ExcCls)
-        jitstate.residual_ll_exception(ll_evalue)
+        from pypy.jit.rainbow.codewriter import residual_exception_nontranslated
+        if we_are_translated():
+            ll_evalue = get_ll_instance_for_exccls(ExcCls)
+            jitstate.residual_ll_exception(ll_evalue)
+        else:
+            residual_exception_nontranslated(jitstate, ExcClass(), self.rtyper)
         return self.errorbox
     residual_exception._annspecialcase_ = 'specialize:arg(2)'
 

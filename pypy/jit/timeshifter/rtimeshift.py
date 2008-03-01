@@ -555,7 +555,7 @@ def save_return(jitstate):
     jitstate.next = dispatchqueue.return_chain
     dispatchqueue.return_chain = jitstate
 
-def ll_learn_nonzeroness(jitstate, ptrbox, nonzeroness):
+def learn_nonzeroness(jitstate, ptrbox, nonzeroness):
     ptrbox.learn_nonzeroness(jitstate, nonzeroness)
 
 ##def ll_gvar_from_redbox(jitstate, redbox):
@@ -1203,7 +1203,6 @@ class JITState(object):
 
     def residual_exception(self, e):
         self.residual_ll_exception(cast_instance_to_base_ptr(e))
-
 
     def get_resuming(self):
         return self.frame.dispatchqueue.resuming
