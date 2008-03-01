@@ -149,6 +149,9 @@ def dump_bytecode(jitcode, file=None):
                 elif argspec == "interiordesc":
                     d = jitcode.interiordescs[src.load_2byte()]
                     args.append(d)
+                elif argspec == "exception":
+                    d = jitcode.exceptioninstances[src.load_2byte()]
+                    args.append(d)
                 else:
                     assert 0, "unknown argtype declaration"
 

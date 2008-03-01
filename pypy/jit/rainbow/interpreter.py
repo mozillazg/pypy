@@ -21,8 +21,8 @@ class JitCode(object):
 
     def __init__(self, name, code, constants, typekinds, redboxclasses,
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
-                 interiordescs, oopspecdescs, promotiondescs,
-                 called_bytecodes, num_mergepoints,
+                 interiordescs, exceptioninstances, oopspecdescs,
+                 promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, indirectcalldescs, is_portal):
         self.name = name
         self.code = code
@@ -34,6 +34,7 @@ class JitCode(object):
         self.fielddescs = fielddescs
         self.arrayfielddescs = arrayfielddescs
         self.interiordescs = interiordescs
+        self.exceptioninstances = exceptioninstances
         self.oopspecdescs = oopspecdescs
         self.promotiondescs = promotiondescs
         self.called_bytecodes = called_bytecodes
@@ -136,6 +137,9 @@ def arguments(*argtypes, **kwargs):
                     args += (d, )
                 elif argspec == "interiordesc":
                     d = self.frame.bytecode.interiordescs[self.load_2byte()]
+                    args += (d, )
+                elif argspec == "exception":
+                    d = self.frame.bytecode.exceptioninstances[self.load_2byte()]
                     args += (d, )
                 else:
                     assert 0, "unknown argtype declaration"
@@ -364,22 +368,32 @@ class JitInterpreter(object):
     @arguments("red", "jumptarget")
     def opimpl_red_goto_iftrue(self, switchbox, target):
         # XXX not sure about passing no green vars
-        descision = rtimeshift.split(self.jitstate, switchbox, self.frame.pc)
-        if descision:
+        decision = rtimeshift.split(self.jitstate, switchbox, self.frame.pc)
+        if decision:
             self.frame.pc = target
 
     @arguments("bool", "red", "red", "jumptarget")
     def opimpl_red_goto_ifptrnonzero(self, reverse, ptrbox, switchbox, target):
         # XXX not sure about passing no green vars
-        descision = rtimeshift.split_ptr_nonzero(self.jitstate, switchbox,
+        decision = rtimeshift.split_ptr_nonzero(self.jitstate, switchbox,
                                                  self.frame.pc, ptrbox, reverse)
-        if descision:
+        if decision:
             self.frame.pc = target
 
     @arguments("red", "jumptarget")
     def opimpl_goto_if_constant(self, valuebox, target):
         if valuebox.is_constant():
             self.frame.pc = target
+
+    @arguments("exception")
+    def opimpl_split_raisingop(self, ll_evalue):
+        # XXX not sure about passing no green vars
+        decision = rtimeshift.split_raisingop(self.jitstate, self.frame.pc,
+                                              ll_evalue)
+        if decision:
+            self.frame.pc = target
+        
+
 
     @arguments("jumptarget")
     def opimpl_goto_if_oopcall_was_virtual(self, target):
