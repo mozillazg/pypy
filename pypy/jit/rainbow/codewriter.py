@@ -18,7 +18,7 @@ from pypy.translator.unsimplify import varoftype
 class CallDesc:
     __metaclass__ = cachedtype
 
-    def __init__(self, RGenOp, FUNCTYPE, voidargs=()):
+    def __init__(self, RGenOp, rtyper, FUNCTYPE, voidargs=()):
         self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
         self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
         # xxx what if the result is virtualizable?
@@ -49,8 +49,17 @@ class CallDesc:
             try:
                 result = rgenop.genconst(fnptr(*args))
             except Exception, e:
-                XXX # set exception
-                return rgenop.genconst(whatever_return_value)
+                if not we_are_translated():
+                    # since we have a normal exception instance here
+                    # we need to turn it into a low level one
+                    bk = rtyper.annotator.bookkeeper
+                    exc_classdef = bk.getuniqueclassdef(type(e))
+                    ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
+                        rtyper, exc_classdef)
+                    interpreter.jitstate.residual_ll_exception(ll_exc)
+                else:
+                    interpreter.jitstate.residual_exception(ll_exc)
+                result = rgenop.genconst(whatever_return_value)
             interpreter.green_result(result)
         self.green_call = green_call
 
@@ -80,7 +89,8 @@ class IndirectCallsetDesc(object):
 
         self.graphs = [graph for (graph, tsgraph) in graph2tsgraph]
         self.jitcodes = values
-        self.calldesc = CallDesc(codewriter.RGenOp, lltype.typeOf(fnptr))
+        self.calldesc = CallDesc(codewriter.RGenOp, codewriter.rtyper,
+                                 lltype.typeOf(fnptr))
 
 
 class BytecodeWriter(object):
@@ -591,7 +601,7 @@ class BytecodeWriter(object):
             return self.calldesc_positions[key]
         result = len(self.calldescs)
         self.calldescs.append(
-            CallDesc(self.RGenOp, FUNCTYPE, voidargs))
+            CallDesc(self.RGenOp, self.rtyper, FUNCTYPE, voidargs))
         self.calldesc_positions[key] = result
         return result
 
