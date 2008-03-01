@@ -228,7 +228,7 @@ class BytecodeWriter(object):
             cand = 0
             if (op.opname == 'hint' and
                 op.args[1].value == {'global_merge_point': True}):
-                assert not self.is_portal, "global_merge_point can appare only in portal"
+                assert self.is_portal, "global_merge_point can appare only in portal"
                 hashint = True
                 if block is startblock or len(entrymap[block]) > 1:
                     global_merge_blocks[block] = True
