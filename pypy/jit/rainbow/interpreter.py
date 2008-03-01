@@ -1,7 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated, CDefinedIntSymbolic
-from pypy.jit.timeshifter import rtimeshift, rcontainer
+from pypy.jit.timeshifter import rtimeshift, rcontainer, rvalue
 from pypy.jit.timeshifter.greenkey import empty_key, GreenKey, newgreendict
 from pypy.rpython.lltypesystem import lltype, llmemory
 

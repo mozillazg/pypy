@@ -2,9 +2,10 @@ import operator
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.annlowlevel import cachedtype, cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import base_ptr_lltype, cast_instance_to_base_ptr
-from pypy.jit.timeshifter import rvalue
+from pypy.rpython.annlowlevel import llhelper
+from pypy.jit.timeshifter import rvalue, rvirtualizable
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.timeshifter import rvirtualizable
+from pypy.rlib.objectmodel import we_are_translated
 
 from pypy.annotation import model as annmodel
 
@@ -211,8 +212,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
                 """.split()
 
     def __init__(self, RGenOp, TYPE):
-        XXX
-        StructTypeDesc.__init__(self, hrtyper, TYPE)
+        StructTypeDesc.__init__(self, RGenOp, TYPE)
         ACCESS = self.TYPE.ACCESS
         redirected_fields = ACCESS.redirected_fields
         self.redirected_fielddescs = []
@@ -227,6 +227,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         self.rti_desc = self.getfielddesc('vable_rti')
         self.access_desc = self.getfielddesc('vable_access')
         TOPPTR = self.access_desc.PTRTYPE
+        self.STRUCTTYPE = TOPPTR
         self.s_structtype = annmodel.lltype_to_annotation(TOPPTR)
 
         self.my_redirected_getsetters_untouched = {}
@@ -238,7 +239,7 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
             if fielddesc.PTRTYPE != self.PTRTYPE:
                 continue
             my_redirected_names.append(fielddesc.fieldname)
-            self._define_getset_field_ptr(hrtyper, fielddesc, j)
+            self._define_getset_field_ptr(RGenOp, fielddesc, j)
 
 
         access_untouched = lltype.malloc(ACCESS, immortal=True)
@@ -253,21 +254,15 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
 
         self._define_collect_residual_args()
 
-        self._define_access_is_null(hrtyper)
+        self._define_access_is_null(RGenOp)
 
 
     def _define_virtual_desc(self):
         pass
 
-    def _define_getset_field_ptr(self, hrtyper, fielddesc, j):
-        XXX
-        annhelper = hrtyper.annhelper
-        s_lltype = annmodel.lltype_to_annotation(fielddesc.RESTYPE)
-
+    def _define_getset_field_ptr(self, RGenOp, fielddesc, j):
         untouched = self.my_redirected_getsetters_untouched
         touched = self.my_redirected_getsetters_touched
-
-        mkptr = annhelper.delayedfunction
 
         fnpairs = rvirtualizable.define_getset_field_ptrs(fielddesc, j)
 
@@ -275,10 +270,12 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         for getsetters, (get_field, set_field) in zip((untouched, touched),
                                                       fnpairs):
 
-            get_field_ptr = mkptr(get_field, [self.s_structtype], s_lltype,
-                                             needtype = True)
-            set_field_ptr = mkptr(set_field, [self.s_structtype, s_lltype],
-                                             annmodel.s_None, needtype=True)
+            TYPE = lltype.Ptr(lltype.FuncType([self.STRUCTTYPE],
+                                              fielddesc.RESTYPE))
+            get_field_ptr = llhelper(TYPE, get_field)
+            TYPE = lltype.Ptr(lltype.FuncType(
+                [self.STRUCTTYPE, fielddesc.RESTYPE], lltype.Void))
+            set_field_ptr = llhelper(TYPE, set_field)
             
             getsetters[name] = get_field_ptr, set_field_ptr
 
@@ -322,16 +319,11 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         self.collect_residual_args = collect_residual_args
 
 
-    def _define_access_is_null(self, hrtyper):
-        XXX
-        RGenOp = hrtyper.RGenOp
-        annhelper = hrtyper.annhelper        
+    def _define_access_is_null(self, RGenOp):
         def access_is_null(struc):
             assert not struc.vable_access
-        access_is_null_ptr = annhelper.delayedfunction(access_is_null,
-                                                       [self.s_structtype],
-                                                       annmodel.s_None,
-                                                       needtype = True)
+        TYPE = lltype.Ptr(lltype.FuncType([self.STRUCTTYPE], lltype.Void))
+        access_is_null_ptr = llhelper(TYPE, access_is_null)
         self.gv_access_is_null_ptr = RGenOp.constPrebuiltGlobal(
                                               access_is_null_ptr)
         self.access_is_null_token =  RGenOp.sigToken(
@@ -924,7 +916,11 @@ class VirtualizableStruct(VirtualStruct):
         base_desc = typedesc.base_desc
         base_token = base_desc.fieldtoken
         builder.genop_setfield(base_token, gv_outside, gv_base)
-        vable_rti_ptr = cast_instance_to_base_ptr(vable_rti)
+        if we_are_translated():
+            vable_rti_ptr = cast_instance_to_base_ptr(vable_rti)
+        else:
+            vable_rti_ptr = vable_rti
+
         gv_vable_rti = builder.rgenop.genconst(vable_rti_ptr)
         rti_token = typedesc.rti_desc.fieldtoken
         builder.genop_setfield(rti_token, gv_outside, gv_vable_rti)
