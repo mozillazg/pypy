@@ -601,7 +601,13 @@ class JitInterpreter(object):
         check_forced = False
         flagbox = rtimeshift.after_residual_call(self.jitstate,
                                                  exceptiondesc, check_forced)
-        done = rtimeshift.promote(self.jitstate, flagbox, promotiondesc)
+        # XXX slightly hackish: the flagbox needs to be in local_boxes
+        # to be passed along to the new block
+        self.frame.local_boxes.append(flagbox)
+        try:
+            done = rtimeshift.promote(self.jitstate, flagbox, promotiondesc)
+        finally:
+            self.frame.local_boxes.pop()
         if done:
             return self.dispatch()
         gv_flag = flagbox.getgenvar(self.jitstate)
@@ -623,7 +629,13 @@ class JitInterpreter(object):
             exceptiondesc = None
         flagbox = rtimeshift.after_residual_call(self.jitstate,
                                                  exceptiondesc, True)
-        done = rtimeshift.promote(self.jitstate, flagbox, promotiondesc)
+        # XXX slightly hackish: the flagbox needs to be in local_boxes
+        # to be passed along to the new block
+        self.frame.local_boxes.append(flagbox)
+        try:
+            done = rtimeshift.promote(self.jitstate, flagbox, promotiondesc)
+        finally:
+            self.frame.local_boxes.pop()
         if done:
             return self.dispatch()
         gv_flag = flagbox.getgenvar(self.jitstate)

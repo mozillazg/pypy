@@ -1014,6 +1014,7 @@ class SimpleTests(InterpretationTest):
             return 2*h(x)
 
         def f(x):
+            hint(None, global_merge_point=True)
             try:
                 return g(x)
             except ValueError:
@@ -1260,6 +1261,7 @@ class SimpleTests(InterpretationTest):
             else:
                 return -12 + y
         def f(x, y):
+            hint(None, global_merge_point=True)
             x = hint(x, concrete=True)
             if x == 1:
                 return g(lltype.nullptr(S), y)
@@ -1312,6 +1314,7 @@ class SimpleTests(InterpretationTest):
             ll_assert(bool(s), "please don't give me a null")
             return 5
         def f(m):
+            hint(None, global_merge_point=True)
             s = h()
             n = g(s)
             if not s:
@@ -1354,6 +1357,7 @@ class SimpleTests(InterpretationTest):
             return h(n) + x
 
         def f(n, x):
+            hint(None, global_merge_point=True)
             try:
                 return g(n, x)
             except ValueError:
