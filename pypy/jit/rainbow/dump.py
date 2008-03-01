@@ -105,6 +105,9 @@ def dump_bytecode(jitcode, file=None):
                     args.append(jitcode.typekinds[src.load_2byte()])
                 elif argspec == "jumptarget":
                     args.append(src.load_jumptarget())
+                elif argspec == "jumptargets":
+                    num = src.load_2byte()
+                    args.append([src.load_jumptarget() for i in range(num)], )
                 elif argspec == "bool":
                     args.append(src.load_bool())
                 elif argspec == "redboxcls":

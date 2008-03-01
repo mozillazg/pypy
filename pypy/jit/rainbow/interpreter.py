@@ -95,6 +95,9 @@ def arguments(*argtypes, **kwargs):
                     args += (self.frame.bytecode.typekinds[self.load_2byte()], )
                 elif argspec == "jumptarget":
                     args += (self.load_4byte(), )
+                elif argspec == "jumptargets":
+                    num = self.load_2byte()
+                    args += ([self.load_4byte() for i in range(num)], )
                 elif argspec == "bool":
                     args += (self.load_bool(), )
                 elif argspec == "redboxcls":
@@ -364,6 +367,16 @@ class JitInterpreter(object):
         arg = genconst.revealconst(lltype.Bool)
         if arg:
             self.frame.pc = target
+
+    @arguments("green", "green_varargs", "jumptargets")
+    def opimpl_green_switch(self, exitcase, cases, targets):
+        arg = exitcase.revealconst(lltype.Signed)
+        assert len(cases) == len(targets)
+        for i in range(len(cases)):
+            if arg == cases[i].revealconst(lltype.Signed):
+                self.frame.pc = targets[i]
+                break
+
 
     @arguments("red", "jumptarget")
     def opimpl_red_goto_iftrue(self, switchbox, target):
