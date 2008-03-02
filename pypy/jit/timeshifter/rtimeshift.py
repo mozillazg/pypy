@@ -142,6 +142,7 @@ def genmalloc_varsize(jitstate, contdesc, sizebox):
     return rvalue.PtrRedBox(contdesc.ptrkind, genvar, known_nonzero=True)
 
 def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
+    assert isinstance(argbox, rvalue.PtrRedBox)
     if (fielddesc.immutable or deepfrozen) and argbox.is_constant():
         resgv = fielddesc.getfield_if_non_null(
                 jitstate, argbox.getgenvar(jitstate))
@@ -150,9 +151,11 @@ def gengetfield(jitstate, deepfrozen, fielddesc, argbox):
     return argbox.op_getfield(jitstate, fielddesc)
 
 def gensetfield(jitstate, fielddesc, destbox, valuebox):
+    assert isinstance(destbox, rvalue.PtrRedBox)
     destbox.op_setfield(jitstate, fielddesc, valuebox)
 
 def ll_gengetsubstruct(jitstate, fielddesc, argbox):
+    assert isinstance(argbox, rvalue.PtrRedBox)
     if argbox.is_constant():
         ptr = rvalue.ll_getvalue(argbox, fielddesc.PTRTYPE)
         if ptr:    # else don't constant-fold - we'd get a bogus pointer
@@ -213,6 +216,7 @@ def gengetarraysize(jitstate, fielddesc, argbox):
 
 
 def genptrnonzero(jitstate, argbox, reverse):
+    assert isinstance(argbox, rvalue.PtrRedBox)
     if argbox.is_constant():
         addr = rvalue.ll_getvalue(argbox, llmemory.Address)
         return rvalue.ll_fromvalue(jitstate, bool(addr) ^ reverse)
@@ -228,6 +232,8 @@ def genptrnonzero(jitstate, argbox, reverse):
     return rvalue.IntRedBox(builder.rgenop.kindToken(lltype.Bool), gv_res)
 
 def genptreq(jitstate, argbox0, argbox1, reverse):
+    assert isinstance(argbox0, rvalue.PtrRedBox)
+    assert isinstance(argbox1, rvalue.PtrRedBox)
     builder = jitstate.curbuilder
     if argbox0.is_constant() and argbox1.is_constant():
         addr0 = rvalue.ll_getvalue(argbox0, llmemory.Address)
@@ -386,6 +392,7 @@ def split(jitstate, switchredbox, resumepoint, *greens_gv):
 
 def split_ptr_nonzero(jitstate, switchredbox, resumepoint,
                       ptrbox, reverse, *greens_gv):
+    assert isinstance(ptrbox, rvalue.PtrRedBox)
     exitgvar = switchredbox.getgenvar(jitstate)
     if exitgvar.is_const:
         return exitgvar.revealconst(lltype.Bool)
@@ -540,6 +547,8 @@ def setexcvaluebox(jitstate, box):
     jitstate.exc_value_box = box
 
 def setexception(jitstate, typebox, valuebox):
+    assert isinstance(typebox, rvalue.PtrRedBox)
+    assert isinstance(valuebox, rvalue.PtrRedBox)
     ok1 = typebox .learn_nonzeroness(jitstate, True)
     ok2 = valuebox.learn_nonzeroness(jitstate, True)
     assert ok1 & ok2       # probably... maybe it's false but it would be
@@ -556,6 +565,7 @@ def save_return(jitstate):
     dispatchqueue.return_chain = jitstate
 
 def learn_nonzeroness(jitstate, ptrbox, nonzeroness):
+    assert isinstance(ptrbox, rvalue.PtrRedBox)
     ptrbox.learn_nonzeroness(jitstate, nonzeroness)
 
 ##def ll_gvar_from_redbox(jitstate, redbox):
