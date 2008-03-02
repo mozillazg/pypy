@@ -75,6 +75,7 @@ class InterpretationTest(object):
 
     RGenOp = LLRGenOp
     small = False
+    translate_support_code = False       # only works for portal tests for now
 
     def setup_class(cls):
         cls.on_llgraph = cls.RGenOp is LLRGenOp
@@ -115,7 +116,7 @@ class InterpretationTest(object):
         # rewire the original portal
 
         rewriter = PortalRewriter(self.hintannotator, self.rtyper, self.RGenOp,
-                                  writer)
+                                  writer, self.translate_support_code)
         self.rewriter = rewriter
         origportalgraph = graphof(self.rtyper.annotator.translator, portal)
         portalgraph = graphof(t, portal)

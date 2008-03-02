@@ -9,12 +9,14 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 
 # graph transformations for transforming the portal graph(s)
 class PortalRewriter(object):
-    def __init__(self, hintannotator, rtyper, RGenOp, codewriter):
+    def __init__(self, hintannotator, rtyper, RGenOp, codewriter,
+                 translate_support_code = True):
         self.hintannotator = hintannotator
         self.rtyper = rtyper
         self.interpreter = codewriter.interpreter
         self.codewriter = codewriter
         self.RGenOp = RGenOp
+        self.translate_support_code = translate_support_code
 
     def rewrite(self, origportalgraph, portalgraph, view=False):
         self.origportalgraph = origportalgraph
@@ -64,12 +66,26 @@ class PortalRewriter(object):
         self.interpreter.set_portalstate(state)
 
     def mutate_origportalgraph(self):
-        # XXX
-        # the following line should really be a call to a mixlevel annotator
-        # but for now the jit stuff should be run directly to make tests faster
-        # currently this makes it untranslatable
-        portal_entry_graph_ptr = llhelper(lltype.Ptr(self.PORTAL_FUNCTYPE),
-                                          self.portal_entry)
+        if not self.translate_support_code:
+            # this case is used for most tests: the jit stuff should be run
+            # directly to make these tests faster
+            portal_entry_graph_ptr = llhelper(lltype.Ptr(self.PORTAL_FUNCTYPE),
+                                              self.portal_entry)
+        else:
+            # this translates portal_entry into low-level graphs, recursively
+            # dragging the whole jit support code with it.  Depending on which
+            # descs are reachable from the portalbytecode, this will create
+            # the specialized versions of the support code as needed.
+            from pypy.rpython import annlowlevel
+            from pypy.annotation import model as annmodel
+            annhelper = annlowlevel.MixLevelHelperAnnotator(self.rtyper)
+            FUNC = self.PORTAL_FUNCTYPE
+            args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
+            s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
+            portal_entry_graph_ptr = annhelper.delayedfunction(
+                self.portal_entry, args_s, s_result)
+            annhelper.finish()
+
         # the following gives a pdb prompt when portal_entry raises an exception
         portal_entry_graph_ptr._obj.__dict__['_debugexc'] = True
         # XXX hack hack hack
