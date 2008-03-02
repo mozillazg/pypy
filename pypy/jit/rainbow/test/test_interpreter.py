@@ -251,7 +251,6 @@ class SimpleTests(InterpretationTest):
     small = True
 
     def test_simple_fixed(self):
-        py.test.skip("green return")
         def ll_function(x, y):
             return hint(x + y, concrete=True)
         res = self.interpret(ll_function, [5, 7])
@@ -452,7 +451,6 @@ class SimpleTests(InterpretationTest):
         assert res == ll_function(-70)
 
     def test_merge_const_at_return(self):
-        py.test.skip("green return")
         def ll_function(x):
             if x > 0:
                 return 17
