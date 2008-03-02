@@ -107,7 +107,8 @@ class PortalRewriter(object):
         block.operations[:] = [
             flowmodel.SpaceOperation("direct_call", args, result)]
         block.exitswitch = None
-        block.exits = [flowmodel.Link([result], self.origportalgraph.returnblock)]
+        block.recloseblock(
+            flowmodel.Link([result], self.origportalgraph.returnblock))
         self.origportalgraph.exceptblock = None
 
     def getportalargdesc(self, lowleveltype):
