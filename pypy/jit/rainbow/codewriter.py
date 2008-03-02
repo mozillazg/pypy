@@ -170,6 +170,7 @@ class BytecodeWriter(object):
         #graph.show()
         if is_portal:
             bytecode = JitCode.__new__(JitCode)
+            bytecode.name = graph.name     # for dump()
             bytecode.is_portal = True
             self.all_graphs[graph] = bytecode
         self.seen_blocks = {}
@@ -272,6 +273,7 @@ class BytecodeWriter(object):
         if graph in self.all_graphs:
             return self.all_graphs[graph]
         bytecode = JitCode.__new__(JitCode)
+        bytecode.name = graph.name     # for dump()
         self.all_graphs[graph] = bytecode
         self.unfinished_graphs.append(graph)
         return bytecode
