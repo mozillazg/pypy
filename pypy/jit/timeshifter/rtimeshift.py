@@ -778,8 +778,16 @@ class PromotionDesc:
         self.ll_continue_compilation = ll_continue_compilation
 
         FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED], lltype.Void)
-        self.FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
+        FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
+        self.FUNCPTRTYPE = FUNCPTRTYPE
         self.sigtoken = interpreter.rgenop.sigToken(FUNCTYPE)
+
+        def get_gv_continue_compilation(builder):
+            fnptr = llhelper(FUNCPTRTYPE, ll_continue_compilation)
+            # ^^^ the llhelper cannot be attached on 'self' directly, because
+            # the translator needs to see its construction done by RPython code
+            return builder.rgenop.genconst(fnptr)
+        self.get_gv_continue_compilation = get_gv_continue_compilation
 
     def _freeze_(self):
         return True
@@ -813,11 +821,9 @@ def promote(jitstate, promotebox, promotiondesc):
                                               exceptiondesc.gv_null_exc_type )
             exceptiondesc.genop_set_exc_value(default_builder,
                                               exceptiondesc.gv_null_exc_value)
-            fnptr = llhelper(promotiondesc.FUNCPTRTYPE,
-                             promotiondesc.ll_continue_compilation)
-            gv_continue_compilation = default_builder.rgenop.genconst(fnptr)
+            gv_cc = promotiondesc.get_gv_continue_compilation(default_builder)
             default_builder.genop_call(promotiondesc.sigtoken,
-                                       gv_continue_compilation,
+                                       gv_cc,
                                        [gv_pm, gv_switchvar])
             exceptiondesc.genop_set_exc_type (default_builder, gv_exc_type )
             exceptiondesc.genop_set_exc_value(default_builder, gv_exc_value)
