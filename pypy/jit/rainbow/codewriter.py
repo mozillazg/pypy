@@ -1236,6 +1236,19 @@ class BytecodeWriter(object):
         else:
             self.register_greenvar(op.result)
 
+    def serialize_op_is_early_constant(self, op):
+        consttrue = flowmodel.Constant(True, lltype.Bool)
+        trueindex = self.serialize_oparg("green", consttrue)
+        if self.varcolor(op.args[0]) == "green":
+            self.register_greenvar(op.result, trueindex)
+        else:
+            constfalse = flowmodel.Constant(False, lltype.Bool)
+            falseindex = self.serialize_oparg("green", constfalse)
+            argindex = self.serialize_oparg("red", op.args[0])
+            self.emit("is_constant")
+            self.emit(argindex, trueindex, falseindex)
+            self.register_greenvar(op.result)
+
 
     # call handling
 

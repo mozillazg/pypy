@@ -771,6 +771,13 @@ class JitInterpreter(object):
         return interiordesc.gengetinteriorarraysize(
             self.jitstate, arraybox, indexboxes)
 
+    @arguments("red", "green", "green", returns="green")
+    def opimpl_is_constant(self, arg, true, false):
+        if arg.is_constant():
+            return true
+        return false
+
+
     # ____________________________________________________________
     # construction-time interface
 
