@@ -273,7 +273,6 @@ class JitInterpreter(object):
                 self.newjitstate(newjitstate)
                 if self.frame is None:
                     if frame.backframe is not None:
-                        import pdb; pdb.set_trace()
                         frame = frame.backframe
                         queue = frame.dispatchqueue
                         continue
