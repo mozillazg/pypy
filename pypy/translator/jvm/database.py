@@ -542,6 +542,7 @@ class Database(OODatabase):
         ootype.Bool     : jvm.jByteArray,
         ootype.UniChar  : jvm.jCharArray,
         ootype.String   : jvm.jStringArray,
+        ootype.Float    : jvm.jDoubleArray,
         ootype.Void     : jvm.jVoidArray,
     }
 
