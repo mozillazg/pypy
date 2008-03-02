@@ -23,7 +23,8 @@ class JitCode(object):
                  keydescs, structtypedescs, fielddescs, arrayfielddescs,
                  interiordescs, exceptioninstances, oopspecdescs,
                  promotiondescs, called_bytecodes, num_mergepoints,
-                 graph_color, calldescs, indirectcalldescs, is_portal):
+                 graph_color, calldescs, metacalldescs,
+                 indirectcalldescs, is_portal):
         self.name = name
         self.code = code
         self.constants = constants
@@ -41,6 +42,7 @@ class JitCode(object):
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
         self.calldescs = calldescs
+        self.metacalldescs = metacalldescs
         self.indirectcalldescs = indirectcalldescs
         self.is_portal = is_portal
 
@@ -120,6 +122,10 @@ def arguments(*argtypes, **kwargs):
                 elif argspec == "calldesc":
                     index = self.load_2byte()
                     function = self.frame.bytecode.calldescs[index]
+                    args += (function, )
+                elif argspec == "metacalldesc":
+                    index = self.load_2byte()
+                    function = self.frame.bytecode.metacalldescs[index]
                     args += (function, )
                 elif argspec == "indirectcalldesc":
                     index = self.load_2byte()
@@ -646,6 +652,11 @@ class JitInterpreter(object):
         assert gv_flag.is_const
         rtimeshift.residual_fetch(self.jitstate, self.exceptiondesc,
                                   True, flagbox)
+
+    @arguments("metacalldesc", "red_varargs", returns="red")
+    def opimpl_metacall(self, metafunc, redargs):
+        return metafunc(self, redargs)
+
 
     # exceptions
 

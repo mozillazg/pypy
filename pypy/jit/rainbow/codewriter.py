@@ -69,6 +69,53 @@ class CallDesc:
     def _freeze_(self):
         return True
 
+
+class CallDesc:
+    __metaclass__ = cachedtype
+
+    def __init__(self, RGenOp, rtyper, FUNCTYPE, voidargs=()):
+        self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
+        self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
+        # xxx what if the result is virtualizable?
+        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
+        whatever_return_value = FUNCTYPE.TO.RESULT._defl()
+        numargs = len(FUNCTYPE.TO.ARGS)
+        argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
+        def green_call(interpreter, fnptr_gv, greenargs):
+            fnptr = fnptr_gv.revealconst(FUNCTYPE)
+            assert len(greenargs) + len(voidargs) == numargs 
+            args = ()
+            j = 0
+            k = 0
+            for ARG in argiter:
+                if ARG == lltype.Void:
+                    arg = voidargs[k]
+                    # XXX terrible hack
+                    if not we_are_translated():
+                        arg._TYPE = lltype.Void
+                    args += (arg, )
+                    k += 1
+                else:
+                    genconst = greenargs[j]
+                    arg = genconst.revealconst(ARG)
+                    args += (arg, )
+                    j += 1
+            rgenop = interpreter.jitstate.curbuilder.rgenop
+            try:
+                result = rgenop.genconst(fnptr(*args))
+            except Exception, e:
+                if not we_are_translated():
+                    residual_exception_nontranslated(interpreter.jitstate, e, rtyper)
+                else:
+                    interpreter.jitstate.residual_exception(e)
+                result = rgenop.genconst(whatever_return_value)
+            interpreter.green_result(result)
+        self.green_call = green_call
+
+    def _freeze_(self):
+        return True
+
+
 class IndirectCallsetDesc(object):
     __metaclass__ = cachedtype
     
@@ -143,6 +190,7 @@ class BytecodeWriter(object):
         self.graph_color = self.graph_calling_color(graph)
         self.calldescs = []
         self.indirectcalldescs = []
+        self.metacalldescs = []
         self.is_portal = is_portal
         # mapping constant -> index in constants
         self.const_positions = {}
@@ -176,6 +224,8 @@ class BytecodeWriter(object):
         self.graph_positions = {}
         # mapping fnobjs to index
         self.calldesc_positions = {}
+        # mapping class to index
+        self.metacalldesc_positions = {}
         # mapping fnobjs to index
         self.indirectcalldesc_positions = {}
 
@@ -205,6 +255,7 @@ class BytecodeWriter(object):
                           self.num_local_mergepoints,
                           self.graph_color,
                           self.calldescs,
+                          self.metacalldescs,
                           self.indirectcalldescs,
                           self.is_portal)
         bytecode._source = self.assembler
@@ -608,6 +659,29 @@ class BytecodeWriter(object):
         self.calldesc_positions[key] = result
         return result
 
+    def metacalldesc_position(self, op):
+        key = op
+        if key in self.metacalldesc_positions:
+            return self.metacalldesc_positions[key]
+        result = len(self.metacalldescs)
+        metadesc = op.args[1].value(self)
+        ARGS = [arg.concretetype for arg in op.args[2:]]
+        argiter = unrolling_iterable(ARGS)
+        def func(interpreter, redargs):
+            args = ()
+            j = 0
+            for ARG in argiter:
+                if ARG == lltype.Void:
+                    args += (None, )
+                else:
+                    box = redargs[j]
+                    args += (box, )
+                    j += 1
+            return metadesc.metafunc(interpreter.jitstate, *args)
+        self.metacalldescs.append(func)
+        self.metacalldesc_positions[key] = result
+        return result
+
     def indirectcalldesc_position(self, graph2code):
         key = graph2code.items()
         key.sort()
@@ -752,6 +826,15 @@ class BytecodeWriter(object):
         handler = getattr(self, "handle_%s_call" % (kind, ))
         print op, kind, withexc
         return handler(op, withexc)
+
+    def serialize_op_ts_metacall(self, op):
+        emitted_args = []
+        for v in op.args[2:]:
+            if v.concretetype != lltype.Void:
+                emitted_args.append(self.serialize_oparg("red", v))
+        metaindex = self.metacalldesc_position(op)
+        self.emit("metacall", metaindex, len(emitted_args), *emitted_args)
+        self.register_redvar(op.result)
 
     def serialize_op_indirect_call(self, op):
         kind, withexc = self.guess_call_kind(op)
