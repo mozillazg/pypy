@@ -274,6 +274,7 @@ def oop_newlist(jitstate, oopspecdesc, deepfrozen, lengthbox, itembox=None):
     return oopspecdesc.residual_call(jitstate, [lengthbox, itembox])
 
 def oop_list_copy(jitstate, oopspecdesc, deepfrozen, selfbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         copybox = oopspecdesc.typedesc.factory(0, None)
@@ -285,6 +286,7 @@ def oop_list_copy(jitstate, oopspecdesc, deepfrozen, selfbox):
         return oopspecdesc.residual_call(jitstate, [selfbox])
 
 def oop_list_len(jitstate, oopspecdesc, deepfrozen, selfbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         return rvalue.ll_fromvalue(jitstate, len(content.item_boxes))
@@ -294,6 +296,7 @@ def oop_list_len(jitstate, oopspecdesc, deepfrozen, selfbox):
 oop_list_len.couldfold = True
 
 def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         return rvalue.ll_fromvalue(jitstate, bool(content.item_boxes))
@@ -303,6 +306,7 @@ def oop_list_nonzero(jitstate, oopspecdesc, deepfrozen, selfbox):
 oop_list_nonzero.couldfold = True
 
 def oop_list_append(jitstate, oopspecdesc, deepfrozen, selfbox, itembox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.append(itembox)
@@ -310,6 +314,7 @@ def oop_list_append(jitstate, oopspecdesc, deepfrozen, selfbox, itembox):
         oopspecdesc.residual_call(jitstate, [selfbox, itembox])
 
 def oop_list_insert(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -320,6 +325,7 @@ def oop_list_insert(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembo
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
 def oop_list_concat(jitstate, oopspecdesc, deepfrozen, selfbox, otherbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         assert isinstance(otherbox, rvalue.PtrRedBox)
@@ -334,6 +340,7 @@ def oop_list_concat(jitstate, oopspecdesc, deepfrozen, selfbox, otherbox):
     return oopspecdesc.residual_call(jitstate, [selfbox, otherbox])
 
 def oop_list_pop(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox=None):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if indexbox is None:
         if isinstance(content, VirtualList):
@@ -354,6 +361,7 @@ def oop_list_pop(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox=None):
     return oopspecdesc.residual_call(jitstate, [selfbox, indexbox])
 
 def oop_list_reverse(jitstate, oopspecdesc, deepfrozen, selfbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList):
         content.item_boxes.reverse()
@@ -361,6 +369,7 @@ def oop_list_reverse(jitstate, oopspecdesc, deepfrozen, selfbox):
         oopspecdesc.residual_call(jitstate, [selfbox])
 
 def oop_list_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -374,6 +383,7 @@ def oop_list_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
 oop_list_getitem.couldfold = True
 
 def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itembox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
@@ -385,6 +395,7 @@ def oop_list_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox, itemb
         oopspecdesc.residual_call(jitstate, [selfbox, indexbox, itembox])
 
 def oop_list_delitem(jitstate, oopspecdesc, deepfrozen, selfbox, indexbox):
+    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, VirtualList) and indexbox.is_constant():
         index = rvalue.ll_getvalue(indexbox, lltype.Signed)
