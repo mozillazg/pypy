@@ -19,7 +19,7 @@ def residual_exception_nontranslated(jitstate, e, rtyper):
     # we need to turn it into a low level one
     assert not we_are_translated()
     bk = rtyper.annotator.bookkeeper
-    exc_classdef = bk.getuniqueclassdef(type(e))
+    exc_classdef = bk.getuniqueclassdef(e.__class__)
     ll_exc = rtyper.exceptiondata.get_standard_ll_exc_instance(
         rtyper, exc_classdef)
     jitstate.residual_ll_exception(ll_exc)
