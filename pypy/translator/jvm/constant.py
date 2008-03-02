@@ -180,7 +180,7 @@ class JVMCustomDictConst(CustomDictConst):
     def create_pointer(self, gen):
         gen.new_with_jtype(self.eq_jcls)
         gen.new_with_jtype(self.hash_jcls)
-        gen.emit(CUSTOMDICTMAKE)
+        gen.emit(jvm.CUSTOMDICTMAKE)
         
 class JVMWeakRefConst(WeakRefConst):
 
