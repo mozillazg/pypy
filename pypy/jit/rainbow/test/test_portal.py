@@ -40,7 +40,11 @@ class PortalTest(InterpretationTest):
                         backendoptimize=backendoptimize)
 
         if conftest.option.view and self.small:
-            self.rtyper.annotator.translator.view()
+            if self.translate_support_code:
+                startgraph = self.rewriter.portal_entry_graph
+                self.rtyper.annotator.translator.viewcg(startgraph)
+            else:
+                self.rtyper.annotator.translator.view()
 
         # Populate the cache
         if len(self._cache_order) >= 3:
