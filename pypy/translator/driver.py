@@ -135,7 +135,7 @@ class TranslationDriver(SimpleTaskEngine):
                 task, postfix = parts
                 if task in ('rtype', 'backendopt', 'llinterpret',
                             'prehannotatebackendopt', 'hintannotate',
-                            'timeshift'):
+                            'rainbow'):
                     if ts:
                         if ts == postfix:
                             expose_task(task, explicit_task)
@@ -386,14 +386,14 @@ class TranslationDriver(SimpleTaskEngine):
         get_portal = self.extra['portal']
         PORTAL, POLICY = get_portal(self)
         t = self.translator
-        self.portal_graph = graphof(t, PORTAL)
+        self.orig_portal_graph = graphof(t, PORTAL)
 
         hannotator = HintAnnotator(base_translator=t, policy=POLICY)
         self.hint_translator = hannotator.translator
-        hs = hannotator.build_types(self.portal_graph,
+        hs = hannotator.build_types(self.orig_portal_graph,
                                     [SomeLLAbstractConstant(v.concretetype,
                                                             {OriginFlags(): True})
-                                     for v in self.portal_graph.getargs()])
+                                     for v in self.orig_portal_graph.getargs()])
         count = hannotator.bookkeeper.nonstuboriggraphcount
         stubcount = hannotator.bookkeeper.stuboriggraphcount
         self.log.info("The hint-annotator saw %d graphs"
@@ -401,14 +401,16 @@ class TranslationDriver(SimpleTaskEngine):
         n = len(list(hannotator.translator.graphs[0].iterblocks()))
         self.log.info("portal has %d blocks" % n)
         self.hannotator = hannotator
+        self.portal_graph = graphof(hannotator.translator, PORTAL)
     #
     task_hintannotate_lltype = taskdef(task_hintannotate_lltype,
                                        ['prehannotatebackendopt_lltype'],
                                        "Hint-annotate")
 
-    def task_timeshift_lltype(self):
-        from pypy.jit.timeshifter.hrtyper import HintRTyper
+    def task_rainbow_lltype(self):
         from pypy.jit.codegen import detect_cpu
+        from pypy.jit.rainbow.codewriter import BytecodeWriter
+        from pypy.jit.rainbow.portal import PortalRewriter
         cpu = detect_cpu.autodetect()
         if cpu == 'i386':
             from pypy.jit.codegen.i386.rgenop import RI386GenOp as RGenOp
@@ -422,13 +424,19 @@ class TranslationDriver(SimpleTaskEngine):
         del self.hint_translator
         ha = self.hannotator
         t = self.translator
-        # make the timeshifted graphs
-        hrtyper = HintRTyper(ha, t.rtyper, RGenOp)
-        hrtyper.specialize(origportalgraph=self.portal_graph, view=False)
+        rtyper = t.rtyper
+        # make the bytecode and the rainbow interp
+        writer = BytecodeWriter(t, ha, RGenOp)
+        jitcode = writer.make_bytecode(self.portal_graph)
+        rewriter = PortalRewriter(self.hannotator, rtyper, RGenOp,
+                                  writer, True)
+        rewriter.rewrite(origportalgraph=self.orig_portal_graph,
+                         portalgraph=self.portal_graph,
+                         view=False)
     #
-    task_timeshift_lltype = taskdef(task_timeshift_lltype,
+    task_rainbow_lltype = taskdef(task_rainbow_lltype,
                              ["hintannotate_lltype"],
-                             "Timeshift")
+                             "Create Rainbow-Interpreter")
 
     def task_backendopt_lltype(self):
         from pypy.translator.backendopt.all import backend_optimizations
@@ -436,7 +444,7 @@ class TranslationDriver(SimpleTaskEngine):
     #
     task_backendopt_lltype = taskdef(task_backendopt_lltype,
                                      [RTYPE,
-                                      '??timeshift_lltype'],
+                                      '??rainbow_lltype'],
                                      "lltype back-end optimisations")
     BACKENDOPT = 'backendopt_lltype'
 
