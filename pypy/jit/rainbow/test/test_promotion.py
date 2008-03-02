@@ -101,11 +101,10 @@ class TestPromotion(InterpretationTest):
         self.check_insns(int_add=1, int_mul=0, int_sub=0)
 
     def test_promote_inside_call2(self):
-        py.test.skip("bug in promotion")
         def ll_two(n):
             k = hint(n, promote=True)
             k *= 17
-            return hint(k, variable=True)
+            return k
         def ll_function(n, m):
             hint(None, global_merge_point=True)
             if not n:

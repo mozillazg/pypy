@@ -250,29 +250,37 @@ class JitInterpreter(object):
     def dispatch(self):
         is_portal = self.frame.bytecode.is_portal
         graph_color = self.frame.bytecode.graph_color
+        frame = self.frame
         queue = self.queue
-        newjitstate = rtimeshift.dispatch_next(queue)
-        resumepoint = rtimeshift.getresumepoint(newjitstate)
-        self.newjitstate(newjitstate)
-        if resumepoint == -1:
-            if graph_color == "gray":
-                assert not is_portal
-                newjitstate = rtimeshift.leave_graph_gray(queue)
-            elif is_portal or graph_color == "red":
-                newjitstate = rtimeshift.leave_graph_red(
-                        queue, is_portal)
-            elif graph_color == "yellow":
-                newjitstate = rtimeshift.leave_graph_yellow(queue)
-            elif graph_color == "green":
-                assert 0, "green graphs shouldn't be seen by the rainbow interp"
-            else:
-                assert 0, "unknown graph color %s" % (graph_color, )
-
+        while 1:
+            newjitstate = rtimeshift.dispatch_next(queue)
+            resumepoint = rtimeshift.getresumepoint(newjitstate)
             self.newjitstate(newjitstate)
-            if self.frame is None:
-                return STOP
-        else:
-            self.frame.pc = resumepoint
+            if resumepoint == -1:
+                if graph_color == "gray":
+                    assert not is_portal
+                    newjitstate = rtimeshift.leave_graph_gray(queue)
+                elif is_portal or graph_color == "red":
+                    newjitstate = rtimeshift.leave_graph_red(
+                            queue, is_portal)
+                elif graph_color == "yellow":
+                    newjitstate = rtimeshift.leave_graph_yellow(queue)
+                elif graph_color == "green":
+                    assert 0, "green graphs shouldn't be seen by the rainbow interp"
+                else:
+                    assert 0, "unknown graph color %s" % (graph_color, )
+
+                self.newjitstate(newjitstate)
+                if self.frame is None:
+                    if frame.backframe is not None:
+                        import pdb; pdb.set_trace()
+                        frame = frame.backframe
+                        queue = frame.dispatchqueue
+                        continue
+                    return STOP
+            else:
+                self.frame.pc = resumepoint
+            return
 
     # operation helper functions
     def load_byte(self):
