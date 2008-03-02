@@ -7,7 +7,6 @@ class TestFrontend(InterpretationTest):
     type_system = "lltype"
 
     def test_we_are_jitted(self):
-        py.test.skip("implement me")
         def f():
             if we_are_jitted():
                 return 42
