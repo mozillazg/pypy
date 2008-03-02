@@ -1,8 +1,7 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.oosupport.metavm import MicroInstruction
 from pypy.translator.jvm.typesystem import JvmScalarType, JvmClassType
-import pypy.translator.jvm.generator as jvmgen
-import pypy.translator.jvm.typesystem as jvmtype
+import pypy.translator.jvm.typesystem as jvm
 from pypy.translator.jvm.builtin import JvmBuiltInType
 
 class _IndirectCall(MicroInstruction):
@@ -73,8 +72,8 @@ class TranslateException(MicroInstruction):
         just find the class to throw normally, but I don't know how.
         """
         self.java_exc = jexc
-        self.pypy_method = jvmgen.Method.v(
-            jvmtype.jPyPyInterlink, pexcmthd, [], jvmtype.jVoid)
+        self.pypy_method = jvm.Method.v(
+            jvm.jPyPyInterlink, pexcmthd, [], jvm.jVoid)
         self.instruction = inst
         
     def render(self, gen, op):
@@ -88,16 +87,16 @@ class TranslateException(MicroInstruction):
         gen.goto(donelbl)
         # } catch (JavaExceptionType) {
         gen.mark(catchlbl)
-        gen.emit(jvmgen.POP)            # throw away the exception object
+        gen.emit(jvm.POP)            # throw away the exception object
         gen.push_pypy()                 # load the PyPy object
-        gen.emit(jvmgen.PYPYINTERLINK)  # load the interlink field from it
+        gen.emit(jvm.PYPYINTERLINK)  # load the interlink field from it
         gen.emit(self.pypy_method)      # invoke the method
         # Note: these instructions will never execute, as we expect
         # the pypy_method to throw an exception and not to return.  We
         # need them here to satisfy the Java verifier, however, as it
         # does not know that the pypy_method will never return.
-        gen.emit(jvmgen.ACONST_NULL)
-        gen.emit(jvmgen.ATHROW)
+        gen.emit(jvm.ACONST_NULL)
+        gen.emit(jvm.ATHROW)
         # }
         gen.mark(donelbl)
 
@@ -126,7 +125,7 @@ class _NewCustomDict(MicroInstruction):
     def render(self, generator, op):
         self._load_func(generator, *op.args[1:4])
         self._load_func(generator, *op.args[4:7])
-        generator.emit(jvmgen.CUSTOMDICTMAKE)
+        generator.emit(jvm.CUSTOMDICTMAKE)
 NewCustomDict = _NewCustomDict()
 
 #XXX These classes have been adapted to the new
@@ -148,8 +147,8 @@ NewCustomDict = _NewCustomDict()
 
 CASTS = {
 #   FROM                      TO
-    (ootype.Signed,           ootype.UnsignedLongLong): jvmgen.I2L,
-    (ootype.SignedLongLong,   ootype.Signed):           jvmgen.L2I,
+    (ootype.Signed,           ootype.UnsignedLongLong): jvm.I2L,
+    (ootype.SignedLongLong,   ootype.Signed):           jvm.L2I,
     (ootype.UnsignedLongLong, ootype.SignedLongLong):   None,
     }
 
