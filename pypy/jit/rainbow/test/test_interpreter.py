@@ -229,7 +229,8 @@ class InterpretationTest(object):
         if not self.on_llgraph:
             return
         oops = {}
-        for block in self.residual_graph.iterblocks():
+        residual_graph = self.get_residual_graph()
+        for block in residual_graph.iterblocks():
             for op in block.operations:
                 if op.opname == 'direct_call':
                     f = getattr(op.args[0].value._obj, "_callable", None)
@@ -240,9 +241,11 @@ class InterpretationTest(object):
             assert oops == expected
         for name, count in counts.items():
             assert oops.get(name, 0) == count
+
     def check_flexswitches(self, expected_count):
+        residual_graph = self.get_residual_graph()
         count = 0
-        for block in self.residual_graph.iterblocks():
+        for block in residual_graph.iterblocks():
             if (isinstance(block.exitswitch, Variable) and
                 block.exitswitch.concretetype is lltype.Signed):
                 count += 1

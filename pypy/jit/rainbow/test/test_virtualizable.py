@@ -1200,7 +1200,6 @@ class TestVirtualizableImplicit(PortalTest):
         assert res == main()
 
     def test_simple_interpreter_with_frame_with_stack(self):
-        py.test.skip("strange problem")
         class Log:
             stack = None
         log = Log()
