@@ -256,16 +256,16 @@ class JitInterpreter(object):
         resumepoint = rtimeshift.getresumepoint(newjitstate)
         self.newjitstate(newjitstate)
         if resumepoint == -1:
-            if graph_color == "red":
+            if graph_color == "gray":
+                assert not is_portal
+                newjitstate = rtimeshift.leave_graph_gray(queue)
+            elif is_portal or graph_color == "red":
                 newjitstate = rtimeshift.leave_graph_red(
                         queue, is_portal)
             elif graph_color == "yellow":
                 newjitstate = rtimeshift.leave_graph_yellow(queue)
             elif graph_color == "green":
                 assert 0, "green graphs shouldn't be seen by the rainbow interp"
-            elif graph_color == "gray":
-                assert not is_portal
-                newjitstate = rtimeshift.leave_graph_gray(queue)
             else:
                 assert 0, "unknown graph color %s" % (graph_color, )
 

@@ -348,7 +348,15 @@ class BytecodeWriter(object):
         if block.exits == ():
             returnvar, = block.inputargs
             color = self.graph_calling_color(self.graph)
-            if color == "red":
+            if self.is_portal:
+                if color == "yellow":
+                    place = self.serialize_oparg("red", returnvar)
+                    assert place == 0
+                if color == "gray":
+                    self.emit("gray_return")
+                else:
+                    self.emit("red_return")
+            elif color == "red":
                 self.emit("red_return")
             elif color == "gray":
                 self.emit("gray_return")
