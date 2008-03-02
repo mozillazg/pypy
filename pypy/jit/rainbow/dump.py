@@ -132,6 +132,10 @@ def dump_bytecode(jitcode, file=None):
                     index = src.load_2byte()
                     function = jitcode.calldescs[index]
                     args.append(function)
+                elif argspec == "metacalldesc":
+                    index = src.load_2byte()
+                    function = jitcode.metacalldescs[index]
+                    args.append(function)
                 elif argspec == "indirectcalldesc":
                     index = src.load_2byte()
                     function = jitcode.indirectcalldescs[index]

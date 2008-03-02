@@ -1641,10 +1641,49 @@ class SimpleTests(InterpretationTest):
         res = self.interpret(f, [2, 4], backendoptimize=True)
         assert res == 56 - 90
 
-    def test_substitute_graph(self):
-        py.test.skip("not working yet")
+    def test_simple_substitute_graph(self):
 
         class MetaG:
+            def __init__(self, codewriter):
+                pass
+
+            def _freeze_(self):
+                return True
+
+            def metafunc(self, jitstate, abox, bbox):
+                from pypy.jit.timeshifter.rvalue import IntRedBox
+                builder = jitstate.curbuilder
+                gv_result = builder.genop2("int_sub", abox.getgenvar(jitstate),
+                                           bbox.getgenvar(jitstate))
+                return IntRedBox(abox.kind, gv_result)
+
+        def g(a, b):
+            return a + b
+
+        def f(a, b):
+            x = g(a, b)
+            y = g(b, a)
+            return x + y
+
+        class MyPolicy(HintAnnotatorPolicy):
+            novirtualcontainer = True
+            
+            def look_inside_graph(self, graph):
+                if graph.func is g:
+                    return MetaG   # replaces g with a meta-call to metafunc()
+                else:
+                    return True
+
+        res = self.interpret(f, [3, 6], policy=MyPolicy())
+        assert res == 0
+        self.check_insns({'int_add': 1, 'int_sub': 2})
+
+    def test_substitute_graph_void(self):
+
+        class MetaG:
+            def __init__(self, codewriter):
+                pass
+
             def _freeze_(self):
                 return True
 
