@@ -62,22 +62,14 @@ class PortalTest(InterpretationTest):
                                                 inline=inline, policy=policy,
                                                 backendoptimize=backendoptimize)
         self.main_args = main_args
-        self.main_is_portal = main is portal
-        llinterp = LLInterpreter(self.rtyper,
+        self.llinterp = LLInterpreter(self.rtyper,
                                  exc_data_ptr=
                                      self.writer.exceptiondesc.exc_data_ptr)
-        res = llinterp.eval_graph(self.maingraph, main_args)
+        res = self.llinterp.eval_graph(self.maingraph, main_args)
         return res
 
     def get_residual_graph(self):
-        portalstate = self.rewriter.state
-        if self.main_is_portal:
-            residual_graph = portalstate.readportal(*self.main_args)._obj.graph
-        else:
-            residual_graphs = portalstate.readallportals()
-            assert len(residual_graphs) == 1
-            residual_graph = residual_graphs[0]._obj.graph
-        return residual_graph
+        return self.rewriter.get_residual_graph(self.llinterp)
             
     def count_direct_calls(self):
         residual_graph = self.get_residual_graph()
