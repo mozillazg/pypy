@@ -43,7 +43,6 @@ class PortalRewriter(object):
             binding = self.hintannotator.binding(v)
             concretetype = originalconcretetype(binding)
             if binding.is_green():
-                ORIGARGS.append(concretetype)
                 arg_spec = "green", None, None, concretetype
             else:
                 argdesc = self.getportalargdesc(concretetype)
