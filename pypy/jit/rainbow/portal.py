@@ -82,8 +82,10 @@ class PortalRewriter(object):
             FUNC = self.PORTAL_FUNCTYPE
             args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
             s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
-            portal_entry_graph_ptr = annhelper.delayedfunction(
+            self.portal_entry_graph = annhelper.getgraph(
                 self.portal_entry, args_s, s_result)
+            portal_entry_graph_ptr = annhelper.graph2delayed(
+                self.portal_entry_graph, FUNC)
             annhelper.finish()
 
         # the following gives a pdb prompt when portal_entry raises an exception
