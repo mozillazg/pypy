@@ -109,7 +109,6 @@ class PortalRewriter(object):
         block.exitswitch = None
         block.recloseblock(
             flowmodel.Link([result], self.origportalgraph.returnblock))
-        self.origportalgraph.exceptblock = None
 
     def getportalargdesc(self, lowleveltype):
         assert not isinstance(lowleveltype, lltype.ContainerType)
