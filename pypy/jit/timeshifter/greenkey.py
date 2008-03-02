@@ -69,6 +69,9 @@ class GreenKey(object):
         raise TypeError("don't store GreenKeys in a normal dict")
 
     def __hash__(self):
+        if len(self.values) == 0:
+            # to support using the empty_key as an annotation-time constant
+            return 7623876
         raise TypeError("not hashable")
 
 def greenkey_eq(self, other):
