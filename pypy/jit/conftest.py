@@ -17,7 +17,11 @@ option = py.test.config.addoptions("pypy options",
                dest="benchmark", default=False,
                help="give benchmarks in tests that support it"),
     )
-
+option = py.test.config.addoptions("pypy options", 
+        Option('--quicktest', action="store_true",
+               dest="quicktest", default=False,
+               help="only run the tests that take a reasonable amount of time"),
+    )
 
 class Benchmark(object):
     RUN_TIME = 2.0    # repeat the benchmarked loop for two seconds
