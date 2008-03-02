@@ -20,7 +20,6 @@ class TestFrontend(InterpretationTest):
         assert res == 42
 
     def test_is_early_constant(self):
-        py.test.skip("implement me")
         def f(x):
             if _is_early_constant(x):
                 return 42
@@ -32,7 +31,6 @@ class TestFrontend(InterpretationTest):
         assert res == 42
 
     def test_is_early_constant_for_green(self):
-        py.test.skip("implement me")
         def g(x):
             if _is_early_constant(x):
                 return 42
