@@ -79,12 +79,20 @@ class PortalRewriter(object):
             from pypy.annotation import model as annmodel
             annhelper = annlowlevel.MixLevelHelperAnnotator(self.rtyper)
             FUNC = self.PORTAL_FUNCTYPE
+            RESFUNC = self.RESIDUAL_FUNCTYPE
             args_s = [annmodel.lltype_to_annotation(ARG) for ARG in FUNC.ARGS]
             s_result = annmodel.lltype_to_annotation(FUNC.RESULT)
             self.portal_entry_graph = annhelper.getgraph(
                 self.portal_entry, args_s, s_result)
             portal_entry_graph_ptr = annhelper.graph2delayed(
                 self.portal_entry_graph, FUNC)
+            # debugging
+            state = self.state
+            def ll_get_residual_fnptr():
+                return state.get_residual_fnptr()
+            self.get_residual_fnptr_graph = annhelper.getgraph(
+                ll_get_residual_fnptr, [],
+                annmodel.lltype_to_annotation(lltype.Ptr(RESFUNC)))
             annhelper.finish()
 
         # the following gives a pdb prompt when portal_entry raises an exception
@@ -112,6 +120,17 @@ class PortalRewriter(object):
                 else:
                     redportargdesccls = RedPortalArgDesc
         return redportargdesccls(lowleveltype, self.RGenOp)
+
+    def get_residual_graph(self, llinterp):
+        # debugging helper
+        portalstate = self.state
+        if not self.translate_support_code:
+            residual_graph_ptr = portalstate.get_residual_fnptr()
+        else:
+            residual_graph_ptr = llinterp.eval_graph(
+                self.get_residual_fnptr_graph, [])
+        residual_graph = residual_graph_ptr._obj.graph
+        return residual_graph
 
 
 def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
@@ -287,6 +306,16 @@ def make_state_class(args_specification, RESIDUAL_FUNCTYPE, sigtoken,
         def readallportals(self):
             return [gv_gen.revealconst(lltype.Ptr(RESIDUAL_FUNCTYPE))
                     for gv_gen in self.cache.values()]
+
+        def get_residual_fnptr(self):
+            lst = self.readallportals()
+            if len(lst) == 1:
+                return lst[0]
+            elif len(lst) == 0:
+                raise Exception("no residual graph!")
+            else:
+                raise Exception("multiple residual graphs")
+
     return PortalState
 
 
