@@ -183,7 +183,6 @@ class JitInterpreter(object):
         self.portalstate = None
         self.num_global_mergepoints = -1
         self.global_state_dicts = None
-        self._add_implemented_opcodes()
 
     def set_portalstate(self, portalstate):
         assert self.portalstate is None
@@ -768,16 +767,16 @@ class JitInterpreter(object):
     # ____________________________________________________________
     # construction-time interface
 
-    def _add_implemented_opcodes(self):
-        for name in dir(self):
-            if not name.startswith("opimpl_"):
-                continue
-            opname = name[len("opimpl_"):]
+    def _register_opcode_if_implemented(self, opname):
+        name = "opimpl_" + opname
+        if hasattr(self, name):
             self.opname_to_index[opname] = len(self.opcode_implementations)
             self.opcode_implementations.append(getattr(self, name).im_func)
             self.opcode_descs.append(None)
 
     def find_opcode(self, name):
+        if name not in self.opname_to_index:
+            self._register_opcode_if_implemented(name)
         return self.opname_to_index.get(name, -1)
 
     def make_opcode_implementation(self, color, opdesc):
