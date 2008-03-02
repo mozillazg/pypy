@@ -825,7 +825,6 @@ class TestVirtualizableImplicit(PortalTest):
         self.check_insns(getfield=0)
 
     def test_simple_interpreter_with_frame(self):
-        py.test.skip("strange problem")
         class Log:
             acc = 0
         log = Log()
@@ -872,8 +871,8 @@ class TestVirtualizableImplicit(PortalTest):
         assert res == 42
         if self.on_llgraph:
             calls = self.count_direct_calls()
-            call_count = sum([count for graph, count in calls.iteritems()
-                              if not graph.name.startswith('rpyexc_')])
+            call_count = sum(calls.values())
+            # one call to "continue_compilation" and one call to debug
             assert call_count == 2
 
 
