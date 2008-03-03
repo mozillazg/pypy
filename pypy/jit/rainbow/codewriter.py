@@ -815,6 +815,8 @@ class BytecodeWriter(object):
 
         emitted_args = []
         for v in op.args[1:-1]:
+            if v.concretetype == lltype.Void:
+                continue
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_call")
         calldescindex = self.calldesc_position(op.args[0].concretetype)
@@ -1313,8 +1315,12 @@ class GraphTransformer(object):
         self.hannotator = hannotator
 
     def transform_graph(self, graph):
+        from pypy.translator.backendopt.constfold import constant_fold_graph
         self.graph = graph
         remove_same_as(graph)
+        # to get rid of the we_are_jitted constant
+        # XXX not sure this is right, leaving commented out for now
+        #constant_fold_graph(graph)
         self.insert_splits()
 
     def insert_splits(self):

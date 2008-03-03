@@ -1839,6 +1839,24 @@ class SimpleTests(InterpretationTest):
             return f(space, x, y)
         res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
+
+    def test_indirect_call_voidargs(self):
+        class Void(object):
+            def _freeze_(self):
+                return True
+        void = Void()
+        def h1(n, v):
+            return n*2
+        def h2(n, v):
+            return n*4
+        l = [h1, h2]
+        def f(n, x):
+            h = l[n&1]
+            return h(n, void) + x
+
+        res = self.interpret(f, [7, 3])
+        assert res == f(7, 3)
+        self.check_insns(indirect_call=1, direct_call=1)
             
 
 class TestLLType(SimpleTests):
