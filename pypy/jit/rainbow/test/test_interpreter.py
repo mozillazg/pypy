@@ -1795,5 +1795,39 @@ class SimpleTests(InterpretationTest):
             return g(n)
         py.test.raises(AssertionError, self.interpret, f, [7], [])
 
+    # void tests
+    def test_void_args(self):
+        class Space(object):
+            true = True
+            false = False
+            
+            def is_true(self, x):
+                if x:
+                    return self.true
+                return self.false
+
+            def add(self, x, y):
+                return x + y
+
+            def sub(self, x, y):
+                return x - y
+
+            def _freeze_(self):
+                return True
+
+        def f(space, x, y):
+            if space.is_true(x):
+                return space.add(x, y)
+            return space.sub(6, y)
+
+        def main(x, y):
+            return f(space, x, y)
+
+        space = Space()
+        res = self.interpret(main, [5, 6])
+        assert res == 11
+            
+
 class TestLLType(SimpleTests):
     type_system = "lltype"
+
