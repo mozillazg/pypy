@@ -271,7 +271,14 @@ class JitInterpreter(object):
                     assert 0, "unknown graph color %s" % (graph_color, )
 
                 self.newjitstate(newjitstate)
-                if self.frame is None:
+                if self.frame is not None:
+                    newjitstate = rtimeshift.collect_split(
+                        self.jitstate, self.frame.pc,
+                        self.frame.local_green)
+                    assert newjitstate.frame.bytecode is self.frame.bytecode
+                    assert newjitstate.frame.pc == self.frame.pc
+                    self.newjitstate(newjitstate)
+                else:
                     if frame.backframe is not None:
                         frame = frame.backframe
                         queue = frame.dispatchqueue
@@ -526,21 +533,16 @@ class JitInterpreter(object):
     def opimpl_red_direct_call(self, greenargs, redargs, targetbytecode):
         self.run(self.jitstate, targetbytecode, greenargs, redargs,
                  start_bytecode_loop=False)
-        # this frame will be resumed later in the next bytecode, which is
-        # red_after_direct_call
 
-    @arguments()
-    def opimpl_red_after_direct_call(self):
+    @arguments("green_varargs", "red_varargs")
+    def opimpl_portal_call(self, greenargs, redargs):
+        self.portalstate.portal_reentry(greenargs, redargs)
         newjitstate = rtimeshift.collect_split(
             self.jitstate, self.frame.pc,
             self.frame.local_green)
         assert newjitstate.frame.bytecode is self.frame.bytecode
         assert newjitstate.frame.pc == self.frame.pc
         self.newjitstate(newjitstate)
-
-    @arguments("green_varargs", "red_varargs")
-    def opimpl_portal_call(self, greenargs, redargs):
-        self.portalstate.portal_reentry(greenargs, redargs)
 
     @arguments("green", "calldesc", "green_varargs")
     def opimpl_green_call(self, fnptr_gv, calldesc, greenargs):
@@ -550,8 +552,6 @@ class JitInterpreter(object):
     def opimpl_yellow_direct_call(self, greenargs, redargs, targetbytecode):
         self.run(self.jitstate, targetbytecode, greenargs, redargs,
                  start_bytecode_loop=False)
-        # this frame will be resumed later in the next bytecode, which is
-        # yellow_after_direct_call
 
     @arguments("green_varargs", "red_varargs", "red", "indirectcalldesc")
     def opimpl_indirect_call_const(self, greenargs, redargs,
@@ -561,13 +561,6 @@ class JitInterpreter(object):
         bytecode = callset.bytecode_for_address(addr)
         self.run(self.jitstate, bytecode, greenargs, redargs,
                  start_bytecode_loop=False)
-
-    @arguments()
-    def opimpl_yellow_after_direct_call(self):
-        newjitstate = rtimeshift.collect_split(
-            self.jitstate, self.frame.pc,
-            self.frame.local_green)
-        assert newjitstate is self.jitstate
 
     @arguments(returns="green")
     def opimpl_yellow_retrieve_result(self):

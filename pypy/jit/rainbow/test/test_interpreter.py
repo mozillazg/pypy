@@ -533,6 +533,49 @@ class SimpleTests(InterpretationTest):
         self.check_insns({'int_gt': 1, 'int_add': 1,
                           'int_sub': 1, 'int_mul': 1})
 
+    def test_call_5(self):
+        def ll_two(x):
+            if x > 0:
+                return x + 5
+            else:
+                return x - 4
+        def ll_function(y):
+            if y > 2:
+                return ll_two(y) * y
+            else:
+                return ll_two(y + 3) * y
+
+        res = self.interpret(ll_function, [3], [])
+        assert res == 24
+        self.check_insns({'int_gt': 3, 'int_add': 3,
+                          'int_sub': 2, 'int_mul': 2})
+
+        res = self.interpret(ll_function, [-3], [])
+        assert res == 12
+        self.check_insns({'int_gt': 3, 'int_add': 3,
+                          'int_sub': 2, 'int_mul': 2})
+
+    def test_call_6(self):
+        def ll_two(x):
+            if x > 0:
+                return x + 5
+            else:
+                return x - 4
+        def ll_function(y):
+            if y > 2:
+                y -= 2
+            return ll_two(y) * y
+
+        res = self.interpret(ll_function, [3], [])
+        assert res == 6
+        self.check_insns({'int_gt': 2, 'int_add': 1,
+                          'int_sub': 2, 'int_mul': 1})
+
+        res = self.interpret(ll_function, [-3], [])
+        assert res == 21
+        self.check_insns({'int_gt': 2, 'int_add': 1,
+                          'int_sub': 2, 'int_mul': 1})
+
     def test_void_call(self):
         def ll_do_nothing(x):
             pass
