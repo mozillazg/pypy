@@ -499,7 +499,6 @@ class Database(OODatabase):
     def lltype_to_cts(self, OOT):
         import sys
         res = self._lltype_to_cts(OOT)
-        print >> sys.stderr, "lltype_to_cts(%r) -> %r" % (OOT, res)
         return res
 
     def _lltype_to_cts(self, OOT):
@@ -531,7 +530,7 @@ class Database(OODatabase):
 
         # handle externals
         if isinstance(OOT, ExternalType):
-            return JvmNativeClass(self, OOT)
+            return jvm.JvmNativeClass(self, OOT)
         
         assert False, "Untranslatable type %s!" % OOT
 
