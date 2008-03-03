@@ -25,4 +25,4 @@ class TestTL(PortalTest):
 
         res = self.timeshift_from_portal(main, tiny2.interpret, [0, 5, 0, 0],
                                          policy=MyHintAnnotatorPolicy())
-        assert res == "5 4 3 2 1"
+        assert "".join(res.chars._obj.items) == "5 4 3 2 1"

@@ -835,15 +835,11 @@ class BytecodeWriter(object):
             self.emit(*emitted_args)
             setdescindex = self.indirectcalldesc_position(targets)
             self.emit(fnptrindex, setdescindex)
-
-            if kind == "red":
-                self.emit("red_after_direct_call")
-            elif kind == "yellow":
-                self.emit("yellow_after_direct_call")
+            if kind == "yellow":
                 self.emit("yellow_retrieve_result_as_red")
                 self.emit(self.type_position(op.result.concretetype))
-            elif kind == "gray":
-                self.emit("red_after_direct_call")
+            elif kind in ("gray", "red"):
+                pass
             else:
                 assert 0, "unknown call kind %s" % (kind, )
 
@@ -957,7 +953,6 @@ class BytecodeWriter(object):
 
         if kind == "red":
             self.register_redvar(op.result)
-        self.emit("red_after_direct_call")
     
     def handle_gray_call(self, op, withexc):
         return self.handle_red_call(op, withexc, "gray")
@@ -972,7 +967,6 @@ class BytecodeWriter(object):
         self.emit("yellow_direct_call")
         self.emit(*emitted_args)
         self.emit(graphindex)
-        self.emit("yellow_after_direct_call")
         self.emit("yellow_retrieve_result")
         self.register_greenvar(op.result)
 
