@@ -4,7 +4,7 @@ from pypy.rlib.rarithmetic import r_ulonglong, ovfcheck_lshift
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
-from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 import sys, os
 import math
@@ -218,8 +218,6 @@ class LLFrame(object):
             val = varorconst.value
         except AttributeError:
             val = self.bindings[varorconst]
-        if isinstance(val, ComputedIntSymbolic):
-            val = val.compute_fn()
         if varorconst.concretetype is not lltype.Void:
             try:
                 val = lltype.enforce(varorconst.concretetype, val)
