@@ -29,6 +29,9 @@ P_OOPSPEC_NOVIRTUAL = HintAnnotatorPolicy(oopspec=True,
                                           entrypoint_returns_red=False)
 
 def getargtypes(annotator, values):
+    if values is None:    # for backend tests producing stand-alone exe's
+        from pypy.annotation.listdef import s_list_of_strings
+        return [s_list_of_strings]
     return [annotation(annotator, x) for x in values]
 
 def annotation(a, x):
