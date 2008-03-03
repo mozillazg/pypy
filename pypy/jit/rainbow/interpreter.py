@@ -534,7 +534,9 @@ class JitInterpreter(object):
         newjitstate = rtimeshift.collect_split(
             self.jitstate, self.frame.pc,
             self.frame.local_green)
-        assert newjitstate is self.jitstate
+        assert newjitstate.frame.bytecode is self.frame.bytecode
+        assert newjitstate.frame.pc == self.frame.pc
+        self.newjitstate(newjitstate)
 
     @arguments("green_varargs", "red_varargs")
     def opimpl_portal_call(self, greenargs, redargs):
