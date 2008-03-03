@@ -320,7 +320,6 @@ def test_coalesce_exitswitchs():
 
 
 def test_switch_constant_folding():
-    py.test.skip("fails right now")
     def fn(n, x):
         if n == 0:
             x += 4
