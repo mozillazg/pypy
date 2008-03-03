@@ -2,9 +2,9 @@ import py
 
 from pypy import conftest
 from pypy.translator.translator import graphof
-from pypy.jit.timeshifter.test.test_timeshift import TestLLType as TSTestLLType, getargtypes
 from pypy.jit.rainbow.test.test_interpreter import P_NOVIRTUAL, StopAtXPolicy
 from pypy.jit.rainbow.test.test_interpreter import hannotate, InterpretationTest
+from pypy.jit.rainbow.test.test_interpreter import getargtypes
 from pypy.jit.rainbow.test.test_vlist import P_OOPSPEC
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype
