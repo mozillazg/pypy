@@ -317,3 +317,27 @@ def test_coalesce_exitswitchs():
     check_graph(graph, [2], 0, t)
     check_graph(graph, [10], 100, t)
     check_graph(graph, [42], 0, t)
+
+
+def test_switch_constant_folding():
+    py.test.skip("fails right now")
+    def fn(n, x):
+        if n == 0:
+            x += 4
+        elif n == 1:
+            x += 5
+        elif n == 2:
+            x -= 1
+        return x * n
+
+    graph, t = get_graph(fn, [int, int])
+    from pypy.translator.backendopt.merge_if_blocks import merge_if_blocks
+    from pypy.translator.backendopt import removenoops
+    removenoops.remove_same_as(graph)
+    merge_if_blocks(graph)
+    if conftest.option.view:
+        t.view()
+    constant_fold_graph(graph)
+    if conftest.option.view:
+        t.view()
+    check_graph(graph, [6, 2], 12, t)
