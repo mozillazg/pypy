@@ -261,7 +261,6 @@ pc: 0 |  make_redbox          (0), 0           => r1
         writer, jitcode = self.serialize(f, [int])
         assert jitcode.code == assemble(writer.interpreter,
                                         "red_direct_call", 0, 1, 0, 0,
-                                        "red_after_direct_call",
                                         "make_redbox", -1, 0,
                                         "red_int_mul", 1, 2,
                                         "make_new_redvars", 1, 3,
@@ -311,7 +310,6 @@ pc: 0 |  make_redbox          (0), 0           => r1
         writer, jitcode = self.serialize(ll_function, [int])
         assert jitcode.code == assemble(writer.interpreter,
                                         "yellow_direct_call", 0, 1, 0, 0,
-                                        "yellow_after_direct_call",
                                         "yellow_retrieve_result",
                                         "green_int_add", 0, -1,
                                         "make_redbox", 1, 0,
