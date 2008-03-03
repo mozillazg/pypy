@@ -124,7 +124,7 @@ translation_optiondescription = OptionDescription(
     ChoiceOption("fork_before",
                  "(UNIX) Create restartable checkpoint before step",
                  ["annotate", "rtype", "backendopt", "database", "source",
-                  "hintannotate", "timeshift"],
+                  "hintannotate", "rainbow"],
                  default=None, cmdline="--fork-before"),
 
     # options for ootype
