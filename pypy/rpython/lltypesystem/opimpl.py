@@ -1,6 +1,7 @@
 import sys
 import math
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.objectmodel import ComputedIntSymbolic
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import opimpls
 
@@ -62,17 +63,28 @@ def get_primitive_op_src(fullopname):
         if opname in ops_unary:
             def op_function(x):
                 if not isinstance(x, argtype):
-                    raise TypeError("%r arg must be %s, got %r instead" % (
-                        fullopname, typname, type(x).__name__))
+                    if argtype is int:
+                        x = _compute_int(x)
+                    else:
+                        raise TypeError("%r arg must be %s, got %r instead" % (
+                            fullopname, typname, type(x).__name__))
                 return adjust_result(func(x))
         else:
             def op_function(x, y):
                 if not isinstance(x, argtype):
-                    raise TypeError("%r arg 1 must be %s, got %r instead" % (
-                        fullopname, typname, type(x).__name__))
+                    if argtype is int:
+                        x = _compute_int(x)
+                    else:
+                        raise TypeError("%r arg 1 must be %s, got %r instead"
+                                        % (fullopname, typname,
+                                           type(x).__name__))
                 if not isinstance(y, argtype):
-                    raise TypeError("%r arg 2 must be %s, got %r instead" % (
-                        fullopname, typname, type(y).__name__))
+                    if argtype is int:
+                        y = _compute_int(y)
+                    else:
+                        raise TypeError("%r arg 2 must be %s, got %r instead"
+                                        % (fullopname, typname,
+                                           type(y).__name__))
                 return adjust_result(func(x, y))
 
     return func_with_new_name(op_function, 'op_' + fullopname)
@@ -170,27 +182,35 @@ def op_bool_not(b):
     assert type(b) is bool
     return not b
 
+def _compute_int(val):
+    if isinstance(val, ComputedIntSymbolic):
+        val = val.compute_fn()
+    assert isinstance(val, int)
+    return val
+
 def op_int_add(x, y):
-    assert isinstance(x, (int, llmemory.AddressOffset))
-    assert isinstance(y, (int, llmemory.AddressOffset))
+    if not (type(x) is int and type(y) is int):
+        if not isinstance(x, llmemory.AddressOffset): x = _compute_int(x)
+        if not isinstance(y, llmemory.AddressOffset): y = _compute_int(y)
     return intmask(x + y)
 
 def op_int_mul(x, y):
-    assert isinstance(x, (int, llmemory.AddressOffset))
-    assert isinstance(y, (int, llmemory.AddressOffset))
+    if not (type(x) is int and type(y) is int):
+        if not isinstance(x, llmemory.AddressOffset): x = _compute_int(x)
+        if not isinstance(y, llmemory.AddressOffset): y = _compute_int(y)
     return intmask(x * y)
 
 def op_int_floordiv(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    x = _compute_int(x)
+    y = _compute_int(y)
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_int_mod(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    x = _compute_int(x)
+    y = _compute_int(y)
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
