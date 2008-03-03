@@ -344,7 +344,8 @@ class PseudoHighLevelCallableEntry(extregistry.ExtRegistryEntry):
 def llhelper(F, f):
     # implementation for the purpose of direct running only
     # XXX need more cleverness to support translation of prebuilt llhelper ptr
-    return lltype.functionptr(F.TO, f.func_name, _callable=f)
+    return lltype.functionptr(F.TO, f.func_name, _callable=f,
+                              _debugexc = getattr(f, '_debugexc', False))
 
 class LLHelperEntry(extregistry.ExtRegistryEntry):
     _about_ = llhelper

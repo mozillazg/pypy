@@ -776,6 +776,7 @@ class PromotionDesc:
                 lloperation.llop.debug_fatalerror(
                     lltype.Void, "compilation-time error %s" % e)
         self.ll_continue_compilation = ll_continue_compilation
+        ll_continue_compilation._debugexc = True
 
         FUNCTYPE = lltype.FuncType([base_ptr_lltype(), ERASED], lltype.Void)
         FUNCPTRTYPE = lltype.Ptr(FUNCTYPE)
