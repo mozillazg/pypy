@@ -1820,11 +1820,24 @@ class SimpleTests(InterpretationTest):
                 return space.add(x, y)
             return space.sub(6, y)
 
-        def main(x, y):
+        def main1(x, y):
             return f(space, x, y)
 
         space = Space()
-        res = self.interpret(main, [5, 6])
+        res = self.interpret(main1, [5, 6])
+        assert res == 11
+
+        def g(space, x, y):
+            return space.add(x, y)
+
+        def f(space, x, y):
+            if space.is_true(x):
+                return g(space, x, y)
+            return space.sub(6, y)
+
+        def main2(x, y):
+            return f(space, x, y)
+        res = self.interpret(main2, [5, 6], policy=StopAtXPolicy(g))
         assert res == 11
             
 

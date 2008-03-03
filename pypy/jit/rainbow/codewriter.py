@@ -921,6 +921,8 @@ class BytecodeWriter(object):
         func = self.serialize_oparg("red", fnptr)
         emitted_args = []
         for v in op.args[1:]:
+            if v.concretetype == lltype.Void:
+                continue
             emitted_args.append(self.serialize_oparg("red", v))
         self.emit("red_residual_call")
         self.emit(func, pos, withexc, has_result, len(emitted_args))
