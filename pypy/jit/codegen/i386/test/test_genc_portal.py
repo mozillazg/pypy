@@ -84,7 +84,7 @@ class I386PortalTestMixin(object):
         self.cbuilder.generate_source()
         exename = self.cbuilder.compile()
         print '-'*60
-        print 'Generated executable for %s: %s', (self.testname, exename)
+        print 'Generated executable for %s: %s' % (self.testname, exename)
         print '-'*60
 
 
