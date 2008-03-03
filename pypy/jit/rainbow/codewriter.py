@@ -1008,10 +1008,10 @@ class BytecodeWriter(object):
     def serialize_op_zero_gc_pointers_inside(self, op):
         pass # XXX is that right?
 
-    def translate_op_resume_point(self, op):
+    def serialize_op_resume_point(self, op):
         pass
 
-    def translate_op_keepalive(self, op):
+    def serialize_op_keepalive(self, op):
         pass
 
     def serialize_op_cast_pointer(self, op):
