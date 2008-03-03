@@ -43,56 +43,12 @@ class CallDesc:
             k = 0
             for ARG in argiter:
                 if ARG == lltype.Void:
-                    arg = voidargs[k]
                     # XXX terrible hack
                     if not we_are_translated():
+                        arg = voidargs[k]
                         arg._TYPE = lltype.Void
-                    args += (arg, )
-                    k += 1
-                else:
-                    genconst = greenargs[j]
-                    arg = genconst.revealconst(ARG)
-                    args += (arg, )
-                    j += 1
-            rgenop = interpreter.jitstate.curbuilder.rgenop
-            try:
-                result = rgenop.genconst(fnptr(*args))
-            except Exception, e:
-                if not we_are_translated():
-                    residual_exception_nontranslated(interpreter.jitstate, e, rtyper)
-                else:
-                    interpreter.jitstate.residual_exception(e)
-                result = rgenop.genconst(whatever_return_value)
-            interpreter.green_result(result)
-        self.green_call = green_call
-
-    def _freeze_(self):
-        return True
-
-
-class CallDesc:
-    __metaclass__ = cachedtype
-
-    def __init__(self, RGenOp, rtyper, FUNCTYPE, voidargs=()):
-        self.sigtoken = RGenOp.sigToken(FUNCTYPE.TO)
-        self.result_kind = RGenOp.kindToken(FUNCTYPE.TO.RESULT)
-        # xxx what if the result is virtualizable?
-        self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
-        whatever_return_value = FUNCTYPE.TO.RESULT._defl()
-        numargs = len(FUNCTYPE.TO.ARGS)
-        argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
-        def green_call(interpreter, fnptr_gv, greenargs):
-            fnptr = fnptr_gv.revealconst(FUNCTYPE)
-            assert len(greenargs) + len(voidargs) == numargs 
-            args = ()
-            j = 0
-            k = 0
-            for ARG in argiter:
-                if ARG == lltype.Void:
-                    arg = voidargs[k]
-                    # XXX terrible hack
-                    if not we_are_translated():
-                        arg._TYPE = lltype.Void
+                    else:
+                        arg = None
                     args += (arg, )
                     k += 1
                 else:
