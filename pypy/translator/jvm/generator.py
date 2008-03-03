@@ -493,7 +493,6 @@ class JVMGenerator(Generator):
         # Determine java type:
         jty = self.db.lltype_to_cts(v.concretetype)
         import sys
-        print >> sys.stderr, "_var_data(%s) -> %r" % (v.name, jty)
         # Determine index in stack frame slots:
         #   note that arguments and locals can be treated the same here
         return jty, self.curfunc.var_offset(v, jty)
@@ -842,7 +841,7 @@ class JVMGenerator(Generator):
     greater_equals = lambda self: self._compare_op(jvm.IF_ICMPGE)
 
     def _uint_compare_op(self, cmpopcode):
-        PYPYUINTCMP.invoke(self)
+        jvm.PYPYUINTCMP.invoke(self)
         self._compare_op(cmpopcode)
 
     u_equals = equals
@@ -876,7 +875,7 @@ class JVMGenerator(Generator):
     long_greater_equals = lambda self: self._long_compare_op(jvm.IFGE)
 
     def _ulong_compare_op(self, cmpopcode):
-        PYPYULONGCMP.invoke(self)
+        jvm.PYPYULONGCMP.invoke(self)
         self._compare_op(cmpopcode)
 
     ulong_equals = long_equals

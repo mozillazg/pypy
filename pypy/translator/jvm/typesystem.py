@@ -345,7 +345,6 @@ class JvmNativeClass(JvmClassType):
         return self.methods[methname]
 
     def _add_methods(self):
-        from pypy.translator.jvm.generator import Method
         for methname, methspec in self.OOTYPE._class_._methods.items():
             argtypes = [self.db.annotation_to_cts(arg._type) for arg in
                         methspec.args]
@@ -384,7 +383,7 @@ class _JvmVoidArray(JvmClassType):
 
     def lookup_method(self, methodnm):
         jargtypes, jrettype = self.method_types[methodnm]
-        return jvmgen.Method.v(self, methodnm, jargtypes, jrettype)
+        return Method.v(self, methodnm, jargtypes, jrettype)
     
 class JvmArrayType(JvmType):
     """

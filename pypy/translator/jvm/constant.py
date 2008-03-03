@@ -188,7 +188,7 @@ class JVMWeakRefConst(WeakRefConst):
     PRIORITY = 200
 
     def jtype(self):
-        return jPyPyWeakRef
+        return jvm.jPyPyWeakRef
 
     def create_pointer(self, gen):        
         if not self.value:
