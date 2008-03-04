@@ -424,11 +424,7 @@ class JitInterpreter(object):
     @arguments("exception")
     def opimpl_split_raisingop(self, ll_evalue):
         # XXX not sure about passing no green vars
-        decision = rtimeshift.split_raisingop(self.jitstate, self.frame.pc,
-                                              ll_evalue)
-        if decision:
-            self.frame.pc = target
-        
+        rtimeshift.split_raisingop(self.jitstate, self.frame.pc, ll_evalue)
 
 
     @arguments("jumptarget")
