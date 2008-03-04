@@ -27,22 +27,14 @@ int main(int argc, char *argv[])
     if (errmsg) goto error;
 
     list = _RPyListOfString_New(argc);
-    if (RPyExceptionOccurred()) goto memory_out;
+    //if (RPyExceptionOccurred()) goto memory_out;
     for (i=0; i<argc; i++) {
         RPyString *s = RPyString_FromString(argv[i]);
-        if (RPyExceptionOccurred()) goto memory_out;
+        //if (RPyExceptionOccurred()) goto memory_out;
         _RPyListOfString_SetItem(list, i, s);
     }
 
     exitcode = STANDALONE_ENTRY_POINT(list);
-    if (RPyExceptionOccurred()) {
-        /* fish for the exception type, at least */
-#ifndef AVR
-        fprintf(stderr, "Fatal RPython error: %s\n",
-                RPyFetchExceptionType()->ov_name->items);
-#endif
-        exitcode = 1;
-    }
     return exitcode;
 
  memory_out:
