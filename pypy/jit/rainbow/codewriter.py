@@ -34,7 +34,14 @@ class CallDesc:
         self.redboxbuilder = rvalue.ll_redboxbuilder(FUNCTYPE.TO.RESULT)
         whatever_return_value = FUNCTYPE.TO.RESULT._defl()
         numargs = len(FUNCTYPE.TO.ARGS)
+        voidargcount = 0
+        for ARG in FUNCTYPE.TO.ARGS:
+            if ARG == lltype.Void:
+                voidargcount += 1
+        if len(voidargs) != voidargcount:
+            voidargs = (None, ) * voidargcount
         argiter = unrolling_iterable(FUNCTYPE.TO.ARGS)
+        RETURN = FUNCTYPE.TO.RESULT
         def green_call(interpreter, fnptr_gv, greenargs):
             fnptr = fnptr_gv.revealconst(FUNCTYPE)
             assert len(greenargs) + len(voidargs) == numargs 
@@ -58,14 +65,15 @@ class CallDesc:
                     j += 1
             rgenop = interpreter.jitstate.curbuilder.rgenop
             try:
-                result = rgenop.genconst(fnptr(*args))
+                result = fnptr(*args)
             except Exception, e:
                 if not we_are_translated():
                     residual_exception_nontranslated(interpreter.jitstate, e, rtyper)
                 else:
                     interpreter.jitstate.residual_exception(e)
-                result = rgenop.genconst(whatever_return_value)
-            interpreter.green_result(result)
+                result = whatever_return_value
+            if RETURN != lltype.Void:
+                interpreter.green_result(rgenop.genconst(result))
         self.green_call = green_call
 
     def _freeze_(self):
