@@ -109,12 +109,6 @@ def predeclare_exception_data(db, rtyper):
     if not db.standalone:
         yield ('RPYTHON_PYEXCCLASS2EXC', exceptiondata.fn_pyexcclass2exc)
 
-    yield ('RPyExceptionOccurred1',    exctransformer.rpyexc_occured_ptr.value)
-    yield ('RPyFetchExceptionType',    exctransformer.rpyexc_fetch_type_ptr.value)
-    yield ('RPyFetchExceptionValue',   exctransformer.rpyexc_fetch_value_ptr.value)
-    yield ('RPyClearException',        exctransformer.rpyexc_clear_ptr.value)
-    yield ('RPyRaiseException',        exctransformer.rpyexc_raise_ptr.value)
-
     for pyexccls in exceptiondata.standardexceptions:
         exc_llvalue = exceptiondata.fn_pyexcclass2exc(
             lltype.pyobjectptr(pyexccls))

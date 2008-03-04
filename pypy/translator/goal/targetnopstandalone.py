@@ -14,8 +14,18 @@ def debug(msg):
 
 # __________  Entry point  __________
 
+def foobar(n):
+    if n > 0:
+        return foobar(n-1)+n
+    else:
+        return 0
+
 def entry_point(argv):
-    debug("hello world")
+    try:
+        foobar(5000000)
+    except RuntimeError:
+        debug("bigbig")
+    debug("hello world: %d" % foobar(5))
     return 0
 
 # _____ Define and setup target ___

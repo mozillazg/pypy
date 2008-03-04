@@ -7,8 +7,8 @@
 #endif 
 
 /* just a renaming, unless DO_LOG_EXC is set */
-#define RPyExceptionOccurred RPyExceptionOccurred1
 #define RPY_DEBUG_RETURN()   /* nothing */
+
 
 #ifndef PyExceptionClass_Check    /* Python < 2.5 */
 # define PyExceptionClass_Check(x)	PyClass_Check(x)
@@ -21,6 +21,63 @@
 /******************************************************************/
 #ifdef HAVE_RTYPER               /* RPython version of exceptions */
 /******************************************************************/
+
+
+#define OP_RPYEXC_TRY(tag, result_evalue)                               \
+  ;                                                                     \
+  struct rpyjmpbuf_s rpyjmpbuf##tag;                                    \
+  rpyjmpbuf##tag.prev = rpyjmp_head;                                    \
+  rpyjmp_head = &rpyjmpbuf##tag;                                        \
+  asm volatile("xorl	%%ebx, %%ebx\n\
+	movl	%%esp, %1\n\
+	movl	%%ebp, %2\n\
+	movl	$0f, %3\n\
+0:" :                                                                   \
+               "=b"(result_evalue) :                                    \
+               "m"(rpyjmpbuf##tag.esp),                                 \
+               "m"(rpyjmpbuf##tag.ebp),                                 \
+               "m"(rpyjmpbuf##tag.resumeaddr) :                         \
+               "eax", "edx", "ecx", "esi", "edi", "memory", "cc")
+
+#define OP_RPYEXC_ENDTRY(tag, r)  rpyjmp_head = rpyjmpbuf##tag.prev
+
+#define OP_RPYEXC_RAISE(evalue, r)       rpyexc_raise(evalue, __FUNCTION__)
+#define RPyRaiseException(etype, evalue) rpyexc_raise(evalue, __FUNCTION__)
+
+struct rpyjmpbuf_s {
+  struct rpyjmpbuf_s* prev;
+  void* esp;
+  void* ebp;
+  void* resumeaddr;
+};
+
+extern struct rpyjmpbuf_s *rpyjmp_head;
+void rpyexc_raise(RPYTHON_EXCEPTION evalue, const char* funcname)
+     __attribute__ ((noreturn));
+
+#ifndef PYPY_NOT_MAIN_FILE
+struct rpyjmpbuf_s *rpyjmp_head = NULL;
+void rpyexc_raise(RPYTHON_EXCEPTION evalue, const char *funcname)
+{
+  if (rpyjmp_head == NULL)
+    {
+      fprintf(stderr, "Fatal RPython error in %s: %s\n",
+              funcname, RPYTHON_TYPE_OF_EXC_INST(evalue)->ov_name->items);
+      exit(1);
+    }
+  asm volatile("movl	%0, %%esp\n\
+	movl	%1, %%ebp\n\
+	jmp	*%2" : :
+               "g"(rpyjmp_head->esp),
+               "g"(rpyjmp_head->ebp),
+               "g"(rpyjmp_head->resumeaddr),
+               "b"(evalue));
+  abort();
+}
+#endif
+
+
+
 
 #ifdef DO_LOG_EXC
 #undef RPyExceptionOccurred
