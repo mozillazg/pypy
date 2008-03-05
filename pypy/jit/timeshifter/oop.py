@@ -89,9 +89,26 @@ class OopSpecDesc:
                              None, None, [method])
         self.typedesc = vmodule.TypeDesc(RGenOp, rtyper, SELFTYPE)
         handler = getattr(vmodule, method)
-        setattr(self, "ll_handler_%s" % (len(OOPARGTYPES), ), handler)
 
-        self.ll_handler = handler
+        argcount_max = handler.func_code.co_argcount
+        argcount_min = argcount_max - len(handler.func_defaults or ())
+
+        def ll_handler(*args):
+            # an indirection to support the fact that the handler() can
+            # take default arguments.  This is an RPython trick to let
+            # a family of ll_handler()s be called with a constant number
+            # of arguments.  If we tried to call directly the handler()s
+            # in a family, the fact that some have extra default arguments
+            # and others not causes trouble in normalizecalls.py.
+            assert argcount_min <= len(args) <= argcount_max
+            # ^^^ 'assert' is because each call family contains all
+            # oopspecs with the rainbow interpreter.  The number of
+            # arguments is wrong for many of the oopspecs in the
+            # call family, though, so the assert prevents the actual
+            # call below from being seen.
+            return handler(*args)
+
+        self.ll_handler = ll_handler
         self.couldfold = getattr(handler, 'couldfold', False)
 
         if self.couldfold:
