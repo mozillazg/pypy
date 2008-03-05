@@ -265,12 +265,9 @@ class AbstractVirtualDict(VirtualContainer):
 
 
 def oop_newdict(jitstate, oopspecdesc, deepfrozen):
-    assert isinstance(oopspecdesc, oop.OopSpecDesc_dict)
     return oopspecdesc.typedesc.factory()
 
 def oop_dict_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox, valuebox):
-    assert isinstance(oopspecdesc, oop.OopSpecDesc_dict)
-    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, AbstractVirtualDict) and keybox.is_constant():
         content.setitem(keybox, valuebox)
@@ -278,8 +275,6 @@ def oop_dict_setitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox, valuebo
         oopspecdesc.residual_call(jitstate, [selfbox, keybox, valuebox])
 
 def oop_dict_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox):
-    assert isinstance(oopspecdesc, oop.OopSpecDesc_dict)
-    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, AbstractVirtualDict) and keybox.is_constant():
         try:
@@ -292,8 +287,6 @@ def oop_dict_getitem(jitstate, oopspecdesc, deepfrozen, selfbox, keybox):
 oop_dict_getitem.couldfold = True
 
 def oop_dict_contains(jitstate, oopspecdesc, deepfrozen, selfbox, keybox):
-    assert isinstance(oopspecdesc, oop.OopSpecDesc_dict)
-    assert isinstance(selfbox, rvalue.PtrRedBox)
     content = selfbox.content
     if isinstance(content, AbstractVirtualDict) and keybox.is_constant():
         try:
