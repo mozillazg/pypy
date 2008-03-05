@@ -872,15 +872,6 @@ class BytecodeWriter(object):
             args_v.append(v)
             args.append(self.serialize_oparg("red", v))
 
-        ll_handler = oopspecdesc.ll_handler
-        couldfold = oopspecdesc.couldfold
-        missing_args = ((ll_handler.func_code.co_argcount - 3) -
-                        len(oopspecdesc.argtuple))
-        assert missing_args >= 0
-        if missing_args > 0:
-            assert (ll_handler.func_defaults[-missing_args:] ==
-                    (None,) * missing_args)
-
         if oopspecdesc.is_method:
             hs_self = self.hannotator.binding(
                 opargs[oopspecdesc.argtuple[0].n])

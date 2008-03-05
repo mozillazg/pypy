@@ -572,35 +572,35 @@ class JitInterpreter(object):
 
     @arguments("oopspec", "bool", returns="red")
     def opimpl_red_oopspec_call_0(self, oopspec, deepfrozen):
-        return oopspec.ll_handler_0(self.jitstate, oopspec, deepfrozen)
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen)
 
     @arguments("oopspec", "bool", "red", returns="red")
     def opimpl_red_oopspec_call_1(self, oopspec, deepfrozen, arg1):
-        return oopspec.ll_handler_1(self.jitstate, oopspec, deepfrozen, arg1)
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1)
 
     @arguments("oopspec", "bool", "red", "red", returns="red")
     def opimpl_red_oopspec_call_2(self, oopspec, deepfrozen, arg1, arg2):
-        return oopspec.ll_handler_2(self.jitstate, oopspec, deepfrozen, arg1, arg2)
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2)
 
     @arguments("oopspec", "bool", "red", "red", "red", returns="red")
     def opimpl_red_oopspec_call_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
-        return oopspec.ll_handler_3(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
+        return oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
 
     @arguments("oopspec", "bool")
     def opimpl_red_oopspec_call_noresult_0(self, oopspec, deepfrozen):
-        oopspec.ll_handler_0(self.jitstate, oopspec, deepfrozen)
+        oopspec.ll_handler(self.jitstate, oopspec, deepfrozen)
 
     @arguments("oopspec", "bool", "red")
     def opimpl_red_oopspec_call_noresult_1(self, oopspec, deepfrozen, arg1):
-        oopspec.ll_handler_1(self.jitstate, oopspec, deepfrozen, arg1)
+        oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1)
 
     @arguments("oopspec", "bool", "red", "red")
     def opimpl_red_oopspec_call_noresult_2(self, oopspec, deepfrozen, arg1, arg2):
-        oopspec.ll_handler_2(self.jitstate, oopspec, deepfrozen, arg1, arg2)
+        oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2)
 
     @arguments("oopspec", "bool", "red", "red", "red")
     def opimpl_red_oopspec_call_noresult_3(self, oopspec, deepfrozen, arg1, arg2, arg3):
-        oopspec.ll_handler_3(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
+        oopspec.ll_handler(self.jitstate, oopspec, deepfrozen, arg1, arg2, arg3)
 
     @arguments("promotiondesc")
     def opimpl_after_oop_residual_call(self, promotiondesc):
