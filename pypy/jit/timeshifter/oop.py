@@ -74,16 +74,22 @@ class OopSpecDesc:
         if operation_name == 'newlist':
             typename, method = 'list', 'oop_newlist'
             SELFTYPE = FUNCTYPE.RESULT.TO
-            self.is_method = False
+            is_method = False
         elif operation_name == 'newdict':
             typename, method = 'dict', 'oop_newdict'
             SELFTYPE = FUNCTYPE.RESULT.TO
-            self.is_method = False
+            is_method = False
         else:
             typename, method = operation_name.split('.')
             method = 'oop_%s_%s' % (typename, method)
             SELFTYPE = FUNCTYPE.ARGS[self.argtuple[0].n].TO
-            self.is_method = True
+            is_method = True
+        self.is_method = is_method
+
+        # hack! to avoid confusion between the .typedesc attribute
+        # of oopspecdescs of different types (lists, dicts, etc.)
+        # let's use different subclasses for the oopspecdesc too.
+        self.__class__ = myrealclass = globals()['OopSpecDesc_%s' % typename]
 
         vmodule = __import__('pypy.jit.timeshifter.v%s' % (typename,),
                              None, None, [method])
@@ -93,20 +99,27 @@ class OopSpecDesc:
         argcount_max = handler.func_code.co_argcount
         argcount_min = argcount_max - len(handler.func_defaults or ())
 
-        def ll_handler(*args):
+        def ll_handler(jitstate, oopspecdesc, deepfrozen, *args):
             # an indirection to support the fact that the handler() can
             # take default arguments.  This is an RPython trick to let
             # a family of ll_handler()s be called with a constant number
             # of arguments.  If we tried to call directly the handler()s
             # in a family, the fact that some have extra default arguments
             # and others not causes trouble in normalizecalls.py.
-            assert argcount_min <= len(args) <= argcount_max
+            assert argcount_min <= 3 + len(args) <= argcount_max
             # ^^^ 'assert' is because each call family contains all
             # oopspecs with the rainbow interpreter.  The number of
             # arguments is wrong for many of the oopspecs in the
             # call family, though, so the assert prevents the actual
             # call below from being seen.
-            return handler(*args)
+            assert isinstance(oopspecdesc, myrealclass)
+            if is_method:
+                selfbox = args[0]
+                assert isinstance(selfbox, rvalue.PtrRedBox)
+                return handler(jitstate, oopspecdesc, deepfrozen, selfbox,
+                               *args[1:])
+            else:
+                return handler(jitstate, oopspecdesc, deepfrozen, *args)
 
         self.ll_handler = ll_handler
         self.couldfold = getattr(handler, 'couldfold', False)
@@ -144,11 +157,6 @@ class OopSpecDesc:
                 return rvalue.ll_fromvalue(jitstate, result)
 
             self.do_call = do_call
-
-        # hack! to avoid confusion between the .typedesc attribute
-        # of oopspecdescs of different types (lists, dicts, etc.)
-        # let's use different subclasses for the oopspecdesc too.
-        self.__class__ = globals()['OopSpecDesc_%s' % typename]
 
     def residual_call(self, jitstate, argboxes, deepfrozen=False):
         builder = jitstate.curbuilder
