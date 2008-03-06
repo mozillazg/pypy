@@ -1317,9 +1317,10 @@ class GraphTransformer(object):
         from pypy.translator.backendopt.constfold import constant_fold_graph
         self.graph = graph
         remove_same_as(graph)
-        # to get rid of the we_are_jitted constant
-        # XXX not sure this is right, leaving commented out for now
-        #constant_fold_graph(graph)
+        # to get rid of the usages of the we_are_jitted constant
+        # (turned to '1' by the hintannotator)
+        # XXX is this the best way to deal with it?
+        constant_fold_graph(graph)
         self.insert_splits()
 
     def insert_splits(self):
