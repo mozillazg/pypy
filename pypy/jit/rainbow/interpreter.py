@@ -248,8 +248,6 @@ class JitInterpreter(object):
                 assert result is None
 
     def dispatch(self):
-        is_portal = self.frame.bytecode.is_portal
-        graph_color = self.frame.bytecode.graph_color
         frame = self.frame
         queue = self.queue
         while 1:
@@ -257,6 +255,8 @@ class JitInterpreter(object):
             resumepoint = rtimeshift.getresumepoint(newjitstate)
             self.newjitstate(newjitstate)
             if resumepoint == -1:
+                is_portal = frame.bytecode.is_portal
+                graph_color = frame.bytecode.graph_color
                 if graph_color == "gray":
                     assert not is_portal
                     newjitstate = rtimeshift.leave_graph_gray(queue)

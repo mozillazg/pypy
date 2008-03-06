@@ -423,6 +423,23 @@ class TestPromotion(InterpretationTest):
         assert res == 6
         self.check_insns(int_add=0)
 
+    def test_more_promote_in_yellow_call(self):
+        def ll_two(n):
+            n = hint(n, promote=True)
+            return n + 2
+            
+        def ll_function(n):
+            hint(None, global_merge_point=True)
+            if n > 5:
+                c = n
+            else:
+                c = ll_two(n)
+            return hint(c, variable=True)
+
+        res = self.interpret(ll_function, [4], [], policy=P_NOVIRTUAL)
+        assert res == 6
+        self.check_insns(int_add=0)
+
     def test_two_promotions_in_call(self):
         def ll_two(n, m):
             if n < 1:
