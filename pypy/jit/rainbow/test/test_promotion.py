@@ -180,7 +180,6 @@ class TestPromotion(InterpretationTest):
         self.check_insns(int_add=0, int_mul=0)
 
     def test_more_promotes(self):
-        py.test.skip("not working yet")
         S = lltype.GcStruct('S', ('x', lltype.Signed), ('y', lltype.Signed))
         def ll_two(s, i, m):
             if i > 4:
