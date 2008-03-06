@@ -25,6 +25,13 @@ class JitCode(object):
                  promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, metacalldescs,
                  indirectcalldescs, is_portal):
+        # XXX quite a lot of lists of descs here...  We should at least
+        # try to share the empty lists between the numberous prebuilt
+        # JitCode instances.  A better approach memory-wise could be
+        # to have a single list of descs and use 'assert isinstance'
+        # checks; or move these lists to the Interpreter class and
+        # do something about the fact that some of these lists could
+        # then have more than 65536 items.
         self.name = name
         self.code = code
         self.constants = constants
