@@ -51,9 +51,12 @@ class MultipleFrozenPBCRepr(AbstractMultipleFrozenPBCRepr):
         self.pbc_cache = {}
 
     def _setup_repr(self):
+        # try to find a name for the Struct, arbitrarily using the longest
+        # common prefix or suffix of the classes of the objects
+        name = self.guess_type_name()
         llfields = self._setup_repr_fields()
         kwds = {'hints': {'immutable': True}}
-        self.pbc_type.become(Struct('pbc', *llfields, **kwds))
+        self.pbc_type.become(Struct(name, *llfields, **kwds))
 
     def create_instance(self):
         return malloc(self.pbc_type, immortal=True)
