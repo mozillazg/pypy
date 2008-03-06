@@ -175,7 +175,7 @@ class MultipleFrozenPBCRepr(AbstractMultipleFrozenPBCRepr):
     def __init__(self, rtyper, access_set):
         self.rtyper = rtyper
         self.access_set = access_set
-        self.lowleveltype = ootype.Instance('pbc', PBCROOT)
+        self.lowleveltype = ootype.Instance(self.guess_type_name(), PBCROOT)
         self.pbc_cache = {}
 
     def _setup_repr(self):
