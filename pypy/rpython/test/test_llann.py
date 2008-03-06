@@ -8,6 +8,7 @@ from pypy.rpython.annlowlevel import annotate_lowlevel_helper
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.annlowlevel import PseudoHighLevelCallable
 from pypy.rpython.annlowlevel import llhelper, cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import llstructofhelpers
 from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.test.test_llinterp import interpret
@@ -476,6 +477,30 @@ def test_prebuilt_llhelper():
 
     res = interpret(h, [8, 5, 2])
     assert res == 99
+
+
+def test_llstructofhelpers():
+    F = Ptr(FuncType([], Signed))
+    S1 = Struct('S1', ('f1', F))
+    S2 = Struct('S2', ('parent', S1), ('f2', F))
+
+    def myf1():
+        return 401 + we_are_translated()
+
+    def myf2():
+        return 602 + we_are_translated()
+
+    initdata = {'parent.f1': myf1,
+                'f2': myf2}
+
+    def h():
+        s2 = llstructofhelpers(Ptr(S2), initdata)
+        assert typeOf(s2) == Ptr(S2)
+        return s2.parent.f1() + s2.f2()
+
+    assert h() == 401 + 602
+    res = interpret(h, [])
+    assert res == 401 + 602 + 2
 
 
 def test_cast_instance_to_base_ptr():

@@ -367,6 +367,56 @@ class LLHelperEntry(extregistry.ExtRegistryEntry):
 
 # ____________________________________________________________
 
+def llstructofhelpers(P, initdata):
+    """Ad hoc.  Returns an immortal structure of type P.TO whose fields
+    are low-level function pointers, initialized according to the
+    constant dict 'initdata'."""
+    # implementation for the purpose of direct running only
+    # XXX this is a workaround for the fact that prebuilt llhelpers cannot
+    # be translated
+    # XXX this is all happy hacking :-/
+    result = lltype.malloc(P.TO, immortal=True, zero=True)
+    for name, callable in initdata.items():
+        F = eval('P.TO.%s' % name)
+        fnptr = llhelper(F, callable)
+        exec 'result.%s = fnptr' % name
+    return result
+
+class LLStructOfHelpersEntry(extregistry.ExtRegistryEntry):
+    _about_ = llstructofhelpers
+
+    def compute_result_annotation(self, s_P, s_initdata):
+        assert s_P.is_constant()
+        assert s_initdata.is_constant()
+        P = s_P.const
+        initdata = s_initdata.const
+        for name, callable in initdata.items():
+            F = eval('P.TO.%s' % name)
+            s_callable = self.bookkeeper.immutablevalue(callable)
+            args_s = [annmodel.lltype_to_annotation(T) for T in F.TO.ARGS]
+            key = (name, llhelper, s_callable.const)
+            s_res = self.bookkeeper.emulate_pbc_call(name, s_callable, args_s)
+            assert annmodel.lltype_to_annotation(F.TO.RESULT).contains(s_res)
+        return annmodel.SomePtr(P)
+
+    def specialize_call(self, hop):
+        bk = hop.rtyper.annotator.bookkeeper
+        P = hop.args_s[0].const
+        initdata = hop.args_s[1].const
+        result = lltype.malloc(P.TO, immortal=True, zero=True)
+        for name, callable in initdata.items():
+            F = eval('P.TO.%s' % name)
+            s_callable = bk.immutablevalue(callable)
+            r_callable = hop.rtyper.getrepr(s_callable)
+            c_fnptr = r_callable.get_unique_llfn()
+            assert isinstance(c_fnptr, Constant)
+            fnptr = c_fnptr.value
+            exec 'result.%s = fnptr' % name
+        hop.exception_cannot_occur()
+        return hop.inputconst(P, result)
+
+# ____________________________________________________________
+
 def hlstr(ll_s):
     if hasattr(ll_s, 'items'):
         return ''.join(items)
