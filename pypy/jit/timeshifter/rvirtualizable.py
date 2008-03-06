@@ -2,13 +2,14 @@ from pypy.rpython.lltypesystem import lltype, llmemory, lloperation
 from pypy.rpython.annlowlevel import cachedtype, base_ptr_lltype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import llstructofhelpers
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 
 debug_print = lloperation.llop.debug_print
 debug_pdb = lloperation.llop.debug_pdb
 
-def define_touch_update(TOPPTR, redirected_fielddescs, access_touched):
+def define_touch_update(TOPPTR, redirected_fielddescs, get_access_touched):
     redirected_fielddescs = unrolling_iterable(redirected_fielddescs)
 
     def touch_update(strucref):
@@ -29,6 +30,7 @@ def define_touch_update(TOPPTR, redirected_fielddescs, access_touched):
             tgt = lltype.cast_pointer(fielddesc.PTRTYPE, struc)            
             setattr(tgt, fielddesc.fieldname, v)
         ACCESSPTR = TOPPTR.TO.vable_access
+        access_touched = get_access_touched()
         struc.vable_access = lltype.cast_pointer(ACCESSPTR, access_touched)
 
     return touch_update
@@ -171,3 +173,25 @@ class VirtualRTI(RTI):
         return bool(self.bitmask & shapemask)
 
 
+class GetSetters:
+    """A convenient place to put the set of getter/setter functions
+    that needs to be converted to a low-level ACCESS structure."""
+
+    def __init__(self, ACCESS, parent=None):
+        functions = {}
+        # initialize 'functions' with everything from the parent
+        if parent is not None:
+            for key, value in parent.functions.items():
+                functions['parent.' + key] = value
+        self.functions = functions
+
+        def get_access():
+            return llstructofhelpers(lltype.Ptr(ACCESS), functions)
+        self.get_access = get_access
+
+        def get_gv_access(builder):
+            return builder.rgenop.genconst(get_access())
+        self.get_gv_access = get_gv_access
+
+    def define(self, name, func):
+        self.functions[name] = func

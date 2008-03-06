@@ -205,9 +205,9 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
     _attrs_  =  """redirected_fielddescs
                    redirected
                    base_desc rti_desc access_desc
-                   gv_access
+                   get_gv_access
                    touch_update
-                   gv_access_is_null_ptr access_is_null_token
+                   get_gv_access_is_null access_is_null_token
                    get_rti set_rti
                 """.split()
 
@@ -230,8 +230,20 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         self.STRUCTTYPE = TOPPTR
         self.s_structtype = annmodel.lltype_to_annotation(TOPPTR)
 
-        self.my_redirected_getsetters_untouched = {}
-        self.my_redirected_getsetters_touched = {}        
+        firstsubstructdesc = self.firstsubstructdesc
+        if (firstsubstructdesc is not None and 
+            isinstance(firstsubstructdesc, VirtualizableStructTypeDesc)):
+            p_untouched = firstsubstructdesc.my_redirected_getsetters_untouched
+            p_touched = firstsubstructdesc.my_redirected_getsetters_touched
+        else:
+            p_untouched = None
+            p_touched = None
+        gs_untouched = rvirtualizable.GetSetters(ACCESS, p_untouched)
+        gs_touched = rvirtualizable.GetSetters(ACCESS, p_untouched)
+        self.get_gv_access = gs_untouched.get_gv_access
+
+        self.my_redirected_getsetters_untouched = gs_untouched
+        self.my_redirected_getsetters_touched = gs_touched
         self.my_redirected_names = my_redirected_names = []
         j = -1
         for fielddesc, _  in self.redirected_fielddescs:
@@ -241,16 +253,9 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
             my_redirected_names.append(fielddesc.fieldname)
             self._define_getset_field_ptr(RGenOp, fielddesc, j)
 
-
-        access_untouched = lltype.malloc(ACCESS, immortal=True)
-        access_touched = lltype.malloc(ACCESS, immortal=True)
-        self._fill_access('untouched', access_untouched)
-        self._fill_access('touched',   access_touched)
-        self.gv_access = RGenOp.constPrebuiltGlobal(access_untouched)
-
         self.touch_update = rvirtualizable.define_touch_update(TOPPTR,
                                 self.redirected_fielddescs,
-                                access_touched)
+                                gs_touched.get_access)
 
         self._define_collect_residual_args()
 
@@ -269,28 +274,9 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         name = fielddesc.fieldname
         for getsetters, (get_field, set_field) in zip((untouched, touched),
                                                       fnpairs):
+            getsetters.define('get_' + name, get_field)
+            getsetters.define('set_' + name, set_field)
 
-            TYPE = lltype.Ptr(lltype.FuncType([self.STRUCTTYPE],
-                                              fielddesc.RESTYPE))
-            get_field_ptr = llhelper(TYPE, get_field)
-            TYPE = lltype.Ptr(lltype.FuncType(
-                [self.STRUCTTYPE, fielddesc.RESTYPE], lltype.Void))
-            set_field_ptr = llhelper(TYPE, set_field)
-            
-            getsetters[name] = get_field_ptr, set_field_ptr
-
-    def _fill_access(self, which, access):
-        firstsubstructdesc = self.firstsubstructdesc
-        if (firstsubstructdesc is not None and 
-            isinstance(firstsubstructdesc, VirtualizableStructTypeDesc)):
-            firstsubstructdesc._fill_access(which, access.parent)
-            
-        getsetters = getattr(self, 'my_redirected_getsetters_'+which)
-
-        for name, (get_field_ptr, set_field_ptr) in getsetters.iteritems():
-            setattr(access, 'get_'+name, get_field_ptr)
-            setattr(access, 'set_'+name, set_field_ptr)
- 
     def _define_collect_residual_args(self):
         my_redirected_names = unrolling_iterable(self.my_redirected_names)
         TOPPTR = self.access_desc.PTRTYPE
@@ -323,12 +309,11 @@ class VirtualizableStructTypeDesc(StructTypeDesc):
         def access_is_null(struc):
             assert not struc.vable_access
         TYPE = lltype.Ptr(lltype.FuncType([self.STRUCTTYPE], lltype.Void))
-        access_is_null_ptr = llhelper(TYPE, access_is_null)
-        self.gv_access_is_null_ptr = RGenOp.constPrebuiltGlobal(
-                                              access_is_null_ptr)
-        self.access_is_null_token =  RGenOp.sigToken(
-                                   lltype.typeOf(access_is_null_ptr).TO)
-
+        def get_gv_access_is_null(builder):
+            access_is_null_ptr = llhelper(TYPE, access_is_null)
+            return builder.rgenop.genconst(access_is_null_ptr)
+        self.get_gv_access_is_null = get_gv_access_is_null
+        self.access_is_null_token = RGenOp.sigToken(TYPE.TO)
 
     def factory(self):
         vstructbox = StructTypeDesc.factory(self)
@@ -859,7 +844,7 @@ class VirtualizableStruct(VirtualStruct):
                                      known_nonzero=True)
         builder = jitstate.curbuilder
         builder.genop_call(typedesc.access_is_null_token,
-                           typedesc.gv_access_is_null_ptr,
+                           typedesc.get_gv_access_is_null(builder),
                            [gv_outside])
         for fielddesc, i in typedesc.redirected_fielddescs:
             boxes[i] = fielddesc.generate_get(jitstate, gv_outside)
@@ -925,7 +910,8 @@ class VirtualizableStruct(VirtualStruct):
         rti_token = typedesc.rti_desc.fieldtoken
         builder.genop_setfield(rti_token, gv_outside, gv_vable_rti)
         access_token = typedesc.access_desc.fieldtoken
-        builder.genop_setfield(access_token, gv_outside, typedesc.gv_access)
+        builder.genop_setfield(access_token, gv_outside,
+                               typedesc.get_gv_access(builder))
 
     def check_forced_after_residual_call(self, jitstate):
         typedesc = self.typedesc
