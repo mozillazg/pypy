@@ -394,8 +394,8 @@ class LLStructOfHelpersEntry(extregistry.ExtRegistryEntry):
             F = eval('P.TO.%s' % name)
             s_callable = self.bookkeeper.immutablevalue(callable)
             args_s = [annmodel.lltype_to_annotation(T) for T in F.TO.ARGS]
-            key = (name, llhelper, s_callable.const)
-            s_res = self.bookkeeper.emulate_pbc_call(name, s_callable, args_s)
+            key = (llhelper, s_callable.const)
+            s_res = self.bookkeeper.emulate_pbc_call(key, s_callable, args_s)
             assert annmodel.lltype_to_annotation(F.TO.RESULT).contains(s_res)
         return annmodel.SomePtr(P)
 
