@@ -1,6 +1,6 @@
 import py
 from pypy.jit.conftest import option
-from pypy.jit.rainbow.test import test_portal
+from pypy.jit.rainbow.test import test_portal, test_virtualizable
 
 if option.quicktest:
     py.test.skip("slow")
@@ -14,17 +14,11 @@ class TestLLInterpreted(test_portal.TestPortal):
     # ====> test_portal.py
 
 
-    def test_vdict_and_vlist(self):
-        py.test.skip("XXX")
-        def ll_function():
-            dic = {}
-            lst = [12] * 3
-            lst += []
-            lst.append(13)
-            lst.reverse()
-            dic[12] = 34
-            dic[lst[0]] = 35
-            return dic[lst.pop()]
-        res = self.timeshift_from_portal(ll_function, ll_function, [])
-        assert res == ll_function()
-        self.check_insns({})
+class TestLLVirtualizable(test_virtualizable.TestVirtualizableImplicit):
+    translate_support_code = True
+
+    def setup_method(self, meth):
+        py.test.skip("in-progress")
+
+    # for the individual tests see
+    # ====> test_virtualizable.py

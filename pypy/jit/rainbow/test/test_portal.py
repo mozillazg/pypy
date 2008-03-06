@@ -554,3 +554,17 @@ class TestPortal(PortalTest):
         res = self.timeshift_from_portal(f, f, [7, 3])
         assert res == f(7, 3)
         self.check_insns(indirect_call=1, direct_call=1)
+
+
+    def test_vdict_and_vlist(self):
+        def ll_function():
+            dic = {}
+            lst = [12] * 3
+            lst.append(13)
+            lst.reverse()
+            dic[12] = 34
+            dic[lst[0]] = 35
+            return dic[lst.pop()]
+        res = self.timeshift_from_portal(ll_function, ll_function, [])
+        assert res == ll_function()
+        self.check_insns({})
