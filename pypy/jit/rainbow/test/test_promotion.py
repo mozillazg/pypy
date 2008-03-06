@@ -401,6 +401,15 @@ class TestPromotion(InterpretationTest):
                              policy=StopAtXPolicy(w))
         res == 1
 
+    def test_exception_after_promotion(self):
+        def ll_function(n, m):
+            hint(None, global_merge_point=True)
+            hint(m, promote=True)
+            if m == 0:
+                raise ValueError
+            return n
+        self.interpret_raises(ValueError, ll_function, [1, 0], [])
+
     def test_promote_in_yellow_call(self):
         def ll_two(n):
             n = hint(n, promote=True)
