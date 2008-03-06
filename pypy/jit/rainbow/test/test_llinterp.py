@@ -17,8 +17,5 @@ class TestLLInterpreted(test_portal.TestPortal):
 class TestLLVirtualizable(test_virtualizable.TestVirtualizableImplicit):
     translate_support_code = True
 
-    def setup_method(self, meth):
-        py.test.skip("in-progress")
-
     # for the individual tests see
     # ====> test_virtualizable.py
