@@ -1470,21 +1470,23 @@ class SimpleTests(InterpretationTest):
         self.check_insns(indirect_call=1)
 
     def test_constant_indirect_red_call(self):
-        def h1(x):
+        py.test.skip("XXX fix me")
+        def h1(m, n, x):
             return x-2
-        def h2(x):
+        def h2(m, n, x):
             return x*4
         l = [h1, h2]
-        def f(n, x):
+        def f(m, n, x):
+            m = hint(m, concrete=True)
             frozenl = hint(l, deepfreeze=True)
             h = frozenl[n&1]
-            return h(x)
+            return h(m, 5, x)
 
         P = StopAtXPolicy()
-        res = self.interpret(f, [7, 3], [0], policy=P)
+        res = self.interpret(f, [1, 7, 3], [0, 1], policy=P)
         assert res == f(7,3)
         self.check_insns({'int_mul': 1})
-        res = self.interpret(f, [4, 113], [0], policy=P)
+        res = self.interpret(f, [1, 4, 113], [0, 1], policy=P)
         assert res == f(4,113)
         self.check_insns({'int_sub': 1})
 
