@@ -51,7 +51,6 @@ class TestException(InterpretationTest):
         self.check_insns({'setfield': 1})
 
     def test_catch(self):
-        py.test.skip("not implemented yet")
         def ll_two(x):
             if x == 0:
                 raise ValueError
