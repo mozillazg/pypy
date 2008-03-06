@@ -285,7 +285,8 @@ class JitInterpreter(object):
                         continue
                     return STOP
             else:
-                self.frame.pc = resumepoint
+                # XXX the 'resumepoint' value is not really needed any more
+                assert self.frame.pc == resumepoint
             return
 
     # operation helper functions
