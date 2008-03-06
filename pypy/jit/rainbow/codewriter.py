@@ -1482,6 +1482,7 @@ class tlabel(object):
 def assemble_labelpos(labelpos, interpreter, *args):
     result = []
     def emit_2byte(index):
+        assert -32768 <= index < 32767
         result.append(chr((index >> 8) & 0xff))
         result.append(chr(index & 0xff))
     for arg in args:
