@@ -421,6 +421,13 @@ class LLFrame(object):
         if exc is None:
             original = sys.exc_info()
             exc = original[1]
+            # it makes no sense to convert some exception classes that
+            # just mean something buggy crashed
+            if isinstance(exc, (AssertionError, AttributeError,
+                                TypeError, NameError,
+                                KeyboardInterrupt, SystemExit,
+                                ImportError, SyntaxError)):
+                raise original[0], original[1], original[2]     # re-raise it
             extraargs = (original,)
         else:
             extraargs = ()
