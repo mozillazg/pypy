@@ -1,3 +1,4 @@
+import py
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.lltypesystem.rclass import OBJECTPTR
 from pypy.rpython.rclass import fishllattr
@@ -10,6 +11,7 @@ from pypy.rpython.annlowlevel import llhelper, cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import base_ptr_lltype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.test.test_llinterp import interpret
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.objspace.flow.objspace import FlowObjSpace 
 from pypy.conftest import option
 
@@ -426,9 +428,11 @@ def test_pseudohighlevelcallable():
 def test_llhelper():
     S = GcStruct('S', ('x', Signed), ('y', Signed))
     def f(s,z):
+        assert we_are_translated()
         return s.x*s.y+z
 
     def g(s):
+        assert we_are_translated()
         return s.x+s.y
 
     F = Ptr(FuncType([Ptr(S), Signed], Signed))
@@ -440,6 +444,33 @@ def test_llhelper():
         s.y = y
         fptr = llhelper(F, f)
         gptr = llhelper(G, g)
+        assert typeOf(fptr) == F
+        return fptr(s, z)+fptr(s, z*2)+gptr(s)
+
+    res = interpret(h, [8, 5, 2])
+    assert res == 99
+
+
+def test_prebuilt_llhelper():
+    py.test.skip("does not work")
+    S = GcStruct('S', ('x', Signed), ('y', Signed))
+    def f(s,z):
+        assert we_are_translated()
+        return s.x*s.y+z
+
+    def g(s):
+        assert we_are_translated()
+        return s.x+s.y
+
+    F = Ptr(FuncType([Ptr(S), Signed], Signed))
+    G = Ptr(FuncType([Ptr(S)], Signed))
+    fptr = llhelper(F, f)
+    gptr = llhelper(G, g)
+        
+    def h(x, y, z):
+        s = malloc(S)
+        s.x = x
+        s.y = y
         assert typeOf(fptr) == F
         return fptr(s, z)+fptr(s, z*2)+gptr(s)
 
