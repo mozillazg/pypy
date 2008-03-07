@@ -832,14 +832,20 @@ class BytecodeWriter(object):
         fnptrindex = self.serialize_oparg("red", op.args[0])
         has_result = (self.varcolor(op.result) != "gray" and
                       op.result.concretetype != lltype.Void)
-        if targets:
-            self.emit("goto_if_constant", fnptrindex, tlabel(("direct call", op)))
 
         emitted_args = []
         for v in op.args[1:-1]:
             if v.concretetype == lltype.Void:
                 continue
             emitted_args.append(self.serialize_oparg("red", v))
+
+        if targets:
+            # XXX can we move this control flow inside the interpreter?
+            # the jump must be after the serialize_oparg() calls above
+            # to ensure that both paths of the control flow push the same
+            # number of results.  See test_constant_indirect_red_call
+            self.emit("goto_if_constant", fnptrindex, tlabel(("direct call", op)))
+
         self.emit("red_residual_call")
         calldescindex = self.calldesc_position(op.args[0].concretetype)
         self.emit(fnptrindex, calldescindex, withexc, has_result)
