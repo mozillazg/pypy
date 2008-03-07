@@ -17,6 +17,7 @@ Buffer protocol support.
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
+from pypy.interpreter.error import OperationError
 
 
 class Buffer(Wrappable):
