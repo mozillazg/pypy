@@ -63,10 +63,10 @@ class AbstractSerializationTest:
                                         "make_new_redvars", 1, 2,
                                         "make_new_greenvars", 0,
                                         "red_return")
-        assert len(jitcode.constants) == 0
-        assert len(jitcode.typekinds) == 0
+        assert not jitcode.constants
+        assert not jitcode.typekinds
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
 
     def test_constant(self):
         def f(x):
@@ -82,7 +82,7 @@ class AbstractSerializationTest:
         assert len(jitcode.typekinds) == 1
         assert len(jitcode.redboxclasses) == 1
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
  
     def test_green_switch(self):
         def f(x, y, z):
@@ -105,10 +105,10 @@ class AbstractSerializationTest:
                             "goto", tlabel("return"),
                             )
         assert jitcode.code == expected
-        assert len(jitcode.constants) == 0
-        assert len(jitcode.typekinds) == 0
+        assert not jitcode.constants
+        assert not jitcode.typekinds
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
 
     def test_green_switch2(self):
         def f(x, y, z):
@@ -139,10 +139,10 @@ class AbstractSerializationTest:
                             "goto", tlabel("return"),
                             )
         assert jitcode.code == expected
-        assert len(jitcode.constants) == 0
-        assert len(jitcode.typekinds) == 0
+        assert not jitcode.constants
+        assert not jitcode.typekinds
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
 
     def test_merge(self):
         def f(x, y, z):
@@ -179,7 +179,7 @@ class AbstractSerializationTest:
         assert len(jitcode.constants) == 1
         assert len(jitcode.typekinds) == 1
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
 
     def test_loop(self):
         def f(x):
@@ -209,7 +209,7 @@ class AbstractSerializationTest:
                             "make_new_redvars", 2, 2, 4,
                             "goto", tlabel("while"))
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
 
     def test_dump_loop(self):
         def f(x):
@@ -276,7 +276,7 @@ pc: 0 |  make_redbox          (0), 0           => r1
                                                "make_new_greenvars", 0,
                                                "red_return")
         assert not called_jitcode.is_portal
-        assert len(called_jitcode.called_bytecodes) == 0
+        assert not called_jitcode.called_bytecodes
 
     def test_green_call(self):
         def ll_add_one(x):
@@ -294,7 +294,7 @@ pc: 0 |  make_redbox          (0), 0           => r1
                                         "make_new_greenvars", 0,
                                         "red_return")
         assert jitcode.is_portal
-        assert len(jitcode.called_bytecodes) == 0
+        assert not jitcode.called_bytecodes
         assert len(jitcode.calldescs) == 1
         assert len(jitcode.constants) == 1
 
@@ -333,7 +333,7 @@ pc: 0 |  make_redbox          (0), 0           => r1
                                                "goto", tlabel("return")
                                                )
         assert not called_jitcode.is_portal
-        assert len(called_jitcode.called_bytecodes) == 0
+        assert not called_jitcode.called_bytecodes
 
 class TestLLType(AbstractSerializationTest):
     type_system = "lltype"

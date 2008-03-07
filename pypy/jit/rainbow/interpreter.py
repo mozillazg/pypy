@@ -29,32 +29,31 @@ class JitCode(object):
                  promotiondescs, called_bytecodes, num_mergepoints,
                  graph_color, calldescs, metacalldescs,
                  indirectcalldescs, is_portal):
-        # XXX quite a lot of lists of descs here...  We should at least
-        # try to share the empty lists between the numberous prebuilt
-        # JitCode instances.  A better approach memory-wise could be
+        # XXX quite a lot of lists of descs here...  At least we replace
+        # empty lists with None.  A better approach memory-wise could be
         # to have a single list of descs and use 'assert isinstance'
         # checks; or move these lists to the Interpreter class and
         # do something about the fact that some of these lists could
         # then have more than 65536 items.
         self.name = name
         self.code = code
-        self.constants = constants
-        self.typekinds = typekinds
-        self.redboxclasses = redboxclasses
-        self.keydescs = keydescs
-        self.structtypedescs = structtypedescs
-        self.fielddescs = fielddescs
-        self.arrayfielddescs = arrayfielddescs
-        self.interiordescs = interiordescs
-        self.exceptioninstances = exceptioninstances
-        self.oopspecdescs = oopspecdescs
-        self.promotiondescs = promotiondescs
-        self.called_bytecodes = called_bytecodes
+        self.constants = constants or None
+        self.typekinds = typekinds or None
+        self.redboxclasses = redboxclasses or None
+        self.keydescs = keydescs or None
+        self.structtypedescs = structtypedescs or None
+        self.fielddescs = fielddescs or None
+        self.arrayfielddescs = arrayfielddescs or None
+        self.interiordescs = interiordescs or None
+        self.exceptioninstances = exceptioninstances or None
+        self.oopspecdescs = oopspecdescs or None
+        self.promotiondescs = promotiondescs or None
+        self.called_bytecodes = called_bytecodes or None
         self.num_mergepoints = num_mergepoints
         self.graph_color = graph_color
-        self.calldescs = calldescs
-        self.metacalldescs = metacalldescs
-        self.indirectcalldescs = indirectcalldescs
+        self.calldescs = calldescs or None
+        self.metacalldescs = metacalldescs or None
+        self.indirectcalldescs = indirectcalldescs or None
         self.is_portal = is_portal
 
     def _freeze_(self):
