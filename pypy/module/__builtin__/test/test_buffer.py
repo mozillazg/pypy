@@ -35,3 +35,8 @@ class AppTestBuffer:
 
     def test_str(self):
         assert str(buffer('hello')) == 'hello'
+
+    def test_add(self):
+        assert buffer('abc') + 'def' == 'abcdef'
+        import array
+        assert buffer('abc') + array.array('c', 'def') == 'abcdef'

@@ -68,6 +68,10 @@ class Buffer(Wrappable):
         return space.wrap(self.as_str())
     descr_str.unwrap_spec = ['self', ObjSpace]
 
+    def descr_add(self, space, other):
+        return space.wrap(self.as_str() + other)
+    descr_add.unwrap_spec = ['self', ObjSpace, 'bufferstr']
+
 
 def descr_buffer__new__(space, w_subtype, w_object):  #, offset, size
     # w_subtype can only be exactly 'buffer' for now
@@ -95,6 +99,7 @@ extend to the end of the target object (or with the specified size).
     __getitem__ = interp2app(Buffer.descr_getitem),
     __buffer__ = interp2app(Buffer.descr__buffer__),
     __str__ = interp2app(Buffer.descr_str),
+    __add__ = interp2app(Buffer.descr_add),
     )
 Buffer.typedef.acceptable_as_base_class = False
 
